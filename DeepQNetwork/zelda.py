@@ -51,6 +51,7 @@ class ZeldaMemoryLayout:
             (0x66C, "keys"),
             (0x674, "regular_boomerang"),
             (0x675, "magic_boomerang"),
+            (0x656, "selected_item"),
             ]
         
         self.index_map = {name: index for index, (_, name) in enumerate(self.locations)}
