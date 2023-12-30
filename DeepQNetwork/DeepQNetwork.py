@@ -16,7 +16,7 @@ epsilon = 1.0  # exploration rate
 epsilon_min = 0.10
 epsilon_decay = 0.998
 learning_rate = 0.001
-batch_size = 32
+batch_size = 512
 
 max_memory_len = 20_000            # one per frame we made a decision on
 max_decisions_per_game = 1_000
