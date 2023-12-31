@@ -1,4 +1,4 @@
-﻿function checkHearts(address, value)
+﻿function writeValues(address, value)
   --emu.log(value)
 end
 
@@ -13,9 +13,5 @@ function writeValues(address, value)
   emu.log(string.format("sword=%x beams=%x, rang=%x, b1=%x, b2=%x, aw=%x", sword, beams, rang, bomb1, bomb2, wand))
 end
 
-emu.addMemoryCallback(checkHearts, emu.memCallbackType.writeValues, 0xb9)
-emu.addMemoryCallback(checkHearts, emu.memCallbackType.writeValues, 0xba)
-emu.addMemoryCallback(checkHearts, emu.memCallbackType.writeValues, 0xbb)
-emu.addMemoryCallback(checkHearts, emu.memCallbackType.writeValues, 0xbc)
-emu.addMemoryCallback(checkHearts, emu.memCallbackType.writeValues, 0xbd)
-emu.addMemoryCallback(checkHearts, emu.memCallbackType.writeValues, 0xbe)
+
+emu.addMemoryCallback(writeValues, emu.callbackType.write, 0xb9, 0xbe)
