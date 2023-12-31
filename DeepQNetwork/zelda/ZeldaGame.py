@@ -97,7 +97,7 @@ class ZeldaMemoryLayout:
             return self.index_map[name]
         raise Exception(f"Unknown memory location {name}") 
         
-    def get_memory_list(self):
+    def get_address_list(self):
         return [x for x, _ in self.locations]
         
 ZeldaMemoryLayout = ZeldaMemoryLayout()

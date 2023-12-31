@@ -8,7 +8,7 @@ importlib.reload(zelda)
 
 class PrintRewards:
     def __init__(self):
-        addr = emu.registerFrameMemory(7, zelda.ZeldaMemoryLayout.get_memory_list())
+        addr = emu.registerFrameMemory(7, zelda.ZeldaMemoryLayout.get_address_list())
         self.zelda_memory = zelda.ZeldaMemoryWrapper(addr)
         self.last_snapshot = self.zelda_memory.snapshot()
         self.rewards = zelda.LegendOfZeldaScorer()
