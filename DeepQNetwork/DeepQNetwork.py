@@ -147,7 +147,8 @@ class DqnAgentRunner:
 
     def next_action(self, state_for_model, state_for_score, done):
         if self.prev_action is not None:
-            self.agent.remember(self.prev_state, self.prev_action, self.prev_reward, state_for_model, done)
+            reward = self.score_function(self.prev_state_for_score, state_for_score)
+            self.agent.remember(self.prev_state, self.prev_action, reward, state_for_model, done)
             
         if done:
             self.end_iteration()
@@ -158,8 +159,6 @@ class DqnAgentRunner:
         
         # update variables for next iteration
         self.prev_action = action
-        self.prev_reward = self.score_function(self.prev_state_for_score, state_for_score)
-        self.score += self.prev_reward
         
         self.prev_state = state_for_model
         self.prev_state_for_score = state_for_score
