@@ -5,7 +5,7 @@ from DeepQNetwork import DqnAgentRunner
 from icecream import ic
 
 # number of frames to give the model
-model_parameter_count = 0
+model_parameter_count = 4
 model_frame_count = 5
 frames_saved = 60
 
@@ -262,6 +262,12 @@ class LegendOfZeldaAgent:
 
         self.current_game_state = None
         self.last_game_state = None
+
+    def begin_game(self):
+        self.dqn_agent.start_iteration()
+
+    def end_game(self):
+        self.dqn_agent.end_iteration()
         
     def capture_and_check_game_state(self) -> int:
         """Returns whether we should call get_action_from_game_state or not and actually process this frame of gameplay."""
@@ -303,20 +309,12 @@ class LegendOfZeldaAgent:
             return no_action
         
         # todo: handle game over, make sure game over works
-        
-        frames = np.stack(self.enumerate_frames(model_frame_count), axis=0)
-        
-        # todo: build model_state, normalize model_state, set model_parameter_count
-        gameState = self.current_game_state
-        model_state = [
-            gameState.hearts / gameState.heart_containers,
-            gameState.location_x / 16.0,
-            gameState.location_y / 16.0,
-            gameState.bombs / float(gameState.bombs_max),
-            
-            ]
-        
-        action_probabilities = self.dqn_agent.next_action([frames, model_state], self.current_game_state.game_state == zeldaGameStates.game_over)
+        if self.current_game_state.game_state == zeldaGameStates.game_over:
+            ic("Game Over reported")
+
+        model_state = self.build_model_state()
+
+        action_probabilities = self.dqn_agent.next_action(model_state, self.current_game_state.game_state == zeldaGameStates.game_over)
         if action_probabilities is not None:
             action_probabilities = [x > 0.6 for x in action_probabilities]
         
@@ -327,12 +325,34 @@ class LegendOfZeldaAgent:
         return action_probabilities
         
         #todo:  add begin new run method call start_iteration.  Also call end_iteration?
+    
+    def build_model_state(self):
+        frames = np.stack(self.enumerate_frames(model_frame_count), axis=0)
         
-    def enumerate_frames(self, num_frames):
-        # when we just start the session, we won't have enough frames yet
+        # todo: build model_state, normalize model_state, set model_parameter_count
+        gameState = self.current_game_state
+        sword = 0.0
+        if gameState.sword:
+            sword = 1.0
 
-        if len(self.frames) < frames_saved:
-            return [self.frames[0]] * num_frames
+        model_game_state = [
+            gameState.hearts / gameState.heart_containers,
+            gameState.location_x / 16.0,
+            gameState.location_y / 16.0,
+            sword,
+            ]
         
-        return (self.frames[i] for i in self.frame_sequence)
+        return [frames, model_game_state]
+
+
+    def enumerate_frames(self, num_frames, useShadow):
+        frames = self.frames
+        if useShadow:
+            frames = self.shadow_frames
+            
+        n = max(min(n, len(frames)), 0)
+
+        if n == num_frames:
+            return [x for x in frames[-n:]]
         
+        return [frames[-1]] * num_frames
