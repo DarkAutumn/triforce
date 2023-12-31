@@ -19,7 +19,8 @@ save_every = 50
 action_frame_skip_min = 5
 action_frame_skip_max = 15
 
-start_button_input = [False, False, False, False, False, True, False, False]
+# input order: a b start select up down left right, use None to not set a value
+start_button_input = [False, False, True, False, False, False, False, False]
 no_button_input = [False, False, False, False, False, False, False, False]
 
 class LoadSaveStateAndSkipTitle:
