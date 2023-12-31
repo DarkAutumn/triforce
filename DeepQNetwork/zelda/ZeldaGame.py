@@ -1,7 +1,7 @@
 import ctypes
 import numpy as np
 from collections import deque
-from DeepQNetwork import DqnAgentRunner
+from .DeepQNetwork import DqnAgentRunner
 from icecream import ic
 
 # number of frames to give the model
@@ -19,12 +19,6 @@ penalty_small = -1.0
 penalty_medium = -10.0
 penalty_large = -50.0
 
-class Logger:
-    def log(self, message):
-        print(message)
-
-logger = Logger()
-
 class ZeldaGameStates:
     """An enum of game states"""
     def __init__(self):
@@ -39,7 +33,7 @@ class ZeldaGameStates:
         
         self.gameplay_animation_lock = 0x100
 
-zeldaGameStates = ZeldaGameStates()        
+ZeldaGameStates = ZeldaGameStates()
 
 class ZeldaMemoryLayout:
     """Raw memory addresses in the game and what they map to"""
@@ -106,7 +100,7 @@ class ZeldaMemoryLayout:
     def get_memory_list(self):
         return [x for x, _ in self.locations]
         
-memoryLayout = ZeldaMemoryLayout()
+ZeldaMemoryLayout = ZeldaMemoryLayout()
 
 
 class ZeldaMemory:
@@ -118,7 +112,7 @@ class ZeldaMemory:
             return self.__dict__[item]
         
         snapshot = self.__dict__['snapshot']
-        return snapshot[memoryLayout.get_index(item)]
+        return snapshot[ZeldaMemoryLayout.get_index(item)]
     
     @property
     def triforce_pieces(self):
@@ -154,11 +148,11 @@ class ZeldaMemory:
         return self.location >> 4
             
 
-class MemoryWrapper:
+class ZeldaMemoryWrapper:
     def __init__(self, addr):
         """Takes in a raw address in memory to a byte array of the Zelda memory locations.  This should
         be in the exact order that ZeldaMemoryConstants.locations are in"""
-        self.pointer = ctypes.cast(addr, ctypes.POINTER(ctypes.c_uint8 * len(memoryLayout.locations)))
+        self.pointer = ctypes.cast(addr, ctypes.POINTER(ctypes.c_uint8 * len(ZeldaMemoryLayout.locations)))
 
     def snapshot(self) -> ZeldaMemory:
         return ZeldaMemory(np.frombuffer(self.pointer.contents, dtype=np.uint8))
@@ -239,7 +233,7 @@ class LegendOfZeldaScorer:
                 ic("Penalty for losing health!")
         
         # did we hit a game over?
-        if old_state.game_state != zeldaGameStates.game_over and new_state.game_state == zeldaGameStates.game_over:
+        if old_state.game_state != ZeldaGameStates.game_over and new_state.game_state == ZeldaGameStates.game_over:
             reward += self.penalty_game_over
             ic("Penalty for game over!")
             
@@ -249,7 +243,7 @@ no_action = [False] * 8
 class LegendOfZeldaAgent:
     def __init__(self, memoryAddress, screenAddress, num_iterations):
         # game wrappers
-        self.memory = MemoryWrapper(memoryAddress)
+        self.memory = ZeldaMemoryWrapper(memoryAddress)
         self.screen = ScreenWrapper(screenAddress)
         
         # keep the last 60 seconds of frames
@@ -276,10 +270,10 @@ class LegendOfZeldaAgent:
         state = self.current_game_state.game_state
         
         self.current_frame = self.screen.snapshot()
-        if state == zeldaGameStates.gameplay:
+        if state == ZeldaGameStates.gameplay:
             # if the last state we processed was not a gameplay state, we need to use only this current frame
             # for all images the model sees, otherwise it would be reacting to what's on the previous screen
-            if self.last_game_state is None or self.last_game_state.game_state != zeldaGameStates.gameplay:
+            if self.last_game_state is None or self.last_game_state.game_state != ZeldaGameStates.gameplay:
                 self.frames.clear()
                 
             self.frames.append(self.current_frame)
@@ -295,11 +289,11 @@ class LegendOfZeldaAgent:
         # report back that link is animation locked and should not try to get an action
         sword_animation = self.current_game_state.sword_animation
         if sword_animation == 1 or sword_animation == 2:
-            return zeldaGameStates.gameplay_animation_lock
+            return ZeldaGameStates.gameplay_animation_lock
         
         # same for wand
         if sword_animation == 31 or sword_animation == 32:
-            return zeldaGameStates.gameplay_animation_lock
+            return ZeldaGameStates.gameplay_animation_lock
         
         return state
 
@@ -309,12 +303,12 @@ class LegendOfZeldaAgent:
             return no_action
         
         # todo: handle game over, make sure game over works
-        if self.current_game_state.game_state == zeldaGameStates.game_over:
+        if self.current_game_state.game_state == ZeldaGameStates.game_over:
             ic("Game Over reported")
 
         model_state = self.build_model_state()
 
-        action_probabilities = self.dqn_agent.next_action(model_state, self.current_game_state.game_state == zeldaGameStates.game_over)
+        action_probabilities = self.dqn_agent.next_action(model_state, self.current_game_state.game_state == ZeldaGameStates.game_over)
         if action_probabilities is not None:
             action_probabilities = [x > 0.6 for x in action_probabilities]
         

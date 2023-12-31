@@ -1,15 +1,15 @@
 ﻿# a test script to print rewards to test scoring
-import emu
 import zelda
 import importlib
-
+import emu
+ 
 # Reload so that if I make live changes to zelda.py they are reflected in Mesen
 importlib.reload(zelda)
 
 class PrintRewards:
     def __init__(self):
-        addr = emu.registerFrameMemory(7, zelda.memoryLayout.get_memory_list())
-        self.zelda_memory = zelda.MemoryWrapper(addr)
+        addr = emu.registerFrameMemory(7, zelda.ZeldaMemoryLayout.get_memory_list())
+        self.zelda_memory = zelda.ZeldaMemoryWrapper(addr)
         self.last_snapshot = self.zelda_memory.snapshot()
         self.rewards = zelda.LegendOfZeldaScorer()
          
