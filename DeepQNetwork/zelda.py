@@ -2,6 +2,7 @@ import ctypes
 import numpy as np
 from collections import deque
 from DeepQNetwork import DqnAgentRunner
+from icecream import ic
 
 # number of frames to give the model
 model_parameter_count = 0
@@ -26,7 +27,7 @@ logger = Logger()
 
 class ZeldaGameStates:
     """An enum of game states"""
-    def __init(self):
+    def __init__(self):
         self.titleTransition = 0
         self.selectionScreen = 1
         self.completed_scrolling = 4
@@ -44,7 +45,7 @@ class ZeldaMemoryLayout:
     """Raw memory addresses in the game and what they map to"""
     def __init__(self):
         self.locations = [
-            ( 0x10, "dungeon"),
+            ( 0x10, "level"),
             ( 0xeb, "location"),
             ( 0x12, "game_state"),
 
@@ -100,19 +101,24 @@ class ZeldaMemoryLayout:
     def get_index(self, name):
         if name in self.index_map:
             return self.index_map[name]
+        raise Exception(f"Unknown memory location {name}") 
+        
+    def get_memory_list(self):
+        return [x for x, _ in self.locations]
         
 memoryLayout = ZeldaMemoryLayout()
 
 
 class ZeldaMemory:
     def __init__(self, snapshot):
-        self.snapshot = snapshot
+        self.snapshot = list(snapshot)
         
     def __getattr__(self, item):
-        if item in self._dict:
-            return self._dict[item]
+        if item in self.__dict__:
+            return self.__dict__[item]
         
-        return self.snapshot[memoryLayout.get_index(item)]
+        snapshot = self.__dict__['snapshot']
+        return snapshot[memoryLayout.get_index(item)]
     
     @property
     def triforce_pieces(self):
@@ -129,7 +135,7 @@ class ZeldaMemory:
         if partialHealth > 0xf0:
             return full_hearts
         
-        return full_hearts - 1 + partialHealth / 16.0
+        return full_hearts - 1 + float(partialHealth) / 255
     
     @property
     def boomerang(self):
@@ -192,16 +198,17 @@ class LegendOfZeldaScorer:
         # has the agent found a brand new place?
         old_location = (old_state.level, old_state.location)
         new_location = (new_state.level, new_state.location)
-        
-        if old_location != new_location and new_location not in self._locations:
-            if self._locations.add(new_location):
+
+        if old_location != new_location:
+            if new_location not in self._locations:
+                self._locations.add(new_location)
                 reward += self.reward_new_location
-                logger.log(f"Reward for discovering new room! {self.reward_new_location}")
+                ic(f"Reward for discovering new room! {self.reward_new_location}")
                 
         # did link kill an enemy?
         if old_state.room_kill_count < new_state.room_kill_count:
             reward += self.reward_enemy_kill
-            logger.log(f"Reward for killing an enemy!")
+            ic(f"Reward for killing an enemy!")
             
         # did link gain rupees?
         if old_state.rupees_to_add < new_state.rupees_to_add:
@@ -209,29 +216,32 @@ class LegendOfZeldaScorer:
             # only reward for the accumulator that adds them, not the value of the current
             # rupee total
             reward += self.reward_get_rupee
-            logger.log(f"Reward for gaining rupees!")
+            ic(f"Reward for gaining rupees!")
+
+        if not self.__hearts_equal(old_state.hearts, new_state.hearts):
+            ic(f"{old_state.hearts} -> {new_state.hearts}")
 
         # did link gain health?
         if old_state.hearts < new_state.hearts:
             reward += self.reward_gain_health
-            logger.log(f"Reward for gaining hearts!")
+            ic(f"Reward for gaining hearts!")
             
         # did link lose health?
         elif old_state.hearts > new_state.hearts:
             # did link lose sword beams as a result?
             if self.__hearts_equal(old_state.hearts, old_state.heart_containers):
                 reward += self.penalty_lose_beams
-                logger.log("Penalty for losing beams!");
+                ic("Penalty for losing beams!");
             
             # losing anything other than the first or last heart is less of an issue
             else:
                 reward += self.penalty_take_damage
-                logger.log("Penalty for losing health!")
+                ic("Penalty for losing health!")
         
         # did we hit a game over?
         if old_state.game_state != zeldaGameStates.game_over and new_state.game_state == zeldaGameStates.game_over:
             reward += self.penalty_game_over
-            logger.log("Penalty for game over!")
+            ic("Penalty for game over!")
             
         return reward
 
