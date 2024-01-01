@@ -1,5 +1,5 @@
 # a test script to print rewards to test scoring
-from zelda import LegendOfZeldaAgent, ZeldaMemoryLayout, ZeldaMemoryWrapper, ZeldaGameStates
+import zelda
 import importlib
 import random
 import emu
@@ -23,46 +23,12 @@ action_frame_skip_max = 15
 start_button_input = [False, False, True, False, False, False, False, False]
 no_button_input = [False, False, False, False, False, False, False, False]
 
-class LoadSaveStateAndSkipTitle:
-    def __init__(self, old_on_frame, save_state, zeldaMemory : ZeldaMemoryWrapper):
-        self.old_on_frame = old_on_frame
-        self.zeldaMemory = zeldaMemory
-        
-        emu.removeEventCallback(self, old_on_frame)
-        emu.addEventCallback(self.onFrame)
-
-        self.state = 0  # loaded save
-        emu.load_save_state(save_state)
-
-        # skip a random number of frames to make sure RNG changes
-        self.frame_skip = random.randint(0, 75)
-
-    def onFrame(self, cpuType):
-        if self.skip_frames:
-            self.skip_frames -= 1
-            return
-        
-        mem = self.zeldaMemory.snapshot()
-        if mem.game_state == ZeldaGameStates.gameplay:
-            # we are done!
-            emu.removeEventCallback(self, self.onFrame)
-            emu.addEventCallback(self.old_on_frame)
-            self.old_on_frame(cpuType)
-
-        if self.state == 0:
-            # We are now at the title screen
-            emu.setInput(start_button_input)
-            self.state = 1
-        
-        else:
-            emu.setInput(no_button_input)
-            self.state = 0
 
 class TrainAgent:
     def __init__(self):
-        memory = emu.registerFrameMemory(7, ZeldaMemoryLayout.get_address_list())
+        memory = emu.registerFrameMemory(7, zelda.ZeldaMemoryLayout.get_address_list())
         screen = emu.registerScreenMemory()
-        self.agent = LegendOfZeldaAgent(memory, screen)
+        self.agent = zelda.LegendOfZeldaAgent(memory, screen)
         self.total_iterations = iterations
         self.is_running = False
         self.current_iteration = 0
@@ -73,16 +39,20 @@ class TrainAgent:
         self.skip_frames = 0
         self.current_input = None
 
-    def onFrame(self, cpuType):
-        if self.skip_frames:
-            if self.current_input:
-                emu.setInput(self.current_input)
-            
-            self.skip_frames -= 1
-            if self.skip_frames == 0:
-                self.current_input = None
+    def enable(self):
+        emu.addEventCallback(self.onFrame, eventType.startFrame)
+        emu.addEventCallback(self.onInput, eventType.pollInput)
 
-            return
+    def disable(self):
+        emu.removeEventCallback(self.onFrame, eventType.startFrame)
+        emu.removeEventCallback(self.onInput, eventType.pollInput)
+
+    def pollInput(self, _):
+        if self.current_input:
+            emu.setInput(0, 0, self.current_input)
+
+    def onFrame(self, _):
+
 
         try:
             if not self.is_running:
@@ -93,18 +63,25 @@ class TrainAgent:
                     print("Complete!")
                     return
                 
-                LoadSaveStateAndSkipTitle(self.onFrame, "X:\\start.mss", self.agent.memory)
+                emu.loadSaveState("x:\\start.mss")
                 self.is_running = True
                 self.agent.begin_game()
                 return
 
             gameplay_state = self.agent.capture_and_check_game_state()
 
-            if gameplay_state == ZeldaGameStates.gameplay_animation_lock:
-                # take no action if there's animation lock
-                pass
+            if gameplay_state == zelda.ZeldaGameStates.gameplay_animation_lock:
+                # if there's animation lock, it's fast, and we want the AI to be able to respond
+                # when it lifts instead of standard frame waiting
+                self.skip_frames = 0
+
+            elif self.skip_frames:
+                # check if we should even process the event
+                self.skip_frames -= 1
+                if self.skip_frames == 0:
+                    self.current_input = no_button_input
             
-            elif gameplay_state == ZeldaGameStates.game_over:
+            elif gameplay_state == zelda.ZeldaGameStates.game_over:
                 # finish the iteration
                 self.agent.end_game()
                 self.is_running = False
@@ -125,4 +102,6 @@ class TrainAgent:
             
             emu.removeEventCallback(self.onFrame, self.eventType.startFrame)
 
-emu.addEventCallback(TrainAgent().onFrame, eventType.startFrame)
+trainer = TrainAgent()
+trainer.enable()
+
