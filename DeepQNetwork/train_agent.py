@@ -3,6 +3,7 @@ import zelda
 import importlib
 import random
 import mesen
+from mesen_zelda import GameReplay
 
 # Reload so that if I make live changes to zelda.py they are reflected in Mesen
 importlib.reload(zelda)
@@ -25,7 +26,8 @@ no_button_input = [False, False, False, False, False, False, False, False]
 
 
 class TrainAgent:
-    def __init__(self):
+    def __init__(self, save_state):
+        self.save_state = save_state
         memory = mesen.registerFrameMemory(7, zelda.ZeldaMemoryLayout.get_address_list())
         screen = mesen.registerScreenMemory()
         self.agent = zelda.LegendOfZeldaAgent(memory, screen)
@@ -35,14 +37,21 @@ class TrainAgent:
 
         self.max_frame = max_game_duration_sec / frames_per_second
 
-        self.skip_frames = 0
+        self.action_cooldown = 0
         self.current_input = None
+        self.frames = None
 
-    def start(self):
-            mesen.loadSaveState("x:\\start.mss")
-            self.is_running = True
-            self.agent.begin_game()
-            self.enable()
+        self.state = zelda.ZeldaGameState()
+
+
+    def capture_frame(self):
+            # always capture the current frame
+            frame = self.frames.capture()
+
+            # update game state
+            game_state = self.state
+            game_state.set_memory(frame.memory)
+            return (frame, game_state)
 
     def onPollInput(self, _):
         if self.current_input:
@@ -50,48 +59,72 @@ class TrainAgent:
 
     def onFrame(self, _):
         try:
-            # alwawys check the gameplay state, this captures input/screen
-            gameplay_state = self.agent.capture_and_check_game_state()
-            if gameplay_state == zelda.ZeldaGameStates.gameplay_animation_lock:
-                # if there's animation lock, it's fast, and we want the AI to be able to respond
-                # when it lifts instead of standard frame waiting
-                self.skip_frames = 0
-                self.current_input = no_button_input
+            frame, game_state = self.capture_frame()
 
-            elif self.skip_frames:
-                # check if we should even process the event, hold current button input
-                self.skip_frames -= 1
-                if self.skip_frames == 0:
+            # First check if link is animation locked since we special case that
+            if game_state.is_link_animation_locked():
+                # If there's animation lock, it's fast, and we want the AI to be able to respond
+                # when it lifts instead of standard frame waiting.  In this case, clear the
+                # action cooldown, stop sending input, and stop processing.
+                self.action_cooldown = 0
+                self.current_input = no_button_input
+                return
+
+            # Check if we are on action cooldown
+            if self.action_cooldown:
+                self.action_cooldown -= 1
+
+                # if we still have a cooldown, stop processing
+                if self.action_cooldown:
+                    return
+                    
+                # If cooldown just ended, clear the input and continue processing. Note that input
+                # is polled before the frame is processed, so we want to go ahead and run the agent
+                # since it won't be polled again until the next frame.
+                else:
                     self.current_input = no_button_input
+
             
-            elif gameplay_state == zelda.ZeldaGameStates.game_over:
+            mode = game_state.get_mode()
+
+            # check for game over
+            if mode == zelda.ZeldaGameStates.game_over:
                 # finish the iteration
-                self.agent.end_game()
+                self.agent.end_game(game_state)
+
                 self.current_iteration += 1
                 self.current_input = no_button_input
                 print("game over")
 
                 if self.current_iteration < self.total_iterations:
-                    # start the next iteration
+                    # begin a new game
+                    self.frames = GameReplay()
                     mesen.loadSaveState("x:\\start.mss")
                     self.agent.begin_game()
+
                 else:
                     # we are done
                     self.disable()
                     self.agent.save("completed.dat")
                     print("Complete!")
-                    return
 
-            else:
-                # our action is the controller input
-                action = self.agent.get_action_from_game_state()
-                print(action)
-                mesen.setInput(0, 0, action)
+                return
 
-                # skip frames for the next action:
-                if action_frame_skip_min < action_frame_skip_max:
-                    self.current_input = action
-                    self.skip_frames = random.randint(action_frame_skip_min, action_frame_skip_max)
+            # our action is the controller input
+            action = self.agent.act(self.frames)
+            print(action)
+            mesen.setInput(0, 0, action)
+
+            # Assign the input we just sent to the current frame instead of
+            # the next frame.  This isn't technically correct, but it makes
+            # logic simpler to save.
+            frame.input = frame.encode_input(action)
+            frame.agent_action = True
+
+            # skip frames for the next action:
+            if action_frame_skip_min < action_frame_skip_max:
+                self.current_input = action
+                self.action_cooldown = random.randint(action_frame_skip_min, action_frame_skip_max)
 
         except Exception as e:
             print(e)
@@ -108,5 +141,5 @@ class TrainAgent:
         mesen.removeEventCallback(self.onFrame, mesen.eventType.startFrame)
         mesen.removeEventCallback(self.onPollInput, mesen.eventType.inputPolled)
 
-trainer = TrainAgent()
+trainer = TrainAgent("x:\\start.mss")
 trainer.enable()

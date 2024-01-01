@@ -1,7 +1,10 @@
+from collections.abc import Sequence
 import ctypes
 import numpy as np
 from collections import deque
 from .dqn import DqnAgentRunner
+
+action_threshold = 0.7 # model must be 70% confident in a button press
 
 # number of frames to give the model
 model_parameter_count = 4
@@ -18,7 +21,7 @@ penalty_small = -1.0
 penalty_medium = -10.0
 penalty_large = -50.0
 
-class ZeldaGameStates:
+class ZeldaGameModes:
     """An enum of game states"""
     def __init__(self):
         self.titleTransition = 0
@@ -29,10 +32,8 @@ class ZeldaGameStates:
         self.scrolling = 7
         self.registration = 0xe
         self.game_over = 0xf
-        
-        self.gameplay_animation_lock = 0x100
 
-ZeldaGameStates = ZeldaGameStates()
+zelda_game_modes = ZeldaGameModes()
 
 class ZeldaMemoryLayout:
     """Raw memory addresses in the game and what they map to"""
@@ -40,7 +41,7 @@ class ZeldaMemoryLayout:
         self.locations = [
             ( 0x10, "level"),
             ( 0xeb, "location"),
-            ( 0x12, "game_state"),
+            ( 0x12, "mode"),
 
             ( 0xb9, "sword_animation"),
             ( 0xba, "beam_animation"),
@@ -98,20 +99,23 @@ class ZeldaMemoryLayout:
         
     def get_address_list(self):
         return [x for x, _ in self.locations]
-        
+    
 ZeldaMemoryLayout = ZeldaMemoryLayout()
 
 
-class ZeldaMemory:
-    def __init__(self, snapshot):
-        self.snapshot = list(snapshot)
-        
+class ZeldaGameState:
+    def __init__(self, memory_buffer = None):
+        self.set_memory(memory_buffer)
+    
+    def set_memory(self, memory_buffer):
+        self.memory_buffer = memory_buffer
+
     def __getattr__(self, item):
         if item in self.__dict__:
             return self.__dict__[item]
         
-        snapshot = self.__dict__['snapshot']
-        return snapshot[ZeldaMemoryLayout.get_index(item)]
+        buffer = self.__dict__['memory_buffer']
+        return buffer[ZeldaMemoryLayout.get_index(item)]
     
     @property
     def triforce_pieces(self):
@@ -145,6 +149,12 @@ class ZeldaMemory:
     @property
     def location_y(self):
         return self.location >> 4
+    
+    @property
+    def is_link_animation_locked(self):
+        """Returns whether link is animation locked and cannot take an action"""
+        animation = self.sword_animation
+        return animation == 1 or animation == 2 or animation == 31 or animation == 32
             
 
 class ZeldaMemoryWrapper:
@@ -153,8 +163,8 @@ class ZeldaMemoryWrapper:
         be in the exact order that ZeldaMemoryConstants.locations are in"""
         self.pointer = ctypes.cast(addr, ctypes.POINTER(ctypes.c_uint8 * len(ZeldaMemoryLayout.locations)))
 
-    def snapshot(self) -> ZeldaMemory:
-        return ZeldaMemory(np.frombuffer(self.pointer.contents, dtype=np.uint8))
+    def snapshot(self) -> ZeldaGameState:
+        return ZeldaGameState(np.frombuffer(self.pointer.contents, dtype=np.uint8))
 
 
 class ScreenWrapper:
@@ -181,16 +191,28 @@ class LegendOfZeldaScorer:
         self.penalty_lose_beams = penalty_medium
         self.penalty_take_damage = penalty_small
         self.penalty_game_over = penalty_large
+
+        self.prev_state = None
         
     def __hearts_equal(self, first, second):
         return abs(first - second) <= 0.01
     
-    def score(self, old_state : ZeldaMemory, new_state : ZeldaMemory) -> float:
+    def reset(self):
+        self._locations.clear()
+        self.prev_state = None
+    
+    def score(self, state : ZeldaGameState) -> float:
+        prev = self.prev_state
+        self.prev_state = state
+
+        if prev is None or state is None:
+            return 0
+        
         reward = 0
 
         # has the agent found a brand new place?
-        old_location = (old_state.level, old_state.location)
-        new_location = (new_state.level, new_state.location)
+        old_location = (prev.level, prev.location)
+        new_location = (state.level, state.location)
 
         if old_location != new_location:
             if new_location not in self._locations:
@@ -199,30 +221,30 @@ class LegendOfZeldaScorer:
                 print(f"Reward for discovering new room! {self.reward_new_location}")
                 
         # did link kill an enemy?
-        if old_state.room_kill_count < new_state.room_kill_count:
+        if prev.room_kill_count < state.room_kill_count:
             reward += self.reward_enemy_kill
             print(f"Reward for killing an enemy!")
             
         # did link gain rupees?
-        if old_state.rupees_to_add < new_state.rupees_to_add:
+        if prev.rupees_to_add < state.rupees_to_add:
             # rupees are added to the total one at a time when you pick up multiple, so we
             # only reward for the accumulator that adds them, not the value of the current
             # rupee total
             reward += self.reward_get_rupee
             print(f"Reward for gaining rupees!")
 
-        if not self.__hearts_equal(old_state.hearts, new_state.hearts):
-            print(f"{old_state.hearts} -> {new_state.hearts}")
+        if not self.__hearts_equal(prev.hearts, state.hearts):
+            print(f"{prev.hearts} -> {state.hearts}")
 
         # did link gain health?
-        if old_state.hearts < new_state.hearts:
+        if prev.hearts < state.hearts:
             reward += self.reward_gain_health
             print(f"Reward for gaining hearts!")
             
         # did link lose health?
-        elif old_state.hearts > new_state.hearts:
+        elif prev.hearts > state.hearts:
             # did link lose sword beams as a result?
-            if self.__hearts_equal(old_state.hearts, old_state.heart_containers):
+            if self.__hearts_equal(prev.hearts, prev.heart_containers):
                 reward += self.penalty_lose_beams
                 print("Penalty for losing beams!");
             
@@ -232,121 +254,70 @@ class LegendOfZeldaScorer:
                 print("Penalty for losing health!")
         
         # did we hit a game over?
-        if old_state.game_state != ZeldaGameStates.game_over and new_state.game_state == ZeldaGameStates.game_over:
+        if prev.game_state != zelda_game_modes.game_over and state.game_state == zelda_game_modes.game_over:
             reward += self.penalty_game_over
             print("Penalty for game over!")
             
         return reward
 
+
+class ZeldaFrame:
+    def __init__(self, frame : int, memory : bytes, screen : bytes, input : bytes):
+        self.frame = frame
+        self.memory = memory
+        self.screen = screen
+        self.input = input
+        
+    @staticmethod
+    def encode_input(bools) -> bytes:
+        if len(bools) != 8:
+            raise ValueError("Array must contain exactly 8 booleans.")
+
+        result = 0
+        for i, bit in enumerate(bools):
+            if bit:  # If the boolean is True
+                result |= 1 << - i
+        return result.to_bytes(1, 'big')
+    
+    @staticmethod
+    def decode_input(byte) -> []:
+        if len(byte) != 1:
+            raise ValueError("Input must be a single byte.")
+
+        result = []
+        num = int.from_bytes(byte, 'big')
+        for i in range(8):
+            result.append(bool(num & (1 << i)))
+        return result
+    
+    @property
+    def game_state(self):
+        return ZeldaGameState(self.memory)
+
 no_action = [False] * 8
 class LegendOfZeldaAgent:
-    def __init__(self, memoryAddress, screenAddress):
-        # game wrappers
-        self.memory = ZeldaMemoryWrapper(memoryAddress)
-        self.screen = ScreenWrapper(screenAddress)
-        
-        # keep the last 60 seconds of frames
-        self.frames = deque(maxlen=60)
-        self.shadow_frames = deque(maxlen = model_frame_count)
-        
-        self.dqn_agent = DqnAgentRunner(LegendOfZeldaScorer().score, model_frame_count, model_parameter_count)
-
-        self.current_game_state = None
-        self.last_game_state = None
+    def __init__(self, model, scorer : LegendOfZeldaScorer, max_memory, action_threshold = action_threshold):
+        self.dqn_agent = DqnAgentRunner(LegendOfZeldaScorer().score, model, model.get_random_action, max_memory)
+        self.prev = None
+        self.scorer = scorer
 
     def begin_game(self):
-        self.dqn_agent.start_iteration()
+        self.dqn_agent.reset()
+        self.scorer.reset()
 
-    def end_game(self):
-        self.dqn_agent.end_iteration()
-        
-    def capture_and_check_game_state(self) -> int:
-        """Returns whether we should call get_action_from_game_state or not and actually process this frame of gameplay."""
-        self.current_game_state = self.memory.snapshot()
-        
-        state = self.current_game_state.game_state
-        
-        self.current_frame = self.screen.snapshot()
-        if state == ZeldaGameStates.gameplay:
-            # if the last state we processed was not a gameplay state, we need to use only this current frame
-            # for all images the model sees, otherwise it would be reacting to what's on the previous screen
-            if self.last_game_state is None or self.last_game_state.game_state != ZeldaGameStates.gameplay:
-                self.frames.clear()
-                
-            self.frames.append(self.current_frame)
-        
-        else:
-            # use the shadow frame sequence for non-gameplay frames
-            # but only if the game state matches current
-            if self.last_game_state is None or self.last_game_state.game_state != state:
-                self.shadow_frames.clear()
-            
-            self.shadow_frames.append(self.current_frame)
-        
-        # report back that link is animation locked and should not try to get an action
-        sword_animation = self.current_game_state.sword_animation
-        if sword_animation == 1 or sword_animation == 2:
-            return ZeldaGameStates.gameplay_animation_lock
-        
-        # same for wand
-        if sword_animation == 31 or sword_animation == 32:
-            return ZeldaGameStates.gameplay_animation_lock
-        
-        return state
+    def end_game(self, curr_frame : ZeldaFrame):
+        model_state = self.build_model_state()
+        reward = self.scorer.score(curr_frame.game_state)
+        self.dqn_agent.done(model_state, reward)
 
-    def get_action_from_game_state(self):
+    def act(self, curr_frame : ZeldaFrame, frames : Sequence[ZeldaFrame]) -> [bool]:
         """Returns either a controller state, or None if the game is over."""
-        print("get_action_from_game_state")
-        if len(self.frames) < frames_saved:
-            print("Not enough frames to process")
-            return no_action
-        
         # todo: handle game over, make sure game over works
-        if self.current_game_state.game_state == ZeldaGameStates.game_over:
-            print("Game Over reported")
 
         model_state = self.build_model_state()
+        reward = self.scorer.score(curr_frame.game_state)
 
-        action_probabilities = self.dqn_agent.next_action(model_state, self.current_game_state.game_state == ZeldaGameStates.game_over)
-        if action_probabilities is not None:
-            action_probabilities = [x > 0.6 for x in action_probabilities]
+        action_probabilities = self.dqn_agent.act(model_state, reward)
+        action = [x > action_threshold for x in action_probabilities]
         
-        # cleanup: Assign current state to none so we hit an error if someone forgot to call capture_and_check_game_state
-        self.last_game_state = self.current_game_state
-        self.current_game_state = None
-        
-        print(action_probabilities)
-        return action_probabilities
-        
-        #todo:  add begin new run method call start_iteration.  Also call end_iteration?
-    
-    def build_model_state(self):
-        frames = np.stack(self.enumerate_frames(model_frame_count), axis=0)
-        
-        # todo: build model_state, normalize model_state, set model_parameter_count
-        gameState = self.current_game_state
-        sword = 0.0
-        if gameState.sword:
-            sword = 1.0
-
-        model_game_state = [
-            gameState.hearts / gameState.heart_containers,
-            gameState.location_x / 16.0,
-            gameState.location_y / 16.0,
-            sword,
-            ]
-        
-        return [frames, model_game_state]
-
-
-    def enumerate_frames(self, num_frames, useShadow):
-        frames = self.frames
-        if useShadow:
-            frames = self.shadow_frames
-            
-        n = max(min(n, len(frames)), 0)
-
-        if n == num_frames:
-            return [x for x in frames[-n:]]
-        
-        return [frames[-1]] * num_frames
+        return action
