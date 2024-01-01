@@ -103,7 +103,7 @@ class ZeldaModelXL:
         combined_dense = tf.keras.layers.Dense(512, activation='relu')(combined)
 
         # Output layer
-        output = tf.keras.layers.Dense(num_output, activation='sigmoid')(combined_dense)
+        output = tf.keras.layers.Dense(num_outputs, activation='sigmoid')(combined_dense)
 
         # Create the model
         model = tf.keras.Model(inputs=[image_input, state_input], outputs=output)
