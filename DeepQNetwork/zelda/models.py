@@ -8,6 +8,8 @@ image_width = 256
 image_channels = 3
 num_output = 8      # buttons on the controller
 
+action_threshold = 0.7 # model must be 70% confident in a button press
+
 xl_frame_count = 3
 xl_feature_count = 4
 
@@ -27,7 +29,7 @@ def argb_bytes_to_np_rgb(argb_array):
 class ZeldaModelXL:
     def __init__(self):
         self.model = self._build_model(xl_frame_count, xl_feature_count)
-        self.num_outputs = num_output
+        self.action_threshold = action_threshold
 
     def save(self, path):
         self.model.save_weights(path)
@@ -36,7 +38,7 @@ class ZeldaModelXL:
         self.model.load_weights(path)
 
     def get_random_action(self):
-        return np.random.beta(0.5, 0.5, self.num_outputs)
+        return np.random.beta(0.5, 0.5, num_outputs)
 
     def get_model_input(self, all_frames : list[ZeldaFrame]):
         """Uses the last frame to build input for the model"""

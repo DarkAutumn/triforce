@@ -4,8 +4,6 @@ import numpy as np
 from collections import deque
 from .dqn import DqnAgentRunner
 
-action_threshold = 0.7 # model must be 70% confident in a button press
-
 # number of frames to give the model
 model_parameter_count = 4
 model_frame_count = 5
@@ -296,10 +294,11 @@ class ZeldaFrame:
 
 no_action = [False] * 8
 class LegendOfZeldaAgent:
-    def __init__(self, model, scorer : LegendOfZeldaScorer, max_memory, action_threshold = action_threshold):
+    def __init__(self, model, scorer : LegendOfZeldaScorer, max_memory):
         self.dqn_agent = DqnAgentRunner(LegendOfZeldaScorer().score, model, model.get_random_action, max_memory)
         self.prev = None
         self.scorer = scorer
+        self.action_threshold = model.action_threshold
 
     def begin_game(self):
         self.dqn_agent.reset()
@@ -318,6 +317,6 @@ class LegendOfZeldaAgent:
         reward = self.scorer.score(curr_frame.game_state)
 
         action_probabilities = self.dqn_agent.act(model_state, reward)
-        action = [x > action_threshold for x in action_probabilities]
+        action = [x > self.action_threshold for x in action_probabilities]
         
         return action
