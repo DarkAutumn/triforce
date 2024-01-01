@@ -1,4 +1,5 @@
-from .zelda_game import zelda_game_modes, ZeldaGameState
+from .zelda_state import ZeldaGameState
+from .zelda_constants import zelda_game_modes
 
 reward_small = 1.0
 reward_medium = 10.0

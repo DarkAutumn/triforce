@@ -2,14 +2,16 @@
 import zelda
 import importlib
 import mesen
+
+from zelda.zelda_constants import zelda_memory_layout
  
 # Reload so that if I make live changes to zelda.py they are reflected in Mesen
 importlib.reload(zelda)
 
 class PrintRewards:
     def __init__(self):
-        addr = mesen.registerFrameMemory(7, zelda.ZeldaMemoryLayout.get_address_list())
-        self.zelda_memory = zelda.ZeldaMemoryWrapper(addr)
+        addr = mesen.registerFrameMemory(7, zelda.zelda_memory_layout.get_address_list())
+        self.zelda_memory = zelda_memory_layout(addr)
         self.last_snapshot = self.zelda_memory.snapshot()
         self.rewards = zelda.LegendOfZeldaScorer()
          

@@ -11,7 +11,7 @@ class MesenZeldaRecorder:
     buffer_size: the maximum number of frames to capture in memory before the oldest frame is discarded
     (buffer_size only applies to recent memory, not to file output)"""
     def __init__(self, buffer_size = 120):
-        addresses = zelda.ZeldaMemoryLayout.get_address_list()
+        addresses = zelda.zelda_memory_layout.get_address_list()
         self._memoryHandle = mesen.registerFrameMemory(mesen.memoryType.nesMemory, addresses)
         self._screenHandle = mesen.registerScreenMemory()
 

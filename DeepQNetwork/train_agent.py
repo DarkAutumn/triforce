@@ -3,13 +3,13 @@ import zelda
 import importlib
 import random
 import mesen
-from mesen_zelda import GameReplay
+from mesen_zelda import MesenZeldaRecorder
 
 # Reload so that if I make live changes to zelda.py they are reflected in Mesen
 importlib.reload(zelda)
 
 iterations = 5
-max_game_duration_sec = 1 * 60
+max_game_duration_sec = 5 * 60
 frames_per_second = 60.1
 save_every = 50
 
@@ -17,20 +17,18 @@ save_every = 50
 # it's important this be a range and not, say, every 2 frames because certain enemy animations
 # are on a particular cycle, and would therefore be "invisible" to the agent without some
 # variability
-action_frame_skip_min = 5
-action_frame_skip_max = 15
+action_frame_skip_min = 10
+action_frame_skip_max = 20
 
 # input order: a b start select up down left right, use None to not set a value
 start_button_input = [False, False, True, False, False, False, False, False]
 no_button_input = [False, False, False, False, False, False, False, False]
 
-
 class TrainAgent:
     def __init__(self, save_state):
         self.save_state = save_state
-        memory = mesen.registerFrameMemory(7, zelda.ZeldaMemoryLayout.get_address_list())
-        screen = mesen.registerScreenMemory()
-        self.agent = zelda.LegendOfZeldaAgent(memory, screen)
+        memory = mesen.registerFrameMemory(7, zelda.zelda_memory_layout.get_address_list())
+        self.agent = zelda.LegendOfZeldaAgent()
         self.total_iterations = iterations
 
         self.current_iteration = 0
@@ -39,9 +37,11 @@ class TrainAgent:
 
         self.action_cooldown = 0
         self.current_input = None
-        self.frames = None
 
-        self.state = zelda.ZeldaGameState()
+        self.frames = MesenZeldaRecorder()
+        self.state = zelda.ZeldaGameState(memory)
+
+        self.complete = False
 
 
     def capture_frame(self):
@@ -53,16 +53,19 @@ class TrainAgent:
             game_state.set_memory(frame.memory)
             return (frame, game_state)
 
-    def onPollInput(self, _):
+    def onPollInput(self):
         if self.current_input:
             mesen.setInput(0, 0, self.current_input)
 
-    def onFrame(self, _):
+    def onFrame(self):
+        if self.complete:
+            return
+        
         try:
             frame, game_state = self.capture_frame()
 
             # First check if link is animation locked since we special case that
-            if game_state.is_link_animation_locked():
+            if game_state.is_link_animation_locked:
                 # If there's animation lock, it's fast, and we want the AI to be able to respond
                 # when it lifts instead of standard frame waiting.  In this case, clear the
                 # action cooldown, stop sending input, and stop processing.
@@ -85,10 +88,10 @@ class TrainAgent:
                     self.current_input = no_button_input
 
             
-            mode = game_state.get_mode()
+            mode = game_state.mode
 
             # check for game over
-            if mode == zelda.ZeldaGameStates.game_over:
+            if mode == zelda.zelda_game_modes.game_over:
                 # finish the iteration
                 self.agent.end_game(game_state)
 
@@ -98,13 +101,17 @@ class TrainAgent:
 
                 if self.current_iteration < self.total_iterations:
                     # begin a new game
-                    self.frames = GameReplay()
-                    mesen.loadSaveState("x:\\start.mss")
+                    iterations += 1
+                    if iterations % save_every == 0:
+                        self.agent.save(f"zelda_model_{iterations}.dat")
+
+                    self.frames = MesenZeldaRecorder()
+                    mesen.loadSaveState(self.save_state)
                     self.agent.begin_game()
 
                 else:
                     # we are done
-                    self.disable()
+                    self.complete = True
                     self.agent.save("completed.dat")
                     print("Complete!")
 
@@ -131,15 +138,25 @@ class TrainAgent:
             import traceback
             print(traceback.format_exc())
 
-            self.disable()
+            disable()
 
-    def enable(self):
-        mesen.addEventCallback(self.onFrame, mesen.eventType.startFrame)
-        mesen.addEventCallback(self.onPollInput, mesen.eventType.inputPolled)
 
-    def disable(self):
-        mesen.removeEventCallback(self.onFrame, mesen.eventType.startFrame)
-        mesen.removeEventCallback(self.onPollInput, mesen.eventType.inputPolled)
+
 
 trainer = TrainAgent("x:\\start.mss")
-trainer.enable()
+
+def onFrame(cpuType):
+    trainer.onFrame()
+
+def onPollInput(cpuType):
+    trainer.onPollInput()
+
+def enable():
+    mesen.addEventCallback(onFrame, mesen.eventType.startFrame)
+    mesen.addEventCallback(onPollInput, mesen.eventType.inputPolled)
+
+def disable():
+    mesen.removeEventCallback(onFrame, mesen.eventType.startFrame)
+    mesen.removeEventCallback(onPollInput, mesen.eventType.inputPolled)
+
+enable()

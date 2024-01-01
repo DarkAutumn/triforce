@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from zelda import ZeldaFrame
+from .zelda_frame import ZeldaFrame
 
 # model parameters
 image_height = 240
@@ -44,13 +44,13 @@ class ZeldaModelXL:
         """Uses the last frame to build input for the model"""
 
         # Get all frames that are in the same mode as the last frame
-        frames = self.get_frames_of_same_mode(all_frames, xl_frame_count)
+        frames = list(self.get_frames_of_same_mode(all_frames, xl_frame_count))
 
         # Build the image input
         image_input = np.stack([argb_bytes_to_np_rgb(f.screen) for f in frames])
 
         curr = frames[-1]
-        gameState = curr.game_statee
+        gameState = curr.game_state
         sword = 0.0
         if gameState.sword:
             sword = 1.0
@@ -65,7 +65,6 @@ class ZeldaModelXL:
         return [image_input, feature_input]
     
     def get_frames_of_same_mode(self, frames : list[ZeldaFrame], count):
-
         last = frames[-1]
         yield last
         count -= 1

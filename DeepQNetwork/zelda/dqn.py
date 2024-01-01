@@ -12,10 +12,6 @@ epsilon = 1.0  # exploration rate
 epsilon_min = 0.10
 epsilon_decay = 0.998
 learning_rate = 0.001
-batch_size = 512
-
-max_memory_len = 20_000            # one per frame we made a decision on
-max_decisions_per_game = 1_000
 
 class DqnAgent:
     """Deep Q-learning Agent based on Jon Krohn's video series"""
@@ -34,12 +30,13 @@ class DqnAgent:
     def act(self, model_input) -> (bool, np.ndarray[float]):
         """Returns the action the agent should take based on the current state"""
         if np.random.rand() <= self.epsilon:  # if random number from 0 to 1 is less than exploration rate
-            return self.get_random_action()
+            return (False, self.get_random_action())
         
         act_values = self.model.predict(model_input)  # predict reward value based on current state
         result = np.argmax(act_values[0])         # return action with highest reward
 
-        return result
+        print(result)
+        return (True, result)
 
     def learn(self, memory, batch_size):
         # batch_size: size of random sample from memory
