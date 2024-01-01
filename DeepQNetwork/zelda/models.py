@@ -6,7 +6,7 @@ from .zelda_frame import ZeldaFrame
 image_height = 240
 image_width = 256
 image_channels = 3
-num_outputs = 8      # buttons on the controller
+num_outputs = 7      # buttons on the controller
 
 action_threshold = 0.7 # model must be 70% confident in a button press
 
@@ -32,9 +32,11 @@ class ZeldaModelXL:
         self.action_threshold = action_threshold
 
     def save(self, path):
+        print("saved model")
         self.model.save_weights(path)
 
     def load(self, path):
+        print("loaded model")
         self.model.load_weights(path)
 
     def get_random_action(self):
@@ -70,15 +72,16 @@ class ZeldaModelXL:
         count -= 1
 
         mode = last.game_state.mode
-        for i in range(len(frames) - 2, -1, -1):
+        for i in range(1, len(frames)):
             if not count:
                 break
 
-            if frames[i].game_state.mode == mode:
-                last = frames[i]
+            curr = frames[-i]
+            if curr.game_state.mode == mode:
+                last = curr
                 yield last
                 count -= 1
-
+                
         while count:
             yield last
             count -= 1

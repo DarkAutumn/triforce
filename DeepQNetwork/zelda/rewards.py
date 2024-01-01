@@ -84,7 +84,7 @@ class ZeldaScoreBasic:
                 print("Penalty for losing health!")
         
         # did we hit a game over?
-        if prev.game_state != zelda_game_modes.game_over and state.game_state == zelda_game_modes.game_over:
+        if prev.mode != zelda_game_modes.game_over and state.mode == zelda_game_modes.game_over:
             reward += self.penalty_game_over
             print("Penalty for game over!")
             

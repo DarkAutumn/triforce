@@ -38,11 +38,23 @@ class TrainAgent:
         self.action_cooldown = 0
         self.current_input = None
 
-        self.frames = MesenZeldaRecorder()
         self.state = zelda.ZeldaGameState(memory)
-
         self.complete = False
+        self.begin_game()
 
+    def begin_game(self):
+        self.frames = MesenZeldaRecorder()
+        mesen.loadSaveState(self.save_state)
+        self.agent.begin_game()
+
+    def end_game(self, game_state):
+        self.current_input = no_button_input
+        self.agent.end_game(game_state)
+        self.agent.learn()
+
+        self.current_iteration += 1
+        if self.current_iteration % save_every == 0:
+            self.agent.save(f"zelda_model_{iterations}.dat")
 
     def capture_frame(self):
             # always capture the current frame
@@ -93,33 +105,22 @@ class TrainAgent:
             # check for game over
             if mode == zelda.zelda_game_modes.game_over:
                 # finish the iteration
-                self.agent.end_game(game_state)
-
-                self.current_iteration += 1
-                self.current_input = no_button_input
                 print("game over")
+                self.end_game(game_state)
 
                 if self.current_iteration < self.total_iterations:
-                    # begin a new game
-                    iterations += 1
-                    if iterations % save_every == 0:
-                        self.agent.save(f"zelda_model_{iterations}.dat")
-
-                    self.frames = MesenZeldaRecorder()
-                    mesen.loadSaveState(self.save_state)
-                    self.agent.begin_game()
-
+                    self.begin_game()
                 else:
                     # we are done
                     self.complete = True
                     self.agent.save("completed.dat")
                     print("Complete!")
+                    disable()
 
                 return
 
             # our action is the controller input
             action = self.agent.act(self.frames)
-            print(action)
             mesen.setInput(0, 0, action)
 
             # Assign the input we just sent to the current frame instead of

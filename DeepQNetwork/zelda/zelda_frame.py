@@ -9,13 +9,13 @@ class ZeldaFrame:
         
     @staticmethod
     def encode_input(bools) -> bytes:
-        if len(bools) != 8:
-            raise ValueError("Array must contain exactly 8 booleans.")
+        if len(bools) > 8:
+            raise ValueError("Array must contain at most 8 booleans.")
 
         result = 0
         for i, bit in enumerate(bools):
             if bit:  # If the boolean is True
-                result |= 1 << - i
+                result |= 1 << i
         return result.to_bytes(1, 'big')
     
     @staticmethod

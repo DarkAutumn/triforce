@@ -35,7 +35,6 @@ class DqnAgent:
         act_values = self.model.predict(model_input)  # predict reward value based on current state
         result = np.argmax(act_values[0])         # return action with highest reward
 
-        print(result)
         return (True, result)
 
     def learn(self, memory, batch_size):

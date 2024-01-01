@@ -20,9 +20,7 @@ action_threshold = 0.6 # model must be 60% confident in a button press
 
 default_max_memory = 20_000   # number of steps max to keep in memory, at 4 per second, this is 83 minutes of gameplay
 default_batch_size = 1024
-            
 
-no_action = [False] * 8
 class LegendOfZeldaAgent:
     def __init__(self, model = "default", scorer = "default", max_memory = default_max_memory):
         model = self.get_model_by_name(model)
@@ -62,12 +60,15 @@ class LegendOfZeldaAgent:
         # returns whether the model predicted the value (otherwise it used a random value)
         predicted, action_probabilities = self.dqn_agent.act(model_state, reward)
 
+
         # store the action into the current frame
         curr_frame = frames[-1]
         curr_frame.predicted = predicted
         curr_frame.action = action_probabilities
 
         buttons = [x > self.action_threshold for x in action_probabilities]
+        buttons.insert(3, False)   # select
+        
         return buttons
     
     def end_game(self, frames : Sequence[ZeldaFrame]):
