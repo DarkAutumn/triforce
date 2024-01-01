@@ -78,10 +78,12 @@ class DqnAgent:
     def act(self, state):
         # state: current state
         if np.random.rand() <= self.epsilon:  # if random number from 0 to 1 is less than exploration rate
-            return np.random.beta(0.5, 0.5, num_output)
-        
-        act_values = self.model.predict(state)  # predict reward value based on current state
-        return np.argmax(act_values[0])         # return action with highest reward
+            result = np.random.beta(0.5, 0.5, num_output)
+        else:
+            act_values = self.model.predict(state)  # predict reward value based on current state
+            result = np.argmax(act_values[0])         # return action with highest reward
+
+        return result
 
     def replay(self, batch_size):
         # batch_size: size of random sample from memory
@@ -106,10 +108,9 @@ class DqnAgent:
         self.model.save_weights(name)
 
 class DqnAgentRunner:
-    def __init__(self, iterations, score_function, frames, parameters):
+    def __init__(self, score_function, frames, parameters):
         # per run variables
         self.curr_iteration = 0
-        self.total_iterations = iterations
         self.score_function = score_function
         
         self.agent = DqnAgent(frames, parameters)
@@ -123,17 +124,13 @@ class DqnAgentRunner:
         self.score = 0.0
     
     def start_iteration(self):
-        if self.curr_iteration < self.total_iterations:
-            self.curr_iteration += 1
-            return True
+        self.curr_iteration += 1
         
         self.prev_action = None
         self.prev_state = None
         self.prev_state_for_score = None
         self.score = 0.0
         
-        return False
-    
     def end_iteration(self):
         if self.prev_action is not None:
             print(f"episode: {self.curr_iteration} score: {self.score}")

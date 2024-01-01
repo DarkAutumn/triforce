@@ -241,7 +241,7 @@ class LegendOfZeldaScorer:
 
 no_action = [False] * 8
 class LegendOfZeldaAgent:
-    def __init__(self, memoryAddress, screenAddress, num_iterations):
+    def __init__(self, memoryAddress, screenAddress):
         # game wrappers
         self.memory = ZeldaMemoryWrapper(memoryAddress)
         self.screen = ScreenWrapper(screenAddress)
@@ -250,9 +250,7 @@ class LegendOfZeldaAgent:
         self.frames = deque(maxlen=60)
         self.shadow_frames = deque(maxlen = model_frame_count)
         
-        self.dqn_agent = DqnAgentRunner(num_iterations, LegendOfZeldaScorer().score, model_frame_count, model_parameter_count)
-        if not self.dqn_agent.start_iteration():
-            raise Exception("Unable to start first iteration")
+        self.dqn_agent = DqnAgentRunner(LegendOfZeldaScorer().score, model_frame_count, model_parameter_count)
 
         self.current_game_state = None
         self.last_game_state = None
