@@ -2,8 +2,8 @@
 import zelda
 import importlib
 import random
-import emu
- 
+import mesen
+
 # Reload so that if I make live changes to zelda.py they are reflected in Mesen
 importlib.reload(zelda)
 
@@ -26,8 +26,8 @@ no_button_input = [False, False, False, False, False, False, False, False]
 
 class TrainAgent:
     def __init__(self):
-        memory = emu.registerFrameMemory(7, zelda.ZeldaMemoryLayout.get_address_list())
-        screen = emu.registerScreenMemory()
+        memory = mesen.registerFrameMemory(7, zelda.ZeldaMemoryLayout.get_address_list())
+        screen = mesen.registerScreenMemory()
         self.agent = zelda.LegendOfZeldaAgent(memory, screen)
         self.total_iterations = iterations
 
@@ -39,14 +39,14 @@ class TrainAgent:
         self.current_input = None
 
     def start(self):
-            emu.loadSaveState("x:\\start.mss")
+            mesen.loadSaveState("x:\\start.mss")
             self.is_running = True
             self.agent.begin_game()
             self.enable()
 
     def onPollInput(self, _):
         if self.current_input:
-            emu.setInput(0, 0, self.current_input)
+            mesen.setInput(0, 0, self.current_input)
 
     def onFrame(self, _):
         try:
@@ -73,7 +73,7 @@ class TrainAgent:
 
                 if self.current_iteration < self.total_iterations:
                     # start the next iteration
-                    emu.loadSaveState("x:\\start.mss")
+                    mesen.loadSaveState("x:\\start.mss")
                     self.agent.begin_game()
                 else:
                     # we are done
@@ -86,7 +86,7 @@ class TrainAgent:
                 # our action is the controller input
                 action = self.agent.get_action_from_game_state()
                 print(action)
-                emu.setInput(0, 0, action)
+                mesen.setInput(0, 0, action)
 
                 # skip frames for the next action:
                 if action_frame_skip_min < action_frame_skip_max:
@@ -101,13 +101,12 @@ class TrainAgent:
             self.disable()
 
     def enable(self):
-        emu.addEventCallback(self.onFrame, eventType.startFrame)
-        emu.addEventCallback(self.onPollInput, eventType.inputPolled)
+        mesen.addEventCallback(self.onFrame, mesen.eventType.startFrame)
+        mesen.addEventCallback(self.onPollInput, mesen.eventType.inputPolled)
 
     def disable(self):
-        emu.removeEventCallback(self.onFrame, eventType.startFrame)
-        emu.removeEventCallback(self.onPollInput, eventType.inputPolled)
+        mesen.removeEventCallback(self.onFrame, mesen.eventType.startFrame)
+        mesen.removeEventCallback(self.onPollInput, mesen.eventType.inputPolled)
 
 trainer = TrainAgent()
 trainer.enable()
-

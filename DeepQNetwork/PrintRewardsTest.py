@@ -1,14 +1,14 @@
 ﻿# a test script to print rewards to test scoring
 import zelda
 import importlib
-import emu
+import mesen
  
 # Reload so that if I make live changes to zelda.py they are reflected in Mesen
 importlib.reload(zelda)
 
 class PrintRewards:
     def __init__(self):
-        addr = emu.registerFrameMemory(7, zelda.ZeldaMemoryLayout.get_address_list())
+        addr = mesen.registerFrameMemory(7, zelda.ZeldaMemoryLayout.get_address_list())
         self.zelda_memory = zelda.ZeldaMemoryWrapper(addr)
         self.last_snapshot = self.zelda_memory.snapshot()
         self.rewards = zelda.LegendOfZeldaScorer()
@@ -26,7 +26,7 @@ class PrintRewards:
             import traceback
             print(traceback.format_exc())
             
-            emu.removeEventCallback(self.onFrame, self.eventType.startFrame)
+            mesen.removeEventCallback(self.onFrame, mesen.eventType.startFrame)
 
 
-emu.addEventCallback(PrintRewards().onFrame, eventType.startFrame)
+mesen.addEventCallback(PrintRewards().onFrame, mesen.eventType.startFrame)
