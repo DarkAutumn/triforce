@@ -6,7 +6,7 @@ from zelda import ZeldaFrame
 image_height = 240
 image_width = 256
 image_channels = 3
-num_output = 8      # buttons on the controller
+num_outputs = 8      # buttons on the controller
 
 action_threshold = 0.7 # model must be 70% confident in a button press
 
