@@ -1,7 +1,7 @@
 import ctypes
 import numpy as np
 from collections import deque
-from .DeepQNetwork import DqnAgentRunner
+from .dqn import DqnAgentRunner
 
 # number of frames to give the model
 model_parameter_count = 4
