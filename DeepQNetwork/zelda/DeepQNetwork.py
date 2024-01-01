@@ -78,11 +78,14 @@ class DqnAgent:
     def act(self, state):
         # state: current state
         if np.random.rand() <= self.epsilon:  # if random number from 0 to 1 is less than exploration rate
+            print("random action")
             result = np.random.beta(0.5, 0.5, num_output)
         else:
+            print("predicted action")
             act_values = self.model.predict(state)  # predict reward value based on current state
             result = np.argmax(act_values[0])         # return action with highest reward
 
+        print(result)
         return result
 
     def replay(self, batch_size):

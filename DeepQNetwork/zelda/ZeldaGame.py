@@ -2,7 +2,6 @@ import ctypes
 import numpy as np
 from collections import deque
 from .DeepQNetwork import DqnAgentRunner
-from icecream import ic
 
 # number of frames to give the model
 model_parameter_count = 4
@@ -197,12 +196,12 @@ class LegendOfZeldaScorer:
             if new_location not in self._locations:
                 self._locations.add(new_location)
                 reward += self.reward_new_location
-                ic(f"Reward for discovering new room! {self.reward_new_location}")
+                print(f"Reward for discovering new room! {self.reward_new_location}")
                 
         # did link kill an enemy?
         if old_state.room_kill_count < new_state.room_kill_count:
             reward += self.reward_enemy_kill
-            ic(f"Reward for killing an enemy!")
+            print(f"Reward for killing an enemy!")
             
         # did link gain rupees?
         if old_state.rupees_to_add < new_state.rupees_to_add:
@@ -210,32 +209,32 @@ class LegendOfZeldaScorer:
             # only reward for the accumulator that adds them, not the value of the current
             # rupee total
             reward += self.reward_get_rupee
-            ic(f"Reward for gaining rupees!")
+            print(f"Reward for gaining rupees!")
 
         if not self.__hearts_equal(old_state.hearts, new_state.hearts):
-            ic(f"{old_state.hearts} -> {new_state.hearts}")
+            print(f"{old_state.hearts} -> {new_state.hearts}")
 
         # did link gain health?
         if old_state.hearts < new_state.hearts:
             reward += self.reward_gain_health
-            ic(f"Reward for gaining hearts!")
+            print(f"Reward for gaining hearts!")
             
         # did link lose health?
         elif old_state.hearts > new_state.hearts:
             # did link lose sword beams as a result?
             if self.__hearts_equal(old_state.hearts, old_state.heart_containers):
                 reward += self.penalty_lose_beams
-                ic("Penalty for losing beams!");
+                print("Penalty for losing beams!");
             
             # losing anything other than the first or last heart is less of an issue
             else:
                 reward += self.penalty_take_damage
-                ic("Penalty for losing health!")
+                print("Penalty for losing health!")
         
         # did we hit a game over?
         if old_state.game_state != ZeldaGameStates.game_over and new_state.game_state == ZeldaGameStates.game_over:
             reward += self.penalty_game_over
-            ic("Penalty for game over!")
+            print("Penalty for game over!")
             
         return reward
 
@@ -297,12 +296,14 @@ class LegendOfZeldaAgent:
 
     def get_action_from_game_state(self):
         """Returns either a controller state, or None if the game is over."""
+        print("get_action_from_game_state")
         if len(self.frames) < frames_saved:
+            print("Not enough frames to process")
             return no_action
         
         # todo: handle game over, make sure game over works
         if self.current_game_state.game_state == ZeldaGameStates.game_over:
-            ic("Game Over reported")
+            print("Game Over reported")
 
         model_state = self.build_model_state()
 
@@ -314,6 +315,7 @@ class LegendOfZeldaAgent:
         self.last_game_state = self.current_game_state
         self.current_game_state = None
         
+        print(action_probabilities)
         return action_probabilities
         
         #todo:  add begin new run method call start_iteration.  Also call end_iteration?

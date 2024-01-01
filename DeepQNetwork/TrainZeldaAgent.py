@@ -52,7 +52,6 @@ class TrainAgent:
         try:
             # alwawys check the gameplay state, this captures input/screen
             gameplay_state = self.agent.capture_and_check_game_state()
-
             if gameplay_state == zelda.ZeldaGameStates.gameplay_animation_lock:
                 # if there's animation lock, it's fast, and we want the AI to be able to respond
                 # when it lifts instead of standard frame waiting
@@ -86,6 +85,7 @@ class TrainAgent:
             else:
                 # our action is the controller input
                 action = self.agent.get_action_from_game_state()
+                print(action)
                 emu.setInput(0, 0, action)
 
                 # skip frames for the next action:
