@@ -70,16 +70,18 @@ class DqnAgent:
         image_input = np.squeeze(image_input, axis=1)
         feature_input = np.squeeze(feature_input, axis=1)
 
-        self.model.fit([image_input, feature_input], target_output, batch_size=batch_size, epochs=1, verbose=0)
+        self.model.fit([image_input, feature_input], target_output, batch_size=batch_size, epochs=1)
 
         # Update epsilon
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
 
 
 class DqnAgentRunner:
-    def __init__(self, model, get_random_action, max_memory):
+    def __init__(self, model, score, get_random_action, max_memory):
         self.memory = deque(maxlen=max_memory)
         self.agent = DqnAgent(model, get_random_action)
+        self.score = score
+        self.prev_score_state = None
         self.reset()
         
     def reset(self):
@@ -93,8 +95,9 @@ class DqnAgentRunner:
         self.memory.append((self.prev_state, self.prev_action, reward, state, True))
         self.reset()
 
-    def act(self, state, reward, done = False):
+    def act(self, state, score_state, done = False):
         if self.prev_action is not None:
+            reward = self.score(self.prev_score_state)
             self.memory.append((self.prev_state, self.prev_action, reward, state, done))
             
         if done:
@@ -106,6 +109,7 @@ class DqnAgentRunner:
         # update variables for next iteration
         self.prev_action = action
         self.prev_state = state
+        self.prev_score_state = score_state
         
         return action
     

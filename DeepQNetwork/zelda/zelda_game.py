@@ -21,9 +21,9 @@ class LegendOfZeldaAgent:
     def __init__(self, model = "default", scorer = "default", max_memory = default_max_memory):
         model = self.get_model_by_name(model)
         self.model = model
-        self.dqn_agent = DqnAgentRunner(model.model, model.get_random_action, max_memory)
-        self.prev = None
         self.scorer = self.get_scorer_by_name(scorer)
+        self.dqn_agent = DqnAgentRunner(model.model, self.scorer.score, model.get_random_action, max_memory)
+        self.prev = None
 
     def get_model_by_name(self, name):
         if name == "default" or name == "xl":
@@ -54,14 +54,12 @@ class LegendOfZeldaAgent:
         game_state = frames[-1].game_state
         if not game_state.is_game_playable:
             return None
-        
-        curr_frame = frames[-1]
-        reward = self.scorer.score(curr_frame.game_state)
 
         model_state = self.model.get_model_input(frames)
-        predicted, action = self.dqn_agent.act(model_state, reward)
+        predicted, action = self.dqn_agent.act(model_state, game_state)
 
         # store the action into the current frame
+        curr_frame = frames[-1]
         curr_frame.predicted = predicted
         curr_frame.action = action
 
