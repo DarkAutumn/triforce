@@ -60,3 +60,8 @@ class ZeldaGameState:
     @property
     def is_screen_scrolling(self) -> bool:
         return self.mode == zelda_game_modes.scrolling or self.mode == zelda_game_modes.prepare_scrolling or self.mode == zelda_game_modes.completed_scrolling
+    
+    @property
+    def is_game_playable(self) -> bool:
+        print(self.mode)
+        return self.mode == zelda_game_modes.gameplay or self.mode == zelda_game_modes.game_over

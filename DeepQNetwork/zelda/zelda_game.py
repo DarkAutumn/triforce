@@ -52,7 +52,7 @@ class LegendOfZeldaAgent:
         # We score a reward based on the last frame, but the model needs to be fed a sequence
         # of frames in case it needs to use RNNs or similar.
         game_state = frames[-1].game_state
-        if game_state.mode != zelda_game_modes.gameplay and game_state.mode != game_state.mode == zelda_game_modes.game_over:
+        if not game_state.is_game_playable:
             return None
         
         curr_frame = frames[-1]

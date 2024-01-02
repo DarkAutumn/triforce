@@ -32,7 +32,7 @@ class TrainAgent:
     def __init__(self, save_state, model = "default", scorer = "default"):
         self.save_state = save_state
         memory = mesen.registerFrameMemory(7, zelda.zelda_memory_layout.get_address_list())
-        self.agent = zelda.LegendOfZeldaAgent()
+        self.agent = zelda.LegendOfZeldaAgent(model, scorer)
         self.total_iterations = iterations
 
         self.current_iteration = 0
@@ -135,6 +135,7 @@ class TrainAgent:
         self.frames = MesenZeldaRecorder()
         self.agent.begin_game()
         self.current_frame = 0
+        self.action_cooldown = random.randint(action_frame_skip_min, action_frame_skip_max)
 
     def end_game(self):
         self.current_input = no_button_input
