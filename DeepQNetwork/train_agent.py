@@ -29,7 +29,7 @@ start_button_input = [False, False, True, False, False, False, False, False]
 no_button_input = [False, False, False, False, False, False, False, False]
 
 class TrainAgent:
-    def __init__(self, save_state):
+    def __init__(self, save_state, model = "default", scorer = "default"):
         self.save_state = save_state
         memory = mesen.registerFrameMemory(7, zelda.zelda_memory_layout.get_address_list())
         self.agent = zelda.LegendOfZeldaAgent()
@@ -109,15 +109,18 @@ class TrainAgent:
 
             # our action is the controller input
             action = self.agent.act(self.frames)
-            buttons = action_id_to_controller(action)
-            mesen.setInput(0, 0, buttons)
+            if action is not None:
+                buttons = action_id_to_controller(action)
+                mesen.setInput(0, 0, buttons)
+                self.current_input = buttons
 
-            frame.action = action
-            frame.agent_action = True
+            else:
+                pass
+                # No action can be taken at the current time
+
 
             # skip frames for the next action:
             if action_frame_skip_min < action_frame_skip_max:
-                self.current_input = buttons
                 self.action_cooldown = random.randint(action_frame_skip_min, action_frame_skip_max)
 
         except Exception as e:
@@ -128,8 +131,8 @@ class TrainAgent:
             disable()
 
     def begin_game(self):
-        self.frames = MesenZeldaRecorder()
         mesen.loadSaveState(self.save_state)
+        self.frames = MesenZeldaRecorder()
         self.agent.begin_game()
         self.current_frame = 0
 
@@ -159,7 +162,7 @@ class TrainAgent:
 
 
 
-trainer = TrainAgent("x:\\dungeon1.mss")
+trainer = TrainAgent("x:\\dungeon1.mss", scorer="dungeon")
 
 def onFrame(cpuType):
     trainer.onFrame()

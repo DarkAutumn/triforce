@@ -12,7 +12,7 @@ importlib.reload(zelda)
 class PrintRewards:
     def __init__(self):
         self.recorder = MesenZeldaRecorder()
-        self.rewards = zelda.ZeldaScoreBasic()
+        self.rewards = zelda.ZeldaScoreDungeon()
          
     def onFrame(self, cpuType):
         try:

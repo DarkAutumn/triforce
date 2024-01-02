@@ -1,4 +1,4 @@
-from .zelda_constants import zelda_memory_layout
+from .zelda_constants import zelda_game_modes, zelda_memory_layout
 import numpy as np
 
 class ZeldaGameState:
@@ -53,3 +53,10 @@ class ZeldaGameState:
         """Returns whether link is animation locked and cannot take an action"""
         animation = self.sword_animation
         return animation == 1 or animation == 2 or animation == 31 or animation == 32
+    
+    def has_triforce(self, level : int):
+        return self.triforce & (1 << level)
+    
+    @property
+    def is_screen_scrolling(self) -> bool:
+        return self.mode == zelda_game_modes.scrolling or self.mode == zelda_game_modes.prepare_scrolling or self.mode == zelda_game_modes.completed_scrolling

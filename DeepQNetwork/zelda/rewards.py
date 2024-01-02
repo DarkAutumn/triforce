@@ -32,23 +32,24 @@ class ZeldaScoreBasic:
         self.prev_state = None
     
     def score(self, state : ZeldaGameState) -> float:
+        # don't score anything other than gameplay and game over
+        if state.mode != zelda_game_modes.gameplay and state.mode != zelda_game_modes.game_over:
+            return 0.0
+
         prev = self.prev_state
         self.prev_state = state
 
-        if prev is None or state is None:
-            return 0
+        if prev is None:
+            # mark the starting location as visited
+            self.check_and_add_room_location(state.level, state.location)
+
+            # we calculate on differences, so the first state will always be 0
+            prev = self.prev_state = state
         
         reward = 0
 
         # has the agent found a brand new place?
-        old_location = (prev.level, prev.location)
-        new_location = (state.level, state.location)
-
-        if old_location != new_location:
-            if new_location not in self._locations:
-                self._locations.add(new_location)
-                reward += self.reward_new_location
-                print(f"Reward for discovering new room! {self.reward_new_location}")
+        reward += self.reward_for_new_location(prev, state)
                 
         # did link kill an enemy?
         if prev.room_kill_count < state.room_kill_count:
@@ -90,3 +91,50 @@ class ZeldaScoreBasic:
             
         return reward
 
+    def reward_for_new_location(self, prev, curr):
+        if self.is_new_location(prev, curr):
+            if self.check_and_add_room_location(curr.level, curr.location):
+                print(f"Reward for discovering new room (level:{curr.level}, coords:{curr.location_x}, {curr.location_y})! {self.reward_new_location}")
+                return self.reward_new_location
+            
+        return 0
+
+    def is_new_location(self, prev, curr):
+        old_location = (prev.level, prev.location)
+        new_location = (curr.level, curr.location)
+        return old_location != new_location
+    
+    def check_and_add_room_location(self, level, location):
+        key = (level, location)
+        if key not in self._locations:
+            self._locations.add(key)
+            return True
+        
+        return False
+
+    
+class ZeldaScoreDungeon(ZeldaScoreBasic):
+    def __init__(self):
+        super().__init__()
+
+        self.penalty_leave_dungeon_early = penalty_medium
+
+    def score(self, state : ZeldaGameState) -> float:
+        prev = self.prev_state
+        if prev is None:
+            return super().score(state)
+        
+        reward = 0.0
+
+        # Check if we left the dungeon without the triforce.  If so, it's not game over, but it is pretty bad
+        if self.is_new_location(prev, state) and state.level == 0 and not state.has_triforce(state.level):
+            print("Penalty for leaving a dungeon without the triforce piece!")
+            reward -= self.penalty_leave_dungeon_early
+
+        return reward + super().score(state)
+    
+    def reward_for_new_location(self, prev, curr):
+        # only reward if we are in a dungeon
+        if curr.level != 0:
+            return super().reward_for_new_location(prev, curr)
+        return 0

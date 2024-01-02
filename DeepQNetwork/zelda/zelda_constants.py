@@ -1,4 +1,3 @@
-
 class ZeldaGameModes:
     """An enum of game states"""
     def __init__(self):

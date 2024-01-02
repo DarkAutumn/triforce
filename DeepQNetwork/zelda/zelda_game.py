@@ -3,13 +3,11 @@ import ctypes
 import numpy as np
 from collections import deque
 
-
 from .dqn import DqnAgentRunner
-from .rewards import ZeldaScoreBasic
-from .zelda_constants import zelda_memory_layout
-from .zelda_state import ZeldaGameState
+from .rewards import ZeldaScoreBasic, ZeldaScoreDungeon
 from .zelda_frame import ZeldaFrame
 from .models import ZeldaModelXL
+from .zelda_constants import zelda_game_modes
 
 # number of frames to give the model
 model_parameter_count = 4
@@ -36,6 +34,8 @@ class LegendOfZeldaAgent:
     def get_scorer_by_name(self, name):
         if name == "default" or name == "basic":
             return ZeldaScoreBasic()
+        elif name == "dungeon":
+            return ZeldaScoreDungeon()
         else:
             raise ValueError("Unknown scorer name: " + name)
 
@@ -51,15 +51,17 @@ class LegendOfZeldaAgent:
         # Frames contain a sequnce of the last N frames.  The last frame is the current frame.
         # We score a reward based on the last frame, but the model needs to be fed a sequence
         # of frames in case it needs to use RNNs or similar.
+        game_state = frames[-1].game_state
+        if game_state.mode != zelda_game_modes.gameplay and game_state.mode != game_state.mode == zelda_game_modes.game_over:
+            return None
+        
+        curr_frame = frames[-1]
+        reward = self.scorer.score(curr_frame.game_state)
 
         model_state = self.model.get_model_input(frames)
-        reward = self.scorer.score(frames[-1].game_state)
-
-        # returns whether the model predicted the value (otherwise it used a random value)
         predicted, action = self.dqn_agent.act(model_state, reward)
 
         # store the action into the current frame
-        curr_frame = frames[-1]
         curr_frame.predicted = predicted
         curr_frame.action = action
 
