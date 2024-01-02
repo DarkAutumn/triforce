@@ -1,11 +1,10 @@
 from .zelda_state import ZeldaGameState
 
 class ZeldaFrame:
-    def __init__(self, frame : int, memory : bytes, screen : bytes, input : bytes):
+    def __init__(self, frame : int, memory : bytes, screen : bytes):
         self.frame = frame
         self.memory = memory
         self.screen = screen
-        self.input = input
         
     @staticmethod
     def encode_input(bools) -> bytes:

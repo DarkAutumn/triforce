@@ -8,8 +8,7 @@ class ZeldaGameModes:
         self.gameplay = 5
         self.prepare_scrolling = 6
         self.scrolling = 7
-        self.registration = 0xe
-        self.game_over = 0xf
+        self.game_over = 0x11
 
 zelda_game_modes = ZeldaGameModes()
 

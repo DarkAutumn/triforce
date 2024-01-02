@@ -31,11 +31,10 @@ class MesenZeldaRecorder:
         mesen.unregisterScreenMemory(self._screenHandle)
 
     def capture(self) -> zelda.ZeldaFrame:
-        input = zelda.ZeldaFrame.encode_input(mesen.getInput(0, 0))
         memory = bytes(self.memory.contents)
         screen = bytes(self.screen.contents)
         
-        result = zelda.ZeldaFrame(self.frame, memory, screen, input)
+        result = zelda.ZeldaFrame(self.frame, memory, screen)
         self.history.append(result)
         
         self.frame += 1

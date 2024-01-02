@@ -74,7 +74,7 @@ class LegendOfZeldaAgent:
     def end_game(self, frames : Sequence[ZeldaFrame]):
         """Ends the game and provides the final reward for the game."""
         # Similar to act, but the game is over and there is no next state to predict
-        model_state = self.build_model_state()
+        model_state = self.model.get_model_input(frames)
         reward = self.scorer.score(frames[-1].game_state)
         self.dqn_agent.done(model_state, reward)
 

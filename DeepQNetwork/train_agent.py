@@ -40,7 +40,8 @@ class TrainAgent:
 
         self.state = zelda.ZeldaGameState(memory)
         self.complete = False
-        self.begin_game()
+
+        self.started = False
 
     def begin_game(self):
         self.frames = MesenZeldaRecorder()
@@ -72,6 +73,10 @@ class TrainAgent:
     def onFrame(self):
         if self.complete:
             return
+        
+        if not self.started:
+            self.begin_game()
+            self.started = True
         
         try:
             frame, game_state = self.capture_frame()
