@@ -64,7 +64,11 @@ class ZeldaModelXL:
             sword,
             ])
         
-        return [image_input, feature_input]
+        # reshape
+        image_input_reshaped = np.expand_dims(image_input, axis=0)
+        feature_input_reshaped = np.expand_dims(feature_input, axis=0)
+
+        return [image_input_reshaped, feature_input_reshaped]
     
     def get_frames_of_same_mode(self, frames : list[ZeldaFrame], count):
         last = frames[-1]
