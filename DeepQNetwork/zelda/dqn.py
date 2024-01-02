@@ -64,7 +64,7 @@ class DqnAgentRunner:
         self.prev_state = None
     
     def learn(self, batch_size):
-        self.model.learn(self.memory, batch_size)
+        self.agent.learn(self.memory, batch_size)
 
     def done(self, state, reward):
         self.memory.append((self.prev_state, self.prev_action, reward, state, True))
