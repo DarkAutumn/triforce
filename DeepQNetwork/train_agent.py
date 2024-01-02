@@ -9,8 +9,10 @@ from mesen_zelda import MesenZeldaRecorder
 importlib.reload(zelda)
 
 iterations = 5
-max_game_duration_sec = 5 * 60
+max_game_duration_min = 1
 frames_per_second = 60.1
+max_game_duration_frames = max_game_duration_min * 60 * frames_per_second
+
 save_every = 50
 
 # after every action the agent takes, skip some frames so that we don't act on every frame
@@ -32,37 +34,22 @@ class TrainAgent:
         self.total_iterations = iterations
 
         self.current_iteration = 0
-
-        self.max_frame = max_game_duration_sec / frames_per_second
+        self.current_frame = 0
 
         self.action_cooldown = 0
         self.current_input = None
 
-        self.state = zelda.ZeldaGameState(memory)
+        self.zelda_game_state = zelda.ZeldaGameState(memory)
         self.complete = False
 
         self.started = False
-
-    def begin_game(self):
-        self.frames = MesenZeldaRecorder()
-        mesen.loadSaveState(self.save_state)
-        self.agent.begin_game()
-
-    def end_game(self, game_state):
-        self.current_input = no_button_input
-        self.agent.end_game(game_state)
-        self.agent.learn()
-
-        self.current_iteration += 1
-        if self.current_iteration % save_every == 0:
-            self.agent.save(f"zelda_model_{iterations}.dat")
 
     def capture_frame(self):
             # always capture the current frame
             frame = self.frames.capture()
 
             # update game state
-            game_state = self.state
+            game_state = self.zelda_game_state
             game_state.set_memory(frame.memory)
             return (frame, game_state)
 
@@ -79,6 +66,7 @@ class TrainAgent:
             self.started = True
         
         try:
+            self.current_frame += 1
             frame, game_state = self.capture_frame()
 
             # First check if link is animation locked since we special case that
@@ -107,21 +95,14 @@ class TrainAgent:
             
             mode = game_state.mode
 
+            # check for timeout
+            if self.current_frame >= max_game_duration_frames:
+                print("max game duration reached")
+                mode = zelda.zelda_game_modes.game_over
+
             # check for game over
             if mode == zelda.zelda_game_modes.game_over:
-                # finish the iteration
-                print("game over")
-                self.end_game(game_state)
-
-                if self.current_iteration < self.total_iterations:
-                    self.begin_game()
-                else:
-                    # we are done
-                    self.complete = True
-                    self.agent.save("completed.dat")
-                    print("Complete!")
-                    disable()
-
+                self.game_over()
                 return
 
             # our action is the controller input
@@ -146,10 +127,39 @@ class TrainAgent:
 
             disable()
 
+    def begin_game(self):
+        self.frames = MesenZeldaRecorder()
+        mesen.loadSaveState(self.save_state)
+        self.agent.begin_game()
+        self.current_frame = 0
+
+    def end_game(self):
+        self.current_input = no_button_input
+        self.agent.end_game(self.frames)
+        self.agent.learn()
+
+        self.current_iteration += 1
+        if self.current_iteration % save_every == 0:
+            self.agent.save(f"zelda_model_{iterations}.dat")
+
+    def game_over(self):
+        # finish the iteration
+        print("game over")
+        self.end_game()
+
+        if self.current_iteration < self.total_iterations:
+            self.begin_game()
+        else:
+            # we are done
+            self.complete = True
+            self.agent.save("completed.dat")
+            print("Complete!")
+            disable()
 
 
 
-trainer = TrainAgent("x:\\start.mss")
+
+trainer = TrainAgent("x:\\dungeon1.mss")
 
 def onFrame(cpuType):
     trainer.onFrame()
@@ -165,4 +175,5 @@ def disable():
     mesen.removeEventCallback(onFrame, mesen.eventType.startFrame)
     mesen.removeEventCallback(onPollInput, mesen.eventType.inputPolled)
 
+print("Started")
 enable()
