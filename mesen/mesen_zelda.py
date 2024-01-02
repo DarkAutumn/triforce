@@ -10,7 +10,7 @@ class MesenZeldaRecorder:
     buffer_size: the maximum number of frames to capture in memory before the oldest frame is discarded
     (buffer_size only applies to recent memory, not to file output)"""
     def __init__(self, buffer_size = 120):
-        addresses = zelda.zelda_memory_layout.get_address_list()
+        addresses = zeldaml.zelda_memory_layout.get_address_list()
         self._memoryHandle = mesen.registerFrameMemory(mesen.memoryType.nesMemory, addresses)
         self._screenHandle = mesen.registerScreenMemory()
 
@@ -29,11 +29,11 @@ class MesenZeldaRecorder:
         mesen.unregisterFrameMemory(self._memoryHandle)
         mesen.unregisterScreenMemory(self._screenHandle)
 
-    def capture(self) -> zelda.ZeldaFrame:
+    def capture(self) -> zeldaml.ZeldaFrame:
         memory = bytes(self.memory.contents)
         screen = bytes(self.screen.contents)
         
-        result = zelda.ZeldaFrame(self.frame, memory, screen)
+        result = zeldaml.ZeldaFrame(self.frame, memory, screen)
         self.history.append(result)
         
         self.frame += 1
@@ -79,7 +79,7 @@ def movement_action_to_controller(movement, action):
 
 def action_id_to_controller(id):
     """Converts an action id to a controller state"""
-    return movement_action_to_controller(zelda.get_movement(id), zelda.get_action(id))
+    return movement_action_to_controller(zeldaml.get_movement(id), zeldaml.get_action(id))
 
 def should_swap_item(id):
-    return zelda.get_action(id) == "swap_item"
+    return zeldaml.get_action(id) == "swap_item"
