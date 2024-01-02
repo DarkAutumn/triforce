@@ -1,18 +1,15 @@
 ﻿# a test script to print rewards to test scoring
-import zelda
+import zeldaml
 import importlib
 import mesen
 
-from zelda import zelda_memory_layout, ZeldaGameState, ZeldaScoreBasic
+from zeldaml import zelda_memory_layout, ZeldaGameState, ZeldaScoreBasic
 from mesen_zelda import MesenZeldaRecorder
  
-# Reload so that if I make live changes to zelda.py they are reflected in Mesen
-importlib.reload(zelda)
-
 class PrintRewards:
     def __init__(self):
         self.recorder = MesenZeldaRecorder()
-        self.rewards = zelda.ZeldaScoreDungeon()
+        self.rewards = zeldaml.ZeldaScoreDungeon()
          
     def onFrame(self, cpuType):
         try:

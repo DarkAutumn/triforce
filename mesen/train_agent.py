@@ -1,12 +1,9 @@
 ﻿# a test script to print rewards to test scoring
-import zelda
+import zeldaml
 import importlib
 import random
 import mesen
 from mesen_zelda import MesenZeldaRecorder, action_id_to_controller
-
-# Reload so that if I make live changes to zelda.py they are reflected in Mesen
-importlib.reload(zelda)
 
 iterations = 5
 max_game_duration_min = 1
@@ -31,8 +28,8 @@ no_button_input = [False, False, False, False, False, False, False, False]
 class TrainAgent:
     def __init__(self, save_state, model = "default", scorer = "default"):
         self.save_state = save_state
-        memory = mesen.registerFrameMemory(7, zelda.zelda_memory_layout.get_address_list())
-        self.agent = zelda.LegendOfZeldaAgent(model, scorer)
+        memory = mesen.registerFrameMemory(7, zeldaml.zelda_memory_layout.get_address_list())
+        self.agent = zeldaml.LegendOfZeldaAgent(model, scorer)
         self.total_iterations = iterations
 
         self.current_iteration = 0
@@ -41,7 +38,7 @@ class TrainAgent:
         self.action_cooldown = 0
         self.current_input = None
 
-        self.zelda_game_state = zelda.ZeldaGameState(memory)
+        self.zelda_game_state = zeldaml.ZeldaGameState(memory)
         self.complete = False
 
         self.started = False
@@ -100,10 +97,10 @@ class TrainAgent:
             # check for timeout
             if self.current_frame >= max_game_duration_frames:
                 print("max game duration reached")
-                mode = zelda.zelda_game_modes.game_over
+                mode = zeldaml.zelda_game_modes.game_over
 
             # check for game over
-            if mode == zelda.zelda_game_modes.game_over:
+            if mode == zeldaml.zelda_game_modes.game_over:
                 self.game_over()
                 return
 

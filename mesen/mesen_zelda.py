@@ -2,7 +2,7 @@
 
 from collections import deque
 import mesen
-import zelda
+import zeldaml
 import ctypes
 
 class MesenZeldaRecorder:
