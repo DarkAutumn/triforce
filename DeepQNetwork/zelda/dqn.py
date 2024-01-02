@@ -32,17 +32,22 @@ class DqnAgent:
         if np.random.rand() <= self.epsilon:  # if random number from 0 to 1 is less than exploration rate
             return (False, self.get_random_action())
         
-        act_values = self.model.predict(model_input)    # predict reward value based on current state
-        result = np.argmax(act_values[0])               # return action with highest reward
+        act_values = self.model.predict(model_input, verbose=0) # predict reward value based on current state
+        result = np.argmax(act_values[0])                           # return action with highest reward
 
         return (True, result)
 
     def learn(self, memory, batch_size):
-        # batch_size: size of random sample from memory
-        minibatch = random.sample(memory, batch_size)  # random sample from memory
+        minibatch = random.sample(memory, batch_size)
+
+        # Initialize arrays for batch update
+        image_input = []
+        feature_input = []
+        target_output = []
+
         for state, action, reward, next_state, done in minibatch:
             # Predict the Q-values for the current state
-            target_f = self.model.predict(state)
+            target_f = self.model.predict(state, verbose=0)
 
             # Compute the target Q-value
             target = reward
@@ -52,15 +57,25 @@ class DqnAgent:
             # Update the Q-value for the taken action
             target_f[0][action] = target
 
-            # Fit the model
-            self.model.fit(state, target_f, epochs=1, verbose=0)
-                
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
-            
-        if self.epsilon < self.epsilon_min:
-            self.epsilon = self.epsilon_min
-    
+            # Accumulate the states and targets
+            image_input.append(state[0])
+            feature_input.append(state[1])
+            target_output.append(target_f)
+
+        # Fit the model on the batch
+        image_input = np.array(image_input)
+        feature_input = np.array(feature_input)
+        target_output = np.array(target_output)
+        
+        image_input = np.squeeze(image_input, axis=1)
+        feature_input = np.squeeze(feature_input, axis=1)
+
+        self.model.fit([image_input, feature_input], target_output, batch_size=batch_size, epochs=1, verbose=0)
+
+        # Update epsilon
+        self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
+
+
 class DqnAgentRunner:
     def __init__(self, model, get_random_action, max_memory):
         self.memory = deque(maxlen=max_memory)
