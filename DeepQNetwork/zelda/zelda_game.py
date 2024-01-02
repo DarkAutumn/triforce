@@ -16,10 +16,8 @@ model_parameter_count = 4
 model_frame_count = 5
 frames_saved = 60
 
-action_threshold = 0.6 # model must be 60% confident in a button press
-
-default_max_memory = 20_000   # number of steps max to keep in memory, at 4 per second, this is 83 minutes of gameplay
-default_batch_size = 1024
+default_max_memory = 500   # number of steps max to keep in memory, at 4 per second, this is 83 minutes of gameplay
+default_batch_size = 32
 
 class LegendOfZeldaAgent:
     def __init__(self, model = "default", scorer = "default", max_memory = default_max_memory):
@@ -28,7 +26,6 @@ class LegendOfZeldaAgent:
         self.dqn_agent = DqnAgentRunner(model.model, model.get_random_action, max_memory)
         self.prev = None
         self.scorer = self.get_scorer_by_name(scorer)
-        self.action_threshold = model.action_threshold
 
     def get_model_by_name(self, name):
         if name == "default" or name == "xl":
@@ -54,22 +51,19 @@ class LegendOfZeldaAgent:
         # Frames contain a sequnce of the last N frames.  The last frame is the current frame.
         # We score a reward based on the last frame, but the model needs to be fed a sequence
         # of frames in case it needs to use RNNs or similar.
+
         model_state = self.model.get_model_input(frames)
         reward = self.scorer.score(frames[-1].game_state)
 
         # returns whether the model predicted the value (otherwise it used a random value)
-        predicted, action_probabilities = self.dqn_agent.act(model_state, reward)
-
+        predicted, action = self.dqn_agent.act(model_state, reward)
 
         # store the action into the current frame
         curr_frame = frames[-1]
         curr_frame.predicted = predicted
-        curr_frame.action = action_probabilities
+        curr_frame.action = action
 
-        buttons = [x > self.action_threshold for x in action_probabilities]
-        buttons.insert(3, False)   # select
-        
-        return buttons
+        return action
     
     def end_game(self, frames : Sequence[ZeldaFrame]):
         """Ends the game and provides the final reward for the game."""

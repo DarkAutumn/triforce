@@ -28,12 +28,12 @@ class DqnAgent:
         self.learning_rate = learning_rate
 
     def act(self, model_input) -> (bool, np.ndarray[float]):
-        """Returns the action the agent should take based on the current state"""
+        """Returns the action the agent should take based on the current state and whether the action was predicted or random"""
         if np.random.rand() <= self.epsilon:  # if random number from 0 to 1 is less than exploration rate
             return (False, self.get_random_action())
         
-        act_values = self.model.predict(model_input)  # predict reward value based on current state
-        result = np.argmax(act_values[0])         # return action with highest reward
+        act_values = self.model.predict(model_input)    # predict reward value based on current state
+        result = np.argmax(act_values[0])               # return action with highest reward
 
         return (True, result)
 

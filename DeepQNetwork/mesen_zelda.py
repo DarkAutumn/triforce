@@ -5,7 +5,6 @@ import mesen
 import zelda
 import ctypes
 
-
 class MesenZeldaRecorder:
     """A class to capture the game state from mesen
     buffer_size: the maximum number of frames to capture in memory before the oldest frame is discarded
@@ -55,3 +54,32 @@ class MesenZeldaRecorder:
     def __len__(self):
         """Returns the total number of frames available"""
         return len(self.history)
+    
+def movement_action_to_controller(movement, action):
+    """Converts a movement and action id to a controller state"""
+    up = down = right = left = False
+    a = b = select = start = False
+
+    if movement == "up":
+        up = True
+    elif movement == "down":
+        down = True
+    elif movement == "left":
+        left = True
+    elif movement == "right":
+        right = True
+
+    if action == "attack":
+        a = True
+    elif action == "item":
+        b = True
+
+    return (a, b, select, start, up, down, left, right)
+
+
+def action_id_to_controller(id):
+    """Converts an action id to a controller state"""
+    return movement_action_to_controller(zelda.get_movement(id), zelda.get_action(id))
+
+def should_swap_item(id):
+    return zelda.get_action(id) == "swap_item"

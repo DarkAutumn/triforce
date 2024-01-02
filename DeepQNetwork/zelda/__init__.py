@@ -5,3 +5,4 @@ from .zelda_game import ZeldaGameState, LegendOfZeldaAgent
 from .rewards import ZeldaScoreBasic
 from .zelda_constants import zelda_game_modes, zelda_memory_layout
 from .zelda_frame import ZeldaFrame
+from .zelda_actions import get_movement, get_action, link_actions, link_movements

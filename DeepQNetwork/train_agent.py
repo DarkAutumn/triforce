@@ -3,7 +3,7 @@ import zelda
 import importlib
 import random
 import mesen
-from mesen_zelda import MesenZeldaRecorder
+from mesen_zelda import MesenZeldaRecorder, action_id_to_controller
 
 # Reload so that if I make live changes to zelda.py they are reflected in Mesen
 importlib.reload(zelda)
@@ -14,6 +14,8 @@ frames_per_second = 60.1
 max_game_duration_frames = max_game_duration_min * 60 * frames_per_second
 
 save_every = 50
+
+data_dir = "X:\\data"
 
 # after every action the agent takes, skip some frames so that we don't act on every frame
 # it's important this be a range and not, say, every 2 frames because certain enemy animations
@@ -107,17 +109,15 @@ class TrainAgent:
 
             # our action is the controller input
             action = self.agent.act(self.frames)
-            mesen.setInput(0, 0, action)
+            buttons = action_id_to_controller(action)
+            mesen.setInput(0, 0, buttons)
 
-            # Assign the input we just sent to the current frame instead of
-            # the next frame.  This isn't technically correct, but it makes
-            # logic simpler to save.
-            frame.input = frame.encode_input(action)
+            frame.action = action
             frame.agent_action = True
 
             # skip frames for the next action:
             if action_frame_skip_min < action_frame_skip_max:
-                self.current_input = action
+                self.current_input = buttons
                 self.action_cooldown = random.randint(action_frame_skip_min, action_frame_skip_max)
 
         except Exception as e:
@@ -140,7 +140,7 @@ class TrainAgent:
 
         self.current_iteration += 1
         if self.current_iteration % save_every == 0:
-            self.agent.save(f"zelda_model_{iterations}.dat")
+            self.agent.save(data_dir + '\\' + f"zelda_model_{iterations}.dat")
 
     def game_over(self):
         # finish the iteration
@@ -152,7 +152,7 @@ class TrainAgent:
         else:
             # we are done
             self.complete = True
-            self.agent.save("completed.dat")
+            self.agent.save(data_dir + '\\' + "completed.dat")
             print("Complete!")
             disable()
 

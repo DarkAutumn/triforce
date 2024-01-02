@@ -5,6 +5,7 @@ class ZeldaFrame:
         self.frame = frame
         self.memory = memory
         self.screen = screen
+        self.action = None
         
     @staticmethod
     def encode_input(bools) -> bytes:

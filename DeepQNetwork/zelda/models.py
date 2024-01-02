@@ -1,14 +1,14 @@
 import tensorflow as tf
 import numpy as np
+from random import randint
 from .zelda_frame import ZeldaFrame
+from .zelda_actions import total_actions
 
 # model parameters
 image_height = 240
 image_width = 256
 image_channels = 3
-num_outputs = 7      # buttons on the controller
-
-action_threshold = 0.7 # model must be 70% confident in a button press
+num_outputs = total_actions
 
 xl_frame_count = 3
 xl_feature_count = 4
@@ -29,7 +29,6 @@ def argb_bytes_to_np_rgb(argb_array):
 class ZeldaModelXL:
     def __init__(self):
         self.model = self._build_model(xl_frame_count, xl_feature_count)
-        self.action_threshold = action_threshold
 
     def save(self, path):
         print("saved model")
@@ -40,7 +39,7 @@ class ZeldaModelXL:
         self.model.load_weights(path)
 
     def get_random_action(self):
-        return np.random.beta(0.5, 0.5, num_outputs)
+        return randint(0, total_actions - 1)
 
     def get_model_input(self, all_frames : list[ZeldaFrame]):
         """Uses the last frame to build input for the model"""
@@ -109,7 +108,7 @@ class ZeldaModelXL:
         combined_dense = tf.keras.layers.Dense(512, activation='relu')(combined)
 
         # Output layer
-        output = tf.keras.layers.Dense(num_outputs, activation='sigmoid')(combined_dense)
+        output = tf.keras.layers.Dense(num_outputs, activation='linear')(combined_dense)
 
         # Create the model
         model = tf.keras.Model(inputs=[image_input, state_input], outputs=output)
