@@ -41,11 +41,19 @@ class DqnAgent:
         # batch_size: size of random sample from memory
         minibatch = random.sample(memory, batch_size)  # random sample from memory
         for state, action, reward, next_state, done in minibatch:
+            # Predict the Q-values for the current state
+            target_f = self.model.predict(state)
+
+            # Compute the target Q-value
             target = reward
             if not done:
-                target_f = reward + self.gamma * np.amax(self.model.predict(next_state)[0])
-                target_f[0][action] = target
-                self.model.fit(state, target_f, epochs=1, verbose=0)
+                target = reward + self.gamma * np.amax(self.model.predict(next_state)[0])
+
+            # Update the Q-value for the taken action
+            target_f[0][action] = target
+
+            # Fit the model
+            self.model.fit(state, target_f, epochs=1, verbose=0)
                 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
