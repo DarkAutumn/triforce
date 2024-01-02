@@ -25,7 +25,7 @@ class LegendOfZeldaAgent:
     def __init__(self, model = "default", scorer = "default", max_memory = default_max_memory):
         model = self.get_model_by_name(model)
         self.model = model
-        self.dqn_agent = DqnAgentRunner(model, model.get_random_action, max_memory)
+        self.dqn_agent = DqnAgentRunner(model.model, model.get_random_action, max_memory)
         self.prev = None
         self.scorer = self.get_scorer_by_name(scorer)
         self.action_threshold = model.action_threshold
