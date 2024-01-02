@@ -63,5 +63,4 @@ class ZeldaGameState:
     
     @property
     def is_game_playable(self) -> bool:
-        print(self.mode)
         return self.mode == zelda_game_modes.gameplay or self.mode == zelda_game_modes.game_over
