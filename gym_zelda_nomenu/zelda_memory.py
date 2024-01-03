@@ -1,5 +1,9 @@
 # constants
+
+zelda_mode_completed_scrolling = 4
 zelda_mode_gameplay = 5
+zelda_mode_prepare_scrolling = 6
+zelda_mode_scrolling = 7
 zelda_mode_gameover = 0x11
 
 # offsets

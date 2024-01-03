@@ -1,5 +1,4 @@
 from .zelda_memory import ZeldaMemory
-from .constants import *
 from .zelda_environment import *
 
 

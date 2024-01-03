@@ -5,8 +5,7 @@ from gym.spaces import Dict, MultiBinary
 import numpy as np
 import os
 
-from .zelda_memory import ZeldaMemory
-from .constants import *
+from .zelda_memory import *
 from gym.spaces import Discrete
 
 zelda_usable_item_indices = {
@@ -30,11 +29,11 @@ zelda_basic_actions = [
     "MoveDown",
     "MoveLeft",
     "MoveRight",
-    "Attack",
     "AttackUp",
     "AttackDown",
     "AttackLeft",
     "AttackRight",
+    "Attack",  # attack in the direction we are facing
 ]
 
 zelda_usable_item_actions = zelda_basic_actions + [
@@ -87,6 +86,17 @@ class ZeldaNoMenuEnv(NESEnv):
             'items': MultiBinary(num_usable_items)
         })
 
+        self._button_map = {
+            'right':  0b10000000,
+            'left':   0b01000000,
+            'down':   0b00100000,
+            'up':     0b00010000,
+            'start':  0b00001000,
+            'select': 0b00000100,
+            'b':      0b00000010,
+            'a':      0b00000001,
+            }
+
     def _find_rom_path(self, rom_name):
         """Searches for the given ROM name in the current directory and its parents."""
         current_directory = os.path.dirname(os.path.realpath(__file__))
@@ -100,6 +110,12 @@ class ZeldaNoMenuEnv(NESEnv):
             current_directory = os.path.dirname(current_directory)
 
         return None
+    
+    def save_state(self):
+        self._backup()
+
+    def load_state(self):
+        self._restore()
 
     def _old_observation_to_new(self, old_observation):
         """Converts the old observation space to the new one."""
@@ -165,12 +181,50 @@ class ZeldaNoMenuEnv(NESEnv):
         return result
     
     def step(self, action):
+        action = self._translate_action_and_set_item(action)
+
         obs, reward, _, info = super().step(action)
 
         obs = self._old_observation_to_new(obs)
         done = self.zelda_memory.mode == zelda_mode_gameover or self.zelda_memory.triforce_of_power
 
         return obs, reward, done, info
+    
+    def _translate_action_and_set_item(self, action):
+        if isinstance(action, int):
+            action = self.actions[action]
+
+        if action == "none":
+            return 0
+        
+        result = 0
+        if action == "MoveUp" or action == "AttackUp":
+            result |= self._button_map["up"]
+        elif action == "MoveDown" or action == "AttackDown":
+            result |= self._button_map["down"]
+        elif action == "MoveLeft" or action == "AttackLeft":
+            result |= self._button_map["left"]
+        elif action == "MoveRight" or action == "AttackRight":
+            result |= self._button_map["right"]
+
+        if action == "AttackUp" or action == "AttackDown" or action == "AttackLeft" or action == "AttackRight" or action == "Attack":
+            result |= self._button_map["a"]
+
+        if "Use" in action:
+            result |= self._button_map["b"]
+        
+        return result
+    
+    def skip_screen_scroll(self):
+        """Skips the scrolling animation that occurs when entering a new room."""
+        while self.is_scrolling:
+            self._frame_advance(0)
+
+    @property
+    def is_scrolling(self):
+        """Returns true if the screen is scrolling."""
+        mode = self.zelda_memory.mode
+        return mode == zelda_mode_prepare_scrolling or mode == zelda_mode_scrolling or mode == zelda_mode_completed_scrolling
 
     def set_score_function(self, score_function, reward_range=(-float('inf'), float('inf'))):
         """Sets the score function for this environment.  The score function is called with the environment
@@ -184,6 +238,58 @@ class ZeldaNoMenuEnv(NESEnv):
             self._score_function = lambda _: 0
 
         return self._score_function(self)
+    
+    def reset_to_first_dungeon(self):
+        """Moves link to the first dungeon.  This works because the game is deterministic based
+        on input.  That's why adding a random frame delay is neccessary to make the game non-deterministic."""
+        self.reset(options={"random_delay" : False})
+
+        def move_until_next_screen(moveDirection):
+            location = self.zelda_memory.location
+            while location == self.zelda_memory.location:
+                self.step(moveDirection)
+
+            self.skip_screen_scroll()
+
+        def move_for(direction, steps):
+            for x in range(steps):
+                self.step(direction)
+
+        # move north on first screen
+        move_until_next_screen("MoveUp")
+
+        # move east on the next screen
+        move_for("MoveUp", 50)
+        move_until_next_screen("MoveRight")
+
+        # move north on the next screen
+        move_for("MoveRight", 13)
+        move_for("MoveUp", 15)
+        move_for("MoveRight", 28)
+        move_until_next_screen("MoveUp")
+
+        # move north on the next screen
+        move_for("MoveUp", 30)
+        move_for("MoveRight", 25)
+        move_for("MoveUp", 65)
+        move_for("MoveRight", 25)
+        move_until_next_screen("MoveUp")
+
+        # move north on the next screen
+        move_for("MoveUp", 60)
+        move_for("MoveRight", 12)
+        move_for("MoveUp", 55)
+        move_for("MoveLeft", 12)
+        move_until_next_screen("MoveUp")
+
+        # move west on the next screen
+        move_for("MoveUp", 60)
+        move_until_next_screen("MoveLeft")
+
+
+        # enter the dungeon
+        move_for("MoveLeft", 95)
+        move_until_next_screen("MoveUp")
 
 
 class ZeldaSmartItemEnv(ZeldaNoMenuEnv):
