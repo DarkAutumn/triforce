@@ -132,7 +132,7 @@ class ZeldaNoMenuEnv(NESEnv):
         Resets the game, skips the main menu, and if random_start_delay was set in the constructor, it will
         wait a small number of frames to avoid a deterministic playthrough.
         """
-        super().reset(seed)
+        scr = super().reset(seed)
 
         # if the user saved a backup file, don't perform startup code
         if self._has_backup:
@@ -143,6 +143,7 @@ class ZeldaNoMenuEnv(NESEnv):
             delay = randint(0, 15)
             for x in range(delay):
                 self._frame_advance(0)
+                self.render()
 
         # move past the menu screen until gameplay starts.
         # Zelda's save slots are set early in the game, so we set them in
@@ -158,6 +159,8 @@ class ZeldaNoMenuEnv(NESEnv):
 
             else:
                 self._frame_advance(0)
+
+            self.render()
 
             press_start_button = not press_start_button
 
@@ -184,12 +187,9 @@ class ZeldaNoMenuEnv(NESEnv):
     def step(self, action):
         action = self._translate_action_and_set_item(action)
 
-        _, reward, _, info = super().step(action)
-
-        obs = self._screen_buffer()
-        print(np.all(obs == 0))
+        obs, reward, _, info = super().step(action)
+        
         obs = self._old_observation_to_new(obs)
-
         return obs, reward, self.is_done, info
     
     def _translate_action_and_set_item(self, action):
@@ -221,12 +221,19 @@ class ZeldaNoMenuEnv(NESEnv):
         """Skips the scrolling animation that occurs when entering a new room."""
         while self.is_scrolling:
             self._frame_advance(0)
+            self.render()
 
     @property
     def is_scrolling(self):
         """Returns true if the screen is scrolling."""
         mode = self.zelda_memory.mode
         return mode == zelda_mode_prepare_scrolling or mode == zelda_mode_scrolling or mode == zelda_mode_completed_scrolling
+    
+    @property
+    def is_playable(self):
+        """Returns true if the screen is scrolling."""
+        mode = self.zelda_memory.mode
+        return mode == zelda_mode_gameplay or mode == zelda_mode_gameover
 
     def set_score_function(self, score_function, reward_range=(-float('inf'), float('inf'))):
         """Sets the score function for this environment.  The score function is called with the environment
@@ -253,7 +260,7 @@ class ZeldaNoMenuEnv(NESEnv):
         def move_until_next_screen(moveDirection):
             location = self.zelda_memory.location
             while location == self.zelda_memory.location:
-                self.step(moveDirection)
+                state, _, _, _ = self.step(moveDirection)
                 self.render()
 
             self.skip_screen_scroll()
@@ -261,6 +268,7 @@ class ZeldaNoMenuEnv(NESEnv):
         def move_for(direction, steps):
             for x in range(steps):
                 self.step(direction)
+                self.render()
 
         # move north on first screen
         move_until_next_screen("MoveUp")
@@ -297,6 +305,10 @@ class ZeldaNoMenuEnv(NESEnv):
         # enter the dungeon
         move_for("MoveLeft", 95)
         move_until_next_screen("MoveUp")
+
+        while not self.is_playable:
+            self._frame_advance(0)
+            self.render()
 
 
 class ZeldaSmartItemEnv(ZeldaNoMenuEnv):
