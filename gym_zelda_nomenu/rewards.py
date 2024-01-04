@@ -48,8 +48,8 @@ class ZeldaScoreBasic:
         if state.mode != zelda_mode_gameplay and state.mode != zelda_mode_gameover:
             return 0.0
 
-        prev = self.prev_state.snapshot()
-        self.prev_state = state
+        prev = self.prev_state
+        self.prev_state = state.snapshot()
 
         if prev is None:
             # mark the starting location as visited
@@ -175,7 +175,7 @@ class ZeldaScoreDungeon(ZeldaScoreBasic):
             print("Penalty for leaving a dungeon without the triforce piece!")
             reward -= self.penalty_leave_dungeon_early
 
-        return reward + super().score(state)
+        return reward + super().score(env)
     
     def reward_for_new_location(self, prev, curr):
         # only reward if we are in a dungeon
