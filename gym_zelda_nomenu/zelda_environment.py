@@ -139,7 +139,7 @@ class ZeldaNoMenuEnv(NESEnv):
             return self._old_observation_to_new(self.screen)
 
         # if we were asked to delay the start, do so
-        if options is not None and options.get("random_delay", False):
+        if options is not None and options.get("nondeterministic", False):
             delay = randint(0, 15)
             for x in range(delay):
                 self._frame_advance(0)
@@ -184,6 +184,11 @@ class ZeldaNoMenuEnv(NESEnv):
 
         return result
     
+    def skip_frame(self, action):
+        """Skips the current frame."""
+        controller_state = self._translate_action_and_set_item(action)
+        self._frame_advance(controller_state)
+
     def step(self, action):
         action = self._translate_action_and_set_item(action)
 
