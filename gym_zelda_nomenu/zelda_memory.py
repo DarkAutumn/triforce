@@ -154,10 +154,19 @@ class ZeldaMemory():
     def heart_containers(self):
         return (self.hearts_and_containers >> 4) + 1
     
-    @property
     def has_triforce(self, level : int):
         level = level - 1
         return self.triforce & (1 << level)
+    
+    @property
+    def triforce_pieces(self):
+        # count the bits set in self.triforce
+        count = 0
+        for i in range(0, 8):
+            if self.triforce & (1 << i):
+                count += 1
+
+        return count
     
     # begin generated code     
 
