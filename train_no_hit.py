@@ -3,52 +3,41 @@ import random
 
 import numpy as np
 import gym_zelda_nomenu
-from models import ZeldaBaseModel
-from gym_zelda_nomenu import ZeldaScoreDungeon
+from models import NoHitModel
+from gym_zelda_nomenu import ZeldaScoreNoHit
 
-def scoreNone(self):
-    return 0.0
-
-env = gym_zelda_nomenu.ZeldaSmartItemEnv()
-env.set_score_function(scoreNone)
-
-# move to the first dungeon
-env.reset_to_first_dungeon()
-env.zelda_memory.sword = 1
-env.zelda_memory.bombs = 2
-env.save_state()
+env = gym_zelda_nomenu.ZeldaNoHitEnv()
 
 gamma = 0.95
 epsilon = 1.0
 epsilon_decay = 0.995
-epsilon_min = 0.01
-replay_buffer = deque(maxlen=2000)
-batch_size = 32
-train_every = 100
+epsilon_min = 0.05
+replay_buffer = deque(maxlen=10_000)
+batch_size = 128
+
 
 # eventually these are command line options:
-model = ZeldaBaseModel()
-weights = "zelda_dqn_weights.h5"
-level = 1
-episodes = 1000
+output_path = "X:/triforce/models"
+episodes = 10000
 rendering = True
-verbose = True
+verbose = False
 nondeterministic = True
-train_model = False
+train_model = True
 reset_options = { "nondeterministic": nondeterministic }
+episode_length_minutes = 3
+decisions_per_second = 2
+
+model = NoHitModel()
+model.load(output_path)
 
 # this is the length of playable minutes for each episode (doesn't count scrolling)
-episode_length_minutes = 1
 max_frames = episode_length_minutes * 60 * 60.1  # nes runs at 60.1 fps
 
-# We shoot for 4 decisions per second, so 60.1 / 4 ~= 15.  We also want to introduce
-# some randomness in the game, which comes from delays between each action.  Zelda
-# runs on frame rules for randomness.
-action_cooldown_frame_min = 10
-action_cooldown_frame_max = 20
+action_cooldown_frame_min = max(1, int(60.1 / decisions_per_second) - 5)
+action_cooldown_frame_max = min(60, int(60.1 / decisions_per_second) + 5)
 
 # how long to hold down the buttons for each action (for just a and b, not movement)
-button_hold_length = 4
+button_hold_length = min(4, action_cooldown_frame_min)
 
 def get_button_hold(action):
     # Keep holding movement buttons for the whole duration. Note that we don't want
@@ -61,14 +50,8 @@ def get_button_hold(action):
     # otherwise perform no action
     return 0
 
-env.set_score_function(ZeldaScoreDungeon().score)
 
 frames = deque(maxlen=model.frame_count)
-
-def observation_to_state(obs):
-    screen = obs["screen"]
-    frames.append(screen.copy())
-    return list(frames)
 
 def skip_screen_scroll(state):
     if not env.is_scrolling:
@@ -101,17 +84,41 @@ def random_delay(min_delay, max_delay, action):
 
     return delay
 
+def reset_state():
+    state = env.reset(options=reset_options)
+
+    # introduce randomnesss
+    if nondeterministic:
+        delay = random.randint(0, 31)
+        for _ in range(delay):
+            env.skip_frame(None)
+
+    env.move_until_next_screen("MoveRight")
+
+    # skip the scrolling screen
+    env.skip_screen_scroll()
+    frames.clear()
+    for _ in range(frames.maxlen):
+        frames.append(env.screen.copy())
+
+    return state
+
 show_image = False
 since_last_train = 0
-for episode in range(1, episodes):
-    state = observation_to_state(env.reset(options=reset_options))
-    state = skip_screen_scroll(state)
+for episode in range(0, episodes):
+    state = reset_state()
+    state = list(frames)
 
-    frame_count = random_delay(0, action_cooldown_frame_max, 0)
+    scorer = ZeldaScoreNoHit()
+    env.set_score_function(scorer.score)
+
+    frame_count = 0
     while frame_count < max_frames:
         # ensure we don't try to take action while we aren't in control
         state = skip_screen_scroll(state)
         
+        total_score = 0.0
+
         predicted = False
         if np.random.rand() <= epsilon:
             action = random.randint(0, len(env.actions) - 1)
@@ -122,8 +129,13 @@ for episode in range(1, episodes):
         if verbose:
             print(f"Episode: {episode}, Frame: {frame_count}, Action: {env.actions[action]}, Predicted: {predicted}")
 
-        observation, reward, done, _ = env.step(action)
+        next_state, reward, done, _ = env.step(action)
         frame_count += 1
+
+        total_score += reward
+
+        frames.append(next_state.copy())
+        next_state = list(frames)
 
         # hold buttons for a bit
         frame_count += button_hold_length
@@ -131,9 +143,6 @@ for episode in range(1, episodes):
             env.skip_frame(action)
 
         frame_count += random_delay(action_cooldown_frame_min, action_cooldown_frame_max, get_button_hold(action))
-
-        # copy the screen buffer into frames, get the model input from the observed state
-        next_state = observation_to_state(observation)
         
         # Store in replay buffer
         replay_buffer.append((state, action, reward, next_state, done))
@@ -141,9 +150,8 @@ for episode in range(1, episodes):
 
         state = next_state
         
-        if train_model and since_last_train >= train_every and len(replay_buffer) > batch_size:
-            if verbose:
-                print(f"Training model - samples:{len(replay_buffer)} - epsilon:{epsilon} - time since last train:{since_last_train}")
+        if batch_size < len(replay_buffer):
+            print(f"Training model - samples:{len(replay_buffer)} - epsilon:{epsilon}")
 
             since_last_train = 0
             
@@ -161,5 +169,11 @@ for episode in range(1, episodes):
             break
 
         env.render()
+        
+        if episode and episode % 100 == 0:
+            model.save(output_path, episode)
 
     epsilon = max(epsilon_min, epsilon_decay * epsilon)
+    print(f"Episode: {episode}, Score: {total_score}, Epsilon: {epsilon}")
+
+model.save(output_path, "complete")

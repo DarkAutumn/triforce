@@ -1,4 +1,4 @@
-from .zelda_environment import ZeldaNoMenuEnv
+from .zelda_environment import ZeldaBaseEnv
 from .zelda_memory import *
 
 reward_small = 1.0
@@ -9,12 +9,22 @@ penalty_small = -1.0
 penalty_medium = -2.0
 penalty_large = -5.0
 
-class ZeldaScoreBasic:
+class ZeldaScoreBase:
+    def is_different_location(self, prev, curr):
+        old_location = (prev.level, prev.location)
+        new_location = (curr.level, curr.location)
+        return old_location != new_location
+    
+    def __hearts_equal(self, first, second):
+        return abs(first - second) <= 0.01
+
+class ZeldaScoreBasic(ZeldaScoreBase):
     def __init__(self):
         # keep track of visited locations and kills in those locations
         # first index is 0 = overworld, 1 = dungeon
         # second index is the room number
         self._locations = [[-1] * 256] * 2
+        self._locations[0][(6<<4) | 7] = 0
         
         self.reward_enemy_kill = reward_small
         self.reward_get_rupee = reward_small
@@ -33,15 +43,12 @@ class ZeldaScoreBasic:
         self.max_kill_reward_in_room = 5
 
         self.prev_state = None
-        
-    def __hearts_equal(self, first, second):
-        return abs(first - second) <= 0.01
     
     def reset(self):
         self._locations.clear()
         self.prev_state = None
     
-    def score(self, env : ZeldaNoMenuEnv) -> (float, bool):
+    def score(self, env : ZeldaBaseEnv) -> (float, bool):
         # don't score anything other than gameplay and game over
         state = env.zelda_memory
 
@@ -65,7 +72,7 @@ class ZeldaScoreBasic:
                 
         # did link kill an enemy?
         if prev.room_kill_count < state.room_kill_count:
-            if self.should_reward_kill(state.location):
+            if self.should_reward_kill(state.level, state.location):
                 reward += self.reward_enemy_kill
                 print(f"Reward for killing an enemy!")
             else:
@@ -128,10 +135,6 @@ class ZeldaScoreBasic:
             
         return 0
 
-    def is_different_location(self, prev, curr):
-        old_location = (prev.level, prev.location)
-        new_location = (curr.level, curr.location)
-        return old_location != new_location
     
     def check_and_add_room_location(self, level, location):
         level = 0 if level == 0 else 1
@@ -142,7 +145,7 @@ class ZeldaScoreBasic:
         
         return False
     
-    def should_reward_kill(self, location):
+    def should_reward_kill(self, level, location):
         level = 0 if level == 0 else 1
         count = self._locations[level][location]
 
@@ -157,7 +160,7 @@ class ZeldaScoreDungeon(ZeldaScoreBasic):
         self.penalty_leave_dungeon_early = penalty_medium
         self.level = None
 
-    def score(self, env : ZeldaNoMenuEnv) -> float:
+    def score(self, env : ZeldaBaseEnv) -> float:
         state = env.zelda_memory
 
         prev = self.prev_state
@@ -182,3 +185,41 @@ class ZeldaScoreDungeon(ZeldaScoreBasic):
         if curr.level != 0:
             return super().reward_for_new_location(prev, curr)
         return 0
+    
+class ZeldaScoreNoHit(ZeldaScoreBase):
+    def __init__(self):
+        self.prev_state = None
+        self._done = False
+
+        self.penalty_take_damage = penalty_small
+        self.penalty_go_wrong_direction = penalty_medium
+
+
+    def score(self, env : ZeldaBaseEnv) -> float:
+        state = env.zelda_memory
+
+        prev = self.prev_state
+        if prev is None:
+            self.prev_state = state.snapshot()
+            return 0.0
+            
+        reward = 0.0
+
+        if prev.hearts > state.hearts:
+            reward += self.penalty_take_damage
+            print("Penalty for taking damage!")
+
+            # restore hearts so we don't die
+            env.zelda_memory.hearts = prev.hearts
+
+
+        if prev.location_y != state.location_y:
+            reward += self.penalty_go_wrong_direction
+            print("Penalty for going the wrong direction! (north)")
+
+        if prev.location_x > state.location_x:
+            reward += self.penalty_go_wrong_direction
+            print("Penalty for going the wrong direction! (west)")
+
+        self.prev_state = state.snapshot()
+        return reward

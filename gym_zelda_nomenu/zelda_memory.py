@@ -150,6 +150,13 @@ class ZeldaMemory():
         
         return full_hearts - 1 + float(partialHealth) / 255
     
+    @hearts.setter
+    def hearts(self, value):
+        full_hearts = int(value)
+        partialHealth = int((value - full_hearts) * 255)
+        self.hearts_and_containers = (self.hearts_and_containers & 0xf0) | full_hearts
+        self.partial_hearts = partialHealth
+    
     @property
     def heart_containers(self):
         return (self.hearts_and_containers >> 4) + 1
@@ -167,6 +174,14 @@ class ZeldaMemory():
                 count += 1
 
         return count
+    
+    @property
+    def location_x(self):
+        return self.location & 0x0f
+    
+    @property
+    def location_y(self):
+        return self.location >> 4
     
     # begin generated code     
 
