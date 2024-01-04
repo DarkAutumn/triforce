@@ -39,13 +39,11 @@ class ZeldaBaseModel:
         
         
         image_input = np.stack(frames)
-        print(image_input.shape)
 
-        # reshape
+        # reshape and normalize
         image_input_reshaped = np.expand_dims(image_input, axis=0)
-        print(image_input_reshaped.shape)
-
-        return image_input_reshaped
+        normalized = image_input_reshaped / 255.0
+        return normalized
     
     def _build_model(self, frame_count):
         # Image processing pathway with LSTM
