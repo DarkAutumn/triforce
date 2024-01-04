@@ -43,12 +43,11 @@ def observation_to_state(obs):
     screen = obs["screen"]
     frames.append(screen.copy())
     return model.get_model_input(frames)
-import matplotlib.pyplot as plt
 
 since_last_train = 0
 for episode in range(1, episodes):
     state = observation_to_state(env.reset())
-
+    
     steps = 0
     while steps < max_steps:
         # ensure we don't try to take action while we aren't in control
@@ -58,15 +57,16 @@ for episode in range(1, episodes):
             # Start frames fresh if we change rooms
             frames.clear()
             for x in range(frames.maxlen):
-                frames.append(state["screen"].copy())
+                frames.append(env.screen.copy())
 
             state = model.get_model_input(frames)
 
         if np.random.rand() <= epsilon:
-            action = random.randint(0, len(env.actions))
+            action = random.randint(0, len(env.actions) - 1)
         else:
-            predicted = model.model.predict(state)
-        action = np.argmax(predicted[0])
+            predicted = model.model.predict(state, verbose=0)
+            action = np.argmax(predicted[0])
+        
 
         observation, reward, done, _ = env.step(action)
 
@@ -79,20 +79,22 @@ for episode in range(1, episodes):
 
         state = next_state
         
-        if since_last_train >= train_every:
+        if since_last_train >= train_every and len(replay_buffer) > batch_size:
             since_last_train = 0
             
             minibatch = random.sample(replay_buffer, batch_size)
             for state, action, reward, next_state, done in minibatch:
                 target = reward
                 if not done:
-                    target = reward + gamma * np.amax(model.model.predict(next_state)[0])
+                    target = reward + gamma * np.amax(model.model.predict(next_state, verbose = 0)[0])
 
-                target_f = model.model.predict(state)
+                target_f = model.model.predict(state, verbose=0)
                 target_f[0][action] = target
                 model.model.fit(state, target_f, epochs=1, verbose=0)
 
         if done:
             break
+
+        env.render()
 
     epsilon = max(epsilon_min, epsilon_decay * epsilon)
