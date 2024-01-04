@@ -112,6 +112,6 @@ class ZeldaModelXL:
 
         # Create the model
         model = tf.keras.Model(inputs=[image_input, state_input], outputs=output)
-        model.compile(optimizer='adam', loss='binary_crossentropy')
+        model.compile(optimizer='adam', loss='mse')
         
         return model

@@ -154,6 +154,11 @@ class ZeldaMemory():
     def heart_containers(self):
         return (self.hearts_and_containers >> 4) + 1
     
+    @property
+    def has_triforce(self, level : int):
+        level = level - 1
+        return self.triforce & (1 << level)
+    
     # begin generated code     
 
     @property
