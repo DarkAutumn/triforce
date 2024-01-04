@@ -77,7 +77,6 @@ class ZeldaNoMenuEnv(NESEnv):
 
         # set up the action and observation spaces
         self.actions = list(zelda_usable_item_actions)
-        self.action_space = Discrete(len(self.actions))
 
         screen_observation = self.observation_space
         self.observation_space = Dict({
@@ -137,7 +136,7 @@ class ZeldaNoMenuEnv(NESEnv):
 
         # if the user saved a backup file, don't perform startup code
         if self._has_backup:
-             return
+            return self._old_observation_to_new(self.screen)
 
         # if we were asked to delay the start, do so
         if options is not None and options.get("random_delay", False):
@@ -162,6 +161,8 @@ class ZeldaNoMenuEnv(NESEnv):
 
             press_start_button = not press_start_button
 
+        return self._old_observation_to_new(self.screen)
+
     
     @property
     def usable_item_space(self):
@@ -183,15 +184,16 @@ class ZeldaNoMenuEnv(NESEnv):
     def step(self, action):
         action = self._translate_action_and_set_item(action)
 
-        obs, reward, _, info = super().step(action)
+        _, reward, _, info = super().step(action)
 
+        obs = self._screen_buffer()
+        print(np.all(obs == 0))
         obs = self._old_observation_to_new(obs)
-        done = self.zelda_memory.mode == zelda_mode_gameover or self.zelda_memory.triforce_of_power
 
-        return obs, reward, done, info
+        return obs, reward, self.is_done, info
     
     def _translate_action_and_set_item(self, action):
-        if isinstance(action, int):
+        if not isinstance(action, str):
             action = self.actions[action]
 
         if action == "none":
@@ -239,6 +241,10 @@ class ZeldaNoMenuEnv(NESEnv):
 
         return self._score_function(self)
     
+    @property
+    def is_done(self):
+        return self.zelda_memory.mode == zelda_mode_gameover or self.zelda_memory.triforce_of_power
+    
     def reset_to_first_dungeon(self):
         """Moves link to the first dungeon.  This works because the game is deterministic based
         on input.  That's why adding a random frame delay is neccessary to make the game non-deterministic."""
@@ -248,6 +254,7 @@ class ZeldaNoMenuEnv(NESEnv):
             location = self.zelda_memory.location
             while location == self.zelda_memory.location:
                 self.step(moveDirection)
+                self.render()
 
             self.skip_screen_scroll()
 
@@ -305,7 +312,7 @@ class ZeldaSmartItemEnv(ZeldaNoMenuEnv):
     def __init__(self):
         super().__init__()
         self.actions = list(zelda_smart_item_actions)
-        self.action_space = Discrete(len(self.actions))
+        self.entered_dungeon = False
 
     def _did_step(self, done):
         # todo: Mark rooms which require particular items.
@@ -322,6 +329,16 @@ class ZeldaSmartItemEnv(ZeldaNoMenuEnv):
 
         elif mem.regular_boomerang or mem.magic_boomerang:
             mem.selected_item = zelda_usable_item_indices["boomerang"]
+
+    @property
+    def is_done(self):
+        if self.zelda_memory.level != 0 and not self.entered_dungeon:
+            self.entered_dungeon = True
+
+        if not self.entered_dungeon:
+            return super().is_done
+    
+        return super().is_done or self.zelda_memory.level == 0
     
 
 
