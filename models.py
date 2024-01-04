@@ -26,6 +26,14 @@ class ZeldaBaseModel:
 
     def get_random_action(self):
         return randint(0, num_outputs - 1)
+    
+    def predict(self, frames, *args, **kwargs):
+        model_input = self.get_model_input(frames)
+        return self.model.predict(model_input, *args, **kwargs)
+    
+    def fit(self, frames, *args, **kwargs):
+        model_input = self.get_model_input(frames)
+        self.model.fit(model_input, *args, **kwargs)
 
     def get_model_input(self, frames):
         """Uses the last frame to build input for the model"""
