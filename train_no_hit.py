@@ -172,7 +172,6 @@ with open(log_file_name, 'w') as log_file:
             
             # Store in replay buffer
             replay_buffer.append((state, action, reward, next_state, done))
-            since_last_train += 1
 
             state = next_state
 
@@ -188,8 +187,6 @@ with open(log_file_name, 'w') as log_file:
         if batch_size < len(replay_buffer):
             if verbose:
                 print_log(f"Training model - samples:{len(replay_buffer)} - epsilon:{epsilon}")
-
-            since_last_train = 0
             
             minibatch = random.sample(replay_buffer, batch_size)
             for state, action, reward, next_state, done in minibatch:
