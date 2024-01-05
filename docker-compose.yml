@@ -1,0 +1,9 @@
+version: '3'
+
+services:
+  myapp:
+    build: .
+    volumes:
+      - ./roms:/data/triforce/roms:ro
+      - ./models:/data/triforce/models
+      - ./logs:/data/triforce/logs

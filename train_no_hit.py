@@ -1,4 +1,5 @@
 import os
+import datetime
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import tensorflow as tf
@@ -26,7 +27,7 @@ batch_size = 32
 
 
 # eventually these are command line options:
-output_path = "X:/triforce/models"
+output_path = "/models/"
 episodes = 10000
 rendering = False
 verbose = False
@@ -112,78 +113,94 @@ def reset_state():
 
     return state
 
-show_image = False
-since_last_train = 0
-for episode in tqdm.tqdm(range(0, episodes)):
-    state = reset_state()
-    state = list(frames)
 
-    scorer = ZeldaScoreNoHit(verbose=verbose)
-    env.set_score_function(scorer.score)
+# Get the name of the current script
+script_name = os.path.basename(__file__)
 
-    frame_count = 0
-    while frame_count < max_frames:
-        # ensure we don't try to take action while we aren't in control
-        state = skip_screen_scroll(state)
-        
+# Remove the '.py' extension and add the datetime and '.log'
+current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+log_file_name = f"/logs/{script_name[:-3]}_{current_time}.log"
+
+# Open the log file for writing
+with open(log_file_name, 'w') as log_file:
+    def print_log(message):
+        if verbose:
+            print(message)
+        log_file.write(message + '\n')
+        log_file.flush()
+
+
+    for episode in tqdm.tqdm(range(0, episodes)):
+        state = reset_state()
+        state = list(frames)
+
+
         total_score = 0.0
 
-        predicted = False
-        if np.random.rand() <= epsilon:
-            action = random.randint(0, len(env.actions) - 1)
-        else:
-            predicted = model.predict(state, verbose=0)
-            action = np.argmax(predicted[0])
-        
-        if verbose:
-            print(f"Episode: {episode}, Frame: {frame_count}, Action: {env.actions[action]}, Predicted: {predicted}")
+        scorer = ZeldaScoreNoHit(verbose=verbose)
+        env.set_score_function(scorer.score)
 
-        next_state, reward, done, _ = env.step(action)
-        frame_count += 1
+        frame_count = 0
+        while frame_count < max_frames:
+            # ensure we don't try to take action while we aren't in control
+            state = skip_screen_scroll(state)
 
-        total_score += reward
+            predicted = False
+            if np.random.rand() <= epsilon:
+                action = random.randint(0, len(env.actions) - 1)
+            else:
+                predicted = model.predict(state, verbose=0)
+                action = np.argmax(predicted[0])
+            
+            if verbose:
+                print_log(f"Episode: {episode}, Frame: {frame_count}, Action: {env.actions[action]}, Predicted: {predicted}")
 
-        frames.append(next_state.copy())
-        next_state = list(frames)
+            next_state, reward, done, _ = env.step(action)
+            frame_count += 1
 
-        # hold buttons for a bit
-        frame_count += button_hold_length
-        for _ in range(button_hold_length):
-            env.skip_frame(action)
+            total_score += reward
 
-        frame_count += random_delay(action_cooldown_frame_min, action_cooldown_frame_max, get_button_hold(action))
-        
-        # Store in replay buffer
-        replay_buffer.append((state, action, reward, next_state, done))
-        since_last_train += 1
+            frames.append(next_state.copy())
+            next_state = list(frames)
 
-        state = next_state
+            # hold buttons for a bit
+            frame_count += button_hold_length
+            for _ in range(button_hold_length):
+                env.skip_frame(action)
 
-        if done:
-            break
+            frame_count += random_delay(action_cooldown_frame_min, action_cooldown_frame_max, get_button_hold(action))
+            
+            # Store in replay buffer
+            replay_buffer.append((state, action, reward, next_state, done))
+            since_last_train += 1
 
-        if rendering:
-            env.render()
-        
-        if episode and episode % 100 == 0:
-            model.save(output_path, episode)
+            state = next_state
 
-    if batch_size < len(replay_buffer):
-        if verbose:
-            print(f"Training model - samples:{len(replay_buffer)} - epsilon:{epsilon}")
+            if done:
+                break
 
-        since_last_train = 0
-        
-        minibatch = random.sample(replay_buffer, batch_size)
-        for state, action, reward, next_state, done in minibatch:
-            target = reward
-            if not done:
-                target = reward + gamma * np.amax(model.predict(next_state, verbose = 0)[0])
+            if rendering:
+                env.render()
+            
+            if episode and episode % 100 == 0:
+                model.save(output_path, episode)
 
-            target_f = model.predict(state, verbose=0)
-            target_f[0][action] = target
-            model.fit(state, target_f, epochs=1, verbose=0)
-    epsilon = max(epsilon_min, epsilon_decay * epsilon)
-    print(f"Episode: {episode}, Score: {total_score}, Epsilon: {epsilon}")
+        if batch_size < len(replay_buffer):
+            if verbose:
+                print_log(f"Training model - samples:{len(replay_buffer)} - epsilon:{epsilon}")
+
+            since_last_train = 0
+            
+            minibatch = random.sample(replay_buffer, batch_size)
+            for state, action, reward, next_state, done in minibatch:
+                target = reward
+                if not done:
+                    target = reward + gamma * np.amax(model.predict(next_state, verbose = 0)[0])
+
+                target_f = model.predict(state, verbose=0)
+                target_f[0][action] = target
+                model.fit(state, target_f, epochs=1, verbose=0)
+        epsilon = max(epsilon_min, epsilon_decay * epsilon)
+        print_log(f"Episode: {episode}, Score: {total_score}, Epsilon: {epsilon}")
 
 model.save(output_path, "complete")

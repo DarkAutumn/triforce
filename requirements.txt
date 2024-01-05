@@ -1,0 +1,4 @@
+tensorflow
+nes-py
+gym
+numpy

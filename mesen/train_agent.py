@@ -12,8 +12,6 @@ max_game_duration_frames = max_game_duration_min * 60 * frames_per_second
 
 save_every = 50
 
-data_dir = "X:\\data"
-
 # after every action the agent takes, skip some frames so that we don't act on every frame
 # it's important this be a range and not, say, every 2 frames because certain enemy animations
 # are on a particular cycle, and would therefore be "invisible" to the agent without some
@@ -141,7 +139,7 @@ class TrainAgent:
 
         self.current_iteration += 1
         if self.current_iteration % save_every == 0:
-            self.agent.save(data_dir + '\\' + f"zelda_model_{iterations}.dat")
+            self.agent.save(f"/models/zelda_model_{iterations}.dat")
 
     def game_over(self):
         # finish the iteration
@@ -153,14 +151,14 @@ class TrainAgent:
         else:
             # we are done
             self.complete = True
-            self.agent.save(data_dir + '\\' + "completed.dat")
+            self.agent.save("/models/completed.dat")
             print("Complete!")
             disable()
 
 
 
 
-trainer = TrainAgent("x:\\dungeon1.mss", scorer="dungeon")
+trainer = TrainAgent("dungeon1.mss", scorer="dungeon")
 
 def onFrame(cpuType):
     trainer.onFrame()

@@ -66,8 +66,8 @@ class ZeldaBaseEnv(NESEnv):
     def __init__(self):
         # "zelda.rom" must be next to this file, or in one of its parent directories,
         # find it or throw an exception
-        rom_path = self._find_rom_path("zelda.nes")
-        if rom_path is None:
+        rom_path = "/roms/zelda.nes"
+        if not os.path.exists(rom_path):
             raise FileNotFoundError("Could not find zelda.nes.  This must be next to your program or in a parent directory.")
 
         super().__init__(rom_path)
