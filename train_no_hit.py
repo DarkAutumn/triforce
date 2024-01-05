@@ -162,7 +162,8 @@ for episode in tqdm.tqdm(range(0, episodes)):
         if done:
             break
 
-        env.render()
+        if rendering:
+            env.render()
         
         if episode and episode % 100 == 0:
             model.save(output_path, episode)
