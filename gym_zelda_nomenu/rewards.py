@@ -187,12 +187,14 @@ class ZeldaScoreDungeon(ZeldaScoreBasic):
         return 0
     
 class ZeldaScoreNoHit(ZeldaScoreBase):
-    def __init__(self):
+    def __init__(self, verbose):
         self.prev_state = None
         self._done = False
 
         self.penalty_take_damage = penalty_small
         self.penalty_go_wrong_direction = penalty_medium
+
+        self._verbose = verbose
 
 
     def score(self, env : ZeldaBaseEnv) -> float:
@@ -207,7 +209,8 @@ class ZeldaScoreNoHit(ZeldaScoreBase):
 
         if prev.hearts > state.hearts:
             reward += self.penalty_take_damage
-            print("Penalty for taking damage!")
+            if self._verbose:
+                print("Penalty for taking damage!")
 
             # restore hearts so we don't die
             env.zelda_memory.hearts = prev.hearts
@@ -215,11 +218,13 @@ class ZeldaScoreNoHit(ZeldaScoreBase):
 
         if prev.location_y != state.location_y:
             reward += self.penalty_go_wrong_direction
-            print("Penalty for going the wrong direction! (north)")
+            if self._verbose:
+                print("Penalty for going the wrong direction! (north)")
 
         if prev.location_x > state.location_x:
             reward += self.penalty_go_wrong_direction
-            print("Penalty for going the wrong direction! (west)")
+            if self._verbose:
+                print("Penalty for going the wrong direction! (west)")
 
         self.prev_state = state.snapshot()
         return reward

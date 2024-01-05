@@ -220,8 +220,7 @@ class ZeldaBaseEnv(NESEnv):
 
     def _get_reward(self):
         if self._score_function is None:
-            print("No reward function set.  Use set_reward_function to set one.")
-            self._score_function = lambda _: 0
+            return 0.0
 
         return self._score_function(self)
     

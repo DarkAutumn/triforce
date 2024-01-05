@@ -1,10 +1,19 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)  # Suppress TensorFlow INFO and WARNING messages
+
 from collections import deque
 import random
+import tqdm
 
 import numpy as np
 import gym_zelda_nomenu
 from models import NoHitModel
 from gym_zelda_nomenu import ZeldaScoreNoHit
+
+
 
 env = gym_zelda_nomenu.ZeldaNoHitEnv()
 
@@ -12,8 +21,8 @@ gamma = 0.95
 epsilon = 1.0
 epsilon_decay = 0.995
 epsilon_min = 0.05
-replay_buffer = deque(maxlen=10_000)
-batch_size = 128
+replay_buffer = deque(maxlen=2000)
+batch_size = 32
 
 
 # eventually these are command line options:
@@ -24,7 +33,7 @@ verbose = False
 nondeterministic = True
 train_model = True
 reset_options = { "nondeterministic": nondeterministic }
-episode_length_minutes = 3
+episode_length_minutes = 2
 decisions_per_second = 2
 
 model = NoHitModel()
@@ -105,11 +114,11 @@ def reset_state():
 
 show_image = False
 since_last_train = 0
-for episode in range(0, episodes):
+for episode in tqdm.tqdm(range(0, episodes)):
     state = reset_state()
     state = list(frames)
 
-    scorer = ZeldaScoreNoHit()
+    scorer = ZeldaScoreNoHit(verbose=verbose)
     env.set_score_function(scorer.score)
 
     frame_count = 0
@@ -149,21 +158,6 @@ for episode in range(0, episodes):
         since_last_train += 1
 
         state = next_state
-        
-        if batch_size < len(replay_buffer):
-            print(f"Training model - samples:{len(replay_buffer)} - epsilon:{epsilon}")
-
-            since_last_train = 0
-            
-            minibatch = random.sample(replay_buffer, batch_size)
-            for state, action, reward, next_state, done in minibatch:
-                target = reward
-                if not done:
-                    target = reward + gamma * np.amax(model.predict(next_state, verbose = 0)[0])
-
-                target_f = model.predict(state, verbose=0)
-                target_f[0][action] = target
-                model.fit(state, target_f, epochs=1, verbose=0)
 
         if done:
             break
@@ -173,6 +167,21 @@ for episode in range(0, episodes):
         if episode and episode % 100 == 0:
             model.save(output_path, episode)
 
+    if batch_size < len(replay_buffer):
+        if verbose:
+            print(f"Training model - samples:{len(replay_buffer)} - epsilon:{epsilon}")
+
+        since_last_train = 0
+        
+        minibatch = random.sample(replay_buffer, batch_size)
+        for state, action, reward, next_state, done in minibatch:
+            target = reward
+            if not done:
+                target = reward + gamma * np.amax(model.predict(next_state, verbose = 0)[0])
+
+            target_f = model.predict(state, verbose=0)
+            target_f[0][action] = target
+            model.fit(state, target_f, epochs=1, verbose=0)
     epsilon = max(epsilon_min, epsilon_decay * epsilon)
     print(f"Episode: {episode}, Score: {total_score}, Epsilon: {epsilon}")
 
