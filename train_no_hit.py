@@ -28,7 +28,7 @@ batch_size = 32
 # eventually these are command line options:
 output_path = "X:/triforce/models"
 episodes = 10000
-rendering = True
+rendering = False
 verbose = False
 nondeterministic = True
 train_model = True

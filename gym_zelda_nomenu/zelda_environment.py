@@ -121,7 +121,6 @@ class ZeldaBaseEnv(NESEnv):
             delay = randint(0, 31)
             for x in range(delay):
                 self._frame_advance(0)
-                self.render()
 
         # move past the menu screen until gameplay starts.
         # Zelda's save slots are set early in the game, so we set them in
@@ -138,8 +137,6 @@ class ZeldaBaseEnv(NESEnv):
 
             else:
                 self._frame_advance(0)
-
-            self.render()
 
             press_start_button = not press_start_button
 
@@ -190,7 +187,6 @@ class ZeldaBaseEnv(NESEnv):
         """Skips the scrolling animation that occurs when entering a new room."""
         while self.is_scrolling:
             self._frame_advance(0)
-            self.render()
 
     @property
     def is_scrolling(self):
@@ -228,13 +224,11 @@ class ZeldaBaseEnv(NESEnv):
         location = self.zelda_memory.location
         while location == self.zelda_memory.location:
             state, _, _, _ = self.step(moveDirection)
-            self.render()
         self.skip_screen_scroll()
 
     def move_for(self, direction, steps):
         for x in range(steps):
             self.step(direction)
-            self.render()
 
     def reset_to_first_dungeon(self):
         """Moves link to the first dungeon.  This works because the game is deterministic based
@@ -278,7 +272,6 @@ class ZeldaBaseEnv(NESEnv):
 
         while not self.is_playable:
             self._frame_advance(0)
-            self.render()
 
 class ZeldaNoHitEnv(ZeldaBaseEnv):
     def __init__(self):
