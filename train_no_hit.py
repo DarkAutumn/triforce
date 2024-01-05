@@ -119,7 +119,7 @@ script_name = os.path.basename(__file__)
 
 # Remove the '.py' extension and add the datetime and '.log'
 current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-log_file_name = f"/logs/{script_name[:-3]}_{current_time}.log"
+log_file_name = f"/output/{script_name[:-3]}_{current_time}.log"
 
 # Open the log file for writing
 with open(log_file_name, 'w') as log_file:
