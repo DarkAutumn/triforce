@@ -84,7 +84,7 @@ def random_delay(min_delay, max_delay, action):
     # wait a short amount of time before starting the episode to introduce randomness
     delay = random.randint(min_delay, max_delay)
     for _ in range(delay):
-        env.skip_frame(action)
+        env.skip_frame(None)
 
     # ensure the screen buffer is up to date
     frames.clear()
