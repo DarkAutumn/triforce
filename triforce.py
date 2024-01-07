@@ -65,14 +65,15 @@ def main():
             test_environment(env, args.iterations)
 
         else:
-            env = Monitor(env, log_dir)
-            
             if args.load:
                 model = scenario.load_model(args.load)
             else:
                 model = scenario.create_model(env, verbose=1, tensorboard_log=log_dir)
 
             if args.action == 'train' or args.action == 'learn':
+                # monitor the environment if we are training
+                env = Monitor(env, log_dir)
+
                 callback = SaveBestModelCallback(check_freq=4096, save_path=best_path, log_dir=log_dir, verbose=True)
                 model.learn(args.iterations, progress_bar=True, callback=callback)
                 model.save(model_path)
