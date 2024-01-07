@@ -1,5 +1,6 @@
 import gymnasium as gym
 from random import randint
+from . import zelda_constants as zelda
 
 class Frameskip(gym.Wrapper):
     """Skip every min-max frames.  This ensures that we do not take too many actions
@@ -21,5 +22,14 @@ class Frameskip(gym.Wrapper):
             total_rew += rew
             if terminated or truncated:
                 break
+
+        mode = info["mode"]
+        while mode != zelda.mode_game_over and mode != zelda.mode_gameplay:
+            obs, rew, terminated, truncated, info = self.env.step(act)
+            total_rew += rew
+            if terminated or truncated:
+                break
+            
+            mode = info["mode"]
 
         return obs, total_rew, terminated, truncated, info
