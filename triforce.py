@@ -65,14 +65,10 @@ def main():
             test_environment(env, args.iterations)
 
         else:
-            if args.load:
-                model = scenario.load_model(args.load)
-            else:
-                model = scenario.create_model(env, verbose=1, tensorboard_log=log_dir)
-
             if args.action == 'train' or args.action == 'learn':
                 # monitor the environment if we are training
                 env = Monitor(env, log_dir)
+                model = load_or_create_model(scenario, log_dir, env, args.load)
 
                 callback = SaveBestModelCallback(check_freq=4096, save_path=best_path, log_dir=log_dir, verbose=True)
                 model.learn(args.iterations, progress_bar=True, callback=callback)
@@ -82,11 +78,19 @@ def main():
                 if not args.load:
                     raise Exception('Must specify model to evaluate or record.')
                 
+                model = load_or_create_model(scenario, log_dir, env, args.load)
                 mean_reward, std_reward = evaluate_policy(model, env, render=True, n_eval_episodes=args.iterations)
                 print(f'Mean reward: {mean_reward} +/- {std_reward}')
 
     finally:
         env.close()
+
+def load_or_create_model(scenario, log_dir, env, path = None):
+    if path is not None:
+        model = scenario.load_model(path)
+    else:
+        model = scenario.create_model(env, verbose=1, tensorboard_log=log_dir)
+    return model
 
 import argparse
 
