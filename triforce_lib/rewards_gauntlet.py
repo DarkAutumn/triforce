@@ -33,12 +33,14 @@ class ZeldaGuantletRewards(ZeldaBasicRewards):
     def _reward_location(self, prev, state):
         location = state['location']
         if location < 120 or location > 127:
-            print(f"Penalty for leaving the gauntlet! {-self._reward_large}")
+            if self._verbose:
+                print(f"Penalty for leaving the gauntlet! {-self._reward_large}")
             return -self._reward_large
         
         prev_location = prev['location']
         if location < prev_location:
-            print(f"Penalty for moving backwards! {-self._reward_medium}")
+            if self._verbose:
+                print(f"Penalty for moving backwards! {-self._reward_medium}")
             return -self._reward_medium
         
         return 0.0
