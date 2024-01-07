@@ -395,3 +395,4 @@ FodyWeavers.xsd
 *.msp
 
 *.nes
+.vscode/launch.json
