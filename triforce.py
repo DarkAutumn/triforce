@@ -73,7 +73,7 @@ def main():
                 model = scenario.create_model(env, verbose=1, tensorboard_log=log_dir)
 
             if args.action == 'train' or args.action == 'learn':
-                callback = SaveBestModelCallback(check_freq=1000, save_path=best_path, log_dir=log_dir, verbose=True)
+                callback = SaveBestModelCallback(check_freq=4096, save_path=best_path, log_dir=log_dir, verbose=True)
                 model.learn(args.iterations, progress_bar=True, callback=callback)
                 model.save(model_path)
 
