@@ -2,6 +2,8 @@
 0x010 level
 0x0eb location
 0x012 mode
+0x070 link_x
+0x084 link_y
 
 # animations
 0x0b9 sword_animation

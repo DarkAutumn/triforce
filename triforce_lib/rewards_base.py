@@ -2,7 +2,7 @@ import gymnasium as gym
 import numpy as np
 from . import zelda_constants as zelda
 
-class ZeldaRewardBase(gym.Wrapper):
+class ZeldaBasicRewards(gym.Wrapper):
     def __init__(self, env, verbose=False):
         super().__init__(env)
         self._reward_tiny = 0.01
@@ -16,6 +16,8 @@ class ZeldaRewardBase(gym.Wrapper):
         self._last_state = None
         self._visted_locations = [[False] * 256 ] * 2
         self._enemies_killed = 0
+        self._actions_on_same_screen = 0
+        self._max_actions_on_same_screen = 1000
 
     def reset(self, **kwargs):
         state = super().reset(**kwargs)
@@ -30,9 +32,23 @@ class ZeldaRewardBase(gym.Wrapper):
             # clear enemies killed if we've changed locations
             if self._is_new_location(self._last_state, state):
                 self._enemies_killed = 0
+                self._actions_on_same_screen = 0
+            else:
+                self._actions_on_same_screen += 1
+                if self._actions_on_same_screen > self._max_actions_on_same_screen:
+                    print(f"Penalty for taking too long on the same screen! {-self._reward_medium}")
+                    rewards -= self._reward_medium
+                    truncated = True
 
             rewards = self._get_rewards(state)
-            terminated = self._check_is_terminated(state)
+
+            terminated = terminated or self._check_is_terminated(state)
+            if terminated:
+                self._on_terminated(state)
+
+            truncated = truncated or self._check_is_truncated(state)
+            if truncated:
+                self._on_truncated(state)
 
         else:
             self.mark_visited(state["level"], state["location"])
@@ -40,6 +56,13 @@ class ZeldaRewardBase(gym.Wrapper):
         self._last_state = state
         return obs, rewards, terminated, truncated, state
     
+    # events
+    def _on_terminated(self, state):
+        pass
+
+    def _on_truncated(self, state):
+        pass
+
     # reward helpers, may be overridden
     def _get_rewards(self, state):
         total = 0.0
@@ -61,9 +84,6 @@ class ZeldaRewardBase(gym.Wrapper):
     def _reward_heart_change(self, old, new):
         old_hearts = self.get_heart_halves(old)
         new_hearts = self.get_heart_halves(new)
-
-        if old_hearts != new_hearts:
-            print(f"Old hearts: {old_hearts} New hearts: {new_hearts}")
 
         reward = self._reward_medium
         diff = new_hearts - old_hearts
@@ -99,6 +119,8 @@ class ZeldaRewardBase(gym.Wrapper):
 
         if prev != curr and not self.has_visited(*curr):
             self.mark_visited(*curr)
+            if self._verbose:
+                print(f"Reward for discovering new room (level:{curr[0]}, coords:{curr[1]})! {self._reward_medium}")
             return self._reward_medium
 
         return 0
@@ -132,4 +154,3 @@ class ZeldaRewardBase(gym.Wrapper):
     
     def get_heart_containers(self, state):
         return (state["hearts_and_containers"] >> 4) + 1
-    

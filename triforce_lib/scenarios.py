@@ -3,7 +3,7 @@ import retro
 
 from stable_baselines3 import PPO
 
-from .rewards_base import ZeldaRewardBase
+from .rewards_gauntlet import ZeldaGuantletRewards
 from .frameskip import Frameskip
 
 class ZeldaScenario:
@@ -55,14 +55,14 @@ class ZeldaScenario:
 
         # We only take action every so many frames, not every single frame.
         env = Frameskip(env, 10, 20)
-        env = self.rewards(env, verbose=True)
+        env = self.rewards(env)
 
         return env
     
     def get_model_name(self, iterations):
         return f'{self.algorithm}_{self.policy}_{self.name}_{iterations}.zip'
     
-ZeldaScenario('gauntlet', 'Run link from the starting screen to the furthest right screen without dying.', 'ppo', 'cnn', '120w.state', rewards = ZeldaRewardBase)
+ZeldaScenario('gauntlet', 'Run link from the starting screen to the furthest right screen without dying.', 'ppo', 'cnn', '120w.state', rewards = ZeldaGuantletRewards)
 
 def load_scenario(name) -> ZeldaScenario:
     return ZeldaScenario.get(name)

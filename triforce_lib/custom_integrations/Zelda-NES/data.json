@@ -12,6 +12,14 @@
             "address": 18,
             "type": "=u1"
         },
+        "link_x": {
+            "address": 112,
+            "type": "=u1"
+        },
+        "link_y": {
+            "address": 132,
+            "type": "=u1"
+        },
         "sword_animation": {
             "address": 185,
             "type": "=u1"
