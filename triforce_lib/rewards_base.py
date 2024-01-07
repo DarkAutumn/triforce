@@ -131,8 +131,8 @@ class ZeldaBasicRewards(gym.Wrapper):
         """penalize for taking too long on the same screen"""
 
         if self._actions_on_same_screen > self._max_actions_on_same_screen:
-            print(f"Penalty for taking too long on the same screen! {-self._self.reward_large}")
-            return -self._self.reward_large
+            print(f"Penalty for taking too long on the same screen! {-self._reward_large}")
+            return -self._reward_large
         
         return 0
 
