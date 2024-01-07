@@ -2,10 +2,12 @@ import sys
 import numpy as np
 import os
 
+from triforce_lib.frameskip import Frameskip
+from save_best import SaveOnBestTrainingRewardCallback
+
+from scenarios import load_scenario
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
-
-from triforce_lib import *
 
 def test_environment(env, iterations):
     total_reward = 0
@@ -20,23 +22,7 @@ def test_environment(env, iterations):
         if done:
             env.reset()
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Parse command line arguments for training, testing, evaluating, or recording.")
-
-    parser.add_argument("action", choices=['train', 'test', 'evaluate', 'record'], help="Action to perform: train, test, evaluate, or record.")
-    parser.add_argument("scenario", choices=['gauntlet'], help="The scenario to run: guantlet.")
-    parser.add_argument("iterations", type=int, help="Number of iterations to run.")
-
-    parser.add_argument("--algorithm", choices=['ppo', 'a2c', 'dqn', 'sac', 'td3', 'ddpg'], help="The algorithm to use (ppo, a2c, dqn, sac, td3, ddpg).")
-    parser.add_argument("--scenario", help="The scenario to use (e.g., gauntlet).")
-    parser.add_argument("--load", help="Loads the given model.")
-
-    return parser.parse_args()
-
-
-def main():
-    args = parse_args()
-
+def main(args):
     # load scenario and create directories
     scenario = load_scenario(args.scenario)
     
@@ -71,7 +57,7 @@ def main():
                 model = scenario.create_model(env, verbose=1, tensorboard_log=log_dir)
 
             if args.action == 'train' or args.action == 'learn':
-                callback = SaveBestModelCallback(check_freq=1000, save_path=best_path, log_dir=log_dir, verbose=True)
+                callback = SaveOnBestTrainingRewardCallback(check_freq=1000, save_path=best_path, log_dir=log_dir, verbose=True)
                 model.learn(args.iterations, progress_bar=True, callback=callback)
                 model.save(model_path)
 
@@ -88,4 +74,21 @@ def main():
 import argparse
 
 if __name__ == '__main__':
-    main()
+    # Create the parser
+    parser = argparse.ArgumentParser(description="Parse command line arguments for training, testing, evaluating, or recording.")
+
+    # Positional arguments
+    parser.add_argument("action", choices=['train', 'test', 'evaluate', 'record'], help="Action to perform: train, test, evaluate, or record.")
+    parser.add_argument("scenario", choices=['gauntlet'], help="The scenario to run: guantlet.")
+    parser.add_argument("iterations", type=int, help="Number of iterations to run.")
+
+    # Optional arguments
+    parser.add_argument("--algorithm", choices=['ppo', 'a2c', 'dqn', 'sac', 'td3', 'ddpg'], help="The algorithm to use (ppo, a2c, dqn, sac, td3, ddpg).")
+    parser.add_argument("--scenario", help="The scenario to use (e.g., gauntlet).")
+    parser.add_argument("--load", help="Loads the given model.")
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    main(args)
+

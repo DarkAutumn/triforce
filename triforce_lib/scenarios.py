@@ -3,7 +3,7 @@ import retro
 
 from stable_baselines3 import PPO
 
-from frameskip import Frameskip
+from .frameskip import Frameskip
 
 class ZeldaScenario:
     _scenarios = {}
@@ -48,7 +48,7 @@ class ZeldaScenario:
             raise Exception(f'Unsupported algorithm: {self.algorithm}')
         
         return PPO('CnnPolicy', env, **kwargs)
-    
+
     def create_env(self, **kwargs):
         env = retro.make(game='Zelda-NES', state=self.state, inttype=retro.data.Integrations.CUSTOM_ONLY, **kwargs)
 
@@ -62,7 +62,7 @@ class ZeldaScenario:
     
 ZeldaScenario('gauntlet', 'Run link from the starting screen to the furthest right screen without dying.', 'ppo', 'cnn', '120w.state', custom_rewards = None)
 
-def load_scenario(name):
+def load_scenario(name) -> ZeldaScenario:
     return ZeldaScenario.get(name)
 
 __all__ = ['load_scenario']

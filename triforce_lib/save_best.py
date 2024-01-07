@@ -5,9 +5,9 @@ import numpy as np
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common.callbacks import BaseCallback
 
-class SaveOnBestTrainingRewardCallback(BaseCallback):
+class SaveBestModelCallback(BaseCallback):
     def __init__(self, check_freq: int, save_path, log_dir: str, verbose=1, model_info=None):
-        super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
+        super(SaveBestModelCallback, self).__init__(verbose)
         self.check_freq = check_freq
         self.log_dir = log_dir
         self.save_path = save_path
