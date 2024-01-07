@@ -12,17 +12,20 @@ class ZeldaBasicRewards(gym.Wrapper):
 
         self._verbose = verbose
         
+        self._max_actions_on_same_screen = 1000
+        
         # state that has to be carefully managed
         self._last_state = None
         self._visted_locations = [[False] * 256 ] * 2
         self._enemies_killed = 0
         self._actions_on_same_screen = 0
-        self._max_actions_on_same_screen = 1000
 
     def reset(self, **kwargs):
         state = super().reset(**kwargs)
         self._last_state = None
         self._visted_locations = [[False] * 256 ] * 2
+        self._enemies_killed = 0
+        self._actions_on_same_screen = 0
         return state
 
     def step(self, act):
