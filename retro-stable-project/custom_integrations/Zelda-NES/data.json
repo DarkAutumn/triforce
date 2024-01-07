@@ -1,0 +1,68 @@
+{
+  "info": {
+    "bombs": {
+      "address": 1624,
+      "type": "=b1"
+    },
+    "heart_containers": {
+      "address": 1647,
+      "type": "=n1"
+    },
+    "hearts_and_containers": {
+      "address": 1647,
+      "type": "=b1"
+    },
+    "level": {
+      "address": 16,
+      "type": "=b1"
+    },
+    "location": {
+      "address": 235,
+      "type": "=b1"
+    },
+    "mode": {
+      "address": 18,
+      "type": "=b1"
+    },
+    "partial_hearts": {
+      "address": 1648,
+      "type": "|i1"
+    },
+    "room_kill_count": {
+      "address": 1575,
+      "type": "=b1"
+    },
+    "rupees": {
+      "address": 1645,
+      "type": "=b1"
+    },
+    "rupees_to_add": {
+      "address": 1661,
+      "type": "=b1"
+    },
+    "selected_item": {
+      "address": 1622,
+      "type": "=n1"
+    },
+    "sword": {
+      "address": 1623,
+      "type": "=b1"
+    },
+    "triforce": {
+      "address": 1649,
+      "type": "=b1"
+    },
+    "triforce_of_power": {
+      "address": 1650,
+      "type": "=b1"
+    },
+    "x": {
+      "address": 112,
+      "type": "=u1"
+    },
+    "y": {
+      "address": 132,
+      "type": "=u1"
+    }
+  }
+}

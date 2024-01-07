@@ -1,0 +1,17 @@
+{
+  "crop": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "done": {
+    "script": "lua:is_done"
+  },
+  "reward": {
+    "script": "lua:get_reward"
+  },
+  "scripts": [
+    "gauntlet.lua"
+  ]
+}
