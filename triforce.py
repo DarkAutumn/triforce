@@ -30,6 +30,7 @@ def parse_args():
     parser.add_argument("--algorithm", choices=['ppo', 'a2c', 'dqn', 'sac', 'td3', 'ddpg'], help="The algorithm to use (ppo, a2c, dqn, sac, td3, ddpg).")
     parser.add_argument("--scenario", help="The scenario to use (e.g., gauntlet).")
     parser.add_argument("--load", help="Loads the given model.")
+    parser.add_argument("--render", action='store_true', help="Render the environment.")
 
     return parser.parse_args()
 
@@ -52,8 +53,9 @@ def main():
 
     # create the environment
     render_mode = None
-    render_mode = 'human' if args.action == 'test' or args.action == 'evaluate' else None
+    render_mode = 'human' if args.action == 'test' or args.action == 'evaluate' or args.render else None
     record = args.action == 'record'
+
     env = scenario.create_env(render_mode=render_mode, record=record)
 
     # run the scenario

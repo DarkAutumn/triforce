@@ -1,68 +1,168 @@
 {
-  "info": {
-    "bombs": {
-      "address": 1624,
-      "type": "=b1"
-    },
-    "heart_containers": {
-      "address": 1647,
-      "type": "=n1"
-    },
-    "hearts_and_containers": {
-      "address": 1647,
-      "type": "=b1"
-    },
-    "level": {
-      "address": 16,
-      "type": "=b1"
-    },
-    "location": {
-      "address": 235,
-      "type": "=b1"
-    },
-    "mode": {
-      "address": 18,
-      "type": "=b1"
-    },
-    "partial_hearts": {
-      "address": 1648,
-      "type": "|i1"
-    },
-    "room_kill_count": {
-      "address": 1575,
-      "type": "=b1"
-    },
-    "rupees": {
-      "address": 1645,
-      "type": "=b1"
-    },
-    "rupees_to_add": {
-      "address": 1661,
-      "type": "=b1"
-    },
-    "selected_item": {
-      "address": 1622,
-      "type": "=n1"
-    },
-    "sword": {
-      "address": 1623,
-      "type": "=b1"
-    },
-    "triforce": {
-      "address": 1649,
-      "type": "=b1"
-    },
-    "triforce_of_power": {
-      "address": 1650,
-      "type": "=b1"
-    },
-    "x": {
-      "address": 112,
-      "type": "=u1"
-    },
-    "y": {
-      "address": 132,
-      "type": "=u1"
+    "info": {
+        "level": {
+            "address": 16,
+            "type": "=u1"
+        },
+        "location": {
+            "address": 235,
+            "type": "=u1"
+        },
+        "mode": {
+            "address": 18,
+            "type": "=u1"
+        },
+        "sword_animation": {
+            "address": 185,
+            "type": "=u1"
+        },
+        "beam_animation": {
+            "address": 186,
+            "type": "=u1"
+        },
+        "bomb_or_flame_animation": {
+            "address": 188,
+            "type": "=u1"
+        },
+        "bomb_or_flame_animation2": {
+            "address": 189,
+            "type": "=u1"
+        },
+        "arrow_magic_animation": {
+            "address": 190,
+            "type": "=u1"
+        },
+        "triforce": {
+            "address": 1649,
+            "type": "=u1"
+        },
+        "triforce_of_power": {
+            "address": 1650,
+            "type": "=u1"
+        },
+        "hearts_and_containers": {
+            "address": 1647,
+            "type": "=u1"
+        },
+        "partial_hearts": {
+            "address": 1648,
+            "type": "=u1"
+        },
+        "kill_streak": {
+            "address": 1575,
+            "type": "=u1"
+        },
+        "rupees": {
+            "address": 1645,
+            "type": "=u1"
+        },
+        "rupees_to_add": {
+            "address": 1661,
+            "type": "=u1"
+        },
+        "bombs": {
+            "address": 1624,
+            "type": "=u1"
+        },
+        "bombMax": {
+            "address": 1660,
+            "type": "=u1"
+        },
+        "keys": {
+            "address": 1644,
+            "type": "=u1"
+        },
+        "sword": {
+            "address": 1623,
+            "type": "=u1"
+        },
+        "arrows": {
+            "address": 1625,
+            "type": "=u1"
+        },
+        "bow": {
+            "address": 1626,
+            "type": "=u1"
+        },
+        "candle": {
+            "address": 1627,
+            "type": "=u1"
+        },
+        "whistle": {
+            "address": 1628,
+            "type": "=u1"
+        },
+        "food": {
+            "address": 1629,
+            "type": "=u1"
+        },
+        "potion": {
+            "address": 1630,
+            "type": "=u1"
+        },
+        "magic_rod": {
+            "address": 1631,
+            "type": "=u1"
+        },
+        "raft": {
+            "address": 1632,
+            "type": "=u1"
+        },
+        "magic_book": {
+            "address": 1633,
+            "type": "=u1"
+        },
+        "ring": {
+            "address": 1634,
+            "type": "=u1"
+        },
+        "step_ladder": {
+            "address": 1635,
+            "type": "=u1"
+        },
+        "magic_Key": {
+            "address": 1636,
+            "type": "=u1"
+        },
+        "power_braclet": {
+            "address": 1637,
+            "type": "=u1"
+        },
+        "letter": {
+            "address": 1638,
+            "type": "=u1"
+        },
+        "regular_boomerang": {
+            "address": 1652,
+            "type": "=u1"
+        },
+        "magic_boomerang": {
+            "address": 1653,
+            "type": "=u1"
+        },
+        "compass": {
+            "address": 1639,
+            "type": "=u1"
+        },
+        "map": {
+            "address": 1640,
+            "type": "=u1"
+        },
+        "compass9": {
+            "address": 1641,
+            "type": "=u1"
+        },
+        "map9": {
+            "address": 1642,
+            "type": "=u1"
+        },
+        "clock": {
+            "address": 1644,
+            "type": "=u1"
+        },
+        "selected_item": {
+            "address": 1622,
+            "type": "=u1"
+        }
     }
-  }
 }
