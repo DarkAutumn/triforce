@@ -1,5 +1,0 @@
-tensorflow
-nes-py
-gym
-numpy
-tqdm
