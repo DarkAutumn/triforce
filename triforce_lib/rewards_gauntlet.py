@@ -55,6 +55,6 @@ class ZeldaGuantletRewards(ZeldaBasicRewards):
             return self._reward_tiny
         elif diff < 0:
             return -self._reward_tiny
-        else:
-            return -self._reward_tiniest
+        
+        return 0.0
     
