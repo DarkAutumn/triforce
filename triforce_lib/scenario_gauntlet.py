@@ -4,7 +4,7 @@
 # The goal is to train a model that will make it to the far south-east location of the map without dying.
 
 from .scenario import ZeldaScenario
-from .end_condition import ZeldaEndCondition
+from .end_condition import ZeldaEndCondition, ZeldaGameplayEndCondition
 from .critic import ZeldaCritic, ZeldaGameplayCritic
 
 class ZeldaGuantletRewards(ZeldaCritic):
@@ -15,7 +15,7 @@ class ZeldaGuantletRewards(ZeldaCritic):
         self.new_location_reward = self.reward_large
         self.leaving_penalty = -self.reward_large
         self.moving_backwards_penalty = -self.reward_medium
-        self.screen_forward_progress_reward = self.reward_medium
+        self.screen_forward_progress_reward = self.reward_tiny
         self.reward_new_location = self.reward_large
 
         # state variables
@@ -31,17 +31,12 @@ class ZeldaGuantletRewards(ZeldaCritic):
     def mark_visited(self, level, location):
         self._visted_locations[level][location] = True
 
-    def get_all_rewards(self, old, new):
-        total += self.reward_forward_progress(self._last_state, new)
-        total += self.reward_screen_progress(self._last_state, new)
-
-        return total
+    def get_rewards(self, old, new):
+        rewards = 0.0
+        rewards += self.reward_forward_progress(old, new)
+        rewards += self.reward_screen_progress(old, new)
+        return rewards
     
-    def check_is_terminated(self, state):
-        location = state['location']
-        return super().check_is_terminated(state) or location < 120 or location >= 127
-    
-
     def reward_forward_progress(self, old, new):
         # reward for visiting a new room in the given range, note that this scenario disables the normal
         # room discovery reward
@@ -80,8 +75,10 @@ class ZeldaGuantletRewards(ZeldaCritic):
             diff = new_state['link_x'] - old_state['link_x']
             if diff > 0:
                 reward += self.screen_forward_progress_reward
+                self.print_verbose(f"Reward for moving right! {reward}")
             elif diff < 0:
                 reward -= self.screen_forward_progress_reward
+                self.print_verbose(f"Penalty for moving left! {reward}")
         
         return reward
 
@@ -111,7 +108,7 @@ class GauntletScenario(ZeldaScenario):
         basic_minus_new_location.new_location_reward = 0
         critics = [basic_minus_new_location, ZeldaGuantletRewards(verbose=verbose)]
 
-        super().__init__('gauntlet', description, "78w.state", critics, [ZeldaEndCondition(), GauntletEndCondition()])
+        super().__init__('gauntlet', description, "78w.state", critics, [ZeldaGameplayEndCondition(), GauntletEndCondition()])
 
     def __str__(self):
         return 'Gauntlet Scenario'

@@ -30,6 +30,7 @@ class ZeldaML:
         else:
             self.verbose = 0
 
+
         if not isinstance(frame_stack, int) or frame_stack < 2:
             frame_stack = 1
 
@@ -37,6 +38,10 @@ class ZeldaML:
             scenario = ZeldaScenario.get(scenario)
         elif not isinstance(scenario, ZeldaScenario):
             raise Exception('scenario must be a ZeldaScenario or the name of a well-known scenario')
+        
+        if 'debug_scenario' in kwargs:
+            scenario.debug(kwargs['debug_scenario'])
+            del kwargs['debug_scenario']
 
         self.algorithm = algorithm
         self.color = color
@@ -61,10 +66,8 @@ class ZeldaML:
 #            env = GrayscaleObservation(env)
         
         env = self.scenario.activate(env)
-        self.env = Monitor(self.env, self.log_dir)
-
-        # create the model, must be done after the environment
-        self.model = self._create_model()
+        self.env = Monitor(env, self.log_dir)
+        self.model = None
 
     def close(self):
         self.env.close()
@@ -75,8 +78,11 @@ class ZeldaML:
     def learn(self, iterations, progress_bar = True, save_best = True):
         if not iterations:
             raise Exception('Must specify number of iterations to learn')
+        
+        if not self.model:
+            self.model = self._create_model()
 
-        callback = SaveBestModelCallback(check_freq=4096, save_func=self.save, log_dir=self.log_dir, verbose=self.verbose) if save_best else None
+        callback = SaveBestModelCallback(check_freq=8192, save_func=self.save, log_dir=self.log_dir, verbose=self.verbose) if save_best else None
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
         self.save()
 

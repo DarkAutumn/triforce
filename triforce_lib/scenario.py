@@ -31,7 +31,7 @@ class ScenarioGymWrapper(gym.Wrapper):
 
         if self._last_state is not None:
             for c in self._critics:
-                rewards += c.get_reward(self._last_state, state)
+                rewards += c.get_rewards(self._last_state, state)
 
             terminated = terminated or any((x.is_terminated(state) for x in self._conditions))
             truncated = truncated or any((x.is_truncated(state) for x in self._conditions))
@@ -57,6 +57,18 @@ class ZeldaScenario:
         env = ScenarioGymWrapper(env, self.critics, self.end_conditions)
         return env
     
+    def debug(self, debug):
+        verbose = 2 if debug else 0
+        
+        self.verbose = verbose
+
+        for c in self.critics:
+            c.verbose = verbose
+
+        for ec in self.end_conditions:
+            ec.verbose = verbose
+
+
     @classmethod
     def get(cls, name):
         return ZeldaScenario._scenarios.get(name, None)

@@ -33,9 +33,9 @@ class ZeldaCritic:
         """Called when the environment is reset to clear any saved state"""
         pass
 
-    def get_reward(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
+    def get_rewards(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
         """Called to get the reward for the transition from old_state to new_state"""
-        return 0.0
+        raise NotImplementedError()
     
     def print_verbose(self, message):
         if self.verbose:
@@ -65,7 +65,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self._enemies_killed = 0
         self._actions_on_same_screen = 0
 
-    def get_reward(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
+    def get_rewards(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
         total = 0.0
 
         # health

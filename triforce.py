@@ -16,6 +16,7 @@ def parse_args():
     parser.add_argument("--stack", type=int, default=1, help="Number of frames to stack in the observation.")
     parser.add_argument("--record", action='store_true', help="Whether to record playback or not.")
     parser.add_argument("--load", help="Load a specific saved model.")
+    parser.add_argument("--debug-scenario", action='store_true', help="Debug the scenario by printing out rewards.")
 
     try:
         args = parser.parse_args()
@@ -38,7 +39,8 @@ def main():
     # create the agent and load the model
     render_mode = 'human' if args.action == 'test' or args.action == 'evaluate' or args.render else None
     record = args.action == 'record'
-    zelda_ml = ZeldaML(base_dir, args.scenario, args.algorithm, args.stack, args.color, record=record, render_mode=render_mode, verbose=1)
+    debug_scenario = args.debug_scenario
+    zelda_ml = ZeldaML(base_dir, args.scenario, args.algorithm, args.stack, args.color, record=record, render_mode=render_mode, verbose=1, debug_scenario=debug_scenario)
 
     if args.load:
         zelda_ml.load(args.load)

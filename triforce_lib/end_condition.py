@@ -2,17 +2,17 @@ from . import zelda_constants as zelda
 
 class ZeldaEndCondition:
     def __init__(self, verbose=False):
-        self._verbose = verbose
+        self.verbose = verbose
 
     def print_verbose(self, message):
-        if self._verbose:
+        if self.verbose:
             print(message)
 
     def is_terminated(self, info):
-        return 
+        raise NotImplementedError() 
     
     def is_truncated(self, info):
-        return
+        raise NotImplementedError()
 
 class ZeldaGameplayEndCondition(ZeldaEndCondition):
     """The basic end condition for all gameplay.  The run is over if the player dies or gets the triforce of power
