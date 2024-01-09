@@ -102,14 +102,14 @@ class GauntletEndCondition(ZeldaEndCondition):
     
 
 class GauntletScenario(ZeldaScenario):
-    def __init__(self):
+    def __init__(self, verbose=False):
         description = """The Guantlet Scenario - Move from the starting tile to the far south-east tile without dying"""
 
         # We disable the basic new location reward in the basic critic.  We do not want to reward stepping off
         # of the gauntlet area.  ZeldaGauntletRewards will handle the new location reward.
-        basic_minus_new_location = ZeldaGameplayCritic()
-        basic_minus_new_location.reward_new_location = 0
-        critics = [basic_minus_new_location, ZeldaGuantletRewards()]
+        basic_minus_new_location = ZeldaGameplayCritic(verbose=verbose)
+        basic_minus_new_location.new_location_reward = 0
+        critics = [basic_minus_new_location, ZeldaGuantletRewards(verbose=verbose)]
 
         super().__init__('gauntlet', description, "78w.state", critics, [ZeldaEndCondition(), GauntletEndCondition()])
 

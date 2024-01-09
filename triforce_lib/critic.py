@@ -89,11 +89,12 @@ class ZeldaGameplayCritic(ZeldaCritic):
         old_hearts = self.get_heart_halves(old)
         new_hearts = self.get_heart_halves(new)
 
-        reward = self.health_change_reward
+        reward = 0
         diff = new_hearts - old_hearts
-        reward = diff * reward
 
-        self.print_verbose(f"Reward for gaining {diff/2} hearts: {reward}")
+        if diff:
+            reward = diff * self.health_change_reward
+            self.print_verbose(f"Reward for gaining {diff/2} hearts: {reward}")
 
         return reward
     
@@ -139,7 +140,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         curr = (new['level'], new['location'])
 
         reward = 0
-        if prev != curr and not self.has_visited(*curr):
+        if self.new_location_reward and prev != curr and not self.has_visited(*curr):
             self.mark_visited(*curr)
 
             reward = self.new_location_reward
