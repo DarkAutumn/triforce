@@ -1,7 +1,7 @@
 import gymnasium as gym
 import numpy as np
 from random import randint
-from . import zelda_constants as zelda
+from .zelda_modes import is_mode_scrolling
 
 class GrayscaleObservation(gym.ObservationWrapper):
     """Converts the observation to grayscale to make processing easier"""
@@ -36,7 +36,7 @@ class Frameskip(gym.Wrapper):
                 break
 
         mode = info["mode"]
-        while mode != zelda.mode_game_over and mode != zelda.mode_gameplay and mode != zelda.mode_game_over_screen:
+        while is_mode_scrolling(mode):
             obs, rew, terminated, truncated, info = self.env.step(act)
             total_rew += rew
             if terminated or truncated:

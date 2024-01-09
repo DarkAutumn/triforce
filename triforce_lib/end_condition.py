@@ -1,4 +1,4 @@
-from . import zelda_constants as zelda
+from .zelda_modes import is_mode_death
 
 class ZeldaEndCondition:
     def __init__(self, verbose=False):
@@ -18,7 +18,7 @@ class ZeldaGameplayEndCondition(ZeldaEndCondition):
     """The basic end condition for all gameplay.  The run is over if the player dies or gets the triforce of power
     after beating Ganon."""
     def is_terminated(self, info):
-        if info['mode'] == zelda.mode_game_over or info['mode'] == zelda.mode_game_over_screen:
+        if is_mode_death(info['mode']):
             self.print_verbose("Game over")
             return True
         
