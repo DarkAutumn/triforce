@@ -86,7 +86,7 @@ class ZeldaML:
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
         self.save()
 
-    def load(self, path=None, best = True):
+    def load(self, path=None, best = None):
         if path and best:
             raise Exception('Cannot specify both path and best')
         
