@@ -1,6 +1,18 @@
 import gymnasium as gym
+import numpy as np
 from random import randint
 from . import zelda_constants as zelda
+
+class GrayscaleObservation(gym.ObservationWrapper):
+    """Converts the observation to grayscale to make processing easier"""
+    def __init__(self, env):
+        super().__init__(env)
+        obs_shape = self.observation_space.shape[:2]
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
+
+    def observation(self, observation):
+        grayscale_obs = np.dot(observation[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
+        return grayscale_obs
 
 class Frameskip(gym.Wrapper):
     """Skip every min-max frames.  This ensures that we do not take too many actions
@@ -24,7 +36,7 @@ class Frameskip(gym.Wrapper):
                 break
 
         mode = info["mode"]
-        while mode != zelda.mode_game_over and mode != zelda.mode_gameplay:
+        while mode != zelda.mode_game_over and mode != zelda.mode_gameplay and mode != zelda.mode_game_over_screen:
             obs, rew, terminated, truncated, info = self.env.step(act)
             total_rew += rew
             if terminated or truncated:
