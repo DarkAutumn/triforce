@@ -143,7 +143,7 @@ class SaveBestModelCallback(BaseCallback):
                 mean_reward = np.mean(y[-100:])
                 if self.verbose > 0:
                     print("Num timesteps: {}".format(self.num_timesteps))
-                    print("Best mean reward: {:.2f} - Last mean reward per episode: {:.2f}".format(self.best_mean_reward, mean_reward))
+                    print(f"New best mean reward: {mean_reward:.2f} (last: {self.best_mean_reward:.2f})")
 
                 if mean_reward > self.best_mean_reward:
                     if self.verbose > 0:
