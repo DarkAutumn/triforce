@@ -1,6 +1,7 @@
 import os
 import retro
 import numpy as np
+import gymnasium as gym
 
 from stable_baselines3 import PPO, A2C
 from stable_baselines3.common.evaluation import evaluate_policy
@@ -10,7 +11,6 @@ from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common.monitor import Monitor
 
 from .scenario import ZeldaScenario
-from .wrappers import GrayscaleObservation
 
 class ZeldaML:
     """The model and algorithm used to train the agent"""
@@ -153,5 +153,16 @@ class SaveBestModelCallback(BaseCallback):
                     self.save_func(best=True)
 
         return True
+
+class GrayscaleObservation(gym.ObservationWrapper):
+    """Converts the observation to grayscale to make processing easier"""
+    def __init__(self, env):
+        super().__init__(env)
+        obs_shape = self.observation_space.shape[:2]
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
+
+    def observation(self, observation):
+        grayscale_obs = np.dot(observation[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
+        return grayscale_obs
 
 __all__ = ['ZeldaML']
