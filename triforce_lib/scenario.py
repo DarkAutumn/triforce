@@ -33,6 +33,9 @@ class ScenarioGymWrapper(gym.Wrapper):
         for c in self._critics:
             c.clear()
 
+        for ec in self._conditions:
+            ec.clear()
+
         return state
     
     def step(self, act):

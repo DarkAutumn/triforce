@@ -46,6 +46,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         super().__init__(verbose)
 
         self._max_actions_on_same_screen = 1000
+        self._max_actions_in_same_position = 10
 
         # reward values
         self.health_change_reward = self.reward_medium
@@ -54,16 +55,16 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.kill_reward = self.reward_small
         self.new_location_reward = self.reward_medium
         self.same_screen_action_penalty = -self.reward_medium
+        self.same_position_penalty = -self.reward_tiny
 
-        # state that has to be carefully managed
-        self._visted_locations = [[False] * 256 ] * 2
-        self._enemies_killed = 0
-        self._actions_on_same_screen = 0
+        self.clear()
 
     def clear(self):
         self._visted_locations = [[False] * 256 ] * 2
         self._enemies_killed = 0
         self._actions_on_same_screen = 0
+        self._x_y_position = (-1, -1)
+        self._position_duration = 0
 
     def critique_gameplay(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
         total = 0.0
@@ -80,7 +81,8 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # locations
         total += self.critique_location_discovery(old, new)
-        total += self.critique_same_screen_stuck(old, new)
+        total += self.critique_location_duration(old, new)
+        total += self.critique_position(old, new)
 
         return total
     
@@ -148,9 +150,9 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         return 0
     
-    def critique_same_screen_stuck(self, old, new):
-        """Penalize for taking too long on the same screen.  Chances are if we hit this condition then we are stuck at some
-        odd place on the map"""
+    def critique_location_duration(self, old, new):
+        """Penalize for staying at the same location for too long.  Chances are if we hit this condition then we are walking
+        around in a loop."""
         prev = (old['level'], old['location'])
         curr = (new['level'], new['location'])
 
@@ -162,6 +164,24 @@ class ZeldaGameplayCritic(ZeldaCritic):
             else:
                 self._actions_on_same_screen += 1
         
+        return reward
+    
+    def critique_position(self, old, new):
+        """Penalize for being 'stuck' in the same location on a screen.  Prevents link from getting zero rewards when he does not move
+        around."""
+        reward = 0
+        position = (new['link_x'], new['link_y'])
+        if self._x_y_position != position:
+            self._x_y_position = position
+            self._position_duration = 0
+
+        else:
+            self._position_duration += 1
+
+            if self._position_duration > self._max_actions_in_same_position:
+                reward = self.same_position_penalty
+                self.print_verbose(f"Penalty for taking too long in the same position! {reward}")
+
         return reward
 
     # state helpers, some states are calculated
