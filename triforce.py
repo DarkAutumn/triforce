@@ -39,7 +39,7 @@ def main():
     # create the agent and load the model
     render_mode = 'human' if args.action == 'test' or args.action == 'evaluate' or args.render else None
     record = args.action == 'record'
-    debug_scenario = args.debug_scenario
+    debug_scenario = args.debug_scenario or args.action == 'evaluate'
     zelda_ml = ZeldaML(base_dir, args.scenario, args.algorithm, args.stack, args.color, record=record, render_mode=render_mode, verbose=1, debug_scenario=debug_scenario)
 
     if args.load:
