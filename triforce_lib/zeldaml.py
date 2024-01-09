@@ -72,8 +72,8 @@ class ZeldaML:
     def close(self):
         self.env.close()
 
-    def evaluate(self, **kwargs):
-        return evaluate_policy(self.model, self.env, **kwargs)
+    def evaluate(self, episodes, **kwargs):
+        return evaluate_policy(self.model, self.env, n_eval_episodes=episodes, **kwargs)
         
     def learn(self, iterations, progress_bar = True, save_best = True):
         if not iterations:
