@@ -61,10 +61,9 @@ class ZeldaML:
 #            env = GrayscaleObservation(env)
         
         env = self.scenario.activate(env)
-        self.env = env
+        self.env = Monitor(self.env, self.log_dir)
 
         # create the model, must be done after the environment
-        self.env = Monitor(self.env, self.log_dir)
         self.model = self._create_model()
 
     def close(self):
@@ -95,9 +94,9 @@ class ZeldaML:
             return False
         
         if self.algorithm == 'ppo':
-            self.model = PPO.load(path, self.env)
+            self.model = PPO.load(path, self.env, verbose=self.verbose)
         elif self.algorithm == 'a2c':
-            self.model = A2C.load(path, self.env)
+            self.model = A2C.load(path, self.env, verbose=self.verbose)
         else:
             raise Exception(f'Unsupported algorithm: {self.algorithm}')
 
@@ -110,14 +109,13 @@ class ZeldaML:
         self.model.save(path)
 
     def _create_model(self):
-        verbose = 0
         tensorboard_log=self.log_dir
 
         if self.algorithm == 'ppo':
-            return PPO('CnnPolicy', self.env, verbose=verbose, tensorboard_log=tensorboard_log)
+            return PPO('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log)
         
         elif self.algorithm == 'a2c':
-            return A2C('CnnPolicy', self.env, verbose=verbose, tensorboard_log=tensorboard_log)
+            return A2C('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log)
         
         raise Exception(f'Unsupported algorithm: {self.algorithm}')
     
