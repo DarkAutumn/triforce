@@ -24,6 +24,11 @@ class ZeldaML:
             kwargs -- additional arguments to pass to the environment creation, such as render_mode, etc
         """
         algorithm = algorithm.lower()
+        if 'verbose' in kwargs:
+            self.verbose = kwargs['verbose']
+            del kwargs['verbose']
+        else:
+            self.verbose = 0
 
         if not isinstance(frame_stack, int) or frame_stack < 2:
             frame_stack = 1
@@ -56,10 +61,10 @@ class ZeldaML:
 #            env = GrayscaleObservation(env)
         
         env = self.scenario.activate(env)
-        env = Monitor(env, self.log_dir)
         self.env = env
 
         # create the model, must be done after the environment
+        self.env = Monitor(self.env, self.log_dir)
         self.model = self._create_model()
 
     def close(self):
@@ -72,7 +77,7 @@ class ZeldaML:
         if not iterations:
             raise Exception('Must specify number of iterations to learn')
 
-        callback = SaveBestModelCallback(check_freq=4096, save_func=self.save, log_dir=self.log_dir, verbose=0) if save_best else None
+        callback = SaveBestModelCallback(check_freq=4096, save_func=self.save, log_dir=self.log_dir, verbose=self.verbose) if save_best else None
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
         self.save()
 
@@ -138,7 +143,7 @@ class SaveBestModelCallback(BaseCallback):
 
                 if mean_reward > self.best_mean_reward:
                     if self.verbose > 0:
-                        print("Saving new best model to {}".format(self.save_path))
+                        print("Saving new best model.")
 
                     self.best_mean_reward = mean_reward
                     self.save_func(best=True)
