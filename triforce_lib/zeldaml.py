@@ -82,7 +82,7 @@ class ZeldaML:
         if not self.model:
             self.model = self._create_model()
 
-        callback = SaveBestModelCallback(check_freq=8192, save_func=self.save, log_dir=self.log_dir, verbose=self.verbose) if save_best else None
+        callback = SaveBestModelCallback(check_freq=4096, save_func=self.save, log_dir=self.model_base_dir, verbose=self.verbose) if save_best else None
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
         self.save()
 
