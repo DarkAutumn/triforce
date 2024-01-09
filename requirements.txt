@@ -1,0 +1,4 @@
+stable-retro
+numpy
+tensorflow
+gymnasium
