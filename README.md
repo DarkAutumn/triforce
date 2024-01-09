@@ -72,4 +72,4 @@ End conditions define when a scenario is terminated or truncated.  The basic end
 
 ### Gameplay state used for Critics/EndConditions:
 
-Do not directly modify [data.json](custom_integrations/Zelda-NES/data.json).  Instead, update [zelda_memory.txt](zelda_memory.txt) and run [update_memory_definitions.py](../scripts/update_memory_definitions.py) to change what data is put into the dictionary fed to critics.
+Do not directly modify [data.json](custom_integrations/Zelda-NES/data.json).  Instead, update [zelda_memory.txt](triforce_lib/zelda_memory.txt) and run [update_memory_definitions.py](../scripts/update_memory_definitions.py) to change what data is put into the dictionary fed to critics.
