@@ -1,98 +1,64 @@
-import sys
-import numpy as np
+import argparse
 import os
 
-from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.monitor import Monitor
-
-from triforce_lib import *
-
-def test_environment(env, iterations):
-    total_reward = 0
-
-    env.reset()
-    for _ in range(iterations):
-        obs, reward, done, d, info = env.step(env.action_space.sample())
-        if reward:
-            print(f'reward: {reward} total:{total_reward}')
-            total_reward += reward
-        env.render()
-        if done:
-            env.reset()
+from triforce_lib import ZeldaScenario, ZeldaML
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command line arguments for training, testing, evaluating, or recording.")
 
-    parser.add_argument("action", choices=['train', 'test', 'evaluate', 'record'], help="Action to perform: train, test, evaluate, or record.")
-    parser.add_argument("scenario", choices=['gauntlet'], help="The scenario to run: guantlet.")
+    parser.add_argument("action", choices=['train', 'evaluate', 'help'], help="Action to perform.")
+    parser.add_argument("scenario", choices=['gauntlet'], help="The scenario to run.")
     parser.add_argument("iterations", type=int, help="Number of iterations to run.")
 
-    parser.add_argument("--algorithm", choices=['ppo', 'a2c', 'dqn', 'sac', 'td3', 'ddpg'], help="The algorithm to use (ppo, a2c, dqn, sac, td3, ddpg).")
-    parser.add_argument("--scenario", help="The scenario to use (e.g., gauntlet).")
-    parser.add_argument("--load", help="Loads the given model.")
+    parser.add_argument("--algorithm", type=str, default="ppo", choices=['ppo', 'a2c'], help="The algorithm to use.")
     parser.add_argument("--render", action='store_true', help="Render the environment.")
+    parser.add_argument("--color", action='store_true', help="Record the environment.")
+    parser.add_argument("--stack", type=int, default=1, help="Number of frames to stack in the observation.")
+    parser.add_argument("--record", action='store_true', help="Whether to record playback or not.")
+    parser.add_argument("--load", help="Load a specific saved model.")
+    parser.add_argument("--debug-scenario", action='store_true', help="Debug the scenario by printing out rewards.")
 
-    return parser.parse_args()
+    try:
+        args = parser.parse_args()
+        return args
+    except Exception as e:
+        print(e)
+        parser.print_help()
+        exit(0)
 
 
 def main():
+    # load environment variables
+    base_dir = './models/'
+    if 'TRIFORCE_MODEL_DIR' in os.environ:
+        base_dir = os.environ['TRIFORCE_MODEL_DIR']
+
+    # parse arguments
     args = parse_args()
 
-    # load scenario and create directories
-    scenario = load_scenario(args.scenario)
-    
-    log_dir = '/output/'
-    model_dir = '/models/'
-    model_name = scenario.get_model_name(args.iterations)
-    model_path = os.path.join(model_dir, model_name)
-    best_dir = os.path.join(model_dir, 'best')
-    best_path = os.path.join(best_dir, model_name)
-
-    os.makedirs(model_dir, exist_ok=True)
-    os.makedirs(best_dir, exist_ok=True)
-
-    # create the environment
-    render_mode = None
+    # create the agent and load the model
     render_mode = 'human' if args.action == 'test' or args.action == 'evaluate' or args.render else None
     record = args.action == 'record'
+    debug_scenario = args.debug_scenario or args.action == 'evaluate'
+    zelda_ml = ZeldaML(base_dir, args.scenario, args.algorithm, args.stack, args.color, record=record, render_mode=render_mode, verbose=1, debug_scenario=debug_scenario)
 
-    env = scenario.create_env(render_mode=render_mode, record=record)
+    if args.load:
+        zelda_ml.load(args.load)
+    else:
+        zelda_ml.load()
 
-    # run the scenario
     try:
+        if args.action == 'train' or args.action == 'learn':
+            # learn automatically saves both the best model and the model at the end of training
+            zelda_ml.learn(args.iterations, progress_bar=True)
 
-        if args.action == 'test':
-            test_environment(env, args.iterations)
-
-        else:
-            if args.action == 'train' or args.action == 'learn':
-                # monitor the environment if we are training
-                env = Monitor(env, log_dir)
-                model = load_or_create_model(scenario, log_dir, env, args.load)
-
-                callback = SaveBestModelCallback(check_freq=4096, save_path=best_path, log_dir=log_dir, verbose=True)
-                model.learn(args.iterations, progress_bar=True, callback=callback)
-                model.save(model_path)
-
-            elif args.action == 'evaluate' or args.action == 'record':
-                if not args.load:
-                    raise Exception('Must specify model to evaluate or record.')
-                
-                model = load_or_create_model(scenario, log_dir, env, args.load)
-                mean_reward, std_reward = evaluate_policy(model, env, render=True, n_eval_episodes=args.iterations)
-                print(f'Mean reward: {mean_reward} +/- {std_reward}')
+        elif args.action == 'evaluate' or args.action == 'record':
+            mean_reward, std_reward = zelda_ml.evaluate(args.iterations, render=True)
+            print(f'Mean reward: {mean_reward} +/- {std_reward}')
 
     finally:
-        env.close()
+        zelda_ml.close()
 
-def load_or_create_model(scenario, log_dir, env, path = None):
-    if path is not None:
-        model = scenario.load_model(path)
-    else:
-        model = scenario.create_model(env, verbose=1, tensorboard_log=log_dir)
-    return model
-
-import argparse
 
 if __name__ == '__main__':
     main()

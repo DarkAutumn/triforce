@@ -3,7 +3,11 @@ import os
 import json
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
-zelda_memory_file = os.path.join(script_dir, 'zelda_memory.txt')
+zelda_memory_file = os.path.join(script_dir, '../triforce_lib/zelda_memory.txt')
+assert os.path.exists(zelda_memory_file), f'Could not find zelda_memory.txt at {zelda_memory_file}'
+
+zelda_memory_data = os.path.join(script_dir, '../triforce_lib/custom_integrations/Zelda-NES/data.json')
+assert os.path.exists(zelda_memory_data), f'Could not find data.json at {zelda_memory_data}'
 
 def get_signed(value):
     if value == 'signed':
@@ -34,8 +38,7 @@ def main():
                     }
     
     # write the json out to a file
-    output = os.path.join(script_dir, 'custom_integrations/Zelda-NES/data.json')
-    with open(output, 'w') as f:
+    with open(zelda_memory_data, 'w') as f:
         json.dump(result, f, indent=4)
 
 if __name__ == '__main__':
