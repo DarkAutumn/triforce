@@ -31,13 +31,13 @@ class ZeldaGuantletRewards(ZeldaCritic):
     def mark_visited(self, level, location):
         self._visted_locations[level][location] = True
 
-    def get_rewards(self, old, new):
+    def critique_gameplay(self, old, new):
         rewards = 0.0
-        rewards += self.reward_forward_progress(old, new)
-        rewards += self.reward_screen_progress(old, new)
+        rewards += self.critique_forward_progress(old, new)
+        rewards += self.critique_screen_progress(old, new)
         return rewards
     
-    def reward_forward_progress(self, old, new):
+    def critique_forward_progress(self, old, new):
         # reward for visiting a new room in the given range, note that this scenario disables the normal
         # room discovery reward
         prev = (old['level'], old['location'])
@@ -63,7 +63,7 @@ class ZeldaGuantletRewards(ZeldaCritic):
             
         return 0.0
 
-    def reward_screen_progress(self, old_state, new_state):
+    def critique_screen_progress(self, old_state, new_state):
         old_location = (old_state['level'], old_state['location'])
         new_location = (new_state['level'], new_state['location'])
 

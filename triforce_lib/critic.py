@@ -33,7 +33,7 @@ class ZeldaCritic:
         """Called when the environment is reset to clear any saved state"""
         pass
 
-    def get_rewards(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
+    def critique_gameplay(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
         """Called to get the reward for the transition from old_state to new_state"""
         raise NotImplementedError()
     
@@ -65,27 +65,27 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self._enemies_killed = 0
         self._actions_on_same_screen = 0
 
-    def get_rewards(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
+    def critique_gameplay(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
         total = 0.0
 
         # health
-        total += self.get_health_change_reward(old, new)
-        total += self.get_heart_container_reward(old, new)
+        total += self.critique_health_change(old, new)
+        total += self.critique_heart_containers(old, new)
 
         # triforce
-        total += self.get_triforce_reward(old, new)
+        total += self.critique_triforce(old, new)
 
         # combat
-        total += self.get_kill_reward(old, new)
+        total += self.critique_kills(old, new)
 
         # locations
-        total += self.get_new_location_reward(old, new)
-        total += self.get_same_screen_action_reward(old, new)
+        total += self.critique_location_discovery(old, new)
+        total += self.critique_same_screen_stuck(old, new)
 
         return total
     
     # reward helpers, may be overridden
-    def get_health_change_reward(self, old, new):
+    def critique_health_change(self, old, new):
         old_hearts = self.get_heart_halves(old)
         new_hearts = self.get_heart_halves(new)
 
@@ -98,7 +98,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         return reward
     
-    def get_heart_container_reward(self, old, new):
+    def critique_heart_containers(self, old, new):
         # we can only gain one heart container at a time
         reward = 0
         if self.get_heart_containers(old) < self.get_heart_containers(new):
@@ -107,7 +107,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         return reward
     
-    def get_triforce_reward(self, old, new):
+    def critique_triforce(self, old, new):
         reward = 0
 
         if self.get_num_triforce_pieces(old) < self.get_num_triforce_pieces(new):
@@ -120,7 +120,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         return reward
 
-    def get_kill_reward(self, old, new):
+    def critique_kills(self, old, new):
         reward = 0.0
 
         enemies_killed = new['kill_streak']
@@ -135,7 +135,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         return reward
     
-    def get_new_location_reward(self, old, new):
+    def critique_location_discovery(self, old, new):
         prev = (old['level'], old['location'])
         curr = (new['level'], new['location'])
 
@@ -148,7 +148,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         return 0
     
-    def get_same_screen_action_reward(self, old, new):
+    def critique_same_screen_stuck(self, old, new):
         """Penalize for taking too long on the same screen.  Chances are if we hit this condition then we are stuck at some
         odd place on the map"""
         prev = (old['level'], old['location'])

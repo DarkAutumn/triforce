@@ -40,7 +40,7 @@ class ScenarioGymWrapper(gym.Wrapper):
 
         if self._last_state is not None:
             for c in self._critics:
-                rewards += c.get_rewards(self._last_state, state)
+                rewards += c.critique_gameplay(self._last_state, state)
 
             terminated = terminated or any((x.is_terminated(state) for x in self._conditions))
             truncated = truncated or any((x.is_truncated(state) for x in self._conditions))
