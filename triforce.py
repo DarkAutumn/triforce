@@ -6,8 +6,10 @@ from triforce_lib import ZeldaScenario, ZeldaML
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command line arguments for training, testing, evaluating, or recording.")
 
+    scenarios = ZeldaScenario.get_all_scenarios()
+
     parser.add_argument("action", choices=['train', 'evaluate', 'help'], help="Action to perform.")
-    parser.add_argument("scenario", choices=['gauntlet'], help="The scenario to run.")
+    parser.add_argument("scenario", choices=scenarios, help="The scenario to run.")
     parser.add_argument("iterations", type=int, help="Number of iterations to run.")
 
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
