@@ -30,6 +30,11 @@ class ZeldaML:
         else:
             self.verbose = 0
 
+        if 'ent_coef' in kwargs:
+            self.ent_coef = kwargs['ent_coef']
+            del kwargs['ent_coef']
+        else:
+            self.ent_coef = 0.0
 
         if not isinstance(frame_stack, int) or frame_stack < 2:
             frame_stack = 1
@@ -82,7 +87,7 @@ class ZeldaML:
         if not self.model:
             self.model = self._create_model()
 
-        callback = SaveModelCallback(save_freq=10000, best_check_freq=2048, save_func=self.save, save_dir=self.model_base_dir, log_dir=self.model_base_dir, verbose=self.verbose) if save_best else None
+        callback = SaveModelCallback(save_freq=10000, best_check_freq=2048, zeldaml=self) if save_best else None
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
         self.save(self.model_file)
 
@@ -100,9 +105,9 @@ class ZeldaML:
             return False
         
         if self.algorithm == 'ppo':
-            self.model = PPO.load(path, self.env, verbose=self.verbose)
+            self.model = PPO.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef)
         elif self.algorithm == 'a2c':
-            self.model = A2C.load(path, self.env, verbose=self.verbose)
+            self.model = A2C.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef)
         else:
             raise Exception(f'Unsupported algorithm: {self.algorithm}')
 
@@ -118,32 +123,32 @@ class ZeldaML:
         tensorboard_log=self.log_dir
 
         if self.algorithm == 'ppo':
-            return PPO('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log)
+            return PPO('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef)
         
         elif self.algorithm == 'a2c':
-            return A2C('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log)
+            return A2C('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef)
         
         raise Exception(f'Unsupported algorithm: {self.algorithm}')
     
 
 class SaveModelCallback(BaseCallback):
-    def __init__(self, save_freq : int, best_check_freq: int, model : ZeldaML):
-        super(SaveModelCallback, self).__init__(model.verbose)
+    def __init__(self, save_freq : int, best_check_freq: int, zeldaml : ZeldaML):
+        super(SaveModelCallback, self).__init__(zeldaml.verbose)
         self.best_check_freq = best_check_freq
         self.save_freq = save_freq
-        self.model = model
+        self.zeldaml = zeldaml
         self.best_mean_reward = -np.inf
         self.best_timestamp = -np.inf
 
     def _on_step(self) -> bool:
         if self.n_calls % self.save_freq == 0:
             # Save the model as save_dir/model_{iterations}.zip
-            path = os.path.join(self.model.model_base_dir, f"model_{self.num_timesteps}.zip")
-            self.model.save(path)
+            path = os.path.join(self.zeldaml.model_base_dir, f"model_{self.num_timesteps}.zip")
+            self.zeldaml.save(path)
 
         if self.n_calls % self.best_check_freq == 0:
             # Retrieve training reward
-            x, y = ts2xy(load_results(self.model.log_dir), 'timesteps')
+            x, y = ts2xy(load_results(self.zeldaml.log_dir), 'timesteps')
             if len(x) > 0:
                 # Mean training reward over the last 100 episodes
                 mean_reward = np.mean(y[-100:])
@@ -159,8 +164,8 @@ class SaveModelCallback(BaseCallback):
                         print("Saving new best model.")
 
                     self.best_mean_reward = mean_reward
-                    path = os.path.join(self.model.model_base_dir, f"best.zip")
-                    self.model.save(path)
+                    path = os.path.join(self.zeldaml.model_base_dir, f"best.zip")
+                    self.zeldaml.save(path)
 
         return True
 
