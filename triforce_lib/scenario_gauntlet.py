@@ -43,22 +43,22 @@ class ZeldaGuantletRewards(ZeldaCritic):
         prev = (old['level'], old['location'])
         curr = (new['level'], new['location'])
 
-        curr_location = new['location']
 
         reward = 0.0
 
-        if curr_location <= 120 or curr_location > 127:
-            reward += self.leaving_penalty
-            self.report(reward, f"Penalty for leaving the gauntlet! {reward}")
-        
         if prev != curr:
-            if not self.has_visited(*curr):
+            curr_location = new['location']
+            
+            if curr_location <= 120 or curr_location > 127:
+                reward += self.leaving_penalty
+                self.report(reward, f"Penalty for leaving the gauntlet! {reward}")
+        
+            elif not self.has_visited(*curr):
                 self.mark_visited(*curr)
                 reward += self.reward_new_location
                 self.report(reward, f"Reward for discovering new room (level:{curr[0]}, coords:{curr[1]})! {reward}")
 
             else:
-                curr_location = new['location']
                 prev_location = old['location']
 
                 if curr_location < prev_location:

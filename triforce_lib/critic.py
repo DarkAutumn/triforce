@@ -63,8 +63,9 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.triforce_reward = self.reward_maximum
         self.kill_reward = self.reward_small
         self.new_location_reward = self.reward_medium
-        self.same_screen_action_penalty = -self.reward_medium
-        self.same_position_move_reward = -self.reward_large
+        self.same_position_move_reward = self.reward_large
+
+        self.same_position_penalty = -self.reward_minimum
 
         self.clear()
 
@@ -91,7 +92,6 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # locations
         total += self.critique_location_discovery(old, new)
-        total += self.critique_location_duration(old, new)
         total += self.critique_position(old, new)
 
         return total
@@ -166,40 +166,29 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         return reward
     
-    def critique_location_duration(self, old, new):
-        """Penalize for staying at the same location for too long.  Chances are if we hit this condition then we are walking
-        around in a loop."""
-        prev = (old['level'], old['location'])
-        curr = (new['level'], new['location'])
-
-        reward = 0
-        if prev == curr:
-            if self._actions_on_same_screen > self._max_actions_on_same_screen:
-                reward = self.same_screen_action_penalty
-                self.report(reward, f"Penalty for taking too long on the same screen! {reward}")
-                self._actions_on_same_screen = 0
-            else:
-                self._actions_on_same_screen += 1
-        
-        return reward
-    
     def critique_position(self, old, new):
         """"Reward the agent for moving out of the last position, but only if that did not happen as a result of taking a hit
         from an enemy."""
         reward = 0
         position = (new['link_x'], new['link_y'])
         if self._x_y_position != position:
+            # link moved, if he moved for a reason other than taking damage, reward that action
             took_damage = self.get_heart_halves(old) > self.get_heart_halves(new)
 
             if self._position_duration > self._position_change_cooldown and not took_damage:
-                reward = self.same_position_move_reward
+                reward += self.same_position_move_reward
                 self.report(reward, f"Reward for moving out of the last position! rew:{reward} duration:{self._position_duration}")
 
             self._x_y_position = position
             self._position_duration = 0
 
         else:
+            # we haven't moved, penalize if it's been longer than 1 action and kill count isn't going up
             self._position_duration += 1
+
+            if self._position_duration > 1 and old['total_kills'] == new['total_kills'] and old['total_injuries'] == new['total_injuries']:
+                reward += self.same_position_penalty
+                self.report(reward, f"Penalty for not moving! rew:{reward} duration:{self._position_duration}")
 
         return reward
 
