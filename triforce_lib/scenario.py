@@ -67,7 +67,6 @@ class ScenarioGymWrapper(gym.Wrapper):
                 self._reward_summary.clear()
 
             if self.verbose == 2 and (terminated or truncated):
-                print(f"Run ended in {self._curr_step} steps:")
                 self.print_sorted_summary(f"Run ended in {self._curr_step} steps:")
                 self._curr_step = 0
                 self._reward_summary.clear()
