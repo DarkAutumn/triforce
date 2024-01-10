@@ -3,8 +3,9 @@
 # This scenario is starting with a sword on the screen to the east of the starting screen.
 # The goal is to train a model that will make it to the far south-east location of the map without dying.
 
+from typing import Dict
 from .scenario import ZeldaScenario
-from .end_condition import ZeldaEndCondition, ZeldaGameplayEndCondition
+from .end_condition import ZeldaEndCondition, ZeldaEndCondition
 from .critic import ZeldaCritic, ZeldaGameplayCritic
 
 class ZeldaGuantletRewards(ZeldaCritic):
@@ -87,16 +88,13 @@ class GauntletEndCondition(ZeldaEndCondition):
     def __init__(self, verbose=False):
         super().__init__(verbose)
 
-    def is_terminated(self, state):
-        location = state['location']
-        #print("Left the guantlet")
-        return location < 120 or location >= 127
+    def is_scenario_ended(self, old: Dict[str, int], new: Dict[str, int]) -> (bool, bool):
+        terminated, truncated = super().is_scenario_ended(old, new)
 
-    def is_truncated(self, state):
-        return False
+        location = new['location']
+        terminated = terminated or location < 120 or location >= 127
 
-    def __str__(self):
-        return 'Gauntlet End Condition'
+        return terminated, truncated
     
 
 class GauntletScenario(ZeldaScenario):
@@ -109,7 +107,7 @@ class GauntletScenario(ZeldaScenario):
         basic_minus_new_location.new_location_reward = 0
         critics = [basic_minus_new_location, ZeldaGuantletRewards(verbose=verbose)]
 
-        super().__init__('gauntlet', description, "78w.state", critics, [ZeldaGameplayEndCondition(), GauntletEndCondition()])
+        super().__init__('gauntlet', description, "78w.state", critics, [GauntletEndCondition()])
 
     def __str__(self):
         return 'Gauntlet Scenario'

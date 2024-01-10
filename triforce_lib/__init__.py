@@ -1,7 +1,7 @@
 import os
 import retro
 
-from.end_condition import ZeldaEndCondition, ZeldaGameplayEndCondition
+from.end_condition import ZeldaEndCondition, ZeldaEndCondition
 from .critic import ZeldaCritic, ZeldaGameplayCritic
 from .zeldaml import ZeldaML
 from .scenario import ZeldaScenario
@@ -21,4 +21,4 @@ for i in range(1):
 
 
 # define the model surface area
-__all__ = [ ZeldaML.__name__, ZeldaScenario.__name__, ZeldaCritic.__name__, ZeldaEndCondition.__name__, ZeldaGameplayCritic.__name__, ZeldaGameplayEndCondition.__name__]
+__all__ = [ ZeldaML.__name__, ZeldaScenario.__name__, ZeldaCritic.__name__, ZeldaEndCondition.__name__, ZeldaGameplayCritic.__name__, ZeldaEndCondition.__name__]

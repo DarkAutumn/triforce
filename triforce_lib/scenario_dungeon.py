@@ -1,4 +1,5 @@
 import typing
+from typing import Dict
 from .end_condition import *
 from .scenario import ZeldaScenario
 from .critic import ZeldaCritic, ZeldaGameplayCritic
@@ -67,13 +68,47 @@ class ZeldaDungeonCritic(ZeldaGameplayCritic):
 
         return reward
 
-class DungeonEndCondition(ZeldaGameplayEndCondition):
+class DungeonEndCondition(ZeldaEndCondition):
     def __init__(self, verbose=0):
         super().__init__(verbose)
 
-        self._free = set()
+        self._seen = set()
+
+        self._last_discovery = 0        
+        self.location_timeout = 1200 # 5 minutes to find a new room
+
+    def clear(self):
+        super().clear()
+        self._seen.clear()
         self._last_discovery = 0
-        self._dicovery_requirement = 1200 # 5 minutes to find a new room
+
+    def is_scenario_ended(self, old: Dict[str, int], new: Dict[str, int]) -> (bool, bool):
+        terminated, truncated = super().is_scenario_ended(old, new)
+
+        level = new['level']
+        if not terminated:
+            if level == 0:
+                self.print_verbose('End Scenario - Left Dungeon')
+                terminated = True
+
+        if not truncated:
+            old_location = old['location']
+            new_location = new['location']
+            if old_location != new_location and new_location not in self._seen:
+                self._seen.add(new_location)
+                self._last_discovery = 0
+
+            else:
+                self._last_discovery += 1
+
+            if self._last_discovery > self.location_timeout:
+                self.print_verbose('Truncated - No new rooms discovered in 5 minutes')
+                truncated = True
+        
+        return terminated, truncated
+
+    def mark_visited(self, location):
+        self._seen.add(location)
 
     def is_terminated(self, info):
         level = info['level']
