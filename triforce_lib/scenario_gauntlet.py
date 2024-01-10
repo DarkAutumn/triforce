@@ -48,37 +48,35 @@ class ZeldaGuantletRewards(ZeldaCritic):
         if prev != curr and not self.has_visited(*curr) and curr[1] >= 120 and curr[1] < 127:
             self.mark_visited(*curr)
             reward += self.reward_new_location
-            self.print_verbose(f"Reward for discovering new room (level:{curr[0]}, coords:{curr[1]})! {reward}")
+            self.report(reward, f"Reward for discovering new room (level:{curr[0]}, coords:{curr[1]})! {reward}")
 
         else:
             location = new['location']
+            prev_location = old['location']
+
             if location < 120 or location > 127:
                 reward += self.leaving_penalty
-                self.print_verbose(f"Penalty for leaving the gauntlet! {reward}")
+                self.report(reward, f"Penalty for leaving the gauntlet! {reward}")
             
-            prev_location = old['location']
-            if location < prev_location:
+            elif location < prev_location:
                 reward += self.moving_backwards_penalty
-                self.print_verbose(f"Penalty for moving backwards! {reward}")
+                self.report(reward, f"Penalty for moving backwards! {reward}")
             
-        return 0.0
+        return reward
 
     def critique_screen_progress(self, old_state, new_state):
         old_location = (old_state['level'], old_state['location'])
         new_location = (new_state['level'], new_state['location'])
 
-        if old_location != new_location:
-            return 0.0
-        
         reward = 0
         if old_location == new_location:
             diff = new_state['link_x'] - old_state['link_x']
             if diff > 0:
                 reward += self.screen_forward_progress_reward
-                self.print_verbose(f"Reward for moving right! {reward}")
+                self.report(reward, f"Reward for moving right! {reward}")
             elif diff < 0:
                 reward -= self.screen_forward_progress_reward
-                self.print_verbose(f"Penalty for moving left! {reward}")
+                self.report(reward, f"Penalty for moving left! {reward}")
         
         return reward
 
@@ -89,6 +87,7 @@ class GauntletEndCondition(ZeldaEndCondition):
 
     def is_terminated(self, state):
         location = state['location']
+        #print("Left the guantlet")
         return location < 120 or location >= 127
 
     def is_truncated(self, state):

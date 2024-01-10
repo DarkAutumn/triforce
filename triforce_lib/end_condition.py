@@ -1,11 +1,11 @@
-from .zelda_modes import is_mode_death
+from .zelda_game import is_mode_death
 
 class ZeldaEndCondition:
     def __init__(self, verbose=False):
         self.verbose = verbose
 
     def print_verbose(self, message):
-        if self.verbose:
+        if self.verbose >= 2:
             print(message)
 
     def is_terminated(self, info):
@@ -41,7 +41,7 @@ class ZeldaGameplayEndCondition(ZeldaEndCondition):
         if position == self._last_position:
             self._position_duration += 1
             if self._position_duration > 50:
-                self.print_verbose("Stuck in same position for too long")
+                self.print_verbose("Truncated - Stuck in same position for too long")
                 return True
         else:
             self._position_duration = 0
