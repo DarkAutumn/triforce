@@ -82,9 +82,9 @@ class ZeldaML:
         if not self.model:
             self.model = self._create_model()
 
-        callback = SaveBestModelCallback(check_freq=4096, save_func=self.save, log_dir=self.model_base_dir, verbose=self.verbose) if save_best else None
+        callback = SaveModelCallback(save_freq=10000, best_check_freq=2048, save_func=self.save, save_dir=self.model_base_dir, log_dir=self.model_base_dir, verbose=self.verbose) if save_best else None
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
-        self.save()
+        self.save(self.model_file)
 
     def load(self, path=None, best = None):
         if path and best:
@@ -108,9 +108,9 @@ class ZeldaML:
 
         return True
     
-    def save(self, path = None, best = False):
+    def save(self, path):
         if not path:
-            path = self.best_file if best else self.model_file
+            raise Exception('Must specify path to save model to')
         
         self.model.save(path)
 
@@ -126,19 +126,24 @@ class ZeldaML:
         raise Exception(f'Unsupported algorithm: {self.algorithm}')
     
 
-class SaveBestModelCallback(BaseCallback):
-    def __init__(self, check_freq: int, save_func, log_dir: str, verbose=0):
-        super(SaveBestModelCallback, self).__init__(verbose)
-        self.check_freq = check_freq
-        self.log_dir = log_dir
+class SaveModelCallback(BaseCallback):
+    def __init__(self, save_freq : int, best_check_freq: int, model : ZeldaML):
+        super(SaveModelCallback, self).__init__(model.verbose)
+        self.best_check_freq = best_check_freq
+        self.save_freq = save_freq
+        self.model = model
         self.best_mean_reward = -np.inf
         self.best_timestamp = -np.inf
-        self.save_func = save_func
 
     def _on_step(self) -> bool:
-        if self.n_calls % self.check_freq == 0:
+        if self.n_calls % self.save_freq == 0:
+            # Save the model as save_dir/model_{iterations}.zip
+            path = os.path.join(self.model.model_base_dir, f"model_{self.num_timesteps}.zip")
+            self.model.save(path)
+
+        if self.n_calls % self.best_check_freq == 0:
             # Retrieve training reward
-            x, y = ts2xy(load_results(self.log_dir), 'timesteps')
+            x, y = ts2xy(load_results(self.model.log_dir), 'timesteps')
             if len(x) > 0:
                 # Mean training reward over the last 100 episodes
                 mean_reward = np.mean(y[-100:])
@@ -154,7 +159,8 @@ class SaveBestModelCallback(BaseCallback):
                         print("Saving new best model.")
 
                     self.best_mean_reward = mean_reward
-                    self.save_func(best=True)
+                    path = os.path.join(self.model.model_base_dir, f"best.zip")
+                    self.model.save(path)
 
         return True
 
