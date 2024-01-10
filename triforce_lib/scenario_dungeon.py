@@ -107,29 +107,7 @@ class DungeonEndCondition(ZeldaEndCondition):
         
         return terminated, truncated
 
-    def mark_visited(self, location):
-        self._seen.add(location)
-
-    def is_terminated(self, info):
-        level = info['level']
-        if level == 0:
-            self.print_verbose('End Scenario - Left Dungeon')
-            return True
-        
-        return super().is_terminated(info)
-    
-    def is_truncated(self, info):
-        # todo
-        location = info['location']
-
-        if self._last_discovery > self._dicovery_requirement:
-            self.print_verbose('Truncated - No new rooms discovered in 5 minutes')
-            return True
-        
-        return super().is_truncated(info)
-    
     def clear(self):
-        self._free.clear()
         self._last_discovery = 0
 
 
