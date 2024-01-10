@@ -56,15 +56,22 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         self._max_actions_on_same_screen = 1000
         self._position_change_cooldown = 5
+        self._is_first_step = True
 
         # reward values
+        self.rupee_reward = self.reward_small
         self.health_change_reward = self.reward_medium
-        self.heart_container_reward = self.reward_maximum
-        self.triforce_reward = self.reward_maximum
         self.kill_reward = self.reward_small
         self.new_location_reward = self.reward_medium
-        self.same_position_move_reward = self.reward_large
+        self.same_position_move_reward = self.reward_small
+        
+        # these are pivotal to the game, so they are rewarded highly
+        self.bomb_reward = self.reward_large
+        self.key_reward = self.reward_large
+        self.heart_container_reward = self.reward_maximum
+        self.triforce_reward = self.reward_maximum
 
+        self.position_penalty_delay = 4
         self.same_position_penalty = -self.reward_minimum
 
         self.clear()
@@ -76,8 +83,13 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self._actions_on_same_screen = 0
         self._x_y_position = (-1, -1)
         self._position_duration = 0
+        self._is_first_step = True
 
     def critique_gameplay(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
+        if self._is_first_step:
+            self._is_first_step = False
+            self.mark_visited(new['level'], new['location'])
+
         total = 0.0
 
         # health
@@ -89,6 +101,10 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # combat
         total += self.critique_kills(old, new)
+        total += self.critique_item_pickup(old, new)
+
+        # keys
+        total += self.critique_key_pickup_usage(old, new)
 
         # locations
         total += self.critique_location_discovery(old, new)
@@ -97,6 +113,32 @@ class ZeldaGameplayCritic(ZeldaCritic):
         return total
     
     # reward helpers, may be overridden
+    def critique_key_pickup_usage(self, old, new):
+        # No matter if link picked up a key or used a key to open a door, it's a good
+        # outcome
+        reward = 0
+        if old['keys'] != new['keys']:
+            reward += self.key_reward
+            if old['keys'] > new['keys']:
+                self.report(reward, f"Reward for using a key: {reward}")
+            else:
+                self.report(reward, f"Reward for picking up a key: {reward}")
+
+        return reward
+
+    def critique_item_pickup(self, old, new):
+        reward = 0
+        
+        if old['rupees_to_add'] < new['rupees_to_add']:
+            reward += self.rupee_reward
+            self.report(reward, f"Reward for collecting rupees: {reward}")
+
+        if old['bombs'] != 0 < new['bombs'] == 0:
+            reward += self.bomb_reward
+            self.report(reward, f"Reward for collecting bombs: {reward}")
+
+        return reward
+
     def critique_health_change(self, old, new):
         old_hearts = self.get_heart_halves(old)
         new_hearts = self.get_heart_halves(new)
@@ -186,7 +228,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
             # we haven't moved, penalize if it's been longer than 1 action and kill count isn't going up
             self._position_duration += 1
 
-            if self._position_duration > 1 and old['total_kills'] == new['total_kills'] and old['total_injuries'] == new['total_injuries']:
+            if self._position_duration > self.position_penalty_delay and old['total_kills'] == new['total_kills'] and old['total_injuries'] == new['total_injuries']:
                 reward += self.same_position_penalty
                 self.report(reward, f"Penalty for not moving! rew:{reward} duration:{self._position_duration}")
 
