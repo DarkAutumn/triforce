@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Scenario: Gauntlet Training",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["train", "gauntlet", "4096", "--color", "--render", "--debug-scenario", "--algorithm", "a2c", "--verbose", "2"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Scenario: Gauntlet Evaluation",
             "type": "python",
             "request": "launch",
