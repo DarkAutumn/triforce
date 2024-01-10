@@ -74,7 +74,12 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.position_penalty_delay = 4
         self.same_position_penalty = -self.reward_minimum
 
-        self.clear()
+        self._visted_locations = [[False] * 256 ] * 2
+        self._enemies_killed = 0
+        self._actions_on_same_screen = 0
+        self._x_y_position = (-1, -1)
+        self._position_duration = 0
+        self._is_first_step = True
 
     def clear(self):
         super().clear()
