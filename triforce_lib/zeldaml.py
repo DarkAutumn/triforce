@@ -132,6 +132,7 @@ class SaveBestModelCallback(BaseCallback):
         self.check_freq = check_freq
         self.log_dir = log_dir
         self.best_mean_reward = -np.inf
+        self.best_timestamp = -np.inf
         self.save_func = save_func
 
     def _on_step(self) -> bool:
@@ -143,9 +144,10 @@ class SaveBestModelCallback(BaseCallback):
                 mean_reward = np.mean(y[-100:])
                 if self.verbose > 0:
                     if mean_reward > self.best_mean_reward:
-                        print(f"timesteps: {self.num_timesteps} new best: {mean_reward:.2f} prev: {self.best_mean_reward:.2f}")
+                        print(f"timesteps: {self.num_timesteps} new best: {mean_reward:.2f} prev: {self.best_mean_reward:.2f} (steps:{self.best_timestamp})")
+                        self.best_timestamp = self.num_timesteps
                     else:
-                        print(f"timesteps: {self.num_timesteps} curr: {mean_reward:.2f} best: {self.best_mean_reward:.2f}")
+                        print(f"timesteps: {self.num_timesteps} curr: {mean_reward:.2f} best: {self.best_mean_reward:.2f} (steps:{self.best_timestamp})")
 
                 if mean_reward > self.best_mean_reward:
                     if self.verbose > 0:
