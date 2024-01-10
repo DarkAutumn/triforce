@@ -1,7 +1,7 @@
 from .zelda_game import is_mode_death
 
 class ZeldaEndCondition:
-    def __init__(self, verbose=False):
+    def __init__(self, verbose=0):
         self.verbose = verbose
 
     def print_verbose(self, message):
@@ -24,7 +24,8 @@ class ZeldaGameplayEndCondition(ZeldaEndCondition):
     """
     def __init__(self, verbose=False):
         super().__init__(verbose)
-        self.clear()
+        self._last_position = None
+        self._position_duration = 0
 
     def is_terminated(self, info):
         if is_mode_death(info['mode']):
