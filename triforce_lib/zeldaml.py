@@ -65,7 +65,7 @@ class ZeldaML:
 #        if not self.color:
 #            env = GrayscaleObservation(env)
         
-        env = self.scenario.activate(env)
+        env = self.scenario.activate(env, self.verbose)
         self.env = Monitor(env, self.log_dir)
         self.model = None
 
@@ -142,8 +142,10 @@ class SaveBestModelCallback(BaseCallback):
                 # Mean training reward over the last 100 episodes
                 mean_reward = np.mean(y[-100:])
                 if self.verbose > 0:
-                    print("Num timesteps: {}".format(self.num_timesteps))
-                    print(f"New best mean reward: {mean_reward:.2f} (last: {self.best_mean_reward:.2f})")
+                    if mean_reward > self.best_mean_reward:
+                        print(f"timesteps: {self.num_timesteps} new best: {mean_reward:.2f} prev: {self.best_mean_reward:.2f}")
+                    else:
+                        print(f"timesteps: {self.num_timesteps} curr: {mean_reward:.2f} best: {self.best_mean_reward:.2f}")
 
                 if mean_reward > self.best_mean_reward:
                     if self.verbose > 0:

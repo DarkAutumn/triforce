@@ -10,6 +10,7 @@ def parse_args():
     parser.add_argument("scenario", choices=['gauntlet'], help="The scenario to run.")
     parser.add_argument("iterations", type=int, help="Number of iterations to run.")
 
+    parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--algorithm", type=str, default="ppo", choices=['ppo', 'a2c'], help="The algorithm to use.")
     parser.add_argument("--render", action='store_true', help="Render the environment.")
     parser.add_argument("--color", action='store_true', help="Record the environment.")
@@ -40,7 +41,7 @@ def main():
     render_mode = 'human' if args.action == 'test' or args.action == 'evaluate' or args.render else None
     record = args.action == 'record'
     debug_scenario = args.debug_scenario or args.action == 'evaluate'
-    zelda_ml = ZeldaML(base_dir, args.scenario, args.algorithm, args.stack, args.color, record=record, render_mode=render_mode, verbose=1, debug_scenario=debug_scenario)
+    zelda_ml = ZeldaML(base_dir, args.scenario, args.algorithm, args.stack, args.color, record=record, render_mode=render_mode, verbose=args.verbose, debug_scenario=debug_scenario)
 
     if args.load:
         zelda_ml.load(args.load)

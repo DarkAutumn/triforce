@@ -171,6 +171,54 @@
         "selected_item": {
             "address": 1622,
             "type": "=u1"
+        },
+        "enemy_health_0": {
+            "address": 1157,
+            "type": "=u1"
+        },
+        "enemy_health_1": {
+            "address": 1158,
+            "type": "=u1"
+        },
+        "enemy_health_2": {
+            "address": 1159,
+            "type": "=u1"
+        },
+        "enemy_health_3": {
+            "address": 1160,
+            "type": "=u1"
+        },
+        "enemy_health_4": {
+            "address": 1161,
+            "type": "=u1"
+        },
+        "enemy_health_5": {
+            "address": 1162,
+            "type": "=u1"
+        },
+        "enemy_health_6": {
+            "address": 1163,
+            "type": "=u1"
+        },
+        "enemy_health_7": {
+            "address": 1164,
+            "type": "=u1"
+        },
+        "enemy_health_8": {
+            "address": 1165,
+            "type": "=u1"
+        },
+        "enemy_health_9": {
+            "address": 1166,
+            "type": "=u1"
+        },
+        "enemy_health_10": {
+            "address": 1167,
+            "type": "=u1"
+        },
+        "enemy_health_11": {
+            "address": 1168,
+            "type": "=u1"
         }
     }
 }
