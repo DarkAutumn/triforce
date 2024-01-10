@@ -128,11 +128,11 @@
             "address": 1635,
             "type": "=u1"
         },
-        "magic_Key": {
+        "magic_key": {
             "address": 1636,
             "type": "=u1"
         },
-        "power_braclet": {
+        "power_bracelet": {
             "address": 1637,
             "type": "=u1"
         },
