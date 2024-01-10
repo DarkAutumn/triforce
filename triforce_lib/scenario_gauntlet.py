@@ -49,7 +49,7 @@ class ZeldaGuantletRewards(ZeldaCritic):
         if prev != curr:
             curr_location = new['location']
             
-            if curr_location <= 120 or curr_location > 127:
+            if curr_location < 120 or curr_location > 127:
                 reward += self.leaving_penalty
                 self.report(reward, f"Penalty for leaving the gauntlet! {reward}")
         
@@ -90,7 +90,7 @@ class GauntletEndCondition(ZeldaEndCondition):
     def is_terminated(self, state):
         location = state['location']
         #print("Left the guantlet")
-        return location <= 120 or location >= 127
+        return location < 120 or location >= 127
 
     def is_truncated(self, state):
         return False
