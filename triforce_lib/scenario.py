@@ -22,8 +22,8 @@ class ScenarioGymWrapper(gym.Wrapper):
     def __init__(self, env, critics : [ZeldaCritic], end_conditions : [ZeldaEndCondition], verbose):
         super().__init__(env)
 
-        self._critics = critics
-        self._conditions = end_conditions
+        self._critics = [c(verbose=verbose) for c in critics]
+        self._conditions = [ec(verbose=verbose) for ec in end_conditions]
         self.verbose = verbose
 
         self._last_state = None
@@ -55,8 +55,9 @@ class ScenarioGymWrapper(gym.Wrapper):
             for c in self._critics:
                 rewards += c.critique_gameplay(self._last_state, state)
 
-            terminated = terminated or any((x.is_terminated(state) for x in self._conditions))
-            truncated = truncated or any((x.is_truncated(state) for x in self._conditions))
+            end = [x.is_scenario_ended(self._last_state, state) for x in self._conditions]
+            terminated = terminated or any((x[0] for x in end))
+            truncated = truncated or any((x[1] for x in end))
 
         # verbose==1 means we print every _report_interval steps
         # verbose==2 means we print every time the run ended
