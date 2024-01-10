@@ -72,12 +72,12 @@
             "address": 1624,
             "type": "=u1"
         },
-        "bombMax": {
+        "bomb_max": {
             "address": 1660,
             "type": "=u1"
         },
         "keys": {
-            "address": 1644,
+            "address": 1646,
             "type": "=u1"
         },
         "sword": {
