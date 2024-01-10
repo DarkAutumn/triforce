@@ -1,54 +1,48 @@
+from typing import Dict
 from .zelda_game import is_mode_death
 
 class ZeldaEndCondition:
-    def __init__(self, verbose=False):
+    def __init__(self, verbose=0):
         self.verbose = verbose
+
+        # the number of timesteps the agent can be in the same position before we truncate
+        self.position_timeout = 50
+        
+        # how long we've been in the same position on screen
+        self._position_duration = 0
 
     def print_verbose(self, message):
         if self.verbose >= 2:
             print(message)
 
-    def is_terminated(self, info):
-        raise NotImplementedError() 
-    
-    def is_truncated(self, info):
-        raise NotImplementedError()
-    
     def clear(self):
-        pass
+        self._position_duration = 0
 
-class ZeldaGameplayEndCondition(ZeldaEndCondition):
-    """The basic end condition for all gameplay.
-    We terminate if the agent dies or gets the triforce of power after beating Ganon.
-    We truncate if the agent is stuck in the same x, y location for 50 timesteps (~12 sec).
-    """
-    def __init__(self, verbose=False):
-        super().__init__(verbose)
-        self.clear()
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool):
+        """Called to determine if the scenario has ended, returns (terminated, truncated)"""
+        terminated = False
 
-    def is_terminated(self, info):
-        if is_mode_death(info['mode']):
+        if is_mode_death(new['mode']):
             self.print_verbose("Game over")
-            return True
+            terminated = True
         
-        if info['triforce_of_power']:
+        elif new['triforce_of_power']:
             self.print_verbose("Got the triforce of power")
-            return True
-    
-    def is_truncated(self, info):
-        position = (info['link_x'], info['link_y'])
+            terminated = True
 
-        if position == self._last_position:
-            self._position_duration += 1
-            if self._position_duration > 50:
+        # check truncation
+        truncated = False
+        last_position = (old['link_x'], old['link_y'])
+        curr_position = (new['link_x'], new['link_y'])
+
+        if last_position == curr_position:
+            if self._position_duration >= self.position_timeout:
                 self.print_verbose("Truncated - Stuck in same position for too long")
-                return True
+                truncated = True
+
+            self._position_duration += 1
         else:
             self._position_duration = 0
 
-        self._last_position = position
-        return False
-    
-    def clear(self):
-        self._last_position = None
-        self._position_duration = 0
+
+        return terminated, truncated

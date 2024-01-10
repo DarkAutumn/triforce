@@ -396,5 +396,3 @@ FodyWeavers.xsd
 
 *.nes
 models/
-
-.vscode/launch.json

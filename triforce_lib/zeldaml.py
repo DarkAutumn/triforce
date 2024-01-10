@@ -30,6 +30,11 @@ class ZeldaML:
         else:
             self.verbose = 0
 
+        if 'ent_coef' in kwargs:
+            self.ent_coef = kwargs['ent_coef']
+            del kwargs['ent_coef']
+        else:
+            self.ent_coef = 0.0
 
         if not isinstance(frame_stack, int) or frame_stack < 2:
             frame_stack = 1
@@ -82,9 +87,9 @@ class ZeldaML:
         if not self.model:
             self.model = self._create_model()
 
-        callback = SaveBestModelCallback(check_freq=4096, save_func=self.save, log_dir=self.model_base_dir, verbose=self.verbose) if save_best else None
+        callback = SaveModelCallback(save_freq=10000, best_check_freq=2048, zeldaml=self) if save_best else None
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
-        self.save()
+        self.save(self.model_file)
 
     def load(self, path=None, best = None):
         if path and best:
@@ -100,17 +105,17 @@ class ZeldaML:
             return False
         
         if self.algorithm == 'ppo':
-            self.model = PPO.load(path, self.env, verbose=self.verbose)
+            self.model = PPO.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef)
         elif self.algorithm == 'a2c':
-            self.model = A2C.load(path, self.env, verbose=self.verbose)
+            self.model = A2C.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef)
         else:
             raise Exception(f'Unsupported algorithm: {self.algorithm}')
 
         return True
     
-    def save(self, path = None, best = False):
+    def save(self, path):
         if not path:
-            path = self.best_file if best else self.model_file
+            raise Exception('Must specify path to save model to')
         
         self.model.save(path)
 
@@ -118,41 +123,49 @@ class ZeldaML:
         tensorboard_log=self.log_dir
 
         if self.algorithm == 'ppo':
-            return PPO('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log)
+            return PPO('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef)
         
         elif self.algorithm == 'a2c':
-            return A2C('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log)
+            return A2C('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef)
         
         raise Exception(f'Unsupported algorithm: {self.algorithm}')
     
 
-class SaveBestModelCallback(BaseCallback):
-    def __init__(self, check_freq: int, save_func, log_dir: str, verbose=0):
-        super(SaveBestModelCallback, self).__init__(verbose)
-        self.check_freq = check_freq
-        self.log_dir = log_dir
+class SaveModelCallback(BaseCallback):
+    def __init__(self, save_freq : int, best_check_freq: int, zeldaml : ZeldaML):
+        super(SaveModelCallback, self).__init__(zeldaml.verbose)
+        self.best_check_freq = best_check_freq
+        self.save_freq = save_freq
+        self.zeldaml = zeldaml
         self.best_mean_reward = -np.inf
-        self.save_func = save_func
+        self.best_timestamp = -np.inf
 
     def _on_step(self) -> bool:
-        if self.n_calls % self.check_freq == 0:
+        if self.n_calls % self.save_freq == 0:
+            # Save the model as save_dir/model_{iterations}.zip
+            path = os.path.join(self.zeldaml.model_base_dir, f"model_{self.num_timesteps}.zip")
+            self.zeldaml.save(path)
+
+        if self.n_calls % self.best_check_freq == 0:
             # Retrieve training reward
-            x, y = ts2xy(load_results(self.log_dir), 'timesteps')
+            x, y = ts2xy(load_results(self.zeldaml.log_dir), 'timesteps')
             if len(x) > 0:
                 # Mean training reward over the last 100 episodes
                 mean_reward = np.mean(y[-100:])
                 if self.verbose > 0:
                     if mean_reward > self.best_mean_reward:
-                        print(f"timesteps: {self.num_timesteps} new best: {mean_reward:.2f} prev: {self.best_mean_reward:.2f}")
+                        print(f"timesteps: {self.num_timesteps} new best: {mean_reward:.2f} prev: {self.best_mean_reward:.2f} (steps:{self.best_timestamp})")
+                        self.best_timestamp = self.num_timesteps
                     else:
-                        print(f"timesteps: {self.num_timesteps} curr: {mean_reward:.2f} best: {self.best_mean_reward:.2f}")
+                        print(f"timesteps: {self.num_timesteps} curr: {mean_reward:.2f} best: {self.best_mean_reward:.2f} (steps:{self.best_timestamp})")
 
                 if mean_reward > self.best_mean_reward:
                     if self.verbose > 0:
                         print("Saving new best model.")
 
                     self.best_mean_reward = mean_reward
-                    self.save_func(best=True)
+                    path = os.path.join(self.zeldaml.model_base_dir, f"best.zip")
+                    self.zeldaml.save(path)
 
         return True
 

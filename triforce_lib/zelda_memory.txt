@@ -25,8 +25,8 @@
 0x66d rupees
 0x67d rupees_to_add            
 0x658 bombs
-0x67C bombMax
-0x66C keys
+0x67C bomb_max
+0x66E keys
 
 # items
 0x657 sword
@@ -41,8 +41,8 @@
 0x661 magic_book
 0x662 ring
 0x663 step_ladder
-0x664 magic_Key
-0x665 power_braclet
+0x664 magic_key
+0x665 power_bracelet
 0x666 letter
 0x674 regular_boomerang
 0x675 magic_boomerang
