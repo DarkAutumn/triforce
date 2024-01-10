@@ -30,22 +30,23 @@ class DamageDetector(gym.Wrapper):
         
 
     def step(self, act):
-        obs, rewards, terminated, truncated, state = self.env.step(act)
+        obs, rewards, terminated, truncated, info = self.env.step(act)
 
         # do nothing if this is a new screen
-        location = (state['level'], state['location'])
+        location = (info['level'], info['location'])
         if location != self.prev_location:
             self.prev_location = location
             self.beams_handled = False
             self.consume_kill = False
             self.consume_injury = False
-            self.fill_damage_table(state, self.damage_table)
-            return obs, rewards, terminated, truncated, state
+            self.fill_damage_table(info, self.damage_table)
+            self.update_info(info)
+            return obs, rewards, terminated, truncated, info
 
-        beam_state = get_beam_state(state)
+        beam_state = get_beam_state(info)
 
-        if self.last_kill_streak < state['kill_streak']:
-            self.total_kills += state['kill_streak'] - self.last_kill_streak
+        if self.last_kill_streak < info['kill_streak']:
+            self.total_kills += info['kill_streak'] - self.last_kill_streak
             
             if beam_state == 2 and self.consume_kill:
                 self.total_kills -= 1
@@ -58,7 +59,7 @@ class DamageDetector(gym.Wrapper):
 
         elif beam_state == 1:
             if not self.beams_handled:
-                kill, injury = self.did_beams_kill(act, state)
+                kill, injury = self.did_beams_kill(act, info)
                 self.consume_kill = kill
                 self.consume_injury = injury
                 if kill:
@@ -71,7 +72,7 @@ class DamageDetector(gym.Wrapper):
 
         # injuries are  hits that are not fatal
         prev_damage = self.damage_table.copy()
-        self.fill_damage_table(state, self.damage_table)
+        self.fill_damage_table(info, self.damage_table)
         injuries = self.detect_injuries(prev_damage, self.damage_table)
         if injuries:
             if self.consume_injury:
@@ -81,12 +82,15 @@ class DamageDetector(gym.Wrapper):
             self.total_injuries += injuries
 
         # don't let anyone use kill_streak, they should use total_kills
-        self.last_kill_streak = state['kill_streak']
+        self.last_kill_streak = info['kill_streak']
+        self.update_info(info)
+        
+        return obs, rewards, terminated, truncated, info
+
+    def update_info(self, state):
         del state['kill_streak']
         state['total_kills'] = self.total_kills
         state['total_injuries'] = self.total_injuries
-        
-        return obs, rewards, terminated, truncated, state
 
     def detect_injuries(self, prev_health, curr_health):
         injuries = 0
