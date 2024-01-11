@@ -67,8 +67,8 @@ class ZeldaML:
 #        if self.frame_stack > 1:
 #            env = VecFrameStack(env, n_stack=self.frame_stack)
 
-#        if not self.color:
-#            env = GrayscaleObservation(env)
+        if not self.color:
+            env = GrayscaleObservation(env)
         
         env = self.scenario.activate(env, self.verbose)
         self.env = Monitor(env, self.log_dir)
@@ -173,11 +173,14 @@ class GrayscaleObservation(gym.ObservationWrapper):
     """Converts the observation to grayscale to make processing easier"""
     def __init__(self, env):
         super().__init__(env)
-        obs_shape = self.observation_space.shape[:2]
-        self.observation_space = gym.spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
+        orig_shape = self.observation_space.shape
+        new_shape = (orig_shape[0], orig_shape[1], 1)
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=new_shape, dtype=np.uint8)
 
     def observation(self, observation):
+        # grayscale coversion: https://stackoverflow.com/a/12201744
         grayscale_obs = np.dot(observation[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
-        return grayscale_obs
+        return grayscale_obs[..., np.newaxis]  # Add a channel dimension
+
 
 __all__ = ['ZeldaML']
