@@ -87,7 +87,9 @@ class GauntletEndCondition(ZeldaEndCondition):
         terminated, truncated = super().is_scenario_ended(old, new)
 
         location = new['location']
-        terminated = terminated or location < 120 or location >= 127
+        if location < 120 or location >= 127:
+            self.report("terminated-left-gauntlet", "Left gauntlet")
+            terminated = True
 
         return terminated, truncated
     

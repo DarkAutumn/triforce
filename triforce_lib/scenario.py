@@ -30,6 +30,7 @@ class ScenarioGymWrapper(gym.Wrapper):
         self._report_interval = 10000
         self._curr_step = 0
         self._reward_summary = {}
+        self._end_summary = {}
 
     def reset(self, **kwargs):
         state = super().reset(**kwargs)
@@ -43,6 +44,10 @@ class ScenarioGymWrapper(gym.Wrapper):
             c.clear()
 
         for ec in self._conditions:
+            rewards = ec.end_causes
+            for key, value in rewards.items():
+                self._end_summary[key] = self._end_summary.get(key, 0) + value
+
             ec.clear()
 
         return state
@@ -65,6 +70,7 @@ class ScenarioGymWrapper(gym.Wrapper):
         if self.verbose:
             if self.verbose == 1 and self._curr_step % self._report_interval == 0:
                 self.print_sorted_summary("Reward summary:")
+                self.print_end_summary()
                 self._reward_summary.clear()
 
             if self.verbose == 2 and (terminated or truncated):
@@ -86,6 +92,12 @@ class ScenarioGymWrapper(gym.Wrapper):
 
             for key, value in sorted_items:
                 print(f"{round(value, 2):<{max_key_length + 3}.2f}{key}")
+
+    def print_end_summary(self):
+        if self.verbose:
+            self.print_sorted_summary("Scenario end reason:")
+            for key, value in self._end_summary.items():
+                print(f"    {value}: {key}")
 
 class Frameskip(gym.Wrapper):
     """Skip every min-max frames.  This ensures that we do not take too many actions per second."""

@@ -88,7 +88,7 @@ class DungeonEndCondition(ZeldaEndCondition):
         level = new['level']
         if not terminated:
             if level == 0:
-                self.print_verbose('End Scenario - Left Dungeon')
+                self.report("terminated-left-dungeon", "Left dungeon")
                 terminated = True
 
         if not truncated:
@@ -102,7 +102,7 @@ class DungeonEndCondition(ZeldaEndCondition):
                 self._last_discovery += 1
 
             if self._last_discovery > self.location_timeout:
-                self.print_verbose('Truncated - No new rooms discovered in 5 minutes')
+                self.report("truncated-no-discovery", "Truncated - No new rooms discovered in 5 minutes")
                 truncated = True
         
         return terminated, truncated

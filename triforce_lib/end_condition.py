@@ -10,24 +10,28 @@ class ZeldaEndCondition:
         
         # how long we've been in the same position on screen
         self._position_duration = 0
+        self.end_causes = {}
 
-    def print_verbose(self, message):
+    def report(self, source, message):
         if self.verbose >= 2:
-            print(message)
+            print(f"{source}: {message}")
+
+        self.end_causes[source] = self.end_causes.get(source, 0) + 1
 
     def clear(self):
         self._position_duration = 0
+        self.end_causes.clear()
 
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool):
         """Called to determine if the scenario has ended, returns (terminated, truncated)"""
         terminated = False
 
         if is_mode_death(new['mode']):
-            self.print_verbose("Game over")
+            self.report("terminated-game-over", "Game over")
             terminated = True
         
         elif new['triforce_of_power']:
-            self.print_verbose("Got the triforce of power")
+            self.report("terminated-game-won", "Got the triforce of power")
             terminated = True
 
         # check truncation
@@ -37,7 +41,7 @@ class ZeldaEndCondition:
 
         if last_position == curr_position:
             if self._position_duration >= self.position_timeout:
-                self.print_verbose("Truncated - Stuck in same position for too long")
+                self.report("truncated-position-timeout", f"Truncated - Stuck in same position for too long ({self._position_duration} steps)")
                 truncated = True
 
             self._position_duration += 1
