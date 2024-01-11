@@ -148,7 +148,7 @@ class SaveModelCallback(BaseCallback):
 
         if self.n_calls % self.best_check_freq == 0:
             # Retrieve training reward
-            x, y = ts2xy(load_results(self.zeldaml.log_dir), 'timesteps')
+            x, y = ts2xy(load_results(self.zeldaml.model_base_dir), 'timesteps')
             if len(x) > 0:
                 # Mean training reward over the last 100 episodes
                 mean_reward = np.mean(y[-100:])
