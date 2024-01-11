@@ -16,7 +16,7 @@ def parse_args():
     parser.add_argument("--algorithm", type=str, default="ppo", choices=['ppo', 'a2c'], help="The algorithm to use.")
     parser.add_argument("--render", action='store_true', help="Render the environment.")
     parser.add_argument("--color", action='store_true', help="Record the environment.")
-    parser.add_argument("--stack", type=int, default=1, help="Number of frames to stack in the observation.")
+    parser.add_argument("--frame-stack", type=int, default=3, help="Number of frames to stack in the observation.")
     parser.add_argument("--record", action='store_true', help="Whether to record playback or not.")
     parser.add_argument("--load", help="Load a specific saved model.")
     parser.add_argument("--debug-scenario", action='store_true', help="Debug the scenario by printing out rewards.")
@@ -44,7 +44,7 @@ def main():
     render_mode = 'human' if args.action == 'test' or args.action == 'evaluate' or args.render else None
     record = args.action == 'record'
     debug_scenario = args.debug_scenario or args.action == 'evaluate'
-    zelda_ml = ZeldaML(base_dir, args.scenario, args.algorithm, args.stack, args.color, record=record, render_mode=render_mode, verbose=args.verbose, debug_scenario=debug_scenario, ent_coef=args.ent_coef)
+    zelda_ml = ZeldaML(base_dir, args.scenario, args.algorithm, args.frame_stack, args.color, record=record, render_mode=render_mode, verbose=args.verbose, debug_scenario=debug_scenario, ent_coef=args.ent_coef)
 
     if args.load:
         zelda_ml.load(args.load)

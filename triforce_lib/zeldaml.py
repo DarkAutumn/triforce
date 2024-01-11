@@ -6,8 +6,9 @@ import gymnasium as gym
 from stable_baselines3 import PPO, A2C
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.vec_env import VecFrameStack
+from stable_baselines3.common.vec_env import VecFrameStack, VecMonitor
 from stable_baselines3.common.results_plotter import load_results, ts2xy
+from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.monitor import Monitor
 
 from .scenario import ZeldaScenario
@@ -58,20 +59,26 @@ class ZeldaML:
         self.model_file = os.path.join(self.model_base_dir, 'model.zip')
         self.best_file = os.path.join(self.model_base_dir, 'best.zip')
         self.log_dir = os.path.join(self.model_base_dir, 'logs')
+        self.log_file = os.path.join(self.log_dir, 'monitor.csv')
 
         os.makedirs(self.model_base_dir, exist_ok=True)
 
         # create the environment
         env = retro.make(game='Zelda-NES', state=self.scenario.start_state, inttype=retro.data.Integrations.CUSTOM_ONLY, **kwargs)
-
-#        if self.frame_stack > 1:
-#            env = VecFrameStack(env, n_stack=self.frame_stack)
+        env = self.scenario.activate(env, self.verbose)
 
         if not self.color:
             env = GrayscaleObservation(env)
-        
-        env = self.scenario.activate(env, self.verbose)
-        self.env = Monitor(env, self.log_dir)
+
+        if self.frame_stack > 1:
+            env = KwargsStrippingWrapper(env) #
+            env = make_vec_env(lambda: env, n_envs=1)
+            env = VecFrameStack(env, n_stack=self.frame_stack)
+            env = VecMonitor(env, self.log_file)
+        else:
+            self.env = Monitor(env, self.log_dir)
+            
+        self.env = env
         self.model = None
 
     def close(self):
@@ -148,7 +155,7 @@ class SaveModelCallback(BaseCallback):
 
         if self.n_calls % self.best_check_freq == 0:
             # Retrieve training reward
-            x, y = ts2xy(load_results(self.zeldaml.model_base_dir), 'timesteps')
+            x, y = ts2xy(load_results(self.zeldaml.log_dir), 'timesteps')
             if len(x) > 0:
                 # Mean training reward over the last 100 episodes
                 mean_reward = np.mean(y[-100:])
@@ -181,6 +188,14 @@ class GrayscaleObservation(gym.ObservationWrapper):
         # grayscale coversion: https://stackoverflow.com/a/12201744
         grayscale_obs = np.dot(observation[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
         return grayscale_obs[..., np.newaxis]  # Add a channel dimension
+
+class KwargsStrippingWrapper(gym.Wrapper):
+    """Wrapper class to strip the kwargs from the reset method, which is not supported by VecFrameStack"""
+    def __init__(self, env):
+        super().__init__(env)
+
+    def reset(self, **kwargs):
+        return self.env.reset()
 
 
 __all__ = ['ZeldaML']
