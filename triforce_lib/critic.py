@@ -56,7 +56,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         super().__init__(verbose)
 
         self._max_actions_on_same_screen = 1000
-        self._position_change_cooldown = 5
+        self._position_change_cooldown = 5000000
         self._is_first_step = True
 
         # reward values
