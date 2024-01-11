@@ -27,12 +27,14 @@ class ZeldaDungeonCritic(ZeldaGameplayCritic):
         
         # what tiles have been visited on each individual dungeon room
         self._squares_visited = [set()] * 256
+        self._first = True
 
     def critique_gameplay(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
         rewards = super().critique_gameplay(old_state, new_state)
 
         rewards += self.critique_tile_discovery(old_state, new_state)
 
+        self._first = False
         return rewards
     
     def critique_location_discovery(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
@@ -60,6 +62,9 @@ class ZeldaDungeonCritic(ZeldaGameplayCritic):
 
         # only consider tiles of size 8x8 instead of every unique location
         position = (int(new_state['link_x'] / self.tile_sizing_x), int(new_state['link_y'] / self.tile_sizing_y))
+        if self._first:
+            positions_seen.add(position)
+
         if position not in positions_seen:
             positions_seen.add(position)
 
