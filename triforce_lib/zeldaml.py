@@ -70,6 +70,9 @@ class ZeldaML:
         if not self.color:
             env = GrayscaleObservation(env)
 
+        # crop the top of the screen so that the model only sees gameplay and not the extra bits at the top
+        env = GameplayViewportObservation(env)
+        
         if self.frame_stack > 1:
             env = KwargsStrippingWrapper(env) #
             env = make_vec_env(lambda: env, n_envs=1)
@@ -197,5 +200,27 @@ class KwargsStrippingWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         return self.env.reset()
 
+class GameplayViewportObservation(gym.ObservationWrapper):
+    """Cut off the top pixels of the screen so that the model only sees the actual gameplay, not the extra
+    bits at the top."""
+    def __init__(self, env, crop_top=55):
+        super().__init__(env)
+        self.crop_top = crop_top
+        orig_shape = self.observation_space.shape
+        new_shape = (orig_shape[0] - crop_top, orig_shape[1], orig_shape[2])
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=new_shape, dtype=np.uint8)
+
+    def observation(self, observation):
+        observation = observation[self.crop_top:, :, :]
+        return observation
+    
+    def write_image(self, observation, path):
+        import matplotlib.pyplot as plt
+        plt.imshow(observation, cmap='gray', vmin=0, vmax=255)
+        plt.colorbar()
+        plt.savefig(path)
+        plt.close()
+
+    
 
 __all__ = ['ZeldaML']
