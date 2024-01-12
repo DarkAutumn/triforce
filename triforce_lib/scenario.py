@@ -31,7 +31,6 @@ class ScenarioGymWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         self._curr_room = (self._curr_room + 1) % len(self._scenario.all_start_states)
         save_state = self._scenario.all_start_states[self._curr_room]
-        print(f"Starting room: {save_state}")
         
         env_unwrapped = self.unwrapped
         env_unwrapped.load_state(save_state, retro.data.Integrations.CUSTOM_ONLY)
