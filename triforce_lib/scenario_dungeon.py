@@ -1,5 +1,7 @@
 import typing
 from typing import Dict
+
+from .zelda_game import get_heart_halves
 from .end_condition import *
 from .critic import ZeldaGameplayCritic
 
@@ -16,7 +18,12 @@ class ZeldaDungeonCritic(ZeldaGameplayCritic):
         self.tile_sizing_x = 80
         self.tile_sizing_y = 60
 
-        self.clear()
+        # do not reward for any new locations in the overworld
+        self._visted_locations[0] = [True] * 256
+        
+        # what tiles have been visited on each individual dungeon room
+        self._squares_visited = [set()] * 256
+        self._first = True
 
     def clear(self):
         super().clear()
@@ -67,8 +74,10 @@ class ZeldaDungeonCritic(ZeldaGameplayCritic):
         if position not in positions_seen:
             positions_seen.add(position)
 
-            reward += self.new_tile_reward
-            self.report(reward, f"Reward for moving to new section of room {room:x} ({position}): {reward}")
+            #ensure we don't reward for getting hit into a new tile
+            if get_heart_halves(old_state) == get_heart_halves(new_state):
+                reward += self.new_tile_reward
+                self.report(reward, f"Reward for moving to new section of room {room:x} ({position}): {reward}")
 
         return reward
 
