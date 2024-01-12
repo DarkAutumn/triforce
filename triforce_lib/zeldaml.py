@@ -6,8 +6,9 @@ import gymnasium as gym
 from stable_baselines3 import PPO, A2C
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.vec_env import VecFrameStack
+from stable_baselines3.common.vec_env import VecFrameStack, VecMonitor
 from stable_baselines3.common.results_plotter import load_results, ts2xy
+from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.monitor import Monitor
 
 from .scenario import ZeldaScenario
@@ -58,20 +59,29 @@ class ZeldaML:
         self.model_file = os.path.join(self.model_base_dir, 'model.zip')
         self.best_file = os.path.join(self.model_base_dir, 'best.zip')
         self.log_dir = os.path.join(self.model_base_dir, 'logs')
+        self.log_file = os.path.join(self.log_dir, 'monitor.csv')
 
         os.makedirs(self.model_base_dir, exist_ok=True)
 
         # create the environment
         env = retro.make(game='Zelda-NES', state=self.scenario.start_state, inttype=retro.data.Integrations.CUSTOM_ONLY, **kwargs)
-
-#        if self.frame_stack > 1:
-#            env = VecFrameStack(env, n_stack=self.frame_stack)
-
-#        if not self.color:
-#            env = GrayscaleObservation(env)
-        
         env = self.scenario.activate(env, self.verbose)
-        self.env = Monitor(env, self.log_dir)
+
+        if not self.color:
+            env = GrayscaleObservation(env)
+
+        # crop the top of the screen so that the model only sees gameplay and not the extra bits at the top
+        env = GameplayViewportObservation(env)
+        
+        if self.frame_stack > 1:
+            env = KwargsStrippingWrapper(env) #
+            env = make_vec_env(lambda: env, n_envs=1)
+            env = VecFrameStack(env, n_stack=self.frame_stack)
+            env = VecMonitor(env, self.log_file)
+        else:
+            self.env = Monitor(env, self.log_dir)
+            
+        self.env = env
         self.model = None
 
     def close(self):
@@ -148,7 +158,7 @@ class SaveModelCallback(BaseCallback):
 
         if self.n_calls % self.best_check_freq == 0:
             # Retrieve training reward
-            x, y = ts2xy(load_results(self.zeldaml.model_base_dir), 'timesteps')
+            x, y = ts2xy(load_results(self.zeldaml.log_dir), 'timesteps')
             if len(x) > 0:
                 # Mean training reward over the last 100 episodes
                 mean_reward = np.mean(y[-100:])
@@ -173,11 +183,44 @@ class GrayscaleObservation(gym.ObservationWrapper):
     """Converts the observation to grayscale to make processing easier"""
     def __init__(self, env):
         super().__init__(env)
-        obs_shape = self.observation_space.shape[:2]
-        self.observation_space = gym.spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
+        orig_shape = self.observation_space.shape
+        new_shape = (orig_shape[0], orig_shape[1], 1)
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=new_shape, dtype=np.uint8)
 
     def observation(self, observation):
+        # grayscale coversion: https://stackoverflow.com/a/12201744
         grayscale_obs = np.dot(observation[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
-        return grayscale_obs
+        return grayscale_obs[..., np.newaxis]  # Add a channel dimension
+
+class KwargsStrippingWrapper(gym.Wrapper):
+    """Wrapper class to strip the kwargs from the reset method, which is not supported by VecFrameStack"""
+    def __init__(self, env):
+        super().__init__(env)
+
+    def reset(self, **kwargs):
+        return self.env.reset()
+
+class GameplayViewportObservation(gym.ObservationWrapper):
+    """Cut off the top pixels of the screen so that the model only sees the actual gameplay, not the extra
+    bits at the top."""
+    def __init__(self, env, crop_top=55):
+        super().__init__(env)
+        self.crop_top = crop_top
+        orig_shape = self.observation_space.shape
+        new_shape = (orig_shape[0] - crop_top, orig_shape[1], orig_shape[2])
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=new_shape, dtype=np.uint8)
+
+    def observation(self, observation):
+        observation = observation[self.crop_top:, :, :]
+        return observation
+    
+    def write_image(self, observation, path):
+        import matplotlib.pyplot as plt
+        plt.imshow(observation, cmap='gray', vmin=0, vmax=255)
+        plt.colorbar()
+        plt.savefig(path)
+        plt.close()
+
+    
 
 __all__ = ['ZeldaML']

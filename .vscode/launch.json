@@ -9,7 +9,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["train", "gauntlet", "4096", "--color", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "2"],
+            "args": ["train", "gauntlet", "4096", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "2"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -18,7 +18,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["evaluate", "gauntlet", "10", "--color", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "2"],
+            "args": ["evaluate", "gauntlet", "10", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "2"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -27,7 +27,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["train", "dungeon1", "4096", "--color", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "1"],
+            "args": ["train", "dungeon1", "4096", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -36,7 +36,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["evaluate", "dungeon1", "10", "--color", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "2"],
+            "args": ["evaluate", "dungeon1", "10", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "2"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
