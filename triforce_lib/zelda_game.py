@@ -1,4 +1,5 @@
 # responsible for decoding difficult parts of zelda gamestate
+import numpy as np
 
 mode_scrolling_complete = 4
 mode_gameplay = 5
@@ -38,4 +39,25 @@ def get_beam_state(state):
     
     return 0
 
-__all__ = ['is_mode_scrolling', 'is_mode_death']
+def get_num_triforce_pieces(state):
+    return np.binary_repr(state["triforce"]).count('1')
+
+def get_full_hearts(state):
+    return (state["hearts_and_containers"] & 0x0F) + 1
+
+def get_heart_halves(state):
+    full = get_full_hearts(state) * 2
+    partial_hearts = state["partial_hearts"]
+    if partial_hearts > 0xf0:
+        return full
+    
+    partial_count = 1 if partial_hearts > 0 else 0
+    return full - 2 + partial_count
+
+def get_heart_containers(state):
+    return (state["hearts_and_containers"] >> 4) + 1
+
+def has_beams(state):
+    return get_heart_halves(state) == get_heart_containers(state) * 2
+
+__all__ = ['is_mode_scrolling', 'is_mode_death', 'get_beam_state', 'get_num_triforce_pieces', 'get_full_hearts', 'get_heart_halves', 'get_heart_containers', 'has_beams']

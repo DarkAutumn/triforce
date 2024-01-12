@@ -3,19 +3,6 @@ import gymnasium as gym
 
 from .critic import ZeldaCritic
 from .end_condition import ZeldaEndCondition
-from .zelda_game import is_mode_scrolling
-from .damage_detector import DamageDetector
-
-actions_per_second = 4
-
-# Frame skip values based on actions per second
-frameskip_ranges = {
-    1: (58, 62),      # one action every ~60 frames
-    2: (30, 50),      # one action every ~40 frames
-    3: (20, 30),      # one action every ~20 frames
-    4: (10, 20),      # one action every ~15 frames
-    5: (9, 15),       # one action every ~12 frames
-}
 
 class ScenarioGymWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
@@ -99,38 +86,6 @@ class ScenarioGymWrapper(gym.Wrapper):
             for key, value in self._end_summary.items():
                 print(f"    {value}: {key}")
 
-class Frameskip(gym.Wrapper):
-    """Skip every min-max frames.  This ensures that we do not take too many actions per second."""
-    def __init__(self, env, skip_min, skip_max):
-        super().__init__(env)
-        self._skip_min = skip_min
-        self._skip_max = skip_max
-
-    def reset(self, **kwargs):
-        return self.env.reset(**kwargs)
-
-    def step(self, act):
-        total_rew = 0.0
-        terminated = False
-        truncated = False
-        for i in range(randint(self._skip_min, self._skip_max)):
-            obs, rew, terminated, truncated, info = self.env.step(act)
-            total_rew += rew
-            if terminated or truncated:
-                break
-
-        mode = info["mode"]
-        while is_mode_scrolling(mode):
-            obs, rew, terminated, truncated, info = self.env.step(act)
-            total_rew += rew
-            if terminated or truncated:
-                break
-            
-            mode = info["mode"]
-
-        return obs, total_rew, terminated, truncated, info
-
-
 class ZeldaScenario:
     _scenarios = {}
 
@@ -153,9 +108,6 @@ class ZeldaScenario:
         for ec in self.end_conditions:
             ec.verbose = verbose
 
-        frameskip_min, frameskip_max = frameskip_ranges[actions_per_second]
-        env = DamageDetector(env)
-        env = Frameskip(env, frameskip_min, frameskip_max)
         env = ScenarioGymWrapper(env, self.critics, self.end_conditions, verbose)
         return env
     
