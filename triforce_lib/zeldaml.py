@@ -183,4 +183,4 @@ class SaveModelCallback(BaseCallback):
 
         return True
 
-__all__ = ['ZeldaML', 'actions_per_second']
+__all__ = ['ZeldaML']
