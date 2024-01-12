@@ -1,6 +1,7 @@
 import numpy as np
 import typing
 import inspect
+from .zelda_game import *
 
 class ZeldaCritic:
     def __init__(self, verbose=0):
@@ -185,8 +186,8 @@ class ZeldaGameplayCritic(ZeldaCritic):
         return reward
 
     def critique_health_change(self, old, new):
-        old_hearts = self.get_heart_halves(old)
-        new_hearts = self.get_heart_halves(new)
+        old_hearts = get_heart_halves(old)
+        new_hearts = get_heart_halves(new)
 
         reward = 0
         if new_hearts < old_hearts:
@@ -201,7 +202,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
     def critique_heart_containers(self, old, new):
         # we can only gain one heart container at a time
         reward = 0
-        if self.get_heart_containers(old) < self.get_heart_containers(new):
+        if get_heart_containers(old) <get_heart_containers(new):
             reward = self.heart_container_reward
             self.report(reward, f"Reward for gaining a heart container: {reward}")
 
@@ -210,7 +211,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
     def critique_triforce(self, old, new):
         reward = 0
 
-        if self.get_num_triforce_pieces(old) < self.get_num_triforce_pieces(new):
+        if get_num_triforce_pieces(old) < get_num_triforce_pieces(new):
             reward += self.triforce_reward
             self.report(reward, f"Reward for gaining a triforce piece: {reward}")
         
@@ -260,7 +261,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         position = (new['link_x'], new['link_y'])
         if self._x_y_position != position:
             # link moved, if he moved for a reason other than taking damage, reward that action
-            took_damage = self.get_heart_halves(old) > self.get_heart_halves(new)
+            took_damage = get_heart_halves(old) > get_heart_halves(new)
 
             if self._position_duration > self._position_change_cooldown and not took_damage:
                 reward += self.same_position_move_reward
@@ -285,21 +286,3 @@ class ZeldaGameplayCritic(ZeldaCritic):
     
     def mark_visited(self, level, location):
         self._visted_locations[level][location] = True
-
-    def get_num_triforce_pieces(self, state):
-        return np.binary_repr(state["triforce"]).count('1')
-    
-    def get_full_hearts(self, state):
-        return (state["hearts_and_containers"] & 0x0F) + 1
-
-    def get_heart_halves(self, state):
-        full = self.get_full_hearts(state) * 2
-        partial_hearts = state["partial_hearts"]
-        if partial_hearts > 0xf0:
-            return full
-        
-        partial_count = 1 if partial_hearts > 0 else 0
-        return full - 2 + partial_count
-    
-    def get_heart_containers(self, state):
-        return (state["hearts_and_containers"] >> 4) + 1

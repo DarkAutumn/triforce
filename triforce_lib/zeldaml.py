@@ -1,17 +1,21 @@
 import os
 import retro
 import numpy as np
-import gymnasium as gym
 
 from stable_baselines3 import PPO, A2C
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.vec_env import VecFrameStack, VecMonitor
 from stable_baselines3.common.results_plotter import load_results, ts2xy
-from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.monitor import Monitor
 
+from .damage_detector import DamageDetector
+from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
+
+from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
+from .frame_skip import Frameskip
+
+actions_per_second = 4
 
 class ZeldaML:
     """The model and algorithm used to train the agent"""
@@ -65,22 +69,26 @@ class ZeldaML:
 
         # create the environment
         env = retro.make(game='Zelda-NES', state=self.scenario.start_state, inttype=retro.data.Integrations.CUSTOM_ONLY, **kwargs)
-        env = self.scenario.activate(env, self.verbose)
 
-        if not self.color:
-            env = GrayscaleObservation(env)
+        # Capture the raw observation frames into a deque.  Since we are skipping frames and not acting on every frame, we need to save
+        # the last 'frame_stack' frames so that we can give the model a sense of motion without it being affected by the skipped frames.
+        env = FrameCaptureWrapper(env)
+        captured_frames = env.frames
 
-        # crop the top of the screen so that the model only sees gameplay and not the extra bits at the top
-        env = GameplayViewportObservation(env)
+        env = DamageDetector(env)
+        env = Frameskip(env, actions_per_second)
         
-        if self.frame_stack > 1:
-            env = KwargsStrippingWrapper(env) #
-            env = make_vec_env(lambda: env, n_envs=1)
-            env = VecFrameStack(env, n_stack=self.frame_stack)
-            env = VecMonitor(env, self.log_file)
-        else:
-            self.env = Monitor(env, self.log_dir)
-            
+        # to be a Dict and VecFrameStack doesn't support Dict observations.
+        env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, gameplay_only=True)
+        
+        
+        # extract features from the game, like whether link has beams or has keys
+        env = ZeldaGameFeatures(env)
+
+        env = self.scenario.activate(env, self.verbose)
+        
+        env = Monitor(env, self.log_dir)
+        
         self.env = env
         self.model = None
 
@@ -133,10 +141,7 @@ class ZeldaML:
         tensorboard_log=self.log_dir
 
         if self.algorithm == 'ppo':
-            return PPO('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef)
-        
-        elif self.algorithm == 'a2c':
-            return A2C('CnnPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef)
+            return PPO('MultiInputPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef)
         
         raise Exception(f'Unsupported algorithm: {self.algorithm}')
     
@@ -178,49 +183,5 @@ class SaveModelCallback(BaseCallback):
                     self.zeldaml.save(path)
 
         return True
-
-class GrayscaleObservation(gym.ObservationWrapper):
-    """Converts the observation to grayscale to make processing easier"""
-    def __init__(self, env):
-        super().__init__(env)
-        orig_shape = self.observation_space.shape
-        new_shape = (orig_shape[0], orig_shape[1], 1)
-        self.observation_space = gym.spaces.Box(low=0, high=255, shape=new_shape, dtype=np.uint8)
-
-    def observation(self, observation):
-        # grayscale coversion: https://stackoverflow.com/a/12201744
-        grayscale_obs = np.dot(observation[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
-        return grayscale_obs[..., np.newaxis]  # Add a channel dimension
-
-class KwargsStrippingWrapper(gym.Wrapper):
-    """Wrapper class to strip the kwargs from the reset method, which is not supported by VecFrameStack"""
-    def __init__(self, env):
-        super().__init__(env)
-
-    def reset(self, **kwargs):
-        return self.env.reset()
-
-class GameplayViewportObservation(gym.ObservationWrapper):
-    """Cut off the top pixels of the screen so that the model only sees the actual gameplay, not the extra
-    bits at the top."""
-    def __init__(self, env, crop_top=55):
-        super().__init__(env)
-        self.crop_top = crop_top
-        orig_shape = self.observation_space.shape
-        new_shape = (orig_shape[0] - crop_top, orig_shape[1], orig_shape[2])
-        self.observation_space = gym.spaces.Box(low=0, high=255, shape=new_shape, dtype=np.uint8)
-
-    def observation(self, observation):
-        observation = observation[self.crop_top:, :, :]
-        return observation
-    
-    def write_image(self, observation, path):
-        import matplotlib.pyplot as plt
-        plt.imshow(observation, cmap='gray', vmin=0, vmax=255)
-        plt.colorbar()
-        plt.savefig(path)
-        plt.close()
-
-    
 
 __all__ = ['ZeldaML']

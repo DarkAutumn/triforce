@@ -14,7 +14,12 @@ class DamageDetector(gym.Wrapper):
 
     def reset(self, **kwargs):
         self._clear()
-        return self.env.reset(**kwargs)
+        obs, info = self.env.reset(**kwargs)
+
+        info['total_kills'] = self.total_kills
+        info['total_injuries'] = self.total_injuries
+
+        return obs, info
     
     def _clear(self):
         self.beams_handled = False
@@ -108,7 +113,7 @@ class DamageDetector(gym.Wrapper):
 
     def did_beams_kill(self, act, state):
         self.beams_handled = True
-        savestate = self.env.em.get_state()
+        savestate = self.env.unwrapped.em.get_state()
         original_kills = state['kill_streak']
 
         damage_table = [0] * 12
@@ -124,7 +129,7 @@ class DamageDetector(gym.Wrapper):
             obs, rewards, terminated, truncated, state = self.env.step(act)
             beams = get_beam_state(state)
 
-        self.env.em.set_state(savestate)
+        self.env.unwrapped.em.set_state(savestate)
         kills = state['kill_streak'] > original_kills
 
         # check damage
