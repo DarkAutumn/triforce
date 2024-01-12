@@ -1,0 +1,37 @@
+{
+    "scenarios": [
+        {
+            "name": "gauntlet",
+            "description": "Run link to the right until he reaches the leftmost screen",
+            "critics": ["ZeldaGuantletRewards"],
+            "end_conditions": ["GauntletEndCondition"],
+            "level": 0,
+            "start": ["0_78w"],
+            "data" : {}
+        },
+        {
+            "name": "dungeon1",
+            "description": "Traverse dungeon 1",
+            "critics": ["ZeldaDungeonCritic"],
+            "end_conditions": ["DungeonEndCondition"],
+            "level" : 1,
+            "start": ["1_73s"],
+            "data" : {}
+        },
+        {
+            "name": "dungeon1combat",
+            "description": "Dungeon 1 combat trainer",
+            "critics": ["ZeldaDungeonCombatCritic"],
+            "end_conditions": ["ZeldaDungeonCombatEndCondition"],
+            "level" : 1,
+            "start": ["1_23", "1_33", "1_35", "1_42", "1_43", "1_44", "1_52", "1_54", "1_63", "1_72", "1_74", "1_83"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 0,
+                "hearts_and_containers" : 252,
+                "partial_hearts" : 254
+            }
+        }
+    ]
+}
