@@ -48,5 +48,4 @@ class ZeldaEndCondition:
         else:
             self._position_duration = 0
 
-
         return terminated, truncated
