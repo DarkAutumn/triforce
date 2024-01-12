@@ -9,8 +9,8 @@ from stable_baselines3.common.vec_env import VecFrameStack, VecMonitor
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common.monitor import Monitor
 
-from triforce_lib.damage_detector import DamageDetector
-from triforce_lib.viewport_observation import FrameCaptureWrapper, ZeldaViewWrapper
+from .damage_detector import DamageDetector
+from .viewport_observation import FrameCaptureWrapper, ZeldaViewWrapper
 
 from .custom_policy import ZeldaActorCriticPolicy
 from .zelda_game_features import ZeldaGameFeatures
@@ -71,7 +71,6 @@ class ZeldaML:
 
         # create the environment
         env = retro.make(game='Zelda-NES', state=self.scenario.start_state, inttype=retro.data.Integrations.CUSTOM_ONLY, **kwargs)
-        env = self.scenario.activate(env, self.verbose)
 
         # Capture the raw observation frames into a deque.  Since we are skipping frames and not acting on every frame, we need to save
         # the last 'frame_stack' frames so that we can give the model a sense of motion without it being affected by the skipped frames.
@@ -87,6 +86,9 @@ class ZeldaML:
         
         # extract features from the game, like whether link has beams or has keys
         env = ZeldaGameFeatures(env)
+
+        env = self.scenario.activate(env, self.verbose)
+        
         env = Monitor(env, self.log_dir)
         
         self.env = env
