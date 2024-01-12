@@ -68,7 +68,7 @@ class ZeldaML:
         os.makedirs(self.model_base_dir, exist_ok=True)
 
         # create the environment
-        env = retro.make(game='Zelda-NES', state=self.scenario.start_state, inttype=retro.data.Integrations.CUSTOM_ONLY, **kwargs)
+        env = retro.make(game='Zelda-NES', state=self.scenario.all_start_states[0], inttype=retro.data.Integrations.CUSTOM_ONLY, **kwargs)
 
         # Capture the raw observation frames into a deque.  Since we are skipping frames and not acting on every frame, we need to save
         # the last 'frame_stack' frames so that we can give the model a sense of motion without it being affected by the skipped frames.

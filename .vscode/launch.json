@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Scenario: Dungeon 1 Combat Training",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["train", "dungeon1combat", "4096", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "2"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Scenario: Gauntlet Training",
             "type": "python",
             "request": "launch",

@@ -1,8 +1,7 @@
 import typing
 from typing import Dict
 from .end_condition import *
-from .scenario import ZeldaScenario
-from .critic import ZeldaCritic, ZeldaGameplayCritic
+from .critic import ZeldaGameplayCritic
 
 class ZeldaDungeonCritic(ZeldaGameplayCritic):
     def __init__(self, verbose=False):
@@ -114,13 +113,3 @@ class DungeonEndCondition(ZeldaEndCondition):
 
     def clear(self):
         self._last_discovery = 0
-
-
-class DungeonScenario(ZeldaScenario):
-    def __init__(self, dungeon, verbose=False):
-        self.dungeon = dungeon
-        super().__init__(f'dungeon{dungeon}', f"The Dungeon Scenario - Try to complete dungeon {dungeon}", f'dungeon{dungeon}.state', [ZeldaDungeonCritic], [DungeonEndCondition])
-
-    def __str__(self):
-        return f'Dungeon {self.dungeon} Scenario'
-    

@@ -4,15 +4,13 @@
 # The goal is to train a model that will make it to the far south-east location of the map without dying.
 
 from typing import Dict
-from .scenario import ZeldaScenario
 from .end_condition import ZeldaEndCondition, ZeldaEndCondition
-from .critic import ZeldaCritic, ZeldaGameplayCritic
+from .critic import ZeldaGameplayCritic
 
 class ZeldaGuantletRewards(ZeldaGameplayCritic):
     def __init__(self, verbose=False):
         super().__init__(verbose)
 
-        
         self.new_location_reward = 0
 
         # reward values
@@ -93,11 +91,3 @@ class GauntletEndCondition(ZeldaEndCondition):
 
         return terminated, truncated
     
-
-class GauntletScenario(ZeldaScenario):
-    def __init__(self, verbose=0):
-        description = "The Guantlet Scenario - Move from the starting tile to the far south-east tile without dying"
-        super().__init__('gauntlet', description, "78w.state", [ZeldaGuantletRewards], [GauntletEndCondition])
-
-    def __str__(self):
-        return 'Gauntlet Scenario'
