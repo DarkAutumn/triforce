@@ -22,7 +22,6 @@ Example library usage:
 
 Instead of passing a scenario name, you can define your own by inheriting from ZeldaScenario, ZeldaCritic, and ZeldaEndCondition.
 
-
 ## Architecture
 
 This lib has a few concepts that are decoupled from each other:  Models, scenarios, and critics.
@@ -70,6 +69,6 @@ Critics:
 
 End conditions define when a scenario is terminated or truncated.  The basic end condition set is defined in [ZeldaGameplayEndCondition](triforce_lib/end_condition.py) which ends the game if the Triforce of Power is obtained (after killing Ganon) or if the agent hits the Game Over screen.
 
-### Gameplay state used for Critics/EndConditions:
+### Gameplay state used for Critics/EndConditions
 
-Do not directly modify [data.json](custom_integrations/Zelda-NES/data.json).  Instead, update [zelda_memory.txt](triforce_lib/zelda_memory.txt) and run [update_memory_definitions.py](../scripts/update_memory_definitions.py) to change what data is put into the dictionary fed to critics.
+Do not directly modify [data.json](custom_integrations/Zelda-NES/data.json).  Instead, update [zelda_game_data.txt](triforce_lib/zelda_game_data.txt) and run [update_memory_definitions.py](../scripts/update_memory_definitions.py) to change what data is put into the dictionary fed to critics.
