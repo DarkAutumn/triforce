@@ -1,7 +1,5 @@
 import os
 
-from retro import RetroEnv
-
 class ZeldaRoom:
     def __init__(self, save_state_dir, level, location, exits, enemies, reward = None, bomb_secrets = None):
         self.level = level
@@ -11,7 +9,6 @@ class ZeldaRoom:
         self.reward = reward
         self.bomb_secrets = bomb_secrets
         self.save_states = [""]
-        RetroEnv
 
 class ZeldaGameData:
     def __init__(self):
