@@ -3,6 +3,7 @@ import typing
 from .end_condition import ZeldaEndCondition
 from .scenario_dungeon import ZeldaDungeonCritic
 from .zelda_game_data import zelda_game_data
+from .model_parameters import actions_per_second
 
 class ZeldaDungeonCombatCritic(ZeldaDungeonCritic):
     def __init__(self, verbose=False):
@@ -25,12 +26,20 @@ class ZeldaDungeonCombatEndCondition(ZeldaEndCondition):
     def __init__(self, verbose=False):
         super().__init__(verbose)
 
+        # 3 minutes to beat each room
+        total_minutes = 5
+        total_seconds = total_minutes * 60
+        self._step_max = total_seconds * actions_per_second
+
     def clear(self):
         super().clear()
         self._room = None
+        self._frame_count = 0
 
     def is_scenario_ended(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
         terminated, truncated = super().is_scenario_ended(old_state, new_state)
+
+        self._frame_count += 1
 
         if self._room is None:
             self._room = zelda_game_data.get_room_by_location(new_state['level'], new_state['location'])
@@ -41,6 +50,10 @@ class ZeldaDungeonCombatEndCondition(ZeldaEndCondition):
 
         elif old_state['location'] != new_state['location']:
             self.report("left", "Left the room!")
+            terminated = True
+
+        elif self._frame_count >= self._step_max:
+            self.report("timed-out", "Timed out!")
             terminated = True
 
         return terminated, truncated

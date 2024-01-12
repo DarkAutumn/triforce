@@ -14,8 +14,7 @@ from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrap
 from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
 from .frame_skip import Frameskip
-
-actions_per_second = 4
+from .model_parameters import actions_per_second
 
 class ZeldaML:
     """The model and algorithm used to train the agent"""
@@ -184,4 +183,4 @@ class SaveModelCallback(BaseCallback):
 
         return True
 
-__all__ = ['ZeldaML']
+__all__ = ['ZeldaML', 'actions_per_second']
