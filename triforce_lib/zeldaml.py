@@ -5,14 +5,12 @@ import numpy as np
 from stable_baselines3 import PPO, A2C
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.vec_env import VecFrameStack, VecMonitor
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common.monitor import Monitor
 
 from .damage_detector import DamageDetector
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
 
-from .custom_policy import ZeldaActorCriticPolicy
 from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
 from .frame_skip import Frameskip
@@ -143,7 +141,7 @@ class ZeldaML:
         tensorboard_log=self.log_dir
 
         if self.algorithm == 'ppo':
-            return PPO('MultiInputPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef)  #ZeldaActorCriticPolicy
+            return PPO('MultiInputPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef)
         
         raise Exception(f'Unsupported algorithm: {self.algorithm}')
     
