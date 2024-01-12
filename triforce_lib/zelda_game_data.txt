@@ -1,3 +1,5 @@
+[memory]
+
 # mode and locations
 0x010 level
 0x0eb location
@@ -69,3 +71,23 @@
 0x48e enemy_health_9
 0x48f enemy_health_10
 0x490 enemy_health_11
+
+[rooms]
+# level, location, exits, num_enemies, item, secret_exits
+
+1   72  E       3   key
+1   73  NEW     0
+1   74  W       5   key
+1   63  NS      3
+1   53  SEW     5   key N
+1   54  W       8   compass
+1   52  NE      6
+1   42  EW      3
+1   43  NEW     5   map
+1   33  NS      3   key
+1   23  SW      3   key
+1   13  EW      0   stair
+1   44  EW      3   boomerang
+1   45  WN      8   key
+1   35  NE      1   heart-container
+1   36  W       0   triforce

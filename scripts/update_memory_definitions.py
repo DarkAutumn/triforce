@@ -3,8 +3,8 @@ import os
 import json
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
-zelda_memory_file = os.path.join(script_dir, '../triforce_lib/zelda_memory.txt')
-assert os.path.exists(zelda_memory_file), f'Could not find zelda_memory.txt at {zelda_memory_file}'
+zelda_memory_file = os.path.join(script_dir, '../triforce_lib/zelda_game_data.txt')
+assert os.path.exists(zelda_memory_file), f'Could not find zelda_game_data.txt at {zelda_memory_file}'
 
 zelda_memory_data = os.path.join(script_dir, '../triforce_lib/custom_integrations/Zelda-NES/data.json')
 assert os.path.exists(zelda_memory_data), f'Could not find data.json at {zelda_memory_data}'
@@ -23,9 +23,19 @@ def main():
 
     #load the memory file
     with open(zelda_memory_file, 'r') as f:
+        is_memory = False
+
         for line in f:
             line = line.strip()
-            if line.startswith('0x'):
+            if line == '[memory]':
+                is_memory = True
+                continue
+
+            elif line.startswith('[') or line.endswith(']'):
+                is_memory = False
+                continue
+
+            if is_memory and line.startswith('0x'):
                 parts = line.split(' ')
                 name = parts[1]
 
