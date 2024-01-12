@@ -1,3 +1,8 @@
+# For this project, we don't neccessarily need to see the whole screen, or even the game in color.
+# The ZeldaObservationWrapper takes care of this by letting us (optionally) trim off the HUD and
+# convert the image to grayscale.  We also stack multiple frames together to give the agent a sense
+# of motion over time.
+
 import gymnasium as gym
 import numpy as np
 from collections import deque
@@ -23,7 +28,7 @@ class FrameCaptureWrapper(gym.Wrapper):
         self.frames.append(observation)
         return observation, reward, terminated, truncated, info
 
-class ZeldaViewWrapper(gym.Wrapper):
+class ZeldaObservationWrapper(gym.Wrapper):
     def __init__(self, env, frames, count, grayscale, gameplay_only):
         super().__init__(env)
         self.env = env
@@ -64,11 +69,12 @@ class ZeldaViewWrapper(gym.Wrapper):
         return self._get_observation(), reward, terminated, truncated, info
 
     def _get_observation(self):
-        stacked = []
-
         # Some Zelda enemies flash in and out every other frame, so we need to capture a sequence
-        # of frames in a way that will capture the enemy in both states.
+        # of frames in a way that will capture the enemy in both states.  We also don't really want
+        # to just use the last three frames, as that doesn't give a good sense of motion.  So we will
+        # use some from the past, being sure to not always pick odd or even frames.
 
+        stacked = []
         sequence = [1, 6, 15]
         for i in range(self.n_stack):
             position = sequence[i]

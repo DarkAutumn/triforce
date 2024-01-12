@@ -10,7 +10,7 @@ from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common.monitor import Monitor
 
 from .damage_detector import DamageDetector
-from .viewport_observation import FrameCaptureWrapper, ZeldaViewWrapper
+from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
 
 from .custom_policy import ZeldaActorCriticPolicy
 from .zelda_game_features import ZeldaGameFeatures
@@ -81,7 +81,7 @@ class ZeldaML:
         env = Frameskip(env, actions_per_second)
         
         # to be a Dict and VecFrameStack doesn't support Dict observations.
-        env = ZeldaViewWrapper(env, captured_frames, self.frame_stack, not self.color, gameplay_only=True)
+        env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, gameplay_only=True)
         
         
         # extract features from the game, like whether link has beams or has keys
