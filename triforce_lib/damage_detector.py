@@ -14,7 +14,12 @@ class DamageDetector(gym.Wrapper):
 
     def reset(self, **kwargs):
         self._clear()
-        return self.env.reset(**kwargs)
+        obs, info = self.env.reset(**kwargs)
+
+        info['total_kills'] = self.total_kills
+        info['total_injuries'] = self.total_injuries
+
+        return obs, info
     
     def _clear(self):
         self.beams_handled = False
