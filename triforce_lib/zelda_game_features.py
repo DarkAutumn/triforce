@@ -20,13 +20,13 @@ class ZeldaGameFeatures(gym.Wrapper):
         self.num_features = num_features
 
     def step(self, action):
-        observation, reward, done, info = self.env.step(action)
+        observation, reward, terminated, truncated, info = self.env.step(action)
         augmented_observation = self.augment_observation(observation, info)
-        return augmented_observation, reward, done, info
+        return augmented_observation, reward, terminated, truncated, info
 
     def reset(self, **kwargs):
-        observation = self.env.reset()
-        return self.augment_observation(observation, None), {}
+        observation, info = self.env.reset()
+        return self.augment_observation(observation, None), info
 
     def augment_observation(self, observation, info):
         # Extract features and store them in the dictionary format
@@ -43,7 +43,7 @@ class ZeldaGameFeatures(gym.Wrapper):
             int(zelda.get_heart_halves(info) <= 2),
             int(info['bombs'] > 0),
             int(info['keys'] > 0),
-            int(info['bombs'] == info['bombs_max']),
+            int(info['bombs'] == info['bomb_max']),
         ]
 
         # Convert boolean features to uint8 format
