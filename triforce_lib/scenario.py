@@ -3,10 +3,11 @@ import os
 import gymnasium as gym
 import retro
 
+
 from .zelda_game_data import zelda_game_data
 from .scenario_dungeon import DungeonEndCondition, ZeldaDungeonCritic
 from .scenario_gauntlet import GauntletEndCondition, ZeldaGuantletRewards
-from .end_condition import ZeldaEndCondition
+from .scenario_dungeon_combat import ZeldaDungeonCombatCritic, ZeldaDungeonCombatEndCondition
 
 class ScenarioGymWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
@@ -30,12 +31,12 @@ class ScenarioGymWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         self._curr_room = (self._curr_room + 1) % len(self._scenario.all_start_states)
         save_state = self._scenario.all_start_states[self._curr_room]
+        print(f"Starting room: {save_state}")
         
         env_unwrapped = self.unwrapped
         env_unwrapped.load_state(save_state, retro.data.Integrations.CUSTOM_ONLY)
 
         state = super().reset(**kwargs)
-
 
         # assign data for the scenario
         if self._scenario.data:
@@ -175,6 +176,8 @@ class ZeldaScenario:
             return ZeldaGuantletRewards
         elif name == 'ZeldaDungeonCritic':
             return ZeldaDungeonCritic
+        elif name == 'ZeldaDungeonCombatCritic':
+            return ZeldaDungeonCombatCritic
         
         raise Exception(f'Unknown critic {name}')
     
@@ -182,10 +185,11 @@ class ZeldaScenario:
     def resolve_end_condition(cls, name):
         if name == 'GauntletEndCondition':
             return GauntletEndCondition
-        
         elif name == 'DungeonEndCondition':
             return DungeonEndCondition
+        elif name == 'ZeldaDungeonCombatEndCondition':
+            return ZeldaDungeonCombatEndCondition
         
         raise Exception(f'Unknown end condition {name}')
 
-__all__ = ['ZeldaScenario', 'ZeldaEndCondition', 'ZeldaGameplayEndCondition']
+__all__ = ['ZeldaScenario']

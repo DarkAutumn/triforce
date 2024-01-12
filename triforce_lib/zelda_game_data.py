@@ -6,7 +6,7 @@ class ZeldaRoom:
         self.level = int(level)
         self.location = location
         self.exits = exits
-        self.enemies = enemies
+        self.enemies = int(enemies) if enemies else 0
         self.reward = reward
         self.bomb_secrets = bomb_secrets
         
@@ -64,14 +64,9 @@ class ZeldaGameData:
                     name = parts[1]
                     address = int(parts[0], 16)
                     self.memory[name] = address
-
-    def get_room_by_savestate(self, state):
-        for room in self.rooms:
-            for savestate in room.save_states:
-                if savestate.startswith(state):
-                    return room
-                
-        return None
+    
+    def get_room_by_location(self, level, location):
+        return self.rooms.get(f'{level}_{location:2x}', None)
     
     def get_savestates_by_name(self, room_name):
         full_location = room_name
