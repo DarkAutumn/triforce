@@ -22,6 +22,7 @@
 
 # kill count
 0x627 kill_streak
+0x34f room_kills
 
 # counted items
 0x66d rupees

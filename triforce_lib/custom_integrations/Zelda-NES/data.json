@@ -60,6 +60,10 @@
             "address": 1575,
             "type": "=u1"
         },
+        "room_kills": {
+            "address": 847,
+            "type": "=u1"
+        },
         "rupees": {
             "address": 1645,
             "type": "=u1"
