@@ -8,11 +8,11 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common.monitor import Monitor
 
+
 from .reward_reporter import RewardReporter
-
 from .zelda_wrapper import ZeldaGameWrapper
+from .action_space import ZeldaActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
-
 from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
 
@@ -82,6 +82,10 @@ class ZeldaML:
         # to be a Dict and VecFrameStack doesn't support Dict observations.
         env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, gameplay_only=True)
         
+        # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
+        # since that doesn't make any sense in Zelda)
+        env = ZeldaActionSpace(env)
+
         # extract features from the game for the model, like whether link has beams or has keys and expose these as observations
         env = ZeldaGameFeatures(env)
 
