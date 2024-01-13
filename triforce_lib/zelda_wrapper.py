@@ -4,6 +4,7 @@
 #
 # This consumes some state and produces values like 'step_kills' and 'step_injuries'.
 
+from random import randint
 from typing import Any
 import gymnasium as gym
 
@@ -51,22 +52,16 @@ class ZeldaObjectData:
     def enemy_count(self):
         return sum(1 for i in range(1, 0xb) if self.is_enemy(self.get_object_id(i)))
 
-# Frame skip values based on actions per second
-frameskip_ranges = {
-    1: (58, 62),      # one action every ~60 frames
-    2: (30, 50),      # one action every ~40 frames
-    3: (20, 30),      # one action every ~20 frames
-    4: (10, 20),      # one action every ~15 frames
-    5: (9, 15),       # one action every ~12 frames
-}
+movement_cooldown = 5
+attack_cooldown = 20
+item_cooldown = 10
+random_delay_max_frames = 1
 
 class ZeldaGameWrapper(gym.Wrapper):
-    def __init__(self, env):
+    def __init__(self, env, deterministic=False):
         super().__init__(env)
 
-        frameskip_min, frameskip_max = frameskip_ranges[actions_per_second]
-        self._skip_min = frameskip_min
-        self._skip_max = frameskip_max
+        self.deterministic = deterministic
 
         self._reset_state()
 
@@ -85,21 +80,7 @@ class ZeldaGameWrapper(gym.Wrapper):
     
     def step(self, act):
         # take the first step
-        obs, rewards, terminated, truncated, info = self.env.step(act)
-
-        # frameskip
-        for i in range(self._skip_min, self._skip_max):           
-            obs, rew, terminated, truncated, info = self.env.step(act)
-            rewards += rew
-            if terminated or truncated:
-                return obs, rewards, terminated, truncated, info
-            
-        # skip scrolling
-        while is_mode_scrolling(info["mode"]):
-            obs, rew, terminated, truncated, info = self.env.step(act)
-            rewards += rew
-            if terminated or truncated:
-                break
+        obs, rewards, terminated, truncated, info = self.act_and_wait(act)
 
         unwrapped = self.env.unwrapped
         objects = ZeldaObjectData(unwrapped.get_ram())
@@ -173,6 +154,57 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['beam_hits'] = beam_kills + beam_injuries
 
         return obs, rewards, terminated, truncated, info
+
+    def act_and_wait(self, act):
+        obs, rewards, terminated, truncated, info = self.env.step(act)
+
+        # wait based on the kind of action
+        if not terminated and not truncated:
+            if self.action_is_movement(act):
+                obs, terminated, truncated, info, rew = self.skip(act, movement_cooldown)
+                rewards += rew
+
+            elif self.action_is_attack(act):
+                obs, terminated, truncated, info, rew = self.skip(act, attack_cooldown)
+                rewards += rew
+
+            elif self.action_is_item(act):
+                obs, terminated, truncated, info, rew = self.skip(act, item_cooldown)
+                rewards += rew
+
+            else:
+                raise Exception("Unknown action type")
+        
+        # skip scrolling
+        while is_mode_scrolling(info["mode"]):
+            obs, rew, terminated, truncated, info = self.env.step(act)
+            rewards += rew
+            if terminated or truncated:
+                break
+
+        if not self.deterministic:
+            # skip movement cooldown
+            cooldown = randint(0, random_delay_max_frames + 1)
+            if cooldown:
+                obs, terminated, truncated, info, rew = self.skip(act, cooldown)
+                rewards += rew
+
+        return obs,rewards,terminated,truncated,info
+
+    def skip(self, act, cooldown):
+        for i in range(cooldown):
+            obs, rew, terminated, truncated, info = self.env.step(act)
+
+        return obs,terminated,truncated,info,rew
+    
+    def action_is_movement(self, act):
+        return any(act[4:8])
+
+    def action_is_item(self, act):
+        return act[0]
+
+    def action_is_attack(self, act):
+        return act[8]
 
     def did_hit_during(self, act, info, should_continue):
         unwrapped = self.env.unwrapped
