@@ -45,19 +45,19 @@ class ZeldaGuantletRewards(ZeldaGameplayCritic):
             
             if curr_location < 120 or curr_location > 127:
                 reward += self.leaving_penalty
-                self.report(reward, f"Penalty for leaving the gauntlet! {reward}")
+                self.report(reward, f"Penalty for leaving the gauntlet! {reward}", "penalty-leave-gauntlet")
         
             elif not self.has_visited(*curr):
                 self.mark_visited(*curr)
                 reward += self.reward_new_location
-                self.report(reward, f"Reward for discovering new room (level:{curr[0]}, coords:{curr[1]})! {reward}")
+                self.report(reward, f"Reward for discovering new room (level:{curr[0]}, coords:{curr[1]})! {reward}", "reward-new-room")
 
             else:
                 prev_location = old['location']
 
                 if curr_location < prev_location:
                     reward += self.moving_backwards_penalty
-                    self.report(reward, f"Penalty for moving backwards! {reward}")
+                    self.report(reward, f"Penalty for moving backwards! {reward}", "penalty-move-backwards")
             
         return reward
 
@@ -70,10 +70,10 @@ class ZeldaGuantletRewards(ZeldaGameplayCritic):
             diff = new_state['link_x'] - old_state['link_x']
             if diff > 0:
                 reward += self.screen_forward_progress_reward
-                self.report(reward, f"Reward for moving right! {reward}")
+                self.report(reward, f"Reward for moving right! {reward}", "reward-move-right")
             elif diff < 0:
                 reward -= self.screen_forward_progress_reward
-                self.report(reward, f"Penalty for moving left! {reward}")
+                self.report(reward, f"Penalty for moving left! {reward}", "penalty-move-left")
         
         return reward
 

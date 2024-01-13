@@ -50,7 +50,7 @@ class ZeldaDungeonCritic(ZeldaGameplayCritic):
             reward += super().critique_location_discovery(old_state, new_state)
         else:
             reward += self.leave_dungeon_penalty
-            self.report(reward, f"Penalty for leaving the dungeon! {reward}")
+            self.report(reward, f"Penalty for leaving the dungeon! {reward}", "penalty-leave-dungeon")
 
         return reward
     
@@ -77,7 +77,7 @@ class ZeldaDungeonCritic(ZeldaGameplayCritic):
             #ensure we don't reward for getting hit into a new tile
             if get_heart_halves(old_state) == get_heart_halves(new_state):
                 reward += self.new_tile_reward
-                self.report(reward, f"Reward for moving to new section of room {room:x} ({position}): {reward}")
+                self.report(reward, f"Reward for moving to new section of room {room:x} ({position}): {reward}", "reward-new-tile")
 
         return reward
 
