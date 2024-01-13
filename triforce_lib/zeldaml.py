@@ -10,7 +10,7 @@ from stable_baselines3.common.monitor import Monitor
 
 from .reward_reporter import RewardReporter
 
-from .damage_detector import DamageDetector
+from .zelda_wrapper import ZeldaWrapper
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
 
 from .zelda_game_features import ZeldaGameFeatures
@@ -77,7 +77,7 @@ class ZeldaML:
         env = FrameCaptureWrapper(env)
         captured_frames = env.frames
 
-        env = DamageDetector(env)
+        env = ZeldaWrapper(env)
         env = Frameskip(env, actions_per_second)
         
         # to be a Dict and VecFrameStack doesn't support Dict observations.
@@ -176,7 +176,7 @@ class SaveModelCallback(BaseCallback):
 
         if self.n_calls % self.best_check_freq == 0 and self.n_calls > 10000:
             # Retrieve training reward
-            x, y = ts2xy(load_results(self.zeldaml.log_dir), 'timesteps')
+            x, y = ts2xy(load_results(self.zeldaml.model_base_dir), 'timesteps')
             if len(x) > 0:
                 # Mean training reward over the last 100 episodes
                 mean_reward = np.mean(y[-100:])

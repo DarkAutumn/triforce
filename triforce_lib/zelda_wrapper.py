@@ -1,3 +1,4 @@
+# Responsible for interpreting complex game state and producing an object model in the 'info' dictionary.
 # Zelda has a very complicated combat system.  This class is responsible for detecting when the
 # agent has killed or injured an enemy.
 #
@@ -6,7 +7,7 @@
 import gymnasium as gym
 from .zelda_game import is_mode_death, get_beam_state
 
-class DamageDetector(gym.Wrapper):
+class ZeldaWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
 
