@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Create replay",
+            "type": "python",
+            "request": "launch",
+            "program": "scripts/create_replay.py",
+            "args": ["1_44e.state"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Scenario: Dungeon 1 Combat Training",
             "type": "python",
             "request": "launch",
