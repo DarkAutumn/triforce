@@ -99,7 +99,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         if new_location:
             self._location = location
             self._prev_health = None
-            self._beams_already_active = True
+            self._beams_already_active = False
             self._discounted_kills = 0
             self._discounted_injuries = 0
         else:
