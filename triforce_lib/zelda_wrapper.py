@@ -2,7 +2,7 @@
 # Zelda has a very complicated combat system.  This class is responsible for detecting when the
 # agent has killed or injured an enemy.
 #
-# This consumes some state and produces 'total_kills' and 'total_injuries'.
+# This consumes some state and produces values like 'step_kills' and 'step_injuries'.
 
 from typing import Any
 import gymnasium as gym
@@ -48,6 +48,9 @@ class ZeldaObjectData:
             if self.is_enemy(self.get_object_id(i)):
                 yield i
 
+    def enemy_count(self):
+        return sum(1 for i in range(1, 0xb) if self.is_enemy(self.get_object_id(i)))
+
 # Frame skip values based on actions per second
 frameskip_ranges = {
     1: (58, 62),      # one action every ~60 frames
@@ -77,6 +80,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._beams_already_active = False
         self._prev_enemies = None
         self._prev_health = None
+        self._discounted_kills = 0
+        self._discounted_injuries = 0
     
     def step(self, act):
         # take the first step
@@ -115,6 +120,9 @@ class ZeldaGameWrapper(gym.Wrapper):
         if new_location:
             self._location = location
             self._prev_health = None
+            self._beams_already_active = True
+            self._discounted_kills = 0
+            self._discounted_injuries = 0
         else:
             # check if beams are still active after frameskips
             beams = get_beam_state(info)
@@ -122,8 +130,14 @@ class ZeldaGameWrapper(gym.Wrapper):
                 # Process if beams weren't active when we left this function
                 if not self._beams_already_active:
                     kills, injuries = self.did_hit_during(info, act, info, lambda st: get_beam_state(st) == 1)
+                    
+                    step_kills += kills
+                    step_injuries += injuries
                     beam_hits = kills + injuries
+
                     self._beams_already_active = True
+                    self._discounted_kills = kills
+                    self._discounted_injuries = injuries
             else:
                 self._beams_already_active = False
 
@@ -141,10 +155,21 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._prev_health = curr_enemy_health
         self._prev_objs = objects
 
-        info['beams_hit'] = beam_hits
+        # discount kills and injuries if we already counted as beam hits
+        if self._discounted_injuries and step_injuries:
+            discount = min(self._discounted_injuries, step_injuries)
+            self._discounted_injuries -= discount
+            step_injuries -= discount
+
+        if self._discounted_kills and step_kills:
+            discount = min(self._discounted_kills, step_kills)
+            self._discounted_kills -= discount
+            step_kills -= discount
+
+        info['new_location'] = new_location
         info['step_kills'] = step_kills
         info['step_injuries'] = step_injuries
-        info['new_location'] = new_location
+        info['beam_hits'] = beam_hits # included in injury/kills above
 
         return obs, rewards, terminated, truncated, info
 
