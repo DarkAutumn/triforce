@@ -105,6 +105,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         objects = ZeldaObjectData(unwrapped.get_ram())
         info['objects'] = objects
 
+        curr_enemy_health = None
         beam_kills = 0
         beam_injuries = 0
         step_kills = 0
