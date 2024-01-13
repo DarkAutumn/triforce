@@ -6,8 +6,8 @@ from .end_condition import *
 from .critic import ZeldaGameplayCritic
 
 class ZeldaDungeonCritic(ZeldaGameplayCritic):
-    def __init__(self, verbose=False):
-        super().__init__(verbose)
+    def __init__(self, reporter=None):
+        super().__init__(reporter)
 
         # reward finding new locations and kills high in dungeons
         self.new_tile_reward = self.reward_small
@@ -82,8 +82,8 @@ class ZeldaDungeonCritic(ZeldaGameplayCritic):
         return reward
 
 class DungeonEndCondition(ZeldaEndCondition):
-    def __init__(self, verbose=0):
-        super().__init__(verbose)
+    def __init__(self, reporter):
+        super().__init__(reporter)
 
         self._seen = set()
 

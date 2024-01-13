@@ -2,8 +2,8 @@ from typing import Dict
 from .zelda_game import is_mode_death
 
 class ZeldaEndCondition:
-    def __init__(self, verbose=0):
-        self.verbose = verbose
+    def __init__(self, reporter=None):
+        self.reporter = reporter
 
         # the number of timesteps the agent can be in the same position before we truncate
         self.position_timeout = 50
@@ -13,10 +13,7 @@ class ZeldaEndCondition:
         self.end_causes = {}
 
     def report(self, source, message):
-        if self.verbose >= 2:
-            print(f"{source}: {message}")
-
-        self.end_causes[source] = self.end_causes.get(source, 0) + 1
+        self.reporter.report_ending(source)
 
     def clear(self):
         self._position_duration = 0

@@ -6,11 +6,11 @@ from .zelda_game_data import zelda_game_data
 from .model_parameters import actions_per_second
 
 class ZeldaDungeonCombatCritic(ZeldaDungeonCritic):
-    def __init__(self, verbose=False):
-        super().__init__(verbose)
+    def __init__(self, reporter=None):
+        super().__init__(reporter)
 
         self.new_location_reward = 0
-        self.leaving_penalty = self.reward_large
+        self.leaving_penalty = -self.reward_large
     
     def critique_location_discovery(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
         # Override.  Only allow rewards for new locations in dungeons
@@ -18,13 +18,13 @@ class ZeldaDungeonCombatCritic(ZeldaDungeonCritic):
 
         if old_state['location'] != new_state['location']:
             reward += self.leaving_penalty
-            self.report(reward, f"Penalty for leaving the scenario! {reward}")
+            self.report(reward, f"Penalty for leaving the scenario! {reward}", "leave-room-penalty")
 
         return reward
     
 class ZeldaDungeonCombatEndCondition(ZeldaEndCondition):
-    def __init__(self, verbose=False):
-        super().__init__(verbose)
+    def __init__(self, reporter=None):
+        super().__init__(reporter)
 
         # 3 minutes to beat each room
         total_minutes = 5

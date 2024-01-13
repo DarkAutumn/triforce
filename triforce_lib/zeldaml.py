@@ -8,6 +8,8 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common.monitor import Monitor
 
+from .reward_reporter import RewardReporter
+
 from .damage_detector import DamageDetector
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
 
@@ -28,6 +30,7 @@ class ZeldaML:
             kwargs -- additional arguments to pass to the environment creation, such as render_mode, etc
         """
         algorithm = algorithm.lower()
+        
         if 'verbose' in kwargs:
             self.verbose = kwargs['verbose']
             del kwargs['verbose']
@@ -84,7 +87,9 @@ class ZeldaML:
         # extract features from the game, like whether link has beams or has keys
         env = ZeldaGameFeatures(env)
 
-        env = self.scenario.activate(env, self.verbose)
+
+        self.reporter = RewardReporter()
+        env = self.scenario.activate(env, self.reporter)
         
         env = Monitor(env, self.log_dir)
         
@@ -104,7 +109,7 @@ class ZeldaML:
         if not self.model:
             self.model = self._create_model()
 
-        callback = SaveModelCallback(save_freq=10000, best_check_freq=2048, zeldaml=self) if save_best else None
+        callback = SaveModelCallback(save_freq=10000, best_check_freq=2048, zeldaml=self, reporter=self.reporter) if save_best else None
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
         self.save(self.model_file)
 
@@ -146,11 +151,12 @@ class ZeldaML:
     
 
 class SaveModelCallback(BaseCallback):
-    def __init__(self, save_freq : int, best_check_freq: int, zeldaml : ZeldaML):
+    def __init__(self, save_freq : int, best_check_freq: int, zeldaml : ZeldaML, reporter : RewardReporter):
         super(SaveModelCallback, self).__init__(zeldaml.verbose)
         self.best_check_freq = best_check_freq
         self.save_freq = save_freq
         self.zeldaml = zeldaml
+        self.reward_reporter = reporter
         self.best_mean_reward = -np.inf
         self.best_timestamp = -np.inf
 
@@ -160,7 +166,15 @@ class SaveModelCallback(BaseCallback):
             path = os.path.join(self.zeldaml.model_base_dir, f"model_{self.num_timesteps}.zip")
             self.zeldaml.save(path)
 
-        if self.n_calls % self.best_check_freq == 0:
+            rew = self.reward_reporter.get_rewards_and_clear()
+            for key, value in rew.items():
+                self.logger.record('reward/' + key, value)
+
+            ends = self.reward_reporter.get_endings_and_clear()
+            for key, value in ends.items():
+                self.logger.record('end/' + key, value)
+
+        if self.n_calls % self.best_check_freq == 0 and self.n_calls > 10000:
             # Retrieve training reward
             x, y = ts2xy(load_results(self.zeldaml.log_dir), 'timesteps')
             if len(x) > 0:

@@ -8,8 +8,8 @@ from .end_condition import ZeldaEndCondition, ZeldaEndCondition
 from .critic import ZeldaGameplayCritic
 
 class ZeldaGuantletRewards(ZeldaGameplayCritic):
-    def __init__(self, verbose=False):
-        super().__init__(verbose)
+    def __init__(self, reporter=None):
+        super().__init__(reporter)
 
         self.new_location_reward = 0
 
@@ -78,8 +78,8 @@ class ZeldaGuantletRewards(ZeldaGameplayCritic):
         return reward
 
 class GauntletEndCondition(ZeldaEndCondition):
-    def __init__(self, verbose=0):
-        super().__init__(verbose)
+    def __init__(self, reporter=None):
+        super().__init__(reporter)
 
     def is_scenario_ended(self, old: Dict[str, int], new: Dict[str, int]) -> (bool, bool):
         terminated, truncated = super().is_scenario_ended(old, new)
