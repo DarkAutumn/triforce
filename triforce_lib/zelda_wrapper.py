@@ -12,10 +12,10 @@ from .model_parameters import actions_per_second
 from .zelda_game import is_mode_death, get_beam_state, is_mode_scrolling
 
 class ZeldaObjectData:
-    def __init__(self, slot, ram = None):
+    def __init__(self, ram):
 
         for table, (offset, size) in zelda_game_data.tables.items():
-            self.__dict__[table.name] = ram[offset:offset+size]
+            self.__dict__[table] = ram[offset:offset+size]
 
     @property
     def link_pos(self):
@@ -103,18 +103,15 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         unwrapped = self.env.unwrapped
         objects = ZeldaObjectData(unwrapped.get_ram())
-        beam_hits = 0
+        info['objects'] = objects
+
+        beam_kills = 0
+        beam_injuries = 0
         step_kills = 0
         step_injuries = 0
         
         location = (info['level'], info['location'])
         new_location = self._location != location
-
-        # capture enemy health data
-        curr_enemy_health = {}
-        for eid in objects.enumerate_enemy_ids():
-            assert self._prev_health is None or eid in self._prev_health
-            curr_enemy_health[eid] = objects.get_obj_health(eid)
 
         # only check beams and other state if we are in the same room:
         if new_location:
@@ -124,34 +121,33 @@ class ZeldaGameWrapper(gym.Wrapper):
             self._discounted_kills = 0
             self._discounted_injuries = 0
         else:
+            # capture enemy health data
+            curr_enemy_health = {}
+            for eid in objects.enumerate_enemy_ids():
+                assert self._prev_health is None or eid in self._prev_health
+                curr_enemy_health[eid] = objects.get_obj_health(eid)
+
             # check if beams are still active after frameskips
             beams = get_beam_state(info)
             if beams == 1:
                 # Process if beams weren't active when we left this function
                 if not self._beams_already_active:
-                    kills, injuries = self.did_hit_during(info, act, info, lambda st: get_beam_state(st) == 1)
-                    
-                    step_kills += kills
-                    step_injuries += injuries
-                    beam_hits = kills + injuries
+                    beam_kills, beam_injuries = self.did_hit_during(act, info, lambda st: get_beam_state(st) == 1)
 
                     self._beams_already_active = True
-                    self._discounted_kills = kills
-                    self._discounted_injuries = injuries
             else:
                 self._beams_already_active = False
 
             # check if we killed or injured anything
             if self._prev_health:
                 # check kills
-                for eid, health in self._prev_health:
+                for eid, health in self._prev_health.items():
                     if eid not in curr_enemy_health:
                         step_kills += 1
 
                     elif curr_enemy_health[eid] < health:
                         step_injuries += 1
 
-        info['objects'] = objects
         self._prev_health = curr_enemy_health
         self._prev_objs = objects
 
@@ -166,10 +162,14 @@ class ZeldaGameWrapper(gym.Wrapper):
             self._discounted_kills -= discount
             step_kills -= discount
 
+        if beam_kills or beam_injuries:
+                self._discounted_kills = beam_kills
+                self._discounted_injuries = beam_injuries
+
         info['new_location'] = new_location
-        info['step_kills'] = step_kills
-        info['step_injuries'] = step_injuries
-        info['beam_hits'] = beam_hits # included in injury/kills above
+        info['step_kills'] = step_kills + beam_kills
+        info['step_injuries'] = step_injuries + beam_injuries
+        info['beam_hits'] = beam_kills + beam_injuries
 
         return obs, rewards, terminated, truncated, info
 
@@ -197,6 +197,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         kills = 0
         injuries = 0
 
+
+        objects = ZeldaObjectData(unwrapped.get_ram())
         end_enemies = list(objects.enumerate_enemy_ids())
         if len(end_enemies) < len(start_enemies):
             kills += len(start_enemies) - len(end_enemies)
@@ -205,7 +207,10 @@ class ZeldaGameWrapper(gym.Wrapper):
             start = start_health.get(enemy, 0)
             end = objects.get_obj_health(enemy)
             if end < start:
-                injuries += 1
+                if end == 0:
+                    kills += 1
+                else:
+                    injuries += 1
 
         unwrapped.em.set_state(savestate)
         return kills, injuries

@@ -77,7 +77,7 @@ class ZeldaGameData:
 
                 elif is_table:
                     offset = int(parts[0], 16)
-                    size = int(parts[1])
+                    size = int(parts[1], 16)
                     name = parts[2]
                     self.tables[name] = (offset, size)
     

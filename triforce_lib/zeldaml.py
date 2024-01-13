@@ -10,7 +10,7 @@ from stable_baselines3.common.monitor import Monitor
 
 from .reward_reporter import RewardReporter
 
-from .zelda_wrapper import ZeldaGameWrapper, ZeldaWrapper
+from .zelda_wrapper import ZeldaGameWrapper
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
 
 from .zelda_game_features import ZeldaGameFeatures
