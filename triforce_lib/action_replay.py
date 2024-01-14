@@ -66,6 +66,10 @@ class ZeldaActionReplay:
             for button in self.actions_taken:
                 self.step(button)
 
+        elif button == 'c':
+            self.reset()
+            self.actions_taken = ""
+
         else:
             self.actions_taken += button
             action = self.map[button]
