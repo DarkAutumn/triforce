@@ -26,10 +26,12 @@ class ZeldaGameData:
 
         self.rooms = {}
         self.memory = {}
+        self.tables = {}
 
         with open(data_filename, 'r') as f:
             is_room = False
             is_memory = False
+            is_table = False
 
             for line in f:
                 line = line.strip()
@@ -39,11 +41,19 @@ class ZeldaGameData:
                 if line == '[rooms]':
                     is_room = True
                     is_memory = False
+                    is_table = False
                     continue
 
                 elif line == '[memory]':
                     is_room = False
                     is_memory = True
+                    is_table = False
+                    continue
+
+                elif line == '[tables]':
+                    is_room = False
+                    is_memory = False
+                    is_table = True
                     continue
 
                 elif line.startswith('[') or line.endswith(']'):
@@ -64,6 +74,12 @@ class ZeldaGameData:
                     name = parts[1]
                     address = int(parts[0], 16)
                     self.memory[name] = address
+
+                elif is_table:
+                    offset = int(parts[0], 16)
+                    size = int(parts[1], 16)
+                    name = parts[2]
+                    self.tables[name] = (offset, size)
     
     def get_room_by_location(self, level, location):
         return self.rooms.get(f'{level}_{location:2x}', None)

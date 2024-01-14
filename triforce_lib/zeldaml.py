@@ -8,15 +8,13 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common.monitor import Monitor
 
+
 from .reward_reporter import RewardReporter
-
-from .zelda_wrapper import ZeldaWrapper
+from .zelda_wrapper import ZeldaGameWrapper
+from .action_space import ZeldaActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
-
 from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
-from .frame_skip import Frameskip
-from .model_parameters import actions_per_second
 
 class ZeldaML:
     """The model and algorithm used to train the agent"""
@@ -77,16 +75,19 @@ class ZeldaML:
         env = FrameCaptureWrapper(env)
         captured_frames = env.frames
 
-        env = ZeldaWrapper(env)
-        env = Frameskip(env, actions_per_second)
+        # Wrap the game to produce new info about game state and to hold the button down after the action is taken to achieve the desired
+        # number of actions per second.
+        env = ZeldaGameWrapper(env)
         
         # to be a Dict and VecFrameStack doesn't support Dict observations.
         env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, gameplay_only=True)
         
-        
-        # extract features from the game, like whether link has beams or has keys
-        env = ZeldaGameFeatures(env)
+        # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
+        # since that doesn't make any sense in Zelda)
+        env = ZeldaActionSpace(env)
 
+        # extract features from the game for the model, like whether link has beams or has keys and expose these as observations
+        env = ZeldaGameFeatures(env)
 
         self.reporter = RewardReporter()
         env = self.scenario.activate(env, self.reporter)

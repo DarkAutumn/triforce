@@ -44,7 +44,7 @@ class ZeldaDungeonCombatEndCondition(ZeldaEndCondition):
         if self._room is None:
             self._room = zelda_game_data.get_room_by_location(new_state['level'], new_state['location'])
 
-        if new_state['total_kills'] >= self._room.enemies:
+        if new_state['objects'].enemy_count == 0:
             self.report("completed", "Completed the room!")
             terminated = True
 

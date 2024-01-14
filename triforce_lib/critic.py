@@ -73,7 +73,6 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.same_position_penalty = -self.reward_minimum
 
         self._visted_locations = [[False] * 256 ] * 2
-        self._enemies_killed = 0
         self._actions_on_same_screen = 0
         self._x_y_position = (-1, -1)
         self._position_duration = 0
@@ -82,7 +81,6 @@ class ZeldaGameplayCritic(ZeldaCritic):
     def clear(self):
         super().clear()
         self._visted_locations = [[False] * 256 ] * 2
-        self._enemies_killed = 0
         self._actions_on_same_screen = 0
         self._x_y_position = (-1, -1)
         self._position_duration = 0
@@ -219,20 +217,19 @@ class ZeldaGameplayCritic(ZeldaCritic):
     def critique_kills(self, old, new):    
         reward = 0.0
 
-        enemies_killed = new['total_kills']
-        prev_enemies_killed = old['total_kills']
-        self._enemies_killed = enemies_killed
+        enemies_killed = new['step_kills']
 
-        if enemies_killed > prev_enemies_killed:
+        if enemies_killed:
             reward = self.kill_reward
-            self.report(reward, f"Reward for killing an enemy: {reward}", "reward-injure-kill")
+            suffix = 'y' if enemies_killed == 1 else 'ies'
+            self.report(reward, f"Reward for killing {enemies_killed} enem{suffix}: {reward}", "reward-injure-kill")
 
         else:
-            enemies_injured = new['total_injuries']
-            prev_enemies_injured = old['total_injuries']
-            if enemies_injured > prev_enemies_injured:
+            enemies_injured = new['step_injuries']
+            if enemies_injured:
                 reward = self.kill_reward
-                self.report(reward, f"Reward for injuring an enemy: {reward}", "reward-injure-kill")
+                suffix = 'y' if enemies_injured == 1 else 'ies'
+                self.report(reward, f"Reward for injuring {enemies_injured} enem{suffix}: {reward}", "reward-injure-kill")
 
         return reward
     
@@ -254,7 +251,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         from an enemy."""
         reward = 0
         position = (new['link_x'], new['link_y'])
-        if self._x_y_position != position and old['total_kills'] != new['total_kills'] and old['total_injuries'] != new['total_injuries']:
+        if self._x_y_position != position or new['step_kills'] or new['step_injuries']:
             # link moved or dealt damage, if he moved for a reason other than taking damage, reward that action or at least reset the cooldown
             # for not doing anything
             took_damage = get_heart_halves(old) > get_heart_halves(new)
