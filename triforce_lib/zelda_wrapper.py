@@ -75,8 +75,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._beams_already_active = False
         self._prev_enemies = None
         self._prev_health = None
-        self._discounted_kills = 0
-        self._discounted_injuries = 0
+        self._discounted_beam_kills = 0
+        self._discounted_beam_injuries = 0
     
     def step(self, act):
         # take the first step
@@ -84,11 +84,11 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         unwrapped = self.env.unwrapped
         objects = ZeldaObjectData(unwrapped.get_ram())
+
         info['objects'] = objects
+        info['beam_hits'] = 0
 
         curr_enemy_health = None
-        beam_kills = 0
-        beam_injuries = 0
         step_kills = 0
         step_injuries = 0
         
@@ -100,25 +100,14 @@ class ZeldaGameWrapper(gym.Wrapper):
             self._location = location
             self._prev_health = None
             self._beams_already_active = False
-            self._discounted_kills = 0
-            self._discounted_injuries = 0
+            self._discounted_beam_kills = 0
+            self._discounted_beam_injuries = 0
         else:
             # capture enemy health data
             curr_enemy_health = {}
             for eid in objects.enumerate_enemy_ids():
                 assert self._prev_health is None or eid in self._prev_health
                 curr_enemy_health[eid] = objects.get_obj_health(eid)
-
-            # check if beams are still active after frameskips
-            beams = get_beam_state(info)
-            if beams == 1:
-                # Process if beams weren't active when we left this function
-                if not self._beams_already_active:
-                    beam_kills, beam_injuries = self.did_hit_during(act, info, lambda st: get_beam_state(st) == 1)
-
-                    self._beams_already_active = True
-            else:
-                self._beams_already_active = False
 
             # check if we killed or injured anything
             if self._prev_health:
@@ -130,30 +119,55 @@ class ZeldaGameWrapper(gym.Wrapper):
                     elif curr_enemy_health[eid] < health:
                         step_injuries += 1
 
+            # check if beams, bombs, arrows, etc are active and if they will hit in the future,
+            # as we need to count them as rewards/results of this action so the model trains properly
+            step_kills, step_injuries = self.handle_beam_future_hits(act, info, step_kills, step_injuries)
+
+        info['new_location'] = new_location
+        info['step_kills'] = step_kills
+        info['step_injuries'] = step_injuries
+
         self._prev_health = curr_enemy_health
         self._prev_objs = objects
 
-        # discount kills and injuries if we already counted as beam hits
-        if self._discounted_injuries and step_injuries:
-            discount = min(self._discounted_injuries, step_injuries)
-            self._discounted_injuries -= discount
-            step_injuries -= discount
-
-        if self._discounted_kills and step_kills:
-            discount = min(self._discounted_kills, step_kills)
-            self._discounted_kills -= discount
-            step_kills -= discount
-
-        if beam_kills or beam_injuries:
-                self._discounted_kills = beam_kills
-                self._discounted_injuries = beam_injuries
-
-        info['new_location'] = new_location
-        info['step_kills'] = step_kills + beam_kills
-        info['step_injuries'] = step_injuries + beam_injuries
-        info['beam_hits'] = beam_kills + beam_injuries
-
         return obs, rewards, terminated, truncated, info
+
+    def handle_beam_future_hits(self, act, info, step_kills, step_injuries):
+        beams = get_beam_state(info)
+        if beams == 1:
+                # Process if beams weren't active when we left this function
+            if not self._beams_already_active:
+                    # check if beams will hit something
+                beam_kills, beam_injuries = self.did_hit_during(act, info, lambda st: get_beam_state(st) == 1)
+                info['beam_hits'] = beam_kills + beam_injuries
+
+                    # count the future hits now, discount them from the later hit
+                step_kills += beam_kills
+                step_injuries += beam_injuries
+
+                self._discounted_beam_kills = beam_kills
+                self._discounted_beam_injuries = beam_injuries
+
+                    # we've processed the active beams, don't process beams again this shot
+                self._beams_already_active = True
+        else:
+                # If we got here, either beams aren't active at all, or we stepped past the end of
+                # the beams.  Make sure we are ready to process them again, and discount any kills
+                # we found.
+            self._beams_already_active = False
+
+                # discount kills and injuries if we already counted as beam hits
+            if self._discounted_beam_injuries and step_injuries:
+                discount = min(self._discounted_beam_injuries, step_injuries)
+                self._discounted_beam_injuries -= discount
+                step_injuries -= discount
+
+            if self._discounted_beam_kills and step_kills:
+                discount = min(self._discounted_beam_kills, step_kills)
+                self._discounted_beam_kills -= discount
+                step_kills -= discount
+
+        return step_kills, step_injuries
 
     def act_and_wait(self, act):
         obs, rewards, terminated, truncated, info = self.env.step(act)
@@ -163,14 +177,17 @@ class ZeldaGameWrapper(gym.Wrapper):
             if self.action_is_movement(act):
                 obs, terminated, truncated, info, rew = self.skip(act, movement_cooldown)
                 rewards += rew
+                info['action'] = 'movement'
 
             elif self.action_is_attack(act):
                 obs, terminated, truncated, info, rew = self.skip(act, attack_cooldown)
                 rewards += rew
+                info['action'] = 'attack'
 
             elif self.action_is_item(act):
                 obs, terminated, truncated, info, rew = self.skip(act, item_cooldown)
                 rewards += rew
+                info['action'] = 'item'
 
             else:
                 raise Exception("Unknown action type")
