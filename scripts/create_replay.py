@@ -6,32 +6,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from triforce_lib import action_replay
 
 def main(savestate):
-    replay = action_replay.ZeldaActionReplay(savestate)
+    replay = action_replay.ZeldaActionReplay(savestate, render_mode="human")
     replay.reset()
 
     while True:
         action = input('Enter action: ')
+        if 'q' in action:
+            break
 
-        i = 0
-        while i < len(action):
-            a = action[i]
-            count = 0
-            idx = i + 1
-            while idx < len(action) and '0' <= action[idx] <= '9':
-                count = count * 10 + int(action[idx])
-                idx += 1
-
-            if a == 'q':
-                return
-
-            if a == 'c':
-                replay.reset()
-                break
-
-            for i in range(max(count, 1)):
-                replay.step(a)
-
-            i = idx
+        replay.run_steps(action)
         print(replay.actions_taken)
 
 

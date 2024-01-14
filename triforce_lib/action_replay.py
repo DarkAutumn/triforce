@@ -6,8 +6,8 @@ from .action_space import ZeldaActionSpace
 from .zelda_wrapper import ZeldaGameWrapper
 
 class ZeldaActionReplay:
-    def __init__(self, savestate):
-        env = retro.make(game='Zelda-NES', state=savestate, inttype=retro.data.Integrations.CUSTOM_ONLY, render_mode="human")
+    def __init__(self, savestate, render_mode=None):
+        env = retro.make(game='Zelda-NES', state=savestate, inttype=retro.data.Integrations.CUSTOM_ONLY, render_mode=render_mode)
         env = ZeldaGameWrapper(env, deterministic=True)
         env = ZeldaActionSpace(env)
 
@@ -32,12 +32,32 @@ class ZeldaActionReplay:
             if env.actions[i][0] == 'B':
                 self.map['b'] = i
 
+        env.reset()
+        self.actions_taken = ""
         self.env = env
+
+    def __delattr__(self, __name: str) -> None:
+        self.env.close()
 
     def reset(self):
         self.actions_taken = ""
         return self.env.reset()
     
+    def run_steps(self, commands):
+        i = 0
+        while i < len(commands):
+            a = commands[i]
+            count = 0
+            idx = i + 1
+            while idx < len(commands) and '0' <= commands[idx] <= '9':
+                count = count * 10 + int(commands[idx])
+                idx += 1
+
+            for i in range(max(count, 1)):
+                self.step(a)
+
+            i = idx
+
     def step(self, button):
         if button == 'x':
             self.reset()
