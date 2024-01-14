@@ -15,6 +15,9 @@ mode_dying = 17
 animation_beams_active = 16
 animation_beams_hit = 17
 
+animation_bombs_active = 18
+animation_bombs_exploded = 20
+
 
 def is_mode_scrolling(state):
     # overworld scrolling
@@ -35,6 +38,25 @@ def get_beam_state(state):
     if beams == animation_beams_active:
         return 1
     elif beams == animation_beams_hit:
+        return 2
+    
+    return 0
+
+
+def get_bomb_state(state, i):
+    assert 0 <= i <= 1
+    if i == 0:
+        bombs = state['bomb_or_flame_animation']
+    else:
+        bombs = state['bomb_or_flame_animation2']
+    
+    print(bombs)
+    if bombs == 0:
+        return 0
+
+    if animation_bombs_active <= bombs < animation_bombs_exploded:
+        return 1
+    elif bombs == animation_bombs_exploded:
         return 2
     
     return 0

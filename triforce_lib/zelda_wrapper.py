@@ -10,7 +10,7 @@ import gymnasium as gym
 
 from .zelda_game_data import zelda_game_data
 from .model_parameters import actions_per_second
-from .zelda_game import is_mode_death, get_beam_state, is_mode_scrolling
+from .zelda_game import get_bomb_state, is_mode_death, get_beam_state, is_mode_scrolling
 
 class ZeldaObjectData:
     def __init__(self, ram):
@@ -99,9 +99,9 @@ class ZeldaGameWrapper(gym.Wrapper):
         if new_location:
             self._location = location
             self._prev_health = None
-            self._beams_already_active = False
-            self._discounted_beam_kills = 0
-            self._discounted_beam_injuries = 0
+            self.clear_variables('beam_hits')
+            self.clear_variables('bomb_hits')
+            self.clear_variables('arrow_hits')
         else:
             # capture enemy health data
             curr_enemy_health = {}
@@ -121,7 +121,9 @@ class ZeldaGameWrapper(gym.Wrapper):
 
             # check if beams, bombs, arrows, etc are active and if they will hit in the future,
             # as we need to count them as rewards/results of this action so the model trains properly
-            step_kills, step_injuries = self.handle_beam_future_hits(act, info, step_kills, step_injuries)
+            step_kills, step_injuries = self.handle_future_hits(act, info, step_kills, step_injuries, 'beam_hits', lambda st: get_beam_state(st) == 1)
+            step_kills, step_injuries = self.handle_future_hits(act, info, step_kills, step_injuries, 'bomb1_hits', lambda st: get_bomb_state(st, 0) == 1)
+            step_kills, step_injuries = self.handle_future_hits(act, info, step_kills, step_injuries, 'bomb2_hits', lambda st: get_bomb_state(st, 1) == 1)
 
         info['new_location'] = new_location
         info['step_kills'] = step_kills
@@ -132,39 +134,56 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return obs, rewards, terminated, truncated, info
 
-    def handle_beam_future_hits(self, act, info, step_kills, step_injuries):
-        beams = get_beam_state(info)
-        if beams == 1:
-                # Process if beams weren't active when we left this function
-            if not self._beams_already_active:
-                    # check if beams will hit something
-                beam_kills, beam_injuries = self.did_hit_during(act, info, lambda st: get_beam_state(st) == 1)
-                info['beam_hits'] = beam_kills + beam_injuries
+    def clear_variables(self, name):
+        self.clear_item(name + '_already_active')
+        self.clear_item(name + '_discounted_kills')
+        self.clear_item(name + '_discounted_injuries')
+
+    def clear_item(self, name):
+        if name in self.__dict__:
+            del self.__dict__[name]
+
+    def handle_future_hits(self, act, info, step_kills, step_injuries, name, condition_check):
+        already_active_name = name + '_already_active'
+        discounted_kills_name = name + '_discounted_kills'
+        discounted_injuries_name = name + '_discounted_injuries'
+        
+        if condition_check(info):
+            already_active = self.__dict__.get(already_active_name, False)
+            if not already_active:
+                # check if beams will hit something
+                future_kills, future_injuries = self.predict_future(act, info, condition_check)
+                info[name] = future_kills + future_injuries
 
                     # count the future hits now, discount them from the later hit
-                step_kills += beam_kills
-                step_injuries += beam_injuries
+                step_kills += future_kills
+                step_injuries += future_injuries
 
-                self._discounted_beam_kills = beam_kills
-                self._discounted_beam_injuries = beam_injuries
-
-                    # we've processed the active beams, don't process beams again this shot
-                self._beams_already_active = True
+                self.__dict__[discounted_kills_name] = future_kills
+                self.__dict__[discounted_injuries_name] = future_injuries
+                self.__dict__[already_active_name] = True
+                
         else:
-                # If we got here, either beams aren't active at all, or we stepped past the end of
-                # the beams.  Make sure we are ready to process them again, and discount any kills
-                # we found.
-            self._beams_already_active = False
+            # If we got here, either beams aren't active at all, or we stepped past the end of
+            # the beams.  Make sure we are ready to process them again, and discount any kills
+            # we found.
+            self.__dict__[already_active_name] = False
 
-                # discount kills and injuries if we already counted as beam hits
-            if self._discounted_beam_injuries and step_injuries:
-                discount = min(self._discounted_beam_injuries, step_injuries)
-                self._discounted_beam_injuries -= discount
+            # discount kills and injuries if we already counted as beam hits
+            discounted_injuries = self.__dict__.get(discounted_injuries_name, 0)
+            if discounted_injuries and step_injuries:
+                discount = min(discounted_injuries, step_injuries)
+                discounted_injuries -= discount
+                
+                self.__dict__[discounted_injuries_name] = discounted_injuries
                 step_injuries -= discount
 
-            if self._discounted_beam_kills and step_kills:
-                discount = min(self._discounted_beam_kills, step_kills)
-                self._discounted_beam_kills -= discount
+            discounted_kills = self.__dict__.get(discounted_kills_name, 0)
+            if discounted_kills and step_kills:
+                discount = min(discounted_kills, step_kills)
+                discounted_kills -= discount
+                
+                self.__dict__[discounted_kills_name] = discounted_kills
                 step_kills -= discount
 
         return step_kills, step_injuries
@@ -223,7 +242,7 @@ class ZeldaGameWrapper(gym.Wrapper):
     def action_is_attack(self, act):
         return act[8]
 
-    def did_hit_during(self, act, info, should_continue):
+    def predict_future(self, act, info, should_continue):
         unwrapped = self.env.unwrapped
         savestate = unwrapped.em.get_state()
         data = unwrapped.data
