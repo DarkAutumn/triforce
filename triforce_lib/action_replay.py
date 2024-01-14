@@ -44,6 +44,10 @@ class ZeldaActionReplay:
         return self.env.reset()
     
     def run_steps(self, commands):
+        for x in self.iterate_steps(commands):
+            pass
+
+    def iterate_steps(self, commands):
         i = 0
         while i < len(commands):
             a = commands[i]
@@ -54,7 +58,7 @@ class ZeldaActionReplay:
                 idx += 1
 
             for i in range(max(count, 1)):
-                self.step(a)
+                yield self.step(a)
 
             i = idx
 
