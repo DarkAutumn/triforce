@@ -199,14 +199,14 @@ class ZeldaGameWrapper(gym.Wrapper):
             if terminated or truncated:
                 break
 
+        # add a random delay to make Zelda non deterministic
         if not self.deterministic:
-            # skip movement cooldown
             cooldown = randint(0, random_delay_max_frames + 1)
             if cooldown:
                 obs, terminated, truncated, info, rew = self.skip(act, cooldown)
                 rewards += rew
 
-        return obs,rewards,terminated,truncated,info
+        return obs, rewards, terminated, truncated, info
 
     def skip(self, act, cooldown):
         for i in range(cooldown):
@@ -243,10 +243,8 @@ class ZeldaGameWrapper(gym.Wrapper):
             if terminated or truncated:
                 break
         
-        # compare enemies to previous
         kills = 0
         injuries = 0
-
 
         objects = ZeldaObjectData(unwrapped.get_ram())
         end_enemies = list(objects.enumerate_enemy_ids())
