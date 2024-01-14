@@ -50,7 +50,6 @@ def get_bomb_state(state, i):
     else:
         bombs = state['bomb_or_flame_animation2']
     
-    print(bombs)
     if bombs == 0:
         return 0
 
