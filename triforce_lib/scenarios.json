@@ -19,6 +19,21 @@
             "data" : {}
         },
         {
+            "name": "dungeon1stalfos",
+            "description": "Dungeon 1 Stalfos trainer",
+            "critics": ["ZeldaDungeonCombatCritic"],
+            "end_conditions": ["ZeldaDungeonCombatEndCondition"],
+            "level" : 1,
+            "start": ["1_74"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 0,
+                "hearts_and_containers" : 252,
+                "partial_hearts" : 254
+            }
+        },
+        {
             "name": "dungeon1combat",
             "description": "Dungeon 1 combat trainer",
             "critics": ["ZeldaDungeonCombatCritic"],
