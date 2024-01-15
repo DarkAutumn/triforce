@@ -39,7 +39,6 @@ class ZeldaObjectData:
             return None
         return self.obj_health[obj] >> 4
         
-
     def is_enemy(self, obj_id : int):
         return 1 <= obj_id <= 0x48
     
@@ -49,6 +48,7 @@ class ZeldaObjectData:
             if self.is_enemy(self.get_object_id(i)):
                 yield i
 
+    @property
     def enemy_count(self):
         return sum(1 for i in range(1, 0xb) if self.is_enemy(self.get_object_id(i)))
 
@@ -87,6 +87,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         info['objects'] = objects
         info['beam_hits'] = 0
+        info['link_pos'] = objects.link_pos
 
         curr_enemy_health = None
         step_kills = 0
