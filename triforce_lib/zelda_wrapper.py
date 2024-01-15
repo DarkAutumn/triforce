@@ -71,6 +71,7 @@ class ZeldaGameWrapper(gym.Wrapper):
     
     def _reset_state(self):
         self._location = None
+        self._link_last_pos = None
         self._beams_already_active = False
         self._prev_enemies = None
         self._prev_health = None
@@ -103,6 +104,10 @@ class ZeldaGameWrapper(gym.Wrapper):
         
         location = (info['level'], info['location'])
         new_location = self._location != location
+        info['new_location'] = new_location
+
+        info['new_position'] = not new_location and self._link_last_pos is not None and self._link_last_pos != objects.link_pos
+        self._link_last_pos = objects.link_pos
 
         # only check beams and other state if we are in the same room:
         if new_location:

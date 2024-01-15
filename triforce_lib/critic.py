@@ -71,7 +71,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # same room movement rewards
         self.wall_collision_penalty = -self.reward_tiny
-        self.close_distance_reward = self.reward_minimum
+        self.close_distance_reward = self.reward_tiny
         
         # state tracking
         self._visted_locations = [[False] * 256 ] * 2
@@ -260,32 +260,36 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         return reward
     
-    def distance_between(self, point1, point2):
-        return math.sqrt((point2[0] - point1[0]) ** 2 + (point2[1] - point1[1]) ** 2)
-
-    def distance_change(self, old_pos, new_pos, mob_pos):
-        old_distance = self.distance_between(old_pos, mob_pos)
-        new_distance = self.distance_between(new_pos, mob_pos)
-        return new_distance - old_distance
-
     def critique_closing_distance(self, old, new):
         reward = 0
-
-        if self.close_distance_reward is not None:
+        
+        if self.close_distance_reward is not None and new['new_position']:
             objects = new['objects']
 
             if objects.enemy_count > 0:
+                # calculate Link's normalized motion vector
+                link_old_pos = np.array(old['link_pos'], dtype=np.float32)
+                link_new_pos = np.array(new['link_pos'], dtype=np.float32)
+
+                link_motion_vector = link_new_pos - link_old_pos
+                link_motion_vector = link_motion_vector / np.linalg.norm(link_motion_vector)
+
+                # calculate normalized vector from link to each enemy
                 enemy_ids = [id for id in objects.enumerate_enemy_ids() if id is not None]
-                enemy_pos = [objects.get_position(id) for id in enemy_ids]
-                link_old_pos = old['link_pos']
-                link_new_pos = new['link_pos']
+                enemy_pos = np.array([objects.get_position(id) for id in enemy_ids])
 
-                distance_changed = [self.distance_change(link_old_pos, link_new_pos, pos) for pos in enemy_pos]
+                vector_to_enemies = enemy_pos - link_old_pos
+                norms = np.linalg.norm(vector_to_enemies, axis=1)
+                vector_to_enemies = vector_to_enemies / norms[:, np.newaxis]
 
-                max_changed = max(distance_changed)
-                if max_changed > 0:
-                    reward += min(1, max_changed * self.close_distance_reward)
-                    self.report(reward, f"Reward for closing distance to enemy! rew:{reward}", "reward-close-distance")
+                # find points within a 90 degree cone of link's motion vector, COS(45) == sqrt(2)/2
+                dotproducts = np.sum(link_motion_vector * vector_to_enemies, axis=1)
+                enemies_closer = np.sum(dotproducts >= np.sqrt(2) / 2)
+
+                if enemies_closer:
+                    percentage = enemies_closer / float(objects.enemy_count)
+                    reward += percentage * self.close_distance_reward
+                    self.report(reward, f"Reward for closing distance to {enemies_closer} {'enemy' if enemies_closer == 1 else 'enemies'}! rew:{reward}", "reward-close-distance")
 
         return reward
 
