@@ -79,7 +79,7 @@ class ZeldaML:
         # number of actions per second.
         env = ZeldaGameWrapper(env)
         
-        # to be a Dict and VecFrameStack doesn't support Dict observations.
+        # Frame stack and convert to grayscale if requested
         env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, gameplay_only=True)
         
         # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
@@ -89,9 +89,12 @@ class ZeldaML:
         # extract features from the game for the model, like whether link has beams or has keys and expose these as observations
         env = ZeldaGameFeatures(env)
 
+        # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new info state provded
+        # by ZeldaGameWrapper above.
         self.reporter = RewardReporter()
         env = self.scenario.activate(env, self.reporter)
         
+        # Monitor the environment so that our callbacks can save the model and report on progress.
         env = Monitor(env, self.log_dir)
         
         self.env = env
