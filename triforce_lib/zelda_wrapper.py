@@ -245,7 +245,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         return obs,terminated,truncated,info,rew
     
     def action_is_movement(self, act):
-        return any(act[4:8])
+        return any(act[4:8]) and not self.action_is_attack(act) and not self.action_is_item(act)
 
     def action_is_item(self, act):
         return act[0]
