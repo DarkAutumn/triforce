@@ -10,39 +10,10 @@ class ZeldaDungeonCritic(ZeldaGameplayCritic):
         super().__init__(reporter)
 
         # reward finding new locations and kills high in dungeons
-        self.new_tile_reward = self.reward_small
         self.kill_reward = self.reward_large
         self.health_change_reward = self.reward_large
         self.leave_dungeon_penalty = -self.reward_large
-        
-        self.tile_sizing_x = 80
-        self.tile_sizing_y = 60
 
-        # do not reward for any new locations in the overworld
-        self._visted_locations[0] = [True] * 256
-        
-        # what tiles have been visited on each individual dungeon room
-        self._squares_visited = [set()] * 256
-        self._first = True
-
-    def clear(self):
-        super().clear()
-
-        # do not reward for any new locations in the overworld
-        self._visted_locations[0] = [True] * 256
-        
-        # what tiles have been visited on each individual dungeon room
-        self._squares_visited = [set()] * 256
-        self._first = True
-
-    def critique_gameplay(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
-        rewards = super().critique_gameplay(old_state, new_state)
-
-        rewards += self.critique_tile_discovery(old_state, new_state)
-
-        self._first = False
-        return rewards
-    
     def critique_location_discovery(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
         # Override.  Only allow rewards for new locations in dungeons
         reward = 0
@@ -51,33 +22,6 @@ class ZeldaDungeonCritic(ZeldaGameplayCritic):
         else:
             reward += self.leave_dungeon_penalty
             self.report(reward, f"Penalty for leaving the dungeon! {reward}", "penalty-leave-dungeon")
-
-        return reward
-    
-    def critique_tile_discovery(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
-        """reward reaching new parts of each dungeon room"""
-
-        # only score in dungeons, not if the player made it back to the map
-        if new_state['level'] == 0:
-            return 0.0
-        
-        reward = 0.0
-
-        room = new_state['location']
-        positions_seen = self._squares_visited[room]
-
-        # only consider tiles of size 8x8 instead of every unique location
-        position = (int(new_state['link_x'] / self.tile_sizing_x), int(new_state['link_y'] / self.tile_sizing_y))
-        if self._first:
-            positions_seen.add(position)
-
-        if position not in positions_seen:
-            positions_seen.add(position)
-
-            #ensure we don't reward for getting hit into a new tile
-            if get_heart_halves(old_state) == get_heart_halves(new_state):
-                reward += self.new_tile_reward
-                self.report(reward, f"Reward for moving to new section of room {room:x} ({position}): {reward}", "reward-new-tile")
 
         return reward
 
