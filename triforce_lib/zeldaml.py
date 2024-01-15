@@ -11,7 +11,7 @@ from stable_baselines3.common.monitor import Monitor
 
 from .reward_reporter import RewardReporter
 from .zelda_wrapper import ZeldaGameWrapper
-from .action_space import ZeldaActionSpace
+from .action_space import ZeldaAttackOnlyActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
 from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
@@ -84,7 +84,7 @@ class ZeldaML:
         
         # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
         # since that doesn't make any sense in Zelda)
-        env = ZeldaActionSpace(env)
+        env = ZeldaAttackOnlyActionSpace(env)
 
         # extract features from the game for the model, like whether link has beams or has keys and expose these as observations
         env = ZeldaGameFeatures(env)
