@@ -6,10 +6,12 @@ from .action_space import ZeldaActionSpace
 from .zelda_wrapper import ZeldaGameWrapper
 
 class ZeldaActionReplay:
-    def __init__(self, savestate, render_mode=None):
+    def __init__(self, savestate, wrapper=None, render_mode=None):
         env = retro.make(game='Zelda-NES', state=savestate, inttype=retro.data.Integrations.CUSTOM_ONLY, render_mode=render_mode)
         env = ZeldaGameWrapper(env, deterministic=True)
         env = ZeldaActionSpace(env)
+        if wrapper:
+            env = wrapper(env)
 
         self.map = {}
 

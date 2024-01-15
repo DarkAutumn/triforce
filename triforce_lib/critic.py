@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import typing
 import inspect
@@ -60,7 +61,6 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.health_change_reward = self.reward_medium
         self.kill_reward = self.reward_small
         self.new_location_reward = self.reward_medium
-        self.same_position_move_reward = self.reward_small
         
         # these are pivotal to the game, so they are rewarded highly
         self.bomb_reward = self.reward_large
@@ -69,21 +69,19 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.triforce_reward = self.reward_maximum
         self.equipment_reward = self.reward_maximum
 
-        self.position_penalty_delay = 4
-        self.same_position_penalty = -self.reward_minimum
-
+        # same room movement rewards
+        self.wall_collision_penalty = -self.reward_tiny
+        self.close_distance_reward = self.reward_minimum
+        
+        # state tracking
         self._visted_locations = [[False] * 256 ] * 2
         self._actions_on_same_screen = 0
-        self._x_y_position = (-1, -1)
-        self._position_duration = 0
         self._is_first_step = True
 
     def clear(self):
         super().clear()
         self._visted_locations = [[False] * 256 ] * 2
         self._actions_on_same_screen = 0
-        self._x_y_position = (-1, -1)
-        self._position_duration = 0
         self._is_first_step = True
 
     def critique_gameplay(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
@@ -108,9 +106,10 @@ class ZeldaGameplayCritic(ZeldaCritic):
         total += self.critique_key_pickup_usage(old, new)
         total += self.critique_equipment_pickup(old, new)
 
-        # locations
+        # movement
         total += self.critique_location_discovery(old, new)
-        total += self.critique_position(old, new)
+        total += self.critique_wall_collision(old, new)
+        total += self.critique_closing_distance(old, new)
 
         return total
     
@@ -246,30 +245,47 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         return reward
     
-    def critique_position(self, old, new):
+    def critique_wall_collision(self, old, new):
         """"Reward the agent for moving out of the last position, but only if that did not happen as a result of taking a hit
         from an enemy."""
+
         reward = 0
-        position = (new['link_x'], new['link_y'])
-        if self._x_y_position != position or new['step_kills'] or new['step_injuries']:
-            # link moved or dealt damage, if he moved for a reason other than taking damage, reward that action or at least reset the cooldown
-            # for not doing anything
-            took_damage = get_heart_halves(old) > get_heart_halves(new)
 
-            if self._position_duration > self._position_change_cooldown and not took_damage:
-                reward += self.same_position_move_reward
-                self.report(reward, f"Reward for moving out of the last position! rew:{reward} duration:{self._position_duration}", "reward-new-xy")
+        if self.wall_collision_penalty is not None:
 
-            self._x_y_position = position
-            self._position_duration = 0
+            if old['link_pos'] == new['link_pos'] and new['action'] == 'movement':
+                # link bumped against the wall and didn't move despite choosing to move
+                reward += self.wall_collision_penalty
+                self.report(reward, f"Penalty for bumping into a wall! rew:{reward}", "penalty-wall-collision")
 
-        else:
-            # we haven't moved, penalize if it's been longer than 1 action and kill count isn't going up
-            self._position_duration += 1
+        return reward
+    
+    def distance_between(self, point1, point2):
+        return math.sqrt((point2[0] - point1[0]) ** 2 + (point2[1] - point1[1]) ** 2)
 
-            if self._position_duration > self.position_penalty_delay:
-                reward += self.same_position_penalty
-                self.report(reward, f"Penalty for not moving! rew:{reward} duration:{self._position_duration}", "penalty-same-xy")
+    def distance_change(self, old_pos, new_pos, mob_pos):
+        old_distance = self.distance_between(old_pos, mob_pos)
+        new_distance = self.distance_between(new_pos, mob_pos)
+        return new_distance - old_distance
+
+    def critique_closing_distance(self, old, new):
+        reward = 0
+
+        if self.close_distance_reward is not None:
+            objects = new['objects']
+
+            if objects.enemy_count > 0:
+                enemy_ids = [id for id in objects.enumerate_enemy_ids() if id is not None]
+                enemy_pos = [objects.get_position(id) for id in enemy_ids]
+                link_old_pos = old['link_pos']
+                link_new_pos = new['link_pos']
+
+                distance_changed = [self.distance_change(link_old_pos, link_new_pos, pos) for pos in enemy_pos]
+
+                max_changed = max(distance_changed)
+                if max_changed > 0:
+                    reward += min(1, max_changed * self.close_distance_reward)
+                    self.report(reward, f"Reward for closing distance to enemy! rew:{reward}", "reward-close-distance")
 
         return reward
 
