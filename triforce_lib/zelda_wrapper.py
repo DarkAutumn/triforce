@@ -14,7 +14,6 @@ from .zelda_game import get_bomb_state, is_mode_death, get_beam_state, is_mode_s
 
 class ZeldaObjectData:
     def __init__(self, ram):
-
         for table, (offset, size) in zelda_game_data.tables.items():
             self.__dict__[table] = ram[offset:offset+size]
 
@@ -82,6 +81,15 @@ class ZeldaGameWrapper(gym.Wrapper):
         # take the first step
         obs, rewards, terminated, truncated, info = self.act_and_wait(act)
 
+        if self.action_is_movement(act):
+            info['action'] = 'movement'
+
+        elif self.action_is_attack(act):
+            info['action'] = 'attack'
+
+        elif self.action_is_item(act):
+            info['action'] = 'item'
+            
         unwrapped = self.env.unwrapped
         objects = ZeldaObjectData(unwrapped.get_ram())
 
@@ -197,17 +205,14 @@ class ZeldaGameWrapper(gym.Wrapper):
             if self.action_is_movement(act):
                 obs, terminated, truncated, info, rew = self.skip(act, movement_cooldown)
                 rewards += rew
-                info['action'] = 'movement'
 
             elif self.action_is_attack(act):
                 obs, terminated, truncated, info, rew = self.skip(act, attack_cooldown)
                 rewards += rew
-                info['action'] = 'attack'
 
             elif self.action_is_item(act):
                 obs, terminated, truncated, info, rew = self.skip(act, item_cooldown)
                 rewards += rew
-                info['action'] = 'item'
 
             else:
                 raise Exception("Unknown action type")
