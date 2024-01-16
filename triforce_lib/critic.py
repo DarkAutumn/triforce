@@ -206,7 +206,10 @@ class ZeldaGameplayCritic(ZeldaCritic):
                     enemy_pos = np.array([objects.get_position(id) for id in enemy_ids])
 
                     vector_to_enemies = enemy_pos - link_old_pos
-                    norms = np.linalg.norm(vector_to_enemies, axis=1)
+
+                    # add a small epislon to avoid divide by zero
+                    epsilon = 1e-6
+                    norms = np.linalg.norm(vector_to_enemies, axis=1) + epsilon
                     vector_to_enemies = vector_to_enemies / norms[:, np.newaxis]
 
                     # find points within a 90 degree cone of link's motion vector, COS(45) == sqrt(2)/2
