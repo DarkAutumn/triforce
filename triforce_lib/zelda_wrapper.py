@@ -14,7 +14,6 @@ from .zelda_game import get_bomb_state, is_mode_death, get_beam_state, is_mode_s
 
 class ZeldaObjectData:
     def __init__(self, ram):
-
         for table, (offset, size) in zelda_game_data.tables.items():
             self.__dict__[table] = ram[offset:offset+size]
 
@@ -39,7 +38,6 @@ class ZeldaObjectData:
             return None
         return self.obj_health[obj] >> 4
         
-
     def is_enemy(self, obj_id : int):
         return 1 <= obj_id <= 0x48
     
@@ -49,6 +47,7 @@ class ZeldaObjectData:
             if self.is_enemy(self.get_object_id(i)):
                 yield i
 
+    @property
     def enemy_count(self):
         return sum(1 for i in range(1, 0xb) if self.is_enemy(self.get_object_id(i)))
 
@@ -72,6 +71,7 @@ class ZeldaGameWrapper(gym.Wrapper):
     
     def _reset_state(self):
         self._location = None
+        self._link_last_pos = None
         self._beams_already_active = False
         self._prev_enemies = None
         self._prev_health = None
@@ -82,11 +82,21 @@ class ZeldaGameWrapper(gym.Wrapper):
         # take the first step
         obs, rewards, terminated, truncated, info = self.act_and_wait(act)
 
+        if self.action_is_movement(act):
+            info['action'] = 'movement'
+
+        elif self.action_is_attack(act):
+            info['action'] = 'attack'
+
+        elif self.action_is_item(act):
+            info['action'] = 'item'
+            
         unwrapped = self.env.unwrapped
         objects = ZeldaObjectData(unwrapped.get_ram())
 
         info['objects'] = objects
         info['beam_hits'] = 0
+        info['link_pos'] = objects.link_pos
 
         curr_enemy_health = None
         step_kills = 0
@@ -94,6 +104,10 @@ class ZeldaGameWrapper(gym.Wrapper):
         
         location = (info['level'], info['location'])
         new_location = self._location != location
+        info['new_location'] = new_location
+
+        info['new_position'] = not new_location and self._link_last_pos is not None and self._link_last_pos != objects.link_pos
+        self._link_last_pos = objects.link_pos
 
         # only check beams and other state if we are in the same room:
         if new_location:
@@ -196,17 +210,14 @@ class ZeldaGameWrapper(gym.Wrapper):
             if self.action_is_movement(act):
                 obs, terminated, truncated, info, rew = self.skip(act, movement_cooldown)
                 rewards += rew
-                info['action'] = 'movement'
 
             elif self.action_is_attack(act):
                 obs, terminated, truncated, info, rew = self.skip(act, attack_cooldown)
                 rewards += rew
-                info['action'] = 'attack'
 
             elif self.action_is_item(act):
                 obs, terminated, truncated, info, rew = self.skip(act, item_cooldown)
                 rewards += rew
-                info['action'] = 'item'
 
             else:
                 raise Exception("Unknown action type")
@@ -234,7 +245,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         return obs,terminated,truncated,info,rew
     
     def action_is_movement(self, act):
-        return any(act[4:8])
+        return any(act[4:8]) and not self.action_is_attack(act) and not self.action_is_item(act)
 
     def action_is_item(self, act):
         return act[0]

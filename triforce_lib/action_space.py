@@ -1,12 +1,11 @@
 import gymnasium as gym
 import numpy as np
 
-class ZeldaActionSpace(gym.ActionWrapper):
+class ZeldaAttackOnlyActionSpace(gym.ActionWrapper):
     def __init__(self, env):
         super().__init__(env)
 
-        # currently do not allow the model to turn and act at the same time
-        self.actions = [['LEFT'], ['RIGHT'], ['UP'], ['DOWN'], ['A'], ['B']]
+        self.actions = [['LEFT'], ['RIGHT'], ['UP'], ['DOWN'], ['LEFT', 'A'], ['RIGHT', 'A'], ['UP', 'A'], ['DOWN', 'A']]
 
         assert isinstance(env.action_space, gym.spaces.MultiBinary)
 

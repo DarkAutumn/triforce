@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import typing
 import inspect
@@ -60,7 +61,6 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.health_change_reward = self.reward_medium
         self.kill_reward = self.reward_small
         self.new_location_reward = self.reward_medium
-        self.same_position_move_reward = self.reward_small
         
         # these are pivotal to the game, so they are rewarded highly
         self.bomb_reward = self.reward_large
@@ -69,21 +69,19 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.triforce_reward = self.reward_maximum
         self.equipment_reward = self.reward_maximum
 
-        self.position_penalty_delay = 4
-        self.same_position_penalty = -self.reward_minimum
-
+        # same room movement rewards
+        self.wall_collision_penalty = -self.reward_tiny
+        self.close_distance_reward = self.reward_tiny
+        
+        # state tracking
         self._visted_locations = [[False] * 256 ] * 2
         self._actions_on_same_screen = 0
-        self._x_y_position = (-1, -1)
-        self._position_duration = 0
         self._is_first_step = True
 
     def clear(self):
         super().clear()
         self._visted_locations = [[False] * 256 ] * 2
         self._actions_on_same_screen = 0
-        self._x_y_position = (-1, -1)
-        self._position_duration = 0
         self._is_first_step = True
 
     def critique_gameplay(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
@@ -108,9 +106,10 @@ class ZeldaGameplayCritic(ZeldaCritic):
         total += self.critique_key_pickup_usage(old, new)
         total += self.critique_equipment_pickup(old, new)
 
-        # locations
+        # movement
         total += self.critique_location_discovery(old, new)
-        total += self.critique_position(old, new)
+        total += self.critique_wall_collision(old, new)
+        total += self.critique_closing_distance(old, new)
 
         return total
     
@@ -246,30 +245,52 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         return reward
     
-    def critique_position(self, old, new):
+    def critique_wall_collision(self, old, new):
         """"Reward the agent for moving out of the last position, but only if that did not happen as a result of taking a hit
         from an enemy."""
+
         reward = 0
-        position = (new['link_x'], new['link_y'])
-        if self._x_y_position != position or new['step_kills'] or new['step_injuries']:
-            # link moved or dealt damage, if he moved for a reason other than taking damage, reward that action or at least reset the cooldown
-            # for not doing anything
-            took_damage = get_heart_halves(old) > get_heart_halves(new)
 
-            if self._position_duration > self._position_change_cooldown and not took_damage:
-                reward += self.same_position_move_reward
-                self.report(reward, f"Reward for moving out of the last position! rew:{reward} duration:{self._position_duration}", "reward-new-xy")
+        if self.wall_collision_penalty is not None:
 
-            self._x_y_position = position
-            self._position_duration = 0
+            if old['link_pos'] == new['link_pos'] and new['action'] == 'movement':
+                # link bumped against the wall and didn't move despite choosing to move
+                reward += self.wall_collision_penalty
+                self.report(reward, f"Penalty for bumping into a wall! rew:{reward}", "penalty-wall-collision")
 
-        else:
-            # we haven't moved, penalize if it's been longer than 1 action and kill count isn't going up
-            self._position_duration += 1
+        return reward
+    
+    def critique_closing_distance(self, old, new):
+        reward = 0
+        
+        if self.close_distance_reward is not None and new['new_position'] and new['action'] == 'movement':
+            objects = new['objects']
 
-            if self._position_duration > self.position_penalty_delay:
-                reward += self.same_position_penalty
-                self.report(reward, f"Penalty for not moving! rew:{reward} duration:{self._position_duration}", "penalty-same-xy")
+            if objects.enemy_count > 0:
+                # calculate Link's normalized motion vector
+                link_old_pos = np.array(old['link_pos'], dtype=np.float32)
+                link_new_pos = np.array(new['link_pos'], dtype=np.float32)
+
+                if link_old_pos.all() != link_new_pos.all():
+                    link_motion_vector = link_new_pos - link_old_pos
+                    link_motion_vector = link_motion_vector / np.linalg.norm(link_motion_vector)
+
+                    # calculate normalized vector from link to each enemy
+                    enemy_ids = [id for id in objects.enumerate_enemy_ids() if id is not None]
+                    enemy_pos = np.array([objects.get_position(id) for id in enemy_ids])
+
+                    vector_to_enemies = enemy_pos - link_old_pos
+                    norms = np.linalg.norm(vector_to_enemies, axis=1)
+                    vector_to_enemies = vector_to_enemies / norms[:, np.newaxis]
+
+                    # find points within a 90 degree cone of link's motion vector, COS(45) == sqrt(2)/2
+                    dotproducts = np.sum(link_motion_vector * vector_to_enemies, axis=1)
+                    enemies_closer = np.sum(dotproducts >= np.sqrt(2) / 2)
+
+                    if enemies_closer:
+                        percentage = enemies_closer / float(objects.enemy_count)
+                        reward += percentage * self.close_distance_reward
+                        self.report(reward, f"Reward for closing distance to {enemies_closer} {'enemy' if enemies_closer == 1 else 'enemies'}! rew:{reward}", "reward-close-distance")
 
         return reward
 

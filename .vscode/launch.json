@@ -14,11 +14,20 @@
             "justMyCode": false
         },
         {
+            "name": "Scenario: Dungeon 1 Stalfos Training",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["train", "dungeon1stalfos", "4096", "--render", "--debug-scenario","--verbose", "2"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Scenario: Dungeon 1 Combat Training",
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["train", "dungeon1combat", "4096", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "2"],
+            "args": ["train", "dungeon1combat", "4096", "--render", "--debug-scenario","--verbose", "2"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -27,7 +36,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["train", "gauntlet", "4096", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "2"],
+            "args": ["train", "gauntlet", "4096", "--render", "--debug-scenario","--verbose", "2"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -36,7 +45,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["evaluate", "gauntlet", "10", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "2"],
+            "args": ["evaluate", "gauntlet", "10", "--render", "--debug-scenario","--verbose", "2"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -45,7 +54,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["train", "dungeon1", "4096", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "1"],
+            "args": ["train", "dungeon1", "4096", "--render", "--debug-scenario","--verbose", "1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -54,7 +63,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["evaluate", "dungeon1", "10", "--render", "--debug-scenario", "--algorithm", "ppo", "--verbose", "2"],
+            "args": ["evaluate", "dungeon1", "10", "--render", "--debug-scenario","--verbose", "2"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

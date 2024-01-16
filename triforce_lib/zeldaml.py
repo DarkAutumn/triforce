@@ -11,23 +11,22 @@ from stable_baselines3.common.monitor import Monitor
 
 from .reward_reporter import RewardReporter
 from .zelda_wrapper import ZeldaGameWrapper
-from .action_space import ZeldaActionSpace
+from .action_space import ZeldaAttackOnlyActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
 from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
 
 class ZeldaML:
     """The model and algorithm used to train the agent"""
-    def __init__(self, model_dir, scenario, algorithm, frame_stack, color, **kwargs):
+    def __init__(self, model_dir, scenario, frame_stack, color, **kwargs):
         """
         arguments:
             model_dir -- the directory to save the model
-            algorithm -- the algorithm to use (ppo, a2c, etc)
             color -- whether to use color or not (False = grayscale)
             frame_stack -- number of frames to stack in the observation
             kwargs -- additional arguments to pass to the environment creation, such as render_mode, etc
         """
-        algorithm = algorithm.lower()
+        algorithm = "ppo"
         
         if 'verbose' in kwargs:
             self.verbose = kwargs['verbose']
@@ -84,7 +83,7 @@ class ZeldaML:
         
         # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
         # since that doesn't make any sense in Zelda)
-        env = ZeldaActionSpace(env)
+        env = ZeldaAttackOnlyActionSpace(env)
 
         # extract features from the game for the model, like whether link has beams or has keys and expose these as observations
         env = ZeldaGameFeatures(env)
