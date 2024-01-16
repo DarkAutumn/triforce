@@ -60,7 +60,8 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # same room movement rewards
         self.wall_collision_penalty = -self.reward_tiny
-        self.close_distance_reward = self.reward_tiny
+        self.closing_distance_reward = self.reward_tiny
+        self.moving_farther_penalty = -self.reward_tiny
         
         # state tracking
         self._visted_locations = [[False] * 256 ] * 2
@@ -187,16 +188,16 @@ class ZeldaGameplayCritic(ZeldaCritic):
                 # link bumped against the wall and didn't move despite choosing to move
                 rewards['penalty-wall-collision'] = self.wall_collision_penalty
     
-    def critique_closing_distance(self, old, new, rewards):        
-        if self.close_distance_reward is not None and new['new_position'] and new['action'] == 'movement':
+    def critique_closing_distance(self, old, new, rewards):
+        if self.closing_distance_reward is not None and new['new_position'] and new['action'] == 'movement':
             objects = new['objects']
 
             if objects.enemy_count > 0:
-                # calculate Link's normalized motion vector
-                link_old_pos = np.array(old['link_pos'], dtype=np.float32)
-                link_new_pos = np.array(new['link_pos'], dtype=np.float32)
+                if old['link_pos'] != new['link_pos']:
+                    # calculate Link's normalized motion vector
+                    link_old_pos = np.array(old['link_pos'], dtype=np.float32)
+                    link_new_pos = np.array(new['link_pos'], dtype=np.float32)
 
-                if link_old_pos.all() != link_new_pos.all():
                     link_motion_vector = link_new_pos - link_old_pos
                     link_motion_vector = link_motion_vector / np.linalg.norm(link_motion_vector)
 
@@ -211,10 +212,14 @@ class ZeldaGameplayCritic(ZeldaCritic):
                     # find points within a 90 degree cone of link's motion vector, COS(45) == sqrt(2)/2
                     dotproducts = np.sum(link_motion_vector * vector_to_enemies, axis=1)
                     enemies_closer = np.sum(dotproducts >= np.sqrt(2) / 2)
+                    enemies_farther = np.all(dotproducts <= -np.sqrt(2) / 2)
 
                     if enemies_closer:
                         percentage = enemies_closer / float(objects.enemy_count)
                         rewards['reward-close-distance'] = percentage * self.close_distance_reward
+                        
+                    elif enemies_farther:
+                        rewards['penalty-moving-farther'] = percentage * self.moving_farther_penalty
 
     # state helpers, some states are calculated
     def has_visited(self, level, location):
