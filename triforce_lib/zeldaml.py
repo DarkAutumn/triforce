@@ -1,3 +1,4 @@
+from collections import Counter
 import os
 import retro
 import numpy as np
@@ -7,9 +8,9 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
-
-from .reward_reporter import RewardReporter
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaAttackOnlyActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
@@ -18,7 +19,7 @@ from .scenario import ZeldaScenario
 
 class ZeldaML:
     """The model and algorithm used to train the agent"""
-    def __init__(self, model_dir, scenario, frame_stack, color, **kwargs):
+    def __init__(self, model_dir, scenario, frame_stack, color, parallel, **kwargs):
         """
         arguments:
             model_dir -- the directory to save the model
@@ -66,35 +67,41 @@ class ZeldaML:
 
         os.makedirs(self.model_base_dir, exist_ok=True)
 
-        # create the environment
-        env = retro.make(game='Zelda-NES', state=self.scenario.all_start_states[0], inttype=retro.data.Integrations.CUSTOM_ONLY, **kwargs)
+        def make_env():
+            # create the environment
+            env = retro.make(game='Zelda-NES', state=self.scenario.all_start_states[0], inttype=retro.data.Integrations.CUSTOM_ONLY, **kwargs)
 
-        # Capture the raw observation frames into a deque.  Since we are skipping frames and not acting on every frame, we need to save
-        # the last 'frame_stack' frames so that we can give the model a sense of motion without it being affected by the skipped frames.
-        env = FrameCaptureWrapper(env)
-        captured_frames = env.frames
+            # Capture the raw observation frames into a deque.  Since we are skipping frames and not acting on every frame, we need to save
+            # the last 'frame_stack' frames so that we can give the model a sense of motion without it being affected by the skipped frames.
+            env = FrameCaptureWrapper(env)
+            captured_frames = env.frames
 
-        # Wrap the game to produce new info about game state and to hold the button down after the action is taken to achieve the desired
-        # number of actions per second.
-        env = ZeldaGameWrapper(env)
-        
-        # Frame stack and convert to grayscale if requested
-        env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, gameplay_only=True)
-        
-        # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
-        # since that doesn't make any sense in Zelda)
-        env = ZeldaAttackOnlyActionSpace(env)
+            # Wrap the game to produce new info about game state and to hold the button down after the action is taken to achieve the desired
+            # number of actions per second.
+            env = ZeldaGameWrapper(env)
+            
+            # Frame stack and convert to grayscale if requested
+            env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, gameplay_only=True)
+            
+            # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
+            # since that doesn't make any sense in Zelda)
+            env = ZeldaAttackOnlyActionSpace(env)
 
-        # extract features from the game for the model, like whether link has beams or has keys and expose these as observations
-        env = ZeldaGameFeatures(env)
+            # extract features from the game for the model, like whether link has beams or has keys and expose these as observations
+            env = ZeldaGameFeatures(env)
 
-        # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new info state provded
-        # by ZeldaGameWrapper above.
-        self.reporter = RewardReporter()
-        env = self.scenario.activate(env, self.reporter)
-        
-        # Monitor the environment so that our callbacks can save the model and report on progress.
-        env = Monitor(env, self.log_dir)
+            # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new info state provded
+            # by ZeldaGameWrapper above.
+            env = self.scenario.activate(env)
+
+            # Monitor the environment so that our callbacks can save the model and report on progress.
+            env = Monitor(env, self.log_dir)
+            return env
+
+        if parallel and parallel > 1:
+            env = make_vec_env(make_env, n_envs=parallel, vec_env_cls=SubprocVecEnv)
+        else:
+            env = make_env()
         
         self.env = env
         self.model = None
@@ -112,7 +119,7 @@ class ZeldaML:
         if not self.model:
             self.model = self._create_model()
 
-        callback = SaveModelCallback(save_freq=10000, best_check_freq=2048, zeldaml=self, reporter=self.reporter) if save_best else None
+        callback = SaveModelCallback(save_freq=4096, best_check_freq=2048, zeldaml=self) if save_best else None
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
         self.save(self.model_file)
 
@@ -154,28 +161,43 @@ class ZeldaML:
     
 
 class SaveModelCallback(BaseCallback):
-    def __init__(self, save_freq : int, best_check_freq: int, zeldaml : ZeldaML, reporter : RewardReporter):
+    def __init__(self, save_freq : int, best_check_freq: int, zeldaml : ZeldaML):
         super(SaveModelCallback, self).__init__(zeldaml.verbose)
         self.best_check_freq = best_check_freq
         self.save_freq = save_freq
         self.zeldaml = zeldaml
-        self.reward_reporter = reporter
         self.best_mean_reward = -np.inf
         self.best_timestamp = -np.inf
 
+        self._rewards = {}
+        self._endings = []
+
     def _on_step(self) -> bool:
+        infos = self.locals['infos']
+        for info in infos:
+            if 'rewards' in info:
+                for kind, reward in info['rewards'].items():
+                    self._rewards[kind] = reward + self._rewards.get(kind, 0)
+            
+            if 'end' in info:
+                self._endings.append(info['end'])
+
         if self.n_calls % self.save_freq == 0:
             # Save the model as save_dir/model_{iterations}.zip
             path = os.path.join(self.zeldaml.model_base_dir, f"model_{self.num_timesteps}.zip")
             self.zeldaml.save(path)
 
-            rew = self.reward_reporter.get_rewards_and_clear()
-            for key, value in rew.items():
-                self.logger.record('reward/' + key, value)
+            # rewards and ends tend to be pretty wild at the beginning of training, so only log them after 8192 steps
+            if self.n_calls >= 8192:
+                for kind, reward in self._rewards.items():
+                    self.logger.record('reward/' + kind, reward)
 
-            ends = self.reward_reporter.get_endings_and_clear()
-            for key, value in ends.items():
-                self.logger.record('end/' + key, value)
+                ends = Counter(self._endings)
+                for ending, count in ends.items():
+                    self.logger.record('end/' + ending, count)
+
+            self._rewards.clear()
+            self._endings.clear()
 
         if self.n_calls % self.best_check_freq == 0 and self.n_calls > 10000:
             # Retrieve training reward
