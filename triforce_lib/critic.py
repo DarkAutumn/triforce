@@ -5,9 +5,6 @@ import inspect
 from .zelda_game import *
 
 class ZeldaCritic:
-    def __init__(self, reporter=None):
-        self.reporter = reporter
-
     @property
     def reward_minimum(self):
         return 0.01
@@ -36,21 +33,13 @@ class ZeldaCritic:
         """Called when the environment is reset to clear any saved state"""
         pass
 
-    def critique_gameplay(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
+    def critique_gameplay(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int], rewards : typing.Dict[str, float]):
         """Called to get the reward for the transition from old_state to new_state"""
         raise NotImplementedError()
-    
-    def report(self, reward, message, source=None):
-        if self.reporter:
-            if source is None:
-                stack = inspect.stack()
-                source = stack[1].function
-
-            self.reporter.report_reward(source, reward)
 
 class ZeldaGameplayCritic(ZeldaCritic):
-    def __init__(self, reporter=None):
-        super().__init__(reporter)
+    def __init__(self):
+        super().__init__()
 
         self._max_actions_on_same_screen = 1000
         self._position_change_cooldown = 5000000
@@ -84,185 +73,121 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self._actions_on_same_screen = 0
         self._is_first_step = True
 
-    def critique_gameplay(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
+    def critique_gameplay(self, old : typing.Dict[str, int], new : typing.Dict[str, int], rewards : typing.Dict[str, float]):
         if self._is_first_step:
             self._is_first_step = False
             self.mark_visited(new['level'], new['location'])
 
-        total = 0.0
-
         # health
-        total += self.critique_health_change(old, new)
-        total += self.critique_heart_containers(old, new)
+        self.critique_health_change(old, new, rewards)
+        self.critique_heart_containers(old, new, rewards)
 
         # triforce
-        total += self.critique_triforce(old, new)
+        self.critique_triforce(old, new, rewards)
 
         # combat
-        total += self.critique_kills(old, new)
+        self.critique_kills(old, new, rewards)
 
         # items
-        total += self.critique_item_pickup(old, new)
-        total += self.critique_key_pickup_usage(old, new)
-        total += self.critique_equipment_pickup(old, new)
+        self.critique_item_pickup(old, new, rewards)
+        self.critique_key_pickup_usage(old, new, rewards)
+        self.critique_equipment_pickup(old, new, rewards)
 
         # movement
-        total += self.critique_location_discovery(old, new)
-        total += self.critique_wall_collision(old, new)
-        total += self.critique_closing_distance(old, new)
-
-        return total
+        self.critique_location_discovery(old, new, rewards)
+        self.critique_wall_collision(old, new, rewards)
+        self.critique_closing_distance(old, new, rewards)
     
     # reward helpers, may be overridden
-    def critique_equipment_pickup(self, old, new):
-        reward = 0.0
-        
-        reward += self.check_one_item(old, new, 'sword')
-        reward += self.check_one_item(old, new, 'arrows')
-        reward += self.check_one_item(old, new, 'bow')
-        reward += self.check_one_item(old, new, 'candle')
-        reward += self.check_one_item(old, new, 'whistle')
-        reward += self.check_one_item(old, new, 'food')
-        reward += self.check_one_item(old, new, 'potion')
-        reward += self.check_one_item(old, new, 'magic_rod')
-        reward += self.check_one_item(old, new, 'raft')
-        reward += self.check_one_item(old, new, 'magic_book')
-        reward += self.check_one_item(old, new, 'ring')
-        reward += self.check_one_item(old, new, 'step_ladder')
-        reward += self.check_one_item(old, new, 'magic_key')
-        reward += self.check_one_item(old, new, 'power_bracelet')
-        reward += self.check_one_item(old, new, 'letter')
-        reward += self.check_one_item(old, new, 'regular_boomerang')
-        reward += self.check_one_item(old, new, 'magic_boomerang')
+    def critique_equipment_pickup(self, old, new, rewards):
+        self.check_one_item(old, new, rewards, 'sword')
+        self.check_one_item(old, new, rewards, 'arrows')
+        self.check_one_item(old, new, rewards, 'bow')
+        self.check_one_item(old, new, rewards, 'candle')
+        self.check_one_item(old, new, rewards, 'whistle')
+        self.check_one_item(old, new, rewards, 'food')
+        self.check_one_item(old, new, rewards, 'potion')
+        self.check_one_item(old, new, rewards, 'magic_rod')
+        self.check_one_item(old, new, rewards, 'raft')
+        self.check_one_item(old, new, rewards, 'magic_book')
+        self.check_one_item(old, new, rewards, 'ring')
+        self.check_one_item(old, new, rewards, 'step_ladder')
+        self.check_one_item(old, new, rewards, 'magic_key')
+        self.check_one_item(old, new, rewards, 'power_bracelet')
+        self.check_one_item(old, new, rewards, 'letter')
+        self.check_one_item(old, new, rewards, 'regular_boomerang')
+        self.check_one_item(old, new, rewards, 'magic_boomerang')
+        self.check_one_item(old, new, rewards, 'compass')
+        self.check_one_item(old, new, rewards, 'map')
+        self.check_one_item(old, new, rewards, 'compass9')
+        self.check_one_item(old, new, rewards, 'map9')
 
-        reward += self.check_one_item(old, new, 'compass')
-        reward += self.check_one_item(old, new, 'map')
-        reward += self.check_one_item(old, new, 'compass9')
-        reward += self.check_one_item(old, new, 'map9')
-        
-        return reward
-
-    def check_one_item(self, old, new, item):
-        reward = 0.0
-
+    def check_one_item(self, old, new, rewards, item):
         if old[item] < new[item]:
-            reward = self.equipment_reward
-            self.report(reward, f"Reward for picking up the {item}: {reward}", source=f'reward-equipment-gained')
+            rewards['reward-equipment-gained'] = self.equipment_reward
 
-        return reward
-
-    def critique_key_pickup_usage(self, old, new):
-        # No matter if link picked up a key or used a key to open a door, it's a good
-        # outcome
-        reward = 0
-        if old['keys'] != new['keys']:
-            reward += self.key_reward
-            if old['keys'] > new['keys']:
-                self.report(reward, f"Reward for using a key: {reward}", "reward-key")
-            else:
-                self.report(reward, f"Reward for picking up a key: {reward}", "reward-key")
-
-        return reward
-
-    def critique_item_pickup(self, old, new):
-        reward = 0
+    def critique_key_pickup_usage(self, old, new, rewards):
+        # No matter if link picked up a key or used a key to open a door, it's a good outcome.
+        # Make sure that link picked it up off the floor though, and didn't just bump into an
+        # enemy with a key
         
-        if old['rupees_to_add'] < new['rupees_to_add']:
-            reward += self.rupee_reward
-            self.report(reward, f"Reward for collecting rupees: {reward}", "reward-rupee")
-
-        if old['bombs'] != 0 < new['bombs'] == 0:
-            reward += self.bomb_reward
-            self.report(reward, f"Reward for collecting bombs: {reward}", "reward-bomb")
-
-        return reward
-
-    def critique_health_change(self, old, new):
         old_hearts = get_heart_halves(old)
         new_hearts = get_heart_halves(new)
 
-        reward = 0
+        if old['keys'] > new['keys']:
+            rewards['reward-used-key'] = self.key_reward
+        elif old['keys'] < new['keys'] and old_hearts <= new_hearts:
+            rewards['reward-gained-key'] = self.key_reward
+
+    def critique_item_pickup(self, old, new, rewards):
+        if old['rupees_to_add'] < new['rupees_to_add']:
+            rewards['reward-gained-rupees'] = self.rupee_reward
+
+        if old['bombs'] != 0 < new['bombs'] == 0:
+            rewards['reward-gained-bombs'] = self.bomb_reward
+
+    def critique_health_change(self, old, new, rewards):
+        old_hearts = get_heart_halves(old)
+        new_hearts = get_heart_halves(new)
+
         if new_hearts < old_hearts:
-            reward = -self.health_change_reward
-            self.report(reward, f"Penalty for losing hearts: {reward}", "penalty-losing-health")
+            rewards['penalty-losing-health'] = -self.health_change_reward
         elif new_hearts > old_hearts:
-            reward = self.health_change_reward
-            self.report(reward, f"Reward for gaining hearts: {reward}", "reward-gaining-health")
-
-        return reward
+            rewards['reward-gaining-health'] = self.health_change_reward
     
-    def critique_heart_containers(self, old, new):
+    def critique_heart_containers(self, old, new, rewards):
         # we can only gain one heart container at a time
-        reward = 0
         if get_heart_containers(old) <get_heart_containers(new):
-            reward = self.heart_container_reward
-            self.report(reward, f"Reward for gaining a heart container: {reward}", "reward-heart-container")
-
-        return reward
+            rewards['reward-gained-heart-container'] = self.heart_container_reward
     
-    def critique_triforce(self, old, new):
-        reward = 0
+    def critique_triforce(self, old, new, rewards):
+        if get_num_triforce_pieces(old) < get_num_triforce_pieces(new) or (old["triforce_of_power"] == 0 and new["triforce_of_power"] == 1):
+            rewards['reward-gained-triforce'] = self.triforce_reward
 
-        if get_num_triforce_pieces(old) < get_num_triforce_pieces(new):
-            reward += self.triforce_reward
-            self.report(reward, f"Reward for gaining a triforce piece: {reward}", "reward-triforce")
-        
-        if old["triforce_of_power"] == 0 and new["triforce_of_power"] == 1:
-            reward += self.triforce_reward
-            self.report(reward, f"Reward for gaining the triforce of power: {reward}", "reward-triforce")
-
-        return reward
-
-    def critique_kills(self, old, new):    
-        reward = 0.0
-
+    def critique_kills(self, _, new, rewards):
         enemies_killed = new['step_kills']
 
-        if enemies_killed:
-            reward = self.kill_reward
-            suffix = 'y' if enemies_killed == 1 else 'ies'
-            self.report(reward, f"Reward for killing {enemies_killed} enem{suffix}: {reward}", "reward-injure-kill")
+        if new['step_kills'] or new['step_injuries']:
+            rewards['reward-injure-kill'] = self.kill_reward
 
-        else:
-            enemies_injured = new['step_injuries']
-            if enemies_injured:
-                reward = self.kill_reward
-                suffix = 'y' if enemies_injured == 1 else 'ies'
-                self.report(reward, f"Reward for injuring {enemies_injured} enem{suffix}: {reward}", "reward-injure-kill")
-
-        return reward
-    
-    def critique_location_discovery(self, old, new):
+    def critique_location_discovery(self, old, new, rewards):
         prev = (old['level'], old['location'])
         curr = (new['level'], new['location'])
 
-        reward = 0
         if self.new_location_reward and prev != curr and not self.has_visited(*curr):
             self.mark_visited(*curr)
-
-            reward = self.new_location_reward
-            self.report(reward, f"Reward for discovering new room (level:{curr[0]}, coords:{curr[1]})! {reward}", "reward-new-location")
-
-        return reward
+            rewards['reward-new-location'] = self.new_location_reward
     
-    def critique_wall_collision(self, old, new):
+    def critique_wall_collision(self, old, new, rewards):
         """"Reward the agent for moving out of the last position, but only if that did not happen as a result of taking a hit
         from an enemy."""
 
-        reward = 0
-
         if self.wall_collision_penalty is not None:
-
             if old['link_pos'] == new['link_pos'] and new['action'] == 'movement':
                 # link bumped against the wall and didn't move despite choosing to move
-                reward += self.wall_collision_penalty
-                self.report(reward, f"Penalty for bumping into a wall! rew:{reward}", "penalty-wall-collision")
-
-        return reward
+                rewards['penalty-wall-collision'] = self.wall_collision_penalty
     
-    def critique_closing_distance(self, old, new):
-        reward = 0
-        
+    def critique_closing_distance(self, old, new, rewards):        
         if self.close_distance_reward is not None and new['new_position'] and new['action'] == 'movement':
             objects = new['objects']
 
@@ -289,10 +214,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
                     if enemies_closer:
                         percentage = enemies_closer / float(objects.enemy_count)
-                        reward += percentage * self.close_distance_reward
-                        self.report(reward, f"Reward for closing distance to {enemies_closer} {'enemy' if enemies_closer == 1 else 'enemies'}! rew:{reward}", "reward-close-distance")
-
-        return reward
+                        rewards['reward-close-distance'] = percentage * self.close_distance_reward
 
     # state helpers, some states are calculated
     def has_visited(self, level, location):

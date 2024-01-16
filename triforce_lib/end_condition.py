@@ -2,9 +2,7 @@ from typing import Dict
 from .zelda_game import is_mode_death
 
 class ZeldaEndCondition:
-    def __init__(self, reporter=None):
-        self.reporter = reporter
-
+    def __init__(self):
         # the number of timesteps the agent can be in the same position before we truncate
         self.position_timeout = 50
         
@@ -12,37 +10,32 @@ class ZeldaEndCondition:
         self._position_duration = 0
         self.end_causes = {}
 
-    def report(self, source, message):
-        self.reporter.report_ending(source)
-
     def clear(self):
         self._position_duration = 0
         self.end_causes.clear()
 
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool):
         """Called to determine if the scenario has ended, returns (terminated, truncated)"""
+        reason = None
         terminated = False
 
         if is_mode_death(new['mode']):
-            self.report("terminated-game-over", "Game over")
+            reason = "terminated-death"
             terminated = True
         
         elif new['triforce_of_power']:
-            self.report("terminated-game-won", "Got the triforce of power")
+            reason = "terminated-game-won"
             terminated = True
 
         # check truncation
         truncated = False
-        last_position = (old['link_x'], old['link_y'])
-        curr_position = (new['link_x'], new['link_y'])
-
-        if last_position == curr_position:
+        if old['link_pos'] == new['link_pos'] and not new['step_kills'] and not new['step_injuries']:
             if self._position_duration >= self.position_timeout:
-                self.report("truncated-position-timeout", f"Truncated - Stuck in same position for too long ({self._position_duration} steps)")
+                reason = "truncated-position-timeout"
                 truncated = True
 
             self._position_duration += 1
         else:
             self._position_duration = 0
 
-        return terminated, truncated
+        return terminated, truncated, reason

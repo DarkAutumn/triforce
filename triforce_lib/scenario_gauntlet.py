@@ -8,8 +8,8 @@ from .end_condition import ZeldaEndCondition, ZeldaEndCondition
 from .critic import ZeldaGameplayCritic
 
 class ZeldaGuantletRewards(ZeldaGameplayCritic):
-    def __init__(self, reporter=None):
-        super().__init__(reporter)
+    def __init__(self):
+        super().__init__()
 
         self.new_location_reward = 0
 
@@ -20,74 +20,55 @@ class ZeldaGuantletRewards(ZeldaGameplayCritic):
         self.screen_forward_progress_reward = self.reward_tiny
         self.reward_new_location = self.reward_large
         
-    def clear(self):
-        super().clear()
-    
-    def critique_gameplay(self, old, new):
+    def critique_gameplay(self, old, new, rewards):
         # We override critique_location_discovery, which will be called in super().critique_gameplay
         # so we don't need to call it explicitly in this function
-        rewards = super().critique_gameplay(old, new)
+        super().critique_gameplay(old, new, rewards)
 
-        rewards += self.critique_screen_progress(old, new)
-
-        return rewards
+        self.critique_screen_progress(old, new, rewards)
     
-    def critique_location_discovery(self, old, new):
+    def critique_location_discovery(self, old : Dict, new : Dict, rewards : Dict[str, float]):
         # reward for visiting a new room in the given range, note that this scenario disables the normal
         # room discovery reward
         prev = (old['level'], old['location'])
         curr = (new['level'], new['location'])
 
-        reward = 0.0
-
         if prev != curr:
             curr_location = new['location']
             
             if curr_location < 120 or curr_location > 127:
-                reward += self.leaving_penalty
-                self.report(reward, f"Penalty for leaving the gauntlet! {reward}", "penalty-leave-gauntlet")
+                rewards["penalty-leave-gauntlet"] = self.leaving_penalty
         
             elif not self.has_visited(*curr):
                 self.mark_visited(*curr)
-                reward += self.reward_new_location
-                self.report(reward, f"Reward for discovering new room (level:{curr[0]}, coords:{curr[1]})! {reward}", "reward-new-room")
+                rewards["reward-new-room"] = self.reward_new_location
 
             else:
                 prev_location = old['location']
 
                 if curr_location < prev_location:
-                    reward += self.moving_backwards_penalty
-                    self.report(reward, f"Penalty for moving backwards! {reward}", "penalty-move-backwards")
-            
-        return reward
+                    rewards["penalty-move-backwards"] = self.moving_backwards_penalty
 
-    def critique_screen_progress(self, old_state, new_state):
+    def critique_screen_progress(self, old_state, new_state, rewards : Dict[str, float]):
         old_location = (old_state['level'], old_state['location'])
         new_location = (new_state['level'], new_state['location'])
 
-        reward = 0
         if old_location == new_location:
             diff = new_state['link_x'] - old_state['link_x']
             if diff > 0:
-                reward += self.screen_forward_progress_reward
-                self.report(reward, f"Reward for moving right! {reward}", "reward-move-right")
+                rewards["reward-move-right"] = self.screen_forward_progress_reward
             elif diff < 0:
-                reward -= self.screen_forward_progress_reward
-                self.report(reward, f"Penalty for moving left! {reward}", "penalty-move-left")
-        
-        return reward
+                rewards["penalty-move-left"] = -self.screen_forward_progress_reward
 
 class GauntletEndCondition(ZeldaEndCondition):
-    def __init__(self, reporter=None):
-        super().__init__(reporter)
-
     def is_scenario_ended(self, old: Dict[str, int], new: Dict[str, int]) -> (bool, bool):
-        terminated, truncated = super().is_scenario_ended(old, new)
+        terminated, truncated, reason = super().is_scenario_ended(old, new)
 
-        location = new['location']
-        if location < 120 or location >= 127:
-            self.report("terminated-left-gauntlet", "Left gauntlet")
-            terminated = True
+        if not terminated and not truncated:
+            location = new['location']
+            if location < 120 or location >= 127:
+                reason = "terminated-left-gauntlet"
+                terminated = True
 
-        return terminated, truncated
+        return terminated, truncated, reason
     

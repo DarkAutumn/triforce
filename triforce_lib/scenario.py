@@ -3,9 +3,6 @@ import os
 import gymnasium as gym
 import retro
 
-from .reward_reporter import RewardReporter
-
-
 from .zelda_game_data import zelda_game_data
 from .scenario_dungeon import DungeonEndCondition, ZeldaDungeonCritic
 from .scenario_gauntlet import GauntletEndCondition, ZeldaGuantletRewards
@@ -13,28 +10,27 @@ from .scenario_dungeon_combat import ZeldaDungeonCombatCritic, ZeldaDungeonComba
 
 class ScenarioGymWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
-    def __init__(self, env, scenario, reporter):
+    def __init__(self, env, scenario):
         super().__init__(env)
 
         self._scenario = scenario
-        self._critics = [c(reporter=reporter) for c in scenario.critics]
-        self._conditions = [ec(reporter=reporter) for ec in scenario.end_conditions]
+        self._critics = [c() for c in scenario.critics]
+        self._conditions = [ec() for ec in scenario.end_conditions]
         
         self._curr_room = -1
         self.game_data = zelda_game_data
 
         self._last_state = None
-        self._report_interval = 10000
-        self._curr_step = 0
-        self._reward_summary = {}
-        self._end_summary = {}
 
     def reset(self, **kwargs):
-        self._curr_room = (self._curr_room + 1) % len(self._scenario.all_start_states)
-        save_state = self._scenario.all_start_states[self._curr_room]
-        
-        env_unwrapped = self.unwrapped
-        env_unwrapped.load_state(save_state, retro.data.Integrations.CUSTOM_ONLY)
+        if len(self._scenario.all_start_states) > 1:
+            self._curr_room = (self._curr_room + 1) % len(self._scenario.all_start_states)
+            save_state = self._scenario.all_start_states[self._curr_room]
+            
+            env_unwrapped = self.unwrapped
+            env_unwrapped.load_state(save_state, retro.data.Integrations.CUSTOM_ONLY)
+        else:
+            env_unwrapped = self.unwrapped
 
         state = super().reset(**kwargs)
 
@@ -54,19 +50,30 @@ class ScenarioGymWrapper(gym.Wrapper):
         return state
     
     def step(self, act):
-        obs, rewards, terminated, truncated, state = self.env.step(act)
-        self._curr_step += 1
+        obs, rewards, terminated, truncated, info = self.env.step(act)
 
         if self._last_state is not None:
+            reward_dict = {}
             for c in self._critics:
-                rewards += c.critique_gameplay(self._last_state, state)
+                c.critique_gameplay(self._last_state, info, reward_dict)
 
-            end = [x.is_scenario_ended(self._last_state, state) for x in self._conditions]
+            if reward_dict:
+                for value in reward_dict.values():
+                    rewards += value
+
+            info['rewards'] = reward_dict
+
+            end = [x.is_scenario_ended(self._last_state, info) for x in self._conditions]
             terminated = terminated or any((x[0] for x in end))
             truncated = truncated or any((x[1] for x in end))
+            reason = [x[2] for x in end if x[2]]
 
-        self._last_state = state
-        return obs, rewards, terminated, truncated, state
+            if reason:
+                # I guess we could have more than one reason, but I'm not going to cover that corner case
+                info['end'] = reason[0]
+
+        self._last_state = info
+        return obs, rewards, terminated, truncated, info
 
 
 class ZeldaScenario:
@@ -95,8 +102,8 @@ class ZeldaScenario:
     def __str__(self):
         return f'{self.name} - {self.description}'
     
-    def activate(self, env, reporter):
-        env = ScenarioGymWrapper(env, self, reporter)
+    def activate(self, env):
+        env = ScenarioGymWrapper(env, self)
         return env
     
     def debug(self, debug):
