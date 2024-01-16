@@ -219,7 +219,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
                     if enemies_closer:
                         percentage = enemies_closer / float(objects.enemy_count)
-                        rewards['reward-close-distance'] = percentage * self.close_distance_reward
+                        rewards['reward-close-distance'] = percentage * self.closing_distance_reward
                         
                     elif enemies_farther:
                         percentage = enemies_farther / float(objects.enemy_count)
