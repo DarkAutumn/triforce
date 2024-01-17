@@ -74,11 +74,28 @@ class ZeldaObservationWrapper(gym.Wrapper):
         # to just use the last three frames, as that doesn't give a good sense of motion.  So we will
         # use some from the past, being sure to not always pick odd or even frames.
 
-        stacked = []
-        sequence = [1, 6, 15]
-        for i in range(self.n_stack):
-            position = sequence[i]
-            frame = self.frames[-position]
+        if self.n_stack > 1:
+            stacked = []
+            sequence = [1, 6, 15]
+            for i in range(self.n_stack):
+                position = sequence[i]
+                frame = self.frames[-position]
+
+                if self.trim:
+                    frame = frame[self.trim:, :, :]
+
+                if self.grayscale:
+                    frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
+                    # add the channel back to the frame so the shape is (height, width, 1)
+                    frame = np.expand_dims(frame, axis=-1)
+
+                stacked.append(frame)
+
+            if self.n_stack > 1:
+                stacked_images = np.stack(stacked, axis=-1)
+            return stacked_images
+        else:
+            frame = self.frames[-1]
 
             if self.trim:
                 frame = frame[self.trim:, :, :]
@@ -88,8 +105,4 @@ class ZeldaObservationWrapper(gym.Wrapper):
                 # add the channel back to the frame so the shape is (height, width, 1)
                 frame = np.expand_dims(frame, axis=-1)
 
-            stacked.append(frame)
-
-        if self.n_stack > 1:
-            stacked_images = np.stack(stacked, axis=-1)
-        return stacked_images
+            return frame
