@@ -35,6 +35,12 @@ class ZeldaML:
         else:
             self.verbose = 0
 
+        if 'device' in kwargs:
+            self.device = kwargs['device']
+            del kwargs['device']
+        else:
+            self.device = "auto"
+
         if 'ent_coef' in kwargs:
             self.ent_coef = kwargs['ent_coef']
             del kwargs['ent_coef']
@@ -94,8 +100,6 @@ class ZeldaML:
             # by ZeldaGameWrapper above.
             env = self.scenario.activate(env)
 
-            # Monitor the environment so that our callbacks can save the model and report on progress.
-            env = Monitor(env, self.log_dir)
             return env
 
         if parallel and parallel > 1:
@@ -119,7 +123,7 @@ class ZeldaML:
         if not self.model:
             self.model = self._create_model()
 
-        callback = SaveModelCallback(save_freq=4096, best_check_freq=2048, zeldaml=self) if save_best else None
+        callback = LogRewardCallback(save_freq=4096, best_check_freq=2048, zeldaml=self) if save_best else None
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
         self.save(self.model_file)
 
@@ -137,9 +141,9 @@ class ZeldaML:
             return False
         
         if self.algorithm == 'ppo':
-            self.model = PPO.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef)
+            self.model = PPO.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef, device=self.device)
         elif self.algorithm == 'a2c':
-            self.model = A2C.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef)
+            self.model = A2C.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef, device=self.device)
         else:
             raise Exception(f'Unsupported algorithm: {self.algorithm}')
 
@@ -155,16 +159,15 @@ class ZeldaML:
         tensorboard_log=self.log_dir
 
         if self.algorithm == 'ppo':
-            return PPO('MultiInputPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef)
+            return PPO('MultiInputPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef, device=self.device)
         
         raise Exception(f'Unsupported algorithm: {self.algorithm}')
     
 
-class SaveModelCallback(BaseCallback):
+class LogRewardCallback(BaseCallback):
     def __init__(self, save_freq : int, best_check_freq: int, zeldaml : ZeldaML):
-        super(SaveModelCallback, self).__init__(zeldaml.verbose)
-        self.best_check_freq = best_check_freq
-        self.save_freq = save_freq
+        super(LogRewardCallback, self).__init__(zeldaml.verbose)
+        self.log_reward_freq = save_freq
         self.zeldaml = zeldaml
         self.best_mean_reward = -np.inf
         self.best_timestamp = -np.inf
@@ -176,21 +179,21 @@ class SaveModelCallback(BaseCallback):
         infos = self.locals['infos']
         for info in infos:
             if 'rewards' in info:
-                for kind, reward in info['rewards'].items():
-                    self._rewards[kind] = reward + self._rewards.get(kind, 0)
+                for kind, rew in info['rewards'].items():
+                    self._rewards[kind] = rew + self._rewards.get(kind, 0)
             
             if 'end' in info:
                 self._endings.append(info['end'])
 
-        if self.n_calls % self.save_freq == 0:
+        if self.n_calls % self.log_reward_freq == 0:
             # Save the model as save_dir/model_{iterations}.zip
             path = os.path.join(self.zeldaml.model_base_dir, f"model_{self.num_timesteps}.zip")
             self.zeldaml.save(path)
 
-            # rewards and ends tend to be pretty wild at the beginning of training, so only log them after 8192 steps
-            if self.n_calls >= 8192:
-                for kind, reward in self._rewards.items():
-                    self.logger.record('reward/' + kind, reward)
+            # rewards and ends tend to be pretty wild at the beginning of training, so only log them after a certain threshold
+            if self.n_calls >= 2048:
+                for kind, rew in self._rewards.items():
+                    self.logger.record('reward/' + kind, rew)
 
                 ends = Counter(self._endings)
                 for ending, count in ends.items():
@@ -198,27 +201,6 @@ class SaveModelCallback(BaseCallback):
 
             self._rewards.clear()
             self._endings.clear()
-
-        if self.n_calls % self.best_check_freq == 0 and self.n_calls > 10000:
-            # Retrieve training reward
-            x, y = ts2xy(load_results(self.zeldaml.model_base_dir), 'timesteps')
-            if len(x) > 0:
-                # Mean training reward over the last 100 episodes
-                mean_reward = np.mean(y[-100:])
-                if self.verbose > 0:
-                    if mean_reward > self.best_mean_reward:
-                        print(f"timesteps: {self.num_timesteps} new best: {mean_reward:.2f} prev: {self.best_mean_reward:.2f} (steps:{self.best_timestamp})")
-                        self.best_timestamp = self.num_timesteps
-                    else:
-                        print(f"timesteps: {self.num_timesteps} curr: {mean_reward:.2f} best: {self.best_mean_reward:.2f} (steps:{self.best_timestamp})")
-
-                if mean_reward > self.best_mean_reward:
-                    if self.verbose > 0:
-                        print("Saving new best model.")
-
-                    self.best_mean_reward = mean_reward
-                    path = os.path.join(self.zeldaml.model_base_dir, f"best.zip")
-                    self.zeldaml.save(path)
 
         return True
 

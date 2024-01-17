@@ -44,7 +44,7 @@ def main():
     render_mode = 'human' if args.action == 'test' or args.action == 'evaluate' or args.render else None
     record = args.action == 'record'
     debug_scenario = args.debug_scenario or args.action == 'evaluate'
-    zelda_ml = ZeldaML(base_dir, args.scenario, args.frame_stack, args.color, args.parallel, record=record, render_mode=render_mode, verbose=args.verbose, debug_scenario=debug_scenario, ent_coef=args.ent_coef)
+    zelda_ml = ZeldaML(base_dir, args.scenario, args.frame_stack, args.color, args.parallel, record=record, render_mode=render_mode, verbose=args.verbose, debug_scenario=debug_scenario, ent_coef=args.ent_coef, device="cuda")
 
     if args.load:
         zelda_ml.load(args.load)
@@ -57,7 +57,7 @@ def main():
             zelda_ml.learn(args.iterations, progress_bar=True)
 
         elif args.action == 'evaluate' or args.action == 'record':
-            mean_reward, std_reward = zelda_ml.evaluate(args.iterations, render=True)
+            mean_reward, std_reward = zelda_ml.evaluate(args.iterations, deterministic=False, render=True)
             print(f'Mean reward: {mean_reward} +/- {std_reward}')
 
     finally:
