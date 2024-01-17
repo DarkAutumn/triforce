@@ -35,6 +35,12 @@ class ZeldaML:
         else:
             self.verbose = 0
 
+        if 'device' in kwargs:
+            self.device = kwargs['device']
+            del kwargs['device']
+        else:
+            self.device = "auto"
+
         if 'ent_coef' in kwargs:
             self.ent_coef = kwargs['ent_coef']
             del kwargs['ent_coef']
@@ -135,9 +141,9 @@ class ZeldaML:
             return False
         
         if self.algorithm == 'ppo':
-            self.model = PPO.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef)
+            self.model = PPO.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef, device=self.device)
         elif self.algorithm == 'a2c':
-            self.model = A2C.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef)
+            self.model = A2C.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef, device=self.device)
         else:
             raise Exception(f'Unsupported algorithm: {self.algorithm}')
 
@@ -153,7 +159,7 @@ class ZeldaML:
         tensorboard_log=self.log_dir
 
         if self.algorithm == 'ppo':
-            return PPO('MultiInputPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef)
+            return PPO('MultiInputPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef, device=self.device)
         
         raise Exception(f'Unsupported algorithm: {self.algorithm}')
     
