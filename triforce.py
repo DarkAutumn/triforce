@@ -57,7 +57,7 @@ def main():
             zelda_ml.learn(args.iterations, progress_bar=True)
 
         elif args.action == 'evaluate' or args.action == 'record':
-            mean_reward, std_reward = zelda_ml.evaluate(args.iterations, render=True)
+            mean_reward, std_reward = zelda_ml.evaluate(args.iterations, deterministic=False, render=True)
             print(f'Mean reward: {mean_reward} +/- {std_reward}')
 
     finally:
