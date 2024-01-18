@@ -6,8 +6,6 @@ import numpy as np
 from stable_baselines3 import PPO, A2C
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.results_plotter import load_results, ts2xy
-from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
@@ -46,6 +44,12 @@ class ZeldaML:
             del kwargs['ent_coef']
         else:
             self.ent_coef = 0.0
+
+        if 'obs_kind' in kwargs:
+            obs_kind = kwargs['obs_kind']
+            del kwargs['obs_kind']
+        else:
+            obs_kind = 'viewport'
 
         if not isinstance(frame_stack, int) or frame_stack < 2:
             frame_stack = 1
@@ -87,8 +91,8 @@ class ZeldaML:
             env = ZeldaGameWrapper(env)
             
             # Frame stack and convert to grayscale if requested
-            env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, gameplay_only=True)
-            
+            env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, kind=obs_kind)
+
             # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
             # since that doesn't make any sense in Zelda)
             env = ZeldaAttackOnlyActionSpace(env)
