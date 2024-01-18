@@ -53,10 +53,10 @@ class ZeldaObservationWrapper(gym.Wrapper):
             self.observation_space = gym.spaces.Box(low=0, high=255, shape=new_shape, dtype=np.uint8)
 
         if self.viewport_size:
-            shape = self.env.observation_space.shape
+            shape = self.observation_space.shape
             new_shape = (self.viewport_size, self.viewport_size, shape[2])
             self.observation_space = gym.spaces.Box(low=0, high=255, shape=new_shape, dtype=np.uint8)
-            
+
         elif self.trim:
             shape = self.observation_space.shape
             new_shape = (shape[0] - self.trim, shape[1], shape[2])
