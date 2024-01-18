@@ -100,7 +100,7 @@ class ZeldaObservationWrapper(gym.Wrapper):
             return frame
 
     def trim_normalize_grayscale(self, info, frame):
-        if self.trim or self.viewport_size:
+        if self.trim:
             frame = frame[self.trim:, :, :]
 
         if self.viewport_size:
