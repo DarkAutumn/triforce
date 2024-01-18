@@ -1,11 +1,7 @@
 import gymnasium as gym
 import numpy as np
-from . import zelda_game as zelda
 
-import stable_baselines3.common.envs.multi_input_envs
-
-num_features = 5
-feature_names = ['has_beams', 'low_health', 'has_bombs', 'has_keys', 'bombs_are_max']
+num_direction_vectors = 5
 
 class ZeldaGameFeatures(gym.Wrapper):
     def __init__(self, env):
@@ -15,9 +11,9 @@ class ZeldaGameFeatures(gym.Wrapper):
         # Define a new observation space as a dictionary
         self.observation_space = gym.spaces.Dict({
             "image": self.image_obs_space,
-            "features": gym.spaces.Box(low=0, high=255, shape=(num_features,), dtype=np.uint8)
+            "enemy_vectors": gym.spaces.Box(low=-1.0, high=1.0, shape=(num_direction_vectors, 2), dtype=np.float32)
         })
-        self.num_features = num_features
+        self.num_enemy_vectors = num_direction_vectors
 
     def step(self, action):
         observation, reward, terminated, truncated, info = self.env.step(action)
@@ -30,21 +26,38 @@ class ZeldaGameFeatures(gym.Wrapper):
 
     def augment_observation(self, observation, info):
         # Extract features and store them in the dictionary format
-        features = self.extract_features(info)
-        return {"image": observation, "features": features}
+        vectors = self.get_enemy_vectors(info)
+        return {"image": observation, "enemy_vectors": vectors}
 
-    def extract_features(self, info):
-        if info is None:
-            return np.zeros(self.num_features, dtype=np.uint8)
+    def normalize_vector(self, vector):
+        """Normalize a 2D vector."""
+        norm = np.linalg.norm(vector)
+        if norm == 0: 
+            return vector
+        return vector / norm
+    
+    def get_enemy_vectors(self, info):
+        if info is None or 'link_pos' not in info or 'objects' not in info:
+            return np.zeros((self.num_enemy_vectors, 2), dtype=np.float32)
 
-        # Extract the required features from the info dictionary
-        features = [
-            int(zelda.has_beams(info)),
-            int(zelda.get_heart_halves(info) <= 2),
-            int(info['bombs'] > 0),
-            int(info['keys'] > 0),
-            int(info['bombs'] == info['bomb_max']),
+        link_pos = np.array(info['link_pos'], dtype=np.float32)
+        objects = info['objects']
+
+        enemy_ids = [id for id in objects.enumerate_enemy_ids() if id is not None]
+        enemy_positions = [objects.get_position(id) for id in enemy_ids]
+
+        # Calculate vectors and distances to each enemy
+        vectors_and_distances = [
+            ((enemy_pos - link_pos), np.linalg.norm(enemy_pos - link_pos))
+            for enemy_pos in enemy_positions
         ]
 
-        # Convert boolean features to uint8 format
-        return np.array(features, dtype=np.uint8) * 255
+        # Sort by distance
+        vectors_and_distances.sort(key=lambda x: x[1])
+
+        # Normalize vectors and ensure the list has self.num_enemy_vectors elements
+        normalized_vectors = [self.normalize_vector(v[0]) for v in vectors_and_distances][:self.num_enemy_vectors]
+        while len(normalized_vectors) < self.num_enemy_vectors:
+            normalized_vectors.append(np.zeros(2))  # Append zero vectors if fewer than 5 enemies
+
+        return np.array(normalized_vectors, dtype=np.float32)
