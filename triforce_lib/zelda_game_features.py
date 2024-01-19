@@ -44,11 +44,11 @@ class ZeldaGameFeatures(gym.Wrapper):
         objects = info['objects']
 
         closest_enemy = self.get_closest_normalized(link_pos, objects, objects.enumerate_enemy_ids())
-        closest_item = self.get_closest_normalized(link_pos, objects, objects.enumerate_item_ids())
         closest_projectile = self.get_closest_normalized(link_pos, objects, objects.enumerate_projectile_ids())
+        closest_item = self.get_closest_normalized(link_pos, objects, objects.enumerate_item_ids())
 
         # create an np array of the vectors
-        normalized_vectors = [np.zeros(2, dtype=np.float32), closest_enemy, closest_item, closest_projectile, np.zeros(2, dtype=np.float32)]
+        normalized_vectors = [np.zeros(2, dtype=np.float32), closest_enemy, closest_projectile, closest_item, np.zeros(2, dtype=np.float32)]
         return np.array(normalized_vectors, dtype=np.float32)
 
     def get_closest_normalized(self, link_pos, objects, ids):
