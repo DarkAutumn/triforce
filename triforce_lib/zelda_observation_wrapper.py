@@ -11,21 +11,33 @@ from collections import deque
 gameplay_start_y = 55
 
 class FrameCaptureWrapper(gym.Wrapper):
-    def __init__(self, env):
+    def __init__(self, env, rgb_render):
         super().__init__(env)
         self.env = env
         self.observation_space = self.env.observation_space
         self.frames = deque(maxlen=30)
+        if rgb_render:
+            self.rgb_deque = deque(maxlen=120)
+        else:
+            self.rgb_deque = None
 
     def reset(self, **kwargs):
         observation, info = self.env.reset(**kwargs)
         for _ in range(self.frames.maxlen):
             self.frames.append(observation)
+
+        if self.rgb_deque is not None:
+            self.rgb_deque.append(self.env.render())
+
         return observation, info
 
     def step(self, action):
         observation, reward, terminated, truncated, info = self.env.step(action)
         self.frames.append(observation)
+        
+        if self.rgb_deque is not None:
+            self.rgb_deque.append(self.env.render())
+
         return observation, reward, terminated, truncated, info
 
 class ZeldaObservationWrapper(gym.Wrapper):

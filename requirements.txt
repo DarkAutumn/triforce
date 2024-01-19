@@ -8,3 +8,4 @@ matplotlib
 pytest
 opencv-python
 Pillow
+pygame

@@ -6,6 +6,7 @@ from.end_condition import ZeldaEndCondition, ZeldaEndCondition
 from .critic import ZeldaCritic, ZeldaGameplayCritic
 from .zeldaml import ZeldaML
 from .scenario import ZeldaScenario
+from .pygame_display import pygame_render
 
 # add custom integrations to retro
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -19,5 +20,6 @@ __all__ = [
     ZeldaEndCondition.__name__,
     ZeldaGameplayCritic.__name__,
     ZeldaEndCondition.__name__,
-    ZeldaActionReplay.__name__
+    ZeldaActionReplay.__name__,
+    pygame_render.__name__,
     ]

@@ -51,6 +51,12 @@ class ZeldaML:
         else:
             obs_kind = 'viewport'
 
+        self.rgb_render = False
+        if 'render_mode' in kwargs and kwargs['render_mode'] == 'rgb_array':
+            self.rgb_render = True
+            if parallel > 1:
+                raise Exception('Cannot use rgb_array render mode with parallel environments')
+
         if not isinstance(frame_stack, int) or frame_stack < 2:
             frame_stack = 1
 
@@ -83,8 +89,10 @@ class ZeldaML:
 
             # Capture the raw observation frames into a deque.  Since we are skipping frames and not acting on every frame, we need to save
             # the last 'frame_stack' frames so that we can give the model a sense of motion without it being affected by the skipped frames.
-            env = FrameCaptureWrapper(env)
+            env = FrameCaptureWrapper(env, self.rgb_render)
             captured_frames = env.frames
+            if self.rgb_render:
+                self.rgb_deque = env.rgb_deque
 
             # Wrap the game to produce new info about game state and to hold the button down after the action is taken to achieve the desired
             # number of actions per second.
