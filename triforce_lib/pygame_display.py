@@ -54,11 +54,6 @@ def pygame_render(zelda_ml):
 
             if mode == 'n':
                 mode = 'p'
-
-        for i in range(1, 0xb):
-            id = info['objects'].get_object_id(i)
-            if id > 48:
-                print(hex(id))
         
         # update rewards for display
         update_rewards(reward_values, reward_details, info, reward)
@@ -106,7 +101,7 @@ def pygame_render(zelda_ml):
 
                     elif event.key == pygame.K_n:
                         mode = 'n'
-                        
+
                     elif event.key == pygame.K_c:
                         mode = 'c'
 
