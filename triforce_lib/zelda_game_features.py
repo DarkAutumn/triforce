@@ -43,21 +43,29 @@ class ZeldaGameFeatures(gym.Wrapper):
         link_pos = np.array(info['link_pos'], dtype=np.float32)
         objects = info['objects']
 
-        enemy_ids = [id for id in objects.enumerate_enemy_ids() if id is not None]
-        enemy_positions = [objects.get_position(id) for id in enemy_ids]
+        closest_enemy = self.get_closest_normalized(link_pos, objects, objects.enumerate_enemy_ids())
+        closest_item = self.get_closest_normalized(link_pos, objects, objects.enumerate_item_ids())
+        closest_projectile = self.get_closest_normalized(link_pos, objects, objects.enumerate_projectile_ids())
+
+        # create an np array of the vectors
+        normalized_vectors = [np.zeros(2, dtype=np.float32), closest_enemy, closest_item, closest_projectile, np.zeros(2, dtype=np.float32)]
+        return np.array(normalized_vectors, dtype=np.float32)
+
+    def get_closest_normalized(self, link_pos, objects, ids):
+        positions = [objects.get_position(id) for id in ids if id is not None]
 
         # Calculate vectors and distances to each enemy
         vectors_and_distances = [
             ((enemy_pos - link_pos), np.linalg.norm(enemy_pos - link_pos))
-            for enemy_pos in enemy_positions
+            for enemy_pos in positions
         ]
+
+        epsilon = 1e-6  # Prevent division by zero
 
         # Sort by distance
         vectors_and_distances.sort(key=lambda x: x[1])
-
-        # Normalize vectors and ensure the list has self.num_enemy_vectors elements
-        normalized_vectors = [self.normalize_vector(v[0]) for v in vectors_and_distances][:self.num_enemy_vectors]
-        while len(normalized_vectors) < self.num_enemy_vectors:
-            normalized_vectors.append(np.zeros(2))  # Append zero vectors if fewer than 5 enemies
-
-        return np.array(normalized_vectors, dtype=np.float32)
+        normalized_vectors = [self.normalize_vector(v[0]) for v in vectors_and_distances if abs(v[1]) > epsilon]
+        if normalized_vectors:
+            return normalized_vectors[0]
+        
+        return np.zeros(2, dtype=np.float32)

@@ -42,9 +42,19 @@ class ZeldaObjectData:
         return 1 <= obj_id <= 0x48
     
     def enumerate_enemy_ids(self) -> int:
-        enemies = 0
         for i in range(1, 0xb):
             if self.is_enemy(self.get_object_id(i)):
+                yield i
+
+    def enumerate_item_ids(self) -> int:
+        for i in range(1, 0xb):
+            if self.get_object_id(i) == 0x60:
+                yield i
+                
+    def enumerate_projectile_ids(self) -> int:
+        for i in range(1, 0xb):
+            id = self.get_object_id(i)
+            if id > 0x48 and id != 0x60:
                 yield i
 
     @property
