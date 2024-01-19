@@ -1,3 +1,4 @@
+import math
 import pygame
 import numpy as np
 from collections import deque
@@ -10,12 +11,22 @@ def pygame_render(zelda_ml):
     global font
     font = pygame.font.Font(None, 24)
 
+    obs_width = 128
+    obs_height = 640
+    obs_x = 0
+    obs_y = 0
+
     game_width, game_height = 640, 480
     graph_height = 150
-    graph_width = game_width
+    game_x = obs_width
+    game_y = 0
+    graph_width = game_width + obs_width
+
+    text_x = obs_width + game_width
+    text_y = 0
     text_height = game_height + graph_height
     text_width = 300
-    screen = pygame.display.set_mode((game_width + text_width, max(game_height + graph_height, text_height)))
+    screen = pygame.display.set_mode((obs_width + game_width + text_width, max(game_height + graph_height, text_height)))
     clock = pygame.time.Clock()
 
     block_width = 10
@@ -36,6 +47,11 @@ def pygame_render(zelda_ml):
         # Perform a step in the environment
         action, _states = zelda_ml.model.predict(obs, deterministic=False)  # Replace this with your action logic
         obs, reward, terminated, truncated, info = env.step(action)
+
+        for i in range(1, 0xb):
+            id = info['objects'].get_object_id(i)
+            if id > 48:
+                print(hex(id))
         
         # update rewards for display
         update_rewards(reward_values, reward_details, info, reward)
@@ -43,9 +59,18 @@ def pygame_render(zelda_ml):
         while zelda_ml.rgb_deque:
             screen.fill((0, 0, 0))  # Black background
 
-            render_game_view(zelda_ml, game_width, game_height, screen)
+            # Show observation values
+            y_pos = render_observation_view(screen, obs_x, obs_y, obs_width, obs["image"])
+            y_pos = draw_arrow(screen, "Enemy", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][1], radius=obs_width // 4, color=(255, 255, 255), width=3)
+            y_pos = draw_arrow(screen, "Projectile]", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][2], radius=obs_width // 4, color=(255, 0, 0), width=3)
+            y_pos = draw_arrow(screen, "Item", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][3], radius=obs_width // 4, color=(255, 255, 255), width=3)
+
+            # render the gameplay
+            render_game_view(zelda_ml, (game_x, game_y), game_width, game_height, screen)
+
+            # render rewards graph and values
             draw_rewards_graph(graph_height, screen, block_width, center_line, reward_values)
-            render_sidebar(screen, reward_details, game_width, 0, 20, text_height)
+            render_sidebar(screen, reward_details, text_x, text_y, 20, text_height)
 
             # Display the scaled frame
             pygame.display.flip()
@@ -65,11 +90,50 @@ def pygame_render(zelda_ml):
     env.close()
     pygame.quit()
 
-def render_game_view(zelda_ml, game_width, game_height, screen):
+def draw_arrow(screen, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
+    render_text(screen, label, (start_pos[0], start_pos[1]))
+    circle_start = (start_pos[0], start_pos[1] + 20)
+    centerpoint = (circle_start[0] + radius, circle_start[1] + radius)
+    end_pos = (centerpoint[0] + direction[0] * radius, centerpoint[1] + direction[1] * radius)
+
+    pygame.draw.circle(screen, (255, 255, 255), centerpoint, radius, 1)
+
+    if direction.all() != 0:
+        pygame.draw.line(screen, color, centerpoint, end_pos, width)
+
+        # Arrowhead
+        arrowhead_size = 10
+        angle = math.atan2(-direction[1], direction[0]) + math.pi
+
+        left = (end_pos[0] + arrowhead_size * math.cos(angle - math.pi / 6),
+                end_pos[1] - arrowhead_size * math.sin(angle - math.pi / 6))
+        right = (end_pos[0] + arrowhead_size * math.cos(angle + math.pi / 6),
+                end_pos[1] - arrowhead_size * math.sin(angle + math.pi / 6))
+
+        pygame.draw.polygon(screen, color, [end_pos, left, right])
+        
+
+    return circle_start[1] + radius * 2
+
+def render_observation_view(screen, x, y, dim, img):
+    render_text(screen, "Observation", (x, y))
+    y += 20
+
+    if img.shape[2] == 1:
+        img = np.repeat(img, 3, axis=2)
+        
+    observation_surface = pygame.surfarray.make_surface(np.swapaxes(img, 0, 1))
+    observation_surface = pygame.transform.scale(observation_surface, (dim, dim))
+    screen.blit(observation_surface, (x, y))
+
+    y += dim
+    return y
+
+def render_game_view(zelda_ml, pos, game_width, game_height, screen):
     rgb_array = zelda_ml.rgb_deque.popleft()
     frame = pygame.surfarray.make_surface(np.swapaxes(rgb_array, 0, 1))
     scaled_frame = pygame.transform.scale(frame, (game_width, game_height))
-    screen.blit(scaled_frame, (0, 0))
+    screen.blit(scaled_frame, pos)
 
 def draw_rewards_graph(graph_height, screen, block_width, center_line, reward_values):
     for i, r in enumerate(reward_values):
