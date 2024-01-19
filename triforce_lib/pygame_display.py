@@ -76,11 +76,11 @@ def draw_rewards_graph(graph_height, screen, block_width, center_line, reward_va
         x_position = i * block_width
 
         if r == 0:
-                    # Draw a white line for zero reward
             pygame.draw.line(screen, (255, 255, 255), (x_position, center_line), (x_position + block_width, center_line))
         else:
             color = (0, 0, 255) if r > 0 else (255, 0, 0)  # Blue for positive, red for negative
             block_height = int(abs(r) * (graph_height // 2))
+            block_height = max(block_height, 10)
             y_position = center_line - block_height if r > 0 else center_line
             pygame.draw.rect(screen, color, (x_position, y_position, block_width, block_height))
 
@@ -122,8 +122,9 @@ def render_sidebar(surface, rewards_deque, start_x, start_y, line_height, max_he
 
                     return  # Stop rendering when we run out of vertical space
         else:
-            text = "No reward"
-            render_text(surface, text, (start_x, y))
+            text = "none"
+            color = (128, 128, 128)
+            render_text(surface, text, (start_x, y), color)
             y += line_height
             
         # Render the step count (e.g., x3) aligned to the right
