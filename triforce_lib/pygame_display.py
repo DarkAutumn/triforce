@@ -79,7 +79,7 @@ def pygame_render(zelda_ml):
 
             # render rewards graph and values
             draw_rewards_graph(graph_height, screen, block_width, center_line, reward_values)
-            render_sidebar(screen, reward_details, text_x, text_y, 20, text_height)
+            draw_description_text(screen, reward_details, text_x, text_y, 20, text_height)
 
             # Display the scaled frame
             pygame.display.flip()
@@ -175,21 +175,25 @@ def update_rewards(reward_values, reward_details, info, reward):
         reward_dict = {}
 
     prev = reward_details[0] if reward_details else None
-    if prev is not None and prev['rewards'] == reward_dict:
+    if prev is not None and prev['rewards'] == reward_dict and prev['action'] == info['action']:
         prev['count'] += 1
     else:
-        reward_details.appendleft({'count': 1, 'rewards': reward_dict})
+        reward_details.appendleft({'count': 1, 'rewards': reward_dict, 'action' : info['action']})
 
 
 def render_text(surface, text, position, color=(255, 255, 255)):
     text_surface = font.render(text, True, color)
     surface.blit(text_surface, position)
 
-def render_sidebar(surface, rewards_deque, start_x, start_y, line_height, max_height):
+def draw_description_text(surface, rewards_deque, start_x, start_y, line_height, max_height):
     y = start_y
     for i in range(len(rewards_deque)):
         entry = rewards_deque[i]
-        step_count, rewards = entry['count'], entry['rewards']
+        step_count, rewards, action = entry['count'], entry['rewards'], entry['action']
+
+        render_text(surface, f"Action: {action}", (start_x, y))
+        y += line_height
+        
         if rewards:
             for reason, value in rewards.items():
                 # color=red if negative, light blue if positive, white if zero
