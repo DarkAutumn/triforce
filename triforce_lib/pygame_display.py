@@ -36,17 +36,24 @@ def pygame_render(zelda_ml):
 
     terminated = True
     truncated = False
-    continue_rendering = True
-    while continue_rendering:
+
+    # modes: c - continue, n - next, r - reset, p - pause, q - quit
+    mode = 'c'
+    while mode != 'q':
         if terminated or truncated:
             obs, info = env.reset()
+            reward_details.clear()
             reward_values.clear()
             for _ in range(reward_values.maxlen):
                 reward_values.append(0)
 
         # Perform a step in the environment
-        action, _states = zelda_ml.model.predict(obs, deterministic=False)  # Replace this with your action logic
-        obs, reward, terminated, truncated, info = env.step(action)
+        if mode == 'c' or mode == 'n':
+            action, _states = zelda_ml.model.predict(obs, deterministic=False)  # Replace this with your action logic
+            obs, reward, terminated, truncated, info = env.step(action)
+
+            if mode == 'n':
+                mode = 'p'
 
         for i in range(1, 0xb):
             id = info['objects'].get_object_id(i)
@@ -56,7 +63,14 @@ def pygame_render(zelda_ml):
         # update rewards for display
         update_rewards(reward_values, reward_details, info, reward)
 
-        while zelda_ml.rgb_deque:
+
+        while True:
+            if zelda_ml.rgb_deque:
+                rgb_array = zelda_ml.rgb_deque.popleft()
+            elif mode != 'p':
+                break
+
+
             screen.fill((0, 0, 0))  # Black background
 
             # Show observation values
@@ -66,7 +80,7 @@ def pygame_render(zelda_ml):
             y_pos = draw_arrow(screen, "Item", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][3], radius=obs_width // 4, color=(255, 255, 255), width=3)
 
             # render the gameplay
-            render_game_view(zelda_ml, (game_x, game_y), game_width, game_height, screen)
+            render_game_view(rgb_array, (game_x, game_y), game_width, game_height, screen)
 
             # render rewards graph and values
             draw_rewards_graph(graph_height, screen, block_width, center_line, reward_values)
@@ -79,13 +93,22 @@ def pygame_render(zelda_ml):
             # Check for Pygame events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    continue_rendering = False
+                    mode = 'q'
                     break
+
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_r:
                         terminated = truncated = True
                         break
 
+                    elif event.key == pygame.K_p:
+                        mode = 'p'
+
+                    elif event.key == pygame.K_n:
+                        mode = 'n'
+                        
+                    elif event.key == pygame.K_c:
+                        mode = 'c'
 
     env.close()
     pygame.quit()
@@ -129,8 +152,7 @@ def render_observation_view(screen, x, y, dim, img):
     y += dim
     return y
 
-def render_game_view(zelda_ml, pos, game_width, game_height, screen):
-    rgb_array = zelda_ml.rgb_deque.popleft()
+def render_game_view(rgb_array, pos, game_width, game_height, screen):
     frame = pygame.surfarray.make_surface(np.swapaxes(rgb_array, 0, 1))
     scaled_frame = pygame.transform.scale(frame, (game_width, game_height))
     screen.blit(scaled_frame, pos)
