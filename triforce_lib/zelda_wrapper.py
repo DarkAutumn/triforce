@@ -7,9 +7,9 @@
 from random import randint
 from typing import Any
 import gymnasium as gym
+import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .model_parameters import actions_per_second
 from .zelda_game import get_bomb_state, is_mode_death, get_beam_state, is_mode_scrolling
 
 class ZeldaObjectData:
@@ -50,7 +50,7 @@ class ZeldaObjectData:
         for i in range(1, 0xb):
             if self.get_object_id(i) == 0x60:
                 yield i
-                
+
     def enumerate_projectile_ids(self) -> int:
         for i in range(1, 0xb):
             id = self.get_object_id(i)
@@ -62,7 +62,7 @@ class ZeldaObjectData:
         return sum(1 for i in range(1, 0xb) if self.is_enemy(self.get_object_id(i)))
 
 movement_cooldown = 5
-attack_cooldown = 20
+attack_cooldown = 15
 item_cooldown = 10
 random_delay_max_frames = 1
 
@@ -73,6 +73,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         self.deterministic = deterministic
 
         self._reset_state()
+        self._none_action = np.zeros(9, dtype=bool)
 
     def reset(self, **kwargs):
         result = super().reset(**kwargs)
@@ -214,19 +215,22 @@ class ZeldaGameWrapper(gym.Wrapper):
 
     def act_and_wait(self, act):
         obs, rewards, terminated, truncated, info = self.env.step(act)
+        hold_action = act
 
         # wait based on the kind of action
         if not terminated and not truncated:
             if self.action_is_movement(act):
-                obs, terminated, truncated, info, rew = self.skip(act, movement_cooldown)
+                obs, terminated, truncated, info, rew = self.skip(hold_action, movement_cooldown)
                 rewards += rew
 
             elif self.action_is_attack(act):
-                obs, terminated, truncated, info, rew = self.skip(act, attack_cooldown)
+                hold_action = self._none_action
+                obs, terminated, truncated, info, rew = self.skip(hold_action, attack_cooldown)
                 rewards += rew
 
             elif self.action_is_item(act):
-                obs, terminated, truncated, info, rew = self.skip(act, item_cooldown)
+                hold_action = self._none_action
+                obs, terminated, truncated, info, rew = self.skip(hold_action, item_cooldown)
                 rewards += rew
 
             else:
@@ -234,7 +238,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         
         # skip scrolling
         while is_mode_scrolling(info["mode"]):
-            obs, rew, terminated, truncated, info = self.env.step(act)
+            obs, rew, terminated, truncated, info = self.env.step(hold_action)
             rewards += rew
             if terminated or truncated:
                 break
@@ -243,7 +247,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         if not self.deterministic:
             cooldown = randint(0, random_delay_max_frames + 1)
             if cooldown:
-                obs, terminated, truncated, info, rew = self.skip(act, cooldown)
+                obs, terminated, truncated, info, rew = self.skip(hold_action, cooldown)
                 rewards += rew
 
         return obs, rewards, terminated, truncated, info
