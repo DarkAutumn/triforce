@@ -68,6 +68,10 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self._actions_on_same_screen = 0
         self._is_first_step = True
 
+        # missed attack
+        self.distance_threshold = 36
+        self.attack_miss_penalty = -self.reward_minimum
+
     def clear(self):
         super().clear()
         self._visted_locations = [[False] * 256 ] * 2
@@ -169,6 +173,11 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         if new['step_kills'] or new['step_injuries']:
             rewards['reward-injure-kill'] = self.kill_reward
+        else:
+            if new['action'] == 'attack' and new['enemy_vectors']:
+                distance = new['enemy_vectors'][0][1]
+                if distance > self.distance_threshold:
+                    rewards['penalty-attack-miss'] = self.attack_miss_penalty
 
     def critique_location_discovery(self, old, new, rewards):
         prev = (old['level'], old['location'])
