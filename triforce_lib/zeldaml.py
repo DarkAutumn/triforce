@@ -140,7 +140,7 @@ class ZeldaML:
         if not self.model:
             self.model = self._create_model()
 
-        callback = LogRewardCallback(save_freq=4096, best_check_freq=2048, zeldaml=self) if save_best else None
+        callback = LogRewardCallback(save_freq=4096, zeldaml=self) if save_best else None
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
         self.save(self.model_file)
 
@@ -182,7 +182,7 @@ class ZeldaML:
     
 
 class LogRewardCallback(BaseCallback):
-    def __init__(self, save_freq : int, best_check_freq: int, zeldaml : ZeldaML):
+    def __init__(self, save_freq : int, zeldaml : ZeldaML):
         super(LogRewardCallback, self).__init__(zeldaml.verbose)
         self.log_reward_freq = save_freq
         self.zeldaml = zeldaml
@@ -210,7 +210,8 @@ class LogRewardCallback(BaseCallback):
             # rewards and ends tend to be pretty wild at the beginning of training, so only log them after a certain threshold
             if self.n_calls >= 2048:
                 for kind, rew in self._rewards.items():
-                    self.logger.record('reward/' + kind, rew)
+                    split = kind.split('-', 1)
+                    self.logger.log(f"{split[0]}/{split[1]}", rew)
 
                 ends = Counter(self._endings)
                 for ending, count in ends.items():

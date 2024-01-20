@@ -15,7 +15,7 @@ class ZeldaDungeonCombatCritic(ZeldaDungeonCritic):
     def critique_location_discovery(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int], rewards : typing.Dict[str, float]):
         # Override.  Only allow rewards for new locations in dungeons
         if old_state['location'] != new_state['location']:
-            rewards['leave-room-penalty'] = self.leaving_penalty
+            rewards['penalty-leave-room'] = self.leaving_penalty
     
 class ZeldaDungeonCombatEndCondition(ZeldaEndCondition):
     def __init__(self):
