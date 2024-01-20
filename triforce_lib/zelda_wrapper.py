@@ -54,7 +54,7 @@ class ZeldaObjectData:
     def enumerate_projectile_ids(self) -> int:
         for i in range(1, 0xc):
             id = self.get_object_id(i)
-            if id > 0x48 and id != 0x60:
+            if id > 0x48 and id != 0x60 and id != 0x68:
                 yield i
 
     @property
