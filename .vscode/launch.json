@@ -59,11 +59,11 @@
             "justMyCode": false
         },
         {
-            "name": "Scenario: Dungeon 1 Evaluation",
+            "name": "Display",
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["evaluate", "dungeon1", "10", "--render", "--debug-scenario","--verbose", "2"],
+            "args": ["display", "dungeon1combat", "10", "--frame-stack", "1", "--load", "/mnt/x/triforce/vector_rewards_miss_penalty/dungeon1combat/ppo_1x_grayscale/model_114688.zip"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

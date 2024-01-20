@@ -70,7 +70,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # missed attack
         self.distance_threshold = 36
-        self.attack_miss_penalty = -self.reward_minimum
+        self.attack_miss_penalty = -self.reward_tiny
 
     def clear(self):
         super().clear()
