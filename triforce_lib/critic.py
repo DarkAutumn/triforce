@@ -60,8 +60,8 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # same room movement rewards
         self.wall_collision_penalty = -self.reward_tiny
-        self.closing_distance_reward = self.reward_tiny
-        self.moving_farther_penalty = -self.reward_tiny
+        self.move_closer_reward = self.reward_tiny
+        self.move_farther_penalty = -self.reward_tiny
         
         # state tracking
         self._visted_locations = [[False] * 256 ] * 2
@@ -96,8 +96,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # movement
         self.critique_location_discovery(old, new, rewards)
-        self.critique_wall_collision(old, new, rewards)
-        self.critique_closing_distance(old, new, rewards)
+        self.critique_movement(old, new, rewards)
     
     # reward helpers, may be overridden
     def critique_equipment_pickup(self, old, new, rewards):
@@ -179,51 +178,33 @@ class ZeldaGameplayCritic(ZeldaCritic):
             self.mark_visited(*curr)
             rewards['reward-new-location'] = self.new_location_reward
     
-    def critique_wall_collision(self, old, new, rewards):
-        """"Reward the agent for moving out of the last position, but only if that did not happen as a result of taking a hit
-        from an enemy."""
-
-        if self.wall_collision_penalty is not None:
-            if old['link_pos'] == new['link_pos'] and new['action'] == 'movement':
-                # link bumped against the wall and didn't move despite choosing to move
+    def critique_movement(self, old, new, rewards):
+        if new['action'] == 'movement':
+            if old['link_pos'] == new['link_pos']:
+                # link tried to move but ran into the wall instead
                 rewards['penalty-wall-collision'] = self.wall_collision_penalty
-    
-    def critique_closing_distance(self, old, new, rewards):
-        if self.closing_distance_reward is not None and new['new_position'] and new['action'] == 'movement':
-            objects = new['objects']
+            
+            else:
+                # Reward moving towards objectives, or moving to the closest item
+                # Penalize directly moving away from the objective if not moving twoards an item
 
-            if objects.enemy_count > 0:
-                if old['link_pos'] != new['link_pos']:
-                    # calculate Link's normalized motion vector
-                    link_old_pos = np.array(old['link_pos'], dtype=np.float32)
-                    link_new_pos = np.array(new['link_pos'], dtype=np.float32)
+                objective_vectors = [new['objective_vector'], new['closest_item_vector']]
+                nonzero_vectors = [v for v in objective_vectors if v[0] or v[1]]
 
-                    link_motion_vector = link_new_pos - link_old_pos
-                    link_motion_vector = link_motion_vector / np.linalg.norm(link_motion_vector)
+                link_old_pos = np.array(old['link_pos'], dtype=np.float32)
+                link_new_pos = np.array(new['link_pos'], dtype=np.float32)
 
-                    # calculate normalized vector from link to each enemy
-                    enemy_ids = [id for id in objects.enumerate_enemy_ids() if id is not None]
-                    enemy_pos = np.array([objects.get_position(id) for id in enemy_ids])
+                # we know the norm won't be zero since we know the position has changed
+                link_motion_vector = link_new_pos - link_old_pos
+                link_motion_vector = link_motion_vector / np.linalg.norm(link_motion_vector)
 
-                    vector_to_enemies = enemy_pos - link_old_pos
+                # find points within a 90 degree cone of link's motion vector, COS(45) == sqrt(2)/2
+                dotproducts = np.sum(link_motion_vector * nonzero_vectors, axis=1)
+                if np.any(dotproducts >= np.sqrt(2) / 2):
+                    rewards['reward-move-closer'] = self.move_closer_reward
 
-                    # add a small epislon to avoid divide by zero
-                    epsilon = 1e-6
-                    norms = np.linalg.norm(vector_to_enemies, axis=1) + epsilon
-                    vector_to_enemies = vector_to_enemies / norms[:, np.newaxis]
-
-                    # find points within a 90 degree cone of link's motion vector, COS(45) == sqrt(2)/2
-                    dotproducts = np.sum(link_motion_vector * vector_to_enemies, axis=1)
-                    enemies_closer = np.sum(dotproducts >= np.sqrt(2) / 2)
-                    enemies_farther = np.all(dotproducts <= -np.sqrt(2) / 2)
-
-                    if enemies_closer:
-                        percentage = enemies_closer / float(objects.enemy_count)
-                        rewards['reward-close-distance'] = percentage * self.closing_distance_reward
-                        
-                    elif enemies_farther:
-                        percentage = enemies_farther / float(objects.enemy_count)
-                        rewards['penalty-moving-farther'] = percentage * self.moving_farther_penalty
+                elif np.all(dotproducts <= -np.sqrt(2) / 2):
+                    rewards['penalty-move-farther'] = self.move_farther_penalty
 
     # state helpers, some states are calculated
     def has_visited(self, level, location):
