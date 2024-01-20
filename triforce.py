@@ -55,8 +55,6 @@ def main():
 
     if args.load:
         zelda_ml.load(args.load)
-    else:
-        zelda_ml.load()
 
     try:
         if args.action == 'train' or args.action == 'learn':

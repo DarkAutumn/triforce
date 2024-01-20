@@ -144,19 +144,10 @@ class ZeldaML:
         self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
         self.save(self.model_file)
 
-    def load(self, path=None, best = None):
-        if path and best:
-            raise Exception('Cannot specify both path and best')
-        
-        if not path:
-            if best and os.path.exists(self.best_file):
-                path = self.best_file
-            elif os.path.exists(self.model_file):
-                path = self.model_file
-
-        if not path or not os.path.exists(path):
-            return False
-        
+    def load(self, path):
+        if not os.path.exists(path):
+            raise Exception(f'Cannot load model from {path} because it does not exist')
+                
         if self.algorithm == 'ppo':
             self.model = PPO.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef, device=self.device)
         elif self.algorithm == 'a2c':
