@@ -42,17 +42,17 @@ class ZeldaObjectData:
         return 1 <= obj_id <= 0x48
     
     def enumerate_enemy_ids(self) -> int:
-        for i in range(1, 0xb):
+        for i in range(1, 0xc):
             if self.is_enemy(self.get_object_id(i)):
                 yield i
 
     def enumerate_item_ids(self) -> int:
-        for i in range(1, 0xb):
+        for i in range(1, 0xc):
             if self.get_object_id(i) == 0x60:
                 yield i
 
     def enumerate_projectile_ids(self) -> int:
-        for i in range(1, 0xb):
+        for i in range(1, 0xc):
             id = self.get_object_id(i)
             if id > 0x48 and id != 0x60:
                 yield i
@@ -244,7 +244,7 @@ class ZeldaGameWrapper(gym.Wrapper):
     # wait based on the kind of action
         if self.action_is_movement(act):
             obs, rewards, terminated, truncated, info = self.env.step(act)
-            obs, terminated, truncated, info, rew = self.skip(act, movement_cooldown)
+            obs, rew, terminated, truncated, info = self.skip(act, movement_cooldown)
             rewards += rew
 
         elif self.action_is_attack(act):
@@ -254,14 +254,13 @@ class ZeldaGameWrapper(gym.Wrapper):
 
             obs, rew, terminated, truncated, info = self.env.step(act)
             rewards += rew
-            hold_action = self._none_action
-            obs, terminated, truncated, info, rew = self.skip(hold_action, attack_cooldown)
+
+            obs, rew, terminated, truncated, info = self.skip(self._none_action, attack_cooldown)
             rewards += rew
 
         elif self.action_is_item(act):
             obs, rewards, terminated, truncated, info = self.env.step(act)
-            hold_action = self._none_action
-            obs, terminated, truncated, info, rew = self.skip(hold_action, item_cooldown)
+            obs, rew, terminated, truncated, info = self.skip(self._none_action, item_cooldown)
             rewards += rew
 
         else:
@@ -278,16 +277,18 @@ class ZeldaGameWrapper(gym.Wrapper):
         if not self.deterministic:
             cooldown = randint(0, random_delay_max_frames + 1)
             if cooldown:
-                obs, terminated, truncated, info, rew = self.skip(self._none_action, cooldown)
+                obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
                 rewards += rew
 
         return obs, rewards, terminated, truncated, info
 
     def skip(self, act, cooldown):
+        rewards = 0
         for i in range(cooldown):
             obs, rew, terminated, truncated, info = self.env.step(act)
+            rewards += rew
 
-        return obs,terminated,truncated,info,rew
+        return obs, rewards, terminated, truncated, info
     
     def action_is_movement(self, act):
         return any(act[4:8]) and not self.action_is_attack(act) and not self.action_is_item(act)
