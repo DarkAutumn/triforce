@@ -211,7 +211,8 @@ class LogRewardCallback(BaseCallback):
             if self.n_calls >= 2048:
                 for kind, rew in self._rewards.items():
                     split = kind.split('-', 1)
-                    self.logger.log(f"{split[0]}/{split[1]}", rew)
+                    name = f"{split[0]}/{split[1]}"
+                    self.logger.record(name, rew)
 
                 ends = Counter(self._endings)
                 for ending, count in ends.items():
