@@ -9,6 +9,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
+from .ai_orchestrator import AIOrchestrator
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaAttackOnlyActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
@@ -97,6 +98,10 @@ class ZeldaML:
             # Wrap the game to produce new info about game state and to hold the button down after the action is taken to achieve the desired
             # number of actions per second.
             env = ZeldaGameWrapper(env)
+
+            # The AI orchestration piece.  This is responsible for selecting the model to use and the target
+            # objective.
+            env = AIOrchestrator(env)
             
             # Frame stack and convert to grayscale if requested
             env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, kind=obs_kind)

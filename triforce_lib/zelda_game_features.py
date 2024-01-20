@@ -32,12 +32,14 @@ class ZeldaGameFeatures(gym.Wrapper):
     def get_enemy_vectors(self, info):
         if info is None or 'link_pos' not in info or 'objects' not in info:
             return np.zeros((self.num_enemy_vectors, 2), dtype=np.float32)
+        
+        objective = info['objective_vector']
         closest_enemy = self.get_vector_of_closest(info['enemy_vectors'])
         closest_projectile = self.get_vector_of_closest(info['projectile_vectors'])
         closest_item = self.get_vector_of_closest(info['item_vectors'])
 
         # create an np array of the vectors
-        normalized_vectors = [np.zeros(2, dtype=np.float32), closest_enemy, closest_projectile, closest_item, np.zeros(2, dtype=np.float32)]
+        normalized_vectors = [objective, closest_enemy, closest_projectile, closest_item, np.zeros(2, dtype=np.float32)]
         return np.array(normalized_vectors, dtype=np.float32)
 
     def get_vector_of_closest(self, vectors_and_distances):
