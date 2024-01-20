@@ -216,6 +216,10 @@ class LogRewardCallback(BaseCallback):
                 for ending, count in ends.items():
                     self.logger.record('end/' + ending, count)
 
+                if ends:
+                    win_rate = ends['killed-all-enemies'] / float(sum(ends.values()))
+                    self.logger.record('end/win_rate', win_rate)
+
             self._rewards.clear()
             self._endings.clear()
 
