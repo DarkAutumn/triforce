@@ -7,9 +7,9 @@
 from random import randint
 from typing import Any
 import gymnasium as gym
+import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .model_parameters import actions_per_second
 from .zelda_game import get_bomb_state, is_mode_death, get_beam_state, is_mode_scrolling
 
 class ZeldaObjectData:
@@ -42,9 +42,19 @@ class ZeldaObjectData:
         return 1 <= obj_id <= 0x48
     
     def enumerate_enemy_ids(self) -> int:
-        enemies = 0
-        for i in range(1, 0xb):
+        for i in range(1, 0xc):
             if self.is_enemy(self.get_object_id(i)):
+                yield i
+
+    def enumerate_item_ids(self) -> int:
+        for i in range(1, 0xc):
+            if self.get_object_id(i) == 0x60:
+                yield i
+
+    def enumerate_projectile_ids(self) -> int:
+        for i in range(1, 0xc):
+            id = self.get_object_id(i)
+            if id > 0x48 and id != 0x60 and id != 0x68:
                 yield i
 
     @property
@@ -52,7 +62,7 @@ class ZeldaObjectData:
         return sum(1 for i in range(1, 0xb) if self.is_enemy(self.get_object_id(i)))
 
 movement_cooldown = 5
-attack_cooldown = 20
+attack_cooldown = 15
 item_cooldown = 10
 random_delay_max_frames = 1
 
@@ -63,6 +73,9 @@ class ZeldaGameWrapper(gym.Wrapper):
         self.deterministic = deterministic
 
         self._reset_state()
+        self._none_action = np.zeros(9, dtype=bool)
+
+        self.a_button = env.unwrapped.buttons.index('A')
 
     def reset(self, **kwargs):
         result = super().reset(**kwargs)
@@ -90,13 +103,17 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         elif self.action_is_item(act):
             info['action'] = 'item'
-            
+
         unwrapped = self.env.unwrapped
+        info['buttons'] = self.get_button_names(act, unwrapped.buttons)
         objects = ZeldaObjectData(unwrapped.get_ram())
 
         info['objects'] = objects
         info['beam_hits'] = 0
-        info['link_pos'] = objects.link_pos
+
+        link_pos = objects.link_pos
+        info['link_pos'] = link_pos
+        self._add_vectors_and_distances(link_pos, objects, info)
 
         curr_enemy_health = None
         step_kills = 0
@@ -147,6 +164,27 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._prev_objs = objects
 
         return obs, rewards, terminated, truncated, info
+
+    def _add_vectors_and_distances(self, link_pos, objects, info):
+        link_pos = np.array(link_pos, dtype=np.float32)
+        info['enemy_vectors'] = self._get_and_normalize_vectors(link_pos, objects, objects.enumerate_enemy_ids())
+        info['projectile_vectors'] = self._get_and_normalize_vectors(link_pos, objects, objects.enumerate_projectile_ids())
+        info['item_vectors'] = self._get_and_normalize_vectors(link_pos, objects, objects.enumerate_item_ids())
+
+    def _get_and_normalize_vectors(self, link_pos, objects, ids):
+        positions = [objects.get_position(id) for id in ids if id is not None]
+
+        # Calculate vectors and distances to each enemy
+        vectors_and_distances = [self._normalize(enemy_pos - link_pos) for enemy_pos in positions]
+        vectors_and_distances.sort(key=lambda x: x[1])
+        return vectors_and_distances
+    
+    def _normalize(self, vector):
+        epsilon = 1e-6
+        norm = np.linalg.norm(vector)
+        if abs(norm) < epsilon: 
+            return np.zeros(2, dtype=np.float32), 0
+        return vector / norm, norm
 
     def clear_variables(self, name):
         self.clear_item(name + '_already_active')
@@ -203,28 +241,34 @@ class ZeldaGameWrapper(gym.Wrapper):
         return step_kills, step_injuries
 
     def act_and_wait(self, act):
-        obs, rewards, terminated, truncated, info = self.env.step(act)
+    # wait based on the kind of action
+        if self.action_is_movement(act):
+            obs, rewards, terminated, truncated, info = self.env.step(act)
+            obs, rew, terminated, truncated, info = self.skip(act, movement_cooldown)
+            rewards += rew
 
-        # wait based on the kind of action
-        if not terminated and not truncated:
-            if self.action_is_movement(act):
-                obs, terminated, truncated, info, rew = self.skip(act, movement_cooldown)
-                rewards += rew
+        elif self.action_is_attack(act):
+            turn_action = act.copy()
+            turn_action[self.a_button] = False
+            obs, rewards, terminated, truncated, info = self.env.step(turn_action)
 
-            elif self.action_is_attack(act):
-                obs, terminated, truncated, info, rew = self.skip(act, attack_cooldown)
-                rewards += rew
+            obs, rew, terminated, truncated, info = self.env.step(act)
+            rewards += rew
 
-            elif self.action_is_item(act):
-                obs, terminated, truncated, info, rew = self.skip(act, item_cooldown)
-                rewards += rew
+            obs, rew, terminated, truncated, info = self.skip(self._none_action, attack_cooldown)
+            rewards += rew
 
-            else:
-                raise Exception("Unknown action type")
+        elif self.action_is_item(act):
+            obs, rewards, terminated, truncated, info = self.env.step(act)
+            obs, rew, terminated, truncated, info = self.skip(self._none_action, item_cooldown)
+            rewards += rew
+
+        else:
+            raise Exception("Unknown action type")
         
         # skip scrolling
         while is_mode_scrolling(info["mode"]):
-            obs, rew, terminated, truncated, info = self.env.step(act)
+            obs, rew, terminated, truncated, info = self.env.step(self._none_action)
             rewards += rew
             if terminated or truncated:
                 break
@@ -233,16 +277,18 @@ class ZeldaGameWrapper(gym.Wrapper):
         if not self.deterministic:
             cooldown = randint(0, random_delay_max_frames + 1)
             if cooldown:
-                obs, terminated, truncated, info, rew = self.skip(act, cooldown)
+                obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
                 rewards += rew
 
         return obs, rewards, terminated, truncated, info
 
     def skip(self, act, cooldown):
+        rewards = 0
         for i in range(cooldown):
             obs, rew, terminated, truncated, info = self.env.step(act)
+            rewards += rew
 
-        return obs,terminated,truncated,info,rew
+        return obs, rewards, terminated, truncated, info
     
     def action_is_movement(self, act):
         return any(act[4:8]) and not self.action_is_attack(act) and not self.action_is_item(act)
@@ -292,3 +338,10 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         unwrapped.em.set_state(savestate)
         return kills, injuries
+
+    def get_button_names(self, act, buttons):
+        result = []
+        for i, b in enumerate(buttons):
+            if act[i]:
+                result.append(b)
+        return result

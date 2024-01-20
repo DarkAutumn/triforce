@@ -1,14 +1,14 @@
 import argparse
 import os
 
-from triforce_lib import ZeldaScenario, ZeldaML
+from triforce_lib import ZeldaScenario, ZeldaML, pygame_render
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command line arguments for training, testing, evaluating, or recording.")
 
     scenarios = ZeldaScenario.get_all_scenarios()
 
-    parser.add_argument("action", choices=['train', 'evaluate', 'help'], help="Action to perform.")
+    parser.add_argument("action", choices=['train', 'evaluate', 'help', 'display'], help="Action to perform.")
     parser.add_argument("scenario", choices=scenarios, help="The scenario to run.")
     parser.add_argument("iterations", type=int, help="Number of iterations to run.")
 
@@ -42,8 +42,14 @@ def main():
     args = parse_args()
 
     # create the agent and load the model
-    render_mode = 'human' if args.action == 'test' or args.action == 'evaluate' or args.render else None
-    record = args.action == 'record'
+
+    render_mode = None
+    if args.action == 'test' or args.action == 'evaluate':
+        render_mode = 'human'
+    elif args.action == 'display':
+        render_mode = 'rgb_array'
+
+    record = args.record
     debug_scenario = args.debug_scenario or args.action == 'evaluate'
     zelda_ml = ZeldaML(base_dir, args.scenario, args.frame_stack, args.color, args.parallel, record=record, render_mode=render_mode, verbose=args.verbose, debug_scenario=debug_scenario, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
 
@@ -60,6 +66,9 @@ def main():
         elif args.action == 'evaluate' or args.action == 'record':
             mean_reward, std_reward = zelda_ml.evaluate(args.iterations, deterministic=False, render=True)
             print(f'Mean reward: {mean_reward} +/- {std_reward}')
+
+        elif args.action == 'display':
+            pygame_render(zelda_ml)
 
     finally:
         zelda_ml.close()
