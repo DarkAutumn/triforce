@@ -191,20 +191,21 @@ class ZeldaGameplayCritic(ZeldaCritic):
                 objective_vectors = [new['objective_vector'], new['closest_item_vector']]
                 nonzero_vectors = [v for v in objective_vectors if v[0] or v[1]]
 
-                link_old_pos = np.array(old['link_pos'], dtype=np.float32)
-                link_new_pos = np.array(new['link_pos'], dtype=np.float32)
+                if nonzero_vectors:
+                    link_old_pos = np.array(old['link_pos'], dtype=np.float32)
+                    link_new_pos = np.array(new['link_pos'], dtype=np.float32)
 
-                # we know the norm won't be zero since we know the position has changed
-                link_motion_vector = link_new_pos - link_old_pos
-                link_motion_vector = link_motion_vector / np.linalg.norm(link_motion_vector)
+                    # we know the norm won't be zero since we know the position has changed
+                    link_motion_vector = link_new_pos - link_old_pos
+                    link_motion_vector = link_motion_vector / np.linalg.norm(link_motion_vector)
 
-                # find points within a 90 degree cone of link's motion vector, COS(45) == sqrt(2)/2
-                dotproducts = np.sum(link_motion_vector * nonzero_vectors, axis=1)
-                if np.any(dotproducts >= np.sqrt(2) / 2):
-                    rewards['reward-move-closer'] = self.move_closer_reward
+                    # find points within a 90 degree cone of link's motion vector, COS(45) == sqrt(2)/2
+                    dotproducts = np.sum(link_motion_vector * nonzero_vectors, axis=1)
+                    if np.any(dotproducts >= np.sqrt(2) / 2):
+                        rewards['reward-move-closer'] = self.move_closer_reward
 
-                elif np.all(dotproducts <= -np.sqrt(2) / 2):
-                    rewards['penalty-move-farther'] = self.move_farther_penalty
+                    elif np.all(dotproducts <= -np.sqrt(2) / 2):
+                        rewards['penalty-move-farther'] = self.move_farther_penalty
 
     # state helpers, some states are calculated
     def has_visited(self, level, location):
