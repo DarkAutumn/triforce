@@ -116,7 +116,7 @@ def draw_arrow(screen, label, start_pos, direction, radius=128, color=(255, 0, 0
 
     pygame.draw.circle(screen, (255, 255, 255), centerpoint, radius, 1)
 
-    if direction.all() != 0:
+    if direction[0] != 0 or direction[1] != 0:
         pygame.draw.line(screen, color, centerpoint, end_pos, width)
 
         # Arrowhead
@@ -193,7 +193,7 @@ def draw_description_text(surface, rewards_deque, start_x, start_y, line_height,
 
         render_text(surface, f"Action: {action}", (start_x, y))
         y += line_height
-        
+
         if rewards:
             for reason, value in rewards.items():
                 # color=red if negative, light blue if positive, white if zero
