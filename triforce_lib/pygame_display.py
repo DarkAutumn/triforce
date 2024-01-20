@@ -175,10 +175,11 @@ def update_rewards(reward_values, reward_details, info, reward):
         reward_dict = {}
 
     prev = reward_details[0] if reward_details else None
-    if prev is not None and prev['rewards'] == reward_dict and prev['action'] == info['action']:
+    action = "+".join(info['buttons'])
+    if prev is not None and prev['rewards'] == reward_dict and prev['action'] == action:
         prev['count'] += 1
     else:
-        reward_details.appendleft({'count': 1, 'rewards': reward_dict, 'action' : info['action']})
+        reward_details.appendleft({'count': 1, 'rewards': reward_dict, 'action' : action})
 
 
 def render_text(surface, text, position, color=(255, 255, 255)):

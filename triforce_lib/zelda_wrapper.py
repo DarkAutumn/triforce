@@ -101,8 +101,9 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         elif self.action_is_item(act):
             info['action'] = 'item'
-            
+
         unwrapped = self.env.unwrapped
+        info['buttons'] = self.get_button_names(act, unwrapped.buttons)
         objects = ZeldaObjectData(unwrapped.get_ram())
 
         info['objects'] = objects
@@ -330,3 +331,10 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         unwrapped.em.set_state(savestate)
         return kills, injuries
+
+    def get_button_names(self, act, buttons):
+        result = []
+        for i, b in enumerate(buttons):
+            if act[i]:
+                result.append(b)
+        return result
