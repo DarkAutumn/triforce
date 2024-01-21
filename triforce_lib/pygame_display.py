@@ -1,4 +1,6 @@
 import math
+import os
+import cv2
 import pygame
 import numpy as np
 from collections import deque
@@ -26,13 +28,20 @@ def pygame_render(zelda_ml):
     text_y = 0
     text_height = game_height + graph_height
     text_width = 300
-    screen = pygame.display.set_mode((obs_width + game_width + text_width, max(game_height + graph_height, text_height)))
+
+    total_width = obs_width + game_width + text_width
+    total_height = max(game_height + graph_height, text_height)
+    dimensions = (total_width, total_height)
+
+    screen = pygame.display.set_mode(dimensions)
     clock = pygame.time.Clock()
 
     block_width = 10
     center_line = game_height + graph_height // 2
     reward_values = deque(maxlen=graph_width // block_width)
     reward_details = deque(maxlen=100)
+
+    recording = None
 
     terminated = True
     truncated = False
@@ -46,6 +55,10 @@ def pygame_render(zelda_ml):
             reward_values.clear()
             for _ in range(reward_values.maxlen):
                 reward_values.append(0)
+
+            if recording is not None:
+                stop_recording(recording)
+                recording = start_recording(dimensions)
 
         # Perform a step in the environment
         if mode == 'c' or mode == 'n':
@@ -84,6 +97,12 @@ def pygame_render(zelda_ml):
             draw_rewards_graph(graph_height, screen, block_width, center_line, reward_values)
             draw_description_text(screen, reward_details, text_x, text_y, 20, text_height)
 
+            if recording:
+                result_frame = pygame.surfarray.array3d(pygame.display.get_surface())
+                result_frame = result_frame.transpose([1, 0, 2])  # Transpose it to the correct format
+                result_frame = cv2.cvtColor(result_frame, cv2.COLOR_RGB2BGR)  # Convert from RGB to BGR
+                recording.write(result_frame)
+
             # Display the scaled frame
             pygame.display.flip()
             clock.tick(60.1)
@@ -95,7 +114,11 @@ def pygame_render(zelda_ml):
                     break
 
                 elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_r:
+                    if event.key == pygame.K_q:
+                        mode = 'q'
+                        break
+
+                    elif event.key == pygame.K_r:
                         terminated = truncated = True
                         break
 
@@ -108,8 +131,34 @@ def pygame_render(zelda_ml):
                     elif event.key == pygame.K_c:
                         mode = 'c'
 
+                    elif event.key == pygame.K_F5:
+                        if recording is not None:
+                            stop_recording(recording)
+                            recording = None
+                        else:
+                            recording = start_recording(dimensions)
+
+    stop_recording(recording)
     env.close()
     pygame.quit()
+
+def get_filename():
+    # get a unique filename in the current directory in the format of recording_###.mp4
+    i = 0
+    while True:
+        filename = f"recording_{i:03d}.avi"
+        if not os.path.exists(filename):
+            return filename
+        i += 1
+
+def start_recording(dimensions):
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    recording = cv2.VideoWriter(get_filename(), fourcc, 60.1, dimensions)
+    return recording
+
+def stop_recording(recording):
+    if recording is not None:
+        recording.release()
 
 def draw_arrow(screen, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
     render_text(screen, label, (start_pos[0], start_pos[1]))
