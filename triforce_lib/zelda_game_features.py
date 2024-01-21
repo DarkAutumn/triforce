@@ -1,8 +1,6 @@
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import get_heart_halves, get_heart_containers
-
 num_direction_vectors = 5
 
 class ZeldaGameFeatures(gym.Wrapper):
@@ -55,7 +53,7 @@ class ZeldaGameFeatures(gym.Wrapper):
             has_enemies = 1.0
 
         has_beams = 0.0
-        if 'objects' in info:
-            has_beams = 1.0 if get_heart_halves(info) * 2 == get_heart_containers(info) else 0.0
+        if 'has_beams' in info:
+            has_beams = 1.0 if info['has_beams'] else 0.0
 
         return np.array([has_enemies, has_beams], dtype=np.float32)

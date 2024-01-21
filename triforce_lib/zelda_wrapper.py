@@ -10,7 +10,7 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import get_bomb_state, is_mode_death, get_beam_state, is_mode_scrolling
+from .zelda_game import get_bomb_state, has_beams, is_mode_death, get_beam_state, is_mode_scrolling
 
 class ZeldaObjectData:
     def __init__(self, ram):
@@ -114,6 +114,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         link_pos = objects.link_pos
         info['link_pos'] = link_pos
         self._add_vectors_and_distances(link_pos, objects, info)
+
+        info['has_beams'] = has_beams(info)
 
         curr_enemy_health = None
         step_kills = 0
