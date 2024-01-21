@@ -47,7 +47,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # reward values
         self.rupee_reward = self.reward_small
-        self.health_change_reward = self.reward_medium
+        self.health_change_reward = self.reward_large
         self.kill_reward = self.reward_small
         self.new_location_reward = self.reward_medium
         
