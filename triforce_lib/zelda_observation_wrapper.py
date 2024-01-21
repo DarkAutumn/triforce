@@ -9,7 +9,7 @@ from collections import deque
 from .model_parameters import viewport_pixels
 
 # the y coordinate where the game viewport starts (above which is the HUD)
-gameplay_start_y = 55
+gameplay_start_y = 56
 
 class FrameCaptureWrapper(gym.Wrapper):
     def __init__(self, env, rgb_render):
