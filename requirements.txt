@@ -9,3 +9,4 @@ pytest
 opencv-python
 Pillow
 pygame
+cv2
