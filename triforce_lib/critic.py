@@ -174,7 +174,8 @@ class ZeldaGameplayCritic(ZeldaCritic):
         if new['step_kills'] or new['step_injuries']:
             rewards['reward-injure-kill'] = self.kill_reward
         else:
-            if new['action'] == 'attack' and new['enemy_vectors']:
+            # penalize random attacks, unless we have sword beams
+            if new['action'] == 'attack' and new['enemy_vectors'] and not new['has_beams']:
                 distance = new['enemy_vectors'][0][1]
                 if distance > self.distance_threshold:
                     rewards['penalty-attack-miss'] = self.attack_miss_penalty
