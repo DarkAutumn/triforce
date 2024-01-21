@@ -70,10 +70,10 @@ def pygame_render(zelda_ml):
 
             # Show observation values
             y_pos = render_observation_view(screen, obs_x, obs_y, obs_width, obs["image"])
-            y_pos = draw_arrow(screen, "Objective", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][0], radius=obs_width // 4, color=(255, 255, 255), width=3)
-            y_pos = draw_arrow(screen, "Enemy", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][1], radius=obs_width // 4, color=(255, 255, 255), width=3)
-            y_pos = draw_arrow(screen, "Projectile", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][2], radius=obs_width // 4, color=(255, 0, 0), width=3)
-            y_pos = draw_arrow(screen, "Item", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][3], radius=obs_width // 4, color=(255, 255, 255), width=3)
+            y_pos = draw_arrow(screen, "Objective", (obs_x + obs_width // 4, y_pos), obs["vectors"][0], radius=obs_width // 4, color=(255, 255, 255), width=3)
+            y_pos = draw_arrow(screen, "Enemy", (obs_x + obs_width // 4, y_pos), obs["vectors"][1], radius=obs_width // 4, color=(255, 255, 255), width=3)
+            y_pos = draw_arrow(screen, "Projectile", (obs_x + obs_width // 4, y_pos), obs["vectors"][2], radius=obs_width // 4, color=(255, 0, 0), width=3)
+            y_pos = draw_arrow(screen, "Item", (obs_x + obs_width // 4, y_pos), obs["vectors"][3], radius=obs_width // 4, color=(255, 255, 255), width=3)
 
             # render the gameplay
             render_game_view(rgb_array, (game_x, game_y), game_width, game_height, screen)
