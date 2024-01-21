@@ -3,7 +3,7 @@ import typing
 from .end_condition import ZeldaEndCondition
 from .scenario_dungeon import ZeldaDungeonCritic
 from .zelda_game_data import zelda_game_data
-from .model_parameters import actions_per_second
+from .model_parameters import step_max
 
 class ZeldaDungeonCombatCritic(ZeldaDungeonCritic):
     def __init__(self):
@@ -21,10 +21,7 @@ class ZeldaDungeonCombatEndCondition(ZeldaEndCondition):
     def __init__(self):
         super().__init__()
 
-        # 3 minutes to beat each room
-        total_minutes = 5
-        total_seconds = total_minutes * 60
-        self._step_max = total_seconds * actions_per_second
+        self._step_max = step_max
 
     def clear(self):
         super().clear()

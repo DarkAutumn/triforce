@@ -1,2 +1,2 @@
-
-actions_per_second = 4
+step_max = 750
+viewport_pixels = 128

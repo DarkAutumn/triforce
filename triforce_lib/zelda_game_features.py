@@ -1,6 +1,8 @@
 import gymnasium as gym
 import numpy as np
 
+from .zelda_game import get_heart_halves, get_heart_containers
+
 num_direction_vectors = 5
 
 class ZeldaGameFeatures(gym.Wrapper):
@@ -12,7 +14,7 @@ class ZeldaGameFeatures(gym.Wrapper):
         self.observation_space = gym.spaces.Dict({
             "image": self.image_obs_space,
             "vectors" : gym.spaces.Box(low=-1.0, high=1.0, shape=(num_direction_vectors, 2), dtype=np.float32),
-            "features" : gym.spaces.MultiBinary(1)
+            "features" : gym.spaces.MultiBinary(2)
         })
         self.num_enemy_vectors = num_direction_vectors
 
@@ -45,8 +47,15 @@ class ZeldaGameFeatures(gym.Wrapper):
         return np.array(normalized_vectors, dtype=np.float32)
 
     def get_features(self, info):
-        value = 0.0
-        if info is not None and 'enemy_vectors' in info and info['enemy_vectors'] and info['enemy_vectors'][0][1] > 36:
-            value = 1.0
+        if info is None:
+            return np.zeros(2, dtype=np.float32)
 
-        return np.array([value], dtype=np.float32)
+        has_enemies = 0.0
+        if 'enemy_vectors' in info and info['enemy_vectors'] and info['enemy_vectors'][0][1] > 36:
+            has_enemies = 1.0
+
+        has_beams = 0.0
+        if 'objects' in info:
+            has_beams = 1.0 if get_heart_halves(info) * 2 == get_heart_containers(info) else 0.0
+
+        return np.array([has_enemies, has_beams], dtype=np.float32)

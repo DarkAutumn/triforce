@@ -6,6 +6,7 @@
 import gymnasium as gym
 import numpy as np
 from collections import deque
+from .model_parameters import viewport_pixels
 
 # the y coordinate where the game viewport starts (above which is the HUD)
 gameplay_start_y = 55
@@ -55,7 +56,7 @@ class ZeldaObservationWrapper(gym.Wrapper):
             self.trim = 0
 
         if kind == 'viewport':
-            self.viewport_size = 64
+            self.viewport_size = viewport_pixels
 
         # modify the observation space to match the new shape
         # we also move the last channel count to be the first dimension to avoid a VecTransposeImage wrapper
