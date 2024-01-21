@@ -70,10 +70,12 @@ def pygame_render(zelda_ml):
 
             # Show observation values
             y_pos = render_observation_view(screen, obs_x, obs_y, obs_width, obs["image"])
-            y_pos = draw_arrow(screen, "Objective", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][0], radius=obs_width // 4, color=(255, 255, 255), width=3)
-            y_pos = draw_arrow(screen, "Enemy", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][1], radius=obs_width // 4, color=(255, 255, 255), width=3)
-            y_pos = draw_arrow(screen, "Projectile", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][2], radius=obs_width // 4, color=(255, 0, 0), width=3)
-            y_pos = draw_arrow(screen, "Item", (obs_x + obs_width // 4, y_pos), obs["enemy_vectors"][3], radius=obs_width // 4, color=(255, 255, 255), width=3)
+            y_pos = draw_arrow(screen, "Objective", (obs_x + obs_width // 4, y_pos), obs["vectors"][0], radius=obs_width // 4, color=(255, 255, 255), width=3)
+            y_pos = draw_arrow(screen, "Enemy", (obs_x + obs_width // 4, y_pos), obs["vectors"][1], radius=obs_width // 4, color=(255, 255, 255), width=3)
+            y_pos = draw_arrow(screen, "Projectile", (obs_x + obs_width // 4, y_pos), obs["vectors"][2], radius=obs_width // 4, color=(255, 0, 0), width=3)
+            y_pos = draw_arrow(screen, "Item", (obs_x + obs_width // 4, y_pos), obs["vectors"][3], radius=obs_width // 4, color=(255, 255, 255), width=3)
+            y_pos = render_text(screen, f"Enemies: {obs['features'][0]}", (obs_x, y_pos))
+            y_pos = render_text(screen, f"Beams: {obs['features'][1]}", (obs_x, y_pos))
 
             # render the gameplay
             render_game_view(rgb_array, (game_x, game_y), game_width, game_height, screen)
@@ -186,6 +188,7 @@ def update_rewards(reward_values, reward_details, info, reward):
 def render_text(surface, text, position, color=(255, 255, 255)):
     text_surface = font.render(text, True, color)
     surface.blit(text_surface, position)
+    return position[1] + text_surface.get_height()
 
 def draw_description_text(surface, rewards_deque, start_x, start_y, line_height, max_height):
     y = start_y

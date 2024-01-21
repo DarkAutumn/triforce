@@ -10,7 +10,7 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import get_bomb_state, is_mode_death, get_beam_state, is_mode_scrolling
+from .zelda_game import get_bomb_state, has_beams, is_mode_death, get_beam_state, is_mode_scrolling
 
 class ZeldaObjectData:
     def __init__(self, ram):
@@ -115,6 +115,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['link_pos'] = link_pos
         self._add_vectors_and_distances(link_pos, objects, info)
 
+        info['has_beams'] = has_beams(info)
+
         curr_enemy_health = None
         step_kills = 0
         step_injuries = 0
@@ -167,9 +169,15 @@ class ZeldaGameWrapper(gym.Wrapper):
 
     def _add_vectors_and_distances(self, link_pos, objects, info):
         link_pos = np.array(link_pos, dtype=np.float32)
+        
         info['enemy_vectors'] = self._get_and_normalize_vectors(link_pos, objects, objects.enumerate_enemy_ids())
+        info['closest_enemy_vector'] = self._get_vector_of_closest(info['enemy_vectors'])
+        
         info['projectile_vectors'] = self._get_and_normalize_vectors(link_pos, objects, objects.enumerate_projectile_ids())
+        info['closest_projectile_vector'] = self._get_vector_of_closest(info['projectile_vectors'])
+        
         info['item_vectors'] = self._get_and_normalize_vectors(link_pos, objects, objects.enumerate_item_ids())
+        info['closest_item_vector'] = self._get_vector_of_closest(info['item_vectors'])
 
     def _get_and_normalize_vectors(self, link_pos, objects, ids):
         positions = [objects.get_position(id) for id in ids if id is not None]
@@ -185,6 +193,12 @@ class ZeldaGameWrapper(gym.Wrapper):
         if abs(norm) < epsilon: 
             return np.zeros(2, dtype=np.float32), 0
         return vector / norm, norm
+    
+    def _get_vector_of_closest(self, vectors_and_distances):
+        if vectors_and_distances:
+            return vectors_and_distances[0][0]
+        
+        return np.zeros(2, dtype=np.float32)
 
     def clear_variables(self, name):
         self.clear_item(name + '_already_active')

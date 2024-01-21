@@ -11,7 +11,8 @@ class ZeldaGameFeatures(gym.Wrapper):
         # Define a new observation space as a dictionary
         self.observation_space = gym.spaces.Dict({
             "image": self.image_obs_space,
-            "enemy_vectors": gym.spaces.Box(low=-1.0, high=1.0, shape=(num_direction_vectors, 2), dtype=np.float32)
+            "vectors" : gym.spaces.Box(low=-1.0, high=1.0, shape=(num_direction_vectors, 2), dtype=np.float32),
+            "features" : gym.spaces.MultiBinary(2)
         })
         self.num_enemy_vectors = num_direction_vectors
 
@@ -27,23 +28,32 @@ class ZeldaGameFeatures(gym.Wrapper):
     def augment_observation(self, observation, info):
         # Extract features and store them in the dictionary format
         vectors = self.get_enemy_vectors(info)
-        return {"image": observation, "enemy_vectors": vectors}
+        features = self.get_features(info)
+        return {"image": observation, "vectors": vectors, "features": features}
 
     def get_enemy_vectors(self, info):
         if info is None or 'link_pos' not in info or 'objects' not in info:
             return np.zeros((self.num_enemy_vectors, 2), dtype=np.float32)
         
         objective = info['objective_vector']
-        closest_enemy = self.get_vector_of_closest(info['enemy_vectors'])
-        closest_projectile = self.get_vector_of_closest(info['projectile_vectors'])
-        closest_item = self.get_vector_of_closest(info['item_vectors'])
+        closest_enemy = info['closest_enemy_vector']
+        closest_projectile = info['closest_projectile_vector']
+        closest_item = info['closest_item_vector']
 
         # create an np array of the vectors
         normalized_vectors = [objective, closest_enemy, closest_projectile, closest_item, np.zeros(2, dtype=np.float32)]
         return np.array(normalized_vectors, dtype=np.float32)
 
-    def get_vector_of_closest(self, vectors_and_distances):
-        if vectors_and_distances:
-            return vectors_and_distances[0][0]
-        
-        return np.zeros(2, dtype=np.float32)
+    def get_features(self, info):
+        if info is None:
+            return np.zeros(2, dtype=np.float32)
+
+        has_enemies = 0.0
+        if 'enemy_vectors' in info and info['enemy_vectors'] and info['enemy_vectors'][0][1] > 36:
+            has_enemies = 1.0
+
+        has_beams = 0.0
+        if 'has_beams' in info:
+            has_beams = 1.0 if info['has_beams'] else 0.0
+
+        return np.array([has_enemies, has_beams], dtype=np.float32)

@@ -16,7 +16,7 @@ def parse_args():
     parser.add_argument("--parallel", type=int, default=1, help="Number of parallel environments to run.")
     parser.add_argument("--render", action='store_true', help="Render the environment.")
     parser.add_argument("--color", action='store_true', help="Record the environment.")
-    parser.add_argument("--frame-stack", type=int, default=3, help="Number of frames to stack in the observation.")
+    parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack in the observation.")
     parser.add_argument("--record", action='store_true', help="Whether to record playback or not.")
     parser.add_argument("--load", help="Load a specific saved model.")
     parser.add_argument("--debug-scenario", action='store_true', help="Debug the scenario by printing out rewards.")
@@ -55,8 +55,6 @@ def main():
 
     if args.load:
         zelda_ml.load(args.load)
-    else:
-        zelda_ml.load()
 
     try:
         if args.action == 'train' or args.action == 'learn':

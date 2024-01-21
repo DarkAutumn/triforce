@@ -20,7 +20,7 @@ class ZeldaDungeonCritic(ZeldaGameplayCritic):
             super().critique_location_discovery(old_state, new_state, rewards)
         else:
             if old_state['location'] != new_state['location']:
-                rewards['leave-room-penalty'] = self.leave_dungeon_penalty
+                rewards['penalty-leave-room'] = self.leave_dungeon_penalty
 
 class DungeonEndCondition(ZeldaEndCondition):
     def __init__(self):
