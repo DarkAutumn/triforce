@@ -63,7 +63,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["display", "dungeon1combat", "10", "--frame-stack", "1", "--load", "/mnt/x/triforce/vector_rewards_miss_penalty/dungeon1combat/ppo_1x_grayscale/model_114688.zip"],
+            "args": ["display", "dungeon1combat", "10", "--frame-stack", "1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
