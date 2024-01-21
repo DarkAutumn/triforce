@@ -114,7 +114,11 @@ def pygame_render(zelda_ml):
                     break
 
                 elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_r:
+                    if event.key == pygame.K_q:
+                        mode = 'q'
+                        break
+
+                    elif event.key == pygame.K_r:
                         terminated = truncated = True
                         break
 
@@ -155,7 +159,6 @@ def start_recording(dimensions):
 def stop_recording(recording):
     if recording is not None:
         recording.release()
-
 
 def draw_arrow(screen, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
     render_text(screen, label, (start_pos[0], start_pos[1]))
