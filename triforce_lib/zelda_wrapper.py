@@ -329,7 +329,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         while should_continue(info) and not is_mode_death(info['mode']) and location == (info['level'], info['location']):
             data.set_value('hearts_and_containers', 0xff) # make sure we don't die
 
-            _, _, terminated, truncated, info = self.env.step(act)
+            _, _, terminated, truncated, info = unwrapped.step(act)
             if terminated or truncated:
                 break
         
