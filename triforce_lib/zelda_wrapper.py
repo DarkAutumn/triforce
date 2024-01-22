@@ -113,9 +113,23 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         link_pos = objects.link_pos
         info['link_pos'] = link_pos
+        
+        direction = info['link_direction']
+        info['link_vector'] = np.zeros(2, dtype=np.float32)
+        if direction == 1:      # east
+            info['link_vector'][0] = 1
+        elif direction == 2:    # west
+            info['link_vector'][0] = -1
+        elif direction == 4:    # south
+            info['link_vector'][1] = 1
+        elif direction == 8:    # north
+            info['link_vector'][1] = -1
+        else:
+            raise Exception("Unknown link direction")        
+
         self._add_vectors_and_distances(link_pos, objects, info)
 
-        info['has_beams'] = has_beams(info)
+        info['has_beams'] = has_beams(info) and get_beam_state(info) == 0
 
         curr_enemy_health = None
         step_kills = 0

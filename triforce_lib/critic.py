@@ -69,7 +69,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self._is_first_step = True
 
         # missed attack
-        self.distance_threshold = 36
+        self.distance_threshold = 50
         self.attack_miss_penalty = -self.reward_tiny
 
     def clear(self):
@@ -91,7 +91,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.critique_triforce(old, new, rewards)
 
         # combat
-        self.critique_kills(old, new, rewards)
+        self.critique_attack(old, new, rewards)
 
         # items
         self.critique_item_pickup(old, new, rewards)
@@ -168,17 +168,20 @@ class ZeldaGameplayCritic(ZeldaCritic):
         if get_num_triforce_pieces(old) < get_num_triforce_pieces(new) or (old["triforce_of_power"] == 0 and new["triforce_of_power"] == 1):
             rewards['reward-gained-triforce'] = self.triforce_reward
 
-    def critique_kills(self, _, new, rewards):
-        enemies_killed = new['step_kills']
-
+    def critique_attack(self, _, new, rewards):
         if new['step_kills'] or new['step_injuries']:
             rewards['reward-injure-kill'] = self.kill_reward
         else:
-            # penalize random attacks, unless we have sword beams
-            if new['action'] == 'attack' and new['enemy_vectors'] and not new['has_beams']:
-                distance = new['enemy_vectors'][0][1]
-                if distance > self.distance_threshold:
-                    rewards['penalty-attack-miss'] = self.attack_miss_penalty
+            if new['action'] == 'attack' and new['enemy_vectors']:
+                enemy_vectors = [x[0] for x in new['enemy_vectors'] if abs(x[1]) > 0]
+                if enemy_vectors:
+                    dotproducts = np.sum(new['link_vector'] * enemy_vectors, axis=1)
+                    if not np.any(dotproducts > np.sqrt(2) / 2):
+                        rewards['penalty-attack-miss'] = self.attack_miss_penalty
+                    elif not new['has_beams']:
+                        distance = new['enemy_vectors'][0][1]
+                        if distance > self.distance_threshold:
+                            rewards['penalty-attack-miss'] = self.attack_miss_penalty
 
     def critique_location_discovery(self, old, new, rewards):
         prev = (old['level'], old['location'])

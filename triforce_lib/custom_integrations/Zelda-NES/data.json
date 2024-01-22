@@ -20,6 +20,10 @@
             "address": 132,
             "type": "=u1"
         },
+        "link_direction": {
+            "address": 152,
+            "type": "=u1"
+        },
         "sword_animation": {
             "address": 185,
             "type": "=u1"
