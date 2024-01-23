@@ -83,6 +83,10 @@ class AIOrchestrator(gym.Wrapper):
         if objective_vector is None and location in self.location_direction:
             objective_vector = self.get_direction_vector(link_pos, self.location_direction[location])
 
+            info['location_objective'] = self.get_location_objective(location)
+        else:
+            info['location_objective'] = None
+
         if objective_vector is None:
             objective_vector = np.zeros(2, dtype=np.float32)
 
@@ -107,6 +111,23 @@ class AIOrchestrator(gym.Wrapper):
                 val = v
                 
         return val, lowest
+    
+    def get_location_objective(self, location):
+        if location not in self.location_direction:
+            return None
+        
+        direction = self.location_direction[location]
+        if direction == 'N':
+            return location - 0x10
+        elif direction == 'S':
+            return location + 0x10
+        elif direction == 'E':
+            return location + 1
+        elif direction == 'W':
+            return location - 1
+        else:
+            return None
+
     
     def get_direction_vector(self, link_pos, direction):
         if direction == "N":
