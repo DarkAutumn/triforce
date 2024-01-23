@@ -7,7 +7,7 @@ from .zelda_game_data import zelda_game_data
 from .scenario_dungeon import DungeonEndCondition, ZeldaDungeonCritic
 from .scenario_gauntlet import GauntletEndCondition, ZeldaGuantletRewards
 from .scenario_dungeon_combat import ZeldaDungeonCombatCritic, ZeldaDungeonCombatEndCondition
-from .scenario_dungeon1 import Dungeon1Critic, Dungeon1EndCondition
+from .scenario_dungeon1 import Dungeon1BossCritic, Dungeon1BossEndCondition, Dungeon1Critic, Dungeon1EndCondition
 
 class ScenarioGymWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
@@ -140,6 +140,8 @@ class ZeldaScenario:
             return ZeldaDungeonCombatCritic
         elif name == "Dungeon1Critic":
             return Dungeon1Critic
+        elif name == 'Dungeon1BossCritic':
+            return Dungeon1BossCritic
         
         raise Exception(f'Unknown critic {name}')
     
@@ -153,6 +155,8 @@ class ZeldaScenario:
             return ZeldaDungeonCombatEndCondition
         elif name == 'Dungeon1EndCondition':
             return Dungeon1EndCondition
+        elif name == 'Dungeon1BossEndCondition':
+            return Dungeon1BossEndCondition
         
         raise Exception(f'Unknown end condition {name}')
 

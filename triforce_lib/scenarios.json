@@ -69,7 +69,22 @@
             "critics": ["Dungeon1Critic"],
             "end_conditions": ["Dungeon1EndCondition"],
             "level" : 1,
-            "start": ["1_73s"],
+            "start": ["1_72"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 0,
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
+            }
+        },
+        {
+            "name": "dungeon1boss",
+            "description": "Dungeon 1 Full",
+            "critics": ["Dungeon1BossCritic"],
+            "end_conditions": ["Dungeon1BossEndCondition"],
+            "level" : 1,
+            "start": ["1_35"],
             "data":
             {
                 "bombs" : 0,

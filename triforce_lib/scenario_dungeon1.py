@@ -2,7 +2,7 @@ import typing
 
 from .critic import ZeldaGameplayCritic
 from .end_condition import ZeldaEndCondition
-from .zelda_game import get_num_triforce_pieces
+from .zelda_game import get_heart_containers, get_num_triforce_pieces
 
 class Dungeon1Critic(ZeldaGameplayCritic):
     def __init__(self):
@@ -20,7 +20,10 @@ class Dungeon1Critic(ZeldaGameplayCritic):
             if old_state['location_objective'] == new_state['location']:
                 rewards['reward-new-location'] = self.new_location_reward
             else:
-                rewards['penalty-left-early'] = -self.leave_early_penalty
+                rewards['penalty-left-early'] = self.leave_early_penalty
+
+class Dungeon1BossCritic(Dungeon1Critic):
+    pass
 
 class Dungeon1EndCondition(ZeldaEndCondition):
     def clear(self):
@@ -54,3 +57,18 @@ class Dungeon1EndCondition(ZeldaEndCondition):
 
         return terminated, truncated, reason
     
+class Dungeon1BossEndCondition(ZeldaEndCondition):
+    def is_scenario_ended(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
+        terminated, truncated, reason = super().is_scenario_ended(old_state, new_state)
+
+        if not terminated and not truncated:
+            location = new_state['location']
+            if location != 0x35:
+                reason = "left-scenario"
+                terminated = True
+
+            if get_heart_containers(old_state) < get_heart_containers(new_state):
+                reason = "gained-heart-container"
+                terminated = True
+
+        return terminated, truncated, reason
