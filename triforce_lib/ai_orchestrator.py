@@ -8,7 +8,7 @@ class AIOrchestrator(gym.Wrapper):
         self.keys_obtained = set()
         self.prev_keys = None
 
-        self.locations_to_kill_enemies = set([0x72, 0x35, 0x34, 0x23])
+        self.locations_to_kill_enemies = set([0x72, 0x53, 0x34, 0x23])
         self.location_direction = {
             0x74 : "W",
             0x72 : "E",
