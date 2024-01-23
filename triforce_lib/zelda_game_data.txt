@@ -41,6 +41,11 @@
 0x67C bomb_max
 0x66E keys
 
+# treasure
+0x083 treasure_x
+0x097 treasure_y
+0x0bf treasure_flag
+
 # items
 0x657 sword
 0x659 arrows
@@ -68,20 +73,6 @@
 0x66C clock
 
 0x656 selected_item
-
-#enemy data
-0x485 enemy_health_0
-0x486 enemy_health_1
-0x487 enemy_health_2
-0x488 enemy_health_3
-0x489 enemy_health_4
-0x48a enemy_health_5
-0x48b enemy_health_6
-0x48c enemy_health_7
-0x48d enemy_health_8
-0x48e enemy_health_9
-0x48f enemy_health_10
-0x490 enemy_health_11
 
 [rooms]
 # level, location, exits, num_enemies, item, secret_exits
