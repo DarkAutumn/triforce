@@ -49,9 +49,11 @@ class AIOrchestrator(gym.Wrapper):
             self.prev_keys = info['keys']
 
         objective_vector = None
+        info['objective_kind'] = None
 
         # special case entry room, TODO: need to detect door lock
         if objective_vector is None and  location == 0x73:
+            info['objective_kind'] = 'room'
             if 0x72 not in self.keys_obtained:
                 objective_vector = self.get_direction_vector(link_pos, "W")
             elif 0x74 not in self.keys_obtained:
@@ -63,6 +65,7 @@ class AIOrchestrator(gym.Wrapper):
         if objective_vector is None:
             closest_item_vector = self.get_vector(info, 'closest_item_vector')
             if closest_item_vector is not None:
+                info['objective_kind'] = 'item'
                 objective_vector = closest_item_vector
 
         # The trasure flag changes from 0xff -> 0x00 when the treasure spawns, then back to 0xff when it is collected
@@ -70,7 +73,8 @@ class AIOrchestrator(gym.Wrapper):
             position = np.array([info['treasure_x'], info['treasure_y']], dtype=np.float32)
             treasure_vector = position - link_pos
             norm = np.linalg.norm(treasure_vector)
-            if norm > 0:
+            if norm > 0:    
+                info['objective_kind'] = 'treasure'
                 objective_vector = treasure_vector / norm
 
         # check if we should kill all enemies:
@@ -78,12 +82,14 @@ class AIOrchestrator(gym.Wrapper):
             enemy_vector = self.get_vector(info, 'closest_enemy_vector')
             if enemy_vector is not None:
                 objective_vector = enemy_vector
+                info['objective_kind'] = 'kill'
 
         # otherwise, movement direction is based on the location
         if objective_vector is None and location in self.location_direction:
             objective_vector = self.get_direction_vector(link_pos, self.location_direction[location])
 
             info['location_objective'] = self.get_location_objective(location)
+            info['objective_kind'] = 'room'
         else:
             info['location_objective'] = None
 
