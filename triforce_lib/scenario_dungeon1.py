@@ -9,6 +9,12 @@ class Dungeon1Critic(ZeldaGameplayCritic):
         super().__init__()
 
         self.health_change_reward = self.reward_large
+        self.leave_dungeon_penalty = -self.reward_large
+
+    def critique_gameplay(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int], rewards : typing.Dict[str, float]):
+        super().critique_gameplay(old_state, new_state, rewards)
+        if new_state['level'] != 1:
+            rewards['penalty-left-dungeon'] = self.leave_dungeon_penalty
 
 class Dungeon1EndCondition(ZeldaEndCondition):
     def clear(self):

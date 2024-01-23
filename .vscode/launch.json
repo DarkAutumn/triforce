@@ -63,7 +63,16 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["display", "dungeon1combat", "10", "--frame-stack", "1"],
+            "args": ["display", "dungeon1", "10", "--frame-stack", "1", "--load", "~/models/dungeon_combat/model.zip"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Display 2",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["display", "dungeon1", "10", "--frame-stack", "1", "--load", "/mnt/x/triforce/dungeon1/dungeon1/ppo_1x_grayscale/model_32768.zip"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

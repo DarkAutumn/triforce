@@ -38,9 +38,7 @@ class AIOrchestrator(gym.Wrapper):
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
 
-        info['should_kill_enemies'] = False
         link_pos = np.array(info['link_pos'], dtype=np.float32)
-
         location = info['location']
 
         # check if we have a new key
@@ -80,7 +78,6 @@ class AIOrchestrator(gym.Wrapper):
             enemy_vector = self.get_vector(info, 'closest_enemy_vector')
             if enemy_vector is not None:
                 objective_vector = enemy_vector
-                info['should_kill_enemies'] = True
 
         # otherwise, movement direction is based on the location
         if objective_vector is None and location in self.location_direction:
