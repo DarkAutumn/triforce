@@ -63,7 +63,8 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.move_closer_reward = self.reward_tiny
         self.movement_reward_min = 2.5
         self.movement_reward_max = 8.0
-        self.move_farther_penalty = -self.reward_tiny
+        self.move_away_penalty = -self.reward_tiny
+        self.move_perpendicular_penalty = -self.reward_minimum
         
         # state tracking
         self._visted_locations = [[False] * 256 ] * 2
@@ -226,11 +227,19 @@ class ZeldaGameplayCritic(ZeldaCritic):
                         # find points within a 90 degree cone of link's motion vector, COS(45) == sqrt(2)/2
                         dotproducts = np.sum(link_motion_vector * nonzero_vectors, axis=1)
                         if np.any(dotproducts >= np.sqrt(2) / 2):
+                            # Are we moving towards the objective?
                             percent = min(dist / self.movement_reward_max, 1)
                             rewards['reward-move-closer'] = self.move_closer_reward * percent
 
                         elif np.all(dotproducts <= -np.sqrt(2) / 2):
-                            rewards['penalty-move-farther'] = self.move_farther_penalty
+                            # Are we moving directly away from the objective
+                            rewards['penalty-move-farther'] = self.move_away_penalty
+
+                        else:
+                            # We are moving perpendicular to the objective.
+                            # We will not penalize this during combat.
+                            if not new['enemies_on_screen']:
+                                rewards['penalty-move-farther'] = self.move_perpendicular_penalty
 
     # state helpers, some states are calculated
     def has_visited(self, level, location):
