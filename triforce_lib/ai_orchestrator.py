@@ -52,14 +52,17 @@ class AIOrchestrator(gym.Wrapper):
         info['objective_kind'] = None
 
         # special case entry room, TODO: need to detect door lock
-        if objective_vector is None and  location == 0x73:
+        if objective_vector is None and location == 0x73:
             info['objective_kind'] = 'room'
             if 0x72 not in self.keys_obtained:
                 objective_vector = self.get_direction_vector(link_pos, "W")
+                info['location_objective'] = 0x72
             elif 0x74 not in self.keys_obtained:
                 objective_vector = self.get_direction_vector(link_pos, "E")
+                info['location_objective'] = 0x74
             else:
                 objective_vector = self.get_direction_vector(link_pos, "N")
+                info['location_objective'] = 0x63
 
         # Check if any items are on the floor, if so prioritize those since they disappear
         if objective_vector is None:
@@ -90,7 +93,7 @@ class AIOrchestrator(gym.Wrapper):
 
             info['location_objective'] = self.get_location_objective(location)
             info['objective_kind'] = 'room'
-        else:
+        elif 'location_objective' not in info:
             info['location_objective'] = None
 
         if objective_vector is None:
@@ -141,7 +144,7 @@ class AIOrchestrator(gym.Wrapper):
         elif direction == "S":
             pos = np.array([0x78, 0xdd], dtype=np.float32)
         elif direction == "E":
-            pos = np.array([0xf0, 0x8d], dtype=np.float32)
+            pos = np.array([0xff, 0x8d], dtype=np.float32)
         elif direction == "W":
             pos = np.array([0x00, 0x8d], dtype=np.float32)
         else:

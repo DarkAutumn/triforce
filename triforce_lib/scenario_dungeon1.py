@@ -9,7 +9,8 @@ class Dungeon1Critic(ZeldaGameplayCritic):
         super().__init__()
 
         self.health_change_reward = self.reward_large
-        self.leave_dungeon_penalty = -self.reward_large
+        self.leave_dungeon_penalty = -self.reward_maximum
+        self.leave_early_penalty = -self.reward_maximum
 
     def critique_location_discovery(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int], rewards : typing.Dict[str, float]):
         if new_state['level'] != 1:
@@ -19,7 +20,7 @@ class Dungeon1Critic(ZeldaGameplayCritic):
             if old_state['location_objective'] == new_state['location']:
                 rewards['reward-new-location'] = self.new_location_reward
             else:
-                rewards['penalty-left-early'] = -self.new_location_reward
+                rewards['penalty-left-early'] = -self.leave_early_penalty
 
 class Dungeon1EndCondition(ZeldaEndCondition):
     def clear(self):
