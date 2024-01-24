@@ -38,6 +38,11 @@ class AIOrchestrator(gym.Wrapper):
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
 
+        self.set_objectives(info)
+
+        return obs, reward, terminated, truncated, info
+
+    def set_objectives(self, info):
         link_pos = np.array(info['link_pos'], dtype=np.float32)
         location = info['location']
 
@@ -109,8 +114,6 @@ class AIOrchestrator(gym.Wrapper):
             objective_vector = np.zeros(2, dtype=np.float32)
 
         info['objective_vector'] = objective_vector
-
-        return obs, reward, terminated, truncated, info
     
     def get_vector(self, info, key):
         if key in info:

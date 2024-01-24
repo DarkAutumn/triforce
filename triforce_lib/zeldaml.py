@@ -1,14 +1,16 @@
 from collections import Counter
+import datetime
+import json
 import os
 import retro
 import numpy as np
 
-from stable_baselines3 import PPO, A2C
-from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
+from .models import ZeldaModel, load_model_info
 from .ai_orchestrator import AIOrchestrator
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaAttackOnlyActionSpace
@@ -17,17 +19,7 @@ from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
 
 class ZeldaML:
-    """The model and algorithm used to train the agent"""
-    def __init__(self, model_dir, scenario, frame_stack, color, parallel, **kwargs):
-        """
-        arguments:
-            model_dir -- the directory to save the model
-            color -- whether to use color or not (False = grayscale)
-            frame_stack -- number of frames to stack in the observation
-            kwargs -- additional arguments to pass to the environment creation, such as render_mode, etc
-        """
-        algorithm = "ppo"
-        
+    def __init__(self, frame_stack, color, **kwargs):
         if 'verbose' in kwargs:
             self.verbose = kwargs['verbose']
             del kwargs['verbose']
@@ -47,46 +39,25 @@ class ZeldaML:
             self.ent_coef = 0.0
 
         if 'obs_kind' in kwargs:
-            obs_kind = kwargs['obs_kind']
+            self.obs_kind = kwargs['obs_kind']
             del kwargs['obs_kind']
         else:
-            obs_kind = 'viewport'
+            self.obs_kind = 'viewport'
+
+        self.__extra_args = kwargs
 
         self.rgb_render = False
         if 'render_mode' in kwargs and kwargs['render_mode'] == 'rgb_array':
             self.rgb_render = True
-            if parallel > 1:
-                raise Exception('Cannot use rgb_array render mode with parallel environments')
 
-        if not isinstance(frame_stack, int) or frame_stack < 2:
-            frame_stack = 1
-
-        if isinstance(scenario, str):
-            scenario = ZeldaScenario.get(scenario)
-        elif not isinstance(scenario, ZeldaScenario):
-            raise Exception('scenario must be a ZeldaScenario or the name of a well-known scenario')
-        
-        if 'debug_scenario' in kwargs:
-            scenario.debug(kwargs['debug_scenario'])
-            del kwargs['debug_scenario']
-
-        self.algorithm = algorithm
         self.color = color
-        self.frame_stack = frame_stack
-        self.scenario = scenario
+        self.frame_stack = 1 if not isinstance(frame_stack, int) or frame_stack < 2 else frame_stack
+        self.models = load_model_info()
 
-        # set up directories
-        self.model_base_dir = os.path.join(model_dir, scenario.name, f"{algorithm.lower()}_{frame_stack}x_{'color' if color else 'grayscale'}")
-        self.model_file = os.path.join(self.model_base_dir, 'model.zip')
-        self.best_file = os.path.join(self.model_base_dir, 'best.zip')
-        self.log_dir = os.path.join(self.model_base_dir, 'logs')
-        self.log_file = os.path.join(self.log_dir, 'monitor.csv')
-
-        os.makedirs(self.model_base_dir, exist_ok=True)
-
-        def make_env():
+    def make_env(self, scenario, parallel = 1):
+        def make_env_func():
             # create the environment
-            env = retro.make(game='Zelda-NES', state=self.scenario.all_start_states[0], inttype=retro.data.Integrations.CUSTOM_ONLY, **kwargs)
+            env = retro.make(game='Zelda-NES', state=scenario.all_start_states[0], inttype=retro.data.Integrations.CUSTOM_ONLY, **self.__extra_args)
 
             # Capture the raw observation frames into a deque.  Since we are skipping frames and not acting on every frame, we need to save
             # the last 'frame_stack' frames so that we can give the model a sense of motion without it being affected by the skipped frames.
@@ -102,9 +73,10 @@ class ZeldaML:
             # The AI orchestration piece.  This is responsible for selecting the model to use and the target
             # objective.
             env = AIOrchestrator(env)
+            orchestrator = env
             
             # Frame stack and convert to grayscale if requested
-            env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, kind=obs_kind)
+            env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, kind=self.obs_kind)
 
             # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
             # since that doesn't make any sense in Zelda)
@@ -115,73 +87,89 @@ class ZeldaML:
 
             # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new info state provded
             # by ZeldaGameWrapper above.
-            env = self.scenario.activate(env)
+            env = scenario.activate(env)
 
             return env
 
         if parallel and parallel > 1:
-            env = make_vec_env(make_env, n_envs=parallel, vec_env_cls=SubprocVecEnv)
+            env = make_vec_env(make_env_func, n_envs=parallel, vec_env_cls=SubprocVecEnv)
         else:
-            env = make_env()
+            env = make_env_func()
+
+        return env
         
-        self.env = env
-        self.model = None
-
-    def close(self):
-        self.env.close()
-
-    def evaluate(self, episodes, **kwargs):
-        return evaluate_policy(self.model, self.env, n_eval_episodes=episodes, **kwargs)
-        
-    def learn(self, iterations, progress_bar = True, save_best = True):
-        if not iterations:
-            raise Exception('Must specify number of iterations to learn')
-        
-        if not self.model:
-            self.model = self._create_model()
-
-        callback = LogRewardCallback(save_freq=4096, zeldaml=self) if save_best else None
-        self.model.learn(iterations, progress_bar=progress_bar, callback=callback)
-        self.save(self.model_file)
-
-    def load(self, path):
-        if not os.path.exists(path):
-            raise Exception(f'Cannot load model from {path} because it does not exist')
-                
-        if self.algorithm == 'ppo':
-            self.model = PPO.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef, device=self.device)
-        elif self.algorithm == 'a2c':
-            self.model = A2C.load(path, self.env, verbose=self.verbose, tensorboard_log=self.log_dir, ent_coef=self.ent_coef, device=self.device)
+    def train(self, output_path = None, model_names = None, iteration_override = None, parallel = None, progress_bar = True):
+        if model_names is None:
+            models = self.models
         else:
-            raise Exception(f'Unsupported algorithm: {self.algorithm}')
+            models = [x for x in self.models if x.name in model_names]
+            if len(models) != len(model_names):
+                raise Exception(f'Could not find all models requested: {model_names} missing: {set(model_names) - set([x.name for x in models])}')
 
-        return True
-    
-    def save(self, path):
-        if not path:
-            raise Exception('Must specify path to save model to')
-        
-        self.model.save(path)
+        if output_path is None:
+            date_for_filename = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M")
+            output_path = os.path.join(os.getcwd(), 'training', date_for_filename)
 
-    def _create_model(self):
-        tensorboard_log=self.log_dir
+        print("Writing to:", output_path)
 
-        if self.algorithm == 'ppo':
-            return PPO('MultiInputPolicy', self.env, verbose=self.verbose, tensorboard_log=tensorboard_log, ent_coef=self.ent_coef, device=self.device)
-        
-        raise Exception(f'Unsupported algorithm: {self.algorithm}')
+        for model_info in models:
+            model_dir = os.path.join(output_path, model_info.name)
+            os.makedirs(model_dir, exist_ok=True)
+
+            iterations = model_info.iterations if iteration_override is None else iteration_override
+
+            model_path = os.path.join(model_dir, 'model.zip')
+            best_model_path = os.path.join(model_dir, 'best.zip')
+            log_path = os.path.join(model_dir, 'logs')
+
+            scenario = ZeldaScenario.get(model_info.training_scenario)
+            env = self.make_env(scenario, parallel)
+            try:
+                print()
+                print(f"Training model: {model_info.name}")
+                print(f"Scenario:       {model_info.training_scenario}")
+                print(f"Path:           {model_path}")
+                model = self._create_model(env, log_path)
+                callback = LogRewardCallback(model.save, best_model_path)
+                model.learn(iterations, progress_bar=progress_bar, callback=callback)
+                model.save(model_path)
+
+            finally:
+                env.close()
+
+    def load_models(self, path):
+        models = {}
+        for model_info in self.models:
+            model_path = os.path.join(path, model_info.name, 'best.zip')
+
+            if not os.path.exists(model_path):
+                model_path = os.path.join(path, model_info.name, 'model.zip')
+
+            if os.path.exists(model_path):
+                model = PPO.load(model_path, verbose=self.verbose, ent_coef=self.ent_coef, device=self.device)
+            else:
+                model = None
+
+            if model:
+                models[model_info.name] = ZeldaModel(model_info, model)
+
+        return models
+
+    def _create_model(self, env, log_dir):
+        return PPO('MultiInputPolicy', env, verbose=self.verbose, tensorboard_log=log_dir, ent_coef=self.ent_coef, device=self.device)
     
 
 class LogRewardCallback(BaseCallback):
-    def __init__(self, save_freq : int, zeldaml : ZeldaML):
-        super(LogRewardCallback, self).__init__(zeldaml.verbose)
+    def __init__(self, save_model, best_path : str, save_freq : int = 4096):
+        super(LogRewardCallback, self).__init__()
         self.log_reward_freq = save_freq
-        self.zeldaml = zeldaml
-        self.best_mean_reward = -np.inf
-        self.best_timestamp = -np.inf
+        self.best_metric = -np.inf
+        self.best_path = best_path
+        self.save_model = save_model
 
         self._rewards = {}
         self._endings = []
+        self._evaluation = []
 
     def _on_step(self) -> bool:
         infos = self.locals['infos']
@@ -193,11 +181,10 @@ class LogRewardCallback(BaseCallback):
             if 'end' in info:
                 self._endings.append(info['end'])
 
-        if self.n_calls % self.log_reward_freq == 0:
-            # Save the model as save_dir/model_{iterations}.zip
-            path = os.path.join(self.zeldaml.model_base_dir, f"model_{self.num_timesteps}.zip")
-            self.zeldaml.save(path)
+            if 'evaluation-metric' in info:
+                self._evaluation.append(info['evaluation-metric'])
 
+        if self.n_calls % self.log_reward_freq == 0:
             # rewards and ends tend to be pretty wild at the beginning of training, so only log them after a certain threshold
             if self.n_calls >= 2048:
                 for kind, rew in self._rewards.items():
@@ -209,12 +196,22 @@ class LogRewardCallback(BaseCallback):
                 for ending, count in ends.items():
                     self.logger.record('end/' + ending, count)
 
-                if ends:
-                    win_rate = ends['won-scenario'] / float(sum(ends.values()))
-                    self.logger.record('end/win_rate', win_rate)
+                if self._evaluation:
+                    evaluation = np.mean(self._evaluation)
+                    self.logger.record('evaluation-metric', evaluation)
+
+                    if evaluation > self.best_metric:
+                        self.best_metric = evaluation
+
+                        self.save_model(self.best_path)
+
+                        metadata = { 'evaluation' : evaluation, "iterations" : self.num_timesteps }
+                        with open(self.best_path + '.json', 'w') as f:
+                            json.dump(metadata, f)
 
             self._rewards.clear()
             self._endings.clear()
+            self._evaluation.clear()
 
         return True
 

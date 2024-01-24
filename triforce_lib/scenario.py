@@ -107,16 +107,16 @@ class ZeldaScenario:
         env = ScenarioGymWrapper(env, self)
         return env
     
-    def debug(self, debug):
-        verbose = 2 if debug else 0
-
-
     @classmethod
     def get(cls, name):
-        return ZeldaScenario._scenarios.get(name, None)
+        return cls.get_scenarios().get(name, None)
     
     @classmethod
     def get_all_scenarios(cls):
+        return cls.get_scenarios().keys()
+
+    @classmethod
+    def get_scenarios(cls):
         if not ZeldaScenario._scenarios:
             # load scenarios.json
             curr_dir = os.path.dirname(os.path.realpath(__file__))
@@ -128,7 +128,7 @@ class ZeldaScenario:
                 scenario = ZeldaScenario(**json_scenario)
                 ZeldaScenario._scenarios[scenario.name] = scenario
 
-        return ZeldaScenario._scenarios.keys()
+        return ZeldaScenario._scenarios
     
     @classmethod
     def resolve_critic(cls, name):

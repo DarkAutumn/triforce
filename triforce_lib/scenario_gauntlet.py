@@ -69,6 +69,7 @@ class GauntletEndCondition(ZeldaEndCondition):
             if location < 120 or location >= 127:
                 reason = "terminated-left-gauntlet"
                 terminated = True
+                new['evaluation-metric'] = 0
 
         return terminated, truncated, reason
     

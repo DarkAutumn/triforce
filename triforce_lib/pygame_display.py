@@ -5,10 +5,20 @@ import pygame
 import numpy as np
 from collections import deque
 
+from .scenario import ZeldaScenario
+from .zeldaml import ZeldaML
 
-def pygame_render(zelda_ml):
-    env = zelda_ml.env
-
+def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
+    scenario = ZeldaScenario.get(scenario_name)
+    if not scenario:
+        raise Exception(f'Unknown scenario {scenario_name}')
+    
+    if not os.path.exists(model_path):
+        raise Exception(f'Could not find model path {model_path}')
+    
+    models = zelda_ml.load_models(model_path)
+    env = zelda_ml.make_env(scenario)
+    
     pygame.init()
     global font
     font = pygame.font.Font(None, 24)
@@ -62,7 +72,8 @@ def pygame_render(zelda_ml):
 
         # Perform a step in the environment
         if mode == 'c' or mode == 'n':
-            action, _states = zelda_ml.model.predict(obs, deterministic=False)  # Replace this with your action logic
+            curr_model = select_model(models, scenario, info)
+            action, _states = curr_model.model.predict(obs, deterministic=False)  # Replace this with your action logic
             obs, reward, terminated, truncated, info = env.step(action)
 
             if mode == 'n':
@@ -71,18 +82,17 @@ def pygame_render(zelda_ml):
         # update rewards for display
         update_rewards(reward_values, reward_details, info, reward)
 
-
         while True:
             if zelda_ml.rgb_deque:
                 rgb_array = zelda_ml.rgb_deque.popleft()
             elif mode != 'p':
                 break
 
-
             screen.fill((0, 0, 0))  # Black background
 
             # Show observation values
-            y_pos = render_observation_view(screen, obs_x, obs_y, obs_width, obs["image"])
+            y_pos = obs_y
+            y_pos = render_observation_view(screen, obs_x, y_pos, obs_width, obs["image"])
             y_pos = draw_arrow(screen, "Objective", (obs_x + obs_width // 4, y_pos), obs["vectors"][0], radius=obs_width // 4, color=(255, 255, 255), width=3)
             y_pos = draw_arrow(screen, "Enemy", (obs_x + obs_width // 4, y_pos), obs["vectors"][1], radius=obs_width // 4, color=(255, 255, 255), width=3)
             y_pos = draw_arrow(screen, "Projectile", (obs_x + obs_width // 4, y_pos), obs["vectors"][2], radius=obs_width // 4, color=(255, 0, 0), width=3)
@@ -92,6 +102,7 @@ def pygame_render(zelda_ml):
 
             # render the gameplay
             render_game_view(rgb_array, (game_x, game_y), game_width, game_height, screen)
+            render_text(screen, f"Model: {curr_model.name}", (game_x, game_y))
 
             # render rewards graph and values
             draw_rewards_graph(graph_height, screen, block_width, center_line, reward_values)
@@ -141,6 +152,12 @@ def pygame_render(zelda_ml):
     stop_recording(recording)
     env.close()
     pygame.quit()
+
+def select_model(models, scenario, info = None):
+    if info is not None and "model" in info:
+        return list((x for x in models.values() if x.model is not None))[0]
+    
+    return [x for x in models.values() if x.training_scenario == scenario.name][0]
 
 def get_filename():
     directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "recording")
