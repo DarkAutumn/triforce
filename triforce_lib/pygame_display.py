@@ -143,10 +143,13 @@ def pygame_render(zelda_ml):
     pygame.quit()
 
 def get_filename():
-    # get a unique filename in the current directory in the format of recording_###.mp4
+    directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "recording")
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
     i = 0
     while True:
-        filename = f"recording_{i:03d}.avi"
+        filename = os.path.join(directory, f"recording_{i:03d}.avi")
         if not os.path.exists(filename):
             return filename
         i += 1
