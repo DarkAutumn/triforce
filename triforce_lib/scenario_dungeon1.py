@@ -68,7 +68,7 @@ class Dungeon1BossEndCondition(ZeldaEndCondition):
                 terminated = True
 
             if get_heart_containers(old_state) < get_heart_containers(new_state):
-                reason = "gained-heart-container"
+                reason = "won-scenario"
                 terminated = True
 
         return terminated, truncated, reason
