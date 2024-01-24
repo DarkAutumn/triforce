@@ -180,6 +180,9 @@ class ZeldaGameplayCritic(ZeldaCritic):
                 if not new['enemies_on_screen']:
                     rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
 
+                elif self.offscreen_sword_disabled(new):
+                    rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
+
                 elif new['enemy_vectors']:
                     enemy_vectors = [x[0] for x in new['enemy_vectors'] if abs(x[1]) > 0]
                     if enemy_vectors:
@@ -190,6 +193,11 @@ class ZeldaGameplayCritic(ZeldaCritic):
                             distance = new['enemy_vectors'][0][1]
                             if distance > self.distance_threshold:
                                 rewards['penalty-attack-miss'] = self.attack_miss_penalty
+
+    def offscreen_sword_disabled(self, new):
+        x, y = new['link_pos']
+        return x <= 16 or x >= 0xd9 or y <= 0x53 or y >= 0xc5
+
 
     def critique_location_discovery(self, old, new, rewards):
         prev = (old['level'], old['location'])
