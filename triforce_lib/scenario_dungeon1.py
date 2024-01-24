@@ -61,6 +61,10 @@ class Dungeon1EndCondition(ZeldaEndCondition):
                 terminated = True
 
             location = new_state['location']
+            if location == 0x35:
+                reason = "reached-boss"
+                terminated = True
+
             if location not in self._new_rooms:
                 self._new_rooms.add(location)
                 self._frame_count = 0
