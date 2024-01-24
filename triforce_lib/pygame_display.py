@@ -72,7 +72,7 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
         # Perform a step in the environment
         if mode == 'c' or mode == 'n':
-            curr_model = select_model(models, scenario, info)
+            curr_model = select_model(models, info)
             action, _states = curr_model.model.predict(obs, deterministic=False)  # Replace this with your action logic
             obs, reward, terminated, truncated, info = env.step(action)
 
@@ -153,11 +153,11 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
     env.close()
     pygame.quit()
 
-def select_model(models, scenario, info = None):
+def select_model(models, info):
     if info is not None and "model" in info:
-        return list((x for x in models.values() if x.model is not None))[0]
+        return models[info["model"]]
     
-    return [x for x in models.values() if x.training_scenario == scenario.name][0]
+    return list((x for x in models.values() if x.model is not None))[0]
 
 def get_filename():
     directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "recording")

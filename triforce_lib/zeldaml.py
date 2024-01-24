@@ -72,7 +72,7 @@ class ZeldaML:
 
             # The AI orchestration piece.  This is responsible for selecting the model to use and the target
             # objective.
-            env = AIOrchestrator(env)
+            env = AIOrchestrator(env, self.models)
             orchestrator = env
             
             # Frame stack and convert to grayscale if requested

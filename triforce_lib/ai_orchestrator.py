@@ -2,8 +2,10 @@ import gymnasium as gym
 import numpy as np
 
 class AIOrchestrator(gym.Wrapper):
-    def __init__(self, env):
+    def __init__(self, env, models):
         super().__init__(env)
+        self.models_by_priority = list(models)
+        self.models_by_priority.sort(key=lambda x: x.priority, reverse=True)
 
         self.keys_obtained = set()
         self.prev_keys = None
@@ -39,8 +41,22 @@ class AIOrchestrator(gym.Wrapper):
         obs, reward, terminated, truncated, info = self.env.step(action)
 
         self.set_objectives(info)
+        self.select_model(info)
 
         return obs, reward, terminated, truncated, info
+    
+    def select_model(self, info):
+        location = info['location']
+        level = info['level']
+
+        matching = [x for x in self.models_by_priority if level in x.levels and (x.rooms is None or location in x.rooms)]
+        if matching:
+            model = matching[0]
+        else:
+            # lowest priority model is likely the most general?
+            model = self.models_by_priority[-1]
+
+        info['model'] = model.name
 
     def set_objectives(self, info):
         link_pos = np.array(info['link_pos'], dtype=np.float32)
