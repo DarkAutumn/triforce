@@ -69,7 +69,7 @@
             "critics": ["Dungeon1Critic"],
             "end_conditions": ["Dungeon1EndCondition"],
             "level" : 1,
-            "start": ["1_72"],
+            "start": ["1_72", "1_45"],
             "data":
             {
                 "bombs" : 0,
