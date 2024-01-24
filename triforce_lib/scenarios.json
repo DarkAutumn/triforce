@@ -69,7 +69,7 @@
             "critics": ["Dungeon1Critic"],
             "end_conditions": ["Dungeon1EndCondition"],
             "level" : 1,
-            "start": ["1_72", "1_45"],
+            "start": ["1_72"],
             "data":
             {
                 "bombs" : 0,
@@ -80,7 +80,7 @@
         },
         {
             "name": "dungeon1boss",
-            "description": "Dungeon 1 Full",
+            "description": "Dungeon 1 Boss",
             "critics": ["Dungeon1BossCritic"],
             "end_conditions": ["Dungeon1BossEndCondition"],
             "level" : 1,
