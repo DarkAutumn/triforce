@@ -5,11 +5,29 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Create replay",
+            "name": "Run Combat Scenario",
             "type": "python",
             "request": "launch",
-            "program": "scripts/create_replay.py",
-            "args": ["1_44e.state"],
+            "program": "triforce.py",
+            "args": ["display", "dungeon1", "10", "--frame-stack", "1", "--load", "saved-models/dungeon1combat.zip"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Run Boss Scenario",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["display", "dungeon1boss", "10", "--frame-stack", "1", "--load", "saved-models/dungeon1boss.zip"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Run Dungeon 1",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["display", "dungeon1", "10", "--frame-stack", "1", "--load", "saved-models/dungeon1.zip"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -55,15 +73,6 @@
             "request": "launch",
             "program": "triforce.py",
             "args": ["train", "dungeon1", "4096", "--render", "--debug-scenario","--verbose", "1"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Display",
-            "type": "python",
-            "request": "launch",
-            "program": "triforce.py",
-            "args": ["display", "dungeon1combat", "10", "--frame-stack", "1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

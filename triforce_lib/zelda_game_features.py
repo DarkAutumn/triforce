@@ -48,12 +48,10 @@ class ZeldaGameFeatures(gym.Wrapper):
         if info is None:
             return np.zeros(2, dtype=np.float32)
 
-        has_enemies = 0.0
-        if 'enemy_vectors' in info and info['enemy_vectors'] and info['enemy_vectors'][0][1] > 36:
-            has_enemies = 1.0
+        enemies_on_screen = 1.0 if 'enemies_on_screen' in info and info['enemies_on_screen'] else 0.0
 
         has_beams = 0.0
         if 'has_beams' in info:
             has_beams = 1.0 if info['has_beams'] else 0.0
 
-        return np.array([has_enemies, has_beams], dtype=np.float32)
+        return np.array([enemies_on_screen, has_beams], dtype=np.float32)

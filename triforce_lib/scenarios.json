@@ -44,7 +44,52 @@
             {
                 "bombs" : 0,
                 "keys" : 0,
-                "hearts_and_containers" : 252,
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
+            }
+        },
+        {
+            "name": "dungeon1combat2h",
+            "description": "Dungeon 1 combat trainer (no beams)",
+            "critics": ["ZeldaDungeonCombatCritic"],
+            "end_conditions": ["ZeldaDungeonCombatEndCondition"],
+            "level" : 1,
+            "start": ["1_23", "1_33", "1_35", "1_42", "1_43", "1_44", "1_52", "1_54", "1_63", "1_72", "1_74", "1_83"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 0,
+                "hearts_and_containers" : 241,
+                "partial_hearts" : 254
+            }
+        },
+        {
+            "name": "dungeon1",
+            "description": "Dungeon 1 Full",
+            "critics": ["Dungeon1Critic"],
+            "end_conditions": ["Dungeon1EndCondition"],
+            "level" : 1,
+            "start": ["1_72"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 0,
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
+            }
+        },
+        {
+            "name": "dungeon1boss",
+            "description": "Dungeon 1 Boss",
+            "critics": ["Dungeon1BossCritic"],
+            "end_conditions": ["Dungeon1BossEndCondition"],
+            "level" : 1,
+            "start": ["1_35"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 0,
+                "hearts_and_containers" : 34,
                 "partial_hearts" : 254
             }
         }

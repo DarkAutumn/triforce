@@ -42,7 +42,7 @@ class ZeldaDungeonCombatEndCondition(ZeldaEndCondition):
                 terminated = True
 
             elif new_state['objects'].enemy_count == 0:
-                reason = "killed-all-enemies"
+                reason = "won-scenario"
                 terminated = True
 
             elif self._frame_count >= self._step_max:
