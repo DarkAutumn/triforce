@@ -36,6 +36,10 @@ class ZeldaCritic:
     def critique_gameplay(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int], rewards : typing.Dict[str, float]):
         """Called to get the reward for the transition from old_state to new_state"""
         raise NotImplementedError()
+    
+    def set_score(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
+        """Override to set info['score']"""
+        pass
 
 class ZeldaGameplayCritic(ZeldaCritic):
     def __init__(self):
@@ -172,7 +176,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         if get_num_triforce_pieces(old) < get_num_triforce_pieces(new) or (old["triforce_of_power"] == 0 and new["triforce_of_power"] == 1):
             rewards['reward-gained-triforce'] = self.triforce_reward
 
-    def critique_attack(self, _, new, rewards):
+    def critique_attack(self, old, new, rewards):
         if new['step_kills'] or new['step_injuries']:
             rewards['reward-injure-kill'] = self.kill_reward
         else:
@@ -189,7 +193,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
                         dotproducts = np.sum(new['link_vector'] * enemy_vectors, axis=1)
                         if not np.any(dotproducts > np.sqrt(2) / 2):
                             rewards['penalty-attack-miss'] = self.attack_miss_penalty
-                        elif not new['has_beams']:
+                        elif not old['has_beams']:
                             distance = new['enemy_vectors'][0][1]
                             if distance > self.distance_threshold:
                                 rewards['penalty-attack-miss'] = self.attack_miss_penalty

@@ -128,7 +128,6 @@ class ZeldaGameWrapper(gym.Wrapper):
             raise Exception("Unknown link direction")        
 
         self._add_vectors_and_distances(link_pos, objects, info)
-
         info['has_beams'] = has_beams(info) and get_beam_state(info) == 0
 
         curr_enemy_health = None

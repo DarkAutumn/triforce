@@ -57,6 +57,7 @@ class ScenarioGymWrapper(gym.Wrapper):
             reward_dict = {}
             for c in self._critics:
                 c.critique_gameplay(self._last_state, info, reward_dict)
+                c.set_score(self._last_state, info)
 
             if reward_dict:
                 for value in reward_dict.values():
@@ -72,6 +73,10 @@ class ScenarioGymWrapper(gym.Wrapper):
             if reason:
                 # I guess we could have more than one reason, but I'm not going to cover that corner case
                 info['end'] = reason[0]
+
+            if truncated or terminated:
+                if 'score' in info:
+                    info['final-score'] = info['score']
 
         self._last_state = info
         return obs, rewards, terminated, truncated, info

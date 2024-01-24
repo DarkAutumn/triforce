@@ -1,4 +1,5 @@
 import typing
+from typing import Any
 
 from .critic import ZeldaGameplayCritic
 from .end_condition import ZeldaEndCondition
@@ -11,6 +12,11 @@ class Dungeon1Critic(ZeldaGameplayCritic):
         self.health_change_reward = self.reward_large
         self.leave_dungeon_penalty = -self.reward_maximum
         self.leave_early_penalty = -self.reward_maximum
+        self.seen = set()
+
+    def clear(self):
+        super().clear()
+        self.seen.clear()
 
     def critique_location_discovery(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int], rewards : typing.Dict[str, float]):
         if new_state['level'] != 1:
@@ -22,8 +28,21 @@ class Dungeon1Critic(ZeldaGameplayCritic):
             else:
                 rewards['penalty-left-early'] = self.leave_early_penalty
 
+    def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
+        new_location = new['location']
+        self.seen.add(new_location)
+        new['score'] = len(self.seen) - 1
+
 class Dungeon1BossCritic(Dungeon1Critic):
-    pass
+    def clear(self):
+        super().clear()
+        self.score = 0
+
+    def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
+        if not self.score and get_heart_containers(new) > get_heart_containers(old):
+            self.score = 1
+
+        new['score'] = self.score
 
 class Dungeon1EndCondition(ZeldaEndCondition):
     def clear(self):

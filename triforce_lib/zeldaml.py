@@ -181,8 +181,8 @@ class LogRewardCallback(BaseCallback):
             if 'end' in info:
                 self._endings.append(info['end'])
 
-            if 'evaluation-metric' in info:
-                self._evaluation.append(info['evaluation-metric'])
+            if 'final-score' in info:
+                self._evaluation.append(info['final-score'])
 
         if self.n_calls % self.log_reward_freq == 0:
             # rewards and ends tend to be pretty wild at the beginning of training, so only log them after a certain threshold
@@ -198,7 +198,7 @@ class LogRewardCallback(BaseCallback):
 
                 if self._evaluation:
                     evaluation = np.mean(self._evaluation)
-                    self.logger.record('evaluation-metric', evaluation)
+                    self.logger.record('evaluation/score', evaluation)
 
                     if evaluation > self.best_metric:
                         self.best_metric = evaluation
