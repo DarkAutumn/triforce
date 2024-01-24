@@ -68,7 +68,7 @@ class AIOrchestrator(gym.Wrapper):
             # if link's position is within 20 pixels around (0x78, 0x4d) then set the objective position to
             # be [0x78, 0x3d]
             diff = 20
-            if link_pos[0] > 0x78 - diff and link_pos[0] < 0x78 + diff and link_pos[1] > 0xca - diff and link_pos[1] < 0xca + diff:
+            if link_pos[0] > 0x78 - diff and link_pos[0] < 0x78 + diff and link_pos[1] > 0x78 and link_pos[1] < 0xca + diff:
                 objective_vector = self.get_direction_vector(link_pos, "N")
                 info['location_objective'] = self.get_location_objective(location)
                 info['objective_kind'] = 'fight'
