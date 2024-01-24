@@ -64,6 +64,15 @@ class AIOrchestrator(gym.Wrapper):
                 objective_vector = self.get_direction_vector(link_pos, "N")
                 info['location_objective'] = 0x63
 
+        if objective_vector is None and location == 0x35:
+            # if link's position is within 20 pixels around (0x78, 0x4d) then set the objective position to
+            # be [0x78, 0x3d]
+            diff = 20
+            if link_pos[0] > 0x78 - diff and link_pos[0] < 0x78 + diff and link_pos[1] > 0xca - diff and link_pos[1] < 0xca + diff:
+                objective_vector = self.get_direction_vector(link_pos, "N")
+                info['location_objective'] = self.get_location_objective(location)
+                info['objective_kind'] = 'fight'
+
         # Check if any items are on the floor, if so prioritize those since they disappear
         if objective_vector is None:
             closest_item_vector = self.get_vector(info, 'closest_item_vector')
@@ -85,7 +94,7 @@ class AIOrchestrator(gym.Wrapper):
             enemy_vector = self.get_vector(info, 'closest_enemy_vector')
             if enemy_vector is not None:
                 objective_vector = enemy_vector
-                info['objective_kind'] = 'kill'
+                info['objective_kind'] = 'fight'
 
         # otherwise, movement direction is based on the location
         if objective_vector is None and location in self.location_direction:
