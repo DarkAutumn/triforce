@@ -18,7 +18,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["display", "dungeon1boss", "10", "--frame-stack", "1", "--load", "saved-models/dungeon1.zip"],
+            "args": ["display", "dungeon1boss", "10", "--frame-stack", "1", "--load", "saved-models/dungeon1boss.zip"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
