@@ -5,11 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run Dungeon1 Scenario",
+            "name": "Run Dungeon1 Beam Scenario",
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["run", "dungeon1", "models/"],
+            "args": ["run", "dungeon1beams", "models/"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Run Dungeon1 Sword Scenario (no beams)",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["run", "dungeon1nobeams", "models/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

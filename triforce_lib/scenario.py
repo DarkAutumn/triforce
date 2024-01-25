@@ -36,10 +36,7 @@ class ScenarioGymWrapper(gym.Wrapper):
         state = super().reset(**kwargs)
 
         # assign data for the scenario
-        if self._scenario.data:
-            data = env_unwrapped.data
-            for key, value in self._scenario.data.items():
-                data.set_value(key, value)
+        self.set_data(env_unwrapped, self._scenario.data)
 
         self._last_state = None
         for c in self._critics:
@@ -49,8 +46,16 @@ class ScenarioGymWrapper(gym.Wrapper):
             ec.clear()
 
         return state
+
+    def set_data(self, env_unwrapped, data):
+        if data:
+            game_data = env_unwrapped.data
+            for key, value in data.items():
+                game_data.set_value(key, value)
     
     def step(self, act):
+        self.set_data(self.unwrapped, self._scenario.fixed)
+
         obs, rewards, terminated, truncated, info = self.env.step(act)
 
         if self._last_state is not None:
@@ -87,7 +92,7 @@ class ScenarioGymWrapper(gym.Wrapper):
 class ZeldaScenario:
     _scenarios = {}
 
-    def __init__(self, name, description, critics : [str], end_conditions : [str], level, start, data):
+    def __init__(self, name, description, critics : [str], end_conditions : [str], level, start, data, fixed):
         self.name = name
         self.description = description
         self.critics = [ZeldaScenario.resolve_critic(x) for x in critics]
@@ -95,6 +100,7 @@ class ZeldaScenario:
         self.level = level
         self.start = start
         self.data = data
+        self.fixed = fixed
         
         self.all_start_states = []
         for x in start:
@@ -132,6 +138,9 @@ class ZeldaScenario:
                 data = json.load(f)
             
             for json_scenario in data['scenarios']:
+                if 'fixed' not in json_scenario:
+                    json_scenario['fixed'] = {}
+
                 scenario = ZeldaScenario(**json_scenario)
                 ZeldaScenario._scenarios[scenario.name] = scenario
 

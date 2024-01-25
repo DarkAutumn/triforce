@@ -2,13 +2,25 @@
     "models" :
     [
         {
-            "name" : "dungeon1",
-            "path" : "models/dungeon1.zip",
+            "name" : "dungeon1nobeams",
+            "path" : "dungeon1nobeams/model.zip",
             "priority" : 1,
             "levels" : 1,
             "requires_enemies" : false,
+            "equipment_required" : [],
 
-            "training_scenario" : "dungeon1combat",
+            "training_scenario" : "dungeon1nobeams",
+            "iterations" : 1500000
+        },
+        {
+            "name" : "dungeon1beams",
+            "path" : "dungeon1beams/model.zip",
+            "priority" : 0,
+            "levels" : 1,
+            "requires_enemies" : false,
+            "equipment_required" : ["beams"],
+
+            "training_scenario" : "dungeon1beams",
             "iterations" : 1500000
         },
         {
@@ -18,6 +30,7 @@
             "levels" : 1,
             "rooms" : "0x35",
             "requires_enemies" : true,
+            "equipment_required" : [],
 
             "training_scenario" : "dungeon1boss",
             "iterations" : 500000

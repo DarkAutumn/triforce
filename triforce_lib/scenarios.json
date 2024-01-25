@@ -10,15 +10,6 @@
             "data" : {}
         },
         {
-            "name": "dungeon1",
-            "description": "Traverse dungeon 1",
-            "critics": ["ZeldaDungeonCritic"],
-            "end_conditions": ["DungeonEndCondition"],
-            "level" : 1,
-            "start": ["1_73s"],
-            "data" : {}
-        },
-        {
             "name": "dungeon1stalfos",
             "description": "Dungeon 1 Stalfos trainer",
             "critics": ["ZeldaDungeonCombatCritic"],
@@ -79,8 +70,8 @@
             }
         },
         {
-            "name": "dungeon1combat",
-            "description": "Dungeon 1 Full",
+            "name": "dungeon1beams",
+            "description": "Dungeon 1 Beams",
             "critics": ["Dungeon1Critic"],
             "end_conditions": ["Dungeon1EndCondition"],
             "level" : 1,
@@ -91,6 +82,31 @@
                 "keys" : 0,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
+            },
+            "fixed":
+            {
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
+            }
+        },
+        {
+            "name": "dungeon1nobeams",
+            "description": "Dungeon 1 combat trainer (no beams)",
+            "critics": ["Dungeon1Critic"],
+            "end_conditions": ["Dungeon1EndCondition"],
+            "level" : 1,
+            "start": ["1_72"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 0,
+                "hearts_and_containers" : 33,
+                "partial_hearts" : 100
+            },
+            "fixed":
+            {
+                "hearts_and_containers" : 33,
+                "partial_hearts" : 100
             }
         },
         {
