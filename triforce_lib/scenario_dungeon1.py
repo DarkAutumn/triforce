@@ -39,7 +39,7 @@ class Dungeon1BossCritic(Dungeon1Critic):
         self.score = 0
 
     def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
-        if not self.score and get_heart_containers(new) > get_heart_containers(old):
+        if not self.score and new['step_kills']:
             self.score = 1
 
         new['score'] = self.score

@@ -77,6 +77,8 @@ class ScenarioGymWrapper(gym.Wrapper):
             if truncated or terminated:
                 if 'score' in info:
                     info['final-score'] = info['score']
+                else:
+                    info['final-score'] = 0
 
         self._last_state = info
         return obs, rewards, terminated, truncated, info
