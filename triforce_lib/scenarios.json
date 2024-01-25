@@ -74,7 +74,7 @@
             {
                 "bombs" : 0,
                 "keys" : 0,
-                "hearts_and_containers" : 255,
+                "hearts_and_containers" : 34,
                 "partial_hearts" : 254
             }
         },
