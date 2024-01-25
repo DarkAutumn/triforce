@@ -7,7 +7,7 @@ from .zelda_game_data import zelda_game_data
 from .scenario_dungeon import DungeonEndCondition, ZeldaDungeonCritic
 from .scenario_gauntlet import GauntletEndCondition, ZeldaGuantletRewards
 from .scenario_dungeon_combat import ZeldaDungeonCombatCritic, ZeldaDungeonCombatEndCondition
-from .scenario_dungeon1 import Dungeon1BossCritic, Dungeon1BossEndCondition, Dungeon1Critic, Dungeon1EndCondition
+from .scenario_dungeon1 import Dungeon1BossCritic, Dungeon1BossEndCondition, Dungeon1Critic, Dungeon1CombatEndCondition, Dungeon1EndCondition
 
 class ScenarioGymWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
@@ -139,32 +139,20 @@ class ZeldaScenario:
     
     @classmethod
     def resolve_critic(cls, name):
-        if name == 'ZeldaGuantletRewards':
-            return ZeldaGuantletRewards
-        elif name == 'ZeldaDungeonCritic':
-            return ZeldaDungeonCritic
-        elif name == 'ZeldaDungeonCombatCritic':
-            return ZeldaDungeonCombatCritic
-        elif name == "Dungeon1Critic":
-            return Dungeon1Critic
-        elif name == 'Dungeon1BossCritic':
-            return Dungeon1BossCritic
-        
+        rewards = [ZeldaGuantletRewards, ZeldaDungeonCritic, ZeldaDungeonCombatCritic, Dungeon1Critic, Dungeon1BossCritic]
+        for x in rewards:
+            if name == x.__name__:
+                return x
+            
         raise Exception(f'Unknown critic {name}')
     
     @classmethod
     def resolve_end_condition(cls, name):
-        if name == 'GauntletEndCondition':
-            return GauntletEndCondition
-        elif name == 'DungeonEndCondition':
-            return DungeonEndCondition
-        elif name == 'ZeldaDungeonCombatEndCondition':
-            return ZeldaDungeonCombatEndCondition
-        elif name == 'Dungeon1EndCondition':
-            return Dungeon1EndCondition
-        elif name == 'Dungeon1BossEndCondition':
-            return Dungeon1BossEndCondition
-        
+        end_conditions = [GauntletEndCondition, DungeonEndCondition, ZeldaDungeonCombatEndCondition, Dungeon1EndCondition, Dungeon1CombatEndCondition, Dungeon1BossEndCondition]
+        for x in end_conditions:
+            if name == x.__name__:
+                return x
+            
         raise Exception(f'Unknown end condition {name}')
 
 __all__ = ['ZeldaScenario']

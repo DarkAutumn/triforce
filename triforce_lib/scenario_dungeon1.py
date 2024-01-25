@@ -45,7 +45,7 @@ class Dungeon1BossCritic(Dungeon1Critic):
 
         new['score'] = self.score
 
-class Dungeon1EndCondition(ZeldaEndCondition):
+class Dungeon1CombatEndCondition(ZeldaEndCondition):
     def clear(self):
         super().clear()
         self._new_rooms = set()
@@ -80,7 +80,26 @@ class Dungeon1EndCondition(ZeldaEndCondition):
                 terminated = True
 
         return terminated, truncated, reason
-    
+
+
+class Dungeon1EndCondition(ZeldaEndCondition):
+    def clear(self):
+        super().clear()
+
+    def is_scenario_ended(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
+        terminated, truncated, reason = super().is_scenario_ended(old_state, new_state)
+
+        if not terminated and not truncated:
+            if new_state['level'] != 1:
+                reason = "left-scenario"
+                terminated = True
+
+            if get_num_triforce_pieces(old_state) < get_num_triforce_pieces(new_state):
+                reason = "gained-triforce"
+                terminated = True
+
+        return terminated, truncated, reason
+
 class Dungeon1BossEndCondition(ZeldaEndCondition):
     def is_scenario_ended(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
         terminated, truncated, reason = super().is_scenario_ended(old_state, new_state)
