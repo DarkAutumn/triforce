@@ -160,7 +160,7 @@ def select_model(models, info):
     return list((x for x in models.values() if x.model is not None))[0]
 
 def get_filename():
-    directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "recording")
+    directory = os.path.join(os.getcwd(), "recording")
     if not os.path.exists(directory):
         os.makedirs(directory)
 
