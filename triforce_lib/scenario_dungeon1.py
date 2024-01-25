@@ -37,6 +37,7 @@ class Dungeon1BossCritic(Dungeon1Critic):
     def clear(self):
         super().clear()
         self.score = 0
+        self.too_close_threshold = 10
 
     def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
         if not self.score and new['step_kills']:
