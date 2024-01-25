@@ -154,7 +154,7 @@ class Dungeon1Orchestrator:
         self.keys_obtained = set()
         self.prev_keys = None
 
-        self.locations_to_kill_enemies = set([0x72, 0x53, 0x34, 0x23, 0x35])
+        self.locations_to_kill_enemies = set([0x72, 0x53, 0x34, 0x44, 0x23, 0x35])
         self.location_direction = {
             0x74 : "W",
             0x72 : "E",
