@@ -7,7 +7,7 @@ from .zelda_game_data import zelda_game_data
 from .scenario_dungeon import DungeonEndCondition, ZeldaDungeonCritic
 from .scenario_gauntlet import GauntletEndCondition, ZeldaGuantletRewards
 from .scenario_dungeon_combat import ZeldaDungeonCombatCritic, ZeldaDungeonCombatEndCondition
-from .scenario_dungeon1 import Dungeon1BossCritic, Dungeon1BossEndCondition, Dungeon1Critic, Dungeon1EndCondition
+from .scenario_dungeon1 import Dungeon1BossCritic, Dungeon1BossEndCondition, Dungeon1Critic, Dungeon1CombatEndCondition, Dungeon1EndCondition
 
 class ScenarioGymWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
@@ -57,6 +57,7 @@ class ScenarioGymWrapper(gym.Wrapper):
             reward_dict = {}
             for c in self._critics:
                 c.critique_gameplay(self._last_state, info, reward_dict)
+                c.set_score(self._last_state, info)
 
             if reward_dict:
                 for value in reward_dict.values():
@@ -72,6 +73,12 @@ class ScenarioGymWrapper(gym.Wrapper):
             if reason:
                 # I guess we could have more than one reason, but I'm not going to cover that corner case
                 info['end'] = reason[0]
+
+            if truncated or terminated:
+                if 'score' in info:
+                    info['final-score'] = info['score']
+                else:
+                    info['final-score'] = 0
 
         self._last_state = info
         return obs, rewards, terminated, truncated, info
@@ -107,16 +114,16 @@ class ZeldaScenario:
         env = ScenarioGymWrapper(env, self)
         return env
     
-    def debug(self, debug):
-        verbose = 2 if debug else 0
-
-
     @classmethod
     def get(cls, name):
-        return ZeldaScenario._scenarios.get(name, None)
+        return cls.get_scenarios().get(name, None)
     
     @classmethod
     def get_all_scenarios(cls):
+        return cls.get_scenarios().keys()
+
+    @classmethod
+    def get_scenarios(cls):
         if not ZeldaScenario._scenarios:
             # load scenarios.json
             curr_dir = os.path.dirname(os.path.realpath(__file__))
@@ -128,36 +135,24 @@ class ZeldaScenario:
                 scenario = ZeldaScenario(**json_scenario)
                 ZeldaScenario._scenarios[scenario.name] = scenario
 
-        return ZeldaScenario._scenarios.keys()
+        return ZeldaScenario._scenarios
     
     @classmethod
     def resolve_critic(cls, name):
-        if name == 'ZeldaGuantletRewards':
-            return ZeldaGuantletRewards
-        elif name == 'ZeldaDungeonCritic':
-            return ZeldaDungeonCritic
-        elif name == 'ZeldaDungeonCombatCritic':
-            return ZeldaDungeonCombatCritic
-        elif name == "Dungeon1Critic":
-            return Dungeon1Critic
-        elif name == 'Dungeon1BossCritic':
-            return Dungeon1BossCritic
-        
+        rewards = [ZeldaGuantletRewards, ZeldaDungeonCritic, ZeldaDungeonCombatCritic, Dungeon1Critic, Dungeon1BossCritic]
+        for x in rewards:
+            if name == x.__name__:
+                return x
+            
         raise Exception(f'Unknown critic {name}')
     
     @classmethod
     def resolve_end_condition(cls, name):
-        if name == 'GauntletEndCondition':
-            return GauntletEndCondition
-        elif name == 'DungeonEndCondition':
-            return DungeonEndCondition
-        elif name == 'ZeldaDungeonCombatEndCondition':
-            return ZeldaDungeonCombatEndCondition
-        elif name == 'Dungeon1EndCondition':
-            return Dungeon1EndCondition
-        elif name == 'Dungeon1BossEndCondition':
-            return Dungeon1BossEndCondition
-        
+        end_conditions = [GauntletEndCondition, DungeonEndCondition, ZeldaDungeonCombatEndCondition, Dungeon1EndCondition, Dungeon1CombatEndCondition, Dungeon1BossEndCondition]
+        for x in end_conditions:
+            if name == x.__name__:
+                return x
+            
         raise Exception(f'Unknown end condition {name}')
 
 __all__ = ['ZeldaScenario']

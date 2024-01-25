@@ -395,6 +395,6 @@ FodyWeavers.xsd
 *.msp
 
 *.nes
-models/
-*.avi
-*.mp4
+
+training/
+recording/

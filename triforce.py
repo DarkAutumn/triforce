@@ -4,24 +4,25 @@ import os
 from triforce_lib import ZeldaScenario, ZeldaML, pygame_render
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Parse command line arguments for training, testing, evaluating, or recording.")
-
-    scenarios = ZeldaScenario.get_all_scenarios()
-
-    parser.add_argument("action", choices=['train', 'evaluate', 'help', 'display'], help="Action to perform.")
-    parser.add_argument("scenario", choices=scenarios, help="The scenario to run.")
-    parser.add_argument("iterations", type=int, help="Number of iterations to run.")
-
+    parser = argparse.ArgumentParser(description="ZeldaML - An ML agent to play The Legned of Zelda (NES).")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
-    parser.add_argument("--parallel", type=int, default=1, help="Number of parallel environments to run.")
-    parser.add_argument("--render", action='store_true', help="Render the environment.")
+    parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--color", action='store_true', help="Record the environment.")
     parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack in the observation.")
-    parser.add_argument("--record", action='store_true', help="Whether to record playback or not.")
-    parser.add_argument("--load", help="Load a specific saved model.")
-    parser.add_argument("--debug-scenario", action='store_true', help="Debug the scenario by printing out rewards.")
-    parser.add_argument("--ent-coef", type=float, default=0.00, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport', help="The kind of observation to use.")
+
+    subparsers = parser.add_subparsers(dest='action', required=True)
+
+    parser_train = subparsers.add_parser('train', aliases=['learn'])
+    parser_train.add_argument('models', nargs='*', help='List of models to train')
+    parser_train.add_argument("--output", type=str, help="Location to write to.")
+    parser_train.add_argument("--render", action='store_true', help="Render the environment.")
+    parser_train.add_argument("--iterations", type=int, default=-1, help="Number of iterations to run.")
+    parser_train.add_argument("--parallel", type=int, default=1, help="Number of parallel environments to run.")
+
+    parser_display = subparsers.add_parser('run', aliases=['show', 'display'])
+    parser_display.add_argument('scenario', nargs=1, help='Scenario name')
+    parser_display.add_argument('model_path', nargs=1, help='Model path')
 
     try:
         args = parser.parse_args()
@@ -46,31 +47,18 @@ def main():
     render_mode = None
     if args.action == 'test' or args.action == 'evaluate':
         render_mode = 'human'
-    elif args.action == 'display':
+    elif args.action in ['display', 'run', 'show']:
         render_mode = 'rgb_array'
 
-    record = args.record
-    debug_scenario = args.debug_scenario or args.action == 'evaluate'
-    zelda_ml = ZeldaML(base_dir, args.scenario, args.frame_stack, args.color, args.parallel, record=record, render_mode=render_mode, verbose=args.verbose, debug_scenario=debug_scenario, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
+    zelda_ml = ZeldaML(args.frame_stack, args.color, render_mode=render_mode, verbose=args.verbose, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
 
-    if args.load:
-        zelda_ml.load(args.load)
+    if args.action in ['train', 'learn']:
+        iterations = None if args.iterations <= 0 else args.iterations
+        models = args.models if args.models else None
+        zelda_ml.train(args.output, models, iterations, args.parallel)
 
-    try:
-        if args.action == 'train' or args.action == 'learn':
-            # learn automatically saves both the best model and the model at the end of training
-            zelda_ml.learn(args.iterations, progress_bar=True)
-
-        elif args.action == 'evaluate' or args.action == 'record':
-            mean_reward, std_reward = zelda_ml.evaluate(args.iterations, deterministic=False, render=True)
-            print(f'Mean reward: {mean_reward} +/- {std_reward}')
-
-        elif args.action == 'display':
-            pygame_render(zelda_ml)
-
-    finally:
-        zelda_ml.close()
-
+    elif args.action in ['display', 'run', 'show']:
+        pygame_render(zelda_ml, args.scenario[0], args.model_path[0])
 
 if __name__ == '__main__':
     main()

@@ -1,4 +1,5 @@
 import typing
+from typing import Any
 
 from .critic import ZeldaGameplayCritic
 from .end_condition import ZeldaEndCondition
@@ -11,6 +12,11 @@ class Dungeon1Critic(ZeldaGameplayCritic):
         self.health_change_reward = self.reward_large
         self.leave_dungeon_penalty = -self.reward_maximum
         self.leave_early_penalty = -self.reward_maximum
+        self.seen = set()
+
+    def clear(self):
+        super().clear()
+        self.seen.clear()
 
     def critique_location_discovery(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int], rewards : typing.Dict[str, float]):
         if new_state['level'] != 1:
@@ -22,10 +28,24 @@ class Dungeon1Critic(ZeldaGameplayCritic):
             else:
                 rewards['penalty-left-early'] = self.leave_early_penalty
 
-class Dungeon1BossCritic(Dungeon1Critic):
-    pass
+    def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
+        new_location = new['location']
+        self.seen.add(new_location)
+        new['score'] = len(self.seen) - 1
 
-class Dungeon1EndCondition(ZeldaEndCondition):
+class Dungeon1BossCritic(Dungeon1Critic):
+    def clear(self):
+        super().clear()
+        self.score = 0
+        self.too_close_threshold = 10
+
+    def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
+        if not self.score and new['step_kills']:
+            self.score = 1
+
+        new['score'] = self.score
+
+class Dungeon1CombatEndCondition(ZeldaEndCondition):
     def clear(self):
         super().clear()
         self._new_rooms = set()
@@ -42,6 +62,10 @@ class Dungeon1EndCondition(ZeldaEndCondition):
                 terminated = True
 
             location = new_state['location']
+            if location == 0x35:
+                reason = "reached-boss"
+                terminated = True
+
             if location not in self._new_rooms:
                 self._new_rooms.add(location)
                 self._frame_count = 0
@@ -56,7 +80,26 @@ class Dungeon1EndCondition(ZeldaEndCondition):
                 terminated = True
 
         return terminated, truncated, reason
-    
+
+
+class Dungeon1EndCondition(ZeldaEndCondition):
+    def clear(self):
+        super().clear()
+
+    def is_scenario_ended(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
+        terminated, truncated, reason = super().is_scenario_ended(old_state, new_state)
+
+        if not terminated and not truncated:
+            if new_state['level'] != 1:
+                reason = "left-scenario"
+                terminated = True
+
+            if get_num_triforce_pieces(old_state) < get_num_triforce_pieces(new_state):
+                reason = "gained-triforce"
+                terminated = True
+
+        return terminated, truncated, reason
+
 class Dungeon1BossEndCondition(ZeldaEndCondition):
     def is_scenario_ended(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
         terminated, truncated, reason = super().is_scenario_ended(old_state, new_state)

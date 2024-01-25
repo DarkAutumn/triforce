@@ -1,0 +1,26 @@
+{
+    "models" :
+    [
+        {
+            "name" : "dungeon1",
+            "path" : "models/dungeon1.zip",
+            "priority" : 1,
+            "levels" : 1,
+            "requires_enemies" : false,
+
+            "training_scenario" : "dungeon1combat",
+            "iterations" : 1500000
+        },
+        {
+            "name" : "dungeon1boss",
+            "path" : "models/dungeon1boss.zip",
+            "priority" : 10,
+            "levels" : 1,
+            "rooms" : "0x35",
+            "requires_enemies" : true,
+
+            "training_scenario" : "dungeon1boss",
+            "iterations" : 500000
+        }
+    ]
+}
