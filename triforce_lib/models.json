@@ -18,7 +18,7 @@
             "rooms" : "0x35",
 
             "training_scenario" : "dungeon1boss",
-            "iterations" : 1500000
+            "iterations" : 500000
         }
     ]
 }
