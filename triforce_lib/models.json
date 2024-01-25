@@ -28,7 +28,7 @@
             "path" : "models/dungeon1boss.zip",
             "priority" : 10,
             "levels" : 1,
-            "rooms" : "0x35",
+            "rooms" : ["0x35", "0x36"],
             "requires_enemies" : true,
             "equipment_required" : [],
 

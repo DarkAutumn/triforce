@@ -73,7 +73,7 @@
             "name": "dungeon1beams",
             "description": "Dungeon 1 Beams",
             "critics": ["Dungeon1BeamCritic"],
-            "end_conditions": ["Dungeon1EndCondition"],
+            "end_conditions": ["Dungeon1CombatEndCondition"],
             "level" : 1,
             "start": ["1_72"],
             "data":
@@ -93,7 +93,7 @@
             "name": "dungeon1nobeams",
             "description": "Dungeon 1 combat trainer (no beams)",
             "critics": ["Dungeon1Critic"],
-            "end_conditions": ["Dungeon1EndCondition"],
+            "end_conditions": ["Dungeon1CombatEndCondition"],
             "level" : 1,
             "start": ["1_72"],
             "data":
