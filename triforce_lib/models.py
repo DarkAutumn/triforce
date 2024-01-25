@@ -1,6 +1,6 @@
 import json
 import os
-from typing import List
+from typing import List, Optional
 from dataclasses import dataclass
 
 @dataclass
@@ -11,6 +11,7 @@ class ZeldaModelInfo:
 
     levels : List[int]
     rooms : List[int]
+    requires_enemies : bool
 
     training_scenario : str
     iterations : int

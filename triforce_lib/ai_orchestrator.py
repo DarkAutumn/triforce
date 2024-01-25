@@ -46,7 +46,7 @@ class AIOrchestrator(gym.Wrapper):
         location = info['location']
         level = info['level']
 
-        matching = [x for x in self.models_by_priority if level in x.levels and (x.rooms is None or location in x.rooms)]
+        matching = [x for x in self.models_by_priority if level in x.levels and (x.rooms is None or location in x.rooms) and (not x.requires_enemies or info['objects'].enemy_count)]
         if matching:
             model = matching[0]
         else:
@@ -148,7 +148,7 @@ class Dungeon1Orchestrator:
         self.keys_obtained = set()
         self.prev_keys = None
 
-        self.locations_to_kill_enemies = set([0x72, 0x53, 0x34, 0x23])
+        self.locations_to_kill_enemies = set([0x72, 0x53, 0x34, 0x23, 0x35])
         self.location_direction = {
             0x74 : "W",
             0x72 : "E",
@@ -199,9 +199,16 @@ class Dungeon1Orchestrator:
 
         # boss room
         if objective_vector is None and location == 0x35:
-            if link_pos[1] < 0xca:
+            if link_pos[1] >= 0xca:
                 objective_vector = np.array([1, -1], dtype=np.float32)
                 objective_vector /= np.linalg.norm(objective_vector)
                 info['objective_kind'] = 'fight'
+
+        # triforce room
+        if location == 0x36 and link_pos[1] < 0xB0:
+                if link_pos[0] < 0x18:
+                    objective_vector = np.array([1, 0], dtype=np.float32)
+                elif link_pos[0] <= 0x20:
+                    objective_vector = np.array([0, 1], dtype=np.float32)
 
         return objective_vector
