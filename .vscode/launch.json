@@ -14,6 +14,15 @@
             "justMyCode": false
         },
         {
+            "name": "Run Dungeon1 Boss",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["run", "dungeon1boss", "models/"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Training",
             "type": "python",
             "request": "launch",
