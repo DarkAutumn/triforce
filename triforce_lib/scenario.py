@@ -7,7 +7,7 @@ from .zelda_game_data import zelda_game_data
 from .scenario_dungeon import DungeonEndCondition, ZeldaDungeonCritic
 from .scenario_gauntlet import GauntletEndCondition, ZeldaGuantletRewards
 from .scenario_dungeon_combat import ZeldaDungeonCombatCritic, ZeldaDungeonCombatEndCondition
-from .scenario_dungeon1 import Dungeon1BossCritic, Dungeon1BossEndCondition, Dungeon1Critic, Dungeon1CombatEndCondition, Dungeon1EndCondition
+from .scenario_dungeon1 import Dungeon1BeamCritic, Dungeon1BossCritic, Dungeon1BossEndCondition, Dungeon1Critic, Dungeon1CombatEndCondition, Dungeon1EndCondition
 
 class ScenarioGymWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
@@ -148,7 +148,7 @@ class ZeldaScenario:
     
     @classmethod
     def resolve_critic(cls, name):
-        rewards = [ZeldaGuantletRewards, ZeldaDungeonCritic, ZeldaDungeonCombatCritic, Dungeon1Critic, Dungeon1BossCritic]
+        rewards = [ZeldaGuantletRewards, ZeldaDungeonCritic, ZeldaDungeonCombatCritic, Dungeon1Critic, Dungeon1BossCritic, Dungeon1BeamCritic]
         for x in rewards:
             if name == x.__name__:
                 return x

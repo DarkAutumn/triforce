@@ -72,7 +72,7 @@
         {
             "name": "dungeon1beams",
             "description": "Dungeon 1 Beams",
-            "critics": ["Dungeon1Critic"],
+            "critics": ["Dungeon1BeamCritic"],
             "end_conditions": ["Dungeon1EndCondition"],
             "level" : 1,
             "start": ["1_72"],

@@ -157,7 +157,9 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
 def select_model(models, info):
     if info is not None and "model" in info:
-        return models[info["model"]]
+        for model_name in info["model"]:
+            if model_name in models and models[model_name].model is not None:
+                return models[model_name]
     
     return list((x for x in models.values() if x.model is not None))[0]
 

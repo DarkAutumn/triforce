@@ -33,6 +33,13 @@ class Dungeon1Critic(ZeldaGameplayCritic):
         self.seen.add(new_location)
         new['score'] = len(self.seen) - 1
 
+class Dungeon1BeamCritic(Dungeon1Critic):
+    def __init__(self):
+        super().__init__()
+        self.health_gained_reward = 0
+        self.health_lost_penalty = -self.reward_maximum
+
+
 class Dungeon1BossCritic(Dungeon1Critic):
     def clear(self):
         super().clear()
