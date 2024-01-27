@@ -103,6 +103,8 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
             # render the gameplay
             render_game_view(rgb_array, (game_x, game_y), game_width, game_height, screen)
             render_text(screen, f"Model: {curr_model.name}", (game_x, game_y))
+            if "location" in info:
+                render_text(screen, f"Location: {hex(info['location'])}", (game_x + game_width - 120, game_y))
 
             # render rewards graph and values
             draw_rewards_graph(graph_height, screen, block_width, center_line, reward_values)
@@ -155,7 +157,9 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
 def select_model(models, info):
     if info is not None and "model" in info:
-        return models[info["model"]]
+        for model_name in info["model"]:
+            if model_name in models and models[model_name].model is not None:
+                return models[model_name]
     
     return list((x for x in models.values() if x.model is not None))[0]
 

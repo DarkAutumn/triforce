@@ -51,7 +51,8 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # reward values
         self.rupee_reward = self.reward_small
-        self.health_change_reward = self.reward_large
+        self.health_gained_reward = self.reward_large
+        self.health_lost_penalty = -self.reward_large
         self.kill_reward = self.reward_small
         self.new_location_reward = self.reward_medium
         
@@ -168,9 +169,9 @@ class ZeldaGameplayCritic(ZeldaCritic):
         new_hearts = get_heart_halves(new)
 
         if new_hearts < old_hearts:
-            rewards['penalty-losing-health'] = -self.health_change_reward
+            rewards['penalty-losing-health'] = self.health_lost_penalty
         elif new_hearts > old_hearts:
-            rewards['reward-gaining-health'] = self.health_change_reward
+            rewards['reward-gaining-health'] = self.health_gained_reward
     
     def critique_heart_containers(self, old, new, rewards):
         # we can only gain one heart container at a time

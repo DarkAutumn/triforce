@@ -1,6 +1,7 @@
 import gymnasium as gym
 import numpy as np
 
+from .zelda_game import has_beams
 
 def get_dungeon_door_pos(link_pos, direction):
     if direction == "N":
@@ -46,14 +47,19 @@ class AIOrchestrator(gym.Wrapper):
         location = info['location']
         level = info['level']
 
-        matching = [x for x in self.models_by_priority if level in x.levels and (x.rooms is None or location in x.rooms) and (not x.requires_enemies or info['objects'].enemy_count)]
-        if matching:
-            model = matching[0]
-        else:
-            # lowest priority model is likely the most general?
-            model = self.models_by_priority[-1]
+        models = [x.name for x in self.models_by_priority if level in x.levels and (x.rooms is None or location in x.rooms) and (not x.requires_enemies or info['objects'].enemy_count) and self.matches_equipment(x, info)]
 
-        info['model'] = model.name
+        info['model'] = models if models else [x.name for x in self.models_by_priority]
+
+    def matches_equipment(self, model, info):
+        for equipment in model.equipment_required:
+            if equipment == "beams":
+                if not has_beams(info):
+                    return False
+            else:
+                raise Exception("Unknown equipment requirement: " + equipment)
+            
+        return True
 
     def set_objectives(self, info):
         link_pos = np.array(info['link_pos'], dtype=np.float32)
@@ -148,7 +154,7 @@ class Dungeon1Orchestrator:
         self.keys_obtained = set()
         self.prev_keys = None
 
-        self.locations_to_kill_enemies = set([0x72, 0x53, 0x34, 0x23, 0x35])
+        self.locations_to_kill_enemies = set([0x72, 0x53, 0x34, 0x44, 0x23, 0x35])
         self.location_direction = {
             0x74 : "W",
             0x72 : "E",

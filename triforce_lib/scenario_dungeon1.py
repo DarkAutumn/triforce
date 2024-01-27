@@ -3,7 +3,7 @@ from typing import Any
 
 from .critic import ZeldaGameplayCritic
 from .end_condition import ZeldaEndCondition
-from .zelda_game import get_heart_containers, get_num_triforce_pieces
+from .zelda_game import get_heart_containers, get_heart_halves, get_num_triforce_pieces
 
 class Dungeon1Critic(ZeldaGameplayCritic):
     def __init__(self):
@@ -31,7 +31,14 @@ class Dungeon1Critic(ZeldaGameplayCritic):
     def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
         new_location = new['location']
         self.seen.add(new_location)
-        new['score'] = len(self.seen) - 1
+        new['score'] = len(self.seen) - 1 + get_heart_halves(new) * 0.5
+
+class Dungeon1BeamCritic(Dungeon1Critic):
+    def __init__(self):
+        super().__init__()
+        self.health_gained_reward = 0
+        self.health_lost_penalty = -self.reward_maximum
+
 
 class Dungeon1BossCritic(Dungeon1Critic):
     def clear(self):
@@ -41,7 +48,7 @@ class Dungeon1BossCritic(Dungeon1Critic):
 
     def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
         if not self.score and new['step_kills']:
-            self.score = 1
+            self.score = get_heart_halves(new) * 0.5
 
         new['score'] = self.score
 
@@ -100,18 +107,14 @@ class Dungeon1EndCondition(ZeldaEndCondition):
 
         return terminated, truncated, reason
 
-class Dungeon1BossEndCondition(ZeldaEndCondition):
+class Dungeon1BossEndCondition(Dungeon1EndCondition):
     def is_scenario_ended(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
         terminated, truncated, reason = super().is_scenario_ended(old_state, new_state)
 
         if not terminated and not truncated:
             location = new_state['location']
-            if location != 0x35:
+            if location != 0x35 and location != 0x36:
                 reason = "left-scenario"
-                terminated = True
-
-            if get_heart_containers(old_state) < get_heart_containers(new_state):
-                reason = "won-scenario"
                 terminated = True
 
         return terminated, truncated, reason

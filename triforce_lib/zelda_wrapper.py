@@ -61,7 +61,7 @@ class ZeldaObjectData:
     def enemy_count(self):
         return sum(1 for i in range(1, 0xb) if self.is_enemy(self.get_object_id(i)))
 
-movement_cooldown = 5
+movement_frames = 6
 attack_cooldown = 15
 item_cooldown = 10
 random_delay_max_frames = 1
@@ -271,9 +271,12 @@ class ZeldaGameWrapper(gym.Wrapper):
     def act_and_wait(self, act):
     # wait based on the kind of action
         if self.action_is_movement(act):
-            obs, rewards, terminated, truncated, info = self.env.step(act)
-            obs, rew, terminated, truncated, info = self.skip(act, movement_cooldown)
-            rewards += rew
+            rewards = 0
+            for i in range(movement_frames):
+                    obs, rew, terminated, truncated, info = self.env.step(act)
+                    rewards += rew
+                    if terminated or truncated:
+                        break
 
         elif self.action_is_attack(act):
             turn_action = act.copy()
@@ -283,7 +286,11 @@ class ZeldaGameWrapper(gym.Wrapper):
             obs, rew, terminated, truncated, info = self.env.step(act)
             rewards += rew
 
-            obs, rew, terminated, truncated, info = self.skip(self._none_action, attack_cooldown)
+            cooldown = attack_cooldown
+            if not self.deterministic:
+                cooldown += randint(0, random_delay_max_frames)
+
+            obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
             rewards += rew
 
         elif self.action_is_item(act):
@@ -300,13 +307,6 @@ class ZeldaGameWrapper(gym.Wrapper):
             rewards += rew
             if terminated or truncated:
                 break
-
-        # add a random delay to make Zelda non deterministic
-        if not self.deterministic:
-            cooldown = randint(0, random_delay_max_frames + 1)
-            if cooldown:
-                obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
-                rewards += rew
 
         return obs, rewards, terminated, truncated, info
 

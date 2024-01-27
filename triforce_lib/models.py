@@ -12,6 +12,7 @@ class ZeldaModelInfo:
     levels : List[int]
     rooms : List[int]
     requires_enemies : bool
+    equipment_required : List[str]
 
     training_scenario : str
     iterations : int
