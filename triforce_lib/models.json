@@ -29,7 +29,7 @@
             "name" : "dungeon1bombs",
             "path" : "dungeon1bombs/model.zip",
             "action_space" : "directional-item",
-            "priority" : 1,
+            "priority" : 2,
             "levels" : 1,
             "requires_enemies" : false,
             "equipment_required" : ["bombs"],
