@@ -1,6 +1,5 @@
 import math
 import os
-import cv2
 import pygame
 import numpy as np
 from collections import deque
@@ -111,10 +110,7 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
             draw_description_text(screen, reward_details, text_x, text_y, 20, text_height)
 
             if recording:
-                result_frame = pygame.surfarray.array3d(pygame.display.get_surface())
-                result_frame = result_frame.transpose([1, 0, 2])  # Transpose it to the correct format
-                result_frame = cv2.cvtColor(result_frame, cv2.COLOR_RGB2BGR)  # Convert from RGB to BGR
-                recording.write(result_frame)
+                write_frame(recording)
 
             # Display the scaled frame
             pygame.display.flip()
@@ -176,6 +172,7 @@ def get_filename():
         i += 1
 
 def start_recording(dimensions):
+    import cv2
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     recording = cv2.VideoWriter(get_filename(), fourcc, 60.1, dimensions)
     return recording
@@ -183,6 +180,13 @@ def start_recording(dimensions):
 def stop_recording(recording):
     if recording is not None:
         recording.release()
+
+def write_frame(recording):
+    import cv2
+    result_frame = pygame.surfarray.array3d(pygame.display.get_surface())
+    result_frame = result_frame.transpose([1, 0, 2])  # Transpose it to the correct format
+    result_frame = cv2.cvtColor(result_frame, cv2.COLOR_RGB2BGR)  # Convert from RGB to BGR
+    recording.write(result_frame)
 
 def draw_arrow(screen, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
     render_text(screen, label, (start_pos[0], start_pos[1]))
