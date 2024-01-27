@@ -57,7 +57,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.new_location_reward = self.reward_medium
         
         # these are pivotal to the game, so they are rewarded highly
-        self.bomb_reward = self.reward_large
+        self.bomb_pickup_reward = self.reward_large
         self.key_reward = self.reward_large
         self.heart_container_reward = self.reward_maximum
         self.triforce_reward = self.reward_maximum
@@ -86,7 +86,8 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # items
         self.used_null_item_penalty = -self.reward_large
-
+        self.bomb_miss_penalty = -self.reward_large
+        self.bomb_hit_reward = self.reward_large
 
         self.cos45 = np.sqrt(2) / 2
 
@@ -167,7 +168,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
             rewards['reward-gained-rupees'] = self.rupee_reward
 
         if old['bombs'] != 0 < new['bombs'] == 0:
-            rewards['reward-gained-bombs'] = self.bomb_reward
+            rewards['reward-gained-bombs'] = self.bomb_pickup_reward
 
     def critique_health_change(self, old, new, rewards):
         old_hearts = get_heart_halves(old)
@@ -215,6 +216,12 @@ class ZeldaGameplayCritic(ZeldaCritic):
             selected = new['selected_item']
             if selected == 0 and not new['regular_boomerang'] and not new['magic_boomerang']:
                 rewards['used-null-item'] = self.used_null_item_penalty
+            elif selected == 1:  # bombs
+                total_hits = new['step_kills'] + new['step_injuries']
+                if total_hits == 0:
+                    rewards['penalty-bomb-miss'] = self.bomb_miss_penalty
+                else:
+                    rewards['reward-bomb-hit'] = min(self.bomb_hit_reward * total_hits, 1.0)
 
     def offscreen_sword_disabled(self, new):
         x, y = new['link_pos']
