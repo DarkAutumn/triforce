@@ -39,6 +39,8 @@ class Dungeon1BeamCritic(Dungeon1Critic):
         self.health_gained_reward = 0
         self.health_lost_penalty = -self.reward_maximum
 
+class Dungeon1BombCritic(Dungeon1Critic):
+    pass
 
 class Dungeon1BossCritic(Dungeon1Critic):
     def clear(self):

@@ -90,6 +90,25 @@
             }
         },
         {
+            "name": "dungeon1bombs",
+            "description": "Dungeon 1 Bombs",
+            "critics": ["Dungeon1BombCritic"],
+            "end_conditions": ["Dungeon1CombatEndCondition"],
+            "level" : 1,
+            "start": ["1_74"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 1,
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
+            },
+            "fixed":
+            {
+                "bombs" : 8
+            }
+        },
+        {
             "name": "dungeon1nobeams",
             "description": "Dungeon 1 combat trainer (no beams)",
             "critics": ["Dungeon1Critic"],

@@ -4,6 +4,7 @@
         {
             "name" : "dungeon1nobeams",
             "path" : "dungeon1nobeams/model.zip",
+            "action_space" : "attack-only",
             "priority" : 0,
             "levels" : 1,
             "requires_enemies" : false,
@@ -15,6 +16,7 @@
         {
             "name" : "dungeon1beams",
             "path" : "dungeon1beams/model.zip",
+            "action_space" : "attack-only",
             "priority" : 1,
             "levels" : 1,
             "requires_enemies" : false,
@@ -24,8 +26,21 @@
             "iterations" : 1500000
         },
         {
+            "name" : "dungeon1bombs",
+            "path" : "dungeon1bombs/model.zip",
+            "action_space" : "directional-item",
+            "priority" : 1,
+            "levels" : 1,
+            "requires_enemies" : false,
+            "equipment_required" : ["bombs"],
+
+            "training_scenario" : "dungeon1bombs",
+            "iterations" : 1500000
+        },
+        {
             "name" : "dungeon1boss",
             "path" : "models/dungeon1boss.zip",
+            "action_space" : "attack-only",
             "priority" : 10,
             "levels" : 1,
             "rooms" : ["0x35", "0x36"],

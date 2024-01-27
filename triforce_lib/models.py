@@ -7,6 +7,7 @@ from dataclasses import dataclass
 class ZeldaModelInfo:
     name : str
     path : str
+    action_space : bool
     priority : int
 
     levels : List[int]

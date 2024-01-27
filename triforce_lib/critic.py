@@ -84,6 +84,10 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.attack_miss_penalty = -self.reward_tiny
         self.attack_no_enemies_penalty = -self.reward_minimum
 
+        # items
+        self.used_null_item_penalty = -self.reward_large
+
+
         self.cos45 = np.sqrt(2) / 2
 
     def clear(self):
@@ -106,6 +110,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # combat
         self.critique_attack(old, new, rewards)
+        self.critique_item_usage(old, new, rewards)
 
         # items
         self.critique_item_pickup(old, new, rewards)
@@ -204,6 +209,12 @@ class ZeldaGameplayCritic(ZeldaCritic):
                             distance = new['enemy_vectors'][0][1]
                             if distance > self.distance_threshold:
                                 rewards['penalty-attack-miss'] = self.attack_miss_penalty
+
+    def critique_item_usage(self, old, new, rewards):
+        if new['action'] == 'item':
+            selected = new['selected_item']
+            if selected == 0 and not new['regular_boomerang'] and not new['magic_boomerang']:
+                rewards['used-null-item'] = self.used_null_item_penalty
 
     def offscreen_sword_disabled(self, new):
         x, y = new['link_pos']

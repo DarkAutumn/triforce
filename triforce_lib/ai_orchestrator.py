@@ -56,6 +56,10 @@ class AIOrchestrator(gym.Wrapper):
             if equipment == "beams":
                 if not has_beams(info):
                     return False
+                
+            elif equipment == "bombs":
+                if info['bombs'] == 0:
+                    return False
             else:
                 raise Exception("Unknown equipment requirement: " + equipment)
             

@@ -32,6 +32,15 @@
             "justMyCode": false
         },
         {
+            "name": "Run Dungeon1 Bombs Scenario",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["run", "dungeon1bombs", "models/"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Run Dungeon1 Boss",
             "type": "python",
             "request": "launch",

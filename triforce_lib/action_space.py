@@ -1,11 +1,26 @@
 import gymnasium as gym
 import numpy as np
 
-class ZeldaAttackOnlyActionSpace(gym.ActionWrapper):
-    def __init__(self, env):
+class ZeldaActionSpace(gym.ActionWrapper):
+    def __init__(self, env, kind):
         super().__init__(env)
 
-        self.actions = [['LEFT'], ['RIGHT'], ['UP'], ['DOWN'], ['LEFT', 'A'], ['RIGHT', 'A'], ['UP', 'A'], ['DOWN', 'A']]
+        # movement is always allowed
+        self.actions = [['LEFT'], ['RIGHT'], ['UP'], ['DOWN'],
+                        ['LEFT', 'A'], ['RIGHT', 'A'], ['UP', 'A'], ['DOWN', 'A'],
+                        ['LEFT', 'B'], ['RIGHT', 'B'], ['UP', 'B'], ['DOWN', 'B'],
+                        ['UP', 'LEFT', 'B'], ['UP', 'RIGHT', 'B'], ['DOWN', 'LEFT', 'B'], ['DOWN', 'RIGHT', 'B']
+                        ]
+        
+        num_action_space = 4
+        if kind != 'move-only':
+            num_action_space += 4
+
+        if kind == 'directional-item' or kind == 'diagonal-item' or kind == 'all':
+            num_action_space += 4
+        
+        if kind == 'diagonal-item' or kind == 'all':
+            num_action_space += 4
 
         assert isinstance(env.action_space, gym.spaces.MultiBinary)
 
@@ -20,7 +35,7 @@ class ZeldaAttackOnlyActionSpace(gym.ActionWrapper):
             
             self._decode_discrete_action.append(arr)
 
-        self.action_space = gym.spaces.Discrete(len(self._decode_discrete_action))
+        self.action_space = gym.spaces.Discrete(num_action_space)
 
     def action(self, act):
         return self._decode_discrete_action[act].copy()

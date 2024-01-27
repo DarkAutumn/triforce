@@ -13,7 +13,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from .models import ZeldaModel, load_model_info
 from .ai_orchestrator import AIOrchestrator
 from .zelda_wrapper import ZeldaGameWrapper
-from .action_space import ZeldaAttackOnlyActionSpace
+from .action_space import ZeldaActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
 from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
@@ -54,7 +54,7 @@ class ZeldaML:
         self.frame_stack = 1 if not isinstance(frame_stack, int) or frame_stack < 2 else frame_stack
         self.models = load_model_info()
 
-    def make_env(self, scenario, parallel = 1):
+    def make_env(self, scenario, action_space = "all", parallel = 1):
         def make_env_func():
             # create the environment
             env = retro.make(game='Zelda-NES', state=scenario.all_start_states[0], inttype=retro.data.Integrations.CUSTOM_ONLY, **self.__extra_args)
@@ -80,7 +80,7 @@ class ZeldaML:
 
             # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
             # since that doesn't make any sense in Zelda)
-            env = ZeldaAttackOnlyActionSpace(env)
+            env = ZeldaActionSpace(env, action_space)
 
             # extract features from the game for the model, like whether link has beams or has keys and expose these as observations
             env = ZeldaGameFeatures(env)
@@ -123,7 +123,7 @@ class ZeldaML:
             log_path = os.path.join(model_dir, 'logs')
 
             scenario = ZeldaScenario.get(model_info.training_scenario)
-            env = self.make_env(scenario, parallel)
+            env = self.make_env(scenario, model_info.action_space, parallel)
             try:
                 print()
                 print(f"Training model: {model_info.name}")
