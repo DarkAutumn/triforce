@@ -53,7 +53,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.rupee_reward = self.reward_small
         self.health_gained_reward = self.reward_large
         self.health_lost_penalty = -self.reward_large
-        self.kill_reward = self.reward_small
+        self.injure_kill_reward = self.reward_small
         self.new_location_reward = self.reward_medium
         
         # these are pivotal to the game, so they are rewarded highly
@@ -184,7 +184,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
     def critique_attack(self, old, new, rewards):
         if new['step_kills'] or new['step_injuries']:
-            rewards['reward-injure-kill'] = self.kill_reward
+            rewards['reward-injure-kill'] = self.injure_kill_reward
         
         else:
             if new['action'] == 'attack':                
