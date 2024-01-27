@@ -4,7 +4,7 @@ services:
     build: .
     volumes:
       - .:/usr/src/app
-      - models:/models
+      - ./models:/models
       - training:/training
     ports:
       - "6006:6006"
