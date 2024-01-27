@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  tensorflow:
+    build: .
+    volumes:
+      - .:/usr/src/app
+      - ./models:/models
+      - training:/training
+    ports:
+      - "6006:6006"
+    command: ./train_with_tensorboard.sh
+    runtime: nvidia
+
+volumes:
+  models:
+  training:
