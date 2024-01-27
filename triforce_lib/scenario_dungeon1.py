@@ -43,14 +43,16 @@ class Dungeon1BeamCritic(Dungeon1Critic):
 class Dungeon1BossCritic(Dungeon1Critic):
     def clear(self):
         super().clear()
-        self.score = 0
+        self.total_damage = 0
         self.too_close_threshold = 10
+        self.move_closer_reward = self.reward_small
+        self.move_away_penalty = -self.reward_small
+        self.injure_kill_reward = self.reward_large
+        self.health_lost_penalty = -self.reward_small
 
     def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
-        if not self.score and new['step_kills']:
-            self.score = get_heart_halves(new) * 0.5
-
-        new['score'] = self.score
+        self.total_damage += new['step_injuries'] + new['step_kills']
+        new['score'] = get_heart_halves(new) + self.total_damage
 
 class Dungeon1CombatEndCondition(ZeldaEndCondition):
     def clear(self):
