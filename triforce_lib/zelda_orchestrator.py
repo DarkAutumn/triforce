@@ -4,7 +4,7 @@ from .zelda_game import has_beams
 class ZeldaAIOrchestrator:
     def __init__(self):
         # we only select usable models
-        self.models_by_priority = [x for x in ZeldaModel.get_all() if x.model]
+        self.models_by_priority = [x for x in ZeldaModel.get_loaded_models() if x.model]
         self.models_by_priority.sort(key=lambda x: x.priority, reverse=True)
     
     @property

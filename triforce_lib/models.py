@@ -76,5 +76,9 @@ class ZeldaModel(ZeldaModelInfo):
         return cls._models.get(name, None)
     
     @classmethod
-    def get_all(cls) -> List['ZeldaModel']:
+    def get_loaded_models(cls) -> List['ZeldaModel']:
         return list(cls._models.values())
+    
+    @classmethod
+    def get_model_info(cls) -> List[str]:
+        return cls._model_infos
