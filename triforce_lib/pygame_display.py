@@ -4,6 +4,7 @@ import pygame
 import numpy as np
 from collections import deque
 
+from .zelda_orchestrator import ZeldaAIOrchestrator
 from .scenario import ZeldaScenario
 from .zeldaml import ZeldaML
 
@@ -15,8 +16,10 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
     if not os.path.exists(model_path):
         raise Exception(f'Could not find model path {model_path}')
     
-    models = zelda_ml.load_models(model_path)
     env = zelda_ml.make_env(scenario)
+    orchestrator = ZeldaAIOrchestrator()
+    if not orchestrator.has_any_model:
+        raise Exception(f'No models loaded')
     
     pygame.init()
     global font
@@ -51,6 +54,7 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
     reward_details = deque(maxlen=100)
 
     recording = None
+    cap_fps = True
 
     terminated = True
     truncated = False
@@ -71,8 +75,8 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
         # Perform a step in the environment
         if mode == 'c' or mode == 'n':
-            curr_model = select_model(models, info)
-            action, _states = curr_model.model.predict(obs, deterministic=False)  # Replace this with your action logic
+            selected = orchestrator.select_model(info)[0]
+            action, _states = selected.model.predict(obs, deterministic=False)  # Replace this with your action logic
             obs, reward, terminated, truncated, info = env.step(action)
 
             if mode == 'n':
@@ -101,7 +105,7 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
             # render the gameplay
             render_game_view(rgb_array, (game_x, game_y), game_width, game_height, screen)
-            render_text(screen, f"Model: {curr_model.name}", (game_x, game_y))
+            render_text(screen, f"Model: {selected.name}", (game_x, game_y))
             if "location" in info:
                 render_text(screen, f"Location: {hex(info['location'])}", (game_x + game_width - 120, game_y))
 
@@ -114,7 +118,8 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
             # Display the scaled frame
             pygame.display.flip()
-            clock.tick(60.1)
+            if cap_fps:
+                clock.tick(60.1)
 
             # Check for Pygame events
             for event in pygame.event.get():
@@ -140,6 +145,9 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
                     elif event.key == pygame.K_c:
                         mode = 'c'
 
+                    elif event.key == pygame.K_u:
+                        cap_fps = not cap_fps
+
                     elif event.key == pygame.K_F5:
                         if recording is not None:
                             stop_recording(recording)
@@ -150,14 +158,6 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
     stop_recording(recording)
     env.close()
     pygame.quit()
-
-def select_model(models, info):
-    if info is not None and "model" in info:
-        for model_name in info["model"]:
-            if model_name in models and models[model_name].model is not None:
-                return models[model_name]
-    
-    return list((x for x in models.values() if x.model is not None))[0]
 
 def get_filename():
     directory = os.path.join(os.getcwd(), "recording")

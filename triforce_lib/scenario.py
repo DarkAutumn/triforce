@@ -7,7 +7,7 @@ from .zelda_game_data import zelda_game_data
 from .scenario_dungeon import DungeonEndCondition, ZeldaDungeonCritic
 from .scenario_gauntlet import GauntletEndCondition, ZeldaGuantletRewards
 from .scenario_dungeon_combat import ZeldaDungeonCombatCritic, ZeldaDungeonCombatEndCondition
-from .scenario_dungeon1 import Dungeon1BeamCritic, Dungeon1BossCritic, Dungeon1BossEndCondition, Dungeon1Critic, Dungeon1CombatEndCondition, Dungeon1EndCondition
+from .scenario_dungeon1 import Dungeon1BeamCritic, Dungeon1BombCritic, Dungeon1BossCritic, Dungeon1BossEndCondition, Dungeon1Critic, Dungeon1CombatEndCondition, Dungeon1EndCondition
 
 class ScenarioGymWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
@@ -33,7 +33,7 @@ class ScenarioGymWrapper(gym.Wrapper):
         else:
             env_unwrapped = self.unwrapped
 
-        state = super().reset(**kwargs)
+        obs, info = super().reset(**kwargs)
 
         # assign data for the scenario
         self.set_data(env_unwrapped, self._scenario.data)
@@ -45,7 +45,9 @@ class ScenarioGymWrapper(gym.Wrapper):
         for ec in self._conditions:
             ec.clear()
 
-        return state
+        self._last_state = info
+
+        return obs, info
 
     def set_data(self, env_unwrapped, data):
         if data:
@@ -122,22 +124,13 @@ class ZeldaScenario:
     
     @classmethod
     def get(cls, name):
-        return cls.get_scenarios().get(name, None)
-    
-    @classmethod
-    def get_all_scenarios(cls):
-        return cls.get_scenarios().keys()
+        return cls._scenarios.get(name, None)
 
     @classmethod
-    def get_scenarios(cls):
+    def initialize(cls, scenarios):
         if not ZeldaScenario._scenarios:
-            # load scenarios.json
-            curr_dir = os.path.dirname(os.path.realpath(__file__))
-            scenarios_file = os.path.join(curr_dir, 'scenarios.json')
-            with open(scenarios_file, 'r') as f:
-                data = json.load(f)
             
-            for json_scenario in data['scenarios']:
+            for json_scenario in scenarios:
                 if 'fixed' not in json_scenario:
                     json_scenario['fixed'] = {}
 
@@ -148,7 +141,7 @@ class ZeldaScenario:
     
     @classmethod
     def resolve_critic(cls, name):
-        rewards = [ZeldaGuantletRewards, ZeldaDungeonCritic, ZeldaDungeonCombatCritic, Dungeon1Critic, Dungeon1BossCritic, Dungeon1BeamCritic]
+        rewards = [ZeldaGuantletRewards, ZeldaDungeonCritic, ZeldaDungeonCombatCritic, Dungeon1Critic, Dungeon1BossCritic, Dungeon1BeamCritic, Dungeon1BombCritic]
         for x in rewards:
             if name == x.__name__:
                 return x

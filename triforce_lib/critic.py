@@ -57,7 +57,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.new_location_reward = self.reward_medium
         
         # these are pivotal to the game, so they are rewarded highly
-        self.bomb_reward = self.reward_large
+        self.bomb_pickup_reward = self.reward_large
         self.key_reward = self.reward_large
         self.heart_container_reward = self.reward_maximum
         self.triforce_reward = self.reward_maximum
@@ -84,6 +84,11 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.attack_miss_penalty = -self.reward_tiny
         self.attack_no_enemies_penalty = -self.reward_minimum
 
+        # items
+        self.used_null_item_penalty = -self.reward_large
+        self.bomb_miss_penalty = -self.reward_small
+        self.bomb_hit_reward = self.reward_large
+
         self.cos45 = np.sqrt(2) / 2
 
     def clear(self):
@@ -106,6 +111,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
         # combat
         self.critique_attack(old, new, rewards)
+        self.critique_item_usage(old, new, rewards)
 
         # items
         self.critique_item_pickup(old, new, rewards)
@@ -162,7 +168,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
             rewards['reward-gained-rupees'] = self.rupee_reward
 
         if old['bombs'] != 0 < new['bombs'] == 0:
-            rewards['reward-gained-bombs'] = self.bomb_reward
+            rewards['reward-gained-bombs'] = self.bomb_pickup_reward
 
     def critique_health_change(self, old, new, rewards):
         old_hearts = get_heart_halves(old)
@@ -204,6 +210,18 @@ class ZeldaGameplayCritic(ZeldaCritic):
                             distance = new['enemy_vectors'][0][1]
                             if distance > self.distance_threshold:
                                 rewards['penalty-attack-miss'] = self.attack_miss_penalty
+
+    def critique_item_usage(self, old, new, rewards):
+        if new['action'] == 'item':
+            selected = new['selected_item']
+            if selected == 0 and not new['regular_boomerang'] and not new['magic_boomerang']:
+                rewards['used-null-item'] = self.used_null_item_penalty
+            elif selected == 1:  # bombs
+                total_hits = new['step_kills'] + new['step_injuries']
+                if total_hits == 0:
+                    rewards['penalty-bomb-miss'] = self.bomb_miss_penalty
+                else:
+                    rewards['reward-bomb-hit'] = min(self.bomb_hit_reward * total_hits, 1.0)
 
     def offscreen_sword_disabled(self, new):
         x, y = new['link_pos']

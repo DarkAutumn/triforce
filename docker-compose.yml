@@ -5,7 +5,7 @@ services:
     volumes:
       - .:/usr/src/app
       - ./models:/models
-      - training:/training
+      - ./training:/training
     ports:
       - "6006:6006"
     command: ./train_with_tensorboard.sh

@@ -2,14 +2,14 @@
 
 import retro
 
-from .action_space import ZeldaAttackOnlyActionSpace
+from .action_space import ZeldaActionSpace
 from .zelda_wrapper import ZeldaGameWrapper
 
 class ZeldaActionReplay:
     def __init__(self, savestate, wrapper=None, render_mode=None):
         env = retro.make(game='Zelda-NES', state=savestate, inttype=retro.data.Integrations.CUSTOM_ONLY, render_mode=render_mode)
         env = ZeldaGameWrapper(env, deterministic=True)
-        env = ZeldaAttackOnlyActionSpace(env)
+        env = ZeldaActionSpace(env)
         if wrapper:
             env = wrapper(env)
 

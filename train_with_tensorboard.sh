@@ -1,5 +1,9 @@
 #!/bin/bash
-python triforce.py train --parallel 16 --output /training &
+
+# for use with docker
+
+mkdir -p /training/current
+python triforce.py train --parallel 16 --output /training/current &
 TRAIN_PID=$!
 tensorboard --logdir=/training --bind_all &
 TENSORBOARDPID=$!

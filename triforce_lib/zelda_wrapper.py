@@ -11,6 +11,7 @@ import numpy as np
 
 from .zelda_game_data import zelda_game_data
 from .zelda_game import get_bomb_state, has_beams, is_mode_death, get_beam_state, is_mode_scrolling
+from .model_parameters import *
 
 class ZeldaObjectData:
     def __init__(self, ram):
@@ -61,11 +62,6 @@ class ZeldaObjectData:
     def enemy_count(self):
         return sum(1 for i in range(1, 0xb) if self.is_enemy(self.get_object_id(i)))
 
-movement_frames = 6
-attack_cooldown = 15
-item_cooldown = 10
-random_delay_max_frames = 1
-
 class ZeldaGameWrapper(gym.Wrapper):
     def __init__(self, env, deterministic=False):
         super().__init__(env)
@@ -78,9 +74,16 @@ class ZeldaGameWrapper(gym.Wrapper):
         self.a_button = env.unwrapped.buttons.index('A')
 
     def reset(self, **kwargs):
-        result = super().reset(**kwargs)
+        obs, info = super().reset(**kwargs)
         self._reset_state()
-        return result
+
+        if reset_delay_max_frames:
+            obs, _, terminated, truncated, info = self.skip(self._none_action, randint(1, reset_delay_max_frames))
+            assert not terminated and not truncated
+
+        self.update_info(self._none_action, info)
+
+        return obs, info
     
     def _reset_state(self):
         self._location = None
@@ -95,6 +98,11 @@ class ZeldaGameWrapper(gym.Wrapper):
         # take the first step
         obs, rewards, terminated, truncated, info = self.act_and_wait(act)
 
+        self.update_info(act, info)
+
+        return obs, rewards, terminated, truncated, info
+
+    def update_info(self, act, info):
         if self.action_is_movement(act):
             info['action'] = 'movement'
 
@@ -177,8 +185,6 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         self._prev_health = curr_enemy_health
         self._prev_objs = objects
-
-        return obs, rewards, terminated, truncated, info
 
     def _add_vectors_and_distances(self, link_pos, objects, info):
         link_pos = np.array(link_pos, dtype=np.float32)
