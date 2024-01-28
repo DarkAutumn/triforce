@@ -124,22 +124,13 @@ class ZeldaScenario:
     
     @classmethod
     def get(cls, name):
-        return cls.get_scenarios().get(name, None)
-    
-    @classmethod
-    def get_all_scenarios(cls):
-        return cls.get_scenarios().keys()
+        return cls._scenarios.get(name, None)
 
     @classmethod
-    def get_scenarios(cls):
+    def initialize(cls, scenarios):
         if not ZeldaScenario._scenarios:
-            # load scenarios.json
-            curr_dir = os.path.dirname(os.path.realpath(__file__))
-            scenarios_file = os.path.join(curr_dir, 'scenarios.json')
-            with open(scenarios_file, 'r') as f:
-                data = json.load(f)
             
-            for json_scenario in data['scenarios']:
+            for json_scenario in scenarios:
                 if 'fixed' not in json_scenario:
                     json_scenario['fixed'] = {}
 

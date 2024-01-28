@@ -10,8 +10,8 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
-from .models import ZeldaModel, load_model_info
-from .ai_orchestrator import AIOrchestrator
+from .models import ZeldaModel
+from .objective_selector import ObjectiveSelector
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
@@ -52,7 +52,6 @@ class ZeldaML:
 
         self.color = color
         self.frame_stack = 1 if not isinstance(frame_stack, int) or frame_stack < 2 else frame_stack
-        self.models = load_model_info()
 
     def make_env(self, scenario, action_space = "all", parallel = 1):
         def make_env_func():
@@ -72,7 +71,7 @@ class ZeldaML:
 
             # The AI orchestration piece.  This is responsible for selecting the model to use and the target
             # objective.
-            env = AIOrchestrator(env, self.models)
+            env = ObjectiveSelector(env)
             orchestrator = env
             
             # Frame stack and convert to grayscale if requested
@@ -100,9 +99,9 @@ class ZeldaML:
         
     def train(self, output_path = None, model_names = None, iteration_override = None, parallel = None, progress_bar = True):
         if model_names is None:
-            models = self.models
+            models = ZeldaModel.get_all()
         else:
-            models = [x for x in self.models if x.name in model_names]
+            models = [x for x in ZeldaModel.get_all() if x.name in model_names]
             if len(models) != len(model_names):
                 raise Exception(f'Could not find all models requested: {model_names} missing: {set(model_names) - set([x.name for x in models])}')
 
@@ -138,22 +137,7 @@ class ZeldaML:
                 env.close()
 
     def load_models(self, path):
-        models = {}
-        for model_info in self.models:
-            model_path = os.path.join(path, model_info.name, 'best.zip')
-
-            if not os.path.exists(model_path):
-                model_path = os.path.join(path, model_info.name, 'model.zip')
-
-            if os.path.exists(model_path):
-                model = PPO.load(model_path, verbose=self.verbose, ent_coef=self.ent_coef, device=self.device)
-            else:
-                model = None
-
-            if model:
-                models[model_info.name] = ZeldaModel(model_info, model)
-
-        return models
+        return ZeldaModel.load_models(path, verbose=self.verbose, ent_coef=self.ent_coef, device=self.device)
 
     def _create_model(self, env, log_dir):
         return PPO('MultiInputPolicy', env, verbose=self.verbose, tensorboard_log=log_dir, ent_coef=self.ent_coef, device=self.device)

@@ -36,11 +36,6 @@ def parse_args():
 
 
 def main():
-    # load environment variables
-    base_dir = './models/'
-    if 'TRIFORCE_MODEL_DIR' in os.environ:
-        base_dir = os.environ['TRIFORCE_MODEL_DIR']
-
     # parse arguments
     args = parse_args()
 
@@ -60,6 +55,10 @@ def main():
         zelda_ml.train(args.output, models, iterations, args.parallel)
 
     elif args.action in ['display', 'run', 'show']:
+        if args.model_path:
+            zelda_ml.load_models(args.model_path[0])
+        else:
+            zelda_ml.load_models(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'models'))
         pygame_render(zelda_ml, args.scenario[0], args.model_path[0])
 
 if __name__ == '__main__':
