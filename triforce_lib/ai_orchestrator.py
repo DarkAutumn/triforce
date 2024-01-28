@@ -31,9 +31,13 @@ class AIOrchestrator(gym.Wrapper):
         self.sub_orchestrator = None
 
     def reset(self, **kwargs):
-        result = self.env.reset(**kwargs)
+        obs, info = self.env.reset(**kwargs)
         self.dungeon1.reset()
-        return result
+
+        self.set_objectives(info)
+        self.select_model(info)
+
+        return obs, info
 
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
@@ -75,6 +79,12 @@ class AIOrchestrator(gym.Wrapper):
 
         objective_vector = None
         info['objective_kind'] = None
+
+        if objective_vector is None:
+            if info['link_pos'][1] > 0xbd:
+                objective_vector = np.array([0, -1], dtype=np.float32)
+                objective_vector /= np.linalg.norm(objective_vector)
+                info['objective_kind'] = 'doorway'
 
         # Check if any items are on the floor, if so prioritize those since they disappear
         if objective_vector is None:

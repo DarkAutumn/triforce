@@ -23,7 +23,7 @@ class ZeldaGameFeatures(gym.Wrapper):
 
     def reset(self, **kwargs):
         observation, info = self.env.reset()
-        return self.augment_observation(observation, None), info
+        return self.augment_observation(observation, info), info
 
     def augment_observation(self, observation, info):
         # Extract features and store them in the dictionary format

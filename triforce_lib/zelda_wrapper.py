@@ -81,6 +81,8 @@ class ZeldaGameWrapper(gym.Wrapper):
             obs, _, terminated, truncated, info = self.skip(self._none_action, randint(1, reset_delay_max_frames))
             assert not terminated and not truncated
 
+        self.update_info(self._none_action, info)
+
         return obs, info
     
     def _reset_state(self):
@@ -96,6 +98,11 @@ class ZeldaGameWrapper(gym.Wrapper):
         # take the first step
         obs, rewards, terminated, truncated, info = self.act_and_wait(act)
 
+        self.update_info(act, info)
+
+        return obs, rewards, terminated, truncated, info
+
+    def update_info(self, act, info):
         if self.action_is_movement(act):
             info['action'] = 'movement'
 
@@ -178,8 +185,6 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         self._prev_health = curr_enemy_health
         self._prev_objs = objects
-
-        return obs, rewards, terminated, truncated, info
 
     def _add_vectors_and_distances(self, link_pos, objects, info):
         link_pos = np.array(link_pos, dtype=np.float32)

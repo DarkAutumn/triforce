@@ -33,7 +33,7 @@ class ScenarioGymWrapper(gym.Wrapper):
         else:
             env_unwrapped = self.unwrapped
 
-        state = super().reset(**kwargs)
+        obs, info = super().reset(**kwargs)
 
         # assign data for the scenario
         self.set_data(env_unwrapped, self._scenario.data)
@@ -45,7 +45,9 @@ class ScenarioGymWrapper(gym.Wrapper):
         for ec in self._conditions:
             ec.clear()
 
-        return state
+        self._last_state = info
+
+        return obs, info
 
     def set_data(self, env_unwrapped, data):
         if data:
