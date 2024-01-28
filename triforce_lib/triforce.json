@@ -140,21 +140,6 @@
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
             }
-        },
-        {
-            "name": "dungeon1moveonly",
-            "description": "Dungeon 1 Move Only",
-            "critics": ["Dungeon1Critic"],
-            "end_conditions": ["Dungeon1CombatEndCondition"],
-            "level" : 1,
-            "start": ["1_73"],
-            "data":
-            {
-                "bombs" : 0,
-                "keys" : 8,
-                "hearts_and_containers" : 34,
-                "partial_hearts" : 254
-            }
         }
     ]
 }
