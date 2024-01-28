@@ -173,7 +173,7 @@ class LogRewardCallback(BaseCallback):
         if self.n_calls % self.log_reward_freq == 0:
             # rewards and ends tend to be pretty wild at the beginning of training, so only log them after a certain threshold
             if self.n_calls >= 2048:
-                rew_mean = np.mean(self._rewards.values())
+                rew_mean = np.mean(list(self._rewards.values()))
                 for kind, rew in self._rewards.items():
                     split = kind.split('-', 1)
                     name = f"{split[0]}/{split[1]}"
