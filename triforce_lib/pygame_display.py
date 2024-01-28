@@ -51,6 +51,7 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
     reward_details = deque(maxlen=100)
 
     recording = None
+    cap_fps = True
 
     terminated = True
     truncated = False
@@ -114,7 +115,8 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
             # Display the scaled frame
             pygame.display.flip()
-            clock.tick(60.1)
+            if cap_fps:
+                clock.tick(60.1)
 
             # Check for Pygame events
             for event in pygame.event.get():
@@ -139,6 +141,9 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
                     elif event.key == pygame.K_c:
                         mode = 'c'
+
+                    elif event.key == pygame.K_u:
+                        cap_fps = not cap_fps
 
                     elif event.key == pygame.K_F5:
                         if recording is not None:
