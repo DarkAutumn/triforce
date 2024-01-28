@@ -187,9 +187,9 @@ class LogRewardCallback(BaseCallback):
                     evaluation = np.mean(self._evaluation)
                     self.logger.record('evaluation/score', evaluation)
 
-                if evaluation > self.best_score:
-                    self.best_score = evaluation
-                    self.save_best(evaluation, os.path.join(self.save_dir, 'best_score.zip'))
+                    if evaluation > self.best_score:
+                        self.best_score = evaluation
+                        self.save_best(evaluation, os.path.join(self.save_dir, 'best_score.zip'))
                 
                 if rew_mean > self.best_reward:
                     self.best_reward = rew_mean
