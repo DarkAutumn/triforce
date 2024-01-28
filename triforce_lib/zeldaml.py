@@ -118,7 +118,6 @@ class ZeldaML:
             iterations = model_info.iterations if iteration_override is None else iteration_override
 
             model_path = os.path.join(model_dir, 'model.zip')
-            best_model_path = os.path.join(model_dir, 'best.zip')
             log_path = os.path.join(model_dir, 'logs')
 
             scenario = ZeldaScenario.get(model_info.training_scenario)
@@ -129,7 +128,7 @@ class ZeldaML:
                 print(f"Scenario:       {model_info.training_scenario}")
                 print(f"Path:           {model_path}")
                 model = self._create_model(env, log_path)
-                callback = LogRewardCallback(model.save, best_model_path)
+                callback = LogRewardCallback(model.save, model_path)
                 model.learn(iterations, progress_bar=progress_bar, callback=callback)
                 model.save(model_path)
 
@@ -144,11 +143,14 @@ class ZeldaML:
     
 
 class LogRewardCallback(BaseCallback):
-    def __init__(self, save_model, best_path : str, save_freq : int = 4096):
+    def __init__(self, save_model, save_path : str, save_freq : int = 4096):
         super(LogRewardCallback, self).__init__()
         self.log_reward_freq = save_freq
-        self.best_metric = -np.inf
-        self.best_path = best_path
+
+        self.best_score = -np.inf
+        self.best_reward = -np.inf
+
+        self.save_path = save_path
         self.save_model = save_model
 
         self._rewards = {}
@@ -171,6 +173,7 @@ class LogRewardCallback(BaseCallback):
         if self.n_calls % self.log_reward_freq == 0:
             # rewards and ends tend to be pretty wild at the beginning of training, so only log them after a certain threshold
             if self.n_calls >= 2048:
+                rew_mean = np.mean(self._rewards.values())
                 for kind, rew in self._rewards.items():
                     split = kind.split('-', 1)
                     name = f"{split[0]}/{split[1]}"
@@ -184,19 +187,25 @@ class LogRewardCallback(BaseCallback):
                     evaluation = np.mean(self._evaluation)
                     self.logger.record('evaluation/score', evaluation)
 
-                    if evaluation > self.best_metric:
-                        self.best_metric = evaluation
-
-                        self.save_model(self.best_path)
-
-                        metadata = { 'evaluation' : evaluation, "iterations" : self.num_timesteps }
-                        with open(self.best_path + '.json', 'w') as f:
-                            json.dump(metadata, f)
+                if evaluation > self.best_score:
+                    self.best_score = evaluation
+                    self.save_best(evaluation, os.path.join(self.save_path, 'best_score.zip'))
+                
+                if rew_mean > self.best_reward:
+                    self.best_reward = rew_mean
+                    self.save_best(rew_mean, os.path.join(self.save_path, 'best_reward.zip'))
 
             self._rewards.clear()
             self._endings.clear()
             self._evaluation.clear()
 
         return True
+
+    def save_best(self, evaluation, save_path):
+        self.save_model(save_path)
+
+        metadata = { 'evaluation' : evaluation, "iterations" : self.num_timesteps }
+        with open(save_path + '.json', 'w') as f:
+            json.dump(metadata, f, indent = 4)
 
 __all__ = ['ZeldaML']
