@@ -1,66 +1,12 @@
 {
     "scenarios": [
         {
-            "name": "gauntlet",
-            "description": "Run link to the right until he reaches the leftmost screen",
-            "critics": ["ZeldaGuantletRewards"],
-            "end_conditions": ["GauntletEndCondition"],
-            "level": 0,
-            "start": ["0_78w"],
-            "data" : {}
-        },
-        {
-            "name": "dungeon1stalfos",
-            "description": "Dungeon 1 Stalfos trainer",
-            "critics": ["ZeldaDungeonCombatCritic"],
-            "end_conditions": ["ZeldaDungeonCombatEndCondition"],
-            "level" : 1,
-            "start": ["1_74"],
-            "data":
-            {
-                "bombs" : 0,
-                "keys" : 0,
-                "hearts_and_containers" : 252,
-                "partial_hearts" : 254
-            }
-        },
-        {
-            "name": "dungeon1randomcombat",
-            "description": "Dungeon 1 combat trainer",
-            "critics": ["ZeldaDungeonCombatCritic"],
-            "end_conditions": ["ZeldaDungeonCombatEndCondition"],
-            "level" : 1,
-            "start": ["1_23", "1_33", "1_35", "1_42", "1_43", "1_44", "1_52", "1_54", "1_63", "1_72", "1_74", "1_83"],
-            "data":
-            {
-                "bombs" : 0,
-                "keys" : 0,
-                "hearts_and_containers" : 34,
-                "partial_hearts" : 254
-            }
-        },
-        {
-            "name": "dungeon1randomcombat2h",
-            "description": "Dungeon 1 combat trainer (no beams)",
-            "critics": ["ZeldaDungeonCombatCritic"],
-            "end_conditions": ["ZeldaDungeonCombatEndCondition"],
-            "level" : 1,
-            "start": ["1_23", "1_33", "1_35", "1_42", "1_43", "1_44", "1_52", "1_54", "1_63", "1_72", "1_74", "1_83"],
-            "data":
-            {
-                "bombs" : 0,
-                "keys" : 0,
-                "hearts_and_containers" : 241,
-                "partial_hearts" : 254
-            }
-        },
-        {
             "name": "dungeon1",
             "description": "Dungeon 1 Full",
             "critics": ["Dungeon1Critic"],
             "end_conditions": ["Dungeon1EndCondition"],
             "level" : 1,
-            "start": ["1_72"],
+            "start": ["1_73"],
             "data":
             {
                 "bombs" : 0,
@@ -75,7 +21,7 @@
             "critics": ["Dungeon1BeamCritic"],
             "end_conditions": ["Dungeon1CombatEndCondition"],
             "level" : 1,
-            "start": ["1_72"],
+            "start": ["1_73"],
             "data":
             {
                 "bombs" : 0,
@@ -93,13 +39,13 @@
             "name": "dungeon1bombs",
             "description": "Dungeon 1 Bombs",
             "critics": ["Dungeon1BombCritic"],
-            "end_conditions": ["Dungeon1CombatEndCondition"],
+            "end_conditions": ["Dungeon1EndCondition"],
             "level" : 1,
-            "start": ["1_74"],
+            "start": ["1_73"],
             "data":
             {
                 "bombs" : 0,
-                "keys" : 1,
+                "keys" : 0,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
             },
@@ -114,7 +60,7 @@
             "critics": ["Dungeon1Critic"],
             "end_conditions": ["Dungeon1CombatEndCondition"],
             "level" : 1,
-            "start": ["1_72"],
+            "start": ["1_73"],
             "data":
             {
                 "bombs" : 0,
@@ -139,6 +85,21 @@
             {
                 "bombs" : 0,
                 "keys" : 0,
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
+            }
+        },
+        {
+            "name": "dungeon1moveonly",
+            "description": "Dungeon 1 Move Only",
+            "critics": ["Dungeon1Critic"],
+            "end_conditions": ["Dungeon1CombatEndCondition"],
+            "level" : 1,
+            "start": ["1_73"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 8,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
             }
