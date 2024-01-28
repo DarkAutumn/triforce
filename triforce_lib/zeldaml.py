@@ -128,7 +128,7 @@ class ZeldaML:
                 print(f"Scenario:       {model_info.training_scenario}")
                 print(f"Path:           {model_path}")
                 model = self._create_model(env, log_path)
-                callback = LogRewardCallback(model.save, model_path)
+                callback = LogRewardCallback(model.save, model_dir)
                 model.learn(iterations, progress_bar=progress_bar, callback=callback)
                 model.save(model_path)
 
@@ -143,14 +143,14 @@ class ZeldaML:
     
 
 class LogRewardCallback(BaseCallback):
-    def __init__(self, save_model, save_path : str, save_freq : int = 4096):
+    def __init__(self, save_model, save_dir : str, save_freq : int = 4096):
         super(LogRewardCallback, self).__init__()
         self.log_reward_freq = save_freq
 
         self.best_score = -np.inf
         self.best_reward = -np.inf
 
-        self.save_path = save_path
+        self.save_dir = save_dir
         self.save_model = save_model
 
         self._rewards = {}
@@ -189,11 +189,11 @@ class LogRewardCallback(BaseCallback):
 
                 if evaluation > self.best_score:
                     self.best_score = evaluation
-                    self.save_best(evaluation, os.path.join(self.save_path, 'best_score.zip'))
+                    self.save_best(evaluation, os.path.join(self.save_dir, 'best_score.zip'))
                 
                 if rew_mean > self.best_reward:
                     self.best_reward = rew_mean
-                    self.save_best(rew_mean, os.path.join(self.save_path, 'best_reward.zip'))
+                    self.save_best(rew_mean, os.path.join(self.save_dir, 'best_reward.zip'))
 
             self._rewards.clear()
             self._endings.clear()
