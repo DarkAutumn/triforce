@@ -24,9 +24,9 @@ class ZeldaModel(ZeldaModelInfo):
     _models = {}
     _model_infos = []
 
-    def __init__(self, model_info : ZeldaModelInfo, model):
+    def __init__(self, model_info : ZeldaModelInfo, models):
         super().__init__(**model_info.__dict__)
-        self.model = model
+        self.models = models
 
     @classmethod
     def initialize(cls, models_json):
@@ -51,31 +51,26 @@ class ZeldaModel(ZeldaModelInfo):
     @classmethod
     def load_models(cls, path, **kwargs):
         for model_info in cls._model_infos:
-            model = None
+            models = {}
+            if not cls.__try_load_model(models, 'default', path, model_info.path + '.zip', **kwargs):
+                model_path = os.path.join(path, model_info.path)
 
-            model_path = os.path.join(path, model_info.path + '.zip')
-            if os.path.exists(model_path):
-                model = PPO.load(model_path, **kwargs)
-            else:
-                model_directory = os.path.join(path, model_info.path)
-                if os.path.exists(model_directory):
-                    model_path = os.path.join(model_directory, 'best_score.zip')
-                    if os.path.exists(model_path):
-                        model = PPO.load(model_path, **kwargs)
-                    
-                    else:
-                        if os.path.exists(model_directory):
-                            model_path = os.path.join(model_directory, 'best_reward.zip')
-                            if os.path.exists(model_path):
-                                model = PPO.load(model_path, **kwargs)
-                        else:
-                            model_path = os.path.join(model_directory, 'model.zip')
-                            if os.path.exists(model_path):
-                                model = PPO.load(model_path, **kwargs)
-            
-            model_directory = os.path.join(path, model_info.path)
-            cls._models[model_info.name] = ZeldaModel(model_info, model)
+                if os.path.exists(model_path):
+                    cls.__try_load_model(models, "default", model_path, "model.zip", **kwargs)
+                    cls.__try_load_model(models, "best-score", model_path, "best_score.zip", **kwargs)
+                    cls.__try_load_model(models, "best-reward", model_path, "best_reward.zip", **kwargs)
+
+            cls._models[model_info.name] = ZeldaModel(model_info, models)
     
+    @classmethod
+    def __try_load_model(cls, models, key, path, subpath, **kwargs):
+        fullpath = os.path.join(path, subpath)
+        if os.path.exists(fullpath):
+            models[key] = PPO.load(fullpath, **kwargs)
+            return True
+        
+        return False
+
     @classmethod
     def get(cls, name : str) -> Optional['ZeldaModel']:
         return cls._models.get(name, None)
