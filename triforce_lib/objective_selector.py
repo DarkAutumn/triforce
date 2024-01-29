@@ -141,6 +141,10 @@ class OverworldOrchestrator:
         link_pos = np.array(info['link_pos'], dtype=np.float32)
         location = info['location']
 
+        info['location_objective'] = None
+        if location in self.location_direction:
+            info['location_objective'] = get_location_objective(self.location_direction, location)
+
         if objective_vector is None and location == 0x77 and info['sword'] == 0:
             objective_pos = np.array([0x40, 0x4d], dtype=np.float32)
             objective_vector = self.create_vector_norm(link_pos, objective_pos)
@@ -157,8 +161,8 @@ class OverworldOrchestrator:
 
         return objective_vector
 
-    def create_vector_norm(self, link_pos, objective_pos):
-        objective_vector = objective_pos - link_pos
+    def create_vector_norm(self, from_pos, to_pos):
+        objective_vector = to_pos - from_pos
         norm = np.linalg.norm(objective_vector)
         if norm > 0:
             objective_vector /= norm

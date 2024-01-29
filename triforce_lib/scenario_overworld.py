@@ -14,11 +14,17 @@ class Overworld1Critic(ZeldaGameplayCritic):
 
         self.left_allowed_area_penalty = -self.reward_large
         self.left_without_sword_penalty = -self.reward_large
-
+        self.leave_early_penalty = -self.reward_maximum
+        
     def critique_location_discovery(self, old, new, rewards):
+        if old['location'] != new['location'] and old['location_objective']:
+            if old['location_objective'] == new['location']:
+                rewards['reward-new-location'] = self.new_location_reward
+            else:
+                rewards['penalty-left-early'] = self.leave_early_penalty
+
         level = new['level']
         location = new['location']
-
         if level == 0:
             if location not in self.allowed_rooms:
                 rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
@@ -27,11 +33,11 @@ class Overworld1Critic(ZeldaGameplayCritic):
                 rewards['penalty-no-sword'] = self.left_without_sword_penalty
                 
             else:
-                return super().critique_location_discovery(old, new, rewards)
+                super().critique_location_discovery(old, new, rewards)
             
         elif level == 1:
             # don't forget to reward for reaching level 1 dungeon
-            return super().critique_location_discovery(old, new, rewards)
+            super().critique_location_discovery(old, new, rewards)
 
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
         new_location = new['location']
