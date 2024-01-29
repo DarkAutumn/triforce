@@ -3,6 +3,7 @@ import os
 import gymnasium as gym
 import retro
 
+from .scenario_overworld import Overworld1Critic, Overworld1EndCondition
 from .zelda_game_data import zelda_game_data
 from .scenario_dungeon import DungeonEndCondition, ZeldaDungeonCritic
 from .scenario_gauntlet import GauntletEndCondition, ZeldaGuantletRewards
@@ -90,7 +91,6 @@ class ScenarioGymWrapper(gym.Wrapper):
         self._last_state = info
         return obs, rewards, terminated, truncated, info
 
-
 class ZeldaScenario:
     _scenarios = {}
 
@@ -141,7 +141,7 @@ class ZeldaScenario:
     
     @classmethod
     def resolve_critic(cls, name):
-        rewards = [ZeldaGuantletRewards, ZeldaDungeonCritic, ZeldaDungeonCombatCritic, Dungeon1Critic, Dungeon1BossCritic, Dungeon1BeamCritic, Dungeon1BombCritic]
+        rewards = [ZeldaGuantletRewards, ZeldaDungeonCritic, ZeldaDungeonCombatCritic, Dungeon1Critic, Dungeon1BossCritic, Dungeon1BeamCritic, Dungeon1BombCritic, Overworld1Critic]
         for x in rewards:
             if name == x.__name__:
                 return x
@@ -150,7 +150,7 @@ class ZeldaScenario:
     
     @classmethod
     def resolve_end_condition(cls, name):
-        end_conditions = [GauntletEndCondition, DungeonEndCondition, ZeldaDungeonCombatEndCondition, Dungeon1EndCondition, Dungeon1CombatEndCondition, Dungeon1BossEndCondition]
+        end_conditions = [GauntletEndCondition, DungeonEndCondition, ZeldaDungeonCombatEndCondition, Dungeon1EndCondition, Dungeon1CombatEndCondition, Dungeon1BossEndCondition, Overworld1EndCondition]
         for x in end_conditions:
             if name == x.__name__:
                 return x

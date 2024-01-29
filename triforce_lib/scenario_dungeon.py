@@ -1,8 +1,7 @@
 import typing
 from typing import Dict
 
-from .zelda_game import get_heart_halves
-from .end_condition import *
+from .end_condition import ZeldaEndCondition
 from .critic import ZeldaGameplayCritic
 
 class ZeldaDungeonCritic(ZeldaGameplayCritic):

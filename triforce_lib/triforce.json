@@ -2,6 +2,18 @@
     "models" :
     [
         {
+            "name" : "overworld1",
+            "path" : "overworld1",
+            "action_space" : "attack-only",
+            "priority" : 0,
+            "levels" : 0,
+            "requires_enemies" : false,
+            "equipment_required" : [],
+
+            "training_scenario" : "overworld1",
+            "iterations" : 1500000
+        },
+        {
             "name" : "dungeon1nobeams",
             "path" : "dungeon1nobeams",
             "action_space" : "attack-only",
@@ -52,6 +64,21 @@
         }
     ],
     "scenarios": [
+        {
+            "name": "overworld1",
+            "description": "Start of the game to the first dungeon entrance",
+            "critics": ["Overworld1Critic"],
+            "end_conditions": ["Overworld1EndCondition"],
+            "level" : 0,
+            "start": ["0_77"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 0,
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
+            }
+        },
         {
             "name": "dungeon1",
             "description": "Dungeon 1 Full",

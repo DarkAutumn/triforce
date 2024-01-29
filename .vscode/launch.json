@@ -50,11 +50,29 @@
             "justMyCode": false
         },
         {
+            "name": "Run Overworld1 Scenario",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["run", "overworld1", "models/"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Training",
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
             "args": ["train", "--iterations", "10000", "--parallel", "1"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Train Overworld",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["train", "overworld1", "--iterations", "10000", "--parallel", "1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

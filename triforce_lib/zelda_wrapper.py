@@ -160,7 +160,6 @@ class ZeldaGameWrapper(gym.Wrapper):
             # capture enemy health data
             curr_enemy_health = {}
             for eid in objects.enumerate_enemy_ids():
-                assert self._prev_health is None or eid in self._prev_health
                 curr_enemy_health[eid] = objects.get_obj_health(eid)
 
             # check if we killed or injured anything

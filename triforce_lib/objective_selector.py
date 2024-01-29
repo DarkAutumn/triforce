@@ -31,7 +31,6 @@ def get_overworld_direction_vector(direction):
         return np.array([-1, 0], dtype=np.float32)
     else:
         return np.zeros(2, dtype=np.float32)
-    
 
 def get_location_objective(location_direction, location):
     if location not in location_direction:
@@ -49,8 +48,6 @@ def get_location_objective(location_direction, location):
     else:
         return None
     
-
-    
 def get_vector(info, key):
     if key in info:
         vector = info[key]
@@ -59,14 +56,11 @@ def get_vector(info, key):
         
     return None
 
-#overworld notes:
-# sword cave: 0x40, 0x4d
-#d1 entrance: 0x70, 7d
-
 class ObjectiveSelector(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
         self.dungeon1 = Dungeon1Orchestrator()
+        self.overworld = OverworldOrchestrator()
         self.sub_orchestrator = None
 
     def reset(self, **kwargs):
@@ -91,6 +85,10 @@ class ObjectiveSelector(gym.Wrapper):
 
         if level == 1:
             self.sub_orchestrator = self.dungeon1
+        if level == 0:
+            self.sub_orchestrator = self.overworld
+        else:
+            self.sub_orchestrator = None
 
         objective_vector = None
         info['objective_kind'] = None
@@ -125,9 +123,50 @@ class ObjectiveSelector(gym.Wrapper):
                 val = v
                 
         return val, lowest
-    
+
+class OverworldOrchestrator:
+    def __init__(self):
+        self.location_direction = {
+            0x77 : "N",
+            0x78 : "N",
+            0x67 : "E",
+            0x68 : "N",
+            0x58 : "N",
+            0x48 : "N",
+            0x38 : "N",
+            0x37 : "W",
+        }
+
+    def set_objectives(self, info, objective_vector):
+        link_pos = np.array(info['link_pos'], dtype=np.float32)
+        location = info['location']
+
+        if objective_vector is None and location == 0x77 and info['sword'] == 0:
+            objective_pos = np.array([0x40, 0x4d], dtype=np.float32)
+            objective_vector = self.create_vector_norm(link_pos, objective_pos)
+            info['objective_kind'] = 'enter-cave'
+        
+        if objective_vector is None and location == 0x37:
+            objective_pos = np.array([0x70, 0x7d], dtype=np.float32)
+            objective_vector = self.create_vector_norm(link_pos, objective_pos)
+            info['objective_kind'] = 'enter-cave'
+
+        if objective_vector is None and location in self.location_direction:
+            objective_vector = get_overworld_direction_vector(self.location_direction[location])
+            info['objective_kind'] = 'room'
+
+        return objective_vector
+
+    def create_vector_norm(self, link_pos, objective_pos):
+        objective_vector = objective_pos - link_pos
+        norm = np.linalg.norm(objective_vector)
+        if norm > 0:
+            objective_vector /= norm
+        return objective_vector
+
+
 class Dungeon1Orchestrator:
-    def __init__(self) -> None:
+    def __init__(self):
         self.keys_obtained = set()
         self.prev_keys = None
 
