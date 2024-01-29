@@ -101,7 +101,7 @@ class ZeldaML:
         if model_names is None:
             models = ZeldaModel.get_model_info()
         else:
-            models = [x for x in ZeldaModel.get_loaded_models() if x.name in model_names]
+            models = [x for x in ZeldaModel.get_model_info() if x.name in model_names]
             if len(models) != len(model_names):
                 raise Exception(f'Could not find all models requested: {model_names} missing: {set(model_names) - set([x.name for x in models])}')
 
