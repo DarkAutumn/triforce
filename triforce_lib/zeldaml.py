@@ -75,7 +75,7 @@ class ZeldaML:
             orchestrator = env
             
             # Frame stack and convert to grayscale if requested
-            env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, kind=self.obs_kind)
+            env = ZeldaObservationWrapper(env, captured_frames, not self.color, kind=self.obs_kind)
 
             # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
             # since that doesn't make any sense in Zelda)
