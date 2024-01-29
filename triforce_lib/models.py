@@ -59,14 +59,19 @@ class ZeldaModel(ZeldaModelInfo):
             else:
                 model_directory = os.path.join(path, model_info.path)
                 if os.path.exists(model_directory):
-                    model_path = os.path.join(model_directory, 'best.zip')
+                    model_path = os.path.join(model_directory, 'best_score.zip')
                     if os.path.exists(model_path):
                         model = PPO.load(model_path, **kwargs)
                     
                     else:
-                        model_path = os.path.join(model_directory, 'model.zip')
-                        if os.path.exists(model_path):
-                            model = PPO.load(model_path, **kwargs)
+                        if os.path.exists(model_directory):
+                            model_path = os.path.join(model_directory, 'best_reward.zip')
+                            if os.path.exists(model_path):
+                                model = PPO.load(model_path, **kwargs)
+                        else:
+                            model_path = os.path.join(model_directory, 'model.zip')
+                            if os.path.exists(model_path):
+                                model = PPO.load(model_path, **kwargs)
             
             model_directory = os.path.join(path, model_info.path)
             cls._models[model_info.name] = ZeldaModel(model_info, model)
