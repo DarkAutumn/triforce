@@ -23,7 +23,7 @@ class Overworld1Critic(ZeldaGameplayCritic):
             if location not in self.allowed_rooms:
                 rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
 
-            elif location == 0x77 and not new['sword']:
+            elif old['location'] == 0x77 and location != 0x77 and not new['sword']:
                 rewards['penalty-no-sword'] = self.left_without_sword_penalty
                 
             else:
