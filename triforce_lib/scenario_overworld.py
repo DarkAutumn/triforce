@@ -15,6 +15,8 @@ class Overworld1Critic(ZeldaGameplayCritic):
         self.left_allowed_area_penalty = -self.reward_large
         self.left_without_sword_penalty = -self.reward_large
         self.leave_early_penalty = -self.reward_maximum
+        self.move_perpendicular_penalty = 0.0
+        self.equipment_reward = 0.0
         
     def critique_location_discovery(self, old, new, rewards):
         if old['location'] != new['location'] and old['location_objective']:
@@ -48,6 +50,14 @@ class Overworld1EndCondition(ZeldaEndCondition):
     def __init__(self):
         super().__init__()
         self.allowed_rooms = overworld_dungeon1_walk_rooms
+        self._seen = set()
+        self._last_discovery = 0
+        self.location_timeout = 1200 # 5 minutes to find a new room
+
+    def clear(self):
+        super().clear()
+        self._seen.clear()
+        self._last_discovery = 0
 
     def is_scenario_ended(self, old: Dict[str, int], new: Dict[str, int]) -> (bool, bool, str):
         terminated, truncated, reason = super().is_scenario_ended(old, new)
@@ -66,5 +76,19 @@ class Overworld1EndCondition(ZeldaEndCondition):
             elif new['sword'] == 0 and location != 0x77:
                 reason = "no-sword"
                 terminated = True
+
+        if not truncated:
+            old_location = old['location']
+            new_location = new['location']
+            if old_location != new_location and new_location not in self._seen:
+                self._seen.add(new_location)
+                self._last_discovery = 0
+
+            else:
+                self._last_discovery += 1
+
+            if self._last_discovery > self.location_timeout:
+                reason = "truncated-no-discovery"
+                truncated = True
 
         return terminated, truncated, reason
