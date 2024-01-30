@@ -79,9 +79,7 @@ class ObjectiveSelector(gym.Wrapper):
         return obs, reward, terminated, truncated, info
     
     def set_objectives(self, info):
-        link_pos = np.array(info['link_pos'], dtype=np.float32)
         level = info['level']
-        location = info['location']
 
         if level == 1:
             self.sub_orchestrator = self.dungeon1
@@ -92,6 +90,7 @@ class ObjectiveSelector(gym.Wrapper):
 
         objective_vector = None
         info['objective_kind'] = None
+        info['location_objective'] = None
 
         if objective_vector is None:
             if level != 0 and info['link_pos'][1] > 0xbd:
@@ -140,7 +139,6 @@ class OverworldOrchestrator:
         link_pos = np.array(info['link_pos'], dtype=np.float32)
         location = info['location']
 
-        info['location_objective'] = None
         if location in self.location_direction:
             info['location_objective'] = get_location_objective(self.location_direction, location)
 
