@@ -58,7 +58,7 @@ class ZeldaModel(ZeldaModelInfo):
                 model_path = os.path.join(path, model_info.path)
 
                 if os.path.exists(model_path):
-                    cls.__try_load_model(models, kinds, "final", model_path, "final.zip", **kwargs)
+                    cls.__try_load_model(models, kinds, "last", model_path, "last.zip", **kwargs)
                     cls.__try_load_model(models, kinds, "best-score", model_path, "best_score.zip", **kwargs)
                     cls.__try_load_model(models, kinds, "best-reward", model_path, "best_reward.zip", **kwargs)
 

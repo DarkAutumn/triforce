@@ -115,7 +115,7 @@ class ZeldaML:
 
             iterations = model_info.iterations if iteration_override is None else iteration_override
 
-            model_path = os.path.join(model_dir, 'final.zip')
+            model_path = os.path.join(model_dir, 'last.zip')
             log_path = os.path.join(model_dir, 'logs')
 
             scenario = ZeldaScenario.get(model_info.training_scenario)
@@ -141,9 +141,10 @@ class ZeldaML:
     
 
 class LogRewardCallback(BaseCallback):
-    def __init__(self, save_model, save_dir : str, save_freq : int = 4096):
+    def __init__(self, save_model, save_dir : str, log_freq : int = 4096, force_save_freq : int = 250000):
         super(LogRewardCallback, self).__init__()
-        self.log_reward_freq = save_freq
+        self.log_reward_freq = log_freq
+        self.force_save_freq = force_save_freq
 
         self.best_score = -np.inf
         self.best_reward = -np.inf
@@ -167,6 +168,9 @@ class LogRewardCallback(BaseCallback):
 
             if 'final-score' in info:
                 self._evaluation.append(info['final-score'])
+
+        if self.n_calls % self.force_save_freq == 0:
+            self.save_model(os.path.join(self.save_dir, 'last.zip'))
 
         if self.n_calls % self.log_reward_freq == 0:
             # rewards and ends tend to be pretty wild at the beginning of training, so only log them after a certain threshold
