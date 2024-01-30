@@ -138,14 +138,37 @@ class OverworldOrchestrator:
     def set_objectives(self, info, objective_vector):
         link_pos = np.array(info['link_pos'], dtype=np.float32)
         location = info['location']
+        mode = info['mode']
 
         if location in self.location_direction:
             info['location_objective'] = get_location_objective(self.location_direction, location)
 
         if objective_vector is None and location == 0x77 and info['sword'] == 0:
-            objective_pos = np.array([0x40, 0x4d], dtype=np.float32)
-            objective_vector = self.create_vector_norm(link_pos, objective_pos)
-            info['objective_kind'] = 'enter-cave'
+            if mode != 11:
+                objective_pos = np.array([0x40, 0x4d], dtype=np.float32)
+                objective_vector = self.create_vector_norm(link_pos, objective_pos)
+                info['objective_kind'] = 'enter-cave'
+
+            else:
+                # In cave, goal is the swordpn
+                objective_pos = np.array([0x78, 0x95], dtype=np.float32)
+                objective_vector = self.create_vector_norm(link_pos, objective_pos)
+                info['objective_kind'] = 'room'
+
+        
+        if objective_vector is None and location == 0x77 and info['sword'] == 1:
+            # we have the sword, but are in the cave
+            if mode == 11:
+                objective_pos = np.array([0x78, 0xdd], dtype=np.float32)
+                objective_vector = self.create_vector_norm(link_pos, objective_pos)
+
+            elif link_pos[0] == 0x40 and link_pos[1] <= 0x55:
+                objective_vector = np.array([0, 1], dtype=np.float32)
+                info['objective_kind'] = 'doorway'
+
+            elif link_pos[0] < 0x70:
+                objective_vector = np.array([1, 0], dtype=np.float32)
+                info['objective_kind'] = 'doorway'
         
         if objective_vector is None and location == 0x37:
             objective_pos = np.array([0x70, 0x7d], dtype=np.float32)
