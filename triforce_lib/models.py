@@ -24,9 +24,10 @@ class ZeldaModel(ZeldaModelInfo):
     _models = {}
     _model_infos = []
 
-    def __init__(self, model_info : ZeldaModelInfo, models):
+    def __init__(self, model_info : ZeldaModelInfo, models, model_kinds):
         super().__init__(**model_info.__dict__)
         self.models = models
+        self.model_kinds = model_kinds
 
     @classmethod
     def initialize(cls, models_json):
@@ -51,22 +52,24 @@ class ZeldaModel(ZeldaModelInfo):
     @classmethod
     def load_models(cls, path, **kwargs):
         for model_info in cls._model_infos:
-            models = {}
-            if not cls.__try_load_model(models, 'default', path, model_info.path + '.zip', **kwargs):
+            models = []
+            kinds = []
+            if not cls.__try_load_model(models, kinds, None, path, model_info.path + '.zip', **kwargs):
                 model_path = os.path.join(path, model_info.path)
 
                 if os.path.exists(model_path):
-                    cls.__try_load_model(models, "default", model_path, "model.zip", **kwargs)
-                    cls.__try_load_model(models, "best-score", model_path, "best_score.zip", **kwargs)
-                    cls.__try_load_model(models, "best-reward", model_path, "best_reward.zip", **kwargs)
+                    cls.__try_load_model(models, kinds, "final", model_path, "final.zip", **kwargs)
+                    cls.__try_load_model(models, kinds, "best-score", model_path, "best_score.zip", **kwargs)
+                    cls.__try_load_model(models, kinds, "best-reward", model_path, "best_reward.zip", **kwargs)
 
-            cls._models[model_info.name] = ZeldaModel(model_info, models)
+            cls._models[model_info.name] = ZeldaModel(model_info, models, kinds)
     
     @classmethod
-    def __try_load_model(cls, models, key, path, subpath, **kwargs):
+    def __try_load_model(cls, models, kinds, kind, path, subpath, **kwargs):
         fullpath = os.path.join(path, subpath)
         if os.path.exists(fullpath):
-            models[key] = PPO.load(fullpath, **kwargs)
+            models.append(PPO.load(fullpath, **kwargs))
+            kinds.append(kind)
             return True
         
         return False

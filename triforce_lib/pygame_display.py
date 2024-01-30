@@ -8,8 +8,6 @@ from .zelda_orchestrator import ZeldaAIOrchestrator
 from .scenario import ZeldaScenario
 from .zeldaml import ZeldaML
 
-model_kinds = ["default", "best-score", "best-reward"]
-
 def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
     scenario = ZeldaScenario.get(scenario_name)
     if not scenario:
@@ -50,9 +48,9 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
     screen = pygame.display.set_mode(dimensions)
     clock = pygame.time.Clock()
 
-    model_requested = "default"
-    model_kind = "default"
-    model_name = "none"
+    model_requested = 0
+    model_name = None
+    model_kind = None
 
     block_width = 10
     center_line = game_height + graph_height // 2
@@ -81,9 +79,15 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
         # Perform a step in the environment
         if mode == 'c' or mode == 'n':
-            selected_models = orchestrator.select_model(info)
-            model, model_name, model_kind = get_model_by_kind(selected_models, model_requested)
-            action, _ = model.predict(obs, deterministic=False)  # Replace this with your action logic
+            acceptable_models = orchestrator.select_model(info)
+            selected_model = acceptable_models[0]
+
+            model_requested %= len(selected_model.models)
+            model = selected_model.models[model_requested]
+            model_kind = selected_model.model_kinds[model_requested]
+            model_name = selected_model.name if not model_kind else f"{selected_model.name} ({model_kind})"
+
+            action, _ = model.predict(obs, deterministic=False)
             obs, reward, terminated, truncated, info = env.step(action)
 
             if mode == 'n':
@@ -98,7 +102,7 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
             elif mode != 'p':
                 break
 
-            screen.fill((0, 0, 0))  # Black background
+            screen.fill((0, 0, 0))
 
             # Show observation values
             y_pos = obs_y
@@ -112,7 +116,7 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
             # render the gameplay
             render_game_view(rgb_array, (game_x, game_y), game_width, game_height, screen)
-            render_text(screen, f"Model: {model_name} ({model_kind})", (game_x, game_y))
+            render_text(screen, f"Model: {model_name}", (game_x, game_y))
             if "location" in info:
                 render_text(screen, f"Location: {hex(info['location'])}", (game_x + game_width - 120, game_y))
 
@@ -153,7 +157,7 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
                         mode = 'c'
 
                     elif event.key == pygame.K_m:
-                        model_requested = model_kinds[(model_kinds.index(model_requested) + 1) % len(model_kinds)]
+                        model_requested += 1
 
                     elif event.key == pygame.K_u:
                         cap_fps = not cap_fps
@@ -168,20 +172,6 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
     stop_recording(recording)
     env.close()
     pygame.quit()
-
-def get_model_by_kind(selected_models, model_kind):
-    zelda_model = selected_models[0]
-    model = zelda_model.models.get(model_kind, None)
-    if not model:    
-        if model_kind != "default":
-            model = zelda_model.models.get("default", None)
-            model_kind = "default"
-
-        if not model:
-            model_kind, model = next(iter(zelda_model.models.items()))
-
-    return model, zelda_model.name, model_kind
-
 
 def get_filename():
     directory = os.path.join(os.getcwd(), "recording")

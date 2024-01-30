@@ -117,7 +117,7 @@ class ZeldaML:
 
             iterations = model_info.iterations if iteration_override is None else iteration_override
 
-            model_path = os.path.join(model_dir, 'model.zip')
+            model_path = os.path.join(model_dir, 'final.zip')
             log_path = os.path.join(model_dir, 'logs')
 
             scenario = ZeldaScenario.get(model_info.training_scenario)
