@@ -63,7 +63,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["train", "--iterations", "10000", "--parallel", "1"],
+            "args": ["train", "--iterations", "5000", "--parallel", "1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -72,7 +72,7 @@
             "type": "python",
             "request": "launch",
             "program": "triforce.py",
-            "args": ["train", "overworld1", "--iterations", "10000", "--parallel", "1"],
+            "args": ["train", "overworld1", "--iterations", "5000", "--parallel", "1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
