@@ -16,7 +16,6 @@ class Overworld1Critic(ZeldaGameplayCritic):
         self.left_without_sword_penalty = -self.reward_large
         self.leave_early_penalty = -self.reward_maximum
         self.entered_cave_penalty = -self.reward_large
-        self.move_perpendicular_penalty = 0
         self.equipment_reward = 0.0
         
     def critique_location_discovery(self, old, new, rewards):
@@ -47,7 +46,7 @@ class Overworld1Critic(ZeldaGameplayCritic):
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
         new_location = new['location']
         self.seen.add(new_location)
-        new['score'] = new['sword'] + len(self.seen) - 1 + get_heart_halves(new) * 0.5
+        new['score'] = new['sword'] + len(self.seen) - 1
 
 class OverworldSwordCritic(ZeldaGameplayCritic):
     def __init__(self):
