@@ -50,6 +50,15 @@
             "justMyCode": false
         },
         {
+            "name": "Run Overworld Sword Scenario",
+            "type": "python",
+            "request": "launch",
+            "program": "triforce.py",
+            "args": ["run", "overworld-sword", "models/"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Run Overworld1 Scenario",
             "type": "python",
             "request": "launch",
