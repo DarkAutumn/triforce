@@ -106,7 +106,7 @@ class ZeldaML:
                 raise Exception(f'Could not find all models requested: {model_names} missing: {set(model_names) - set([x.name for x in models])}')
 
         if output_path is None:
-            output_path = os.path.dirname(os.path.realpath(__file__))
+            output_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
             output_path = os.path.join(output_path, 'training')
 
         print("Writing to:", output_path)
