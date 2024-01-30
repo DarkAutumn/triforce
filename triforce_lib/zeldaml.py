@@ -19,7 +19,7 @@ from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
 
 class ZeldaML:
-    def __init__(self, frame_stack, color, **kwargs):
+    def __init__(self, color, **kwargs):
         if 'verbose' in kwargs:
             self.verbose = kwargs['verbose']
             del kwargs['verbose']
@@ -51,15 +51,13 @@ class ZeldaML:
             self.rgb_render = True
 
         self.color = color
-        self.frame_stack = 1 if not isinstance(frame_stack, int) or frame_stack < 2 else frame_stack
 
     def make_env(self, scenario, action_space = "all", parallel = 1):
         def make_env_func():
             # create the environment
             env = retro.make(game='Zelda-NES', state=scenario.all_start_states[0], inttype=retro.data.Integrations.CUSTOM_ONLY, **self.__extra_args)
 
-            # Capture the raw observation frames into a deque.  Since we are skipping frames and not acting on every frame, we need to save
-            # the last 'frame_stack' frames so that we can give the model a sense of motion without it being affected by the skipped frames.
+            # Capture the raw observation frames into a deque.
             env = FrameCaptureWrapper(env, self.rgb_render)
             captured_frames = env.frames
             if self.rgb_render:
