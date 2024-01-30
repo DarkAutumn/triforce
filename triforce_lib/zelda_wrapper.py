@@ -10,7 +10,7 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import get_bomb_state, has_beams, is_mode_death, get_beam_state, is_mode_scrolling
+from .zelda_game import get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling
 from .model_parameters import *
 
 class ZeldaObjectData:
@@ -38,6 +38,9 @@ class ZeldaObjectData:
         if obj == 0:
             return None
         return self.obj_health[obj] >> 4
+    
+    def get_obj_status(self, obj : int):
+        return self.obj_status[obj]
         
     def is_enemy(self, obj_id : int):
         return 1 <= obj_id <= 0x48
@@ -142,7 +145,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         step_kills = 0
         step_injuries = 0
         
-        location = (info['level'], info['location'])
+        location = (info['level'], info['location'], is_in_cave(info))
         new_location = self._location != location
         info['new_location'] = new_location
 
@@ -307,11 +310,15 @@ class ZeldaGameWrapper(gym.Wrapper):
             raise Exception("Unknown action type")
         
         # skip scrolling
-        while is_mode_scrolling(info["mode"]):
+        unwrapped = self.env.unwrapped
+        objects = ZeldaObjectData(unwrapped.get_ram())
+        while is_mode_scrolling(info["mode"]) or is_link_stunned(objects.get_obj_status(0)):
             obs, rew, terminated, truncated, info = self.env.step(self._none_action)
             rewards += rew
             if terminated or truncated:
                 break
+                
+            objects = ZeldaObjectData(unwrapped.get_ram())
 
         return obs, rewards, terminated, truncated, info
 

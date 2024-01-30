@@ -18,6 +18,10 @@ animation_beams_hit = 17
 animation_bombs_active = 18
 animation_bombs_exploded = 20
 
+stun_flag = 0x40
+
+def is_in_cave(state):
+    return state['mode'] == mode_cave
 
 def is_mode_scrolling(state):
     # overworld scrolling
@@ -29,6 +33,9 @@ def is_mode_scrolling(state):
         return True
     
     return False
+
+def is_link_stunned(status_ac):
+    return status_ac & stun_flag
 
 def is_mode_death(state):
     return state == mode_dying or state == mode_game_over_screen
@@ -81,4 +88,4 @@ def get_heart_containers(state):
 def has_beams(state):
     return get_heart_halves(state) == get_heart_containers(state) * 2
 
-__all__ = ['is_mode_scrolling', 'is_mode_death', 'get_beam_state', 'get_num_triforce_pieces', 'get_full_hearts', 'get_heart_halves', 'get_heart_containers', 'has_beams']
+__all__ = ['is_in_cave', 'is_mode_scrolling', 'is_mode_death', 'get_beam_state', 'get_num_triforce_pieces', 'get_full_hearts', 'get_heart_halves', 'get_heart_containers', 'has_beams']

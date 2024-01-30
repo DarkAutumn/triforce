@@ -1,6 +1,6 @@
 from typing import Dict
 
-from .zelda_game import get_heart_halves
+from .zelda_game import get_heart_halves, mode_gameplay, mode_cave
 from .end_condition import ZeldaEndCondition
 from .critic import ZeldaGameplayCritic
 
@@ -15,6 +15,7 @@ class Overworld1Critic(ZeldaGameplayCritic):
         self.left_allowed_area_penalty = -self.reward_large
         self.left_without_sword_penalty = -self.reward_large
         self.leave_early_penalty = -self.reward_maximum
+        self.entered_cave_penalty = -self.reward_large
         self.move_perpendicular_penalty = 0.0
         self.equipment_reward = 0.0
         
@@ -27,7 +28,11 @@ class Overworld1Critic(ZeldaGameplayCritic):
 
         level = new['level']
         location = new['location']
-        if level == 0:
+
+        if old['mode'] == mode_gameplay and location == 0x77 and new['mode'] == mode_cave:
+            rewards['penalty-entered-cave'] = self.entered_cave_penalty
+            
+        elif level == 0:
             if location not in self.allowed_rooms:
                 rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
 
@@ -45,6 +50,12 @@ class Overworld1Critic(ZeldaGameplayCritic):
         new_location = new['location']
         self.seen.add(new_location)
         new['score'] = new['sword'] + len(self.seen) - 1 + get_heart_halves(new) * 0.5
+
+class OverworldSwordCritic(ZeldaGameplayCritic):
+    pass
+
+class OverworldSwordEndCondition(ZeldaEndCondition):
+    pass
 
 class Overworld1EndCondition(ZeldaEndCondition):
     def __init__(self):
