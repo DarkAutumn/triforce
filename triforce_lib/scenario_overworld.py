@@ -21,9 +21,7 @@ class Overworld1Critic(ZeldaGameplayCritic):
         
     def critique_location_discovery(self, old, new, rewards):
         if old['location'] != new['location'] and old['location_objective']:
-            if old['location_objective'] == new['location']:
-                rewards['reward-new-location'] = self.new_location_reward
-            else:
+            if old['location_objective'] != new['location']:
                 rewards['penalty-left-early'] = self.leave_early_penalty
 
         level = new['level']
