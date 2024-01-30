@@ -48,6 +48,10 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
     screen = pygame.display.set_mode(dimensions)
     clock = pygame.time.Clock()
 
+    model_requested = 0
+    model_name = None
+    model_kind = None
+
     block_width = 10
     center_line = game_height + graph_height // 2
     reward_values = deque(maxlen=graph_width // block_width)
@@ -75,8 +79,15 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
         # Perform a step in the environment
         if mode == 'c' or mode == 'n':
-            selected = orchestrator.select_model(info)[0]
-            action, _states = selected.model.predict(obs, deterministic=False)  # Replace this with your action logic
+            acceptable_models = orchestrator.select_model(info)
+            selected_model = acceptable_models[0]
+
+            model_requested %= len(selected_model.models)
+            model = selected_model.models[model_requested]
+            model_kind = selected_model.model_kinds[model_requested]
+            model_name = selected_model.name if not model_kind else f"{selected_model.name} ({model_kind})"
+
+            action, _ = model.predict(obs, deterministic=False)
             obs, reward, terminated, truncated, info = env.step(action)
 
             if mode == 'n':
@@ -91,7 +102,7 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
             elif mode != 'p':
                 break
 
-            screen.fill((0, 0, 0))  # Black background
+            screen.fill((0, 0, 0))
 
             # Show observation values
             y_pos = obs_y
@@ -105,7 +116,7 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
             # render the gameplay
             render_game_view(rgb_array, (game_x, game_y), game_width, game_height, screen)
-            render_text(screen, f"Model: {selected.name}", (game_x, game_y))
+            render_text(screen, f"Model: {model_name}", (game_x, game_y))
             if "location" in info:
                 render_text(screen, f"Location: {hex(info['location'])}", (game_x + game_width - 120, game_y))
 
@@ -144,6 +155,9 @@ def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
 
                     elif event.key == pygame.K_c:
                         mode = 'c'
+
+                    elif event.key == pygame.K_m:
+                        model_requested += 1
 
                     elif event.key == pygame.K_u:
                         cap_fps = not cap_fps

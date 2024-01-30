@@ -1,8 +1,7 @@
 import typing
 from typing import Dict
 
-from .zelda_game import get_heart_halves
-from .end_condition import *
+from .end_condition import ZeldaEndCondition
 from .critic import ZeldaGameplayCritic
 
 class ZeldaDungeonCritic(ZeldaGameplayCritic):
@@ -28,7 +27,7 @@ class DungeonEndCondition(ZeldaEndCondition):
 
         self._seen = set()
 
-        self._last_discovery = 0        
+        self._last_discovery = 0
         self.location_timeout = 1200 # 5 minutes to find a new room
 
     def clear(self):

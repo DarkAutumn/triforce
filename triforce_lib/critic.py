@@ -1,7 +1,5 @@
-import math
 import numpy as np
 import typing
-import inspect
 from .zelda_game import *
 
 class ZeldaCritic:
@@ -190,7 +188,10 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
     def critique_attack(self, old, new, rewards):
         if new['step_kills'] or new['step_injuries']:
-            rewards['reward-injure-kill'] = self.injure_kill_reward
+            if not is_in_cave(new):
+                rewards['reward-injure-kill'] = self.injure_kill_reward
+            else:
+                rewards['penalty-injure-cave'] = self.injure_kill_reward
         
         else:
             if new['action'] == 'attack':                
@@ -242,7 +243,11 @@ class ZeldaGameplayCritic(ZeldaCritic):
         if old_location == new_location and new['action'] == 'movement':
             if old['link_pos'] == new['link_pos']:
                 # link tried to move but ran into the wall instead
-                rewards['penalty-wall-collision'] = self.wall_collision_penalty
+
+                # corner case: Entering a cave with text scroll, link is uncontrollable
+                # but it's hard to detect this state, so we'll just ignore it
+                if not is_in_cave(new) or new['link_y'] < 0x80:
+                    rewards['penalty-wall-collision'] = self.wall_collision_penalty
             
             elif get_heart_halves(old) <= get_heart_halves(new):
                 # Reward moving towards objectives, or moving to the closest item
@@ -286,7 +291,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
                             # Are we moving directly away from the objective
                             rewards['penalty-move-farther'] = self.move_away_penalty
 
-                        else:
+                        elif self.move_perpendicular_penalty:
                             # We are moving perpendicular to the objective.
                             # We will not penalize this during combat.
                             if not new['enemies_on_screen']:

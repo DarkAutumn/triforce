@@ -75,7 +75,7 @@ class ZeldaML:
             orchestrator = env
             
             # Frame stack and convert to grayscale if requested
-            env = ZeldaObservationWrapper(env, captured_frames, self.frame_stack, not self.color, kind=self.obs_kind)
+            env = ZeldaObservationWrapper(env, captured_frames, not self.color, kind=self.obs_kind)
 
             # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
             # since that doesn't make any sense in Zelda)
@@ -106,8 +106,8 @@ class ZeldaML:
                 raise Exception(f'Could not find all models requested: {model_names} missing: {set(model_names) - set([x.name for x in models])}')
 
         if output_path is None:
-            date_for_filename = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M")
-            output_path = os.path.join(os.getcwd(), 'training', date_for_filename)
+            output_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+            output_path = os.path.join(output_path, 'training')
 
         print("Writing to:", output_path)
 
@@ -117,7 +117,7 @@ class ZeldaML:
 
             iterations = model_info.iterations if iteration_override is None else iteration_override
 
-            model_path = os.path.join(model_dir, 'model.zip')
+            model_path = os.path.join(model_dir, 'final.zip')
             log_path = os.path.join(model_dir, 'logs')
 
             scenario = ZeldaScenario.get(model_info.training_scenario)
@@ -183,17 +183,18 @@ class LogRewardCallback(BaseCallback):
                 for ending, count in ends.items():
                     self.logger.record('end/' + ending, count)
 
+                score_mean = None
                 if self._evaluation:
-                    evaluation = np.mean(self._evaluation)
-                    self.logger.record('evaluation/score', evaluation)
+                    score_mean = np.mean(self._evaluation)
+                    self.logger.record('evaluation/score', score_mean)
 
-                    if evaluation > self.best_score:
-                        self.best_score = evaluation
-                        self.save_best(evaluation, os.path.join(self.save_dir, 'best_score.zip'))
+                    if score_mean > self.best_score:
+                        self.best_score = score_mean
+                        self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_score.zip'))
                 
                 if rew_mean > self.best_reward:
                     self.best_reward = rew_mean
-                    self.save_best(rew_mean, os.path.join(self.save_dir, 'best_reward.zip'))
+                    self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_reward.zip'))
 
             self._rewards.clear()
             self._endings.clear()
@@ -201,10 +202,13 @@ class LogRewardCallback(BaseCallback):
 
         return True
 
-    def save_best(self, evaluation, save_path):
+    def save_best(self, score, reward, save_path):
         self.save_model(save_path)
 
-        metadata = { 'evaluation' : evaluation, "iterations" : self.num_timesteps }
+        metadata = { "iterations" : self.num_timesteps, 'reward' : reward}
+        if score is not None:
+            metadata['score'] = score
+
         with open(save_path + '.json', 'w') as f:
             json.dump(metadata, f, indent = 4)
 
