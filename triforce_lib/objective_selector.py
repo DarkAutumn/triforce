@@ -133,8 +133,7 @@ class OverworldOrchestrator:
             0x68 : "N",
             0x58 : "N",
             0x48 : "N",
-            0x38 : "N",
-            0x37 : "W",
+            0x38 : "W",
         }
 
     def set_objectives(self, info, objective_vector):
