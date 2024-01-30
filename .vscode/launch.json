@@ -5,11 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run Dungeon1 Scenario",
+            "name": "Full Game (so far)",
             "type": "python",
             "request": "launch",
-            "program": "triforce.py",
-            "args": ["run", "dungeon1", "models/"],
+            "program": "run.py",
+            "args": [],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Dungeon 1",
+            "type": "python",
+            "request": "launch",
+            "program": "run.py",
+            "args": ["dungeon1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -17,8 +26,8 @@
             "name": "Run Dungeon1 Beams Scenario",
             "type": "python",
             "request": "launch",
-            "program": "triforce.py",
-            "args": ["run", "dungeon1beams", "models/"],
+            "program": "run.py",
+            "args": ["dungeon1beams"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -26,8 +35,8 @@
             "name": "Run Dungeon1 Sword Scenario (no beams)",
             "type": "python",
             "request": "launch",
-            "program": "triforce.py",
-            "args": ["run", "dungeon1nobeams", "models/"],
+            "program": "run.py",
+            "args": ["dungeon1nobeams"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -35,8 +44,8 @@
             "name": "Run Dungeon1 Bombs Scenario",
             "type": "python",
             "request": "launch",
-            "program": "triforce.py",
-            "args": ["run", "dungeon1bombs", "models/"],
+            "program": "run.py",
+            "args": ["dungeon1bombs"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -44,8 +53,8 @@
             "name": "Run Dungeon1 Boss",
             "type": "python",
             "request": "launch",
-            "program": "triforce.py",
-            "args": ["run", "dungeon1boss", "models/"],
+            "program": "run.py",
+            "args": ["dungeon1boss"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -53,8 +62,8 @@
             "name": "Run Overworld Sword Scenario",
             "type": "python",
             "request": "launch",
-            "program": "triforce.py",
-            "args": ["run", "overworld-sword", "models/"],
+            "program": "run.py",
+            "args": ["overworld-sword"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -62,8 +71,8 @@
             "name": "Run Overworld1 Scenario",
             "type": "python",
             "request": "launch",
-            "program": "triforce.py",
-            "args": ["run", "overworld1", "models/"],
+            "program": "run.py",
+            "args": ["overworld1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -71,8 +80,8 @@
             "name": "Training",
             "type": "python",
             "request": "launch",
-            "program": "triforce.py",
-            "args": ["train", "--iterations", "5000", "--parallel", "1"],
+            "program": "train.py",
+            "args": ["--iterations", "5000", "--parallel", "1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -80,8 +89,8 @@
             "name": "Train Overworld",
             "type": "python",
             "request": "launch",
-            "program": "triforce.py",
-            "args": ["train", "overworld1", "--iterations", "5000", "--parallel", "1"],
+            "program": "train.py",
+            "args": ["overworld1", "--iterations", "5000", "--parallel", "1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

@@ -8,13 +8,10 @@ from .zelda_orchestrator import ZeldaAIOrchestrator
 from .scenario import ZeldaScenario
 from .zeldaml import ZeldaML
 
-def pygame_render(zelda_ml : ZeldaML, scenario_name : str, model_path : str):
+def pygame_render(zelda_ml : ZeldaML, scenario_name : str):
     scenario = ZeldaScenario.get(scenario_name)
     if not scenario:
         raise Exception(f'Unknown scenario {scenario_name}')
-    
-    if not os.path.exists(model_path):
-        raise Exception(f'Could not find model path {model_path}')
     
     env = zelda_ml.make_env(scenario)
     orchestrator = ZeldaAIOrchestrator()

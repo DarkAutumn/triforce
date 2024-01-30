@@ -77,6 +77,15 @@
     ],
     "scenarios": [
         {
+            "name": "zelda",
+            "description": "Full Game (so far)",
+            "critics": ["ZeldaGameplayCritic"],
+            "end_conditions": ["ZeldaFullGameEndCondition"],
+            "level" : 0,
+            "start": ["0_77"],
+            "data": {}
+        },
+        {
             "name": "overworld-sword",
             "description": "Start of the game to the sword",
             "critics": ["OverworldSwordCritic"],
