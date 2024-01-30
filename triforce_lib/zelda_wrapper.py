@@ -192,8 +192,12 @@ class ZeldaGameWrapper(gym.Wrapper):
         link_pos = np.array(link_pos, dtype=np.float32)
         
         info['enemy_vectors'] = self._get_and_normalize_vectors(link_pos, objects, objects.enumerate_enemy_ids())
-        info['closest_enemy_vector'] = self._get_vector_of_closest(info['enemy_vectors'])
-        info['enemies_on_screen'] = len(info['enemy_vectors'])
+        if is_in_cave(info):
+            info['closest_enemy_vector'] = np.zeros(2, dtype=np.float32)
+            info['enemies_on_screen'] = 0
+        else:
+            info['closest_enemy_vector'] = self._get_vector_of_closest(info['enemy_vectors'])
+            info['enemies_on_screen'] = len(info['enemy_vectors'])
         
         info['projectile_vectors'] = self._get_and_normalize_vectors(link_pos, objects, objects.enumerate_projectile_ids())
         info['closest_projectile_vector'] = self._get_vector_of_closest(info['projectile_vectors'])

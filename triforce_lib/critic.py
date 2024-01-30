@@ -291,7 +291,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
                             # Are we moving directly away from the objective
                             rewards['penalty-move-farther'] = self.move_away_penalty
 
-                        else:
+                        elif self.move_perpendicular_penalty:
                             # We are moving perpendicular to the objective.
                             # We will not penalize this during combat.
                             if not new['enemies_on_screen']:

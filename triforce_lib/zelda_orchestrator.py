@@ -35,6 +35,11 @@ class ZeldaAIOrchestrator:
             elif equipment == "bombs":
                 if info['bombs'] == 0:
                     return False
+                
+            elif equipment == "nosword":
+                if info['sword']:
+                    return False
+
             else:
                 raise Exception("Unknown equipment requirement: " + equipment)
             

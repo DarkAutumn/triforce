@@ -2,6 +2,18 @@
     "models" :
     [
         {
+            "name" : "overworld-sword",
+            "path" : "overworld-sword",
+            "action_space" : "move-only",
+            "priority" : 0,
+            "levels" : 0,
+            "requires_enemies" : false,
+            "equipment_required" : ["nosword"],
+
+            "training_scenario" : "overworld-sword",
+            "iterations" : 1000000
+        },
+        {
             "name" : "overworld1",
             "path" : "overworld1",
             "action_space" : "attack-only",
@@ -65,6 +77,19 @@
     ],
     "scenarios": [
         {
+            "name": "overworld-sword",
+            "description": "Start of the game to the sword",
+            "critics": ["OverworldSwordCritic"],
+            "end_conditions": ["OverworldSwordEndCondition"],
+            "level" : 0,
+            "start": ["0_77"],
+            "data":
+            {
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
+            }
+        },
+        {
             "name": "overworld1",
             "description": "Start of the game to the first dungeon entrance",
             "critics": ["Overworld1Critic"],
@@ -76,7 +101,11 @@
                 "bombs" : 0,
                 "keys" : 0,
                 "hearts_and_containers" : 34,
-                "partial_hearts" : 254
+                "partial_hearts" : 254,
+                "sword" : 1,
+                "link_x" : 64,
+                "link_y" : 80,
+                "link_vector" : 4
             }
         },
         {

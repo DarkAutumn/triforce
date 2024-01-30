@@ -143,17 +143,31 @@ class OverworldOrchestrator:
         if location in self.location_direction:
             info['location_objective'] = get_location_objective(self.location_direction, location)
 
-        if objective_vector is None and location == 0x77 and info['sword'] == 0:
-            if mode != 11:
-                objective_pos = np.array([0x40, 0x4d], dtype=np.float32)
-                objective_vector = self.create_vector_norm(link_pos, objective_pos)
-                info['objective_kind'] = 'enter-cave'
+        # get sword if we don't have it
+        if objective_vector is None and info['sword'] == 0:            
+            if location == 0x77:
+                if mode != 11:
+                    objective_pos = np.array([0x40, 0x4d], dtype=np.float32)
+                    objective_vector = self.create_vector_norm(link_pos, objective_pos)
+                    info['objective_kind'] = 'enter-cave'
 
-            else:
-                # In cave, goal is the swordpn
-                objective_pos = np.array([0x78, 0x95], dtype=np.float32)
-                objective_vector = self.create_vector_norm(link_pos, objective_pos)
+                else:
+                    objective_pos = np.array([0x78, 0x95], dtype=np.float32)
+                    objective_vector = self.create_vector_norm(link_pos, objective_pos)
+                    info['objective_kind'] = 'room'
+
+            elif 0xf0 & location != 0x70:
+                objective_vector = np.array([0, 1], dtype=np.float32)
                 info['objective_kind'] = 'room'
+
+            elif 0x0f & location < 0x07:
+                objective_vector = np.array([1, 0], dtype=np.float32)
+                info['objective_kind'] = 'room'
+
+            elif 0x0f & location > 0x07:
+                objective_vector = np.array([-1, 0], dtype=np.float32)
+                info['objective_kind'] = 'room'
+
 
         
         if objective_vector is None and location == 0x77 and info['sword'] == 1:
@@ -166,7 +180,7 @@ class OverworldOrchestrator:
                 objective_vector = np.array([0, 1], dtype=np.float32)
                 info['objective_kind'] = 'doorway'
 
-            elif link_pos[0] < 0x70:
+            elif link_pos[0] <= 0x40:
                 objective_vector = np.array([1, 0], dtype=np.float32)
                 info['objective_kind'] = 'doorway'
         

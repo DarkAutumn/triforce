@@ -1,6 +1,6 @@
 from typing import Dict
 
-from .zelda_game import get_heart_halves, mode_gameplay, mode_cave
+from .zelda_game import get_heart_halves, is_in_cave, mode_gameplay, mode_cave
 from .end_condition import ZeldaEndCondition
 from .critic import ZeldaGameplayCritic
 
@@ -16,7 +16,7 @@ class Overworld1Critic(ZeldaGameplayCritic):
         self.left_without_sword_penalty = -self.reward_large
         self.leave_early_penalty = -self.reward_maximum
         self.entered_cave_penalty = -self.reward_large
-        self.move_perpendicular_penalty = 0.0
+        self.move_perpendicular_penalty = 0
         self.equipment_reward = 0.0
         
     def critique_location_discovery(self, old, new, rewards):
@@ -31,7 +31,7 @@ class Overworld1Critic(ZeldaGameplayCritic):
 
         if old['mode'] == mode_gameplay and location == 0x77 and new['mode'] == mode_cave:
             rewards['penalty-entered-cave'] = self.entered_cave_penalty
-            
+
         elif level == 0:
             if location not in self.allowed_rooms:
                 rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
@@ -52,10 +52,56 @@ class Overworld1Critic(ZeldaGameplayCritic):
         new['score'] = new['sword'] + len(self.seen) - 1 + get_heart_halves(new) * 0.5
 
 class OverworldSwordCritic(ZeldaGameplayCritic):
-    pass
+    def __init__(self):
+        super().__init__()
+        self.entered_cave = False
+
+        self.entered_cave_reward = self.reward_large
+        self.left_cave_penalty = -self.reward_large
+
+    def clear(self):
+        self.entered_cave = False
+
+    def critique_location_discovery(self, old, new, rewards):
+        if not self.entered_cave and is_in_cave(new):
+            self.entered_cave = True
+            rewards['reward-entered-cave'] = self.entered_cave_reward
+
+        if is_in_cave(old) and not is_in_cave(new) and not new['sword']:
+            rewards['penalty-left-cave'] = self.left_cave_penalty
+
+    
+    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+        score = 0
+        if self.entered_cave:
+            score += 1
+
+        if new['sword']:
+            score += 1
+
+        if new['sword'] and not is_in_cave(new):
+            score += 1
+
+        new['score'] = score
 
 class OverworldSwordEndCondition(ZeldaEndCondition):
-    pass
+    def __init__(self):
+        super().__init__()
+        self.overworld_sword_rooms = set([0x77, 0x76, 0x78, 0x67])
+
+    def is_scenario_ended(self, old: Dict[str, int], new: Dict[str, int]) -> (bool, bool):
+        terminated, truncated, reason = super().is_scenario_ended(old, new)
+
+        if not terminated and not truncated:
+            if new['sword'] and not is_in_cave(new):
+                reason = "reached-sword"
+                terminated = True
+
+            if new['location'] not in self.overworld_sword_rooms:
+                reason = "left-scenario"
+                terminated = True
+
+        return terminated, truncated, reason
 
 class Overworld1EndCondition(ZeldaEndCondition):
     def __init__(self):
