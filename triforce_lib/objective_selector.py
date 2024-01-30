@@ -168,8 +168,6 @@ class OverworldOrchestrator:
                 objective_vector = np.array([-1, 0], dtype=np.float32)
                 info['objective_kind'] = 'room'
 
-
-        
         if objective_vector is None and location == 0x77 and info['sword'] == 1:
             # we have the sword, but are in the cave
             if mode == 11:
@@ -178,10 +176,6 @@ class OverworldOrchestrator:
 
             elif link_pos[0] == 0x40 and link_pos[1] <= 0x55:
                 objective_vector = np.array([0, 1], dtype=np.float32)
-                info['objective_kind'] = 'doorway'
-
-            elif link_pos[0] <= 0x40:
-                objective_vector = np.array([1, 0], dtype=np.float32)
                 info['objective_kind'] = 'doorway'
         
         if objective_vector is None and location == 0x37:
