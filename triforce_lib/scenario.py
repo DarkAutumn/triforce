@@ -1,5 +1,3 @@
-import json
-import os
 import gymnasium as gym
 import retro
 
@@ -9,6 +7,8 @@ from .scenario_dungeon import DungeonEndCondition, ZeldaDungeonCritic
 from .scenario_gauntlet import GauntletEndCondition, ZeldaGuantletRewards
 from .scenario_dungeon_combat import ZeldaDungeonCombatCritic, ZeldaDungeonCombatEndCondition
 from .scenario_dungeon1 import Dungeon1BeamCritic, Dungeon1BombCritic, Dungeon1BossCritic, Dungeon1BossEndCondition, Dungeon1Critic, Dungeon1CombatEndCondition, Dungeon1EndCondition
+from .critic import ZeldaGameplayCritic
+from .end_condition import ZeldaFullGameEndCondition
 
 class ScenarioGymWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
@@ -141,7 +141,7 @@ class ZeldaScenario:
     
     @classmethod
     def resolve_critic(cls, name):
-        rewards = [ZeldaGuantletRewards, ZeldaDungeonCritic, ZeldaDungeonCombatCritic, Dungeon1Critic, Dungeon1BossCritic, Dungeon1BeamCritic, Dungeon1BombCritic, Overworld1Critic, OverworldSwordCritic]
+        rewards = [ZeldaGameplayCritic, ZeldaGuantletRewards, ZeldaDungeonCritic, ZeldaDungeonCombatCritic, Dungeon1Critic, Dungeon1BossCritic, Dungeon1BeamCritic, Dungeon1BombCritic, Overworld1Critic, OverworldSwordCritic]
         for x in rewards:
             if name == x.__name__:
                 return x
@@ -150,7 +150,7 @@ class ZeldaScenario:
     
     @classmethod
     def resolve_end_condition(cls, name):
-        end_conditions = [GauntletEndCondition, DungeonEndCondition, ZeldaDungeonCombatEndCondition, Dungeon1EndCondition, Dungeon1CombatEndCondition, Dungeon1BossEndCondition, Overworld1EndCondition, OverworldSwordEndCondition]
+        end_conditions = [GauntletEndCondition, DungeonEndCondition, ZeldaDungeonCombatEndCondition, Dungeon1EndCondition, Dungeon1CombatEndCondition, Dungeon1BossEndCondition, Overworld1EndCondition, OverworldSwordEndCondition, ZeldaFullGameEndCondition]
         for x in end_conditions:
             if name == x.__name__:
                 return x

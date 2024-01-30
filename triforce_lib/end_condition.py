@@ -39,3 +39,16 @@ class ZeldaEndCondition:
             self._position_duration = 0
 
         return terminated, truncated, reason
+    
+class ZeldaFullGameEndCondition(ZeldaEndCondition):
+    def __init__(self):
+        super().__init__()
+
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
+        terminated, truncated, reason = super().is_scenario_ended(old, new)
+        if not terminated and not truncated:
+            if new['triforce'] != 0:
+                reason = "scenario-won"
+                terminated = True
+
+        return terminated, truncated, reason

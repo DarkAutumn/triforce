@@ -122,6 +122,9 @@ class ZeldaGameplayCritic(ZeldaCritic):
     
     # reward helpers, may be overridden
     def critique_equipment_pickup(self, old, new, rewards):
+        if not self.equipment_reward:
+            return
+
         self.check_one_item(old, new, rewards, 'sword')
         self.check_one_item(old, new, rewards, 'arrows')
         self.check_one_item(old, new, rewards, 'bow')

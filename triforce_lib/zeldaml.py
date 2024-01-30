@@ -19,7 +19,7 @@ from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
 
 class ZeldaML:
-    def __init__(self, frame_stack, color, **kwargs):
+    def __init__(self, color, **kwargs):
         if 'verbose' in kwargs:
             self.verbose = kwargs['verbose']
             del kwargs['verbose']
@@ -51,15 +51,13 @@ class ZeldaML:
             self.rgb_render = True
 
         self.color = color
-        self.frame_stack = 1 if not isinstance(frame_stack, int) or frame_stack < 2 else frame_stack
 
     def make_env(self, scenario, action_space = "all", parallel = 1):
         def make_env_func():
             # create the environment
             env = retro.make(game='Zelda-NES', state=scenario.all_start_states[0], inttype=retro.data.Integrations.CUSTOM_ONLY, **self.__extra_args)
 
-            # Capture the raw observation frames into a deque.  Since we are skipping frames and not acting on every frame, we need to save
-            # the last 'frame_stack' frames so that we can give the model a sense of motion without it being affected by the skipped frames.
+            # Capture the raw observation frames into a deque.
             env = FrameCaptureWrapper(env, self.rgb_render)
             captured_frames = env.frames
             if self.rgb_render:
@@ -117,7 +115,7 @@ class ZeldaML:
 
             iterations = model_info.iterations if iteration_override is None else iteration_override
 
-            model_path = os.path.join(model_dir, 'final.zip')
+            model_path = os.path.join(model_dir, 'last.zip')
             log_path = os.path.join(model_dir, 'logs')
 
             scenario = ZeldaScenario.get(model_info.training_scenario)
@@ -143,9 +141,10 @@ class ZeldaML:
     
 
 class LogRewardCallback(BaseCallback):
-    def __init__(self, save_model, save_dir : str, save_freq : int = 4096):
+    def __init__(self, save_model, save_dir : str, log_freq : int = 4096, force_save_freq : int = 250000):
         super(LogRewardCallback, self).__init__()
-        self.log_reward_freq = save_freq
+        self.log_reward_freq = log_freq
+        self.force_save_freq = force_save_freq
 
         self.best_score = -np.inf
         self.best_reward = -np.inf
@@ -169,6 +168,9 @@ class LogRewardCallback(BaseCallback):
 
             if 'final-score' in info:
                 self._evaluation.append(info['final-score'])
+
+        if self.n_calls % self.force_save_freq == 0:
+            self.save_model(os.path.join(self.save_dir, 'last.zip'))
 
         if self.n_calls % self.log_reward_freq == 0:
             # rewards and ends tend to be pretty wild at the beginning of training, so only log them after a certain threshold
