@@ -61,7 +61,7 @@ class ObjectiveSelector(gym.Wrapper):
         super().__init__(env)
         self.dungeon1 = Dungeon1Orchestrator()
         self.overworld = OverworldOrchestrator()
-        self.sub_orchestrator = None
+        self.sub_orchestrators = { 0 : self.overworld, 1 : self.dungeon1}
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
@@ -81,13 +81,6 @@ class ObjectiveSelector(gym.Wrapper):
     def set_objectives(self, info):
         level = info['level']
 
-        if level == 1:
-            self.sub_orchestrator = self.dungeon1
-        if level == 0:
-            self.sub_orchestrator = self.overworld
-        else:
-            self.sub_orchestrator = None
-
         objective_vector = None
         info['objective_kind'] = None
         info['location_objective'] = None
@@ -105,8 +98,9 @@ class ObjectiveSelector(gym.Wrapper):
                 info['objective_kind'] = 'item'
                 objective_vector = closest_item_vector
 
-        if self.sub_orchestrator:
-            objective_vector = self.sub_orchestrator.set_objectives(info, objective_vector)
+        sub_orchestrator = self.sub_orchestrators.get(level, None)
+        if sub_orchestrator:
+            objective_vector = sub_orchestrator.set_objectives(info, objective_vector)
 
         if objective_vector is None:
             objective_vector = np.zeros(2, dtype=np.float32)
@@ -168,8 +162,6 @@ class OverworldOrchestrator:
                 objective_vector = np.array([-1, 0], dtype=np.float32)
                 info['objective_kind'] = 'room'
 
-
-        
         if objective_vector is None and location == 0x77 and info['sword'] == 1:
             # we have the sword, but are in the cave
             if mode == 11:
@@ -178,10 +170,6 @@ class OverworldOrchestrator:
 
             elif link_pos[0] == 0x40 and link_pos[1] <= 0x55:
                 objective_vector = np.array([0, 1], dtype=np.float32)
-                info['objective_kind'] = 'doorway'
-
-            elif link_pos[0] <= 0x40:
-                objective_vector = np.array([1, 0], dtype=np.float32)
                 info['objective_kind'] = 'doorway'
         
         if objective_vector is None and location == 0x37:
