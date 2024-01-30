@@ -64,12 +64,11 @@ class ZeldaGameplayCritic(ZeldaCritic):
         # same room movement rewards
         self.wall_collision_penalty = -self.reward_tiny
         self.move_closer_reward = self.reward_tiny
-        self.movement_reward_min = 2.5
-        self.movement_reward_max = 8.0
+        
+        self.movement_scale_factor = 9.0
         self.move_away_penalty = -self.reward_tiny
-        self.move_perpendicular_penalty = -self.reward_minimum
 
-        self.too_close_threshold = 25
+        self.too_close_threshold = 20
         self.move_too_close_penalty = -self.reward_small
         
         # state tracking
@@ -241,64 +240,56 @@ class ZeldaGameplayCritic(ZeldaCritic):
             rewards['reward-new-location'] = self.new_location_reward
     
     def critique_movement(self, old, new, rewards):
-        old_location = old['location']
-        new_location = new['location']
-        if old_location == new_location and new['action'] == 'movement':
-            if old['link_pos'] == new['link_pos']:
-                # link tried to move but ran into the wall instead
+        if old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
+            return
+        
+        # Did link run into a wall?
+        if new['action'] == 'movement' and old['link_pos'] == new['link_pos']:
 
-                # corner case: Entering a cave with text scroll, link is uncontrollable
-                # but it's hard to detect this state, so we'll just ignore it
-                if not is_in_cave(new) or new['link_y'] < 0x80:
-                    rewards['penalty-wall-collision'] = self.wall_collision_penalty
-            
-            elif get_heart_halves(old) <= get_heart_halves(new):
-                # Reward moving towards objectives, or moving to the closest item
-                # Penalize directly moving away from the objective if not moving twoards an item
-                # Don't reward if we took damage, or if we didn't move more than a threshold
+            # corner case: Entering a cave with text scroll, link is uncontrollable
+            # but it's hard to detect this state, so we'll just ignore it
+            if not is_in_cave(new) or new['link_y'] < 0x80:
+                rewards['penalty-wall-collision'] = self.wall_collision_penalty
+        
+        # Did link move closer or father away?
+        # Reward for getting closer to objectives or items
+        # Penalize for moving too close to an enemy
+        # Penalize for moving away from an objective
+        if get_heart_halves(old) <= get_heart_halves(new):
+            # Reward moving towards objectives, or moving to the closest item
+            # Penalize directly moving away from the objective if not moving twoards an item
+            # Don't reward if we took damage, or if we didn't move more than a threshold
 
-                objective_vectors = [new['objective_vector'], new['closest_item_vector']]
-                nonzero_vectors = [v for v in objective_vectors if v[0] or v[1]]
+            # This is link's motion vector, which may be zero
+            if old['link_pos'] != new['link_pos']:
+                link_old_pos = np.array(old['link_pos'], dtype=np.float32)
+                link_new_pos = np.array(new['link_pos'], dtype=np.float32)
+                link_motion_vector = link_new_pos - link_old_pos
 
-                if nonzero_vectors:
-                    link_old_pos = np.array(old['link_pos'], dtype=np.float32)
-                    link_new_pos = np.array(new['link_pos'], dtype=np.float32)
+                # Check if we moved too close to any enemies first
+                moved_too_close = False
+                if new['action'] != 'attack':
+                    close_enemies = [x[0] for x in new['enemy_vectors'] if x[1] < self.too_close_threshold]
 
-                    # we know the norm won't be zero since we know the position has changed
-                    link_motion_vector = link_new_pos - link_old_pos
-                    dist = np.linalg.norm(link_motion_vector)
+                    if close_enemies:
+                        close_enemy_distances = [np.dot(link_motion_vector, x) for x in close_enemies]
+                        closest_distance = max(close_enemy_distances)
+                        if closest_distance > 0:
+                            rewards['penalty-move-too-close'] = self.move_too_close_penalty * closest_distance / self.movement_scale_factor
+                            moved_too_close = True
 
-                    if dist > self.movement_reward_min:
-                        link_motion_vector = link_motion_vector / dist
+                # Otherwise check to see if we moved closer to the objective
+                if not moved_too_close:
+                    objective_vectors = [new['objective_vector'], new['closest_item_vector']]
+                    nonzero_objectives = [v for v in objective_vectors if v[0] or v[1]]
 
-                        close_enemies = [x[0] for x in new['enemy_vectors'] if x[1] < self.too_close_threshold]
-                        if close_enemies:
-                            enemy_dotproducts = np.sum(link_motion_vector * close_enemies, axis=1)
-                        else:
-                            enemy_dotproducts = None
-
-                        objective_dotproducts = np.sum(link_motion_vector * nonzero_vectors, axis=1)
-
-                        # find points within a 90 degree cone of link's motion vector, COS(45) == sqrt(2)/2
-                        
-                        if enemy_dotproducts is not None and np.any(enemy_dotproducts >= self.cos45):
-                            # are we moving towards enemies we could simply hit with our sword?
-                            rewards['penalty-move-too-close'] = self.move_too_close_penalty
-                            
-                        elif np.any(objective_dotproducts >= self.cos45):
-                            # Are we moving towards the objective?
-                            percent = min(dist / self.movement_reward_max, 1)
-                            rewards['reward-move-closer'] = self.move_closer_reward * percent
-
-                        elif np.all(objective_dotproducts <= -self.cos45):
-                            # Are we moving directly away from the objective
-                            rewards['penalty-move-farther'] = self.move_away_penalty
-
-                        elif self.move_perpendicular_penalty:
-                            # We are moving perpendicular to the objective.
-                            # We will not penalize this during combat.
-                            if not new['enemies_on_screen']:
-                                rewards['penalty-move-farther'] = self.move_perpendicular_penalty
+                    if nonzero_objectives:
+                        objective_distances = [np.dot(link_motion_vector, x) for x in nonzero_objectives]
+                        best = max(objective_distances)
+                        if best > 0:
+                            rewards['reward-move-closer'] = self.move_closer_reward * best / self.movement_scale_factor
+                        elif best < 0:
+                            rewards['penalty-move-farther'] = self.move_away_penalty * abs(best) / self.movement_scale_factor
 
     # state helpers, some states are calculated
     def has_visited(self, level, location):

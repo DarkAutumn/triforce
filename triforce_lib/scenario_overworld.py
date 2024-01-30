@@ -17,7 +17,6 @@ class Overworld1Critic(ZeldaGameplayCritic):
         self.leave_early_penalty = -self.reward_maximum
         self.entered_cave_penalty = -self.reward_large
         self.equipment_reward = None
-        self.move_perpendicular_penalty = None
         
     def critique_location_discovery(self, old, new, rewards):
         if old['location'] != new['location'] and old['location_objective']:
