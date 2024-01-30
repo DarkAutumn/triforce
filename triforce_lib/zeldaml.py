@@ -183,17 +183,18 @@ class LogRewardCallback(BaseCallback):
                 for ending, count in ends.items():
                     self.logger.record('end/' + ending, count)
 
+                score_mean = None
                 if self._evaluation:
-                    evaluation = np.mean(self._evaluation)
-                    self.logger.record('evaluation/score', evaluation)
+                    score_mean = np.mean(self._evaluation)
+                    self.logger.record('evaluation/score', score_mean)
 
-                    if evaluation > self.best_score:
-                        self.best_score = evaluation
-                        self.save_best(evaluation, os.path.join(self.save_dir, 'best_score.zip'))
+                    if score_mean > self.best_score:
+                        self.best_score = score_mean
+                        self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_score.zip'))
                 
                 if rew_mean > self.best_reward:
                     self.best_reward = rew_mean
-                    self.save_best(rew_mean, os.path.join(self.save_dir, 'best_reward.zip'))
+                    self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_reward.zip'))
 
             self._rewards.clear()
             self._endings.clear()
@@ -201,10 +202,13 @@ class LogRewardCallback(BaseCallback):
 
         return True
 
-    def save_best(self, evaluation, save_path):
+    def save_best(self, score, reward, save_path):
         self.save_model(save_path)
 
-        metadata = { 'evaluation' : evaluation, "iterations" : self.num_timesteps }
+        metadata = { "iterations" : self.num_timesteps, 'reward' : reward}
+        if score is not None:
+            metadata['score'] = score
+
         with open(save_path + '.json', 'w') as f:
             json.dump(metadata, f, indent = 4)
 
