@@ -22,6 +22,7 @@ class Overworld1Critic(ZeldaGameplayCritic):
         if old['location'] != new['location'] and old['location_objective']:
             if old['location_objective'] != new['location']:
                 rewards['penalty-left-early'] = self.leave_early_penalty
+                return
 
         level = new['level']
         location = new['location']
