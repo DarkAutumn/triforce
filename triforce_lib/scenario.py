@@ -38,6 +38,7 @@ class ScenarioGymWrapper(gym.Wrapper):
 
         # assign data for the scenario
         self.set_data(env_unwrapped, self._scenario.data)
+        self.set_data(self.unwrapped, self._scenario.fixed)
 
         self._last_state = None
         for c in self._critics:
@@ -46,7 +47,7 @@ class ScenarioGymWrapper(gym.Wrapper):
         for ec in self._conditions:
             ec.clear()
 
-        self._last_state = info
+        self._last_state = None
 
         return obs, info
 
