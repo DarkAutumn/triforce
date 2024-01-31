@@ -68,11 +68,20 @@
             "justMyCode": false
         },
         {
-            "name": "Run Overworld1 Scenario",
+            "name": "Run Overworld1 NO Beams",
             "type": "python",
             "request": "launch",
             "program": "run.py",
-            "args": ["overworld1"],
+            "args": ["overworld1nobeams"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Run Overworld1 Beams",
+            "type": "python",
+            "request": "launch",
+            "program": "run.py",
+            "args": ["overworld1beams"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

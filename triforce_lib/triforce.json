@@ -14,15 +14,27 @@
             "iterations" : 1000000
         },
         {
-            "name" : "overworld1",
-            "path" : "overworld1",
+            "name" : "overworld1beams",
+            "path" : "overworld1beams",
+            "action_space" : "attack-only",
+            "priority" : 0,
+            "levels" : 0,
+            "requires_enemies" : false,
+            "equipment_required" : ["beams"],
+
+            "training_scenario" : "overworld1beams",
+            "iterations" : 1500000
+        },
+        {
+            "name" : "overworld1nobeams",
+            "path" : "overworld1nobeams",
             "action_space" : "attack-only",
             "priority" : 0,
             "levels" : 0,
             "requires_enemies" : false,
             "equipment_required" : [],
 
-            "training_scenario" : "overworld1",
+            "training_scenario" : "overworld1nobeams",
             "iterations" : 1500000
         },
         {
@@ -35,7 +47,7 @@
             "equipment_required" : [],
 
             "training_scenario" : "dungeon1nobeams",
-            "iterations" : 1500000
+            "iterations" : 2750000
         },
         {
             "name" : "dungeon1beams",
@@ -99,7 +111,7 @@
             }
         },
         {
-            "name": "overworld1",
+            "name": "overworld1beams",
             "description": "Start of the game to the first dungeon entrance",
             "critics": ["Overworld1Critic"],
             "end_conditions": ["Overworld1EndCondition"],
@@ -111,10 +123,33 @@
                 "keys" : 0,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254,
-                "sword" : 1,
-                "link_x" : 64,
-                "link_y" : 80,
-                "link_vector" : 4
+                "sword" : 1
+            },
+            "fixed":
+            {
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
+            }
+        },
+        {
+            "name": "overworld1nobeams",
+            "description": "Start of the game to the first dungeon entrance",
+            "critics": ["Overworld1Critic"],
+            "end_conditions": ["Overworld1EndCondition"],
+            "level" : 0,
+            "start": ["0_77"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 0,
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254,
+                "sword" : 1
+            },
+            "fixed":
+            {
+                "hearts_and_containers" : 33,
+                "partial_hearts" : 100
             }
         },
         {
