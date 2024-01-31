@@ -116,7 +116,7 @@
             "critics": ["Overworld1Critic"],
             "end_conditions": ["Overworld1EndCondition"],
             "level" : 0,
-            "start": ["0_77"],
+            "start": ["0_67s"],
             "data":
             {
                 "bombs" : 0,
@@ -137,7 +137,7 @@
             "critics": ["Overworld1Critic"],
             "end_conditions": ["Overworld1EndCondition"],
             "level" : 0,
-            "start": ["0_77"],
+            "start": ["0_67s"],
             "data":
             {
                 "bombs" : 0,
