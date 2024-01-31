@@ -72,7 +72,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.move_too_close_penalty = -self.reward_small
         
         # state tracking
-        self._visted_locations = [[False] * 256 ] * 2
+        self._visted_locations = set()
         self._actions_on_same_screen = 0
         self._is_first_step = True
 
@@ -90,7 +90,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
     def clear(self):
         super().clear()
-        self._visted_locations = [[False] * 256 ] * 2
+        self._visted_locations.clear()
         self._actions_on_same_screen = 0
         self._is_first_step = True
 
@@ -293,7 +293,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
     # state helpers, some states are calculated
     def has_visited(self, level, location):
-        return self._visted_locations[level][location]
+        return (level, location) in self._visted_locations
     
     def mark_visited(self, level, location):
-        self._visted_locations[level][location] = True
+        self._visted_locations.add((level, location))
