@@ -11,7 +11,7 @@ class ZeldaGuantletRewards(ZeldaGameplayCritic):
     def __init__(self):
         super().__init__()
 
-        self.new_location_reward = 0
+        self.new_location_reward = 0.0
 
         # reward values
         self.new_location_reward = self.reward_large

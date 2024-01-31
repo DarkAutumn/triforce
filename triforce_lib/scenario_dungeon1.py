@@ -36,7 +36,7 @@ class Dungeon1Critic(ZeldaGameplayCritic):
 class Dungeon1BeamCritic(Dungeon1Critic):
     def __init__(self):
         super().__init__()
-        self.health_gained_reward = 0
+        self.health_gained_reward = 0.0
         self.health_lost_penalty = -self.reward_maximum
 
 class Dungeon1BombCritic(Dungeon1Critic):

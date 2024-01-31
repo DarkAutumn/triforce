@@ -9,7 +9,7 @@ class ZeldaDungeonCombatCritic(ZeldaDungeonCritic):
     def __init__(self):
         super().__init__()
 
-        self.new_location_reward = 0
+        self.new_location_reward = 0.0
         self.leaving_penalty = -self.reward_large
     
     def critique_location_discovery(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int], rewards : typing.Dict[str, float]):
