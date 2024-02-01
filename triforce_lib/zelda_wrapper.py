@@ -236,6 +236,8 @@ class ZeldaGameWrapper(gym.Wrapper):
             del self.__dict__[name]
 
     def handle_future_hits(self, act, info, step_kills, step_injuries, name, condition_check):
+        info[name] = 0
+
         already_active_name = name + '_already_active'
         discounted_kills_name = name + '_discounted_kills'
         discounted_injuries_name = name + '_discounted_injuries'
@@ -247,7 +249,7 @@ class ZeldaGameWrapper(gym.Wrapper):
                 future_kills, future_injuries = self.predict_future(act, info, condition_check)
                 info[name] = future_kills + future_injuries
 
-                    # count the future hits now, discount them from the later hit
+                # count the future hits now, discount them from the later hit
                 step_kills += future_kills
                 step_injuries += future_injuries
 
