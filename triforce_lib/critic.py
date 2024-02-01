@@ -220,7 +220,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
             if selected == 0 and not new['regular_boomerang'] and not new['magic_boomerang']:
                 rewards['used-null-item'] = self.used_null_item_penalty
             elif selected == 1:  # bombs
-                total_hits = new['step_kills'] + new['step_injuries']
+                total_hits = new.get('bomb1_hits', 0) + new.get('bomb2_hits', 0)
                 if total_hits == 0:
                     rewards['penalty-bomb-miss'] = self.bomb_miss_penalty
                 else:
