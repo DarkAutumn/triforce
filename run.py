@@ -138,6 +138,7 @@ class Display:
             
             # update rewards for display
             self.update_rewards(reward_values, reward_details, info, reward)
+            curr_score = info.get('score', None)
 
             while True:
                 if self.zelda_ml.rgb_deque:
@@ -158,6 +159,8 @@ class Display:
                 y_pos = self.render_text(surface, f"Enemies: {obs['features'][0]}", (x_pos, y_pos))
                 y_pos = self.render_text(surface, f"Beams: {obs['features'][1]}", (x_pos, y_pos))
                 y_pos = self.render_text(surface, f"Total Rewards: {round(self.total_rewards, 2)}", (x_pos, y_pos))
+                if curr_score is not None:
+                    y_pos = self.render_text(surface, f"Score: {round(curr_score, 2)}", (x_pos, y_pos))
 
                 # render the gameplay
                 self.render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width, self.game_height)
