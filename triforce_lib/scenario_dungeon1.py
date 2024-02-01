@@ -40,7 +40,22 @@ class Dungeon1BeamCritic(Dungeon1Critic):
         self.health_lost_penalty = -self.reward_maximum
 
 class Dungeon1BombCritic(Dungeon1Critic):
-    pass
+    def clear(self):
+        super().clear()
+        self.score = 0
+
+    def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
+        if new['action'] == 'item':
+            selected = new['selected_item']
+            if selected == 1:  # bombs
+                hits = new['bomb1_hits'] + new['bomb2_hits']
+                if hits:
+                    self.score += hits
+                else:
+                    self.score -= 1
+
+
+        new['score'] = self.score
 
 class Dungeon1BossCritic(Dungeon1Critic):
     def clear(self):
