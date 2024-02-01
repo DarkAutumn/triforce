@@ -82,6 +82,8 @@ class Display:
         self.total_height = max(self.game_height + self.graph_height, self.text_height)
         self.dimensions = (self.total_width, self.total_height)
 
+        self.total_rewards = 0.0
+
     def show(self):
         env = self.zelda_ml.make_env(self.scenario)
 
@@ -108,6 +110,7 @@ class Display:
         while mode != 'q':
             if terminated or truncated:
                 obs, info = env.reset()
+                self.total_rewards = 0.0
                 reward_details.clear()
                 reward_values.clear()
                 for _ in range(reward_values.maxlen):
@@ -135,6 +138,7 @@ class Display:
             
             # update rewards for display
             self.update_rewards(reward_values, reward_details, info, reward)
+            curr_score = info.get('score', None)
 
             while True:
                 if self.zelda_ml.rgb_deque:
@@ -154,6 +158,9 @@ class Display:
                 y_pos = self.draw_arrow(surface, "Item", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][3], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
                 y_pos = self.render_text(surface, f"Enemies: {obs['features'][0]}", (x_pos, y_pos))
                 y_pos = self.render_text(surface, f"Beams: {obs['features'][1]}", (x_pos, y_pos))
+                y_pos = self.render_text(surface, f"Total Rewards: {round(self.total_rewards, 2)}", (x_pos, y_pos))
+                if curr_score is not None:
+                    y_pos = self.render_text(surface, f"Score: {round(curr_score, 2)}", (x_pos, y_pos))
 
                 # render the gameplay
                 self.render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width, self.game_height)
@@ -219,8 +226,12 @@ class Display:
     def update_rewards(self, reward_values, reward_details, info, reward):
         reward_values.append(reward)
 
+
         if 'rewards' in info:
             reward_dict = {k: round(v, 2) for k, v in info['rewards'].items()}
+
+            for rew in info.get('rewards', {}).values():
+                self.total_rewards += rew
 
         else:
             reward_dict = {}

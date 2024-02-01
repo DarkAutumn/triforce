@@ -4,7 +4,7 @@ from .zelda_game import get_heart_halves, is_in_cave, mode_gameplay, mode_cave
 from .end_condition import ZeldaEndCondition
 from .critic import ZeldaGameplayCritic
 
-overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
+overworld_dungeon1_walk_rooms = set([0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
 
 class Overworld1Critic(ZeldaGameplayCritic):
     def clear(self):
@@ -22,6 +22,7 @@ class Overworld1Critic(ZeldaGameplayCritic):
         if old['location'] != new['location'] and old['location_objective']:
             if old['location_objective'] != new['location']:
                 rewards['penalty-left-early'] = self.leave_early_penalty
+                return
 
         level = new['level']
         location = new['location']

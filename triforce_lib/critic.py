@@ -72,7 +72,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.move_too_close_penalty = -self.reward_small
         
         # state tracking
-        self._visted_locations = [[False] * 256 ] * 2
+        self._visted_locations = set()
         self._actions_on_same_screen = 0
         self._is_first_step = True
 
@@ -90,7 +90,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
     def clear(self):
         super().clear()
-        self._visted_locations = [[False] * 256 ] * 2
+        self._visted_locations.clear()
         self._actions_on_same_screen = 0
         self._is_first_step = True
 
@@ -220,7 +220,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
             if selected == 0 and not new['regular_boomerang'] and not new['magic_boomerang']:
                 rewards['used-null-item'] = self.used_null_item_penalty
             elif selected == 1:  # bombs
-                total_hits = new['step_kills'] + new['step_injuries']
+                total_hits = new.get('bomb1_hits', 0) + new.get('bomb2_hits', 0)
                 if total_hits == 0:
                     rewards['penalty-bomb-miss'] = self.bomb_miss_penalty
                 else:
@@ -285,15 +285,21 @@ class ZeldaGameplayCritic(ZeldaCritic):
 
                     if nonzero_objectives:
                         objective_distances = [np.dot(link_motion_vector, x) for x in nonzero_objectives]
-                        best = max(objective_distances)
-                        if best > 0:
-                            rewards['reward-move-closer'] = self.move_closer_reward * best / self.movement_scale_factor
-                        elif best < 0:
-                            rewards['penalty-move-farther'] = self.move_away_penalty * abs(best) / self.movement_scale_factor
+                        best_distance = max(objective_distances)
+
+                        # Don't reward positive movement on attack
+                        if best_distance > 0 and new['action'] != 'attack':
+                            rewards['reward-move-closer'] = self.move_closer_reward * best_distance / self.movement_scale_factor
+                        
+                        # We have to discount movement away on attack to ensure that the model does
+                        # "move" with attacks in the negative direction then move back to the original
+                        # position, creating infinite rewards
+                        if best_distance < 0:
+                            rewards['penalty-move-farther'] = self.move_away_penalty * abs(best_distance) / self.movement_scale_factor
 
     # state helpers, some states are calculated
     def has_visited(self, level, location):
-        return self._visted_locations[level][location]
+        return (level, location) in self._visted_locations
     
     def mark_visited(self, level, location):
-        self._visted_locations[level][location] = True
+        self._visted_locations.add((level, location))
