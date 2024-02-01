@@ -48,7 +48,7 @@ class Dungeon1BombCritic(Dungeon1Critic):
         if new['action'] == 'item':
             selected = new['selected_item']
             if selected == 1:  # bombs
-                hits = new['bomb1_hits'] + new['bomb2_hits']
+                hits = new.get('bomb1_hits', 0) + new.get('bomb2_hits', 0)
                 if hits:
                     self.score += hits
                 else:
