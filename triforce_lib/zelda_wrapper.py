@@ -175,9 +175,10 @@ class ZeldaGameWrapper(gym.Wrapper):
                     elif curr_enemy_health[eid] < health:
                         step_injuries += 1
 
+
             # check if beams, bombs, arrows, etc are active and if they will hit in the future,
             # as we need to count them as rewards/results of this action so the model trains properly
-            step_kills, step_injuries = self.handle_future_hits(act, info, step_kills, step_injuries, 'beam_hits', lambda st: get_beam_state(st) == 1)
+            step_kills, step_injuries = self.handle_future_hits(act, info, step_kills, step_injuries, 'beam_hits', lambda st: get_beam_state(st) != 0)
             step_kills, step_injuries = self.handle_future_hits(act, info, step_kills, step_injuries, 'bomb1_hits', lambda st: get_bomb_state(st, 0) == 1)
             step_kills, step_injuries = self.handle_future_hits(act, info, step_kills, step_injuries, 'bomb2_hits', lambda st: get_bomb_state(st, 1) == 1)
 
