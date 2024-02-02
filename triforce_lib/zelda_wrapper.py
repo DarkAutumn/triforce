@@ -359,10 +359,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         
         hits = 0
 
-        for i in range(20):
-            data.set_value('hearts_and_containers', 0xff) # make sure we don't die
-            _, _, terminated, truncated, info = unwrapped.step(act)
-
         objects = ZeldaObjectData(unwrapped.get_ram())
         for enemy in start_enemies:
             start = start_health.get(enemy, 0)
