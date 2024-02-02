@@ -360,10 +360,12 @@ class ZeldaGameWrapper(gym.Wrapper):
         hits = 0
 
         objects = ZeldaObjectData(unwrapped.get_ram())
+        end_health = {x: objects.get_obj_health(x) for x in objects.enumerate_enemy_ids()}
         for enemy in start_enemies:
             start = start_health.get(enemy, 0)
             end = objects.get_obj_health(enemy)
-            if end < start:
+
+            if enemy not in end_health or end < start:
                 hits += 1
 
         unwrapped.em.set_state(savestate)
