@@ -1,20 +1,15 @@
 import os
 import sys
-from triforce_lib import ZeldaGameplayCritic
-from triforce_lib.scenario_dungeon_combat import ZeldaDungeonCombatEndCondition
-from utilities import CriticWrapper, RewardRecorder
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from triforce_lib import ZeldaActionReplay
+from triforce_lib.scenario_dungeon_combat import ZeldaDungeonCombatEndCondition
+from utilities import CriticWrapper
 
 def test_dungeon_combat_end():
-    recorder = RewardRecorder()
-
-    def wrapper(env):
-        return CriticWrapper(env, end_conditions=[ZeldaDungeonCombatEndCondition(recorder)])
-
-    replay = ZeldaActionReplay("1_44e.state", wrapper)
+    replay = ZeldaActionReplay("1_44e.state")
+    replay.env = CriticWrapper(replay.env, end_conditions=[ZeldaDungeonCombatEndCondition()])
+    replay.reset()
     
     replay.run_steps('llluuuullllllllllllllld')
 
