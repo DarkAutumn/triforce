@@ -22,8 +22,7 @@ def test_dungeon_combat_end():
     assert not terminated
     assert not truncated
     assert info['beam_hits'] == 0
-    assert info['step_kills'] == 3
-    assert info['step_injuries'] == 0
+    assert info['step_hits'] == 3
     assert info['action'] == 'item'
 
     found = None

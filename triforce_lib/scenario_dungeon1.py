@@ -68,7 +68,7 @@ class Dungeon1BossCritic(Dungeon1Critic):
         self.health_lost_penalty = -self.reward_small
 
     def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
-        self.total_damage += new['step_injuries'] + new['step_kills']
+        self.total_damage += new['step_hits']
         new['score'] = get_heart_halves(new) + self.total_damage
 
 class Dungeon1CombatEndCondition(ZeldaEndCondition):

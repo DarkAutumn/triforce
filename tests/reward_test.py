@@ -4,56 +4,45 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from triforce_lib import ZeldaGameplayCritic
-from utilities import CriticWrapper, RewardRecorder
+from utilities import CriticWrapper
 from triforce_lib import ZeldaActionReplay
 
 def test_wall_collision():
-    recorder = RewardRecorder()
-
-    def wrapper(env):
-        return CriticWrapper(env, critics=[ZeldaGameplayCritic(recorder)])
-
-    actions = ZeldaActionReplay("1_44e.state", wrapper)
+    actions = ZeldaActionReplay("1_44e.state")
+    actions.env = CriticWrapper(actions.env, critics=[ZeldaGameplayCritic()])
+    actions.reset()
 
     # move under a block
     actions.run_steps('llllll')
-    recorder.rewards.clear()
 
     # step up to the block, we shouldn't get penalized here even though we don't fully move
-    actions.step('u')
-    
-    assert not [x for x in recorder.rewards if x[0] == 'penalty-wall-collision']
-
-    recorder.rewards.clear()
+    _, _, _, _, info = actions.step('u')
+    assert 'rewards' in info
+    assert 'penalty-wall-collision' not in info['rewards']
 
     # now we are against a block, we should get penalized for moving up and not changing position
     actions.step('u')
-
-    collisions = [x for x in recorder.rewards if x[0] == 'penalty-wall-collision']
-    assert len(collisions) == 1
-    source, reward = collisions[0]
-    assert source == 'penalty-wall-collision'
-    assert reward < 0
-
+    _, _, _, _, info = actions.step('u')
+    assert 'rewards' in info
+    assert 'penalty-wall-collision' in info['rewards']
+    assert info['rewards']['penalty-wall-collision'] < 0
 
 def test_close_distance():
-    recorder = RewardRecorder()
-
-    def wrapper(env):
-        return CriticWrapper(env, critics=[ZeldaGameplayCritic(recorder)])
-
-    actions = ZeldaActionReplay("1_44e.state", wrapper)
+    actions = ZeldaActionReplay("1_44e.state")
+    actions.env = CriticWrapper(actions.env, critics=[ZeldaGameplayCritic()])
+    actions.reset()
 
     # move under a block
-    actions.run_steps('ll')
-    assert len(recorder.rewards) == 1
-    name, reward = recorder.rewards[0]
-    assert name == "reward-close-distance"
-    assert reward > 0
+    for i in range(2):
+        _, _, _, _, info = actions.step('l')
+        assert 'rewards' in info
+        assert 'reward-move-closer' in info['rewards']
+        assert info['rewards']['reward-move-closer'] > 0
 
-    recorder.rewards.clear()
-    actions.run_steps('r')
-    assert len(recorder.rewards) == 0
+    _, _, _, _, info = actions.step('r')
+    assert 'rewards' in info
+    assert 'reward-move-closer' not in info['rewards']
+    
 
 def test_position():
     # note the position may change for the other axis as link snaps to the grid

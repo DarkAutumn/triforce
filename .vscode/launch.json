@@ -6,7 +6,7 @@
     "configurations": [
         {
             "name": "Full Game (so far)",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "run.py",
             "args": [],
@@ -15,7 +15,7 @@
         },
         {
             "name": "Dungeon 1",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "run.py",
             "args": ["dungeon1"],
@@ -24,7 +24,7 @@
         },
         {
             "name": "Run Dungeon1 Beams Scenario",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "run.py",
             "args": ["dungeon1beams"],
@@ -33,7 +33,7 @@
         },
         {
             "name": "Run Dungeon1 Sword Scenario (no beams)",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "run.py",
             "args": ["dungeon1nobeams"],
@@ -42,7 +42,7 @@
         },
         {
             "name": "Run Dungeon1 Bombs Scenario",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "run.py",
             "args": ["dungeon1bombs"],
@@ -51,7 +51,7 @@
         },
         {
             "name": "Run Dungeon1 Boss",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "run.py",
             "args": ["dungeon1boss"],
@@ -60,7 +60,7 @@
         },
         {
             "name": "Run Overworld Sword Scenario",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "run.py",
             "args": ["overworld-sword"],
@@ -69,7 +69,7 @@
         },
         {
             "name": "Run Overworld1 NO Beams",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "run.py",
             "args": ["overworld1nobeams"],
@@ -78,7 +78,7 @@
         },
         {
             "name": "Run Overworld1 Beams",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "run.py",
             "args": ["overworld1beams"],
@@ -87,7 +87,7 @@
         },
         {
             "name": "Training",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "train.py",
             "args": ["--iterations", "5000", "--parallel", "1"],
@@ -96,7 +96,7 @@
         },
         {
             "name": "Train Overworld",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "train.py",
             "args": ["overworld1", "--iterations", "5000", "--parallel", "1"],

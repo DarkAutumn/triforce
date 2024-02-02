@@ -36,7 +36,7 @@
 
 # counted items
 0x66d rupees
-0x67d rupees_to_add            
+0x67d rupees_to_add
 0x658 bombs
 0x67C bomb_max
 0x66E keys
@@ -64,6 +64,21 @@
 0x666 letter
 0x674 regular_boomerang
 0x675 magic_boomerang
+
+# enemy health
+0x486 obj_health_1
+0x487 obj_health_2
+0x488 obj_health_3
+0x489 obj_health_4
+0x48a obj_health_5
+0x48b obj_health_6
+0x48c obj_health_7
+0x48d obj_health_8
+0x48e obj_health_9
+0x48f obj_health_a
+0x491 obj_health_b
+0x492 obj_health_c
+
             
 0x667 compass
 0x668 map

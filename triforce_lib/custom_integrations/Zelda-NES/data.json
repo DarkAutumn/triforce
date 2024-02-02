@@ -168,6 +168,54 @@
             "address": 1653,
             "type": "=u1"
         },
+        "obj_health_1": {
+            "address": 1158,
+            "type": "=u1"
+        },
+        "obj_health_2": {
+            "address": 1159,
+            "type": "=u1"
+        },
+        "obj_health_3": {
+            "address": 1160,
+            "type": "=u1"
+        },
+        "obj_health_4": {
+            "address": 1161,
+            "type": "=u1"
+        },
+        "obj_health_5": {
+            "address": 1162,
+            "type": "=u1"
+        },
+        "obj_health_6": {
+            "address": 1163,
+            "type": "=u1"
+        },
+        "obj_health_7": {
+            "address": 1164,
+            "type": "=u1"
+        },
+        "obj_health_8": {
+            "address": 1165,
+            "type": "=u1"
+        },
+        "obj_health_9": {
+            "address": 1166,
+            "type": "=u1"
+        },
+        "obj_health_a": {
+            "address": 1167,
+            "type": "=u1"
+        },
+        "obj_health_b": {
+            "address": 1169,
+            "type": "=u1"
+        },
+        "obj_health_c": {
+            "address": 1170,
+            "type": "=u1"
+        },
         "compass": {
             "address": 1639,
             "type": "=u1"

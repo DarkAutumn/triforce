@@ -10,12 +10,45 @@ def assert_no_hit( env, command):
         assert not terminated
         assert not truncated
         assert info['beam_hits'] == 0
-        assert info['step_kills'] == 0
-        assert info['step_injuries'] == 0
+        assert info['step_hits'] == 0
 
 def run( env, command):
     for c in command:
         yield env.step(c)
+
+def test_bat_injury():
+    replay = ZeldaActionReplay("1_72e.state")
+    assert_no_hit(replay, 'lllllllllllllllllllld')
+    _, _, terminated, truncated, info = replay.step('a')
+    assert not terminated
+    assert not truncated
+    assert info['beam_hits'] == 0
+    assert info['step_hits'] == 1
+    assert info['action'] == 'attack'
+    
+    assert_no_hit(replay, 'dddddddddddddddddddddddddddddddddd')
+
+def test_stalfos_injury():
+    replay = ZeldaActionReplay("1_74w.state")
+    assert_no_hit(replay, 'rrddddr')
+
+    unwrapped = replay.env.unwrapped
+    unwrapped.data.set_value('hearts_and_containers', 0xff)
+
+    _, _, terminated, truncated, info = replay.step('a')
+    assert not terminated
+    assert not truncated
+    assert info['step_hits'] == 1
+    assert info['action'] == 'attack'
+    assert_no_hit(replay, 'llllr')
+
+    _, _, terminated, truncated, info = replay.step('a')
+    assert not terminated
+    assert not truncated
+    assert info['step_hits'] == 1
+    assert info['action'] == 'attack'
+    
+    assert_no_hit(replay, 'lllllll')
 
 def test_sword_injury():
     replay = ZeldaActionReplay("1_44e.state")
@@ -26,8 +59,7 @@ def test_sword_injury():
     assert not terminated
     assert not truncated
     assert info['beam_hits'] == 0
-    assert info['step_kills'] == 0
-    assert info['step_injuries'] == 2
+    assert info['step_hits'] == 2
     assert info['action'] == 'attack'
     
     assert_no_hit(replay, 'u')
@@ -44,8 +76,7 @@ def test_beam_injury():
     assert not terminated
     assert not truncated
     assert info['beam_hits'] == 1
-    assert info['step_kills'] == 0
-    assert info['step_injuries'] == 1
+    assert info['step_hits'] == 1
     assert info['action'] == 'attack'
 
     assert_no_hit(replay, "lllllll")
@@ -59,8 +90,7 @@ def test_bombs_kill():
     assert not terminated
     assert not truncated
     assert info['beam_hits'] == 0
-    assert info['step_kills'] == 3
-    assert info['step_injuries'] == 0
+    assert info['step_hits'] == 3
     assert info['action'] == 'item'
 
     assert_no_hit(replay, "uuurrrrrr")
