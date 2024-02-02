@@ -2,7 +2,7 @@
 # Zelda has a very complicated combat system.  This class is responsible for detecting when the
 # agent has killed or injured an enemy.
 #
-# This consumes some state and produces values like 'step_kills' and 'step_injuries'.
+# This consumes some state and produces values like 'step_hits'.
 
 from random import randint
 from typing import Any
@@ -69,6 +69,7 @@ class ZeldaGameWrapper(gym.Wrapper):
     def __init__(self, env, deterministic=False):
         super().__init__(env)
 
+        deterministic = True
         self.deterministic = deterministic
 
         self._reset_state()
@@ -80,9 +81,9 @@ class ZeldaGameWrapper(gym.Wrapper):
         obs, info = super().reset(**kwargs)
         self._reset_state()
 
-        if reset_delay_max_frames:
-            obs, _, terminated, truncated, info = self.skip(self._none_action, randint(1, reset_delay_max_frames))
-            assert not terminated and not truncated
+        delay_frames = 1 if self.deterministic else randint(1, reset_delay_max_frames)
+        obs, _, terminated, truncated, info = self.skip(self._none_action, delay_frames)
+        assert not terminated and not truncated
 
         self.update_info(self._none_action, info)
 
@@ -94,8 +95,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._beams_already_active = False
         self._prev_enemies = None
         self._prev_health = None
-        self._discounted_beam_kills = 0
-        self._discounted_beam_injuries = 0
     
     def step(self, act):
         # take the first step
@@ -142,8 +141,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['has_beams'] = has_beams(info) and get_beam_state(info) == 0
 
         curr_enemy_health = None
-        step_kills = 0
-        step_injuries = 0
+        step_hits = 0
         
         location = (info['level'], info['location'], is_in_cave(info))
         new_location = self._location != location
@@ -163,28 +161,32 @@ class ZeldaGameWrapper(gym.Wrapper):
             # capture enemy health data
             curr_enemy_health = {}
             for eid in objects.enumerate_enemy_ids():
-                curr_enemy_health[eid] = objects.get_obj_health(eid)
+                health = objects.get_obj_health(eid)
+
+                # Some enemies, like gels and keese, do not have health.  This makes calculating hits very challenging.
+                # Instead, just set those 0 health enemies to 1 health, which doesn't otherwise affect the game.  The
+                # game will set them to 0 health when they die.
+                if not health and not self._prev_health:
+                    data = unwrapped.data
+                    data.set_value(f'obj_health_{eid:x}', 0x10)
+                    health = 1
+
+                curr_enemy_health[eid] = health
 
             # check if we killed or injured anything
             if self._prev_health:
-                # check kills
                 for eid, health in self._prev_health.items():
-                    if eid not in curr_enemy_health:
-                        step_kills += 1
-
-                    elif curr_enemy_health[eid] < health:
-                        step_injuries += 1
-
+                    if eid in curr_enemy_health and curr_enemy_health[eid] < health:
+                        step_hits += 1
 
             # check if beams, bombs, arrows, etc are active and if they will hit in the future,
             # as we need to count them as rewards/results of this action so the model trains properly
-            step_kills, step_injuries = self.handle_future_hits(act, info, step_kills, step_injuries, 'beam_hits', lambda st: get_beam_state(st) != 0)
-            step_kills, step_injuries = self.handle_future_hits(act, info, step_kills, step_injuries, 'bomb1_hits', lambda st: get_bomb_state(st, 0) == 1)
-            step_kills, step_injuries = self.handle_future_hits(act, info, step_kills, step_injuries, 'bomb2_hits', lambda st: get_bomb_state(st, 1) == 1)
+            step_hits = self.handle_future_hits(act, info, step_hits, 'beam_hits', lambda st: get_beam_state(st) == 1)
+            step_hits = self.handle_future_hits(act, info, step_hits, 'bomb1_hits', lambda st: get_bomb_state(st, 0) == 1)
+            step_hits = self.handle_future_hits(act, info, step_hits, 'bomb2_hits', lambda st: get_bomb_state(st, 1) == 1)
 
         info['new_location'] = new_location
-        info['step_kills'] = step_kills
-        info['step_injuries'] = step_injuries
+        info['step_hits'] = step_hits
 
         self._prev_health = curr_enemy_health
         self._prev_objs = objects
@@ -229,33 +231,29 @@ class ZeldaGameWrapper(gym.Wrapper):
 
     def clear_variables(self, name):
         self.clear_item(name + '_already_active')
-        self.clear_item(name + '_discounted_kills')
-        self.clear_item(name + '_discounted_injuries')
+        self.clear_item(name + '_discounted_hits')
 
     def clear_item(self, name):
         if name in self.__dict__:
             del self.__dict__[name]
 
-    def handle_future_hits(self, act, info, step_kills, step_injuries, name, condition_check):
+    def handle_future_hits(self, act, info, step_hits, name, condition_check):
         info[name] = 0
 
         already_active_name = name + '_already_active'
-        discounted_kills_name = name + '_discounted_kills'
-        discounted_injuries_name = name + '_discounted_injuries'
-        
+        discounted_hits = name + '_discounted_hits'
+
         if condition_check(info):
             already_active = self.__dict__.get(already_active_name, False)
             if not already_active:
                 # check if beams will hit something
-                future_kills, future_injuries = self.predict_future(act, info, condition_check)
-                info[name] = future_kills + future_injuries
+                future_hits = self.predict_future(act, info, condition_check)
+                info[name] = future_hits
 
                 # count the future hits now, discount them from the later hit
-                step_kills += future_kills
-                step_injuries += future_injuries
+                step_hits += future_hits
 
-                self.__dict__[discounted_kills_name] = future_kills
-                self.__dict__[discounted_injuries_name] = future_injuries
+                self.__dict__[discounted_hits] = future_hits
                 self.__dict__[already_active_name] = True
                 
         else:
@@ -264,24 +262,17 @@ class ZeldaGameWrapper(gym.Wrapper):
             # we found.
             self.__dict__[already_active_name] = False
 
-            # discount kills and injuries if we already counted as beam hits
-            discounted_injuries = self.__dict__.get(discounted_injuries_name, 0)
-            if discounted_injuries and step_injuries:
-                discount = min(discounted_injuries, step_injuries)
-                discounted_injuries -= discount
+            # discount hits if we already counted as beam hits
+            discounted_hits = self.__dict__.get(discounted_hits, 0)
+            if discounted_hits and step_hits:
+                discount = min(discounted_hits, step_hits)
+                discounted_hits -= discount
                 
-                self.__dict__[discounted_injuries_name] = discounted_injuries
-                step_injuries -= discount
+                self.__dict__[discounted_hits] = discounted_hits
+                step_hits -= discount
 
-            discounted_kills = self.__dict__.get(discounted_kills_name, 0)
-            if discounted_kills and step_kills:
-                discount = min(discounted_kills, step_kills)
-                discounted_kills -= discount
-                
-                self.__dict__[discounted_kills_name] = discounted_kills
-                step_kills -= discount
 
-        return step_kills, step_injuries
+        return step_hits
 
     def act_and_wait(self, act):
     # wait based on the kind of action
@@ -366,25 +357,21 @@ class ZeldaGameWrapper(gym.Wrapper):
             if terminated or truncated:
                 break
         
-        kills = 0
-        injuries = 0
+        hits = 0
+
+        for i in range(20):
+            data.set_value('hearts_and_containers', 0xff) # make sure we don't die
+            _, _, terminated, truncated, info = unwrapped.step(act)
 
         objects = ZeldaObjectData(unwrapped.get_ram())
-        end_enemies = list(objects.enumerate_enemy_ids())
-        if len(end_enemies) < len(start_enemies):
-            kills += len(start_enemies) - len(end_enemies)
-
-        for enemy in end_enemies:
+        for enemy in start_enemies:
             start = start_health.get(enemy, 0)
             end = objects.get_obj_health(enemy)
             if end < start:
-                if end == 0:
-                    kills += 1
-                else:
-                    injuries += 1
+                hits += 1
 
         unwrapped.em.set_state(savestate)
-        return kills, injuries
+        return hits
 
     def get_button_names(self, act, buttons):
         result = []

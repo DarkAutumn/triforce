@@ -189,11 +189,11 @@ class ZeldaGameplayCritic(ZeldaCritic):
             rewards['reward-gained-triforce'] = self.triforce_reward
 
     def critique_attack(self, old, new, rewards):
-        if new['step_kills'] or new['step_injuries']:
+        if new['step_hits']:
             if not is_in_cave(new):
-                rewards['reward-injure-kill'] = self.injure_kill_reward
+                rewards['reward-hit'] = self.injure_kill_reward
             else:
-                rewards['penalty-injure-cave'] = self.injure_kill_reward
+                rewards['penalty-hit-cave'] = self.injure_kill_reward
         
         else:
             if new['action'] == 'attack':                

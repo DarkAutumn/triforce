@@ -29,7 +29,7 @@ class ZeldaEndCondition:
 
         # check truncation
         truncated = False
-        if old['link_pos'] == new['link_pos'] and not new['step_kills'] and not new['step_injuries']:
+        if old['link_pos'] == new['link_pos'] and not new['step_hits']:
             if self._position_duration >= self.position_timeout:
                 reason = "truncated-position-timeout"
                 truncated = True

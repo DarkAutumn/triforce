@@ -8,32 +8,20 @@ from .zelda_wrapper import ZeldaGameWrapper
 class ZeldaActionReplay:
     def __init__(self, savestate, wrapper=None, render_mode=None):
         env = retro.make(game='Zelda-NES', state=savestate, inttype=retro.data.Integrations.CUSTOM_ONLY, render_mode=render_mode)
+        self.data = env.data
         env = ZeldaGameWrapper(env, deterministic=True)
-        env = ZeldaActionSpace(env)
-        if wrapper:
-            env = wrapper(env)
+        env = ZeldaActionSpace(env, 'all')
+        self.actions = env.actions
 
-        self.map = {}
-
-        for i in range(len(env.actions)):
-            if env.actions[i][0] == 'UP':
-                self.map['u'] = i
-
-            if env.actions[i][0] == 'DOWN':
-                self.map['d'] = i
-
-            if env.actions[i][0] == 'LEFT':
-                self.map['l'] = i
-
-            if env.actions[i][0] == 'RIGHT':
-                self.map['r'] = i
-
-            if env.actions[i][0] == 'A':
-                self.map['a'] = i
-
-            if env.actions[i][0] == 'B':
-                self.map['b'] = i
-
+        self.buttons = {
+            'u': 'UP',
+            'd': 'DOWN',
+            'l': 'LEFT',
+            'r': 'RIGHT',
+            'a': 'A',
+            'b': 'B',
+        }
+        
         env.reset()
         self.actions_taken = ""
         self.env = env
@@ -43,7 +31,10 @@ class ZeldaActionReplay:
 
     def reset(self):
         self.actions_taken = ""
-        return self.env.reset()
+        result = self.env.reset()
+        self.data.set_value('hearts_and_containers', 0xff)
+        return result
+    
     
     def run_steps(self, commands):
         for x in self.iterate_steps(commands):
@@ -78,9 +69,25 @@ class ZeldaActionReplay:
 
         else:
             self.actions_taken += button
-            action = self.map[button]
+
+            action = self.buttons[button]
+            if action in ['A', 'B']:
+                action = [self.get_prev_direction(), action]
+
+            act = self.get_real_action(action)
             
-            result =  self.env.step(action)
+            result =  self.env.step(act)
             self.env.render()
             
             return result
+        
+    def get_real_action(self, action):
+        if not isinstance(action, list):
+            action = [action]
+
+        return self.actions.index(action)
+    
+    def get_prev_direction(self):
+        for x in reversed(self.actions_taken):
+            if x in ['u', 'd', 'l', 'r']:
+                return self.buttons[x]
