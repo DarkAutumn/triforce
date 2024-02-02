@@ -85,10 +85,8 @@ class ZeldaObservationWrapper(gym.Wrapper):
         return frame
 
     def trim_normalize_grayscale(self, info, frame):
-        save = {'input': frame, 'info': info}
         if self.trim:
             frame = frame[self.trim:, :, :]
-            save['trimmed'] = frame
 
         if self.viewport_size:
             if 'link_pos' in info:
@@ -97,26 +95,20 @@ class ZeldaObservationWrapper(gym.Wrapper):
             else:
                 x, y = 0, 0
 
-            half_vp = self.viewport_size // 2
-            padded_frame = np.pad(frame, ((half_vp, half_vp), (half_vp, half_vp), (0, 0)), mode='edge')
-            center_x, center_y = y + half_vp, x + half_vp
-            frame = padded_frame[center_x - half_vp:center_x + half_vp, center_y - half_vp:center_y + half_vp]
-
-            save['padded_frame'] = padded_frame
-            save['viewport'] = frame
+            padded_frame = np.pad(frame, ((256, 256), (256, 256), (0, 0)), mode='edge')
+            frame = self.extract_viewport(padded_frame, x + 256, y + 256, self.viewport_size)
 
         if self.grayscale:
             frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
             frame = np.expand_dims(frame, axis=-1)
-            save['grayscale'] = frame
-
-        save['result'] = frame
-        if frame.shape != (128, 128, 1):
-            import pickle
-            with open('frame_error.pkl', 'wb') as f:
-                pickle.dump(save, f)
-
-            import pdb
-            pdb.set_trace()
 
         return frame
+    
+    def extract_viewport(self, padded_frame, x_padded, y_padded, viewport_size):
+        half_vp = viewport_size // 2
+
+        x_start = x_padded - half_vp
+        y_start = y_padded - half_vp
+
+        viewport = padded_frame[y_start:y_start+viewport_size, x_start:x_start+viewport_size]
+        return viewport
