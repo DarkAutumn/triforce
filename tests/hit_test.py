@@ -91,6 +91,7 @@ def test_bombs_kill():
     assert not truncated
     assert info['beam_hits'] == 0
     assert info['step_hits'] == 3
+    assert info['bomb1_hits'] == 3
     assert info['action'] == 'item'
 
     assert_no_hit(replay, "uuurrrrrr")
