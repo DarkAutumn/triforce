@@ -17,7 +17,7 @@ def run( env, command):
         yield env.step(c)
 
 def test_bat_injury():
-    replay = ZeldaActionReplay("1_72e.state", render_mode="human")
+    replay = ZeldaActionReplay("1_72e.state")
     assert_no_hit(replay, 'lllllllllllllllllllld')
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
@@ -29,8 +29,12 @@ def test_bat_injury():
     assert_no_hit(replay, 'dddddddddddddddddddddddddddddddddd')
 
 def test_stalfos_injury():
-    replay = ZeldaActionReplay("1_74w.state", render_mode="human")
+    replay = ZeldaActionReplay("1_74w.state")
     assert_no_hit(replay, 'rrddddr')
+
+    unwrapped = replay.env.unwrapped
+    unwrapped.data.set_value('hearts_and_containers', 0xff)
+
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
@@ -47,7 +51,7 @@ def test_stalfos_injury():
     assert_no_hit(replay, 'lllllll')
 
 def test_sword_injury():
-    replay = ZeldaActionReplay("1_44e.state", render_mode="human")
+    replay = ZeldaActionReplay("1_44e.state")
 
     assert_no_hit(replay, 'llluuuullllllllllllllld')
 

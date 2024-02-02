@@ -2,6 +2,7 @@
 
 import retro
 
+from .objective_selector import ObjectiveSelector
 from .action_space import ZeldaActionSpace
 from .zelda_wrapper import ZeldaGameWrapper
 
@@ -10,7 +11,11 @@ class ZeldaActionReplay:
         env = retro.make(game='Zelda-NES', state=savestate, inttype=retro.data.Integrations.CUSTOM_ONLY, render_mode=render_mode)
         self.data = env.data
         env = ZeldaGameWrapper(env, deterministic=True)
+        env = ObjectiveSelector(env)
         env = ZeldaActionSpace(env, 'all')
+        if wrapper:
+            env = wrapper(env)
+
         self.actions = env.actions
 
         self.buttons = {
