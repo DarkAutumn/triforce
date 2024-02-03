@@ -203,7 +203,9 @@
             },
             "fixed":
             {
-                "bombs" : 8
+                "bombs" : 3,
+                "hearts_and_containers" : 33,
+                "partial_hearts" : 100
             }
         },
         {
