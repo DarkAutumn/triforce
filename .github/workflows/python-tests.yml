@@ -22,15 +22,12 @@ jobs:
 
     - name: Handle secrets
       run: |
-      echo -n "${{ secrets.SECRET1 }}" > triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part1.base64
-      echo -n "${{ secrets.SECRET2 }}" > triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part2.base64
-
-      base64 --decode triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part1.base64 > triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part1
-      base64 --decode triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part2.base64 > triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part2
-
-      cat triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part1 triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part2 > triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2
-
-      bzip2 -d triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2
+        echo -n "${{ secrets.SECRET1 }}" > triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part1.base64
+        echo -n "${{ secrets.SECRET2 }}" > triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part2.base64
+        base64 --decode triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part1.base64 > triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part1
+        base64 --decode triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part2.base64 > triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part2
+        cat triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part1 triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2.part2 > triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2
+        bzip2 -d triforce_lib/custom_integrations/Zelda-NES/rom.nes.bz2
 
     - name: Install dependencies
       run: |
