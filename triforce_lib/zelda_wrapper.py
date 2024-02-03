@@ -181,9 +181,9 @@ class ZeldaGameWrapper(gym.Wrapper):
 
             # check if beams, bombs, arrows, etc are active and if they will hit in the future,
             # as we need to count them as rewards/results of this action so the model trains properly
-            step_hits = self.handle_future_hits(act, info, step_hits, 'beam_hits', lambda st: get_beam_state(st) == 1)
-            step_hits = self.handle_future_hits(act, info, step_hits, 'bomb1_hits', lambda st: get_bomb_state(st, 0) == 1)
-            step_hits = self.handle_future_hits(act, info, step_hits, 'bomb2_hits', lambda st: get_bomb_state(st, 1) == 1)
+            step_hits = self.handle_future_hits(act, info, step_hits, 'beam_hits', lambda st: get_beam_state(st) == 1, self.set_beams_only)
+            step_hits = self.handle_future_hits(act, info, step_hits, 'bomb1_hits', lambda st: get_bomb_state(st, 0) == 1, self.set_bomb1_only)
+            step_hits = self.handle_future_hits(act, info, step_hits, 'bomb2_hits', lambda st: get_bomb_state(st, 1) == 1, self.set_bomb2_only)
 
         info['new_location'] = new_location
         info['step_hits'] = step_hits
@@ -236,43 +236,6 @@ class ZeldaGameWrapper(gym.Wrapper):
     def clear_item(self, name):
         if name in self.__dict__:
             del self.__dict__[name]
-
-    def handle_future_hits(self, act, info, step_hits, name, condition_check):
-        info[name] = 0
-
-        already_active_name = name + '_already_active'
-        discounted_hits = name + '_discounted_hits'
-
-        if condition_check(info):
-            already_active = self.__dict__.get(already_active_name, False)
-            if not already_active:
-                # check if beams will hit something
-                future_hits = self.predict_future(act, info, condition_check)
-                info[name] = future_hits
-
-                # count the future hits now, discount them from the later hit
-                step_hits += future_hits
-
-                self.__dict__[discounted_hits] = future_hits
-                self.__dict__[already_active_name] = True
-                
-        else:
-            # If we got here, either beams aren't active at all, or we stepped past the end of
-            # the beams.  Make sure we are ready to process them again, and discount any kills
-            # we found.
-            self.__dict__[already_active_name] = False
-
-            # discount hits if we already counted as beam hits
-            discounted_hits = self.__dict__.get(discounted_hits, 0)
-            if discounted_hits and step_hits:
-                discount = min(discounted_hits, step_hits)
-                discounted_hits -= discount
-                
-                self.__dict__[discounted_hits] = discounted_hits
-                step_hits -= discount
-
-
-        return step_hits
 
     def act_and_wait(self, act):
     # wait based on the kind of action
@@ -337,10 +300,51 @@ class ZeldaGameWrapper(gym.Wrapper):
     def action_is_attack(self, act):
         return act[8]
 
-    def predict_future(self, act, info, should_continue):
+
+    def handle_future_hits(self, act, info, step_hits, name, condition_check, disable_others):
+        info[name] = 0
+
+        already_active_name = name + '_already_active'
+        discounted_hits = name + '_discounted_hits'
+
+        if condition_check(info):
+            already_active = self.__dict__.get(already_active_name, False)
+            if not already_active:
+                # check if beams will hit something
+                future_hits = self.predict_future(act, info, condition_check, disable_others)
+                info[name] = future_hits
+
+                # count the future hits now, discount them from the later hit
+                step_hits += future_hits
+
+                self.__dict__[discounted_hits] = future_hits
+                self.__dict__[already_active_name] = True
+                
+        else:
+            # If we got here, either beams aren't active at all, or we stepped past the end of
+            # the beams.  Make sure we are ready to process them again, and discount any kills
+            # we found.
+            self.__dict__[already_active_name] = False
+
+            # discount hits if we already counted as beam hits
+            discounted_hits = self.__dict__.get(discounted_hits, 0)
+            if discounted_hits and step_hits:
+                discount = min(discounted_hits, step_hits)
+                discounted_hits -= discount
+                
+                self.__dict__[discounted_hits] = discounted_hits
+                step_hits -= discount
+
+
+        return step_hits
+    
+    def predict_future(self, act, info, should_continue, disable_others):
         unwrapped = self.env.unwrapped
         savestate = unwrapped.em.get_state()
         data = unwrapped.data
+
+        # disable beams, bombs, or other active damaging effects until the current one is resolved
+        disable_others(data)
 
         objects = info['objects']
         start_enemies = list(objects.enumerate_enemy_ids())
@@ -370,6 +374,18 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         unwrapped.em.set_state(savestate)
         return hits
+    
+    def set_beams_only(self, data):
+        data.set_value('bomb_or_flame_animation', 0)
+        data.set_value('bomb_or_flame_animation2', 0)
+
+    def set_bomb1_only(self, data):
+        data.set_value('beam_animation', 0)
+        data.set_value('bomb_or_flame_animation2', 0)
+
+    def set_bomb2_only(self, data):
+        data.set_value('beam_animation', 0)
+        data.set_value('bomb_or_flame_animation1', 0)
 
     def get_button_names(self, act, buttons):
         result = []

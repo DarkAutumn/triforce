@@ -84,7 +84,7 @@ class ZeldaGameplayCritic(ZeldaCritic):
         # items
         self.used_null_item_penalty = -self.reward_large
         self.bomb_miss_penalty = -self.reward_small
-        self.bomb_hit_reward = self.reward_large
+        self.bomb_hit_reward = self.reward_medium
 
         self.cos45 = np.sqrt(2) / 2
 
