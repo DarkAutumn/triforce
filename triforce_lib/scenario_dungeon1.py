@@ -43,6 +43,7 @@ class Dungeon1BombCritic(Dungeon1Critic):
     def clear(self):
         super().clear()
         self.score = 0
+        self.bomb_miss_penalty = -self.reward_minimum
 
     def set_score(self, old : typing.Dict[str, int], new : typing.Dict[str, int]):
         if new['action'] == 'item':
@@ -88,9 +89,6 @@ class Dungeon1CombatEndCondition(ZeldaEndCondition):
                 terminated = True
 
             location = new_state['location']
-            if location == 0x35:
-                reason = "reached-boss"
-                terminated = True
 
             if location not in self._new_rooms:
                 self._new_rooms.add(location)
