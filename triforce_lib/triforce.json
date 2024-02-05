@@ -91,7 +91,7 @@
         {
             "name": "zelda",
             "description": "Full Game (so far)",
-            "critics": ["ZeldaGameplayCritic"],
+            "critics": ["GameplayCritic"],
             "end_conditions": ["GainedTriforce", "LeftOverworld1Area", "GameOver", "Timeout"],
             "level" : 0,
             "start": ["0_77"],
