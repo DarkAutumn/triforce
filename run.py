@@ -360,7 +360,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="ZeldaML - An ML agent to play The Legned of Zelda (NES).")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
-    parser.add_argument("--color", action='store_true', help="Record the environment.")
+    parser.add_argument("--color", action='store_true', help="Give the model a color version of the game (instead of grayscale).")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport', help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
 
