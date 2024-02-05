@@ -3,8 +3,6 @@ import retro
 
 from .zelda_orchestrator import ZeldaAIOrchestrator
 from .action_replay import ZeldaActionReplay
-from .end_conditions import ZeldaEndCondition, ZeldaEndCondition
-from .critic import ZeldaCritic, ZeldaGameplayCritic
 from .zeldaml import ZeldaML
 from .scenario import ZeldaScenario
 from .models import ZeldaModel
@@ -24,10 +22,6 @@ with open(os.path.join(script_dir, 'triforce.json')) as f:
 __all__ = [
     ZeldaML.__name__,
     ZeldaScenario.__name__,
-    ZeldaCritic.__name__,
-    ZeldaEndCondition.__name__,
-    ZeldaGameplayCritic.__name__,
-    ZeldaEndCondition.__name__,
     ZeldaActionReplay.__name__,
     ZeldaAIOrchestrator.__name__,
     ]

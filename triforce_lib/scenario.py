@@ -1,12 +1,10 @@
 import gymnasium as gym
 import retro
 
-from .scenario_overworld import Overworld1Critic, OverworldSwordCritic
 from .zelda_game_data import zelda_game_data
-from .scenario_dungeon import ZeldaDungeonCritic
-from .scenario_dungeon1 import Dungeon1BeamCritic, Dungeon1BombCritic, Dungeon1BossCritic, Dungeon1Critic
-from .critic import ZeldaGameplayCritic
+
 from . import end_conditions
+from . import critics
 
 class ScenarioGymWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
@@ -143,20 +141,18 @@ class ZeldaScenario:
     
     @classmethod
     def resolve_critic(cls, name):
-        rewards = [ZeldaGameplayCritic, ZeldaDungeonCritic, Dungeon1Critic, Dungeon1BossCritic, Dungeon1BeamCritic, Dungeon1BombCritic, Overworld1Critic, OverworldSwordCritic]
-        for x in rewards:
-            if name == x.__name__:
-                return x
-            
-        raise Exception(f'Unknown critic {name}')
+        critic = getattr(critics, name, None)
+        if not critic:
+            raise Exception(f'Unknown critic {name}')
+        
+        return critic
     
     @classmethod
     def resolve_end_condition(cls, name):
-        ec = getattr(end_conditions, name, None)
-        
-        if not ec:
+        end_condition = getattr(end_conditions, name, None)
+        if not end_condition:
             raise Exception(f'Unknown end condition {name}')
         
-        return ec
+        return end_condition
 
 __all__ = ['ZeldaScenario']

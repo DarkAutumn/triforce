@@ -3,13 +3,13 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
-from triforce_lib import ZeldaGameplayCritic
+from triforce_lib.critics import GameplayCritic
 from utilities import CriticWrapper
 from triforce_lib import ZeldaActionReplay
 
 def test_wall_collision():
     actions = ZeldaActionReplay("1_44e.state")
-    actions.env = CriticWrapper(actions.env, critics=[ZeldaGameplayCritic()])
+    actions.env = CriticWrapper(actions.env, critics=[GameplayCritic()])
     actions.reset()
 
     # move under a block
@@ -29,7 +29,7 @@ def test_wall_collision():
 
 def test_close_distance():
     actions = ZeldaActionReplay("1_44e.state")
-    actions.env = CriticWrapper(actions.env, critics=[ZeldaGameplayCritic()])
+    actions.env = CriticWrapper(actions.env, critics=[GameplayCritic()])
     actions.reset()
 
     # move under a block
