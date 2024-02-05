@@ -101,7 +101,7 @@
             "name": "overworld-sword",
             "description": "Start of the game to the sword",
             "critics": ["OverworldSwordCritic"],
-            "end_conditions": ["StartingRoomConditions"],
+            "end_conditions": ["StartingRoomConditions", "Timeout"],
             "level" : 0,
             "start": ["0_77"],
             "data":

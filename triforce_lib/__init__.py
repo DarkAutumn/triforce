@@ -21,6 +21,7 @@ with open(os.path.join(script_dir, 'triforce.json')) as f:
 # define the model surface area
 __all__ = [
     ZeldaML.__name__,
+    ZeldaModel.__name__,
     ZeldaScenario.__name__,
     ZeldaActionReplay.__name__,
     ZeldaAIOrchestrator.__name__,
