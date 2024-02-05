@@ -3,7 +3,7 @@ import retro
 
 from .zelda_orchestrator import ZeldaAIOrchestrator
 from .action_replay import ZeldaActionReplay
-from .end_condition import ZeldaEndCondition, ZeldaEndCondition
+from .end_conditions import ZeldaEndCondition, ZeldaEndCondition
 from .critic import ZeldaCritic, ZeldaGameplayCritic
 from .zeldaml import ZeldaML
 from .scenario import ZeldaScenario

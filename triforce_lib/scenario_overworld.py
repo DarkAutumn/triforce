@@ -1,7 +1,7 @@
 from typing import Dict
 
 from .zelda_game import get_heart_halves, is_in_cave, mode_gameplay, mode_cave
-from .end_condition import ZeldaEndCondition
+from .end_conditions import ZeldaEndCondition
 from .critic import ZeldaGameplayCritic
 
 overworld_dungeon1_walk_rooms = set([0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
@@ -81,69 +81,3 @@ class OverworldSwordCritic(ZeldaGameplayCritic):
             score += 1
 
         new['score'] = score
-
-class OverworldSwordEndCondition(ZeldaEndCondition):
-    def __init__(self):
-        super().__init__()
-        self.overworld_sword_rooms = set([0x77, 0x76, 0x78, 0x67])
-
-    def is_scenario_ended(self, old: Dict[str, int], new: Dict[str, int]) -> (bool, bool):
-        terminated, truncated, reason = super().is_scenario_ended(old, new)
-
-        if not terminated and not truncated:
-            if new['sword'] and new['location'] != 0x77:
-                reason = "reached-sword"
-                terminated = True
-
-            if new['location'] not in self.overworld_sword_rooms:
-                reason = "left-scenario"
-                terminated = True
-
-        return terminated, truncated, reason
-
-class Overworld1EndCondition(ZeldaEndCondition):
-    def __init__(self):
-        super().__init__()
-        self.allowed_rooms = overworld_dungeon1_walk_rooms
-        self._seen = set()
-        self._last_discovery = 0
-        self.location_timeout = 1200 # 5 minutes to find a new room
-
-    def clear(self):
-        super().clear()
-        self._seen.clear()
-        self._last_discovery = 0
-
-    def is_scenario_ended(self, old: Dict[str, int], new: Dict[str, int]) -> (bool, bool, str):
-        terminated, truncated, reason = super().is_scenario_ended(old, new)
-
-        if not terminated and not truncated:
-            location = new['location']
-
-            if new['level'] == 1:
-                reason = "reached-dungeon1"
-                terminated = True
-
-            elif location not in self.allowed_rooms:
-                reason = "left-scenario"
-                terminated = True
-
-            elif new['sword'] == 0 and location != 0x77:
-                reason = "no-sword"
-                terminated = True
-
-        if not truncated:
-            old_location = old['location']
-            new_location = new['location']
-            if old_location != new_location and new_location not in self._seen:
-                self._seen.add(new_location)
-                self._last_discovery = 0
-
-            else:
-                self._last_discovery += 1
-
-            if self._last_discovery > self.location_timeout:
-                reason = "truncated-no-discovery"
-                truncated = True
-
-        return terminated, truncated, reason
