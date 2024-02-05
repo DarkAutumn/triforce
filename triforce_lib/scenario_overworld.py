@@ -91,7 +91,7 @@ class OverworldSwordEndCondition(ZeldaEndCondition):
         terminated, truncated, reason = super().is_scenario_ended(old, new)
 
         if not terminated and not truncated:
-            if new['sword'] and not is_in_cave(new):
+            if new['sword'] and new['location'] != 0x77:
                 reason = "reached-sword"
                 terminated = True
 
