@@ -125,7 +125,7 @@ def main(args):
 
     else:
         results = []
-        for scenario in all_scenarios:
+        for scenario in tqdm(all_scenarios, total=len(all_scenarios)):
             results.append(run_one_scenario(*scenario, zelda_ml=zelda_ml))
 
     columns = ['Model', 'Kind', 'Success%', 'Score', 'Total Reward', 'Rewards', 'Penalties']
