@@ -70,7 +70,6 @@ class ZeldaML:
             # The AI orchestration piece.  This is responsible for selecting the model to use and the target
             # objective.
             env = ObjectiveSelector(env)
-            orchestrator = env
             
             # Frame stack and convert to grayscale if requested
             env = ZeldaObservationWrapper(env, captured_frames, not self.color, kind=self.obs_kind)
