@@ -134,7 +134,7 @@ class ZeldaML:
                 env.close()
 
     def load_models(self, path):
-        return ZeldaModel.load_models(path, verbose=self.verbose, ent_coef=self.ent_coef, device=self.device)
+        ZeldaModel.load_models(path, verbose=self.verbose, ent_coef=self.ent_coef, device=self.device)
 
     def _create_model(self, env, log_dir):
         return PPO('MultiInputPolicy', env, verbose=self.verbose, tensorboard_log=log_dir, ent_coef=self.ent_coef, device=self.device)
