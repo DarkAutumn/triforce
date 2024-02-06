@@ -92,7 +92,7 @@
             "name": "zelda",
             "description": "Full Game (so far)",
             "critics": ["GameplayCritic"],
-            "end_conditions": ["GainedTriforce", "LeftOverworld1Area", "GameOver", "Timeout"],
+            "end_conditions": ["GainedTriforce", "GameOver", "Timeout"],
             "level" : 0,
             "start": ["0_77"],
             "data": {}
