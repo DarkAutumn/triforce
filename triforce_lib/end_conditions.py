@@ -68,7 +68,7 @@ class LeftDungeon(ZeldaEndCondition):
 
 class EnteredDungeon(ZeldaEndCondition):
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
-        if new['level'] != 1:
+        if new['level'] == 1:
             return True, False, "success-entered-dungeon"
 
 class LeftOverworld1Area(ZeldaEndCondition):
