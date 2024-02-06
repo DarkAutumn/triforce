@@ -134,7 +134,7 @@ class ZeldaML:
                 env.close()
 
     def load_models(self, path):
-        return ZeldaModel.load_models(path, verbose=self.verbose, ent_coef=self.ent_coef, device=self.device)
+        ZeldaModel.load_models(path, verbose=self.verbose, ent_coef=self.ent_coef, device=self.device)
 
     def _create_model(self, env, log_dir):
         return PPO('MultiInputPolicy', env, verbose=self.verbose, tensorboard_log=log_dir, ent_coef=self.ent_coef, device=self.device)
@@ -155,6 +155,7 @@ class LogRewardCallback(BaseCallback):
         self._rewards = {}
         self._endings = []
         self._evaluation = []
+        self._success_rate = []
 
     def _on_step(self) -> bool:
         infos = self.locals['infos']
@@ -164,7 +165,13 @@ class LogRewardCallback(BaseCallback):
                     self._rewards[kind] = rew + self._rewards.get(kind, 0)
             
             if 'end' in info:
-                self._endings.append(info['end'])
+                ending = info['end']
+                self._endings.append(ending)
+                if ending.startswith('success'):
+                    self._success_rate.append(1)
+                else:
+                    self._success_rate.append(0)
+
 
             if 'final-score' in info:
                 self._evaluation.append(info['final-score'])
@@ -184,6 +191,9 @@ class LogRewardCallback(BaseCallback):
                 ends = Counter(self._endings)
                 for ending, count in ends.items():
                     self.logger.record('end/' + ending, count)
+
+                success_rate = np.mean(self._success_rate) if self._success_rate else 0.0
+                self.logger.record('evaluation/success-rate', success_rate)
 
                 score_mean = None
                 if self._evaluation:

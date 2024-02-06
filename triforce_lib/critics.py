@@ -1,6 +1,7 @@
 import numpy as np
-import typing
+from typing import Dict
 from .zelda_game import *
+from .zelda_game import get_heart_halves, is_in_cave, mode_gameplay, mode_cave
 
 class ZeldaCritic:
     @property
@@ -31,15 +32,15 @@ class ZeldaCritic:
         """Called when the environment is reset to clear any saved state"""
         pass
 
-    def critique_gameplay(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int], rewards : typing.Dict[str, float]):
+    def critique_gameplay(self, old_state : Dict[str, int], new_state : Dict[str, int], rewards : Dict[str, float]):
         """Called to get the reward for the transition from old_state to new_state"""
         raise NotImplementedError()
     
-    def set_score(self, old_state : typing.Dict[str, int], new_state : typing.Dict[str, int]):
+    def set_score(self, old_state : Dict[str, int], new_state : Dict[str, int]):
         """Override to set info['score']"""
         pass
 
-class ZeldaGameplayCritic(ZeldaCritic):
+class GameplayCritic(ZeldaCritic):
     def __init__(self):
         super().__init__()
 
@@ -86,15 +87,13 @@ class ZeldaGameplayCritic(ZeldaCritic):
         self.bomb_miss_penalty = -self.reward_small
         self.bomb_hit_reward = self.reward_medium
 
-        self.cos45 = np.sqrt(2) / 2
-
     def clear(self):
         super().clear()
         self._visted_locations.clear()
         self._actions_on_same_screen = 0
         self._is_first_step = True
 
-    def critique_gameplay(self, old : typing.Dict[str, int], new : typing.Dict[str, int], rewards : typing.Dict[str, float]):
+    def critique_gameplay(self, old : Dict[str, int], new : Dict[str, int], rewards : Dict[str, float]):
         if self._is_first_step:
             self._is_first_step = False
             self.mark_visited(new['level'], new['location'])
@@ -303,3 +302,149 @@ class ZeldaGameplayCritic(ZeldaCritic):
     
     def mark_visited(self, level, location):
         self._visted_locations.add((level, location))
+
+
+class Dungeon1Critic(GameplayCritic):
+    def __init__(self):
+        super().__init__()
+
+        self.health_change_reward = self.reward_large
+        self.leave_dungeon_penalty = -self.reward_maximum
+        self.leave_early_penalty = -self.reward_maximum
+        self.seen = set()
+
+    def clear(self):
+        super().clear()
+        self.seen.clear()
+
+    def critique_location_discovery(self, old_state : Dict[str, int], new_state : Dict[str, int], rewards : Dict[str, float]):
+        if new_state['level'] != 1:
+            rewards['penalty-left-dungeon'] = self.leave_dungeon_penalty
+        
+        elif old_state['location'] != new_state['location']:
+            if old_state['location_objective'] == new_state['location']:
+                rewards['reward-new-location'] = self.new_location_reward
+            else:
+                rewards['penalty-left-early'] = self.leave_early_penalty
+
+    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+        new_location = new['location']
+        self.seen.add(new_location)
+        new['score'] = len(self.seen) - 1 + get_heart_halves(new) * 0.5
+
+class Dungeon1BeamCritic(Dungeon1Critic):
+    def __init__(self):
+        super().__init__()
+        self.health_gained_reward = 0.0
+        self.health_lost_penalty = -self.reward_maximum
+
+class Dungeon1BombCritic(Dungeon1Critic):
+    def clear(self):
+        super().clear()
+        self.score = 0
+        self.bomb_miss_penalty = -self.reward_minimum
+
+    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+        if new['action'] == 'item':
+            selected = new['selected_item']
+            if selected == 1:  # bombs
+                hits = new.get('bomb1_hits', 0) + new.get('bomb2_hits', 0)
+                if hits:
+                    self.score += hits
+                else:
+                    self.score -= 1
+
+
+        new['score'] = self.score
+
+class Dungeon1BossCritic(Dungeon1Critic):
+    def clear(self):
+        super().clear()
+        self.total_damage = 0
+        self.too_close_threshold = 10
+        self.move_closer_reward = self.reward_small
+        self.move_away_penalty = -self.reward_small
+        self.injure_kill_reward = self.reward_large
+        self.health_lost_penalty = -self.reward_small
+
+    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+        self.total_damage += new['step_hits']
+        new['score'] = get_heart_halves(new) + self.total_damage
+
+overworld_dungeon1_walk_rooms = set([0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
+
+class Overworld1Critic(GameplayCritic):
+    def clear(self):
+        super().clear()
+        self.seen = set()
+        self.allowed_rooms = overworld_dungeon1_walk_rooms
+
+        self.left_allowed_area_penalty = -self.reward_large
+        self.left_without_sword_penalty = -self.reward_large
+        self.leave_early_penalty = -self.reward_maximum
+        self.entered_cave_penalty = -self.reward_large
+        self.equipment_reward = None
+        
+    def critique_location_discovery(self, old, new, rewards):
+        if old['location'] != new['location'] and old['location_objective']:
+            if old['location_objective'] != new['location']:
+                rewards['penalty-left-early'] = self.leave_early_penalty
+                return
+
+        level = new['level']
+        location = new['location']
+
+        if old['mode'] == mode_gameplay and location == 0x77 and new['mode'] == mode_cave:
+            rewards['penalty-entered-cave'] = self.entered_cave_penalty
+
+        elif level == 0:
+            if location not in self.allowed_rooms:
+                rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
+
+            elif old['location'] == 0x77 and location != 0x77 and not new['sword']:
+                rewards['penalty-no-sword'] = self.left_without_sword_penalty
+                
+            else:
+                super().critique_location_discovery(old, new, rewards)
+            
+        elif level == 1:
+            # don't forget to reward for reaching level 1 dungeon
+            super().critique_location_discovery(old, new, rewards)
+
+    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+        new_location = new['location']
+        self.seen.add(new_location)
+        new['score'] = new['sword'] + len(self.seen) - 1
+
+class OverworldSwordCritic(GameplayCritic):
+    def __init__(self):
+        super().__init__()
+        self.entered_cave = False
+
+        self.entered_cave_reward = self.reward_large
+        self.left_cave_penalty = -self.reward_large
+
+    def clear(self):
+        self.entered_cave = False
+
+    def critique_location_discovery(self, old, new, rewards):
+        if not self.entered_cave and is_in_cave(new):
+            self.entered_cave = True
+            rewards['reward-entered-cave'] = self.entered_cave_reward
+
+        if is_in_cave(old) and not is_in_cave(new) and not new['sword']:
+            rewards['penalty-left-cave'] = self.left_cave_penalty
+
+    
+    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+        score = 0
+        if self.entered_cave:
+            score += 1
+
+        if new['sword']:
+            score += 1
+
+        if new['sword'] and not is_in_cave(new):
+            score += 1
+
+        new['score'] = score

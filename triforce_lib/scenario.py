@@ -1,14 +1,10 @@
 import gymnasium as gym
 import retro
 
-from .scenario_overworld import Overworld1Critic, Overworld1EndCondition, OverworldSwordCritic, OverworldSwordEndCondition
 from .zelda_game_data import zelda_game_data
-from .scenario_dungeon import DungeonEndCondition, ZeldaDungeonCritic
-from .scenario_gauntlet import GauntletEndCondition, ZeldaGuantletRewards
-from .scenario_dungeon_combat import ZeldaDungeonCombatCritic, ZeldaDungeonCombatEndCondition
-from .scenario_dungeon1 import Dungeon1BeamCritic, Dungeon1BombCritic, Dungeon1BossCritic, Dungeon1BossEndCondition, Dungeon1Critic, Dungeon1CombatEndCondition, Dungeon1EndCondition
-from .critic import ZeldaGameplayCritic
-from .end_condition import ZeldaFullGameEndCondition
+
+from . import end_conditions
+from . import critics
 
 class ScenarioGymWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
@@ -75,7 +71,8 @@ class ScenarioGymWrapper(gym.Wrapper):
 
             info['rewards'] = reward_dict
 
-            end = [x.is_scenario_ended(self._last_state, info) for x in self._conditions]
+            end = (x.is_scenario_ended(self._last_state, info) for x in self._conditions)
+            end = [x for x in end if x is not None]
             terminated = terminated or any((x[0] for x in end))
             truncated = truncated or any((x[1] for x in end))
             reason = [x[2] for x in end if x[2]]
@@ -144,20 +141,18 @@ class ZeldaScenario:
     
     @classmethod
     def resolve_critic(cls, name):
-        rewards = [ZeldaGameplayCritic, ZeldaGuantletRewards, ZeldaDungeonCritic, ZeldaDungeonCombatCritic, Dungeon1Critic, Dungeon1BossCritic, Dungeon1BeamCritic, Dungeon1BombCritic, Overworld1Critic, OverworldSwordCritic]
-        for x in rewards:
-            if name == x.__name__:
-                return x
-            
-        raise Exception(f'Unknown critic {name}')
+        critic = getattr(critics, name, None)
+        if not critic:
+            raise Exception(f'Unknown critic {name}')
+        
+        return critic
     
     @classmethod
     def resolve_end_condition(cls, name):
-        end_conditions = [GauntletEndCondition, DungeonEndCondition, ZeldaDungeonCombatEndCondition, Dungeon1EndCondition, Dungeon1CombatEndCondition, Dungeon1BossEndCondition, Overworld1EndCondition, OverworldSwordEndCondition, ZeldaFullGameEndCondition]
-        for x in end_conditions:
-            if name == x.__name__:
-                return x
-            
-        raise Exception(f'Unknown end condition {name}')
+        end_condition = getattr(end_conditions, name, None)
+        if not end_condition:
+            raise Exception(f'Unknown end condition {name}')
+        
+        return end_condition
 
 __all__ = ['ZeldaScenario']

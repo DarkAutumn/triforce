@@ -29,6 +29,13 @@ class ZeldaModel(ZeldaModelInfo):
         self.models = models
         self.model_kinds = model_kinds
 
+    def get_model_by_kind(self, kind):
+        i = self.model_kinds.index(kind)
+        if i >= 0:
+            return self.models[i]
+        
+        return None
+
     @classmethod
     def initialize(cls, models_json):
         model_info = []

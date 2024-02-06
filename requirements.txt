@@ -10,3 +10,6 @@ opencv-python
 Pillow
 pygame
 opencv-python
+pandas
+tqdm
+pyarrow

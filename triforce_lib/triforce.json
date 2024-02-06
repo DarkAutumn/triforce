@@ -91,8 +91,8 @@
         {
             "name": "zelda",
             "description": "Full Game (so far)",
-            "critics": ["ZeldaGameplayCritic"],
-            "end_conditions": ["ZeldaFullGameEndCondition"],
+            "critics": ["GameplayCritic"],
+            "end_conditions": ["GainedTriforce", "GameOver", "Timeout"],
             "level" : 0,
             "start": ["0_77"],
             "data": {}
@@ -101,7 +101,7 @@
             "name": "overworld-sword",
             "description": "Start of the game to the sword",
             "critics": ["OverworldSwordCritic"],
-            "end_conditions": ["OverworldSwordEndCondition"],
+            "end_conditions": ["StartingRoomConditions", "Timeout"],
             "level" : 0,
             "start": ["0_77"],
             "data":
@@ -114,7 +114,7 @@
             "name": "overworld1beams",
             "description": "Start of the game to the first dungeon entrance",
             "critics": ["Overworld1Critic"],
-            "end_conditions": ["Overworld1EndCondition"],
+            "end_conditions": ["EnteredDungeon", "LeftOverworld1Area", "GameOver", "Timeout"],
             "level" : 0,
             "start": ["0_67s"],
             "data":
@@ -135,7 +135,7 @@
             "name": "overworld1nobeams",
             "description": "Start of the game to the first dungeon entrance",
             "critics": ["Overworld1Critic"],
-            "end_conditions": ["Overworld1EndCondition"],
+            "end_conditions": ["EnteredDungeon", "LeftOverworld1Area", "GameOver", "Timeout"],
             "level" : 0,
             "start": ["0_67s"],
             "data":
@@ -156,7 +156,7 @@
             "name": "dungeon1",
             "description": "Dungeon 1 Full",
             "critics": ["Dungeon1Critic"],
-            "end_conditions": ["Dungeon1EndCondition"],
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "level" : 1,
             "start": ["1_73"],
             "data":
@@ -171,7 +171,7 @@
             "name": "dungeon1beams",
             "description": "Dungeon 1 Beams",
             "critics": ["Dungeon1BeamCritic"],
-            "end_conditions": ["Dungeon1CombatEndCondition"],
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "level" : 1,
             "start": ["1_73"],
             "data":
@@ -191,7 +191,7 @@
             "name": "dungeon1bombs",
             "description": "Dungeon 1 Bombs",
             "critics": ["Dungeon1BombCritic"],
-            "end_conditions": ["Dungeon1EndCondition"],
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "level" : 1,
             "start": ["1_73"],
             "data":
@@ -212,7 +212,7 @@
             "name": "dungeon1nobeams",
             "description": "Dungeon 1 combat trainer (no beams)",
             "critics": ["Dungeon1Critic"],
-            "end_conditions": ["Dungeon1CombatEndCondition"],
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "level" : 1,
             "start": ["1_73"],
             "data":
@@ -232,7 +232,7 @@
             "name": "dungeon1boss",
             "description": "Dungeon 1 Boss",
             "critics": ["Dungeon1BossCritic"],
-            "end_conditions": ["Dungeon1BossEndCondition"],
+            "end_conditions": ["GainedTriforce", "DefeatedBoss", "GameOver", "Timeout"],
             "level" : 1,
             "start": ["1_35"],
             "data":
