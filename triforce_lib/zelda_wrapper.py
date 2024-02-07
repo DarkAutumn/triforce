@@ -115,14 +115,24 @@ class ZeldaGameWrapper(gym.Wrapper):
             info['action'] = 'item'
 
         unwrapped = self.env.unwrapped
+        ram = unwrapped.get_ram()
         info['buttons'] = self.get_button_names(act, unwrapped.buttons)
-        objects = ZeldaObjectData(unwrapped.get_ram())
+        objects = ZeldaObjectData(ram)
+
+        map_offset, map_len = zelda_game_data.tables['tile_layout']
+        tiles = ram[map_offset:map_offset+map_len]
+        tiles = tiles.reshape((32, 22))
+        info['tiles'] = tiles
 
         info['objects'] = objects
         info['beam_hits'] = 0
 
         link_pos = objects.link_pos
         info['link_pos'] = link_pos
+
+        info['tile_index'] = (link_pos[0] // 8, (link_pos[1] - gameplay_start_y + 4) // 8)
+        info['tile'] = tiles[info['tile_index']]
+
         
         direction = info['link_direction']
         info['link_vector'] = np.zeros(2, dtype=np.float32)
