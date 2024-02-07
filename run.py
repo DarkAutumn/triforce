@@ -9,7 +9,7 @@ import pygame
 import numpy as np
 from collections import deque
 
-from triforce_lib import ZeldaAIOrchestrator, ZeldaScenario, ZeldaML
+from triforce_lib import ZeldaAIOrchestrator, ZeldaScenario, ZeldaML, is_in_cave
 
 class Recording:
     def __init__(self, dimensions):
@@ -61,13 +61,17 @@ class Display:
 
         self.font = pygame.font.Font(None, 24)
 
+        game_x, game_y = 240, 224
+        self.scale = 4
+
+        self.game_width = game_x * self.scale
+        self.game_height = game_y * self.scale
+
         self.obs_width = 128
-        self.obs_height = 720
+        self.obs_height = self.game_height
         self.obs_x = 0
         self.obs_y = 0
 
-        self.game_width = 720
-        self.game_height = 672
         self.graph_height = 150
         self.game_x = self.obs_width
         self.game_y = 0
@@ -166,7 +170,8 @@ class Display:
                 # render the gameplay
                 self.render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width, self.game_height)
                 if overlay:
-                    self.overlay_grid_and_text(surface, (self.game_x, self.game_y), info['tiles'], "black" if info['level'] == 0 else "white")
+                    color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
+                    self.overlay_grid_and_text(surface, (self.game_x, self.game_y), info['tiles'], color, self.scale)
                 self.render_text(surface, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
                     self.render_text(surface, f"Location: {hex(info['location'])}", (self.game_x + self.game_width - 120, self.game_y))
