@@ -3,77 +3,13 @@
 # convert the image to grayscale.  We also stack multiple frames together to give the agent a sense
 # of motion over time.
 
-import math
 import gymnasium as gym
 import numpy as np
 from collections import deque
 
 from .zelda_game_data import zelda_game_data
 from .model_parameters import viewport_pixels, gameplay_start_y
-
-def overscan_reshape(tile_layout):
-    reshaped_array = tile_layout.reshape((32, 22))
-
-    trimmed_array = reshaped_array[1:-1:]
-
-    return trimmed_array
-
-def overlay_grid_and_text(image_array, tile_numbers, output_filename, pos):
-    from PIL import Image, ImageDraw, ImageFont
-    # Convert the NumPy array to a PIL Image
-    image = Image.fromarray(image_array)
-
-    scale = 4
-
-    new_size = (image.width * scale, image.height * scale)
-    image = image.resize(new_size, Image.NEAREST)
-
-    draw = ImageDraw.Draw(image)
-
-    # Define the new size of the grid
-    grid_width = 30  # Adjusted grid width
-    grid_height = 21  # Adjusted grid height
-    tile_width = 8  * scale
-    tile_height = 8 * scale
-
-    # Optionally, define a font for the text
-    font_size = max(min(tile_width, tile_height) // 2, 10)  # Half of the smaller tile dimension or 10, whichever is larger
-    font = ImageFont.load_default()  # Default font
-
-
-    # Iterate over the grid and draw lines and text
-    for i in range(grid_width):
-        for j in range(grid_height):
-            # Calculate the top left corner of the tile, adjusted by start_y
-            x = i * tile_width
-            y = j * tile_height
-
-            # Draw the grid lines
-            draw.rectangle([x, y, x + tile_width - 1, y + tile_height - 1], outline="blue", width=1)
-
-            # Get the tile number and calculate its position
-            tile_number = tile_numbers[i, j]  # Adjusted indexing for the new shape
-            text = f"{tile_number:02X}"  # Format as two hex digits
-            font = ImageFont.load_default()
-            text_width, text_height = draw.textsize(text, font=font)
-            text_x = x + (tile_width - text_width) // 2
-            text_y = y + (tile_height - text_height) // 2
-
-            # Draw the tile number
-            draw.text((text_x, text_y), text, fill="white", font=font)
-
-    x, y = pos
-    y -= gameplay_start_y
-    x = x * scale
-    y = y * scale
-
-    draw.rectangle([x - 16, y - 16, x + 16, y + 16], outline="black", width=2)
-
-    # Save the image
-    image.save(output_filename)
-    pass
-
-    
+ 
 class FrameCaptureWrapper(gym.Wrapper):
     def __init__(self, env, rgb_render):
         super().__init__(env)
@@ -153,11 +89,6 @@ class ZeldaObservationWrapper(gym.Wrapper):
     def trim_normalize_grayscale(self, info, frame):
         if self.trim:
             frame = frame[self.trim:, :, :]
-
-        #ram = self.unwrapped.get_ram()
-        #map_offset, map_len = zelda_game_data.tables['tile_layout']
-        #tiles = ram[map_offset:map_offset+map_len]
-        #overlay_grid_and_text(frame, overscan_reshape(tiles), "overlay.png", info['link_pos'])
 
         if self.viewport_size:
             if 'link_pos' in info:

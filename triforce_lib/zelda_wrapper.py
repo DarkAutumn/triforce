@@ -133,7 +133,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['tile_index'] = (link_pos[0] // 8, (link_pos[1] - gameplay_start_y + 4) // 8)
         info['tile'] = tiles[info['tile_index']]
 
-        
         direction = info['link_direction']
         info['link_vector'] = np.zeros(2, dtype=np.float32)
         if direction == 1:      # east

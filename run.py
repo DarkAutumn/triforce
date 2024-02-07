@@ -62,12 +62,12 @@ class Display:
         self.font = pygame.font.Font(None, 24)
 
         self.obs_width = 128
-        self.obs_height = 640
+        self.obs_height = 720
         self.obs_x = 0
         self.obs_y = 0
 
-        self.game_width = 640
-        self.game_height = 480
+        self.game_width = 720
+        self.game_height = 672
         self.graph_height = 150
         self.game_x = self.obs_width
         self.game_y = 0
@@ -101,6 +101,7 @@ class Display:
 
         recording = None
         cap_fps = True
+        overlay = False
 
         terminated = True
         truncated = False
@@ -164,6 +165,8 @@ class Display:
 
                 # render the gameplay
                 self.render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width, self.game_height)
+                if overlay:
+                    self.overlay_grid_and_text(surface, (self.game_x, self.game_y), info['tiles'], "black" if info['level'] == 0 else "white")
                 self.render_text(surface, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
                     self.render_text(surface, f"Location: {hex(info['location'])}", (self.game_x + self.game_width - 120, self.game_y))
@@ -203,6 +206,9 @@ class Display:
 
                         elif event.key == pygame.K_c:
                             mode = 'c'
+
+                        elif event.key == pygame.K_o:
+                            overlay = not overlay
 
                         elif event.key == pygame.K_m:
                             model_requested += 1
@@ -342,6 +348,34 @@ class Display:
             pygame.draw.line(surface, (255, 255, 255), (start_x, y), (start_x + 300, y))
             y += 3
 
+    def overlay_grid_and_text(self, surface, offset, tiles, text_color, scale=3):
+        grid_width = 30
+        grid_height = 21
+        tile_width = 8 * scale
+        tile_height = 8 * scale
+
+        # Pygame font setup
+        font_size = int(min(tile_width, tile_height) // 2)
+        font = pygame.font.Font(None, font_size)
+
+        for i in range(grid_width):
+            for j in range(grid_height):
+                x = offset[0] + i * tile_width
+                y = 56 * scale + offset[1] + j * tile_height
+
+                # Draw rectangle (grid cell)
+                pygame.draw.rect(surface, (0, 0, 255), (x, y, tile_width, tile_height), 1)
+
+                # Get the tile number
+                tile_number = tiles[i, j]
+                text = f"{tile_number:02X}"
+
+                # Render the text
+                text_surface = font.render(text, True, text_color)
+                text_rect = text_surface.get_rect(center=(x + tile_width // 2, y + tile_height // 2))
+
+                # Draw the text
+                surface.blit(text_surface, text_rect)
 
 def main(args):
     render_mode = 'rgb_array'
