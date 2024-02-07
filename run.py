@@ -363,19 +363,19 @@ class Display:
         font_size = int(min(tile_width, tile_height) // 2)
         font = pygame.font.Font(None, font_size)
 
-        for i in range(grid_width):
-            for j in range(grid_height):
-                if path and (i, j) not in path:
+        for tile_x in range(grid_width):
+            for tile_y in range(grid_height):
+                if path and (tile_y, tile_x) not in path:
                     continue
 
-                x = offset[0] + i * tile_width
-                y = 56 * scale + offset[1] + j * tile_height
+                x = offset[0] + tile_x * tile_width
+                y = 56 * scale + offset[1] + tile_y * tile_height
 
                 # Draw rectangle (grid cell)
                 pygame.draw.rect(surface, (0, 0, 255), (x, y, tile_width, tile_height), 1)
 
                 # Get the tile number
-                tile_number = tiles[i, j]
+                tile_number = tiles[tile_y, tile_x]
                 text = f"{tile_number:02X}"
 
                 # Render the text

@@ -3,26 +3,26 @@ import heapq
 from .zelda_game import is_tile_walkable
 
 def heuristic(current, direction, map_width, map_height):
-    x, y = current
+    y, x = current
     if direction == 'N':
         return y
     elif direction == 'S':
         return map_height - y - 1
     elif direction == 'W':
-        return map_width - x - 1
-    elif direction == 'E':
         return x
+    elif direction == 'E':
+        return map_width - x - 1
     else:
-        nx, ny = direction
+        ny, nx = direction
         return abs(nx - x) + abs(ny - y)
 
 def get_neighbors(position, tiles):
-    x, y = position
+    y, x = position
     neighbors = []
     for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
         nx, ny = x + dx, y + dy
-        if 0 <= ny < tiles.shape[1] and 0 <= nx < tiles.shape[0] and is_tile_walkable(tiles[nx, ny]):
-            neighbors.append((nx, ny))
+        if 0 <= nx < tiles.shape[1] and 0 <= ny < tiles.shape[0] and is_tile_walkable(tiles[ny, nx]):
+            neighbors.append((ny, nx))
     return neighbors
 
 def a_star(link_position, tiles, target):

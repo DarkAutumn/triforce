@@ -97,7 +97,7 @@ seen = set()
 def is_tile_walkable(tile):
     return tile in walkable_tiles
 
-def position_to_tile(x, y):
-    return (x // 8, (y - gameplay_start_y + 4) // 8)
+def position_to_tile_index(x, y):
+    return ((y - gameplay_start_y + 4) // 8, x // 8)
 
-__all__ = ['is_in_cave', 'is_mode_scrolling', 'is_mode_death', 'get_beam_state', 'get_num_triforce_pieces', 'get_full_hearts', 'get_heart_halves', 'get_heart_containers', 'has_beams', 'is_tile_walkable', 'walkable_tiles', 'position_to_tile']
+__all__ = ['is_in_cave', 'is_mode_scrolling', 'is_mode_death', 'get_beam_state', 'get_num_triforce_pieces', 'get_full_hearts', 'get_heart_halves', 'get_heart_containers', 'has_beams', 'is_tile_walkable', 'walkable_tiles', 'position_to_tile_index']

@@ -10,7 +10,7 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, position_to_tile
+from .zelda_game import get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, position_to_tile_index
 from .model_parameters import *
 
 class ZeldaObjectData:
@@ -129,7 +129,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         map_offset, map_len = zelda_game_data.tables['tile_layout']
         tiles = ram[map_offset:map_offset+map_len]
-        tiles = tiles.reshape((32, 22))
+        tiles = tiles.reshape((32, 22)).T
         info['tiles'] = tiles
 
         info['objects'] = objects
@@ -138,8 +138,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         link_pos = objects.link_pos
         info['link_pos'] = link_pos
 
-        info['tile_index'] = position_to_tile(*link_pos)
-        info['current_tile'] = tiles[info['tile_index']]
+        info['tile_index'] = position_to_tile_index(*link_pos)
 
         direction = info['link_direction']
         info['link_vector'] = np.zeros(2, dtype=np.float32)
