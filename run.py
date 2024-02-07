@@ -171,7 +171,7 @@ class Display:
                 self.render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width, self.game_height)
                 if overlay:
                     color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
-                    self.overlay_grid_and_text(surface, (self.game_x, self.game_y), info['tiles'], color, self.scale)
+                    self.overlay_grid_and_text(surface, (self.game_x, self.game_y), info['tiles'], color, self.scale, info.get('optimal_path', None))
                 self.render_text(surface, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
                     self.render_text(surface, f"Location: {hex(info['location'])}", (self.game_x + self.game_width - 120, self.game_y))
@@ -353,7 +353,7 @@ class Display:
             pygame.draw.line(surface, (255, 255, 255), (start_x, y), (start_x + 300, y))
             y += 3
 
-    def overlay_grid_and_text(self, surface, offset, tiles, text_color, scale=3):
+    def overlay_grid_and_text(self, surface, offset, tiles, text_color, scale, path = None):
         grid_width = 30
         grid_height = 21
         tile_width = 8 * scale
@@ -365,6 +365,9 @@ class Display:
 
         for i in range(grid_width):
             for j in range(grid_height):
+                if path and (i, j) not in path:
+                    continue
+
                 x = offset[0] + i * tile_width
                 y = 56 * scale + offset[1] + j * tile_height
 

@@ -10,7 +10,7 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling
+from .zelda_game import get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, position_to_tile
 from .model_parameters import *
 
 class ZeldaObjectData:
@@ -76,6 +76,11 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._none_action = np.zeros(9, dtype=bool)
 
         self.a_button = env.unwrapped.buttons.index('A')
+        self.b_button = env.unwrapped.buttons.index('B')
+        self.up_button = env.unwrapped.buttons.index('UP')
+        self.down_button = env.unwrapped.buttons.index('DOWN')
+        self.left_button = env.unwrapped.buttons.index('LEFT')
+        self.right_button = env.unwrapped.buttons.index('RIGHT')
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
@@ -105,14 +110,17 @@ class ZeldaGameWrapper(gym.Wrapper):
         return obs, rewards, terminated, truncated, info
 
     def update_info(self, act, info):
-        if self.action_is_movement(act):
-            info['action'] = 'movement'
-
-        elif self.action_is_attack(act):
+        if self.action_is_attack(act):
             info['action'] = 'attack'
 
         elif self.action_is_item(act):
             info['action'] = 'item'
+
+        else:
+            direction = self.action_is_movement(act)
+            if direction:
+                info['action'] = 'movement'
+                info['direction'] = direction
 
         unwrapped = self.env.unwrapped
         ram = unwrapped.get_ram()
@@ -130,8 +138,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         link_pos = objects.link_pos
         info['link_pos'] = link_pos
 
-        info['tile_index'] = (link_pos[0] // 8, (link_pos[1] - gameplay_start_y + 4) // 8)
-        info['tile'] = tiles[info['tile_index']]
+        info['tile_index'] = position_to_tile(*link_pos)
+        info['current_tile'] = tiles[info['tile_index']]
 
         direction = info['link_direction']
         info['link_vector'] = np.zeros(2, dtype=np.float32)
@@ -301,13 +309,28 @@ class ZeldaGameWrapper(gym.Wrapper):
         return obs, rewards, terminated, truncated, info
     
     def action_is_movement(self, act):
-        return any(act[4:8]) and not self.action_is_attack(act) and not self.action_is_item(act)
+        if self.action_is_attack(act) or self.action_is_item(act):
+            return False
+
+        if act[self.up_button]:
+            return 'N'
+        
+        if act[self.down_button]:
+            return 'S'
+        
+        if act[self.left_button]:
+            return 'W'
+        
+        if act[self.right_button]:
+            return 'E'
+
+        return False
 
     def action_is_item(self, act):
-        return act[0]
+        return act[self.b_button]
 
     def action_is_attack(self, act):
-        return act[8]
+        return act[self.a_button]
 
 
     def handle_future_hits(self, act, info, step_hits, name, condition_check, disable_others):

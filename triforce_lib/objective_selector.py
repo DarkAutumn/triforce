@@ -1,5 +1,6 @@
 import gymnasium as gym
 import numpy as np
+from .astar import a_star
 
 def get_dungeon_door_pos(link_pos, direction):
     if direction == "N":
@@ -106,6 +107,9 @@ class ObjectiveSelector(gym.Wrapper):
             objective_vector = np.zeros(2, dtype=np.float32)
 
         info['objective_vector'] = objective_vector
+
+        if 'location_objective' in info and info['location_objective'] is not None:
+            info['optimal_path'] = a_star(info['tile_index'], info['tiles'], 'W')
     
     def get_first_non_zero(self, list):
         lowest = np.inf

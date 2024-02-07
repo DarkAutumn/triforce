@@ -1,4 +1,6 @@
 # responsible for decoding difficult parts of zelda gamestate
+from .model_parameters import gameplay_start_y
+
 import numpy as np
 
 mode_scrolling_complete = 4
@@ -88,4 +90,14 @@ def get_heart_containers(state):
 def has_beams(state):
     return get_heart_halves(state) == get_heart_containers(state) * 2
 
-__all__ = ['is_in_cave', 'is_mode_scrolling', 'is_mode_death', 'get_beam_state', 'get_num_triforce_pieces', 'get_full_hearts', 'get_heart_halves', 'get_heart_containers', 'has_beams']
+
+walkable_tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87, 0xf6] + list(range(0x74, 0x77+1))
+
+seen = set()
+def is_tile_walkable(tile):
+    return tile in walkable_tiles
+
+def position_to_tile(x, y):
+    return (x // 8, (y - gameplay_start_y + 4) // 8)
+
+__all__ = ['is_in_cave', 'is_mode_scrolling', 'is_mode_death', 'get_beam_state', 'get_num_triforce_pieces', 'get_full_hearts', 'get_heart_halves', 'get_heart_containers', 'has_beams', 'is_tile_walkable', 'walkable_tiles', 'position_to_tile']
