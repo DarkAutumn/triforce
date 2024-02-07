@@ -371,11 +371,9 @@ class Display:
                 x = offset[0] + tile_x * tile_width
                 y = 56 * scale + offset[1] + tile_y * tile_height
 
-                # Draw rectangle (grid cell)
                 pygame.draw.rect(surface, (0, 0, 255), (x, y, tile_width, tile_height), 1)
 
-                # Get the tile number
-                tile_number = tiles[tile_y, tile_x]
+                tile_number = tiles[tile_y, tile_x + 1] # 1 for overscan
                 text = f"{tile_number:02X}"
 
                 # Render the text
