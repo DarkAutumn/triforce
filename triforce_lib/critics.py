@@ -1,5 +1,7 @@
 import numpy as np
 from typing import Dict
+
+from .astar import a_star
 from .zelda_game import *
 from .zelda_game import get_heart_halves, is_in_cave, mode_gameplay, mode_cave
 
@@ -261,28 +263,45 @@ class GameplayCritic(ZeldaCritic):
         if get_heart_halves(old) <= get_heart_halves(new):
 
             # do we have an optimal path?
-            old_path = old.get('optimal_path', [])
-            new_path = new.get('optimal_path', [])
-            if len(old_path) >= 2:
-                optimal_direction = self.get_optimal_direction(old_path[0], old_path[1])
-                direction = new['direction']
-                
-                # reward if we moved in the right direction
-                if optimal_direction == direction:
-                    rewards['reward-move-closer'] = self.move_closer_reward
+            if "a*_path" in old:
+                _, old_objective_pos, old_path = old["a*_path"]
+                if len(old_path) >= 2:
+                    optimal_direction = self.get_optimal_direction(old_path[0], old_path[1])
+                    direction = new['direction']
+                    
+                    # reward if we moved in the right direction
+                    if optimal_direction == direction:
+                        rewards['reward-move-closer'] = self.move_closer_reward
 
-                # penalize moving in the opposite direction
-                elif self.is_opposite_direction(optimal_direction, direction):
-                    rewards['penalty-move-farther'] = self.move_away_penalty
+                    # penalize moving in the opposite direction
+                    elif self.is_opposite_direction(optimal_direction, direction):
+                        rewards['penalty-move-farther'] = self.move_away_penalty
 
-                # Only penalize here if the new tile we reached is farther from the target
-                else:
-                    # see if we reached a new tile
-                    if new_path and new_path[0] != old_path[0]:
-                        if len(new_path) > len(old_path):
-                            rewards['penalty-move-farther'] = self.move_away_penalty
-                        elif len(new_path) < len(old_path):
-                            rewards['reward-move-closer'] = self.move_closer_reward
+                    elif "a*_path" in new:
+                        # even though we didn't move in the A* selected path, we could still be
+                        # moving closer to the objective
+
+                        _, new_objective_pos, new_path = new["a*_path"]
+                        if old_objective_pos == new_objective_pos:
+                            # if the objective hasn't moved, see if we got closer or farther using
+                            # the a* paths.
+
+                            if len(new_path) > len(old_path):
+                                rewards['penalty-move-farther'] = self.move_away_penalty
+                            elif len(new_path) < len(old_path):
+                                rewards['reward-move-closer'] = self.move_closer_reward
+
+                        else:
+                            # The objective moved.  We might have selected a new objective, or we are
+                            # chasing an enemy that moved away. We should stil reward the move if the agent
+                            # got closer to the old objective position.
+
+                            new_path = a_star(get_link_tile_index(new), old['tiles'], old_objective_pos)
+
+                            if len(new_path) > len(old_path):
+                                rewards['penalty-move-farther'] = self.move_away_penalty
+                            elif len(new_path) < len(old_path):
+                                rewards['reward-move-closer'] = self.move_closer_reward
 
     def is_opposite_direction(self, a, b):
         if a == 'N' and b == 'S':

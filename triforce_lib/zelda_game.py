@@ -110,6 +110,10 @@ def is_tile_walkable(last_tile, tile):
 def position_to_tile_index(x, y):
     return (int((y - gameplay_start_y) // 8), int(x // 8))
 
+def get_link_tile_index(info):
+    return position_to_tile_index(info['link_x'], info['link_y'] + 4)
+    
+
 def tile_index_to_position(tile_index):
     return (tile_index[1] * 8, tile_index[0] * 8 + gameplay_start_y)
 
@@ -180,5 +184,6 @@ __all__ = [
     'walkable_tiles',
     'position_to_tile_index',
     'tile_index_to_position',
+    'get_link_tile_index',
     ZeldaObjectData.__name__,
     ]
