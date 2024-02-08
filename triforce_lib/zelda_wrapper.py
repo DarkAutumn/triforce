@@ -10,60 +10,9 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, position_to_tile_index
+from .zelda_game import get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData
 from .model_parameters import *
 
-class ZeldaObjectData:
-    def __init__(self, ram):
-        for table, (offset, size) in zelda_game_data.tables.items():
-            self.__dict__[table] = ram[offset:offset+size]
-
-    @property
-    def link_pos(self):
-        return self.get_position(0)
-    
-    def get_position(self, obj : int):
-        return self.obj_pos_x[obj], self.obj_pos_y[obj]
-    
-    def get_object_id(self, obj : int):
-        if obj == 0:
-            return None
-
-        return self.obj_id[obj]
-    
-    def get_obj_direction(self, obj : int):
-        return self.obj_direction[obj]
-    
-    def get_obj_health(self, obj : int):
-        if obj == 0:
-            return None
-        return self.obj_health[obj] >> 4
-    
-    def get_obj_status(self, obj : int):
-        return self.obj_status[obj]
-        
-    def is_enemy(self, obj_id : int):
-        return 1 <= obj_id <= 0x48
-    
-    def enumerate_enemy_ids(self) -> int:
-        for i in range(1, 0xc):
-            if self.is_enemy(self.get_object_id(i)):
-                yield i
-
-    def enumerate_item_ids(self) -> int:
-        for i in range(1, 0xc):
-            if self.get_object_id(i) == 0x60:
-                yield i
-
-    def enumerate_projectile_ids(self) -> int:
-        for i in range(1, 0xc):
-            id = self.get_object_id(i)
-            if id > 0x48 and id != 0x60 and id != 0x63 and id != 0x64 and id != 0x68:
-                yield i
-
-    @property
-    def enemy_count(self):
-        return sum(1 for i in range(1, 0xb) if self.is_enemy(self.get_object_id(i)))
 
 class ZeldaGameWrapper(gym.Wrapper):
     def __init__(self, env, deterministic=False):
@@ -130,23 +79,27 @@ class ZeldaGameWrapper(gym.Wrapper):
         map_offset, map_len = zelda_game_data.tables['tile_layout']
         tiles = ram[map_offset:map_offset+map_len]
         tiles = tiles.reshape((32, 22)).T
-        info['tiles'] = tiles
 
-        info['objects'] = objects
+        info['tiles'] = tiles
         info['beam_hits'] = 0
 
         link_pos = objects.link_pos
         info['link_pos'] = link_pos
+        link_pos = np.array(link_pos, dtype=np.float32)
 
         direction = info['link_direction']
         info['link_vector'] = np.zeros(2, dtype=np.float32)
         if direction == 1:      # east
+            info['link_direction'] = 'E'
             info['link_vector'][0] = 1
         elif direction == 2:    # west
+            info['link_direction'] = 'W'
             info['link_vector'][0] = -1
         elif direction == 4:    # south
+            info['link_direction'] = 'S'
             info['link_vector'][1] = 1
         elif direction == 8:    # north
+            info['link_direction'] = 'N'
             info['link_vector'][1] = -1
         else:
             raise Exception("Unknown link direction")        
@@ -154,8 +107,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._add_vectors_and_distances(link_pos, objects, info)
         info['has_beams'] = has_beams(info) and get_beam_state(info) == 0
 
-        curr_enemy_health = None
-        step_hits = 0
         
         location = (info['level'], info['location'], is_in_cave(info))
         new_location = self._location != location
@@ -164,46 +115,49 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['new_position'] = not new_location and self._link_last_pos is not None and self._link_last_pos != objects.link_pos
         self._link_last_pos = objects.link_pos
 
-        # only check beams and other state if we are in the same room:
         if new_location:
             self._location = location
             self._prev_health = None
             self.clear_variables('beam_hits')
-            self.clear_variables('bomb_hits')
-            self.clear_variables('arrow_hits')
+            self.clear_variables('bomb1_hits')
+            self.clear_variables('bomb2_hits')
+            info['step_hits'] = 0
         else:
-            # capture enemy health data
-            curr_enemy_health = {}
-            for eid in objects.enumerate_enemy_ids():
-                health = objects.get_obj_health(eid)
+            # Only check hits if we didn't move room locations
+            info['step_hits'] = self._get_step_hits(act, objects, unwrapped, info)
 
-                # Some enemies, like gels and keese, do not have health.  This makes calculating hits very challenging.
-                # Instead, just set those 0 health enemies to 1 health, which doesn't otherwise affect the game.  The
-                # game will set them to 0 health when they die.
-                if not health and not self._prev_health:
-                    data = unwrapped.data
-                    data.set_value(f'obj_health_{eid:x}', 0x10)
-                    health = 1
+    def _get_step_hits(self, act, objects, unwrapped, info):
+        step_hits = 0
 
-                curr_enemy_health[eid] = health
+        # capture enemy health data
+        curr_enemy_health = {}
+        for eid in objects.enumerate_enemy_ids():
+            health = objects.get_obj_health(eid)
 
-            # check if we killed or injured anything
-            if self._prev_health:
-                for eid, health in self._prev_health.items():
-                    if eid in curr_enemy_health and curr_enemy_health[eid] < health:
-                        step_hits += 1
+            # Some enemies, like gels and keese, do not have health.  This makes calculating hits very challenging.
+            # Instead, just set those 0 health enemies to 1 health, which doesn't otherwise affect the game.  The
+            # game will set them to 0 health when they die.
+            if not health and not self._prev_health:
+                data = unwrapped.data
+                data.set_value(f'obj_health_{eid:x}', 0x10)
+                health = 1
 
-            # check if beams, bombs, arrows, etc are active and if they will hit in the future,
-            # as we need to count them as rewards/results of this action so the model trains properly
-            step_hits = self.handle_future_hits(act, info, step_hits, 'beam_hits', lambda st: get_beam_state(st) == 1, self.set_beams_only)
-            step_hits = self.handle_future_hits(act, info, step_hits, 'bomb1_hits', lambda st: get_bomb_state(st, 0) == 1, self.set_bomb1_only)
-            step_hits = self.handle_future_hits(act, info, step_hits, 'bomb2_hits', lambda st: get_bomb_state(st, 1) == 1, self.set_bomb2_only)
+            curr_enemy_health[eid] = health
 
-        info['new_location'] = new_location
-        info['step_hits'] = step_hits
+        # check if we killed or injured anything
+        if self._prev_health:
+            for eid, health in self._prev_health.items():
+                if eid in curr_enemy_health and curr_enemy_health[eid] < health:
+                    step_hits += 1
+
+        # check if beams, bombs, arrows, etc are active and if they will hit in the future,
+        # as we need to count them as rewards/results of this action so the model trains properly
+        step_hits = self.handle_future_hits(act, info, step_hits, 'beam_hits', lambda st: get_beam_state(st) == 1, self.set_beams_only)
+        step_hits = self.handle_future_hits(act, info, step_hits, 'bomb1_hits', lambda st: get_bomb_state(st, 0) == 1, self.set_bomb1_only)
+        step_hits = self.handle_future_hits(act, info, step_hits, 'bomb2_hits', lambda st: get_bomb_state(st, 1) == 1, self.set_bomb2_only)
 
         self._prev_health = curr_enemy_health
-        self._prev_objs = objects
+        return step_hits
 
     def _add_vectors_and_distances(self, link_pos, objects, info):
         link_pos = np.array(link_pos, dtype=np.float32)
