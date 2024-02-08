@@ -171,7 +171,7 @@ class Display:
                 self.render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width, self.game_height)
                 if overlay:
                     color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
-                    self.overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), info['tiles'], color, self.scale, info.get('optimal_path', None))
+                    self.overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), info['tiles'], color, self.scale, self.get_optimal_path(info))
                 self.render_text(surface, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
                     self.render_text(surface, f"Location: {hex(info['location'])}", (self.game_x + self.game_width - 120, self.game_y))
@@ -352,6 +352,10 @@ class Display:
             # Draw dividing line
             pygame.draw.line(surface, (255, 255, 255), (start_x, y), (start_x + 300, y))
             y += 3
+
+    def get_optimal_path(self, info):
+        if 'a*_path' in info:
+            return info['a*_path'][-1]
 
     def overlay_grid_and_text(self, surface, kind, offset, tiles, text_color, scale, path = None):
         grid_width = 32
