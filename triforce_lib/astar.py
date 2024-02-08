@@ -42,9 +42,14 @@ def a_star(start, tiles, target):
             # Reconstruct path
             path = []
             while current in came_from:
+                if len(path) == 0 and isinstance(target, str):
+                    add_direction(target, current, path)
+
                 path.append(current)
                 current = came_from[current]
 
+            if not path:
+                add_direction(target, start, path)
             path.append(start)
             return path[::-1]
 
@@ -58,3 +63,13 @@ def a_star(start, tiles, target):
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
     return []
+
+def add_direction(target, current, path):
+    if target == 'N':
+        path.append((current[0] - 1, current[1]))
+    elif target == 'S':
+        path.append((current[0] + 1, current[1]))
+    elif target == 'W':
+        path.append((current[0], current[1] - 1))
+    elif target == 'E':
+        path.append((current[0], current[1] + 1))
