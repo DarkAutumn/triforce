@@ -295,7 +295,7 @@ class GameplayCritic(ZeldaCritic):
 
                             if len(new_path) > len(old_path):
                                 rewards['penalty-move-farther'] = self.move_away_penalty
-                            elif len(new_path) < len(old_path) and diff > 0:
+                            elif len(new_path) < len(old_path) and diff >= 0:
                                 rewards['reward-move-closer'] = self.move_closer_reward
 
                         else:
@@ -307,7 +307,7 @@ class GameplayCritic(ZeldaCritic):
 
                             if len(new_path) > len(old_path):
                                 rewards['penalty-move-farther'] = self.move_away_penalty
-                            elif len(new_path) < len(old_path) and diff > 0:
+                            elif len(new_path) < len(old_path) and diff >= 0:
                                 rewards['reward-move-closer'] = self.move_closer_reward
 
     def is_opposite_direction(self, a, b):
