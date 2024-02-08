@@ -88,8 +88,7 @@ class StartingRoomConditions(ZeldaEndCondition):
 
 class DefeatedBoss(ZeldaEndCondition):
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
-        objects = new['objects']
-        if objects.enemy_count == 0:
+        if not new['enemies']:
             return True, False, "success-killed-boss"
         
         if new['location'] != 0x35:

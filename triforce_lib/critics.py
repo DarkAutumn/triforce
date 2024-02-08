@@ -196,20 +196,20 @@ class GameplayCritic(ZeldaCritic):
         
         else:
             if new['action'] == 'attack':                
-                if not new['enemies_on_screen']:
+                if not new['enemies']:
                     rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
 
                 elif self.offscreen_sword_disabled(new):
                     rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
 
-                elif new['enemy_vectors']:
-                    enemy_vectors = [x[0] for x in new['enemy_vectors'] if abs(x[1]) > 0]
+                elif new['enemies']:
+                    enemy_vectors = [x[3] for x in new['enemies'] if abs(x[2]) > 0]
                     if enemy_vectors:
                         dotproducts = np.sum(new['link_vector'] * enemy_vectors, axis=1)
                         if not np.any(dotproducts > np.sqrt(2) / 2):
                             rewards['penalty-attack-miss'] = self.attack_miss_penalty
                         elif not old['has_beams']:
-                            distance = new['enemy_vectors'][0][1]
+                            distance = new['enemies'][0][2]
                             if distance > self.distance_threshold:
                                 rewards['penalty-attack-miss'] = self.attack_miss_penalty
 
@@ -268,7 +268,7 @@ class GameplayCritic(ZeldaCritic):
                 # Check if we moved too close to any enemies first
                 moved_too_close = False
                 if new['action'] != 'attack':
-                    close_enemies = [x[0] for x in new['enemy_vectors'] if x[1] < self.too_close_threshold]
+                    close_enemies = [x[3] for x in new['enemies'] if x[2] < self.too_close_threshold]
 
                     if close_enemies:
                         close_enemy_distances = [np.dot(link_motion_vector, x) for x in close_enemies]
@@ -279,7 +279,10 @@ class GameplayCritic(ZeldaCritic):
 
                 # Otherwise check to see if we moved closer to the objective
                 if not moved_too_close:
-                    objective_vectors = [new['objective_vector'], new['closest_item_vector']]
+                    objective_vectors = [new['objective_vector']]
+                    if new['items']:
+                        objective_vectors += [x[3] for x in new['items']]
+
                     nonzero_objectives = [v for v in objective_vectors if v[0] or v[1]]
 
                     if nonzero_objectives:

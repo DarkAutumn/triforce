@@ -87,16 +87,10 @@ class ObjectiveSelector(gym.Wrapper):
         objective_kind = None
 
         # Check if any items are on the floor, if so prioritize those since they disappear
-        objects = info['objects']
-        closest_item, item_dist = find_closest_object(objects, objects.enumerate_item_ids(), link_pos)
-
-        if closest_item is not None:
-            item_vector = closest_item - link_pos
-            item_vector /= item_dist
-
-            objective_vector = item_vector
+        if info['items']:
+            objective_vector = info['items'][0][3]
             objective_kind = 'item'
-            objective_pos_dir = closest_item
+            objective_pos_dir = info['items'][0][1]
 
         else:
             sub_orchestrator = self.sub_orchestrators.get(level, None)
@@ -253,13 +247,9 @@ class Dungeon1Orchestrator:
         
         # check if we should kill all enemies:
         if location in self.locations_to_kill_enemies:
-            objects = info['objects']
-            closest, closest_dist = find_closest_object(objects, objects.enumerate_enemy_ids(), link_pos)
-
-            if closest is not None:
-                enemy_vector = closest - link_pos
-                enemy_vector /= closest_dist
-                return None, enemy_vector, closest, 'fight'
+            if info['enemies']:
+                _, position, _, vector = info['enemies'][0]
+                return None, vector, position, 'fight'
 
         # otherwise, movement direction is based on the location
         if location in self.location_direction:

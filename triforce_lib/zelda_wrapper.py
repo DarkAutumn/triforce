@@ -79,10 +79,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         map_offset, map_len = zelda_game_data.tables['tile_layout']
         tiles = ram[map_offset:map_offset+map_len]
         tiles = tiles.reshape((32, 22)).T
-
         info['tiles'] = tiles
-        info['beam_hits'] = 0
-
+        
         link_pos = objects.link_pos
         info['link_pos'] = link_pos
         link_pos = np.array(link_pos, dtype=np.float32)
@@ -104,16 +102,16 @@ class ZeldaGameWrapper(gym.Wrapper):
         else:
             raise Exception("Unknown link direction")        
 
-        self._add_vectors_and_distances(link_pos, objects, info)
+        # add information about enemies, items, and projectiles
+        self._add_enemies_and_objects(link_pos, info, 'enemies', objects, objects.enumerate_enemy_ids())
+        self._add_enemies_and_objects(link_pos, info, 'items', objects, objects.enumerate_item_ids())
+        self._add_enemies_and_objects(link_pos, info, 'projectiles', objects, objects.enumerate_projectile_ids())
+
         info['has_beams'] = has_beams(info) and get_beam_state(info) == 0
 
-        
         location = (info['level'], info['location'], is_in_cave(info))
         new_location = self._location != location
         info['new_location'] = new_location
-
-        info['new_position'] = not new_location and self._link_last_pos is not None and self._link_last_pos != objects.link_pos
-        self._link_last_pos = objects.link_pos
 
         if new_location:
             self._location = location
@@ -152,29 +150,24 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         # check if beams, bombs, arrows, etc are active and if they will hit in the future,
         # as we need to count them as rewards/results of this action so the model trains properly
-        step_hits = self.handle_future_hits(act, info, step_hits, 'beam_hits', lambda st: get_beam_state(st) == 1, self.set_beams_only)
-        step_hits = self.handle_future_hits(act, info, step_hits, 'bomb1_hits', lambda st: get_bomb_state(st, 0) == 1, self.set_bomb1_only)
-        step_hits = self.handle_future_hits(act, info, step_hits, 'bomb2_hits', lambda st: get_bomb_state(st, 1) == 1, self.set_bomb2_only)
+        step_hits = self.handle_future_hits(act, info, objects, step_hits, 'beam_hits', lambda st: get_beam_state(st) == 1, self.set_beams_only)
+        step_hits = self.handle_future_hits(act, info, objects, step_hits, 'bomb1_hits', lambda st: get_bomb_state(st, 0) == 1, self.set_bomb1_only)
+        step_hits = self.handle_future_hits(act, info, objects, step_hits, 'bomb2_hits', lambda st: get_bomb_state(st, 1) == 1, self.set_bomb2_only)
 
         self._prev_health = curr_enemy_health
         return step_hits
 
-    def _add_vectors_and_distances(self, link_pos, objects, info):
-        link_pos = np.array(link_pos, dtype=np.float32)
-        
-        info['enemy_vectors'] = self._get_and_normalize_vectors(link_pos, objects, objects.enumerate_enemy_ids())
-        if is_in_cave(info):
-            info['closest_enemy_vector'] = np.zeros(2, dtype=np.float32)
-            info['enemies_on_screen'] = 0
-        else:
-            info['closest_enemy_vector'] = self._get_vector_of_closest(info['enemy_vectors'])
-            info['enemies_on_screen'] = len(info['enemy_vectors'])
-        
-        info['projectile_vectors'] = self._get_and_normalize_vectors(link_pos, objects, objects.enumerate_projectile_ids())
-        info['closest_projectile_vector'] = self._get_vector_of_closest(info['projectile_vectors'])
-        
-        info['item_vectors'] = self._get_and_normalize_vectors(link_pos, objects, objects.enumerate_item_ids())
-        info['closest_item_vector'] = self._get_vector_of_closest(info['item_vectors'])
+    def _add_enemies_and_objects(self, link_pos, info, name, objects, enumeration):
+        result = []
+
+        for eid in enumeration:
+            pos = objects.get_position(eid)
+            distance = np.linalg.norm(pos - link_pos)
+            vector = (pos - link_pos) / distance if distance > 0 else np.zeros(2, dtype=np.float32)
+            result.append((eid, pos, distance, vector))
+
+        result.sort(key=lambda x: x[2])
+        info[name] = result
 
     def _get_and_normalize_vectors(self, link_pos, objects, ids):
         positions = [objects.get_position(id) for id in ids if id is not None]
@@ -284,7 +277,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         return act[self.a_button]
 
 
-    def handle_future_hits(self, act, info, step_hits, name, condition_check, disable_others):
+    def handle_future_hits(self, act, info, objects, step_hits, name, condition_check, disable_others):
         info[name] = 0
 
         already_active_name = name + '_already_active'
@@ -294,7 +287,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             already_active = self.__dict__.get(already_active_name, False)
             if not already_active:
                 # check if beams will hit something
-                future_hits = self.predict_future(act, info, condition_check, disable_others)
+                future_hits = self.predict_future(act, info, objects, condition_check, disable_others)
                 info[name] = future_hits
 
                 # count the future hits now, discount them from the later hit
@@ -321,7 +314,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return step_hits
     
-    def predict_future(self, act, info, should_continue, disable_others):
+    def predict_future(self, act, info, objects, should_continue, disable_others):
         unwrapped = self.env.unwrapped
         savestate = unwrapped.em.get_state()
         data = unwrapped.data
@@ -329,7 +322,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         # disable beams, bombs, or other active damaging effects until the current one is resolved
         disable_others(data)
 
-        objects = info['objects']
         start_enemies = list(objects.enumerate_enemy_ids())
         start_health = {x: objects.get_obj_health(x) for x in start_enemies}
         

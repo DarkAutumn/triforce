@@ -26,7 +26,7 @@ class ZeldaAIOrchestrator:
 
         matches_level = level in model.levels
         matches_room = model.rooms is None or location in model.rooms
-        matches_enemy_requirements = not model.requires_enemies or info['objects'].enemy_count
+        matches_enemy_requirements = not model.requires_enemies or info['enemies']
         matches_equipment = self.matches_equipment(model, info)
 
         return matches_level and matches_room and matches_enemy_requirements and matches_equipment
