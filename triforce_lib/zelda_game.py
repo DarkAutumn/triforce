@@ -98,6 +98,9 @@ def is_tile_walkable(tile):
     return tile in walkable_tiles
 
 def position_to_tile_index(x, y):
-    return ((y - gameplay_start_y + 4) // 8, x // 8)
+    return ((y - gameplay_start_y) // 8, x // 8)
 
-__all__ = ['is_in_cave', 'is_mode_scrolling', 'is_mode_death', 'get_beam_state', 'get_num_triforce_pieces', 'get_full_hearts', 'get_heart_halves', 'get_heart_containers', 'has_beams', 'is_tile_walkable', 'walkable_tiles', 'position_to_tile_index']
+def tile_index_to_position(tile_index):
+    return (tile_index[1] * 8, tile_index[0] * 8 + gameplay_start_y)
+
+__all__ = ['is_in_cave', 'is_mode_scrolling', 'is_mode_death', 'get_beam_state', 'get_num_triforce_pieces', 'get_full_hearts', 'get_heart_halves', 'get_heart_containers', 'has_beams', 'is_tile_walkable', 'walkable_tiles', 'position_to_tile_index', 'tile_index_to_position']

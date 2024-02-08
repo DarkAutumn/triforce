@@ -1,27 +1,10 @@
 import gymnasium as gym
 import numpy as np
+
+from .zelda_game import is_in_cave, position_to_tile_index, tile_index_to_position
 from .astar import a_star
 
-def get_dungeon_door_pos(link_pos, direction):
-    if direction == "N":
-        pos = np.array([0x78, 0x3d], dtype=np.float32)
-    elif direction == "S":
-        pos = np.array([0x78, 0xdd], dtype=np.float32)
-    elif direction == "E":
-        pos = np.array([0xff, 0x8d], dtype=np.float32)
-    elif direction == "W":
-        pos = np.array([0x00, 0x8d], dtype=np.float32)
-    else:
-        return np.zeros(2, dtype=np.float32)
-    
-    vector = pos - link_pos
-    norm = np.linalg.norm(vector)
-    if norm > 0:
-        return vector / norm
-    
-    return np.zeros(2, dtype=np.float32)
-
-def get_overworld_direction_vector(direction):
+def get_vector_from_direction(direction):
     if direction == "N":
         return np.array([0, -1], dtype=np.float32)
     elif direction == "S":
@@ -49,13 +32,28 @@ def get_location_objective(location_direction, location):
     else:
         return None
     
-def get_vector(info, key):
-    if key in info:
-        vector = info[key]
-        if np.linalg.norm(vector) > 0:
-            return vector
-        
-    return None
+def find_closest_object(objects, enum, link_pos):
+    closest = None
+    closest_dist = np.inf
+    for enemy in enum:
+        enemy_pos = np.array(objects.get_position(enemy), dtype=np.float32)
+        dist = np.linalg.norm(enemy_pos - link_pos)
+        if dist < closest_dist and dist > 0:
+            closest = enemy_pos
+            closest_dist = dist
+    return closest,closest_dist
+
+def find_closest_cave(info):
+    link_pos = np.array(info['link_pos'], dtype=np.float32)
+    
+    cave_indices = np.argwhere(info['tiles'] == 0x24)
+    if len(cave_indices) == 0:
+        raise Exception('Could not find any caves')
+    
+    cave_positions = [tile_index_to_position(x) for x in cave_indices]
+    cave_distances = [np.linalg.norm(x - link_pos) for x in cave_positions]
+    closest_cave = cave_positions[np.argmin(cave_distances)]
+    return closest_cave
 
 class ObjectiveSelector(gym.Wrapper):
     def __init__(self, env):
@@ -81,35 +79,43 @@ class ObjectiveSelector(gym.Wrapper):
     
     def set_objectives(self, info):
         level = info['level']
+        link_pos = info['link_pos']
 
+        location_objective = None
         objective_vector = None
-        info['objective_kind'] = None
-        info['location_objective'] = None
-
-        if objective_vector is None:
-            if level != 0 and info['link_pos'][1] > 0xbd:
-                objective_vector = np.array([0, -1], dtype=np.float32)
-                objective_vector /= np.linalg.norm(objective_vector)
-                info['objective_kind'] = 'doorway'
+        objective_pos_dir = None
+        objective_kind = None
 
         # Check if any items are on the floor, if so prioritize those since they disappear
-        if objective_vector is None:
-            closest_item_vector = get_vector(info, 'closest_item_vector')
-            if closest_item_vector is not None:
-                info['objective_kind'] = 'item'
-                objective_vector = closest_item_vector
+        objects = info['objects']
+        closest_item, item_dist = find_closest_object(objects, objects.enumerate_item_ids(), link_pos)
 
-        sub_orchestrator = self.sub_orchestrators.get(level, None)
-        if sub_orchestrator:
-            objective_vector = sub_orchestrator.set_objectives(info, objective_vector)
+        if closest_item is not None:
+            item_vector = closest_item - link_pos
+            item_vector /= item_dist
 
-        if objective_vector is None:
-            objective_vector = np.zeros(2, dtype=np.float32)
+            objective_vector = item_vector
+            objective_kind = 'item'
+            objective_pos_dir = closest_item
 
-        info['objective_vector'] = objective_vector
+        else:
+            sub_orchestrator = self.sub_orchestrators.get(level, None)
+            if sub_orchestrator:
+                objectives = sub_orchestrator.get_objectives(info)
+                if objectives is not None:
+                    location_objective, objective_vector, objective_pos_dir, objective_kind = objectives
 
-        if 'location_objective' in info and info['location_objective'] is not None:
-            info['optimal_path'] = a_star(info['tile_index'], info['tiles'], 'W')
+        info['objective_vector'] = objective_vector if objective_vector is not None else np.zeros(2, dtype=np.float32)
+        info['objective_kind'] = objective_kind
+        info['objective_position'] = objective_pos_dir
+        info['location_objective'] = location_objective
+
+        if objective_pos_dir is not None:
+            link_tile_index = position_to_tile_index(link_pos[0], link_pos[1] + 4)
+
+            if not isinstance(objective_pos_dir, str):
+                objective_pos_dir = position_to_tile_index(*objective_pos_dir)
+            info['optimal_path'] = a_star(link_tile_index, info['tiles'], objective_pos_dir)
     
     def get_first_non_zero(self, list):
         lowest = np.inf
@@ -133,59 +139,43 @@ class OverworldOrchestrator:
             0x38 : "W",
         }
 
-    def set_objectives(self, info, objective_vector):
+    def get_objectives(self, info):
+        """Returns location_objective, objective_vector, objective_pos_dir, objective_kind"""
         link_pos = np.array(info['link_pos'], dtype=np.float32)
         location = info['location']
         mode = info['mode']
 
-        if location in self.location_direction:
-            info['location_objective'] = get_location_objective(self.location_direction, location)
+
+        location_objective = get_location_objective(self.location_direction, location) if location in self.location_direction else None
 
         # get sword if we don't have it
-        if objective_vector is None and info['sword'] == 0:            
-            if location == 0x77:
-                if mode != 11:
-                    objective_pos = np.array([0x40, 0x4d], dtype=np.float32)
-                    objective_vector = self.create_vector_norm(link_pos, objective_pos)
-                    info['objective_kind'] = 'enter-cave'
-
-                else:
+        if location == 0x77:
+            if info['sword'] == 0:
+                if is_in_cave(info):
                     objective_pos = np.array([0x78, 0x95], dtype=np.float32)
                     objective_vector = self.create_vector_norm(link_pos, objective_pos)
-                    info['objective_kind'] = 'room'
+                    return None, objective_vector, objective_pos, 'sword'
 
-            elif 0xf0 & location != 0x70:
-                objective_vector = np.array([0, 1], dtype=np.float32)
-                info['objective_kind'] = 'room'
-
-            elif 0x0f & location < 0x07:
-                objective_vector = np.array([1, 0], dtype=np.float32)
-                info['objective_kind'] = 'room'
-
-            elif 0x0f & location > 0x07:
-                objective_vector = np.array([-1, 0], dtype=np.float32)
-                info['objective_kind'] = 'room'
-
-        if objective_vector is None and location == 0x77 and info['sword'] == 1:
-            # we have the sword, but are in the cave
-            if mode == 11:
-                objective_pos = np.array([0x78, 0xdd], dtype=np.float32)
-                objective_vector = self.create_vector_norm(link_pos, objective_pos)
-
-            elif link_pos[0] == 0x40 and link_pos[1] <= 0x55:
-                objective_vector = np.array([0, 1], dtype=np.float32)
-                info['objective_kind'] = 'doorway'
+                else:
+                    cave_pos = find_closest_cave(info)
+                    objective_vector = self.create_vector_norm(link_pos, cave_pos)
+                    return None, objective_vector, cave_pos, 'cave'
+            else:
+                if is_in_cave(info):
+                    return None, get_vector_from_direction('S'), 'S', 'exit-cave'
+                
+                else:
+                    return location_objective, get_vector_from_direction('N'), 'N', 'room'
         
-        if objective_vector is None and location == 0x37:
-            objective_pos = np.array([0x70, 0x7d], dtype=np.float32)
-            objective_vector = self.create_vector_norm(link_pos, objective_pos)
-            info['objective_kind'] = 'enter-cave'
+        if location == 0x37:
+            cave_pos = find_closest_cave(info)
+            objective_vector = self.create_vector_norm(link_pos, cave_pos)
+            return None, objective_vector, cave_pos, 'cave'
 
-        if objective_vector is None and location in self.location_direction:
-            objective_vector = get_overworld_direction_vector(self.location_direction[location])
-            info['objective_kind'] = 'room'
-
-        return objective_vector
+        if location in self.location_direction:
+            direction = self.location_direction[location]
+            objective_vector = get_vector_from_direction(direction)
+            return location_objective, objective_vector, direction, 'room'
 
     def create_vector_norm(self, from_pos, to_pos):
         objective_vector = to_pos - from_pos
@@ -225,7 +215,9 @@ class Dungeon1Orchestrator:
         self.keys_obtained.clear()
         self.prev_keys = None
 
-    def set_objectives(self, info, objective_vector):
+    def get_objectives(self, info):
+        """Returns location_objective, objective_vector, objective_pos_dir, objective_kind"""
+
         link_pos = np.array(info['link_pos'], dtype=np.float32)
         location = info['location']
 
@@ -237,60 +229,43 @@ class Dungeon1Orchestrator:
             self.prev_keys = info['keys']
 
         # The treasure flag changes from 0xff -> 0x00 when the treasure spawns, then back to 0xff when it is collected
-        if objective_vector is None and 'treasure_flag' in info and info['treasure_flag'] == 0:
+        if 'treasure_flag' in info and info['treasure_flag'] == 0:
             position = np.array([info['treasure_x'], info['treasure_y']], dtype=np.float32)
             treasure_vector = position - link_pos
             norm = np.linalg.norm(treasure_vector)
-            if norm > 0:    
-                info['objective_kind'] = 'treasure'
-                objective_vector = treasure_vector / norm
+            if norm > 0:
+                return None, treasure_vector / norm, position, 'treasure'
 
         # special case entry room, TODO: need to detect door lock
-        if objective_vector is None and location == 0x73:
-            info['objective_kind'] = 'room'
+        if location == 0x73:
             if 0x72 not in self.keys_obtained:
-                objective_vector = get_dungeon_door_pos(link_pos, "W")
-                info['location_objective'] = 0x72
+                direction = "W"
+                objective_vector = get_vector_from_direction(direction)
+                return 0x72, objective_vector, direction, 'room'
             elif 0x74 not in self.keys_obtained:
-                objective_vector = get_dungeon_door_pos(link_pos, "E")
-                info['location_objective'] = 0x74
+                direction = "E"
+                objective_vector = get_vector_from_direction(direction)
+                return 0x74, objective_vector, direction, 'room'
             else:
-                objective_vector = get_dungeon_door_pos(link_pos, "N")
-                info['location_objective'] = 0x63
-
-        # boss room
-        if objective_vector is None and location == 0x35:
-            if link_pos[1] >= 0xca:
-                objective_vector = np.array([1, -1], dtype=np.float32)
-                objective_vector /= np.linalg.norm(objective_vector)
-                info['objective_kind'] = 'fight'
-
-        # triforce room
-        if location == 0x36 and link_pos[1] < 0xB0:
-                if link_pos[0] < 0x18:
-                    objective_vector = np.array([1, 0], dtype=np.float32)
-                elif link_pos[0] <= 0x20:
-                    objective_vector = np.array([0, 1], dtype=np.float32)
-
+                direction = "N"
+                objective_vector = get_vector_from_direction(direction)
+                return 0x63, objective_vector, direction, 'room'
         
         # check if we should kill all enemies:
-        if objective_vector is None and location in self.locations_to_kill_enemies:
-            enemy_vector = get_vector(info, 'closest_enemy_vector')
-            if enemy_vector is not None:
-                objective_vector = enemy_vector
-                info['objective_kind'] = 'fight'
+        if location in self.locations_to_kill_enemies:
+            objects = info['objects']
+            closest, closest_dist = find_closest_object(objects, objects.enumerate_enemy_ids(), link_pos)
+
+            if closest is not None:
+                enemy_vector = closest - link_pos
+                enemy_vector /= closest_dist
+                return None, enemy_vector, closest, 'fight'
 
         # otherwise, movement direction is based on the location
-        if objective_vector is None and location in self.location_direction:
-            objective_vector = get_dungeon_door_pos(link_pos, self.location_direction[location])
-
-            info['location_objective'] = get_location_objective(self.location_direction, location)
-            info['objective_kind'] = 'room'
-
-        elif 'location_objective' not in info:
-            info['location_objective'] = None
-
-        return objective_vector
-    
+        if location in self.location_direction:
+            direction = self.location_direction[location]
+            objective_vector = get_vector_from_direction(direction)
+            location = get_location_objective(self.location_direction, location)
+            return location, objective_vector, direction, 'room'
 
 __all__ = [ObjectiveSelector.__name__]
