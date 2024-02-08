@@ -46,11 +46,7 @@ class ZeldaGameFeatures(gym.Wrapper):
     
     def get_first_vector(self, info, kind):
         entries = info[kind]
-        if entries:
-            _, _, _, vector = entries[0]
-            return vector
-        
-        return np.zeros(2, dtype=np.float32)
+        return entries[0].vector if entries else np.zeros(2, dtype=np.float32)
 
     def get_features(self, info):
         result = np.zeros(2, dtype=np.float32)

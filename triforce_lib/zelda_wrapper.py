@@ -13,6 +13,13 @@ from .zelda_game_data import zelda_game_data
 from .zelda_game import get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData
 from .model_parameters import *
 
+class ZeldaObject:
+    def __init__(self, id, pos, distance, vector, health):
+        self.id = id
+        self.pos = pos
+        self.distance = distance
+        self.vector = vector
+        self.health = health
 
 class ZeldaGameWrapper(gym.Wrapper):
     def __init__(self, env, deterministic=False):
@@ -103,9 +110,9 @@ class ZeldaGameWrapper(gym.Wrapper):
             raise Exception("Unknown link direction")        
 
         # add information about enemies, items, and projectiles
-        self._add_enemies_and_objects(link_pos, info, 'enemies', objects, objects.enumerate_enemy_ids())
-        self._add_enemies_and_objects(link_pos, info, 'items', objects, objects.enumerate_item_ids())
-        self._add_enemies_and_objects(link_pos, info, 'projectiles', objects, objects.enumerate_projectile_ids())
+        self._add_enemies_and_objects(link_pos, info, 'enemies', objects, objects.enumerate_enemy_ids(), True)
+        self._add_enemies_and_objects(link_pos, info, 'items', objects, objects.enumerate_item_ids(), False)
+        self._add_enemies_and_objects(link_pos, info, 'projectiles', objects, objects.enumerate_projectile_ids(), False)
 
         info['has_beams'] = has_beams(info) and get_beam_state(info) == 0
 
@@ -157,14 +164,16 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._prev_health = curr_enemy_health
         return step_hits
 
-    def _add_enemies_and_objects(self, link_pos, info, name, objects, enumeration):
+    def _add_enemies_and_objects(self, link_pos, info, name, objects, enumeration, has_health):
         result = []
 
         for eid in enumeration:
             pos = objects.get_position(eid)
             distance = np.linalg.norm(pos - link_pos)
             vector = (pos - link_pos) / distance if distance > 0 else np.zeros(2, dtype=np.float32)
-            result.append((eid, pos, distance, vector))
+            health = objects.get_obj_health(eid) if has_health else None
+
+            result.append(ZeldaObject(eid, pos, distance, vector, health))
 
         result.sort(key=lambda x: x[2])
         info[name] = result
