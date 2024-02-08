@@ -163,7 +163,7 @@ class Display:
                 y_pos = self.draw_arrow(surface, "Item", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][3], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
                 y_pos = self.render_text(surface, f"Enemies: {obs['features'][0]}", (x_pos, y_pos))
                 y_pos = self.render_text(surface, f"Beams: {obs['features'][1]}", (x_pos, y_pos))
-                y_pos = self.render_text(surface, f"Total Rewards: {round(self.total_rewards, 2)}", (x_pos, y_pos))
+                y_pos = self.render_text(surface, f"Rewards: {round(self.total_rewards, 2)}", (x_pos, y_pos))
                 if curr_score is not None:
                     y_pos = self.render_text(surface, f"Score: {round(curr_score, 2)}", (x_pos, y_pos))
 
