@@ -46,6 +46,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         obs, _, terminated, truncated, info = self.skip(self._none_action, delay_frames)
         assert not terminated and not truncated
 
+        self.was_link_in_cave = is_in_cave(info)
         self.update_info(self._none_action, info)
 
         return obs, info
@@ -233,6 +234,12 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         else:
             raise Exception("Unknown action type")
+        
+        in_cave = is_in_cave(info)
+        if in_cave and not self.was_link_in_cave:
+            obs, rew, terminated, truncated, info = self.skip(self._none_action, cave_cooldown)
+
+        self.was_link_in_cave = in_cave
         
         # skip scrolling
         unwrapped = self.env.unwrapped

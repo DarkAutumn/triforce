@@ -7,5 +7,6 @@ gameplay_start_y = 56
 movement_frames = 6
 attack_cooldown = 15
 item_cooldown = 10
+cave_cooldown = 60
 random_delay_max_frames = 1
 reset_delay_max_frames = 60
