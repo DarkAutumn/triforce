@@ -16,7 +16,7 @@ from .model_parameters import *
 class ZeldaObject:
     def __init__(self, id, pos, distance, vector, health):
         self.id = id
-        self.pos = pos
+        self.position = pos
         self.distance = distance
         self.vector = vector
         self.health = health
@@ -175,7 +175,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
             result.append(ZeldaObject(eid, pos, distance, vector, health))
 
-        result.sort(key=lambda x: x[2])
+        result.sort(key=lambda x: x.distance)
         info[name] = result
 
     def _get_and_normalize_vectors(self, link_pos, objects, ids):
