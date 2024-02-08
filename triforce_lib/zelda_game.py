@@ -94,7 +94,13 @@ def has_beams(state):
 walkable_tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87, 0xf6] + list(range(0x74, 0x77+1))
 
 seen = set()
-def is_tile_walkable(tile):
+def is_tile_walkable(last_tile, tile):
+    # Special case dungeon bricks.  Link actually walks through them so they are walkable, but only if
+    # coming from a non-brick tile.  Otherwise the A* algorithm will try to route link around the bricks
+    # outside the play area.
+    if last_tile == tile == 0xf6:
+        return False
+    
     return tile in walkable_tiles
 
 def position_to_tile_index(x, y):

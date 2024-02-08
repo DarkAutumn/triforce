@@ -21,7 +21,7 @@ def get_neighbors(position, tiles):
     neighbors = []
     for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
         nx, ny = x + dx, y + dy
-        if 0 <= nx < tiles.shape[1] and 0 <= ny < tiles.shape[0] and is_tile_walkable(tiles[ny, nx]):
+        if 0 <= nx < tiles.shape[1] and 0 <= ny < tiles.shape[0] and is_tile_walkable(tiles[y, x], tiles[ny, nx]):
             neighbors.append((ny, nx))
     return neighbors
 
