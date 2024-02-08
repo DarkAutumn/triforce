@@ -105,7 +105,7 @@ class Display:
 
         recording = None
         cap_fps = True
-        overlay = False
+        overlay = 0
 
         terminated = True
         truncated = False
@@ -171,7 +171,7 @@ class Display:
                 self.render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width, self.game_height)
                 if overlay:
                     color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
-                    self.overlay_grid_and_text(surface, (self.game_x, self.game_y), info['tiles'], color, self.scale, info.get('optimal_path', None))
+                    self.overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), info['tiles'], color, self.scale, info.get('optimal_path', None))
                 self.render_text(surface, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
                     self.render_text(surface, f"Location: {hex(info['location'])}", (self.game_x + self.game_width - 120, self.game_y))
@@ -213,7 +213,7 @@ class Display:
                             mode = 'c'
 
                         elif event.key == pygame.K_o:
-                            overlay = not overlay
+                            overlay = (overlay + 1) % 3
 
                         elif event.key == pygame.K_m:
                             model_requested += 1
@@ -353,9 +353,9 @@ class Display:
             pygame.draw.line(surface, (255, 255, 255), (start_x, y), (start_x + 300, y))
             y += 3
 
-    def overlay_grid_and_text(self, surface, offset, tiles, text_color, scale, path = None):
-        grid_width = 30
-        grid_height = 21
+    def overlay_grid_and_text(self, surface, kind, offset, tiles, text_color, scale, path = None):
+        grid_width = 32
+        grid_height = 22
         tile_width = 8 * scale
         tile_height = 8 * scale
 
@@ -365,15 +365,15 @@ class Display:
 
         for tile_x in range(grid_width):
             for tile_y in range(grid_height):
-                if path and (tile_y, tile_x) not in path:
+                if kind == 1 and path and (tile_y, tile_x) not in path:
                     continue
 
-                x = offset[0] + tile_x * tile_width
+                x = offset[0] + tile_x * tile_width - 8 * scale
                 y = 56 * scale + offset[1] + tile_y * tile_height
 
                 pygame.draw.rect(surface, (0, 0, 255), (x, y, tile_width, tile_height), 1)
 
-                tile_number = tiles[tile_y, tile_x + 1] # 1 for overscan
+                tile_number = tiles[tile_y, tile_x] # 1 for overscan
                 text = f"{tile_number:02X}"
 
                 # Render the text
