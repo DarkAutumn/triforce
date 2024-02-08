@@ -244,11 +244,8 @@ class GameplayCritic(ZeldaCritic):
         
         # Did link run into a wall?
         if old['link_pos'] == new['link_pos']:
-            # corner case: Entering a cave with text scroll, link is uncontrollable
-            # but it's hard to detect this state, so we'll just ignore it
-            if not is_in_cave(new) or new['link_y'] < 0x80:
-                rewards['penalty-wall-collision'] = self.wall_collision_penalty
-                return
+            rewards['penalty-wall-collision'] = self.wall_collision_penalty
+            return
             
         # did link move too close to an enemy?
         old_enemies_too_close = {x.id: x for x in old['enemies'] if x.distance < self.too_close_threshold}
@@ -281,8 +278,8 @@ class GameplayCritic(ZeldaCritic):
                 # Only penalize here if the new tile we reached is farther from the target
                 else:
                     # see if we reached a new tile
-                    if new_path[0] != old_path[0]:
-                        if len(new_path) >= len(old_path):
+                    if new_path and new_path[0] != old_path[0]:
+                        if len(new_path) > len(old_path):
                             rewards['penalty-move-farther'] = self.move_away_penalty
                         elif len(new_path) < len(old_path):
                             rewards['reward-move-closer'] = self.move_closer_reward
