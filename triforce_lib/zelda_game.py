@@ -105,7 +105,7 @@ def is_tile_walkable(last_tile, tile):
     return tile in walkable_tiles
 
 def position_to_tile_index(x, y):
-    return ((y - gameplay_start_y) // 8, x // 8)
+    return (int((y - gameplay_start_y) // 8), int(x // 8))
 
 def tile_index_to_position(tile_index):
     return (tile_index[1] * 8, tile_index[0] * 8 + gameplay_start_y)

@@ -79,7 +79,7 @@ class ObjectiveSelector(gym.Wrapper):
     
     def set_objectives(self, info):
         level = info['level']
-        link_pos = info['link_pos']
+        link_pos =  np.array(info['link_pos'], dtype=np.float32)
 
         location_objective = None
         objective_vector = None
@@ -95,21 +95,42 @@ class ObjectiveSelector(gym.Wrapper):
         else:
             sub_orchestrator = self.sub_orchestrators.get(level, None)
             if sub_orchestrator:
-                objectives = sub_orchestrator.get_objectives(info)
+                objectives = sub_orchestrator.get_objectives(info, link_pos)
                 if objectives is not None:
                     location_objective, objective_vector, objective_pos_dir, objective_kind = objectives
-
-        info['objective_vector'] = objective_vector if objective_vector is not None else np.zeros(2, dtype=np.float32)
-        info['objective_kind'] = objective_kind
-        info['objective_position'] = objective_pos_dir
-        info['location_objective'] = location_objective
 
         if objective_pos_dir is not None:
             link_tile_index = position_to_tile_index(link_pos[0], link_pos[1] + 4)
 
             if not isinstance(objective_pos_dir, str):
                 objective_pos_dir = position_to_tile_index(*objective_pos_dir)
-            info['optimal_path'] = a_star(link_tile_index, info['tiles'], objective_pos_dir)
+
+            path = a_star(link_tile_index, info['tiles'], objective_pos_dir)
+            info['optimal_path'] = path
+
+            if path:
+                last_tile = path[-1]
+                last_tile_pos = tile_index_to_position(last_tile)
+
+                if objective_vector is None:
+                    objective_vector = np.array(last_tile_pos, dtype=np.float32) - link_pos
+                    norm = np.linalg.norm(objective_vector)
+                    if norm > 0:
+                        objective_vector /= norm
+
+            elif isinstance(objective_pos_dir, str):
+                objective_vector = get_vector_from_direction(objective_pos_dir)
+                objective_pos_dir = link_pos + objective_vector * 16
+                objective_pos_dir[0] = np.clip(objective_pos_dir[0], 0, info['tiles'].shape[1] * 8)
+                objective_pos_dir[1] = np.clip(objective_pos_dir[1], 0, info['tiles'].shape[0] * 8)
+
+            if isinstance(objective_pos_dir, str):
+                objective_pos_dir = last_tile_pos
+        
+        info['objective_vector'] = objective_vector if objective_vector is not None else np.zeros(2, dtype=np.float32)
+        info['objective_kind'] = objective_kind
+        info['objective_position'] = objective_pos_dir
+        info['location_objective'] = location_objective
     
     def get_first_non_zero(self, list):
         lowest = np.inf
@@ -133,13 +154,9 @@ class OverworldOrchestrator:
             0x38 : "W",
         }
 
-    def get_objectives(self, info):
+    def get_objectives(self, info, link_pos):
         """Returns location_objective, objective_vector, objective_pos_dir, objective_kind"""
-        link_pos = np.array(info['link_pos'], dtype=np.float32)
         location = info['location']
-        mode = info['mode']
-
-
         location_objective = get_location_objective(self.location_direction, location) if location in self.location_direction else None
 
         # get sword if we don't have it
@@ -156,10 +173,10 @@ class OverworldOrchestrator:
                     return None, objective_vector, cave_pos, 'cave'
             else:
                 if is_in_cave(info):
-                    return None, get_vector_from_direction('S'), 'S', 'exit-cave'
+                    return None, None, 'S', 'exit-cave'
                 
                 else:
-                    return location_objective, get_vector_from_direction('N'), 'N', 'room'
+                    return location_objective, None, 'N', 'room'
         
         if location == 0x37:
             cave_pos = find_closest_cave(info)
@@ -168,7 +185,7 @@ class OverworldOrchestrator:
 
         if location in self.location_direction:
             direction = self.location_direction[location]
-            objective_vector = get_vector_from_direction(direction)
+            objective_vector = None
             return location_objective, objective_vector, direction, 'room'
 
     def create_vector_norm(self, from_pos, to_pos):
@@ -209,10 +226,8 @@ class Dungeon1Orchestrator:
         self.keys_obtained.clear()
         self.prev_keys = None
 
-    def get_objectives(self, info):
+    def get_objectives(self, info, link_pos):
         """Returns location_objective, objective_vector, objective_pos_dir, objective_kind"""
-
-        link_pos = np.array(info['link_pos'], dtype=np.float32)
         location = info['location']
 
         # check if we have a new key
@@ -233,17 +248,11 @@ class Dungeon1Orchestrator:
         # special case entry room, TODO: need to detect door lock
         if location == 0x73:
             if 0x72 not in self.keys_obtained:
-                direction = "W"
-                objective_vector = get_vector_from_direction(direction)
-                return 0x72, objective_vector, direction, 'room'
+                return 0x72, None, "W", 'room'
             elif 0x74 not in self.keys_obtained:
-                direction = "E"
-                objective_vector = get_vector_from_direction(direction)
-                return 0x74, objective_vector, direction, 'room'
+                return 0x74, None, "E", 'room'
             else:
-                direction = "N"
-                objective_vector = get_vector_from_direction(direction)
-                return 0x63, objective_vector, direction, 'room'
+                return 0x63, None, "N", 'room'
         
         # check if we should kill all enemies:
         if location in self.locations_to_kill_enemies:
@@ -253,8 +262,7 @@ class Dungeon1Orchestrator:
         # otherwise, movement direction is based on the location
         if location in self.location_direction:
             direction = self.location_direction[location]
-            objective_vector = get_vector_from_direction(direction)
             location = get_location_objective(self.location_direction, location)
-            return location, objective_vector, direction, 'room'
+            return location, None, direction, 'room'
 
 __all__ = [ObjectiveSelector.__name__]
