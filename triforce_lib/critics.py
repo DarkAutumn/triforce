@@ -268,7 +268,7 @@ class GameplayCritic(ZeldaCritic):
                 if len(old_path) >= 2:
                     optimal_direction = self.get_optimal_direction(old_path[0], old_path[1])
                     direction = new['direction']
-                    
+
                     # reward if we moved in the right direction
                     if optimal_direction == direction:
                         rewards['reward-move-closer'] = self.move_closer_reward
@@ -282,13 +282,20 @@ class GameplayCritic(ZeldaCritic):
                         # moving closer to the objective
 
                         _, new_objective_pos, new_path = new["a*_path"]
+
+                        target = tile_index_to_position(old_path[-1])
+                        new_target = tile_index_to_position(new_path[-1]) if new_path else target
+                        old_distance = self.manhattan_distance(target, old['link_pos'])
+                        new_distance = self.manhattan_distance(new_target, new['link_pos'])
+                        diff = old_distance - new_distance
+
                         if old_objective_pos == new_objective_pos:
                             # if the objective hasn't moved, see if we got closer or farther using
                             # the a* paths.
 
                             if len(new_path) > len(old_path):
                                 rewards['penalty-move-farther'] = self.move_away_penalty
-                            elif len(new_path) < len(old_path):
+                            elif len(new_path) < len(old_path) and diff > 0:
                                 rewards['reward-move-closer'] = self.move_closer_reward
 
                         else:
@@ -300,7 +307,7 @@ class GameplayCritic(ZeldaCritic):
 
                             if len(new_path) > len(old_path):
                                 rewards['penalty-move-farther'] = self.move_away_penalty
-                            elif len(new_path) < len(old_path):
+                            elif len(new_path) < len(old_path) and diff > 0:
                                 rewards['reward-move-closer'] = self.move_closer_reward
 
     def is_opposite_direction(self, a, b):
