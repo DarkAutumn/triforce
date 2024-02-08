@@ -61,6 +61,7 @@ class ObjectiveSelector(gym.Wrapper):
         self.dungeon1 = Dungeon1Orchestrator()
         self.overworld = OverworldOrchestrator()
         self.sub_orchestrators = { 0 : self.overworld, 1 : self.dungeon1}
+        self.last_route = (None, [])
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
@@ -79,6 +80,7 @@ class ObjectiveSelector(gym.Wrapper):
     
     def set_objectives(self, info):
         level = info['level']
+        location = info['location']
         link_pos =  np.array(info['link_pos'], dtype=np.float32)
 
         location_objective = None
@@ -99,13 +101,20 @@ class ObjectiveSelector(gym.Wrapper):
                 if objectives is not None:
                     location_objective, objective_vector, objective_pos_dir, objective_kind = objectives
 
+        # find the optimal route to the objective
         if objective_pos_dir is not None:
             link_tile_index = position_to_tile_index(link_pos[0], link_pos[1] + 4)
 
             if not isinstance(objective_pos_dir, str):
                 objective_pos_dir = position_to_tile_index(*objective_pos_dir)
 
-            path = a_star(link_tile_index, info['tiles'], objective_pos_dir)
+            key = (level, location, link_tile_index, objective_pos_dir)
+            if self.last_route[0] == key:
+                path = self.last_route[1]
+            else:
+                path = a_star(link_tile_index, info['tiles'], objective_pos_dir)
+
+            self.last_route = (key, path)
             info['optimal_path'] = path
 
             if path:
