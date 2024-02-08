@@ -25,9 +25,8 @@ def get_neighbors(position, tiles):
             neighbors.append((ny, nx))
     return neighbors
 
-def a_star(link_position, tiles, target):
+def a_star(start, tiles, target):
     map_height, map_width = tiles.shape
-    start = link_position
 
     open_set = []
     heapq.heappush(open_set, (0, start))
@@ -45,6 +44,8 @@ def a_star(link_position, tiles, target):
             while current in came_from:
                 path.append(current)
                 current = came_from[current]
+
+            path.append(start)
             return path[::-1]
 
         for neighbor in get_neighbors(current, tiles):
