@@ -98,9 +98,15 @@ class ZeldaML:
         if model_names is None:
             models = ZeldaModel.get_model_info()
         else:
-            models = [x for x in ZeldaModel.get_model_info() if x.name in model_names]
-            if len(models) != len(model_names):
-                raise Exception(f'Could not find all models requested: {model_names} missing: {set(model_names) - set([x.name for x in models])}')
+            model_infos = ZeldaModel.get_model_info()
+            models = []
+            for model_name in model_names:
+                for model_info in model_infos:
+                    if model_info.name == model_name:
+                        models.append(model_info)
+                        break
+                else:
+                    raise Exception(f'Could not find model: {model_name}')
 
         if output_path is None:
             output_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
