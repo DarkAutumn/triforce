@@ -239,46 +239,53 @@ class GameplayCritic(ZeldaCritic):
             rewards['reward-new-location'] = self.new_location_reward
     
     def critique_movement(self, old, new, rewards):
-        if old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
+        if new['action'] != "movement" or old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
             return
         
         # Did link run into a wall?
-        if new['action'] == 'movement' and old['link_pos'] == new['link_pos']:
-
+        if old['link_pos'] == new['link_pos']:
             # corner case: Entering a cave with text scroll, link is uncontrollable
             # but it's hard to detect this state, so we'll just ignore it
             if not is_in_cave(new) or new['link_y'] < 0x80:
                 rewards['penalty-wall-collision'] = self.wall_collision_penalty
+                return
+            
+        # did link move too close to an enemy?
+        old_enemies_too_close = {x.id: x for x in old['enemies'] if x.distance < self.too_close_threshold}
+        if old_enemies_too_close:
+            new_enemies_too_close = [x for x in new['enemies'] if x.id in old_enemies_too_close]
+            if new_enemies_too_close:
+                for enemy in new_enemies_too_close:
+                    if enemy.distance < old_enemies_too_close[enemy.id].distance:
+                        rewards['penalty-move-too-close'] = self.move_too_close_penalty
+                        return
+                    
+        # don't reward/penalize if we lost health, just taking the damage is penalty enough
+        if get_heart_halves(old) <= get_heart_halves(new):
 
-        # Did link move closer or father away?
-        # Reward for getting closer to objectives or items
-        # Penalize for moving too close to an enemy
-        # Penalize for moving away from an objective
-        if get_heart_halves(old) <= get_heart_halves(new) and old['link_pos'] != new['link_pos']:
-            # Reward moving towards objectives, or moving to the closest item
-            # Penalize directly moving away from the objective if not moving twoards an item
-            # Don't reward if we took damage, or if we didn't move more than a threshold
-
-            # This is link's motion vector, which may be zero
-
-            # check if we moved along the optimal path:
+            # do we have an optimal path?
             old_path = old.get('optimal_path', [])
             new_path = new.get('optimal_path', [])
-            if new['action'] == 'movement' and len(old_path) >= 2:
+            if len(old_path) >= 2:
                 optimal_direction = self.get_optimal_direction(old_path[0], old_path[1])
                 direction = new['direction']
                 
+                # reward if we moved in the right direction
                 if optimal_direction == direction:
                     rewards['reward-move-closer'] = self.move_closer_reward
 
+                # penalize moving in the opposite direction
                 elif self.is_opposite_direction(optimal_direction, direction):
                     rewards['penalty-move-farther'] = self.move_away_penalty
 
+                # Only penalize here if the new tile we reached is farther from the target
                 else:
                     # see if we reached a new tile
                     if new_path[0] != old_path[0]:
                         if len(new_path) >= len(old_path):
                             rewards['penalty-move-farther'] = self.move_away_penalty
+                        elif len(new_path) < len(old_path):
+                            rewards['reward-move-closer'] = self.move_closer_reward
 
     def is_opposite_direction(self, a, b):
         if a == 'N' and b == 'S':
