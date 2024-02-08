@@ -192,12 +192,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         if abs(norm) < epsilon: 
             return np.zeros(2, dtype=np.float32), 0
         return vector / norm, norm
-    
-    def _get_vector_of_closest(self, vectors_and_distances):
-        if vectors_and_distances:
-            return vectors_and_distances[0][0]
-        
-        return np.zeros(2, dtype=np.float32)
 
     def clear_variables(self, name):
         self.clear_item(name + '_already_active')
