@@ -1,4 +1,7 @@
 # responsible for decoding difficult parts of zelda gamestate
+from .zelda_game_data import zelda_game_data
+from .model_parameters import gameplay_start_y
+
 import numpy as np
 
 mode_scrolling_complete = 4
@@ -88,4 +91,99 @@ def get_heart_containers(state):
 def has_beams(state):
     return get_heart_halves(state) == get_heart_containers(state) * 2
 
-__all__ = ['is_in_cave', 'is_mode_scrolling', 'is_mode_death', 'get_beam_state', 'get_num_triforce_pieces', 'get_full_hearts', 'get_heart_halves', 'get_heart_containers', 'has_beams']
+
+walkable_tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87, 0xf6]
+walkable_tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
+walkable_tiles += list(range(0x98, 0x9b+1))  # dungeon locked door north
+walkable_tiles += list(range(0xa4, 0xa7+1))  # dungeon locked door east
+
+seen = set()
+def is_tile_walkable(last_tile, tile):
+    # Special case dungeon bricks.  Link actually walks through them so they are walkable, but only if
+    # coming from a non-brick tile.  Otherwise the A* algorithm will try to route link around the bricks
+    # outside the play area.
+    if last_tile == tile == 0xf6:
+        return False
+    
+    return tile in walkable_tiles
+
+def position_to_tile_index(x, y):
+    return (int((y - gameplay_start_y) // 8), int(x // 8))
+
+def get_link_tile_index(info):
+    return position_to_tile_index(info['link_x'], info['link_y'] + 4)
+    
+
+def tile_index_to_position(tile_index):
+    return (tile_index[1] * 8, tile_index[0] * 8 + gameplay_start_y)
+
+
+class ZeldaObjectData:
+    def __init__(self, ram):
+        for table, (offset, size) in zelda_game_data.tables.items():
+            self.__dict__[table] = ram[offset:offset+size]
+
+    @property
+    def link_pos(self):
+        return self.get_position(0)
+    
+    def get_position(self, obj : int):
+        return self.obj_pos_x[obj], self.obj_pos_y[obj]
+    
+    def get_object_id(self, obj : int):
+        if obj == 0:
+            return None
+
+        return self.obj_id[obj]
+    
+    def get_obj_direction(self, obj : int):
+        return self.obj_direction[obj]
+    
+    def get_obj_health(self, obj : int):
+        if obj == 0:
+            return None
+        return self.obj_health[obj] >> 4
+    
+    def get_obj_status(self, obj : int):
+        return self.obj_status[obj]
+        
+    def is_enemy(self, obj_id : int):
+        return 1 <= obj_id <= 0x48
+    
+    def enumerate_enemy_ids(self) -> int:
+        for i in range(1, 0xc):
+            if self.is_enemy(self.get_object_id(i)):
+                yield i
+
+    def enumerate_item_ids(self) -> int:
+        for i in range(1, 0xc):
+            if self.get_object_id(i) == 0x60:
+                yield i
+
+    def enumerate_projectile_ids(self) -> int:
+        for i in range(1, 0xc):
+            id = self.get_object_id(i)
+            if id > 0x48 and id != 0x60 and id != 0x63 and id != 0x64 and id != 0x68:
+                yield i
+
+    @property
+    def enemy_count(self):
+        return sum(1 for i in range(1, 0xb) if self.is_enemy(self.get_object_id(i)))
+
+__all__ = [
+    'is_in_cave',
+    'is_mode_scrolling',
+    'is_mode_death',
+    'get_beam_state',
+    'get_num_triforce_pieces',
+    'get_full_hearts',
+    'get_heart_halves',
+    'get_heart_containers',
+    'has_beams',
+    'is_tile_walkable',
+    'walkable_tiles',
+    'position_to_tile_index',
+    'tile_index_to_position',
+    'get_link_tile_index',
+    ZeldaObjectData.__name__,
+    ]

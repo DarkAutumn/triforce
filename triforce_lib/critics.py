@@ -1,5 +1,7 @@
 import numpy as np
 from typing import Dict
+
+from .astar import a_star
 from .zelda_game import *
 from .zelda_game import get_heart_halves, is_in_cave, mode_gameplay, mode_cave
 
@@ -196,20 +198,20 @@ class GameplayCritic(ZeldaCritic):
         
         else:
             if new['action'] == 'attack':                
-                if not new['enemies_on_screen']:
+                if not new['enemies']:
                     rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
 
                 elif self.offscreen_sword_disabled(new):
                     rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
 
-                elif new['enemy_vectors']:
-                    enemy_vectors = [x[0] for x in new['enemy_vectors'] if abs(x[1]) > 0]
+                elif new['enemies']:
+                    enemy_vectors = [enemy.vector for enemy in new['enemies'] if abs(enemy.distance) > 0]
                     if enemy_vectors:
                         dotproducts = np.sum(new['link_vector'] * enemy_vectors, axis=1)
                         if not np.any(dotproducts > np.sqrt(2) / 2):
                             rewards['penalty-attack-miss'] = self.attack_miss_penalty
                         elif not old['has_beams']:
-                            distance = new['enemy_vectors'][0][1]
+                            distance = new['enemies'][0].distance
                             if distance > self.distance_threshold:
                                 rewards['penalty-attack-miss'] = self.attack_miss_penalty
 
@@ -239,62 +241,99 @@ class GameplayCritic(ZeldaCritic):
             rewards['reward-new-location'] = self.new_location_reward
     
     def critique_movement(self, old, new, rewards):
-        if old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
+        if new['action'] != "movement" or old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
             return
         
         # Did link run into a wall?
-        if new['action'] == 'movement' and old['link_pos'] == new['link_pos']:
-
-            # corner case: Entering a cave with text scroll, link is uncontrollable
-            # but it's hard to detect this state, so we'll just ignore it
-            if not is_in_cave(new) or new['link_y'] < 0x80:
-                rewards['penalty-wall-collision'] = self.wall_collision_penalty
-        
-        # Did link move closer or father away?
-        # Reward for getting closer to objectives or items
-        # Penalize for moving too close to an enemy
-        # Penalize for moving away from an objective
+        if old['link_pos'] == new['link_pos']:
+            rewards['penalty-wall-collision'] = self.wall_collision_penalty
+            return
+            
+        # did link move too close to an enemy?
+        old_enemies_too_close = {x.id: x for x in old['enemies'] if x.distance < self.too_close_threshold}
+        if old_enemies_too_close:
+            new_enemies_too_close = [x for x in new['enemies'] if x.id in old_enemies_too_close]
+            if new_enemies_too_close:
+                for enemy in new_enemies_too_close:
+                    if enemy.distance < old_enemies_too_close[enemy.id].distance:
+                        rewards['penalty-move-too-close'] = self.move_too_close_penalty
+                        return
+                    
+        # don't reward/penalize if we lost health, just taking the damage is penalty enough
         if get_heart_halves(old) <= get_heart_halves(new):
-            # Reward moving towards objectives, or moving to the closest item
-            # Penalize directly moving away from the objective if not moving twoards an item
-            # Don't reward if we took damage, or if we didn't move more than a threshold
 
-            # This is link's motion vector, which may be zero
-            if old['link_pos'] != new['link_pos']:
-                link_old_pos = np.array(old['link_pos'], dtype=np.float32)
-                link_new_pos = np.array(new['link_pos'], dtype=np.float32)
-                link_motion_vector = link_new_pos - link_old_pos
+            # do we have an optimal path?
+            if "a*_path" in old:
+                _, old_objective_pos, old_path = old["a*_path"]
+                if len(old_path) >= 2:
+                    optimal_direction = self.get_optimal_direction(old_path[0], old_path[1])
+                    direction = new['direction']
 
-                # Check if we moved too close to any enemies first
-                moved_too_close = False
-                if new['action'] != 'attack':
-                    close_enemies = [x[0] for x in new['enemy_vectors'] if x[1] < self.too_close_threshold]
+                    # reward if we moved in the right direction
+                    if optimal_direction == direction:
+                        rewards['reward-move-closer'] = self.move_closer_reward
 
-                    if close_enemies:
-                        close_enemy_distances = [np.dot(link_motion_vector, x) for x in close_enemies]
-                        closest_distance = max(close_enemy_distances)
-                        if closest_distance > 0:
-                            rewards['penalty-move-too-close'] = self.move_too_close_penalty * closest_distance / self.movement_scale_factor
-                            moved_too_close = True
+                    # penalize moving in the opposite direction
+                    elif self.is_opposite_direction(optimal_direction, direction):
+                        rewards['penalty-move-farther'] = self.move_away_penalty
 
-                # Otherwise check to see if we moved closer to the objective
-                if not moved_too_close:
-                    objective_vectors = [new['objective_vector'], new['closest_item_vector']]
-                    nonzero_objectives = [v for v in objective_vectors if v[0] or v[1]]
+                    elif "a*_path" in new:
+                        # even though we didn't move in the A* selected path, we could still be
+                        # moving closer to the objective
 
-                    if nonzero_objectives:
-                        objective_distances = [np.dot(link_motion_vector, x) for x in nonzero_objectives]
-                        best_distance = max(objective_distances)
+                        _, new_objective_pos, new_path = new["a*_path"]
 
-                        # Don't reward positive movement on attack
-                        if best_distance > 0 and new['action'] != 'attack':
-                            rewards['reward-move-closer'] = self.move_closer_reward * best_distance / self.movement_scale_factor
-                        
-                        # We have to discount movement away on attack to ensure that the model does
-                        # "move" with attacks in the negative direction then move back to the original
-                        # position, creating infinite rewards
-                        if best_distance < 0:
-                            rewards['penalty-move-farther'] = self.move_away_penalty * abs(best_distance) / self.movement_scale_factor
+                        target = tile_index_to_position(old_path[-1])
+                        new_target = tile_index_to_position(new_path[-1]) if new_path else target
+                        old_distance = self.manhattan_distance(target, old['link_pos'])
+                        new_distance = self.manhattan_distance(new_target, new['link_pos'])
+                        diff = old_distance - new_distance
+
+                        if old_objective_pos == new_objective_pos:
+                            # if the objective hasn't moved, see if we got closer or farther using
+                            # the a* paths.
+
+                            if len(new_path) > len(old_path):
+                                rewards['penalty-move-farther'] = self.move_away_penalty
+                            elif len(new_path) < len(old_path) and diff >= 0:
+                                rewards['reward-move-closer'] = self.move_closer_reward
+
+                        else:
+                            # The objective moved.  We might have selected a new objective, or we are
+                            # chasing an enemy that moved away. We should stil reward the move if the agent
+                            # got closer to the old objective position.
+
+                            new_path = a_star(get_link_tile_index(new), old['tiles'], old_objective_pos)
+
+                            if len(new_path) > len(old_path):
+                                rewards['penalty-move-farther'] = self.move_away_penalty
+                            elif len(new_path) < len(old_path) and diff >= 0:
+                                rewards['reward-move-closer'] = self.move_closer_reward
+
+    def is_opposite_direction(self, a, b):
+        if a == 'N' and b == 'S':
+            return True
+        if a == 'S' and b == 'N':
+            return True
+        if a == 'E' and b == 'W':
+            return True
+        if a == 'W' and b == 'E':
+            return True
+        return False
+
+    def get_optimal_direction(self, old_index, new_index):
+        # given two (x, y) points as indexes, figure out if the movement was N S E or W
+        if new_index[0] > old_index[0]:
+            return 'S'
+        elif new_index[0] < old_index[0]:
+            return 'N'
+        elif new_index[1] > old_index[1]:
+            return 'E'
+        elif new_index[1] < old_index[1]:
+            return 'W'
+
+    def manhattan_distance(self, a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
     # state helpers, some states are calculated
     def has_visited(self, level, location):

@@ -6,8 +6,10 @@
 import gymnasium as gym
 import numpy as np
 from collections import deque
-from .model_parameters import viewport_pixels, gameplay_start_y
 
+from .zelda_game_data import zelda_game_data
+from .model_parameters import viewport_pixels, gameplay_start_y
+ 
 class FrameCaptureWrapper(gym.Wrapper):
     def __init__(self, env, rgb_render):
         super().__init__(env)

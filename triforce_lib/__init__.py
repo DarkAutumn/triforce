@@ -6,6 +6,7 @@ from .action_replay import ZeldaActionReplay
 from .zeldaml import ZeldaML
 from .scenario import ZeldaScenario
 from .models import ZeldaModel
+from .zelda_game import is_in_cave
 
 # add custom integrations to retro
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -25,4 +26,5 @@ __all__ = [
     ZeldaScenario.__name__,
     ZeldaActionReplay.__name__,
     ZeldaAIOrchestrator.__name__,
+    is_in_cave.__name__,
     ]

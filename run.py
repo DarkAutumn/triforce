@@ -9,7 +9,7 @@ import pygame
 import numpy as np
 from collections import deque
 
-from triforce_lib import ZeldaAIOrchestrator, ZeldaScenario, ZeldaML
+from triforce_lib import ZeldaAIOrchestrator, ZeldaScenario, ZeldaML, is_in_cave
 
 class Recording:
     def __init__(self, dimensions):
@@ -61,13 +61,17 @@ class Display:
 
         self.font = pygame.font.Font(None, 24)
 
+        game_x, game_y = 240, 224
+        self.scale = 4
+
+        self.game_width = game_x * self.scale
+        self.game_height = game_y * self.scale
+
         self.obs_width = 128
-        self.obs_height = 640
+        self.obs_height = self.game_height
         self.obs_x = 0
         self.obs_y = 0
 
-        self.game_width = 640
-        self.game_height = 480
         self.graph_height = 150
         self.game_x = self.obs_width
         self.game_y = 0
@@ -101,6 +105,7 @@ class Display:
 
         recording = None
         cap_fps = True
+        overlay = 0
 
         terminated = True
         truncated = False
@@ -158,12 +163,15 @@ class Display:
                 y_pos = self.draw_arrow(surface, "Item", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][3], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
                 y_pos = self.render_text(surface, f"Enemies: {obs['features'][0]}", (x_pos, y_pos))
                 y_pos = self.render_text(surface, f"Beams: {obs['features'][1]}", (x_pos, y_pos))
-                y_pos = self.render_text(surface, f"Total Rewards: {round(self.total_rewards, 2)}", (x_pos, y_pos))
+                y_pos = self.render_text(surface, f"Rewards: {round(self.total_rewards, 2)}", (x_pos, y_pos))
                 if curr_score is not None:
                     y_pos = self.render_text(surface, f"Score: {round(curr_score, 2)}", (x_pos, y_pos))
 
                 # render the gameplay
                 self.render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width, self.game_height)
+                if overlay:
+                    color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
+                    self.overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), info['tiles'], color, self.scale, self.get_optimal_path(info))
                 self.render_text(surface, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
                     self.render_text(surface, f"Location: {hex(info['location'])}", (self.game_x + self.game_width - 120, self.game_y))
@@ -203,6 +211,9 @@ class Display:
 
                         elif event.key == pygame.K_c:
                             mode = 'c'
+
+                        elif event.key == pygame.K_o:
+                            overlay = (overlay + 1) % 3
 
                         elif event.key == pygame.K_m:
                             model_requested += 1
@@ -342,6 +353,39 @@ class Display:
             pygame.draw.line(surface, (255, 255, 255), (start_x, y), (start_x + 300, y))
             y += 3
 
+    def get_optimal_path(self, info):
+        if 'a*_path' in info:
+            return info['a*_path'][-1]
+
+    def overlay_grid_and_text(self, surface, kind, offset, tiles, text_color, scale, path = None):
+        grid_width = 32
+        grid_height = 22
+        tile_width = 8 * scale
+        tile_height = 8 * scale
+
+        # Pygame font setup
+        font_size = int(min(tile_width, tile_height) // 2)
+        font = pygame.font.Font(None, font_size)
+
+        for tile_x in range(grid_width):
+            for tile_y in range(grid_height):
+                if kind == 1 and path and (tile_y, tile_x) not in path:
+                    continue
+
+                x = offset[0] + tile_x * tile_width - 8 * scale
+                y = 56 * scale + offset[1] + tile_y * tile_height
+
+                pygame.draw.rect(surface, (0, 0, 255), (x, y, tile_width, tile_height), 1)
+
+                tile_number = tiles[tile_y, tile_x] # 1 for overscan
+                text = f"{tile_number:02X}"
+
+                # Render the text
+                text_surface = font.render(text, True, text_color)
+                text_rect = text_surface.get_rect(center=(x + tile_width // 2, y + tile_height // 2))
+
+                # Draw the text
+                surface.blit(text_surface, text_rect)
 
 def main(args):
     render_mode = 'rgb_array'

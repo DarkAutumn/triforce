@@ -32,7 +32,6 @@ def test_close_distance():
     actions.env = CriticWrapper(actions.env, critics=[GameplayCritic()])
     actions.reset()
 
-    # move under a block
     for i in range(2):
         _, _, _, _, info = actions.step('l')
         assert 'rewards' in info

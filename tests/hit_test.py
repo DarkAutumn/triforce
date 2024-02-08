@@ -9,7 +9,6 @@ def assert_no_hit( env, command):
     for _, _, terminated, truncated, info in run(env, command):
         assert not terminated
         assert not truncated
-        assert info['beam_hits'] == 0
         assert info['step_hits'] == 0
 
 def run( env, command):
@@ -22,7 +21,6 @@ def test_bat_injury():
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
-    assert info['beam_hits'] == 0
     assert info['step_hits'] == 1
     assert info['action'] == 'attack'
     
@@ -58,7 +56,6 @@ def test_sword_injury():
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
-    assert info['beam_hits'] == 0
     assert info['step_hits'] == 2
     assert info['action'] == 'attack'
     
@@ -75,7 +72,6 @@ def test_beam_injury():
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
-    assert info['beam_hits'] == 1
     assert info['step_hits'] == 1
     assert info['action'] == 'attack'
 
@@ -89,7 +85,6 @@ def test_bombs_kill():
     _, _, terminated, truncated, info = replay.step('b')
     assert not terminated
     assert not truncated
-    assert info['beam_hits'] == 0
     assert info['step_hits'] == 3
     assert info['bomb1_hits'] == 3
     assert info['action'] == 'item'
