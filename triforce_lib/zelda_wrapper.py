@@ -214,15 +214,11 @@ class ZeldaGameWrapper(gym.Wrapper):
         self.was_link_in_cave = in_cave
         
         # skip scrolling
-        unwrapped = self.env.unwrapped
-        objects = ZeldaObjectData(unwrapped.get_ram())
-        while is_mode_scrolling(info["mode"]) or is_link_stunned(objects.get_obj_status(0)):
+        while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']):
             obs, rew, terminated, truncated, info = self.env.step(self._none_action)
             rewards += rew
             if terminated or truncated:
                 break
-                
-            objects = ZeldaObjectData(unwrapped.get_ram())
 
         return obs, rewards, terminated, truncated, info
 
