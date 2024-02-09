@@ -129,7 +129,7 @@ class ZeldaML:
                 print()
                 print(f"Training model: {model_info.name}")
                 print(f"Scenario:       {model_info.training_scenario}")
-                print(f"Path:           {model_path}")
+                print(f"Path:           {model_dir}")
                 model = self._create_model(env, log_path)
                 callback = LogRewardCallback(model.save, model_dir)
                 model.learn(iterations, progress_bar=progress_bar, callback=callback)
