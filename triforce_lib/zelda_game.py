@@ -111,7 +111,7 @@ def position_to_tile_index(x, y):
     return (int((y - gameplay_start_y) // 8), int(x // 8))
 
 def get_link_tile_index(info):
-    return position_to_tile_index(info['link_x'], info['link_y'] + 4)
+    return position_to_tile_index(info['link_x'] + 4, info['link_y'] + 4)
     
 
 def tile_index_to_position(tile_index):

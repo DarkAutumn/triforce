@@ -20,8 +20,13 @@ def get_neighbors(position, tiles):
     y, x = position
     neighbors = []
     for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+
+        prev_tile = 0
+        if 0 <= x < tiles.shape[1] and 0 <= y < tiles.shape[0]:
+            prev_tile = tiles[y, x]
+
         nx, ny = x + dx, y + dy
-        if 0 <= nx < tiles.shape[1] and 0 <= ny < tiles.shape[0] and is_tile_walkable(tiles[y, x], tiles[ny, nx]):
+        if 0 <= nx < tiles.shape[1] and 0 <= ny < tiles.shape[0] and is_tile_walkable(prev_tile, tiles[ny, nx]):
             neighbors.append((ny, nx))
     return neighbors
 
