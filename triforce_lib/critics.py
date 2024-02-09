@@ -67,9 +67,11 @@ class GameplayCritic(ZeldaCritic):
         # same room movement rewards
         self.wall_collision_penalty = -self.reward_tiny
         self.move_closer_reward = self.reward_tiny
+        self.optimal_path_reward = self.move_closer_reward
+        self.useless_move_penalty = -self.reward_minimum
         
         self.movement_scale_factor = 9.0
-        self.move_away_penalty = -self.move_closer_reward
+        self.move_away_penalty = -self.move_closer_reward - self.reward_minimum
 
         self.too_close_threshold = 20
         self.move_too_close_penalty = -self.reward_small
@@ -268,7 +270,7 @@ class GameplayCritic(ZeldaCritic):
             if "a*_path" in old:
                 _, old_objective_pos, old_path = old["a*_path"]
                 if len(old_path) >= 2:
-                    optimal_direction = self.get_optimal_direction(old_path[0], old_path[1])
+                    optimal_direction = self.get_optimal_directions(old_path)
                     direction = new['direction']
 
                     target = np.array(tile_index_to_position(old_path[-1]), dtype=np.float32)
@@ -278,7 +280,7 @@ class GameplayCritic(ZeldaCritic):
                     percent = abs(diff / self.movement_scale_factor)
 
                     # reward if we moved in the right direction
-                    if optimal_direction == direction:
+                    if direction in optimal_direction:
                         if is_movement:
                             rewards['reward-move-closer'] = self.move_closer_reward * percent
 
@@ -299,6 +301,8 @@ class GameplayCritic(ZeldaCritic):
                                 rewards['penalty-move-farther'] = self.move_away_penalty
                             elif is_movement and len(new_path) < len(old_path) and diff > 0:
                                 rewards['reward-move-closer'] = self.move_closer_reward * percent
+                            else:
+                                rewards['useless-move-penalty'] = self.useless_move_penalty
 
                         else:
                             # The objective moved.  We might have selected a new objective, or we are
@@ -323,16 +327,37 @@ class GameplayCritic(ZeldaCritic):
             return True
         return False
 
-    def get_optimal_direction(self, old_index, new_index):
-        # given two (x, y) points as indexes, figure out if the movement was N S E or W
-        if new_index[0] > old_index[0]:
-            return 'S'
-        elif new_index[0] < old_index[0]:
-            return 'N'
-        elif new_index[1] > old_index[1]:
-            return 'E'
-        elif new_index[1] < old_index[1]:
-            return 'W'
+    def get_optimal_directions(self, path):
+        first = None
+        for i in range(1, len(path)):
+            old_index = path[i - 1]
+            new_index = path[i]
+            # given two (x, y) points as indexes, figure out if the movement was N S E or W
+            if new_index[0] > old_index[0]:
+                if first is None:
+                    first = 'S'
+                elif first != 'S':
+                    return first, 'S'
+                
+            elif new_index[0] < old_index[0]:
+                if first is None:
+                    first = 'N'
+                elif first != 'N':
+                    return first, 'N'
+                
+            elif new_index[1] > old_index[1]:
+                if first is None:
+                    first = 'E'
+                elif first != 'E':
+                    return first, 'E'
+                
+            elif new_index[1] < old_index[1]:
+                if first is None:
+                    first = 'W'
+                elif first != 'W':
+                    return first, 'W'
+                
+        return first, first
 
     def distance(self, first, second):
         return np.linalg.norm(np.array(first, dtype=np.float32) - np.array(second, dtype=np.float32))
