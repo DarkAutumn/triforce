@@ -273,9 +273,11 @@ class GameplayCritic(ZeldaCritic):
                     optimal_direction = self.get_optimal_directions(old_path)
                     direction = new['direction']
 
-                    target = np.array(tile_index_to_position(old_path[-1]), dtype=np.float32)
+                    target_tile = self.find_first_turn(old_path)
+                    target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
                     old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
                     new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
+
                     diff = old_distance - new_distance
                     percent = abs(diff / self.movement_scale_factor)
 
@@ -316,6 +318,18 @@ class GameplayCritic(ZeldaCritic):
                             elif is_movement and len(new_path) < len(old_path) and diff > 0:
                                 rewards['reward-move-closer'] = self.move_closer_reward * percent
 
+    def find_first_turn(self, path):
+        direction = self.get_direction(path[0], path[1])
+        for i in range(2, len(path)):
+            old_index = path[i - 1]
+            new_index = path[i]
+
+            new_direction = self.get_direction(old_index, new_index)
+            if new_direction != direction:
+                return old_index
+
+        return path[-1]
+
     def is_opposite_direction(self, a, b):
         if a == 'N' and b == 'S':
             return True
@@ -327,35 +341,28 @@ class GameplayCritic(ZeldaCritic):
             return True
         return False
 
+    def get_direction(self, old, new):
+        if new[0] > old[0]:
+            return 'S'
+        if new[0] < old[0]:
+            return 'N'
+        if new[1] > old[1]:
+            return 'E'
+        if new[1] < old[1]:
+            return 'W'
+        return None
+    
     def get_optimal_directions(self, path):
         first = None
         for i in range(1, len(path)):
             old_index = path[i - 1]
             new_index = path[i]
-            # given two (x, y) points as indexes, figure out if the movement was N S E or W
-            if new_index[0] > old_index[0]:
-                if first is None:
-                    first = 'S'
-                elif first != 'S':
-                    return first, 'S'
-                
-            elif new_index[0] < old_index[0]:
-                if first is None:
-                    first = 'N'
-                elif first != 'N':
-                    return first, 'N'
-                
-            elif new_index[1] > old_index[1]:
-                if first is None:
-                    first = 'E'
-                elif first != 'E':
-                    return first, 'E'
-                
-            elif new_index[1] < old_index[1]:
-                if first is None:
-                    first = 'W'
-                elif first != 'W':
-                    return first, 'W'
+
+            direction = self.get_direction(old_index, new_index)
+            if first is None:
+                first = direction
+            elif first != direction:
+                return first, direction
                 
         return first, first
 
