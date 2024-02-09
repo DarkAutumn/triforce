@@ -97,7 +97,7 @@ walkable_tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
 walkable_tiles += list(range(0x98, 0x9b+1))  # dungeon locked door north
 walkable_tiles += list(range(0xa4, 0xa7+1))  # dungeon locked door east
 
-seen = set()
+walkable_tiles = set(walkable_tiles)
 def is_tile_walkable(last_tile, tile):
     # Special case dungeon bricks.  Link actually walks through them so they are walkable, but only if
     # coming from a non-brick tile.  Otherwise the A* algorithm will try to route link around the bricks
