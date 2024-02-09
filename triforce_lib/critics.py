@@ -284,7 +284,7 @@ class GameplayCritic(ZeldaCritic):
 
                     # penalize moving in the opposite direction
                     elif self.is_opposite_direction(optimal_direction, direction):
-                        rewards['penalty-move-farther'] = self.move_away_penalty * percent
+                        rewards['penalty-move-farther'] = self.move_away_penalty
 
                     elif "a*_path" in new:
                         # even though we didn't move in the A* selected path, we could still be
@@ -296,7 +296,7 @@ class GameplayCritic(ZeldaCritic):
                             # the a* paths.
 
                             if len(new_path) > len(old_path):
-                                rewards['penalty-move-farther'] = self.move_away_penalty * percent
+                                rewards['penalty-move-farther'] = self.move_away_penalty
                             elif is_movement and len(new_path) < len(old_path) and diff > 0:
                                 rewards['reward-move-closer'] = self.move_closer_reward * percent
 
@@ -308,7 +308,7 @@ class GameplayCritic(ZeldaCritic):
                             new_path = a_star(get_link_tile_index(new), old['tiles'], old_objective_pos)
 
                             if len(new_path) > len(old_path):
-                                rewards['penalty-move-farther'] = self.move_away_penalty * percent
+                                rewards['penalty-move-farther'] = self.move_away_penalty
                             elif is_movement and len(new_path) < len(old_path) and diff > 0:
                                 rewards['reward-move-closer'] = self.move_closer_reward * percent
 
