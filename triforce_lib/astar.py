@@ -1,6 +1,6 @@
 import heapq
 
-from .zelda_game import is_tile_walkable
+from .zelda_game import walkable_tiles
 
 def heuristic(current, direction, map_width, map_height):
     y, x = current
@@ -16,18 +16,35 @@ def heuristic(current, direction, map_width, map_height):
         ny, nx = direction
         return abs(nx - x) + abs(ny - y)
 
+def get_tile(position, tiles):
+    y, x = position
+    if 0 <= x < tiles.shape[1] and 0 <= y < tiles.shape[0]:
+        return tiles[y, x]
+    
+    return 0
+
+# Special case dungeon bricks.  Link actually walks through them so they are walkable, but only if
+# coming from a non-brick tile.  Otherwise the A* algorithm will try to route link around the bricks
+# outside the play area.
+brick_tile = 0xf6
 def get_neighbors(position, tiles):
+    prev_tile_is_brick = get_tile(position, tiles) == brick_tile
+
     y, x = position
     neighbors = []
     for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
 
-        prev_tile = 0
-        if 0 <= x < tiles.shape[1] and 0 <= y < tiles.shape[0]:
-            prev_tile = tiles[y, x]
 
-        nx, ny = x + dx, y + dy
-        if 0 <= nx < tiles.shape[1] and 0 <= ny < tiles.shape[0] and is_tile_walkable(prev_tile, tiles[ny, nx]):
-            neighbors.append((ny, nx))
+        next = y + dy, x + dx
+        tile = get_tile(next, tiles)
+
+        # If the previous tile is a brick, we can't move to another brick tile
+        if prev_tile_is_brick and tile == brick_tile:
+            continue
+
+        if walkable_tiles[tile]:
+            neighbors.append(next)
+                
     return neighbors
 
 def a_star(start, tiles, target):
