@@ -317,6 +317,22 @@ class GameplayCritic(ZeldaCritic):
                                 rewards['penalty-move-farther'] = self.move_away_penalty
                             elif is_movement and len(new_path) < len(old_path) and diff > 0:
                                 rewards['reward-move-closer'] = self.move_closer_reward * percent
+                
+                else:
+                    # if A* couldn't find a path, we should still reward the agent for moving closer
+                    # to the objective.  This should be rare, and often happens when an enem moves
+                    # into a wall.  (Bosses or wallmasters.)
+
+                    target = new['objective_position']
+                    old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
+                    new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
+                    dist = new_distance - old_distance
+                    percent = abs(dist / self.movement_scale_factor)
+
+                    if dist < 0:
+                        rewards['reward-move-closer'] = self.move_closer_reward * percent
+                    else:
+                        rewards['penalty-move-farther'] = self.move_away_penalty * percent
 
     def find_first_turn(self, path):
         direction = self.get_direction(path[0], path[1])
