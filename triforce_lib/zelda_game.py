@@ -117,6 +117,13 @@ def get_link_tile_index(info):
 def tile_index_to_position(tile_index):
     return (tile_index[1] * 8, tile_index[0] * 8 + gameplay_start_y)
 
+class ZeldaObject:
+    def __init__(self, id, pos, distance, vector, health):
+        self.id = id
+        self.position = pos
+        self.distance = distance
+        self.vector = vector
+        self.health = health
 
 class ZeldaObjectData:
     def __init__(self, ram):
@@ -160,11 +167,57 @@ class ZeldaObjectData:
             if self.get_object_id(i) == 0x60:
                 yield i
 
+    def is_projectile(self, obj_id : int):
+        return obj_id > 0x48 and obj_id != 0x60 and obj_id != 0x63 and obj_id != 0x64 and obj_id != 0x68
+
     def enumerate_projectile_ids(self) -> int:
         for i in range(1, 0xc):
             id = self.get_object_id(i)
-            if id > 0x48 and id != 0x60 and id != 0x63 and id != 0x64 and id != 0x68:
+            if self.is_projectile(id):
                 yield i
+
+    def get_all_objects(self, link_pos : np.ndarray) -> tuple:
+        """A slightly optimized method to get all objects in the game state, sorted by distance."""
+
+        enemies = []
+        items = []
+        projectiles = []
+
+        obj_id = self.obj_id
+        obj_pos_x = self.obj_pos_x
+        obj_pos_y = self.obj_pos_y
+
+        for i in range(1, 0xc):
+            id = obj_id[i]
+            if id == 0:
+                continue
+
+            pos = obj_pos_x[i], obj_pos_y[i]
+            distance = np.linalg.norm(link_pos - pos)
+            if distance > 0:
+                vector = (pos - link_pos) / distance
+            else:
+                vector = np.array([0, 0], dtype=np.float32)
+
+            if id == 0x60:
+                items.append(ZeldaObject(id, pos, distance, vector, None))
+
+            elif 1 <= id <= 0x48:
+                enemies.append(ZeldaObject(id, pos, distance, vector, self.get_obj_health(i)))
+
+            elif self.is_projectile(id):
+                projectiles.append(ZeldaObject(id, pos, distance, vector, None))
+
+        if len(enemies) > 1:
+            enemies.sort(key=lambda x: x.distance)
+
+        if len(items) > 1:
+            items.sort(key=lambda x: x.distance)
+
+        if len(projectiles) > 1:
+            projectiles.sort(key=lambda x: x.distance)
+
+        return enemies, items, projectiles
 
     @property
     def enemy_count(self):
