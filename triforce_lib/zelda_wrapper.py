@@ -151,21 +151,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._prev_health = curr_enemy_health
         return step_hits
 
-    def _get_and_normalize_vectors(self, link_pos, objects, ids):
-        positions = [objects.get_position(id) for id in ids if id is not None]
-
-        # Calculate vectors and distances to each enemy
-        vectors_and_distances = [self._normalize(enemy_pos - link_pos) for enemy_pos in positions]
-        vectors_and_distances.sort(key=lambda x: x[1])
-        return vectors_and_distances
-    
-    def _normalize(self, vector):
-        epsilon = 1e-6
-        norm = np.linalg.norm(vector)
-        if abs(norm) < epsilon: 
-            return np.zeros(2, dtype=np.float32), 0
-        return vector / norm, norm
-
     def clear_variables(self, name):
         self.clear_item(name + '_already_active')
         self.clear_item(name + '_discounted_hits')
