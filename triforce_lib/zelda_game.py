@@ -91,13 +91,19 @@ def get_heart_containers(state):
 def has_beams(state):
     return get_heart_halves(state) == get_heart_containers(state) * 2
 
+def init_walkable_tiles():
+    walkable_tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87, 0xf6]
+    walkable_tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
+    walkable_tiles += list(range(0x98, 0x9b+1))  # dungeon locked door north
+    walkable_tiles += list(range(0xa4, 0xa7+1))  # dungeon locked door east
 
-walkable_tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87, 0xf6]
-walkable_tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
-walkable_tiles += list(range(0x98, 0x9b+1))  # dungeon locked door north
-walkable_tiles += list(range(0xa4, 0xa7+1))  # dungeon locked door east
+    result = [False] * 256
+    for tile in walkable_tiles:
+        result[tile] = True
 
-walkable_tiles = set(walkable_tiles)
+    return result
+
+walkable_tiles = init_walkable_tiles()
 def is_tile_walkable(last_tile, tile):
     # Special case dungeon bricks.  Link actually walks through them so they are walkable, but only if
     # coming from a non-brick tile.  Otherwise the A* algorithm will try to route link around the bricks
@@ -105,7 +111,7 @@ def is_tile_walkable(last_tile, tile):
     if last_tile == tile == 0xf6:
         return False
     
-    return tile in walkable_tiles
+    return walkable_tiles[tile]
 
 def position_to_tile_index(x, y):
     return (int((y - gameplay_start_y) // 8), int(x // 8))
