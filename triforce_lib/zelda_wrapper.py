@@ -73,11 +73,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         elif self.action_is_item(act):
             info['action'] = 'item'
 
-        else:
-            direction = self.action_is_movement(act)
-            if direction:
-                info['action'] = 'movement'
-                info['direction'] = direction
+        elif self.action_is_movement(act):
+            info['action'] = 'movement'
 
         unwrapped = self.env.unwrapped
         ram = unwrapped.get_ram()
@@ -96,16 +93,16 @@ class ZeldaGameWrapper(gym.Wrapper):
         direction = info['link_direction']
         info['link_vector'] = np.zeros(2, dtype=np.float32)
         if direction == 1:      # east
-            info['link_direction'] = 'E'
+            info['direction'] = 'E'
             info['link_vector'][0] = 1
         elif direction == 2:    # west
-            info['link_direction'] = 'W'
+            info['direction'] = 'W'
             info['link_vector'][0] = -1
         elif direction == 4:    # south
-            info['link_direction'] = 'S'
+            info['direction'] = 'S'
             info['link_vector'][1] = 1
         elif direction == 8:    # north
-            info['link_direction'] = 'N'
+            info['direction'] = 'N'
             info['link_vector'][1] = -1
         else:
             raise Exception("Unknown link direction")        

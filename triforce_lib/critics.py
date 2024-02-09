@@ -69,7 +69,7 @@ class GameplayCritic(ZeldaCritic):
         self.move_closer_reward = self.reward_tiny
         
         self.movement_scale_factor = 9.0
-        self.move_away_penalty = -self.reward_tiny
+        self.move_away_penalty = -self.move_closer_reward
 
         self.too_close_threshold = 20
         self.move_too_close_penalty = -self.reward_small
@@ -241,23 +241,25 @@ class GameplayCritic(ZeldaCritic):
             rewards['reward-new-location'] = self.new_location_reward
     
     def critique_movement(self, old, new, rewards):
-        if new['action'] != "movement" or old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
+        if old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
             return
         
         # Did link run into a wall?
-        if old['link_pos'] == new['link_pos']:
-            rewards['penalty-wall-collision'] = self.wall_collision_penalty
-            return
-            
-        # did link move too close to an enemy?
-        old_enemies_too_close = {x.id: x for x in old['enemies'] if x.distance < self.too_close_threshold}
-        if old_enemies_too_close:
-            new_enemies_too_close = [x for x in new['enemies'] if x.id in old_enemies_too_close]
-            if new_enemies_too_close:
-                for enemy in new_enemies_too_close:
-                    if enemy.distance < old_enemies_too_close[enemy.id].distance:
-                        rewards['penalty-move-too-close'] = self.move_too_close_penalty
-                        return
+        is_movement = 'action' in new and new['action'] == "movement"
+        if is_movement:
+            if old['link_pos'] == new['link_pos']:
+                rewards['penalty-wall-collision'] = self.wall_collision_penalty
+                return
+                
+            # did link move too close to an enemy?
+            old_enemies_too_close = {x.id: x for x in old['enemies'] if x.distance < self.too_close_threshold}
+            if old_enemies_too_close:
+                new_enemies_too_close = [x for x in new['enemies'] if x.id in old_enemies_too_close]
+                if new_enemies_too_close:
+                    for enemy in new_enemies_too_close:
+                        if enemy.distance < old_enemies_too_close[enemy.id].distance:
+                            rewards['penalty-move-too-close'] = self.move_too_close_penalty
+                            return
                     
         # don't reward/penalize if we lost health, just taking the damage is penalty enough
         if get_heart_halves(old) <= get_heart_halves(new):
@@ -269,34 +271,34 @@ class GameplayCritic(ZeldaCritic):
                     optimal_direction = self.get_optimal_direction(old_path[0], old_path[1])
                     direction = new['direction']
 
+                    target = np.array(tile_index_to_position(old_path[-1]), dtype=np.float32)
+                    old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
+                    new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
+                    diff = old_distance - new_distance
+                    percent = abs(diff / self.movement_scale_factor)
+
                     # reward if we moved in the right direction
                     if optimal_direction == direction:
-                        rewards['reward-move-closer'] = self.move_closer_reward
+                        if is_movement:
+                            rewards['reward-move-closer'] = self.move_closer_reward * percent
 
                     # penalize moving in the opposite direction
                     elif self.is_opposite_direction(optimal_direction, direction):
-                        rewards['penalty-move-farther'] = self.move_away_penalty
+                        rewards['penalty-move-farther'] = self.move_away_penalty * percent
 
                     elif "a*_path" in new:
                         # even though we didn't move in the A* selected path, we could still be
                         # moving closer to the objective
-
                         _, new_objective_pos, new_path = new["a*_path"]
-
-                        target = tile_index_to_position(old_path[-1])
-                        new_target = tile_index_to_position(new_path[-1]) if new_path else target
-                        old_distance = self.manhattan_distance(target, old['link_pos'])
-                        new_distance = self.manhattan_distance(new_target, new['link_pos'])
-                        diff = old_distance - new_distance
 
                         if old_objective_pos == new_objective_pos:
                             # if the objective hasn't moved, see if we got closer or farther using
                             # the a* paths.
 
                             if len(new_path) > len(old_path):
-                                rewards['penalty-move-farther'] = self.move_away_penalty
-                            elif len(new_path) < len(old_path) and diff >= 0:
-                                rewards['reward-move-closer'] = self.move_closer_reward
+                                rewards['penalty-move-farther'] = self.move_away_penalty * percent
+                            elif is_movement and len(new_path) < len(old_path) and diff > 0:
+                                rewards['reward-move-closer'] = self.move_closer_reward * percent
 
                         else:
                             # The objective moved.  We might have selected a new objective, or we are
@@ -306,9 +308,9 @@ class GameplayCritic(ZeldaCritic):
                             new_path = a_star(get_link_tile_index(new), old['tiles'], old_objective_pos)
 
                             if len(new_path) > len(old_path):
-                                rewards['penalty-move-farther'] = self.move_away_penalty
-                            elif len(new_path) < len(old_path) and diff >= 0:
-                                rewards['reward-move-closer'] = self.move_closer_reward
+                                rewards['penalty-move-farther'] = self.move_away_penalty * percent
+                            elif is_movement and len(new_path) < len(old_path) and diff > 0:
+                                rewards['reward-move-closer'] = self.move_closer_reward * percent
 
     def is_opposite_direction(self, a, b):
         if a == 'N' and b == 'S':
@@ -332,8 +334,8 @@ class GameplayCritic(ZeldaCritic):
         elif new_index[1] < old_index[1]:
             return 'W'
 
-    def manhattan_distance(self, a, b):
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+    def distance(self, first, second):
+        return np.linalg.norm(np.array(first, dtype=np.float32) - np.array(second, dtype=np.float32))
 
     # state helpers, some states are calculated
     def has_visited(self, level, location):
