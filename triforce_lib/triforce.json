@@ -5,10 +5,11 @@
             "name" : "overworld-sword",
             "path" : "overworld-sword",
             "action_space" : "move-only",
-            "priority" : 0,
+            "priority" : 2,
             "levels" : 0,
+            "rooms" : ["0x77"],
             "requires_enemies" : false,
-            "equipment_required" : ["nosword"],
+            "equipment_required" : [],
 
             "training_scenario" : "overworld-sword",
             "iterations" : 1000000
