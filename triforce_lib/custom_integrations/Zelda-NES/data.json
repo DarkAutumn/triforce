@@ -20,6 +20,10 @@
             "address": 132,
             "type": "=u1"
         },
+        "link_status": {
+            "address": 172,
+            "type": "=u1"
+        },
         "link_direction": {
             "address": 152,
             "type": "=u1"

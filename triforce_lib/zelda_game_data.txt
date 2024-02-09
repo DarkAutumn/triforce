@@ -16,6 +16,7 @@
 0x012 mode
 0x070 link_x
 0x084 link_y
+0x0ac link_status
 0x098 link_direction
 
 # animations

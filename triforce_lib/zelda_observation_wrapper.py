@@ -97,20 +97,26 @@ class ZeldaObservationWrapper(gym.Wrapper):
             else:
                 x, y = 0, 0
 
-            padded_frame = np.pad(frame, ((256, 256), (256, 256), (0, 0)), mode='edge')
-            frame = self.extract_viewport(padded_frame, x + 256, y + 256, self.viewport_size)
+            frame = self.extract_viewport(frame, x, y)
 
         if self.grayscale:
             frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
             frame = np.expand_dims(frame, axis=-1)
 
         return frame
-    
-    def extract_viewport(self, padded_frame, x_padded, y_padded, viewport_size):
-        half_vp = viewport_size // 2
 
-        x_start = x_padded - half_vp
-        y_start = y_padded - half_vp
+    def extract_viewport(self, frame, x, y):
+        half_vp = self.viewport_size // 2
+        padded_frame = np.pad(frame, ((half_vp, half_vp), (half_vp, half_vp), (0, 0)), mode='edge')
 
-        viewport = padded_frame[y_start:y_start+viewport_size, x_start:x_start+viewport_size]
-        return viewport
+        center_x, center_y = y + half_vp, x + half_vp
+        frame = padded_frame[center_x - half_vp:center_x + half_vp, center_y - half_vp:center_y + half_vp]
+
+        # link can sometimes be offscreen due to overscan
+        if frame.shape[0] != self.viewport_size or frame.shape[1] != self.viewport_size:
+            frame = self.reshape(frame)
+
+        return frame
+
+    def reshape(self, frame):
+        return np.pad(frame, ((0, self.viewport_size - frame.shape[0]), (0, self.viewport_size - frame.shape[1]), (0, 0)), mode='edge')

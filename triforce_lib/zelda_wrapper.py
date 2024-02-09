@@ -13,14 +13,6 @@ from .zelda_game_data import zelda_game_data
 from .zelda_game import get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData
 from .model_parameters import *
 
-class ZeldaObject:
-    def __init__(self, id, pos, distance, vector, health):
-        self.id = id
-        self.position = pos
-        self.distance = distance
-        self.vector = vector
-        self.health = health
-
 class ZeldaGameWrapper(gym.Wrapper):
     def __init__(self, env, deterministic=False):
         super().__init__(env)
@@ -108,10 +100,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             raise Exception("Unknown link direction")        
 
         # add information about enemies, items, and projectiles
-        self._add_enemies_and_objects(link_pos, info, 'enemies', objects, objects.enumerate_enemy_ids(), True)
-        self._add_enemies_and_objects(link_pos, info, 'items', objects, objects.enumerate_item_ids(), False)
-        self._add_enemies_and_objects(link_pos, info, 'projectiles', objects, objects.enumerate_projectile_ids(), False)
-
+        info['enemies'], info['items'], info['projectiles'] = objects.get_all_objects(link_pos)
         info['has_beams'] = has_beams(info) and get_beam_state(info) == 0
 
         location = (info['level'], info['location'], is_in_cave(info))
@@ -162,35 +151,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._prev_health = curr_enemy_health
         return step_hits
 
-    def _add_enemies_and_objects(self, link_pos, info, name, objects, enumeration, has_health):
-        result = []
-
-        for eid in enumeration:
-            pos = objects.get_position(eid)
-            distance = np.linalg.norm(pos - link_pos)
-            vector = (pos - link_pos) / distance if distance > 0 else np.zeros(2, dtype=np.float32)
-            health = objects.get_obj_health(eid) if has_health else None
-
-            result.append(ZeldaObject(eid, pos, distance, vector, health))
-
-        result.sort(key=lambda x: x.distance)
-        info[name] = result
-
-    def _get_and_normalize_vectors(self, link_pos, objects, ids):
-        positions = [objects.get_position(id) for id in ids if id is not None]
-
-        # Calculate vectors and distances to each enemy
-        vectors_and_distances = [self._normalize(enemy_pos - link_pos) for enemy_pos in positions]
-        vectors_and_distances.sort(key=lambda x: x[1])
-        return vectors_and_distances
-    
-    def _normalize(self, vector):
-        epsilon = 1e-6
-        norm = np.linalg.norm(vector)
-        if abs(norm) < epsilon: 
-            return np.zeros(2, dtype=np.float32), 0
-        return vector / norm, norm
-
     def clear_variables(self, name):
         self.clear_item(name + '_already_active')
         self.clear_item(name + '_discounted_hits')
@@ -239,15 +199,11 @@ class ZeldaGameWrapper(gym.Wrapper):
         self.was_link_in_cave = in_cave
         
         # skip scrolling
-        unwrapped = self.env.unwrapped
-        objects = ZeldaObjectData(unwrapped.get_ram())
-        while is_mode_scrolling(info["mode"]) or is_link_stunned(objects.get_obj_status(0)):
+        while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']):
             obs, rew, terminated, truncated, info = self.env.step(self._none_action)
             rewards += rew
             if terminated or truncated:
                 break
-                
-            objects = ZeldaObjectData(unwrapped.get_ram())
 
         return obs, rewards, terminated, truncated, info
 
