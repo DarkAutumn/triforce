@@ -93,7 +93,6 @@ class ZeldaObservationWrapper(gym.Wrapper):
         if self.viewport_size:
             if 'link_pos' in info:
                 x, y = info.get('link_pos')
-                x -= 8 # overscan adjustment
                 y -= self.trim
             else:
                 x, y = 0, 0
