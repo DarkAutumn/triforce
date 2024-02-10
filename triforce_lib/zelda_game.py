@@ -104,14 +104,6 @@ def init_walkable_tiles():
     return result
 
 walkable_tiles = init_walkable_tiles()
-def is_tile_walkable(last_tile, tile):
-    # Special case dungeon bricks.  Link actually walks through them so they are walkable, but only if
-    # coming from a non-brick tile.  Otherwise the A* algorithm will try to route link around the bricks
-    # outside the play area.
-    if last_tile == tile == 0xf6:
-        return False
-    
-    return walkable_tiles[tile]
 
 def position_to_tile_index(x, y):
     return (int((y - gameplay_start_y) // 8), int(x // 8))
@@ -239,7 +231,6 @@ __all__ = [
     'get_heart_halves',
     'get_heart_containers',
     'has_beams',
-    'is_tile_walkable',
     'walkable_tiles',
     'position_to_tile_index',
     'tile_index_to_position',
