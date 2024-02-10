@@ -68,7 +68,6 @@ class GameplayCritic(ZeldaCritic):
         self.wall_collision_penalty = -self.reward_tiny
         self.move_closer_reward = self.reward_tiny
         self.optimal_path_reward = self.move_closer_reward
-        self.useless_move_penalty = -self.reward_minimum
         
         self.movement_scale_factor = 9.0
         self.move_away_penalty = -self.move_closer_reward - self.reward_minimum
@@ -296,14 +295,16 @@ class GameplayCritic(ZeldaCritic):
                             rewards['reward-move-closer'] = self.move_closer_reward * percent
 
                     elif direction == possible_direction:
-                        if "a*_path" in new:
+                        if is_movement and "a*_path" in new:
                             _, _, new_path = new["a*_path"]
                             if target_tile in new_path and len(new_path) <= len(old_path):
                                 rewards['reward-optimal-path'] = self.move_closer_reward * percent
                             else:
                                 rewards['penalty-move-farther'] = self.move_away_penalty
-                        else:
+                        elif is_movement:
                             rewards['penalty-move-farther'] = self.move_away_penalty
+                        else:
+                            rewards['penalty-move-farther'] = -self.reward_minimum
 
                     # penalize moving in the opposite direction
                     else:
