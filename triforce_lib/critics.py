@@ -307,7 +307,7 @@ class GameplayCritic(ZeldaCritic):
 
                     # penalize moving in the opposite direction
                     else:
-                        rewards['penalty-move-farther'] = self.move_away_penalty * percent
+                        rewards['penalty-move-farther'] = self.move_away_penalty
 
                 
                 else:
@@ -325,7 +325,7 @@ class GameplayCritic(ZeldaCritic):
                         if dist < 0:
                             rewards['reward-move-closer'] = self.move_closer_reward * percent
                         else:
-                            rewards['penalty-move-farther'] = self.move_away_penalty * percent
+                            rewards['penalty-move-farther'] = self.move_away_penalty
 
     def find_second_turn(self, path):
         turn = 0
