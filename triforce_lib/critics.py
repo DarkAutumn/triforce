@@ -304,7 +304,7 @@ class GameplayCritic(ZeldaCritic):
                             elif is_movement and len(new_path) < len(old_path) and diff > 0:
                                 rewards['reward-move-closer'] = self.move_closer_reward * percent
                             else:
-                                rewards['useless-move-penalty'] = self.useless_move_penalty
+                                rewards['penalty-useless-move'] = self.useless_move_penalty
 
                         else:
                             # The objective moved.  We might have selected a new objective, or we are
