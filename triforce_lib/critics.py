@@ -317,7 +317,7 @@ class GameplayCritic(ZeldaCritic):
                     # into a wall.  (Bosses or wallmasters.)
 
                     target = new['objective_position']
-                    if target:
+                    if target is not None:
                         old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
                         new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
                         dist = new_distance - old_distance
