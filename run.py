@@ -133,7 +133,8 @@ class Display:
                 model_requested %= len(selected_model.models)
                 model = selected_model.models[model_requested]
                 model_kind = selected_model.model_kinds[model_requested]
-                model_name = selected_model.name if not model_kind else f"{selected_model.name} ({model_kind})"
+                timesteps = model.num_timesteps
+                model_name = selected_model.name if not model_kind else f"{selected_model.name} ({model_kind}) {timesteps:,} timesteps"
 
                 action, _ = model.predict(obs, deterministic=False)
                 obs, reward, terminated, truncated, info = env.step(action)
@@ -154,18 +155,7 @@ class Display:
                 surface.fill((0, 0, 0))
 
                 # Show observation values
-                x_pos = self.obs_x
-                y_pos = self.obs_y
-                y_pos = self.render_observation_view(surface, x_pos, y_pos, self.obs_width, obs["image"])
-                y_pos = self.draw_arrow(surface, "Objective", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][0], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
-                y_pos = self.draw_arrow(surface, "Enemy", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][1], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
-                y_pos = self.draw_arrow(surface, "Projectile", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][2], radius=self.obs_width // 4, color=(255, 0, 0), width=3)
-                y_pos = self.draw_arrow(surface, "Item", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][3], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
-                y_pos = self.render_text(surface, f"Enemies: {obs['features'][0]}", (x_pos, y_pos))
-                y_pos = self.render_text(surface, f"Beams: {obs['features'][1]}", (x_pos, y_pos))
-                y_pos = self.render_text(surface, f"Rewards: {round(self.total_rewards, 2)}", (x_pos, y_pos))
-                if curr_score is not None:
-                    y_pos = self.render_text(surface, f"Score: {round(curr_score, 2)}", (x_pos, y_pos))
+                self.show_observation(surface, obs, curr_score)
 
                 # render the gameplay
                 self.render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width, self.game_height)
@@ -233,6 +223,20 @@ class Display:
 
         env.close()
         pygame.quit()
+
+    def show_observation(self, surface, obs, curr_score):
+        x_pos = self.obs_x
+        y_pos = self.obs_y
+        y_pos = self.render_observation_view(surface, x_pos, y_pos, self.obs_width, obs["image"])
+        y_pos = self.draw_arrow(surface, "Objective", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][0], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
+        y_pos = self.draw_arrow(surface, "Enemy", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][1], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
+        y_pos = self.draw_arrow(surface, "Projectile", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][2], radius=self.obs_width // 4, color=(255, 0, 0), width=3)
+        y_pos = self.draw_arrow(surface, "Item", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][3], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
+        y_pos = self.render_text(surface, f"Enemies: {obs['features'][0]}", (x_pos, y_pos))
+        y_pos = self.render_text(surface, f"Beams: {obs['features'][1]}", (x_pos, y_pos))
+        y_pos = self.render_text(surface, f"Rewards: {round(self.total_rewards, 2)}", (x_pos, y_pos))
+        if curr_score is not None:
+            y_pos = self.render_text(surface, f"Score: {round(curr_score, 2)}", (x_pos, y_pos))
 
     def update_rewards(self, reward_values, reward_details, info, reward):
         reward_values.append(reward)
