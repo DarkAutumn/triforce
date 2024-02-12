@@ -457,7 +457,7 @@ class Dungeon1BossCritic(Dungeon1Critic):
         self.total_damage += new['step_hits']
         new['score'] = get_heart_halves(new) + self.total_damage
 
-overworld_dungeon1_walk_rooms = set([0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
+overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
 
 class Overworld1Critic(GameplayCritic):
     def clear(self):
