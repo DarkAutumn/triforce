@@ -142,7 +142,6 @@ class ZeldaML:
 
     def _create_model(self, env, log_dir):
         return PPO('MultiInputPolicy', env, verbose=self.verbose, tensorboard_log=log_dir, ent_coef=self.ent_coef, device=self.device)
-    
 
 class LogRewardCallback(BaseCallback):
     def __init__(self, model : PPO, save_dir : str, last_model_freq = 100_000):
@@ -152,7 +151,6 @@ class LogRewardCallback(BaseCallback):
         self.last_model_freq = last_model_freq
         self.last_model_next_save = self.last_model_freq
         
-
         self.best_score = -np.inf
         self.best_reward = -np.inf
 
@@ -177,7 +175,6 @@ class LogRewardCallback(BaseCallback):
                     self._success_rate.append(1)
                 else:
                     self._success_rate.append(0)
-
 
             if 'final-score' in info:
                 self._evaluation.append(info['final-score'])
