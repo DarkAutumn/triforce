@@ -83,7 +83,6 @@ class GameplayCritic(ZeldaCritic):
         # missed attack
         self.distance_threshold = 50
         self.attack_miss_penalty = -self.reward_tiny
-        self.attack_no_enemies_penalty = -self.reward_minimum
 
         # items
         self.used_null_item_penalty = -self.reward_large
@@ -195,12 +194,12 @@ class GameplayCritic(ZeldaCritic):
             if not is_in_cave(new):
                 rewards['reward-hit'] = self.injure_kill_reward
             else:
-                rewards['penalty-hit-cave'] = self.injure_kill_reward
+                rewards['penalty-hit-cave'] = -self.injure_kill_reward
         
         else:
             if new['action'] == 'attack':                
                 if not new['enemies']:
-                    rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
+                    rewards['penalty-attack-no-enemies'] = self.attack_miss_penalty
 
                 elif self.offscreen_sword_disabled(new):
                     rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
