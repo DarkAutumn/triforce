@@ -505,32 +505,40 @@ class Overworld1Critic(GameplayCritic):
 class OverworldSwordCritic(GameplayCritic):
     def __init__(self):
         super().__init__()
-        self.entered_cave = False
 
-        self.entered_cave_reward = self.reward_large
-        self.left_cave_penalty = -self.reward_large
-
-    def clear(self):
-        self.entered_cave = False
+        self.cave_tranistion_reward = self.reward_large
+        self.cave_transition_penalty = -self.reward_maximum
 
     def critique_location_discovery(self, old, new, rewards):
-        if not self.entered_cave and is_in_cave(new):
-            self.entered_cave = True
-            rewards['reward-entered-cave'] = self.entered_cave_reward
 
-        if is_in_cave(old) and not is_in_cave(new) and not new['sword']:
-            rewards['penalty-left-cave'] = self.left_cave_penalty
+        # entered cave
+        if not is_in_cave(old) and is_in_cave(new):
+            if new['sword']:
+                rewards['penalty-reentered-cave'] = self.cave_transition_penalty
+            else:
+                rewards['reward-entered-cave'] = self.cave_tranistion_reward
+
+        # left cave
+        elif is_in_cave(old) and not is_in_cave(new):
+            if new['sword']:
+                rewards['reward-left-cave'] = self.cave_tranistion_reward
+            else:
+                rewards['penalty-left-cave-early'] = self.cave_transition_penalty
 
     
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
         score = 0
-        if self.entered_cave:
+        if is_in_cave(new):
             score += 1
 
-        if new['sword']:
-            score += 1
+            if new['sword']:
+                score += 1
 
-        if new['sword'] and not is_in_cave(new):
-            score += 1
+        else:
+            if new['sword']:
+                score += 3
+            
+            if new['location'] != 0x77:
+                score += 1
 
         new['score'] = score
