@@ -508,6 +508,7 @@ class OverworldSwordCritic(GameplayCritic):
 
         self.cave_tranistion_reward = self.reward_large
         self.cave_transition_penalty = -self.reward_maximum
+        self.new_location_reward = self.reward_large
 
     def critique_location_discovery(self, old, new, rewards):
 
@@ -525,6 +526,11 @@ class OverworldSwordCritic(GameplayCritic):
             else:
                 rewards['penalty-left-cave-early'] = self.cave_transition_penalty
 
+        elif new['location'] != 0x77:
+            if new['sword']:
+                rewards['reward-new-location'] = self.new_location_reward
+            else:
+                rewards['penalty-left-scenario'] = -self.new_location_reward
     
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
         score = 0
