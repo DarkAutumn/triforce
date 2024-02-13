@@ -123,7 +123,7 @@ class ZeldaObservationWrapper(gym.Wrapper):
             return np.pad(frame, ((0, self.viewport_size - frame.shape[0]), (0, self.viewport_size - frame.shape[1]), (0, 0)), mode='edge')
         except ValueError:
             import pickle
-            result = { 'info': info, 'frame': frame, 'pos' : (x, y) }
+            result = { 'info': info, 'frame' : self.frames[-1], 'reshape_input': frame, 'pos' : (x, y) }
 
             with open('reshape_error.pkl', 'wb') as f:
                 pickle.dump(result, f)
