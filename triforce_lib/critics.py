@@ -73,7 +73,7 @@ class GameplayCritic(ZeldaCritic):
         self.move_away_penalty = -self.move_closer_reward - self.reward_minimum
 
         self.too_close_threshold = 20
-        self.move_too_close_penalty = -self.reward_small
+        self.enemy_too_close_penalty = -self.reward_small
         
         # state tracking
         self._visted_locations = set()
@@ -241,26 +241,28 @@ class GameplayCritic(ZeldaCritic):
             rewards['reward-new-location'] = self.new_location_reward
     
     def critique_movement(self, old, new, rewards):
+        if new['action'] != 'movement':
+            return
+
         if old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
             return
         
         # Did link run into a wall?
-        is_movement = 'action' in new and new['action'] == "movement"
-        if is_movement:
-            if old['link_pos'] == new['link_pos']:
-                rewards['penalty-wall-collision'] = self.wall_collision_penalty
+        if old['link_pos'] == new['link_pos']:
+            rewards['penalty-wall-collision'] = self.wall_collision_penalty
+            return
+            
+        # did link move too close to an enemy?
+        old_enemies_too_close = {x.id: x for x in old['enemies'] if x.distance < self.too_close_threshold}
+        if old_enemies_too_close:
+            new_enemies_too_close = [x for x in new['enemies'] if x.id in old_enemies_too_close]
+            if new_enemies_too_close:
+                for enemy in new_enemies_too_close:
+                    if enemy.distance < old_enemies_too_close[enemy.id].distance:
+                        rewards['penalty-move-too-close'] = self.enemy_too_close_penalty
+                        break
                 return
-                
-            # did link move too close to an enemy?
-            old_enemies_too_close = {x.id: x for x in old['enemies'] if x.distance < self.too_close_threshold}
-            if old_enemies_too_close:
-                new_enemies_too_close = [x for x in new['enemies'] if x.id in old_enemies_too_close]
-                if new_enemies_too_close:
-                    for enemy in new_enemies_too_close:
-                        if enemy.distance < old_enemies_too_close[enemy.id].distance:
-                            rewards['penalty-move-too-close'] = self.move_too_close_penalty
-                            return
-                    
+
         # don't reward/penalize if we lost health, just taking the damage is penalty enough
         if get_heart_halves(old) <= get_heart_halves(new):
 
@@ -290,26 +292,17 @@ class GameplayCritic(ZeldaCritic):
 
                     # reward if we moved in the right direction
                     if direction == correct_direction:
-                        if is_movement:
-                            rewards['reward-move-closer'] = self.move_closer_reward * percent
+                        rewards['reward-move-closer'] = self.move_closer_reward * percent
 
                     elif direction == possible_direction:
-                        if is_movement and "a*_path" in new:
-                            _, _, new_path = new["a*_path"]
-                            if target_tile in new_path and len(new_path) <= len(old_path):
-                                rewards['reward-optimal-path'] = self.move_closer_reward * percent
-                            else:
-                                rewards['penalty-move-farther'] = self.move_away_penalty
-                        elif is_movement:
-                            rewards['penalty-move-farther'] = self.move_away_penalty
+                        _, _, new_path = new["a*_path"]
+                        if len(new_path) <= len(old_path):
+                            rewards['reward-optimal-path'] = self.move_closer_reward * percent
                         else:
-                            rewards['penalty-move-farther'] = -self.reward_minimum
-
-                    # penalize moving in the opposite direction
+                            rewards['penalty-move-farther'] = self.move_away_penalty
                     else:
                         rewards['penalty-move-farther'] = self.move_away_penalty
 
-                
                 else:
                     # if A* couldn't find a path, we should still reward the agent for moving closer
                     # to the objective.  This should be rare, and often happens when an enem moves
