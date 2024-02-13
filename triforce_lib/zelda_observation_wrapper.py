@@ -97,7 +97,7 @@ class ZeldaObservationWrapper(gym.Wrapper):
             else:
                 x, y = 0, 0
 
-            frame = self.extract_viewport(frame, x, y)
+            frame = self.extract_viewport(info, frame, x, y)
 
         if self.grayscale:
             frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
@@ -105,7 +105,7 @@ class ZeldaObservationWrapper(gym.Wrapper):
 
         return frame
 
-    def extract_viewport(self, frame, x, y):
+    def extract_viewport(self, info, frame, x, y):
         half_vp = self.viewport_size // 2
         padded_frame = np.pad(frame, ((half_vp, half_vp), (half_vp, half_vp), (0, 0)), mode='edge')
 
@@ -114,9 +114,18 @@ class ZeldaObservationWrapper(gym.Wrapper):
 
         # link can sometimes be offscreen due to overscan
         if frame.shape[0] != self.viewport_size or frame.shape[1] != self.viewport_size:
-            frame = self.reshape(frame)
+            frame = self.reshape(info, frame, x, y)
 
         return frame
 
-    def reshape(self, frame):
-        return np.pad(frame, ((0, self.viewport_size - frame.shape[0]), (0, self.viewport_size - frame.shape[1]), (0, 0)), mode='edge')
+    def reshape(self, info, frame, x, y):
+        try:
+            return np.pad(frame, ((0, self.viewport_size - frame.shape[0]), (0, self.viewport_size - frame.shape[1]), (0, 0)), mode='edge')
+        except ValueError:
+            import pickle
+            result = { 'info': info, 'frame' : self.frames[-1], 'reshape_input': frame, 'pos' : (x, y) }
+
+            with open('reshape_error.pkl', 'wb') as f:
+                pickle.dump(result, f)
+
+            return np.zeros((self.viewport_size, self.viewport_size, 3), dtype=np.uint8)

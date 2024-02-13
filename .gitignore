@@ -394,6 +394,8 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
+*.prof
+*.pkl
 *.nes
 
 training/

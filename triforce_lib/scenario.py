@@ -1,3 +1,4 @@
+from typing import List
 import gymnasium as gym
 import retro
 
@@ -94,7 +95,7 @@ class ScenarioGymWrapper(gym.Wrapper):
 class ZeldaScenario:
     _scenarios = {}
 
-    def __init__(self, name, description, critics : [str], end_conditions : [str], level, start, data, fixed):
+    def __init__(self, name, description, critics : List[str], end_conditions : List[str], level, start, data, fixed):
         self.name = name
         self.description = description
         self.critics = [ZeldaScenario.resolve_critic(x) for x in critics]
@@ -113,10 +114,30 @@ class ZeldaScenario:
             
         if not self.all_start_states:
             raise Exception(f'Could not find any save states for {name}')
-        
 
     def __str__(self):
         return f'{self.name} - {self.description}'
+    
+    def simulate_step(self, last_info, next_info):
+        critics = [c() for c in self.critics]
+        for c in critics:
+            c.clear()
+
+        end_conditions = [ec() for ec in self.end_conditions]
+        for ec in end_conditions:
+            ec.clear()
+
+        reward_dict = {}
+        for c in critics:
+            c.critique_gameplay(last_info, next_info, reward_dict)
+
+        end = (x.is_scenario_ended(last_info, next_info) for x in end_conditions)
+        end = [x for x in end if x is not None]
+        terminated = any((x[0] for x in end))
+        truncated = any((x[1] for x in end))
+        reason = [x[2] for x in end if x[2]]
+
+        return reward_dict, terminated, truncated, reason
     
     def activate(self, env):
         env = ScenarioGymWrapper(env, self)

@@ -82,6 +82,9 @@ class ZeldaModel(ZeldaModelInfo):
                 number = int(filename[6:-4])
                 result.append((number, filename))
         result.sort(key=lambda x: x[0])
+
+        if len(result) > 5:
+            result = result[-5:]
         return result
 
     @classmethod

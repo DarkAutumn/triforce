@@ -47,12 +47,13 @@ def get_neighbors(position, tiles):
                 
     return neighbors
 
-def reconstruct_path(came_from, current):
+def reconstruct_path(start, came_from, current):
     path = []
     while current in came_from:
         path.append(current)
         current = came_from[current]
 
+    path.append(start)
     return path[::-1]
 
 def a_star(link_position, tiles, direction):
@@ -78,8 +79,7 @@ def a_star(link_position, tiles, direction):
             closest_distance = current_distance
 
         if current_distance == 0:
-            # Reconstruct path to current node
-            return reconstruct_path(came_from, current)
+            return reconstruct_path(start, came_from, current)
 
         for neighbor in get_neighbors(current, tiles):
             tentative_g_score = g_score[current] + 1  # Assuming uniform cost
@@ -90,8 +90,7 @@ def a_star(link_position, tiles, direction):
                 if neighbor not in [item[1] for item in open_set]:
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
-    # Reconstruct path to the closest node if target is unreachable
-    return reconstruct_path(came_from, closest_node)
+    return reconstruct_path(start, came_from, closest_node)
 
 def add_direction(target, current, path):
     if target == 'N':
