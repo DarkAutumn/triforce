@@ -383,11 +383,11 @@ class DebugReward:
         self.info = info
 
     def __call__(self):
-        for reward_dict, terminated, truncated, reason in self.scenario.simulate_step(self.last_info, self.info):
-            print(f"{reward_dict = }")
-            print(f"{terminated = }")
-            print(f"{truncated = }")
-            print(f"{reason = }")
+        reward_dict, terminated, truncated, reason = self.scenario.simulate_step(self.last_info, self.info)
+        print(f"{reward_dict = }")
+        print(f"{terminated = }")
+        print(f"{truncated = }")
+        print(f"{reason = }")
 
 class RewardButton:
     def __init__(self, font, count, rewards, action, width, on_click):
