@@ -284,8 +284,8 @@ class GameplayCritic(ZeldaCritic):
                     if new['link_pos'][1] < target[1]:
                         target[1] += 8
 
-                    old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
-                    new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
+                    old_distance = self.manhattan_distance(target, old['link_pos'])
+                    new_distance = self.manhattan_distance(target, new['link_pos'])
 
                     diff = old_distance - new_distance
                     percent = abs(diff / self.movement_scale_factor)
@@ -319,6 +319,9 @@ class GameplayCritic(ZeldaCritic):
                             rewards['reward-move-closer'] = self.move_closer_reward * percent
                         else:
                             rewards['penalty-move-farther'] = self.move_away_penalty
+
+    def manhattan_distance(self, a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
     def find_second_turn(self, path):
         turn = 0
