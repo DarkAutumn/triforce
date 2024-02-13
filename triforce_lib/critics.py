@@ -302,7 +302,7 @@ class GameplayCritic(ZeldaCritic):
                 elif direction == possible_direction:
                     if len(new.get("a*_path", (None, None, []))[2]) <= len(old_path):
                         if percent is not None:
-                            rewards['reward-optimal-path'] = self.move_closer_reward * percent
+                            rewards['reward-move-closer'] = self.move_closer_reward * percent
                     else:
                         rewards['penalty-move-farther'] = self.move_away_penalty
                 else:
