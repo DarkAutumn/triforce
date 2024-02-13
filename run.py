@@ -187,7 +187,7 @@ class Display:
                         mode = 'q'
                         break
 
-                    elif event.type == pygame.MOUSEBUTTONDOWN:
+                    elif event.type == pygame.MOUSEBUTTONUP:
                         if event.button == 1:
                             for rendered_button in rendered_buttons:
                                 if rendered_button.is_position_within(event.pos):
@@ -339,7 +339,7 @@ class Display:
         # remove unrendered buttons
         while len(buttons) > i:
             buttons.pop()
-        
+
         return result
     
     def get_optimal_path(self, info):
@@ -424,7 +424,7 @@ class RewardButton:
         height = y - position[1]
         pygame.draw.rect(surface, (255, 255, 255), (position[0], position[1], self.width, height), 1)
 
-        return RenderedButton(self, (x, y), (self.width, height))
+        return RenderedButton(self, position, (self.width, height))
     
 class RenderedButton:
     def __init__(self, button, position, dimensions):
