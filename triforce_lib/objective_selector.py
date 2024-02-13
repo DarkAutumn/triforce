@@ -131,16 +131,10 @@ class ObjectiveSelector(gym.Wrapper):
 
             elif isinstance(objective_pos_dir, str):
                 objective_vector = get_vector_from_direction(objective_pos_dir)
-                objective_pos_dir = link_pos + objective_vector * 16
-                objective_pos_dir[0] = np.clip(objective_pos_dir[0], 0, info['tiles'].shape[1] * 8)
-                objective_pos_dir[1] = np.clip(objective_pos_dir[1], 0, info['tiles'].shape[0] * 8)
-
-            if isinstance(objective_pos_dir, str):
-                objective_pos_dir = last_tile_pos
         
         info['objective_vector'] = objective_vector if objective_vector is not None else np.zeros(2, dtype=np.float32)
         info['objective_kind'] = objective_kind
-        info['objective_position'] = objective_pos_dir
+        info['objective_pos_or_dir'] = objective_pos_dir
         info['location_objective'] = location_objective
     
     def get_first_non_zero(self, list):

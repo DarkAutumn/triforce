@@ -287,7 +287,7 @@ class GameplayCritic(ZeldaCritic):
                     old_distance = self.manhattan_distance(target, old['link_pos'])
                     new_distance = self.manhattan_distance(target, new['link_pos'])
 
-                    diff = old_distance - new_distance
+                    diff = new_distance - old_distance
                     percent = abs(diff / self.movement_scale_factor)
 
                     # reward if we moved in the right direction
@@ -308,17 +308,28 @@ class GameplayCritic(ZeldaCritic):
                     # to the objective.  This should be rare, and often happens when an enem moves
                     # into a wall.  (Bosses or wallmasters.)
 
-                    target = new['objective_position']
-                    if target is not None:
+                    target = new['objective_pos_or_dir']
+                    if isinstance(target, str):
+                        if target == 'N':
+                            dist = new['link_y'] - old['link_y']
+                        elif target == 'S':
+                            dist = old['link_y'] - new['link_y']
+                        elif target == 'E':
+                            dist = new['link_x'] - old['link_x']
+                        elif target == 'W':
+                            dist = old['link_x'] - new['link_x']
+
+                        percent = abs(dist / self.movement_scale_factor)
+                    else:
                         old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
                         new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
                         dist = new_distance - old_distance
                         percent = abs(dist / self.movement_scale_factor)
 
-                        if dist < 0:
-                            rewards['reward-move-closer'] = self.move_closer_reward * percent
-                        else:
-                            rewards['penalty-move-farther'] = self.move_away_penalty
+                    if dist < 0:
+                        rewards['reward-move-closer'] = self.move_closer_reward * percent
+                    else:
+                        rewards['penalty-move-farther'] = self.move_away_penalty
 
     def manhattan_distance(self, a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
