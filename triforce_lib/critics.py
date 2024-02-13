@@ -82,7 +82,8 @@ class GameplayCritic(ZeldaCritic):
 
         # missed attack
         self.distance_threshold = 50
-        self.attack_miss_penalty = -self.reward_tiny
+        self.attack_miss_penalty = -self.move_closer_reward - self.reward_minimum
+        self.attack_no_enemies_penalty = -self.move_closer_reward * 2
 
         # items
         self.used_null_item_penalty = -self.reward_large
@@ -199,7 +200,7 @@ class GameplayCritic(ZeldaCritic):
         else:
             if new['action'] == 'attack':                
                 if not new['enemies']:
-                    rewards['penalty-attack-no-enemies'] = self.attack_miss_penalty
+                    rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
 
                 elif self.offscreen_sword_disabled(new):
                     rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
@@ -284,11 +285,11 @@ class GameplayCritic(ZeldaCritic):
                     if new['link_pos'][1] < target[1]:
                         target[1] += 8
 
-                    old_distance = self.manhattan_distance(target, old['link_pos'])
-                    new_distance = self.manhattan_distance(target, new['link_pos'])
+                    old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
+                    new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
 
                     diff = new_distance - old_distance
-                    percent = abs(diff / self.movement_scale_factor)
+                    percent = min(abs(diff / self.movement_scale_factor), 1)
 
                     # reward if we moved in the right direction
                     if direction == correct_direction:
@@ -330,9 +331,6 @@ class GameplayCritic(ZeldaCritic):
                         rewards['reward-move-closer'] = self.move_closer_reward * percent
                     else:
                         rewards['penalty-move-farther'] = self.move_away_penalty
-
-    def manhattan_distance(self, a, b):
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
     def find_second_turn(self, path):
         turn = 0
