@@ -69,6 +69,7 @@ class GameplayCritic(ZeldaCritic):
         self.move_closer_reward = self.reward_tiny
         self.optimal_path_reward = self.move_closer_reward
         
+        self.minimum_movement_required = 1.5
         self.movement_scale_factor = 9.0
         self.move_away_penalty = -self.move_closer_reward - self.reward_minimum
 
@@ -81,7 +82,7 @@ class GameplayCritic(ZeldaCritic):
         self._is_first_step = True
 
         # missed attack
-        self.distance_threshold = 50
+        self.distance_threshold = 28
         self.attack_miss_penalty = -self.move_closer_reward - self.reward_minimum
         self.attack_no_enemies_penalty = -self.move_closer_reward * 2
 
@@ -266,71 +267,76 @@ class GameplayCritic(ZeldaCritic):
 
         # don't reward/penalize if we lost health, just taking the damage is penalty enough
         if get_heart_halves(old) <= get_heart_halves(new):
-
             # do we have an optimal path?
-            if "a*_path" in old:
-                _, _, old_path = old["a*_path"]
-                if len(old_path) >= 2:
-                    correct_direction, possible_direction = self.get_optimal_directions(old_path)
-                    direction = new['direction']
+            old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
+            new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
+            _, _, old_path = old.get("a*_path", (None, None, []))
+            if len(old_path) >= 2:
+                correct_direction, possible_direction = self.get_optimal_directions(old_path)
+                direction = new['direction']
 
-                    target_tile = self.find_second_turn(old_path)
-                    target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
+                target_tile = self.find_second_turn(old_path)
+                target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
 
-                    # target is the top left of the 8x8 tile, if we are left or above the target, add
-                    # 8 to the x or y to get to that edge of the tile.
-                    if new['link_pos'][0] < target[0]:
-                        target[0] += 8
-                    
-                    if new['link_pos'][1] < target[1]:
-                        target[1] += 8
+                # target is the top left of the 8x8 tile, if we are left or above the target, add
+                # 8 to the x or y to get to that edge of the tile.
+                if new_link_pos[0] < target[0]:
+                    target[0] += 8
+                
+                if new_link_pos[1] < target[1]:
+                    target[1] += 8
 
-                    old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
-                    new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
+                old_distance = np.linalg.norm(target - old_link_pos)
+                new_distance = np.linalg.norm(target - new_link_pos)
 
-                    diff = new_distance - old_distance
-                    percent = min(abs(diff / self.movement_scale_factor), 1)
-
-                    # reward if we moved in the right direction
-                    if direction == correct_direction:
-                        rewards['reward-move-closer'] = self.move_closer_reward * percent
-
-                    elif direction == possible_direction:
-                        _, _, new_path = new.get("a*_path", (None, None, []))
-                        if len(new_path) <= len(old_path):
-                            rewards['reward-optimal-path'] = self.move_closer_reward * percent
-                        else:
-                            rewards['penalty-move-farther'] = self.move_away_penalty
-                    else:
-                        rewards['penalty-move-farther'] = self.move_away_penalty
-
+                diff = abs(new_distance - old_distance)
+                if diff >= self.minimum_movement_required:
+                    percent = min(diff / self.movement_scale_factor, 1)
                 else:
-                    # if A* couldn't find a path, we should still reward the agent for moving closer
-                    # to the objective.  This should be rare, and often happens when an enem moves
-                    # into a wall.  (Bosses or wallmasters.)
+                    percent = None
 
-                    target = new['objective_pos_or_dir']
-                    if isinstance(target, str):
-                        if target == 'N':
-                            dist = new['link_y'] - old['link_y']
-                        elif target == 'S':
-                            dist = old['link_y'] - new['link_y']
-                        elif target == 'E':
-                            dist = new['link_x'] - old['link_x']
-                        elif target == 'W':
-                            dist = old['link_x'] - new['link_x']
-
-                        percent = abs(dist / self.movement_scale_factor)
-                    else:
-                        old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
-                        new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
-                        dist = new_distance - old_distance
-                        percent = abs(dist / self.movement_scale_factor)
-
-                    if dist < 0:
+                # reward if we moved in the right direction
+                if direction == correct_direction:
+                    if percent is not None:
                         rewards['reward-move-closer'] = self.move_closer_reward * percent
+
+                elif direction == possible_direction:
+                    _, _, new_path = new.get("a*_path", (None, None, []))
+                    if len(new_path) <= len(old_path):
+                        if percent is not None:
+                            rewards['reward-optimal-path'] = self.move_closer_reward * percent
                     else:
                         rewards['penalty-move-farther'] = self.move_away_penalty
+                else:
+                    rewards['penalty-move-farther'] = self.move_away_penalty
+
+            elif 'objective_pos_or_dir' in new:
+                # if A* couldn't find a path, we should still reward the agent for moving closer
+                # to the objective.  This should be rare, and often happens when an enem moves
+                # into a wall.  (Bosses or wallmasters.)
+
+                target = new['objective_pos_or_dir']
+                if isinstance(target, str):
+                    if target == 'N':
+                        dist = new_link_pos[1] - old_link_pos[1]
+                    elif target == 'S':
+                        dist = old_link_pos[1] - new_link_pos[1]
+                    elif target == 'E':
+                        dist = new_link_pos[0] - old_link_pos[0]
+                    elif target == 'W':
+                        dist = old_link_pos[0] - new_link_pos[0]
+
+                    percent = abs(dist / self.movement_scale_factor)
+                else:
+                    old_distance = np.linalg.norm(target - old_link_pos)
+                    new_distance = np.linalg.norm(target - new_link_pos)
+                    dist = new_distance - old_distance
+                    percent = abs(dist / self.movement_scale_factor)
+
+                if dist < 0:
+                    rewards['reward-move-closer'] = self.move_closer_reward * percent
+                else:
+                    rewards['penalty-move-farther'] = self.move_away_penalty
 
     def find_second_turn(self, path):
         turn = 0
