@@ -1,3 +1,4 @@
+from typing import List
 import gymnasium as gym
 import retro
 
@@ -94,7 +95,7 @@ class ScenarioGymWrapper(gym.Wrapper):
 class ZeldaScenario:
     _scenarios = {}
 
-    def __init__(self, name, description, critics : [str], end_conditions : [str], level, start, data, fixed):
+    def __init__(self, name, description, critics : List[str], end_conditions : List[str], level, start, data, fixed):
         self.name = name
         self.description = description
         self.critics = [ZeldaScenario.resolve_critic(x) for x in critics]

@@ -6,12 +6,12 @@ class ZeldaEndCondition:
         """Called to clear the state of the end condition.  Called at the start of each scenario."""
         pass
 
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         """Called to determine if the scenario has ended, returns (terminated, truncated, reason) or None"""
         pass
 
 class GameOver(ZeldaEndCondition):
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         if is_mode_death(new['mode']):
             return True, False, "failure-terminated-death"
 
@@ -29,7 +29,7 @@ class Timeout(ZeldaEndCondition):
         self.__seen.clear()
         self.__last_discovery = 0
 
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         # Check if link is stuck in one position on the screen
         if self.position_timeout:
             if old['link_pos'] == new['link_pos'] and not new['step_hits']:
@@ -57,29 +57,29 @@ class GainedTriforce(ZeldaEndCondition):
     def __init__(self):
         super().__init__()
 
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         if new['triforce'] != 0 and old['triforce'] != new['triforce']:
             return True, False, "success-gained-triforce"
             
 class LeftDungeon(ZeldaEndCondition):
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         if new['level'] == 0:
             return True, False, "failure-left-dungeon"
 
 class EnteredDungeon(ZeldaEndCondition):
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         if new['level'] == 1:
             return True, False, "success-entered-dungeon"
 
 class LeftOverworld1Area(ZeldaEndCondition):
     overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
 
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         if new['level'] == 0 and new['location'] not in self.overworld_dungeon1_walk_rooms:
             return True, False, "failure-left-play-area"
 
 class StartingRoomConditions(ZeldaEndCondition):
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         if new['location'] != 0x77:
             if new['sword']:
                 return True, False, "success-found-sword"
@@ -87,7 +87,7 @@ class StartingRoomConditions(ZeldaEndCondition):
                 return True, False, "failure-no-sword"
 
 class DefeatedBoss(ZeldaEndCondition):
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         if not new['enemies']:
             return True, False, "success-killed-boss"
         
