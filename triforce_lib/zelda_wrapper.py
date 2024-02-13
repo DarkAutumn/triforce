@@ -21,7 +21,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         self.deterministic = deterministic
 
         self._reset_state()
-        self._none_action = np.zeros(9, dtype=bool)
 
         self.a_button = env.unwrapped.buttons.index('A')
         self.b_button = env.unwrapped.buttons.index('B')
@@ -29,6 +28,10 @@ class ZeldaGameWrapper(gym.Wrapper):
         self.down_button = env.unwrapped.buttons.index('DOWN')
         self.left_button = env.unwrapped.buttons.index('LEFT')
         self.right_button = env.unwrapped.buttons.index('RIGHT')
+
+        self._none_action = np.zeros(9, dtype=bool)
+        self._attack_action = np.zeros(9, dtype=bool)
+        self._attack_action[self.a_button] = True
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
@@ -170,12 +173,19 @@ class ZeldaGameWrapper(gym.Wrapper):
                         break
 
         elif self.action_is_attack(act):
-            turn_action = act.copy()
-            turn_action[self.a_button] = False
-            obs, rewards, terminated, truncated, info = self.env.step(turn_action)
+            direction = self.get_button_direction(act)
+            if direction == 'E':
+                direction = 1
+            elif direction == 'W':
+                direction = 2
+            elif direction == 'S':
+                direction = 4
+            elif direction == 'N':
+                direction = 8
+                
+            self.env.unwrapped.data.set_value('link_direction', direction)
 
-            obs, rew, terminated, truncated, info = self.env.step(act)
-            rewards += rew
+            obs, rewards, terminated, truncated, info = self.env.step(self._attack_action)
 
             cooldown = attack_cooldown
             if not self.deterministic:
@@ -215,10 +225,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return obs, rewards, terminated, truncated, info
     
-    def action_is_movement(self, act):
-        if self.action_is_attack(act) or self.action_is_item(act):
-            return False
-
+    def get_button_direction(self, act):
         if act[self.up_button]:
             return 'N'
         
@@ -231,7 +238,13 @@ class ZeldaGameWrapper(gym.Wrapper):
         if act[self.right_button]:
             return 'E'
 
-        return False
+        return None
+    
+    def action_is_movement(self, act):
+        if self.action_is_attack(act) or self.action_is_item(act):
+            return False
+        
+        return self.get_button_direction(act) is not None
 
     def action_is_item(self, act):
         return act[self.b_button]
@@ -273,7 +286,6 @@ class ZeldaGameWrapper(gym.Wrapper):
                 
                 self.__dict__[discounted_hits] = discounted_hits
                 step_hits -= discount
-
 
         return step_hits
     
