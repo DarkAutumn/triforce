@@ -68,7 +68,6 @@ class GameplayCritic(ZeldaCritic):
         self.wall_collision_penalty = -self.reward_tiny
         self.move_closer_reward = self.reward_tiny
         self.optimal_path_reward = self.move_closer_reward
-        self.useless_move_penalty = -self.reward_minimum
         
         self.movement_scale_factor = 9.0
         self.move_away_penalty = -self.move_closer_reward - self.reward_minimum
@@ -84,7 +83,6 @@ class GameplayCritic(ZeldaCritic):
         # missed attack
         self.distance_threshold = 50
         self.attack_miss_penalty = -self.reward_tiny
-        self.attack_no_enemies_penalty = -self.reward_minimum
 
         # items
         self.used_null_item_penalty = -self.reward_large
@@ -196,12 +194,12 @@ class GameplayCritic(ZeldaCritic):
             if not is_in_cave(new):
                 rewards['reward-hit'] = self.injure_kill_reward
             else:
-                rewards['penalty-hit-cave'] = self.injure_kill_reward
+                rewards['penalty-hit-cave'] = -self.injure_kill_reward
         
         else:
             if new['action'] == 'attack':                
                 if not new['enemies']:
-                    rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
+                    rewards['penalty-attack-no-enemies'] = self.attack_miss_penalty
 
                 elif self.offscreen_sword_disabled(new):
                     rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
@@ -268,13 +266,22 @@ class GameplayCritic(ZeldaCritic):
 
             # do we have an optimal path?
             if "a*_path" in old:
-                _, old_objective_pos, old_path = old["a*_path"]
+                _, _, old_path = old["a*_path"]
                 if len(old_path) >= 2:
-                    optimal_direction = self.get_optimal_directions(old_path)
+                    correct_direction, possible_direction = self.get_optimal_directions(old_path)
                     direction = new['direction']
 
-                    target_tile = self.find_first_turn(old_path)
+                    target_tile = self.find_second_turn(old_path)
                     target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
+
+                    # target is the top left of the 8x8 tile, if we are left or above the target, add
+                    # 8 to the x or y to get to that edge of the tile.
+                    if new['link_pos'][0] < target[0]:
+                        target[0] += 8
+                    
+                    if new['link_pos'][1] < target[1]:
+                        target[1] += 8
+
                     old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
                     new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
 
@@ -282,41 +289,26 @@ class GameplayCritic(ZeldaCritic):
                     percent = abs(diff / self.movement_scale_factor)
 
                     # reward if we moved in the right direction
-                    if direction in optimal_direction:
+                    if direction == correct_direction:
                         if is_movement:
                             rewards['reward-move-closer'] = self.move_closer_reward * percent
 
+                    elif direction == possible_direction:
+                        if is_movement and "a*_path" in new:
+                            _, _, new_path = new["a*_path"]
+                            if target_tile in new_path and len(new_path) <= len(old_path):
+                                rewards['reward-optimal-path'] = self.move_closer_reward * percent
+                            else:
+                                rewards['penalty-move-farther'] = self.move_away_penalty
+                        elif is_movement:
+                            rewards['penalty-move-farther'] = self.move_away_penalty
+                        else:
+                            rewards['penalty-move-farther'] = -self.reward_minimum
+
                     # penalize moving in the opposite direction
-                    elif self.is_opposite_direction(optimal_direction, direction):
+                    else:
                         rewards['penalty-move-farther'] = self.move_away_penalty
 
-                    elif "a*_path" in new:
-                        # even though we didn't move in the A* selected path, we could still be
-                        # moving closer to the objective
-                        _, new_objective_pos, new_path = new["a*_path"]
-
-                        if old_objective_pos == new_objective_pos:
-                            # if the objective hasn't moved, see if we got closer or farther using
-                            # the a* paths.
-
-                            if len(new_path) > len(old_path):
-                                rewards['penalty-move-farther'] = self.move_away_penalty
-                            elif is_movement and len(new_path) < len(old_path) and diff > 0:
-                                rewards['reward-move-closer'] = self.move_closer_reward * percent
-                            else:
-                                rewards['penalty-useless-move'] = self.useless_move_penalty
-
-                        else:
-                            # The objective moved.  We might have selected a new objective, or we are
-                            # chasing an enemy that moved away. We should stil reward the move if the agent
-                            # got closer to the old objective position.
-
-                            new_path = a_star(get_link_tile_index(new), old['tiles'], old_objective_pos)
-
-                            if len(new_path) > len(old_path):
-                                rewards['penalty-move-farther'] = self.move_away_penalty
-                            elif is_movement and len(new_path) < len(old_path) and diff > 0:
-                                rewards['reward-move-closer'] = self.move_closer_reward * percent
                 
                 else:
                     # if A* couldn't find a path, we should still reward the agent for moving closer
@@ -324,17 +316,19 @@ class GameplayCritic(ZeldaCritic):
                     # into a wall.  (Bosses or wallmasters.)
 
                     target = new['objective_position']
-                    old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
-                    new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
-                    dist = new_distance - old_distance
-                    percent = abs(dist / self.movement_scale_factor)
+                    if target is not None:
+                        old_distance = np.linalg.norm(target - np.array(old['link_pos'], dtype=np.float32))
+                        new_distance = np.linalg.norm(target - np.array(new['link_pos'], dtype=np.float32))
+                        dist = new_distance - old_distance
+                        percent = abs(dist / self.movement_scale_factor)
 
-                    if dist < 0:
-                        rewards['reward-move-closer'] = self.move_closer_reward * percent
-                    else:
-                        rewards['penalty-move-farther'] = self.move_away_penalty * percent
+                        if dist < 0:
+                            rewards['reward-move-closer'] = self.move_closer_reward * percent
+                        else:
+                            rewards['penalty-move-farther'] = self.move_away_penalty
 
-    def find_first_turn(self, path):
+    def find_second_turn(self, path):
+        turn = 0
         direction = self.get_direction(path[0], path[1])
         for i in range(2, len(path)):
             old_index = path[i - 1]
@@ -342,8 +336,11 @@ class GameplayCritic(ZeldaCritic):
 
             new_direction = self.get_direction(old_index, new_index)
             if new_direction != direction:
-                return old_index
-
+                turn += 1
+                direction = new_direction
+                if turn == 2:
+                    return old_index
+                
         return path[-1]
 
     def is_opposite_direction(self, a, b):
@@ -460,7 +457,7 @@ class Dungeon1BossCritic(Dungeon1Critic):
         self.total_damage += new['step_hits']
         new['score'] = get_heart_halves(new) + self.total_damage
 
-overworld_dungeon1_walk_rooms = set([0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
+overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
 
 class Overworld1Critic(GameplayCritic):
     def clear(self):
@@ -508,32 +505,46 @@ class Overworld1Critic(GameplayCritic):
 class OverworldSwordCritic(GameplayCritic):
     def __init__(self):
         super().__init__()
-        self.entered_cave = False
 
-        self.entered_cave_reward = self.reward_large
-        self.left_cave_penalty = -self.reward_large
-
-    def clear(self):
-        self.entered_cave = False
+        self.cave_tranistion_reward = self.reward_large
+        self.cave_transition_penalty = -self.reward_maximum
+        self.new_location_reward = self.reward_large
 
     def critique_location_discovery(self, old, new, rewards):
-        if not self.entered_cave and is_in_cave(new):
-            self.entered_cave = True
-            rewards['reward-entered-cave'] = self.entered_cave_reward
 
-        if is_in_cave(old) and not is_in_cave(new) and not new['sword']:
-            rewards['penalty-left-cave'] = self.left_cave_penalty
+        # entered cave
+        if not is_in_cave(old) and is_in_cave(new):
+            if new['sword']:
+                rewards['penalty-reentered-cave'] = self.cave_transition_penalty
+            else:
+                rewards['reward-entered-cave'] = self.cave_tranistion_reward
 
+        # left cave
+        elif is_in_cave(old) and not is_in_cave(new):
+            if new['sword']:
+                rewards['reward-left-cave'] = self.cave_tranistion_reward
+            else:
+                rewards['penalty-left-cave-early'] = self.cave_transition_penalty
+
+        elif new['location'] != 0x77:
+            if new['sword']:
+                rewards['reward-new-location'] = self.new_location_reward
+            else:
+                rewards['penalty-left-scenario'] = -self.new_location_reward
     
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
         score = 0
-        if self.entered_cave:
+        if is_in_cave(new):
             score += 1
 
-        if new['sword']:
-            score += 1
+            if new['sword']:
+                score += 1
 
-        if new['sword'] and not is_in_cave(new):
-            score += 1
+        else:
+            if new['sword']:
+                score += 3
+            
+            if new['location'] != 0x77:
+                score += 1
 
         new['score'] = score

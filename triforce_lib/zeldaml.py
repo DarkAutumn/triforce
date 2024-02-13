@@ -120,7 +120,6 @@ class ZeldaML:
 
             iterations = model_info.iterations if iteration_override is None else iteration_override
 
-            model_path = os.path.join(model_dir, 'last.zip')
             log_path = os.path.join(model_dir, 'logs')
 
             scenario = ZeldaScenario.get(model_info.training_scenario)
@@ -131,9 +130,9 @@ class ZeldaML:
                 print(f"Scenario:       {model_info.training_scenario}")
                 print(f"Path:           {model_dir}")
                 model = self._create_model(env, log_path)
-                callback = LogRewardCallback(model.save, model_dir)
+                callback = LogRewardCallback(model, model_dir)
                 model.learn(iterations, progress_bar=progress_bar, callback=callback)
-                model.save(model_path)
+                model.save(os.path.join(model_dir, 'last.zip'))
 
             finally:
                 env.close()
@@ -143,19 +142,19 @@ class ZeldaML:
 
     def _create_model(self, env, log_dir):
         return PPO('MultiInputPolicy', env, verbose=self.verbose, tensorboard_log=log_dir, ent_coef=self.ent_coef, device=self.device)
-    
 
 class LogRewardCallback(BaseCallback):
-    def __init__(self, save_model, save_dir : str, log_freq : int = 4096, force_save_freq : int = 250000):
+    def __init__(self, model : PPO, save_dir : str, last_model_freq = 100_000):
         super(LogRewardCallback, self).__init__()
-        self.log_reward_freq = log_freq
-        self.force_save_freq = force_save_freq
-
+        self.model = model
+        self.next_save = model.n_steps
+        self.last_model_freq = last_model_freq
+        self.last_model_next_save = self.last_model_freq
+        
         self.best_score = -np.inf
         self.best_reward = -np.inf
 
         self.save_dir = save_dir
-        self.save_model = save_model
 
         self._rewards = {}
         self._endings = []
@@ -177,41 +176,41 @@ class LogRewardCallback(BaseCallback):
                 else:
                     self._success_rate.append(0)
 
-
             if 'final-score' in info:
                 self._evaluation.append(info['final-score'])
 
-        if self.n_calls % self.force_save_freq == 0:
-            self.save_model(os.path.join(self.save_dir, 'last.zip'))
+        if self.n_calls > self.next_save:
+            self.next_save += self.model.n_steps
 
-        if self.n_calls % self.log_reward_freq == 0:
-            # rewards and ends tend to be pretty wild at the beginning of training, so only log them after a certain threshold
-            if self.n_calls >= 2048:
-                rew_mean = np.mean(list(self._rewards.values()))
-                for kind, rew in self._rewards.items():
-                    split = kind.split('-', 1)
-                    name = f"{split[0]}/{split[1]}"
-                    self.logger.record(name, rew)
+            rew_mean = np.mean(list(self._rewards.values()))
+            for kind, rew in self._rewards.items():
+                split = kind.split('-', 1)
+                name = f"{split[0]}/{split[1]}"
+                self.logger.record(name, rew)
 
-                ends = Counter(self._endings)
-                for ending, count in ends.items():
-                    self.logger.record('end/' + ending, count)
+            ends = Counter(self._endings)
+            for ending, count in ends.items():
+                self.logger.record('end/' + ending, count)
 
-                success_rate = np.mean(self._success_rate) if self._success_rate else 0.0
-                self.logger.record('evaluation/success-rate', success_rate)
+            success_rate = np.mean(self._success_rate) if self._success_rate else 0.0
+            self.logger.record('evaluation/success-rate', success_rate)
 
-                score_mean = None
-                if self._evaluation:
-                    score_mean = np.mean(self._evaluation)
-                    self.logger.record('evaluation/score', score_mean)
+            score_mean = None
+            if self._evaluation:
+                score_mean = np.mean(self._evaluation)
+                self.logger.record('evaluation/score', score_mean)
 
-                    if score_mean > self.best_score:
-                        self.best_score = score_mean
-                        self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_score.zip'))
-                
-                if rew_mean > self.best_reward:
-                    self.best_reward = rew_mean
-                    self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_reward.zip'))
+                if score_mean > self.best_score:
+                    self.best_score = score_mean
+                    self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_score.zip'))
+            
+            if rew_mean > self.best_reward:
+                self.best_reward = rew_mean
+                self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_reward.zip'))
+
+            if self.model.num_timesteps >= self.last_model_next_save:
+                self.last_model_next_save += self.last_model_freq
+                self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, f'model_{self.model.num_timesteps}.zip'))
 
             self._rewards.clear()
             self._endings.clear()
@@ -220,7 +219,7 @@ class LogRewardCallback(BaseCallback):
         return True
 
     def save_best(self, score, reward, save_path):
-        self.save_model(save_path)
+        self.model.save(save_path)
 
         metadata = { "iterations" : self.num_timesteps, 'reward' : reward}
         if score is not None:

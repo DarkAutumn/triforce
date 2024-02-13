@@ -89,7 +89,7 @@ def get_heart_containers(state):
     return (state["hearts_and_containers"] >> 4) + 1
 
 def has_beams(state):
-    return get_heart_halves(state) == get_heart_containers(state) * 2
+    return state['sword'] and get_heart_halves(state) == get_heart_containers(state) * 2
 
 def init_walkable_tiles():
     walkable_tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87, 0xf6]
@@ -111,7 +111,6 @@ def position_to_tile_index(x, y):
 def get_link_tile_index(info):
     return position_to_tile_index(info['link_x'] + 4, info['link_y'] + 4)
     
-
 def tile_index_to_position(tile_index):
     return (tile_index[1] * 8, tile_index[0] * 8 + gameplay_start_y)
 

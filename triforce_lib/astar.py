@@ -47,44 +47,51 @@ def get_neighbors(position, tiles):
                 
     return neighbors
 
-def a_star(start, tiles, target):
+def reconstruct_path(came_from, current):
+    path = []
+    while current in came_from:
+        path.append(current)
+        current = came_from[current]
+
+    return path[::-1]
+
+def a_star(link_position, tiles, direction):
     map_height, map_width = tiles.shape
+    start = link_position
 
     open_set = []
     heapq.heappush(open_set, (0, start))
     
     came_from = {}
     g_score = {start: 0}
-    f_score = {start: heuristic(start, target, map_width, map_height)}
+    f_score = {start: heuristic(start, direction, map_width, map_height)}
+    
+    closest_node = start
+    closest_distance = heuristic(start, direction, map_width, map_height)
 
     while open_set:
         _, current = heapq.heappop(open_set)
 
-        if heuristic(current, target, map_width, map_height) == 0:
-            # Reconstruct path
-            path = []
-            while current in came_from:
-                if len(path) == 0 and isinstance(target, str):
-                    add_direction(target, current, path)
+        current_distance = heuristic(current, direction, map_width, map_height)
+        if current_distance < closest_distance:
+            closest_node = current
+            closest_distance = current_distance
 
-                path.append(current)
-                current = came_from[current]
-
-            if not path:
-                add_direction(target, start, path)
-            path.append(start)
-            return path[::-1]
+        if current_distance == 0:
+            # Reconstruct path to current node
+            return reconstruct_path(came_from, current)
 
         for neighbor in get_neighbors(current, tiles):
-            tentative_g_score = g_score[current] + 1
+            tentative_g_score = g_score[current] + 1  # Assuming uniform cost
             if tentative_g_score < g_score.get(neighbor, float('inf')):
                 came_from[neighbor] = current
                 g_score[neighbor] = tentative_g_score
-                f_score[neighbor] = tentative_g_score + heuristic(neighbor, target, map_width, map_height)
+                f_score[neighbor] = tentative_g_score + heuristic(neighbor, direction, map_width, map_height)
                 if neighbor not in [item[1] for item in open_set]:
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
-    return []
+    # Reconstruct path to the closest node if target is unreachable
+    return reconstruct_path(came_from, closest_node)
 
 def add_direction(target, current, path):
     if target == 'N':

@@ -69,8 +69,21 @@ class ZeldaModel(ZeldaModelInfo):
                     cls.__try_load_model(models, kinds, "best-score", model_path, "best_score.zip", **kwargs)
                     cls.__try_load_model(models, kinds, "best-reward", model_path, "best_reward.zip", **kwargs)
 
+                    for iterations, filename in cls.iterate_numbered_models(model_path):
+                        cls.__try_load_model(models, kinds, f"model_{iterations}", model_path, filename, **kwargs)
+
             cls._models[model_info.name] = ZeldaModel(model_info, models, kinds)
     
+    @classmethod
+    def iterate_numbered_models(cls, model_path):
+        result = []
+        for filename in os.listdir(model_path):
+            if filename.startswith('model_') and filename.endswith('.zip'):
+                number = int(filename[6:-4])
+                result.append((number, filename))
+        result.sort(key=lambda x: x[0])
+        return result
+
     @classmethod
     def __try_load_model(cls, models, kinds, kind, path, subpath, **kwargs):
         fullpath = os.path.join(path, subpath)

@@ -72,7 +72,7 @@ class EnteredDungeon(ZeldaEndCondition):
             return True, False, "success-entered-dungeon"
 
 class LeftOverworld1Area(ZeldaEndCondition):
-    overworld_dungeon1_walk_rooms = set([0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
+    overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
 
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> (bool, bool, str):
         if new['level'] == 0 and new['location'] not in self.overworld_dungeon1_walk_rooms:
