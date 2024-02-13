@@ -97,7 +97,7 @@ class Display:
         block_width = 10
         center_line = self.game_height + self.graph_height // 2
         reward_values = deque(maxlen=self.graph_width // block_width)
-        reward_details = deque(maxlen=100)
+        buttons = deque(maxlen=100)
 
         model_requested = 0
         model_name = None
@@ -110,13 +110,16 @@ class Display:
         terminated = True
         truncated = False
 
+        last_info = None
+        info = None
+
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
         mode = 'c'
         while mode != 'q':
             if terminated or truncated:
+                last_info = info
                 obs, info = env.reset()
                 self.total_rewards = 0.0
-                reward_details.clear()
                 reward_values.clear()
                 for _ in range(reward_values.maxlen):
                     reward_values.append(0)
@@ -137,13 +140,14 @@ class Display:
                 model_name = selected_model.name if not model_kind else f"{selected_model.name} ({model_kind}) {timesteps:,} timesteps"
 
                 action, _ = model.predict(obs, deterministic=False)
+                last_info = info
                 obs, reward, terminated, truncated, info = env.step(action)
 
                 if mode == 'n':
                     mode = 'p'
             
             # update rewards for display
-            self.update_rewards(reward_values, reward_details, info, reward)
+            self.update_rewards(reward_values, buttons, last_info, info, reward)
             curr_score = info.get('score', None)
 
             while True:
@@ -154,7 +158,6 @@ class Display:
 
                 surface.fill((0, 0, 0))
 
-                # Show observation values
                 self.show_observation(surface, obs, curr_score)
 
                 # render the gameplay
@@ -162,13 +165,13 @@ class Display:
                 if overlay:
                     color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
                     self.overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), info['tiles'], color, self.scale, self.get_optimal_path(info))
-                self.render_text(surface, f"Model: {model_name}", (self.game_x, self.game_y))
+                render_text(surface, self.font, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
-                    self.render_text(surface, f"Location: {hex(info['location'])}", (self.game_x + self.game_width - 120, self.game_y))
+                    render_text(surface, self.font, f"Location: {hex(info['location'])}", (self.game_x + self.game_width - 120, self.game_y))
 
                 # render rewards graph and values
                 self.draw_rewards_graph(surface, self.graph_height, block_width, center_line, reward_values)
-                self.draw_description_text(surface, reward_details, self.text_x, self.text_y, 20, self.text_height)
+                rendered_buttons = self.draw_reward_buttons(surface, buttons, (self.text_x, self.text_y), (self.text_width, self.text_height))
 
                 if recording:
                     recording.append(pygame.surfarray.array3d(pygame.display.get_surface()))
@@ -183,6 +186,13 @@ class Display:
                     if event.type == pygame.QUIT:
                         mode = 'q'
                         break
+
+                    elif event.type == pygame.MOUSEBUTTONDOWN:
+                        if event.button == 1:
+                            for rendered_button in rendered_buttons:
+                                if rendered_button.is_position_within(event.pos):
+                                    rendered_button.button.on_click()
+                                    break
 
                     elif event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_q:
@@ -232,15 +242,12 @@ class Display:
         y_pos = self.draw_arrow(surface, "Enemy", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][1], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
         y_pos = self.draw_arrow(surface, "Projectile", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][2], radius=self.obs_width // 4, color=(255, 0, 0), width=3)
         y_pos = self.draw_arrow(surface, "Item", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][3], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
-        y_pos = self.render_text(surface, f"Enemies: {obs['features'][0]}", (x_pos, y_pos))
-        y_pos = self.render_text(surface, f"Beams: {obs['features'][1]}", (x_pos, y_pos))
-        y_pos = self.render_text(surface, f"Rewards: {round(self.total_rewards, 2)}", (x_pos, y_pos))
-        if curr_score is not None:
-            y_pos = self.render_text(surface, f"Score: {round(curr_score, 2)}", (x_pos, y_pos))
+        y_pos = render_text(surface, self.font, f"Enemies: {obs['features'][0]}", (x_pos, y_pos))
+        y_pos = render_text(surface, self.font, f"Beams: {obs['features'][1]}", (x_pos, y_pos))
+        y_pos = render_text(surface, self.font, f"Rewards: {round(self.total_rewards, 2)}", (x_pos, y_pos))
 
-    def update_rewards(self, reward_values, reward_details, info, reward):
+    def update_rewards(self, reward_values, buttons, last_info, info, reward):
         reward_values.append(reward)
-
 
         if 'rewards' in info:
             reward_dict = {k: round(v, 2) for k, v in info['rewards'].items()}
@@ -251,15 +258,15 @@ class Display:
         else:
             reward_dict = {}
 
-        prev = reward_details[0] if reward_details else None
+        prev = buttons[0] if buttons else None
         action = "+".join(info['buttons'])
-        if prev is not None and prev['rewards'] == reward_dict and prev['action'] == action:
-            prev['count'] += 1
+        if prev is not None and prev.rewards == reward_dict and prev.action == action:
+            prev.count += 1
         else:
-            reward_details.appendleft({'count': 1, 'rewards': reward_dict, 'action' : action})
+            buttons.appendleft(RewardButton(self.font, 1, reward_dict, action, self.text_width, DebugReward(self.scenario, last_info, info)))
 
     def draw_arrow(self, surface, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
-        self.render_text(surface, label, (start_pos[0], start_pos[1]))
+        render_text(surface, self.font, label, (start_pos[0], start_pos[1]))
         circle_start = (start_pos[0], start_pos[1] + 20)
         centerpoint = (circle_start[0] + radius, circle_start[1] + radius)
         end_pos = (centerpoint[0] + direction[0] * radius, centerpoint[1] + direction[1] * radius)
@@ -284,7 +291,7 @@ class Display:
         return circle_start[1] + radius * 2
 
     def render_observation_view(self, surface, x, y, dim, img):
-        self.render_text(surface, "Observation", (x, y))
+        render_text(surface, self.font, "Observation", (x, y))
         y += 20
 
         if img.shape[2] == 1:
@@ -315,48 +322,26 @@ class Display:
                 y_position = center_line - block_height if r > 0 else center_line
                 pygame.draw.rect(surface, color, (x_position, y_position, block_width, block_height))
 
-    def render_text(self, surface, text, position, color=(255, 255, 255)):
-        text_surface = self.font.render(text, True, color)
-        surface.blit(text_surface, position)
-        return position[1] + text_surface.get_height()
+    def draw_reward_buttons(self, surface, buttons : deque, position, dimensions):
+        result = []
 
-    def draw_description_text(self, surface, rewards_deque, start_x, start_y, line_height, max_height):
-        y = start_y
-        for i in range(len(rewards_deque)):
-            entry = rewards_deque[i]
-            step_count, rewards, action = entry['count'], entry['rewards'], entry['action']
+        x, y = position
+        height = dimensions[1]
 
-            self.render_text(surface, f"Action: {action}", (start_x, y))
-            y += line_height
+        i = 0
+        while i < len(buttons) and y < position[1] + height:
+            button = buttons[i]
+            rendered_button = button.draw_reward_button(surface, (x, y))
+            result.append(rendered_button)
+            y += rendered_button.dimensions[1] + 1
+            i += 1
 
-            if rewards:
-                for reason, value in rewards.items():
-                    # color=red if negative, light blue if positive, white if zero
-                    color = (255, 0, 0) if value < 0 else (0, 255, 255) if value > 0 else (255, 255, 255)
-                    self.render_text(surface, reason, (start_x, y), color=color)
-                    self.render_text(surface, f"{'+' if value > 0 else ''}{value:.2f}", (start_x + 200, y))
-                    y += line_height
-                    if y + line_height > max_height:
-                        while len(rewards_deque) > i:
-                            rewards_deque.pop()
-
-                        return  # Stop rendering when we run out of vertical space
-            else:
-                text = "none"
-                color = (128, 128, 128)
-                self.render_text(surface, text, (start_x, y), color)
-                y += line_height
-                
-            # Render the step count (e.g., x3) aligned to the right
-            if step_count > 1:
-                count_text = f"x{step_count}"
-                count_text_width, _ = self.font.size(count_text)
-                self.render_text(surface, count_text, (start_x + 275 - count_text_width, y - line_height))
-
-            # Draw dividing line
-            pygame.draw.line(surface, (255, 255, 255), (start_x, y), (start_x + 300, y))
-            y += 3
-
+        # remove unrendered buttons
+        while len(buttons) > i:
+            buttons.pop()
+        
+        return result
+    
     def get_optimal_path(self, info):
         if 'a*_path' in info:
             return info['a*_path'][-1]
@@ -390,6 +375,73 @@ class Display:
 
                 # Draw the text
                 surface.blit(text_surface, text_rect)
+
+class DebugReward:
+    def __init__(self, scenario : ZeldaScenario, last_info, info):
+        self.scenario = scenario
+        self.last_info = last_info
+        self.info = info
+
+    def __call__(self):
+        for reward_dict, terminated, truncated, reason in self.scenario.simulate_step(self.last_info, self.info):
+            print(f"{reward_dict = }")
+            print(f"{terminated = }")
+            print(f"{truncated = }")
+            print(f"{reason = }")
+
+class RewardButton:
+    def __init__(self, font, count, rewards, action, width, on_click):
+        self.font = font
+        self.count = count
+        self.rewards = rewards
+        self.action = action
+        self.width = width
+        self.on_click = on_click
+
+    def draw_reward_button(self, surface, position):
+        x = position[0] + 3
+        y = position[1] + 2
+
+        start_y = y
+        y = render_text(surface, self.font, self.action, (x, y))
+        if self.rewards:
+            for reason, value in self.rewards.items():
+                color = (255, 0, 0) if value < 0 else (0, 255, 255) if value > 0 else (255, 255, 255)
+                next_y = render_text(surface, self.font, reason, (x, y), color=color)
+                render_text(surface, self.font, f"{'+' if value > 0 else ''}{value:.2f}", (x + 200, y))
+                y = next_y
+                
+        else:
+            text = "none"
+            color = (128, 128, 128)
+            y = render_text(surface, self.font, text, (x, y), color)
+
+        if self.count > 1:
+            count_text = f"x{self.count}"
+            count_text_width, _ = self.font.size(count_text)
+            render_text(surface, self.font, count_text, (x + 275 - count_text_width, start_y))
+
+        height = y - position[1]
+        pygame.draw.rect(surface, (255, 255, 255), (position[0], position[1], self.width, height), 1)
+
+        return RenderedButton(self, (x, y), (self.width, height))
+    
+class RenderedButton:
+    def __init__(self, button, position, dimensions):
+        self.button = button
+        self.position = position
+        self.dimensions = dimensions
+
+    def is_position_within(self, position):
+        x, y = position
+        bx, by = self.position
+        bw, bh = self.dimensions
+        return bx <= x <= bx + bw and by <= y <= by + bh
+
+def render_text(surface, font, text, position, color=(255, 255, 255)):
+    text_surface = font.render(text, True, color)
+    surface.blit(text_surface, position)
+    return position[1] + text_surface.get_height()
 
 def main(args):
     render_mode = 'rgb_array'
