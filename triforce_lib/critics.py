@@ -270,8 +270,7 @@ class GameplayCritic(ZeldaCritic):
             # do we have an optimal path?
             old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
             new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
-            _, _, old_path = old.get("a*_path", (None, None, []))
-            if len(old_path) >= 2:
+            if len(old_path := old.get("a*_path", (None, None, []))[2]) >= 2:
                 correct_direction, possible_direction = self.get_optimal_directions(old_path)
                 direction = new['direction']
 
@@ -301,8 +300,7 @@ class GameplayCritic(ZeldaCritic):
                         rewards['reward-move-closer'] = self.move_closer_reward * percent
 
                 elif direction == possible_direction:
-                    _, _, new_path = new.get("a*_path", (None, None, []))
-                    if len(new_path) <= len(old_path):
+                    if len(new.get("a*_path", (None, None, []))[2]) <= len(old_path):
                         if percent is not None:
                             rewards['reward-optimal-path'] = self.move_closer_reward * percent
                     else:
@@ -310,12 +308,10 @@ class GameplayCritic(ZeldaCritic):
                 else:
                     rewards['penalty-move-farther'] = self.move_away_penalty
 
-            elif 'objective_pos_or_dir' in new:
+            elif (target := new.get('objective_pos_or_dir', None)) is not None:
                 # if A* couldn't find a path, we should still reward the agent for moving closer
                 # to the objective.  This should be rare, and often happens when an enem moves
                 # into a wall.  (Bosses or wallmasters.)
-
-                target = new['objective_pos_or_dir']
                 if isinstance(target, str):
                     if target == 'N':
                         dist = new_link_pos[1] - old_link_pos[1]
