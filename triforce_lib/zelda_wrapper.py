@@ -4,6 +4,7 @@
 #
 # This consumes some state and produces values like 'step_hits'.
 
+from enum import Enum
 from random import randint
 from typing import Any
 import gymnasium as gym
@@ -12,6 +13,12 @@ import numpy as np
 from .zelda_game_data import zelda_game_data
 from .zelda_game import ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData
 from .model_parameters import *
+
+class ActionType(Enum):
+    Nothing = 0
+    Movement = 1
+    Attack = 2
+    Item = 3
 
 class ZeldaGameWrapper(gym.Wrapper):
     def __init__(self, env, deterministic=False):
@@ -32,6 +39,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._none_action = np.zeros(9, dtype=bool)
         self._attack_action = np.zeros(9, dtype=bool)
         self._attack_action[self.a_button] = True
+        self._item_action = np.zeros(9, dtype=bool)
+        self._item_action[self.b_button] = True
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
@@ -62,14 +71,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         return obs, rewards, terminated, truncated, info
 
     def update_info(self, act, info):
-        if self.action_is_attack(act):
-            info['action'] = 'attack'
-
-        elif self.action_is_item(act):
-            info['action'] = 'item'
-
-        elif self.action_is_movement(act):
-            info['action'] = 'movement'
+        info['action'] = self.get_action_type(act)
 
         unwrapped = self.env.unwrapped
         ram = unwrapped.get_ram()
@@ -164,8 +166,8 @@ class ZeldaGameWrapper(gym.Wrapper):
             del self.__dict__[name]
 
     def act_and_wait(self, act):
-    # wait based on the kind of action
-        if self.action_is_movement(act):
+        action_kind = self.get_action_type(act)
+        if action_kind == ActionType.Movement:
             rewards = 0
             for i in range(movement_frames):
                     obs, rew, terminated, truncated, info = self.env.step(act)
@@ -173,7 +175,7 @@ class ZeldaGameWrapper(gym.Wrapper):
                     if terminated or truncated:
                         break
 
-        elif self.action_is_attack(act):
+        elif action_kind == ActionType.Attack or action_kind == ActionType.Item:
             direction = self.get_button_direction(act)
             if direction == 'E':
                 direction = 1
@@ -186,22 +188,18 @@ class ZeldaGameWrapper(gym.Wrapper):
                 
             self.env.unwrapped.data.set_value('link_direction', direction)
 
-            obs, rewards, terminated, truncated, info = self.env.step(self._attack_action)
+            if action_kind == ActionType.Attack:
+                obs, rewards, terminated, truncated, info = self.env.step(self._attack_action)
+                cooldown = attack_cooldown
+            elif action_kind == ActionType.Item:
+                obs, rewards, terminated, truncated, info = self.env.step(self._item_action)
+                cooldown = item_cooldown
 
-            cooldown = attack_cooldown
             if not self.deterministic:
                 cooldown += randint(0, random_delay_max_frames)
 
             obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
             rewards += rew
-
-        elif self.action_is_item(act):
-            obs, rewards, terminated, truncated, info = self.env.step(act)
-            obs, rew, terminated, truncated, info = self.skip(self._none_action, item_cooldown)
-            rewards += rew
-
-        else:
-            raise Exception("Unknown action type")
         
         in_cave = is_in_cave(info)
         if in_cave and not self.was_link_in_cave:
@@ -241,18 +239,16 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return None
     
-    def action_is_movement(self, act):
-        if self.action_is_attack(act) or self.action_is_item(act):
-            return False
-        
-        return self.get_button_direction(act) is not None
+    def get_action_type(self, act) -> ActionType:
 
-    def action_is_item(self, act):
-        return act[self.b_button]
-
-    def action_is_attack(self, act):
-        return act[self.a_button]
-
+        if act[self.a_button]:
+            return ActionType.Attack
+        elif act[self.b_button]:
+            return ActionType.Item
+        elif self.get_button_direction(act) is not None:
+            return ActionType.Movement
+        else:
+            return ActionType.Nothing
 
     def handle_future_hits(self, act, info, objects, step_hits, name, condition_check, disable_others):
         info[name] = 0

@@ -3,6 +3,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
+from triforce_lib.zelda_wrapper import ActionType
 from triforce_lib import ZeldaActionReplay
 
 def assert_no_hit( env, command):
@@ -22,7 +23,7 @@ def test_bat_injury():
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 1
-    assert info['action'] == 'attack'
+    assert info['action'] == ActionType.Attack
     
     assert_no_hit(replay, 'dddddddddddddddddddddddddddddddddd')
 
@@ -37,14 +38,14 @@ def test_stalfos_injury():
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 1
-    assert info['action'] == 'attack'
+    assert info['action'] == ActionType.Attack
     assert_no_hit(replay, 'llllr')
 
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 1
-    assert info['action'] == 'attack'
+    assert info['action'] == ActionType.Attack
     
     assert_no_hit(replay, 'lllllll')
 
@@ -57,7 +58,7 @@ def test_sword_injury():
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 2
-    assert info['action'] == 'attack'
+    assert info['action'] == ActionType.Attack
     
     assert_no_hit(replay, 'u')
 
@@ -73,7 +74,7 @@ def test_beam_injury():
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 1
-    assert info['action'] == 'attack'
+    assert info['action'] == ActionType.Attack
 
     assert_no_hit(replay, "lllllll")
 
@@ -87,6 +88,6 @@ def test_bombs_kill():
     assert not truncated
     assert info['step_hits'] == 3
     assert info['bomb1_hits'] == 3
-    assert info['action'] == 'item'
+    assert info['action'] == ActionType.Item
 
     assert_no_hit(replay, "uuurrrrrr")

@@ -9,6 +9,8 @@ import pygame
 import numpy as np
 from collections import deque
 
+import tqdm
+
 from triforce_lib import ZeldaAIOrchestrator, ZeldaScenario, ZeldaML, is_in_cave
 
 class Recording:
@@ -72,18 +74,21 @@ class Display:
         self.obs_x = 0
         self.obs_y = 0
 
-        self.graph_height = 150
         self.game_x = self.obs_width
         self.game_y = 0
-        self.graph_width = self.game_width + self.obs_width
+
+        self.details_height = 150
+        self.details_width = self.game_width + self.obs_width
+        self.details_x = 0
+        self.details_y = self.game_height
 
         self.text_x = self.obs_width + self.game_width
         self.text_y = 0
-        self.text_height = self.game_height + self.graph_height
+        self.text_height = self.game_height + self.details_height
         self.text_width = 300
 
         self.total_width = self.obs_width + self.game_width + self.text_width
-        self.total_height = max(self.game_height + self.graph_height, self.text_height)
+        self.total_height = max(self.game_height + self.details_height, self.text_height)
         self.dimensions = (self.total_width, self.total_height)
 
         self.total_rewards = 0.0
@@ -94,15 +99,15 @@ class Display:
         surface = pygame.display.set_mode(self.dimensions)
         clock = pygame.time.Clock()
         
-        block_width = 10
-        center_line = self.game_height + self.graph_height // 2
-        reward_values = deque(maxlen=self.graph_width // block_width)
+        deaths = {}
+        reward_map = {}
         buttons = deque(maxlen=100)
 
         model_requested = 0
         model_name = None
         model_kind = None
 
+        frames = None
         recording = None
         cap_fps = True
         overlay = 0
@@ -117,16 +122,30 @@ class Display:
         mode = 'c'
         while mode != 'q':
             if terminated or truncated:
+                if info and 'level' in info and 'location' in info:
+                    if info['level'] == 0:
+                        deaths['overworld'] = deaths.get('overworld', 0) + 1
+                    else:
+                        location = hex(info['location'])
+                        deaths[location] = deaths.get(location, 0) + 1
+
                 last_info = info
                 obs, info = env.reset()
                 self.total_rewards = 0.0
-                reward_values.clear()
-                for _ in range(reward_values.maxlen):
-                    reward_values.append(0)
+                reward_map.clear()
 
                 if recording is not None:
                     recording.stop()
                     recording = Recording(self.dimensions)
+
+                if frames:
+                    if last_info['triforce']:
+                        recording = Recording(self.dimensions)
+                        for i in tqdm.tqdm(range(len(frames))):
+                            recording.append(pygame.surfarray.array3d(frames[i]))
+                        recording.stop()
+
+                    frames.clear()
 
             # Perform a step in the environment
             if mode == 'c' or mode == 'n':
@@ -147,7 +166,7 @@ class Display:
                     mode = 'p'
             
             # update rewards for display
-            self.update_rewards(reward_values, buttons, last_info, info, reward)
+            self.update_rewards(reward_map, buttons, last_info, info)
             curr_score = info.get('score', None)
 
             while True:
@@ -170,11 +189,14 @@ class Display:
                     render_text(surface, self.font, f"Location: {hex(info['location'])}", (self.game_x + self.game_width - 120, self.game_y))
 
                 # render rewards graph and values
-                self.draw_rewards_graph(surface, self.graph_height, block_width, center_line, reward_values)
+                self.draw_details(surface, reward_map, deaths)
                 rendered_buttons = self.draw_reward_buttons(surface, buttons, (self.text_x, self.text_y), (self.text_width, self.text_height))
 
                 if recording:
                     recording.append(pygame.surfarray.array3d(pygame.display.get_surface()))
+
+                if frames is not None:
+                    frames.append(surface.copy())
 
                 # Display the scaled frame
                 pygame.display.flip()
@@ -221,12 +243,22 @@ class Display:
                         elif event.key == pygame.K_u:
                             cap_fps = not cap_fps
 
-                        elif event.key == pygame.K_F5:
+                        elif event.key == pygame.K_F4:
                             if recording is not None:
                                 recording.stop()
                                 recording = None
+                                print("Live recording stopped")
                             else:
                                 recording = Recording(self.dimensions)
+                                print("Live recording started")
+
+                        elif event.key == pygame.K_F10:
+                            if frames is None:
+                                print("Frame recording started")
+                                frames = []
+                            else:
+                                print("Frame recording stopped")
+                                frames = None
 
         if recording:
             recording.stop()
@@ -242,28 +274,25 @@ class Display:
         y_pos = self.draw_arrow(surface, "Enemy", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][1], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
         y_pos = self.draw_arrow(surface, "Projectile", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][2], radius=self.obs_width // 4, color=(255, 0, 0), width=3)
         y_pos = self.draw_arrow(surface, "Item", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][3], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
-        y_pos = render_text(surface, self.font, f"Enemies: {obs['features'][0]}", (x_pos, y_pos))
-        y_pos = render_text(surface, self.font, f"Beams: {obs['features'][1]}", (x_pos, y_pos))
-        y_pos = render_text(surface, self.font, f"Rewards: {round(self.total_rewards, 2)}", (x_pos, y_pos))
+        y_pos = self.write_key_val_aligned(surface, "Enemies", f"{obs['features'][0]:.1f}", x_pos, y_pos, self.obs_width)
+        y_pos = self.write_key_val_aligned(surface, "Beams", f"{obs['features'][1]:.1f}", x_pos, y_pos, self.obs_width)
 
-    def update_rewards(self, reward_values, buttons, last_info, info, reward):
-        reward_values.append(reward)
-
+    def update_rewards(self, reward_map, buttons, last_info, info):
+        curr_rewards = {}
         if 'rewards' in info:
-            reward_dict = {k: round(v, 2) for k, v in info['rewards'].items()}
-
-            for rew in info.get('rewards', {}).values():
-                self.total_rewards += rew
-
-        else:
-            reward_dict = {}
+            for k, v in info['rewards'].items():
+                if k not in reward_map:
+                    reward_map[k] = 0
+                reward_map[k] += v
+                curr_rewards[k] = round(v, 2)
+                self.total_rewards += v
 
         prev = buttons[0] if buttons else None
         action = "+".join(info['buttons'])
-        if prev is not None and prev.rewards == reward_dict and prev.action == action:
+        if prev is not None and prev.rewards == curr_rewards and prev.action == action:
             prev.count += 1
         else:
-            buttons.appendleft(RewardButton(self.font, 1, reward_dict, action, self.text_width, DebugReward(self.scenario, last_info, info)))
+            buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, self.text_width, DebugReward(self.scenario, last_info, info)))
 
     def draw_arrow(self, surface, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
         render_text(surface, self.font, label, (start_pos[0], start_pos[1]))
@@ -286,7 +315,6 @@ class Display:
                     end_pos[1] - arrowhead_size * math.sin(angle + math.pi / 6))
 
             pygame.draw.polygon(surface, color, [end_pos, left, right])
-            
 
         return circle_start[1] + radius * 2
 
@@ -309,18 +337,44 @@ class Display:
         scaled_frame = pygame.transform.scale(frame, (game_width, game_height))
         surface.blit(scaled_frame, pos)
 
-    def draw_rewards_graph(self, surface, graph_height, block_width, center_line, reward_values):
-        for i, r in enumerate(reward_values):
-            x_position = i * block_width
+    def write_key_val_aligned(self, surface, text, value, x, y, total_width, color=(255, 255, 255)):
+        new_y = render_text(surface, self.font, text, (x, y), color)
+        value_width, _ = self.font.size(value)
+        render_text(surface, self.font, value, (x + total_width - value_width, y), color)
+        return new_y
 
-            if r == 0:
-                pygame.draw.line(surface, (255, 255, 255), (x_position, center_line), (x_position + block_width, center_line))
-            else:
-                color = (0, 0, 255) if r > 0 else (255, 0, 0)  # Blue for positive, red for negative
-                block_height = int(abs(r) * (graph_height // 2))
-                block_height = max(block_height, 10)
-                y_position = center_line - block_height if r > 0 else center_line
-                pygame.draw.rect(surface, color, (x_position, y_position, block_width, block_height))
+    def draw_details(self, surface, rewards, deaths):
+        col = 0
+        row = 1
+        col_width = self.details_width // 3 - 3
+
+        x = self.details_x
+        y = self.write_key_val_aligned(surface, "Total Rewards:", f"{self.total_rewards:.2f}", self.details_x, self.details_y, col_width)
+        row_height = y - self.details_y
+        row_max = self.details_height // row_height
+        items = list(rewards.items())
+        items.sort(key=lambda x: x[1], reverse=True)
+        for k, v in items:
+            color = (255, 0, 0) if v < 0 else (0, 255, 255) if v > 0 else (255, 255, 255)
+            self.write_key_val_aligned(surface, f"{k}:", f"{round(v, 2)}", self.details_x + col * col_width, self.details_y + row * row_height, col_width, color)
+            row, col = self.__increment(row, col, row_max)
+
+        if deaths:
+            row, col = self.__increment(row, col, row_max)
+            self.write_key_val_aligned(surface, "Deaths:", f"{sum(deaths.values())}", self.details_x + col * col_width, self.details_y + row * row_height, col_width)
+        
+            items = list(deaths.items())
+            items.sort(key=lambda x: x[1], reverse=True)
+            for k, v in items:
+                row, col = self.__increment(row, col, row_max)
+                self.write_key_val_aligned(surface, f"{k}:", f"{v}", self.details_x + col * col_width, self.details_y + row * row_height, col_width)
+
+    def __increment(self, row, col, row_max):
+        row += 1
+        if row >= row_max:
+            row = 0
+            col += 1
+        return row, col
 
     def draw_reward_buttons(self, surface, buttons : deque, position, dimensions):
         result = []
