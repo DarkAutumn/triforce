@@ -452,7 +452,7 @@ class Dungeon1BombCritic(Dungeon1Critic):
         self.bomb_miss_penalty = -self.reward_small
 
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
-        if new['action'] == ActionType.item:
+        if new['action'] == ActionType.Item:
             selected = new['selected_item']
             # bombs
             if selected == 1:
