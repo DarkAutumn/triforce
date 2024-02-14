@@ -505,7 +505,7 @@ class Overworld1Critic(GameplayCritic):
         level = new['level']
         location = new['location']
 
-        if old['mode'] == mode_gameplay and location == 0x77 and new['mode'] == mode_cave:
+        if not is_in_cave(old) and location == 0x77 and is_in_cave(new):
             rewards['penalty-entered-cave'] = self.entered_cave_penalty
 
         elif level == 0:
