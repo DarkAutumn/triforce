@@ -9,6 +9,8 @@ import pygame
 import numpy as np
 from collections import deque
 
+import tqdm
+
 from triforce_lib import ZeldaAIOrchestrator, ZeldaScenario, ZeldaML, is_in_cave
 
 class Recording:
@@ -103,6 +105,7 @@ class Display:
         model_name = None
         model_kind = None
 
+        frames = None
         recording = None
         cap_fps = True
         overlay = 0
@@ -127,6 +130,15 @@ class Display:
                 if recording is not None:
                     recording.stop()
                     recording = Recording(self.dimensions)
+
+                if frames:
+                    if last_info['triforce']:
+                        recording = Recording(self.dimensions)
+                        for i in tqdm.tqdm(range(len(frames))):
+                            recording.append(pygame.surfarray.array3d(frames[i]))
+                        recording.stop()
+
+                    frames.clear()
 
             # Perform a step in the environment
             if mode == 'c' or mode == 'n':
@@ -176,6 +188,9 @@ class Display:
                 if recording:
                     recording.append(pygame.surfarray.array3d(pygame.display.get_surface()))
 
+                if frames is not None:
+                    frames.append(surface.copy())
+
                 # Display the scaled frame
                 pygame.display.flip()
                 if cap_fps:
@@ -221,12 +236,22 @@ class Display:
                         elif event.key == pygame.K_u:
                             cap_fps = not cap_fps
 
-                        elif event.key == pygame.K_F5:
+                        elif event.key == pygame.K_F4:
                             if recording is not None:
                                 recording.stop()
                                 recording = None
+                                print("Live recording stopped")
                             else:
                                 recording = Recording(self.dimensions)
+                                print("Live recording started")
+
+                        elif event.key == pygame.K_F10:
+                            if frames is None:
+                                print("Frame recording started")
+                                frames = []
+                            else:
+                                print("Frame recording stopped")
+                                frames = None
 
         if recording:
             recording.stop()
