@@ -1,4 +1,6 @@
 # responsible for decoding difficult parts of zelda gamestate
+from enum import Enum
+from typing import Generator
 from .zelda_game_data import zelda_game_data
 from .model_parameters import gameplay_start_y
 
@@ -114,6 +116,15 @@ def get_link_tile_index(info):
 def tile_index_to_position(tile_index):
     return (tile_index[1] * 8, tile_index[0] * 8 + gameplay_start_y)
 
+class ZeldaEnemy(Enum):
+    WallMaster : int = 39
+
+def id_to_enemy(id):
+    if id == 39:
+        return ZeldaEnemy(id)
+    
+    return id
+
 class ZeldaObject:
     def __init__(self, id, pos, distance, vector, health):
         self.id = id
@@ -154,12 +165,12 @@ class ZeldaObjectData:
     def is_enemy(self, obj_id : int):
         return 1 <= obj_id <= 0x48
     
-    def enumerate_enemy_ids(self) -> int:
+    def enumerate_enemy_ids(self):
         for i in range(1, 0xc):
             if self.is_enemy(self.get_object_id(i)):
                 yield i
 
-    def enumerate_item_ids(self) -> int:
+    def enumerate_item_ids(self):
         for i in range(1, 0xc):
             if self.get_object_id(i) == 0x60:
                 yield i
@@ -167,7 +178,7 @@ class ZeldaObjectData:
     def is_projectile(self, obj_id : int):
         return obj_id > 0x48 and obj_id != 0x60 and obj_id != 0x63 and obj_id != 0x64 and obj_id != 0x68 and obj_id != 0x6a
 
-    def enumerate_projectile_ids(self) -> int:
+    def enumerate_projectile_ids(self):
         for i in range(1, 0xc):
             id = self.get_object_id(i)
             if self.is_projectile(id):
@@ -200,7 +211,7 @@ class ZeldaObjectData:
                 items.append(ZeldaObject(id, pos, distance, vector, None))
 
             elif 1 <= id <= 0x48:
-                enemies.append(ZeldaObject(id, pos, distance, vector, self.get_obj_health(i)))
+                enemies.append(ZeldaObject(id_to_enemy(id), pos, distance, vector, self.get_obj_health(i)))
 
             elif self.is_projectile(id):
                 projectiles.append(ZeldaObject(id, pos, distance, vector, None))
@@ -235,4 +246,5 @@ __all__ = [
     'tile_index_to_position',
     'get_link_tile_index',
     ZeldaObjectData.__name__,
+    ZeldaEnemy.__name__,
     ]

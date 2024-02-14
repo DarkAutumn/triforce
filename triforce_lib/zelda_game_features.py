@@ -1,6 +1,8 @@
 import gymnasium as gym
 import numpy as np
 
+from .zelda_game import *
+
 num_direction_vectors = 5
 
 class ZeldaGameFeatures(gym.Wrapper):
@@ -37,15 +39,21 @@ class ZeldaGameFeatures(gym.Wrapper):
             return result
         
         result[0] = info['objective_vector']
-        result[1] = self.get_first_vector(info, 'enemies')
-        result[2] = self.get_first_vector(info, 'projectiles')
-        result[3] = self.get_first_vector(info, 'items')
+        result[1] = self.get_first_vector([x for x in info['enemies'] if self.should_point_at_enemy(info, x)])
+        result[2] = self.get_first_vector(info['projectiles'])
+        result[3] = self.get_first_vector(info['items'])
 
         # create an np array of the vectors
         return np.array(result, dtype=np.float32)
     
-    def get_first_vector(self, info, kind):
-        entries = info[kind]
+    def should_point_at_enemy(self, info, enemy):
+        if enemy.id != ZeldaEnemy.WallMaster:
+            return True
+
+        dist = np.linalg.norm(np.array(info['link_pos'], dtype=np.float32) - enemy.position)
+        return dist < 30
+    
+    def get_first_vector(self, entries):
         return entries[0].vector if entries else np.zeros(2, dtype=np.float32)
 
     def get_features(self, info):
@@ -57,3 +65,4 @@ class ZeldaGameFeatures(gym.Wrapper):
             result[1] = 1.0 if info['has_beams'] else 0.0
 
         return result
+    
