@@ -79,13 +79,18 @@ def run_one_scenario(args, model_name, model_kind, zelda_ml=None):
 
     return (model_name, model_kind, success_rate, score, total_reward, rewards, penalties)
 
+
 def create_zeldaml(args):
     render_mode = 'human' if args.render else None
-    model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)), 'models')
+    model_path = get_model_path(args)
 
     zelda_ml = ZeldaML(args.color, render_mode=render_mode, verbose=args.verbose, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
     zelda_ml.load_models(model_path)
     return zelda_ml
+
+def get_model_path(args):
+    model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)), 'models')
+    return model_path
 
 def init_pool(args):
     global counter
@@ -131,6 +136,7 @@ def main(args):
     columns = ['Model', 'Kind', 'Success%', 'Score', 'Total Reward', 'Rewards', 'Penalties']
     data_frame = pd.DataFrame(results, columns=columns)
     print(data_frame.to_string(index=False))
+    data_frame.to_csv(os.path.join(get_model_path(args), 'results.csv'), index=False)
 
 
 def parse_args():
