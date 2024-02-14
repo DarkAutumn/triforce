@@ -99,6 +99,7 @@ class Display:
         surface = pygame.display.set_mode(self.dimensions)
         clock = pygame.time.Clock()
         
+        deaths = {}
         reward_map = {}
         buttons = deque(maxlen=100)
 
@@ -121,6 +122,13 @@ class Display:
         mode = 'c'
         while mode != 'q':
             if terminated or truncated:
+                if info and 'level' in info and 'location' in info:
+                    if info['level'] == 0:
+                        deaths['overworld'] = deaths.get('overworld', 0) + 1
+                    else:
+                        location = hex(info['location'])
+                        deaths[location] = deaths.get(location, 0) + 1
+
                 last_info = info
                 obs, info = env.reset()
                 self.total_rewards = 0.0
@@ -181,7 +189,7 @@ class Display:
                     render_text(surface, self.font, f"Location: {hex(info['location'])}", (self.game_x + self.game_width - 120, self.game_y))
 
                 # render rewards graph and values
-                self.draw_details(surface, reward_map)
+                self.draw_details(surface, reward_map, deaths)
                 rendered_buttons = self.draw_reward_buttons(surface, buttons, (self.text_x, self.text_y), (self.text_width, self.text_height))
 
                 if recording:
@@ -335,7 +343,7 @@ class Display:
         render_text(surface, self.font, value, (x + total_width - value_width, y), color)
         return new_y
 
-    def draw_details(self, surface, rewards):
+    def draw_details(self, surface, rewards, deaths):
         col = 0
         row = 1
         col_width = self.details_width // 3 - 3
@@ -348,11 +356,25 @@ class Display:
         items.sort(key=lambda x: x[1], reverse=True)
         for k, v in items:
             color = (255, 0, 0) if v < 0 else (0, 255, 255) if v > 0 else (255, 255, 255)
-            y = self.write_key_val_aligned(surface, f"{k}:", f"{round(v, 2)}", self.details_x + col * col_width, self.details_y + row * row_height, col_width, color)
-            row += 1
-            if row >= row_max:
-                row = 0
-                col += 1
+            self.write_key_val_aligned(surface, f"{k}:", f"{round(v, 2)}", self.details_x + col * col_width, self.details_y + row * row_height, col_width, color)
+            row, col = self.__increment(row, col, row_max)
+
+        if deaths:
+            row, col = self.__increment(row, col, row_max)
+            self.write_key_val_aligned(surface, "Deaths:", f"{sum(deaths.values())}", self.details_x + col * col_width, self.details_y + row * row_height, col_width)
+        
+            items = list(deaths.items())
+            items.sort(key=lambda x: x[1], reverse=True)
+            for k, v in items:
+                row, col = self.__increment(row, col, row_max)
+                self.write_key_val_aligned(surface, f"{k}:", f"{v}", self.details_x + col * col_width, self.details_y + row * row_height, col_width)
+
+    def __increment(self, row, col, row_max):
+        row += 1
+        if row >= row_max:
+            row = 0
+            col += 1
+        return row, col
 
     def draw_reward_buttons(self, surface, buttons : deque, position, dimensions):
         result = []
