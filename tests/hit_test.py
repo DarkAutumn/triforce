@@ -1,10 +1,9 @@
 import os
 import sys
 
-from triforce_lib.zelda_wrapper import ActionType
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
+from triforce_lib.zelda_wrapper import ActionType
 from triforce_lib import ZeldaActionReplay
 
 def assert_no_hit( env, command):
