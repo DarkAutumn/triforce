@@ -241,7 +241,7 @@ class GameplayCritic(ZeldaCritic):
         if self.new_location_reward and prev != curr and not self.has_visited(*curr):
             self.mark_visited(*curr)
             rewards['reward-new-location'] = self.new_location_reward
-    
+
     def critique_movement(self, old, new, rewards):
         if new['action'] != 'movement':
             return
@@ -253,17 +253,30 @@ class GameplayCritic(ZeldaCritic):
         if old['link_pos'] == new['link_pos']:
             rewards['penalty-wall-collision'] = self.wall_collision_penalty
             return
-            
+
+        # In rooms where wallmasters or traps exist, we want to reward link for moving closer to the
+        # center of the room to avoid that.  The a* path already takes into account this by weighting
+        # the edges of the room heavy.  This means we need to reward link for following the path exactly.
+        # Additionally, WallMaster code is weird.  They seem to jump around the map even when not visible
+        # which throws off some of our other code such as checking for enemies that are too close.
+        is_edge_dangerous = False
+
         # did link move too close to an enemy?
-        old_enemies_too_close = {x.id: x for x in old['enemies'] if x.distance < self.too_close_threshold}
-        if old_enemies_too_close:
-            new_enemies_too_close = [x for x in new['enemies'] if x.id in old_enemies_too_close]
-            if new_enemies_too_close:
-                for enemy in new_enemies_too_close:
-                    if enemy.distance < old_enemies_too_close[enemy.id].distance:
-                        rewards['penalty-move-too-close'] = self.enemy_too_close_penalty
-                        break
-                return
+        new_enemies = new['enemies']
+        if new_enemies:
+            if any(x.id == ZeldaEnemy.WallMaster for x in new_enemies):
+                is_edge_dangerous = True
+
+            else:
+                old_enemies_too_close = {x.id: x for x in old['enemies'] if x.distance < self.too_close_threshold}
+                if old_enemies_too_close:
+                    new_enemies_too_close = [x for x in new_enemies if x.id in old_enemies_too_close]
+                    if new_enemies_too_close:
+                        for enemy in new_enemies_too_close:
+                            if enemy.distance < old_enemies_too_close[enemy.id].distance:
+                                rewards['penalty-move-too-close'] = self.enemy_too_close_penalty
+                                break
+                        return
 
         # don't reward/penalize if we lost health, just taking the damage is penalty enough
         if get_heart_halves(old) <= get_heart_halves(new):
