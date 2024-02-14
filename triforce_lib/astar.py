@@ -2,19 +2,25 @@ import heapq
 
 from .zelda_game import walkable_tiles
 
-def heuristic(current, direction, map_width, map_height):
+def heuristic(current, direction, map_width, map_height, is_exterior_dangerous):
     y, x = current
+
+    weight = 0
+    if is_exterior_dangerous:
+        if x in [0x04, 0x05, 0x1a, 0x1b] or y in [0x04, 0x05, 0x10, 0x11]:
+            weight = 10
+
     if direction == 'N':
-        return y
+        return y + weight
     elif direction == 'S':
-        return map_height - y - 1
+        return map_height - y - 1 + weight
     elif direction == 'W':
-        return x
+        return x + weight
     elif direction == 'E':
-        return map_width - x - 1
+        return map_width - x - 1 + weight
     else:
         ny, nx = direction
-        return abs(nx - x) + abs(ny - y)
+        return abs(nx - x) + abs(ny - y) + weight
 
 def get_tile(position, tiles):
     y, x = position
@@ -56,7 +62,7 @@ def reconstruct_path(start, came_from, current):
     path.append(start)
     return path[::-1]
 
-def a_star(link_position, tiles, direction):
+def a_star(link_position, tiles, direction, is_exterior_dangerous):
     map_height, map_width = tiles.shape
     start = link_position
 
@@ -65,15 +71,15 @@ def a_star(link_position, tiles, direction):
     
     came_from = {}
     g_score = {start: 0}
-    f_score = {start: heuristic(start, direction, map_width, map_height)}
+    f_score = {start: heuristic(start, direction, map_width, map_height, is_exterior_dangerous)}
     
     closest_node = start
-    closest_distance = heuristic(start, direction, map_width, map_height)
+    closest_distance = heuristic(start, direction, map_width, map_height, is_exterior_dangerous)
 
     while open_set:
         _, current = heapq.heappop(open_set)
 
-        current_distance = heuristic(current, direction, map_width, map_height)
+        current_distance = heuristic(current, direction, map_width, map_height, is_exterior_dangerous)
         if current_distance < closest_distance:
             closest_node = current
             closest_distance = current_distance
@@ -86,7 +92,7 @@ def a_star(link_position, tiles, direction):
             if tentative_g_score < g_score.get(neighbor, float('inf')):
                 came_from[neighbor] = current
                 g_score[neighbor] = tentative_g_score
-                f_score[neighbor] = tentative_g_score + heuristic(neighbor, direction, map_width, map_height)
+                f_score[neighbor] = tentative_g_score + heuristic(neighbor, direction, map_width, map_height, is_exterior_dangerous)
                 if neighbor not in [item[1] for item in open_set]:
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 

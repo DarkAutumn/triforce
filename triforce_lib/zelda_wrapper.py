@@ -10,7 +10,7 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData
+from .zelda_game import ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData
 from .model_parameters import *
 
 class ZeldaGameWrapper(gym.Wrapper):
@@ -104,6 +104,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         # add information about enemies, items, and projectiles
         info['enemies'], info['items'], info['projectiles'] = objects.get_all_objects(link_pos)
+        info['are_walls_dangerous'] = any(x.id == ZeldaEnemy.WallMaster for x in info['enemies'])
         info['has_beams'] = has_beams(info) and get_beam_state(info) == 0
 
         location = (info['level'], info['location'], is_in_cave(info))
