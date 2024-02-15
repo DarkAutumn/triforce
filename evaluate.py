@@ -136,7 +136,7 @@ def main(args):
     columns = ['Model', 'Kind', 'Success%', 'Score', 'Total Reward', 'Rewards', 'Penalties']
     data_frame = pd.DataFrame(results, columns=columns)
     print(data_frame.to_string(index=False))
-    data_frame.to_csv(os.path.join(get_model_path(args), 'results.csv'), index=False)
+    data_frame.to_csv(os.path.join(get_model_path(args), 'evaluation.csv'), index=False)
 
 
 def parse_args():
