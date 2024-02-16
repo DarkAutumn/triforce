@@ -57,8 +57,9 @@ class GameplayCritic(ZeldaCritic):
         self.new_location_reward = self.reward_medium
 
         # combat values
+        self.wipeout_reward_on_hits = True
         self.health_lost_penalty = -self.reward_large
-        self.injure_kill_reward = self.reward_small
+        self.injure_kill_reward = self.reward_medium
         self.block_projectile_reward = self.reward_large
         
         # these are pivotal to the game, so they are rewarded highly
@@ -106,10 +107,6 @@ class GameplayCritic(ZeldaCritic):
             self._is_first_step = False
             self.mark_visited(new['level'], new['location'])
 
-        # health
-        self.critique_health_change(old, new, rewards)
-        self.critique_heart_containers(old, new, rewards)
-
         # triforce
         self.critique_triforce(old, new, rewards)
 
@@ -126,6 +123,9 @@ class GameplayCritic(ZeldaCritic):
         # movement
         self.critique_location_discovery(old, new, rewards)
         self.critique_movement(old, new, rewards)
+
+        # health - must be last
+        self.critique_health_change(old, new, rewards)
     
     # reward helpers, may be overridden
     def critique_equipment_pickup(self, old, new, rewards):
@@ -182,16 +182,18 @@ class GameplayCritic(ZeldaCritic):
         old_hearts = get_heart_halves(old)
         new_hearts = get_heart_halves(new)
 
-        if new_hearts < old_hearts:
-            rewards['penalty-losing-health'] = self.health_lost_penalty
+        if get_heart_containers(old) < get_heart_containers(new):
+            rewards['reward-gained-heart-container'] = self.heart_container_reward
         elif new_hearts > old_hearts:
             rewards['reward-gaining-health'] = self.health_gained_reward
-    
-    def critique_heart_containers(self, old, new, rewards):
-        # we can only gain one heart container at a time
-        if get_heart_containers(old) <get_heart_containers(new):
-            rewards['reward-gained-heart-container'] = self.heart_container_reward
-    
+        elif new_hearts < old_hearts:
+            rewards['penalty-losing-health'] = self.health_lost_penalty
+
+            if self.wipeout_reward_on_hits:
+                for key, value in rewards.items():
+                    if value > 0:
+                        rewards[key] = 0
+
     def critique_triforce(self, old, new, rewards):
         if get_num_triforce_pieces(old) < get_num_triforce_pieces(new) or (old["triforce_of_power"] == 0 and new["triforce_of_power"] == 1):
             rewards['reward-gained-triforce'] = self.triforce_reward
