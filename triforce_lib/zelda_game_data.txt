@@ -67,6 +67,15 @@
 0x674 regular_boomerang
 0x675 magic_boomerang
 
+0x667 compass
+0x668 map
+0x669 compass9
+0x66A map9
+
+0x66C clock
+
+0x656 selected_item
+
 # enemy health
 0x486 obj_health_1
 0x487 obj_health_2
@@ -80,16 +89,6 @@
 0x48f obj_health_a
 0x491 obj_health_b
 0x492 obj_health_c
-
-            
-0x667 compass
-0x668 map
-0x669 compass9
-0x66A map9
-            
-0x66C clock
-
-0x656 selected_item
 
 [rooms]
 # level, location, exits, num_enemies, item, secret_exits
