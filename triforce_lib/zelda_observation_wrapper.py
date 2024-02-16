@@ -41,12 +41,13 @@ class FrameCaptureWrapper(gym.Wrapper):
         return observation, reward, terminated, truncated, info
 
 class ZeldaObservationWrapper(gym.Wrapper):
-    def __init__(self, env, frames, grayscale, kind):
+    def __init__(self, env, frames, grayscale, kind, framestack):
         super().__init__(env)
         self.env = env
         self.frames = frames
         self.observation_space = self.env.observation_space
         self.grayscale = grayscale
+        self.framestack = framestack
 
         if kind == 'gameplay' or kind == 'viewport':
             self.trim = gameplay_start_y
@@ -73,6 +74,11 @@ class ZeldaObservationWrapper(gym.Wrapper):
             new_shape = (shape[0] - self.trim, shape[1], shape[2])
             self.observation_space = gym.spaces.Box(low=0, high=255, shape=new_shape, dtype=np.uint8)
 
+        if framestack > 1:
+            shape = self.observation_space.shape
+            new_shape = (shape[0] * framestack, shape[1], shape[2])
+            self.observation_space = gym.spaces.Box(low=0, high=255, shape=new_shape, dtype=np.uint8)
+
     def reset(self, **kwargs):
         _, info = self.env.reset(**kwargs)
         return self._get_observation(info), info
@@ -82,6 +88,15 @@ class ZeldaObservationWrapper(gym.Wrapper):
         return self._get_observation(info), reward, terminated, truncated, info
 
     def _get_observation(self, info):
+        if self.framestack > 1:
+            frames = []
+            for i in range(self.framestack):
+                frame = self.frames[-i * 2 - 1]
+                frame = self.trim_normalize_grayscale(info, frame)
+                frames.append(frame)
+            result = np.concatenate(frames, axis=0)
+            return result
+        
         frame = self.frames[-1]
         frame = self.trim_normalize_grayscale(info, frame)
         return frame

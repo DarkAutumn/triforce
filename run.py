@@ -322,14 +322,24 @@ class Display:
         render_text(surface, self.font, "Observation", (x, y))
         y += 20
 
+        if img.shape.__len__() == 4:
+            for i in range(img.shape[0]):
+                y = self.render_one_observation(surface, x, y, dim, img[i])
+
+            return y
+
+        else:
+            return self.render_one_observation(surface, x, y, dim, img)
+
+    def render_one_observation(self, surface, x, y, dim, img):
         if img.shape[2] == 1:
             img = np.repeat(img, 3, axis=2)
             
         observation_surface = pygame.surfarray.make_surface(np.swapaxes(img, 0, 1))
-        observation_surface = pygame.transform.scale(observation_surface, (dim, dim))
+        observation_surface = pygame.transform.scale(observation_surface, (img.shape[1], img.shape[0]))
         surface.blit(observation_surface, (x, y))
 
-        y += dim
+        y += img.shape[0]
         return y
 
     def render_game_view(self, surface, rgb_array, pos, game_width, game_height):
@@ -501,7 +511,7 @@ def main(args):
     render_mode = 'rgb_array'
     model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)), 'models')
 
-    zelda_ml = ZeldaML(args.color, render_mode=render_mode, verbose=args.verbose, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
+    zelda_ml = ZeldaML(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
     zelda_ml.load_models(model_path)
 
     if args.scenario is None:
@@ -517,6 +527,7 @@ def parse_args():
     parser.add_argument("--color", action='store_true', help="Give the model a color version of the game (instead of grayscale).")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport', help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
+    parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames the model was trained with.")
 
     parser.add_argument('scenario', nargs='?', help='Scenario name')
 

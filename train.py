@@ -7,7 +7,7 @@ def main(args):
     iterations = None if args.iterations <= 0 else args.iterations
     models = args.models if args.models else None
 
-    zelda_ml = ZeldaML(args.color, render_mode=None, verbose=args.verbose, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
+    zelda_ml = ZeldaML(args.color, args.frame_stack, render_mode=None, verbose=args.verbose, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
     zelda_ml.train(args.output, models, iterations, args.parallel)
 
 def parse_args():
@@ -16,6 +16,7 @@ def parse_args():
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--color", action='store_true', help="Give the model a color version of the game (instead of grayscale).")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport', help="The kind of observation to use.")
+    parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack together.")
 
     parser.add_argument('models', nargs='*', help='List of models to train')
     parser.add_argument("--output", type=str, help="Location to write to.")
