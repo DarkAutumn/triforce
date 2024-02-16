@@ -197,7 +197,7 @@ class GameplayCritic(ZeldaCritic):
             rewards['reward-gained-triforce'] = self.triforce_reward
 
     def critique_block(self, old, new, rewards):
-        if new['sound_pulse_1'] & ZeldaSoundsPulse1.Block and (old['sound_pulse_1'] & ZeldaSoundsPulse1.Block) != ZeldaSoundsPulse1.Block:
+        if new['sound_pulse_1'] & ZeldaSoundsPulse1.ArrowDeflected.value and (old['sound_pulse_1'] & ZeldaSoundsPulse1.ArrowDeflected.value) != ZeldaSoundsPulse1.ArrowDeflected.value:
             rewards['reward-block'] = self.block_projectile_reward
 
     def critique_attack(self, old, new, rewards):

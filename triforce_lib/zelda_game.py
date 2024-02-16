@@ -132,13 +132,13 @@ class ZeldaEnemy(Enum):
     Zolda : int = 0x11
 
 class ZeldaSoundsPulse1(Enum):
-    ArrowDeflected : 0x01
-    BoomerangStun : 0x02
-    MagicCast : 0x04
-    KeyPickup : 0x08
-    SmallHeartPickup : 0x10
-    SetBomb : 0x20
-    HeartWarning : 0x40
+    ArrowDeflected : int = 0x01
+    BoomerangStun : int = 0x02
+    MagicCast : int = 0x04
+    KeyPickup : int = 0x08
+    SmallHeartPickup : int = 0x10
+    SetBomb : int = 0x20
+    HeartWarning : int = 0x40
 
 id_map = {}
 for enemy in ZeldaEnemy:
@@ -268,6 +268,7 @@ __all__ = [
     'tile_index_to_position',
     'get_link_tile_index',
     'is_sword_frozen',
+    ZeldaSoundsPulse1.__name__,
     ZeldaObjectData.__name__,
     ZeldaEnemy.__name__,
     ]
