@@ -204,7 +204,7 @@ class GameplayCritic(ZeldaCritic):
                 if not new['enemies']:
                     rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
 
-                elif self.offscreen_sword_disabled(new):
+                elif new['is_sword_frozen']:
                     rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
 
                 elif new['enemies']:
@@ -229,11 +229,6 @@ class GameplayCritic(ZeldaCritic):
                     rewards['penalty-bomb-miss'] = self.bomb_miss_penalty
                 else:
                     rewards['reward-bomb-hit'] = min(self.bomb_hit_reward * total_hits, 1.0)
-
-    def offscreen_sword_disabled(self, new):
-        x, y = new['link_pos']
-        return x <= 16 or x >= 0xd9 or y <= 0x53 or y >= 0xc5
-
 
     def critique_location_discovery(self, old, new, rewards):
         prev = (old['level'], old['location'])
