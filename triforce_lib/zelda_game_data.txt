@@ -26,6 +26,9 @@
 0x0bd bomb_or_flame_animation2
 0x0be arrow_magic_animation
 
+# sounds
+0x605 sound_pulse_1
+
 # triforce and hearts
 0x671 triforce
 0x672 triforce_of_power

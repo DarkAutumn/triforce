@@ -131,6 +131,15 @@ class ZeldaEnemy(Enum):
     OctorokBlue : int = 0x8
     Zolda : int = 0x11
 
+class ZeldaSoundsPulse1(Enum):
+    ArrowDeflected : 0x01
+    BoomerangStun : 0x02
+    MagicCast : 0x04
+    KeyPickup : 0x08
+    SmallHeartPickup : 0x10
+    SetBomb : 0x20
+    HeartWarning : 0x40
+
 id_map = {}
 for enemy in ZeldaEnemy:
     id_map[enemy.value] = enemy

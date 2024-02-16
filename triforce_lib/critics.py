@@ -54,9 +54,12 @@ class GameplayCritic(ZeldaCritic):
         # reward values
         self.rupee_reward = self.reward_small
         self.health_gained_reward = self.reward_large
+        self.new_location_reward = self.reward_medium
+
+        # combat values
         self.health_lost_penalty = -self.reward_large
         self.injure_kill_reward = self.reward_small
-        self.new_location_reward = self.reward_medium
+        self.block_projectile_reward = self.reward_large
         
         # these are pivotal to the game, so they are rewarded highly
         self.bomb_pickup_reward = self.reward_large
@@ -111,6 +114,7 @@ class GameplayCritic(ZeldaCritic):
         self.critique_triforce(old, new, rewards)
 
         # combat
+        self.critique_block(old, new, rewards)
         self.critique_attack(old, new, rewards)
         self.critique_item_usage(old, new, rewards)
 
@@ -191,6 +195,10 @@ class GameplayCritic(ZeldaCritic):
     def critique_triforce(self, old, new, rewards):
         if get_num_triforce_pieces(old) < get_num_triforce_pieces(new) or (old["triforce_of_power"] == 0 and new["triforce_of_power"] == 1):
             rewards['reward-gained-triforce'] = self.triforce_reward
+
+    def critique_block(self, old, new, rewards):
+        if new['sound_pulse_1'] & ZeldaSoundsPulse1.Block and (old['sound_pulse_1'] & ZeldaSoundsPulse1.Block) != ZeldaSoundsPulse1.Block:
+            rewards['reward-block'] = self.block_projectile_reward
 
     def critique_attack(self, old, new, rewards):
         if new['step_hits']:

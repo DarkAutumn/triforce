@@ -48,6 +48,10 @@
             "address": 190,
             "type": "=u1"
         },
+        "sound_pulse_1": {
+            "address": 1541,
+            "type": "=u1"
+        },
         "triforce": {
             "address": 1649,
             "type": "=u1"
@@ -172,6 +176,30 @@
             "address": 1653,
             "type": "=u1"
         },
+        "compass": {
+            "address": 1639,
+            "type": "=u1"
+        },
+        "map": {
+            "address": 1640,
+            "type": "=u1"
+        },
+        "compass9": {
+            "address": 1641,
+            "type": "=u1"
+        },
+        "map9": {
+            "address": 1642,
+            "type": "=u1"
+        },
+        "clock": {
+            "address": 1644,
+            "type": "=u1"
+        },
+        "selected_item": {
+            "address": 1622,
+            "type": "=u1"
+        },
         "obj_health_1": {
             "address": 1158,
             "type": "=u1"
@@ -218,30 +246,6 @@
         },
         "obj_health_c": {
             "address": 1170,
-            "type": "=u1"
-        },
-        "compass": {
-            "address": 1639,
-            "type": "=u1"
-        },
-        "map": {
-            "address": 1640,
-            "type": "=u1"
-        },
-        "compass9": {
-            "address": 1641,
-            "type": "=u1"
-        },
-        "map9": {
-            "address": 1642,
-            "type": "=u1"
-        },
-        "clock": {
-            "address": 1644,
-            "type": "=u1"
-        },
-        "selected_item": {
-            "address": 1622,
             "type": "=u1"
         }
     }
