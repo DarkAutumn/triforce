@@ -47,11 +47,15 @@ class ZeldaGameFeatures(gym.Wrapper):
         return np.array(result, dtype=np.float32)
     
     def should_point_at_enemy(self, info, enemy):
-        if enemy.id != ZeldaEnemy.WallMaster:
-            return True
+        if enemy.id == ZeldaEnemy.WallMaster:
+            dist = np.linalg.norm(np.array(info['link_pos'], dtype=np.float32) - enemy.position)
+            return dist < 30
+        
+        # Don't point at Zolda if the sword isn't powerful enough to kill it in one hit
+        if enemy.id == ZeldaEnemy.Zolda and info['sword'] <= 1:
+            return False
 
-        dist = np.linalg.norm(np.array(info['link_pos'], dtype=np.float32) - enemy.position)
-        return dist < 30
+        return True
     
     def get_first_vector(self, entries):
         return entries[0].vector if entries else np.zeros(2, dtype=np.float32)
