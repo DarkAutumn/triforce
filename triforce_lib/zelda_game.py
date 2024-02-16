@@ -118,12 +118,18 @@ def tile_index_to_position(tile_index):
 
 class ZeldaEnemy(Enum):
     WallMaster : int = 39
+    Goriya : int = 6
+    Octorok : int = 0x7
+    OctorokFast : int = 0x7
+    OctorokBlue : int = 0x8
+    Zolda : int = 0x11
+
+id_map = {}
+for enemy in ZeldaEnemy:
+    id_map[enemy.value] = enemy
 
 def id_to_enemy(id):
-    if id == 39:
-        return ZeldaEnemy(id)
-    
-    return id
+    return id_map.get(id, id)
 
 class ZeldaObject:
     def __init__(self, id, pos, distance, vector, health):
