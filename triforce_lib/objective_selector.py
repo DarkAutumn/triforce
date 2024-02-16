@@ -32,17 +32,6 @@ def get_location_objective(location_direction, location):
     else:
         return None
     
-def find_closest_object(objects, enum, link_pos):
-    closest = None
-    closest_dist = np.inf
-    for enemy in enum:
-        enemy_pos = np.array(objects.get_position(enemy), dtype=np.float32)
-        dist = np.linalg.norm(enemy_pos - link_pos)
-        if dist < closest_dist and dist > 0:
-            closest = enemy_pos
-            closest_dist = dist
-    return closest,closest_dist
-
 def find_closest_cave(info):
     link_pos = np.array(info['link_pos'], dtype=np.float32)
     
