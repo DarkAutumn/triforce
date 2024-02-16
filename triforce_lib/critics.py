@@ -78,7 +78,7 @@ class GameplayCritic(ZeldaCritic):
         self.movement_scale_factor = 9.0
         self.move_away_penalty = -self.move_closer_reward - self.reward_minimum
 
-        self.too_close_threshold = 20
+        self.too_close_threshold = 28
         self.enemy_too_close_penalty = -self.reward_small
         
         # state tracking
@@ -272,8 +272,6 @@ class GameplayCritic(ZeldaCritic):
         are_enemies_near = False
 
         # did link move too close to an enemy?
-
-        old_enemies = old['enemies']
         new_enemies_or_projectiles = new['enemies'] + new['projectiles']
         if new_enemies_or_projectiles:
             if any(x.id == ZeldaEnemy.WallMaster for x in new['enemies']):
