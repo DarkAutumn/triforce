@@ -129,7 +129,7 @@ class ZeldaEnemy(Enum):
     Octorok : int = 0x7
     OctorokFast : int = 0x7
     OctorokBlue : int = 0x8
-    Zolda : int = 0x11
+    Zora : int = 0x11
 
 class ZeldaSoundsPulse1(Enum):
     ArrowDeflected : int = 0x01

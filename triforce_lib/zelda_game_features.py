@@ -51,8 +51,8 @@ class ZeldaGameFeatures(gym.Wrapper):
             dist = np.linalg.norm(np.array(info['link_pos'], dtype=np.float32) - enemy.position)
             return dist < 30
         
-        # Don't point at Zolda if the sword isn't powerful enough to kill it in one hit
-        if enemy.id == ZeldaEnemy.Zolda and info['sword'] <= 1:
+        # Don't point at Zora if the sword isn't powerful enough to kill it in one hit
+        if enemy.id == ZeldaEnemy.Zora and info['sword'] <= 1:
             return False
 
         return True
