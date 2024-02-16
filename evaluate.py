@@ -84,7 +84,7 @@ def create_zeldaml(args):
     render_mode = 'human' if args.render else None
     model_path = get_model_path(args)
 
-    zelda_ml = ZeldaML(args.color, render_mode=render_mode, verbose=args.verbose, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
+    zelda_ml = ZeldaML(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
     zelda_ml.load_models(model_path)
     return zelda_ml
 
@@ -136,7 +136,7 @@ def main(args):
     columns = ['Model', 'Kind', 'Success%', 'Score', 'Total Reward', 'Rewards', 'Penalties']
     data_frame = pd.DataFrame(results, columns=columns)
     print(data_frame.to_string(index=False))
-    data_frame.to_csv(os.path.join(get_model_path(args), 'results.csv'), index=False)
+    data_frame.to_csv(os.path.join(get_model_path(args), 'evaluation.csv'), index=False)
 
 
 def parse_args():
@@ -148,6 +148,7 @@ def parse_args():
     parser.add_argument("--episodes", type=int, default=100, help="Number of episodes to test.")
     parser.add_argument("--parallel", type=int, default=1, help="Use parallel environments to evaluate the models.")
     parser.add_argument("--render", action='store_true', help="Render the game while evaluating the models.")
+    parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack together.")
 
     parser.add_argument('model_path', nargs=1, help='The director containing the models to evaluate')
     parser.add_argument('models', nargs='*', help='The director containing the models to evaluate')

@@ -19,7 +19,7 @@ from .zelda_game_features import ZeldaGameFeatures
 from .scenario import ZeldaScenario
 
 class ZeldaML:
-    def __init__(self, color, **kwargs):
+    def __init__(self, color, framestack = 1, **kwargs):
         if 'verbose' in kwargs:
             self.verbose = kwargs['verbose']
             del kwargs['verbose']
@@ -51,6 +51,7 @@ class ZeldaML:
             self.rgb_render = True
 
         self.color = color
+        self.framestack = framestack
 
     def make_env(self, scenario, action_space = "all", parallel = 1):
         def make_env_func():
@@ -72,7 +73,7 @@ class ZeldaML:
             env = ObjectiveSelector(env)
             
             # Frame stack and convert to grayscale if requested
-            env = ZeldaObservationWrapper(env, captured_frames, not self.color, kind=self.obs_kind)
+            env = ZeldaObservationWrapper(env, captured_frames, not self.color, kind=self.obs_kind, framestack=self.framestack)
 
             # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
             # since that doesn't make any sense in Zelda)
