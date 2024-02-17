@@ -88,7 +88,7 @@ class ObjectiveSelector(gym.Wrapper):
             items_to_ignore.append(ZeldaItem.Fairy)
 
         if info['bombs'] == info['bomb_max']:
-            items_to_ignore.append(ZeldaItem.Bomb)
+            items_to_ignore.append(ZeldaItem.Bombs)
 
         if sub_orchestrator and sub_orchestrator.is_dangerous_room(info):
             items_to_ignore.append(ZeldaItem.Rupee)
