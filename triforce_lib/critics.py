@@ -437,6 +437,7 @@ class Dungeon1Critic(GameplayCritic):
     def clear(self):
         super().clear()
         self.seen.clear()
+        self.health_lost = 0
 
     def critique_location_discovery(self, old_state : Dict[str, int], new_state : Dict[str, int], rewards : Dict[str, float]):
         if new_state['level'] != 1:
@@ -449,9 +450,12 @@ class Dungeon1Critic(GameplayCritic):
                 rewards['penalty-left-early'] = self.leave_early_penalty
 
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+        if get_heart_halves(new) < get_heart_halves(old):
+            self.health_lost -= 0.5
+
         new_location = new['location']
         self.seen.add(new_location)
-        new['score'] = len(self.seen) - 1 + get_heart_halves(new) * 0.5
+        new['score'] = len(self.seen) - self.health_lost
 
 class Dungeon1BeamCritic(Dungeon1Critic):
     def __init__(self):
@@ -506,6 +510,7 @@ class Overworld1Critic(GameplayCritic):
         self.leave_early_penalty = -self.reward_maximum
         self.entered_cave_penalty = -self.reward_large
         self.equipment_reward = None
+        self.health_lost = 0
         
     def critique_location_discovery(self, old, new, rewards):
         if old['location'] != new['location']:
@@ -537,9 +542,11 @@ class Overworld1Critic(GameplayCritic):
             super().critique_location_discovery(old, new, rewards)
 
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+        if get_heart_halves(new) < get_heart_halves(old):
+            self.health_lost -= 0.5
         new_location = new['location']
         self.seen.add(new_location)
-        new['score'] = new['sword'] + len(self.seen) - 1
+        new['score'] = len(self.seen) - self.health_lost
 
 class OverworldSwordCritic(GameplayCritic):
     def __init__(self):
