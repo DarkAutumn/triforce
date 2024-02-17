@@ -1,7 +1,7 @@
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import get_link_tile_index, is_in_cave, position_to_tile_index, tile_index_to_position
+from .zelda_game import get_link_tile_index, is_in_cave, position_to_tile_index, tile_index_to_position, is_health_full, ZeldaItem
 from .astar import a_star
 
 def get_vector_from_direction(direction):
@@ -77,14 +77,31 @@ class ObjectiveSelector(gym.Wrapper):
         objective_pos_dir = None
         objective_kind = None
 
+        # Certain rooms are so tough we shouldn't linger to pick up low-value items.  Additionally,
+        # we should avoid picking up health when at full health.  We will still chase bombs if we
+        # aren't full though
+        items_to_ignore = []
+        sub_orchestrator = self.sub_orchestrators.get(level, None)
+
+        if is_health_full(info):
+            items_to_ignore.append(ZeldaItem.Heart)
+            items_to_ignore.append(ZeldaItem.Fairy)
+
+        if info['bombs'] == info['bomb_max']:
+            items_to_ignore.append(ZeldaItem.Bomb)
+
+        if sub_orchestrator and sub_orchestrator.is_dangerous_room(info):
+            items_to_ignore.append(ZeldaItem.Rupee)
+            items_to_ignore.append(ZeldaItem.BlueRupee)
+
         # Check if any items are on the floor, if so prioritize those since they disappear
-        if info['items']:
+        items = info['items'] if not items_to_ignore else [x for x in info['items'] if x.id not in items_to_ignore]
+        if items:
             objective_vector = info['items'][0].vector
             objective_kind = 'item'
             objective_pos_dir = info['items'][0].position
 
         else:
-            sub_orchestrator = self.sub_orchestrators.get(level, None)
             if sub_orchestrator:
                 objectives = sub_orchestrator.get_objectives(info, link_pos)
                 if objectives is not None:
@@ -188,7 +205,9 @@ class OverworldOrchestrator:
         if norm > 0:
             objective_vector /= norm
         return objective_vector
-
+    
+    def is_dangerous_room(self, info):
+        return info['location'] == 0x38
 
 class Dungeon1Orchestrator:
     def __init__(self):
@@ -258,5 +277,8 @@ class Dungeon1Orchestrator:
             direction = self.location_direction[location]
             location = get_location_objective(self.location_direction, location)
             return location, None, direction, 'room'
+        
+    def is_dangerous_room(self, info):
+        return info['location'] == 0x45 and info['enemies']
 
 __all__ = [ObjectiveSelector.__name__]

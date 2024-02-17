@@ -54,7 +54,6 @@ def get_beam_state(state):
     
     return 0
 
-
 def get_bomb_state(state, i):
     assert 0 <= i <= 1
     if i == 0:
@@ -90,8 +89,11 @@ def get_heart_halves(state):
 def get_heart_containers(state):
     return (state["hearts_and_containers"] >> 4) + 1
 
+def is_health_full(state):
+    return get_heart_halves(state) == get_heart_containers(state) * 2
+
 def has_beams(state):
-    return state['sword'] and get_heart_halves(state) == get_heart_containers(state) * 2
+    return state['sword'] and is_health_full(state)
 
 def is_sword_frozen(state):
     x, y = state['link_pos']
@@ -124,12 +126,22 @@ def tile_index_to_position(tile_index):
     return (tile_index[1] * 8, tile_index[0] * 8 + gameplay_start_y)
 
 class ZeldaEnemy(Enum):
-    WallMaster : int = 39
-    Goriya : int = 6
-    Octorok : int = 0x7
+    BlueMoblin : int = 0x03
+    RedMoblin : int = 0x04
+    Goriya : int = 0x06
+    Octorok : int = 0x07
     OctorokFast : int = 0x7
     OctorokBlue : int = 0x8
     Zora : int = 0x11
+    WallMaster : int = 0x27
+    Item : int = 0x60
+
+class ZeldaItem(Enum):
+    Bombs : int = 0x00
+    BlueRupee : int = 0x0f
+    Rupee : int = 0x18
+    Heart : int = 0x22
+    Fairy : int = 0x23
 
 class ZeldaSoundsPulse1(Enum):
     ArrowDeflected : int = 0x01
@@ -144,8 +156,9 @@ id_map = {}
 for enemy in ZeldaEnemy:
     id_map[enemy.value] = enemy
 
-def id_to_enemy(id):
-    return id_map.get(id, id)
+item_map = {}
+for item in ZeldaItem:
+    item_map[item.value] = item
 
 class ZeldaObject:
     def __init__(self, id, pos, distance, vector, health):
@@ -229,11 +242,15 @@ class ZeldaObjectData:
             else:
                 vector = np.array([0, 0], dtype=np.float32)
 
-            if id == 0x60:
+            if id == ZeldaEnemy.Item.value:
+                id = self.obj_status[i]
+                id = item_map.get(id, id)
+
                 items.append(ZeldaObject(id, pos, distance, vector, None))
 
+            # enemies
             elif 1 <= id <= 0x48:
-                enemies.append(ZeldaObject(id_to_enemy(id), pos, distance, vector, self.get_obj_health(i)))
+                enemies.append(ZeldaObject(id_map.get(id, id), pos, distance, vector, self.get_obj_health(i)))
 
             elif self.is_projectile(id):
                 projectiles.append(ZeldaObject(id, pos, distance, vector, None))
@@ -268,6 +285,7 @@ __all__ = [
     'tile_index_to_position',
     'get_link_tile_index',
     'is_sword_frozen',
+    'is_health_full',
     ZeldaSoundsPulse1.__name__,
     ZeldaObjectData.__name__,
     ZeldaEnemy.__name__,
