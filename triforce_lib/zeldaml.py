@@ -145,7 +145,7 @@ class ZeldaML:
         return PPO('MultiInputPolicy', env, verbose=self.verbose, tensorboard_log=log_dir, ent_coef=self.ent_coef, device=self.device)
 
 class LogRewardCallback(BaseCallback):
-    def __init__(self, model : PPO, save_dir : str, last_model_freq = 100_000):
+    def __init__(self, model : PPO, save_dir : str, last_model_freq = 500_000):
         super(LogRewardCallback, self).__init__()
         self.model = model
         self.next_save = model.n_steps
