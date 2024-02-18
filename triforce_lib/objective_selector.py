@@ -266,6 +266,9 @@ class Dungeon1Orchestrator:
                 return 0x74, None, "E", 'room'
             else:
                 return 0x63, None, "N", 'room'
+            
+        if location == 0x63 and info['keys'] == 0:
+            return 0x73, None, "S", 'room'
         
         # check if we should kill all enemies:
         if location in self.locations_to_kill_enemies:
