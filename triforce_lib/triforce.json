@@ -171,7 +171,7 @@
         {
             "name": "dungeon1beams",
             "description": "Dungeon 1 Beams",
-            "critics": ["Dungeon1BeamCritic"],
+            "critics": ["Dungeon1Critic"],
             "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "level" : 1,
             "start": ["1_73"],
