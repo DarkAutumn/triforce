@@ -34,4 +34,4 @@ def test_index_position():
     pos = tile_index_to_position(original_idx)
     index = position_to_tile_index(*pos)
     assert index == original_idx
-    
+

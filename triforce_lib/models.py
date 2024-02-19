@@ -33,7 +33,7 @@ class ZeldaModel(ZeldaModelInfo):
         i = self.model_kinds.index(kind)
         if i >= 0:
             return self.models[i]
-        
+
         return None
 
     @classmethod
@@ -53,7 +53,7 @@ class ZeldaModel(ZeldaModelInfo):
                 model_json['rooms'] = [int(x, 16) for x in model_json['rooms']]
 
             model_info.append(ZeldaModelInfo(**model_json))
-        
+
         cls._model_infos = model_info
 
     @classmethod
@@ -73,7 +73,7 @@ class ZeldaModel(ZeldaModelInfo):
                         cls.__try_load_model(models, kinds, f"model_{iterations}", model_path, filename, **kwargs)
 
             cls._models[model_info.name] = ZeldaModel(model_info, models, kinds)
-    
+
     @classmethod
     def iterate_numbered_models(cls, model_path):
         result = []
@@ -94,17 +94,17 @@ class ZeldaModel(ZeldaModelInfo):
             models.append(PPO.load(fullpath, **kwargs))
             kinds.append(kind)
             return True
-        
+
         return False
 
     @classmethod
     def get(cls, name : str) -> Optional['ZeldaModel']:
         return cls._models.get(name, None)
-    
+
     @classmethod
     def get_loaded_models(cls) -> List['ZeldaModel']:
         return list(cls._models.values())
-    
+
     @classmethod
     def get_model_info(cls) -> List[str]:
         return cls._model_infos

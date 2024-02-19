@@ -19,7 +19,7 @@ def get_vector_from_direction(direction):
 def get_location_objective(location_direction, location):
     if location not in location_direction:
         return None
-    
+
     direction = location_direction[location]
     if direction == 'N':
         return location - 0x10
@@ -31,14 +31,14 @@ def get_location_objective(location_direction, location):
         return location - 1
     else:
         return None
-    
+
 def find_closest_cave(info):
     link_pos = np.array(info['link_pos'], dtype=np.float32)
-    
+
     cave_indices = np.argwhere(info['tiles'] == 0x24)
     if len(cave_indices) == 0:
         raise Exception('Could not find any caves')
-    
+
     cave_positions = [tile_index_to_position(x) for x in cave_indices]
     cave_distances = [np.linalg.norm(x - link_pos) for x in cave_positions]
     closest_cave = cave_positions[np.argmin(cave_distances)]
@@ -66,7 +66,7 @@ class ObjectiveSelector(gym.Wrapper):
         self.set_objectives(info)
 
         return obs, reward, terminated, truncated, info
-    
+
     def set_objectives(self, info):
         level = info['level']
         location = info['location']
@@ -122,7 +122,7 @@ class ObjectiveSelector(gym.Wrapper):
                 path = a_star(link_tile_index, info['tiles'], objective_pos_dir, info['are_walls_dangerous'])
                 result = (link_tile_index, objective_pos_dir, path)
                 self.last_route = (key, result)
-                
+
             info['a*_path'] = result
 
             if path:
@@ -137,12 +137,12 @@ class ObjectiveSelector(gym.Wrapper):
 
             elif isinstance(objective_pos_dir, str):
                 objective_vector = get_vector_from_direction(objective_pos_dir)
-        
+
         info['objective_vector'] = objective_vector if objective_vector is not None else np.zeros(2, dtype=np.float32)
         info['objective_kind'] = objective_kind
         info['objective_pos_or_dir'] = objective_pos_dir
         info['location_objective'] = location_objective
-    
+
     def get_first_non_zero(self, list):
         lowest = np.inf
         val = None
@@ -150,7 +150,7 @@ class ObjectiveSelector(gym.Wrapper):
             if v is not None and len > 0 and len < lowest:
                 lowest = len
                 val = v
-                
+
         return val, lowest
 
 class OverworldOrchestrator:
@@ -185,10 +185,10 @@ class OverworldOrchestrator:
             else:
                 if is_in_cave(info):
                     return None, None, 'S', 'exit-cave'
-                
+
                 else:
                     return location_objective, None, 'N', 'room'
-        
+
         if location == 0x37:
             cave_pos = find_closest_cave(info)
             objective_vector = self.create_vector_norm(link_pos, cave_pos)
@@ -205,7 +205,7 @@ class OverworldOrchestrator:
         if norm > 0:
             objective_vector /= norm
         return objective_vector
-    
+
     def is_dangerous_room(self, info):
         return info['location'] == 0x38
 
@@ -266,10 +266,10 @@ class Dungeon1Orchestrator:
                 return 0x74, None, "E", 'room'
             else:
                 return 0x63, None, "N", 'room'
-            
+
         if location == 0x63 and (0x72 not in self.keys_obtained or 0x74 not in self.keys_obtained):
             return 0x73, None, "S", 'room'
-        
+
         # check if we should kill all enemies:
         if location in self.locations_to_kill_enemies:
             if info['enemies']:
@@ -280,7 +280,7 @@ class Dungeon1Orchestrator:
             direction = self.location_direction[location]
             location = get_location_objective(self.location_direction, location)
             return location, None, direction, 'room'
-        
+
     def is_dangerous_room(self, info):
         return info['location'] == 0x45 and info['enemies']
 

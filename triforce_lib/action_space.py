@@ -11,14 +11,14 @@ class ZeldaActionSpace(gym.ActionWrapper):
                         ['LEFT', 'B'], ['RIGHT', 'B'], ['UP', 'B'], ['DOWN', 'B'],
                         ['UP', 'LEFT', 'B'], ['UP', 'RIGHT', 'B'], ['DOWN', 'LEFT', 'B'], ['DOWN', 'RIGHT', 'B']
                         ]
-        
+
         num_action_space = 4
         if kind != 'move-only':
             num_action_space += 4
 
         if kind == 'directional-item' or kind == 'diagonal-item' or kind == 'all':
             num_action_space += 4
-        
+
         if kind == 'diagonal-item' or kind == 'all':
             num_action_space += 4
 
@@ -29,10 +29,10 @@ class ZeldaActionSpace(gym.ActionWrapper):
         self._decode_discrete_action = []
         for action in self.actions:
             arr = np.array([False] * env.action_space.n)
-            
+
             for button in action:
                 arr[buttons.index(button)] = True
-            
+
             self._decode_discrete_action.append(arr)
 
         self.action_space = gym.spaces.Discrete(num_action_space)

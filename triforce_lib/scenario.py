@@ -15,7 +15,7 @@ class ScenarioGymWrapper(gym.Wrapper):
         self._scenario = scenario
         self._critics = [c() for c in scenario.critics]
         self._conditions = [ec() for ec in scenario.end_conditions]
-        
+
         self._curr_room = -1
         self.game_data = zelda_game_data
 
@@ -25,7 +25,7 @@ class ScenarioGymWrapper(gym.Wrapper):
         if len(self._scenario.all_start_states) > 1:
             self._curr_room = (self._curr_room + 1) % len(self._scenario.all_start_states)
             save_state = self._scenario.all_start_states[self._curr_room]
-            
+
             env_unwrapped = self.unwrapped
             env_unwrapped.load_state(save_state, retro.data.Integrations.CUSTOM_ONLY)
         else:
@@ -56,7 +56,7 @@ class ScenarioGymWrapper(gym.Wrapper):
                 assert key in info
                 old = info[key]
                 info[key] = value
-    
+
     def step(self, act):
         obs, rewards, terminated, truncated, info = self.env.step(act)
 
@@ -104,20 +104,20 @@ class ZeldaScenario:
         self.start = start
         self.data = data
         self.fixed = fixed
-        
+
         self.all_start_states = []
         for x in start:
             i = len(self.all_start_states)
             self.all_start_states.extend(zelda_game_data.get_savestates_by_name(x))
             if len(self.all_start_states) == i:
                 raise Exception(f'Could not find save state for {x}')
-            
+
         if not self.all_start_states:
             raise Exception(f'Could not find any save states for {name}')
 
     def __str__(self):
         return f'{self.name} - {self.description}'
-    
+
     def simulate_step(self, last_info, next_info):
         critics = [c() for c in self.critics]
         for c in critics:
@@ -138,11 +138,11 @@ class ZeldaScenario:
         reason = [x[2] for x in end if x[2]]
 
         return reward_dict, terminated, truncated, reason
-    
+
     def activate(self, env):
         env = ScenarioGymWrapper(env, self)
         return env
-    
+
     @classmethod
     def get(cls, name):
         return cls._scenarios.get(name, None)
@@ -150,7 +150,7 @@ class ZeldaScenario:
     @classmethod
     def initialize(cls, scenarios):
         if not ZeldaScenario._scenarios:
-            
+
             for json_scenario in scenarios:
                 if 'fixed' not in json_scenario:
                     json_scenario['fixed'] = {}
@@ -159,21 +159,21 @@ class ZeldaScenario:
                 ZeldaScenario._scenarios[scenario.name] = scenario
 
         return ZeldaScenario._scenarios
-    
+
     @classmethod
     def resolve_critic(cls, name):
         critic = getattr(critics, name, None)
         if not critic:
             raise Exception(f'Unknown critic {name}')
-        
+
         return critic
-    
+
     @classmethod
     def resolve_end_condition(cls, name):
         end_condition = getattr(end_conditions, name, None)
         if not end_condition:
             raise Exception(f'Unknown end condition {name}')
-        
+
         return end_condition
 
 __all__ = ['ZeldaScenario']

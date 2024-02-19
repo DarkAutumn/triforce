@@ -23,7 +23,7 @@ class Timeout(ZeldaEndCondition):
         # the number of timesteps the agent can be in the same position before we truncate
         self.position_timeout = 50
         self.no_discovery_timeout = 1200
-        
+
     def clear(self):
         self.__position_duration = 0
         self.__seen.clear()
@@ -52,7 +52,7 @@ class Timeout(ZeldaEndCondition):
 
             if self.__last_discovery > self.no_discovery_timeout:
                 return False, True, "failure-no-discovery"
-            
+
 class GainedTriforce(ZeldaEndCondition):
     def __init__(self):
         super().__init__()
@@ -60,7 +60,7 @@ class GainedTriforce(ZeldaEndCondition):
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         if new['triforce'] != 0 and old['triforce'] != new['triforce']:
             return True, False, "success-gained-triforce"
-            
+
 class LeftDungeon(ZeldaEndCondition):
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         if new['level'] == 0:
@@ -90,6 +90,6 @@ class DefeatedBoss(ZeldaEndCondition):
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         if not new['enemies']:
             return True, False, "success-killed-boss"
-        
+
         if new['location'] != 0x35:
             return True, False, "failure-left-boss-room"

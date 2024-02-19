@@ -45,15 +45,15 @@ class Display:
         scenario = ZeldaScenario.get(scenario_name)
         if not scenario:
             raise Exception(f'Unknown scenario {scenario_name}')
-        
+
         orchestrator = ZeldaAIOrchestrator()
         if not orchestrator.has_any_model:
             raise Exception('No models loaded')
-        
+
         self.zelda_ml = zelda_ml
         self.scenario = scenario
         self.orchestrator = orchestrator
-                
+
         pygame.init()
 
         self.font = pygame.font.Font(None, 24)
@@ -159,7 +159,7 @@ class Display:
 
                 if mode == 'n':
                     mode = 'p'
-            
+
             # update rewards for display
             self.update_rewards(reward_map, buttons, last_info, info)
             curr_score = info.get('score', None)
@@ -329,7 +329,7 @@ class Display:
     def render_one_observation(self, surface, x, y, dim, img):
         if img.shape[2] == 1:
             img = np.repeat(img, 3, axis=2)
-            
+
         observation_surface = pygame.surfarray.make_surface(np.swapaxes(img, 0, 1))
         observation_surface = pygame.transform.scale(observation_surface, (img.shape[1], img.shape[0]))
         surface.blit(observation_surface, (x, y))
@@ -367,7 +367,7 @@ class Display:
         if deaths:
             row, col = self.__increment(row, col, row_max)
             self.write_key_val_aligned(surface, "Deaths:", f"{sum(deaths.values())}", self.details_x + col * col_width, self.details_y + row * row_height, col_width)
-        
+
             items = list(deaths.items())
             items.sort(key=lambda x: x[1], reverse=True)
             for k, v in items:
@@ -400,7 +400,7 @@ class Display:
             buttons.pop()
 
         return result
-    
+
     def get_optimal_path(self, info):
         if 'a*_path' in info:
             return info['a*_path'][-1]
@@ -469,7 +469,7 @@ class RewardButton:
                 next_y = render_text(surface, self.font, reason, (x, y), color=color)
                 render_text(surface, self.font, f"{'+' if value > 0 else ''}{value:.2f}", (x + 200, y))
                 y = next_y
-                
+
         else:
             text = "none"
             color = (128, 128, 128)
@@ -484,7 +484,7 @@ class RewardButton:
         pygame.draw.rect(surface, (255, 255, 255), (position[0], position[1], self.width, height), 1)
 
         return RenderedButton(self, position, (self.width, height))
-    
+
 class RenderedButton:
     def __init__(self, button, position, dimensions):
         self.button = button

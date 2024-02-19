@@ -22,7 +22,7 @@ class CriticWrapper(gym.Wrapper):
 
         self._last = state[1]
         return state
-    
+
     def step(self, act):
         obs, rewards, terminated, truncated, state = self.env.step(act)
         reward_dict = {}

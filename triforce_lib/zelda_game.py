@@ -32,11 +32,11 @@ def is_mode_scrolling(state):
     # overworld scrolling
     if  state == mode_scrolling_complete or state == mode_scrolling or state == mode_prepare_scrolling:
         return True
-    
+
     # transition from dungeon -> item room and overworld -> cave
     if state == mode_underground_transition or state == mode_cave_transition:
         return True
-    
+
     return False
 
 def is_link_stunned(status_ac):
@@ -51,7 +51,7 @@ def get_beam_state(state):
         return 1
     elif beams == animation_beams_hit:
         return 2
-    
+
     return 0
 
 def get_bomb_state(state, i):
@@ -60,7 +60,7 @@ def get_bomb_state(state, i):
         bombs = state['bomb_or_flame_animation']
     else:
         bombs = state['bomb_or_flame_animation2']
-    
+
     if bombs == 0:
         return 0
 
@@ -68,7 +68,7 @@ def get_bomb_state(state, i):
         return 1
     elif bombs == animation_bombs_exploded:
         return 2
-    
+
     return 0
 
 def get_num_triforce_pieces(state):
@@ -82,7 +82,7 @@ def get_heart_halves(state):
     partial_hearts = state["partial_hearts"]
     if partial_hearts > 0xf0:
         return full
-    
+
     partial_count = 1 if partial_hearts > 0 else 0
     return full - 2 + partial_count
 
@@ -121,7 +121,7 @@ def position_to_tile_index(x, y):
 
 def get_link_tile_index(info):
     return position_to_tile_index(info['link_x'] + 4, info['link_y'] + 4)
-    
+
 def tile_index_to_position(tile_index):
     return (tile_index[1] * 8, tile_index[0] * 8 + gameplay_start_y)
 
@@ -176,30 +176,30 @@ class ZeldaObjectData:
     @property
     def link_pos(self):
         return self.get_position(0)
-    
+
     def get_position(self, obj : int):
         return self.obj_pos_x[obj], self.obj_pos_y[obj]
-    
+
     def get_object_id(self, obj : int):
         if obj == 0:
             return None
 
         return self.obj_id[obj]
-    
+
     def get_obj_direction(self, obj : int):
         return self.obj_direction[obj]
-    
+
     def get_obj_health(self, obj : int):
         if obj == 0:
             return None
         return self.obj_health[obj] >> 4
-    
+
     def get_obj_status(self, obj : int):
         return self.obj_status[obj]
-        
+
     def is_enemy(self, obj_id : int):
         return 1 <= obj_id <= 0x48
-    
+
     def enumerate_enemy_ids(self):
         for i in range(1, 0xc):
             if self.is_enemy(self.get_object_id(i)):

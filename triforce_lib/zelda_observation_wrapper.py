@@ -9,7 +9,7 @@ from collections import deque
 
 from .zelda_game_data import zelda_game_data
 from .model_parameters import viewport_pixels, gameplay_start_y
- 
+
 class FrameCaptureWrapper(gym.Wrapper):
     def __init__(self, env, rgb_render):
         super().__init__(env)
@@ -34,7 +34,7 @@ class FrameCaptureWrapper(gym.Wrapper):
     def step(self, action):
         observation, reward, terminated, truncated, info = self.env.step(action)
         self.frames.append(observation)
-        
+
         if self.rgb_deque is not None:
             self.rgb_deque.append(self.env.render())
 
@@ -96,7 +96,7 @@ class ZeldaObservationWrapper(gym.Wrapper):
                 frames.append(frame)
             result = np.concatenate(frames, axis=0)
             return result
-        
+
         frame = self.frames[-1]
         frame = self.trim_normalize_grayscale(info, frame)
         return frame

@@ -41,7 +41,7 @@ def test_close_distance():
     _, _, _, _, info = actions.step('r')
     assert 'rewards' in info
     assert 'reward-move-closer' not in info['rewards']
-    
+
 
 def test_position():
     # note the position may change for the other axis as link snaps to the grid

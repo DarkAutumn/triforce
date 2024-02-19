@@ -25,7 +25,7 @@ def run_one_scenario(args, model_name, model_kind, zelda_ml=None):
     loaded_model = model.get_model_by_kind(model_kind)
 
     ep_result = []
-    
+
     env = zelda_ml.make_env(ZeldaScenario.get(model.training_scenario), model.action_space, 1)
 
     for ep in range(args.episodes):
@@ -56,7 +56,7 @@ def run_one_scenario(args, model_name, model_kind, zelda_ml=None):
                         episode_penalties -= abs(rew)
                     else:
                         raise ValueError(f"Unknown reward kind: {kind}")
-            
+
             if 'end' in info:
                 success = info['end'].startswith("success")
 
@@ -67,7 +67,7 @@ def run_one_scenario(args, model_name, model_kind, zelda_ml=None):
 
         global counter
         with counter.get_lock():
-            counter.value += 1        
+            counter.value += 1
 
     env.close()
 

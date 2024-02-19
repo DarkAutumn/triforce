@@ -71,7 +71,7 @@ class ZeldaML:
             # The AI orchestration piece.  This is responsible for selecting the model to use and the target
             # objective.
             env = ObjectiveSelector(env)
-            
+
             # Frame stack and convert to grayscale if requested
             env = ZeldaObservationWrapper(env, captured_frames, not self.color, kind=self.obs_kind, framestack=self.framestack)
 
@@ -94,7 +94,7 @@ class ZeldaML:
             env = make_env_func()
 
         return env
-        
+
     def train(self, output_path = None, model_names = None, iteration_override = None, parallel = None, progress_bar = True):
         if model_names is None:
             models = ZeldaModel.get_model_info()
@@ -151,7 +151,7 @@ class LogRewardCallback(BaseCallback):
         self.next_save = model.n_steps
         self.last_model_freq = last_model_freq
         self.last_model_next_save = self.last_model_freq
-        
+
         self.best_score = -np.inf
         self.best_reward = -np.inf
 
@@ -168,7 +168,7 @@ class LogRewardCallback(BaseCallback):
             if 'rewards' in info:
                 for kind, rew in info['rewards'].items():
                     self._rewards[kind] = rew + self._rewards.get(kind, 0)
-            
+
             if 'end' in info:
                 ending = info['end']
                 self._endings.append(ending)
@@ -204,7 +204,7 @@ class LogRewardCallback(BaseCallback):
                 if score_mean > self.best_score:
                     self.best_score = score_mean
                     self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_score.zip'))
-            
+
             if rew_mean > self.best_reward:
                 self.best_reward = rew_mean
                 self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_reward.zip'))

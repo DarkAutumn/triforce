@@ -54,14 +54,14 @@ class ZeldaGameWrapper(gym.Wrapper):
         self.update_info(self._none_action, info)
 
         return obs, info
-    
+
     def _reset_state(self):
         self._location = None
         self._link_last_pos = None
         self._beams_already_active = False
         self._prev_enemies = None
         self._prev_health = None
-    
+
     def step(self, act):
         # take the first step
         obs, rewards, terminated, truncated, info = self.act_and_wait(act)
@@ -82,7 +82,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         tiles = ram[map_offset:map_offset+map_len]
         tiles = tiles.reshape((32, 22)).T
         info['tiles'] = tiles
-        
+
         link_pos = objects.link_pos
         info['link_pos'] = link_pos
         link_pos = np.array(link_pos, dtype=np.float32)
@@ -187,7 +187,7 @@ class ZeldaGameWrapper(gym.Wrapper):
                 direction = 4
             elif direction == 'N':
                 direction = 8
-                
+
             self.env.unwrapped.data.set_value('link_direction', direction)
 
             if action_kind == ActionType.Attack:
@@ -202,13 +202,13 @@ class ZeldaGameWrapper(gym.Wrapper):
 
             obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
             rewards += rew
-        
+
         in_cave = is_in_cave(info)
         if in_cave and not self.was_link_in_cave:
             obs, rew, terminated, truncated, info = self.skip(self._none_action, cave_cooldown)
 
         self.was_link_in_cave = in_cave
-        
+
         # skip scrolling
         while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']):
             obs, rew, terminated, truncated, info = self.env.step(self._none_action)
@@ -225,22 +225,22 @@ class ZeldaGameWrapper(gym.Wrapper):
             rewards += rew
 
         return obs, rewards, terminated, truncated, info
-    
+
     def get_button_direction(self, act):
         if act[self.up_button]:
             return 'N'
-        
+
         if act[self.down_button]:
             return 'S'
-        
+
         if act[self.left_button]:
             return 'W'
-        
+
         if act[self.right_button]:
             return 'E'
 
         return None
-    
+
     def get_action_type(self, act) -> ActionType:
 
         if act[self.a_button]:
@@ -270,7 +270,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
                 self.__dict__[discounted_hits] = future_hits
                 self.__dict__[already_active_name] = True
-                
+
         else:
             # If we got here, either beams aren't active at all, or we stepped past the end of
             # the beams.  Make sure we are ready to process them again, and discount any kills
@@ -282,12 +282,12 @@ class ZeldaGameWrapper(gym.Wrapper):
             if discounted_hits and step_hits:
                 discount = min(discounted_hits, step_hits)
                 discounted_hits -= discount
-                
+
                 self.__dict__[discounted_hits] = discounted_hits
                 step_hits -= discount
 
         return step_hits
-    
+
     def predict_future(self, act, info, objects, should_continue, disable_others):
         unwrapped = self.env.unwrapped
         savestate = unwrapped.em.get_state()
@@ -298,7 +298,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         start_enemies = list(objects.enumerate_enemy_ids())
         start_health = {x: objects.get_obj_health(x) for x in start_enemies}
-        
+
         # Step over until should_continue is false, or until we left this room or hit a termination condition.
         # Update info at each iteration.
         location = (info['level'], info['location'])
@@ -309,7 +309,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             _, _, terminated, truncated, info = unwrapped.step(act)
             if terminated or truncated:
                 break
-        
+
         hits = 0
 
         objects = ZeldaObjectData(unwrapped.get_ram())
@@ -323,7 +323,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         unwrapped.em.set_state(savestate)
         return hits
-    
+
     def set_beams_only(self, data):
         data.set_value('bomb_or_flame_animation', 0)
         data.set_value('bomb_or_flame_animation2', 0)

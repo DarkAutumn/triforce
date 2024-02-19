@@ -26,7 +26,7 @@ class ZeldaActionReplay:
             'a': 'A',
             'b': 'B',
         }
-        
+
         env.reset()
         self.actions_taken = ""
         self.env = env
@@ -39,8 +39,8 @@ class ZeldaActionReplay:
         result = self.env.reset()
         self.data.set_value('hearts_and_containers', 0xff)
         return result
-    
-    
+
+
     def run_steps(self, commands):
         for x in self.iterate_steps(commands):
             pass
@@ -80,18 +80,18 @@ class ZeldaActionReplay:
                 action = [self.get_prev_direction(), action]
 
             act = self.get_real_action(action)
-            
+
             result =  self.env.step(act)
             self.env.render()
-            
+
             return result
-        
+
     def get_real_action(self, action):
         if not isinstance(action, list):
             action = [action]
 
         return self.actions.index(action)
-    
+
     def get_prev_direction(self):
         for x in reversed(self.actions_taken):
             if x in ['u', 'd', 'l', 'r']:

@@ -26,7 +26,7 @@ def get_tile(position, tiles):
     y, x = position
     if 0 <= x < tiles.shape[1] and 0 <= y < tiles.shape[0]:
         return tiles[y, x]
-    
+
     return 0
 
 # Special case dungeon bricks.  Link actually walks through them so they are walkable, but only if
@@ -50,7 +50,7 @@ def get_neighbors(position, tiles):
 
         if walkable_tiles[tile]:
             neighbors.append(next)
-                
+
     return neighbors
 
 def reconstruct_path(start, came_from, current):
@@ -68,11 +68,11 @@ def a_star(link_position, tiles, direction, is_exterior_dangerous):
 
     open_set = []
     heapq.heappush(open_set, (0, start))
-    
+
     came_from = {}
     g_score = {start: 0}
     f_score = {start: heuristic(start, direction, map_width, map_height, is_exterior_dangerous)}
-    
+
     closest_node = start
     closest_distance = heuristic(start, direction, map_width, map_height, is_exterior_dangerous)
 

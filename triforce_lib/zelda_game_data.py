@@ -9,7 +9,7 @@ class ZeldaRoom:
         self.enemies = int(enemies) if enemies else 0
         self.reward = reward
         self.bomb_secrets = bomb_secrets
-        
+
         self.save_states = []
 
         if not ZeldaRoom.all_save_files:
@@ -80,19 +80,19 @@ class ZeldaGameData:
                     size = int(parts[1], 16)
                     name = parts[2]
                     self.tables[name] = (offset, size)
-    
+
     def get_room_by_location(self, level, location):
         return self.rooms.get(f'{level}_{location:2x}', None)
-    
+
     def get_savestates_by_name(self, room_name):
         full_location = room_name
         room_name = self.strip_direction(room_name)
-        
+
         room = self.rooms.get(room_name, None)
         if room is None:
             level, loc = room_name.split('_')
             room = ZeldaRoom(level, loc, None, None, None, None)
-        
+
         return [x for x in room.save_states if x.startswith(full_location)]
 
     def strip_direction(self, room):

@@ -24,7 +24,7 @@ def test_bat_injury():
     assert not truncated
     assert info['step_hits'] == 1
     assert info['action'] == ActionType.Attack
-    
+
     assert_no_hit(replay, 'dddddddddddddddddddddddddddddddddd')
 
 def test_stalfos_injury():
@@ -46,7 +46,7 @@ def test_stalfos_injury():
     assert not truncated
     assert info['step_hits'] == 1
     assert info['action'] == ActionType.Attack
-    
+
     assert_no_hit(replay, 'lllllll')
 
 def test_sword_injury():
@@ -59,7 +59,7 @@ def test_sword_injury():
     assert not truncated
     assert info['step_hits'] == 2
     assert info['action'] == ActionType.Attack
-    
+
     assert_no_hit(replay, 'u')
 
 def test_beam_injury():
