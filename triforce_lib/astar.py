@@ -1,3 +1,5 @@
+"""A* algorithm implementation for pathfinding.  Used to train the model how to move around the map."""
+
 import heapq
 
 from .zelda_game import walkable_tiles
