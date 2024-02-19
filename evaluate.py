@@ -163,4 +163,9 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-    main(args)
+
+    # if model path is actually a .csv that exists on disk, print that instead
+    if args.model_path and args.model_path[0].endswith('.csv') and os.path.exists(args.model_path[0]):
+        print(pd.read_csv(args.model_path[0]).to_string(index=False))
+    else:
+        main(args)

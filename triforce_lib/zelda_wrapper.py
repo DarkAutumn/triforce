@@ -11,7 +11,7 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData
+from .zelda_game import ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen
 from .model_parameters import *
 
 class ActionType(Enum):
@@ -102,7 +102,9 @@ class ZeldaGameWrapper(gym.Wrapper):
             info['direction'] = 'N'
             info['link_vector'][1] = -1
         else:
-            raise Exception("Unknown link direction")        
+            raise Exception("Unknown link direction")
+
+        info['is_sword_frozen'] = is_sword_frozen(info)
 
         # add information about enemies, items, and projectiles
         info['enemies'], info['items'], info['projectiles'] = objects.get_all_objects(link_pos)

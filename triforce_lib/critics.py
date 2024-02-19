@@ -54,9 +54,13 @@ class GameplayCritic(ZeldaCritic):
         # reward values
         self.rupee_reward = self.reward_small
         self.health_gained_reward = self.reward_large
-        self.health_lost_penalty = -self.reward_large
-        self.injure_kill_reward = self.reward_small
         self.new_location_reward = self.reward_medium
+
+        # combat values
+        self.wipeout_reward_on_hits = True
+        self.health_lost_penalty = -self.reward_large
+        self.injure_kill_reward = self.reward_medium
+        self.block_projectile_reward = self.reward_large
         
         # these are pivotal to the game, so they are rewarded highly
         self.bomb_pickup_reward = self.reward_large
@@ -74,7 +78,7 @@ class GameplayCritic(ZeldaCritic):
         self.movement_scale_factor = 9.0
         self.move_away_penalty = -self.move_closer_reward - self.reward_minimum
 
-        self.too_close_threshold = 20
+        self.too_close_threshold = 28
         self.enemy_too_close_penalty = -self.reward_small
         
         # state tracking
@@ -103,14 +107,11 @@ class GameplayCritic(ZeldaCritic):
             self._is_first_step = False
             self.mark_visited(new['level'], new['location'])
 
-        # health
-        self.critique_health_change(old, new, rewards)
-        self.critique_heart_containers(old, new, rewards)
-
         # triforce
         self.critique_triforce(old, new, rewards)
 
         # combat
+        self.critique_block(old, new, rewards)
         self.critique_attack(old, new, rewards)
         self.critique_item_usage(old, new, rewards)
 
@@ -122,6 +123,9 @@ class GameplayCritic(ZeldaCritic):
         # movement
         self.critique_location_discovery(old, new, rewards)
         self.critique_movement(old, new, rewards)
+
+        # health - must be last
+        self.critique_health_change(old, new, rewards)
     
     # reward helpers, may be overridden
     def critique_equipment_pickup(self, old, new, rewards):
@@ -178,19 +182,25 @@ class GameplayCritic(ZeldaCritic):
         old_hearts = get_heart_halves(old)
         new_hearts = get_heart_halves(new)
 
-        if new_hearts < old_hearts:
-            rewards['penalty-losing-health'] = self.health_lost_penalty
+        if get_heart_containers(old) < get_heart_containers(new):
+            rewards['reward-gained-heart-container'] = self.heart_container_reward
         elif new_hearts > old_hearts:
             rewards['reward-gaining-health'] = self.health_gained_reward
-    
-    def critique_heart_containers(self, old, new, rewards):
-        # we can only gain one heart container at a time
-        if get_heart_containers(old) <get_heart_containers(new):
-            rewards['reward-gained-heart-container'] = self.heart_container_reward
-    
+        elif new_hearts < old_hearts:
+            rewards['penalty-losing-health'] = self.health_lost_penalty
+
+            if self.wipeout_reward_on_hits:
+                for key, value in rewards.items():
+                    if value > 0:
+                        rewards[key] = 0
+
     def critique_triforce(self, old, new, rewards):
         if get_num_triforce_pieces(old) < get_num_triforce_pieces(new) or (old["triforce_of_power"] == 0 and new["triforce_of_power"] == 1):
             rewards['reward-gained-triforce'] = self.triforce_reward
+
+    def critique_block(self, old, new, rewards):
+        if new['sound_pulse_1'] & ZeldaSoundsPulse1.ArrowDeflected.value and (old['sound_pulse_1'] & ZeldaSoundsPulse1.ArrowDeflected.value) != ZeldaSoundsPulse1.ArrowDeflected.value:
+            rewards['reward-block'] = self.block_projectile_reward
 
     def critique_attack(self, old, new, rewards):
         if new['step_hits']:
@@ -204,7 +214,7 @@ class GameplayCritic(ZeldaCritic):
                 if not new['enemies']:
                     rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
 
-                elif self.offscreen_sword_disabled(new):
+                elif new['is_sword_frozen']:
                     rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
 
                 elif new['enemies']:
@@ -230,11 +240,6 @@ class GameplayCritic(ZeldaCritic):
                 else:
                     rewards['reward-bomb-hit'] = min(self.bomb_hit_reward * total_hits, 1.0)
 
-    def offscreen_sword_disabled(self, new):
-        x, y = new['link_pos']
-        return x <= 16 or x >= 0xd9 or y <= 0x53 or y >= 0xc5
-
-
     def critique_location_discovery(self, old, new, rewards):
         prev = (old['level'], old['location'])
         curr = (new['level'], new['location'])
@@ -254,33 +259,42 @@ class GameplayCritic(ZeldaCritic):
         if old['link_pos'] == new['link_pos']:
             rewards['penalty-wall-collision'] = self.wall_collision_penalty
             return
+        
+        # If link took damage he gets knocked back.  Don't consider that 'movement'.
+        if get_heart_halves(old) > get_heart_halves(new):
+            return
 
         # In rooms where wallmasters or traps exist, we want to reward link for moving closer to the
         # center of the room to avoid that.  The a* path already takes into account this by weighting
         # the edges of the room heavy.  This means we need to reward link for following the path exactly.
         # Additionally, WallMaster code is weird.  They seem to jump around the map even when not visible
         # which throws off some of our other code such as checking for enemies that are too close.
-        is_edge_dangerous = False
+        are_enemies_near = False
 
         # did link move too close to an enemy?
-        new_enemies = new['enemies']
-        if new_enemies:
-            if any(x.id == ZeldaEnemy.WallMaster for x in new_enemies):
-                is_edge_dangerous = True
+        new_enemies_or_projectiles = new['enemies'] + new['projectiles']
+        if new_enemies_or_projectiles:
+            if any(x.id == ZeldaEnemy.WallMaster for x in new['enemies']):
+                pass
 
             else:
-                old_enemies_too_close = {x.id: x for x in old['enemies'] if x.distance < self.too_close_threshold}
+                # find enemies that were too close the last time, and punish for moving closer in that direction
+                old_enemies_or_projectiles = old['enemies'] + old['projectiles']
+                old_enemies_too_close = [x for x in old_enemies_or_projectiles if x.distance < self.too_close_threshold]
                 if old_enemies_too_close:
-                    new_enemies_too_close = [x for x in new_enemies if x.id in old_enemies_too_close]
-                    if new_enemies_too_close:
-                        for enemy in new_enemies_too_close:
-                            if enemy.distance < old_enemies_too_close[enemy.id].distance:
-                                rewards['penalty-move-too-close'] = self.enemy_too_close_penalty
-                                break
-                        return
+                    link_vector = new['link_vector']
 
-        # don't reward/penalize if we lost health, just taking the damage is penalty enough
-        if get_heart_halves(old) <= get_heart_halves(new):
+                    # filter old_enemies_too_close to the ones we walked towards
+                    old_enemies_walked_towards = [x for x in old_enemies_too_close if np.dot(link_vector, x.vector) > 0.7071]
+                    if any(x for x in new_enemies_or_projectiles if x.id in old_enemies_walked_towards):
+                        rewards['penalty-move-too-close'] = self.enemy_too_close_penalty
+                        return
+                    
+                    are_enemies_near = True
+
+        # If enemies or projectiles are nearby, no rewards for walking/following the path.  The agent
+        # will discover rewards if they attack correctly or avoid damage.
+        if not are_enemies_near:
             # do we have an optimal path?
             old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
             new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
@@ -423,6 +437,7 @@ class Dungeon1Critic(GameplayCritic):
     def clear(self):
         super().clear()
         self.seen.clear()
+        self.health_lost = 0
 
     def critique_location_discovery(self, old_state : Dict[str, int], new_state : Dict[str, int], rewards : Dict[str, float]):
         if new_state['level'] != 1:
@@ -435,9 +450,12 @@ class Dungeon1Critic(GameplayCritic):
                 rewards['penalty-left-early'] = self.leave_early_penalty
 
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+        if get_heart_halves(new) < get_heart_halves(old):
+            self.health_lost -= 0.5
+
         new_location = new['location']
         self.seen.add(new_location)
-        new['score'] = len(self.seen) - 1 + get_heart_halves(new) * 0.5
+        new['score'] = len(self.seen) - self.health_lost
 
 class Dungeon1BeamCritic(Dungeon1Critic):
     def __init__(self):
@@ -492,6 +510,7 @@ class Overworld1Critic(GameplayCritic):
         self.leave_early_penalty = -self.reward_maximum
         self.entered_cave_penalty = -self.reward_large
         self.equipment_reward = None
+        self.health_lost = 0
         
     def critique_location_discovery(self, old, new, rewards):
         if old['location'] != new['location']:
@@ -523,9 +542,11 @@ class Overworld1Critic(GameplayCritic):
             super().critique_location_discovery(old, new, rewards)
 
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+        if get_heart_halves(new) < get_heart_halves(old):
+            self.health_lost -= 0.5
         new_location = new['location']
         self.seen.add(new_location)
-        new['score'] = new['sword'] + len(self.seen) - 1
+        new['score'] = len(self.seen) - self.health_lost
 
 class OverworldSwordCritic(GameplayCritic):
     def __init__(self):

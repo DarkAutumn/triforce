@@ -1,7 +1,7 @@
 Model,Kind,Success%,Score,Total Reward,Rewards,Penalties
-overworld-sword,,100.0,4.0,4.4,4.9,-0.5
-overworld1beams,,97.0,6.0,0.3,15.7,-15.4
-overworld1nobeams,,99.0,6.0,3.1,12.0,-9.0
-dungeon1nobeams,,89.0,11.8,17.4,44.4,-26.9
-dungeon1beams,,82.0,13.2,24.4,46.4,-22.0
-dungeon1boss,,89.0,9.2,5.0,8.0,-3.1
+overworld-sword,,100.0,4.0,4.3,4.9,-0.5
+overworld1beams,,99.0,8.3,11.1,21.0,-10.0
+overworld1nobeams,,100.0,8.3,8.4,17.8,-9.3
+dungeon1nobeams,,79.0,16.9,44.1,73.0,-28.9
+dungeon1beams,,81.0,14.6,41.4,66.9,-25.4
+dungeon1boss,,98.0,10.7,8.3,9.8,-1.5

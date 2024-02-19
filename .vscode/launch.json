@@ -23,7 +23,7 @@
             "justMyCode": false
         },
         {
-            "name": "Run Dungeon1 Beams Scenario",
+            "name": "Dungeon1 - beams",
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
@@ -32,7 +32,7 @@
             "justMyCode": false
         },
         {
-            "name": "Run Dungeon1 Sword Scenario (no beams)",
+            "name": "Dungeon1 - NO beams",
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
@@ -41,7 +41,7 @@
             "justMyCode": false
         },
         {
-            "name": "Run Dungeon1 Bombs Scenario",
+            "name": "Dungeon1 - Bombs",
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
@@ -50,7 +50,7 @@
             "justMyCode": false
         },
         {
-            "name": "Run Dungeon1 Boss",
+            "name": "Dungeon1 - Boss",
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
@@ -59,7 +59,7 @@
             "justMyCode": false
         },
         {
-            "name": "Run Overworld Sword Scenario",
+            "name": "Overworld - Get Sword",
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
@@ -68,7 +68,7 @@
             "justMyCode": false
         },
         {
-            "name": "Run Overworld1 NO Beams",
+            "name": "Overworld1 - NO Beams",
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
@@ -77,7 +77,7 @@
             "justMyCode": false
         },
         {
-            "name": "Run Overworld1 Beams",
+            "name": "Overworld1 - Beams",
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
@@ -99,7 +99,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
-            "args": ["overworld1", "--iterations", "5000", "--parallel", "1"],
+            "args": ["overworld1beams", "--iterations", "5000", "--parallel", "1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
