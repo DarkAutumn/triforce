@@ -267,7 +267,7 @@ class Dungeon1Orchestrator:
             else:
                 return 0x63, None, "N", 'room'
             
-        if location == 0x63 and info['keys'] == 0:
+        if location == 0x63 and (0x72 not in self.keys_obtained or 0x74 not in self.keys_obtained):
             return 0x73, None, "S", 'room'
         
         # check if we should kill all enemies:
