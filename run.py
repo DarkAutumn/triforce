@@ -2,28 +2,23 @@
 
 import argparse
 import os
-
 import math
-import os
+from collections import deque
 import pygame
 import numpy as np
-from collections import deque
-
+import cv2
 import tqdm
 
 from triforce_lib import ZeldaAIOrchestrator, ZeldaScenario, ZeldaML, is_in_cave
 
 class Recording:
+    """Used to track and save a recording of the game."""
     def __init__(self, dimensions):
-        import cv2
-
         self.dimensions = dimensions
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         self.recording = cv2.VideoWriter(self.__get_filename(), fourcc, 60.1, dimensions)
 
     def append(self, surface):
-        import cv2
-
         result_frame = surface
         result_frame = result_frame.transpose([1, 0, 2])  # Transpose it to the correct format
         result_frame = cv2.cvtColor(result_frame, cv2.COLOR_RGB2BGR)  # Convert from RGB to BGR
@@ -53,7 +48,7 @@ class Display:
         
         orchestrator = ZeldaAIOrchestrator()
         if not orchestrator.has_any_model:
-            raise Exception(f'No models loaded')
+            raise Exception('No models loaded')
         
         self.zelda_ml = zelda_ml
         self.scenario = scenario
@@ -98,7 +93,7 @@ class Display:
 
         surface = pygame.display.set_mode(self.dimensions)
         clock = pygame.time.Clock()
-        
+
         deaths = {}
         reward_map = {}
         buttons = deque(maxlen=100)
@@ -115,8 +110,8 @@ class Display:
         terminated = True
         truncated = False
 
-        last_info = None
-        info = None
+        last_info = {}
+        info = {}
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
         mode = 'c'
@@ -160,7 +155,7 @@ class Display:
 
                 action, _ = model.predict(obs, deterministic=False)
                 last_info = info
-                obs, reward, terminated, truncated, info = env.step(action)
+                obs, _, terminated, truncated, info = env.step(action)
 
                 if mode == 'n':
                     mode = 'p'
