@@ -28,15 +28,15 @@ def heuristic(current, direction, map_width, map_height, is_exterior_dangerous):
 
     if direction == 'N':
         return y + weight
-    elif direction == 'S':
+    if direction == 'S':
         return map_height - y - 1 + weight
-    elif direction == 'W':
+    if direction == 'W':
         return x + weight
-    elif direction == 'E':
+    if direction == 'E':
         return map_width - x - 1 + weight
-    else:
-        ny, nx = direction
-        return abs(nx - x) + abs(ny - y) + weight
+
+    ny, nx = direction
+    return abs(nx - x) + abs(ny - y) + weight
 
 def get_tile(position, tiles):
     """
