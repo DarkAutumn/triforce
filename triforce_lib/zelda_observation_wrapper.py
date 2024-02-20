@@ -8,7 +8,7 @@ import numpy as np
 from collections import deque
 
 from .zelda_game_data import zelda_game_data
-from .model_parameters import viewport_pixels, gameplay_start_y
+from .model_parameters import VIEWPORT_PIXELS, GAMEPLAY_START_Y
 
 class FrameCaptureWrapper(gym.Wrapper):
     def __init__(self, env, rgb_render):
@@ -50,12 +50,12 @@ class ZeldaObservationWrapper(gym.Wrapper):
         self.framestack = framestack
 
         if kind == 'gameplay' or kind == 'viewport':
-            self.trim = gameplay_start_y
+            self.trim = GAMEPLAY_START_Y
         else:
             self.trim = 0
 
         if kind == 'viewport':
-            self.viewport_size = viewport_pixels
+            self.viewport_size = VIEWPORT_PIXELS
 
         # modify the observation space to match the new shape
         # we also move the last channel count to be the first dimension to avoid a VecTransposeImage wrapper

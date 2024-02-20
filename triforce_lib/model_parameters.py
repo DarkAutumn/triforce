@@ -1,12 +1,14 @@
-step_max = 750
-viewport_pixels = 128
+"""Constants for the game model."""
+
+STEP_MAX = 750
+VIEWPORT_PIXELS = 128
 
 # the y coordinate where the game viewport starts (above which is the HUD)
-gameplay_start_y = 56
+GAMEPLAY_START_Y = 56
 
-movement_frames = 6
-attack_cooldown = 15
-item_cooldown = 10
-cave_cooldown = 60
-random_delay_max_frames = 1
-reset_delay_max_frames = 60
+MOVEMENT_FRAMES = 6
+ATTACK_COOLDOWN = 15
+ITEM_COOLDOWN = 10
+CAVE_COOLDOWN = 60
+RANDOM_DELAY_MAX_FRAMES = 1
+RESET_DELAY_MAX_FRAMES = 60

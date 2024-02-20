@@ -46,7 +46,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         obs, info = super().reset(**kwargs)
         self._reset_state()
 
-        delay_frames = 1 if self.deterministic else randint(1, reset_delay_max_frames)
+        delay_frames = 1 if self.deterministic else randint(1, RESET_DELAY_MAX_FRAMES)
         obs, _, terminated, truncated, info = self.skip(self._none_action, delay_frames)
         assert not terminated and not truncated
 
@@ -171,7 +171,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         action_kind = self.get_action_type(act)
         if action_kind == ActionType.Movement:
             rewards = 0
-            for i in range(movement_frames):
+            for i in range(MOVEMENT_FRAMES):
                     obs, rew, terminated, truncated, info = self.env.step(act)
                     rewards += rew
                     if terminated or truncated:
@@ -192,20 +192,20 @@ class ZeldaGameWrapper(gym.Wrapper):
 
             if action_kind == ActionType.Attack:
                 obs, rewards, terminated, truncated, info = self.env.step(self._attack_action)
-                cooldown = attack_cooldown
+                cooldown = ATTACK_COOLDOWN
             elif action_kind == ActionType.Item:
                 obs, rewards, terminated, truncated, info = self.env.step(self._item_action)
-                cooldown = item_cooldown
+                cooldown = ITEM_COOLDOWN
 
             if not self.deterministic:
-                cooldown += randint(0, random_delay_max_frames)
+                cooldown += randint(0, RANDOM_DELAY_MAX_FRAMES)
 
             obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
             rewards += rew
 
         in_cave = is_in_cave(info)
         if in_cave and not self.was_link_in_cave:
-            obs, rew, terminated, truncated, info = self.skip(self._none_action, cave_cooldown)
+            obs, rew, terminated, truncated, info = self.skip(self._none_action, CAVE_COOLDOWN)
 
         self.was_link_in_cave = in_cave
 
