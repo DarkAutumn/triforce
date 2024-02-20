@@ -253,24 +253,23 @@ class GameplayCritic(ZeldaCritic):
             else:
                 rewards['penalty-hit-cave'] = -self.injure_kill_reward
 
-        else:
-            if new['action'] == ActionType.ATTACK:
-                if not new['enemies']:
-                    rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
+        elif new['action'] == ActionType.ATTACK:
+            if not new['enemies']:
+                rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
 
-                elif new['is_sword_frozen']:
-                    rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
+            elif new['is_sword_frozen']:
+                rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
 
-                elif new['enemies']:
-                    enemy_vectors = [enemy.vector for enemy in new['enemies'] if abs(enemy.distance) > 0]
-                    if enemy_vectors:
-                        dotproducts = np.sum(new['link_vector'] * enemy_vectors, axis=1)
-                        if not np.any(dotproducts > np.sqrt(2) / 2):
+            elif new['enemies']:
+                enemy_vectors = [enemy.vector for enemy in new['enemies'] if abs(enemy.distance) > 0]
+                if enemy_vectors:
+                    dotproducts = np.sum(new['link_vector'] * enemy_vectors, axis=1)
+                    if not np.any(dotproducts > np.sqrt(2) / 2):
+                        rewards['penalty-attack-miss'] = self.attack_miss_penalty
+                    elif not old['has_beams']:
+                        distance = new['enemies'][0].distance
+                        if distance > self.distance_threshold:
                             rewards['penalty-attack-miss'] = self.attack_miss_penalty
-                        elif not old['has_beams']:
-                            distance = new['enemies'][0].distance
-                            if distance > self.distance_threshold:
-                                rewards['penalty-attack-miss'] = self.attack_miss_penalty
 
     def critique_item_usage(self, _, new, rewards):
         """
@@ -321,6 +320,9 @@ class GameplayCritic(ZeldaCritic):
         Returns:
             None
         """
+        # The logic in this method is complicated, and tough to break up while still being readable.
+        # pylint: disable=too-many-branches, too-many-statements, too-many-locals
+
         if new['action'] != ActionType.MOVEMENT:
             return
 
@@ -341,31 +343,7 @@ class GameplayCritic(ZeldaCritic):
         # the edges of the room heavy.  This means we need to reward link for following the path exactly.
         # Additionally, WallMaster code is weird.  They seem to jump around the map even when not visible
         # which throws off some of our other code such as checking for enemies that are too close.
-        are_enemies_near = False
-
-        # did link move too close to an enemy?
-        new_enemies_or_projectiles = new['enemies'] + new['projectiles']
-        if new_enemies_or_projectiles:
-            if any(x.id == ZeldaEnemy.WallMaster for x in new['enemies']):
-                pass
-
-            else:
-                # find enemies that were too close the last time, and punish for moving closer in that direction
-                old_enemies_or_projectiles = old['enemies'] + old['projectiles']
-                old_enemies_too_close = [x for x in old_enemies_or_projectiles \
-                                         if x.distance < self.too_close_threshold]
-
-                if old_enemies_too_close:
-                    link_vector = new['link_vector']
-
-                    # filter old_enemies_too_close to the ones we walked towards
-                    old_enemies_walked_towards = [x for x in old_enemies_too_close \
-                                                  if np.dot(link_vector, x.vector) > 0.7071]
-                    if any(x for x in new_enemies_or_projectiles if x.id in old_enemies_walked_towards):
-                        rewards['penalty-move-too-close'] = self.enemy_too_close_penalty
-                        return
-
-                    are_enemies_near = True
+        are_enemies_near = self._check_how_close(old, new, rewards)
 
         # If enemies or projectiles are nearby, no rewards for walking/following the path.  The agent
         # will discover rewards if they attack correctly or avoid damage.
@@ -436,6 +414,34 @@ class GameplayCritic(ZeldaCritic):
                     rewards['reward-move-closer'] = self.move_closer_reward * percent
                 else:
                     rewards['penalty-move-farther'] = self.move_away_penalty
+
+    def _check_how_close(self, old, new, rewards):
+        are_enemies_near = False
+
+        # did link move too close to an enemy?
+        new_enemies_or_projectiles = new['enemies'] + new['projectiles']
+        if new_enemies_or_projectiles:
+            if any(x.id == ZeldaEnemy.WallMaster for x in new['enemies']):
+                pass
+
+            else:
+                # find enemies that were too close the last time, and punish for moving closer in that direction
+                old_enemies_or_projectiles = old['enemies'] + old['projectiles']
+                old_enemies_too_close = [x for x in old_enemies_or_projectiles \
+                                         if x.distance < self.too_close_threshold]
+
+                if old_enemies_too_close:
+                    link_vector = new['link_vector']
+
+                    # filter old_enemies_too_close to the ones we walked towards
+                    old_enemies_walked_towards = [x for x in old_enemies_too_close \
+                                                  if np.dot(link_vector, x.vector) > 0.7071]
+                    if any(x for x in new_enemies_or_projectiles if x.id in old_enemies_walked_towards):
+                        rewards['penalty-move-too-close'] = self.enemy_too_close_penalty
+
+                    are_enemies_near = True
+
+        return are_enemies_near
 
     def __find_second_turn(self, path):
         turn = 0
@@ -603,7 +609,8 @@ class Overworld1Critic(GameplayCritic):
             if old['location_objective'] and old['location_objective'] != new['location']:
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
-            elif old['objective_kind'] == 'cave':
+
+            if old['objective_kind'] == 'cave':
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 
