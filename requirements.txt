@@ -13,3 +13,5 @@ opencv-python
 pandas
 tqdm
 pyarrow
+pylint
+pydantic
