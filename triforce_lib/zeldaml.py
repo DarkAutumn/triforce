@@ -129,7 +129,8 @@ class ZeldaML:
                 print(f"Training model: {zelda_ai_model.name}")
                 print(f"Scenario:       {zelda_ai_model.training_scenario}")
                 print(f"Path:           {model_dir}")
-                model = zelda_ai_model.create(env=env, verbose=self.verbose, tensorboard_log=log_path, ent_coef=self.ent_coef, device=self.device)
+                model = zelda_ai_model.create(env=env, verbose=self.verbose, tensorboard_log=log_path,
+                                              ent_coef=self.ent_coef, device=self.device)
                 callback = LogRewardCallback(model, model_dir)
                 model.learn(iterations, progress_bar=True, callback=callback)
                 model.save(os.path.join(model_dir, 'last.zip'))
