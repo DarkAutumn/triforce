@@ -25,7 +25,7 @@ def test_bat_injury():
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 1
-    assert info['action'] == ActionType.Attack
+    assert info['action'] == ActionType.ATTACK
 
     assert_no_hit(replay, 'dddddddddddddddddddddddddddddddddd')
 
@@ -40,14 +40,14 @@ def test_stalfos_injury():
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 1
-    assert info['action'] == ActionType.Attack
+    assert info['action'] == ActionType.ATTACK
     assert_no_hit(replay, 'llllr')
 
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 1
-    assert info['action'] == ActionType.Attack
+    assert info['action'] == ActionType.ATTACK
 
     assert_no_hit(replay, 'lllllll')
 
@@ -60,7 +60,7 @@ def test_sword_injury():
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 2
-    assert info['action'] == ActionType.Attack
+    assert info['action'] == ActionType.ATTACK
 
     assert_no_hit(replay, 'u')
 
@@ -76,7 +76,7 @@ def test_beam_injury():
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 1
-    assert info['action'] == ActionType.Attack
+    assert info['action'] == ActionType.ATTACK
 
     assert_no_hit(replay, "lllllll")
 
@@ -90,6 +90,6 @@ def test_bombs_kill():
     assert not truncated
     assert info['step_hits'] == 3
     assert info['bomb1_hits'] == 3
-    assert info['action'] == ActionType.Item
+    assert info['action'] == ActionType.ITEM
 
     assert_no_hit(replay, "uuurrrrrr")

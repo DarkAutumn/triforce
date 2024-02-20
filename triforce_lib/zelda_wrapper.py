@@ -1,26 +1,33 @@
-# Responsible for interpreting complex game state and producing an object model in the 'info' dictionary.
-# Zelda has a very complicated combat system.  This class is responsible for detecting when the
-# agent has killed or injured an enemy.
-#
-# This consumes some state and produces values like 'step_hits'.
+"""
+Responsible for interpreting complex game state and producing an object model in the 'info' dictionary.
+Zelda has a very complicated combat system.  This class is responsible for detecting when the
+agent has killed or injured an enemy.
+
+This consumes some state and produces values like 'step_hits'.
+"""
 
 from enum import Enum
 from random import randint
-from typing import Any
 import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen
-from .model_parameters import *
+from .zelda_game import ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, \
+                        get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen
+from .model_parameters import MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, ITEM_COOLDOWN, \
+                              CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
 
 class ActionType(Enum):
-    Nothing = 0
-    Movement = 1
-    Attack = 2
-    Item = 3
+    """The kind of action that the agent took."""
+    NOTHING = 0
+    MOVEMENT = 1
+    ATTACK = 2
+    ITEM = 3
 
 class ZeldaGameWrapper(gym.Wrapper):
+    """Interprets the game state and produces more information in the 'info' dictionary."""
+    # pylint: disable=too-many-instance-attributes
+
     def __init__(self, env, deterministic=False):
         super().__init__(env)
 
@@ -42,6 +49,13 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._item_action = np.zeros(9, dtype=bool)
         self._item_action[self.b_button] = True
 
+        self.was_link_in_cave = False
+        self._location = None
+        self._link_last_pos = None
+        self._beams_already_active = False
+        self._prev_enemies = None
+        self._prev_health = None
+
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
         self._reset_state()
@@ -62,20 +76,19 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._prev_enemies = None
         self._prev_health = None
 
-    def step(self, act):
-        # take the first step
-        obs, rewards, terminated, truncated, info = self.act_and_wait(act)
+    def step(self, action):
+        obs, rewards, terminated, truncated, info = self.__act_and_wait(action)
 
-        self.update_info(act, info)
-
+        self.update_info(action, info)
         return obs, rewards, terminated, truncated, info
 
     def update_info(self, act, info):
-        info['action'] = self.get_action_type(act)
+        """Updates the info dictionary with new information about the game state."""
+        info['action'] = self.__get_action_type(act)
 
         unwrapped = self.env.unwrapped
         ram = unwrapped.get_ram()
-        info['buttons'] = self.get_button_names(act, unwrapped.buttons)
+        info['buttons'] = self.__get_button_names(act, unwrapped.buttons)
         objects = ZeldaObjectData(ram)
 
         map_offset, map_len = zelda_game_data.tables['tile_layout']
@@ -102,7 +115,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             info['direction'] = 'N'
             info['link_vector'][1] = -1
         else:
-            raise Exception("Unknown link direction")
+            assert False, "Unknown direction"
 
         info['is_sword_frozen'] = is_sword_frozen(info)
 
@@ -118,9 +131,9 @@ class ZeldaGameWrapper(gym.Wrapper):
         if new_location:
             self._location = location
             self._prev_health = None
-            self.clear_variables('beam_hits')
-            self.clear_variables('bomb1_hits')
-            self.clear_variables('bomb2_hits')
+            self.__clear_variables('beam_hits')
+            self.__clear_variables('bomb1_hits')
+            self.__clear_variables('bomb2_hits')
             info['step_hits'] = 0
         else:
             # Only check hits if we didn't move room locations
@@ -152,33 +165,36 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         # check if beams, bombs, arrows, etc are active and if they will hit in the future,
         # as we need to count them as rewards/results of this action so the model trains properly
-        step_hits = self.handle_future_hits(act, info, objects, step_hits, 'beam_hits', lambda st: get_beam_state(st) == 1, self.set_beams_only)
-        step_hits = self.handle_future_hits(act, info, objects, step_hits, 'bomb1_hits', lambda st: get_bomb_state(st, 0) == 1, self.set_bomb1_only)
-        step_hits = self.handle_future_hits(act, info, objects, step_hits, 'bomb2_hits', lambda st: get_bomb_state(st, 1) == 1, self.set_bomb2_only)
+        step_hits = self.__handle_future_hits(act, info, objects, step_hits, 'beam_hits',
+                                              lambda st: get_beam_state(st) == 1, self.__set_beams_only)
+        step_hits = self.__handle_future_hits(act, info, objects, step_hits, 'bomb1_hits',
+                                              lambda st: get_bomb_state(st, 0) == 1, self.__set_bomb1_only)
+        step_hits = self.__handle_future_hits(act, info, objects, step_hits, 'bomb2_hits',
+                                              lambda st: get_bomb_state(st, 1) == 1, self.__set_bomb2_only)
 
         self._prev_health = curr_enemy_health
         return step_hits
 
-    def clear_variables(self, name):
-        self.clear_item(name + '_already_active')
-        self.clear_item(name + '_discounted_hits')
+    def __clear_variables(self, name):
+        self.__clear_item(name + '_already_active')
+        self.__clear_item(name + '_discounted_hits')
 
-    def clear_item(self, name):
+    def __clear_item(self, name):
         if name in self.__dict__:
             del self.__dict__[name]
 
-    def act_and_wait(self, act):
-        action_kind = self.get_action_type(act)
-        if action_kind == ActionType.Movement:
+    def __act_and_wait(self, act):
+        action_kind = self.__get_action_type(act)
+        if action_kind == ActionType.MOVEMENT:
             rewards = 0
-            for i in range(MOVEMENT_FRAMES):
-                    obs, rew, terminated, truncated, info = self.env.step(act)
-                    rewards += rew
-                    if terminated or truncated:
-                        break
+            for _ in range(MOVEMENT_FRAMES):
+                obs, rew, terminated, truncated, info = self.env.step(act)
+                rewards += rew
+                if terminated or truncated:
+                    break
 
-        elif action_kind == ActionType.Attack or action_kind == ActionType.Item:
-            direction = self.get_button_direction(act)
+        elif action_kind in (ActionType.ATTACK, ActionType.ITEM):
+            direction = self.__get_button_direction(act)
             if direction == 'E':
                 direction = 1
             elif direction == 'W':
@@ -190,10 +206,10 @@ class ZeldaGameWrapper(gym.Wrapper):
 
             self.env.unwrapped.data.set_value('link_direction', direction)
 
-            if action_kind == ActionType.Attack:
+            if action_kind == ActionType.ATTACK:
                 obs, rewards, terminated, truncated, info = self.env.step(self._attack_action)
                 cooldown = ATTACK_COOLDOWN
-            elif action_kind == ActionType.Item:
+            elif action_kind == ActionType.ITEM:
                 obs, rewards, terminated, truncated, info = self.env.step(self._item_action)
                 cooldown = ITEM_COOLDOWN
 
@@ -219,14 +235,15 @@ class ZeldaGameWrapper(gym.Wrapper):
         return obs, rewards, terminated, truncated, info
 
     def skip(self, act, cooldown):
+        """Skips a number of frames, returning the final state."""
         rewards = 0
-        for i in range(cooldown):
+        for _ in range(cooldown):
             obs, rew, terminated, truncated, info = self.env.step(act)
             rewards += rew
 
         return obs, rewards, terminated, truncated, info
 
-    def get_button_direction(self, act):
+    def __get_button_direction(self, act):
         if act[self.up_button]:
             return 'N'
 
@@ -241,18 +258,19 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return None
 
-    def get_action_type(self, act) -> ActionType:
+    def __get_action_type(self, act) -> ActionType:
 
         if act[self.a_button]:
-            return ActionType.Attack
+            return ActionType.ATTACK
         elif act[self.b_button]:
-            return ActionType.Item
-        elif self.get_button_direction(act) is not None:
-            return ActionType.Movement
+            return ActionType.ITEM
+        elif self.__get_button_direction(act) is not None:
+            return ActionType.MOVEMENT
         else:
-            return ActionType.Nothing
+            return ActionType.NOTHING
 
-    def handle_future_hits(self, act, info, objects, step_hits, name, condition_check, disable_others):
+    def __handle_future_hits(self, act, info, objects, step_hits, name, condition_check, disable_others):
+        # pylint: disable=too-many-arguments
         info[name] = 0
 
         already_active_name = name + '_already_active'
@@ -262,7 +280,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             already_active = self.__dict__.get(already_active_name, False)
             if not already_active:
                 # check if beams will hit something
-                future_hits = self.predict_future(act, info, objects, condition_check, disable_others)
+                future_hits = self.__predict_future(act, info, objects, condition_check, disable_others)
                 info[name] = future_hits
 
                 # count the future hits now, discount them from the later hit
@@ -288,7 +306,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return step_hits
 
-    def predict_future(self, act, info, objects, should_continue, disable_others):
+    def __predict_future(self, act, info, objects, should_continue, disable_others):
         unwrapped = self.env.unwrapped
         savestate = unwrapped.em.get_state()
         data = unwrapped.data
@@ -303,7 +321,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         # Update info at each iteration.
         location = (info['level'], info['location'])
 
-        while should_continue(info) and not is_mode_death(info['mode']) and location == (info['level'], info['location']):
+        while should_continue(info) and not is_mode_death(info['mode']) and \
+                location == (info['level'], info['location']):
             data.set_value('hearts_and_containers', 0xff) # make sure we don't die
 
             _, _, terminated, truncated, info = unwrapped.step(act)
@@ -324,19 +343,19 @@ class ZeldaGameWrapper(gym.Wrapper):
         unwrapped.em.set_state(savestate)
         return hits
 
-    def set_beams_only(self, data):
+    def __set_beams_only(self, data):
         data.set_value('bomb_or_flame_animation', 0)
         data.set_value('bomb_or_flame_animation2', 0)
 
-    def set_bomb1_only(self, data):
+    def __set_bomb1_only(self, data):
         data.set_value('beam_animation', 0)
         data.set_value('bomb_or_flame_animation2', 0)
 
-    def set_bomb2_only(self, data):
+    def __set_bomb2_only(self, data):
         data.set_value('beam_animation', 0)
         data.set_value('bomb_or_flame_animation1', 0)
 
-    def get_button_names(self, act, buttons):
+    def __get_button_names(self, act, buttons):
         result = []
         for i, b in enumerate(buttons):
             if act[i]:

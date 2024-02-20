@@ -254,7 +254,7 @@ class GameplayCritic(ZeldaCritic):
                 rewards['penalty-hit-cave'] = -self.injure_kill_reward
 
         else:
-            if new['action'] == ActionType.Attack:
+            if new['action'] == ActionType.ATTACK:
                 if not new['enemies']:
                     rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
 
@@ -281,7 +281,7 @@ class GameplayCritic(ZeldaCritic):
             new (Dict[str, int]): The new state of the game.
             rewards (Dict[str, float]): The rewards obtained during gameplay.
         """
-        if new['action'] == ActionType.Item:
+        if new['action'] == ActionType.ITEM:
             selected = new['selected_item']
             if selected == 0 and not new['regular_boomerang'] and not new['magic_boomerang']:
                 rewards['used-null-item'] = self.used_null_item_penalty
@@ -321,7 +321,7 @@ class GameplayCritic(ZeldaCritic):
         Returns:
             None
         """
-        if new['action'] != ActionType.Movement:
+        if new['action'] != ActionType.MOVEMENT:
             return
 
         if old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
@@ -543,7 +543,7 @@ class Dungeon1BombCritic(Dungeon1Critic):
         self.bomb_miss_penalty = -REWARD_SMALL
 
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
-        if new['action'] == ActionType.Item:
+        if new['action'] == ActionType.ITEM:
             selected = new['selected_item']
             # bombs
             if selected == 1:
