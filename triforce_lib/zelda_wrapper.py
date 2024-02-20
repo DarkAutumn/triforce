@@ -75,18 +75,18 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._prev_health = None
 
     def step(self, action):
-        obs, rewards, terminated, truncated, info = self.__act_and_wait(action)
+        obs, rewards, terminated, truncated, info = self._act_and_wait(action)
 
         self.update_info(action, info)
         return obs, rewards, terminated, truncated, info
 
     def update_info(self, act, info):
         """Updates the info dictionary with new information about the game state."""
-        info['action'] = self.__get_action_type(act)
+        info['action'] = self._get_action_type(act)
 
         unwrapped = self.env.unwrapped
         ram = unwrapped.get_ram()
-        info['buttons'] = self.__get_button_names(act, unwrapped.buttons)
+        info['buttons'] = self._get_button_names(act, unwrapped.buttons)
         objects = ZeldaObjectData(ram)
 
         map_offset, map_len = zelda_game_data.tables['tile_layout']
@@ -129,9 +129,9 @@ class ZeldaGameWrapper(gym.Wrapper):
         if new_location:
             self._location = location
             self._prev_health = None
-            self.__clear_variables('beam_hits')
-            self.__clear_variables('bomb1_hits')
-            self.__clear_variables('bomb2_hits')
+            self._clear_variables('beam_hits')
+            self._clear_variables('bomb1_hits')
+            self._clear_variables('bomb2_hits')
             info['step_hits'] = 0
         else:
             # Only check hits if we didn't move room locations
@@ -163,26 +163,26 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         # check if beams, bombs, arrows, etc are active and if they will hit in the future,
         # as we need to count them as rewards/results of this action so the model trains properly
-        step_hits = self.__handle_future_hits(act, info, objects, step_hits, 'beam_hits',
-                                    lambda st: get_beam_state(st) == AnimationState.ACTIVE, self.__set_beams_only)
-        step_hits = self.__handle_future_hits(act, info, objects, step_hits, 'bomb1_hits',
-                                    lambda st: get_bomb_state(st, 0) == AnimationState.ACTIVE, self.__set_bomb1_only)
-        step_hits = self.__handle_future_hits(act, info, objects, step_hits, 'bomb2_hits',
-                                    lambda st: get_bomb_state(st, 1) == AnimationState.ACTIVE, self.__set_bomb2_only)
+        step_hits = self._handle_future_hits(act, info, objects, step_hits, 'beam_hits',
+                                    lambda st: get_beam_state(st) == AnimationState.ACTIVE, self._set_beams_only)
+        step_hits = self._handle_future_hits(act, info, objects, step_hits, 'bomb1_hits',
+                                    lambda st: get_bomb_state(st, 0) == AnimationState.ACTIVE, self._set_bomb1_only)
+        step_hits = self._handle_future_hits(act, info, objects, step_hits, 'bomb2_hits',
+                                    lambda st: get_bomb_state(st, 1) == AnimationState.ACTIVE, self._set_bomb2_only)
 
         self._prev_health = curr_enemy_health
         return step_hits
 
     def _clear_variables(self, name):
-        self.__clear_item(name + '_already_active')
-        self.__clear_item(name + '_discounted_hits')
+        self._clear_item(name + '_already_active')
+        self._clear_item(name + '_discounted_hits')
 
     def _clear_item(self, name):
         if name in self.__dict__:
             del self.__dict__[name]
 
     def _act_and_wait(self, act):
-        action_kind = self.__get_action_type(act)
+        action_kind = self._get_action_type(act)
         if action_kind == ActionType.MOVEMENT:
             rewards = 0
             for _ in range(MOVEMENT_FRAMES):
@@ -192,7 +192,7 @@ class ZeldaGameWrapper(gym.Wrapper):
                     break
 
         elif action_kind in (ActionType.ATTACK, ActionType.ITEM):
-            direction = self.__get_button_direction(act)
+            direction = self._get_button_direction(act)
             self._set_direction(direction)
 
             if action_kind == ActionType.ATTACK:
@@ -264,7 +264,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             return ActionType.ATTACK
         if act[self.b_button]:
             return ActionType.ITEM
-        if self.__get_button_direction(act) is not None:
+        if self._get_button_direction(act) is not None:
             return ActionType.MOVEMENT
 
         return ActionType.NOTHING
@@ -279,7 +279,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             already_active = self.__dict__.get(already_active_name, False)
             if not already_active:
                 # check if beams will hit something
-                future_hits = self.__predict_future(act, info, objects, condition_check, disable_others)
+                future_hits = self._predict_future(act, info, objects, condition_check, disable_others)
                 info[name] = future_hits
 
                 # count the future hits now, discount them from the later hit

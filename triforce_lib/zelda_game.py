@@ -275,13 +275,13 @@ class ZeldaObjectData:
         items = []
         projectiles = []
 
-        obj_id = getattr(self, 'obj_id')
+        obj_ids = getattr(self, 'obj_id')
         obj_pos_x = getattr(self, 'obj_pos_x')
         obj_pos_y = getattr(self, 'obj_pos_y')
         obj_status = getattr(self, 'obj_status')
 
         for i in range(1, 0xc):
-            obj_id = obj_id[i]
+            obj_id = obj_ids[i]
             if obj_id == 0:
                 continue
 
