@@ -1,7 +1,7 @@
 from collections import Counter
-import datetime
 import json
 import os
+from typing import List
 import retro
 import numpy as np
 
@@ -10,13 +10,14 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
-from .models import ZeldaModel
+from .models_and_scenarios import ZeldaAIModel
 from .objective_selector import ObjectiveSelector
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
 from .zelda_game_features import ZeldaGameFeatures
-from .scenario import ZeldaScenario
+from .scenario_wrapper import ScenarioWrapper
+from .models_and_scenarios import ZeldaScenario
 
 class ZeldaML:
     def __init__(self, color, framestack = 1, **kwargs):
@@ -53,10 +54,10 @@ class ZeldaML:
         self.color = color
         self.framestack = framestack
 
-    def make_env(self, scenario, action_space = "all", parallel = 1):
+    def make_env(self, scenario : ZeldaScenario, action_space = "all", parallel = 1):
         def make_env_func():
             # create the environment
-            env = retro.make(game='Zelda-NES', state=scenario.all_start_states[0], inttype=retro.data.Integrations.CUSTOM_ONLY, **self.__extra_args)
+            env = retro.make(game='Zelda-NES', state=scenario.start[0], inttype=retro.data.Integrations.CUSTOM_ONLY, **self.__extra_args)
 
             # Capture the raw observation frames into a deque.
             env = FrameCaptureWrapper(env, self.rgb_render)
@@ -84,7 +85,7 @@ class ZeldaML:
 
             # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new info state provded
             # by ZeldaGameWrapper above.
-            env = scenario.activate(env)
+            env = ScenarioWrapper(env, scenario)
 
             return env
 
@@ -95,54 +96,35 @@ class ZeldaML:
 
         return env
 
-    def train(self, output_path = None, model_names = None, iteration_override = None, parallel = None, progress_bar = True):
-        if model_names is None:
-            models = ZeldaModel.get_model_info()
-        else:
-            model_infos = ZeldaModel.get_model_info()
-            models = []
-            for model_name in model_names:
-                for model_info in model_infos:
-                    if model_info.name == model_name:
-                        models.append(model_info)
-                        break
-                else:
-                    raise Exception(f'Could not find model: {model_name}')
-
+    def train(self, models : List[ZeldaAIModel], output_path = None, iteration_override = None, parallel = None, progress_bar = True):
         if output_path is None:
             output_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
             output_path = os.path.join(output_path, 'training')
 
         print("Writing to:", output_path)
 
-        for model_info in models:
-            model_dir = os.path.join(output_path, model_info.name)
+        for zelda_ai_model in models:
+            model_dir = os.path.join(output_path, zelda_ai_model.name)
             os.makedirs(model_dir, exist_ok=True)
 
-            iterations = model_info.iterations if iteration_override is None else iteration_override
+            iterations = zelda_ai_model.iterations if iteration_override is None else iteration_override
 
             log_path = os.path.join(model_dir, 'logs')
 
-            scenario = ZeldaScenario.get(model_info.training_scenario)
-            env = self.make_env(scenario, model_info.action_space, parallel)
+            scenario = ZeldaScenario.get(zelda_ai_model.training_scenario)
+            env = self.make_env(scenario, zelda_ai_model.action_space, parallel)
             try:
                 print()
-                print(f"Training model: {model_info.name}")
-                print(f"Scenario:       {model_info.training_scenario}")
+                print(f"Training model: {zelda_ai_model.name}")
+                print(f"Scenario:       {zelda_ai_model.training_scenario}")
                 print(f"Path:           {model_dir}")
-                model = self._create_model(env, log_path)
+                model = zelda_ai_model.create(env=env, verbose=self.verbose, tensorboard_log=log_path, ent_coef=self.ent_coef, device=self.device)
                 callback = LogRewardCallback(model, model_dir)
                 model.learn(iterations, progress_bar=progress_bar, callback=callback)
                 model.save(os.path.join(model_dir, 'last.zip'))
 
             finally:
                 env.close()
-
-    def load_models(self, path):
-        ZeldaModel.load_models(path, verbose=self.verbose, ent_coef=self.ent_coef, device=self.device)
-
-    def _create_model(self, env, log_dir):
-        return PPO('MultiInputPolicy', env, verbose=self.verbose, tensorboard_log=log_dir, ent_coef=self.ent_coef, device=self.device)
 
 class LogRewardCallback(BaseCallback):
     def __init__(self, model : PPO, save_dir : str, last_model_freq = 500_000):

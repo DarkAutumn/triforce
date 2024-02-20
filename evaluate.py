@@ -108,8 +108,8 @@ def main(args):
     all_scenarios = []
     for model in ZeldaModel.get_loaded_models():
         if not args.models or model.name in args.models:
-            for i in range(len(model.models)):
-                all_scenarios.append((args, model.name, model.model_kinds[i]))
+            for i in range(len(model.available_models)):
+                all_scenarios.append((args, model.name, model.available_models[i]))
 
     total_count = len(all_scenarios) * args.episodes
 

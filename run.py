@@ -4,12 +4,13 @@ import argparse
 import os
 import math
 from collections import deque
+from typing import List
 import pygame
 import numpy as np
 import cv2
 import tqdm
 
-from triforce_lib import ZeldaAIOrchestrator, ZeldaScenario, ZeldaML, is_in_cave
+from triforce_lib import ZeldaAIOrchestrator, ZeldaScenario, ZeldaML, ZeldaAIModel, is_in_cave
 
 class Recording:
     """Used to track and save a recording of the game."""
@@ -23,7 +24,6 @@ class Recording:
         result_frame = result_frame.transpose([1, 0, 2])  # Transpose it to the correct format
         result_frame = cv2.cvtColor(result_frame, cv2.COLOR_RGB2BGR)  # Convert from RGB to BGR
         self.recording.write(result_frame)
-
 
     def stop(self):
         self.recording.release()
@@ -41,12 +41,12 @@ class Recording:
             i += 1
 
 class Display:
-    def __init__(self, zelda_ml : ZeldaML, scenario_name : str):
+    def __init__(self, zelda_ml : ZeldaML, models : List[ZeldaAIModel], scenario_name : str):
         scenario = ZeldaScenario.get(scenario_name)
         if not scenario:
             raise Exception(f'Unknown scenario {scenario_name}')
 
-        orchestrator = ZeldaAIOrchestrator()
+        orchestrator = ZeldaAIOrchestrator(models)
         if not orchestrator.has_any_model:
             raise Exception('No models loaded')
 
@@ -146,10 +146,11 @@ class Display:
             if mode == 'c' or mode == 'n':
                 acceptable_models = self.orchestrator.select_model(info)
                 selected_model = acceptable_models[0]
+                model_versions = list(selected_model.available_models.keys())
 
-                model_requested %= len(selected_model.models)
-                model = selected_model.models[model_requested]
-                model_kind = selected_model.model_kinds[model_requested]
+                model_requested %= len(model_versions)
+                model = selected_model.load(model_versions[model_requested])
+                model_kind = model_versions[model_requested]
                 timesteps = model.num_timesteps
                 model_name = selected_model.name if not model_kind else f"{selected_model.name} ({model_kind}) {timesteps:,} timesteps"
 
@@ -507,12 +508,12 @@ def main(args):
     model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)), 'models')
 
     zelda_ml = ZeldaML(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
-    zelda_ml.load_models(model_path)
+    models = ZeldaAIModel.initialize(model_path)
 
     if args.scenario is None:
         args.scenario = 'zelda'
 
-    display = Display(zelda_ml, args.scenario)
+    display = Display(zelda_ml, models, args.scenario)
     display.show()
 
 def parse_args():

@@ -1,7 +1,7 @@
 #! /usr/bin/python
 
 import argparse
-from triforce_lib import ZeldaML
+from triforce_lib import ZeldaML, ZeldaAIModel
 
 def main(args):
     iterations = None if args.iterations <= 0 else args.iterations

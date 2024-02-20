@@ -1,10 +1,11 @@
-from .models import ZeldaModel
-from .zelda_game import has_beams, is_in_cave
+from typing import Sequence
+from .models_and_scenarios import ZeldaAIModel
+from .zelda_game import has_beams
 
 class ZeldaAIOrchestrator:
-    def __init__(self):
+    def __init__(self, loaded_models : Sequence[ZeldaAIModel]):
         # we only select usable models
-        self.models_by_priority = [x for x in ZeldaModel.get_loaded_models() if x.models]
+        self.models_by_priority = [x for x in loaded_models if x.available_models]
         self.models_by_priority.sort(key=lambda x: x.priority, reverse=True)
 
     @property
@@ -12,15 +13,10 @@ class ZeldaAIOrchestrator:
         return len(self.models_by_priority) > 0
 
     def select_model(self, info):
-        # special case the sword model
-        if info['level'] == 0 and (not info['sword'] or (is_in_cave(info) and info['location'] == 0x77)):
-            acceptable_models = [x for x in self.models_by_priority if x.name == "overworld-sword"]
-        else:
-            acceptable_models = [model for model in self.models_by_priority if self.is_model_acceptable(model, info)]
-
+        acceptable_models = [model for model in self.models_by_priority if self.is_model_acceptable(model, info)]
         return acceptable_models or self.models_by_priority
 
-    def is_model_acceptable(self, model, info):
+    def is_model_acceptable(self, model : ZeldaAIModel, info):
         location = info['location']
         level = info['level']
 
@@ -31,7 +27,7 @@ class ZeldaAIOrchestrator:
 
         return matches_level and matches_room and matches_enemy_requirements and matches_equipment
 
-    def matches_equipment(self, model, info):
+    def matches_equipment(self, model : ZeldaAIModel, info):
         for equipment in model.equipment_required:
             if equipment == "beams":
                 if not has_beams(info):
@@ -49,4 +45,3 @@ class ZeldaAIOrchestrator:
                 raise Exception("Unknown equipment requirement: " + equipment)
 
         return True
-

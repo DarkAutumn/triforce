@@ -8,8 +8,7 @@ import retro
 
 from .zelda_orchestrator import ZeldaAIOrchestrator
 from .zeldaml import ZeldaML
-from .scenario import ZeldaScenario
-from .models import ZeldaModel
+from .models_and_scenarios import ZeldaAIModel, ZeldaScenario
 from .zelda_game import is_in_cave
 
 # add custom integrations to retro
@@ -19,20 +18,8 @@ retro.data.Integrations.add_custom_path(os.path.join(script_dir, 'custom_integra
 # define the model surface area
 __all__ = [
     ZeldaML.__name__,
-    ZeldaModel.__name__,
+    ZeldaAIModel.__name__,
     ZeldaScenario.__name__,
     ZeldaAIOrchestrator.__name__,
     is_in_cave.__name__,
     ]
-
-def __init__():
-    """
-    Initialize the triforce library.
-
-    This module 
-    """
-
-    with open(os.path.join(script_dir, 'triforce.json'), encoding='utf-8') as f:
-        all_settings = json.load(f)
-        ZeldaScenario.initialize(all_settings['scenarios'])
-        ZeldaModel.initialize(all_settings['models'])
