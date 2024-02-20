@@ -1,7 +1,12 @@
 #! /usr/bin/python
+"""Run the ZeldaML agent to play The Legend of Zelda (NES)."""
+
+# pylint: disable=too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
+# pylint: disable=too-many-nested-blocks
 
 import argparse
 import os
+import sys
 import math
 from collections import deque
 from typing import List
@@ -14,18 +19,21 @@ from triforce_lib import ModelSelector, ZeldaScenario, ZeldaML, ZeldaAIModel, is
 
 class Recording:
     """Used to track and save a recording of the game."""
+    # pylint: disable=no-member
     def __init__(self, dimensions):
         self.dimensions = dimensions
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         self.recording = cv2.VideoWriter(self.__get_filename(), fourcc, 60.1, dimensions)
 
     def append(self, surface):
+        """Adds a frame to the recording."""
         result_frame = surface
         result_frame = result_frame.transpose([1, 0, 2])  # Transpose it to the correct format
         result_frame = cv2.cvtColor(result_frame, cv2.COLOR_RGB2BGR)  # Convert from RGB to BGR
         self.recording.write(result_frame)
 
     def stop(self):
+        """Stops the recording."""
         self.recording.release()
 
     def __get_filename(self):
@@ -40,7 +48,8 @@ class Recording:
                 return filename
             i += 1
 
-class Display:
+class DisplayWindow:
+    """A window to display the game and the AI model."""
     def __init__(self, zelda_ml : ZeldaML, models : List[ZeldaAIModel], scenario : ZeldaScenario):
         self.zelda_ml = zelda_ml
         self.scenario = scenario
@@ -81,6 +90,7 @@ class Display:
         self.total_rewards = 0.0
 
     def show(self):
+        """Shows the game and the AI model."""
         env = self.zelda_ml.make_env(self.scenario)
 
         surface = pygame.display.set_mode(self.dimensions)
@@ -94,7 +104,8 @@ class Display:
         model_name = None
         model_kind = None
 
-        frames = None
+        recording_kind = None
+        frames = []
         recording = None
         cap_fps = True
         overlay = 0
@@ -121,11 +132,11 @@ class Display:
                 self.total_rewards = 0.0
                 reward_map.clear()
 
-                if recording is not None:
+                if recording_kind == 'live':
                     recording.stop()
                     recording = Recording(self.dimensions)
 
-                if frames:
+                elif recording_kind == 'on_win':
                     if last_info['triforce']:
                         recording = Recording(self.dimensions)
                         for i in tqdm.tqdm(range(len(frames))):
@@ -135,7 +146,7 @@ class Display:
                     frames.clear()
 
             # Perform a step in the environment
-            if mode == 'c' or mode == 'n':
+            if mode in ('c', 'n'):
                 acceptable_models = self.orchestrator.select_model(info)
                 selected_model = acceptable_models[0]
                 model_versions = list(selected_model.available_models.keys())
@@ -144,7 +155,8 @@ class Display:
                 model = selected_model.load(model_versions[model_requested])
                 model_kind = model_versions[model_requested]
                 timesteps = model.num_timesteps
-                model_name = selected_model.name if not model_kind else f"{selected_model.name} ({model_kind}) {timesteps:,} timesteps"
+                model_name = selected_model.name if not model_kind \
+                        else f"{selected_model.name} ({model_kind}) {timesteps:,} timesteps"
 
                 action, _ = model.predict(obs, deterministic=False)
                 last_info = info
@@ -154,8 +166,7 @@ class Display:
                     mode = 'p'
 
             # update rewards for display
-            self.update_rewards(reward_map, buttons, last_info, info)
-            curr_score = info.get('score', None)
+            self._update_rewards(reward_map, buttons, last_info, info)
 
             while True:
                 if self.zelda_ml.rgb_deque:
@@ -165,20 +176,24 @@ class Display:
 
                 surface.fill((0, 0, 0))
 
-                self.show_observation(surface, obs, curr_score)
+                self._show_observation(surface, obs)
 
                 # render the gameplay
-                self.render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width, self.game_height)
+                self._render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width,
+                                       self.game_height)
                 if overlay:
                     color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
-                    self.overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), info['tiles'], color, self.scale, self.get_optimal_path(info))
+                    self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), info['tiles'], color,
+                                               self.scale, self._get_optimal_path(info))
                 render_text(surface, self.font, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
-                    render_text(surface, self.font, f"Location: {hex(info['location'])}", (self.game_x + self.game_width - 120, self.game_y))
+                    render_text(surface, self.font, f"Location: {hex(info['location'])}",
+                                (self.game_x + self.game_width - 120, self.game_y))
 
                 # render rewards graph and values
-                self.draw_details(surface, reward_map, deaths)
-                rendered_buttons = self.draw_reward_buttons(surface, buttons, (self.text_x, self.text_y), (self.text_width, self.text_height))
+                self._draw_details(surface, reward_map, deaths)
+                rendered_buttons = self._draw_reward_buttons(surface, buttons, (self.text_x, self.text_y),
+                                                            (self.text_width, self.text_height))
 
                 if recording:
                     recording.append(pygame.surfarray.array3d(pygame.display.get_surface()))
@@ -197,7 +212,7 @@ class Display:
                         mode = 'q'
                         break
 
-                    elif event.type == pygame.MOUSEBUTTONUP:
+                    if event.type == pygame.MOUSEBUTTONUP:
                         if event.button == 1:
                             for rendered_button in rendered_buttons:
                                 if rendered_button.is_position_within(event.pos):
@@ -209,11 +224,11 @@ class Display:
                             mode = 'q'
                             break
 
-                        elif event.key == pygame.K_r:
+                        if event.key == pygame.K_r:
                             terminated = truncated = True
                             break
 
-                        elif event.key == pygame.K_p:
+                        if event.key == pygame.K_p:
                             mode = 'p'
 
                         elif event.key == pygame.K_n:
@@ -232,21 +247,27 @@ class Display:
                             cap_fps = not cap_fps
 
                         elif event.key == pygame.K_F4:
-                            if recording is not None:
+                            if recording_kind == 'live':
                                 recording.stop()
                                 recording = None
+                                recording_kind = None
                                 print("Live recording stopped")
-                            else:
+
+                            elif recording_kind is None:
                                 recording = Recording(self.dimensions)
+                                recording_kind = 'live'
                                 print("Live recording started")
 
                         elif event.key == pygame.K_F10:
-                            if frames is None:
+                            if recording_kind is None:
                                 print("Frame recording started")
-                                frames = []
-                            else:
+                                frames.clear()
+                                recording_kind = 'on_win'
+
+                            elif recording_kind == 'on_win':
                                 print("Frame recording stopped")
-                                frames = None
+                                frames.clear()
+
 
         if recording:
             recording.stop()
@@ -254,18 +275,27 @@ class Display:
         env.close()
         pygame.quit()
 
-    def show_observation(self, surface, obs, curr_score):
+    def _show_observation(self, surface, obs):
         x_pos = self.obs_x
         y_pos = self.obs_y
-        y_pos = self.render_observation_view(surface, x_pos, y_pos, self.obs_width, obs["image"])
-        y_pos = self.draw_arrow(surface, "Objective", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][0], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
-        y_pos = self.draw_arrow(surface, "Enemy", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][1], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
-        y_pos = self.draw_arrow(surface, "Projectile", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][2], radius=self.obs_width // 4, color=(255, 0, 0), width=3)
-        y_pos = self.draw_arrow(surface, "Item", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][3], radius=self.obs_width // 4, color=(255, 255, 255), width=3)
-        y_pos = self.write_key_val_aligned(surface, "Enemies", f"{obs['features'][0]:.1f}", x_pos, y_pos, self.obs_width)
-        y_pos = self.write_key_val_aligned(surface, "Beams", f"{obs['features'][1]:.1f}", x_pos, y_pos, self.obs_width)
+        y_pos = self._render_observation_view(surface, x_pos, y_pos, obs["image"])
+        y_pos = self._draw_arrow(surface, "Objective", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][0],
+                                radius=self.obs_width // 4, color=(255, 255, 255), width=3)
 
-    def update_rewards(self, reward_map, buttons, last_info, info):
+        y_pos = self._draw_arrow(surface, "Enemy", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][1],
+                                radius=self.obs_width // 4, color=(255, 255, 255), width=3)
+
+        y_pos = self._draw_arrow(surface, "Projectile", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][2],
+                                radius=self.obs_width // 4, color=(255, 0, 0), width=3)
+
+        y_pos = self._draw_arrow(surface, "Item", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][3],
+                                radius=self.obs_width // 4, color=(255, 255, 255), width=3)
+
+        y_pos = self._write_key_val_aligned(surface, "Enemies", f"{obs['features'][0]:.1f}", x_pos, y_pos,
+                                           self.obs_width)
+        y_pos = self._write_key_val_aligned(surface, "Beams", f"{obs['features'][1]:.1f}", x_pos, y_pos, self.obs_width)
+
+    def _update_rewards(self, reward_map, buttons, last_info, info):
         curr_rewards = {}
         if 'rewards' in info:
             for k, v in info['rewards'].items():
@@ -280,9 +310,12 @@ class Display:
         if prev is not None and prev.rewards == curr_rewards and prev.action == action:
             prev.count += 1
         else:
-            buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, self.text_width, DebugReward(self.scenario, last_info, info)))
+            action = DebugReward(self.scenario, last_info, info)
+            buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, self.text_width, action))
 
-    def draw_arrow(self, surface, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
+    def _draw_arrow(self, surface, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
+        # pylint: disable=too-many-arguments
+
         render_text(surface, self.font, label, (start_pos[0], start_pos[1]))
         circle_start = (start_pos[0], start_pos[1] + 20)
         centerpoint = (circle_start[0] + radius, circle_start[1] + radius)
@@ -306,20 +339,20 @@ class Display:
 
         return circle_start[1] + radius * 2
 
-    def render_observation_view(self, surface, x, y, dim, img):
+    def _render_observation_view(self, surface, x, y, img):
         render_text(surface, self.font, "Observation", (x, y))
         y += 20
 
-        if img.shape.__len__() == 4:
+        if len(img.shape) == 4:
             for i in range(img.shape[0]):
-                y = self.render_one_observation(surface, x, y, dim, img[i])
+                y = self._render_one_observation(surface, x, y, img[i])
 
             return y
 
         else:
-            return self.render_one_observation(surface, x, y, dim, img)
+            return self._render_one_observation(surface, x, y, img)
 
-    def render_one_observation(self, surface, x, y, dim, img):
+    def _render_one_observation(self, surface, x, y, img):
         if img.shape[2] == 1:
             img = np.repeat(img, 3, axis=2)
 
@@ -330,42 +363,46 @@ class Display:
         y += img.shape[0]
         return y
 
-    def render_game_view(self, surface, rgb_array, pos, game_width, game_height):
+    def _render_game_view(self, surface, rgb_array, pos, game_width, game_height):
         frame = pygame.surfarray.make_surface(np.swapaxes(rgb_array, 0, 1))
         scaled_frame = pygame.transform.scale(frame, (game_width, game_height))
         surface.blit(scaled_frame, pos)
 
-    def write_key_val_aligned(self, surface, text, value, x, y, total_width, color=(255, 255, 255)):
+    def _write_key_val_aligned(self, surface, text, value, x, y, total_width, color=(255, 255, 255)):
         new_y = render_text(surface, self.font, text, (x, y), color)
         value_width, _ = self.font.size(value)
         render_text(surface, self.font, value, (x + total_width - value_width, y), color)
         return new_y
 
-    def draw_details(self, surface, rewards, deaths):
+    def _draw_details(self, surface, rewards, deaths):
         col = 0
         row = 1
         col_width = self.details_width // 3 - 3
 
         x = self.details_x
-        y = self.write_key_val_aligned(surface, "Total Rewards:", f"{self.total_rewards:.2f}", self.details_x, self.details_y, col_width)
+        y = self._write_key_val_aligned(surface, "Total Rewards:", f"{self.total_rewards:.2f}", x,
+                                        self.details_y, col_width)
         row_height = y - self.details_y
         row_max = self.details_height // row_height
         items = list(rewards.items())
         items.sort(key=lambda x: x[1], reverse=True)
         for k, v in items:
             color = (255, 0, 0) if v < 0 else (0, 255, 255) if v > 0 else (255, 255, 255)
-            self.write_key_val_aligned(surface, f"{k}:", f"{round(v, 2)}", self.details_x + col * col_width, self.details_y + row * row_height, col_width, color)
+            self._write_key_val_aligned(surface, f"{k}:", f"{round(v, 2)}", x + col * col_width,
+                                        self.details_y + row * row_height, col_width, color)
             row, col = self.__increment(row, col, row_max)
 
         if deaths:
             row, col = self.__increment(row, col, row_max)
-            self.write_key_val_aligned(surface, "Deaths:", f"{sum(deaths.values())}", self.details_x + col * col_width, self.details_y + row * row_height, col_width)
+            self._write_key_val_aligned(surface, "Deaths:", f"{sum(deaths.values())}", x + col * col_width,
+                                        self.details_y + row * row_height, col_width)
 
             items = list(deaths.items())
             items.sort(key=lambda x: x[1], reverse=True)
             for k, v in items:
                 row, col = self.__increment(row, col, row_max)
-                self.write_key_val_aligned(surface, f"{k}:", f"{v}", self.details_x + col * col_width, self.details_y + row * row_height, col_width)
+                self._write_key_val_aligned(surface, f"{k}:", f"{v}", x + col * col_width,
+                                            self.details_y + row * row_height, col_width)
 
     def __increment(self, row, col, row_max):
         row += 1
@@ -374,7 +411,7 @@ class Display:
             col += 1
         return row, col
 
-    def draw_reward_buttons(self, surface, buttons : deque, position, dimensions):
+    def _draw_reward_buttons(self, surface, buttons : deque, position, dimensions):
         result = []
 
         x, y = position
@@ -394,11 +431,10 @@ class Display:
 
         return result
 
-    def get_optimal_path(self, info):
-        if 'a*_path' in info:
-            return info['a*_path'][-1]
+    def _get_optimal_path(self, info):
+        return info['a*_path'][-1] if 'a*_path' in info else None
 
-    def overlay_grid_and_text(self, surface, kind, offset, tiles, text_color, scale, path = None):
+    def _overlay_grid_and_text(self, surface, kind, offset, tiles, text_color, scale, path = None):
         grid_width = 32
         grid_height = 22
         tile_width = 8 * scale
@@ -429,6 +465,7 @@ class Display:
                 surface.blit(text_surface, text_rect)
 
 class DebugReward:
+    """An action to take when a reward button is clicked."""
     def __init__(self, scenario : ZeldaScenario, last_info, info):
         self.scenario = scenario
         self.last_info = last_info
@@ -442,6 +479,7 @@ class DebugReward:
         print(f"{reason = }")
 
 class RewardButton:
+    """A button to display a reward value."""
     def __init__(self, font, count, rewards, action, width, on_click):
         self.font = font
         self.count = count
@@ -450,7 +488,8 @@ class RewardButton:
         self.width = width
         self.on_click = on_click
 
-    def draw_reward_button(self, surface, position):
+    def draw_reward_button(self, surface, position) -> 'RenderedButton':
+        """Draws the button on the surface. Returns a RenderedButton."""
         x = position[0] + 3
         y = position[1] + 2
 
@@ -479,27 +518,35 @@ class RewardButton:
         return RenderedButton(self, position, (self.width, height))
 
 class RenderedButton:
+    """A rendered button on screen, keeping track of its own dimensions."""
     def __init__(self, button, position, dimensions):
         self.button = button
         self.position = position
         self.dimensions = dimensions
 
     def is_position_within(self, position):
+        """Returns True if the position is within the button."""
         x, y = position
         bx, by = self.position
         bw, bh = self.dimensions
         return bx <= x <= bx + bw and by <= y <= by + bh
 
 def render_text(surface, font, text, position, color=(255, 255, 255)):
+    """Render text on the surface and returns the new y position."""
     text_surface = font.render(text, True, color)
     surface.blit(text_surface, position)
     return position[1] + text_surface.get_height()
 
-def main(args):
+def main():
+    """Main function."""
+    args = parse_args()
     render_mode = 'rgb_array'
-    model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)), 'models')
+    model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                                         'models')
 
-    zelda_ml = ZeldaML(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
+    zelda_ml = ZeldaML(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose,
+                       ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
+
     models = ZeldaAIModel.initialize(model_path)
     if not any(model.available_models for model in models):
         print(f"No models found in {model_path}")
@@ -513,15 +560,18 @@ def main(args):
         print(f'Unknown scenario {args.scenario}')
         return
 
-    display = Display(zelda_ml, models, scenario)
+    display = DisplayWindow(zelda_ml, models, scenario)
     display.show()
 
 def parse_args():
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="ZeldaML - An ML agent to play The Legned of Zelda (NES).")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
-    parser.add_argument("--color", action='store_true', help="Give the model a color version of the game (instead of grayscale).")
-    parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport', help="The kind of observation to use.")
+    parser.add_argument("--color", action='store_true',
+                        help="Give the model a color version of the game (instead of grayscale).")
+    parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
+                        help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
     parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames the model was trained with.")
 
@@ -530,11 +580,12 @@ def parse_args():
     try:
         args = parser.parse_args()
         return args
+
+    # pylint: disable=broad-exception-caught
     except Exception as e:
         print(e)
         parser.print_help()
-        exit(0)
+        sys.exit(0)
 
 if __name__ == '__main__':
-    args = parse_args()
-    main(args)
+    main()
