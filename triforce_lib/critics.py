@@ -3,8 +3,8 @@
 from typing import Dict
 import numpy as np
 from .zelda_wrapper import ActionType
-from .zelda_game import ZeldaEnemy, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, get_num_triforce_pieces, \
-                        is_in_cave, tile_index_to_position
+from .zelda_game import ZeldaEnemy, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
+    get_num_triforce_pieces, is_in_cave, tile_index_to_position
 
 REWARD_MINIMUM = 0.01
 REWARD_TINY = 0.05
@@ -234,8 +234,8 @@ class GameplayCritic(ZeldaCritic):
             new (Dict[str, int]): The new state of the game.
             rewards (Dict[str, float]): The rewards obtained during gameplay.
         """
-        if new['sound_pulse_1'] & ZeldaSoundsPulse1.ArrowDeflected.value and \
-                (old['sound_pulse_1'] & ZeldaSoundsPulse1.ArrowDeflected.value) != ZeldaSoundsPulse1.ArrowDeflected.value:
+        arrow_deflected = ZeldaSoundsPulse1.ArrowDeflected.value
+        if new['sound_pulse_1'] & arrow_deflected and (old['sound_pulse_1'] & arrow_deflected) != arrow_deflected:
             rewards['reward-block'] = self.block_projectile_reward
 
     def critique_attack(self, old, new, rewards):
@@ -352,12 +352,15 @@ class GameplayCritic(ZeldaCritic):
             else:
                 # find enemies that were too close the last time, and punish for moving closer in that direction
                 old_enemies_or_projectiles = old['enemies'] + old['projectiles']
-                old_enemies_too_close = [x for x in old_enemies_or_projectiles if x.distance < self.too_close_threshold]
+                old_enemies_too_close = [x for x in old_enemies_or_projectiles \
+                                         if x.distance < self.too_close_threshold]
+
                 if old_enemies_too_close:
                     link_vector = new['link_vector']
 
                     # filter old_enemies_too_close to the ones we walked towards
-                    old_enemies_walked_towards = [x for x in old_enemies_too_close if np.dot(link_vector, x.vector) > 0.7071]
+                    old_enemies_walked_towards = [x for x in old_enemies_too_close \
+                                                  if np.dot(link_vector, x.vector) > 0.7071]
                     if any(x for x in new_enemies_or_projectiles if x.id in old_enemies_walked_towards):
                         rewards['penalty-move-too-close'] = self.enemy_too_close_penalty
                         return
