@@ -1,16 +1,18 @@
-# For this project, we don't neccessarily need to see the whole screen, or even the game in color.
-# The ZeldaObservationWrapper takes care of this by letting us (optionally) trim off the HUD and
-# convert the image to grayscale.  We also stack multiple frames together to give the agent a sense
-# of motion over time.
+"""
+For this project, we don't neccessarily need to see the whole screen, or even the game in color.
+The ZeldaObservationWrapper takes care of this by letting us (optionally) trim off the HUD and
+convert the image to grayscale.  We also stack multiple frames together to give the agent a sense
+of motion over time.
+"""
 
+from collections import deque
+import pickle
 import gymnasium as gym
 import numpy as np
-from collections import deque
-
-from .zelda_game_data import zelda_game_data
 from .model_parameters import VIEWPORT_PIXELS, GAMEPLAY_START_Y
 
 class FrameCaptureWrapper(gym.Wrapper):
+    """A wrapper that captures the last 30 frames of the environment."""
     def __init__(self, env, rgb_render):
         super().__init__(env)
         self.env = env
@@ -41,7 +43,9 @@ class FrameCaptureWrapper(gym.Wrapper):
         return observation, reward, terminated, truncated, info
 
 class ZeldaObservationWrapper(gym.Wrapper):
+    """A wrapper that trims the HUD and converts the image to grayscale."""
     def __init__(self, env, frames, grayscale, kind, framestack):
+        # pylint: disable=too-many-arguments
         super().__init__(env)
         self.env = env
         self.frames = frames
@@ -49,7 +53,7 @@ class ZeldaObservationWrapper(gym.Wrapper):
         self.grayscale = grayscale
         self.framestack = framestack
 
-        if kind == 'gameplay' or kind == 'viewport':
+        if kind in ('gameplay', 'viewport'):
             self.trim = GAMEPLAY_START_Y
         else:
             self.trim = 0
@@ -102,6 +106,7 @@ class ZeldaObservationWrapper(gym.Wrapper):
         return frame
 
     def trim_normalize_grayscale(self, info, frame):
+        """Trim the HUD, normalize the frame, and convert it to grayscale."""
         if self.trim:
             frame = frame[self.trim:, :, :]
 
@@ -121,6 +126,7 @@ class ZeldaObservationWrapper(gym.Wrapper):
         return frame
 
     def extract_viewport(self, info, frame, x, y):
+        """Extract the viewport around link.  If link is offscreen, pad the frame with the edge color."""
         half_vp = self.viewport_size // 2
         padded_frame = np.pad(frame, ((half_vp, half_vp), (half_vp, half_vp), (0, 0)), mode='edge')
 
@@ -134,10 +140,14 @@ class ZeldaObservationWrapper(gym.Wrapper):
         return frame
 
     def reshape(self, info, frame, x, y):
+        """
+        Occasionally link can be offscreen due to overscan, so we pad the frame with the edge color.
+        This shouldn't really happen, so we are saving a 'reshape_error.pkl' file to debug this issue.
+        """
         try:
-            return np.pad(frame, ((0, self.viewport_size - frame.shape[0]), (0, self.viewport_size - frame.shape[1]), (0, 0)), mode='edge')
+            return np.pad(frame, ((0, self.viewport_size - frame.shape[0]), (0, self.viewport_size - frame.shape[1]),
+                                  (0, 0)), mode='edge')
         except ValueError:
-            import pickle
             result = { 'info': info, 'frame' : self.frames[-1], 'reshape_input': frame, 'pos' : (x, y) }
 
             with open('reshape_error.pkl', 'wb') as f:

@@ -1,3 +1,5 @@
+# pylint: disable
+
 import os
 
 def remove_trailing_whitespace(directory):
