@@ -306,7 +306,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         return step_hits
 
     def _predict_future(self, act, info, objects, should_continue, disable_others):
-        # pylint: disable:too-many-locals
+        # pylint: disable=too-many-locals
         unwrapped = self.env.unwrapped
         savestate = unwrapped.em.get_state()
         data = unwrapped.data
