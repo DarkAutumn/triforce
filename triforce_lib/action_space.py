@@ -2,6 +2,7 @@ import gymnasium as gym
 import numpy as np
 
 class ZeldaActionSpace(gym.ActionWrapper):
+    """A wrapper that shrinks the action space down to what's actually used in the game."""
     def __init__(self, env, kind):
         super().__init__(env)
 
@@ -16,10 +17,10 @@ class ZeldaActionSpace(gym.ActionWrapper):
         if kind != 'move-only':
             num_action_space += 4
 
-        if kind == 'directional-item' or kind == 'diagonal-item' or kind == 'all':
+        if kind in ('directional-item', 'diagonal-item', 'all'):
             num_action_space += 4
 
-        if kind == 'diagonal-item' or kind == 'all':
+        if kind in ('diagonal-item', 'all'):
             num_action_space += 4
 
         assert isinstance(env.action_space, gym.spaces.MultiBinary)
@@ -37,5 +38,5 @@ class ZeldaActionSpace(gym.ActionWrapper):
 
         self.action_space = gym.spaces.Discrete(num_action_space)
 
-    def action(self, act):
-        return self._decode_discrete_action[act].copy()
+    def action(self, action):
+        return self._decode_discrete_action[action].copy()
