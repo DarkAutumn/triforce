@@ -1,11 +1,12 @@
+# pylint: disable=all
+
 import os
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from triforce_lib.critics import GameplayCritic
-from utilities import CriticWrapper
-from triforce_lib import ZeldaActionReplay
+from utilities import CriticWrapper, ZeldaActionReplay
 
 def test_wall_collision():
     actions = ZeldaActionReplay("1_44e.state")

@@ -1,10 +1,12 @@
+# pylint: disable=all
+
 import os
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from triforce_lib.zelda_wrapper import ActionType
-from triforce_lib import ZeldaActionReplay
+from utilities import ZeldaActionReplay
 
 def assert_no_hit( env, command):
     for _, _, terminated, truncated, info in run(env, command):
