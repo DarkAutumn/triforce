@@ -173,15 +173,15 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._prev_health = curr_enemy_health
         return step_hits
 
-    def __clear_variables(self, name):
+    def _clear_variables(self, name):
         self.__clear_item(name + '_already_active')
         self.__clear_item(name + '_discounted_hits')
 
-    def __clear_item(self, name):
+    def _clear_item(self, name):
         if name in self.__dict__:
             del self.__dict__[name]
 
-    def __act_and_wait(self, act):
+    def _act_and_wait(self, act):
         action_kind = self.__get_action_type(act)
         if action_kind == ActionType.MOVEMENT:
             rewards = 0
@@ -193,16 +193,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         elif action_kind in (ActionType.ATTACK, ActionType.ITEM):
             direction = self.__get_button_direction(act)
-            if direction == 'E':
-                direction = 1
-            elif direction == 'W':
-                direction = 2
-            elif direction == 'S':
-                direction = 4
-            elif direction == 'N':
-                direction = 8
-
-            self.env.unwrapped.data.set_value('link_direction', direction)
+            self._set_direction(direction)
 
             if action_kind == ActionType.ATTACK:
                 obs, rewards, terminated, truncated, info = self.env.step(self._attack_action)
@@ -232,6 +223,18 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return obs, rewards, terminated, truncated, info
 
+    def _set_direction(self, direction):
+        if direction == 'E':
+            direction = 1
+        elif direction == 'W':
+            direction = 2
+        elif direction == 'S':
+            direction = 4
+        elif direction == 'N':
+            direction = 8
+
+        self.env.unwrapped.data.set_value('link_direction', direction)
+
     def skip(self, act, cooldown):
         """Skips a number of frames, returning the final state."""
         rewards = 0
@@ -241,7 +244,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return obs, rewards, terminated, truncated, info
 
-    def __get_button_direction(self, act):
+    def _get_button_direction(self, act):
         if act[self.up_button]:
             return 'N'
 
@@ -256,19 +259,17 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return None
 
-    def __get_action_type(self, act) -> ActionType:
-
+    def _get_action_type(self, act) -> ActionType:
         if act[self.a_button]:
             return ActionType.ATTACK
-        elif act[self.b_button]:
+        if act[self.b_button]:
             return ActionType.ITEM
-        elif self.__get_button_direction(act) is not None:
+        if self.__get_button_direction(act) is not None:
             return ActionType.MOVEMENT
-        else:
-            return ActionType.NOTHING
 
-    def __handle_future_hits(self, act, info, objects, step_hits, name, condition_check, disable_others):
-        # pylint: disable=too-many-arguments
+        return ActionType.NOTHING
+
+    def _handle_future_hits(self, act, info, objects, step_hits, name, condition_check, disable_others):
         info[name] = 0
 
         already_active_name = name + '_already_active'
@@ -304,7 +305,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return step_hits
 
-    def __predict_future(self, act, info, objects, should_continue, disable_others):
+    def _predict_future(self, act, info, objects, should_continue, disable_others):
         unwrapped = self.env.unwrapped
         savestate = unwrapped.em.get_state()
         data = unwrapped.data
@@ -341,19 +342,19 @@ class ZeldaGameWrapper(gym.Wrapper):
         unwrapped.em.set_state(savestate)
         return hits
 
-    def __set_beams_only(self, data):
+    def _set_beams_only(self, data):
         data.set_value('bomb_or_flame_animation', 0)
         data.set_value('bomb_or_flame_animation2', 0)
 
-    def __set_bomb1_only(self, data):
+    def _set_bomb1_only(self, data):
         data.set_value('beam_animation', 0)
         data.set_value('bomb_or_flame_animation2', 0)
 
-    def __set_bomb2_only(self, data):
+    def _set_bomb2_only(self, data):
         data.set_value('beam_animation', 0)
         data.set_value('bomb_or_flame_animation1', 0)
 
-    def __get_button_names(self, act, buttons):
+    def _get_button_names(self, act, buttons):
         result = []
         for i, b in enumerate(buttons):
             if act[i]:

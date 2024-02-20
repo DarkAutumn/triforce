@@ -3,7 +3,7 @@
 
 # While we want to keep this file relatively clean, it's fine to have a bit of a large render function.
 
-# pylint: disable=too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
+# pylint: disable=too-few-public-methods,too-many-locals,too-many-branches,too-many-statements
 # pylint: disable=too-many-nested-blocks
 
 import argparse
@@ -316,8 +316,6 @@ class DisplayWindow:
             buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, self.text_width, action))
 
     def _draw_arrow(self, surface, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
-        # pylint: disable=too-many-arguments
-
         render_text(surface, self.font, label, (start_pos[0], start_pos[1]))
         circle_start = (start_pos[0], start_pos[1] + 20)
         centerpoint = (circle_start[0] + radius, circle_start[1] + radius)
