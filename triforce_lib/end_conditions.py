@@ -88,6 +88,8 @@ class EnteredDungeon(ZeldaEndCondition):
         if new['level'] == 1:
             return True, False, "success-entered-dungeon"
 
+        return False, False, None
+
 class LeftOverworld1Area(ZeldaEndCondition):
     """End the scenario if the agent leaves the allowable areas between the start room and dungeon 1."""
     overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
@@ -95,6 +97,8 @@ class LeftOverworld1Area(ZeldaEndCondition):
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
         if new['level'] == 0 and new['location'] not in self.overworld_dungeon1_walk_rooms:
             return True, False, "failure-left-play-area"
+
+        return False, False, None
 
 class StartingRoomConditions(ZeldaEndCondition):
     """End conditions for 'pick up the sword' scenario."""
