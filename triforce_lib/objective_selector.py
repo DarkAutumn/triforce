@@ -1,43 +1,46 @@
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import get_link_tile_index, is_in_cave, position_to_tile_index, tile_index_to_position, is_health_full, ZeldaItem
+from .zelda_game import get_link_tile_index, is_in_cave, position_to_tile_index, tile_index_to_position, \
+    is_health_full, ZeldaItem
 from .astar import a_star
 
 def get_vector_from_direction(direction):
+    """Gets a vector from a cardinal direction."""
     if direction == "N":
         return np.array([0, -1], dtype=np.float32)
-    elif direction == "S":
+    if direction == "S":
         return np.array([0, 1], dtype=np.float32)
-    elif direction == "E":
+    if direction == "E":
         return np.array([1, 0], dtype=np.float32)
-    elif direction == "W":
+    if direction == "W":
         return np.array([-1, 0], dtype=np.float32)
-    else:
-        return np.zeros(2, dtype=np.float32)
+
+    return np.zeros(2, dtype=np.float32)
 
 def get_location_objective(location_direction, location):
+    """Gets the objective location from the given direction."""
     if location not in location_direction:
         return None
 
     direction = location_direction[location]
     if direction == 'N':
         return location - 0x10
-    elif direction == 'S':
+    if direction == 'S':
         return location + 0x10
-    elif direction == 'E':
+    if direction == 'E':
         return location + 1
-    elif direction == 'W':
+    if direction == 'W':
         return location - 1
-    else:
-        return None
 
-def find_closest_cave(info):
+    return None
+
+def find_cave_onscreen(info):
+    """Finds the cave on the current screen."""
     link_pos = np.array(info['link_pos'], dtype=np.float32)
 
     cave_indices = np.argwhere(info['tiles'] == 0x24)
-    if len(cave_indices) == 0:
-        raise Exception('Could not find any caves')
+    assert len(cave_indices) > 0, 'Could not find any caves'
 
     cave_positions = [tile_index_to_position(x) for x in cave_indices]
     cave_distances = [np.linalg.norm(x - link_pos) for x in cave_positions]
@@ -45,6 +48,9 @@ def find_closest_cave(info):
     return closest_cave
 
 class ObjectiveSelector(gym.Wrapper):
+    """
+    A wrapper that selects objectives for the agent to pursue.  This is used to help the agent decide what to do.
+    """
     def __init__(self, env):
         super().__init__(env)
         self.dungeon1 = Dungeon1Orchestrator()
@@ -56,20 +62,18 @@ class ObjectiveSelector(gym.Wrapper):
         obs, info = self.env.reset(**kwargs)
         self.dungeon1.reset()
 
-        self.set_objectives(info)
+        self._set_objectives(info)
 
         return obs, info
 
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
 
-        self.set_objectives(info)
+        self._set_objectives(info)
 
         return obs, reward, terminated, truncated, info
 
-    def set_objectives(self, info):
-        level = info['level']
-        location = info['location']
+    def _set_objectives(self, info):
         link_pos =  np.array(info['link_pos'], dtype=np.float32)
 
         location_objective = None
@@ -77,22 +81,12 @@ class ObjectiveSelector(gym.Wrapper):
         objective_pos_dir = None
         objective_kind = None
 
+        sub_orchestrator = self.sub_orchestrators.get(info['level'], None)
+
         # Certain rooms are so tough we shouldn't linger to pick up low-value items.  Additionally,
         # we should avoid picking up health when at full health.  We will still chase bombs if we
         # aren't full though
-        items_to_ignore = []
-        sub_orchestrator = self.sub_orchestrators.get(level, None)
-
-        if is_health_full(info):
-            items_to_ignore.append(ZeldaItem.Heart)
-            items_to_ignore.append(ZeldaItem.Fairy)
-
-        if info['bombs'] == info['bomb_max']:
-            items_to_ignore.append(ZeldaItem.Bombs)
-
-        if sub_orchestrator and sub_orchestrator.is_dangerous_room(info):
-            items_to_ignore.append(ZeldaItem.Rupee)
-            items_to_ignore.append(ZeldaItem.BlueRupee)
+        items_to_ignore = self._get_items_to_ignore(info, sub_orchestrator)
 
         # Check if any items are on the floor, if so prioritize those since they disappear
         items = info['items'] if not items_to_ignore else [x for x in info['items'] if x.id not in items_to_ignore]
@@ -114,7 +108,7 @@ class ObjectiveSelector(gym.Wrapper):
             if not isinstance(objective_pos_dir, str):
                 objective_pos_dir = position_to_tile_index(*objective_pos_dir)
 
-            key = (level, location, link_tile_index, objective_pos_dir)
+            key = (info['level'], info['location'], link_tile_index, objective_pos_dir)
             if self.last_route[0] == key:
                 result = self.last_route[1]
                 path = result[-1]
@@ -125,35 +119,55 @@ class ObjectiveSelector(gym.Wrapper):
 
             info['a*_path'] = result
 
-            if path:
-                last_tile = path[-1]
-                last_tile_pos = tile_index_to_position(last_tile)
-
-                if objective_vector is None:
-                    objective_vector = np.array(last_tile_pos, dtype=np.float32) - link_pos
-                    norm = np.linalg.norm(objective_vector)
-                    if norm > 0:
-                        objective_vector /= norm
-
-            elif isinstance(objective_pos_dir, str):
-                objective_vector = get_vector_from_direction(objective_pos_dir)
+            objective_vector = self._get_objective_vector(link_pos, objective_vector, objective_pos_dir, path)
 
         info['objective_vector'] = objective_vector if objective_vector is not None else np.zeros(2, dtype=np.float32)
         info['objective_kind'] = objective_kind
         info['objective_pos_or_dir'] = objective_pos_dir
         info['location_objective'] = location_objective
 
-    def get_first_non_zero(self, list):
+    def _get_objective_vector(self, link_pos, objective_vector, objective_pos_dir, path):
+        if path:
+            last_tile = path[-1]
+            last_tile_pos = tile_index_to_position(last_tile)
+
+            if objective_vector is None:
+                objective_vector = np.array(last_tile_pos, dtype=np.float32) - link_pos
+                norm = np.linalg.norm(objective_vector)
+                if norm > 0:
+                    objective_vector /= norm
+
+        elif isinstance(objective_pos_dir, str):
+            objective_vector = get_vector_from_direction(objective_pos_dir)
+        return objective_vector
+
+    def _get_items_to_ignore(self, info, sub_orchestrator):
+        items_to_ignore = []
+
+        if is_health_full(info):
+            items_to_ignore.append(ZeldaItem.Heart)
+            items_to_ignore.append(ZeldaItem.Fairy)
+
+        if info['bombs'] == info['bomb_max']:
+            items_to_ignore.append(ZeldaItem.Bombs)
+
+        if sub_orchestrator and sub_orchestrator.is_dangerous_room(info):
+            items_to_ignore.append(ZeldaItem.Rupee)
+            items_to_ignore.append(ZeldaItem.BlueRupee)
+        return items_to_ignore
+
+    def _get_first_non_zero(self, items):
         lowest = np.inf
         val = None
-        for v, len in list:
-            if v is not None and len > 0 and len < lowest:
-                lowest = len
+        for v, l in items:
+            if v is not None and 0 < l < lowest:
+                lowest = l
                 val = v
 
         return val, lowest
 
 class OverworldOrchestrator:
+    """Orchestrator for the overworld.  This is used to help the agent decide what to do."""
     def __init__(self):
         self.location_direction = {
             0x77 : "N",
@@ -168,30 +182,32 @@ class OverworldOrchestrator:
     def get_objectives(self, info, link_pos):
         """Returns location_objective, objective_vector, objective_pos_dir, objective_kind"""
         location = info['location']
-        location_objective = get_location_objective(self.location_direction, location) if location in self.location_direction else None
+        location_objective = get_location_objective(self.location_direction, location) \
+                                if location in self.location_direction else None
 
         # get sword if we don't have it
         if location == 0x77:
             if info['sword'] == 0:
                 if is_in_cave(info):
                     objective_pos = np.array([0x78, 0x95], dtype=np.float32)
-                    objective_vector = self.create_vector_norm(link_pos, objective_pos)
-                    return None, objective_vector, objective_pos, 'sword'
+                    objective_vector = self._create_vector_norm(link_pos, objective_pos)
+                    objective = 'sword'
 
                 else:
-                    cave_pos = find_closest_cave(info)
-                    objective_vector = self.create_vector_norm(link_pos, cave_pos)
-                    return None, objective_vector, cave_pos, 'cave'
-            else:
-                if is_in_cave(info):
-                    return None, None, 'S', 'exit-cave'
+                    objective_pos = find_cave_onscreen(info)
+                    objective_vector = self._create_vector_norm(link_pos, objective_pos)
+                    objective = 'cave'
 
-                else:
-                    return location_objective, None, 'N', 'room'
+                return None, objective_vector, objective_pos, objective
+
+            if is_in_cave(info):
+                return None, None, 'S', 'exit-cave'
+
+            return location_objective, None, 'N', 'room'
 
         if location == 0x37:
-            cave_pos = find_closest_cave(info)
-            objective_vector = self.create_vector_norm(link_pos, cave_pos)
+            cave_pos = find_cave_onscreen(info)
+            objective_vector = self._create_vector_norm(link_pos, cave_pos)
             return None, objective_vector, cave_pos, 'cave'
 
         if location in self.location_direction:
@@ -199,7 +215,9 @@ class OverworldOrchestrator:
             objective_vector = None
             return location_objective, objective_vector, direction, 'room'
 
-    def create_vector_norm(self, from_pos, to_pos):
+        return None
+
+    def _create_vector_norm(self, from_pos, to_pos):
         objective_vector = to_pos - from_pos
         norm = np.linalg.norm(objective_vector)
         if norm > 0:
@@ -207,9 +225,11 @@ class OverworldOrchestrator:
         return objective_vector
 
     def is_dangerous_room(self, info):
+        """Returns True if the room is dangerous.  This is used to avoid picking up low-value items."""
         return info['location'] == 0x38
 
 class Dungeon1Orchestrator:
+    """Orchestrator for dungeon 1.  This is used to help the agent decide what to do."""
     def __init__(self):
         self.keys_obtained = set()
         self.prev_keys = None
@@ -236,6 +256,7 @@ class Dungeon1Orchestrator:
         }
 
     def reset(self):
+        """Resets the state of the orchestrator.  Called at the start of each scenario."""
         self.keys_obtained.clear()
         self.prev_keys = None
 
@@ -260,12 +281,17 @@ class Dungeon1Orchestrator:
 
         # special case entry room, TODO: need to detect door lock
         if location == 0x73:
+            room = 0x63
+            direction = "N"
             if 0x72 not in self.keys_obtained:
-                return 0x72, None, "W", 'room'
+                room = 0x72
+                direction = "W"
+
             elif 0x74 not in self.keys_obtained:
-                return 0x74, None, "E", 'room'
-            else:
-                return 0x63, None, "N", 'room'
+                room = 0x74
+                direction = "E"
+
+            return room, None, direction, 'room'
 
         if location == 0x63 and (0x72 not in self.keys_obtained or 0x74 not in self.keys_obtained):
             return 0x73, None, "S", 'room'
@@ -281,7 +307,10 @@ class Dungeon1Orchestrator:
             location = get_location_objective(self.location_direction, location)
             return location, None, direction, 'room'
 
+        return None
+
     def is_dangerous_room(self, info):
+        """Returns True if the room is dangerous.  This is used to avoid picking up low-value items."""
         return info['location'] == 0x45 and info['enemies']
 
 __all__ = [ObjectiveSelector.__name__]

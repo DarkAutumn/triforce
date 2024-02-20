@@ -185,7 +185,7 @@ for item in ZeldaItem:
 
 class ZeldaObject:
     """Structured data for a single object.  ZeldaObjects are enemies, items, and projectiles."""
-    # pylint: disable=too-few-public-methods,too-many-arguments
+    # pylint: disable=too-few-public-methods
     def __init__(self, obj_id, pos, distance, vector, health):
         self.id = obj_id
         self.position = pos

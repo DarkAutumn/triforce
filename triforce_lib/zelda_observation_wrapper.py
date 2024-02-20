@@ -45,7 +45,6 @@ class FrameCaptureWrapper(gym.Wrapper):
 class ZeldaObservationWrapper(gym.Wrapper):
     """A wrapper that trims the HUD and converts the image to grayscale."""
     def __init__(self, env, frames, grayscale, kind, framestack):
-        # pylint: disable=too-many-arguments
         super().__init__(env)
         self.env = env
         self.frames = frames
