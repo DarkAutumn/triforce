@@ -10,7 +10,7 @@ import numpy as np
 import cv2
 import tqdm
 
-from triforce_lib import ZeldaAIOrchestrator, ZeldaScenario, ZeldaML, ZeldaAIModel, is_in_cave
+from triforce_lib import ModelSelector, ZeldaScenario, ZeldaML, ZeldaAIModel, is_in_cave
 
 class Recording:
     """Used to track and save a recording of the game."""
@@ -41,18 +41,10 @@ class Recording:
             i += 1
 
 class Display:
-    def __init__(self, zelda_ml : ZeldaML, models : List[ZeldaAIModel], scenario_name : str):
-        scenario = ZeldaScenario.get(scenario_name)
-        if not scenario:
-            raise Exception(f'Unknown scenario {scenario_name}')
-
-        orchestrator = ZeldaAIOrchestrator(models)
-        if not orchestrator.has_any_model:
-            raise Exception('No models loaded')
-
+    def __init__(self, zelda_ml : ZeldaML, models : List[ZeldaAIModel], scenario : ZeldaScenario):
         self.zelda_ml = zelda_ml
         self.scenario = scenario
-        self.orchestrator = orchestrator
+        self.orchestrator = ModelSelector(models)
 
         pygame.init()
 
@@ -509,11 +501,19 @@ def main(args):
 
     zelda_ml = ZeldaML(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose, ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
     models = ZeldaAIModel.initialize(model_path)
+    if not any(model.available_models for model in models):
+        print(f"No models found in {model_path}")
+        return
 
     if args.scenario is None:
         args.scenario = 'zelda'
 
-    display = Display(zelda_ml, models, args.scenario)
+    scenario = ZeldaScenario.get(args.scenario)
+    if not scenario:
+        print(f'Unknown scenario {args.scenario}')
+        return
+
+    display = Display(zelda_ml, models, scenario)
     display.show()
 
 def parse_args():

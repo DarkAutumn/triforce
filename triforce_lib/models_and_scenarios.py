@@ -25,7 +25,7 @@ class ZeldaScenario(BaseModel):
     @classmethod
     def get(cls, name) -> 'ZeldaScenario':
         """Gets the scenario from the name."""
-        return ALL_SCENARIOS.get(name)
+        return ALL_SCENARIOS.get(name, None)
 
 class ZeldaAIModel(BaseModel):
     """

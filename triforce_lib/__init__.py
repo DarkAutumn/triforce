@@ -6,7 +6,7 @@ import os
 import json
 import retro
 
-from .zelda_orchestrator import ZeldaAIOrchestrator
+from .model_selector import ModelSelector
 from .zeldaml import ZeldaML
 from .models_and_scenarios import ZeldaAIModel, ZeldaScenario
 from .zelda_game import is_in_cave
@@ -20,6 +20,6 @@ __all__ = [
     ZeldaML.__name__,
     ZeldaAIModel.__name__,
     ZeldaScenario.__name__,
-    ZeldaAIOrchestrator.__name__,
+    ModelSelector.__name__,
     is_in_cave.__name__,
     ]
