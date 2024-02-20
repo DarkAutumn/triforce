@@ -1,7 +1,7 @@
+# pylint: disable=all
 
-from triforce_lib.action_replay import ZeldaActionReplay
+from utilities import ZeldaActionReplay
 from triforce_lib.zelda_game import position_to_tile_index, tile_index_to_position
-
 
 def test_tile_load():
     env = ZeldaActionReplay("1_73s.state")
@@ -34,4 +34,4 @@ def test_index_position():
     pos = tile_index_to_position(original_idx)
     index = position_to_tile_index(*pos)
     assert index == original_idx
-    
+

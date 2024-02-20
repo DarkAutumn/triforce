@@ -1,7 +1,9 @@
+"""The overall entry point for the ML agent."""
+
 from collections import Counter
-import datetime
 import json
 import os
+from typing import List
 import retro
 import numpy as np
 
@@ -10,15 +12,17 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
-from .models import ZeldaModel
+from .models_and_scenarios import ZeldaAIModel
 from .objective_selector import ObjectiveSelector
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
 from .zelda_game_features import ZeldaGameFeatures
-from .scenario import ZeldaScenario
+from .scenario_wrapper import ScenarioWrapper
+from .models_and_scenarios import ZeldaScenario
 
 class ZeldaML:
+    """A class to train zelda models or to create environments."""
     def __init__(self, color, framestack = 1, **kwargs):
         if 'verbose' in kwargs:
             self.verbose = kwargs['verbose']
@@ -46,6 +50,7 @@ class ZeldaML:
 
         self.__extra_args = kwargs
 
+        self.rgb_deque = None
         self.rgb_render = False
         if 'render_mode' in kwargs and kwargs['render_mode'] == 'rgb_array':
             self.rgb_render = True
@@ -53,10 +58,13 @@ class ZeldaML:
         self.color = color
         self.framestack = framestack
 
-    def make_env(self, scenario, action_space = "all", parallel = 1):
+    def make_env(self, scenario : ZeldaScenario, action_space = "all", parallel = 1):
+        """Creates a Zelda retro environment for the given scenario."""
+
         def make_env_func():
             # create the environment
-            env = retro.make(game='Zelda-NES', state=scenario.all_start_states[0], inttype=retro.data.Integrations.CUSTOM_ONLY, **self.__extra_args)
+            env = retro.make(game='Zelda-NES', state=scenario.start[0], inttype=retro.data.Integrations.CUSTOM_ONLY,
+                             **self.__extra_args)
 
             # Capture the raw observation frames into a deque.
             env = FrameCaptureWrapper(env, self.rgb_render)
@@ -64,27 +72,29 @@ class ZeldaML:
             if self.rgb_render:
                 self.rgb_deque = env.rgb_deque
 
-            # Wrap the game to produce new info about game state and to hold the button down after the action is taken to achieve the desired
-            # number of actions per second.
+            # Wrap the game to produce new info about game state and to hold the button down after the action is
+            # taken to achieve the desired number of actions per second.
             env = ZeldaGameWrapper(env)
 
             # The AI orchestration piece.  This is responsible for selecting the model to use and the target
             # objective.
             env = ObjectiveSelector(env)
-            
+
             # Frame stack and convert to grayscale if requested
-            env = ZeldaObservationWrapper(env, captured_frames, not self.color, kind=self.obs_kind, framestack=self.framestack)
+            env = ZeldaObservationWrapper(env, captured_frames, not self.color, kind=self.obs_kind,
+                                          framestack=self.framestack)
 
             # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
             # since that doesn't make any sense in Zelda)
             env = ZeldaActionSpace(env, action_space)
 
-            # extract features from the game for the model, like whether link has beams or has keys and expose these as observations
+            # Extract features from the game for the model, like whether link has beams or has keys and expose
+            # these as observations.
             env = ZeldaGameFeatures(env)
 
-            # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new info state provded
-            # by ZeldaGameWrapper above.
-            env = scenario.activate(env)
+            # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new
+            # info state provded by ZeldaGameWrapper above.
+            env = ScenarioWrapper(env, scenario)
 
             return env
 
@@ -94,20 +104,9 @@ class ZeldaML:
             env = make_env_func()
 
         return env
-        
-    def train(self, output_path = None, model_names = None, iteration_override = None, parallel = None, progress_bar = True):
-        if model_names is None:
-            models = ZeldaModel.get_model_info()
-        else:
-            model_infos = ZeldaModel.get_model_info()
-            models = []
-            for model_name in model_names:
-                for model_info in model_infos:
-                    if model_info.name == model_name:
-                        models.append(model_info)
-                        break
-                else:
-                    raise Exception(f'Could not find model: {model_name}')
+
+    def train(self, models : List[ZeldaAIModel], output_path = None, iteration_override = None, parallel = None):
+        """Trains the given models."""
 
         if output_path is None:
             output_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -115,43 +114,39 @@ class ZeldaML:
 
         print("Writing to:", output_path)
 
-        for model_info in models:
-            model_dir = os.path.join(output_path, model_info.name)
+        for zelda_ai_model in models:
+            model_dir = os.path.join(output_path, zelda_ai_model.name)
             os.makedirs(model_dir, exist_ok=True)
 
-            iterations = model_info.iterations if iteration_override is None else iteration_override
+            iterations = zelda_ai_model.iterations if iteration_override is None else iteration_override
 
             log_path = os.path.join(model_dir, 'logs')
 
-            scenario = ZeldaScenario.get(model_info.training_scenario)
-            env = self.make_env(scenario, model_info.action_space, parallel)
+            scenario = ZeldaScenario.get(zelda_ai_model.training_scenario)
+            env = self.make_env(scenario, zelda_ai_model.action_space, parallel)
             try:
                 print()
-                print(f"Training model: {model_info.name}")
-                print(f"Scenario:       {model_info.training_scenario}")
+                print(f"Training model: {zelda_ai_model.name}")
+                print(f"Scenario:       {zelda_ai_model.training_scenario}")
                 print(f"Path:           {model_dir}")
-                model = self._create_model(env, log_path)
+                model = zelda_ai_model.create(env=env, verbose=self.verbose, tensorboard_log=log_path,
+                                              ent_coef=self.ent_coef, device=self.device)
                 callback = LogRewardCallback(model, model_dir)
-                model.learn(iterations, progress_bar=progress_bar, callback=callback)
+                model.learn(iterations, progress_bar=True, callback=callback)
                 model.save(os.path.join(model_dir, 'last.zip'))
 
             finally:
                 env.close()
 
-    def load_models(self, path):
-        ZeldaModel.load_models(path, verbose=self.verbose, ent_coef=self.ent_coef, device=self.device)
-
-    def _create_model(self, env, log_dir):
-        return PPO('MultiInputPolicy', env, verbose=self.verbose, tensorboard_log=log_dir, ent_coef=self.ent_coef, device=self.device)
-
 class LogRewardCallback(BaseCallback):
+    """A callback to log reward values to tensorboard and save the best models."""
     def __init__(self, model : PPO, save_dir : str, last_model_freq = 500_000):
-        super(LogRewardCallback, self).__init__()
+        super().__init__()
         self.model = model
         self.next_save = model.n_steps
         self.last_model_freq = last_model_freq
         self.last_model_next_save = self.last_model_freq
-        
+
         self.best_score = -np.inf
         self.best_reward = -np.inf
 
@@ -163,22 +158,7 @@ class LogRewardCallback(BaseCallback):
         self._success_rate = []
 
     def _on_step(self) -> bool:
-        infos = self.locals['infos']
-        for info in infos:
-            if 'rewards' in info:
-                for kind, rew in info['rewards'].items():
-                    self._rewards[kind] = rew + self._rewards.get(kind, 0)
-            
-            if 'end' in info:
-                ending = info['end']
-                self._endings.append(ending)
-                if ending.startswith('success'):
-                    self._success_rate.append(1)
-                else:
-                    self._success_rate.append(0)
-
-            if 'final-score' in info:
-                self._evaluation.append(info['final-score'])
+        self._update_stats()
 
         if self.n_calls > self.next_save:
             self.next_save += self.model.n_steps
@@ -203,15 +183,16 @@ class LogRewardCallback(BaseCallback):
 
                 if score_mean > self.best_score:
                     self.best_score = score_mean
-                    self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_score.zip'))
-            
+                    self._save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_score.zip'))
+
             if rew_mean > self.best_reward:
                 self.best_reward = rew_mean
-                self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_reward.zip'))
+                self._save_best(score_mean, rew_mean, os.path.join(self.save_dir, 'best_reward.zip'))
 
             if self.model.num_timesteps >= self.last_model_next_save:
                 self.last_model_next_save += self.last_model_freq
-                self.save_best(score_mean, rew_mean, os.path.join(self.save_dir, f'model_{self.model.num_timesteps}.zip'))
+                self._save_best(score_mean, rew_mean, os.path.join(self.save_dir,
+                                                                   f'model_{self.model.num_timesteps}.zip'))
 
             self._rewards.clear()
             self._endings.clear()
@@ -219,14 +200,31 @@ class LogRewardCallback(BaseCallback):
 
         return True
 
-    def save_best(self, score, reward, save_path):
+    def _update_stats(self):
+        for info in self.locals['infos']:
+            if 'rewards' in info:
+                for kind, rew in info['rewards'].items():
+                    self._rewards[kind] = rew + self._rewards.get(kind, 0)
+
+            if 'end' in info:
+                ending = info['end']
+                self._endings.append(ending)
+                if ending.startswith('success'):
+                    self._success_rate.append(1)
+                else:
+                    self._success_rate.append(0)
+
+            if 'final-score' in info:
+                self._evaluation.append(info['final-score'])
+
+    def _save_best(self, score, reward, save_path):
         self.model.save(save_path)
 
         metadata = { "iterations" : self.num_timesteps, 'reward' : reward}
         if score is not None:
             metadata['score'] = score
 
-        with open(save_path + '.json', 'w') as f:
-            json.dump(metadata, f, indent = 4)
+        with open(save_path + '.json', 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=4)
 
 __all__ = ['ZeldaML']

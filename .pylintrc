@@ -1,0 +1,12 @@
+[MASTER]
+ignore=tests/,scripts/
+extension-pkg-whitelist=pygame,cv2
+
+[FORMAT]
+max-line-length = 120
+
+[DESIGN]
+max-args=8
+
+[MESSAGES CONTROL]
+disable=R0902,C0114,R0903

@@ -1,3 +1,5 @@
+# pylint: disable
+
 import sys
 import os
 

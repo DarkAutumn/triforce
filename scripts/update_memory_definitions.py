@@ -14,7 +14,7 @@ def get_signed(value):
         return True
     elif value == 'unsigned':
         return False
-    
+
     raise Exception(f'Invalid signed value: {value}')
 
 def main():
@@ -46,7 +46,7 @@ def main():
                     'address': address,
                     'type': "=i1" if  signed else "=u1"
                     }
-    
+
     # write the json out to a file
     with open(zelda_memory_data, 'w') as f:
         json.dump(result, f, indent=4)

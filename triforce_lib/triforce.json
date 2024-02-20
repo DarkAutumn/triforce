@@ -3,20 +3,17 @@
     [
         {
             "name" : "overworld-sword",
-            "path" : "overworld-sword",
             "action_space" : "move-only",
             "priority" : 2,
             "levels" : 0,
             "rooms" : ["0x77"],
             "requires_enemies" : false,
-            "equipment_required" : [],
 
             "training_scenario" : "overworld-sword",
             "iterations" : 1000000
         },
         {
             "name" : "overworld1beams",
-            "path" : "overworld1beams",
             "action_space" : "attack-only",
             "priority" : 0,
             "levels" : 0,
@@ -28,31 +25,26 @@
         },
         {
             "name" : "overworld1nobeams",
-            "path" : "overworld1nobeams",
             "action_space" : "attack-only",
             "priority" : 0,
             "levels" : 0,
             "requires_enemies" : false,
-            "equipment_required" : [],
 
             "training_scenario" : "overworld1nobeams",
             "iterations" : 1500000
         },
         {
             "name" : "dungeon1nobeams",
-            "path" : "dungeon1nobeams",
             "action_space" : "attack-only",
             "priority" : 0,
             "levels" : 1,
             "requires_enemies" : false,
-            "equipment_required" : [],
 
             "training_scenario" : "dungeon1nobeams",
             "iterations" : 2750000
         },
         {
             "name" : "dungeon1beams",
-            "path" : "dungeon1beams",
             "action_space" : "attack-only",
             "priority" : 1,
             "levels" : 1,
@@ -64,7 +56,6 @@
         },
         {
             "name" : "dungeon1bombs",
-            "path" : "dungeon1bombs",
             "action_space" : "directional-item",
             "priority" : 2,
             "levels" : 1,
@@ -76,13 +67,11 @@
         },
         {
             "name" : "dungeon1boss",
-            "path" : "dungeon1boss",
             "action_space" : "attack-only",
             "priority" : 10,
             "levels" : 1,
             "rooms" : ["0x35", "0x36"],
             "requires_enemies" : true,
-            "equipment_required" : [],
 
             "training_scenario" : "dungeon1boss",
             "iterations" : 500000
@@ -92,18 +81,15 @@
         {
             "name": "zelda",
             "description": "Full Game (so far)",
-            "critics": ["GameplayCritic"],
+            "critic": "GameplayCritic",
             "end_conditions": ["GainedTriforce", "GameOver", "Timeout"],
-            "level" : 0,
-            "start": ["0_77"],
-            "data": {}
+            "start": ["0_77"]
         },
         {
             "name": "overworld-sword",
             "description": "Start of the game to the sword",
-            "critics": ["OverworldSwordCritic"],
+            "critic": "OverworldSwordCritic",
             "end_conditions": ["StartingRoomConditions", "Timeout"],
-            "level" : 0,
             "start": ["0_77"],
             "data":
             {
@@ -114,9 +100,8 @@
         {
             "name": "overworld1beams",
             "description": "Start of the game to the first dungeon entrance",
-            "critics": ["Overworld1Critic"],
+            "critic": "Overworld1Critic",
             "end_conditions": ["EnteredDungeon", "LeftOverworld1Area", "GameOver", "Timeout"],
-            "level" : 0,
             "start": ["0_67s"],
             "data":
             {
@@ -135,9 +120,8 @@
         {
             "name": "overworld1nobeams",
             "description": "Start of the game to the first dungeon entrance",
-            "critics": ["Overworld1Critic"],
+            "critic": "Overworld1Critic",
             "end_conditions": ["EnteredDungeon", "LeftOverworld1Area", "GameOver", "Timeout"],
-            "level" : 0,
             "start": ["0_67s"],
             "data":
             {
@@ -156,9 +140,8 @@
         {
             "name": "dungeon1",
             "description": "Dungeon 1 Full",
-            "critics": ["Dungeon1Critic"],
+            "critic": "Dungeon1Critic",
             "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
-            "level" : 1,
             "start": ["1_73"],
             "data":
             {
@@ -171,9 +154,8 @@
         {
             "name": "dungeon1beams",
             "description": "Dungeon 1 Beams",
-            "critics": ["Dungeon1BeamCritic"],
+            "critic": "Dungeon1Critic",
             "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
-            "level" : 1,
             "start": ["1_73"],
             "data":
             {
@@ -191,9 +173,8 @@
         {
             "name": "dungeon1bombs",
             "description": "Dungeon 1 Bombs",
-            "critics": ["Dungeon1BombCritic"],
+            "critic": "Dungeon1BombCritic",
             "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
-            "level" : 1,
             "start": ["1_73"],
             "data":
             {
@@ -212,9 +193,8 @@
         {
             "name": "dungeon1nobeams",
             "description": "Dungeon 1 combat trainer (no beams)",
-            "critics": ["Dungeon1Critic"],
+            "critic": "Dungeon1Critic",
             "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
-            "level" : 1,
             "start": ["1_73"],
             "data":
             {
@@ -232,9 +212,8 @@
         {
             "name": "dungeon1boss",
             "description": "Dungeon 1 Boss",
-            "critics": ["Dungeon1BossCritic"],
+            "critic": "Dungeon1BossCritic",
             "end_conditions": ["GainedTriforce", "DefeatedBoss", "GameOver", "Timeout"],
-            "level" : 1,
             "start": ["1_35"],
             "data":
             {

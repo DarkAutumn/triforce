@@ -1,11 +1,12 @@
+# pylint: disable=all
+
 import os
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from triforce_lib.critics import GameplayCritic
-from utilities import CriticWrapper
-from triforce_lib import ZeldaActionReplay
+from utilities import CriticWrapper, ZeldaActionReplay
 
 def test_wall_collision():
     actions = ZeldaActionReplay("1_44e.state")
@@ -41,7 +42,7 @@ def test_close_distance():
     _, _, _, _, info = actions.step('r')
     assert 'rewards' in info
     assert 'reward-move-closer' not in info['rewards']
-    
+
 
 def test_position():
     # note the position may change for the other axis as link snaps to the grid

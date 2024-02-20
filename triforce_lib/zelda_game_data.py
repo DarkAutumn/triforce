@@ -1,6 +1,10 @@
 import os
 
 class ZeldaRoom:
+    """
+    Stores information about a room in the game Zelda-NES. This includes the level, location, exits, enemies, reward,
+    and bomb secrets.
+    """
     all_save_files = []
     def __init__(self, level, location, exits, enemies, reward = None, bomb_secrets = None):
         self.level = int(level)
@@ -9,7 +13,7 @@ class ZeldaRoom:
         self.enemies = int(enemies) if enemies else 0
         self.reward = reward
         self.bomb_secrets = bomb_secrets
-        
+
         self.save_states = []
 
         if not ZeldaRoom.all_save_files:
@@ -20,6 +24,8 @@ class ZeldaRoom:
         self.save_states = [x for x in ZeldaRoom.all_save_files if x.startswith(f'{level}_{location}')]
 
 class ZeldaGameData:
+    """Information about the game Zelda-NES. This includes room data, memory addresses, and tables.
+    Parsed from the file zelda_game_data.txt."""
     def __init__(self):
         data_dir = os.path.dirname(os.path.realpath(__file__))
         data_filename = os.path.join(data_dir, 'zelda_game_data.txt')
@@ -28,7 +34,7 @@ class ZeldaGameData:
         self.memory = {}
         self.tables = {}
 
-        with open(data_filename, 'r') as f:
+        with open(data_filename, 'r', encoding="utf-8") as f:
             is_room = False
             is_memory = False
             is_table = False
@@ -44,24 +50,24 @@ class ZeldaGameData:
                     is_table = False
                     continue
 
-                elif line == '[memory]':
+                if line == '[memory]':
                     is_room = False
                     is_memory = True
                     is_table = False
                     continue
 
-                elif line == '[tables]':
+                if line == '[tables]':
                     is_room = False
                     is_memory = False
                     is_table = True
                     continue
 
-                elif line.startswith('[') or line.endswith(']'):
+                if line.startswith('[') or line.endswith(']'):
                     is_room = False
                     is_memory = False
                     continue
 
-                elif line == '':
+                if line == '':
                     continue
 
                 parts = [x for x in line.split(' ') if x]
@@ -80,25 +86,6 @@ class ZeldaGameData:
                     size = int(parts[1], 16)
                     name = parts[2]
                     self.tables[name] = (offset, size)
-    
-    def get_room_by_location(self, level, location):
-        return self.rooms.get(f'{level}_{location:2x}', None)
-    
-    def get_savestates_by_name(self, room_name):
-        full_location = room_name
-        room_name = self.strip_direction(room_name)
-        
-        room = self.rooms.get(room_name, None)
-        if room is None:
-            level, loc = room_name.split('_')
-            room = ZeldaRoom(level, loc, None, None, None, None)
-        
-        return [x for x in room.save_states if x.startswith(full_location)]
-
-    def strip_direction(self, room):
-        if room[-1] not in '0123456789':
-            room = room[:-1]
-        return room
 
 zelda_game_data = ZeldaGameData()
 __all__ = ['zelda_game_data']
