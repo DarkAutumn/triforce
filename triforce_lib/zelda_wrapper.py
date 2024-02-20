@@ -12,8 +12,8 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, is_mode_death, \
-                        get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen
+from .zelda_game import AnimationState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, \
+                        is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen
 from .model_parameters import MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, ITEM_COOLDOWN, \
                               CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
 
@@ -120,7 +120,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         # add information about enemies, items, and projectiles
         info['enemies'], info['items'], info['projectiles'] = objects.get_all_objects(link_pos)
         info['are_walls_dangerous'] = any(x.id == ZeldaEnemy.WallMaster for x in info['enemies'])
-        info['has_beams'] = has_beams(info) and get_beam_state(info) == 0
+        info['has_beams'] = has_beams(info) and get_beam_state(info) == AnimationState.INACTIVE
 
         location = (info['level'], info['location'], is_in_cave(info))
         new_location = self._location != location
@@ -164,11 +164,11 @@ class ZeldaGameWrapper(gym.Wrapper):
         # check if beams, bombs, arrows, etc are active and if they will hit in the future,
         # as we need to count them as rewards/results of this action so the model trains properly
         step_hits = self.__handle_future_hits(act, info, objects, step_hits, 'beam_hits',
-                                              lambda st: get_beam_state(st) == 1, self.__set_beams_only)
+                                    lambda st: get_beam_state(st) == AnimationState.ACTIVE, self.__set_beams_only)
         step_hits = self.__handle_future_hits(act, info, objects, step_hits, 'bomb1_hits',
-                                              lambda st: get_bomb_state(st, 0) == 1, self.__set_bomb1_only)
+                                    lambda st: get_bomb_state(st, 0) == AnimationState.ACTIVE, self.__set_bomb1_only)
         step_hits = self.__handle_future_hits(act, info, objects, step_hits, 'bomb2_hits',
-                                              lambda st: get_bomb_state(st, 1) == 1, self.__set_bomb2_only)
+                                    lambda st: get_bomb_state(st, 1) == AnimationState.ACTIVE, self.__set_bomb2_only)
 
         self._prev_health = curr_enemy_health
         return step_hits

@@ -6,4 +6,4 @@ extension-pkg-whitelist=pygame,cv2
 max-line-length = 120
 
 [MESSAGES CONTROL]
-disable=R0902,C0111
+disable=R0902,C0114
