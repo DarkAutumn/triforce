@@ -1,6 +1,8 @@
 #! /usr/bin/python
 """Run the ZeldaML agent to play The Legend of Zelda (NES)."""
 
+# While we want to keep this file relatively clean, it's fine to have a bit of a large render function.
+
 # pylint: disable=too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
 # pylint: disable=too-many-nested-blocks
 

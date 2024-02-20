@@ -47,7 +47,7 @@ class ZeldaAIModel(BaseModel):
 
     @field_validator('training_scenario', mode='before')
     @classmethod
-    def get(cls, value):
+    def training_scenario_validator(cls, value):
         """Gets the scenario from the name."""
         return ALL_SCENARIOS.get(value)
 
