@@ -4,7 +4,7 @@
 # While we want to keep this file relatively clean, it's fine to have a bit of a large render function.
 
 # pylint: disable=too-few-public-methods,too-many-locals,too-many-branches,too-many-statements
-# pylint: disable=too-many-nested-blocks
+# pylint: disable=too-many-nested-blocks,duplicate-code
 
 import argparse
 import os
@@ -349,8 +349,7 @@ class DisplayWindow:
 
             return y
 
-        else:
-            return self._render_one_observation(surface, x, y, img)
+        return self._render_one_observation(surface, x, y, img)
 
     def _render_one_observation(self, surface, x, y, img):
         if img.shape[2] == 1:

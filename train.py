@@ -1,6 +1,8 @@
 #! /usr/bin/python3
 """Train models to play The Legend of Zelda (NES)."""
 
+# pylint: disable=duplicate-code
+
 import argparse
 import sys
 from triforce_lib import ZeldaML
