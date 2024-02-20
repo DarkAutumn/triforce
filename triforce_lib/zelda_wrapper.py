@@ -26,8 +26,6 @@ class ActionType(Enum):
 
 class ZeldaGameWrapper(gym.Wrapper):
     """Interprets the game state and produces more information in the 'info' dictionary."""
-    # pylint: disable=too-many-instance-attributes
-
     def __init__(self, env, deterministic=False):
         super().__init__(env)
 
