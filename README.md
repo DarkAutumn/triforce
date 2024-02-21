@@ -71,8 +71,8 @@ Be sure to place The Legend of Zelda rom at `triforce/custom_integrations/Zelda-
 This repo includes a set of pre-trained models.  To run the full game simply use `run.py`.  By default it will run the full game, but you can specify a scenario with the first argument (e.g. `run.py dungeon1beams`).  You can specify the `--model-path` to be a location other than the checked in models, which is helpful to do after training (e.g. `run.py --model-path training/`).
 
     ./run.py
-    ./run.py overworld1beams overworld1nobeams
-    ./run.py overworld1beams overworld1nobeams --model-path training/
+    ./run.py overworld1beams
+    ./run.py overworld1nobeams --model-path training/
 
 Keybindings for `run.py`:
 
