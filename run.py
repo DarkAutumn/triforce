@@ -17,7 +17,7 @@ import numpy as np
 import cv2
 import tqdm
 
-from triforce import ModelSelector, ZeldaScenario, ZeldaEnvFactory, ZeldaAIModel, simulate_critique
+from triforce import ModelSelector, ZeldaScenario, ZeldaEnv, ZeldaAIModel, simulate_critique
 from triforce.zelda_game import is_in_cave
 
 class Recording:
@@ -53,7 +53,7 @@ class Recording:
 
 class DisplayWindow:
     """A window to display the game and the AI model."""
-    def __init__(self, zelda_ml : ZeldaEnvFactory, models : List[ZeldaAIModel], scenario : ZeldaScenario):
+    def __init__(self, zelda_ml : ZeldaEnv, models : List[ZeldaAIModel], scenario : ZeldaScenario):
         self.zelda_ml = zelda_ml
         self.scenario = scenario
         self.orchestrator = ModelSelector(models)
@@ -544,7 +544,7 @@ def main():
     model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                                          'models')
 
-    zelda_ml = ZeldaEnvFactory(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose,
+    zelda_ml = ZeldaEnv(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose,
                        ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
 
     models = ZeldaAIModel.initialize(model_path)
