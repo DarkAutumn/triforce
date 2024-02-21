@@ -5,17 +5,20 @@
 
 import argparse
 import sys
-from triforce import ZeldaEnv
+from triforce import ZeldaEnv, ZeldaAIModel
 
 def main():
     """Main entry point."""
     args = parse_args()
     iterations = None if args.iterations <= 0 else args.iterations
-    models = args.models if args.models else None
+
+    models = ZeldaAIModel.initialize()
+    if args.models:
+        models = [x for x in models if x.name in args.models]
 
     zelda_ml = ZeldaEnv(args.color, args.frame_stack, render_mode=None, verbose=args.verbose, ent_coef=args.ent_coef,
                        device="cuda", obs_kind=args.obs_kind)
-    zelda_ml.train(args.output, models, iterations, args.parallel)
+    zelda_ml.train(models, args.output, iterations, args.parallel)
 
 def parse_args():
     """Parse command line arguments."""

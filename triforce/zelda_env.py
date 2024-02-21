@@ -122,12 +122,11 @@ class ZeldaEnv:
 
             log_path = os.path.join(model_dir, 'logs')
 
-            scenario = ZeldaScenario.get(zelda_ai_model.training_scenario)
-            env = self.make_env(scenario, zelda_ai_model.action_space, parallel)
+            env = self.make_env(zelda_ai_model.training_scenario, zelda_ai_model.action_space, parallel)
             try:
                 print()
                 print(f"Training model: {zelda_ai_model.name}")
-                print(f"Scenario:       {zelda_ai_model.training_scenario}")
+                print(f"Scenario:       {zelda_ai_model.training_scenario.name}")
                 print(f"Path:           {model_dir}")
                 model = zelda_ai_model.create(env=env, verbose=self.verbose, tensorboard_log=log_path,
                                               ent_coef=self.ent_coef, device=self.device)
