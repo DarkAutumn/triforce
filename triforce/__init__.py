@@ -10,6 +10,7 @@ from .model_selector import ModelSelector
 from .zeldaml import ZeldaML
 from .models_and_scenarios import ZeldaAIModel, ZeldaScenario
 from .zelda_game import is_in_cave
+from .simulate_critic import simulate_critique
 
 # add custom integrations to retro
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -21,5 +22,5 @@ __all__ = [
     ZeldaAIModel.__name__,
     ZeldaScenario.__name__,
     ModelSelector.__name__,
-    is_in_cave.__name__,
+    simulate_critique.__name__
     ]
