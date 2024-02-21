@@ -18,12 +18,8 @@ def get_vector_from_direction(direction):
 
     return np.zeros(2, dtype=np.float32)
 
-def get_location_objective(location_direction, location):
+def get_location_from_direction(location, direction):
     """Gets the objective location from the given direction."""
-    if location not in location_direction:
-        return None
-
-    direction = location_direction[location]
     if direction == 'N':
         return location - 0x10
     if direction == 'S':
@@ -182,8 +178,9 @@ class OverworldOrchestrator:
     def get_objectives(self, info, link_pos):
         """Returns location_objective, objective_vector, objective_pos_dir, objective_kind"""
         location = info['location']
-        location_objective = get_location_objective(self.location_direction, location) \
-                                if location in self.location_direction else None
+        if location in self.location_direction:
+            direction = self.location_direction[location]
+            location_objective = get_location_from_direction(self.location_direction, location)
 
         # get sword if we don't have it
         if location == 0x77:
@@ -238,7 +235,6 @@ class Dungeon1Orchestrator:
         self.location_direction = {
             0x74 : "W",
             0x72 : "E",
-            0x73 : "NEW",  # entry room, key based
             0x63 : "N",
             0x53 : "W",
             0x54 : "W",
@@ -279,22 +275,17 @@ class Dungeon1Orchestrator:
             if norm > 0:
                 return None, treasure_vector / norm, position, 'treasure'
 
-        # special case entry room, TODO: need to detect door lock
+        # entry room
         if location == 0x73:
-            room = 0x63
             direction = "N"
-            if 0x72 not in self.keys_obtained:
-                room = 0x72
-                direction = "W"
+            if 0x9a in info['tiles']:
+                if info['keys'] == 0:
+                    direction = "W"
+                elif info['keys'] == 1:
+                    direction = "E"
 
-            elif 0x74 not in self.keys_obtained:
-                room = 0x74
-                direction = "E"
-
+            room = get_location_from_direction(location, direction)
             return room, None, direction, 'room'
-
-        if location == 0x63 and (0x72 not in self.keys_obtained or 0x74 not in self.keys_obtained):
-            return 0x73, None, "S", 'room'
 
         # check if we should kill all enemies:
         if location in self.locations_to_kill_enemies:
@@ -304,7 +295,7 @@ class Dungeon1Orchestrator:
         # otherwise, movement direction is based on the location
         if location in self.location_direction:
             direction = self.location_direction[location]
-            location = get_location_objective(self.location_direction, location)
+            location = get_location_from_direction(location, direction)
             return location, None, direction, 'room'
 
         return None

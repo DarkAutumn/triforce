@@ -34,6 +34,17 @@
             "iterations" : 1500000
         },
         {
+            "name" : "dungeon1entrance",
+            "action_space" : "move-only",
+            "priority" : 10,
+            "levels" : 1,
+            "rooms" : ["0x73"],
+            "requires_enemies" : false,
+
+            "training_scenario" : "dungeon1entrance",
+            "iterations" : 1000000
+        },
+        {
             "name" : "dungeon1nobeams",
             "action_space" : "attack-only",
             "priority" : 0,
@@ -152,15 +163,21 @@
             }
         },
         {
+            "name" : "dungeon1entrance",
+            "description" : "Dungeon 1 Entrance",
+            "critic" : "Dungeon1Critic",
+            "end_conditions" : ["LeftDungeon", "GameOver", "Timeout", "LeftRoom"],
+            "start" : ["1_73s", "1_73e", "1_73w"]
+        },
+        {
             "name": "dungeon1beams",
             "description": "Dungeon 1 Beams",
             "critic": "Dungeon1Critic",
-            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
-            "start": ["1_73"],
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout", "HitEntryway"],
+            "start": ["1_72e", "1_63s", "1_74w"],
             "data":
             {
                 "bombs" : 0,
-                "keys" : 0,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
             },
@@ -174,12 +191,11 @@
             "name": "dungeon1bombs",
             "description": "Dungeon 1 Bombs",
             "critic": "Dungeon1BombCritic",
-            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
-            "start": ["1_73"],
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout", "HitEntryway"],
+            "start": ["1_72e", "1_63s", "1_74w"],
             "data":
             {
                 "bombs" : 0,
-                "keys" : 0,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
             },
@@ -194,12 +210,11 @@
             "name": "dungeon1nobeams",
             "description": "Dungeon 1 combat trainer (no beams)",
             "critic": "Dungeon1Critic",
-            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
-            "start": ["1_73"],
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout", "HitEntryway"],
+            "start": ["1_72e", "1_63s", "1_74w"],
             "data":
             {
                 "bombs" : 0,
-                "keys" : 0,
                 "hearts_and_containers" : 33,
                 "partial_hearts" : 100
             },
