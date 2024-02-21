@@ -108,9 +108,9 @@ After completing a training run, you should use `evaluate.py` and compare it to 
 
     usage: evaluate.py model-path scenarios
 
-    ./evaluate.py training/dungeon1beams dungeon1nobeams
-    ./evaluate.py training/dungeon1beams dungeon1nobeams --parallel 4
-    ./evaluate.py training/dungeon1beams dungeon1nobeams --episodes 250 --parallel 4
+    ./evaluate.py training/ dungeon1beams dungeon1nobeams
+    ./evaluate.py training/ dungeon1beams dungeon1nobeams --parallel 4
+    ./evaluate.py training/ dungeon1beams dungeon1nobeams --episodes 250 --parallel 4
 
 ## Contributing
 
