@@ -5,7 +5,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
-from triforce_lib.critics import GameplayCritic
+from triforce.critics import GameplayCritic
 from utilities import CriticWrapper, ZeldaActionReplay
 
 def test_wall_collision():

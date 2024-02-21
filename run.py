@@ -17,7 +17,7 @@ import numpy as np
 import cv2
 import tqdm
 
-from triforce_lib import ModelSelector, ZeldaScenario, ZeldaML, ZeldaAIModel, is_in_cave
+from triforce import ModelSelector, ZeldaScenario, ZeldaML, ZeldaAIModel, is_in_cave
 
 class Recording:
     """Used to track and save a recording of the game."""

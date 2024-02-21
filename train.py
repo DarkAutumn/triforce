@@ -5,7 +5,7 @@
 
 import argparse
 import sys
-from triforce_lib import ZeldaML
+from triforce import ZeldaML
 
 def main():
     """Main entry point."""
