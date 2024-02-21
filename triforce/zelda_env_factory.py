@@ -21,7 +21,7 @@ from .zelda_game_features import ZeldaGameFeatures
 from .scenario_wrapper import ScenarioWrapper
 from .models_and_scenarios import ZeldaScenario
 
-class ZeldaML:
+class ZeldaEnvFactory:
     """A class to train zelda models or to create environments."""
     def __init__(self, color, framestack = 1, **kwargs):
         if 'verbose' in kwargs:
@@ -227,4 +227,4 @@ class LogRewardCallback(BaseCallback):
         with open(save_path + '.json', 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=4)
 
-__all__ = ['ZeldaML']
+__all__ = ['ZeldaEnvFactory']

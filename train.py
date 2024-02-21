@@ -5,7 +5,7 @@
 
 import argparse
 import sys
-from triforce import ZeldaML
+from triforce import ZeldaEnvFactory
 
 def main():
     """Main entry point."""
@@ -13,7 +13,7 @@ def main():
     iterations = None if args.iterations <= 0 else args.iterations
     models = args.models if args.models else None
 
-    zelda_ml = ZeldaML(args.color, args.frame_stack, render_mode=None, verbose=args.verbose, ent_coef=args.ent_coef,
+    zelda_ml = ZeldaEnvFactory(args.color, args.frame_stack, render_mode=None, verbose=args.verbose, ent_coef=args.ent_coef,
                        device="cuda", obs_kind=args.obs_kind)
     zelda_ml.train(args.output, models, iterations, args.parallel)
 
