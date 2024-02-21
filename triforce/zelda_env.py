@@ -17,11 +17,11 @@ from .objective_selector import ObjectiveSelector
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
-from .zelda_game_features import ZeldaGameFeatures
+from .zelda_vector_features import ZeldaVectorFeatures
 from .scenario_wrapper import ScenarioWrapper
 from .models_and_scenarios import ZeldaScenario
 
-class ZeldaML:
+class ZeldaEnv:
     """A class to train zelda models or to create environments."""
     def __init__(self, color, framestack = 1, **kwargs):
         if 'verbose' in kwargs:
@@ -90,7 +90,7 @@ class ZeldaML:
 
             # Extract features from the game for the model, like whether link has beams or has keys and expose
             # these as observations.
-            env = ZeldaGameFeatures(env)
+            env = ZeldaVectorFeatures(env)
 
             # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new
             # info state provded by ZeldaGameWrapper above.
@@ -227,4 +227,4 @@ class LogRewardCallback(BaseCallback):
         with open(save_path + '.json', 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=4)
 
-__all__ = ['ZeldaML']
+__all__ = ['ZeldaEnv']

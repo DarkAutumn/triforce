@@ -5,10 +5,10 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
-from triforce_lib import action_replay
+from tests.utilities import ZeldaActionReplay
 
 def main(savestate):
-    replay = action_replay.ZeldaActionReplay(savestate, render_mode="human")
+    replay = ZeldaActionReplay(savestate, render_mode="human")
     replay.reset()
 
     while True:

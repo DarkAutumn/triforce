@@ -7,9 +7,10 @@ import json
 import retro
 
 from .model_selector import ModelSelector
-from .zeldaml import ZeldaML
+from .zelda_env import ZeldaEnv
 from .models_and_scenarios import ZeldaAIModel, ZeldaScenario
 from .zelda_game import is_in_cave
+from .simulate_critic import simulate_critique
 
 # add custom integrations to retro
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -17,9 +18,9 @@ retro.data.Integrations.add_custom_path(os.path.join(script_dir, 'custom_integra
 
 # define the model surface area
 __all__ = [
-    ZeldaML.__name__,
+    ZeldaEnv.__name__,
     ZeldaAIModel.__name__,
     ZeldaScenario.__name__,
     ModelSelector.__name__,
-    is_in_cave.__name__,
+    simulate_critique.__name__
     ]

@@ -1,12 +1,13 @@
-# find the directory of this file
+# pylint: disable
+
 import os
 import json
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
-zelda_memory_file = os.path.join(script_dir, '../triforce_lib/zelda_game_data.txt')
+zelda_memory_file = os.path.join(script_dir, '../triforce/zelda_game_data.txt')
 assert os.path.exists(zelda_memory_file), f'Could not find zelda_game_data.txt at {zelda_memory_file}'
 
-zelda_memory_data = os.path.join(script_dir, '../triforce_lib/custom_integrations/Zelda-NES/data.json')
+zelda_memory_data = os.path.join(script_dir, '../triforce/custom_integrations/Zelda-NES/data.json')
 assert os.path.exists(zelda_memory_data), f'Could not find data.json at {zelda_memory_data}'
 
 def get_signed(value):

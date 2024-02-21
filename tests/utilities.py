@@ -2,9 +2,9 @@
 
 import gymnasium as gym
 import retro
-from triforce_lib.action_space import ZeldaActionSpace
-from triforce_lib.objective_selector import ObjectiveSelector
-from triforce_lib.zelda_wrapper import ZeldaGameWrapper
+from triforce.action_space import ZeldaActionSpace
+from triforce.objective_selector import ObjectiveSelector
+from triforce.zelda_wrapper import ZeldaGameWrapper
 
 class CriticWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""

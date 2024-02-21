@@ -17,7 +17,8 @@ import numpy as np
 import cv2
 import tqdm
 
-from triforce_lib import ModelSelector, ZeldaScenario, ZeldaML, ZeldaAIModel, is_in_cave
+from triforce import ModelSelector, ZeldaScenario, ZeldaEnv, ZeldaAIModel, simulate_critique
+from triforce.zelda_game import is_in_cave
 
 class Recording:
     """Used to track and save a recording of the game."""
@@ -52,7 +53,7 @@ class Recording:
 
 class DisplayWindow:
     """A window to display the game and the AI model."""
-    def __init__(self, zelda_ml : ZeldaML, models : List[ZeldaAIModel], scenario : ZeldaScenario):
+    def __init__(self, zelda_ml : ZeldaEnv, models : List[ZeldaAIModel], scenario : ZeldaScenario):
         self.zelda_ml = zelda_ml
         self.scenario = scenario
         self.orchestrator = ModelSelector(models)
@@ -312,8 +313,8 @@ class DisplayWindow:
         if prev is not None and prev.rewards == curr_rewards and prev.action == action:
             prev.count += 1
         else:
-            action = DebugReward(self.scenario, last_info, info)
-            buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, self.text_width, action))
+            on_press = DebugReward(self.scenario, last_info, info)
+            buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, self.text_width, on_press))
 
     def _draw_arrow(self, surface, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
         render_text(surface, self.font, label, (start_pos[0], start_pos[1]))
@@ -471,7 +472,7 @@ class DebugReward:
         self.info = info
 
     def __call__(self):
-        reward_dict, terminated, truncated, reason = self.scenario.simulate_step(self.last_info, self.info)
+        reward_dict, terminated, truncated, reason = simulate_critique(self.scenario, self.last_info, self.info)
         print(f"{reward_dict = }")
         print(f"{terminated = }")
         print(f"{truncated = }")
@@ -543,7 +544,7 @@ def main():
     model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                                          'models')
 
-    zelda_ml = ZeldaML(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose,
+    zelda_ml = ZeldaEnv(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose,
                        ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
 
     models = ZeldaAIModel.initialize(model_path)

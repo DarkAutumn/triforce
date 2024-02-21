@@ -8,8 +8,7 @@ from multiprocessing import Value, Pool
 import multiprocessing
 import pandas as pd
 from tqdm import tqdm
-from triforce_lib import ZeldaML, ZeldaScenario
-from triforce_lib.models_and_scenarios import ZeldaAIModel
+from triforce import ZeldaEnv, ZeldaScenario, ZeldaAIModel
 
 # pylint: disable=global-statement,global-variable-undefined
 
@@ -83,7 +82,7 @@ def run_one_scenario(args, model_name, model_kind):
 def create_zeldaml(args):
     """Creates a ZeldaML instance."""
     render_mode = 'human' if args.render else None
-    zelda_ml = ZeldaML(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose,
+    zelda_ml = ZeldaEnv(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose,
                        ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
     return zelda_ml
 

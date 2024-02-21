@@ -6,7 +6,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import retro
-from triforce_lib.zelda_observation_wrapper import ZeldaObservationWrapper
+from triforce.zelda_observation_wrapper import ZeldaObservationWrapper
 import pickle
 
 def main():
