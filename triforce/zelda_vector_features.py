@@ -5,7 +5,7 @@ from .zelda_game import ZeldaEnemy
 
 NUM_DIRECTION_VECTORS = 5
 
-class ZeldaGameFeatures(gym.Wrapper):
+class ZeldaVectorFeatures(gym.Wrapper):
     """A wrapper that adds additional (non-image) features to the observation space."""
     def __init__(self, env):
         super().__init__(env)
