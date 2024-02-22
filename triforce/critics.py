@@ -399,9 +399,9 @@ class GameplayCritic(ZeldaCritic):
                     elif target == 'S':
                         dist = old_link_pos[1] - new_link_pos[1]
                     elif target == 'E':
-                        dist = new_link_pos[0] - old_link_pos[0]
-                    elif target == 'W':
                         dist = old_link_pos[0] - new_link_pos[0]
+                    elif target == 'W':
+                        dist = new_link_pos[0] - old_link_pos[0]
 
                     percent = abs(dist / self.movement_scale_factor)
                 else:
