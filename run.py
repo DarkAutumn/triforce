@@ -15,7 +15,6 @@ from typing import List
 import pygame
 import numpy as np
 import cv2
-import tqdm
 
 from triforce import ModelSelector, ZeldaScenario, ZeldaEnv, ZeldaAIModel, simulate_critique
 from triforce.zelda_game import is_in_cave
@@ -23,21 +22,50 @@ from triforce.zelda_game import is_in_cave
 class Recording:
     """Used to track and save a recording of the game."""
     # pylint: disable=no-member
-    def __init__(self, dimensions):
+    def __init__(self, dimensions, buffer_size):
         self.dimensions = dimensions
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        self.recording = cv2.VideoWriter(self.__get_filename(), fourcc, 60.1, dimensions)
+        self.recording = None
+        self.buffer_size = buffer_size
+        self.buffer = []
 
-    def append(self, surface):
+    def _get_recording(self):
+        if self.recording is None:
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')
+            self.recording = cv2.VideoWriter(self.__get_filename(), fourcc, 60.1, self.dimensions)
+
+        return self.recording
+
+    def write(self, surface):
         """Adds a frame to the recording."""
-        result_frame = surface
-        result_frame = result_frame.transpose([1, 0, 2])  # Transpose it to the correct format
-        result_frame = cv2.cvtColor(result_frame, cv2.COLOR_RGB2BGR)  # Convert from RGB to BGR
-        self.recording.write(result_frame)
+        if self.buffer_size <= 1:
+            self._write_surface(surface.copy())
 
-    def stop(self):
+        else:
+            self.buffer.append(surface)
+            if len(self.buffer) >= self.buffer_size:
+                self.flush()
+
+    def _write_surface(self, surface):
+        result_frame = pygame.surfarray.array3d(surface)
+        result_frame = result_frame.transpose([1, 0, 2])
+        result_frame = cv2.cvtColor(result_frame, cv2.COLOR_RGB2BGR)
+
+        recording = self._get_recording()
+        recording.write(result_frame)
+
+    def flush(self):
+        """Writes the buffer to the recording."""
+        for frame in self.buffer:
+            self._write_surface(frame)
+
+        self.buffer.clear()
+
+    def close(self):
         """Stops the recording."""
-        self.recording.release()
+        self.flush()
+        if self.recording:
+            self.recording.release()
+            self.recording = None
 
     def __get_filename(self):
         directory = os.path.join(os.getcwd(), "recording")
@@ -107,8 +135,6 @@ class DisplayWindow:
         model_name = None
         model_kind = None
 
-        recording_kind = None
-        frames = []
         recording = None
         cap_fps = True
         overlay = 0
@@ -135,18 +161,12 @@ class DisplayWindow:
                 self.total_rewards = 0.0
                 reward_map.clear()
 
-                if recording_kind == 'live':
-                    recording.stop()
-                    recording = Recording(self.dimensions)
+                # we use buffer_size to check if we only want to record on a win
+                if recording:
+                    if recording.buffer_size > 1 and not last_info['triforce']:
+                        recording.buffer.clear()
 
-                elif recording_kind == 'on_win':
-                    if last_info['triforce']:
-                        recording = Recording(self.dimensions)
-                        for i in tqdm.tqdm(range(len(frames))):
-                            recording.append(pygame.surfarray.array3d(frames[i]))
-                        recording.stop()
-
-                    frames.clear()
+                    recording.close()
 
             # Perform a step in the environment
             if mode in ('c', 'n'):
@@ -199,10 +219,7 @@ class DisplayWindow:
                                                             (self.text_width, self.text_height))
 
                 if recording:
-                    recording.append(pygame.surfarray.array3d(pygame.display.get_surface()))
-
-                if frames is not None:
-                    frames.append(surface.copy())
+                    recording.write(surface)
 
                 # Display the scaled frame
                 pygame.display.flip()
@@ -250,30 +267,28 @@ class DisplayWindow:
                             cap_fps = not cap_fps
 
                         elif event.key == pygame.K_F4:
-                            if recording_kind == 'live':
-                                recording.stop()
-                                recording = None
-                                recording_kind = None
-                                print("Live recording stopped")
-
-                            elif recording_kind is None:
-                                recording = Recording(self.dimensions)
-                                recording_kind = 'live'
+                            if recording is None:
+                                recording = Recording(self.dimensions, 0)
                                 print("Live recording started")
 
+                            else:
+                                print("Live recording stopped")
+                                recording.close()
+                                recording = None
+
                         elif event.key == pygame.K_F10:
-                            if recording_kind is None:
+                            if recording is None:
+                                recording = Recording(self.dimensions, 1_000_000_000)
                                 print("Frame recording started")
-                                frames.clear()
-                                recording_kind = 'on_win'
-
-                            elif recording_kind == 'on_win':
+                            else:
+                                # don't close the recording here, we don't want to save the buffer if we didn't
+                                # win the scenario
                                 print("Frame recording stopped")
-                                frames.clear()
+                                recording = None
 
 
-        if recording:
-            recording.stop()
+        if recording and recording.buffer_size <= 1:
+            recording.close()
 
         env.close()
         pygame.quit()
