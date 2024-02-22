@@ -277,14 +277,16 @@ class Dungeon1Orchestrator:
 
         # entry room
         if location == 0x73:
-            direction = "N"
-            if 0x9a in info['tiles']:
-                if info['keys'] == 0:
-                    direction = "W"
-                elif info['keys'] == 1:
-                    direction = "E"
-
+            direction = "W"
             room = get_location_from_direction(location, direction)
+            if room in self.keys_obtained:
+                direction = "E"
+                room = get_location_from_direction(location, direction)
+
+                if room in self.keys_obtained:
+                    direction = "N"
+                    room = get_location_from_direction(location, direction)
+
             return room, None, direction, 'room'
 
         # check if we should kill all enemies:
