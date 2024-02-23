@@ -8,7 +8,7 @@ from multiprocessing import Value, Pool
 import multiprocessing
 import pandas as pd
 from tqdm import tqdm
-from triforce import ZeldaEnv, ZeldaScenario, ZeldaAIModel
+from triforce import ZeldaEnv, ZeldaAIModel
 
 # pylint: disable=global-statement,global-variable-undefined
 
@@ -25,7 +25,7 @@ def run_one_scenario(args, model_name, model_kind):
 
     ep_result = []
 
-    env = zelda_ml.make_env(ZeldaScenario.get(model.training_scenario), model.action_space, 1)
+    env = zelda_ml.make_env(model.training_scenario, model.action_space, 1)
 
     for ep in range(args.episodes):
         obs, info = env.reset()
@@ -115,7 +115,10 @@ def main():
     all_scenarios = []
     for model in models:
         if not args.models or model.name in args.models:
-            for model_kind in model.available_models.keys():
+            # For inteveral saved models,  only evaluate the last 3
+            available_models = sorted([int(x) for x in model.available_models.keys() if isinstance(x, int)])[-3:]
+            available_models += [x for x in model.available_models.keys() if not isinstance(x, int)]
+            for model_kind in available_models:
                 all_scenarios.append((args, model.name, model_kind))
 
     total_count = len(all_scenarios) * args.episodes
