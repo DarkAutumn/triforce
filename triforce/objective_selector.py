@@ -309,7 +309,7 @@ class Dungeon1Orchestrator:
             elif keys == 1:
                 direction = "E"
 
-        room = get_location_from_direction(location, direction)
+        room = get_location_from_direction(info['location'], direction)
         return room, None, direction, 'room'
 
     def is_dangerous_room(self, info):
