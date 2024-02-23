@@ -14,8 +14,8 @@ import numpy as np
 from .zelda_game_data import zelda_game_data
 from .zelda_game import AnimationState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, \
                         is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen
-from .model_parameters import MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, ITEM_COOLDOWN, \
-                              CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
+from .model_parameters import LOCATION_CHANGE_COOLDOWN, MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, \
+                                ITEM_COOLDOWN, CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
 
 class ActionType(Enum):
     """The kind of action that the agent took."""
@@ -122,7 +122,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['are_walls_dangerous'] = any(x.id == ZeldaEnemy.WallMaster for x in info['enemies'])
         info['has_beams'] = has_beams(info) and get_beam_state(info) == AnimationState.INACTIVE
 
-        location = (info['level'], info['location'], is_in_cave(info))
+        location = self._get_full_location(info)
         new_location = self._location != location
         info['new_location'] = new_location
 
@@ -136,6 +136,9 @@ class ZeldaGameWrapper(gym.Wrapper):
         else:
             # Only check hits if we didn't move room locations
             info['step_hits'] = self._get_step_hits(act, objects, unwrapped, info)
+
+    def _get_full_location(self, info):
+        return (info['level'], info['location'], is_in_cave(info))
 
     def _get_step_hits(self, act, objects, unwrapped, info):
         step_hits = 0
@@ -211,6 +214,9 @@ class ZeldaGameWrapper(gym.Wrapper):
         in_cave = is_in_cave(info)
         if in_cave and not self.was_link_in_cave:
             obs, rew, terminated, truncated, info = self.skip(self._none_action, CAVE_COOLDOWN)
+
+        if self._location != self._get_full_location(info):
+            obs, rew, terminated, truncated, info = self.skip(self._none_action, LOCATION_CHANGE_COOLDOWN)
 
         self.was_link_in_cave = in_cave
 
