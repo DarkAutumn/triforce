@@ -230,6 +230,7 @@ class Dungeon1Orchestrator:
     def __init__(self):
         self.keys_obtained = set()
         self.prev_keys = None
+        self.entry_memory = None
 
         self.locations_to_kill_enemies = set([0x72, 0x53, 0x34, 0x44, 0x23, 0x35])
         self.location_direction = {
@@ -255,6 +256,7 @@ class Dungeon1Orchestrator:
         """Resets the state of the orchestrator.  Called at the start of each scenario."""
         self.keys_obtained.clear()
         self.prev_keys = None
+        self.entry_memory = None
 
     def get_objectives(self, info, link_pos):
         """Returns location_objective, objective_vector, objective_pos_dir, objective_kind"""
@@ -277,17 +279,21 @@ class Dungeon1Orchestrator:
 
         # entry room
         if location == 0x73:
-            direction = "W"
+            if self.entry_memory is None:
+                self.entry_memory = info['keys'], 0x9a in info['tiles']
+
+            keys, door_is_locked = self.entry_memory
+            direction = "N"
+            if door_is_locked:
+                if keys == 0:
+                    direction = "W"
+                elif keys == 1:
+                    direction = "E"
+
             room = get_location_from_direction(location, direction)
-            if room in self.keys_obtained:
-                direction = "E"
-                room = get_location_from_direction(location, direction)
-
-                if room in self.keys_obtained:
-                    direction = "N"
-                    room = get_location_from_direction(location, direction)
-
             return room, None, direction, 'room'
+        else:
+            self.entry_memory = None
 
         # check if we should kill all enemies:
         if location in self.locations_to_kill_enemies:
