@@ -128,20 +128,7 @@ class LeftRoom(ZeldaEndCondition):
         if old['location'] != new['location']:
             if new['location_objective'] == new['location']:
                 return False, True, "truncated-left-room"
-            else:
-                return True, False, "failure-left-room"
 
-        return False, False, None
-
-class HitEntryway(ZeldaEndCondition):
-    """End condition for reaching the entryway."""
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
-        if new['location'] == 0x73 and 0x9a in new['tiles']:
-            if old['location'] == 0x63 and new['keys'] < 1:
-                return True, False, "failure-left-without-key"
-            if old['location'] == 0x83 and new['keys'] < 2:
-                return True, False, "failure-left-without-key"
-
-            return True, False, "success-hit-entryway"
+            return True, False, "failure-left-room"
 
         return False, False, None
