@@ -174,8 +174,8 @@
             "name": "dungeon1beams",
             "description": "Dungeon 1 Beams",
             "critic": "Dungeon1Critic",
-            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout", "HitEntryway"],
-            "start": ["1_72e", "1_63s", "1_74w"],
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
+            "start": ["1_72e"],
             "data":
             {
                 "bombs" : 0,
@@ -193,8 +193,8 @@
             "name": "dungeon1bombs",
             "description": "Dungeon 1 Bombs",
             "critic": "Dungeon1BombCritic",
-            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout", "HitEntryway"],
-            "start": ["1_72e", "1_63s", "1_74w"],
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
+            "start": ["1_72e"],
             "data":
             {
                 "bombs" : 0,
@@ -213,8 +213,8 @@
             "name": "dungeon1nobeams",
             "description": "Dungeon 1 combat trainer (no beams)",
             "critic": "Dungeon1Critic",
-            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout", "HitEntryway"],
-            "start": ["1_72e", "1_63s", "1_74w"],
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
+            "start": ["1_72e"],
             "data":
             {
                 "bombs" : 0,
@@ -233,7 +233,7 @@
             "description": "Dungeon 1 Boss",
             "critic": "Dungeon1BossCritic",
             "end_conditions": ["GainedTriforce", "DefeatedBoss", "GameOver", "Timeout"],
-            "start": ["1_35"],
+            "start": ["1_35s"],
             "data":
             {
                 "bombs" : 0,
