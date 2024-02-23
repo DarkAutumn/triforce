@@ -8,7 +8,7 @@ from multiprocessing import Value, Pool
 import multiprocessing
 import pandas as pd
 from tqdm import tqdm
-from triforce import ZeldaEnv, ZeldaScenario, ZeldaAIModel
+from triforce import ZeldaEnv, ZeldaAIModel
 
 # pylint: disable=global-statement,global-variable-undefined
 
