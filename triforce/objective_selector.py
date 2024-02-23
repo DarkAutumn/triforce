@@ -18,12 +18,8 @@ def get_vector_from_direction(direction):
 
     return np.zeros(2, dtype=np.float32)
 
-def get_location_objective(location_direction, location):
+def get_location_from_direction(location, direction):
     """Gets the objective location from the given direction."""
-    if location not in location_direction:
-        return None
-
-    direction = location_direction[location]
     if direction == 'N':
         return location - 0x10
     if direction == 'S':
@@ -182,8 +178,9 @@ class OverworldOrchestrator:
     def get_objectives(self, info, link_pos):
         """Returns location_objective, objective_vector, objective_pos_dir, objective_kind"""
         location = info['location']
-        location_objective = get_location_objective(self.location_direction, location) \
-                                if location in self.location_direction else None
+        if location in self.location_direction:
+            direction = self.location_direction[location]
+            location_objective = get_location_from_direction(self.location_direction, location)
 
         # get sword if we don't have it
         if location == 0x77:
@@ -233,12 +230,12 @@ class Dungeon1Orchestrator:
     def __init__(self):
         self.keys_obtained = set()
         self.prev_keys = None
+        self.entry_memory = None
 
         self.locations_to_kill_enemies = set([0x72, 0x53, 0x34, 0x44, 0x23, 0x35])
         self.location_direction = {
             0x74 : "W",
             0x72 : "E",
-            0x73 : "NEW",  # entry room, key based
             0x63 : "N",
             0x53 : "W",
             0x54 : "W",
@@ -259,6 +256,7 @@ class Dungeon1Orchestrator:
         """Resets the state of the orchestrator.  Called at the start of each scenario."""
         self.keys_obtained.clear()
         self.prev_keys = None
+        self.entry_memory = None
 
     def get_objectives(self, info, link_pos):
         """Returns location_objective, objective_vector, objective_pos_dir, objective_kind"""
@@ -279,22 +277,12 @@ class Dungeon1Orchestrator:
             if norm > 0:
                 return None, treasure_vector / norm, position, 'treasure'
 
-        # special case entry room, TODO: need to detect door lock
+        # entry room
         if location == 0x73:
-            room = 0x63
-            direction = "N"
-            if 0x72 not in self.keys_obtained:
-                room = 0x72
-                direction = "W"
+            return self._handle_entry_room(info)
 
-            elif 0x74 not in self.keys_obtained:
-                room = 0x74
-                direction = "E"
-
-            return room, None, direction, 'room'
-
-        if location == 0x63 and (0x72 not in self.keys_obtained or 0x74 not in self.keys_obtained):
-            return 0x73, None, "S", 'room'
+        # clear entry memory if we aren't in the entry room
+        self.entry_memory = None
 
         # check if we should kill all enemies:
         if location in self.locations_to_kill_enemies:
@@ -304,10 +292,25 @@ class Dungeon1Orchestrator:
         # otherwise, movement direction is based on the location
         if location in self.location_direction:
             direction = self.location_direction[location]
-            location = get_location_objective(self.location_direction, location)
+            location = get_location_from_direction(location, direction)
             return location, None, direction, 'room'
 
         return None
+
+    def _handle_entry_room(self, info):
+        if self.entry_memory is None:
+            self.entry_memory = info['keys'], 0x9a in info['tiles']
+
+        keys, door_is_locked = self.entry_memory
+        direction = "N"
+        if door_is_locked:
+            if keys == 0:
+                direction = "W"
+            elif keys == 1:
+                direction = "E"
+
+        room = get_location_from_direction(info['location'], direction)
+        return room, None, direction, 'room'
 
     def is_dangerous_room(self, info):
         """Returns True if the room is dangerous.  This is used to avoid picking up low-value items."""

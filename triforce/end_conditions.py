@@ -121,3 +121,14 @@ class DefeatedBoss(ZeldaEndCondition):
             return True, False, "failure-left-boss-room"
 
         return False, False, None
+
+class LeftRoom(ZeldaEndCondition):
+    """End condition for leaving the current room."""
+    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
+        if old['location'] != new['location']:
+            if new['location_objective'] == new['location']:
+                return False, True, "truncated-left-room"
+
+            return True, False, "failure-left-room"
+
+        return False, False, None

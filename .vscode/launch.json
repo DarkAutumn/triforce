@@ -23,6 +23,15 @@
             "justMyCode": false
         },
         {
+            "name": "Dungeon1 - entrance",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "run.py",
+            "args": ["dungeon1entrance"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Dungeon1 - beams",
             "type": "debugpy",
             "request": "launch",
