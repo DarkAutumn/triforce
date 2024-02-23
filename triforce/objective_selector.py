@@ -279,21 +279,10 @@ class Dungeon1Orchestrator:
 
         # entry room
         if location == 0x73:
-            if self.entry_memory is None:
-                self.entry_memory = info['keys'], 0x9a in info['tiles']
+            return self._handle_entry_room(info)
 
-            keys, door_is_locked = self.entry_memory
-            direction = "N"
-            if door_is_locked:
-                if keys == 0:
-                    direction = "W"
-                elif keys == 1:
-                    direction = "E"
-
-            room = get_location_from_direction(location, direction)
-            return room, None, direction, 'room'
-        else:
-            self.entry_memory = None
+        # clear entry memory if we aren't in the entry room
+        self.entry_memory = None
 
         # check if we should kill all enemies:
         if location in self.locations_to_kill_enemies:
@@ -307,6 +296,21 @@ class Dungeon1Orchestrator:
             return location, None, direction, 'room'
 
         return None
+
+    def _handle_entry_room(self, info):
+        if self.entry_memory is None:
+            self.entry_memory = info['keys'], 0x9a in info['tiles']
+
+        keys, door_is_locked = self.entry_memory
+        direction = "N"
+        if door_is_locked:
+            if keys == 0:
+                direction = "W"
+            elif keys == 1:
+                direction = "E"
+
+        room = get_location_from_direction(location, direction)
+        return room, None, direction, 'room'
 
     def is_dangerous_room(self, info):
         """Returns True if the room is dangerous.  This is used to avoid picking up low-value items."""
