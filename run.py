@@ -15,6 +15,7 @@ from typing import List
 import pygame
 import numpy as np
 import cv2
+import tqdm
 
 from triforce import ModelSelector, ZeldaScenario, ZeldaEnv, ZeldaAIModel, simulate_critique
 from triforce.zelda_game import is_in_cave
@@ -37,6 +38,8 @@ class Recording:
 
     def write(self, surface):
         """Adds a frame to the recording."""
+        surface = surface.copy()
+
         if self.buffer_size <= 1:
             self._write_surface(surface.copy())
 
@@ -55,8 +58,12 @@ class Recording:
 
     def flush(self):
         """Writes the buffer to the recording."""
-        for frame in self.buffer:
-            self._write_surface(frame)
+        if len(self.buffer) < 1000:
+            for frame in self.buffer:
+                self._write_surface(frame)
+        else:
+            for frame in tqdm.tqdm(self.buffer):
+                self._write_surface(frame)
 
         self.buffer.clear()
 
@@ -74,7 +81,7 @@ class Recording:
 
         i = 0
         while True:
-            filename = os.path.join(directory, f"recording_{i:03d}.avi")
+            filename = os.path.join(directory, f"gameplay_{i:03d}.avi")
             if not os.path.exists(filename):
                 return filename
             i += 1
@@ -136,6 +143,7 @@ class DisplayWindow:
         model_kind = None
 
         show_endings = False
+        force_save = False
         recording = None
         cap_fps = True
         overlay = 0
@@ -160,7 +168,7 @@ class DisplayWindow:
 
                 # we use buffer_size to check if we only want to record on a win
                 if recording:
-                    if recording.buffer_size > 1 and not last_info['triforce']:
+                    if not force_save and recording.buffer_size > 1 and not last_info['triforce']:
                         recording.buffer.clear()
 
                     recording.close()
@@ -211,7 +219,7 @@ class DisplayWindow:
                                 (self.game_x + self.game_width - 120, self.game_y))
 
                 # render rewards graph and values
-                self._draw_details(surface, reward_map, deaths)
+                ending_render = endings if show_endings else None
                 self._draw_details(surface, reward_map, ending_render)
                 rendered_buttons = self._draw_reward_buttons(surface, buttons, (self.text_x, self.text_y),
                                                             (self.text_width, self.text_height))
@@ -258,11 +266,22 @@ class DisplayWindow:
                         elif event.key == pygame.K_o:
                             overlay = (overlay + 1) % 3
 
+                        elif event.key == pygame.K_e:
+                            show_endings = not show_endings
+
                         elif event.key == pygame.K_m:
                             model_requested += 1
 
                         elif event.key == pygame.K_u:
                             cap_fps = not cap_fps
+
+                        elif event.key == pygame.K_s:
+                            if not force_save:
+                                force_save = not force_save
+                                if force_save:
+                                    print("Always saving videos")
+                                else:
+                                    print("Saving only on win")
 
                         elif event.key == pygame.K_F4:
                             if recording is None:
