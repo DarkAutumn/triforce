@@ -127,7 +127,7 @@ class DisplayWindow:
         surface = pygame.display.set_mode(self.dimensions)
         clock = pygame.time.Clock()
 
-        deaths = {}
+        endings = {}
         reward_map = {}
         buttons = deque(maxlen=100)
 
@@ -135,6 +135,7 @@ class DisplayWindow:
         model_name = None
         model_kind = None
 
+        show_endings = False
         recording = None
         cap_fps = True
         overlay = 0
@@ -149,12 +150,8 @@ class DisplayWindow:
         mode = 'c'
         while mode != 'q':
             if terminated or truncated:
-                if info and 'level' in info and 'location' in info:
-                    if info['level'] == 0:
-                        deaths['overworld'] = deaths.get('overworld', 0) + 1
-                    else:
-                        location = hex(info['location'])
-                        deaths[location] = deaths.get(location, 0) + 1
+                if 'end' in info:
+                    endings[info['end']] = endings.get(info['end'], 0) + 1
 
                 last_info = info
                 obs, info = env.reset()
@@ -215,6 +212,7 @@ class DisplayWindow:
 
                 # render rewards graph and values
                 self._draw_details(surface, reward_map, deaths)
+                self._draw_details(surface, reward_map, ending_render)
                 rendered_buttons = self._draw_reward_buttons(surface, buttons, (self.text_x, self.text_y),
                                                             (self.text_width, self.text_height))
 
@@ -389,7 +387,7 @@ class DisplayWindow:
         render_text(surface, self.font, value, (x + total_width - value_width, y), color)
         return new_y
 
-    def _draw_details(self, surface, rewards, deaths):
+    def _draw_details(self, surface, rewards, endings):
         col = 0
         row = 1
         col_width = self.details_width // 3 - 3
@@ -407,12 +405,12 @@ class DisplayWindow:
                                         self.details_y + row * row_height, col_width, color)
             row, col = self.__increment(row, col, row_max)
 
-        if deaths:
+        if endings:
             row, col = self.__increment(row, col, row_max)
-            self._write_key_val_aligned(surface, "Deaths:", f"{sum(deaths.values())}", x + col * col_width,
+            self._write_key_val_aligned(surface, "Episodes:", f"{sum(endings.values())}", x + col * col_width,
                                         self.details_y + row * row_height, col_width)
 
-            items = list(deaths.items())
+            items = list(endings.items())
             items.sort(key=lambda x: x[1], reverse=True)
             for k, v in items:
                 row, col = self.__increment(row, col, row_max)
