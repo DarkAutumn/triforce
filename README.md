@@ -16,7 +16,7 @@ This project uses stable-baselines3 for reinforcement learning (specifically PPO
 
 Instead of one model that does everything, this project uses a series of models trained on specific tasks to play the game.  We still try to limit the overall number of models used to what we really need.
 
-The triforce project itself is divided into a some key areas:
+The triforce project itself is divided into some key areas:
 
 * Gymnasium Environments and Wrappers - Used to transform the Zelda game state into something usable by stable-baselines.
 * Zelda Memory/Game Interpretation - Code to pull apart the game's RAM and interpret it.
@@ -34,11 +34,11 @@ The triforce project itself is divided into a some key areas:
 
 [ZeldaObservationWrapper](triforce/zelda_observation_wrapper.py) controls what the model "sees" in terms of the image.  It was clear from early on that the basic neural networks defined by stable-baselines3 could not interpret the entire view of the game.  It's too hard for it to find link on the screen and interpret enemies around him.  Instead we create a viewport around link, so the model always has link centered in its view.  We also convert to grayscale because (so far) it seems the model plays better with less color channels to interpret.
 
-[ZeldaVectorFeatures](triforce/zelda_vector_features.py) provides a few more observations to the model.  Since we don't give the model the view of the entire screen (or the hud, including link's health), it isn't able to "see" enemies, items, and objectives outside of that viewport.  Instead we provide it some limited data to help it know about things the map.  This includes whether link has full health to shoot sword beams, vectors pointing to the nearest enemy, item, projectile, and the objective.  The goal is to give the model enough to play the game with a small viewport, but not enough to feel like it's 'cheating'.
+[ZeldaVectorFeatures](triforce/zelda_vector_features.py) provides a few more observations to the model.  Since we don't give the model the view of the entire screen (or the hud, including link's health), it isn't able to "see" enemies, items, and objectives outside of that viewport.  Instead, we provide it with some limited data to help it know about things outside of its view.  This includes whether link has full health to shoot sword beams, vectors pointing to the nearest enemy, item, projectile, and the objective.  The goal is to give the model enough to play the game with a small viewport, but not enough to feel like it's 'cheating'.
 
-[ZeldaGameWrapper](triforce/zelda_wrapper.py) reinterprets game state and RAM into something that can be provided to critics or observation wrappers.  This code finds all enemies, items, and projectiles on screen and produces that in the `info` dictionary.  It also helps determine when link will hit when he shoots his sword beams or drops a bomb onscreen.  We have to reward the exact action which shot the beams for the game to learn properly, and not when the sword or bomb will actually hit, and this wrapper is what does that work.
+[ZeldaGameWrapper](triforce/zelda_wrapper.py) reinterprets game state and RAM into something that can be provided to critics or observation wrappers.  This code finds all enemies, items, and projectiles on screen and produces that in the `info` dictionary.  It also helps determine when link will hit when he shoots his sword beams or drops a bomb onscreen.  We have to reward the exact action that shot sword beams for the game to learn properly, and not when the sword or bomb will hit, and this wrapper is what does that work.
 
-[ObjectiveSelector](triforce/objective_selector.py) sets the goal/objective that the model *should* be doing at any given time.  This creates an objective vector that ZeldaVectorFeatures puts into the observation, but this is also used by critics to reward/punish the model for when it gets closer to/further from completing objectives.
+[ObjectiveSelector](triforce/objective_selector.py) sets the goal/objective that the model *should* be doing at any given time.  This creates an objective vector that ZeldaVectorFeatures puts into the observation, but this is also used by critics to reward/punish the model when it gets closer to/further from completing objectives.
 
 [zelda_game.py](triforce/zelda_game.py) does a lot of the nitty gritty of interpreting raw RAM state into something more usable.  A lot of game interpretation is also done throughout, including in `ZeldaGameWrapper`.
 
@@ -46,7 +46,7 @@ The triforce project itself is divided into a some key areas:
 
 [ZeldaCritic](triforce/critics.py) classes define rewards.  Scenarios have exactly one critic associated with them, and that is used to reward the model for good gameplay and discourage it from bad gameplay.  This is implemented by giving the critics the game state prior to an action it took, the game state after that action, and it fills in a dictionary of rewards.  We use a reward dictionary (not just a number) so that we can debug rewards to figure out issues with training.
 
-Critics also define a **`score`** separate from rewards.  Where rewards are all about how well the model is *playing the game*, and are used to train the model, the `score` is used to determine how well the model is *completing the scenario*.  In particular, the score counts things like health lost and how far the model progressed through rooms.   We don't use score when training the model, instead score is used during evaluation to make sure the model doesn't just get a high reward value but die in the first room or two.
+Critics also define a **`score`** that is separate from rewards.  Where rewards are all about how well the model is *playing the game*, and are used to train the model, the `score` is used to determine how well the model is *completing the scenario*.  In particular, the score counts things like health lost and how far the model progressed through rooms.   We don't use score when training the model.  Instead, score is used during evaluation to make sure the model doesn't just get a high reward value but die in the first room or two.
 
 [ZeldaEndCondition](triforce/end_conditions.py) classes track when the scenario is won, lost, or should be truncated (if the AI gets stuck in one place, for example).  Scenarios have multiple end conditions.
 
@@ -56,11 +56,11 @@ Critics also define a **`score`** separate from rewards.  Where rewards are all 
 
 Models define what their action space is (for example, basic combat models do not use items like bombs, so the B button is entirely disabled for them.)  They define their training scenario and how many iterations should be used by default to train them.  Models also define a series of conditions and a priority for selecting them.  This project uses multiple models to play the game, so each model defines the equipment needed to use it (beams, bombs, etc) and the level that the model should be used (dungeon1, overworld, etc).  Lastly, it also defines a priority.  When multiple models match the criteria, priority determines which is picked.
 
-Scenarios are used to train and evaluate models.  They define what critic, end conditions, and starting room(s) are used to train them.  They also allow us to change aspects of gameplay.  The `data` section can change RAM values of the game to do a variety of things.  The `fixed` section is like `data` but those values are reset every frame.  This is how we train the model which knows how to use sword beams.  No matter if that model takes damage, it is always set to full health.  Similarly, for the no-beam model we always set health lower than full so that it never has sword beams when training.
+Scenarios are used to train and evaluate models.  They define what critic, end conditions, and starting room(s) are used to train them.  They also allow us to change aspects of gameplay.  The `data` section can change RAM values of the game to do a variety of things.  The `fixed` section is like `data` but those values are reset every frame.  This is how we train the model which knows how to use sword beams.  No matter if that model takes damage, it is always set to full health.  For the no-beam model, we always set health lower than full so that it never has sword beams when training.
 
 ## Running and Debugging the Models
 
-I develop on Linux, but in the past this project has worked fine on an up-to-date WSL2 Ubuntu instance on Windows (including the pygame based GUI).  I do not test it on Windows, so your experience my vary.
+I develop on Linux, but in the past this project has worked fine on an up-to-date WSL2 Ubuntu instance on Windows (including the pygame based GUI).  I do not test it on Windows, so your experience may vary.
 
 Be sure to install dependencies with `pip install -r requirements.txt`.
 
@@ -86,11 +86,11 @@ Keybindings for `run.py`:
 * **F4** - Enable recording.  Recording files are dropped to recording/
 * **F10** - Enable in-memory recording, only saving the recording if the scenario is successfully completed.  **DANGER**: This can eat 100gb+ of RAM.  I use this to capture videos of successful runs, but should not be used unless your machine has a massive amount of RAM.
 
-As the program runs, per-step rewards are displayed on the right hand side.  Clicking on those individual rewards will cause the program to re-run the ZeldaCritic responsible for generating that reward and will print the values to console.  This is used to debug rewards.  When you see a reward that doesn't make sense, use VS Code (or your favorite editor/debugger) to set a breakpoint on the function and click the reward in the UI to debug through it.
+As the program runs, per-step rewards are displayed on the right hand side.  Clicking on those individual rewards will cause the program to re-run the ZeldaCritic responsible for generating that reward and will print the values to the console.  This is used to debug rewards.  When you see a reward that doesn't make sense, use VS Code (or your favorite editor/debugger) to set a breakpoint on the function and click the reward in the UI to debug through it.
 
 ### Training Models
 
-Training the model can be accomplished using `train.py`.  By default it will train all models, single threaded, using the default number of iterations defined in `triforce.json`.  You can also specify which models to train, where to output the models, how many subprocesses to use, etc.
+Training the model can be accomplished using `train.py`.  By default it will train all models, single-threaded, using the default number of iterations defined in `triforce.json`.  You can also specify which models to train, where to output the models, how many subprocesses to use, etc.
 
     ./train.py
     ./train.py overworld1beams overworld1nobeams
@@ -104,7 +104,7 @@ By default, the new models will be placed in `training/`. Use `run.py --model-pa
 
 Rewards teach the model how to play, but it's the scoring function that tries to figure out how well the model is doing in completing the scenario.  It doesn't matter how many enemies Link kills or movements in the "wrong" direction as long as he completes the scenario without dying.  The `evaluate.py` module will run a given scenario 100 times (by default) and calculate the percentage of runs that were completed successfully, as well as the average score and rewards.
 
-After completing a training run, you should use `evaluate.py` and compare it to `models/evaluation.csv`.  You can run this in parallel (but it's graphics card RAM intensive, keep the number low), and the number of episodes to run.  For example, if you trained the dungeon1beams and dungeon1nobeams models, saving them to the default training/ folder:
+After completing a training run, you should use `evaluate.py` and compare it to `models/evaluation.csv`.  You can run this in parallel (but it's graphics card RAM intensive, so keep the number low), and the number of episodes to run.  For example, if you trained the dungeon1beams and dungeon1nobeams models and saved them to the default training/ folder:
 
     usage: evaluate.py model-path scenarios
 
