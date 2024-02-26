@@ -349,7 +349,9 @@ class DisplayWindow:
     def _print_end_info(self, info, terminated):
         total_time = (pygame.time.get_ticks() - self.start_time) / 1000
         term = "terminated" if terminated else "truncated"
-        print(f"Episode {term} with {self.total_rewards:.2f} rewards, ending: {info.get('end', '???')} in {total_time:.2f} seconds")
+        result = f"Episode {term} with {self.total_rewards:.2f} rewards"
+        result += f", ending: {info.get('end', '???')} in {total_time:.2f} seconds"
+        print(result)
 
     def _show_observation(self, surface, obs):
         x_pos = self.obs_x
