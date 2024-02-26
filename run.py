@@ -15,6 +15,7 @@ from typing import List
 import pygame
 import numpy as np
 import cv2
+import tqdm
 
 from triforce import ModelSelector, ZeldaScenario, ZeldaEnv, ZeldaAIModel, simulate_critique
 from triforce.zelda_game import is_in_cave
@@ -37,6 +38,8 @@ class Recording:
 
     def write(self, surface):
         """Adds a frame to the recording."""
+        surface = surface.copy()
+
         if self.buffer_size <= 1:
             self._write_surface(surface.copy())
 
@@ -55,8 +58,12 @@ class Recording:
 
     def flush(self):
         """Writes the buffer to the recording."""
-        for frame in self.buffer:
-            self._write_surface(frame)
+        if len(self.buffer) < 1000:
+            for frame in self.buffer:
+                self._write_surface(frame)
+        else:
+            for frame in tqdm.tqdm(self.buffer):
+                self._write_surface(frame)
 
         self.buffer.clear()
 
@@ -74,7 +81,7 @@ class Recording:
 
         i = 0
         while True:
-            filename = os.path.join(directory, f"recording_{i:03d}.avi")
+            filename = os.path.join(directory, f"gameplay_{i:03d}.avi")
             if not os.path.exists(filename):
                 return filename
             i += 1
@@ -119,15 +126,15 @@ class DisplayWindow:
         self.dimensions = (self.total_width, self.total_height)
 
         self.total_rewards = 0.0
+        self._last_location = None
+        self.start_time = None
 
-    def show(self):
+    def show(self, headless_recording=False):
         """Shows the game and the AI model."""
         env = self.zelda_ml.make_env(self.scenario)
-
-        surface = pygame.display.set_mode(self.dimensions)
         clock = pygame.time.Clock()
 
-        deaths = {}
+        endings = {}
         reward_map = {}
         buttons = deque(maxlen=100)
 
@@ -135,9 +142,20 @@ class DisplayWindow:
         model_name = None
         model_kind = None
 
+        show_endings = False
+        force_save = False
         recording = None
         cap_fps = True
         overlay = 0
+
+        if headless_recording:
+            recording = Recording(self.dimensions, 1)
+            force_save = True
+            cap_fps = False
+            surface = pygame.Surface(self.dimensions)
+            print("Headless recording started")
+        else:
+            surface = pygame.display.set_mode(self.dimensions)
 
         terminated = True
         truncated = False
@@ -149,12 +167,11 @@ class DisplayWindow:
         mode = 'c'
         while mode != 'q':
             if terminated or truncated:
-                if info and 'level' in info and 'location' in info:
-                    if info['level'] == 0:
-                        deaths['overworld'] = deaths.get('overworld', 0) + 1
-                    else:
-                        location = hex(info['location'])
-                        deaths[location] = deaths.get(location, 0) + 1
+                if headless_recording and last_info:
+                    self._print_end_info(info, terminated)
+
+                if 'end' in info:
+                    endings[info['end']] = endings.get(info['end'], 0) + 1
 
                 last_info = info
                 obs, info = env.reset()
@@ -163,10 +180,12 @@ class DisplayWindow:
 
                 # we use buffer_size to check if we only want to record on a win
                 if recording:
-                    if recording.buffer_size > 1 and not last_info['triforce']:
+                    if not force_save and recording.buffer_size > 1 and not last_info['triforce']:
                         recording.buffer.clear()
 
                     recording.close()
+
+                self.start_time = pygame.time.get_ticks()
 
             # Perform a step in the environment
             if mode in ('c', 'n'):
@@ -214,7 +233,8 @@ class DisplayWindow:
                                 (self.game_x + self.game_width - 120, self.game_y))
 
                 # render rewards graph and values
-                self._draw_details(surface, reward_map, deaths)
+                ending_render = endings if show_endings else None
+                self._draw_details(surface, reward_map, ending_render)
                 rendered_buttons = self._draw_reward_buttons(surface, buttons, (self.text_x, self.text_y),
                                                             (self.text_width, self.text_height))
 
@@ -222,7 +242,12 @@ class DisplayWindow:
                     recording.write(surface)
 
                 # Display the scaled frame
-                pygame.display.flip()
+                if not headless_recording:
+                    pygame.display.flip()
+
+                else:
+                    self._print_location_info(info)
+
                 if cap_fps:
                     clock.tick(60.1)
 
@@ -260,11 +285,22 @@ class DisplayWindow:
                         elif event.key == pygame.K_o:
                             overlay = (overlay + 1) % 3
 
+                        elif event.key == pygame.K_e:
+                            show_endings = not show_endings
+
                         elif event.key == pygame.K_m:
                             model_requested += 1
 
                         elif event.key == pygame.K_u:
                             cap_fps = not cap_fps
+
+                        elif event.key == pygame.K_s:
+                            if not force_save:
+                                force_save = not force_save
+                                if force_save:
+                                    print("Always saving videos")
+                                else:
+                                    print("Saving only on win")
 
                         elif event.key == pygame.K_F4:
                             if recording is None:
@@ -292,6 +328,30 @@ class DisplayWindow:
 
         env.close()
         pygame.quit()
+
+    def _print_location_info(self, info):
+        if self._last_location is not None:
+            last_level, last_location = self._last_location
+            if last_level != info['level']:
+                if info['level'] == 0:
+                    print("Overworld")
+                else:
+                    print(f"Dungeon {info['level']}")
+
+            if last_location != info['location']:
+                print(f"Location: {hex(last_location)} -> {hex(info['location'])}")
+        else:
+            print("Overworld" if info['level'] == 0 else f"Dungeon {info['level']}")
+            print(f"Location: {hex(info['location'])}")
+
+        self._last_location = (info['level'], info['location'])
+
+    def _print_end_info(self, info, terminated):
+        total_time = (pygame.time.get_ticks() - self.start_time) / 1000
+        term = "terminated" if terminated else "truncated"
+        result = f"Episode {term} with {self.total_rewards:.2f} rewards"
+        result += f", ending: {info.get('end', '???')} in {total_time:.2f} seconds"
+        print(result)
 
     def _show_observation(self, surface, obs):
         x_pos = self.obs_x
@@ -389,7 +449,7 @@ class DisplayWindow:
         render_text(surface, self.font, value, (x + total_width - value_width, y), color)
         return new_y
 
-    def _draw_details(self, surface, rewards, deaths):
+    def _draw_details(self, surface, rewards, endings):
         col = 0
         row = 1
         col_width = self.details_width // 3 - 3
@@ -407,12 +467,12 @@ class DisplayWindow:
                                         self.details_y + row * row_height, col_width, color)
             row, col = self.__increment(row, col, row_max)
 
-        if deaths:
+        if endings:
             row, col = self.__increment(row, col, row_max)
-            self._write_key_val_aligned(surface, "Deaths:", f"{sum(deaths.values())}", x + col * col_width,
+            self._write_key_val_aligned(surface, "Episodes:", f"{sum(endings.values())}", x + col * col_width,
                                         self.details_y + row * row_height, col_width)
 
-            items = list(deaths.items())
+            items = list(endings.items())
             items.sort(key=lambda x: x[1], reverse=True)
             for k, v in items:
                 row, col = self.__increment(row, col, row_max)
@@ -576,7 +636,7 @@ def main():
         return
 
     display = DisplayWindow(zelda_ml, models, scenario)
-    display.show()
+    display.show(args.headless_recording)
 
 def parse_args():
     """Parse command line arguments."""
@@ -589,6 +649,7 @@ def parse_args():
                         help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
     parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames the model was trained with.")
+    parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
 
     parser.add_argument('scenario', nargs='?', help='Scenario name')
 
