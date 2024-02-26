@@ -126,12 +126,12 @@ class DisplayWindow:
         self.dimensions = (self.total_width, self.total_height)
 
         self.total_rewards = 0.0
+        self._last_location = None
+        self.start_time = None
 
-    def show(self):
+    def show(self, headless_recording=False):
         """Shows the game and the AI model."""
         env = self.zelda_ml.make_env(self.scenario)
-
-        surface = pygame.display.set_mode(self.dimensions)
         clock = pygame.time.Clock()
 
         endings = {}
@@ -148,6 +148,15 @@ class DisplayWindow:
         cap_fps = True
         overlay = 0
 
+        if headless_recording:
+            recording = Recording(self.dimensions, 1)
+            force_save = True
+            cap_fps = False
+            surface = pygame.Surface(self.dimensions)
+            print("Headless recording started")
+        else:
+            surface = pygame.display.set_mode(self.dimensions)
+
         terminated = True
         truncated = False
 
@@ -158,6 +167,9 @@ class DisplayWindow:
         mode = 'c'
         while mode != 'q':
             if terminated or truncated:
+                if headless_recording and last_info:
+                    self._print_end_info(info, terminated)
+
                 if 'end' in info:
                     endings[info['end']] = endings.get(info['end'], 0) + 1
 
@@ -172,6 +184,8 @@ class DisplayWindow:
                         recording.buffer.clear()
 
                     recording.close()
+
+                self.start_time = pygame.time.get_ticks()
 
             # Perform a step in the environment
             if mode in ('c', 'n'):
@@ -228,7 +242,12 @@ class DisplayWindow:
                     recording.write(surface)
 
                 # Display the scaled frame
-                pygame.display.flip()
+                if not headless_recording:
+                    pygame.display.flip()
+
+                else:
+                    self._print_location_info(info)
+
                 if cap_fps:
                     clock.tick(60.1)
 
@@ -309,6 +328,28 @@ class DisplayWindow:
 
         env.close()
         pygame.quit()
+
+    def _print_location_info(self, info):
+        if self._last_location is not None:
+            last_level, last_location = self._last_location
+            if last_level != info['level']:
+                if info['level'] == 0:
+                    print("Overworld")
+                else:
+                    print(f"Dungeon {info['level']}")
+
+            if last_location != info['location']:
+                print(f"Location: {hex(last_location)} -> {hex(info['location'])}")
+        else:
+            print("Overworld" if info['level'] == 0 else f"Dungeon {info['level']}")
+            print(f"Location: {hex(info['location'])}")
+
+        self._last_location = (info['level'], info['location'])
+
+    def _print_end_info(self, info, terminated):
+        total_time = (pygame.time.get_ticks() - self.start_time) / 1000
+        term = "terminated" if terminated else "truncated"
+        print(f"Episode {term} with {self.total_rewards:.2f} rewards, ending: {info.get('end', '???')} in {total_time:.2f} seconds")
 
     def _show_observation(self, surface, obs):
         x_pos = self.obs_x
@@ -593,7 +634,7 @@ def main():
         return
 
     display = DisplayWindow(zelda_ml, models, scenario)
-    display.show()
+    display.show(args.headless_recording)
 
 def parse_args():
     """Parse command line arguments."""
@@ -606,6 +647,7 @@ def parse_args():
                         help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
     parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames the model was trained with.")
+    parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
 
     parser.add_argument('scenario', nargs='?', help='Scenario name')
 
