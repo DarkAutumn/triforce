@@ -8,7 +8,7 @@ This repo does *not* include a copy of the Legend of Zelda rom.  You must find y
 
 This project was built using Python 3.10.  You may also have to install `libgl1-mesa-glx` to use `run.py`.
 
-This repo does include a set of pre-trained models.  Once the Zelda rom is in place, simply run `./run.py` to see the model play game.
+This repo does include a set of pre-trained models.  Once the Zelda rom is in place, simply run `./run.py` to see the model play the game up through the end of the first dungeon.  (It does not usually win.)
 
 ![run.py output](./img/run.png)
 
