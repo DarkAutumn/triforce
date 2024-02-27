@@ -4,7 +4,6 @@ import json
 import os
 from typing import Dict, List, Optional, Union
 from pydantic import BaseModel, field_validator
-from stable_baselines3 import PPO
 
 class ZeldaScenario(BaseModel):
     """A scenario in the game to train on.  This is a combination of critics and end conditions."""
@@ -17,17 +16,7 @@ class ZeldaScenario(BaseModel):
     data : Optional[Dict[str, int]] = {}
     fixed : Optional[Dict[str, int]] = {}
 
-    @classmethod
-    def get_all_scenarios(cls) -> List['ZeldaScenario']:
-        """Returns all scenarios."""
-        return list(ALL_SCENARIOS.values())
-
-    @classmethod
-    def get(cls, name) -> 'ZeldaScenario':
-        """Gets the scenario from the name."""
-        return ALL_SCENARIOS.get(name, None)
-
-class ZeldaAIModel(BaseModel):
+class ZeldaModelDefinition(BaseModel):
     """
     Represents a defined AI model for The Legend of Zelda.  Each ZeldaAIModel will have a set of available models,
     which are a trained version of this defined model.
@@ -43,13 +32,11 @@ class ZeldaAIModel(BaseModel):
 
     training_scenario : ZeldaScenario
     iterations : int
-    available_models : Dict[Union[str, int], str] # version : path
-
     @field_validator('training_scenario', mode='before')
     @classmethod
     def training_scenario_validator(cls, value):
         """Gets the scenario from the name."""
-        return ALL_SCENARIOS.get(value)
+        return TRAINING_SCENARIOS.get(value)
 
     @field_validator('levels', 'rooms', mode='before')
     @classmethod
@@ -75,51 +62,24 @@ class ZeldaAIModel(BaseModel):
 
         return value
 
-    def load(self, version):
-        """Loads the specified version of the model."""
-        assert version in self.available_models, f"Model kind {version} is not available"
-
-        if self.name not in LOADED_MODELS:
-            LOADED_MODELS[self.name] = {}
-
-        if version not in LOADED_MODELS[self.name]:
-            LOADED_MODELS[self.name][version] = PPO.load(self.available_models[version])
-
-        return LOADED_MODELS[self.name][version]
-
-    def create(self, **values):
-        """Creates a new instance of the model."""
-        return PPO('MultiInputPolicy', **values)
-
-    @classmethod
-    def initialize(cls, path : Optional[str] = None) -> List['ZeldaAIModel']:
-        """Creates a ZeldaAIModel from the specified directory.  Meant to be used internally."""
-        result = []
-
-        if path is not None and not os.path.exists(path):
-            raise FileNotFoundError(f"Path {path} does not exist")
-
-        for model_name, defined_model in DEFINED_MODELS.items():
-            available_models = cls.__get_available_models(path, model_name)
-            result.append(cls(**defined_model, available_models=available_models))
-
-        return result
-
-    @classmethod
-    def __get_available_models(cls, path, model_name):
+    def find_available_models(self, path) -> Dict[str, 'ZeldaModelDefinition']:
+        """Finds the available models for this model definition in the given path.  Returns a dictionary of name to
+        path."""
         available_models = {}
-
         if path is None:
             return available_models
 
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Path {path} does not exist")
+
         # Check if model.zip exists
-        full_path = os.path.join(path, model_name + '.zip')
+        full_path = os.path.join(path, self.name + '.zip')
         if os.path.exists(full_path):
             available_models['default'] = full_path
 
         # otherwise, it's a training directory of models
         else:
-            dir_name = os.path.join(path, model_name)
+            dir_name = os.path.join(path, self.name)
             if os.path.isdir(dir_name):
                 for filename in os.listdir(dir_name):
                     if filename.endswith('.zip'):
@@ -131,25 +91,30 @@ class ZeldaAIModel(BaseModel):
 
         return available_models
 
-
-def load_models_and_scenarios():
-    """Loads the models and scenarios from triforce.json."""
+def _load_settings():
     script_dir = os.path.dirname(os.path.realpath(__file__))
-    models = {}
-    scenarios = {}
     with open(os.path.join(script_dir, 'triforce.json'), encoding='utf-8') as f:
-        all_settings = json.load(f)
+        return json.load(f)
 
-    for model in all_settings['models']:
-        models[model['name']] = model
-
-    for scenario in all_settings['scenarios']:
+def _load_training_scenarios(settings):
+    """Loads the models and scenarios from triforce.json."""
+    scenarios = {}
+    for scenario in settings['scenarios']:
         scenario = ZeldaScenario(**scenario)
         scenarios[scenario.name] = scenario
 
-    return models, scenarios
+    return scenarios
 
-DEFINED_MODELS, ALL_SCENARIOS = load_models_and_scenarios()
-LOADED_MODELS = {}
+def _load_model_definitions(settings):
+    """Loads the models and scenarios from triforce.json."""
+    models = {}
+    for model in settings['models']:
+        models[model['name']] = ZeldaModelDefinition(**model)
 
-__all__ = [ZeldaAIModel.__name__, ZeldaScenario.__name__]
+    return models
+
+all_settings = _load_settings()
+TRAINING_SCENARIOS = _load_training_scenarios(all_settings)
+ZELDA_MODELS = _load_model_definitions(all_settings)
+
+__all__ = [ZeldaModelDefinition.__name__, ZeldaScenario.__name__, 'ZELDA_MODELS', 'TRAINING_SCENARIOS']

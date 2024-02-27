@@ -18,7 +18,7 @@ Instead of one model that does everything, this project uses a series of models 
 
 The triforce project itself is divided into some key areas:
 
-* Gymnasium Environments and Wrappers - Used to transform the Zelda game state into something usable by stable-baselines.
+* Zelda Gymnasium Environments and Wrappers - Used to transform the Zelda game state into something a machine-learning model can understand.
 * Zelda Memory/Game Interpretation - Code to pull apart the game's RAM and interpret it.
 * Objective Selector - Selects what the model *should* be doing at any given time.
 * Critics and End Conditions - Used to reward the reinforcement learning algorithm based on the current objective.
@@ -26,7 +26,7 @@ The triforce project itself is divided into some key areas:
 
 ### Gymnasium Environments and Wrappers
 
-[ZeldaEnv](triforce/zelda_env.py) is not *exactly* a gym environment, it's more of an environment factory which keeps track of how to create environments based on options selected, and training models.
+[make_zelda_env](triforce/zelda_env.py) is a function which creates a Zelda retro environment with all the appropriate wrappers.  Most uses of stable-retro are confined to this one file/function (with some exceptions where it made sense).
 
 [ScenarioWrapper](triforce/scenario_wrapper.py) keeps track of the scenario we are running or training on, and all of the critics and end conditions associated with it.
 
@@ -52,11 +52,13 @@ Critics also define a **`score`** that is separate from rewards.  Where rewards 
 
 ### Scenarios and Models
 
-[triforce.json](triforce/triforce.json) defines models and the scenarios used to train and evaluate them.
+[triforce.json](triforce/triforce.json) this *defines* models and the scenarios used to train and evaluate them (definitions are in [models_and_scenarios.py](triforce/models_and_scenarios.py)).
 
 Models define what their action space is (for example, basic combat models do not use items like bombs, so the B button is entirely disabled for them.)  They define their training scenario and how many iterations should be used by default to train them.  Models also define a series of conditions and a priority for selecting them.  This project uses multiple models to play the game, so each model defines the equipment needed to use it (beams, bombs, etc) and the level that the model should be used (dungeon1, overworld, etc).  Lastly, it also defines a priority.  When multiple models match the criteria, priority determines which is picked.
 
 Scenarios are used to train and evaluate models.  They define what critic, end conditions, and starting room(s) are used to train them.  They also allow us to change aspects of gameplay.  The `data` section can change RAM values of the game to do a variety of things.  The `fixed` section is like `data` but those values are reset every frame.  This is how we train the model which knows how to use sword beams.  No matter if that model takes damage, it is always set to full health.  For the no-beam model, we always set health lower than full so that it never has sword beams when training.
+
+[machine_learning.py](triforce/machine_learning.py) encompasses all neural network and reinforcement learning algorithms.  Currently, this project simply uses stable-baselines for its PPO implementation along with the default 'MultiInputPolicy'.  All interaction with the model goes through the ZeldaAI class to train it, predict actions, and load/save the model itself.  This allows you to easily swap out the underlying implementation without touching the rest of the project.
 
 ## Running and Debugging the Models
 

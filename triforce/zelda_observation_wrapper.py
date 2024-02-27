@@ -13,7 +13,7 @@ from .model_parameters import VIEWPORT_PIXELS, GAMEPLAY_START_Y
 
 class FrameCaptureWrapper(gym.Wrapper):
     """A wrapper that captures the last 30 frames of the environment."""
-    def __init__(self, env, rgb_render):
+    def __init__(self, env, rgb_render : bool):
         super().__init__(env)
         self.env = env
         self.observation_space = self.env.observation_space

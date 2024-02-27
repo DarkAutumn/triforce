@@ -8,24 +8,21 @@ from multiprocessing import Value, Pool
 import multiprocessing
 import pandas as pd
 from tqdm import tqdm
-from triforce import ZeldaEnv, ZeldaAIModel
+from triforce import ZeldaModelDefinition, make_zelda_env, ZELDA_MODELS, ZeldaAI
 
 # pylint: disable=global-statement,global-variable-undefined
 
-def run_one_scenario(args, model_name, model_kind):
+def run_one_scenario(args, model_name, model_path):
     """Runs a single scenario."""
     # pylint: disable=redefined-outer-name,too-many-locals
 
-    zelda_ml = create_zeldaml(args)
-
-    model_dir = get_model_path(args)
-    models = ZeldaAIModel.initialize(model_dir)
-    model = next(x for x in models if x.name == model_name)
-    loaded_model = model.load(model_kind)
+    model = ZELDA_MODELS[model_name]
+    ai = ZeldaAI(model, ent_coef=args.ent_coef, verbose=args.verbose)
+    ai.load(model_path)
 
     ep_result = []
 
-    env = zelda_ml.make_env(model.training_scenario, model.action_space, 1)
+    env = make_zelda_env_from_args(model, args)
 
     for ep in range(args.episodes):
         obs, info = env.reset()
@@ -39,7 +36,7 @@ def run_one_scenario(args, model_name, model_kind):
         terminated = truncated = False
 
         while not terminated and not truncated:
-            action, _ = loaded_model.predict(obs, info)
+            action = ai.predict(obs)
             obs, reward, terminated, truncated, info = env.step(action) # pylint: disable=unbalanced-tuple-unpacking
             episode_total_reward += reward
 
@@ -76,15 +73,14 @@ def run_one_scenario(args, model_name, model_kind):
     rewards = round(sum(x[4] for x in ep_result) / len(ep_result), 1)
     penalties = round(sum(x[5] for x in ep_result) / len(ep_result), 1)
 
-    return (model_name, model_kind, success_rate, score, total_reward, rewards, penalties)
+    return (model_name, model_path, success_rate, score, total_reward, rewards, penalties)
 
 
-def create_zeldaml(args):
+def make_zelda_env_from_args(model : ZeldaModelDefinition, args):
     """Creates a ZeldaML instance."""
     render_mode = 'human' if args.render else None
-    zelda_ml = ZeldaEnv(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose,
-                       ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
-    return zelda_ml
+    return make_zelda_env(model.training_scenario, model.action_space, grayscale= not args.color,
+                          framestack=args.frame_stack, render_mode=render_mode, obs_kind=args.obs_kind)
 
 def get_model_path(args):
     """Gets the model path."""
@@ -110,16 +106,20 @@ def main():
     global COUNTER
     COUNTER = Value('i', 0)
 
-    models = ZeldaAIModel.initialize(get_model_path(args))
+    model_path = get_model_path(args)
+    models = args.models if args.models else ZELDA_MODELS.keys()
 
     all_scenarios = []
-    for model in models:
-        if not args.models or model.name in args.models:
+    for model_name in models:
+        if not args.models or model_name in args.models:
+            available_models = ZELDA_MODELS[model_name].find_available_models(model_path)
+
             # For inteveral saved models,  only evaluate the last 3
-            available_models = sorted([int(x) for x in model.available_models.keys() if isinstance(x, int)])[-3:]
-            available_models += [x for x in model.available_models.keys() if not isinstance(x, int)]
-            for model_kind in available_models:
-                all_scenarios.append((args, model.name, model_kind))
+            models_to_evaluate = sorted([int(x) for x in available_models.keys() if isinstance(x, int)])[-3:]
+            models_to_evaluate += [x for x in available_models.keys() if not isinstance(x, int)]
+            for key in models_to_evaluate:
+                path = available_models[key]
+                all_scenarios.append((args, model_name, path))
 
     total_count = len(all_scenarios) * args.episodes
 
@@ -143,15 +143,18 @@ def main():
         for scenario in tqdm(all_scenarios, total=len(all_scenarios)):
             results.append(run_one_scenario(*scenario))
 
+    print_and_save(get_model_path(args), results)
+
+def print_and_save(model_path, results):
+    """Prints the result and saves it to evaluation.csv."""
     columns = ['Model', 'Kind', 'Success%', 'Score', 'Total Reward', 'Rewards', 'Penalties']
     data_frame = pd.DataFrame(results, columns=columns)
     print(data_frame.to_string(index=False))
-    data_frame.to_csv(os.path.join(get_model_path(args), 'evaluation.csv'), index=False)
-
+    data_frame.to_csv(os.path.join(model_path, 'evaluation.csv'), index=False)
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="ZeldaML - An ML agent to play The Legned of Zelda (NES).")
+    parser = argparse.ArgumentParser(description="evaluate - Evaluate Zelda ML models.")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--color", action='store_true',
