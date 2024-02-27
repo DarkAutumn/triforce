@@ -8,11 +8,12 @@ This consumes some state and produces values like 'step_hits'.
 
 from enum import Enum
 from random import randint
+from typing import Optional
 import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import AnimationState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, \
+from .zelda_game import AnimationState, Direction, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, \
                         is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen
 from .model_parameters import LOCATION_CHANGE_COOLDOWN, MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, \
                                 ITEM_COOLDOWN, CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
@@ -98,23 +99,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['link_pos'] = link_pos
         link_pos = np.array(link_pos, dtype=np.float32)
 
-        direction = info['link_direction']
-        info['link_vector'] = np.zeros(2, dtype=np.float32)
-        if direction == 1:      # east
-            info['direction'] = 'E'
-            info['link_vector'][0] = 1
-        elif direction == 2:    # west
-            info['direction'] = 'W'
-            info['link_vector'][0] = -1
-        elif direction == 4:    # south
-            info['direction'] = 'S'
-            info['link_vector'][1] = 1
-        elif direction == 8:    # north
-            info['direction'] = 'N'
-            info['link_vector'][1] = -1
-        else:
-            assert False, "Unknown direction"
-
+        info['link_direction'] = Direction.from_ram_value(info['link_direction'])
         info['is_sword_frozen'] = is_sword_frozen(info)
 
         # add information about enemies, items, and projectiles
@@ -235,17 +220,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['total_frames'] = total_frames
         return obs, rewards, terminated, truncated, info
 
-    def _set_direction(self, direction):
-        if direction == 'E':
-            direction = 1
-        elif direction == 'W':
-            direction = 2
-        elif direction == 'S':
-            direction = 4
-        elif direction == 'N':
-            direction = 8
-
-        self.env.unwrapped.data.set_value('link_direction', direction)
+    def _set_direction(self, direction : Direction):
+        self.env.unwrapped.data.set_value('link_direction', direction.value)
 
     def skip(self, act, cooldown):
         """Skips a number of frames, returning the final state."""
@@ -256,18 +232,18 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return obs, rewards, terminated, truncated, info
 
-    def _get_button_direction(self, act):
+    def _get_button_direction(self, act) -> Optional[Direction]:
         if act[self.up_button]:
-            return 'N'
+            return Direction.N
 
         if act[self.down_button]:
-            return 'S'
+            return Direction.S
 
         if act[self.left_button]:
-            return 'W'
+            return Direction.W
 
         if act[self.right_button]:
-            return 'E'
+            return Direction.E
 
         return None
 

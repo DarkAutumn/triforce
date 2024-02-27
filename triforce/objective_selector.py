@@ -1,35 +1,24 @@
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import get_link_tile_index, is_in_cave, position_to_tile_index, tile_index_to_position, \
+from .zelda_game import Direction, get_link_tile_index, is_in_cave, position_to_tile_index, tile_index_to_position, \
     is_health_full, ZeldaItem
 from .astar import a_star
 
-def get_vector_from_direction(direction):
-    """Gets a vector from a cardinal direction."""
-    if direction == "N":
-        return np.array([0, -1], dtype=np.float32)
-    if direction == "S":
-        return np.array([0, 1], dtype=np.float32)
-    if direction == "E":
-        return np.array([1, 0], dtype=np.float32)
-    if direction == "W":
-        return np.array([-1, 0], dtype=np.float32)
-
-    return np.zeros(2, dtype=np.float32)
-
 def get_location_from_direction(location, direction):
-    """Gets the objective location from the given direction."""
-    if direction == 'N':
-        return location - 0x10
-    if direction == 'S':
-        return location + 0x10
-    if direction == 'E':
-        return location + 1
-    if direction == 'W':
-        return location - 1
+    """Gets the map location from the given direction."""
 
-    raise ValueError(f'Invalid direction: {direction}')
+    match direction:
+        case Direction.N:
+            return location - 0x10
+        case Direction.S:
+            return location + 0x10
+        case Direction.E:
+            return location + 1
+        case Direction.W:
+            return location - 1
+        case _:
+            raise ValueError(f'Invalid direction: {direction}')
 
 def find_cave_onscreen(info):
     """Finds the cave on the current screen."""
@@ -101,7 +90,7 @@ class ObjectiveSelector(gym.Wrapper):
         if objective_pos_dir is not None:
             link_tile_index = get_link_tile_index(info)
 
-            if not isinstance(objective_pos_dir, str):
+            if not isinstance(objective_pos_dir, Direction):
                 objective_pos_dir = position_to_tile_index(*objective_pos_dir)
 
             key = (info['level'], info['location'], link_tile_index, objective_pos_dir)
@@ -133,8 +122,9 @@ class ObjectiveSelector(gym.Wrapper):
                 if norm > 0:
                     objective_vector /= norm
 
-        elif isinstance(objective_pos_dir, str):
-            objective_vector = get_vector_from_direction(objective_pos_dir)
+        elif isinstance(objective_pos_dir, Direction):
+            objective_vector = objective_pos_dir.to_vector()
+
         return objective_vector
 
     def _get_items_to_ignore(self, info, sub_orchestrator):
@@ -166,13 +156,13 @@ class OverworldOrchestrator:
     """Orchestrator for the overworld.  This is used to help the agent decide what to do."""
     def __init__(self):
         self.location_direction = {
-            0x77 : "N",
-            0x78 : "N",
-            0x67 : "E",
-            0x68 : "N",
-            0x58 : "N",
-            0x48 : "N",
-            0x38 : "W",
+            0x77 : Direction.N,
+            0x78 : Direction.N,
+            0x67 : Direction.E,
+            0x68 : Direction.N,
+            0x58 : Direction.N,
+            0x48 : Direction.N,
+            0x38 : Direction.W,
         }
 
     def get_objectives(self, info, link_pos):
@@ -198,9 +188,9 @@ class OverworldOrchestrator:
                 return None, objective_vector, objective_pos, objective
 
             if is_in_cave(info):
-                return None, None, 'S', 'exit-cave'
+                return None, None, Direction.S, 'exit-cave'
 
-            return location_objective, None, 'N', 'room'
+            return location_objective, None, Direction.N, 'room'
 
         if location == 0x37:
             cave_pos = find_cave_onscreen(info)
@@ -234,22 +224,22 @@ class Dungeon1Orchestrator:
 
         self.locations_to_kill_enemies = set([0x72, 0x53, 0x34, 0x44, 0x23, 0x35])
         self.location_direction = {
-            0x74 : "W",
-            0x72 : "E",
-            0x63 : "N",
-            0x53 : "W",
-            0x54 : "W",
-            0x52 : "N",
-            0x41 : "E",
-            0x42 : "E",
-            0x43 : "E",
-            0x23 : "S",
-            0x33 : "S",
-            0x34 : "S",
-            0x44 : "E",
-            0x45 : "N",
-            0x35 : "E",
-            0x22 : "E",
+            0x74 : Direction.W,
+            0x72 : Direction.E,
+            0x63 : Direction.N,
+            0x53 : Direction.W,
+            0x54 : Direction.W,
+            0x52 : Direction.N,
+            0x41 : Direction.E,
+            0x42 : Direction.E,
+            0x43 : Direction.E,
+            0x23 : Direction.S,
+            0x33 : Direction.S,
+            0x34 : Direction.S,
+            0x44 : Direction.E,
+            0x45 : Direction.N,
+            0x35 : Direction.E,
+            0x22 : Direction.E,
         }
 
     def reset(self):
@@ -302,12 +292,12 @@ class Dungeon1Orchestrator:
             self.entry_memory = info['keys'], 0x9a in info['tiles']
 
         keys, door_is_locked = self.entry_memory
-        direction = "N"
+        direction = Direction.N
         if door_is_locked:
             if keys == 0:
-                direction = "W"
+                direction = Direction.W
             elif keys == 1:
-                direction = "E"
+                direction = Direction.E
 
         room = get_location_from_direction(info['location'], direction)
         return room, None, direction, 'room'
