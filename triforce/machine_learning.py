@@ -164,8 +164,8 @@ class LogRewardCallback(BaseCallback):
             if 'final-score' in info:
                 self._evaluation.append(info['final-score'])
 
-            if log_frames and 'frames' in info:
-                self._frames_per_iteration.append(info['frames'])
+            if log_frames and 'total_frames' in info:
+                self._frames_per_iteration.append(info['total_frames'])
 
     def _save_best(self, score, reward, save_path):
         self.model.save(save_path)
