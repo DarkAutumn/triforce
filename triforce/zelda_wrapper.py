@@ -186,13 +186,12 @@ class ZeldaGameWrapper(gym.Wrapper):
 
     def _act_and_wait(self, act):
         action_kind = self._get_action_type(act)
+        rewards = 0.0
+        total_frames = 0
+
         if action_kind == ActionType.MOVEMENT:
-            rewards = 0
-            for _ in range(MOVEMENT_FRAMES):
-                obs, rew, terminated, truncated, info = self.env.step(act)
-                rewards += rew
-                if terminated or truncated:
-                    break
+            obs, rewards, terminated, truncated, info = self.skip(act, MOVEMENT_FRAMES)
+            total_frames += MOVEMENT_FRAMES
 
         elif action_kind in (ActionType.ATTACK, ActionType.ITEM):
             direction = self._get_button_direction(act)
@@ -201,13 +200,17 @@ class ZeldaGameWrapper(gym.Wrapper):
             if action_kind == ActionType.ATTACK:
                 obs, rewards, terminated, truncated, info = self.env.step(self._attack_action)
                 cooldown = ATTACK_COOLDOWN
+
             elif action_kind == ActionType.ITEM:
                 obs, rewards, terminated, truncated, info = self.env.step(self._item_action)
                 cooldown = ITEM_COOLDOWN
 
+            # RNG in Zelda is frame-rule based, so delaying by a random amount of frames introduces a bit of
+            # randomness into the game to ensure the model doesn't overfit to a specific frame rule.
             if not self.deterministic:
                 cooldown += randint(0, RANDOM_DELAY_MAX_FRAMES)
 
+            total_frames += cooldown + 1
             obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
             rewards += rew
 
@@ -223,10 +226,13 @@ class ZeldaGameWrapper(gym.Wrapper):
         # skip scrolling
         while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']):
             obs, rew, terminated, truncated, info = self.env.step(self._none_action)
+            total_frames += 1
             rewards += rew
+
             if terminated or truncated:
                 break
 
+        info['total_frames'] = total_frames
         return obs, rewards, terminated, truncated, info
 
     def _set_direction(self, direction):

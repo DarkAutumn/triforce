@@ -19,6 +19,7 @@ import tqdm
 from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
                      TRAINING_SCENARIOS
 from triforce.zelda_game import is_in_cave
+from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
 class Recording:
     """Used to track and save a recording of the game."""
@@ -346,9 +347,9 @@ class DisplayWindow:
         return result, name
 
     def _get_rgb_deque(self, env):
-        while hasattr(env, 'env'):
-            if hasattr(env.env, 'rgb_deque'):
-                return env.env.rgb_deque
+        while env is not None:
+            if isinstance(env, FrameCaptureWrapper):
+                return env.rgb_deque
 
             env = env.env
 
