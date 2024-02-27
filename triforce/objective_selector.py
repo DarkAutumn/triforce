@@ -29,7 +29,7 @@ def get_location_from_direction(location, direction):
     if direction == 'W':
         return location - 1
 
-    return None
+    raise ValueError(f'Invalid direction: {direction}')
 
 def find_cave_onscreen(info):
     """Finds the cave on the current screen."""
@@ -180,7 +180,7 @@ class OverworldOrchestrator:
         location = info['location']
         if location in self.location_direction:
             direction = self.location_direction[location]
-            location_objective = get_location_from_direction(self.location_direction, location)
+            location_objective = get_location_from_direction(location, direction)
 
         # get sword if we don't have it
         if location == 0x77:
