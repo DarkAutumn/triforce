@@ -11,13 +11,13 @@ import os
 import sys
 import math
 from collections import deque
-from typing import List
 import pygame
 import numpy as np
 import cv2
 import tqdm
 
-from triforce import ModelSelector, ZeldaScenario, ZeldaEnv, ZeldaAIModel, simulate_critique
+from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
+                     TRAINING_SCENARIOS
 from triforce.zelda_game import is_in_cave
 
 class Recording:
@@ -88,10 +88,9 @@ class Recording:
 
 class DisplayWindow:
     """A window to display the game and the AI model."""
-    def __init__(self, zelda_ml : ZeldaEnv, models : List[ZeldaAIModel], scenario : ZeldaScenario):
-        self.zelda_ml = zelda_ml
+    def __init__(self, scenario : ZeldaScenario, model_path : str):
         self.scenario = scenario
-        self.orchestrator = ModelSelector(models)
+        self.orchestrator = ModelSelector()
 
         pygame.init()
 
@@ -129,9 +128,15 @@ class DisplayWindow:
         self._last_location = None
         self.start_time = None
 
+        self._available_models = {}
+        self._loaded_models = {}
+        self.model_path = model_path
+
     def show(self, headless_recording=False):
         """Shows the game and the AI model."""
-        env = self.zelda_ml.make_env(self.scenario)
+        env = make_zelda_env(self.scenario, 'full', render_mode='rgb_array')
+        rgb_deque = self._get_rgb_deque(env)
+
         clock = pygame.time.Clock()
 
         endings = {}
@@ -140,7 +145,6 @@ class DisplayWindow:
 
         model_requested = 0
         model_name = None
-        model_kind = None
 
         show_endings = False
         force_save = False
@@ -167,9 +171,6 @@ class DisplayWindow:
         mode = 'c'
         while mode != 'q':
             if terminated or truncated:
-                if headless_recording and last_info:
-                    self._print_end_info(info, terminated)
-
                 if 'end' in info:
                     endings[info['end']] = endings.get(info['end'], 0) + 1
 
@@ -185,22 +186,15 @@ class DisplayWindow:
 
                     recording.close()
 
-                self.start_time = pygame.time.get_ticks()
+                force_save = False
 
             # Perform a step in the environment
             if mode in ('c', 'n'):
-                acceptable_models = self.orchestrator.select_model(info)
-                selected_model = acceptable_models[0]
-                model_versions = list(selected_model.available_models.keys())
+                zelda_model = self._select_model(info)
+                ai, loaded_name = self._select_available_model(zelda_model, model_requested)
+                model_name = f"{zelda_model.name} ({loaded_name})"
 
-                model_requested %= len(model_versions)
-                model = selected_model.load(model_versions[model_requested])
-                model_kind = model_versions[model_requested]
-                timesteps = model.num_timesteps
-                model_name = selected_model.name if not model_kind \
-                        else f"{selected_model.name} ({model_kind}) {timesteps:,} timesteps"
-
-                action, _ = model.predict(obs, deterministic=False)
+                action = ai.predict(obs, deterministic=False)
                 last_info = info
                 obs, _, terminated, truncated, info = env.step(action)
 
@@ -211,8 +205,8 @@ class DisplayWindow:
             self._update_rewards(reward_map, buttons, last_info, info)
 
             while True:
-                if self.zelda_ml.rgb_deque:
-                    rgb_array = self.zelda_ml.rgb_deque.popleft()
+                if rgb_deque:
+                    rgb_array = rgb_deque.popleft()
                 elif mode != 'p':
                     break
 
@@ -296,11 +290,8 @@ class DisplayWindow:
 
                         elif event.key == pygame.K_s:
                             if not force_save:
-                                force_save = not force_save
-                                if force_save:
-                                    print("Always saving videos")
-                                else:
-                                    print("Saving only on win")
+                                force_save = True
+                                print("Saving this video")
 
                         elif event.key == pygame.K_F4:
                             if recording is None:
@@ -328,6 +319,40 @@ class DisplayWindow:
 
         env.close()
         pygame.quit()
+
+    def _select_model(self, info) -> ZeldaModelDefinition:
+        acceptable_models = self.orchestrator.find_acceptable_models(info)
+        for model in acceptable_models:
+            if (models_available := self._available_models.get(model.name)) is None:
+                models_available = model.find_available_models(self.model_path)
+                self._available_models[model.name] = models_available
+
+            if models_available:
+                return model
+
+        return None
+
+    def _select_available_model(self, model : ZeldaModelDefinition, index : int) -> ZeldaAI:
+        models_available = self._available_models[model.name]
+        names = list(models_available.keys())
+
+        name = names[index % len(names)]
+        path = models_available[name]
+        if (result := self._loaded_models.get(path, None)) is None:
+            result = ZeldaAI(model)
+            result.load(path)
+            self._loaded_models[path] = result
+
+        return result, name
+
+    def _get_rgb_deque(self, env):
+        while hasattr(env, 'env'):
+            if hasattr(env.env, 'rgb_deque'):
+                return env.env.rgb_deque
+
+            env = env.env
+
+        return None
 
     def _print_location_info(self, info):
         if self._last_location is not None:
@@ -615,32 +640,22 @@ def render_text(surface, font, text, position, color=(255, 255, 255)):
 def main():
     """Main function."""
     args = parse_args()
-    render_mode = 'rgb_array'
     model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                                          'models')
-
-    zelda_ml = ZeldaEnv(args.color, args.frame_stack, render_mode=render_mode, verbose=args.verbose,
-                       ent_coef=args.ent_coef, device="cuda", obs_kind=args.obs_kind)
-
-    models = ZeldaAIModel.initialize(model_path)
-    if not any(model.available_models for model in models):
-        print(f"No models found in {model_path}")
-        return
-
     if args.scenario is None:
         args.scenario = 'zelda'
 
-    scenario = ZeldaScenario.get(args.scenario)
+    scenario = TRAINING_SCENARIOS.get(args.scenario, None)
     if not scenario:
         print(f'Unknown scenario {args.scenario}')
         return
 
-    display = DisplayWindow(zelda_ml, models, scenario)
+    display = DisplayWindow(scenario, model_path)
     display.show(args.headless_recording)
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="ZeldaML - An ML agent to play The Legned of Zelda (NES).")
+    parser = argparse.ArgumentParser(description="Triforce - An ML agent to play The Legned of Zelda (NES).")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--color", action='store_true',

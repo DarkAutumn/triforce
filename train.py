@@ -5,24 +5,23 @@
 
 import argparse
 import sys
-from triforce import ZeldaEnv, ZeldaAIModel
+from triforce import ZELDA_MODELS, ZeldaAI
 
 def main():
     """Main entry point."""
     args = parse_args()
     iterations = None if args.iterations <= 0 else args.iterations
+    output_path = args.output if args.output else 'training/'
 
-    models = ZeldaAIModel.initialize()
-    if args.models:
-        models = [x for x in models if x.name in args.models]
-
-    zelda_ml = ZeldaEnv(args.color, args.frame_stack, render_mode=None, verbose=args.verbose, ent_coef=args.ent_coef,
-                       device="cuda", obs_kind=args.obs_kind)
-    zelda_ml.train(models, args.output, iterations, args.parallel)
+    models = args.models if args.models else models.keys()
+    for model_name in models:
+        zelda_ml = ZeldaAI(ZELDA_MODELS[model_name], verbose=args.verbose, ent_coef=args.ent_coef)
+        zelda_ml.train(output_path, iterations, args.parallel, grayscale=not args.color, framestack=args.frame_stack,
+                       obs_kind=args.obs_kind)
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="ZeldaML - An ML agent to play The Legned of Zelda (NES).")
+    parser = argparse.ArgumentParser(description="train - Train Zelda ML models")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--color", action='store_true',

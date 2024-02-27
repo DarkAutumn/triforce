@@ -1,22 +1,21 @@
 """Model selection based on the current game state."""
 
-from typing import Sequence
-from .models_and_scenarios import ZeldaAIModel
+from typing import List
+from .models_and_scenarios import ZeldaModelDefinition, ZELDA_MODELS
 from .zelda_game import has_beams
 
 class ModelSelector:
     """Selects the best model for the current game state."""
-    def __init__(self, loaded_models : Sequence[ZeldaAIModel]):
-        # we only select usable models
-        self.models_by_priority = [x for x in loaded_models if x.available_models]
-        self.models_by_priority.sort(key=lambda x: x.priority, reverse=True)
+    def __init__(self):
+        self.models_by_priority = sorted((model for model in ZELDA_MODELS.values()),
+                                         key=lambda x: x.priority, reverse=True)
 
-    def select_model(self, info) -> ZeldaAIModel:
+    def find_acceptable_models(self, info) -> List[ZeldaModelDefinition]:
         """Selects a model based on the current game state."""
         acceptable_models = [model for model in self.models_by_priority if self.__is_model_acceptable(model, info)]
         return acceptable_models or self.models_by_priority
 
-    def __is_model_acceptable(self, model : ZeldaAIModel, info):
+    def __is_model_acceptable(self, model : ZeldaModelDefinition, info):
         location = info['location']
         level = info['level']
 
@@ -27,7 +26,7 @@ class ModelSelector:
 
         return matches_level and matches_room and matches_enemy_requirements and matches_equipment
 
-    def __matches_equipment(self, model : ZeldaAIModel, info):
+    def __matches_equipment(self, model : ZeldaModelDefinition, info):
         for equipment in model.equipment_required:
             if equipment == "beams":
                 if not has_beams(info):
