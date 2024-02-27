@@ -142,6 +142,42 @@ def tile_index_to_position(tile_index):
     """Converts a tile index to a screen position."""
     return (tile_index[1] * 8, tile_index[0] * 8 + GAMEPLAY_START_Y)
 
+class Direction(Enum):
+    """The four cardinal directions, as the game defines them."""
+    E = 1
+    W = 2
+    S = 4
+    N = 8
+
+    @staticmethod
+    def from_ram_value(value):
+        """Creates a Direction from the direction value stored in the game's RAM."""
+        match value:
+            case 1:
+                return Direction.E
+            case 2:
+                return Direction.W
+            case 4:
+                return Direction.S
+            case 8:
+                return Direction.N
+            case _:
+                raise ValueError(f"Invalid value for Direction: {value}")
+
+    def to_vector(self):
+        """Returns the vector for the direction."""
+        match self:
+            case Direction.E:
+                return np.array([1, 0])
+            case Direction.W:
+                return np.array([-1, 0])
+            case Direction.S:
+                return np.array([0, 1])
+            case Direction.N:
+                return np.array([0, -1])
+            case _:
+                raise ValueError(f"Unhandled Direction: {self}")
+
 class ZeldaEnemy(Enum):
     """Enemy codes for the game."""
     # pylint: disable=invalid-name

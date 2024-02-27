@@ -3,7 +3,7 @@
 from typing import Dict
 import numpy as np
 from .zelda_wrapper import ActionType
-from .zelda_game import ZeldaEnemy, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
+from .zelda_game import Direction, ZeldaEnemy, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
     get_num_triforce_pieces, is_in_cave, tile_index_to_position
 
 REWARD_MINIMUM = 0.01
@@ -263,7 +263,7 @@ class GameplayCritic(ZeldaCritic):
             elif new['enemies']:
                 enemy_vectors = [enemy.vector for enemy in new['enemies'] if abs(enemy.distance) > 0]
                 if enemy_vectors:
-                    dotproducts = np.sum(new['link_vector'] * enemy_vectors, axis=1)
+                    dotproducts = np.sum(new['link_direction'].to_vector() * enemy_vectors, axis=1)
                     if not np.any(dotproducts > np.sqrt(2) / 2):
                         rewards['penalty-attack-miss'] = self.attack_miss_penalty
                     elif not old['has_beams']:
@@ -353,7 +353,7 @@ class GameplayCritic(ZeldaCritic):
             new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
             if len(old_path := old.get("a*_path", (None, None, []))[2]) >= 2:
                 correct_direction, possible_direction = self.__get_optimal_directions(old_path)
-                direction = new['direction']
+                direction = new['link_direction']
 
                 target_tile = self.__find_second_turn(old_path)
                 target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
@@ -393,14 +393,14 @@ class GameplayCritic(ZeldaCritic):
                 # if A* couldn't find a path, we should still reward the agent for moving closer
                 # to the objective.  This should be rare, and often happens when an enem moves
                 # into a wall.  (Bosses or wallmasters.)
-                if isinstance(target, str):
-                    if target == 'N':
+                if isinstance(target, Direction):
+                    if target == Direction.N:
                         dist = new_link_pos[1] - old_link_pos[1]
-                    elif target == 'S':
+                    elif target == Direction.S:
                         dist = old_link_pos[1] - new_link_pos[1]
-                    elif target == 'E':
+                    elif target == Direction.E:
                         dist = old_link_pos[0] - new_link_pos[0]
-                    elif target == 'W':
+                    elif target == Direction.W:
                         dist = new_link_pos[0] - old_link_pos[0]
 
                     percent = abs(dist / self.movement_scale_factor)
@@ -431,7 +431,7 @@ class GameplayCritic(ZeldaCritic):
                                          if x.distance < self.too_close_threshold]
 
                 if old_enemies_too_close:
-                    link_vector = new['link_vector']
+                    link_vector = new['link_direction'].to_vector()
 
                     # filter old_enemies_too_close to the ones we walked towards
                     old_enemies_walked_towards = [x for x in old_enemies_too_close \
@@ -461,13 +461,13 @@ class GameplayCritic(ZeldaCritic):
 
     def __get_direction(self, old, new):
         if new[0] > old[0]:
-            return 'S'
+            return Direction.S
         if new[0] < old[0]:
-            return 'N'
+            return Direction.N
         if new[1] > old[1]:
-            return 'E'
+            return Direction.E
         if new[1] < old[1]:
-            return 'W'
+            return Direction.W
         return None
 
     def __get_optimal_directions(self, path):

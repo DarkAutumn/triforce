@@ -2,16 +2,15 @@
 
 import heapq
 
-from .zelda_game import walkable_tiles
+from .zelda_game import walkable_tiles, Direction
 
-def heuristic(current, direction, map_width, map_height, is_exterior_dangerous):
+def heuristic(current, direction : Direction, map_width, map_height, is_exterior_dangerous):
     """
     Calculate the heuristic value for the A* algorithm.
 
     Parameters:
     - current: Tuple representing the current position (y, x).
-    - direction: String representing the direction to move ('N', 'S', 'W', 'E') or a tuple
-                 representing the next position (ny, nx).
+    - direction: A Direction representing the direction to move or a tuple representing the next position (ny, nx).
     - map_width: Integer representing the width of the map.
     - map_height: Integer representing the height of the map.
     - is_exterior_dangerous: Boolean indicating if the exterior is dangerous.
@@ -26,13 +25,13 @@ def heuristic(current, direction, map_width, map_height, is_exterior_dangerous):
         if x in [0x04, 0x05, 0x1a, 0x1b] or y in [0x04, 0x05, 0x10, 0x11]:
             weight = 10
 
-    if direction == 'N':
+    if direction == Direction.N:
         return y + weight
-    if direction == 'S':
+    if direction == Direction.S:
         return map_height - y - 1 + weight
-    if direction == 'W':
+    if direction == Direction.W:
         return x + weight
-    if direction == 'E':
+    if direction == Direction.E:
         return map_width - x - 1 + weight
 
     ny, nx = direction
@@ -114,7 +113,7 @@ def a_star(link_position, tiles, direction, is_exterior_dangerous):
     Args:
         link_position (tuple): The starting position of the link.
         tiles (numpy.ndarray): The map tiles.
-        direction (str): The direction in which the link is moving.
+        direction (Direction): The direction in which the link is moving.
         is_exterior_dangerous (bool): Flag indicating if the exterior is dangerous.
 
     Returns:
@@ -162,20 +161,22 @@ def add_direction(target, current, path):
     Adds a new coordinate to the given path based on the target direction.
 
     Args:
-        target (str): The target direction ('N', 'S', 'W', or 'E').
+        target (Direction): The target direction.
         current (tuple): The current coordinate (x, y).
         path (list): The list of coordinates representing the path.
 
     Returns:
         None
     """
-    if target == 'N':
+    if target == Direction.N:
         path.append((current[0] - 1, current[1]))
-    elif target == 'S':
+    elif target == Direction.S:
         path.append((current[0] + 1, current[1]))
-    elif target == 'W':
+    elif target == Direction.W:
         path.append((current[0], current[1] - 1))
-    elif target == 'E':
+    elif target == Direction.E:
         path.append((current[0], current[1] + 1))
+    else:
+        raise ValueError(f"Unknown direction: {target}")
 
 __all__ = ['a_star']
