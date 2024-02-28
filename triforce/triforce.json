@@ -179,7 +179,7 @@
             "data":
             {
                 "bombs" : 0,
-                "keys" : 1,
+                "keys" : 0,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
             },
@@ -198,7 +198,7 @@
             "data":
             {
                 "bombs" : 0,
-                "keys" : 1,
+                "keys" : 0,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
             },
@@ -218,7 +218,7 @@
             "data":
             {
                 "bombs" : 0,
-                "keys" : 1,
+                "keys" : 0,
                 "hearts_and_containers" : 33,
                 "partial_hearts" : 100
             },
