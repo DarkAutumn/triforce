@@ -114,8 +114,9 @@ def main():
         if not args.models or model_name in args.models:
             available_models = ZELDA_MODELS[model_name].find_available_models(model_path)
 
-            # For inteveral saved models,  only evaluate the last 3
-            models_to_evaluate = sorted([int(x) for x in available_models.keys() if isinstance(x, int)])[-3:]
+            models_to_evaluate = sorted([int(x) for x in available_models.keys() if isinstance(x, int)])
+            if args.limit > 0:
+                models_to_evaluate = models_to_evaluate[-args.limit:]
             models_to_evaluate += [x for x in available_models.keys() if not isinstance(x, int)]
             for key in models_to_evaluate:
                 path = available_models[key]
@@ -165,6 +166,8 @@ def parse_args():
     parser.add_argument("--parallel", type=int, default=1, help="Use parallel environments to evaluate the models.")
     parser.add_argument("--render", action='store_true', help="Render the game while evaluating the models.")
     parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack together.")
+    parser.add_argument("--limit", type=int, default=3,
+                        help="Limit the number of periodically saved models to evaluate.")
 
     parser.add_argument('model_path', nargs=1, help='The director containing the models to evaluate')
     parser.add_argument('models', nargs='*', help='The director containing the models to evaluate')
