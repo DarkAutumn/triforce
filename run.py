@@ -193,7 +193,7 @@ class DisplayWindow:
             if mode in ('c', 'n'):
                 zelda_model = self._select_model(info)
                 ai, loaded_name = self._select_available_model(zelda_model, model_requested)
-                model_name = f"{zelda_model.name} ({loaded_name})"
+                model_name = f"{zelda_model.name} ({loaded_name}) {ai.num_timesteps:,} timesteps"
 
                 action = ai.predict(obs, deterministic=False)
                 last_info = info
@@ -335,7 +335,7 @@ class DisplayWindow:
 
     def _select_available_model(self, model : ZeldaModelDefinition, index : int) -> ZeldaAI:
         models_available = self._available_models[model.name]
-        names = list(models_available.keys())
+        names = sorted(models_available.keys(), key=lambda x: int(x) if isinstance(x, int) else -1)
 
         name = names[index % len(names)]
         path = models_available[name]

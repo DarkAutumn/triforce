@@ -33,6 +33,11 @@ class ZeldaAI:
         """Saves the model to the specified path."""
         self._model.save(path)
 
+    @property
+    def num_timesteps(self):
+        """Returns the number of timesteps the model has been trained for."""
+        return self._model.num_timesteps if self._model is not None else 0
+
     def predict(self, obs, deterministic = False):
         """Predicts the action to take based on the observation."""
         action, _ = self._model.predict(obs, deterministic=deterministic)

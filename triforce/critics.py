@@ -528,6 +528,12 @@ class Dungeon1Critic(GameplayCritic):
             else:
                 rewards['penalty-left-early'] = self.leave_early_penalty
 
+    def critique_key_pickup_usage(self, old, new, rewards):
+        if old['keys'] > new['keys'] and new['location'] == 0x73 and new['location_objective'] != 0x63:
+            pass # do not give a reward for prematurely using a key
+        else:
+            super().critique_key_pickup_usage(old, new, rewards)
+
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
         if get_heart_halves(new) < get_heart_halves(old):
             self.health_lost -= 0.5
