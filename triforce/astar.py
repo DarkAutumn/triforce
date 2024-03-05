@@ -60,7 +60,7 @@ def get_neighbors(position, tile_states, dimensions):
 
     return neighbors
 
-def reconstruct_path(start, came_from, current):
+def reconstruct_path(start, came_from, current, target):
     """
     Reconstructs the path from the start node to the current node using the came_from dictionary.
 
@@ -78,7 +78,25 @@ def reconstruct_path(start, came_from, current):
         current = came_from[current]
 
     path.append(start)
-    return path[::-1]
+
+    last = path[0]
+    path.reverse()
+
+    match target:
+        case Direction.N:
+            path.append((last[0] - 1, last[1]))
+        case Direction.S:
+            path.append((last[0] + 1, last[1]))
+        case Direction.W:
+            path.append((last[0], last[1] - 1))
+        case Direction.E:
+            path.append((last[0], last[1] + 1))
+
+    if len(path) > 1 and path[0] == path[-1]:
+        return [path[-1]]
+
+    return path
+
 
 def a_star(link_position, tile_state_map, map_dimensions, direction):
     """
@@ -116,7 +134,7 @@ def a_star(link_position, tile_state_map, map_dimensions, direction):
             closest_distance = current_distance
 
         if current_distance == 0:
-            return reconstruct_path(start, came_from, current)
+            return reconstruct_path(start, came_from, current, direction)
 
         for neighbor, tile in get_neighbors(current, tile_state_map, map_dimensions):
             tentative_g_score = g_score[current] + tile.astar_weight
@@ -128,30 +146,4 @@ def a_star(link_position, tile_state_map, map_dimensions, direction):
                 if neighbor not in [item[1] for item in open_set]:
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
-    path = reconstruct_path(start, came_from, closest_node)
-    add_direction(direction, path[-1], path)
-    return path
-
-def add_direction(target, current, path):
-    """
-    Adds a new coordinate to the given path based on the target direction.
-
-    Args:
-        target (Direction): The target direction.
-        current (tuple): The current coordinate (x, y).
-        path (list): The list of coordinates representing the path.
-
-    Returns:
-        None
-    """
-    match target:
-        case Direction.N:
-            path.append((current[0] - 1, current[1]))
-        case Direction.S:
-            path.append((current[0] + 1, current[1]))
-        case Direction.W:
-            path.append((current[0], current[1] - 1))
-        case Direction.E:
-            path.append((current[0], current[1] + 1))
-
-__all__ = ['a_star']
+    return reconstruct_path(start, came_from, closest_node, direction)
