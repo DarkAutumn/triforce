@@ -108,7 +108,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['tiles'] = tiles
         info['tile_states'] = TileState.create_map(tiles, info['enemies'], info['projectiles'])
 
-        info['are_walls_dangerous'] = any(x.id == ZeldaEnemy.WallMaster for x in info['enemies'])
         info['has_beams'] = has_beams(info) and get_beam_state(info) == AnimationState.INACTIVE
 
         location = self._get_full_location(info)

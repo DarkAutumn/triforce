@@ -169,14 +169,13 @@ class TileState(Enum):
         """Creates a map of the tiles."""
         result = {}
 
-        # todo: wallmasters
-        for obj in enemies:
-            y, x = position_to_tile_index(*obj.position)
-            TileState._add_enemy_or_projectile(result, obj.tile_coordinates)
+        if any(obj.id == ZeldaEnemy.WallMaster for obj in enemies):
+            TileState._add_wallmaster_tiles(result)
 
-        for obj in projectiles:
-            y, x = position_to_tile_index(*obj.position)
-            TileState._add_enemy_or_projectile(result, obj.tile_coordinates)
+        for obj in enemies + projectiles:
+            if obj.is_active:
+                y, x = position_to_tile_index(*obj.position)
+                TileState._add_enemy_or_projectile(result, obj.tile_coordinates)
 
         for x in range(tiles.shape[1]):
             for y in range(tiles.shape[0]):
@@ -186,6 +185,29 @@ class TileState(Enum):
                     result[(y, x)] = TileState.WALKABLE
 
         return result
+
+    @staticmethod
+    def _add_wallmaster_tiles(result):
+        x = 4
+        y = 4
+
+        while x < 28:
+            result[(y, x)] = TileState.DANGER
+            x += 1
+
+        x -= 1
+        while y < 18:
+            result[(y, x)] = TileState.DANGER
+            y += 1
+
+        y -= 1
+        while x > 4:
+            result[(y, x)] = TileState.DANGER
+            x -= 1
+
+        while y > 4:
+            result[(y, x)] = TileState.DANGER
+            y -= 1
 
     @staticmethod
     def _add_enemy_or_projectile(result, coords):
@@ -284,8 +306,8 @@ class ZeldaSoundsPulse1(Enum):
     HeartWarning : int = 0x40
 
 id_map = {}
-for enemy in ZeldaEnemy:
-    id_map[enemy.value] = enemy
+for __c in ZeldaEnemy:
+    id_map[__c.value] = __c
 
 item_map = {}
 for item in ZeldaItem:
@@ -294,12 +316,13 @@ for item in ZeldaItem:
 class ZeldaObject:
     """Structured data for a single object.  ZeldaObjects are enemies, items, and projectiles."""
     # pylint: disable=too-few-public-methods
-    def __init__(self, obj_id, pos, distance, vector, health):
+    def __init__(self, obj_id, pos, distance, vector, health, status):
         self.id = obj_id
         self.position = pos
         self.distance = distance
         self.vector = vector
         self.health = health
+        self.status = status
 
     @property
     def tile_coordinates(self):
@@ -313,6 +336,13 @@ class ZeldaObject:
                 (top_left[0] + 1, top_left[1] + 1)
                 ]
 
+    @property
+    def is_active(self) -> bool:
+        """Returns True if the object is active."""
+        if self.id != ZeldaEnemy.WallMaster:
+            return True
+
+        return self.status == 1
 
 class ZeldaObjectData:
     """
@@ -327,7 +357,8 @@ class ZeldaObjectData:
     @property
     def link(self):
         """Returns link as an object.  Link is object 0.  Does not fill hearts."""
-        return ZeldaObject(0, self.get_position(0), 0, np.array([0, 0], dtype=np.float32), None)
+        status = self.get_obj_status(0)
+        return ZeldaObject(0, self.get_position(0), 0, np.array([0, 0], dtype=np.float32), None, status)
 
     def get_position(self, obj : int):
         """Returns the position of the object.  Objects are indexed from 0 to 0xb."""
@@ -416,15 +447,18 @@ class ZeldaObjectData:
             if obj_id == ZeldaEnemy.Item.value:
                 obj_id = obj_status[i]
                 obj_id = item_map.get(obj_id, obj_id)
-
-                items.append(ZeldaObject(obj_id, pos, distance, vector, None))
+                items.append(ZeldaObject(obj_id, pos, distance, vector, None, None))
 
             # enemies
             elif 1 <= obj_id <= 0x48:
-                enemies.append(ZeldaObject(id_map.get(obj_id, obj_id), pos, distance, vector, self.get_obj_health(i)))
+                enemy_kind = id_map.get(obj_id, obj_id)
+                status = obj_status[i]
+                print(f'i: {i}, status: {status} pos:{pos} obj_id: {obj_id}')
+                enemy = ZeldaObject(enemy_kind, pos, distance, vector, self.get_obj_health(i), status)
+                enemies.append(enemy)
 
             elif self.is_projectile(obj_id):
-                projectiles.append(ZeldaObject(obj_id, pos, distance, vector, None))
+                projectiles.append(ZeldaObject(obj_id, pos, distance, vector, None, None))
 
         if len(enemies) > 1:
             enemies.sort(key=lambda x: x.distance)
