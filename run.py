@@ -18,7 +18,7 @@ import tqdm
 
 from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
                      TRAINING_SCENARIOS
-from triforce.zelda_game import is_in_cave
+from triforce.zelda_game import TileState, is_in_cave
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
 class Recording:
@@ -97,11 +97,11 @@ class DisplayWindow:
 
         self.font = pygame.font.Font(None, 24)
 
-        game_x, game_y = 240, 224
+        game_w, game_h = 240, 224
         self.scale = 4
 
-        self.game_width = game_x * self.scale
-        self.game_height = game_y * self.scale
+        self.game_width = game_w * self.scale
+        self.game_height = game_h * self.scale
 
         self.obs_width = 128
         self.obs_height = self.game_height
@@ -221,7 +221,7 @@ class DisplayWindow:
                 if overlay:
                     color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
                     self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), info['tiles'], color,
-                                               self.scale, self._get_optimal_path(info))
+                                               self.scale, info)
                 render_text(surface, self.font, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
                     render_text(surface, self.font, f"Location: {hex(info['location'])}",
@@ -278,7 +278,7 @@ class DisplayWindow:
                             mode = 'c'
 
                         elif event.key == pygame.K_o:
-                            overlay = (overlay + 1) % 3
+                            overlay = (overlay + 1) % 4
 
                         elif event.key == pygame.K_e:
                             show_endings = not show_endings
@@ -532,10 +532,17 @@ class DisplayWindow:
 
         return result
 
-    def _get_optimal_path(self, info):
-        return info['a*_path'][-1] if 'a*_path' in info else None
+    def _overlay_grid_and_text(self, surface, kind, offset, tiles, text_color, scale, info):
+        # 0 == no overlay
+        # 1 == path overlay
+        # 2 == show tiles
+        # 3 == show tiles other than walkable and impassable
+        if kind == 0:
+            return
 
-    def _overlay_grid_and_text(self, surface, kind, offset, tiles, text_color, scale, path = None):
+        tiles_to_show = self._get_optimal_path(info) if kind == 1 else None
+        tiles_to_show = self._find_special_tiles(info) if kind == 3 else tiles_to_show
+
         grid_width = 32
         grid_height = 22
         tile_width = 8 * scale
@@ -547,13 +554,18 @@ class DisplayWindow:
 
         for tile_x in range(grid_width):
             for tile_y in range(grid_height):
-                if kind == 1 and path and (tile_y, tile_x) not in path:
+                if tiles_to_show is not None and (tile_y, tile_x) not in tiles_to_show:
                     continue
 
                 x = offset[0] + tile_x * tile_width - 8 * scale
                 y = 56 * scale + offset[1] + tile_y * tile_height
 
-                pygame.draw.rect(surface, (0, 0, 255), (x, y, tile_width, tile_height), 1)
+                # red for DAMAGE, yellow for DANGER, blue for WALKABLE, black otherwise
+                state = info['tile_states'].get((tile_y, tile_x), TileState.IMPASSABLE)
+                color = (255, 0, 0) if state == TileState.DAMAGE else (255, 255, 0) if state == TileState.DANGER else \
+                    (0, 0, 255) if state == TileState.WALKABLE else (0, 0, 0)
+
+                pygame.draw.rect(surface, color, (x, y, tile_width, tile_height), 1)
 
                 tile_number = tiles[tile_y, tile_x] # 1 for overscan
                 text = f"{tile_number:02X}"
@@ -564,6 +576,23 @@ class DisplayWindow:
 
                 # Draw the text
                 surface.blit(text_surface, text_rect)
+
+    def _get_optimal_path(self, info):
+        return info['a*_path'][-1] if 'a*_path' in info else None
+
+    def _find_special_tiles(self, info):
+        tiles = []
+        for index, state in info['tile_states'].items():
+            if state not in (TileState.WALKABLE, TileState.IMPASSABLE):
+                tiles.append(index)
+
+        obj = info['link']
+        tiles.append(obj.tile_coordinates)
+        tiles.append((obj.tile_coordinates[0] + 1, obj.tile_coordinates[1]))
+        tiles.append((obj.tile_coordinates[0], obj.tile_coordinates[1] + 1))
+        tiles.append((obj.tile_coordinates[0] + 1, obj.tile_coordinates[1] + 1))
+
+        return tiles
 
 class DebugReward:
     """An action to take when a reward button is clicked."""

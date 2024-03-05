@@ -2,7 +2,7 @@
 
 import heapq
 
-from .zelda_game import walkable_tiles, Direction
+from .zelda_game import WALKABLE_TILES, Direction
 
 def heuristic(current, direction : Direction, map_width, map_height, is_exterior_dangerous):
     """
@@ -81,7 +81,7 @@ def get_neighbors(position, tiles):
         if prev_tile_is_brick and tile == BRICK_TILE:
             continue
 
-        if walkable_tiles[tile]:
+        if WALKABLE_TILES[tile]:
             neighbors.append(next_position)
 
     return neighbors

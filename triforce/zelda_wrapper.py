@@ -13,7 +13,7 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import AnimationState, Direction, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, \
+from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, \
                         is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen
 from .model_parameters import LOCATION_CHANGE_COOLDOWN, MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, \
                                 ITEM_COOLDOWN, CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
@@ -90,12 +90,9 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['buttons'] = self._get_button_names(act, unwrapped.buttons)
         objects = ZeldaObjectData(ram)
 
-        map_offset, map_len = zelda_game_data.tables['tile_layout']
-        tiles = ram[map_offset:map_offset+map_len]
-        tiles = tiles.reshape((32, 22)).T
-        info['tiles'] = tiles
-
-        link_pos = objects.link_pos
+        link = objects.link
+        info['link'] = link
+        link_pos = link.position
         info['link_pos'] = link_pos
         link_pos = np.array(link_pos, dtype=np.float32)
 
@@ -104,6 +101,13 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         # add information about enemies, items, and projectiles
         info['enemies'], info['items'], info['projectiles'] = objects.get_all_objects(link_pos)
+
+        map_offset, map_len = zelda_game_data.tables['tile_layout']
+        tiles = ram[map_offset:map_offset+map_len]
+        tiles = tiles.reshape((32, 22)).T
+        info['tiles'] = tiles
+        info['tile_states'] = TileState.create_map(tiles, info['enemies'], info['projectiles'])
+
         info['are_walls_dangerous'] = any(x.id == ZeldaEnemy.WallMaster for x in info['enemies'])
         info['has_beams'] = has_beams(info) and get_beam_state(info) == AnimationState.INACTIVE
 

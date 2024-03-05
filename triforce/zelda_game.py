@@ -128,7 +128,53 @@ def init_walkable_tiles():
 
     return result
 
-walkable_tiles = init_walkable_tiles()
+
+WALKABLE_TILES = init_walkable_tiles()
+
+BRICK_TILE = 0xf6
+
+class TileState(Enum):
+    """The state of a tile."""
+    IMPASSABLE = 0
+    WALKABLE = 1
+    BRICK = 2  # dungeon bricks
+    DAMAGE = 3  # enemy or projectile
+    DANGER = 4  # tiles next to enemy, or the walls in a wallmaster room
+
+    @staticmethod
+    def create_map(tiles, enemies, projectiles):
+        """Creates a map of the tiles."""
+        result = {}
+
+        for obj in enemies:
+            y, x = position_to_tile_index(*obj.position)
+            TileState._add_enemy_or_projectile(result, obj.tile_coordinates)
+
+        for obj in projectiles:
+            y, x = position_to_tile_index(*obj.position)
+            TileState._add_enemy_or_projectile(result, obj.tile_coordinates)
+
+        for x in range(tiles.shape[1]):
+            for y in range(tiles.shape[0]):
+                if tiles[y, x] == BRICK_TILE:
+                    result[(y, x)] = TileState.BRICK
+                elif WALKABLE_TILES[tiles[y, x]] and (y, x) not in result:
+                    result[(y, x)] = TileState.WALKABLE
+
+        return result
+
+    @staticmethod
+    def _add_enemy_or_projectile(result, coords):
+        y, x = coords
+        result[(y, x)] = TileState.DAMAGE
+        result[(y + 1, x)] = TileState.DAMAGE
+        result[(y, x + 1)] = TileState.DAMAGE
+        result[(y + 1, x + 1)] = TileState.DAMAGE
+
+        for ny in range(y - 1, y + 3):
+            for nx in range(x - 1, x + 3):
+                if (ny, nx) not in result:
+                    result[(ny, nx)] = TileState.DANGER
 
 def position_to_tile_index(x, y):
     """Converts a screen position to a tile index."""
@@ -136,7 +182,7 @@ def position_to_tile_index(x, y):
 
 def get_link_tile_index(info):
     """Returns the tile index of link's position."""
-    return position_to_tile_index(info['link_x'] + 4, info['link_y'] + 4)
+    return position_to_tile_index(info['link_x'], info['link_y'])
 
 def tile_index_to_position(tile_index):
     """Converts a tile index to a screen position."""
@@ -229,6 +275,11 @@ class ZeldaObject:
         self.vector = vector
         self.health = health
 
+    @property
+    def tile_coordinates(self):
+        """Returns the tile coordinates of the object."""
+        return position_to_tile_index(*self.position)
+
 class ZeldaObjectData:
     """
     A class to represent the object data in the game state.  This class is used to extract information about the
@@ -240,9 +291,9 @@ class ZeldaObjectData:
             setattr(self, table, ram[offset:offset+size])
 
     @property
-    def link_pos(self):
-        """Returns the position of link.  Link is object 0."""
-        return self.get_position(0)
+    def link(self):
+        """Returns link as an object.  Link is object 0.  Does not fill hearts."""
+        return ZeldaObject(0, self.get_position(0), 0, np.array([0, 0], dtype=np.float32), None)
 
     def get_position(self, obj : int):
         """Returns the position of the object.  Objects are indexed from 0 to 0xb."""
@@ -367,7 +418,7 @@ __all__ = [
     'get_heart_halves',
     'get_heart_containers',
     'has_beams',
-    'walkable_tiles',
+    'TileState',
     'position_to_tile_index',
     'tile_index_to_position',
     'get_link_tile_index',
@@ -377,4 +428,5 @@ __all__ = [
     ZeldaObjectData.__name__,
     ZeldaEnemy.__name__,
     AnimationState.__name__,
+    'WALKABLE_TILES',
     ]
