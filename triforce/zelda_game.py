@@ -151,7 +151,7 @@ class TileState(Enum):
             case TileState.WALKABLE:
                 return 1
             case TileState.BRICK:
-                return 1
+                return 5
             case TileState.DAMAGE:
                 return 50
             case TileState.DANGER:
@@ -162,7 +162,7 @@ class TileState(Enum):
     @property
     def is_walkable(self):
         """Returns True if the tile is walkable."""
-        return self in (TileState.WALKABLE, TileState.DAMAGE, TileState.DANGER)
+        return self in (TileState.WALKABLE, TileState.DAMAGE, TileState.DANGER, TileState.BRICK)
 
     @staticmethod
     def create_map(tiles, enemies, projectiles):

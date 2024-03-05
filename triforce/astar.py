@@ -48,8 +48,6 @@ def get_neighbors(position, tile_states, dimensions):
     Returns:
         list: A list of neighboring positions that are valid for movement.
     """
-    prev_tile_is_brick = None
-
     y, x = position
     neighbors = []
     for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
@@ -57,16 +55,6 @@ def get_neighbors(position, tile_states, dimensions):
         if 0 <= x + dx < dimensions[1] and 0 <= y + dy < dimensions[0]:
             next_position = y + dy, x + dx
             tile = tile_states.get(next_position, TileState.IMPASSABLE)
-
-            # If the previous tile is a brick, we can't move to another brick tile
-            if tile == TileState.BRICK:
-                if prev_tile_is_brick is None:
-                    if tile_states.get(position, TileState.IMPASSABLE) == TileState.BRICK:
-                        prev_tile_is_brick = True
-
-
-                tile = TileState.IMPASSABLE if prev_tile_is_brick else TileState.WALKABLE
-
             if tile.is_walkable:
                 neighbors.append((next_position, tile))
 
