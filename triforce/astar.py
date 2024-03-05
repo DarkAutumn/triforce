@@ -128,7 +128,9 @@ def a_star(link_position, tile_state_map, map_dimensions, direction):
                 if neighbor not in [item[1] for item in open_set]:
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
-    return reconstruct_path(start, came_from, closest_node)
+    path = reconstruct_path(start, came_from, closest_node)
+    add_direction(direction, path[-1], path)
+    return path
 
 def add_direction(target, current, path):
     """
@@ -142,15 +144,14 @@ def add_direction(target, current, path):
     Returns:
         None
     """
-    if target == Direction.N:
-        path.append((current[0] - 1, current[1]))
-    elif target == Direction.S:
-        path.append((current[0] + 1, current[1]))
-    elif target == Direction.W:
-        path.append((current[0], current[1] - 1))
-    elif target == Direction.E:
-        path.append((current[0], current[1] + 1))
-    else:
-        raise ValueError(f"Unknown direction: {target}")
+    match target:
+        case Direction.N:
+            path.append((current[0] - 1, current[1]))
+        case Direction.S:
+            path.append((current[0] + 1, current[1]))
+        case Direction.W:
+            path.append((current[0], current[1] - 1))
+        case Direction.E:
+            path.append((current[0], current[1] + 1))
 
 __all__ = ['a_star']
