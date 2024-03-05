@@ -141,11 +141,35 @@ class TileState(Enum):
     DAMAGE = 3  # enemy or projectile
     DANGER = 4  # tiles next to enemy, or the walls in a wallmaster room
 
+    @ property
+    def astar_weight(self):
+        """Returns the weight of the tile for the A* algorithm."""
+
+        match self:
+            case TileState.IMPASSABLE:
+                return 100
+            case TileState.WALKABLE:
+                return 1
+            case TileState.BRICK:
+                return 1
+            case TileState.DAMAGE:
+                return 50
+            case TileState.DANGER:
+                return 25
+            case _:
+                raise ValueError(f"Unknown TileState: {self}")
+
+    @property
+    def is_walkable(self):
+        """Returns True if the tile is walkable."""
+        return self in (TileState.WALKABLE, TileState.DAMAGE, TileState.DANGER)
+
     @staticmethod
     def create_map(tiles, enemies, projectiles):
         """Creates a map of the tiles."""
         result = {}
 
+        # todo: wallmasters
         for obj in enemies:
             y, x = position_to_tile_index(*obj.position)
             TileState._add_enemy_or_projectile(result, obj.tile_coordinates)
@@ -165,14 +189,16 @@ class TileState(Enum):
 
     @staticmethod
     def _add_enemy_or_projectile(result, coords):
-        y, x = coords
-        result[(y, x)] = TileState.DAMAGE
-        result[(y + 1, x)] = TileState.DAMAGE
-        result[(y, x + 1)] = TileState.DAMAGE
-        result[(y + 1, x + 1)] = TileState.DAMAGE
+        min_y = min(coord[0] for coord in coords)
+        max_y = max(coord[0] for coord in coords)
+        min_x = min(coord[1] for coord in coords)
+        max_x = max(coord[1] for coord in coords)
 
-        for ny in range(y - 1, y + 3):
-            for nx in range(x - 1, x + 3):
+        for coord in coords:
+            result[coord] = TileState.DAMAGE
+
+        for ny in range(min_y - 1, max_y + 2):
+            for nx in range(min_x - 1, max_x + 2):
                 if (ny, nx) not in result:
                     result[(ny, nx)] = TileState.DANGER
 
@@ -277,8 +303,16 @@ class ZeldaObject:
 
     @property
     def tile_coordinates(self):
-        """Returns the tile coordinates of the object."""
-        return position_to_tile_index(*self.position)
+        """Returns a list of tile coordinates of the object."""
+
+        top_left = position_to_tile_index(*self.position)
+        return [
+                top_left,
+                (top_left[0] + 1, top_left[1]),
+                (top_left[0], top_left[1] + 1),
+                (top_left[0] + 1, top_left[1] + 1)
+                ]
+
 
 class ZeldaObjectData:
     """
@@ -428,5 +462,4 @@ __all__ = [
     ZeldaObjectData.__name__,
     ZeldaEnemy.__name__,
     AnimationState.__name__,
-    'WALKABLE_TILES',
     ]

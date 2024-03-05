@@ -98,7 +98,7 @@ class ObjectiveSelector(gym.Wrapper):
                 result = self.last_route[1]
                 path = result[-1]
             else:
-                path = a_star(link_tile_index, info['tiles'], objective_pos_dir, info['are_walls_dangerous'])
+                path = a_star(link_tile_index, info['tile_states'], info['tiles'].shape, objective_pos_dir)
                 result = (link_tile_index, objective_pos_dir, path)
                 self.last_route = (key, result)
 
