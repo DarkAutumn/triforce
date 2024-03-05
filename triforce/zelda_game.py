@@ -453,7 +453,7 @@ class ZeldaObjectData:
             elif 1 <= obj_id <= 0x48:
                 enemy_kind = id_map.get(obj_id, obj_id)
                 status = obj_status[i]
-                print(f'i: {i}, status: {status} pos:{pos} obj_id: {obj_id}')
+
                 enemy = ZeldaObject(enemy_kind, pos, distance, vector, self.get_obj_health(i), status)
                 enemies.append(enemy)
 
