@@ -587,7 +587,7 @@ class DisplayWindow:
     def _find_special_tiles(self, info):
         tiles = []
         for index, state in info['tile_states'].items():
-            if state not in (TileState.WALKABLE, TileState.IMPASSABLE):
+            if state not in (TileState.WALKABLE, TileState.IMPASSABLE, TileState.BRICK):
                 tiles.append(index)
 
         tiles += info['link'].tile_coordinates
