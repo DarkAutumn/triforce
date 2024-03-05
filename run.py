@@ -533,15 +533,19 @@ class DisplayWindow:
         return result
 
     def _overlay_grid_and_text(self, surface, kind, offset, tiles, text_color, scale, info):
-        # 0 == no overlay
-        # 1 == path overlay
-        # 2 == show tiles
-        # 3 == show tiles other than walkable and impassable
-        if kind == 0:
-            return
-
-        tiles_to_show = self._get_optimal_path(info) if kind == 1 else None
-        tiles_to_show = self._find_special_tiles(info) if kind == 3 else tiles_to_show
+        match kind:
+            case 0:
+                # no overlay, just return
+                return
+            case 1:
+                # show the path overlay
+                tiles_to_show = self._get_optimal_path(info) + self._find_special_tiles(info)
+            case 2:
+                # show tiles other than walkable and impassable
+                tiles_to_show = self._find_special_tiles(info)
+            case _:
+                # show all tile codes
+                tiles_to_show = None
 
         grid_width = 32
         grid_height = 22
@@ -578,7 +582,7 @@ class DisplayWindow:
                 surface.blit(text_surface, text_rect)
 
     def _get_optimal_path(self, info):
-        return info['a*_path'][-1] if 'a*_path' in info else None
+        return info['a*_path'][-1] if 'a*_path' in info else []
 
     def _find_special_tiles(self, info):
         tiles = []
@@ -586,12 +590,7 @@ class DisplayWindow:
             if state not in (TileState.WALKABLE, TileState.IMPASSABLE):
                 tiles.append(index)
 
-        obj = info['link']
-        tiles.append(obj.tile_coordinates)
-        tiles.append((obj.tile_coordinates[0] + 1, obj.tile_coordinates[1]))
-        tiles.append((obj.tile_coordinates[0], obj.tile_coordinates[1] + 1))
-        tiles.append((obj.tile_coordinates[0] + 1, obj.tile_coordinates[1] + 1))
-
+        tiles += info['link'].tile_coordinates
         return tiles
 
 class DebugReward:
