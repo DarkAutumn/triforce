@@ -189,25 +189,16 @@ class TileState(Enum):
     @staticmethod
     def _add_wallmaster_tiles(result):
         x = 4
-        y = 4
-
         while x < 28:
-            result[(y, x)] = TileState.DANGER
+            result[(4, x)] = TileState.DANGER
+            result[(17, x)] = TileState.DANGER
             x += 1
 
-        x -= 1
+        y = 4
         while y < 18:
-            result[(y, x)] = TileState.DANGER
+            result[(y, 4)] = TileState.DANGER
+            result[(y, 27)] = TileState.DANGER
             y += 1
-
-        y -= 1
-        while x > 4:
-            result[(y, x)] = TileState.DANGER
-            x -= 1
-
-        while y > 4:
-            result[(y, x)] = TileState.DANGER
-            y -= 1
 
     @staticmethod
     def _add_enemy_or_projectile(result, coords):
