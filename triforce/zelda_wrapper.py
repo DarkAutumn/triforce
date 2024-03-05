@@ -13,7 +13,7 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, is_link_stunned, \
+from .zelda_game import AnimationState, Direction, TileState, get_bomb_state, has_beams, is_in_cave, is_link_stunned, \
                         is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen
 from .model_parameters import LOCATION_CHANGE_COOLDOWN, MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, \
                                 ITEM_COOLDOWN, CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
