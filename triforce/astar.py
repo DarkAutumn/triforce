@@ -32,7 +32,11 @@ def heuristic(current, direction : Direction, dimensions, tile : TileState):
         return map_width - x - 1 + weight
 
     ny, nx = direction
-    return abs(nx - x) + abs(ny - y) + weight
+    dist = abs(nx - x) + abs(ny - y)
+    if dist:
+        return dist + weight
+
+    return 0
 
 # Special case dungeon bricks.  Link actually walks through them so they are walkable, but only if
 # coming from a non-brick tile.  Otherwise the A* algorithm will try to route link around the bricks
@@ -78,10 +82,18 @@ def reconstruct_path(start, came_from, current, target):
         current = came_from[current]
 
     path.append(start)
-
-    last = path[0]
     path.reverse()
 
+    _append_final_direction(target, path)
+
+    if len(path) > 1 and path[0] == path[-1]:
+        path = [path[-1]]
+        _append_final_direction(target, path)
+
+    return path
+
+def _append_final_direction(target, path):
+    last = path[-1]
     match target:
         case Direction.N:
             path.append((last[0] - 1, last[1]))
@@ -91,11 +103,6 @@ def reconstruct_path(start, came_from, current, target):
             path.append((last[0], last[1] - 1))
         case Direction.E:
             path.append((last[0], last[1] + 1))
-
-    if len(path) > 1 and path[0] == path[-1]:
-        return [path[-1]]
-
-    return path
 
 
 def a_star(link_position, tile_state_map, map_dimensions, direction):
