@@ -68,6 +68,10 @@ class GameplayCritic(ZeldaCritic):
         self.too_close_threshold = 28
         self.enemy_too_close_penalty = -REWARD_SMALL
 
+        self.warning_tile_penalty = -REWARD_TINY
+        self.danger_tile_penalty = -REWARD_MEDIUM
+        self.moved_to_safety_reward = REWARD_TINY
+
         # state tracking
         self._visted_locations = set()
 
@@ -335,8 +339,23 @@ class GameplayCritic(ZeldaCritic):
             return
 
         # If link took damage he gets knocked back.  Don't consider that 'movement'.
-        if get_heart_halves(old) > get_heart_halves(new):
+        if new['took_damage']:
             return
+
+        if not old['took_damage']:
+            warning_diff = new['link_warning_tiles'] - old['link_warning_tiles']
+            danger_diff = new['link_danger_tiles'] - old['link_danger_tiles']
+
+            if danger_diff > 0:
+                rewards['penalty-dangerous-move'] = self.danger_tile_penalty
+            elif danger_diff < 0:
+                if len(old['enemies']) == len(new['enemies']):
+                    rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
+            elif warning_diff > 0:
+                rewards['penalty-risky-move'] = self.warning_tile_penalty
+            elif warning_diff < 0:
+                if len(old['enemies']) == len(new['enemies']):
+                    rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
 
         # In rooms where wallmasters or traps exist, we want to reward link for moving closer to the
         # center of the room to avoid that.  The a* path already takes into account this by weighting

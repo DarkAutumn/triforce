@@ -564,9 +564,9 @@ class DisplayWindow:
                 x = offset[0] + tile_x * tile_width - 8 * scale
                 y = 56 * scale + offset[1] + tile_y * tile_height
 
-                # red for DAMAGE, yellow for DANGER, blue for WALKABLE, black otherwise
+                # red for DANGER, yellow for WARNING, blue for WALKABLE, black otherwise
                 state = info['tile_states'].get((tile_y, tile_x), TileState.IMPASSABLE)
-                color = (255, 0, 0) if state == TileState.DAMAGE else (255, 255, 0) if state == TileState.DANGER else \
+                color = (255, 0, 0) if state == TileState.DANGER else (255, 255, 0) if state == TileState.WARNING else \
                     (0, 0, 255) if state == TileState.WALKABLE else (0, 0, 0)
 
                 pygame.draw.rect(surface, color, (x, y, tile_width, tile_height), 1)

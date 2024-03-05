@@ -138,8 +138,8 @@ class TileState(Enum):
     IMPASSABLE = 0
     WALKABLE = 1
     BRICK = 2  # dungeon bricks
-    DAMAGE = 3  # enemy or projectile
-    DANGER = 4  # tiles next to enemy, or the walls in a wallmaster room
+    WARNING = 3  # tiles next to enemy, or the walls in a wallmaster room
+    DANGER = 4  # enemy or projectile
 
     @ property
     def astar_weight(self):
@@ -152,9 +152,9 @@ class TileState(Enum):
                 return 1
             case TileState.BRICK:
                 return 5
-            case TileState.DAMAGE:
-                return 50
             case TileState.DANGER:
+                return 50
+            case TileState.WARNING:
                 return 25
             case _:
                 raise ValueError(f"Unknown TileState: {self}")
@@ -162,7 +162,7 @@ class TileState(Enum):
     @property
     def is_walkable(self):
         """Returns True if the tile is walkable."""
-        return self in (TileState.WALKABLE, TileState.DAMAGE, TileState.DANGER, TileState.BRICK)
+        return self in (TileState.WALKABLE, TileState.DANGER, TileState.WARNING, TileState.BRICK)
 
     @staticmethod
     def create_map(tiles, enemies, projectiles):
@@ -190,14 +190,14 @@ class TileState(Enum):
     def _add_wallmaster_tiles(result):
         x = 4
         while x < 28:
-            result[(4, x)] = TileState.DANGER
-            result[(17, x)] = TileState.DANGER
+            result[(4, x)] = TileState.WARNING
+            result[(17, x)] = TileState.WARNING
             x += 1
 
         y = 4
         while y < 18:
-            result[(y, 4)] = TileState.DANGER
-            result[(y, 27)] = TileState.DANGER
+            result[(y, 4)] = TileState.WARNING
+            result[(y, 27)] = TileState.WARNING
             y += 1
 
     @staticmethod
@@ -208,12 +208,12 @@ class TileState(Enum):
         max_x = max(coord[1] for coord in coords)
 
         for coord in coords:
-            result[coord] = TileState.DAMAGE
+            result[coord] = TileState.DANGER
 
         for ny in range(min_y - 1, max_y + 2):
             for nx in range(min_x - 1, max_x + 2):
                 if (ny, nx) not in result:
-                    result[(ny, nx)] = TileState.DANGER
+                    result[(ny, nx)] = TileState.WARNING
 
 def position_to_tile_index(x, y):
     """Converts a screen position to a tile index."""

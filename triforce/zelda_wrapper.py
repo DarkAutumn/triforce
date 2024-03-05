@@ -14,7 +14,8 @@ import numpy as np
 
 from .zelda_game_data import zelda_game_data
 from .zelda_game import AnimationState, Direction, TileState, get_bomb_state, has_beams, is_in_cave, is_link_stunned, \
-                        is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen
+                        is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen, \
+                        get_heart_halves
 from .model_parameters import LOCATION_CHANGE_COOLDOWN, MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, \
                                 ITEM_COOLDOWN, CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
 
@@ -50,10 +51,10 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         self.was_link_in_cave = False
         self._location = None
-        self._link_last_pos = None
         self._beams_already_active = False
         self._prev_enemies = None
         self._prev_health = None
+        self._last_info = None
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
@@ -69,8 +70,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         return obs, info
 
     def _reset_state(self):
+        self._last_info = None
         self._location = None
-        self._link_last_pos = None
         self._beams_already_active = False
         self._prev_enemies = None
         self._prev_health = None
@@ -99,17 +100,27 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['link_direction'] = Direction.from_ram_value(info['link_direction'])
         info['is_sword_frozen'] = is_sword_frozen(info)
 
+        if self._last_info:
+            info['took_damage'] = get_heart_halves(info) - get_heart_halves(self._last_info) < 0
+        else:
+            info['took_damage'] = False
+
         # add information about enemies, items, and projectiles
         info['enemies'], info['items'], info['projectiles'] = objects.get_all_objects(link_pos)
 
-        map_offset, map_len = zelda_game_data.tables['tile_layout']
-        tiles = ram[map_offset:map_offset+map_len]
-        tiles = tiles.reshape((32, 22)).T
+        # add the tile layout of the room
+        tiles = self._get_tiles(ram)
+        tile_states = TileState.create_map(tiles, info['enemies'], info['projectiles'])
         info['tiles'] = tiles
-        info['tile_states'] = TileState.create_map(tiles, info['enemies'], info['projectiles'])
+        info['tile_states'] = tile_states
 
+        # calculate how many squares link overlaps with dangerous tiles
+        self._add_danger_tile_overlaps(info, link, tile_states)
+
+        # add information about beam state
         info['has_beams'] = has_beams(info) and get_beam_state(info) == AnimationState.INACTIVE
 
+        # add information about the room location
         location = self._get_full_location(info)
         new_location = self._location != location
         info['new_location'] = new_location
@@ -124,6 +135,27 @@ class ZeldaGameWrapper(gym.Wrapper):
         else:
             # Only check hits if we didn't move room locations
             info['step_hits'] = self._get_step_hits(act, objects, unwrapped, info)
+
+        self._last_info = info
+
+    def _get_tiles(self, ram):
+        map_offset, map_len = zelda_game_data.tables['tile_layout']
+        tiles = ram[map_offset:map_offset+map_len]
+        tiles = tiles.reshape((32, 22)).T
+        return tiles
+
+    def _add_danger_tile_overlaps(self, info, link, tile_states):
+        warning_tiles = 0
+        danger_tiles = 0
+        for pos in link.tile_coordinates:
+            state = tile_states.get(pos, TileState.IMPASSABLE)
+            if state == TileState.WARNING:
+                warning_tiles += 1
+            elif state == TileState.DANGER:
+                danger_tiles += 1
+
+        info['link_warning_tiles'] = warning_tiles
+        info['link_danger_tiles'] = danger_tiles
 
     def _get_full_location(self, info):
         return (info['level'], info['location'], is_in_cave(info))
