@@ -3,21 +3,11 @@
 import heapq
 from .zelda_game import TileState, Direction
 
-def heuristic(current, direction : Direction, dimensions, tile_weight : int):
-    """
-    Calculate the heuristic value for the A* algorithm.
-
-    Parameters:
-    - current: Tuple representing the current position (y, x).
-    - direction: A Direction representing the direction to move or a tuple representing the next position (ny, nx).
-    - dimensions: Tuple representing the dimensions of the map (height, width).
-    - tile_weight: The weight of the current tile.
-
-    Returns:
-    - The heuristic value for the given parameters.
-    """
+def heuristic(current, direction : Direction, tile_state_map):
+    """Calculate the value of a direction or step."""
+    tile_weight = tile_state_map[current]
     y, x = current
-    map_height, map_width = dimensions
+    map_height, map_width = tile_state_map.shape
 
     match direction:
         case Direction.N:
@@ -107,19 +97,18 @@ def append_final_direction(path, target, start_tiles, tile_state_map):
     if last:
         path.append(get_tile_from_direction(last, target))
 
-def a_star(start_tiles, tile_weight_map, map_dimensions, direction):
+def a_star(start_tiles, tile_weight_map, direction):
     """
     A* algorithm implementation for pathfinding.
 
     Args:
         link_position (tuple): The starting position of the link.
-        tiles (numpy.ndarray): The map tiles.
+        tiles (numpy.ndarray): The map tile weights, see TileState.
         direction (Direction): The direction in which the link is moving.
 
     Returns:
         list: The path from the starting position to the goal position.
     """
-    # pylint: disable=too-many-locals
     came_from = {}
     open_set = []
     g_score = {}
@@ -128,18 +117,19 @@ def a_star(start_tiles, tile_weight_map, map_dimensions, direction):
     closest_distance = float('inf')
 
     for start in start_tiles:
-        heapq.heappush(open_set, (0, start))
+        if 0 <= start[0] < tile_weight_map.shape[0] and 0 <= start[1] < tile_weight_map.shape[1]:
+            heapq.heappush(open_set, (0, start))
 
-        current_distance = heuristic(start, direction, map_dimensions, tile_weight_map[start])
-        g_score[start] = 0
-        f_score[start] = current_distance
+            current_distance = heuristic(start, direction, tile_weight_map)
+            g_score[start] = 0
+            f_score[start] = current_distance
 
-        if current_distance < closest_distance:
-            closest_node = start
+            if current_distance < closest_distance:
+                closest_node = start
 
     while open_set:
         _, current = heapq.heappop(open_set)
-        current_distance = heuristic(current, direction, map_dimensions, tile_weight_map[current])
+        current_distance = heuristic(current, direction, tile_weight_map)
         if current_distance < closest_distance:
             closest_node = current
             closest_distance = current_distance
@@ -152,7 +142,7 @@ def a_star(start_tiles, tile_weight_map, map_dimensions, direction):
             if tentative_g_score < g_score.get(neighbor, float('inf')):
                 came_from[neighbor] = current
                 g_score[neighbor] = tentative_g_score
-                h_value = heuristic(neighbor, direction, map_dimensions, tile_weight_map[neighbor])
+                h_value = heuristic(neighbor, direction, tile_weight_map)
                 f_score[neighbor] = tentative_g_score + h_value
                 if neighbor not in [item[1] for item in open_set]:
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))

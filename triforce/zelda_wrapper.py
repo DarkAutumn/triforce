@@ -14,8 +14,8 @@ import numpy as np
 
 from .zelda_game_data import zelda_game_data
 from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, \
-                        is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_room_loaded, \
-                        is_sword_frozen, get_heart_halves, tiles_to_weights
+                        is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, \
+                        is_room_loaded, is_sword_frozen, get_heart_halves, tiles_to_weights
 from .model_parameters import LOCATION_CHANGE_COOLDOWN, MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, \
                                 ITEM_COOLDOWN, CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
 
@@ -207,30 +207,33 @@ class ZeldaGameWrapper(gym.Wrapper):
             y += 1
 
     @staticmethod
-    def _add_enemy_or_projectile(result, coords):
+    def _add_enemy_or_projectile(tiles, coords):
         min_y = min(coord[0] for coord in coords)
         max_y = max(coord[0] for coord in coords)
         min_x = min(coord[1] for coord in coords)
         max_x = max(coord[1] for coord in coords)
 
         for coord in coords:
-            result[coord] = TileState.DANGER.value
+            if 0 <= coord[0] < tiles.shape[0] and 0 <= coord[1] < tiles.shape[1]:
+                tiles[coord] = TileState.DANGER.value
 
         for ny in range(min_y - 1, max_y + 2):
             for nx in range(min_x - 1, max_x + 2):
-                if result[ny, nx] == TileState.WALKABLE.value:
-                    result[ny, nx] = TileState.WARNING.value
+                if 0 <= ny < tiles.shape[0] and 0 <= nx < tiles.shape[1]:
+                    if tiles[ny, nx] == TileState.WALKABLE.value:
+                        tiles[ny, nx] = TileState.WARNING.value
 
     def _count_danger_tile_overlaps(self, link, tile_states):
         warning_tiles = 0
         danger_tiles = 0
         for pos in link.tile_coordinates:
             y, x = pos
-            state = tile_states[y, x]
-            if state == TileState.WARNING.value:
-                warning_tiles += 1
-            elif state == TileState.DANGER.value:
-                danger_tiles += 1
+            if 0 <= y < tile_states.shape[0] and 0 <= x < tile_states.shape[1]:
+                state = tile_states[y, x]
+                if state == TileState.WARNING.value:
+                    warning_tiles += 1
+                elif state == TileState.DANGER.value:
+                    danger_tiles += 1
 
         return warning_tiles, danger_tiles
 
