@@ -220,8 +220,7 @@ class DisplayWindow:
                                        self.game_height)
                 if overlay:
                     color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
-                    self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), info['tiles'], color,
-                                               self.scale, info)
+                    self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), color, self.scale, info)
                 render_text(surface, self.font, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
                     render_text(surface, self.font, f"Location: {hex(info['location'])}",
@@ -532,7 +531,7 @@ class DisplayWindow:
 
         return result
 
-    def _overlay_grid_and_text(self, surface, kind, offset, tiles, text_color, scale, info):
+    def _overlay_grid_and_text(self, surface, kind, offset, text_color, scale, info):
         match kind:
             case 0:
                 # no overlay, just return
@@ -546,6 +545,9 @@ class DisplayWindow:
             case _:
                 # show all tile codes
                 tiles_to_show = None
+
+        tiles = info['tile_states']
+        tile_states = info['tile_states']
 
         grid_width = 32
         grid_height = 22
@@ -565,13 +567,20 @@ class DisplayWindow:
                 y = 56 * scale + offset[1] + tile_y * tile_height
 
                 # red for DANGER, yellow for WARNING, blue for WALKABLE, black otherwise
-                state = info['tile_states'].get((tile_y, tile_x), TileState.IMPASSABLE)
-                color = (255, 0, 0) if state == TileState.DANGER else (255, 255, 0) if state == TileState.WARNING else \
-                    (0, 0, 255) if state == TileState.WALKABLE else (0, 0, 0)
+                match tile_states[tile_y, tile_x]:
+                    case TileState.DANGER.value:
+                        color = (255, 0, 0)
+                    case TileState.WARNING.value:
+                        color = (255, 255, 0)
+                    case TileState.WALKABLE.value:
+                        color = (0, 0, 255)
+                    case _:
+                        color = (0, 0, 0)
+
 
                 pygame.draw.rect(surface, color, (x, y, tile_width, tile_height), 1)
 
-                tile_number = tiles[tile_y, tile_x] # 1 for overscan
+                tile_number = tiles[tile_y, tile_x]
                 text = f"{tile_number:02X}"
 
                 # Render the text
@@ -586,9 +595,12 @@ class DisplayWindow:
 
     def _find_special_tiles(self, info):
         tiles = []
-        for index, state in info['tile_states'].items():
-            if state not in (TileState.WALKABLE, TileState.IMPASSABLE, TileState.BRICK):
-                tiles.append(index)
+        tile_states = info['tile_states']
+        for y in range(tile_states.shape[0]):
+            for x in range(tile_states.shape[1]):
+                if tile_states[y, x] not in \
+                        (TileState.WALKABLE.value, TileState.IMPASSABLE.value, TileState.BRICK.value):
+                    tiles.append((y, x))
 
         tiles += info['link'].tile_coordinates
         return tiles

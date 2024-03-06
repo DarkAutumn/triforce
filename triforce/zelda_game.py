@@ -117,103 +117,33 @@ def is_sword_frozen(state):
 
 def init_walkable_tiles():
     """Returns a lookup table of whether particular tile codes are walkable."""
-    tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87, 0xf6]
+    tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87]
     tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
     tiles += list(range(0x98, 0x9b+1))  # dungeon locked door north
     tiles += list(range(0xa4, 0xa7+1))  # dungeon locked door east
 
-    result = [False] * 256
-    for tile in tiles:
-        result[tile] = True
-
-    return result
-
+    return set(tiles)
 
 WALKABLE_TILES = init_walkable_tiles()
-
 BRICK_TILE = 0xf6
+
+def tiles_to_weights(tiles) -> None:
+    """Converts the tiles from RAM to a set of weights for the A* algorithm."""
+    brick_mask = tiles == BRICK_TILE
+    tiles[brick_mask] = TileState.BRICK.value
+
+    walkable_mask = np.isin(tiles, WALKABLE_TILES)
+    tiles[walkable_mask] = TileState.WALKABLE.value
+
+    tiles[~brick_mask & ~walkable_mask] = TileState.IMPASSABLE.value
 
 class TileState(Enum):
     """The state of a tile."""
-    IMPASSABLE = 0
+    IMPASSABLE = 100
     WALKABLE = 1
-    BRICK = 2  # dungeon bricks
-    WARNING = 3  # tiles next to enemy, or the walls in a wallmaster room
-    DANGER = 4  # enemy or projectile
-
-    @ property
-    def astar_weight(self):
-        """Returns the weight of the tile for the A* algorithm."""
-
-        match self:
-            case TileState.IMPASSABLE:
-                return 100
-            case TileState.WALKABLE:
-                return 1
-            case TileState.BRICK:
-                return 5
-            case TileState.DANGER:
-                return 50
-            case TileState.WARNING:
-                return 25
-            case _:
-                raise ValueError(f"Unknown TileState: {self}")
-
-    @property
-    def is_walkable(self):
-        """Returns True if the tile is walkable."""
-        return self in (TileState.WALKABLE, TileState.DANGER, TileState.WARNING, TileState.BRICK)
-
-    @staticmethod
-    def create_map(tiles, enemies, projectiles):
-        """Creates a map of the tiles."""
-        result = {}
-
-        if any(obj.id == ZeldaEnemy.WallMaster for obj in enemies):
-            TileState._add_wallmaster_tiles(result)
-
-        for obj in enemies + projectiles:
-            if obj.is_active:
-                y, x = position_to_tile_index(*obj.position)
-                TileState._add_enemy_or_projectile(result, obj.tile_coordinates)
-
-        for x in range(tiles.shape[1]):
-            for y in range(tiles.shape[0]):
-                if tiles[y, x] == BRICK_TILE:
-                    result[(y, x)] = TileState.BRICK
-                elif WALKABLE_TILES[tiles[y, x]] and (y, x) not in result:
-                    result[(y, x)] = TileState.WALKABLE
-
-        return result
-
-    @staticmethod
-    def _add_wallmaster_tiles(result):
-        x = 4
-        while x < 28:
-            result[(4, x)] = TileState.WARNING
-            result[(17, x)] = TileState.WARNING
-            x += 1
-
-        y = 4
-        while y < 18:
-            result[(y, 4)] = TileState.WARNING
-            result[(y, 27)] = TileState.WARNING
-            y += 1
-
-    @staticmethod
-    def _add_enemy_or_projectile(result, coords):
-        min_y = min(coord[0] for coord in coords)
-        max_y = max(coord[0] for coord in coords)
-        min_x = min(coord[1] for coord in coords)
-        max_x = max(coord[1] for coord in coords)
-
-        for coord in coords:
-            result[coord] = TileState.DANGER
-
-        for ny in range(min_y - 1, max_y + 2):
-            for nx in range(min_x - 1, max_x + 2):
-                if (ny, nx) not in result:
-                    result[(ny, nx)] = TileState.WARNING
+    BRICK = 5       # dungeon bricks
+    WARNING = 25    # tiles next to enemy, or the walls in a wallmaster room
+    DANGER = 50     # enemy or projectile
 
 def position_to_tile_index(x, y):
     """Converts a screen position to a tile index."""
@@ -477,4 +407,5 @@ __all__ = [
     ZeldaObjectData.__name__,
     ZeldaEnemy.__name__,
     AnimationState.__name__,
+    tiles_to_weights.__name__,
     ]

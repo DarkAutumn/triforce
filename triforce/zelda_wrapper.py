@@ -13,9 +13,9 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import AnimationState, Direction, TileState, get_bomb_state, has_beams, is_in_cave, is_link_stunned, \
-                        is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_sword_frozen, \
-                        get_heart_halves
+from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, \
+                        is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, \
+                        is_sword_frozen, get_heart_halves, tiles_to_weights
 from .model_parameters import LOCATION_CHANGE_COOLDOWN, MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, \
                                 ITEM_COOLDOWN, CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
 
@@ -55,6 +55,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._prev_enemies = None
         self._prev_health = None
         self._last_info = None
+        self._room_maps = {}
+        self._rooms_with_locks = set()
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
@@ -66,6 +68,9 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         self.was_link_in_cave = is_in_cave(info)
         self.update_info(self._none_action, info)
+
+        for room in self._rooms_with_locks:
+            self._room_maps.pop(room, None)
 
         return obs, info
 
@@ -109,13 +114,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['enemies'], info['items'], info['projectiles'] = objects.get_all_objects(link_pos)
 
         # add the tile layout of the room
-        tiles = self._get_tiles(ram)
-        tile_states = TileState.create_map(tiles, info['enemies'], info['projectiles'])
-        info['tiles'] = tiles
-        info['tile_states'] = tile_states
-
-        # calculate how many squares link overlaps with dangerous tiles
-        self._add_danger_tile_overlaps(info, link, tile_states)
+        self._create_tile_maps(info, ram, link)
 
         # add information about beam state
         info['has_beams'] = has_beams(info) and get_beam_state(info) == AnimationState.INACTIVE
@@ -138,24 +137,101 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         self._last_info = info
 
-    def _get_tiles(self, ram):
-        map_offset, map_len = zelda_game_data.tables['tile_layout']
-        tiles = ram[map_offset:map_offset+map_len]
-        tiles = tiles.reshape((32, 22)).T
+    def _create_tile_maps(self, info, ram, link):
+        tiles = self._get_tiles(info, ram)
+        tile_states = ZeldaGameWrapper._get_tile_states(tiles, info['enemies'], info['projectiles'])
+        info['tiles'] = tiles
+        info['tile_states'] = tile_states
+
+        # calculate how many squares link overlaps with dangerous tiles
+        warning_tiles, danger_tiles = self._count_danger_tile_overlaps(link, tile_states)
+        info['link_warning_tiles'] = warning_tiles
+        info['link_danger_tiles'] = danger_tiles
+
+        north_locked = tiles[2, 16] == 0x9a
+        if north_locked:
+            self._rooms_with_locks.add(self._get_full_location(info))
+
+    def _get_tiles(self, info, ram):
+        index = self._get_full_location(info)
+
+        # check if we spent a key, if so the tile layout of the room changed
+        if self._last_info:
+            curr_keys = info['keys']
+            last_keys = self._last_info.get('keys', curr_keys)
+            if curr_keys < last_keys:
+                self._room_maps.pop(index, None)
+
+        if index not in self._room_maps:
+            map_offset, map_len = zelda_game_data.tables['tile_layout']
+            tiles = ram[map_offset:map_offset+map_len]
+            tiles = tiles.reshape((32, 22)).T
+
+            self._room_maps[index] = tiles
+        else:
+            tiles = self._room_maps[index]
+
         return tiles
 
-    def _add_danger_tile_overlaps(self, info, link, tile_states):
+    @staticmethod
+    def _get_tile_states(tiles, enemies, projectiles):
+        tiles = tiles.copy()
+        tiles_to_weights(tiles)
+        saw_wallmaster = False
+        for obj in enemies:
+            if obj.is_active:
+                ZeldaGameWrapper._add_enemy_or_projectile(tiles, obj.tile_coordinates)
+
+            if obj.id == ZeldaEnemy.WallMaster and not saw_wallmaster:
+                saw_wallmaster = True
+                ZeldaGameWrapper._add_wallmaster_tiles(tiles)
+
+        for proj in projectiles:
+            ZeldaGameWrapper._add_enemy_or_projectile(tiles, proj.tile_coordinates)
+
+        return tiles
+
+    @staticmethod
+    def _add_wallmaster_tiles(result):
+        x = 4
+        while x < 28:
+            result[4, x] = TileState.WARNING.value
+            result[17, x] = TileState.WARNING.value
+            x += 1
+
+        y = 4
+        while y < 18:
+            result[(y, 4)] = TileState.WARNING.value
+            result[(y, 27)] = TileState.WARNING.value
+            y += 1
+
+    @staticmethod
+    def _add_enemy_or_projectile(result, coords):
+        min_y = min(coord[0] for coord in coords)
+        max_y = max(coord[0] for coord in coords)
+        min_x = min(coord[1] for coord in coords)
+        max_x = max(coord[1] for coord in coords)
+
+        for coord in coords:
+            result[coord] = TileState.DANGER.value
+
+        for ny in range(min_y - 1, max_y + 2):
+            for nx in range(min_x - 1, max_x + 2):
+                if result[ny, nx] == TileState.WALKABLE.value:
+                    result[ny, nx] = TileState.WARNING.value
+
+    def _count_danger_tile_overlaps(self, link, tile_states):
         warning_tiles = 0
         danger_tiles = 0
         for pos in link.tile_coordinates:
-            state = tile_states.get(pos, TileState.IMPASSABLE)
-            if state == TileState.WARNING:
+            y, x = pos
+            state = tile_states[y, x]
+            if state == TileState.WARNING.value:
                 warning_tiles += 1
-            elif state == TileState.DANGER:
+            elif state == TileState.DANGER.value:
                 danger_tiles += 1
 
-        info['link_warning_tiles'] = warning_tiles
-        info['link_danger_tiles'] = danger_tiles
+        return warning_tiles, danger_tiles
 
     def _get_full_location(self, info):
         return (info['level'], info['location'], is_in_cave(info))
