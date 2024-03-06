@@ -32,11 +32,15 @@ def heuristic(current, direction : Direction, dimensions, tile : TileState):
         return map_width - x - 1 + weight
 
     ny, nx = direction
-    dist = abs(nx - x) + abs(ny - y)
+    dist = mahattan_distance(y, x, ny, nx)
     if dist:
         return dist + weight
 
     return 0
+
+def mahattan_distance(y, x, ny, nx):
+    """Returns the manhattan distance between two points"""
+    return abs(nx - x) + abs(ny - y)
 
 # Special case dungeon bricks.  Link actually walks through them so they are walkable, but only if
 # coming from a non-brick tile.  Otherwise the A* algorithm will try to route link around the bricks
@@ -64,7 +68,7 @@ def get_neighbors(position, tile_states, dimensions):
 
     return neighbors
 
-def reconstruct_path(start, came_from, current, target):
+def reconstruct_path(start_tiles, came_from, current, target, tile_state_map):
     """
     Reconstructs the path from the start node to the current node using the came_from dictionary.
 
@@ -81,31 +85,67 @@ def reconstruct_path(start, came_from, current, target):
         path.append(current)
         current = came_from[current]
 
-    path.append(start)
     path.reverse()
 
-    _append_final_direction(target, path)
+    _append_final_direction(target, start_tiles, path, tile_state_map)
 
     if len(path) > 1 and path[0] == path[-1]:
         path = [path[-1]]
-        _append_final_direction(target, path)
+        _append_final_direction(target, start_tiles, path, tile_state_map)
 
     return path
 
-def _append_final_direction(target, path):
-    last = path[-1]
-    match target:
+def get_tile_from_direction(tile, direction):
+    """
+    Returns the tile in the given direction from the given tile.
+
+    Args:
+        tile (tuple): The tile to get the neighbor of.
+        direction (Direction): The direction to get the neighbor in.
+
+    Returns:
+        tuple: The tile in the given direction from the given tile.
+    """
+    y, x = tile
+    match direction:
         case Direction.N:
-            path.append((last[0] - 1, last[1]))
+            return y - 1, x
         case Direction.S:
-            path.append((last[0] + 1, last[1]))
+            return y + 1, x
         case Direction.W:
-            path.append((last[0], last[1] - 1))
+            return y, x - 1
         case Direction.E:
-            path.append((last[0], last[1] + 1))
+            return y, x + 1
 
+    return tile
 
-def a_star(link_position, tile_state_map, map_dimensions, direction):
+def _append_final_direction(target, start_tiles, path, tile_state_map):
+    if not isinstance(target, Direction):
+        return
+
+    if path:
+        last = path[-1]
+    else:
+        last = None
+        for location in start_tiles:
+            next_tile = get_tile_from_direction(location, target)
+            if next_tile in path or next_tile in start_tiles:
+                continue
+
+            if last is None:
+                last = next_tile
+            else:
+                state = tile_state_map.get(next_tile, TileState.IMPASSABLE)
+                if state.is_walkable:
+                    last = next_tile
+                    break
+
+        last = None
+
+    if last:
+        path.append(get_tile_from_direction(last, target))
+
+def a_star(start_tiles, tile_state_map, map_dimensions, direction):
     """
     A* algorithm implementation for pathfinding.
 
@@ -117,19 +157,24 @@ def a_star(link_position, tile_state_map, map_dimensions, direction):
     Returns:
         list: The path from the starting position to the goal position.
     """
-    # pylint: disable-msg=too-many-locals
-    start = link_position
-    start_tile_state = tile_state_map.get(start, TileState.IMPASSABLE)
-
-    open_set = []
-    heapq.heappush(open_set, (0, start))
-
+    # pylint: disable=too-many-locals
     came_from = {}
-    g_score = {start: 0}
-    f_score = {start: heuristic(start, direction, map_dimensions, start_tile_state)}
+    open_set = []
+    g_score = {}
+    f_score = {}
+    closest_node = None
+    closest_distance = float('inf')
 
-    closest_node = start
-    closest_distance = heuristic(start, direction, map_dimensions, start_tile_state)
+    for start in start_tiles:
+        start_tile_state = tile_state_map.get(start, TileState.IMPASSABLE)
+        heapq.heappush(open_set, (0, start))
+
+        current_distance = heuristic(start, direction, map_dimensions, start_tile_state)
+        g_score[start] = 0
+        f_score[start] = current_distance
+
+        if current_distance < closest_distance:
+            closest_node = start
 
     while open_set:
         _, current = heapq.heappop(open_set)
@@ -141,7 +186,7 @@ def a_star(link_position, tile_state_map, map_dimensions, direction):
             closest_distance = current_distance
 
         if current_distance == 0:
-            return reconstruct_path(start, came_from, current, direction)
+            return reconstruct_path(start_tiles, came_from, current, direction, tile_state_map)
 
         for neighbor, tile in get_neighbors(current, tile_state_map, map_dimensions):
             tentative_g_score = g_score[current] + tile.astar_weight
@@ -153,4 +198,4 @@ def a_star(link_position, tile_state_map, map_dimensions, direction):
                 if neighbor not in [item[1] for item in open_set]:
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
-    return reconstruct_path(start, came_from, closest_node, direction)
+    return reconstruct_path(start_tiles, came_from, closest_node, direction, tile_state_map)

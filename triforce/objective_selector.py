@@ -1,8 +1,8 @@
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import Direction, get_link_tile_index, is_in_cave, position_to_tile_index, tile_index_to_position, \
-    is_health_full, ZeldaItem
+from .zelda_game import Direction, is_in_cave, position_to_tile_index, tile_index_to_position, is_health_full, \
+                        ZeldaItem
 from .astar import a_star
 
 def get_location_from_direction(location, direction):
@@ -88,18 +88,18 @@ class ObjectiveSelector(gym.Wrapper):
 
         # find the optimal route to the objective
         if objective_pos_dir is not None:
-            link_tile_index = get_link_tile_index(info)
+            link_tiles = info['link'].tile_coordinates
 
             if not isinstance(objective_pos_dir, Direction):
                 objective_pos_dir = position_to_tile_index(*objective_pos_dir)
 
-            key = (info['level'], info['location'], link_tile_index, objective_pos_dir)
+            key = (info['level'], info['location'], link_tiles, objective_pos_dir)
             if self.last_route[0] == key:
                 result = self.last_route[1]
                 path = result[-1]
             else:
-                path = a_star(link_tile_index, info['tile_states'], info['tiles'].shape, objective_pos_dir)
-                result = (link_tile_index, objective_pos_dir, path)
+                path = a_star(link_tiles, info['tile_states'], info['tiles'].shape, objective_pos_dir)
+                result = (link_tiles, objective_pos_dir, path)
                 self.last_route = (key, result)
 
             info['a*_path'] = result

@@ -219,10 +219,6 @@ def position_to_tile_index(x, y):
     """Converts a screen position to a tile index."""
     return (int((y - GAMEPLAY_START_Y) // 8), int(x // 8))
 
-def get_link_tile_index(info):
-    """Returns the tile index of link's position."""
-    return position_to_tile_index(info['link_x'], info['link_y'])
-
 def tile_index_to_position(tile_index):
     """Converts a tile index to a screen position."""
     return (tile_index[1] * 8, tile_index[0] * 8 + GAMEPLAY_START_Y)
@@ -475,7 +471,6 @@ __all__ = [
     'TileState',
     'position_to_tile_index',
     'tile_index_to_position',
-    'get_link_tile_index',
     'is_sword_frozen',
     'is_health_full',
     ZeldaSoundsPulse1.__name__,
