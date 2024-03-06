@@ -253,7 +253,7 @@ class GameplayCritic(ZeldaCritic):
         """
         if new['step_hits']:
             if not is_in_cave(new):
-                rewards['reward-hit'] = self.injure_kill_reward * new['step_hits']
+                rewards['reward-hit'] = self.injure_kill_reward
             else:
                 rewards['penalty-hit-cave'] = -self.injure_kill_reward
 
