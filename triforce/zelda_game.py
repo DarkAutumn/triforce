@@ -256,10 +256,10 @@ class ZeldaObject:
     @property
     def is_active(self) -> bool:
         """Returns True if the object is active."""
-        if self.id != ZeldaEnemy.WallMaster:
-            return True
+        if not self.health:
+            return False
 
-        return self.status == 1
+        return self.id != ZeldaEnemy.WallMaster or self.status == 1
 
 class ZeldaObjectData:
     """
@@ -369,10 +369,11 @@ class ZeldaObjectData:
 
             # enemies
             elif 1 <= obj_id <= 0x48:
+                health = self.get_obj_health(i)
                 enemy_kind = ID_MAP.get(obj_id, obj_id)
                 status = obj_status[i]
 
-                enemy = ZeldaObject(enemy_kind, pos, distance, vector, self.get_obj_health(i), status)
+                enemy = ZeldaObject(enemy_kind, pos, distance, vector, health, status)
                 enemies.append(enemy)
 
             elif self.is_projectile(obj_id):

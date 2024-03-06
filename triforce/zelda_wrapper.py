@@ -112,6 +112,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         # add information about enemies, items, and projectiles
         info['enemies'], info['items'], info['projectiles'] = objects.get_all_objects(link_pos)
+        info['active_enemies'] = [x for x in info['enemies'] if x.is_active]
 
         # add the tile layout of the room
         self._create_tile_maps(info, ram, link)

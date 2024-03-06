@@ -254,20 +254,20 @@ class GameplayCritic(ZeldaCritic):
                 rewards['penalty-hit-cave'] = -self.injure_kill_reward
 
         elif new['action'] == ActionType.ATTACK:
-            if not new['enemies']:
+            if not new['active_enemies']:
                 rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
 
             elif new['is_sword_frozen']:
                 rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
 
-            elif new['enemies']:
-                enemy_vectors = [enemy.vector for enemy in new['enemies'] if abs(enemy.distance) > 0]
+            elif new['active_enemies']:
+                enemy_vectors = [enemy.vector for enemy in new['active_enemies'] if abs(enemy.distance) > 0]
                 if enemy_vectors:
                     dotproducts = np.sum(new['link_direction'].to_vector() * enemy_vectors, axis=1)
                     if not np.any(dotproducts > np.sqrt(2) / 2):
                         rewards['penalty-attack-miss'] = self.attack_miss_penalty
                     elif not old['has_beams']:
-                        distance = new['enemies'][0].distance
+                        distance = new['active_enemies'][0].distance
                         if distance > self.distance_threshold:
                             rewards['penalty-attack-miss'] = self.attack_miss_penalty
 
@@ -345,12 +345,12 @@ class GameplayCritic(ZeldaCritic):
             if danger_diff > 0:
                 rewards['penalty-dangerous-move'] = self.danger_tile_penalty
             elif danger_diff < 0:
-                if len(old['enemies']) == len(new['enemies']):
+                if len(old['active_enemies']) == len(new['active_enemies']):
                     rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
             elif warning_diff > 0:
                 rewards['penalty-risky-move'] = self.warning_tile_penalty
             elif warning_diff < 0:
-                if len(old['enemies']) == len(new['enemies']):
+                if len(old['active_enemies']) == len(new['active_enemies']):
                     rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
 
         # do we have an optimal path?
