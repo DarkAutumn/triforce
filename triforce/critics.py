@@ -59,14 +59,10 @@ class GameplayCritic(ZeldaCritic):
         # same room movement rewards
         self.wall_collision_penalty = -REWARD_TINY
         self.move_closer_reward = REWARD_TINY
-        self.optimal_path_reward = self.move_closer_reward
 
         self.minimum_movement_required = 1.5
         self.movement_scale_factor = 9.0
         self.move_away_penalty = -self.move_closer_reward - REWARD_MINIMUM
-
-        self.too_close_threshold = 28
-        self.enemy_too_close_penalty = -REWARD_SMALL
 
         self.warning_tile_penalty = -REWARD_TINY
         self.danger_tile_penalty = -REWARD_MEDIUM
@@ -570,7 +566,6 @@ class Dungeon1BossCritic(Dungeon1Critic):
     def clear(self):
         super().clear()
         self.total_damage = 0
-        self.too_close_threshold = 10
         self.move_closer_reward = REWARD_SMALL
         self.move_away_penalty = -REWARD_SMALL
         self.injure_kill_reward = REWARD_LARGE
