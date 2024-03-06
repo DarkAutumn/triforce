@@ -339,6 +339,7 @@ class ZeldaObjectData:
 
     def get_all_objects(self, link_pos : np.ndarray) -> tuple:
         """A slightly optimized method to get all objects in the game state, sorted by distance."""
+        # pylint: disable=too-many-locals
 
         enemies = []
         items = []

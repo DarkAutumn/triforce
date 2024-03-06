@@ -3,7 +3,7 @@
 from typing import Dict
 import numpy as np
 from .zelda_wrapper import ActionType
-from .zelda_game import Direction, ZeldaEnemy, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
+from .zelda_game import Direction, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
     get_num_triforce_pieces, is_in_cave, tile_index_to_position
 
 REWARD_MINIMUM = 0.01
@@ -357,122 +357,84 @@ class GameplayCritic(ZeldaCritic):
                 if len(old['enemies']) == len(new['enemies']):
                     rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
 
-        # In rooms where wallmasters or traps exist, we want to reward link for moving closer to the
-        # center of the room to avoid that.  The a* path already takes into account this by weighting
-        # the edges of the room heavy.  This means we need to reward link for following the path exactly.
-        # Additionally, WallMaster code is weird.  They seem to jump around the map even when not visible
-        # which throws off some of our other code such as checking for enemies that are too close.
-        are_enemies_near = self._check_how_close(old, new, rewards)
+        # do we have an optimal path?
+        old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
+        new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
 
-        # If enemies or projectiles are nearby, no rewards for walking/following the path.  The agent
-        # will discover rewards if they attack correctly or avoid damage.
-        if not are_enemies_near:
-            # do we have an optimal path?
-            old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
-            new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
+        old_path = old.get("a*_path", [])
+        new_path = new.get("a*_path", [])
 
-            old_path = old.get("a*_path", [])
-            new_path = new.get("a*_path", [])
+        if len(old_path) >= 2:
+            # target is the top left of the 8x8 tile, if we are left or above the target, add
+            # 8 to the x or y to get to that edge of the tile.
+            target_tile = self.__find_second_turn(old_path)
+            target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
 
-            if len(old_path) >= 2:
-                # target is the top left of the 8x8 tile, if we are left or above the target, add
-                # 8 to the x or y to get to that edge of the tile.
-                target_tile = self.__find_second_turn(old_path)
-                target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
+            if new_link_pos[0] < target[0]:
+                target[0] += 8
 
-                if new_link_pos[0] < target[0]:
-                    target[0] += 8
+            if new_link_pos[1] < target[1]:
+                target[1] += 8
 
-                if new_link_pos[1] < target[1]:
-                    target[1] += 8
+            old_distance = np.linalg.norm(target - old_link_pos)
+            new_distance = np.linalg.norm(target - new_link_pos)
 
-                old_distance = np.linalg.norm(target - old_link_pos)
-                new_distance = np.linalg.norm(target - new_link_pos)
+            diff = abs(new_distance - old_distance)
+            if diff >= self.minimum_movement_required:
+                percent = min(diff / self.movement_scale_factor, 1)
+            else:
+                percent = None
 
-                diff = abs(new_distance - old_distance)
-                if diff >= self.minimum_movement_required:
-                    percent = min(diff / self.movement_scale_factor, 1)
-                else:
-                    percent = None
+            overlap = set(new['link'].tile_coordinates)
+            overlap.intersection_update(old_path)
+            if percent is not None and overlap:
+                # Did link move into the optimal path?
+                rewards['reward-move-closer'] = self.move_closer_reward * percent
 
-                overlap = set(new['link'].tile_coordinates)
-                overlap.intersection_update(old_path)
-                if percent is not None and overlap:
-                    # Did link move into the optimal path?
-                    rewards['reward-move-closer'] = self.move_closer_reward * percent
+            else:
+                # Otherwise we have to see if link is moving in the transposed direction of the path.
+                correct_direction, possible_direction = self.__get_optimal_directions(old_path)
+                direction = new['link_direction']
 
-                else:
-                    # Otherwise we have to see if link is moving in the transposed direction of the path.
-                    correct_direction, possible_direction = self.__get_optimal_directions(old_path)
-                    direction = new['link_direction']
+                # reward if we moved in the right direction
+                if direction == correct_direction:
+                    if percent is not None:
+                        rewards['reward-move-closer'] = self.move_closer_reward * percent
 
-                    # reward if we moved in the right direction
-                    if direction == correct_direction:
+                elif direction == possible_direction:
+                    if len(new_path) <= len(old_path):
                         if percent is not None:
                             rewards['reward-move-closer'] = self.move_closer_reward * percent
-
-                    elif direction == possible_direction:
-                        if len(new_path) <= len(old_path):
-                            if percent is not None:
-                                rewards['reward-move-closer'] = self.move_closer_reward * percent
-                        else:
-                            rewards['penalty-move-farther'] = self.move_away_penalty
                     else:
                         rewards['penalty-move-farther'] = self.move_away_penalty
-
-            elif (target := new.get('objective_pos_or_dir', None)) is not None:
-                # if A* couldn't find a path, we should still reward the agent for moving closer
-                # to the objective.  This should be rare, and often happens when an enem moves
-                # into a wall.  (Bosses or wallmasters.)
-                if isinstance(target, Direction):
-                    if target == Direction.N:
-                        dist = new_link_pos[1] - old_link_pos[1]
-                    elif target == Direction.S:
-                        dist = old_link_pos[1] - new_link_pos[1]
-                    elif target == Direction.E:
-                        dist = old_link_pos[0] - new_link_pos[0]
-                    elif target == Direction.W:
-                        dist = new_link_pos[0] - old_link_pos[0]
-
-                    percent = abs(dist / self.movement_scale_factor)
-                else:
-                    old_distance = np.linalg.norm(target - old_link_pos)
-                    new_distance = np.linalg.norm(target - new_link_pos)
-                    dist = new_distance - old_distance
-                    percent = abs(dist / self.movement_scale_factor)
-
-                if dist < 0:
-                    rewards['reward-move-closer'] = self.move_closer_reward * percent
                 else:
                     rewards['penalty-move-farther'] = self.move_away_penalty
 
-    def _check_how_close(self, old, new, rewards):
-        are_enemies_near = False
+        elif (target := new.get('objective_pos_or_dir', None)) is not None:
+            # if A* couldn't find a path, we should still reward the agent for moving closer
+            # to the objective.  This should be rare, and often happens when an enem moves
+            # into a wall.  (Bosses or wallmasters.)
+            if isinstance(target, Direction):
+                if target == Direction.N:
+                    dist = new_link_pos[1] - old_link_pos[1]
+                elif target == Direction.S:
+                    dist = old_link_pos[1] - new_link_pos[1]
+                elif target == Direction.E:
+                    dist = old_link_pos[0] - new_link_pos[0]
+                elif target == Direction.W:
+                    dist = new_link_pos[0] - old_link_pos[0]
 
-        # did link move too close to an enemy?
-        new_enemies_or_projectiles = new['enemies'] + new['projectiles']
-        if new_enemies_or_projectiles:
-            if any(x.id == ZeldaEnemy.WallMaster for x in new['enemies']):
-                pass
-
+                percent = abs(dist / self.movement_scale_factor)
             else:
-                # find enemies that were too close the last time, and punish for moving closer in that direction
-                old_enemies_or_projectiles = old['enemies'] + old['projectiles']
-                old_enemies_too_close = [x for x in old_enemies_or_projectiles \
-                                         if x.distance < self.too_close_threshold]
+                old_distance = np.linalg.norm(target - old_link_pos)
+                new_distance = np.linalg.norm(target - new_link_pos)
+                dist = new_distance - old_distance
+                percent = abs(dist / self.movement_scale_factor)
 
-                if old_enemies_too_close:
-                    link_vector = new['link_direction'].to_vector()
-
-                    # filter old_enemies_too_close to the ones we walked towards
-                    old_enemies_walked_towards = [x for x in old_enemies_too_close \
-                                                  if np.dot(link_vector, x.vector) > 0.7071]
-                    if any(x for x in new_enemies_or_projectiles if x.id in old_enemies_walked_towards):
-                        rewards['penalty-move-too-close'] = self.enemy_too_close_penalty
-
-                    are_enemies_near = True
-
-        return are_enemies_near
+            if dist < 0:
+                rewards['reward-move-closer'] = self.move_closer_reward * percent
+            else:
+                rewards['penalty-move-farther'] = self.move_away_penalty
 
     def __find_second_turn(self, path):
         turn = 0
