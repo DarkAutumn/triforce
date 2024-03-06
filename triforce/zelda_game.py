@@ -296,13 +296,8 @@ class ZeldaSoundsPulse1(Enum):
     SetBomb : int = 0x20
     HeartWarning : int = 0x40
 
-id_map = {}
-for __c in ZeldaEnemy:
-    id_map[__c.value] = __c
-
-item_map = {}
-for item in ZeldaItem:
-    item_map[item.value] = item
+ID_MAP = {x.value: x for x in ZeldaEnemy}
+ITEM_MAP = {x.value: x for x in ZeldaItem}
 
 class ZeldaObject:
     """Structured data for a single object.  ZeldaObjects are enemies, items, and projectiles."""
@@ -437,12 +432,12 @@ class ZeldaObjectData:
 
             if obj_id == ZeldaEnemy.Item.value:
                 obj_id = obj_status[i]
-                obj_id = item_map.get(obj_id, obj_id)
+                obj_id = ITEM_MAP.get(obj_id, obj_id)
                 items.append(ZeldaObject(obj_id, pos, distance, vector, None, None))
 
             # enemies
             elif 1 <= obj_id <= 0x48:
-                enemy_kind = id_map.get(obj_id, obj_id)
+                enemy_kind = ID_MAP.get(obj_id, obj_id)
                 status = obj_status[i]
 
                 enemy = ZeldaObject(enemy_kind, pos, distance, vector, self.get_obj_health(i), status)
