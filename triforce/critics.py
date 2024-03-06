@@ -370,15 +370,16 @@ class GameplayCritic(ZeldaCritic):
             # do we have an optimal path?
             old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
             new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
-            if len(old_path := old.get("a*_path", (None, None, []))[2]) >= 2:
-                correct_direction, possible_direction = self.__get_optimal_directions(old_path)
-                direction = new['link_direction']
 
+            old_path = old.get("a*_path", [])
+            new_path = new.get("a*_path", [])
+
+            if len(old_path) >= 2:
+                # target is the top left of the 8x8 tile, if we are left or above the target, add
+                # 8 to the x or y to get to that edge of the tile.
                 target_tile = self.__find_second_turn(old_path)
                 target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
 
-                # target is the top left of the 8x8 tile, if we are left or above the target, add
-                # 8 to the x or y to get to that edge of the tile.
                 if new_link_pos[0] < target[0]:
                     target[0] += 8
 
@@ -394,19 +395,30 @@ class GameplayCritic(ZeldaCritic):
                 else:
                     percent = None
 
-                # reward if we moved in the right direction
-                if direction == correct_direction:
-                    if percent is not None:
-                        rewards['reward-move-closer'] = self.move_closer_reward * percent
+                overlap = set(new['link'].tile_coordinates)
+                overlap.intersection_update(old_path)
+                if percent is not None and overlap:
+                    # Did link move into the optimal path?
+                    rewards['reward-move-closer'] = self.move_closer_reward * percent
 
-                elif direction == possible_direction:
-                    if len(new.get("a*_path", (None, None, []))[2]) <= len(old_path):
+                else:
+                    # Otherwise we have to see if link is moving in the transposed direction of the path.
+                    correct_direction, possible_direction = self.__get_optimal_directions(old_path)
+                    direction = new['link_direction']
+
+                    # reward if we moved in the right direction
+                    if direction == correct_direction:
                         if percent is not None:
                             rewards['reward-move-closer'] = self.move_closer_reward * percent
+
+                    elif direction == possible_direction:
+                        if len(new_path) <= len(old_path):
+                            if percent is not None:
+                                rewards['reward-move-closer'] = self.move_closer_reward * percent
+                        else:
+                            rewards['penalty-move-farther'] = self.move_away_penalty
                     else:
                         rewards['penalty-move-farther'] = self.move_away_penalty
-                else:
-                    rewards['penalty-move-farther'] = self.move_away_penalty
 
             elif (target := new.get('objective_pos_or_dir', None)) is not None:
                 # if A* couldn't find a path, we should still reward the agent for moving closer

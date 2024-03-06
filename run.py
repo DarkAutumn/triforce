@@ -591,7 +591,7 @@ class DisplayWindow:
                 surface.blit(text_surface, text_rect)
 
     def _get_optimal_path(self, info):
-        return info['a*_path'][-1] if 'a*_path' in info else []
+        return info['a*_path'] if 'a*_path' in info else []
 
     def _find_special_tiles(self, info):
         tiles = []

@@ -32,6 +32,10 @@ def find_cave_onscreen(info):
     closest_cave = cave_positions[np.argmin(cave_distances)]
     return closest_cave
 
+
+
+ADJACENT_TILES = [(-1, 0), (-1, 1), (2, 0),  (2, 1), (0, -1), (1, -1), (0, 2),  (1, 2)]
+
 class ObjectiveSelector(gym.Wrapper):
     """
     A wrapper that selects objectives for the agent to pursue.  This is used to help the agent decide what to do.
@@ -88,21 +92,12 @@ class ObjectiveSelector(gym.Wrapper):
 
         # find the optimal route to the objective
         if objective_pos_dir is not None:
-            link_tiles = info['link'].tile_coordinates
-
             if not isinstance(objective_pos_dir, Direction):
                 objective_pos_dir = position_to_tile_index(*objective_pos_dir)
 
-            key = (info['level'], info['location'], link_tiles, objective_pos_dir)
-            if self.last_route[0] == key:
-                result = self.last_route[1]
-                path = result[-1]
-            else:
-                path = a_star(link_tiles, info['tile_states'], info['tiles'].shape, objective_pos_dir)
-                result = (link_tiles, objective_pos_dir, path)
-                self.last_route = (key, result)
+            path = self._get_a_star_path(info, objective_pos_dir)
 
-            info['a*_path'] = result
+            info['a*_path'] = path
 
             objective_vector = self._get_objective_vector(link_pos, objective_vector, objective_pos_dir, path)
 
@@ -110,6 +105,34 @@ class ObjectiveSelector(gym.Wrapper):
         info['objective_kind'] = objective_kind
         info['objective_pos_or_dir'] = objective_pos_dir
         info['location_objective'] = location_objective
+
+    def _get_a_star_path(self, info, objective_pos_dir):
+        link_tiles = info['link'].tile_coordinates
+
+        key = (info['level'], info['location'], objective_pos_dir)
+        path = None
+        if self.last_route[0] == key:
+            potential_path = self.last_route[1]
+            if potential_path:
+                link_y, link_x = link_tiles[0]
+                adjacent = [(link_y + adj[0], link_x + adj[1]) for adj in ADJACENT_TILES]
+                for i, element in enumerate(potential_path):
+                    if element in link_tiles:
+                        path = potential_path[i+1:]
+                    elif element in adjacent:
+                        if i > 0:
+                            path = potential_path[i:]
+                        else:
+                            path = potential_path
+                            break
+            if path:
+                self.last_route = key, path
+
+        if not path:
+            path = a_star(link_tiles, info['tile_states'], info['tiles'].shape, objective_pos_dir)
+            self.last_route = key, path
+
+        return path
 
     def _get_objective_vector(self, link_pos, objective_vector, objective_pos_dir, path):
         if path:

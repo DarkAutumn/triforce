@@ -14,7 +14,7 @@ import numpy as np
 
 from .zelda_game_data import zelda_game_data
 from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, \
-                        is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, \
+                        is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, is_room_loaded, \
                         is_sword_frozen, get_heart_halves, tiles_to_weights
 from .model_parameters import LOCATION_CHANGE_COOLDOWN, MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, \
                                 ITEM_COOLDOWN, CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
@@ -167,7 +167,8 @@ class ZeldaGameWrapper(gym.Wrapper):
             tiles = ram[map_offset:map_offset+map_len]
             tiles = tiles.reshape((32, 22)).T
 
-            self._room_maps[index] = tiles
+            if is_room_loaded(tiles):
+                self._room_maps[index] = tiles
         else:
             tiles = self._room_maps[index]
 

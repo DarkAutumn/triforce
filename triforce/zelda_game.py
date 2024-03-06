@@ -122,7 +122,7 @@ def init_walkable_tiles():
     tiles += list(range(0x98, 0x9b+1))  # dungeon locked door north
     tiles += list(range(0xa4, 0xa7+1))  # dungeon locked door east
 
-    return set(tiles)
+    return tiles
 
 WALKABLE_TILES = init_walkable_tiles()
 BRICK_TILE = 0xf6
@@ -136,6 +136,11 @@ def tiles_to_weights(tiles) -> None:
     tiles[walkable_mask] = TileState.WALKABLE.value
 
     tiles[~brick_mask & ~walkable_mask] = TileState.IMPASSABLE.value
+
+def is_room_loaded(tiles):
+    """Returns True if the room is loaded."""
+    any_walkable = np.isin(tiles, WALKABLE_TILES).any()
+    return any_walkable
 
 class TileState(Enum):
     """The state of a tile."""
@@ -408,4 +413,5 @@ __all__ = [
     ZeldaEnemy.__name__,
     AnimationState.__name__,
     tiles_to_weights.__name__,
+    is_room_loaded.__name__,
     ]

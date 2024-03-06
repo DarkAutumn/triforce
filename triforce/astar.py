@@ -1,8 +1,6 @@
 """A* algorithm implementation for pathfinding.  Used to train the model how to move around the map."""
 
 import heapq
-import numpy as np
-
 from .zelda_game import TileState, Direction
 
 def heuristic(current, direction : Direction, dimensions, tile_weight : int):
@@ -42,11 +40,11 @@ def mahattan_distance(y, x, ny, nx):
     """Returns the manhattan distance between two points"""
     return abs(nx - x) + abs(ny - y)
 
-WALKABLE_TILES = np.array([TileState.WALKABLE.value,
+WALKABLE_TILES = [TileState.WALKABLE.value,
                            TileState.DANGER.value,
                            TileState.WARNING.value,
                            TileState.BRICK.value
-                           ], dtype=np.uint8)
+                           ]
 
 def get_neighbors(position, tile_weight_map):
     """Returns neighbors of position that are both valid and walkable."""
