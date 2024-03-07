@@ -57,6 +57,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._last_info = None
         self._room_maps = {}
         self._rooms_with_locks = set()
+        self._rooms_with_locks.add((1, 0x35, False))
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
@@ -161,6 +162,9 @@ class ZeldaGameWrapper(gym.Wrapper):
             curr_keys = info['keys']
             last_keys = self._last_info.get('keys', curr_keys)
             if curr_keys < last_keys:
+                self._room_maps.pop(index, None)
+
+            if len(self._last_info['enemies']) != len(info['enemies']):
                 self._room_maps.pop(index, None)
 
         if index not in self._room_maps:
