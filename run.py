@@ -18,7 +18,7 @@ import tqdm
 
 from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
                      TRAINING_SCENARIOS
-from triforce.zelda_game import is_in_cave
+from triforce.zelda_game import TileState, is_in_cave
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
 class Recording:
@@ -97,11 +97,11 @@ class DisplayWindow:
 
         self.font = pygame.font.Font(None, 24)
 
-        game_x, game_y = 240, 224
+        game_w, game_h = 240, 224
         self.scale = 4
 
-        self.game_width = game_x * self.scale
-        self.game_height = game_y * self.scale
+        self.game_width = game_w * self.scale
+        self.game_height = game_h * self.scale
 
         self.obs_width = 128
         self.obs_height = self.game_height
@@ -220,8 +220,7 @@ class DisplayWindow:
                                        self.game_height)
                 if overlay:
                     color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
-                    self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), info['tiles'], color,
-                                               self.scale, self._get_optimal_path(info))
+                    self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), color, self.scale, info)
                 render_text(surface, self.font, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
                     render_text(surface, self.font, f"Location: {hex(info['location'])}",
@@ -278,7 +277,7 @@ class DisplayWindow:
                             mode = 'c'
 
                         elif event.key == pygame.K_o:
-                            overlay = (overlay + 1) % 3
+                            overlay = (overlay + 1) % 4
 
                         elif event.key == pygame.K_e:
                             show_endings = not show_endings
@@ -532,10 +531,24 @@ class DisplayWindow:
 
         return result
 
-    def _get_optimal_path(self, info):
-        return info['a*_path'][-1] if 'a*_path' in info else None
+    def _overlay_grid_and_text(self, surface, kind, offset, text_color, scale, info):
+        match kind:
+            case 0:
+                # no overlay, just return
+                return
+            case 1:
+                # show the path overlay
+                tiles_to_show = self._get_optimal_path(info) + self._find_special_tiles(info)
+            case 2:
+                # show tiles other than walkable and impassable
+                tiles_to_show = self._find_special_tiles(info)
+            case _:
+                # show all tile codes
+                tiles_to_show = None
 
-    def _overlay_grid_and_text(self, surface, kind, offset, tiles, text_color, scale, path = None):
+        tiles = info['tile_states']
+        tile_states = info['tile_states']
+
         grid_width = 32
         grid_height = 22
         tile_width = 8 * scale
@@ -547,15 +560,27 @@ class DisplayWindow:
 
         for tile_x in range(grid_width):
             for tile_y in range(grid_height):
-                if kind == 1 and path and (tile_y, tile_x) not in path:
+                if tiles_to_show is not None and (tile_y, tile_x) not in tiles_to_show:
                     continue
 
                 x = offset[0] + tile_x * tile_width - 8 * scale
                 y = 56 * scale + offset[1] + tile_y * tile_height
 
-                pygame.draw.rect(surface, (0, 0, 255), (x, y, tile_width, tile_height), 1)
+                # red for DANGER, yellow for WARNING, blue for WALKABLE, black otherwise
+                match tile_states[tile_y, tile_x]:
+                    case TileState.DANGER.value:
+                        color = (255, 0, 0)
+                    case TileState.WARNING.value:
+                        color = (255, 255, 0)
+                    case TileState.WALKABLE.value:
+                        color = (0, 0, 255)
+                    case _:
+                        color = (0, 0, 0)
 
-                tile_number = tiles[tile_y, tile_x] # 1 for overscan
+
+                pygame.draw.rect(surface, color, (x, y, tile_width, tile_height), 1)
+
+                tile_number = tiles[tile_y, tile_x]
                 text = f"{tile_number:02X}"
 
                 # Render the text
@@ -564,6 +589,21 @@ class DisplayWindow:
 
                 # Draw the text
                 surface.blit(text_surface, text_rect)
+
+    def _get_optimal_path(self, info):
+        return info['a*_path'] if 'a*_path' in info else []
+
+    def _find_special_tiles(self, info):
+        tiles = []
+        tile_states = info['tile_states']
+        for y in range(tile_states.shape[0]):
+            for x in range(tile_states.shape[1]):
+                if tile_states[y, x] not in \
+                        (TileState.WALKABLE.value, TileState.IMPASSABLE.value, TileState.BRICK.value):
+                    tiles.append((y, x))
+
+        tiles += info['link'].tile_coordinates
+        return tiles
 
 class DebugReward:
     """An action to take when a reward button is clicked."""

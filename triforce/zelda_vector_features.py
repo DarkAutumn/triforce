@@ -40,7 +40,7 @@ class ZeldaVectorFeatures(gym.Wrapper):
             return result
 
         result[0] = info['objective_vector']
-        result[1] = self._get_first_vector([x for x in info['enemies'] if self._should_point_at_enemy(info, x)])
+        result[1] = self._get_first_vector(info['active_enemies'])
         result[2] = self._get_first_vector(info['projectiles'])
         result[3] = self._get_first_vector(info['items'])
 
@@ -48,15 +48,11 @@ class ZeldaVectorFeatures(gym.Wrapper):
         return np.array(result, dtype=np.float32)
 
     def _should_point_at_enemy(self, info, enemy):
-        if enemy.id == ZeldaEnemy.WallMaster:
-            dist = np.linalg.norm(np.array(info['link_pos'], dtype=np.float32) - enemy.position)
-            return dist < 30
-
         # Don't point at Zora if the sword isn't powerful enough to kill it in one hit
         if enemy.id == ZeldaEnemy.Zora and info['sword'] <= 1:
             return False
 
-        return True
+        return enemy.is_active
 
     def _get_first_vector(self, entries):
         return entries[0].vector if entries else np.zeros(2, dtype=np.float32)
@@ -64,7 +60,7 @@ class ZeldaVectorFeatures(gym.Wrapper):
     def _get_features(self, info):
         result = np.zeros(2, dtype=np.float32)
 
-        result[0] = 1.0 if 'enemies' in info and info['enemies'] else 0.0
+        result[0] = 1.0 if 'active_enemies' in info and info['active_enemies'] else 0.0
 
         if 'has_beams' in info:
             result[1] = 1.0 if info['has_beams'] else 0.0

@@ -117,26 +117,42 @@ def is_sword_frozen(state):
 
 def init_walkable_tiles():
     """Returns a lookup table of whether particular tile codes are walkable."""
-    tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87, 0xf6]
+    tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87]
     tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
     tiles += list(range(0x98, 0x9b+1))  # dungeon locked door north
     tiles += list(range(0xa4, 0xa7+1))  # dungeon locked door east
 
-    result = [False] * 256
-    for tile in tiles:
-        result[tile] = True
+    return tiles
 
-    return result
+WALKABLE_TILES = init_walkable_tiles()
+BRICK_TILE = 0xf6
 
-walkable_tiles = init_walkable_tiles()
+def tiles_to_weights(tiles) -> None:
+    """Converts the tiles from RAM to a set of weights for the A* algorithm."""
+    brick_mask = tiles == BRICK_TILE
+    tiles[brick_mask] = TileState.BRICK.value
+
+    walkable_mask = np.isin(tiles, WALKABLE_TILES)
+    tiles[walkable_mask] = TileState.WALKABLE.value
+
+    tiles[~brick_mask & ~walkable_mask] = TileState.IMPASSABLE.value
+
+def is_room_loaded(tiles):
+    """Returns True if the room is loaded."""
+    any_walkable = np.isin(tiles, WALKABLE_TILES).any()
+    return any_walkable
+
+class TileState(Enum):
+    """The state of a tile."""
+    IMPASSABLE = 100
+    WALKABLE = 1
+    BRICK = 5       # dungeon bricks
+    WARNING = 25    # tiles next to enemy, or the walls in a wallmaster room
+    DANGER = 50     # enemy or projectile
 
 def position_to_tile_index(x, y):
     """Converts a screen position to a tile index."""
     return (int((y - GAMEPLAY_START_Y) // 8), int(x // 8))
-
-def get_link_tile_index(info):
-    """Returns the tile index of link's position."""
-    return position_to_tile_index(info['link_x'] + 4, info['link_y'] + 4)
 
 def tile_index_to_position(tile_index):
     """Converts a tile index to a screen position."""
@@ -211,23 +227,39 @@ class ZeldaSoundsPulse1(Enum):
     SetBomb : int = 0x20
     HeartWarning : int = 0x40
 
-id_map = {}
-for enemy in ZeldaEnemy:
-    id_map[enemy.value] = enemy
-
-item_map = {}
-for item in ZeldaItem:
-    item_map[item.value] = item
+ID_MAP = {x.value: x for x in ZeldaEnemy}
+ITEM_MAP = {x.value: x for x in ZeldaItem}
 
 class ZeldaObject:
     """Structured data for a single object.  ZeldaObjects are enemies, items, and projectiles."""
     # pylint: disable=too-few-public-methods
-    def __init__(self, obj_id, pos, distance, vector, health):
+    def __init__(self, obj_id, pos, distance, vector, health, status):
         self.id = obj_id
         self.position = pos
         self.distance = distance
         self.vector = vector
         self.health = health
+        self.status = status
+
+    @property
+    def tile_coordinates(self):
+        """Returns a list of tile coordinates of the object."""
+
+        top_left = position_to_tile_index(*self.position)
+        return [
+                top_left,
+                (top_left[0] + 1, top_left[1]),
+                (top_left[0], top_left[1] + 1),
+                (top_left[0] + 1, top_left[1] + 1)
+                ]
+
+    @property
+    def is_active(self) -> bool:
+        """Returns True if the object is active."""
+        if not self.health:
+            return False
+
+        return self.id != ZeldaEnemy.WallMaster or self.status == 1
 
 class ZeldaObjectData:
     """
@@ -240,9 +272,10 @@ class ZeldaObjectData:
             setattr(self, table, ram[offset:offset+size])
 
     @property
-    def link_pos(self):
-        """Returns the position of link.  Link is object 0."""
-        return self.get_position(0)
+    def link(self):
+        """Returns link as an object.  Link is object 0.  Does not fill hearts."""
+        status = self.get_obj_status(0)
+        return ZeldaObject(0, self.get_position(0), 0, np.array([0, 0], dtype=np.float32), None, status)
 
     def get_position(self, obj : int):
         """Returns the position of the object.  Objects are indexed from 0 to 0xb."""
@@ -306,6 +339,7 @@ class ZeldaObjectData:
 
     def get_all_objects(self, link_pos : np.ndarray) -> tuple:
         """A slightly optimized method to get all objects in the game state, sorted by distance."""
+        # pylint: disable=too-many-locals
 
         enemies = []
         items = []
@@ -330,16 +364,20 @@ class ZeldaObjectData:
 
             if obj_id == ZeldaEnemy.Item.value:
                 obj_id = obj_status[i]
-                obj_id = item_map.get(obj_id, obj_id)
-
-                items.append(ZeldaObject(obj_id, pos, distance, vector, None))
+                obj_id = ITEM_MAP.get(obj_id, obj_id)
+                items.append(ZeldaObject(obj_id, pos, distance, vector, None, None))
 
             # enemies
             elif 1 <= obj_id <= 0x48:
-                enemies.append(ZeldaObject(id_map.get(obj_id, obj_id), pos, distance, vector, self.get_obj_health(i)))
+                health = self.get_obj_health(i)
+                enemy_kind = ID_MAP.get(obj_id, obj_id)
+                status = obj_status[i]
+
+                enemy = ZeldaObject(enemy_kind, pos, distance, vector, health, status)
+                enemies.append(enemy)
 
             elif self.is_projectile(obj_id):
-                projectiles.append(ZeldaObject(obj_id, pos, distance, vector, None))
+                projectiles.append(ZeldaObject(obj_id, pos, distance, vector, None, None))
 
         if len(enemies) > 1:
             enemies.sort(key=lambda x: x.distance)
@@ -367,14 +405,15 @@ __all__ = [
     'get_heart_halves',
     'get_heart_containers',
     'has_beams',
-    'walkable_tiles',
+    'TileState',
     'position_to_tile_index',
     'tile_index_to_position',
-    'get_link_tile_index',
     'is_sword_frozen',
     'is_health_full',
     ZeldaSoundsPulse1.__name__,
     ZeldaObjectData.__name__,
     ZeldaEnemy.__name__,
     AnimationState.__name__,
+    tiles_to_weights.__name__,
+    is_room_loaded.__name__,
     ]
