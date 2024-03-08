@@ -101,10 +101,9 @@ class ObjectiveSelector(gym.Wrapper):
 
         # find the optimal route to the objective
         if objective_pos_dir is not None:
-            if not isinstance(objective_pos_dir, Direction):
-                objective_pos_dir = position_to_tile_index(*objective_pos_dir)
-
-            path = self._get_a_star_path(info, objective_pos_dir)
+            a_star_tile = objective_pos_dir if isinstance(objective_pos_dir, Direction) \
+                                            else position_to_tile_index(*objective_pos_dir)
+            path = self._get_a_star_path(info, a_star_tile)
 
             info['a*_path'] = path
 
