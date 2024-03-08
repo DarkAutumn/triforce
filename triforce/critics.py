@@ -2,6 +2,8 @@
 
 from typing import Dict
 import numpy as np
+
+from .objective_selector import ObjectiveKind
 from .zelda_wrapper import ActionType
 from .zelda_game import Direction, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
     get_num_triforce_pieces, is_in_cave, tile_index_to_position
@@ -47,6 +49,7 @@ class GameplayCritic(ZeldaCritic):
         self.wipeout_reward_on_hits = True
         self.health_lost_penalty = -REWARD_LARGE
         self.injure_kill_reward = REWARD_MEDIUM
+        self.inure_kill_movement_room_reward = REWARD_TINY
         self.block_projectile_reward = REWARD_LARGE
 
         # these are pivotal to the game, so they are rewarded highly
@@ -231,7 +234,7 @@ class GameplayCritic(ZeldaCritic):
 
         Args:
             old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
+            new (Dict[str, int]): The new state of tnhe game.
             rewards (Dict[str, float]): The rewards obtained during gameplay.
         """
         arrow_deflected = ZeldaSoundsPulse1.ArrowDeflected.value
@@ -239,17 +242,16 @@ class GameplayCritic(ZeldaCritic):
             rewards['reward-block'] = self.block_projectile_reward
 
     def critique_attack(self, old, new, rewards):
-        """
-        Critiques attacks made by the player.
+        """Critiques attacks made by the player. """
+        if 'beam_hits' in new and new['beam_hits']:
+            rewards['reward-beam-hit'] = self.injure_kill_reward
 
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
-        if new['step_hits']:
+        elif new['step_hits']:
             if not is_in_cave(new):
-                rewards['reward-hit'] = self.injure_kill_reward
+                if new['objective_kind'] == ObjectiveKind.FIGHT:
+                    rewards['reward-hit'] = self.injure_kill_reward
+                else:
+                    rewards['reward-hit-move-room'] = self.inure_kill_movement_room_reward
             else:
                 rewards['penalty-hit-cave'] = -self.injure_kill_reward
 
@@ -604,7 +606,7 @@ class Overworld1Critic(GameplayCritic):
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 
-            if old['objective_kind'] == 'cave':
+            if old['objective_kind'] == ObjectiveKind.ENTER_CAVE:
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 
