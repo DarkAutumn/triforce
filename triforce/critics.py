@@ -374,12 +374,10 @@ class GameplayCritic(ZeldaCritic):
             if new_link_pos[1] < target[1]:
                 target[1] += 8
 
-            old_distance = np.linalg.norm(target - old_link_pos)
-            new_distance = np.linalg.norm(target - new_link_pos)
-
-            diff = abs(new_distance - old_distance)
-            if diff >= self.minimum_movement_required:
-                percent = min(diff / self.movement_scale_factor, 1)
+            movement_direction = new['link_direction']
+            progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
+            if progress >= self.minimum_movement_required:
+                percent = min(progress / self.movement_scale_factor, 1)
             else:
                 percent = None
 
@@ -392,14 +390,13 @@ class GameplayCritic(ZeldaCritic):
             else:
                 # Otherwise we have to see if link is moving in the transposed direction of the path.
                 correct_direction, possible_direction = self.__get_optimal_directions(old_path)
-                direction = new['link_direction']
 
                 # reward if we moved in the right direction
-                if direction == correct_direction:
+                if movement_direction == correct_direction:
                     if percent is not None:
                         rewards['reward-move-closer'] = self.move_closer_reward * percent
 
-                elif direction == possible_direction:
+                elif movement_direction == possible_direction:
                     if len(new_path) <= len(old_path):
                         if percent is not None:
                             rewards['reward-move-closer'] = self.move_closer_reward * percent
@@ -414,25 +411,36 @@ class GameplayCritic(ZeldaCritic):
             # into a wall.  (Bosses or wallmasters.)
             if isinstance(target, Direction):
                 if target == Direction.N:
-                    dist = new_link_pos[1] - old_link_pos[1]
+                    progress = old_link_pos[1] - new_link_pos[1]
                 elif target == Direction.S:
-                    dist = old_link_pos[1] - new_link_pos[1]
+                    progress = new_link_pos[1] - old_link_pos[1]
                 elif target == Direction.E:
-                    dist = old_link_pos[0] - new_link_pos[0]
+                    progress = new_link_pos[0] - old_link_pos[0]
                 elif target == Direction.W:
-                    dist = new_link_pos[0] - old_link_pos[0]
+                    progress = old_link_pos[0] - new_link_pos[0]
 
-                percent = abs(dist / self.movement_scale_factor)
+                percent = abs(progress / self.movement_scale_factor)
             else:
-                old_distance = np.linalg.norm(target - old_link_pos)
-                new_distance = np.linalg.norm(target - new_link_pos)
-                dist = new_distance - old_distance
-                percent = abs(dist / self.movement_scale_factor)
+                progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
+                percent = abs(progress / self.movement_scale_factor)
 
-            if dist < 0:
+            if progress > 0:
                 rewards['reward-move-closer'] = self.move_closer_reward * percent
             else:
                 rewards['penalty-move-farther'] = self.move_away_penalty
+
+    def __get_progress(self, direction, old_link_pos, new_link_pos, target):
+        direction_vector = direction.to_vector()
+
+        disp = new_link_pos - old_link_pos
+        direction_movement = np.dot(disp, direction_vector) * direction_vector
+
+        projected_new_pos = old_link_pos + direction_movement
+
+        old_distance = np.linalg.norm(target - old_link_pos)
+        new_distance = np.linalg.norm(target - projected_new_pos)
+
+        return old_distance - new_distance
 
     def __find_second_turn(self, path):
         turn = 0
