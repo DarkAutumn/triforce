@@ -362,6 +362,8 @@ class GameplayCritic(ZeldaCritic):
         old_path = old.get("a*_path", [])
         new_path = new.get("a*_path", [])
 
+        movement_direction = new['link_direction']
+
         if len(old_path) >= 2:
             # target is the top left of the 8x8 tile, if we are left or above the target, add
             # 8 to the x or y to get to that edge of the tile.
@@ -374,7 +376,6 @@ class GameplayCritic(ZeldaCritic):
             if new_link_pos[1] < target[1]:
                 target[1] += 8
 
-            movement_direction = new['link_direction']
             progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
             if progress >= self.minimum_movement_required:
                 percent = min(progress / self.movement_scale_factor, 1)
