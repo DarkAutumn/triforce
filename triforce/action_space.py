@@ -25,18 +25,26 @@ class ZeldaActionSpace(gym.ActionWrapper):
 
         assert isinstance(env.action_space, gym.spaces.MultiBinary)
 
-        buttons = env.unwrapped.buttons
+        self.button_count = env.action_space.n
+        self.buttons = env.unwrapped.buttons
 
         self._decode_discrete_action = []
         for action in self.actions:
-            arr = np.array([False] * env.action_space.n)
+            arr = np.array([False] * self.button_count)
 
             for button in action:
-                arr[buttons.index(button)] = True
+                arr[self.buttons.index(button)] = True
 
             self._decode_discrete_action.append(arr)
 
         self.action_space = gym.spaces.Discrete(num_action_space)
 
     def action(self, action):
+        if isinstance(action, list) and len(action) and isinstance(action[0], str):
+            arr = np.array([False] * self.button_count)
+            for button in action:
+                arr[self.buttons.index(button)] = True
+
+            return arr
+
         return self._decode_discrete_action[action].copy()
