@@ -43,8 +43,6 @@ def find_cave_onscreen(info):
     closest_cave = cave_positions[np.argmin(cave_distances)]
     return closest_cave
 
-ADJACENT_TILES = [(-1, 0), (-1, 1), (2, 0),  (2, 1), (0, -1), (1, -1), (0, 2),  (1, 2)]
-
 class ObjectiveSelector(gym.Wrapper):
     """
     A wrapper that selects objectives for the agent to pursue.  This is used to help the agent decide what to do.
@@ -121,23 +119,14 @@ class ObjectiveSelector(gym.Wrapper):
         path = None
         if self.last_route[0] == key:
             potential_path = self.last_route[1]
-            if potential_path:
-                link_y, link_x = link_tiles[0]
-                adjacent = [(link_y + adj[0], link_x + adj[1]) for adj in ADJACENT_TILES]
-                for i, element in enumerate(potential_path):
-                    if element in link_tiles:
-                        path = potential_path[i+1:]
-                    elif element in adjacent:
-                        if i > 0:
-                            path = potential_path[i:]
-                        else:
-                            path = potential_path
-                            break
+            if potential_path and link_tiles[0] in potential_path:
+                i = potential_path.index(link_tiles[0])
+                path = potential_path[i:]
             if path:
                 self.last_route = key, path
 
         if not path:
-            path = a_star(link_tiles, info['tile_states'], objective_pos_dir)
+            path = a_star(link_tiles[0], info['tile_states'], objective_pos_dir)
             self.last_route = key, path
 
         return path

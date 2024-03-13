@@ -442,10 +442,13 @@ class GameplayCritic(ZeldaCritic):
 
         projected_new_pos = old_link_pos + direction_movement
 
-        old_distance = np.linalg.norm(target - old_link_pos)
-        new_distance = np.linalg.norm(target - projected_new_pos)
+        old_distance = self.__manhattan_distance(target, old_link_pos)
+        new_distance = self.__manhattan_distance(target, projected_new_pos)
 
         return old_distance - new_distance
+
+    def __manhattan_distance(self, a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
     def __find_second_turn(self, path):
         turn = 0
