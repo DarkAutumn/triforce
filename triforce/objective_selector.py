@@ -1,9 +1,20 @@
+from enum import Enum
 import gymnasium as gym
 import numpy as np
 
 from .zelda_game import Direction, is_in_cave, position_to_tile_index, tile_index_to_position, is_health_full, \
                         ZeldaItem
 from .astar import a_star
+
+class ObjectiveKind(Enum):
+    """The type of objective for the room."""
+    NONE = 0
+    NEXT_ROOM = 1
+    FIGHT = 2
+    ITEM = 3
+    TREASURE = 4
+    ENTER_CAVE = 5
+    EXIT_CAVE = 6
 
 def get_location_from_direction(location, direction):
     """Gets the map location from the given direction."""
@@ -31,10 +42,6 @@ def find_cave_onscreen(info):
     cave_distances = [np.linalg.norm(x - link_pos) for x in cave_positions]
     closest_cave = cave_positions[np.argmin(cave_distances)]
     return closest_cave
-
-
-
-ADJACENT_TILES = [(-1, 0), (-1, 1), (2, 0),  (2, 1), (0, -1), (1, -1), (0, 2),  (1, 2)]
 
 class ObjectiveSelector(gym.Wrapper):
     """
@@ -81,7 +88,7 @@ class ObjectiveSelector(gym.Wrapper):
         items = info['items'] if not items_to_ignore else [x for x in info['items'] if x.id not in items_to_ignore]
         if items:
             objective_vector = info['items'][0].vector
-            objective_kind = 'item'
+            objective_kind = ObjectiveKind.ITEM
             objective_pos_dir = info['items'][0].position
 
         else:
@@ -92,10 +99,9 @@ class ObjectiveSelector(gym.Wrapper):
 
         # find the optimal route to the objective
         if objective_pos_dir is not None:
-            if not isinstance(objective_pos_dir, Direction):
-                objective_pos_dir = position_to_tile_index(*objective_pos_dir)
-
-            path = self._get_a_star_path(info, objective_pos_dir)
+            a_star_tile = objective_pos_dir if isinstance(objective_pos_dir, Direction) \
+                                            else position_to_tile_index(*objective_pos_dir)
+            path = self._get_a_star_path(info, a_star_tile)
 
             info['a*_path'] = path
 
@@ -108,28 +114,20 @@ class ObjectiveSelector(gym.Wrapper):
 
     def _get_a_star_path(self, info, objective_pos_dir):
         link_tiles = info['link'].tile_coordinates
+        bottom_left_tile = link_tiles[0][0] + 1, link_tiles[0][1]
 
         key = (info['level'], info['location'], objective_pos_dir)
         path = None
         if self.last_route[0] == key:
             potential_path = self.last_route[1]
-            if potential_path:
-                link_y, link_x = link_tiles[0]
-                adjacent = [(link_y + adj[0], link_x + adj[1]) for adj in ADJACENT_TILES]
-                for i, element in enumerate(potential_path):
-                    if element in link_tiles:
-                        path = potential_path[i+1:]
-                    elif element in adjacent:
-                        if i > 0:
-                            path = potential_path[i:]
-                        else:
-                            path = potential_path
-                            break
+            if potential_path and bottom_left_tile in potential_path:
+                i = potential_path.index(bottom_left_tile)
+                path = potential_path[i+1:]
             if path:
                 self.last_route = key, path
 
         if not path:
-            path = a_star(link_tiles, info['tile_states'], objective_pos_dir)
+            path = a_star(bottom_left_tile, info['tile_states'], objective_pos_dir)
             self.last_route = key, path
 
         return path
@@ -201,29 +199,29 @@ class OverworldOrchestrator:
                 if is_in_cave(info):
                     objective_pos = np.array([0x78, 0x95], dtype=np.float32)
                     objective_vector = self._create_vector_norm(link_pos, objective_pos)
-                    objective = 'sword'
+                    objective = ObjectiveKind.TREASURE
 
                 else:
                     objective_pos = find_cave_onscreen(info)
                     objective_vector = self._create_vector_norm(link_pos, objective_pos)
-                    objective = 'cave'
+                    objective = ObjectiveKind.ENTER_CAVE
 
                 return None, objective_vector, objective_pos, objective
 
             if is_in_cave(info):
-                return None, None, Direction.S, 'exit-cave'
+                return None, None, Direction.S, ObjectiveKind.EXIT_CAVE
 
-            return location_objective, None, Direction.N, 'room'
+            return location_objective, None, Direction.N, ObjectiveKind.NEXT_ROOM
 
         if location == 0x37:
             cave_pos = find_cave_onscreen(info)
             objective_vector = self._create_vector_norm(link_pos, cave_pos)
-            return None, objective_vector, cave_pos, 'cave'
+            return None, objective_vector, cave_pos, ObjectiveKind.ENTER_CAVE
 
         if location in self.location_direction:
             direction = self.location_direction[location]
             objective_vector = None
-            return location_objective, objective_vector, direction, 'room'
+            return location_objective, objective_vector, direction, ObjectiveKind.NEXT_ROOM
 
         return None
 
@@ -288,7 +286,7 @@ class Dungeon1Orchestrator:
             treasure_vector = position - link_pos
             norm = np.linalg.norm(treasure_vector)
             if norm > 0:
-                return None, treasure_vector / norm, position, 'treasure'
+                return None, treasure_vector / norm, position, ObjectiveKind.TREASURE
 
         # entry room
         if location == 0x73:
@@ -300,13 +298,13 @@ class Dungeon1Orchestrator:
         # check if we should kill all enemies:
         if location in self.locations_to_kill_enemies:
             if info['enemies']:
-                return None, info['enemies'][0].vector, info['enemies'][0].position, 'fight'
+                return None, info['enemies'][0].vector, info['enemies'][0].position, ObjectiveKind.FIGHT
 
         # otherwise, movement direction is based on the location
         if location in self.location_direction:
             direction = self.location_direction[location]
             location = get_location_from_direction(location, direction)
-            return location, None, direction, 'room'
+            return location, None, direction, ObjectiveKind.NEXT_ROOM
 
         return None
 
@@ -323,10 +321,10 @@ class Dungeon1Orchestrator:
                 direction = Direction.E
 
         room = get_location_from_direction(info['location'], direction)
-        return room, None, direction, 'room'
+        return room, None, direction, ObjectiveKind.NEXT_ROOM
 
     def is_dangerous_room(self, info):
         """Returns True if the room is dangerous.  This is used to avoid picking up low-value items."""
         return info['location'] == 0x45 and info['enemies']
 
-__all__ = [ObjectiveSelector.__name__]
+__all__ = [ObjectiveSelector.__name__, ObjectiveKind.__name__]

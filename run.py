@@ -143,6 +143,7 @@ class DisplayWindow:
         endings = {}
         reward_map = {}
         buttons = deque(maxlen=100)
+        next_action = None
 
         model_requested = 0
         model_name = None
@@ -191,11 +192,13 @@ class DisplayWindow:
 
             # Perform a step in the environment
             if mode in ('c', 'n'):
-                zelda_model = self._select_model(info)
-                ai, loaded_name = self._select_available_model(zelda_model, model_requested)
-                model_name = f"{zelda_model.name} ({loaded_name}) {ai.num_timesteps:,} timesteps"
+                if next_action:
+                    action = next_action
+                    model_name = "keyboard input"
+                    next_action = None
+                else:
+                    model_name, action = self._get_action_from_model(model_requested, info, obs)
 
-                action = ai.predict(obs, deterministic=False)
                 last_info = info
                 obs, _, terminated, truncated, info = env.step(action)
 
@@ -288,6 +291,11 @@ class DisplayWindow:
                         elif event.key == pygame.K_u:
                             cap_fps = not cap_fps
 
+                        elif event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
+                            keys = pygame.key.get_pressed()
+                            next_action = self._get_action_from_keys(keys)
+                            mode = 'n'
+
                         elif event.key == pygame.K_s:
                             if not force_save:
                                 force_save = True
@@ -319,6 +327,29 @@ class DisplayWindow:
 
         env.close()
         pygame.quit()
+
+    def _get_action_from_model(self, model_requested, info, obs):
+        zelda_model = self._select_model(info)
+        ai, loaded_name = self._select_available_model(zelda_model, model_requested)
+        model_name = f"{zelda_model.name} ({loaded_name}) {ai.num_timesteps:,} timesteps"
+
+        action = ai.predict(obs, deterministic=False)
+        return model_name, action
+
+    def _get_action_from_keys(self, keys):
+        a = ["A"] if keys[pygame.K_a] else []
+        b = ["B"] if keys[pygame.K_s] else []
+        if keys[pygame.K_LEFT]:
+            return ['LEFT'] + a + b
+        if keys[pygame.K_RIGHT]:
+            return ['RIGHT'] + a + b
+        if keys[pygame.K_UP]:
+            return ['UP'] + a + b
+        if keys[pygame.K_DOWN]:
+            return ['DOWN'] + a + b
+
+        return None
+
 
     def _select_model(self, info) -> ZeldaModelDefinition:
         acceptable_models = self.orchestrator.find_acceptable_models(info)

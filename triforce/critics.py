@@ -2,6 +2,8 @@
 
 from typing import Dict
 import numpy as np
+
+from .objective_selector import ObjectiveKind
 from .zelda_wrapper import ActionType
 from .zelda_game import Direction, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
     get_num_triforce_pieces, is_in_cave, tile_index_to_position
@@ -47,6 +49,7 @@ class GameplayCritic(ZeldaCritic):
         self.wipeout_reward_on_hits = True
         self.health_lost_penalty = -REWARD_LARGE
         self.injure_kill_reward = REWARD_MEDIUM
+        self.inure_kill_movement_room_reward = REWARD_TINY
         self.block_projectile_reward = REWARD_LARGE
 
         # these are pivotal to the game, so they are rewarded highly
@@ -231,25 +234,28 @@ class GameplayCritic(ZeldaCritic):
 
         Args:
             old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
+            new (Dict[str, int]): The new state of tnhe game.
             rewards (Dict[str, float]): The rewards obtained during gameplay.
         """
-        arrow_deflected = ZeldaSoundsPulse1.ArrowDeflected.value
-        if new['sound_pulse_1'] & arrow_deflected and (old['sound_pulse_1'] & arrow_deflected) != arrow_deflected:
+        if self._is_deflecting(old, new):
             rewards['reward-block'] = self.block_projectile_reward
 
-    def critique_attack(self, old, new, rewards):
-        """
-        Critiques attacks made by the player.
+    def _is_deflecting(self, old, new):
+        arrow_deflected = ZeldaSoundsPulse1.ArrowDeflected.value
+        return new['sound_pulse_1'] & arrow_deflected and (old['sound_pulse_1'] & arrow_deflected) != arrow_deflected
 
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
-        if new['step_hits']:
+    def critique_attack(self, old, new, rewards):
+        """Critiques attacks made by the player. """
+        # pylint: disable=too-many-branches
+        if 'beam_hits' in new and new['beam_hits']:
+            rewards['reward-beam-hit'] = self.injure_kill_reward
+
+        elif new['step_hits']:
             if not is_in_cave(new):
-                rewards['reward-hit'] = self.injure_kill_reward
+                if new['objective_kind'] == ObjectiveKind.FIGHT:
+                    rewards['reward-hit'] = self.injure_kill_reward
+                else:
+                    rewards['reward-hit-move-room'] = self.inure_kill_movement_room_reward
             else:
                 rewards['penalty-hit-cave'] = -self.injure_kill_reward
 
@@ -338,7 +344,7 @@ class GameplayCritic(ZeldaCritic):
         if new['took_damage']:
             return
 
-        if not old['took_damage']:
+        if not old['took_damage'] and not self._is_deflecting(old, new):
             warning_diff = new['link_warning_tiles'] - old['link_warning_tiles']
             danger_diff = new['link_danger_tiles'] - old['link_danger_tiles']
 
@@ -360,28 +366,23 @@ class GameplayCritic(ZeldaCritic):
         old_path = old.get("a*_path", [])
         new_path = new.get("a*_path", [])
 
+        movement_direction = new['link_direction']
+
         if len(old_path) >= 2:
-            # target is the top left of the 8x8 tile, if we are left or above the target, add
-            # 8 to the x or y to get to that edge of the tile.
             target_tile = self.__find_second_turn(old_path)
             target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
 
-            if new_link_pos[0] < target[0]:
-                target[0] += 8
-
-            if new_link_pos[1] < target[1]:
-                target[1] += 8
-
-            old_distance = np.linalg.norm(target - old_link_pos)
-            new_distance = np.linalg.norm(target - new_link_pos)
-
-            diff = abs(new_distance - old_distance)
-            if diff >= self.minimum_movement_required:
-                percent = min(diff / self.movement_scale_factor, 1)
+            progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
+            if progress >= 0:
+                if progress < self.minimum_movement_required:
+                    percent = 0.0
+                else:
+                    percent = min(progress / self.movement_scale_factor, 1)
             else:
                 percent = None
 
             overlap = set(new['link'].tile_coordinates)
+            overlap.intersection_update(old['link'].tile_coordinates) # remove tiles link was already on
             overlap.intersection_update(old_path)
             if percent is not None and overlap:
                 # Did link move into the optimal path?
@@ -390,14 +391,13 @@ class GameplayCritic(ZeldaCritic):
             else:
                 # Otherwise we have to see if link is moving in the transposed direction of the path.
                 correct_direction, possible_direction = self.__get_optimal_directions(old_path)
-                direction = new['link_direction']
 
                 # reward if we moved in the right direction
-                if direction == correct_direction:
+                if movement_direction == correct_direction:
                     if percent is not None:
                         rewards['reward-move-closer'] = self.move_closer_reward * percent
 
-                elif direction == possible_direction:
+                elif movement_direction == possible_direction:
                     if len(new_path) <= len(old_path):
                         if percent is not None:
                             rewards['reward-move-closer'] = self.move_closer_reward * percent
@@ -412,25 +412,37 @@ class GameplayCritic(ZeldaCritic):
             # into a wall.  (Bosses or wallmasters.)
             if isinstance(target, Direction):
                 if target == Direction.N:
-                    dist = new_link_pos[1] - old_link_pos[1]
+                    progress = old_link_pos[1] - new_link_pos[1]
                 elif target == Direction.S:
-                    dist = old_link_pos[1] - new_link_pos[1]
+                    progress = new_link_pos[1] - old_link_pos[1]
                 elif target == Direction.E:
-                    dist = old_link_pos[0] - new_link_pos[0]
+                    progress = new_link_pos[0] - old_link_pos[0]
                 elif target == Direction.W:
-                    dist = new_link_pos[0] - old_link_pos[0]
-
-                percent = abs(dist / self.movement_scale_factor)
+                    progress = old_link_pos[0] - new_link_pos[0]
             else:
-                old_distance = np.linalg.norm(target - old_link_pos)
-                new_distance = np.linalg.norm(target - new_link_pos)
-                dist = new_distance - old_distance
-                percent = abs(dist / self.movement_scale_factor)
+                progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
 
-            if dist < 0:
+            if progress > 0:
+                percent = min(abs(progress / self.movement_scale_factor), 1)
                 rewards['reward-move-closer'] = self.move_closer_reward * percent
             else:
                 rewards['penalty-move-farther'] = self.move_away_penalty
+
+    def __get_progress(self, direction, old_link_pos, new_link_pos, target):
+        direction_vector = direction.to_vector()
+
+        disp = new_link_pos - old_link_pos
+        direction_movement = np.dot(disp, direction_vector) * direction_vector
+
+        projected_new_pos = old_link_pos + direction_movement
+
+        old_distance = self.__manhattan_distance(target, old_link_pos)
+        new_distance = self.__manhattan_distance(target, projected_new_pos)
+
+        return old_distance - new_distance
+
+    def __manhattan_distance(self, a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
     def __find_second_turn(self, path):
         turn = 0
@@ -604,7 +616,7 @@ class Overworld1Critic(GameplayCritic):
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 
-            if old['objective_kind'] == 'cave':
+            if old['objective_kind'] == ObjectiveKind.ENTER_CAVE:
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 
