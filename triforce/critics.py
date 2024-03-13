@@ -380,8 +380,11 @@ class GameplayCritic(ZeldaCritic):
                 target[1] += 8
 
             progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
-            if progress >= self.minimum_movement_required:
-                percent = min(progress / self.movement_scale_factor, 1)
+            if progress >= 0:
+                if progress < self.minimum_movement_required:
+                    percent = 0.0
+                else:
+                    percent = min(progress / self.movement_scale_factor, 1)
             else:
                 percent = None
 
