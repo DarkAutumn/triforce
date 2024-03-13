@@ -237,9 +237,12 @@ class GameplayCritic(ZeldaCritic):
             new (Dict[str, int]): The new state of tnhe game.
             rewards (Dict[str, float]): The rewards obtained during gameplay.
         """
-        arrow_deflected = ZeldaSoundsPulse1.ArrowDeflected.value
-        if new['sound_pulse_1'] & arrow_deflected and (old['sound_pulse_1'] & arrow_deflected) != arrow_deflected:
+        if self._is_deflecting(old, new):
             rewards['reward-block'] = self.block_projectile_reward
+
+    def _is_deflecting(self, old, new):
+        arrow_deflected = ZeldaSoundsPulse1.ArrowDeflected.value
+        return new['sound_pulse_1'] & arrow_deflected and (old['sound_pulse_1'] & arrow_deflected) != arrow_deflected
 
     def critique_attack(self, old, new, rewards):
         """Critiques attacks made by the player. """
@@ -340,7 +343,7 @@ class GameplayCritic(ZeldaCritic):
         if new['took_damage']:
             return
 
-        if not old['took_damage']:
+        if not old['took_damage'] and not self._is_deflecting(old, new):
             warning_diff = new['link_warning_tiles'] - old['link_warning_tiles']
             danger_diff = new['link_danger_tiles'] - old['link_danger_tiles']
 
