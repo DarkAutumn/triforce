@@ -419,13 +419,11 @@ class GameplayCritic(ZeldaCritic):
                     progress = new_link_pos[0] - old_link_pos[0]
                 elif target == Direction.W:
                     progress = old_link_pos[0] - new_link_pos[0]
-
-                percent = abs(progress / self.movement_scale_factor)
             else:
                 progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
-                percent = abs(progress / self.movement_scale_factor)
 
             if progress > 0:
+                percent = min(abs(progress / self.movement_scale_factor), 1)
                 rewards['reward-move-closer'] = self.move_closer_reward * percent
             else:
                 rewards['penalty-move-farther'] = self.move_away_penalty
