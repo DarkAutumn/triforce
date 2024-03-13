@@ -629,7 +629,7 @@ class DisplayWindow:
         for y in range(tile_states.shape[0]):
             for x in range(tile_states.shape[1]):
                 if tile_states[y, x] not in \
-                        (TileState.WALKABLE.value, TileState.IMPASSABLE.value, TileState.BRICK.value):
+                        (TileState.WALKABLE.value, TileState.IMPASSABLE.value):
                     tiles.append((y, x))
 
         tiles += info['link'].tile_coordinates
