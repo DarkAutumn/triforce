@@ -246,6 +246,7 @@ class GameplayCritic(ZeldaCritic):
 
     def critique_attack(self, old, new, rewards):
         """Critiques attacks made by the player. """
+        # pylint: disable=too-many-branches
         if 'beam_hits' in new and new['beam_hits']:
             rewards['reward-beam-hit'] = self.injure_kill_reward
 

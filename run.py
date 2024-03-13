@@ -337,15 +337,16 @@ class DisplayWindow:
         return model_name, action
 
     def _get_action_from_keys(self, keys):
-        A = ["A"] if keys[pygame.K_a] else []
+        a = ["A"] if keys[pygame.K_a] else []
+        b = ["B"] if keys[pygame.K_s] else []
         if keys[pygame.K_LEFT]:
-            return ['LEFT'] + A
+            return ['LEFT'] + a + b
         if keys[pygame.K_RIGHT]:
-            return ['RIGHT'] + A
+            return ['RIGHT'] + a + b
         if keys[pygame.K_UP]:
-            return ['UP'] + A
+            return ['UP'] + a + b
         if keys[pygame.K_DOWN]:
-            return ['DOWN'] + A
+            return ['DOWN'] + a + b
 
         return None
 
