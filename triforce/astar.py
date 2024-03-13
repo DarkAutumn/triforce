@@ -15,8 +15,12 @@ def get_tile_weight(ny, nx, tile_weight_map):
 
 def heuristic(current, direction : Direction, tile_state_map):
     """Calculate the value of a direction or step."""
-    tile_weight = tile_state_map[current]
+    # Use the bottom left corner of the tile for the heuristic, this avoids miscounting impassible tiles since
+    # the link can stand with his top half inside of an impassible tile.
     y, x = current
+    tile_weight = get_tile_weight(y, x, tile_state_map)
+    tile_weight = tile_weight if tile_weight is not None else 1
+
     map_height, map_width = tile_state_map.shape
 
     match direction:
@@ -50,8 +54,8 @@ def is_valid_tile(coords, tile_weight_map):
     """Returns True if the move is valid, False otherwise."""
 
     # coords is link's top left tile (link is a 2x2 sprite).  The game only collides with the bottom two tiles.
-    tile0 = get_tile_weight(coords[0] + 1, coords[1], tile_weight_map)
-    tile1 = get_tile_weight(coords[0] + 1, coords[1] + 1, tile_weight_map)
+    tile0 = get_tile_weight(coords[0], coords[1], tile_weight_map)
+    tile1 = get_tile_weight(coords[0], coords[1] + 1, tile_weight_map)
 
     return all([tile0 in WALKABLE_TILES, tile1 in WALKABLE_TILES])
 
@@ -60,7 +64,6 @@ def get_neighbors(position, tile_weight_map):
     y, x = position
     potential_neighbors = [(y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)]
     return [(ny, nx) for ny, nx in potential_neighbors if is_valid_tile((ny, nx), tile_weight_map)]
-
 
 def reconstruct_path(start, came_from, current, target):
     """Reconstructs the path from the start node to the current node using the came_from dictionary."""
@@ -96,7 +99,7 @@ def append_final_direction(path, target, start):
     last = path[-1] if path else get_tile_from_direction(start, target)
     path.append(get_tile_from_direction(last, target))
 
-def a_star(link_top_left_tile, tile_weight_map, direction):
+def a_star(link_bottom_left_tile, tile_weight_map, direction):
     """
     A* algorithm implementation for pathfinding.
 
@@ -115,7 +118,7 @@ def a_star(link_top_left_tile, tile_weight_map, direction):
     closest_node = None
     closest_distance = float('inf')
 
-    start = link_top_left_tile
+    start = link_bottom_left_tile
     if 0 <= start[0] < tile_weight_map.shape[0] and 0 <= start[1] < tile_weight_map.shape[1]:
         heapq.heappush(open_set, (0, start))
 

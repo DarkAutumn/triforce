@@ -114,19 +114,20 @@ class ObjectiveSelector(gym.Wrapper):
 
     def _get_a_star_path(self, info, objective_pos_dir):
         link_tiles = info['link'].tile_coordinates
+        bottom_left_tile = link_tiles[0][0] + 1, link_tiles[0][1]
 
         key = (info['level'], info['location'], objective_pos_dir)
         path = None
         if self.last_route[0] == key:
             potential_path = self.last_route[1]
-            if potential_path and link_tiles[0] in potential_path:
-                i = potential_path.index(link_tiles[0])
-                path = potential_path[i:]
+            if potential_path and bottom_left_tile in potential_path:
+                i = potential_path.index(bottom_left_tile)
+                path = potential_path[i+1:]
             if path:
                 self.last_route = key, path
 
         if not path:
-            path = a_star(link_tiles[0], info['tile_states'], objective_pos_dir)
+            path = a_star(bottom_left_tile, info['tile_states'], objective_pos_dir)
             self.last_route = key, path
 
         return path

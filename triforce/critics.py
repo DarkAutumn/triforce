@@ -368,16 +368,8 @@ class GameplayCritic(ZeldaCritic):
         movement_direction = new['link_direction']
 
         if len(old_path) >= 2:
-            # target is the top left of the 8x8 tile, if we are left or above the target, add
-            # 8 to the x or y to get to that edge of the tile.
             target_tile = self.__find_second_turn(old_path)
             target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
-
-            if new_link_pos[0] < target[0]:
-                target[0] += 8
-
-            if new_link_pos[1] < target[1]:
-                target[1] += 8
 
             progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
             if progress >= 0:
@@ -389,6 +381,7 @@ class GameplayCritic(ZeldaCritic):
                 percent = None
 
             overlap = set(new['link'].tile_coordinates)
+            overlap.intersection_update(old['link'].tile_coordinates) # remove tiles link was already on
             overlap.intersection_update(old_path)
             if percent is not None and overlap:
                 # Did link move into the optimal path?
