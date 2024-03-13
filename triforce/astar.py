@@ -48,6 +48,7 @@ def mahattan_distance(y, x, ny, nx):
 WALKABLE_TILES = [TileState.WALKABLE.value,
                            TileState.DANGER.value,
                            TileState.WARNING.value,
+                           TileState.BRICK.value
                            ]
 
 def is_valid_tile(coords, tile_weight_map):
@@ -111,6 +112,20 @@ def a_star(link_bottom_left_tile, tile_weight_map, direction):
     Returns:
         list: The path from the starting position to the goal position.
     """
+
+    # quick out for touching the map's edge
+    if direction == Direction.W and link_bottom_left_tile[1] <= 0:
+        return [get_tile_from_direction(link_bottom_left_tile, direction)]
+
+    if direction == Direction.E and link_bottom_left_tile[1] >= tile_weight_map.shape[1] - 1:
+        return [get_tile_from_direction(link_bottom_left_tile, direction)]
+
+    if direction == Direction.N and link_bottom_left_tile[0] <= 0:
+        return [get_tile_from_direction(link_bottom_left_tile, direction)]
+
+    if direction == Direction.S and link_bottom_left_tile[0] >= tile_weight_map.shape[0] - 1:
+        return [get_tile_from_direction(link_bottom_left_tile, direction)]
+
     came_from = {}
     open_set = []
     g_score = {}

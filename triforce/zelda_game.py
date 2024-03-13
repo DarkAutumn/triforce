@@ -146,9 +146,9 @@ class TileState(Enum):
     """The state of a tile."""
     IMPASSABLE = 100
     WALKABLE = 1
-    BRICK = 2      # dungeon bricks
-    WARNING = 3    # tiles next to enemy, or the walls in a wallmaster room
-    DANGER = 4     # enemy or projectile
+    WARNING = 2    # tiles next to enemy, or the walls in a wallmaster room
+    DANGER = 3     # enemy or projectile
+    BRICK = 4      # dungeon bricks
 
 def position_to_tile_index(x, y):
     """Converts a screen position to a tile index."""
