@@ -117,7 +117,7 @@ def is_sword_frozen(state):
 
 def init_walkable_tiles():
     """Returns a lookup table of whether particular tile codes are walkable."""
-    tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87]
+    tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87, 0xf6]
     tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
     tiles += list(range(0x98, 0x9b+1))  # dungeon locked door north
     tiles += list(range(0xa4, 0xa7+1))  # dungeon locked door east
@@ -125,17 +125,12 @@ def init_walkable_tiles():
     return tiles
 
 WALKABLE_TILES = init_walkable_tiles()
-BRICK_TILE = 0xf6
 
 def tiles_to_weights(tiles) -> None:
     """Converts the tiles from RAM to a set of weights for the A* algorithm."""
-    brick_mask = tiles == BRICK_TILE
-    tiles[brick_mask] = TileState.BRICK.value
-
     walkable_mask = np.isin(tiles, WALKABLE_TILES)
     tiles[walkable_mask] = TileState.WALKABLE.value
-
-    tiles[~brick_mask & ~walkable_mask] = TileState.IMPASSABLE.value
+    tiles[~walkable_mask] = TileState.IMPASSABLE.value
 
 def is_room_loaded(tiles):
     """Returns True if the room is loaded."""
@@ -146,7 +141,6 @@ class TileState(Enum):
     """The state of a tile."""
     IMPASSABLE = 100
     WALKABLE = 1
-    BRICK = 5       # dungeon bricks
     WARNING = 25    # tiles next to enemy, or the walls in a wallmaster room
     DANGER = 50     # enemy or projectile
 
