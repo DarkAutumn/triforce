@@ -49,7 +49,7 @@ class GameplayCritic(ZeldaCritic):
         self.wipeout_reward_on_hits = True
         self.health_lost_penalty = -REWARD_LARGE
         self.injure_kill_reward = REWARD_MEDIUM
-        self.inure_kill_movement_room_reward = REWARD_TINY
+        self.inure_kill_movement_room_reward = REWARD_SMALL
         self.block_projectile_reward = REWARD_LARGE
 
         # these are pivotal to the game, so they are rewarded highly
@@ -63,7 +63,6 @@ class GameplayCritic(ZeldaCritic):
         self.wall_collision_penalty = -REWARD_TINY
         self.move_closer_reward = REWARD_TINY
 
-        self.minimum_movement_required = 1.5
         self.movement_scale_factor = 9.0
         self.move_away_penalty = -self.move_closer_reward - REWARD_MINIMUM
 
@@ -373,16 +372,10 @@ class GameplayCritic(ZeldaCritic):
             target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
 
             progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
-            if progress >= 0:
-                if progress < self.minimum_movement_required:
-                    percent = 0.0
-                else:
-                    percent = min(progress / self.movement_scale_factor, 1)
-            else:
-                percent = None
+            percent = min(progress / self.movement_scale_factor, 1) if progress > 0 else None
 
             overlap = set(new['link'].tile_coordinates)
-            overlap.intersection_update(old['link'].tile_coordinates) # remove tiles link was already on
+            overlap.difference_update(old['link'].tile_coordinates) # remove tiles link was already on
             overlap.intersection_update(old_path)
             if percent is not None and overlap:
                 # Did link move into the optimal path?
