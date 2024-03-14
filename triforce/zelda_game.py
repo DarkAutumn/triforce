@@ -203,8 +203,11 @@ class ZeldaEnemy(Enum):
     Octorok : int = 0x07
     OctorokFast : int = 0x7
     OctorokBlue : int = 0x8
+    RedLever : int = 0x10
     Zora : int = 0x11
+    Keese : int = 0x1b
     WallMaster : int = 0x27
+    Stalfos : int = 0x2a
     Item : int = 0x60
 
 class ZeldaItem(Enum):
@@ -233,13 +236,14 @@ ITEM_MAP = {x.value: x for x in ZeldaItem}
 class ZeldaObject:
     """Structured data for a single object.  ZeldaObjects are enemies, items, and projectiles."""
     # pylint: disable=too-few-public-methods
-    def __init__(self, obj_id, pos, distance, vector, health, status):
+    def __init__(self, obj_id, pos, distance, vector, health, status, spawn_state=None):
         self.id = obj_id
         self.position = pos
         self.distance = distance
         self.vector = vector
         self.health = health
         self.status = status
+        self.spawn_state = spawn_state
 
     @property
     def tile_coordinates(self):
@@ -259,7 +263,16 @@ class ZeldaObject:
         if not self.health:
             return False
 
-        return self.id != ZeldaEnemy.WallMaster or self.status == 1
+        # status == 3 means the lever/zora is up
+        if self.id in (ZeldaEnemy.RedLever, ZeldaEnemy.Zora):
+            return self.status == 3
+
+        # status == 1 means the wallmaster is active
+        if self.id == ZeldaEnemy.WallMaster:
+            return self.status == 1
+
+        # spawn_state of 0 means the object is active
+        return not self.spawn_state
 
 class ZeldaObjectData:
     """
@@ -349,6 +362,7 @@ class ZeldaObjectData:
         obj_pos_x = getattr(self, 'obj_pos_x')
         obj_pos_y = getattr(self, 'obj_pos_y')
         obj_status = getattr(self, 'obj_status')
+        obj_spawn_state = getattr(self, 'obj_spawn_state')
 
         for i in range(1, 0xc):
             obj_id = obj_ids[i]
@@ -372,8 +386,9 @@ class ZeldaObjectData:
                 health = self.get_obj_health(i)
                 enemy_kind = ID_MAP.get(obj_id, obj_id)
                 status = obj_status[i]
+                spawn_state = obj_spawn_state[i]
 
-                enemy = ZeldaObject(enemy_kind, pos, distance, vector, health, status)
+                enemy = ZeldaObject(enemy_kind, pos, distance, vector, health, status, spawn_state)
                 enemies.append(enemy)
 
             elif self.is_projectile(obj_id):
