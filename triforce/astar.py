@@ -54,11 +54,11 @@ WALKABLE_TILES = [TileState.WALKABLE.value,
 def is_valid_tile(coords, tile_weight_map):
     """Returns True if the move is valid, False otherwise."""
 
-    # coords is link's top left tile (link is a 2x2 sprite).  The game only collides with the bottom two tiles.
-    tile0 = get_tile_weight(coords[0], coords[1], tile_weight_map)
-    tile1 = get_tile_weight(coords[0], coords[1] + 1, tile_weight_map)
+    link_tiles = [(coords[0] - 1, coords[1]), (coords[0] - 1, coords[1] + 1),
+                  (coords[0], coords[1]), (coords[0], coords[1] + 1)]
 
-    return all([tile0 in WALKABLE_TILES, tile1 in WALKABLE_TILES])
+
+    return all(get_tile_weight(*yx, tile_weight_map) in WALKABLE_TILES for yx in link_tiles)
 
 def get_neighbors(position, tile_weight_map):
     """Returns neighbors of position that are both valid and walkable."""
