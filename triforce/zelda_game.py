@@ -4,6 +4,7 @@ import numpy as np
 from .zelda_game_data import zelda_game_data
 from .model_parameters import GAMEPLAY_START_Y
 
+MODE_REVEAL = 3
 MODE_SCROLL_COMPLETE = 4
 MODE_GAMEPLAY = 5
 MODE_SCROLL_START = 6
@@ -30,7 +31,7 @@ def is_in_cave(state):
 def is_mode_scrolling(state):
     """Returns True if the game is in a scrolling mode, and therefore we cannot take actions."""
     return state in (MODE_SCROLL_COMPLETE, MODE_SCROLL, MODE_SCROLL_START, MODE_UNDERGROUND_TRANSITION, \
-                     MODE_CAVE_TRANSITION)
+                     MODE_CAVE_TRANSITION, MODE_REVEAL)
 
 def is_link_stunned(status_ac):
     """Returns True if link is stunned.  This is used to determine if link can take actions."""
