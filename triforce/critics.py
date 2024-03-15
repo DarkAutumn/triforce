@@ -359,50 +359,39 @@ class GameplayCritic(ZeldaCritic):
                     rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
 
         # do we have an optimal path?
-        old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
-        new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
 
         old_path = old.get("a*_path", [])
         new_path = new.get("a*_path", [])
-
         movement_direction = new['link_direction']
 
-        if len(old_path) >= 2:
-            target_tile = self.__find_second_turn(old_path)
-            target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
+        if old_path and new_path and old_path[-1] == new_path[-1]:
+            if len(old_path) > len(new_path):
+                rewards['reward-move-closer'] = self.move_closer_reward
+            elif len(old_path) < len(new_path):
+                rewards['penalty-move-farther'] = self.move_away_penalty
 
-            progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
-            percent = min(progress / self.movement_scale_factor, 1) if progress > 0 else None
+        elif len(old_path) >= 2:
+            target_y, target_x = self.__find_second_turn(old_path)
+            target_tile = target_x, target_y
 
-            overlap = set(new['link'].tile_coordinates)
-            overlap.difference_update(old['link'].tile_coordinates) # remove tiles link was already on
-            overlap.intersection_update(old_path)
-            if percent is not None and overlap:
-                # Did link move into the optimal path?
-                rewards['reward-move-closer'] = self.move_closer_reward * percent
+            old_link_tile = self.__xy_from_coord(old['link'].tile_coordinates[1])
+            new_link_tile = self.__xy_from_coord(new['link'].tile_coordinates[1])
 
-            else:
-                # Otherwise we have to see if link is moving in the transposed direction of the path.
-                correct_direction, possible_direction = self.__get_optimal_directions(old_path)
+            progress = self.__get_progress(movement_direction, old_link_tile, new_link_tile, target_tile)
 
-                # reward if we moved in the right direction
-                if movement_direction == correct_direction:
-                    if percent is not None:
-                        rewards['reward-move-closer'] = self.move_closer_reward * percent
-
-                elif movement_direction == possible_direction:
-                    if len(new_path) <= len(old_path):
-                        if percent is not None:
-                            rewards['reward-move-closer'] = self.move_closer_reward * percent
-                    else:
-                        rewards['penalty-move-farther'] = self.move_away_penalty
-                else:
-                    rewards['penalty-move-farther'] = self.move_away_penalty
+            if progress > 0:
+                rewards['reward-move-closer'] = self.move_closer_reward
+            elif progress < 0:
+                rewards['penalty-move-farther'] = self.move_away_penalty
 
         elif (target := new.get('objective_pos_or_dir', None)) is not None:
             # if A* couldn't find a path, we should still reward the agent for moving closer
             # to the objective.  This should be rare, and often happens when an enem moves
             # into a wall.  (Bosses or wallmasters.)
+
+            old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
+            new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
+
             if isinstance(target, Direction):
                 if target == Direction.N:
                     progress = old_link_pos[1] - new_link_pos[1]
@@ -420,6 +409,11 @@ class GameplayCritic(ZeldaCritic):
                 rewards['reward-move-closer'] = self.move_closer_reward * percent
             else:
                 rewards['penalty-move-farther'] = self.move_away_penalty
+
+    def __xy_from_coord(self, bottom_left):
+        y, x = bottom_left
+        old_link_tile = np.array([x, y], dtype=np.float32)
+        return old_link_tile
 
     def __get_progress(self, direction, old_link_pos, new_link_pos, target):
         direction_vector = direction.to_vector()
