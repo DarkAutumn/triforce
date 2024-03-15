@@ -330,7 +330,7 @@ class GameplayCritic(ZeldaCritic):
         # Don't score movement if we moved to a new location or took damage.  The "movement" which occurs from
         # damage should never be rewarded, and it will be penalized by the health loss critic.
         if new['action'] != ActionType.MOVEMENT or new['took_damage'] or \
-                new['link_pos'] == old['link_pos'] or is_in_cave(old) != is_in_cave(new):
+                old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
             return
 
         # Did link run into a wall?
@@ -348,7 +348,7 @@ class GameplayCritic(ZeldaCritic):
         # reward the agent for finding them.  This is because it's likely the agent will use this to break the
         # reward system for infinite rewards.
         if self.__any_impassible_tiles(new):
-            rewards['penalty-bad-path'] = -REWARD_MINIMUM
+            rewards['penalty-bad-path'] = self.move_away_penalty
 
         # If we are headed to the same location as last time, simply check whether we made progress towards it.
         elif old_path and new_path and old_path[-1] == new_path[-1]:
