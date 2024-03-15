@@ -5,7 +5,7 @@ import numpy as np
 
 from .objective_selector import ObjectiveKind
 from .zelda_wrapper import ActionType
-from .zelda_game import Direction, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
+from .zelda_game import Direction, TileState, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
     get_num_triforce_pieces, is_in_cave, tile_index_to_position
 
 REWARD_MINIMUM = 0.01
@@ -364,7 +364,10 @@ class GameplayCritic(ZeldaCritic):
         new_path = new.get("a*_path", [])
         movement_direction = new['link_direction']
 
-        if old_path and new_path and old_path[-1] == new_path[-1]:
+        if any(new['tile_states'][tile] == TileState.IMPASSABLE.value for tile in new['link'].tile_coordinates):
+            rewards['penalty-bad-path'] = -REWARD_MINIMUM
+
+        elif old_path and new_path and old_path[-1] == new_path[-1]:
             if len(old_path) > len(new_path):
                 rewards['reward-move-closer'] = self.move_closer_reward
             elif len(old_path) < len(new_path):

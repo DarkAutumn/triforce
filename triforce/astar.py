@@ -51,14 +51,19 @@ WALKABLE_TILES = [TileState.WALKABLE.value,
                            TileState.BRICK.value
                            ]
 
+TOP_WALKABLE_TILES = WALKABLE_TILES + [TileState.HALF_WALKABLE.value]
+
 def is_valid_tile(coords, tile_weight_map):
     """Returns True if the move is valid, False otherwise."""
 
-    link_tiles = [(coords[0] - 1, coords[1]), (coords[0] - 1, coords[1] + 1),
-                  (coords[0], coords[1]), (coords[0], coords[1] + 1)]
+    possible_link_weights = [(coords[0] - 1, coords[1]), (coords[0] - 1, coords[1] + 1),
+                            (coords[0], coords[1]), (coords[0], coords[1] + 1)]
+    possible_link_weights = [get_tile_weight(*yx, tile_weight_map) for yx in possible_link_weights]
 
+    if possible_link_weights[0] not in TOP_WALKABLE_TILES or possible_link_weights[1] not in TOP_WALKABLE_TILES:
+        return False
 
-    return all(get_tile_weight(*yx, tile_weight_map) in WALKABLE_TILES for yx in link_tiles)
+    return possible_link_weights[2] in WALKABLE_TILES and possible_link_weights[3] in WALKABLE_TILES
 
 def get_neighbors(position, tile_weight_map):
     """Returns neighbors of position that are both valid and walkable."""

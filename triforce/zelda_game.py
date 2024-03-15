@@ -125,7 +125,12 @@ def init_walkable_tiles():
 
     return tiles
 
+def init_half_walkable_tiles():
+    """Returns tiles that the top half of link can pass through."""
+    return [0x95, 0x97, 0xb1, 0xb3, 0xd5, 0xd7, 0xdd, 0xde, 0xd9, 0xdb, 0xc5, 0xc7, 0xc9, 0xcb, 0xd4, 0xb5, 0xb7]
+
 WALKABLE_TILES = init_walkable_tiles()
+HALF_WALKABLE_TILES = init_half_walkable_tiles()
 BRICK_TILE = 0xf6
 
 def tiles_to_weights(tiles) -> None:
@@ -136,7 +141,10 @@ def tiles_to_weights(tiles) -> None:
     walkable_mask = np.isin(tiles, WALKABLE_TILES)
     tiles[walkable_mask] = TileState.WALKABLE.value
 
-    tiles[~brick_mask & ~walkable_mask] = TileState.IMPASSABLE.value
+    half_walkable_mask = np.isin(tiles, HALF_WALKABLE_TILES)
+    tiles[half_walkable_mask] = TileState.HALF_WALKABLE.value
+
+    tiles[~brick_mask & ~walkable_mask & ~half_walkable_mask] = TileState.IMPASSABLE.value
 
 def is_room_loaded(tiles):
     """Returns True if the room is loaded."""
@@ -145,6 +153,7 @@ def is_room_loaded(tiles):
 
 class TileState(Enum):
     """The state of a tile."""
+    HALF_WALKABLE = 99
     IMPASSABLE = 100
     WALKABLE = 1
     WARNING = 2    # tiles next to enemy, or the walls in a wallmaster room
