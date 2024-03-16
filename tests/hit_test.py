@@ -41,7 +41,7 @@ def test_stalfos_injury():
     assert not truncated
     assert info['step_hits'] == 1
     assert info['action'] == ActionType.ATTACK
-    assert_no_hit(replay, 'llllr')
+    assert_no_hit(replay, 'lllllllllr')
 
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
@@ -70,7 +70,7 @@ def test_beam_injury():
     data = replay.env.unwrapped.data
     data.set_value('hearts_and_containers', 0xff)
 
-    assert_no_hit(replay, 'l')
+    assert_no_hit(replay, 'll')
 
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
