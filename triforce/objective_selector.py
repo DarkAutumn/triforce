@@ -33,15 +33,17 @@ def get_location_from_direction(location, direction):
 
 def find_cave_onscreen(info):
     """Finds the cave on the current screen."""
-    link_pos = np.array(info['link_pos'], dtype=np.float32)
+    cave_indices = np.argwhere(np.isin(info['tiles'], [0x24, 0xF3]))
 
-    cave_indices = np.argwhere(info['tiles'] == 0x24)
-    assert len(cave_indices) > 0, 'Could not find any caves'
+    cave_pos = None
+    curr = np.inf
+    for y, x in cave_indices:
+        if y < curr:
+            curr = y
+            cave_pos = (y, x)
 
-    cave_positions = [tile_index_to_position(x) for x in cave_indices]
-    cave_distances = [np.linalg.norm(x - link_pos) for x in cave_positions]
-    closest_cave = cave_positions[np.argmin(cave_distances)]
-    return closest_cave
+    assert cave_pos is not None, 'Could not find any caves'
+    return tile_index_to_position(cave_pos)
 
 class ObjectiveSelector(gym.Wrapper):
     """

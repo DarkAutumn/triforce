@@ -5,8 +5,8 @@ import numpy as np
 
 from .objective_selector import ObjectiveKind
 from .zelda_wrapper import ActionType
-from .zelda_game import Direction, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
-    get_num_triforce_pieces, is_in_cave, tile_index_to_position
+from .zelda_game import Direction, TileState, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
+    get_num_triforce_pieces, is_in_cave
 
 REWARD_MINIMUM = 0.01
 REWARD_TINY = 0.05
@@ -49,7 +49,7 @@ class GameplayCritic(ZeldaCritic):
         self.wipeout_reward_on_hits = True
         self.health_lost_penalty = -REWARD_LARGE
         self.injure_kill_reward = REWARD_MEDIUM
-        self.inure_kill_movement_room_reward = REWARD_TINY
+        self.inure_kill_movement_room_reward = REWARD_SMALL
         self.block_projectile_reward = REWARD_LARGE
 
         # these are pivotal to the game, so they are rewarded highly
@@ -63,7 +63,6 @@ class GameplayCritic(ZeldaCritic):
         self.wall_collision_penalty = -REWARD_TINY
         self.move_closer_reward = REWARD_TINY
 
-        self.minimum_movement_required = 1.5
         self.movement_scale_factor = 9.0
         self.move_away_penalty = -self.move_closer_reward - REWARD_MINIMUM
 
@@ -326,13 +325,12 @@ class GameplayCritic(ZeldaCritic):
         Returns:
             None
         """
-        # The logic in this method is complicated, and tough to break up while still being readable.
-        # pylint: disable=too-many-branches, too-many-statements, too-many-locals
+        # pylint: disable=too-many-branches, too-many-locals
 
-        if new['action'] != ActionType.MOVEMENT:
-            return
-
-        if old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
+        # Don't score movement if we moved to a new location or took damage.  The "movement" which occurs from
+        # damage should never be rewarded, and it will be penalized by the health loss critic.
+        if new['action'] != ActionType.MOVEMENT or new['took_damage'] or \
+                old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
             return
 
         # Did link run into a wall?
@@ -340,76 +338,48 @@ class GameplayCritic(ZeldaCritic):
             rewards['penalty-wall-collision'] = self.wall_collision_penalty
             return
 
-        # If link took damage he gets knocked back.  Don't consider that 'movement'.
-        if new['took_damage']:
-            return
-
-        if not old['took_damage'] and not self._is_deflecting(old, new):
-            warning_diff = new['link_warning_tiles'] - old['link_warning_tiles']
-            danger_diff = new['link_danger_tiles'] - old['link_danger_tiles']
-
-            if danger_diff > 0:
-                rewards['penalty-dangerous-move'] = self.danger_tile_penalty
-            elif danger_diff < 0:
-                if len(old['active_enemies']) == len(new['active_enemies']):
-                    rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
-            elif warning_diff > 0:
-                rewards['penalty-risky-move'] = self.warning_tile_penalty
-            elif warning_diff < 0:
-                if len(old['active_enemies']) == len(new['active_enemies']):
-                    rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
-
-        # do we have an optimal path?
-        old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
-        new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
+        self.critique_moving_into_danger(old, new, rewards)
 
         old_path = old.get("a*_path", [])
         new_path = new.get("a*_path", [])
-
         movement_direction = new['link_direction']
 
-        if len(old_path) >= 2:
-            target_tile = self.__find_second_turn(old_path)
-            target = np.array(tile_index_to_position(target_tile), dtype=np.float32)
+        # There are places that can be clipped to that are impassible.  If this happens, we need to make sure not to
+        # reward the agent for finding them.  This is because it's likely the agent will use this to break the
+        # reward system for infinite rewards.
+        if self.__any_impassible_tiles(new):
+            rewards['penalty-bad-path'] = self.move_away_penalty
 
-            progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
-            if progress >= 0:
-                if progress < self.minimum_movement_required:
-                    percent = 0.0
-                else:
-                    percent = min(progress / self.movement_scale_factor, 1)
-            else:
-                percent = None
+        # If we are headed to the same location as last time, simply check whether we made progress towards it.
+        elif old_path and new_path and old_path[-1] == new_path[-1]:
+            if len(old_path) > len(new_path):
+                rewards['reward-move-closer'] = self.move_closer_reward
+            elif len(old_path) < len(new_path):
+                rewards['penalty-move-farther'] = self.move_away_penalty
 
-            overlap = set(new['link'].tile_coordinates)
-            overlap.intersection_update(old['link'].tile_coordinates) # remove tiles link was already on
-            overlap.intersection_update(old_path)
-            if percent is not None and overlap:
-                # Did link move into the optimal path?
-                rewards['reward-move-closer'] = self.move_closer_reward * percent
+        # For most other cases, we calculate the progress towards the target using the manhattan distance towards
+        # the second turn in the path.  That way we can reward any progress towards the target, even if the path
+        # is the transpose of what A* picked.
+        elif len(old_path) >= 2:
+            target_y, target_x = self.__find_second_turn(old_path)
+            target_tile = target_x, target_y
 
-            else:
-                # Otherwise we have to see if link is moving in the transposed direction of the path.
-                correct_direction, possible_direction = self.__get_optimal_directions(old_path)
+            old_link_tile = self.__xy_from_coord(old['link'].tile_coordinates[1])
+            new_link_tile = self.__xy_from_coord(new['link'].tile_coordinates[1])
 
-                # reward if we moved in the right direction
-                if movement_direction == correct_direction:
-                    if percent is not None:
-                        rewards['reward-move-closer'] = self.move_closer_reward * percent
+            progress = self.__get_progress(movement_direction, old_link_tile, new_link_tile, target_tile)
 
-                elif movement_direction == possible_direction:
-                    if len(new_path) <= len(old_path):
-                        if percent is not None:
-                            rewards['reward-move-closer'] = self.move_closer_reward * percent
-                    else:
-                        rewards['penalty-move-farther'] = self.move_away_penalty
-                else:
-                    rewards['penalty-move-farther'] = self.move_away_penalty
+            if progress > 0:
+                rewards['reward-move-closer'] = self.move_closer_reward
+            elif progress < 0:
+                rewards['penalty-move-farther'] = self.move_away_penalty
 
+        # This should be relatively rare, but in cases where A* couldn't find a path to the target (usually because
+        # a monster moved into a wall), we will reward simply moving closer.
         elif (target := new.get('objective_pos_or_dir', None)) is not None:
-            # if A* couldn't find a path, we should still reward the agent for moving closer
-            # to the objective.  This should be rare, and often happens when an enem moves
-            # into a wall.  (Bosses or wallmasters.)
+            old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
+            new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
+
             if isinstance(target, Direction):
                 if target == Direction.N:
                     progress = old_link_pos[1] - new_link_pos[1]
@@ -427,6 +397,39 @@ class GameplayCritic(ZeldaCritic):
                 rewards['reward-move-closer'] = self.move_closer_reward * percent
             else:
                 rewards['penalty-move-farther'] = self.move_away_penalty
+
+    def critique_moving_into_danger(self, old, new, rewards):
+        """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted
+        independent of other movement rewards.  This ensures that even if the agent is moving in the right direction,
+        it is still wary of moving too close to an enemy."""
+        if not old['took_damage'] and not self._is_deflecting(old, new):
+            warning_diff = new['link_warning_tiles'] - old['link_warning_tiles']
+            danger_diff = new['link_danger_tiles'] - old['link_danger_tiles']
+
+            if danger_diff > 0:
+                rewards['penalty-dangerous-move'] = self.danger_tile_penalty
+            elif danger_diff < 0:
+                if len(old['active_enemies']) == len(new['active_enemies']):
+                    rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
+            elif warning_diff > 0:
+                rewards['penalty-risky-move'] = self.warning_tile_penalty
+            elif warning_diff < 0:
+                if len(old['active_enemies']) == len(new['active_enemies']):
+                    rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
+
+    def __any_impassible_tiles(self, new):
+        tile_states = new['tile_states']
+        for tile in new['link'].tile_coordinates:
+            if 0 <= tile[0] < tile_states.shape[0] and 0 <= tile[1] < tile_states.shape[1] \
+                    and tile_states[tile] == TileState.IMPASSABLE.value:
+                return True
+
+        return False
+
+    def __xy_from_coord(self, bottom_left):
+        y, x = bottom_left
+        old_link_tile = np.array([x, y], dtype=np.float32)
+        return old_link_tile
 
     def __get_progress(self, direction, old_link_pos, new_link_pos, target):
         direction_vector = direction.to_vector()
@@ -470,20 +473,6 @@ class GameplayCritic(ZeldaCritic):
         if new[1] < old[1]:
             return Direction.W
         return None
-
-    def __get_optimal_directions(self, path):
-        first = None
-        for i in range(1, len(path)):
-            old_index = path[i - 1]
-            new_index = path[i]
-
-            direction = self.__get_direction(old_index, new_index)
-            if first is None:
-                first = direction
-            elif first != direction:
-                return first, direction
-
-        return first, first
 
     # state helpers, some states are calculated
     def __has_visited(self, level, location):

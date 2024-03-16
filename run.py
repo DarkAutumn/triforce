@@ -577,7 +577,7 @@ class DisplayWindow:
                 # show all tile codes
                 tiles_to_show = None
 
-        tiles = info['tile_states']
+        tiles = info['tiles']
         tile_states = info['tile_states']
 
         grid_width = 32
@@ -629,8 +629,8 @@ class DisplayWindow:
         tile_states = info['tile_states']
         for y in range(tile_states.shape[0]):
             for x in range(tile_states.shape[1]):
-                if tile_states[y, x] not in \
-                        (TileState.WALKABLE.value, TileState.IMPASSABLE.value, TileState.BRICK.value):
+                if tile_states[y, x] not in (TileState.WALKABLE.value, TileState.IMPASSABLE.value,
+                                             TileState.BRICK.value, TileState.HALF_WALKABLE.value):
                     tiles.append((y, x))
 
         tiles += info['link'].tile_coordinates

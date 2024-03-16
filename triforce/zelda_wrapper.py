@@ -15,9 +15,9 @@ import numpy as np
 from .zelda_game_data import zelda_game_data
 from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, \
                         is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, \
-                        is_room_loaded, is_sword_frozen, get_heart_halves, tiles_to_weights
-from .model_parameters import LOCATION_CHANGE_COOLDOWN, MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, \
-                                ITEM_COOLDOWN, CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES
+                        is_room_loaded, is_sword_frozen, get_heart_halves, position_to_tile_index, tiles_to_weights
+from .model_parameters import LOCATION_CHANGE_COOLDOWN, MAX_MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, \
+                                ITEM_COOLDOWN, CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES, WS_ADJUSTMENT_FRAMES
 
 class ActionType(Enum):
     """The kind of action that the agent took."""
@@ -256,7 +256,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             # Some enemies, like gels and keese, do not have health.  This makes calculating hits very challenging.
             # Instead, just set those 0 health enemies to 1 health, which doesn't otherwise affect the game.  The
             # game will set them to 0 health when they die.
-            if not health and not self._prev_health:
+            if not health and (not self._prev_health or self._prev_health.get(eid, 0) == 0):
                 data = unwrapped.data
                 data.set_value(f'obj_health_{eid:x}', 0x10)
                 health = 1
@@ -291,33 +291,18 @@ class ZeldaGameWrapper(gym.Wrapper):
 
     def _act_and_wait(self, act):
         action_kind = self._get_action_type(act)
-        rewards = 0.0
-        total_frames = 0
+        match action_kind:
+            case ActionType.MOVEMENT:
+                obs, rewards, terminated, truncated, info, total_frames = self._act_movement(act)
 
-        if action_kind == ActionType.MOVEMENT:
-            obs, rewards, terminated, truncated, info = self.skip(act, MOVEMENT_FRAMES)
-            total_frames += MOVEMENT_FRAMES
+            case ActionType.ATTACK:
+                obs, rewards, terminated, truncated, info, total_frames = self._act_attack_or_item(act, action_kind)
 
-        elif action_kind in (ActionType.ATTACK, ActionType.ITEM):
-            direction = self._get_button_direction(act)
-            self._set_direction(direction)
+            case ActionType.ITEM:
+                obs, rewards, terminated, truncated, info, total_frames = self._act_attack_or_item(act, action_kind)
 
-            if action_kind == ActionType.ATTACK:
-                obs, rewards, terminated, truncated, info = self.env.step(self._attack_action)
-                cooldown = ATTACK_COOLDOWN
-
-            elif action_kind == ActionType.ITEM:
-                obs, rewards, terminated, truncated, info = self.env.step(self._item_action)
-                cooldown = ITEM_COOLDOWN
-
-            # RNG in Zelda is frame-rule based, so delaying by a random amount of frames introduces a bit of
-            # randomness into the game to ensure the model doesn't overfit to a specific frame rule.
-            if not self.deterministic:
-                cooldown += randint(0, RANDOM_DELAY_MAX_FRAMES)
-
-            total_frames += cooldown + 1
-            obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
-            rewards += rew
+            case _:
+                raise ValueError(f'Unknown action type: {action_kind}')
 
         in_cave = is_in_cave(info)
         if in_cave and not self.was_link_in_cave:
@@ -339,6 +324,75 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         info['total_frames'] = total_frames
         return obs, rewards, terminated, truncated, info
+
+    def _act_attack_or_item(self, act, action_kind):
+        rewards = 0.0
+        total_frames = 0
+        direction = self._get_button_direction(act)
+        self._set_direction(direction)
+
+        if action_kind == ActionType.ATTACK:
+            obs, rewards, terminated, truncated, info = self.env.step(self._attack_action)
+            cooldown = ATTACK_COOLDOWN
+
+        elif action_kind == ActionType.ITEM:
+            obs, rewards, terminated, truncated, info = self.env.step(self._item_action)
+            cooldown = ITEM_COOLDOWN
+
+            # RNG in Zelda is frame-rule based, so delaying by a random amount of frames introduces a bit of
+            # randomness into the game to ensure the model doesn't overfit to a specific frame rule.
+        if not self.deterministic:
+            cooldown += randint(0, RANDOM_DELAY_MAX_FRAMES)
+
+        total_frames += cooldown + 1
+        obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
+        rewards += rew
+
+        return obs, rew, terminated, truncated, info, total_frames
+
+    def _act_movement(self, act):
+        total_frames = 0
+
+        direction = self._get_button_direction(act)
+        if self._last_info is not None and 'link_pos' in self._last_info:
+            last_pos = self._last_info['link_pos']
+        else:
+            obs, rewards, terminated, truncated, info = self.env.step(act)
+            total_frames += 1
+            last_pos = info['link_pos']
+
+
+        last_pos = np.array(last_pos, dtype=np.uint8)
+        old_tile_index = position_to_tile_index(*last_pos)
+
+        prev = last_pos
+        for _ in range(MAX_MOVEMENT_FRAMES):
+            obs, rewards, terminated, truncated, info = self.env.step(act)
+            total_frames += 1
+            x, y = info['link_x'], info['link_y']
+            new_tile_index = position_to_tile_index(x, y)
+            match direction:
+                case Direction.N:
+                    if old_tile_index[0] != new_tile_index[0]:
+                        break
+                case Direction.S:
+                    if old_tile_index[0] != new_tile_index[0]:
+                        obs, rewards, terminated, truncated, info = self.skip(act, WS_ADJUSTMENT_FRAMES)
+                        total_frames += WS_ADJUSTMENT_FRAMES
+                        break
+                case Direction.E:
+                    if old_tile_index[1] != new_tile_index[1]:
+                        break
+                case Direction.W:
+                    if old_tile_index[1] != new_tile_index[1]:
+                        obs, rewards, terminated, truncated, info = self.skip(act, WS_ADJUSTMENT_FRAMES)
+                        total_frames += WS_ADJUSTMENT_FRAMES
+                        break
+
+            if prev[0] == x and prev[1] == y:
+                break
+
+        return obs, rewards, terminated, truncated, info, total_frames
 
     def _set_direction(self, direction : Direction):
         self.env.unwrapped.data.set_value('link_direction', direction.value)

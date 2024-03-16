@@ -4,6 +4,7 @@ import numpy as np
 from .zelda_game_data import zelda_game_data
 from .model_parameters import GAMEPLAY_START_Y
 
+MODE_REVEAL = 3
 MODE_SCROLL_COMPLETE = 4
 MODE_GAMEPLAY = 5
 MODE_SCROLL_START = 6
@@ -30,7 +31,7 @@ def is_in_cave(state):
 def is_mode_scrolling(state):
     """Returns True if the game is in a scrolling mode, and therefore we cannot take actions."""
     return state in (MODE_SCROLL_COMPLETE, MODE_SCROLL, MODE_SCROLL_START, MODE_UNDERGROUND_TRANSITION, \
-                     MODE_CAVE_TRANSITION)
+                     MODE_CAVE_TRANSITION, MODE_REVEAL)
 
 def is_link_stunned(status_ac):
     """Returns True if link is stunned.  This is used to determine if link can take actions."""
@@ -117,14 +118,21 @@ def is_sword_frozen(state):
 
 def init_walkable_tiles():
     """Returns a lookup table of whether particular tile codes are walkable."""
-    tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87]
+    tiles = [0x26, 0x24, 0xf3, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87]
     tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
     tiles += list(range(0x98, 0x9b+1))  # dungeon locked door north
     tiles += list(range(0xa4, 0xa7+1))  # dungeon locked door east
 
     return tiles
 
+def init_half_walkable_tiles():
+    """Returns tiles that the top half of link can pass through."""
+    return [0x95, 0x97, 0xb1, 0xb3, 0xd5, 0xd7, 0xc5, 0xc7, 0xc9, 0xcb, 0xd4, 0xb5, 0xb7,
+            0xdd, 0xde, 0xd9, 0xdb, 0xdf, 0xd1, 0xdc, 0xd0, 0xda
+            ]
+
 WALKABLE_TILES = init_walkable_tiles()
+HALF_WALKABLE_TILES = init_half_walkable_tiles()
 BRICK_TILE = 0xf6
 
 def tiles_to_weights(tiles) -> None:
@@ -135,7 +143,10 @@ def tiles_to_weights(tiles) -> None:
     walkable_mask = np.isin(tiles, WALKABLE_TILES)
     tiles[walkable_mask] = TileState.WALKABLE.value
 
-    tiles[~brick_mask & ~walkable_mask] = TileState.IMPASSABLE.value
+    half_walkable_mask = np.isin(tiles, HALF_WALKABLE_TILES)
+    tiles[half_walkable_mask] = TileState.HALF_WALKABLE.value
+
+    tiles[~brick_mask & ~walkable_mask & ~half_walkable_mask] = TileState.IMPASSABLE.value
 
 def is_room_loaded(tiles):
     """Returns True if the room is loaded."""
@@ -144,6 +155,7 @@ def is_room_loaded(tiles):
 
 class TileState(Enum):
     """The state of a tile."""
+    HALF_WALKABLE = 99
     IMPASSABLE = 100
     WALKABLE = 1
     WARNING = 2    # tiles next to enemy, or the walls in a wallmaster room
@@ -203,8 +215,11 @@ class ZeldaEnemy(Enum):
     Octorok : int = 0x07
     OctorokFast : int = 0x7
     OctorokBlue : int = 0x8
+    RedLever : int = 0x10
     Zora : int = 0x11
+    Keese : int = 0x1b
     WallMaster : int = 0x27
+    Stalfos : int = 0x2a
     Item : int = 0x60
 
 class ZeldaItem(Enum):
@@ -233,13 +248,14 @@ ITEM_MAP = {x.value: x for x in ZeldaItem}
 class ZeldaObject:
     """Structured data for a single object.  ZeldaObjects are enemies, items, and projectiles."""
     # pylint: disable=too-few-public-methods
-    def __init__(self, obj_id, pos, distance, vector, health, status):
+    def __init__(self, obj_id, pos, distance, vector, health, status, spawn_state=None):
         self.id = obj_id
         self.position = pos
         self.distance = distance
         self.vector = vector
         self.health = health
         self.status = status
+        self.spawn_state = spawn_state
 
     @property
     def tile_coordinates(self):
@@ -259,7 +275,16 @@ class ZeldaObject:
         if not self.health:
             return False
 
-        return self.id != ZeldaEnemy.WallMaster or self.status == 1
+        # status == 3 means the lever/zora is up
+        if self.id in (ZeldaEnemy.RedLever, ZeldaEnemy.Zora):
+            return self.status == 3
+
+        # status == 1 means the wallmaster is active
+        if self.id == ZeldaEnemy.WallMaster:
+            return self.status == 1
+
+        # spawn_state of 0 means the object is active
+        return not self.spawn_state
 
 class ZeldaObjectData:
     """
@@ -349,6 +374,7 @@ class ZeldaObjectData:
         obj_pos_x = getattr(self, 'obj_pos_x')
         obj_pos_y = getattr(self, 'obj_pos_y')
         obj_status = getattr(self, 'obj_status')
+        obj_spawn_state = getattr(self, 'obj_spawn_state')
 
         for i in range(1, 0xc):
             obj_id = obj_ids[i]
@@ -372,8 +398,9 @@ class ZeldaObjectData:
                 health = self.get_obj_health(i)
                 enemy_kind = ID_MAP.get(obj_id, obj_id)
                 status = obj_status[i]
+                spawn_state = obj_spawn_state[i]
 
-                enemy = ZeldaObject(enemy_kind, pos, distance, vector, health, status)
+                enemy = ZeldaObject(enemy_kind, pos, distance, vector, health, status, spawn_state)
                 enemies.append(enemy)
 
             elif self.is_projectile(obj_id):
