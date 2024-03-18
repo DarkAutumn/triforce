@@ -6,7 +6,7 @@ This repo contains code to train neural networks to play The Legend of Zelda.  I
 
 This repo does *not* include a copy of the Legend of Zelda rom.  You must find your own copy of the rom and place it (uncompressed) at `triforce/custom_integrations/Zelda-NES/rom.nes`.
 
-This project was built using Python 3.10.  You may also have to install `libgl1-mesa-glx` to use `run.py`.
+This project was built using Python 3.10 on Ubuntu.  You may also have to install `libgl1-mesa-glx` to use `run.py`.
 
 This repo does include a set of pre-trained models.  Once the Zelda rom is in place, simply run `./run.py` to see the model play the game up through the end of the first dungeon.  (It does not usually win.)
 
@@ -64,7 +64,7 @@ Scenarios are used to train and evaluate models.  They define what critic, end c
 
 ## Running and Debugging the Models
 
-I develop on Linux, but in the past this project has worked fine on an up-to-date WSL2 Ubuntu instance on Windows (including the pygame based GUI).  I do not test it on Windows, so your experience may vary.
+I develop on Linux, but in the past this project has worked fine on an up-to-date WSL2 Ubuntu 22 instance on Windows (the pygame based GUI also works).  I do not test on Windows though, so your experience may vary if I've accidently broken something.
 
 Be sure to install dependencies with `pip install -r requirements.txt`.
 
