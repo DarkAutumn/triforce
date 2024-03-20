@@ -28,6 +28,10 @@
             "address": 152,
             "type": "=u1"
         },
+        "random_number_base": {
+            "address": 24,
+            "type": "=u1"
+        },
         "sword_animation": {
             "address": 185,
             "type": "=u1"
