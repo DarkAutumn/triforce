@@ -1,7 +1,8 @@
-Model,Kind,Success%,Score,Total Reward,Rewards,Penalties
-overworld-sword,,100.0,4.0,4.3,4.9,-0.5
-overworld1beams,,99.0,8.3,11.1,21.0,-10.0
-overworld1nobeams,,100.0,8.3,8.4,17.8,-9.3
-dungeon1nobeams,,79.0,16.9,44.1,73.0,-28.9
-dungeon1beams,,81.0,14.6,41.4,66.9,-25.4
-dungeon1boss,,98.0,10.7,8.3,9.8,-1.5
+Model,Kind,Success%,Score,Total Reward,Rewards,Penalties,Episodes
+overworld-sword,models/overworld-sword.zip,100.0,4.0,5.1,5.5,-0.4,1000
+overworld1beams,models/overworld1beams.zip,97.0,-4.3,5.9,19.0,-13.1,1000
+overworld1nobeams,models/overworld1nobeams.zip,96.1,-14.9,-0.6,17.1,-17.7,1000
+dungeon1entrance,models/dungeon1entrance.zip,0.0,,0.6,2.6,-2.0,1000
+dungeon1nobeams,models/dungeon1nobeams.zip,0.2,-15.0,-4.0,15.1,-19.1,1000
+dungeon1beams,models/dungeon1beams.zip,16.0,-10.4,3.3,25.9,-22.6,1000
+dungeon1boss,models/dungeon1boss.zip,68.3,-3.4,4.6,10.2,-5.6,1000
