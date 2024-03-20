@@ -20,6 +20,8 @@
 0x0ac link_status
 0x098 link_direction
 
+0x018 random_number_base
+
 # animations
 0x0b9 sword_animation
 0x0ba beam_animation
