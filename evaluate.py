@@ -1,6 +1,7 @@
 #! /usr/bin/python
 """Evaluates the result of trainined models."""
 
+from collections import Counter
 import sys
 import os
 import json
@@ -81,6 +82,8 @@ def run_one_scenario(args, model_name, model_path):
     total_reward = round(sum(x[3] for x in ep_result) / len(ep_result), 1)
     rewards = round(sum(x[4] for x in ep_result) / len(ep_result), 1)
     penalties = round(sum(x[5] for x in ep_result) / len(ep_result), 1)
+
+    endings = dict(Counter(endings))
 
     result = {
         'model': model_name,
