@@ -16,8 +16,7 @@ from .zelda_game_data import zelda_game_data
 from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, \
                         is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, \
                         is_room_loaded, is_sword_frozen, get_heart_halves, position_to_tile_index, tiles_to_weights
-from .model_parameters import LOCATION_CHANGE_COOLDOWN, MAX_MOVEMENT_FRAMES, ATTACK_COOLDOWN, \
-                                ITEM_COOLDOWN, CAVE_COOLDOWN, WS_ADJUSTMENT_FRAMES
+from .model_parameters import MAX_MOVEMENT_FRAMES, ATTACK_COOLDOWN, ITEM_COOLDOWN, CAVE_COOLDOWN, WS_ADJUSTMENT_FRAMES
 
 class ActionType(Enum):
     """The kind of action that the agent took."""
@@ -305,9 +304,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         in_cave = is_in_cave(info)
         if in_cave and not self.was_link_in_cave:
             obs, _, terminated, truncated, info = self.skip(self._none_action, CAVE_COOLDOWN)
-
-        if self._location != self._get_full_location(info):
-            obs, _, terminated, truncated, info = self.skip(self._none_action, LOCATION_CHANGE_COOLDOWN)
 
         self.was_link_in_cave = in_cave
 
