@@ -78,15 +78,14 @@ class ScenarioWrapper(gym.Wrapper):
             truncated = truncated or any((x[1] for x in end))
             reason = [x[2] for x in end if x[2]]
 
+            success = any(end.startswith("success") for end in reason)
             if reason:
                 # I guess we could have more than one reason, but I'm not going to cover that corner case
                 info['end'] = reason[0]
 
             if truncated or terminated:
-                if 'score' in info:
+                if 'score' in info and success:
                     info['final-score'] = info['score']
-                else:
-                    info['final-score'] = 0
 
         self.__set_data(self.unwrapped, self._scenario.fixed, info)
         self._last_state = info
