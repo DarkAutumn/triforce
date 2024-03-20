@@ -16,8 +16,8 @@ from .zelda_game_data import zelda_game_data
 from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, \
                         is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, \
                         is_room_loaded, is_sword_frozen, get_heart_halves, position_to_tile_index, tiles_to_weights
-from .model_parameters import LOCATION_CHANGE_COOLDOWN, MAX_MOVEMENT_FRAMES, RESET_DELAY_MAX_FRAMES, ATTACK_COOLDOWN, \
-                                ITEM_COOLDOWN, CAVE_COOLDOWN, RANDOM_DELAY_MAX_FRAMES, WS_ADJUSTMENT_FRAMES
+from .model_parameters import LOCATION_CHANGE_COOLDOWN, MAX_MOVEMENT_FRAMES, ATTACK_COOLDOWN, \
+                                ITEM_COOLDOWN, CAVE_COOLDOWN, WS_ADJUSTMENT_FRAMES
 
 class ActionType(Enum):
     """The kind of action that the agent took."""
@@ -31,10 +31,7 @@ class ZeldaGameWrapper(gym.Wrapper):
     def __init__(self, env, deterministic=False):
         super().__init__(env)
 
-        deterministic = True
         self.deterministic = deterministic
-
-        self._reset_state()
 
         self.a_button = env.unwrapped.buttons.index('A')
         self.b_button = env.unwrapped.buttons.index('B')
@@ -49,22 +46,30 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._item_action = np.zeros(9, dtype=bool)
         self._item_action[self.b_button] = True
 
-        self.was_link_in_cave = False
-        self._location = None
-        self._beams_already_active = False
-        self._prev_enemies = None
-        self._prev_health = None
-        self._last_info = None
         self._room_maps = {}
         self._rooms_with_locks = set()
         self._rooms_with_locks.add((1, 0x35, False))
 
+        # per-reset state
+        self._location = None
+        self._last_info = None
+        self._beams_already_active = False
+        self._prev_enemies = None
+        self._prev_health = None
+        self.was_link_in_cave = False
+
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
-        self._reset_state()
+        self._last_info = None
+        self._location = None
+        self._beams_already_active = False
+        self._prev_enemies = None
+        self._prev_health = None
 
-        delay_frames = 1 if self.deterministic else randint(1, RESET_DELAY_MAX_FRAMES)
-        obs, _, terminated, truncated, info = self.skip(self._none_action, delay_frames)
+        if not self.deterministic:
+            self.unwrapped.data.set_value('random_number_base', randint(1, 255))
+
+        obs, _, terminated, truncated, info = self.skip(self._none_action, 1)
         assert not terminated and not truncated
 
         self.was_link_in_cave = is_in_cave(info)
@@ -74,13 +79,6 @@ class ZeldaGameWrapper(gym.Wrapper):
             self._room_maps.pop(room, None)
 
         return obs, info
-
-    def _reset_state(self):
-        self._last_info = None
-        self._location = None
-        self._beams_already_active = False
-        self._prev_enemies = None
-        self._prev_health = None
 
     def step(self, action):
         obs, rewards, terminated, truncated, info = self._act_and_wait(action)
@@ -338,11 +336,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         elif action_kind == ActionType.ITEM:
             obs, rewards, terminated, truncated, info = self.env.step(self._item_action)
             cooldown = ITEM_COOLDOWN
-
-            # RNG in Zelda is frame-rule based, so delaying by a random amount of frames introduces a bit of
-            # randomness into the game to ensure the model doesn't overfit to a specific frame rule.
-        if not self.deterministic:
-            cooldown += randint(0, RANDOM_DELAY_MAX_FRAMES)
 
         total_frames += cooldown + 1
         obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
