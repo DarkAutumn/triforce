@@ -1,8 +1,6 @@
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import ZeldaEnemy
-
 NUM_DIRECTION_VECTORS = 5
 
 class ZeldaVectorFeatures(gym.Wrapper):
@@ -43,16 +41,10 @@ class ZeldaVectorFeatures(gym.Wrapper):
         result[1] = self._get_first_vector(info['active_enemies'])
         result[2] = self._get_first_vector(info['projectiles'])
         result[3] = self._get_first_vector(info['items'])
+        result[4] = self._get_first_vector(info['aligned_enemies'])
 
         # create an np array of the vectors
         return np.array(result, dtype=np.float32)
-
-    def _should_point_at_enemy(self, info, enemy):
-        # Don't point at Zora if the sword isn't powerful enough to kill it in one hit
-        if enemy.id == ZeldaEnemy.Zora and info['sword'] <= 1:
-            return False
-
-        return enemy.is_active
 
     def _get_first_vector(self, entries):
         return entries[0].vector if entries else np.zeros(2, dtype=np.float32)
@@ -62,7 +54,7 @@ class ZeldaVectorFeatures(gym.Wrapper):
 
         result[0] = 1.0 if 'active_enemies' in info and info['active_enemies'] else 0.0
 
-        if 'has_beams' in info:
-            result[1] = 1.0 if info['has_beams'] else 0.0
+        if 'beams_available' in info:
+            result[1] = 1.0 if info['beams_available'] else 0.0
 
         return result

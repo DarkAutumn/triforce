@@ -419,6 +419,9 @@ class DisplayWindow:
         y_pos = self._draw_arrow(surface, "Enemy", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][1],
                                 radius=self.obs_width // 4, color=(255, 255, 255), width=3)
 
+        y_pos = self._draw_arrow(surface, "Aligned", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][4],
+                                radius=self.obs_width // 4, color=(255, 255, 255), width=3)
+
         y_pos = self._draw_arrow(surface, "Projectile", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][2],
                                 radius=self.obs_width // 4, color=(255, 0, 0), width=3)
 
