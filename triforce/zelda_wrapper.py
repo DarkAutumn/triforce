@@ -69,8 +69,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         if not self.deterministic:
             self.unwrapped.data.set_value('random_number_base', randint(1, 255))
 
-        obs, _, terminated, truncated, info = self.skip(self._none_action, 1)
-        assert not terminated and not truncated
+        obs, _, _, _, info = self.skip(self._none_action, 1)
+        obs, info, _ = self._skip_uncontrollable_states(info)
 
         self.was_link_in_cave = is_in_cave(info)
         self.update_info(self._none_action, info)
@@ -291,37 +291,45 @@ class ZeldaGameWrapper(gym.Wrapper):
         action_kind = self._get_action_type(act)
         match action_kind:
             case ActionType.MOVEMENT:
-                obs, rewards, terminated, truncated, info, total_frames = self._act_movement(act)
+                obs, _, terminated, truncated, info, total_frames = self._act_movement(act)
 
             case ActionType.ATTACK:
-                obs, rewards, terminated, truncated, info, total_frames = self._act_attack_or_item(act, action_kind)
+                obs, _, terminated, truncated, info, total_frames = self._act_attack_or_item(act, action_kind)
 
             case ActionType.ITEM:
-                obs, rewards, terminated, truncated, info, total_frames = self._act_attack_or_item(act, action_kind)
+                obs, _, terminated, truncated, info, total_frames = self._act_attack_or_item(act, action_kind)
 
             case _:
                 raise ValueError(f'Unknown action type: {action_kind}')
 
         in_cave = is_in_cave(info)
         if in_cave and not self.was_link_in_cave:
-            obs, rew, terminated, truncated, info = self.skip(self._none_action, CAVE_COOLDOWN)
+            obs, _, terminated, truncated, info = self.skip(self._none_action, CAVE_COOLDOWN)
 
         if self._location != self._get_full_location(info):
-            obs, rew, terminated, truncated, info = self.skip(self._none_action, LOCATION_CHANGE_COOLDOWN)
+            obs, _, terminated, truncated, info = self.skip(self._none_action, LOCATION_CHANGE_COOLDOWN)
 
         self.was_link_in_cave = in_cave
 
         # skip scrolling
-        while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']):
-            obs, rew, terminated, truncated, info = self.env.step(self._none_action)
-            total_frames += 1
-            rewards += rew
-
-            if terminated or truncated:
-                break
+        obs, info, skipped = self._skip_uncontrollable_states(info)
+        total_frames += skipped
 
         info['total_frames'] = total_frames
-        return obs, rewards, terminated, truncated, info
+        return obs, 0, terminated, truncated, info
+
+    def _skip_uncontrollable_states(self, info):
+        """Skips screen scrolling or other uncontrollable states.  The model should only get to see the game when it is
+        in a state where the agent can control Link."""
+        frames_skipped = 0
+        while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']):
+            obs, _, terminated, truncated, info = self.env.step(self._none_action)
+            frames_skipped += 1
+
+            assert not terminated and not truncated
+
+        obs, _, _, _, info = self.skip(self._none_action, 1)
+        return obs, info, frames_skipped
 
     def _act_attack_or_item(self, act, action_kind):
         rewards = 0.0
