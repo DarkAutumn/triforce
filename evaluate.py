@@ -1,11 +1,14 @@
 #! /usr/bin/python
 """Evaluates the result of trainined models."""
 
+from collections import Counter
 import sys
 import os
+import json
 import argparse
 from multiprocessing import Value, Pool
 import multiprocessing
+from typing import Any, Dict, Optional
 import pandas as pd
 from tqdm import tqdm
 from triforce import ZeldaModelDefinition, make_zelda_env, ZELDA_MODELS, ZeldaAI
@@ -21,6 +24,7 @@ def run_one_scenario(args, model_name, model_path):
     ai.load(model_path)
 
     ep_result = []
+    endings = []
 
     env = make_zelda_env_from_args(model, args)
 
@@ -54,8 +58,12 @@ def run_one_scenario(args, model_name, model_path):
                         raise ValueError(f"Unknown reward kind: {kind}")
 
             if 'end' in info:
-                success = info['end'].startswith("success")
+                end = info['end']
+                success = end.startswith("success")
+                endings.append(end)
 
+
+        episode_score = episode_score if success else None
         ep_result.append((ep, success, episode_score, episode_total_reward, episode_rewards, episode_penalties))
 
         if args.verbose:
@@ -67,13 +75,29 @@ def run_one_scenario(args, model_name, model_path):
 
     env.close()
 
+    scores = [x[2] for x in ep_result if x[2] is not None]
+    score = round(sum(scores) / len(scores), 1) if scores else None
+
     success_rate = round(100 * sum(1 for x in ep_result if x[1]) / len(ep_result), 1)
-    score = round(sum(x[2] for x in ep_result) / len(ep_result), 1)
     total_reward = round(sum(x[3] for x in ep_result) / len(ep_result), 1)
     rewards = round(sum(x[4] for x in ep_result) / len(ep_result), 1)
     penalties = round(sum(x[5] for x in ep_result) / len(ep_result), 1)
 
-    return (model_name, model_path, success_rate, score, total_reward, rewards, penalties)
+    endings = dict(Counter(endings))
+
+    result = {
+        'model': model_name,
+        'model_path': model_path,
+        'success_rate': success_rate,
+        'score': score,
+        'total_reward': total_reward,
+        'rewards': rewards,
+        'penalties': penalties,
+        'endings' : endings,
+        'episodes': args.episodes,
+    }
+
+    return result
 
 
 def make_zelda_env_from_args(model : ZeldaModelDefinition, args):
@@ -106,29 +130,13 @@ def main():
     global COUNTER
     COUNTER = Value('i', 0)
 
-    model_path = get_model_path(args)
-    models = args.models if args.models else ZELDA_MODELS.keys()
-
-    all_scenarios = []
-    for model_name in models:
-        if not args.models or model_name in args.models:
-            available_models = ZELDA_MODELS[model_name].find_available_models(model_path)
-
-            models_to_evaluate = sorted([int(x) for x in available_models.keys() if isinstance(x, int)])
-            if args.limit > 0:
-                models_to_evaluate = models_to_evaluate[-args.limit:]
-            models_to_evaluate += [x for x in available_models.keys() if not isinstance(x, int)]
-            for key in models_to_evaluate:
-                path = available_models[key]
-                all_scenarios.append((args, model_name, path))
-
-    total_count = len(all_scenarios) * args.episodes
+    results, all_scenarios = create_scenarios(args)
 
     if args.parallel > 1:
         with Pool(args.parallel, initializer=init_pool, initargs=(COUNTER,)) as pool:
             result = pool.starmap_async(run_one_scenario, all_scenarios)
 
-            with tqdm(total=total_count) as progress:
+            with tqdm(total=len(all_scenarios) * args.episodes) as progress:
                 while not result.ready():
                     result.wait(1)
 
@@ -137,18 +145,64 @@ def main():
 
                     progress.refresh()
 
-            results = result.get()
+            for item in result.get():
+                save_result(item)
+                results.append(item)
+
 
     else:
-        results = []
         for scenario in tqdm(all_scenarios, total=len(all_scenarios)):
-            results.append(run_one_scenario(*scenario))
+            result = run_one_scenario(*scenario)
+            save_result(result)
+            results.append(result)
 
     print_and_save(get_model_path(args), results)
 
+def create_scenarios(args):
+    """Finds all scenarios to be executed.  Also returns the results of any previous evaluations."""
+    model_path = get_model_path(args)
+    models = args.models if args.models else ZELDA_MODELS.keys()
+
+    results = []
+    all_scenarios = []
+    for model_name in models:
+        if not args.models or model_name in args.models:
+            available_models = ZELDA_MODELS[model_name].find_available_models(model_path)
+            models_to_evaluate = sorted([int(x) for x in available_models.keys() if isinstance(x, int)])
+            models_to_evaluate += [x for x in available_models.keys() if not isinstance(x, int)]
+            for key in models_to_evaluate:
+                path = available_models[key]
+
+                result : Optional[Dict[str, Any]] = None
+                if os.path.exists(path + '.evaluation.json'):
+                    with open(path + '.evaluation.json', 'r', encoding="utf8") as f:
+                        result = json.load(f)
+                        results.append(result)
+
+                if result and 'episodes' in result and result['episodes'] >= args.episodes:
+                    results.append(result)
+                else:
+                    all_scenarios.append((args, model_name, path))
+
+    if args.limit > 0:
+        all_scenarios = all_scenarios[-args.limit:]
+
+    return results, all_scenarios
+
+def save_result(result):
+    """Saves the result of an evaluation."""
+    with open(result['model_path'] + '.evaluation.json', 'w', encoding="utf8") as f:
+        json.dump(result, f, ensure_ascii=False, indent=4)
+
 def print_and_save(model_path, results):
     """Prints the result and saves it to evaluation.csv."""
-    columns = ['Model', 'Kind', 'Success%', 'Score', 'Total Reward', 'Rewards', 'Penalties']
+
+    results = [x.copy() for x in results]
+    for result in results:
+        del result['endings']
+    results = [tuple(x.values()) for x in results]
+
+    columns = ['Model', 'Kind', 'Success%', 'Score', 'Total Reward', 'Rewards', 'Penalties', 'Episodes']
     data_frame = pd.DataFrame(results, columns=columns)
     print(data_frame.to_string(index=False))
     data_frame.to_csv(os.path.join(model_path, 'evaluation.csv'), index=False)
@@ -166,8 +220,8 @@ def parse_args():
     parser.add_argument("--parallel", type=int, default=1, help="Use parallel environments to evaluate the models.")
     parser.add_argument("--render", action='store_true', help="Render the game while evaluating the models.")
     parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack together.")
-    parser.add_argument("--limit", type=int, default=3,
-                        help="Limit the number of periodically saved models to evaluate.")
+    parser.add_argument("--limit", type=int, default=-1,
+                        help="Limit the number of models to evaluate.")
 
     parser.add_argument('model_path', nargs=1, help='The director containing the models to evaluate')
     parser.add_argument('models', nargs='*', help='The director containing the models to evaluate')

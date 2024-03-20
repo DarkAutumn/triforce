@@ -17,9 +17,12 @@ REWARD_MAXIMUM = 1.0
 
 class ZeldaCritic:
     """Base class for Zelda gameplay critics."""
+    def __init__(self):
+        self.health_lost = 0
 
     def clear(self):
         """Called when the environment is reset to clear any saved state."""
+        self.health_lost = 0
 
     def critique_gameplay(self, old: Dict[str, int], new: Dict[str, int], rewards: Dict[str, float]):
         """
@@ -34,6 +37,12 @@ class ZeldaCritic:
 
     def set_score(self, old : Dict[str, int], new : Dict[str, int]):
         """Override to set info['score']"""
+
+        diff = get_heart_halves(new) - get_heart_halves(old)
+        if diff < 0:
+            self.health_lost += diff
+
+        new['score'] = self.health_lost
 
 class GameplayCritic(ZeldaCritic):
     """Base class for Zelda gameplay critics."""
@@ -524,13 +533,6 @@ class Dungeon1Critic(GameplayCritic):
         else:
             super().critique_key_pickup_usage(old, new, rewards)
 
-    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
-        if get_heart_halves(new) < get_heart_halves(old):
-            self.health_lost -= 0.5
-
-        new_location = new['location']
-        self.seen.add(new_location)
-        new['score'] = len(self.seen) - self.health_lost
 
 class Dungeon1BombCritic(Dungeon1Critic):
     """Critic specifically for dungeon 1 with bombs."""
@@ -555,26 +557,16 @@ class Dungeon1BombCritic(Dungeon1Critic):
                 else:
                     self.score -= 1
 
-
         new['score'] = self.score
 
 class Dungeon1BossCritic(Dungeon1Critic):
     """Critic specifically for dungeon 1 with the boss."""
-    def __init__(self):
-        super().__init__()
-        self.total_damage = 0
-
     def clear(self):
         super().clear()
-        self.total_damage = 0
         self.move_closer_reward = REWARD_SMALL
         self.move_away_penalty = -REWARD_SMALL
         self.injure_kill_reward = REWARD_LARGE
         self.health_lost_penalty = -REWARD_SMALL
-
-    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
-        self.total_damage += new['step_hits']
-        new['score'] = get_heart_halves(new) + self.total_damage
 
 overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
 
@@ -628,13 +620,6 @@ class Overworld1Critic(GameplayCritic):
         elif level == 1:
             # don't forget to reward for reaching level 1 dungeon
             super().critique_location_discovery(old, new, rewards)
-
-    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
-        if get_heart_halves(new) < get_heart_halves(old):
-            self.health_lost -= 0.5
-        new_location = new['location']
-        self.seen.add(new_location)
-        new['score'] = len(self.seen) - self.health_lost
 
 class OverworldSwordCritic(GameplayCritic):
     """Critic specifically for the beginning of the game up through grabbing the first sword."""
