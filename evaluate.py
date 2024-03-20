@@ -130,6 +130,36 @@ def main():
     global COUNTER
     COUNTER = Value('i', 0)
 
+    results, all_scenarios = create_scenarios(args)
+
+    if args.parallel > 1:
+        with Pool(args.parallel, initializer=init_pool, initargs=(COUNTER,)) as pool:
+            result = pool.starmap_async(run_one_scenario, all_scenarios)
+
+            with tqdm(total=len(all_scenarios) * args.episodes) as progress:
+                while not result.ready():
+                    result.wait(1)
+
+                    with COUNTER.get_lock():
+                        progress.n = COUNTER.value
+
+                    progress.refresh()
+
+            for item in result.get():
+                save_result(item)
+                results.append(item)
+
+
+    else:
+        for scenario in tqdm(all_scenarios, total=len(all_scenarios)):
+            result = run_one_scenario(*scenario)
+            save_result(result)
+            results.append(result)
+
+    print_and_save(get_model_path(args), results)
+
+def create_scenarios(args):
+    """Finds all scenarios to be executed.  Also returns the results of any previous evaluations."""
     model_path = get_model_path(args)
     models = args.models if args.models else ZELDA_MODELS.keys()
 
@@ -157,33 +187,7 @@ def main():
     if args.limit > 0:
         all_scenarios = all_scenarios[-args.limit:]
 
-    total_count = len(all_scenarios) * args.episodes
-
-    if args.parallel > 1:
-        with Pool(args.parallel, initializer=init_pool, initargs=(COUNTER,)) as pool:
-            result = pool.starmap_async(run_one_scenario, all_scenarios)
-
-            with tqdm(total=total_count) as progress:
-                while not result.ready():
-                    result.wait(1)
-
-                    with COUNTER.get_lock():
-                        progress.n = COUNTER.value
-
-                    progress.refresh()
-
-            for item in result.get():
-                save_result(item)
-                results.append(item)
-
-
-    else:
-        for scenario in tqdm(all_scenarios, total=len(all_scenarios)):
-            result = run_one_scenario(*scenario)
-            save_result(result)
-            results.append(result)
-
-    print_and_save(get_model_path(args), results)
+    return results, all_scenarios
 
 def save_result(result):
     """Saves the result of an evaluation."""
