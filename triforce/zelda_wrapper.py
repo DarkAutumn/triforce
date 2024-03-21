@@ -13,7 +13,7 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, has_beams, is_in_cave, \
+from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, is_health_full, is_in_cave, \
                         is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, \
                         is_room_loaded, is_sword_frozen, get_heart_halves, position_to_tile_index, tiles_to_weights
 from .model_parameters import MAX_MOVEMENT_FRAMES, ATTACK_COOLDOWN, ITEM_COOLDOWN, CAVE_COOLDOWN, WS_ADJUSTMENT_FRAMES
@@ -116,7 +116,12 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._create_tile_maps(info, ram, link)
 
         # add information about beam state
-        info['has_beams'] = has_beams(info) and get_beam_state(info) == AnimationState.INACTIVE
+        health_full = is_health_full(info)
+        info['health_full'] = health_full
+        info['beams_available'] = health_full and get_beam_state(info) == AnimationState.INACTIVE
+
+        # enemies the aligned with beams
+        info['aligned_enemies'] = self._get_aligned_enemies(info)
 
         # add information about the room location
         location = self._get_full_location(info)
@@ -135,6 +140,27 @@ class ZeldaGameWrapper(gym.Wrapper):
             info['step_hits'] = self._get_step_hits(act, objects, unwrapped, info)
 
         self._last_info = info
+
+    def _get_aligned_enemies(self, info):
+        """Gets enemies that are aligned with the player."""
+        active_enemies = info['active_enemies']
+        if not active_enemies or not info['beams_available']:
+            return []
+
+        link_top_left = info['link'].tile_coordinates[0]
+        link_ys = (link_top_left[0], link_top_left[0] + 1)
+        link_xs = (link_top_left[1], link_top_left[1] + 1)
+
+        result = []
+        for enemy in active_enemies:
+            enemy_topleft = enemy.tile_coordinates[0]
+            if enemy_topleft[0] in link_ys or enemy_topleft[0] + 1 in link_ys:
+                result.append(enemy)
+
+            if enemy_topleft[1] in link_xs or enemy_topleft[1] + 1 in link_xs:
+                result.append(enemy)
+
+        return result
 
     def _create_tile_maps(self, info, ram, link):
         tiles = self._get_tiles(info, ram)

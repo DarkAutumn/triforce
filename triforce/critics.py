@@ -61,6 +61,9 @@ class GameplayCritic(ZeldaCritic):
         self.inure_kill_movement_room_reward = REWARD_SMALL
         self.block_projectile_reward = REWARD_LARGE
 
+        self.didnt_fire_penalty = -REWARD_TINY
+        self.fired_correctly_reward = REWARD_TINY
+
         # these are pivotal to the game, so they are rewarded highly
         self.bomb_pickup_reward = REWARD_LARGE
         self.key_reward = REWARD_LARGE
@@ -115,6 +118,7 @@ class GameplayCritic(ZeldaCritic):
         self.critique_block(old, new, rewards)
         self.critique_attack(old, new, rewards)
         self.critique_item_usage(old, new, rewards)
+        self.critique_aligned_enemy(old, new, rewards)
 
         # items
         self.critique_item_pickup(old, new, rewards)
@@ -252,6 +256,22 @@ class GameplayCritic(ZeldaCritic):
         arrow_deflected = ZeldaSoundsPulse1.ArrowDeflected.value
         return new['sound_pulse_1'] & arrow_deflected and (old['sound_pulse_1'] & arrow_deflected) != arrow_deflected
 
+    def critique_aligned_enemy(self, old, new, rewards):
+        """Critiques whether the agent fired sword beams towards an aligned enemy or not."""
+        aligned_enemies = old['aligned_enemies']
+        if aligned_enemies:
+
+            match new['action']:
+                case ActionType.MOVEMENT:
+                    rewards['penalty-didnt-fire'] = self.didnt_fire_penalty
+
+                case ActionType.ATTACK:
+                    vector = aligned_enemies[0].vector
+                    link_vector = new['link_direction'].to_vector()
+                    dotproduct = np.dot(vector, link_vector)
+                    if dotproduct > 0.8:
+                        rewards['reward-fired-correctly'] = self.fired_correctly_reward
+
     def critique_attack(self, old, new, rewards):
         """Critiques attacks made by the player. """
         # pylint: disable=too-many-branches
@@ -280,7 +300,7 @@ class GameplayCritic(ZeldaCritic):
                     dotproducts = np.sum(new['link_direction'].to_vector() * enemy_vectors, axis=1)
                     if not np.any(dotproducts > np.sqrt(2) / 2):
                         rewards['penalty-attack-miss'] = self.attack_miss_penalty
-                    elif not old['has_beams']:
+                    elif not old['beams_available']:
                         distance = new['active_enemies'][0].distance
                         if distance > self.distance_threshold:
                             rewards['penalty-attack-miss'] = self.attack_miss_penalty
@@ -361,10 +381,11 @@ class GameplayCritic(ZeldaCritic):
 
         # If we are headed to the same location as last time, simply check whether we made progress towards it.
         elif old_path and new_path and old_path[-1] == new_path[-1]:
-            if len(old_path) > len(new_path):
+            diff = len(old_path) - len(new_path)
+            if diff > 0:
                 rewards['reward-move-closer'] = self.move_closer_reward
-            elif len(old_path) < len(new_path):
-                rewards['penalty-move-farther'] = self.move_away_penalty
+            elif diff < 0:
+                rewards['penalty-move-farther'] = self.move_away_penalty * abs(diff)
 
         # For most other cases, we calculate the progress towards the target using the manhattan distance towards
         # the second turn in the path.  That way we can reward any progress towards the target, even if the path
