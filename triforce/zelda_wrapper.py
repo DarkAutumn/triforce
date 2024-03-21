@@ -144,7 +144,7 @@ class ZeldaGameWrapper(gym.Wrapper):
     def _get_aligned_enemies(self, info):
         """Gets enemies that are aligned with the player."""
         active_enemies = info['active_enemies']
-        if not active_enemies or not info['beams_available']:
+        if not active_enemies:
             return []
 
         link_top_left = info['link'].tile_coordinates[0]

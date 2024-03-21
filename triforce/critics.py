@@ -259,8 +259,7 @@ class GameplayCritic(ZeldaCritic):
     def critique_aligned_enemy(self, old, new, rewards):
         """Critiques whether the agent fired sword beams towards an aligned enemy or not."""
         aligned_enemies = old['aligned_enemies']
-        if aligned_enemies:
-
+        if aligned_enemies and old['beams_available']:
             match new['action']:
                 case ActionType.MOVEMENT:
                     rewards['penalty-didnt-fire'] = self.didnt_fire_penalty
@@ -373,11 +372,20 @@ class GameplayCritic(ZeldaCritic):
         new_path = new.get("a*_path", [])
         movement_direction = new['link_direction']
 
+        # If an action put us into alignment for a sword beam shot, we should avoid penalizing the agent for this
+        # move.  The agent shouldn't be able to get infinite rewards for moving into alignment since the enemy's motion
+        # is fairly unpredictable
+        moved_to_alignment = not old['aligned_enemies'] and new['aligned_enemies'] and old['health_full']
+
+        # We check health_full here (not beams_available) because we still want to avoid penalizing the agent for
+        # lining up the next shot, even if sword beams are already active.
+        move_away_penalty = self.move_away_penalty if not moved_to_alignment else 0
+
         # There are places that can be clipped to that are impassible.  If this happens, we need to make sure not to
         # reward the agent for finding them.  This is because it's likely the agent will use this to break the
         # reward system for infinite rewards.
         if self.__any_impassible_tiles(new):
-            rewards['penalty-bad-path'] = self.move_away_penalty
+            rewards['penalty-bad-path'] = self.move_away_penalty  # don't take alignment into account for this
 
         # If we are headed to the same location as last time, simply check whether we made progress towards it.
         elif old_path and new_path and old_path[-1] == new_path[-1]:
@@ -385,7 +393,7 @@ class GameplayCritic(ZeldaCritic):
             if diff > 0:
                 rewards['reward-move-closer'] = self.move_closer_reward
             elif diff < 0:
-                rewards['penalty-move-farther'] = self.move_away_penalty * abs(diff)
+                rewards['penalty-move-farther'] = move_away_penalty * abs(diff)
 
         # For most other cases, we calculate the progress towards the target using the manhattan distance towards
         # the second turn in the path.  That way we can reward any progress towards the target, even if the path
@@ -402,7 +410,7 @@ class GameplayCritic(ZeldaCritic):
             if progress > 0:
                 rewards['reward-move-closer'] = self.move_closer_reward
             elif progress < 0:
-                rewards['penalty-move-farther'] = self.move_away_penalty
+                rewards['penalty-move-farther'] = move_away_penalty
 
         # This should be relatively rare, but in cases where A* couldn't find a path to the target (usually because
         # a monster moved into a wall), we will reward simply moving closer.
@@ -426,7 +434,7 @@ class GameplayCritic(ZeldaCritic):
                 percent = min(abs(progress / self.movement_scale_factor), 1)
                 rewards['reward-move-closer'] = self.move_closer_reward * percent
             else:
-                rewards['penalty-move-farther'] = self.move_away_penalty
+                rewards['penalty-move-farther'] = move_away_penalty
 
     def critique_moving_into_danger(self, old, new, rewards):
         """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted
