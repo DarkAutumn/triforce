@@ -251,7 +251,8 @@ ITEM_MAP = {x.value: x for x in ZeldaItem}
 class ZeldaObject:
     """Structured data for a single object.  ZeldaObjects are enemies, items, and projectiles."""
     # pylint: disable=too-few-public-methods
-    def __init__(self, obj_id, pos, distance, vector, health, status, spawn_state=None):
+    def __init__(self, index, obj_id, pos, distance, vector, health, status, spawn_state=None):
+        self.index = index
         self.id = obj_id
         self.position = pos
         self.distance = distance
@@ -279,15 +280,21 @@ class ZeldaObject:
             return False
 
         # status == 3 means the lever/zora is up
+        status = self.status & 0xff
         if self.id in (ZeldaEnemy.RedLever, ZeldaEnemy.BlueLever, ZeldaEnemy.Zora):
-            return self.status == 3
+            return status & 0xff == 3
 
         # status == 1 means the wallmaster is active
         if self.id == ZeldaEnemy.WallMaster:
-            return self.status == 1
+            return status == 1
 
         # spawn_state of 0 means the object is active
         return not self.spawn_state
+
+    @property
+    def is_invulnerable(self) -> bool:
+        """Returns True if the object is invulnerable."""
+        return not self.is_active or self.status & 0x100 == 0x100
 
 class ZeldaObjectData:
     """
@@ -303,7 +310,7 @@ class ZeldaObjectData:
     def link(self):
         """Returns link as an object.  Link is object 0.  Does not fill hearts."""
         status = self.get_obj_status(0)
-        return ZeldaObject(0, self.get_position(0), 0, np.array([0, 0], dtype=np.float32), None, status)
+        return ZeldaObject(0, 0, self.get_position(0), 0, np.array([0, 0], dtype=np.float32), None, status)
 
     def get_position(self, obj : int):
         """Returns the position of the object.  Objects are indexed from 0 to 0xb."""
@@ -394,7 +401,7 @@ class ZeldaObjectData:
             if obj_id == ZeldaEnemy.Item.value:
                 obj_id = obj_status[i]
                 obj_id = ITEM_MAP.get(obj_id, obj_id)
-                items.append(ZeldaObject(obj_id, pos, distance, vector, None, None))
+                items.append(ZeldaObject(i, obj_id, pos, distance, vector, None, None))
 
             # enemies
             elif 1 <= obj_id <= 0x48:
@@ -403,11 +410,11 @@ class ZeldaObjectData:
                 status = obj_status[i]
                 spawn_state = obj_spawn_state[i]
 
-                enemy = ZeldaObject(enemy_kind, pos, distance, vector, health, status, spawn_state)
+                enemy = ZeldaObject(i, enemy_kind, pos, distance, vector, health, status, spawn_state)
                 enemies.append(enemy)
 
             elif self.is_projectile(obj_id):
-                projectiles.append(ZeldaObject(obj_id, pos, distance, vector, None, None))
+                projectiles.append(ZeldaObject(i, obj_id, pos, distance, vector, None, None))
 
         if len(enemies) > 1:
             enemies.sort(key=lambda x: x.distance)
