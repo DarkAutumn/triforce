@@ -2,7 +2,7 @@
 
 from typing import List
 from .models_and_scenarios import ZeldaModelDefinition, ZELDA_MODELS
-from .zelda_game import has_beams
+from .zelda_game import get_num_triforce_pieces, has_beams
 
 class ModelSelector:
     """Selects the best model for the current game state."""
@@ -27,6 +27,10 @@ class ModelSelector:
         return matches_level and matches_room and matches_enemy_requirements and matches_equipment
 
     def __matches_equipment(self, model : ZeldaModelDefinition, info):
+        if model.requires_triforce is not None:
+            if get_num_triforce_pieces(info) < model.requires_triforce:
+                return False
+
         for equipment in model.equipment_required:
             if equipment == "beams":
                 if not has_beams(info):

@@ -1,7 +1,7 @@
 """All end conditions for training."""
 
 from typing import Dict
-from .zelda_game import is_mode_death
+from .zelda_game import get_num_triforce_pieces, is_mode_death
 
 class ZeldaEndCondition:
     """
@@ -85,10 +85,15 @@ class LeftDungeon(ZeldaEndCondition):
 class EnteredDungeon(ZeldaEndCondition):
     """End the scenario if the agent enters the dungeon."""
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
-        if new['level'] == 1:
+        if new['level'] == 0:
+            return False, False, None
+
+        triforce_count = get_num_triforce_pieces(new)
+        if new['level'] == triforce_count + 1:
             return True, False, "success-entered-dungeon"
 
-        return False, False, None
+        return False, True, "truncated-entered-dungeon"
+
 
 class LeftOverworld1Area(ZeldaEndCondition):
     """End the scenario if the agent leaves the allowable areas between the start room and dungeon 1."""

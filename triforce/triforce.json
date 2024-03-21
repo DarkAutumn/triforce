@@ -24,6 +24,18 @@
             "iterations" : 1500000
         },
         {
+            "name" : "overworld2beams",
+            "action_space" : "attack-only",
+            "priority" : 2,
+            "levels" : 0,
+            "requires_enemies" : false,
+            "requires_triforce" : 1,
+            "equipment_required" : ["beams"],
+
+            "training_scenario" : "overworld2beams",
+            "iterations" : 1500000
+        },
+        {
             "name" : "overworld1nobeams",
             "action_space" : "attack-only",
             "priority" : 0,
@@ -111,7 +123,7 @@
         {
             "name": "overworld1beams",
             "description": "Start of the game to the first dungeon entrance",
-            "critic": "Overworld1Critic",
+            "critic": "OverworldCritic",
             "end_conditions": ["EnteredDungeon", "LeftOverworld1Area", "GameOver", "Timeout"],
             "start": ["0_67s"],
             "data":
@@ -129,9 +141,29 @@
             }
         },
         {
+            "name": "overworld2beams",
+            "description": "From the first dungeon exit to the second dungeon entrance",
+            "critic": "OverworldCritic",
+            "end_conditions": ["EnteredDungeon", "GameOver", "Timeout"],
+            "start": ["0_37c"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 0,
+                "hearts_and_containers" : 51,
+                "partial_hearts" : 254,
+                "sword" : 1
+            },
+            "fixed":
+            {
+                "hearts_and_containers" : 51,
+                "partial_hearts" : 254
+            }
+        },
+        {
             "name": "overworld1nobeams",
             "description": "Start of the game to the first dungeon entrance",
-            "critic": "Overworld1Critic",
+            "critic": "OverworldCritic",
             "end_conditions": ["EnteredDungeon", "LeftOverworld1Area", "GameOver", "Timeout"],
             "start": ["0_67s"],
             "data":

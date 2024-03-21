@@ -2,7 +2,7 @@ from enum import Enum
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import Direction, is_in_cave, position_to_tile_index, tile_index_to_position, is_health_full, \
+from .zelda_game import Direction, get_num_triforce_pieces, is_in_cave, position_to_tile_index, tile_index_to_position, is_health_full, \
                         ZeldaItem
 from .astar import a_star
 
@@ -178,7 +178,7 @@ class ObjectiveSelector(gym.Wrapper):
 class OverworldOrchestrator:
     """Orchestrator for the overworld.  This is used to help the agent decide what to do."""
     def __init__(self):
-        self.location_direction = {
+        self.overworld1_direction = {
             0x77 : Direction.N,
             0x78 : Direction.N,
             0x67 : Direction.E,
@@ -188,11 +188,32 @@ class OverworldOrchestrator:
             0x38 : Direction.W,
         }
 
+        self.overworld2_direction = {
+            0x37 : Direction.E,
+            0x38 : Direction.N,
+            0x28 : Direction.E,
+            0x29 : Direction.E,
+            0x2a : Direction.E,
+            0x2b : Direction.E,
+            0x2c : Direction.E,
+            0x2d : Direction.S,
+            0x3d : Direction.S,
+            0x4d : Direction.W,
+            0x4c : Direction.N,
+        }
+
+        self.dungeon_entry = {
+            0x37 : 1,
+            0x3c : 2,
+        }
+
     def get_objectives(self, info, link_pos):
         """Returns location_objective, objective_vector, objective_pos_dir, objective_kind"""
         location = info['location']
-        if location in self.location_direction:
-            direction = self.location_direction[location]
+
+        location_map = self._get_direction_map(info)
+        if location in location_map:
+            direction = location_map[location]
             location_objective = get_location_from_direction(location, direction)
 
         # get sword if we don't have it
@@ -215,17 +236,29 @@ class OverworldOrchestrator:
 
             return location_objective, None, Direction.N, ObjectiveKind.NEXT_ROOM
 
-        if location == 0x37:
-            cave_pos = find_cave_onscreen(info)
-            objective_vector = self._create_vector_norm(link_pos, cave_pos)
-            return None, objective_vector, cave_pos, ObjectiveKind.ENTER_CAVE
+        if (dungeon := self.dungeon_entry.get(location, None)) is not None:
+            if dungeon == get_num_triforce_pieces(info) + 1:
+                cave_pos = find_cave_onscreen(info)
+                objective_vector = self._create_vector_norm(link_pos, cave_pos)
+                return None, objective_vector, cave_pos, ObjectiveKind.ENTER_CAVE
 
-        if location in self.location_direction:
-            direction = self.location_direction[location]
+        if location in location_map:
+            direction = location_map[location]
             objective_vector = None
             return location_objective, objective_vector, direction, ObjectiveKind.NEXT_ROOM
 
         return None
+
+    def _get_direction_map(self, info):
+        match get_num_triforce_pieces(info):
+            case 0:
+                return self.overworld1_direction
+
+            case 1:
+                return self.overworld2_direction
+
+            case _:
+                raise NotImplementedError('Not yet implemented.')
 
     def _create_vector_norm(self, from_pos, to_pos):
         objective_vector = to_pos - from_pos

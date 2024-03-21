@@ -48,6 +48,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._room_maps = {}
         self._rooms_with_locks = set()
         self._rooms_with_locks.add((1, 0x35, False))
+        self._last_enemies = [None] * 12
 
         # per-reset state
         self._location = None
@@ -112,6 +113,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         # add information about enemies, items, and projectiles
         info['enemies'], info['items'], info['projectiles'] = objects.get_all_objects(link_pos)
         info['active_enemies'] = [x for x in info['enemies'] if x.is_active]
+        self.update_enemy_info(info)
 
         # add the tile layout of the room
         self._create_tile_maps(info, ram, link)
@@ -135,12 +137,29 @@ class ZeldaGameWrapper(gym.Wrapper):
             self._clear_variables('beam_hits')
             self._clear_variables('bomb1_hits')
             self._clear_variables('bomb2_hits')
+            self._last_enemies = [None] * 12
             info['step_hits'] = 0
         else:
             # Only check hits if we didn't move room locations
             info['step_hits'] = self._get_step_hits(act, objects, unwrapped, info)
 
         self._last_info = info
+
+    def update_enemy_info(self, info):
+        """Updates complicated enemy state."""
+        enemies = info['enemies']
+        for enemy in enemies:
+            match enemy.id:
+                case ZeldaEnemy.PeaHat:
+                    prev = self._last_enemies[enemy.index]
+                    if prev is not None and (enemy.position != prev.position or enemy.health < prev.health):
+                        enemy.status = 0x100 | enemy.status
+
+                case ZeldaEnemy.Zora:
+                    if info['sword'] < 2:
+                        enemy.status = 0x100 | enemy.status
+
+            self._last_enemies[enemy.index] = enemy
 
     def _get_aligned_enemies(self, info):
         """Gets enemies that are aligned with the player."""
@@ -154,12 +173,13 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         result = []
         for enemy in active_enemies:
-            enemy_topleft = enemy.tile_coordinates[0]
-            if enemy_topleft[0] in link_ys or enemy_topleft[0] + 1 in link_ys:
-                result.append(enemy)
+            if not enemy.is_invulnerable:
+                enemy_topleft = enemy.tile_coordinates[0]
+                if enemy_topleft[0] in link_ys or enemy_topleft[0] + 1 in link_ys:
+                    result.append(enemy)
 
-            if enemy_topleft[1] in link_xs or enemy_topleft[1] + 1 in link_xs:
-                result.append(enemy)
+                if enemy_topleft[1] in link_xs or enemy_topleft[1] + 1 in link_xs:
+                    result.append(enemy)
 
         return result
 
@@ -385,10 +405,10 @@ class ZeldaGameWrapper(gym.Wrapper):
             total_frames += 1
             last_pos = info['link_pos']
 
-
         last_pos = np.array(last_pos, dtype=np.uint8)
         old_tile_index = position_to_tile_index(*last_pos)
 
+        stuck_count = 0
         prev = last_pos
         for _ in range(MAX_MOVEMENT_FRAMES):
             obs, rewards, terminated, truncated, info = self.env.step(act)
@@ -414,6 +434,9 @@ class ZeldaGameWrapper(gym.Wrapper):
                         break
 
             if prev[0] == x and prev[1] == y:
+                stuck_count += 1
+
+            if stuck_count > 1:
                 break
 
         return obs, rewards, terminated, truncated, info, total_frames

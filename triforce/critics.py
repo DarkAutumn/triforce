@@ -597,15 +597,16 @@ class Dungeon1BossCritic(Dungeon1Critic):
         self.injure_kill_reward = REWARD_LARGE
         self.health_lost_penalty = -REWARD_SMALL
 
-overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
+OVERWORLD1_WALK = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
+OVERWORLD2_WALK = set([0x37, 0x38, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x3d, 0x4d, 0x4c, 0x3c])
+OVERWORLD2A_WALK = set([0x37, 0x38, 0x48, 0x49, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x4d, 0x4c, 0x3c])
 
-class Overworld1Critic(GameplayCritic):
+class OverworldCritic(GameplayCritic):
     """Critic specifically for overworld 1."""
     def __init__(self):
         super().__init__()
 
         self.seen = set()
-        self.allowed_rooms = overworld_dungeon1_walk_rooms
 
         self.left_allowed_area_penalty = -REWARD_LARGE
         self.left_without_sword_penalty = -REWARD_LARGE
@@ -632,12 +633,13 @@ class Overworld1Critic(GameplayCritic):
 
         level = new['level']
         location = new['location']
+        triforce_pieces = get_num_triforce_pieces(new)
 
         if not is_in_cave(old) and location == 0x77 and is_in_cave(new):
             rewards['penalty-entered-cave'] = self.entered_cave_penalty
 
         elif level == 0:
-            if location not in self.allowed_rooms:
+            if location not in self._get_allowed_rooms(triforce_pieces):
                 rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
 
             elif old['location'] == 0x77 and location != 0x77 and not new['sword']:
@@ -646,9 +648,23 @@ class Overworld1Critic(GameplayCritic):
             else:
                 super().critique_location_discovery(old, new, rewards)
 
-        elif level == 1:
-            # don't forget to reward for reaching level 1 dungeon
+        elif level == triforce_pieces + 1:
+            # don't forget to reward for reaching the correct dungeon
             super().critique_location_discovery(old, new, rewards)
+
+        else:
+            rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
+
+    def _get_allowed_rooms(self, triforce_pieces):
+        match triforce_pieces:
+            case 0:
+                return OVERWORLD1_WALK
+
+            case 1:
+                return OVERWORLD2_WALK
+
+            case _:
+                raise NotImplementedError("No support for more than 1 triforce piece")
 
 class OverworldSwordCritic(GameplayCritic):
     """Critic specifically for the beginning of the game up through grabbing the first sword."""
