@@ -381,10 +381,11 @@ class GameplayCritic(ZeldaCritic):
 
         # If we are headed to the same location as last time, simply check whether we made progress towards it.
         elif old_path and new_path and old_path[-1] == new_path[-1]:
-            if len(old_path) > len(new_path):
+            diff = len(old_path) - len(new_path)
+            if diff > 0:
                 rewards['reward-move-closer'] = self.move_closer_reward
-            elif len(old_path) < len(new_path):
-                rewards['penalty-move-farther'] = self.move_away_penalty
+            elif diff < 0:
+                rewards['penalty-move-farther'] = self.move_away_penalty * abs(diff)
 
         # For most other cases, we calculate the progress towards the target using the manhattan distance towards
         # the second turn in the path.  That way we can reward any progress towards the target, even if the path
