@@ -28,6 +28,7 @@ class ZeldaModelDefinition(BaseModel):
     levels : List[int]
     rooms : Optional[List[int]] = None
     requires_enemies : bool
+    requires_triforce : Optional[int] = None
     equipment_required : Optional[List[str]] = []
 
     training_scenario : ZeldaScenario

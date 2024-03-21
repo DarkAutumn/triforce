@@ -118,7 +118,8 @@ def is_sword_frozen(state):
 
 def init_walkable_tiles():
     """Returns a lookup table of whether particular tile codes are walkable."""
-    tiles = [0x26, 0x24, 0xf3, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d, 0x87]
+    tiles = [0x26, 0x24, 0xf3, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d]
+    tiles += [0x84, 0x85, 0x86, 0x87]
     tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
     tiles += list(range(0x98, 0x9b+1))  # dungeon locked door north
     tiles += list(range(0xa4, 0xa7+1))  # dungeon locked door east
@@ -215,8 +216,10 @@ class ZeldaEnemy(Enum):
     Octorok : int = 0x07
     OctorokFast : int = 0x7
     OctorokBlue : int = 0x8
+    BlueLever : int = 0xf
     RedLever : int = 0x10
     Zora : int = 0x11
+    PeaHat : int = 0x1a
     Keese : int = 0x1b
     WallMaster : int = 0x27
     Stalfos : int = 0x2a
@@ -276,7 +279,7 @@ class ZeldaObject:
             return False
 
         # status == 3 means the lever/zora is up
-        if self.id in (ZeldaEnemy.RedLever, ZeldaEnemy.Zora):
+        if self.id in (ZeldaEnemy.RedLever, ZeldaEnemy.BlueLever, ZeldaEnemy.Zora):
             return self.status == 3
 
         # status == 1 means the wallmaster is active

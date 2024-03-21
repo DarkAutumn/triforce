@@ -95,6 +95,15 @@
             "justMyCode": false
         },
         {
+            "name": "Overworld2 - Beams",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "run.py",
+            "args": ["overworld2beams"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Training",
             "type": "debugpy",
             "request": "launch",
@@ -126,7 +135,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "evaluate.py",
-            "args": ["models/", "--render", "--episodes", "10"],
+            "args": ["models/", "--limit", "3", "--episodes", "5"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

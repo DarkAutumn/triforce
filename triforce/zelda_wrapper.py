@@ -385,10 +385,10 @@ class ZeldaGameWrapper(gym.Wrapper):
             total_frames += 1
             last_pos = info['link_pos']
 
-
         last_pos = np.array(last_pos, dtype=np.uint8)
         old_tile_index = position_to_tile_index(*last_pos)
 
+        stuck_count = 0
         prev = last_pos
         for _ in range(MAX_MOVEMENT_FRAMES):
             obs, rewards, terminated, truncated, info = self.env.step(act)
@@ -414,6 +414,9 @@ class ZeldaGameWrapper(gym.Wrapper):
                         break
 
             if prev[0] == x and prev[1] == y:
+                stuck_count += 1
+
+            if stuck_count > 1:
                 break
 
         return obs, rewards, terminated, truncated, info, total_frames
