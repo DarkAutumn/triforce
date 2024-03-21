@@ -20,7 +20,7 @@ def run( env, command):
 
 def test_bat_injury():
     replay = ZeldaActionReplay("1_72e.state")
-    assert_no_hit(replay, 'lllllllllllllllllllld')
+    assert_no_hit(replay, 'llllllllllldlllllll')
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
