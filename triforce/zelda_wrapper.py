@@ -66,7 +66,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._prev_health = None
 
         if not self.deterministic:
-            self.unwrapped.data.set_value('random_number_base', randint(1, 255))
+            for i in range(12):
+                self.unwrapped.data.set_value(f'rng_{i}', randint(1, 255))
 
         obs, _, _, _, info = self.skip(self._none_action, 1)
         obs, info, _ = self._skip_uncontrollable_states(info)
