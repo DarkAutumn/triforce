@@ -28,8 +28,52 @@
             "address": 152,
             "type": "=u1"
         },
-        "random_number_base": {
+        "rng_0": {
             "address": 24,
+            "type": "=u1"
+        },
+        "rng_1": {
+            "address": 25,
+            "type": "=u1"
+        },
+        "rng_2": {
+            "address": 26,
+            "type": "=u1"
+        },
+        "rng_3": {
+            "address": 27,
+            "type": "=u1"
+        },
+        "rng_4": {
+            "address": 28,
+            "type": "=u1"
+        },
+        "rng_5": {
+            "address": 29,
+            "type": "=u1"
+        },
+        "rng_6": {
+            "address": 30,
+            "type": "=u1"
+        },
+        "rng_7": {
+            "address": 31,
+            "type": "=u1"
+        },
+        "rng_8": {
+            "address": 32,
+            "type": "=u1"
+        },
+        "rng_9": {
+            "address": 33,
+            "type": "=u1"
+        },
+        "rng_10": {
+            "address": 34,
+            "type": "=u1"
+        },
+        "rng_11": {
+            "address": 35,
             "type": "=u1"
         },
         "sword_animation": {
