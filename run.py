@@ -428,9 +428,11 @@ class DisplayWindow:
         y_pos = self._draw_arrow(surface, "Item", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][3],
                                 radius=self.obs_width // 4, color=(255, 255, 255), width=3)
 
-        y_pos = self._write_key_val_aligned(surface, "Enemies", f"{obs['features'][0]:.1f}", x_pos, y_pos,
-                                           self.obs_width)
-        y_pos = self._write_key_val_aligned(surface, "Beams", f"{obs['features'][1]:.1f}", x_pos, y_pos, self.obs_width)
+        y_pos = self._write_key_val_aligned(surface, "Beams", f"{obs['features'][0]:.1f}", x_pos, y_pos, self.obs_width)
+
+        for i in range(4):
+            y_pos = self._write_key_val_aligned(surface, f"Triforce {i}", f"{obs['features'][i + 1]:.1f}", x_pos, y_pos,
+                                                self.obs_width)
 
     def _update_rewards(self, reward_map, buttons, last_info, info):
         curr_rewards = {}
