@@ -8,6 +8,8 @@ from .zelda_wrapper import ActionType
 from .zelda_game import Direction, TileState, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
     get_num_triforce_pieces, is_in_cave
 
+
+
 REWARD_MINIMUM = 0.01
 REWARD_TINY = 0.05
 REWARD_SMALL = 0.25
@@ -357,8 +359,19 @@ class GameplayCritic(ZeldaCritic):
 
         # Don't score movement if we moved to a new location or took damage.  The "movement" which occurs from
         # damage should never be rewarded, and it will be penalized by the health loss critic.
-        if new['action'] != ActionType.MOVEMENT or new['took_damage'] or \
-                old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
+        if new['action'] != ActionType.MOVEMENT or new['took_damage'] or old['location'] != new['location']:
+            return
+
+        if old['objective_kind'] == ObjectiveKind.ENTER_CAVE and not is_in_cave(old) and is_in_cave(new):
+            rewards['reward-move-closer'] = self.move_closer_reward
+            return
+
+        if old['objective_kind'] == ObjectiveKind.EXIT_CAVE and is_in_cave(old) and not is_in_cave(new):
+            rewards['reward-move-closer'] = self.move_closer_reward
+            return
+
+        if is_in_cave(old) != is_in_cave(new):
+            rewards['penalty-cave'] = self.move_away_penalty
             return
 
         # Did link run into a wall?
@@ -414,7 +427,7 @@ class GameplayCritic(ZeldaCritic):
 
         # This should be relatively rare, but in cases where A* couldn't find a path to the target (usually because
         # a monster moved into a wall), we will reward simply moving closer.
-        elif (target := new.get('objective_pos_or_dir', None)) is not None:
+        elif (target := old.get('objective_pos_or_dir', None)) is not None:
             old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
             new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
 
@@ -596,10 +609,6 @@ class Dungeon1BossCritic(Dungeon1Critic):
         self.move_away_penalty = -REWARD_SMALL
         self.injure_kill_reward = REWARD_LARGE
         self.health_lost_penalty = -REWARD_SMALL
-
-OVERWORLD1_WALK = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
-OVERWORLD2_WALK = set([0x37, 0x38, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x3d, 0x4d, 0x4c, 0x3c])
-OVERWORLD2A_WALK = set([0x37, 0x38, 0x48, 0x49, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x4d, 0x4c, 0x3c])
 
 class OverworldCritic(GameplayCritic):
     """Critic specifically for overworld 1."""
