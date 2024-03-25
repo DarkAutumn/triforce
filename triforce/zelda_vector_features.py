@@ -35,10 +35,8 @@ class ZeldaVectorFeatures(gym.Wrapper):
 
     def _get_enemy_vectors(self, info):
         result = [np.zeros(2, dtype=np.float32)] * NUM_DIRECTION_VECTORS
-        if info is None or 'objective_vector' not in info:
-            return result
-
-        result[0] = info['objective_vector']
+        objective_vector = info['objective'].vector
+        result[0] = objective_vector if objective_vector is not None else np.zeros(2, dtype=np.float32)
         result[1] = self._get_first_vector(info['active_enemies'])
         result[2] = self._get_first_vector(info['projectiles'])
         result[3] = self._get_first_vector(info['items'])

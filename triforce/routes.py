@@ -23,7 +23,7 @@ ROOMS_WITH_TREASURE = [
     (1, 0x74),   # stalfos room with key
     (1, 0x43),   # gel with map
     (1, 0x45),   # wallmaster with key
-    (1, 0x34),   # triforce room
+    (1, 0x36),   # triforce room
 ]
 
 CAVES_WITH_TREASURE = {

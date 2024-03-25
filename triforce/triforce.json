@@ -58,17 +58,6 @@
             "iterations" : 1500000
         },
         {
-            "name" : "dungeon1entrance",
-            "action_space" : "move-only",
-            "priority" : 10,
-            "levels" : 1,
-            "rooms" : ["0x73"],
-            "requires_enemies" : false,
-
-            "training_scenario" : "dungeon1entrance",
-            "iterations" : 1000000
-        },
-        {
             "name" : "dungeon1nobeams",
             "action_space" : "attack-only",
             "priority" : 0,
@@ -135,9 +124,9 @@
         {
             "name": "overworld1beams",
             "description": "Start of the game to the first dungeon entrance",
-            "critic": "OverworldCritic",
-            "end_conditions": ["EnteredDungeon", "LeftOverworldArea", "GameOver", "Timeout"],
-            "start": ["0_67s"],
+            "critic": "GameplayCritic",
+            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
+            "start": ["0_77"],
             "data":
             {
                 "bombs" : 0,
@@ -155,8 +144,8 @@
         {
             "name": "overworld2beams",
             "description": "From the first dungeon exit to the second dungeon entrance",
-            "critic": "OverworldCritic",
-            "end_conditions": ["EnteredDungeon", "GameOver", "Timeout"],
+            "critic": "GameplayCritic",
+            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
             "start": ["0_37c"],
             "data":
             {
@@ -175,8 +164,8 @@
         {
             "name": "overworld2nobeams",
             "description": "From the first dungeon exit to the second dungeon entrance",
-            "critic": "OverworldCritic",
-            "end_conditions": ["EnteredDungeon", "GameOver", "Timeout"],
+            "critic": "GameplayCritic",
+            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
             "start": ["0_37c"],
             "data":
             {
@@ -195,9 +184,9 @@
         {
             "name": "overworld1nobeams",
             "description": "Start of the game to the first dungeon entrance",
-            "critic": "OverworldCritic",
-            "end_conditions": ["EnteredDungeon", "LeftOverworldArea", "GameOver", "Timeout"],
-            "start": ["0_67s"],
+            "critic": "GameplayCritic",
+            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
+            "start": ["0_77"],
             "data":
             {
                 "bombs" : 0,
@@ -215,8 +204,8 @@
         {
             "name": "dungeon1",
             "description": "Dungeon 1 Full",
-            "critic": "Dungeon1Critic",
-            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
+            "critic": "GameplayCritic",
+            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
             "start": ["1_73s"],
             "data":
             {
@@ -227,18 +216,10 @@
             }
         },
         {
-            "name" : "dungeon1entrance",
-
-            "description" : "Dungeon 1 Entrance",
-            "critic" : "Dungeon1Critic",
-            "end_conditions" : ["LeftDungeon", "GameOver", "Timeout", "LeftRoom"],
-            "start" : ["1_73s", "1_73e", "1_73w"]
-        },
-        {
             "name": "dungeon1beams",
             "description": "Dungeon 1 Beams",
-            "critic": "Dungeon1Critic",
-            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
+            "critic": "GameplayCritic",
+            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
             "start": ["1_72e"],
             "data":
             {
@@ -257,7 +238,7 @@
             "name": "dungeon1bombs",
             "description": "Dungeon 1 Bombs",
             "critic": "Dungeon1BombCritic",
-            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
+            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
             "start": ["1_72e"],
             "data":
             {
@@ -276,8 +257,8 @@
         {
             "name": "dungeon1nobeams",
             "description": "Dungeon 1 combat trainer (no beams)",
-            "critic": "Dungeon1Critic",
-            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
+            "critic": "GameplayCritic",
+            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
             "start": ["1_72e"],
             "data":
             {
@@ -296,7 +277,7 @@
             "name": "dungeon1boss",
             "description": "Dungeon 1 Boss",
             "critic": "Dungeon1BossCritic",
-            "end_conditions": ["GainedTriforce", "DefeatedBoss", "GameOver", "Timeout"],
+            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
             "start": ["1_35s"],
             "data":
             {

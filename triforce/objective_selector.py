@@ -1,9 +1,9 @@
 from enum import Enum
-from typing import List, Tuple
+from typing import Tuple
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import Direction, get_num_triforce_pieces, is_in_cave, position_to_tile_index, tile_index_to_position, is_health_full, \
+from .zelda_game import Direction, is_in_cave, position_to_tile_index, tile_index_to_position, is_health_full, \
                         ZeldaItem
 from .astar import a_star
 from .routes import DANGEROUS_ROOMS, DUNGEON_ENTRANCES, get_walk, ROOMS_WITH_TREASURE, ROOMS_WITH_REVEALED_TREASURE, CAVES_WITH_TREASURE
@@ -50,11 +50,11 @@ def find_cave_onscreen(info):
     return tile_index_to_position(cave_pos)
 
 class Objective:
-    def __init__(self, kind, location_objective, objective_vector, objective_pos_dir):
-        self.location_objective : Tuple[int, int] = location_objective
-        self.objective_vector : np.ndarray = objective_vector
-        self.objective_pos_dir : Direction = objective_pos_dir
+    def __init__(self, kind, next_location, vector, objective_pos_dir):
         self.kind : ObjectiveKind = kind
+        self.next_location : Tuple[int, int] = next_location
+        self.vector : np.ndarray = vector
+        self.position_or_direction : Direction = objective_pos_dir
 
 class ObjectiveSelector(gym.Wrapper):
     """
@@ -90,10 +90,11 @@ class ObjectiveSelector(gym.Wrapper):
         link_pos =  np.array(info['link_pos'], dtype=np.float32)
 
         objective = self._get_objective(info)
-        location_objective = objective.location_objective
-        objective_vector = objective.objective_vector
-        objective_pos_dir = objective.objective_pos_dir
-        objective_kind = objective.kind
+        objective.walk = self.walk
+        objective.walk_index = self.walk_index
+        info['objective'] = objective
+
+        objective_pos_dir = objective.position_or_direction
 
         # find the optimal route to the objective
         if objective_pos_dir is not None:
@@ -102,13 +103,8 @@ class ObjectiveSelector(gym.Wrapper):
             path = self._get_a_star_path(info, a_star_tile)
 
             info['a*_path'] = path
+            objective.vector = self._get_objective_vector(link_pos, objective.vector, objective_pos_dir, path)
 
-            objective_vector = self._get_objective_vector(link_pos, objective_vector, objective_pos_dir, path)
-
-        info['objective_vector'] = objective_vector if objective_vector is not None else np.zeros(2, dtype=np.float32)
-        info['objective_kind'] = objective_kind
-        info['objective_pos_or_dir'] = objective_pos_dir
-        info['location_objective'] = location_objective
 
     def _get_a_star_path(self, info, objective_pos_dir):
         link_tiles = info['link'].tile_coordinates
@@ -258,7 +254,7 @@ class ObjectiveSelector(gym.Wrapper):
         raise ValueError(f'Invalid location change: {curr} -> {next_room}')
 
     def _get_kill_objective(self, info):
-        return Objective(ObjectiveKind.FIGHT, None, info['active_enemies'][0].vector, info['active_enemies'][0].position)
+        return Objective(ObjectiveKind.FIGHT, None, info['enemies'][0].vector, info['enemies'][0].position)
 
     def _get_cave_objective(self, info):
         if not is_in_cave(info):
@@ -303,6 +299,8 @@ class ObjectiveSelector(gym.Wrapper):
             elif self.walk_index > 0 and location == self.walk[self.walk_index - 1]:
                 self.walk_index -= 1
             else:
+                self.walk = None
+                self.walk_index = -1
                 return None, None
 
         # if this is the last room in the walk, reset the walk

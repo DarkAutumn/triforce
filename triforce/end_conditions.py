@@ -74,66 +74,17 @@ class GainedTriforce(ZeldaEndCondition):
 
         return False, False, None
 
-class LeftDungeon(ZeldaEndCondition):
-    """End the scenario if the agent leaves the dungeon."""
+class AllowedArea(ZeldaEndCondition):
+    """End the scenario if the agent leaves the defined play area for this scenario."""
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
-        if new['level'] == 0:
-            return True, False, "failure-left-dungeon"
+        objective = old['objective']
+        old_walk = objective.walk
 
-        return False, False, None
+        if old_walk != new['objective'].walk:
+            location = new['level'], new['location']
+            if location == old_walk[-1]:
+                return True, False, "success-completed-scenario"
 
-class EnteredDungeon(ZeldaEndCondition):
-    """End the scenario if the agent enters the dungeon."""
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
-        if new['level'] == 0:
-            return False, False, None
-
-        triforce_count = get_num_triforce_pieces(new)
-        if new['level'] == triforce_count + 1:
-            return True, False, "success-entered-dungeon"
-
-        return False, True, "truncated-entered-dungeon"
-
-
-class LeftOverworldArea(ZeldaEndCondition):
-    """End the scenario if the agent leaves the allowable areas between the start room and dungeon 1."""
-    overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
-
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
-        if new['level'] == 0 and new['location'] not in self.overworld_dungeon1_walk_rooms:
             return True, False, "failure-left-play-area"
-
-        return False, False, None
-
-class StartingRoomConditions(ZeldaEndCondition):
-    """End conditions for 'pick up the sword' scenario."""
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
-        if new['location'] != 0x77:
-            if new['sword']:
-                return True, False, "success-found-sword"
-
-            return True, False, "failure-no-sword"
-
-        return False, False, None
-
-class DefeatedBoss(ZeldaEndCondition):
-    """End condition for killing the boss."""
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
-        if not new['enemies']:
-            return True, False, "success-killed-boss"
-
-        if new['location'] != 0x35:
-            return True, False, "failure-left-boss-room"
-
-        return False, False, None
-
-class LeftRoom(ZeldaEndCondition):
-    """End condition for leaving the current room."""
-    def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
-        if old['location'] != new['location']:
-            if new['location_objective'] == new['location']:
-                return False, True, "truncated-left-room"
-
-            return True, False, "failure-left-room"
 
         return False, False, None
