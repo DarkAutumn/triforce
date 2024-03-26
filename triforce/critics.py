@@ -345,7 +345,7 @@ class GameplayCritic(ZeldaCritic):
         Returns:
             None
         """
-        # pylint: disable=too-many-branches, too-many-locals
+        # pylint: disable=too-many-branches, too-many-locals, too-many-statements
 
         # Don't score movement if we moved to a new location or took damage.  The "movement" which occurs from
         # damage should never be rewarded, and it will be penalized by the health loss critic.
@@ -361,7 +361,7 @@ class GameplayCritic(ZeldaCritic):
             return
 
         if is_in_cave(old) != is_in_cave(new):
-            rewards['penalty-cave'] = self.move_away_penalty
+            rewards['penalty-cave'] = self.leave_early_penalty
             return
 
         # Did link run into a wall?
