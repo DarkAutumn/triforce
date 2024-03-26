@@ -6,7 +6,7 @@ import numpy as np
 from .zelda_game import Direction, is_in_cave, is_underground, position_to_tile_index, tile_index_to_position, \
     is_health_full, ZeldaItem, ZeldaEnemy
 from .astar import a_star
-from .routes import DANGEROUS_ROOMS, ROOMS_WITH_PUSHBLOCKS, get_walk, \
+from .routes import DANGEROUS_ROOMS, ROOMS_WITH_PUSHBLOCKS, ROOMS_WITH_TREASURE, get_walk, \
     ROOMS_WITH_REVEALED_TREASURE, CAVES_WITH_TREASURE
 
 class ObjectiveKind(Enum):
@@ -238,6 +238,9 @@ class ObjectiveSelector(gym.Wrapper):
 
             if info['treasure_flag'] == 0:
                 return self._get_treasure_objective(info)
+
+        if curr in ROOMS_WITH_TREASURE and info['treasure_flag'] == 0:
+            return self._get_treasure_objective(info)
 
         if curr[0] != next_room[0]:
             return self._get_cave_objective(info)
