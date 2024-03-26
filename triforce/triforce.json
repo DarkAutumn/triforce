@@ -21,7 +21,7 @@
             "equipment_required" : ["beams"],
 
             "training_scenario" : "overworld1beams",
-            "iterations" : 1500000
+            "iterations" : 50000000
         },
         {
             "name" : "overworld2beams",
@@ -55,7 +55,7 @@
             "requires_enemies" : false,
 
             "training_scenario" : "overworld1nobeams",
-            "iterations" : 1500000
+            "iterations" : 50000000
         },
         {
             "name" : "dungeon1nobeams",
@@ -76,7 +76,7 @@
             "equipment_required" : ["beams"],
 
             "training_scenario" : "dungeon1beams",
-            "iterations" : 1500000
+            "iterations" : 50000000
         },
         {
             "name" : "dungeon1bombs",
@@ -87,7 +87,7 @@
             "equipment_required" : ["bombs"],
 
             "training_scenario" : "dungeon1bombs",
-            "iterations" : 1500000
+            "iterations" : 50000000
         },
         {
             "name" : "dungeon1boss",
@@ -126,7 +126,7 @@
             "description": "Start of the game to the first dungeon entrance",
             "critic": "GameplayCritic",
             "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
-            "start": ["0_67s"],
+            "start": ["0_67s", "0_37c"],
             "data":
             {
                 "bombs" : 0,
@@ -183,7 +183,7 @@
             "description": "Start of the game to the first dungeon entrance",
             "critic": "GameplayCritic",
             "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
-            "start": ["0_77"],
+            "start": ["0_77", "0_37c"],
             "data":
             {
                 "bombs" : 0,
