@@ -126,7 +126,7 @@
             "description": "Start of the game to the first dungeon entrance",
             "critic": "GameplayCritic",
             "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
-            "start": ["0_77"],
+            "start": ["0_67s"],
             "data":
             {
                 "bombs" : 0,
