@@ -65,7 +65,7 @@
             "requires_enemies" : false,
 
             "training_scenario" : "dungeon1nobeams",
-            "iterations" : 2750000
+            "iterations" : 50000000
         },
         {
             "name" : "dungeon1beams",
