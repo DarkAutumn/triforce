@@ -3,10 +3,11 @@ from typing import Tuple
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import Direction, is_in_cave, position_to_tile_index, tile_index_to_position, is_health_full, \
-                        ZeldaItem
+from .zelda_game import Direction, is_in_cave, is_underground, position_to_tile_index, tile_index_to_position, \
+    is_health_full, ZeldaItem, ZeldaEnemy
 from .astar import a_star
-from .routes import DANGEROUS_ROOMS, DUNGEON_ENTRANCES, get_walk, ROOMS_WITH_TREASURE, ROOMS_WITH_REVEALED_TREASURE, CAVES_WITH_TREASURE
+from .routes import DANGEROUS_ROOMS, ROOMS_WITH_PUSHBLOCKS, get_walk, \
+    ROOMS_WITH_REVEALED_TREASURE, CAVES_WITH_TREASURE
 
 class ObjectiveKind(Enum):
     """The type of objective for the room."""
@@ -17,6 +18,8 @@ class ObjectiveKind(Enum):
     TREASURE = 4
     ENTER_CAVE = 5
     EXIT_CAVE = 6
+    PUSH_BLOCK = 7
+    STAIRS = 8
     REJOIN_WALK = 99  # we left the designated walk
     COMPLETE = 100    # we reached the end of the walk
 
@@ -35,9 +38,12 @@ def get_location_from_direction(location, direction):
         case _:
             raise ValueError(f'Invalid direction: {direction}')
 
-def find_cave_onscreen(info):
+CAVE_TILES = [0x24, 0xF3]
+STAIR_TILES = [0x72, 0x73]
+
+def find_on_screen(info, tiles):
     """Finds the cave on the current screen."""
-    cave_indices = np.argwhere(np.isin(info['tiles'], [0x24, 0xF3]))
+    cave_indices = np.argwhere(np.isin(info['tiles'], tiles))
 
     cave_pos = None
     curr = np.inf
@@ -67,6 +73,7 @@ class ObjectiveSelector(gym.Wrapper):
         self.walk = None
         self.walk_index = -1
         self.cave_treasure = None
+        self.push_block = None
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
@@ -74,6 +81,7 @@ class ObjectiveSelector(gym.Wrapper):
         self.walk = None
         self.walk_index = -1
         self.cave_treasure = None
+        self.push_block = None
 
         self._set_objectives(info)
 
@@ -188,7 +196,10 @@ class ObjectiveSelector(gym.Wrapper):
 
             # if we don't have the treasure, go to it
             if self.cave_treasure == curr_treasure:
-                return self._get_cave_objective(info)
+                if is_in_cave(info):
+                    return self._get_cave_objective(info)
+
+                return self._get_treasure_objective(info)
 
             # if we have the treasure, make sure we get out of the cave
             if is_in_cave(info):
@@ -197,6 +208,30 @@ class ObjectiveSelector(gym.Wrapper):
         else:
             self.cave_treasure = None
 
+        if curr in ROOMS_WITH_PUSHBLOCKS:
+            push_block = info['secrets'][0]
+            if self.push_block is None:
+                self.push_block = push_block
+                assert self.push_block.id == ZeldaEnemy.PushBlock, 'Expected push block'
+
+            if push_block.tile_coordinates[0] == self.push_block.tile_coordinates[0]:
+                overlap = set(push_block.tile_coordinates) & set(info['link'].tile_coordinates)
+                if overlap:
+                    if info['link'].tile_coordinates[0] in overlap:
+                        direction = Direction.N
+                    else:
+                        direction = Direction.S
+
+                    return Objective(ObjectiveKind.PUSH_BLOCK, next_room, direction.to_vector(), direction)
+
+                pos = tile_index_to_position(push_block.tile_coordinates[3])
+                return Objective(ObjectiveKind.PUSH_BLOCK, next_room, None, pos)
+
+            pos = find_on_screen(info, STAIR_TILES)
+            return Objective(ObjectiveKind.STAIRS, next_room, None, pos)
+
+        self.push_block = None
+
         if curr in ROOMS_WITH_REVEALED_TREASURE:
             if info['enemies']:
                 return self._get_kill_objective(info)
@@ -204,11 +239,11 @@ class ObjectiveSelector(gym.Wrapper):
             if info['treasure_flag'] == 0:
                 return self._get_treasure_objective(info)
 
-        if curr in ROOMS_WITH_TREASURE and info['treasure_flag'] == 0:
-            return self._get_treasure_objective(info)
-
         if curr[0] != next_room[0]:
             return self._get_cave_objective(info)
+
+        if is_underground(info):
+            return Objective(ObjectiveKind.NEXT_ROOM, next_room, None, Direction.N)
 
         return self._get_room_objective(curr, next_room)
 
@@ -258,7 +293,7 @@ class ObjectiveSelector(gym.Wrapper):
 
     def _get_cave_objective(self, info):
         if not is_in_cave(info):
-            objective_pos = find_cave_onscreen(info)
+            objective_pos = find_on_screen(info, CAVE_TILES)
             objective_vector = self._create_vector_norm(info['link_pos'], objective_pos)
             return Objective(ObjectiveKind.ENTER_CAVE, None, objective_vector, objective_pos)
 

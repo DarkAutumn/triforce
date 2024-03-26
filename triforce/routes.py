@@ -15,6 +15,7 @@ DANGEROUS_ROOMS = [
 ROOMS_WITH_REVEALED_TREASURE = [
     (1, 0x72),   # keese room with key
     (1, 0x53),   # stalfos with key
+    (1, 0x23),   # gojira with key
     (1, 0x44),   # gojira with boomerang
     (1, 0x35),   # boss room,
     (2, 0x7e),   # rope room with key
@@ -29,13 +30,18 @@ ROOMS_WITH_REVEALED_TREASURE = [
 
 ROOMS_WITH_TREASURE = [
     (1, 0x74),   # stalfos room with key
-    (1, 0x43),   # gel with map
     (1, 0x45),   # wallmaster with key
     (1, 0x36),   # triforce room
+    (1, 0x33),   # stalfos with key
+]
+
+ROOMS_WITH_PUSHBLOCKS = [
+    (1, 0x22),   # bow room
 ]
 
 CAVES_WITH_TREASURE = {
-    (0, 0x77) : "sword"
+    (0, 0x77) : "sword",
+    (1, 0x7f) : "bow",
 }
 
 DUNGEON1_WALK = [
@@ -48,6 +54,14 @@ DUNGEON1_WALK = [
     (1, 0x53),   # stalfos with key
     (1, 0x52),   # keese
     (1, 0x42),   # gel
+    (1, 0x43),   # gel with map
+    (1, 0x33),   # stalfos with key
+    (1, 0x23),   # gojira with key
+    (1, 0x22),   # trap room
+    (1, 0x7f),   # bow room
+    (1, 0x22),   # trap room
+    (1, 0x23),   # gojira with key
+    (1, 0x33),   # stalfos with key
     (1, 0x43),   # gel with map
     (1, 0x44),   # gojira with boomerang
     (1, 0x45),   # wallmaster with key

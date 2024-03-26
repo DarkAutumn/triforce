@@ -349,24 +349,8 @@ class GameplayCritic(ZeldaCritic):
 
         # Don't score movement if we moved to a new location or took damage.  The "movement" which occurs from
         # damage should never be rewarded, and it will be penalized by the health loss critic.
-        if new['action'] != ActionType.MOVEMENT or new['took_damage'] or old['location'] != new['location']:
-            return
 
-        if old['objective'].kind == ObjectiveKind.ENTER_CAVE and not is_in_cave(old) and is_in_cave(new):
-            rewards['reward-move-closer'] = self.move_closer_reward
-            return
-
-        if old['objective'].kind == ObjectiveKind.EXIT_CAVE and is_in_cave(old) and not is_in_cave(new):
-            rewards['reward-move-closer'] = self.move_closer_reward
-            return
-
-        if is_in_cave(old) != is_in_cave(new):
-            rewards['penalty-cave'] = self.leave_early_penalty
-            return
-
-        # Did link run into a wall?
-        if old['link_pos'] == new['link_pos']:
-            rewards['penalty-wall-collision'] = self.wall_collision_penalty
+        if self.should_skip_movement_critique(old, new, rewards):
             return
 
         self.critique_moving_into_danger(old, new, rewards)
@@ -439,6 +423,38 @@ class GameplayCritic(ZeldaCritic):
                 rewards['reward-move-closer'] = self.move_closer_reward * percent
             else:
                 rewards['penalty-move-farther'] = move_away_penalty
+
+    def should_skip_movement_critique(self, old, new, rewards):
+        """Whether or not we should skip the movement critique."""
+
+        if new['action'] != ActionType.MOVEMENT or new['took_damage'] or old['location'] != new['location']:
+            return True
+
+        if old['objective'].kind == ObjectiveKind.ENTER_CAVE and not is_in_cave(old) and is_in_cave(new):
+            rewards['reward-move-closer'] = self.move_closer_reward
+            return True
+
+        if old['objective'].kind == ObjectiveKind.EXIT_CAVE and is_in_cave(old) and not is_in_cave(new):
+            rewards['reward-move-closer'] = self.move_closer_reward
+            return True
+
+        if is_in_cave(old) != is_in_cave(new):
+            rewards['penalty-cave'] = self.leave_early_penalty
+            return True
+
+        # spending a key holds you in place for a bit, don't penalize this
+        if old['keys'] > new['keys']:
+            return True
+
+        if old['objective'].kind in (ObjectiveKind.STAIRS, ObjectiveKind.PUSH_BLOCK) and \
+            old['secrets'][0].position != new['secrets'][0].position:
+            return True
+
+        if old['link_pos'] == new['link_pos']:
+            rewards['penalty-wall-collision'] = self.wall_collision_penalty
+            return True
+
+        return False
 
     def critique_moving_into_danger(self, old, new, rewards):
         """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted

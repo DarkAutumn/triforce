@@ -15,7 +15,8 @@ import numpy as np
 from .zelda_game_data import zelda_game_data
 from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, is_health_full, is_in_cave, \
                         is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, \
-                        is_room_loaded, is_sword_frozen, get_heart_halves, position_to_tile_index, tiles_to_weights
+                        is_room_loaded, is_sword_frozen, get_heart_halves, is_underground, position_to_tile_index, \
+                        tiles_to_weights
 from .model_parameters import MAX_MOVEMENT_FRAMES, ATTACK_COOLDOWN, ITEM_COOLDOWN, CAVE_COOLDOWN, WS_ADJUSTMENT_FRAMES
 
 class ActionType(Enum):
@@ -111,7 +112,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             info['took_damage'] = False
 
         # add information about enemies, items, and projectiles
-        info['enemies'], info['items'], info['projectiles'] = objects.get_all_objects(link_pos)
+        info['enemies'], info['items'], info['projectiles'], info['secrets'] = objects.get_all_objects(link_pos)
         info['active_enemies'] = [x for x in info['enemies'] if x.is_active]
         self.update_enemy_info(info)
 
@@ -202,14 +203,26 @@ class ZeldaGameWrapper(gym.Wrapper):
         index = self._get_full_location(info)
 
         # check if we spent a key, if so the tile layout of the room changed
+        should_reset = False
         if self._last_info:
             curr_keys = info['keys']
             last_keys = self._last_info.get('keys', curr_keys)
             if curr_keys < last_keys:
-                self._room_maps.pop(index, None)
+                should_reset = True
 
             if len(self._last_info['enemies']) != len(info['enemies']):
-                self._room_maps.pop(index, None)
+                should_reset = True
+
+            secrets = self._last_info.get('secrets', None)
+            if secrets:
+                if len(secrets) != len(info['secrets']):
+                    should_reset = True
+
+                elif secrets[0].position != info['secrets'][0].position:
+                    should_reset = True
+
+        if should_reset:
+            self._room_maps.pop(index, None)
 
         if index not in self._room_maps:
             map_offset, map_len = zelda_game_data.tables['tile_layout']
@@ -348,7 +361,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             case _:
                 raise ValueError(f'Unknown action type: {action_kind}')
 
-        in_cave = is_in_cave(info)
+        in_cave = is_in_cave(info) or is_underground(info)
         if in_cave and not self.was_link_in_cave:
             obs, _, terminated, truncated, info = self.skip(self._none_action, CAVE_COOLDOWN)
 
