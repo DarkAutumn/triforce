@@ -16,7 +16,15 @@ ROOMS_WITH_REVEALED_TREASURE = [
     (1, 0x72),   # keese room with key
     (1, 0x53),   # stalfos with key
     (1, 0x44),   # gojira with boomerang
-    (1, 0x35),   # boss room
+    (1, 0x35),   # boss room,
+    (2, 0x7e),   # rope room with key
+    (2, 0x4e),   # rope room with key
+    (2, 0x4f),   # gojira with magic boomerang
+    (2, 0x3e),   # moldorm room with key,
+    (2, 0x3f),   # keese with bombs
+    (2, 0x2e),   # rope room with lockout
+    (2, 0x1e),   # gojira with bombs
+    (2, 0x0e),   # boss room,
 ]
 
 ROOMS_WITH_TREASURE = [
@@ -48,15 +56,29 @@ DUNGEON1_WALK = [
     (0, 0x37),   # overworld
 ]
 
+DUNGEON2_WALK = [
+    (2, 0x7d),   # entrance to dungeon 2
+    (2, 0x7e),   # rope room with key
+    (2, 0x6e),   # rope room
+    (2, 0x5e),   # goriya room
+    (2, 0x4e),   # rope room with key
+    (2, 0x3e),   # moldorm room with key,
+    (2, 0x2e),   # rope room with lockout
+    (2, 0x1e),   # gojira with bombs
+    (2, 0x0e),   # boss room
+    (2, 0x0d),   # triforce room
+    (0, 0x3c),   # overworld
+]
+
 OVERWORLD_SWORD_WALK = [(0, 0x77), (0, 0x67)]
 OVERWORLD1_WALK = _build_walk(0, [0x77, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37]) + \
                     [(1, DUNGEON_ENTRANCES[1]), (1, DUNGEON_ENTRANCES[1] - 1)]
 
 OVERWORLD2_WALK = _build_walk(0, [0x37, 0x38, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x3d, 0x4d, 0x4c, 0x3c]) \
-                    + [(2, [DUNGEON_ENTRANCES[2]]), (2, [DUNGEON_ENTRANCES[2] + 1])]
+                    + [(2, DUNGEON_ENTRANCES[2]), (2, DUNGEON_ENTRANCES[2] + 1)]
 
 OVERWORLD2A_WALK = _build_walk(0, [0x37, 0x38, 0x48, 0x49, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x4d, 0x4c, 0x3c]) \
-                    + [(2, [DUNGEON_ENTRANCES[2]]), (2, [DUNGEON_ENTRANCES[2] + 1])]
+                    + [(2, DUNGEON_ENTRANCES[2]), (2, DUNGEON_ENTRANCES[2] + 1)]
 
 def get_walk(info):
     """Returns the series of rooms that the agent should walk through based on the current game state."""
