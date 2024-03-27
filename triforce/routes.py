@@ -55,14 +55,14 @@ DUNGEON1_WALK = [
     (1, 0x52),   # keese
     (1, 0x42),   # gel
     (1, 0x43),   # gel with map
-    (1, 0x33),   # stalfos with key
-    (1, 0x23),   # gojira with key
-    (1, 0x22),   # trap room
-    (1, 0x7f),   # bow room
-    (1, 0x22),   # trap room
-    (1, 0x23),   # gojira with key
-    (1, 0x33),   # stalfos with key
-    (1, 0x43),   # gel with map
+#    (1, 0x33),   # stalfos with key
+#    (1, 0x23),   # gojira with key
+#    (1, 0x22),   # trap room
+#    (1, 0x7f),   # bow room
+#    (1, 0x22),   # trap room
+#    (1, 0x23),   # gojira with key
+#    (1, 0x33),   # stalfos with key
+#    (1, 0x43),   # gel with map
     (1, 0x44),   # gojira with boomerang
     (1, 0x45),   # wallmaster with key
     (1, 0x35),   # boss room
