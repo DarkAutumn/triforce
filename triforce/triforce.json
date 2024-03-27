@@ -126,7 +126,7 @@
             "description": "Start of the game to the first dungeon entrance",
             "critic": "GameplayCritic",
             "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
-            "start": ["0_67s", "0_37c"],
+            "start": ["0_67s"],
             "data":
             {
                 "bombs" : 0,
@@ -183,7 +183,7 @@
             "description": "Start of the game to the first dungeon entrance",
             "critic": "GameplayCritic",
             "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
-            "start": ["0_77", "0_37c"],
+            "start": ["0_67s"],
             "data":
             {
                 "bombs" : 0,
@@ -216,7 +216,7 @@
             "description": "Dungeon 1 Beams",
             "critic": "GameplayCritic",
             "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
-            "start": ["1_72e"],
+            "start": ["1_23s"],
             "data":
             {
                 "bombs" : 0,
