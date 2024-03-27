@@ -196,10 +196,10 @@ class ObjectiveSelector(gym.Wrapper):
 
             # if we don't have the treasure, go to it
             if self.cave_treasure == curr_treasure:
-                if is_in_cave(info):
+                if info['level'] == 0:
                     return self._get_cave_objective(info)
-
-                return self._get_treasure_objective(info)
+                else:
+                    return self._get_treasure_objective(info)
 
             # if we have the treasure, make sure we get out of the cave
             if is_in_cave(info):
