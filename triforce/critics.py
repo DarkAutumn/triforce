@@ -8,8 +8,6 @@ from .zelda_wrapper import ActionType
 from .zelda_game import Direction, TileState, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
     get_num_triforce_pieces, is_in_cave
 
-
-
 REWARD_MINIMUM = 0.01
 REWARD_TINY = 0.05
 REWARD_SMALL = 0.25
