@@ -9,7 +9,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": [],
+            "args": ["--model-path", "training/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -100,6 +100,24 @@
             "request": "launch",
             "program": "run.py",
             "args": ["overworld2beams"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Overworld2 - NO Beams",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "run.py",
+            "args": ["overworld2nobeams"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Grab-Equipment",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "run.py",
+            "args": ["grab-equipment"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
