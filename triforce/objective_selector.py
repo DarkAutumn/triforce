@@ -208,13 +208,16 @@ class ObjectiveSelector(gym.Wrapper):
         else:
             self.cave_treasure = None
 
-        if curr in ROOMS_WITH_PUSHBLOCKS:
+        if curr in ROOMS_WITH_PUSHBLOCKS and not info[ROOMS_WITH_PUSHBLOCKS[curr]]:
             push_block = info['secrets'][0]
             if self.push_block is None:
                 self.push_block = push_block
                 assert self.push_block.id == ZeldaEnemy.PushBlock, 'Expected push block'
+                self.push_block.start = push_block.position
 
-            if push_block.tile_coordinates[0] == self.push_block.tile_coordinates[0]:
+            if push_block.position == self.push_block.start or push_block.position != self.push_block.position and \
+            info['link'].tile_coordinates[0][0] != 10:
+                self.push_block.position = push_block.position
                 overlap = set(push_block.tile_coordinates) & set(info['link'].tile_coordinates)
                 if overlap:
                     if info['link'].tile_coordinates[0] in overlap:
@@ -222,10 +225,11 @@ class ObjectiveSelector(gym.Wrapper):
                     else:
                         direction = Direction.S
 
-                    return Objective(ObjectiveKind.PUSH_BLOCK, next_room, direction.to_vector(), direction)
+                    return Objective(ObjectiveKind.PUSH_BLOCK, None, direction.to_vector(), direction)
+
 
                 pos = tile_index_to_position(push_block.tile_coordinates[3])
-                return Objective(ObjectiveKind.PUSH_BLOCK, next_room, None, pos)
+                return Objective(ObjectiveKind.PUSH_BLOCK, None, None, pos)
 
             pos = find_on_screen(info, STAIR_TILES)
             return Objective(ObjectiveKind.STAIRS, next_room, None, pos)

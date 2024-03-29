@@ -446,6 +446,12 @@ class GameplayCritic(ZeldaCritic):
         if old['keys'] > new['keys']:
             return True
 
+        if old['objective'].kind == ObjectiveKind.PUSH_BLOCK and \
+            old['secrets'][0].position != new['secrets'][0].position and \
+            new['link_direction'] == new['objective'].position_or_direction:
+            rewards['reward-move-closer'] = self.move_closer_reward
+            return True
+
         if old['objective'].kind in (ObjectiveKind.STAIRS, ObjectiveKind.PUSH_BLOCK) and \
             old['secrets'][0].position != new['secrets'][0].position:
             return True
@@ -453,6 +459,7 @@ class GameplayCritic(ZeldaCritic):
         if old['link_pos'] == new['link_pos']:
             rewards['penalty-wall-collision'] = self.wall_collision_penalty
             return True
+
 
         return False
 
