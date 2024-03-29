@@ -9,7 +9,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["--model-path", "training/"],
+            "args": [],
             "console": "integratedTerminal",
             "justMyCode": false
         },
