@@ -416,7 +416,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         if self._last_info is not None and 'link_pos' in self._last_info:
             last_pos = self._last_info['link_pos']
         else:
-            obs, rewards, terminated, truncated, info = self.env.step(act)
+            obs, _, terminated, truncated, info = self.env.step(act)
             total_frames += 1
             last_pos = info['link_pos']
 
@@ -426,7 +426,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         stuck_count = 0
         prev = last_pos
         for _ in range(MAX_MOVEMENT_FRAMES):
-            obs, rewards, terminated, truncated, info = self.env.step(act)
+            obs, _, terminated, truncated, info = self.env.step(act)
             total_frames += 1
             x, y = info['link_x'], info['link_y']
             new_tile_index = position_to_tile_index(x, y)
@@ -436,7 +436,7 @@ class ZeldaGameWrapper(gym.Wrapper):
                         break
                 case Direction.S:
                     if old_tile_index[0] != new_tile_index[0]:
-                        obs, rewards, terminated, truncated, info = self.skip(act, WS_ADJUSTMENT_FRAMES)
+                        obs, _, terminated, truncated, info = self.skip(act, WS_ADJUSTMENT_FRAMES)
                         total_frames += WS_ADJUSTMENT_FRAMES
                         break
                 case Direction.E:
@@ -444,7 +444,7 @@ class ZeldaGameWrapper(gym.Wrapper):
                         break
                 case Direction.W:
                     if old_tile_index[1] != new_tile_index[1]:
-                        obs, rewards, terminated, truncated, info = self.skip(act, WS_ADJUSTMENT_FRAMES)
+                        obs, _, terminated, truncated, info = self.skip(act, WS_ADJUSTMENT_FRAMES)
                         total_frames += WS_ADJUSTMENT_FRAMES
                         break
 
@@ -454,7 +454,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             if stuck_count > 1:
                 break
 
-        return obs, rewards, terminated, truncated, info, total_frames
+        return obs, 0, terminated, truncated, info, total_frames
 
     def _set_direction(self, direction : Direction):
         self.env.unwrapped.data.set_value('link_direction', direction.value)

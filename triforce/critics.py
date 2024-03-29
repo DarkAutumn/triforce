@@ -427,6 +427,7 @@ class GameplayCritic(ZeldaCritic):
     def should_skip_movement_critique(self, old, new, rewards):
         """Whether or not we should skip the movement critique."""
 
+        # pylint: disable=too-many-return-statements
         if new['action'] != ActionType.MOVEMENT or new['took_damage'] or old['location'] != new['location']:
             return True
 
@@ -459,7 +460,6 @@ class GameplayCritic(ZeldaCritic):
         if old['link_pos'] == new['link_pos']:
             rewards['penalty-wall-collision'] = self.wall_collision_penalty
             return True
-
 
         return False
 

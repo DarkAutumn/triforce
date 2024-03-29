@@ -262,7 +262,7 @@ ITEM_MAP = {x.value: x for x in ZeldaItem}
 
 class ZeldaObject:
     """Structured data for a single object.  ZeldaObjects are enemies, items, and projectiles."""
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-many-arguments
     def __init__(self, index, obj_id, pos, distance, vector, health, status, spawn_state=None):
         self.index = index
         self.id = obj_id

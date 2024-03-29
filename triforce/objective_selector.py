@@ -56,11 +56,16 @@ def find_on_screen(info, tiles):
     return tile_index_to_position(cave_pos)
 
 class Objective:
+    """The current objective that the agent *should* be pursuing."""
     def __init__(self, kind, next_location, vector, objective_pos_dir):
         self.kind : ObjectiveKind = kind
         self.next_location : Tuple[int, int] = next_location
         self.vector : np.ndarray = vector
         self.position_or_direction : Direction = objective_pos_dir
+
+        # to be filled in after construction
+        self.walk = None
+        self.walk_index = -1
 
 class ObjectiveSelector(gym.Wrapper):
     """
@@ -176,6 +181,9 @@ class ObjectiveSelector(gym.Wrapper):
         return val, lowest
 
     def _get_objective(self, info):
+        # While this is a long and complicated function, we want to keep decisions about what to do in one place
+        # pylint: disable=too-many-branches, too-many-return-statements
+
         curr, next_room = self._get_curr_next_rooms(info)
         if curr is None:
             return Objective(ObjectiveKind.REJOIN_WALK, None, None, None)
@@ -198,8 +206,8 @@ class ObjectiveSelector(gym.Wrapper):
             if self.cave_treasure == curr_treasure:
                 if info['level'] == 0:
                     return self._get_cave_objective(info)
-                else:
-                    return self._get_treasure_objective(info)
+
+                return self._get_treasure_objective(info)
 
             # if we have the treasure, make sure we get out of the cave
             if is_in_cave(info):
