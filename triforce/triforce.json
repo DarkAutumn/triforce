@@ -94,11 +94,22 @@
             "action_space" : "attack-only",
             "priority" : 10,
             "levels" : 1,
-            "rooms" : ["0x35", "0x36"],
+            "rooms" : ["0x35"],
             "requires_enemies" : true,
 
             "training_scenario" : "dungeon1boss",
             "iterations" : 500000
+        },
+        {
+            "name" : "grab-equipment",
+            "action_space" : "attack-only",
+            "priority" : 100,
+            "levels" : 1,
+            "rooms" : ["0x22", "0x7f"],
+            "requires_enemies" : false,
+
+            "training_scenario" : "grab-equipment",
+            "iterations" : 5000000
         }
     ],
     "scenarios": [
@@ -281,6 +292,18 @@
                 "keys" : 0,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
+            }
+        },
+        {
+            "name": "grab-equipment",
+            "description": "Navigate traps to get equipment",
+            "critic": "GameplayCritic",
+            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
+            "start": ["1_22e"],
+            "data":
+            {
+                "bombs" : 0,
+                "keys" : 0
             }
         }
     ]
