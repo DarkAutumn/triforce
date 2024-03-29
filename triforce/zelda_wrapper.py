@@ -361,15 +361,17 @@ class ZeldaGameWrapper(gym.Wrapper):
             case _:
                 raise ValueError(f'Unknown action type: {action_kind}')
 
-        in_cave = is_in_cave(info) or is_underground(info)
-        if in_cave and not self.was_link_in_cave:
-            obs, _, terminated, truncated, info = self.skip(self._none_action, CAVE_COOLDOWN)
-
-        self.was_link_in_cave = in_cave
 
         # skip scrolling
         obs, info, skipped = self._skip_uncontrollable_states(info)
         total_frames += skipped
+
+        in_cave = is_in_cave(info) or is_underground(info)
+        if in_cave and not self.was_link_in_cave:
+            obs, _, terminated, truncated, info = self.skip(self._none_action, CAVE_COOLDOWN)
+            total_frames += CAVE_COOLDOWN
+
+        self.was_link_in_cave = in_cave
 
         info['total_frames'] = total_frames
         return obs, 0, terminated, truncated, info
