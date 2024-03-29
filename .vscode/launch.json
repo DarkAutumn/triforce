@@ -104,6 +104,24 @@
             "justMyCode": false
         },
         {
+            "name": "Overworld2 - NO Beams",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "run.py",
+            "args": ["overworld2nobeams"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Grab-Equipment",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "run.py",
+            "args": ["grab-equipment"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Training",
             "type": "debugpy",
             "request": "launch",

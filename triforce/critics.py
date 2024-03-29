@@ -53,6 +53,7 @@ class GameplayCritic(ZeldaCritic):
         self.rupee_reward = REWARD_SMALL
         self.health_gained_reward = REWARD_LARGE
         self.new_location_reward = REWARD_MEDIUM
+        self.leave_early_penalty = -REWARD_MAXIMUM
 
         # combat values
         self.wipeout_reward_on_hits = True
@@ -82,9 +83,6 @@ class GameplayCritic(ZeldaCritic):
         self.danger_tile_penalty = -REWARD_MEDIUM
         self.moved_to_safety_reward = REWARD_TINY
 
-        # state tracking
-        self._visted_locations = set()
-
         # missed attack
         self.distance_threshold = 28
         self.attack_miss_penalty = -self.move_closer_reward - REWARD_MINIMUM
@@ -95,10 +93,6 @@ class GameplayCritic(ZeldaCritic):
         self.bomb_miss_penalty = -REWARD_SMALL
         self.bomb_hit_reward = REWARD_MEDIUM
 
-    def clear(self):
-        super().clear()
-        self._visted_locations.clear()
-
     def critique_gameplay(self, old : Dict[str, int], new : Dict[str, int], rewards : Dict[str, float]):
         """
         Critiques the gameplay by comparing the old and new states and the rewards obtained.
@@ -108,9 +102,6 @@ class GameplayCritic(ZeldaCritic):
             new (Dict[str, int]): The new state of the game.
             rewards (Dict[str, float]): The rewards obtained during gameplay.
         """
-        if not self._visted_locations:
-            self.__mark_visited(new['level'], new['location'])
-
         # triforce
         self.critique_triforce(old, new, rewards)
 
@@ -122,11 +113,10 @@ class GameplayCritic(ZeldaCritic):
 
         # items
         self.critique_item_pickup(old, new, rewards)
-        self.critique_key_pickup_usage(old, new, rewards)
         self.critique_equipment_pickup(old, new, rewards)
 
         # movement
-        self.critique_location_discovery(old, new, rewards)
+        self.critique_location_change(old, new, rewards)
         self.critique_movement(old, new, rewards)
 
         # health - must be last
@@ -144,6 +134,11 @@ class GameplayCritic(ZeldaCritic):
         """
         if not self.equipment_reward:
             return
+
+        old_hearts = get_heart_halves(old)
+        new_hearts = get_heart_halves(new)
+        if old_hearts < new_hearts:
+            return # don't reward if we lost health
 
         self.__check_one_item(old, new, rewards, 'sword')
         self.__check_one_item(old, new, rewards, 'arrows')
@@ -166,27 +161,11 @@ class GameplayCritic(ZeldaCritic):
         self.__check_one_item(old, new, rewards, 'map')
         self.__check_one_item(old, new, rewards, 'compass9')
         self.__check_one_item(old, new, rewards, 'map9')
+        self.__check_one_item(old, new, rewards, 'keys')
 
     def __check_one_item(self, old, new, rewards, item):
         if old[item] < new[item]:
             rewards[f'reward-{item}-gained'] = self.equipment_reward
-
-    def critique_key_pickup_usage(self, old, new, rewards):
-        """
-        Critiques the pickup and usage of keys.
-
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
-        old_hearts = get_heart_halves(old)
-        new_hearts = get_heart_halves(new)
-
-        if old['keys'] > new['keys']:
-            rewards['reward-used-key'] = self.key_reward
-        elif old['keys'] < new['keys'] and old_hearts <= new_hearts:
-            rewards['reward-gained-key'] = self.key_reward
 
     def critique_item_pickup(self, old, new, rewards):
         """
@@ -279,7 +258,7 @@ class GameplayCritic(ZeldaCritic):
 
         elif new['step_hits']:
             if not is_in_cave(new):
-                if new['objective_kind'] == ObjectiveKind.FIGHT:
+                if new['objective'].kind == ObjectiveKind.FIGHT:
                     rewards['reward-hit'] = self.injure_kill_reward
                 else:
                     rewards['reward-hit-move-room'] = self.inure_kill_movement_room_reward
@@ -324,7 +303,7 @@ class GameplayCritic(ZeldaCritic):
                 else:
                     rewards['reward-bomb-hit'] = min(self.bomb_hit_reward * total_hits, 1.0)
 
-    def critique_location_discovery(self, old, new, rewards):
+    def critique_location_change(self, old, new, rewards):
         """
         Critiques the discovery of new locations.
 
@@ -333,12 +312,23 @@ class GameplayCritic(ZeldaCritic):
             new (Dict[str, int]): The new state of the game.
             rewards (Dict[str, float]): The rewards obtained during gameplay.
         """
-        prev = (old['level'], old['location'])
-        curr = (new['level'], new['location'])
+        old_obj = old['objective']
+        new_obj = new['objective']
 
-        if self.new_location_reward and prev != curr and not self.__has_visited(*curr):
-            self.__mark_visited(*curr)
-            rewards['reward-new-location'] = self.new_location_reward
+        if new_obj.walk is None:
+            rewards['penalty-leave-early'] = self.leave_early_penalty
+
+        elif old_obj.walk == new_obj.walk:
+            if old_obj.walk_index < new_obj.walk_index:
+                rewards['reward-new-location'] = self.new_location_reward
+            elif old_obj.walk_index > new_obj.walk_index:
+                rewards['penalty-leave-early'] = self.leave_early_penalty
+
+        elif old_obj.walk:
+            full_location = new['level'], new['location']
+            if old_obj.walk_index < len(old_obj.walk) - 1 and old_obj.walk[old_obj.walk_index + 1] == full_location:
+                rewards['reward-new-location'] = self.new_location_reward
+
 
     def critique_movement(self, old, new, rewards):
         """
@@ -353,17 +343,12 @@ class GameplayCritic(ZeldaCritic):
         Returns:
             None
         """
-        # pylint: disable=too-many-branches, too-many-locals
+        # pylint: disable=too-many-branches, too-many-locals, too-many-statements
 
         # Don't score movement if we moved to a new location or took damage.  The "movement" which occurs from
         # damage should never be rewarded, and it will be penalized by the health loss critic.
-        if new['action'] != ActionType.MOVEMENT or new['took_damage'] or \
-                old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
-            return
 
-        # Did link run into a wall?
-        if old['link_pos'] == new['link_pos']:
-            rewards['penalty-wall-collision'] = self.wall_collision_penalty
+        if self.should_skip_movement_critique(old, new, rewards):
             return
 
         self.critique_moving_into_danger(old, new, rewards)
@@ -414,7 +399,8 @@ class GameplayCritic(ZeldaCritic):
 
         # This should be relatively rare, but in cases where A* couldn't find a path to the target (usually because
         # a monster moved into a wall), we will reward simply moving closer.
-        elif (target := new.get('objective_pos_or_dir', None)) is not None:
+        elif old['objective'].position_or_direction is not None:
+            target = old['objective'].position_or_direction
             old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
             new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
 
@@ -435,6 +421,45 @@ class GameplayCritic(ZeldaCritic):
                 rewards['reward-move-closer'] = self.move_closer_reward * percent
             else:
                 rewards['penalty-move-farther'] = move_away_penalty
+
+    def should_skip_movement_critique(self, old, new, rewards):
+        """Whether or not we should skip the movement critique."""
+
+        # pylint: disable=too-many-return-statements
+        if new['action'] != ActionType.MOVEMENT or new['took_damage'] or old['location'] != new['location']:
+            return True
+
+        if old['objective'].kind == ObjectiveKind.ENTER_CAVE and not is_in_cave(old) and is_in_cave(new):
+            rewards['reward-move-closer'] = self.move_closer_reward
+            return True
+
+        if old['objective'].kind == ObjectiveKind.EXIT_CAVE and is_in_cave(old) and not is_in_cave(new):
+            rewards['reward-move-closer'] = self.move_closer_reward
+            return True
+
+        if is_in_cave(old) != is_in_cave(new):
+            rewards['penalty-cave'] = self.leave_early_penalty
+            return True
+
+        # spending a key holds you in place for a bit, don't penalize this
+        if old['keys'] > new['keys']:
+            return True
+
+        if old['objective'].kind == ObjectiveKind.PUSH_BLOCK and \
+            old['secrets'][0].position != new['secrets'][0].position and \
+            new['link_direction'] == new['objective'].position_or_direction:
+            rewards['reward-move-closer'] = self.move_closer_reward
+            return True
+
+        if old['objective'].kind in (ObjectiveKind.STAIRS, ObjectiveKind.PUSH_BLOCK) and \
+            old['secrets'][0].position != new['secrets'][0].position:
+            return True
+
+        if old['link_pos'] == new['link_pos']:
+            rewards['penalty-wall-collision'] = self.wall_collision_penalty
+            return True
+
+        return False
 
     def critique_moving_into_danger(self, old, new, rewards):
         """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted
@@ -512,58 +537,7 @@ class GameplayCritic(ZeldaCritic):
             return Direction.W
         return None
 
-    # state helpers, some states are calculated
-    def __has_visited(self, level, location):
-        return (level, location) in self._visted_locations
-
-    def __mark_visited(self, level, location):
-        self._visted_locations.add((level, location))
-
-
-class Dungeon1Critic(GameplayCritic):
-    """Critic specifically for dungeon 1."""
-    def __init__(self):
-        super().__init__()
-
-        self.health_change_reward = REWARD_LARGE
-        self.leave_dungeon_penalty = -REWARD_MAXIMUM
-        self.leave_early_penalty = -REWARD_MAXIMUM
-        self.seen = set()
-        self.health_lost = 0
-
-    def clear(self):
-        super().clear()
-        self.seen.clear()
-        self.health_lost = 0
-
-    def critique_location_discovery(self, old: Dict[str, int], new: Dict[str, int], rewards: Dict[str, float]):
-        """
-        Critiques the location discovery based on the old and new states and assigns rewards or penalties accordingly.
-
-        Args:
-            old (Dict[str, int]): The old state containing information about the previous location.
-            new (Dict[str, int]): The new state containing information about the current location.
-            rewards (Dict[str, float]): The rewards dictionary to update with rewards or penalties.
-
-        Returns:
-            None
-        """
-        if new['level'] != 1:
-            rewards['penalty-left-dungeon'] = self.leave_dungeon_penalty
-        elif old['location'] != new['location']:
-            if old['location_objective'] == new['location']:
-                rewards['reward-new-location'] = self.new_location_reward
-            else:
-                rewards['penalty-left-early'] = self.leave_early_penalty
-
-    def critique_key_pickup_usage(self, old, new, rewards):
-        if old['keys'] > new['keys'] and new['location'] == 0x73 and new['location_objective'] != 0x63:
-            pass # do not give a reward for prematurely using a key
-        else:
-            super().critique_key_pickup_usage(old, new, rewards)
-
-
-class Dungeon1BombCritic(Dungeon1Critic):
+class Dungeon1BombCritic(GameplayCritic):
     """Critic specifically for dungeon 1 with bombs."""
     def __init__(self):
         super().__init__()
@@ -588,7 +562,7 @@ class Dungeon1BombCritic(Dungeon1Critic):
 
         new['score'] = self.score
 
-class Dungeon1BossCritic(Dungeon1Critic):
+class Dungeon1BossCritic(GameplayCritic):
     """Critic specifically for dungeon 1 with the boss."""
     def clear(self):
         super().clear()
@@ -596,75 +570,6 @@ class Dungeon1BossCritic(Dungeon1Critic):
         self.move_away_penalty = -REWARD_SMALL
         self.injure_kill_reward = REWARD_LARGE
         self.health_lost_penalty = -REWARD_SMALL
-
-OVERWORLD1_WALK = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
-OVERWORLD2_WALK = set([0x37, 0x38, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x3d, 0x4d, 0x4c, 0x3c])
-OVERWORLD2A_WALK = set([0x37, 0x38, 0x48, 0x49, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x4d, 0x4c, 0x3c])
-
-class OverworldCritic(GameplayCritic):
-    """Critic specifically for overworld 1."""
-    def __init__(self):
-        super().__init__()
-
-        self.seen = set()
-
-        self.left_allowed_area_penalty = -REWARD_LARGE
-        self.left_without_sword_penalty = -REWARD_LARGE
-        self.leave_early_penalty = -REWARD_MAXIMUM
-        self.entered_cave_penalty = -REWARD_LARGE
-        self.equipment_reward = None
-        self.health_lost = 0
-
-    def clear(self):
-        super().clear()
-        self.seen.clear()
-        self.equipment_reward = None
-        self.health_lost = 0
-
-    def critique_location_discovery(self, old, new, rewards):
-        if old['location'] != new['location']:
-            if old['location_objective'] and old['location_objective'] != new['location']:
-                rewards['penalty-left-early'] = self.leave_early_penalty
-                return
-
-            if old['objective_kind'] == ObjectiveKind.ENTER_CAVE:
-                rewards['penalty-left-early'] = self.leave_early_penalty
-                return
-
-        level = new['level']
-        location = new['location']
-        triforce_pieces = get_num_triforce_pieces(new)
-
-        if not is_in_cave(old) and location == 0x77 and is_in_cave(new):
-            rewards['penalty-entered-cave'] = self.entered_cave_penalty
-
-        elif level == 0:
-            if location not in self._get_allowed_rooms(triforce_pieces):
-                rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
-
-            elif old['location'] == 0x77 and location != 0x77 and not new['sword']:
-                rewards['penalty-no-sword'] = self.left_without_sword_penalty
-
-            else:
-                super().critique_location_discovery(old, new, rewards)
-
-        elif level == triforce_pieces + 1:
-            # don't forget to reward for reaching the correct dungeon
-            super().critique_location_discovery(old, new, rewards)
-
-        else:
-            rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
-
-    def _get_allowed_rooms(self, triforce_pieces):
-        match triforce_pieces:
-            case 0:
-                return OVERWORLD1_WALK
-
-            case 1:
-                return OVERWORLD2_WALK
-
-            case _:
-                raise NotImplementedError("No support for more than 1 triforce piece")
 
 class OverworldSwordCritic(GameplayCritic):
     """Critic specifically for the beginning of the game up through grabbing the first sword."""
@@ -675,7 +580,7 @@ class OverworldSwordCritic(GameplayCritic):
         self.cave_transition_penalty = -REWARD_MAXIMUM
         self.new_location_reward = REWARD_LARGE
 
-    def critique_location_discovery(self, old, new, rewards):
+    def critique_location_change(self, old, new, rewards):
 
         # entered cave
         if not is_in_cave(old) and is_in_cave(new):

@@ -4,6 +4,7 @@ import numpy as np
 from .zelda_game_data import zelda_game_data
 from .model_parameters import GAMEPLAY_START_Y
 
+MODE_CHANGE = 2
 MODE_REVEAL = 3
 MODE_SCROLL_COMPLETE = 4
 MODE_GAMEPLAY = 5
@@ -15,6 +16,7 @@ MODE_UNDERGROUND_TRANSITION = 10
 MODE_CAVE = 11
 MODE_CAVE_TRANSITION = 16
 MODE_DYING = 17
+MODE_TRIFORCE = 18
 
 ANIMATION_BEAMS_ACTIVE = 16
 ANIMATION_BEAMS_HIT = 17
@@ -28,10 +30,15 @@ def is_in_cave(state):
     """Returns True if link is in a cave."""
     return state['mode'] == MODE_CAVE
 
+
+def is_underground(state):
+    """Returns True if link is underground."""
+    return state['mode'] == MODE_UNDERGROUND
+
 def is_mode_scrolling(state):
     """Returns True if the game is in a scrolling mode, and therefore we cannot take actions."""
     return state in (MODE_SCROLL_COMPLETE, MODE_SCROLL, MODE_SCROLL_START, MODE_UNDERGROUND_TRANSITION, \
-                     MODE_CAVE_TRANSITION, MODE_REVEAL)
+                     MODE_CAVE_TRANSITION, MODE_REVEAL, MODE_CHANGE, MODE_TRIFORCE)
 
 def is_link_stunned(status_ac):
     """Returns True if link is stunned.  This is used to determine if link can take actions."""
@@ -118,8 +125,12 @@ def is_sword_frozen(state):
 
 def init_walkable_tiles():
     """Returns a lookup table of whether particular tile codes are walkable."""
-    tiles = [0x26, 0x24, 0xf3, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d]
+    tiles = [0x26, 0x24, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d,
+             0x74, 0x75, 0x76, 0x77, # tile secret
+             0x70, 0x71, 0x72, 0x73, 0x6f, # stairs
+             ]
     tiles += [0x84, 0x85, 0x86, 0x87]
+    tiles += [0xa0, 0xa1, 0xa2, 0xa3]
     tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
     tiles += list(range(0x98, 0x9b+1))  # dungeon locked door north
     tiles += list(range(0xa4, 0xa7+1))  # dungeon locked door east
@@ -128,8 +139,8 @@ def init_walkable_tiles():
 
 def init_half_walkable_tiles():
     """Returns tiles that the top half of link can pass through."""
-    return [0x95, 0x97, 0xb1, 0xb3, 0xd5, 0xd7, 0xc5, 0xc7, 0xc9, 0xcb, 0xd4, 0xb5, 0xb7,
-            0xaf, 0xb9, 0xbb, 0xad, 0xb1, 0xdd, 0xde, 0xd9, 0xdb, 0xdf, 0xd1, 0xdc, 0xd0, 0xda
+    return [0x95, 0x97, 0xb1, 0xb3, 0xd5, 0xd7, 0xc5, 0xc7, 0xc9, 0xcb, 0xd4, 0xb5, 0xb7, 0xf3, 0xf4,
+            0xaf, 0xb9, 0xbb, 0xad, 0xb1, 0xdd, 0xde, 0xd9, 0xdb, 0xdf, 0xd1, 0xdc, 0xd0, 0xda,
             ]
 
 WALKABLE_TILES = init_walkable_tiles()
@@ -224,6 +235,7 @@ class ZeldaEnemy(Enum):
     WallMaster : int = 0x27
     Stalfos : int = 0x2a
     Item : int = 0x60
+    PushBlock : int = 0x68
 
 class ZeldaItem(Enum):
     """Item codes for the game."""
@@ -250,7 +262,7 @@ ITEM_MAP = {x.value: x for x in ZeldaItem}
 
 class ZeldaObject:
     """Structured data for a single object.  ZeldaObjects are enemies, items, and projectiles."""
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-many-arguments
     def __init__(self, index, obj_id, pos, distance, vector, health, status, spawn_state=None):
         self.index = index
         self.id = obj_id
@@ -379,6 +391,7 @@ class ZeldaObjectData:
         enemies = []
         items = []
         projectiles = []
+        secrets = []
 
         obj_ids = getattr(self, 'obj_id')
         obj_pos_x = getattr(self, 'obj_pos_x')
@@ -416,6 +429,9 @@ class ZeldaObjectData:
             elif self.is_projectile(obj_id):
                 projectiles.append(ZeldaObject(i, obj_id, pos, distance, vector, None, None))
 
+            elif obj_id == ZeldaEnemy.PushBlock.value:
+                secrets.append(ZeldaObject(i, ID_MAP.get(obj_id, obj_id), pos, distance, vector, None, None))
+
         if len(enemies) > 1:
             enemies.sort(key=lambda x: x.distance)
 
@@ -425,7 +441,7 @@ class ZeldaObjectData:
         if len(projectiles) > 1:
             projectiles.sort(key=lambda x: x.distance)
 
-        return enemies, items, projectiles
+        return enemies, items, projectiles, secrets
 
     @property
     def enemy_count(self):
@@ -434,6 +450,7 @@ class ZeldaObjectData:
 
 __all__ = [
     'is_in_cave',
+    'is_underground',
     'is_mode_scrolling',
     'is_mode_death',
     'get_beam_state',
