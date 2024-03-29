@@ -35,9 +35,9 @@ ROOMS_WITH_TREASURE = [
     (1, 0x33),   # stalfos with key
 ]
 
-ROOMS_WITH_PUSHBLOCKS = [
-    (1, 0x22),   # bow room
-]
+ROOMS_WITH_PUSHBLOCKS = {
+    (1, 0x22) : "bow",   # bow room
+}
 
 CAVES_WITH_TREASURE = {
     (0, 0x77) : "sword",
@@ -70,6 +70,13 @@ DUNGEON1_WALK = [
     (0, 0x37),   # overworld
 ]
 
+DUNGEON1_BOW_WALK = [
+    (1, 0x22),   # trap room
+    (1, 0x7f),   # bow room
+    (1, 0x22),   # trap room
+    (1, 0x23),   # gojira with key
+]
+
 DUNGEON2_WALK = [
     (2, 0x7d),   # entrance to dungeon 2
     (2, 0x7e),   # rope room with key
@@ -97,18 +104,21 @@ OVERWORLD2A_WALK = _build_walk(0, [0x37, 0x38, 0x48, 0x49, 0x59, 0x5a, 0x5b, 0x5
 def get_walk(info):
     """Returns the series of rooms that the agent should walk through based on the current game state."""
     triforce = get_num_triforce_pieces(info)
+    loc = (info['level'], info['location'])
     match triforce:
         case 0:
             if info['level'] == 0:
                 return OVERWORLD1_WALK
 
             if info['level'] == 1:
+                if loc in DUNGEON1_BOW_WALK:
+                    return DUNGEON1_BOW_WALK
+
                 return DUNGEON1_WALK
 
             raise NotImplementedError("No walk defined for this scenario")
 
         case 1:
-            loc = (info['level'], info['location'])
             if loc in OVERWORLD2_WALK:
                 return OVERWORLD2_WALK
 
