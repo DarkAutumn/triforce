@@ -51,8 +51,7 @@ WALKABLE_TILES = [TileState.WALKABLE.value,
                            TileState.BRICK.value
                            ]
 
-TOP_WALKABLE_TILES = set(WALKABLE_TILES + [TileState.HALF_WALKABLE.value])
-WALKABLE_TILES = set(WALKABLE_TILES)
+TOP_WALKABLE_TILES = WALKABLE_TILES + [TileState.HALF_WALKABLE.value]
 
 def is_valid_tile(coords, tile_weight_map):
     """Returns True if the move is valid, False otherwise."""

@@ -21,7 +21,7 @@
             "equipment_required" : ["beams"],
 
             "training_scenario" : "overworld1beams",
-            "iterations" : 50000000
+            "iterations" : 1500000
         },
         {
             "name" : "overworld2beams",
@@ -36,18 +36,6 @@
             "iterations" : 1500000
         },
         {
-            "name" : "overworld2nobeams",
-            "action_space" : "attack-only",
-            "priority" : 2,
-            "levels" : 0,
-            "requires_enemies" : false,
-            "requires_triforce" : 1,
-            "equipment_required" : ["beams"],
-
-            "training_scenario" : "overworld2nobeams",
-            "iterations" : 1500000
-        },
-        {
             "name" : "overworld1nobeams",
             "action_space" : "attack-only",
             "priority" : 0,
@@ -55,7 +43,18 @@
             "requires_enemies" : false,
 
             "training_scenario" : "overworld1nobeams",
-            "iterations" : 50000000
+            "iterations" : 1500000
+        },
+        {
+            "name" : "dungeon1entrance",
+            "action_space" : "move-only",
+            "priority" : 10,
+            "levels" : 1,
+            "rooms" : ["0x73"],
+            "requires_enemies" : false,
+
+            "training_scenario" : "dungeon1entrance",
+            "iterations" : 1000000
         },
         {
             "name" : "dungeon1nobeams",
@@ -65,7 +64,7 @@
             "requires_enemies" : false,
 
             "training_scenario" : "dungeon1nobeams",
-            "iterations" : 50000000
+            "iterations" : 2750000
         },
         {
             "name" : "dungeon1beams",
@@ -76,7 +75,7 @@
             "equipment_required" : ["beams"],
 
             "training_scenario" : "dungeon1beams",
-            "iterations" : 50000000
+            "iterations" : 1500000
         },
         {
             "name" : "dungeon1bombs",
@@ -87,29 +86,18 @@
             "equipment_required" : ["bombs"],
 
             "training_scenario" : "dungeon1bombs",
-            "iterations" : 50000000
+            "iterations" : 1500000
         },
         {
             "name" : "dungeon1boss",
             "action_space" : "attack-only",
             "priority" : 10,
             "levels" : 1,
-            "rooms" : ["0x35"],
+            "rooms" : ["0x35", "0x36"],
             "requires_enemies" : true,
 
             "training_scenario" : "dungeon1boss",
             "iterations" : 500000
-        },
-        {
-            "name" : "grab-equipment",
-            "action_space" : "attack-only",
-            "priority" : 100,
-            "levels" : 1,
-            "rooms" : ["0x22", "0x7f"],
-            "requires_enemies" : false,
-
-            "training_scenario" : "grab-equipment",
-            "iterations" : 5000000
         }
     ],
     "scenarios": [
@@ -135,15 +123,16 @@
         {
             "name": "overworld1beams",
             "description": "Start of the game to the first dungeon entrance",
-            "critic": "GameplayCritic",
-            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
+            "critic": "OverworldCritic",
+            "end_conditions": ["EnteredDungeon", "LeftOverworld1Area", "GameOver", "Timeout"],
             "start": ["0_67s"],
             "data":
             {
                 "bombs" : 0,
                 "keys" : 0,
                 "hearts_and_containers" : 34,
-                "partial_hearts" : 254
+                "partial_hearts" : 254,
+                "sword" : 1
             },
             "fixed":
             {
@@ -154,34 +143,16 @@
         {
             "name": "overworld2beams",
             "description": "From the first dungeon exit to the second dungeon entrance",
-            "critic": "GameplayCritic",
-            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
+            "critic": "OverworldCritic",
+            "end_conditions": ["EnteredDungeon", "GameOver", "Timeout"],
             "start": ["0_37c"],
             "data":
             {
                 "bombs" : 0,
                 "keys" : 0,
                 "hearts_and_containers" : 51,
-                "partial_hearts" : 254
-            },
-            "fixed":
-            {
-                "hearts_and_containers" : 51,
-                "partial_hearts" : 254
-            }
-        },
-        {
-            "name": "overworld2nobeams",
-            "description": "From the first dungeon exit to the second dungeon entrance",
-            "critic": "GameplayCritic",
-            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
-            "start": ["0_37c"],
-            "data":
-            {
-                "bombs" : 0,
-                "keys" : 0,
-                "hearts_and_containers" : 51,
-                "partial_hearts" : 254
+                "partial_hearts" : 254,
+                "sword" : 1
             },
             "fixed":
             {
@@ -192,15 +163,16 @@
         {
             "name": "overworld1nobeams",
             "description": "Start of the game to the first dungeon entrance",
-            "critic": "GameplayCritic",
-            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
+            "critic": "OverworldCritic",
+            "end_conditions": ["EnteredDungeon", "LeftOverworld1Area", "GameOver", "Timeout"],
             "start": ["0_67s"],
             "data":
             {
                 "bombs" : 0,
                 "keys" : 0,
                 "hearts_and_containers" : 34,
-                "partial_hearts" : 254
+                "partial_hearts" : 254,
+                "sword" : 1
             },
             "fixed":
             {
@@ -211,8 +183,8 @@
         {
             "name": "dungeon1",
             "description": "Dungeon 1 Full",
-            "critic": "GameplayCritic",
-            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
+            "critic": "Dungeon1Critic",
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "start": ["1_73s"],
             "data":
             {
@@ -223,11 +195,19 @@
             }
         },
         {
+            "name" : "dungeon1entrance",
+
+            "description" : "Dungeon 1 Entrance",
+            "critic" : "Dungeon1Critic",
+            "end_conditions" : ["LeftDungeon", "GameOver", "Timeout", "LeftRoom"],
+            "start" : ["1_73s", "1_73e", "1_73w"]
+        },
+        {
             "name": "dungeon1beams",
             "description": "Dungeon 1 Beams",
-            "critic": "GameplayCritic",
-            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
-            "start": ["1_23s"],
+            "critic": "Dungeon1Critic",
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
+            "start": ["1_72e"],
             "data":
             {
                 "bombs" : 0,
@@ -245,7 +225,7 @@
             "name": "dungeon1bombs",
             "description": "Dungeon 1 Bombs",
             "critic": "Dungeon1BombCritic",
-            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "start": ["1_72e"],
             "data":
             {
@@ -264,8 +244,8 @@
         {
             "name": "dungeon1nobeams",
             "description": "Dungeon 1 combat trainer (no beams)",
-            "critic": "GameplayCritic",
-            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
+            "critic": "Dungeon1Critic",
+            "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "start": ["1_72e"],
             "data":
             {
@@ -284,7 +264,7 @@
             "name": "dungeon1boss",
             "description": "Dungeon 1 Boss",
             "critic": "Dungeon1BossCritic",
-            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
+            "end_conditions": ["GainedTriforce", "DefeatedBoss", "GameOver", "Timeout"],
             "start": ["1_35s"],
             "data":
             {
@@ -292,18 +272,6 @@
                 "keys" : 0,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
-            }
-        },
-        {
-            "name": "grab-equipment",
-            "description": "Navigate traps to get equipment",
-            "critic": "GameplayCritic",
-            "end_conditions": ["AllowedArea", "GameOver", "Timeout"],
-            "start": ["1_22e"],
-            "data":
-            {
-                "bombs" : 0,
-                "keys" : 0
             }
         }
     ]
