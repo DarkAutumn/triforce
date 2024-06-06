@@ -77,6 +77,8 @@ class ZeldaAI:
             ml_model.learn(iterations, progress_bar=True, callback=LogRewardCallback(ml_model, model_dir))
             ml_model.save(os.path.join(model_dir, 'last.zip'))
 
+            return ml_model
+
         finally:
             env.close()
 
