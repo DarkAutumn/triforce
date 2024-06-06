@@ -13,7 +13,7 @@ def main():
     iterations = None if args.iterations <= 0 else args.iterations
     output_path = args.output if args.output else 'training/'
 
-    models = args.models if args.models else models.keys()
+    models = args.models if args.models else ZELDA_MODELS.keys()
     for model_name in models:
         zelda_ml = ZeldaAI(ZELDA_MODELS[model_name], verbose=args.verbose, ent_coef=args.ent_coef)
         zelda_ml.train(output_path, iterations, args.parallel, grayscale=not args.color, framestack=args.frame_stack,
