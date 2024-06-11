@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Torch PPO",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "torch_ppo.py",
+            "args": [],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Full Game (so far)",
             "type": "debugpy",
             "request": "launch",

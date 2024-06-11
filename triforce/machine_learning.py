@@ -1,4 +1,4 @@
-# All code related to actual machine learning is contained in this file, hidden behind the "MachineLearningModel"
+# All code related to actual machine learning is contained in this file, hidden behind the "ZeldaAI"
 # class.  This makes it easier to swap in a brand new machine learning library or a completely different algorithm
 # without having to change any other part of the code.
 
