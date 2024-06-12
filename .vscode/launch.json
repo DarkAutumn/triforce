@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Train PPO",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "train_torch.py",
+            "args": [],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Torch PPO",
             "type": "debugpy",
             "request": "launch",

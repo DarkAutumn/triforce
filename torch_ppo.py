@@ -22,17 +22,30 @@ MAX_GRAD_NORM = 0.5
 
 VIEWPORT_SIZE = 128
 FEATURE_HIDDEN_SIZE = 64
+
 CONV_HIDDEN_SIZE = 512
 COMBINED_SIZE = FEATURE_HIDDEN_SIZE + CONV_HIDDEN_SIZE
 SHARED_LAYER_SIZE = 128
-COMBAT_HIDDEN_SIZE = 64
+DANGER_SENSE_HIDDEN_SIZE = 0
+PATHFINDER_HIDDEN_SIZE = 0
+ACTION_HIDDEN_SIZE = 0
 
 #pylint: disable=missing-class-docstring
 #pylint: disable=missing-function-docstring
 
 class ZeldaMultiHeadNetwork(nn.Module):
-    def __init__(self, viewport_size, num_features, device):
+    def __init__(self, viewport_size, num_features, device, **kwargs):
         super().__init__()
+
+        self.conv_hidden_size = kwargs.get("conv-hidden-size", CONV_HIDDEN_SIZE)
+        self.feature_hidden_size = kwargs.get("feature-hidden-size", FEATURE_HIDDEN_SIZE)
+        self.combined_size = self.feature_hidden_size + self.conv_hidden_size
+        self.shared_layer_size = kwargs.get("shared-layer-size", SHARED_LAYER_SIZE)
+        self.pathfinder_hidden_size = kwargs.get("pathfinder-hidden-size", PATHFINDER_HIDDEN_SIZE)
+        self.danger_sense_hidden_size = kwargs.get("danger-sense-hidden-size", DANGER_SENSE_HIDDEN_SIZE)
+        self.action_hidden_size = kwargs.get("action-selector-hidden-size", ACTION_HIDDEN_SIZE)
+
+        self.trained_steps = 0
 
         self.viewport_size = viewport_size
         self.num_features = num_features
@@ -55,39 +68,71 @@ class ZeldaMultiHeadNetwork(nn.Module):
             self.__init_layer(nn.Conv2d(64, 64, kernel_size=3, stride=1)),
             nn.ReLU(),
             nn.Flatten(),
-            self.__init_layer(nn.Linear(conv_input, CONV_HIDDEN_SIZE)),
+            self.__init_layer(nn.Linear(conv_input, self.conv_hidden_size)),
             nn.ReLU()
         )
 
         # Fully connected layers for feature data
         self.feature_layer = nn.Sequential(
-            self.__init_layer(nn.Linear(num_features, FEATURE_HIDDEN_SIZE)),
+            self.__init_layer(nn.Linear(num_features, self.feature_hidden_size)),
             nn.ReLU()
         )
 
         # combined layers
         self.shared_layer = nn.Sequential(
-            self.__init_layer(nn.Linear(COMBINED_SIZE, SHARED_LAYER_SIZE)),
+            self.__init_layer(nn.Linear(self.combined_size, self.shared_layer_size)),
             nn.ReLU()
         )
 
         # Head for pathfinding
-        self.pathfinder = self.__init_layer(nn.Linear(SHARED_LAYER_SIZE, 4), std=0.01)
-        self.pathfinder_critic = self.__init_layer(nn.Linear(SHARED_LAYER_SIZE, 1), std=1.0)
+        if self.pathfinder_hidden_size:
+            self.pathfinder = nn.Sequential(
+                self.__init_layer(nn.Linear(self.shared_layer_size, self.pathfinder_hidden_size)),
+                nn.ReLU(),
+                self.__init_layer(nn.Linear(self.pathfinder_hidden_size, 4), std=0.01)
+            )
+            self.pathfinder_critic = nn.Sequential(
+                self.__init_layer(nn.Linear(self.shared_layer_size, self.pathfinder_hidden_size)),
+                nn.ReLU(),
+                self.__init_layer(nn.Linear(self.pathfinder_hidden_size, 1), std=1.0)
+            )
 
-        # Hidden layer for danger sense/action selector
-        self.combat_hidden = nn.Sequential(
-            self.__init_layer(nn.Linear(SHARED_LAYER_SIZE, COMBAT_HIDDEN_SIZE)),
-            nn.ReLU()
-        )
+        else:
+            self.pathfinder = self.__init_layer(nn.Linear(self.shared_layer_size, 4), std=0.01)
+            self.pathfinder_critic = self.__init_layer(nn.Linear(self.shared_layer_size, 1), std=1.0)
 
         # Head for danger sense
-        self.danger_sense = self.__init_layer(nn.Linear(COMBAT_HIDDEN_SIZE, 5), std=0.01)
-        self.danger_sense_critic = self.__init_layer(nn.Linear(COMBAT_HIDDEN_SIZE, 1), std=1.0)
+
+        if self.danger_sense_hidden_size:
+            self.danger_sense = nn.Sequential(
+                self.__init_layer(nn.Linear(self.shared_layer_size, self.danger_sense_hidden_size)),
+                nn.ReLU(),
+                self.__init_layer(nn.Linear(self.danger_sense_hidden_size, 5), std=0.01)
+            )
+            self.danger_sense_critic = nn.Sequential(
+                self.__init_layer(nn.Linear(self.shared_layer_size, self.danger_sense_hidden_size)),
+                nn.ReLU(),
+                self.__init_layer(nn.Linear(self.danger_sense_hidden_size, 1), std=1.0)
+            )
+        else:
+            self.danger_sense = self.__init_layer(nn.Linear(self.shared_layer_size, 5), std=0.01)
+            self.danger_sense_critic = self.__init_layer(nn.Linear(self.shared_layer_size, 1), std=1.0)
 
         # Head for action selector
-        self.action_selector = self.__init_layer(nn.Linear(COMBAT_HIDDEN_SIZE, 3), std=0.01)
-        self.action_selector_critic = self.__init_layer(nn.Linear(COMBAT_HIDDEN_SIZE, 1), std=1.0)
+        if self.action_hidden_size:
+            self.action_selector = nn.Sequential(
+                self.__init_layer(nn.Linear(self.shared_layer_size, self.action_hidden_size)),
+                nn.ReLU(),
+                self.__init_layer(nn.Linear(self.action_hidden_size, 3), std=0.01)
+            )
+            self.action_selector_critic = nn.Sequential(
+                self.__init_layer(nn.Linear(self.shared_layer_size, self.action_hidden_size)),
+                nn.ReLU(),
+                self.__init_layer(nn.Linear(self.action_hidden_size, 1), std=1.0)
+            )
+        else:
+            self.action_selector = self.__init_layer(nn.Linear(self.shared_layer_size, 3), std=0.01)
+            self.action_selector_critic = self.__init_layer(nn.Linear(self.shared_layer_size, 1), std=1.0)
 
         self.to(device)
 
@@ -128,8 +173,7 @@ class ZeldaMultiHeadNetwork(nn.Module):
         combined = torch.cat((image_data, feature_data), dim=1)
         shared = self.shared_layer(combined)
 
-        combat_hidden = self.combat_hidden(shared)
-        return shared, combat_hidden
+        return shared, shared
 
     def get_value(self, image, features):
         shared, combat = self._forward_steps(image, features)
@@ -193,55 +237,15 @@ class ZeldaMultiHeadNetwork(nn.Module):
         act_logp_ent_val = torch.stack([actions_tensor, logprob_tensor, entropy_tensor, value_tensor], dim=2)
         return act_logp_ent_val.to(self.device)
 
-class InputWrapper(gym.Wrapper):
-    def step(self, action):
-        action = self.translate_action(action)
-        obs, reward, terminated, truncated, info = self.env.step(action)
-        return self.observation(obs), reward, terminated, truncated, info
-
-    def _button_from_action(self, action):
-        match action:
-            case 0: action = 'UP'
-            case 1: action = 'DOWN'
-            case 2: action = 'LEFT'
-            case 3: action = 'RIGHT'
-            case 4: action = None
-            case _: raise ValueError(f"Invalid dpad action: {action}")
-
-        return action
-
-    def translate_action(self, actions):
-        pathfinding, danger, decision = actions
-
-        match decision:
-            case 0:
-                direction = self._button_from_action(pathfinding)
-                button = None
-
-            case 1:
-                direction = self._button_from_action(danger)
-                button = 'A'
-
-            case 2:
-                direction = self._button_from_action(danger)
-                button = 'A'
-
-            case _: raise ValueError(f"Invalid button action: {decision}")
-
-        return [x for x in (direction, button) if x is not None]
-
-class ObservationWrapper(gym.ObservationWrapper):
-    def observation(self, observation):
-        return observation['image'], observation['features']
-
 class MultiHeadPPO:
-    def __init__(self, network : ZeldaMultiHeadNetwork, device):
+    def __init__(self, network : ZeldaMultiHeadNetwork, device, train_callback = None):
         self.network = network
         self.device = device
+        self.train_callback = train_callback
 
         self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=1e-5)
 
-        self.memory_length = 4096
+        self.memory_length = 4096 * 20
         self.batch_size = 128
         self.minibatches = 4
         self.minibatch_size = self.batch_size // self.minibatches
@@ -262,8 +266,9 @@ class MultiHeadPPO:
         self.returns = torch.empty(self.memory_length, self.network.heads, dtype=torch.float32, device=device)
 
     def _obs_to_batched(self, obs):
-        image = torch.tensor(obs['image'], dtype=torch.float32, device=self.device).unsqueeze(0)
-        features = torch.tensor(obs['features'], dtype=torch.float32, device=self.device).unsqueeze(0)
+        image, features = obs
+        image = image.unsqueeze(0).to(self.device)
+        features = features.flatten().unsqueeze(0).to(self.device)
         return image, features
 
     def train(self, env, iterations, epochs=4):
@@ -302,6 +307,8 @@ class MultiHeadPPO:
 
 
             self._optimize(epochs)
+            if self.train_callback and self.train_callback(self.total_steps, self):
+                break
 
         progress.close()
 
@@ -389,6 +396,8 @@ class MultiHeadPPO:
                 nn.utils.clip_grad_norm_(self.network.parameters(), MAX_GRAD_NORM)
                 self.optimizer.step()
 
+        self.network.trained_steps += self.memory_length
+
 class TestEnv:
     def __init__(self, network):
         self.obs_shape = [(1, network.viewport_size, network.viewport_size), (network.num_features,)]
@@ -418,22 +427,35 @@ def get_counts(model, img, feat):
     for i in range(3):
         counts[i] = torch.bincount(actions[:, i], minlength=5)
 
-    return counts
+    correct = counts[:, 2].min()
 
-def test():
-    model = ZeldaMultiHeadNetwork(VIEWPORT_SIZE, 10, 'cuda')
+    actions = model.get_action(img + 0.98, feat + 0.98)
+    counts = torch.zeros((3, 5), dtype=torch.int32)
+    for i in range(3):
+        counts[i] = torch.bincount(actions[:, i], minlength=5)
 
-    obs_img = 0.02 * torch.rand(4096, 1, VIEWPORT_SIZE, VIEWPORT_SIZE, device='cuda')
-    obs_feat = 0.02 * torch.rand(4096, 10, device='cuda')
+    correct = min(counts[:, 0].min().item(), correct.item())
+    return correct, img.shape[0]
 
-    print(get_counts(model, obs_img, obs_feat))
-    print(get_counts(model, obs_img + 0.98, obs_feat + 0.98))
+obs_img = 0.02 * torch.rand(4096, 1, VIEWPORT_SIZE, VIEWPORT_SIZE, device='cuda')
+obs_feat = 0.02 * torch.rand(4096, 20, device='cuda')
+def callback(steps, ppo):
+    correct, total = get_counts(ppo.network, obs_img, obs_feat)
+    print(f"Steps: {steps} Correct: {correct}/{total} = {correct/total:.2f}")
+    return correct / total > 0.9
+
+def main():
+    model = ZeldaMultiHeadNetwork(VIEWPORT_SIZE, 54, 'cuda')
+
+    obs_img = 0.02 * torch.rand(4096, *model.obs_shape[0], device='cuda')
+    obs_feat = 0.02 * torch.rand(4096, *model.obs_shape[1], device='cuda')
+
+    correct, total = get_counts(model, obs_img, obs_feat)
+    print(f"Start.  Correct: {correct}/{total} = {correct/total:.2f}")
 
     env = TestEnv(model)
-    ppo = MultiHeadPPO(model, 'cuda')
+    ppo = MultiHeadPPO(model, 'cuda', callback)
     ppo.train(env, 100_000, 10)
 
-    print(get_counts(model, obs_img, obs_feat))
-    print(get_counts(model, obs_img + 0.98, obs_feat + 0.98))
-
-test()
+if __name__ == '__main__':
+    main()
