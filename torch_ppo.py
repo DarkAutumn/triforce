@@ -245,7 +245,7 @@ class MultiHeadPPO:
 
         self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=1e-5)
 
-        self.memory_length = 4096 * 20
+        self.memory_length = 4096
         self.batch_size = 128
         self.minibatches = 4
         self.minibatch_size = self.batch_size // self.minibatches
