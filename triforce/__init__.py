@@ -7,9 +7,10 @@ import json
 import retro
 
 from .model_selector import ModelSelector
-from .zelda_env import make_zelda_env
+from .zelda_env import make_zelda_env, make_multihead_zelda_env
 from .models_and_scenarios import ZeldaModelDefinition, ZeldaScenario, ZELDA_MODELS, TRAINING_SCENARIOS
-from .machine_learning import ZeldaAI
+from .ml_stable_baslines import ZeldaAI
+from .ml_torch import ZeldaMultiHeadNetwork, MultiHeadPPO
 from .simulate_critic import simulate_critique
 
 # add custom integrations to retro
@@ -34,11 +35,14 @@ def load_model_version(model_def : ZeldaModelDefinition, version):
 # define the model surface area
 __all__ = [
     make_zelda_env.__name__,
+    make_multihead_zelda_env.__name__,
     load_model_version.__name__,
     ZeldaAI.__name__,
     ZeldaModelDefinition.__name__,
     ZeldaScenario.__name__,
     ModelSelector.__name__,
+    ZeldaMultiHeadNetwork.__name__,
+    MultiHeadPPO.__name__,
     simulate_critique.__name__,
     'ZELDA_MODELS',
     'TRAINING_SCENARIOS'

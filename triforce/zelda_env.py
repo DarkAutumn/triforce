@@ -3,8 +3,8 @@
 import retro
 from .objective_selector import ObjectiveSelector
 from .zelda_wrapper import ZeldaGameWrapper
-from .action_space import ZeldaActionSpace
-from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
+from .action_space import MultiHeadInputWrapper, ZeldaActionSpace
+from .zelda_observation_wrapper import FrameCaptureWrapper, MultiHeadObservationWrapper, ZeldaObservationWrapper
 from .zelda_vector_features import ZeldaVectorFeatures
 from .scenario_wrapper import ScenarioWrapper
 from .models_and_scenarios import ZeldaScenario
@@ -50,6 +50,18 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
     # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new
     # info state provded by ZeldaGameWrapper above.
     env = ScenarioWrapper(env, scenario)
+
+    return env
+
+def make_multihead_zelda_env(save_state, *, render_mode = None, device = 'cpu'):
+    """Creates a Zelda retro environment for use with the multi-headed model."""
+    env = retro.make(game='Zelda-NES', state=save_state, inttype=retro.data.Integrations.CUSTOM_ONLY,
+                     render_mode=render_mode)
+    #env = FrameCaptureWrapper(env, render_mode == 'rgb_array')
+    env = ZeldaGameWrapper(env)
+    env = ObjectiveSelector(env, produce_astar=False)
+    env = MultiHeadObservationWrapper(env, 128, device)
+    env = MultiHeadInputWrapper(env)
 
     return env
 

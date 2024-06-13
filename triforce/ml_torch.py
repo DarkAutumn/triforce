@@ -1,11 +1,9 @@
 #!/usr/bin/python
 
 import math
-import time
 import torch
 import numpy as np
 from torch import nn
-import gymnasium as gym
 from tqdm import tqdm
 
 NORM_ADVANTAGES = True
@@ -398,64 +396,4 @@ class MultiHeadPPO:
 
         self.network.trained_steps += self.memory_length
 
-class TestEnv:
-    def __init__(self, network):
-        self.obs_shape = [(1, network.viewport_size, network.viewport_size), (network.num_features,)]
-        self.curr = 0
-
-    def get_observation(self):
-        offset = 0.98 if self.curr % 2 == 0 else 0.0
-
-
-        return {
-            "image": offset + 0.02 * torch.rand(self.obs_shape[0]),
-            "features": offset + 0.02 * torch.rand(self.obs_shape[1])
-            }
-
-    def step(self, action):
-        self.curr += 1
-        target = 2 if self.curr % 2 == 0 else 0
-        rewards = [1 if act == target else -1 for act in action]
-        return self.get_observation(), rewards, False, False, {}
-
-    def reset(self):
-        return self.get_observation(), {}
-
-def get_counts(model, img, feat):
-    actions = model.get_action(img, feat)
-    counts = torch.zeros((3, 5), dtype=torch.int32)
-    for i in range(3):
-        counts[i] = torch.bincount(actions[:, i], minlength=5)
-
-    correct = counts[:, 2].min()
-
-    actions = model.get_action(img + 0.98, feat + 0.98)
-    counts = torch.zeros((3, 5), dtype=torch.int32)
-    for i in range(3):
-        counts[i] = torch.bincount(actions[:, i], minlength=5)
-
-    correct = min(counts[:, 0].min().item(), correct.item())
-    return correct, img.shape[0]
-
-obs_img = 0.02 * torch.rand(4096, 1, VIEWPORT_SIZE, VIEWPORT_SIZE, device='cuda')
-obs_feat = 0.02 * torch.rand(4096, 20, device='cuda')
-def callback(steps, ppo):
-    correct, total = get_counts(ppo.network, obs_img, obs_feat)
-    print(f"Steps: {steps} Correct: {correct}/{total} = {correct/total:.2f}")
-    return correct / total > 0.9
-
-def main():
-    model = ZeldaMultiHeadNetwork(VIEWPORT_SIZE, 54, 'cuda')
-
-    obs_img = 0.02 * torch.rand(4096, *model.obs_shape[0], device='cuda')
-    obs_feat = 0.02 * torch.rand(4096, *model.obs_shape[1], device='cuda')
-
-    correct, total = get_counts(model, obs_img, obs_feat)
-    print(f"Start.  Correct: {correct}/{total} = {correct/total:.2f}")
-
-    env = TestEnv(model)
-    ppo = MultiHeadPPO(model, 'cuda', callback)
-    ppo.train(env, 100_000, 10)
-
-if __name__ == '__main__':
-    main()
+__all__ = [MultiHeadPPO.__name__, ZeldaMultiHeadNetwork.__name__]

@@ -48,3 +48,49 @@ class ZeldaActionSpace(gym.ActionWrapper):
             return arr
 
         return self._decode_discrete_action[action].copy()
+
+class MultiHeadInputWrapper(gym.Wrapper):
+    """A wrapper that translates the multi-head model's action output into actual buttons for retro-environments."""
+    def __init__(self, env):
+        super().__init__(env)
+        self.action_space = gym.spaces.MultiDiscrete([5, 3, 3])
+        self.a_button = self.unwrapped.buttons.index('A')
+        self.up_button = self.unwrapped.buttons.index('UP')
+        self.down_button = self.unwrapped.buttons.index('DOWN')
+        self.left_button = self.unwrapped.buttons.index('LEFT')
+        self.right_button = self.unwrapped.buttons.index('RIGHT')
+        self.button_len = len(self.unwrapped.buttons)
+
+    def step(self, action):
+        action = self._translate_action(action)
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        return obs, reward, terminated, truncated, info
+
+    def _assign_button_fron_direction(self, action,  buttons):
+        match action:
+            case 0: buttons[self.up_button] = True
+            case 1: buttons[self.down_button] = True
+            case 2: buttons[self.left_button] = True
+            case 3: buttons[self.right_button] = True
+            case 4: buttons[self.up_button] = True
+            case _: raise ValueError(f"Invalid dpad action: {action}")
+
+    def _translate_action(self, actions):
+        pathfinding, danger, decision = actions
+        buttons = [False] * self.button_len
+
+        match decision:
+            case 0:
+                self._assign_button_fron_direction(pathfinding, buttons)
+
+            case 1:
+                self._assign_button_fron_direction(danger, buttons)
+                buttons[self.a_button] = True
+
+            case 2:
+                self._assign_button_fron_direction(danger, buttons)
+                buttons[self.a_button] = True
+
+            case _: raise ValueError(f"Invalid button action: {decision}")
+
+        return buttons

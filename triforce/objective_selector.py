@@ -2,8 +2,8 @@ from enum import Enum
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import Direction, get_num_triforce_pieces, is_in_cave, position_to_tile_index, tile_index_to_position, is_health_full, \
-                        ZeldaItem
+from .zelda_game import Direction, get_num_triforce_pieces, is_in_cave, position_to_tile_index, \
+                        tile_index_to_position, is_health_full, ZeldaItem
 from .astar import a_star
 
 class ObjectiveKind(Enum):
@@ -49,12 +49,13 @@ class ObjectiveSelector(gym.Wrapper):
     """
     A wrapper that selects objectives for the agent to pursue.  This is used to help the agent decide what to do.
     """
-    def __init__(self, env):
+    def __init__(self, env, produce_astar = True):
         super().__init__(env)
         self.dungeon1 = Dungeon1Orchestrator()
         self.overworld = OverworldOrchestrator()
         self.sub_orchestrators = { 0 : self.overworld, 1 : self.dungeon1}
         self.last_route = (None, [])
+        self.produce_astar = produce_astar
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
@@ -100,7 +101,7 @@ class ObjectiveSelector(gym.Wrapper):
                     location_objective, objective_vector, objective_pos_dir, objective_kind = objectives
 
         # find the optimal route to the objective
-        if objective_pos_dir is not None:
+        if self.produce_astar and objective_pos_dir is not None:
             a_star_tile = objective_pos_dir if isinstance(objective_pos_dir, Direction) \
                                             else position_to_tile_index(*objective_pos_dir)
             path = self._get_a_star_path(info, a_star_tile)
