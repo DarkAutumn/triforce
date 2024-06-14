@@ -1,6 +1,9 @@
 import gymnasium as gym
 import numpy as np
 
+from .ml_torch import action_to_direction
+from .zelda_game import Direction
+
 class ZeldaActionSpace(gym.ActionWrapper):
     """A wrapper that shrinks the action space down to what's actually used in the game."""
     def __init__(self, env, kind):
@@ -67,13 +70,12 @@ class MultiHeadInputWrapper(gym.Wrapper):
         return obs, reward, terminated, truncated, info
 
     def _assign_button_fron_direction(self, action,  buttons):
+        action = action_to_direction(action)
         match action:
-            case 0: buttons[self.up_button] = True
-            case 1: buttons[self.down_button] = True
-            case 2: buttons[self.left_button] = True
-            case 3: buttons[self.right_button] = True
-            case 4: buttons[self.up_button] = True
-            case _: raise ValueError(f"Invalid dpad action: {action}")
+            case Direction.N: buttons[self.up_button] = True
+            case Direction.S: buttons[self.down_button] = True
+            case Direction.W: buttons[self.left_button] = True
+            case Direction.E: buttons[self.right_button] = True
 
     def _translate_action(self, actions):
         pathfinding, danger, decision = actions

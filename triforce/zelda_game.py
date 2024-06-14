@@ -207,6 +207,37 @@ class Direction(Enum):
             case _:
                 raise ValueError(f"Unhandled Direction: {self}")
 
+    @staticmethod
+    def from_position_change(tile, next_tile):
+        """Returns the direction to move from tile to next_tile."""
+        x, y = tile
+        nx, ny = next_tile
+
+        if nx > x:
+            return Direction.E
+        if nx < x:
+            return Direction.W
+        if ny > y:
+            return Direction.S
+        if ny < y:
+            return Direction.N
+
+        raise ValueError(f"Invalid tile change: {tile} -> {next_tile}")
+
+    def opposite(self):
+        """Returns the opposite direction."""
+        match self:
+            case Direction.E:
+                return Direction.W
+            case Direction.W:
+                return Direction.E
+            case Direction.S:
+                return Direction.N
+            case Direction.N:
+                return Direction.S
+            case _:
+                raise ValueError(f"Unhandled Direction: {self}")
+
 class ZeldaEnemy(Enum):
     """Enemy codes for the game."""
     # pylint: disable=invalid-name

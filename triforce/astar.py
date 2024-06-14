@@ -108,14 +108,6 @@ def append_final_direction(path, target, start):
 def a_star(link_bottom_left_tile, tile_weight_map, direction):
     """
     A* algorithm implementation for pathfinding.
-
-    Args:
-        link_position (tuple): The starting position of the link.
-        tiles (numpy.ndarray): The map tile weights, see TileState.
-        direction (Direction): The direction in which the link is moving.
-
-    Returns:
-        list: The path from the starting position to the goal position.
     """
 
     # quick out for touching the map's edge

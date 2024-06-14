@@ -1,10 +1,13 @@
 #!/usr/bin/python
 
+from enum import Enum
 import math
 import torch
 import numpy as np
 from torch import nn
 from tqdm import tqdm
+
+from triforce.zelda_game import Direction
 
 NORM_ADVANTAGES = True
 CLIP_VAL_LOSS = True
@@ -396,4 +399,79 @@ class MultiHeadPPO:
 
         self.network.trained_steps += self.memory_length
 
-__all__ = [MultiHeadPPO.__name__, ZeldaMultiHeadNetwork.__name__]
+def action_to_direction(action):
+    """Converts a model action into a direction."""
+    match action:
+        case 0: return Direction.N
+        case 1: return Direction.S
+        case 2: return Direction.W
+        case 3: return Direction.E
+        case 4: return None
+        case _: raise ValueError(f"Invalid pathfinding action: {action}")
+
+def direction_to_action(direction):
+    """Converts a direction into a model action."""
+    match direction:
+        case Direction.N: return 0
+        case Direction.S: return 1
+        case Direction.W: return 2
+        case Direction.E: return 3
+        case None: return 4
+        case _: raise ValueError(f"Invalid direction: {direction}")
+
+class SelectedAction(Enum):
+    """Enumeration of possible actions."""
+    MOVEMENT = 0
+    ATTACK = 1
+    BEAMS = 2
+
+    @staticmethod
+    def get_mask(disabled_actions):
+        """Returns a mask for the given actions."""
+        mask = torch.ones(3, dtype=torch.float32)
+        for action in disabled_actions:
+            if isinstance(action, SelectedAction):
+                mask[action.value] = 0.0
+            else:
+                mask[action] = 0.0
+
+        return mask
+
+def mask_actions(disabled_actions):
+    """Returns a mask for the given actions."""
+    mask = torch.ones(3, dtype=torch.float32)
+    for action in disabled_actions:
+        if isinstance(action, SelectedAction):
+            mask[action.value] = 0.0
+        else:
+            mask[action] = 0.0
+
+    return mask
+
+def mask_movement(disabled_directions):
+    """Returns a mask for the given directions."""
+    mask = torch.ones(5, dtype=torch.float32)
+    for direction in disabled_directions:
+        mask[direction] = 0.0
+
+    return mask
+
+def action_to_selection(action):
+    """Converts a model action into a selection."""
+    match action:
+        case 0: return 0
+        case 1: return 1
+        case 2: return 2
+        case 3: return None
+        case _: raise ValueError(f"Invalid selection action: {action}")
+
+__all__ = [
+    MultiHeadPPO.__name__,
+    ZeldaMultiHeadNetwork.__name__,
+    action_to_direction.__name__,
+    direction_to_action.__name__,
+    SelectedAction.__name__,
+    mask_actions.__name__,
+    mask_movement.__name__,
+    action_to_selection.__name__
+    ]

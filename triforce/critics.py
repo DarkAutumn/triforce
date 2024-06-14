@@ -1,12 +1,16 @@
 """Gameplay critics for Zelda."""
 
-from typing import Dict
+from typing import Dict, OrderedDict, Tuple
 import numpy as np
+import gymnasium as gym
+import torch
 
+from .astar import a_star
+from .ml_torch import action_to_direction, SelectedAction, direction_to_action
 from .objective_selector import ObjectiveKind
 from .zelda_wrapper import ActionType
 from .zelda_game import Direction, TileState, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
-    get_num_triforce_pieces, is_in_cave
+    get_num_triforce_pieces, is_in_cave, is_sword_frozen
 
 REWARD_MINIMUM = 0.01
 REWARD_TINY = 0.05
@@ -14,6 +18,55 @@ REWARD_SMALL = 0.25
 REWARD_MEDIUM = 0.5
 REWARD_LARGE = 0.75
 REWARD_MAXIMUM = 1.0
+
+def _manhattan_distance(a, b):
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+def _get_progress(direction, old_link_pos, new_link_pos, target):
+    direction_vector = direction.to_vector()
+
+    disp = new_link_pos - old_link_pos
+    direction_movement = np.dot(disp, direction_vector) * direction_vector
+
+    projected_new_pos = old_link_pos + direction_movement
+
+    old_distance = _manhattan_distance(target, old_link_pos)
+    new_distance = _manhattan_distance(target, projected_new_pos)
+
+    return old_distance - new_distance
+
+def _xy_from_coord(bottom_left):
+    y, x = bottom_left
+    old_link_tile = np.array([x, y], dtype=np.float32)
+    return old_link_tile
+
+
+def _get_direction(old, new):
+    if new[0] > old[0]:
+        return Direction.S
+    if new[0] < old[0]:
+        return Direction.N
+    if new[1] > old[1]:
+        return Direction.E
+    if new[1] < old[1]:
+        return Direction.W
+    return None
+
+def _find_second_turn(path):
+    turn = 0
+    direction = _get_direction(path[0], path[1])
+    for i in range(2, len(path)):
+        old_index = path[i - 1]
+        new_index = path[i]
+
+        new_direction = _get_direction(old_index, new_index)
+        if new_direction != direction:
+            turn += 1
+            direction = new_direction
+            if turn == 2:
+                return old_index
+
+    return path[-1]
 
 class ZeldaCritic:
     """Base class for Zelda gameplay critics."""
@@ -399,13 +452,13 @@ class GameplayCritic(ZeldaCritic):
         # the second turn in the path.  That way we can reward any progress towards the target, even if the path
         # is the transpose of what A* picked.
         elif len(old_path) >= 2:
-            target_y, target_x = self.__find_second_turn(old_path)
+            target_y, target_x = _find_second_turn(old_path)
             target_tile = target_x, target_y
 
-            old_link_tile = self.__xy_from_coord(old['link'].tile_coordinates[1])
-            new_link_tile = self.__xy_from_coord(new['link'].tile_coordinates[1])
+            old_link_tile = _xy_from_coord(old['link'].tile_coordinates[1])
+            new_link_tile = _xy_from_coord(new['link'].tile_coordinates[1])
 
-            progress = self.__get_progress(movement_direction, old_link_tile, new_link_tile, target_tile)
+            progress = _get_progress(movement_direction, old_link_tile, new_link_tile, target_tile)
 
             if progress > 0:
                 rewards['reward-move-closer'] = self.move_closer_reward
@@ -428,7 +481,7 @@ class GameplayCritic(ZeldaCritic):
                 elif target == Direction.W:
                     progress = old_link_pos[0] - new_link_pos[0]
             else:
-                progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
+                progress = _get_progress(movement_direction, old_link_pos, new_link_pos, target)
 
             if progress > 0:
                 percent = min(abs(progress / self.movement_scale_factor), 1)
@@ -463,54 +516,6 @@ class GameplayCritic(ZeldaCritic):
                 return True
 
         return False
-
-    def __xy_from_coord(self, bottom_left):
-        y, x = bottom_left
-        old_link_tile = np.array([x, y], dtype=np.float32)
-        return old_link_tile
-
-    def __get_progress(self, direction, old_link_pos, new_link_pos, target):
-        direction_vector = direction.to_vector()
-
-        disp = new_link_pos - old_link_pos
-        direction_movement = np.dot(disp, direction_vector) * direction_vector
-
-        projected_new_pos = old_link_pos + direction_movement
-
-        old_distance = self.__manhattan_distance(target, old_link_pos)
-        new_distance = self.__manhattan_distance(target, projected_new_pos)
-
-        return old_distance - new_distance
-
-    def __manhattan_distance(self, a, b):
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
-    def __find_second_turn(self, path):
-        turn = 0
-        direction = self.__get_direction(path[0], path[1])
-        for i in range(2, len(path)):
-            old_index = path[i - 1]
-            new_index = path[i]
-
-            new_direction = self.__get_direction(old_index, new_index)
-            if new_direction != direction:
-                turn += 1
-                direction = new_direction
-                if turn == 2:
-                    return old_index
-
-        return path[-1]
-
-    def __get_direction(self, old, new):
-        if new[0] > old[0]:
-            return Direction.S
-        if new[0] < old[0]:
-            return Direction.N
-        if new[1] > old[1]:
-            return Direction.E
-        if new[1] < old[1]:
-            return Direction.W
-        return None
 
     # state helpers, some states are calculated
     def __has_visited(self, level, location):
@@ -676,7 +681,6 @@ class OverworldSwordCritic(GameplayCritic):
         self.new_location_reward = REWARD_LARGE
 
     def critique_location_discovery(self, old, new, rewards):
-
         # entered cave
         if not is_in_cave(old) and is_in_cave(new):
             if new['sword']:
@@ -713,3 +717,267 @@ class OverworldSwordCritic(GameplayCritic):
                 score += 1
 
         new['score'] = score
+
+CACHE_CAPACITY = 256
+MOVEMENT_SCALE_FACTOR = 9.0
+
+MOVE_CLOSER_REWARD = REWARD_TINY
+MOVE_FURTHER_PENALTY = -REWARD_TINY - REWARD_MINIMUM
+DAMAGE_PENALTY = -REWARD_LARGE
+NO_MOVEMENT_PENALTY = -REWARD_LARGE
+ENEMY_HIT_REWARD = REWARD_LARGE
+NO_DANGER_REWARD = REWARD_MEDIUM
+DANGER_SENSE_REWARD = REWARD_LARGE
+
+MAX_DANGER_DISTANCE = 240
+
+class PathReward:
+    def __init__(self, path):
+        self.weight = len(path)
+        self.rewards = [None] * 4
+        self.second_turn = _find_second_turn(path)
+
+class PathingData:
+    """Pathing rewards for a single location."""
+    def __init__(self, room_info, target, tile_map):
+        self._tile_rewards = {}
+        self.room_info = room_info
+        self.target = target
+        self.tile_map = tile_map
+
+    def get_pathing_rewards(self, start_tile) -> PathReward:
+        data = self._tile_rewards.get(start_tile, None)
+        if data is None:
+            path = a_star(start_tile, self.tile_map, self.target)
+
+            pathing = self if path[-1] == self.target else self.room_info.get_pathing_data(path[-1], self.tile_map)
+            pathing.update(path)
+
+        return data
+
+    def update(self, path):
+        for i in range(len(path) - 1):
+            tile = path[i]
+            next_tile = path[i + 1]
+
+            if tile not in self._tile_rewards:
+                rewards = PathReward(path)
+                self._tile_rewards[tile] = rewards
+            else:
+                rewards = self._tile_rewards[tile]
+
+            direction = Direction.from_position_change(tile, next_tile)
+            rewards[direction_to_action(direction)] = MOVE_CLOSER_REWARD
+
+            opposite = direction.opposite()
+            rewards[direction_to_action(opposite)] = MOVE_FURTHER_PENALTY
+
+class RoomInformation:
+    """Information about a single Zelda room."""
+    def __init__(self, level, location):
+        self.level = level
+        self.location = location
+        self._pathing_cache = OrderedDict()
+
+    def get_pathing_data(self, target, tile_map) -> PathingData:
+        if target not in self._pathing_cache:
+            if len(self._pathing_cache) >= CACHE_CAPACITY:
+                self._pathing_cache.popitem(last=False)
+
+            self._pathing_cache[target] = PathingData(self, target, tile_map)
+
+        return self._pathing_cache[target]
+
+
+def calculate_alignment_factor(distance, alignment_distance):
+    """Calculates alignment factor based on how close the enemy is to the beam path."""
+    if distance <= 8:
+        max_alignment_distance = 8
+    else:
+        max_alignment_distance = 8 + (8 * (distance - 8) / (175 - 8))
+
+    alignment_factor = max(0, 1 - (alignment_distance / max_alignment_distance))
+    return alignment_factor
+
+def calculate_danger_sense_accuracy(link_pos, enemies, direction):
+    """Calculates how much reward should be given for the agent sensing danger in a particular direction."""
+    max_distance = 175
+    min_distance = 8
+
+    max_reward = 0
+
+    for enemy_pos in enemies:
+        dx = enemy_pos[0] - link_pos[0]
+        dy = enemy_pos[1] - link_pos[1]
+
+        distance = np.sqrt(dx**2 + dy**2)
+
+        if distance > max_distance:
+            continue
+
+        # Distance reward
+        if distance <= min_distance:
+            distance_reward = 1.0
+        else:
+            distance_reward = np.clip(1.0 - (distance - min_distance) / (max_distance - min_distance) * 0.9, 0.1, 1.0)
+
+        # Calculate alignment distance for the chosen direction
+        if direction == 'up' and dy < 0:
+            alignment_distance = abs(dx)
+        elif direction == 'down' and dy > 0:
+            alignment_distance = abs(dx)
+        elif direction == 'left' and dx < 0:
+            alignment_distance = abs(dy)
+        elif direction == 'right' and dx > 0:
+            alignment_distance = abs(dy)
+        else:
+            alignment_distance = float('inf')
+
+        if alignment_distance != float('inf'):
+            if distance <= 8:
+                max_alignment_distance = 8
+            else:
+                max_alignment_distance = 8 + (8 * (distance - 8) / (175 - 8))
+
+            alignment_factor = max(0, 1 - (alignment_distance / max_alignment_distance))
+            total_reward = distance_reward * alignment_factor
+            max_reward = max(max_reward, total_reward)
+
+    if max_reward <= 0.1:
+        max_reward = -1.0
+
+    # Normalize reward to be between 0.1 and 1.0
+    max_reward = np.clip(max_reward, 0.1, 1.0)
+
+    return max_reward
+
+class MultiHeadCritic(gym.Wrapper):
+    """Critic for multiple objectives."""
+    def __init__(self, env):
+        super().__init__(env)
+        self._last = None
+        self._room_info = {}
+        self.next_movement_reward = None
+        self.pathfinding_mask = None
+
+    def reset(self, *, seed = None, options = None):
+        obs, info = super().reset(seed=seed, options=options)
+        self._last = info
+        return obs, info
+
+    def step(self, action):
+        obs, _, terminated, truncated, info = self.env.step(action)
+
+        rewards = self._critique_gameplay(action, self._last, info)
+        return obs, rewards, terminated, truncated, info
+
+    def critique_gameplay(self, action, last_info, info):
+        """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
+        movement_reward = self._critique_movement(action, last_info, info)
+        danger_sense_reward = self._critique_danger_sense(action, last_info, info)
+        action_reward = self._critique_action(action, last_info, info)
+
+        info['movement_mask'] = self.pathfinding_mask
+        info['danger_sense_mask'] = self._get_danger_sense_mask(info)
+        info['action_mask'] = self._get_action_mask(info)
+
+        return movement_reward, action_reward, danger_sense_reward
+
+    def _critique_movement(self, action, old, new):
+        movement_action = action[0]
+        direction = action_to_direction(movement_action)
+        selection = action[2]
+
+        # Make sure we didn't select "no direction" and "movement".  This isn't an allowed state, so it shouldn't
+        # happen, but we should check to make sure.
+        if selection == SelectedAction.MOVEMENT and direction is None:
+            return NO_MOVEMENT_PENALTY
+
+        # If link ran into a wall, penalize the agent, but also mask the direction so we get better actions to
+        # learn from
+        if old['link'].position == new['link'].position:
+            if self.pathfinding_mask is None:
+                self.pathfinding_mask = torch.ones(4, dtype=torch.float32)
+            self.pathfinding_mask[movement_action] = 0
+            return NO_MOVEMENT_PENALTY
+
+        self.pathfinding_mask = None
+
+        # Ok, we have a movement action, let's see if went in the right direction
+        last_path_reward, new_path_reward = self._step_movement_reward(new)
+        directional_rewards = last_path_reward.rewards[movement_action]
+
+        # if we don't have a directional reward, it means the actor did not follow the path,
+        # we can see if this is a good or bad thing by comparing the last and new path weight
+        if directional_rewards is None:
+            if last_path_reward.weight < new_path_reward.weight:
+                reward =  MOVE_FURTHER_PENALTY
+            else:
+                reward = MOVE_CLOSER_REWARD
+
+            directional_rewards = last_path_reward.rewards[movement_action] = reward
+
+        # Scale movement in the right direction to make sure we don't over-reward the agent
+        if directional_rewards > 0:
+            old_pos = old['link'].position
+            new_pos = new['link'].position
+            progress = _get_progress(direction, old_pos, new_pos, last_path_reward.second_turn)
+            directional_rewards *= min(abs(progress / MOVEMENT_SCALE_FACTOR), 1)
+
+        return directional_rewards
+
+    def _step_movement_reward(self, new) -> Tuple[PathReward, PathReward]:
+        last_movement_reward = self.next_movement_reward
+        room_info = self._get_room_info(new['level'], new['location'])
+        pathing_data = room_info.get_pathing_data(new['objective_pos_or_dir'], new['tile_states'])
+        self.next_movement_reward = pathing_data.get_pathing_rewards(new['link'].tile_coordinates[1])
+        return last_movement_reward, self.next_movement_reward
+
+    def _critique_danger_sense(self, action, old, new):
+        selected_is_attack = action[2] != SelectedAction.MOVEMENT
+        if selected_is_attack:
+            if new['step_hits']:
+                return ENEMY_HIT_REWARD
+
+            return -ENEMY_HIT_REWARD
+
+        direction = action_to_direction(action[1])
+        if direction is None:
+            if not new['active_enemies']:
+                return NO_DANGER_REWARD
+
+            return -NO_DANGER_REWARD
+
+        factor = calculate_danger_sense_accuracy(old['link'].position, old['active_enemies'], direction)
+        if factor > 0:
+            return DANGER_SENSE_REWARD * factor
+
+        return -DANGER_SENSE_REWARD
+
+    def _get_danger_sense_mask(self, info):
+        if not info['active_enemies']:
+            mask = torch.zeros(5, dtype=torch.float32)
+            mask[4] = 1
+
+        else:
+            mask = torch.ones(5, dtype=torch.float32)
+
+        return mask
+
+    def _get_action_mask(self, info):
+        if is_sword_frozen(info):
+            mask = torch.zeros(3, dtype=torch.float32)
+            mask[SelectedAction.MOVEMENT.value] = 1
+        else:
+            mask = torch.ones(3, dtype=torch.float32)
+            if not info['beams_available']:
+                mask[SelectedAction.BEAMS.value] = 0
+
+        return mask
+
+    def _get_room_info(self, level, location):
+        key = (level, location)
+        if key not in self._room_info:
+            self._room_info[key] = RoomInformation(level, location)
+
+        return self._room_info[key]
