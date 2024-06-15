@@ -69,16 +69,19 @@ class MultiHeadInputWrapper(gym.Wrapper):
         obs, reward, terminated, truncated, info = self.env.step(action)
         return obs, reward, terminated, truncated, info
 
-    def _assign_button_fron_direction(self, action,  buttons):
+    def _assign_button_fron_direction(self, action,  buttons, allow_none=False):
         action = action_to_direction(action)
         match action:
             case Direction.N: buttons[self.up_button] = True
             case Direction.S: buttons[self.down_button] = True
             case Direction.W: buttons[self.left_button] = True
             case Direction.E: buttons[self.right_button] = True
+            case _:
+                if not allow_none:
+                    raise ValueError(f"Invalid direction: {action}")
 
     def _translate_action(self, actions):
-        pathfinding, danger, decision = actions
+        pathfinding, danger, decision = actions.squeeze(0).tolist()
         buttons = [False] * self.button_len
 
         match decision:
