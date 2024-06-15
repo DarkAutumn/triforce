@@ -14,11 +14,11 @@
             "justMyCode": false
         },
         {
-            "name": "Torch PPO",
+            "name": "Run PPO",
             "type": "debugpy",
             "request": "launch",
-            "program": "torch_ppo.py",
-            "args": [],
+            "program": "run.py",
+            "args": ["overworld1nobeams", "--torch"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
