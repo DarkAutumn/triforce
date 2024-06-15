@@ -1,6 +1,8 @@
 # A wrapper to create a Zelda environment.
 
 import retro
+
+from .critics import MultiHeadCritic
 from .objective_selector import ObjectiveSelector
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import MultiHeadInputWrapper, ZeldaActionSpace
@@ -53,16 +55,23 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
 
     return env
 
-def make_multihead_zelda_env(save_state, *, render_mode = None, device = 'cpu'):
+def make_multihead_zelda_env(save_state, *, render_mode = None, device = 'cpu', rgb_deque=None):
     """Creates a Zelda retro environment for use with the multi-headed model."""
+    if rgb_deque is not None:
+        render_mode = 'rgb_array'
+
     env = retro.make(game='Zelda-NES', state=save_state, inttype=retro.data.Integrations.CUSTOM_ONLY,
                      render_mode=render_mode)
-    #env = FrameCaptureWrapper(env, render_mode == 'rgb_array')
+
+    if rgb_deque is not None:
+        env = FrameCaptureWrapper(env, rgb_render=rgb_deque)
+
     env = ZeldaGameWrapper(env)
     env = ObjectiveSelector(env, produce_astar=False)
     env = MultiHeadObservationWrapper(env, 128, device)
     env = MultiHeadInputWrapper(env)
+    env = MultiHeadCritic(env)
 
     return env
 
-__all__ = ['make_zelda_env']
+__all__ = ['make_zelda_env', 'make_multihead_zelda_env']
