@@ -185,38 +185,79 @@ class ZeldaMultiHeadNetwork(nn.Module):
             self.action_selector_critic(combat)
         ], dim=2).to(self.device)
 
-    def get_action(self, image, features):
+    def get_action(self, image, features, masks = None):
         shared, combat = self._forward_steps(image, features)
 
-        logits = [
-            self.pathfinder(shared),
-            self.danger_sense(combat),
-            self.action_selector(combat)
-        ]
+        # Choose the pathfinding (movement) direction
+        pathfinding_logits = self.pathfinder(shared)
+        pathfinding_mask = None if masks is None else masks[0]
+        if pathfinding_mask is not None:
+            pathfinding_logits += (1 - pathfinding_mask.to(self.device)) * -1e9
 
-        dists = [torch.distributions.Categorical(logits=l) for l in logits]
-        actions = [dist.sample() for dist in dists]
+        pathfinding_direction = torch.distributions.Categorical(logits=pathfinding_logits).sample()
 
-        return torch.stack(actions, dim=1).to(self.device)
+        # Choose the action the agent will take
+        selected_action_logits = self.action_selector(combat)
+        selected_action_mask = None if masks is None else masks[2]
+        if selected_action_mask is not None:
+            selected_action_logits += (1 - selected_action_mask.to(self.device)) * -1e9
 
-    def get_act_logp_ent_val(self, image, features, actions = None):
+        selected_action = torch.distributions.Categorical(logits=selected_action_logits).sample()
+
+        # If we choose to attack, we cannot chose no danger direction
+        danger_sense_logits = self.danger_sense(combat)
+        if selected_action != 0:
+            danger_sense_mask = torch.ones(5, dtype=torch.float32) if masks is None else masks[1]
+            danger_sense_mask[4] = 0.0
+
+            if danger_sense_mask is not None:
+                danger_sense_logits += (1 - danger_sense_mask.to(self.device)) * -1e9
+
+        danger_sense_direction = torch.distributions.Categorical(logits=danger_sense_logits).sample()
+
+        return pathfinding_direction, danger_sense_direction, selected_action
+
+    def get_act_logp_ent_val(self, image, features, actions = None, masks = None):
         shared, combat = self._forward_steps(image, features)
 
-        logits = [
-            self.pathfinder(shared),
-            self.danger_sense(combat),
-            self.action_selector(combat)
-        ]
+        # Choose the pathfinding (movement) direction
+        pathfinding_logits = self.pathfinder(shared)
+        pathfinding_mask = None if masks is None else masks[0]
+        if pathfinding_mask is not None:
+            pathfinding_logits += (1 - pathfinding_mask.to(self.device)) * -1e9
 
-        values = [
-            self.pathfinder_critic(shared).squeeze(1),
-            self.danger_sense_critic(combat).squeeze(1),
-            self.action_selector_critic(combat).squeeze(1)
-        ]
+        pathfinding_dists = torch.distributions.Categorical(logits=pathfinding_logits)
+        pathfinding_direction = pathfinding_dists.sample() if actions is None else actions[:, 0]
 
-        dists = [torch.distributions.Categorical(logits=l) for l in logits]
+        # Choose the action the agent will take
+        selected_action_logits = self.action_selector(combat)
+        selected_action_mask = None if masks is None else masks[2]
+        if selected_action_mask is not None:
+            selected_action_logits += (1 - selected_action_mask.to(self.device)) * -1e9
+
+        selected_action_dists = torch.distributions.Categorical(logits=selected_action_logits)
+        selected_action = selected_action_dists.sample() if actions is None else actions[:, 2]
+
+        # If we choose to attack, we cannot chose no danger direction
+        danger_sense_logits = self.danger_sense(combat)
+        if selected_action != 0:
+            danger_sense_mask = torch.ones(5, dtype=torch.float32) if masks is None else masks[1]
+            danger_sense_mask[4] = 0.0
+
+            if danger_sense_mask is not None:
+                danger_sense_logits += (1 - danger_sense_mask.to(self.device)) * -1e9
+
+        danger_sense_dists = torch.distributions.Categorical(logits=danger_sense_logits)
+        danger_sense_direction = danger_sense_dists.sample() if actions is None else actions[:, 1]
+
+        value_tensor = torch.stack([self.pathfinder_critic(shared).squeeze(1),
+                                    self.danger_sense_critic(combat).squeeze(1),
+                                    self.action_selector_critic(combat).squeeze(1)
+                                    ], dim=1).to(self.device)
+
+        dists = [pathfinding_dists, danger_sense_dists, selected_action_dists]
         if actions is None:
-            actions = [dist.sample() for dist in dists]
+            actions = [pathfinding_direction, danger_sense_direction, selected_action]
             actions_tensor = torch.stack(actions, dim=1).to(self.device)
             logprob_tensor = torch.stack([dist.log_prob(a) for dist, a in zip(dists, actions)], dim=1)
             logprob_tensor = logprob_tensor.to(self.device)
@@ -230,13 +271,22 @@ class ZeldaMultiHeadNetwork(nn.Module):
                 logprob = dist.log_prob(action)
                 logprobs.append(logprob)
 
-            logprob_tensor = torch.stack(logprobs).to(self.device).T
+            logprob_tensor = torch.stack(logprobs, dim=1).to(self.device)
 
         entropy_tensor = torch.stack([dist.entropy() for dist in dists], dim=1).to(self.device)
-        value_tensor = torch.stack(values, dim=1).to(self.device)
 
         act_logp_ent_val = torch.stack([actions_tensor, logprob_tensor, entropy_tensor, value_tensor], dim=2)
+
+        if actions_tensor[0, 2] != 0 and actions_tensor[0, 1] == 4:
+            raise ValueError("Invalid masks")
+
         return act_logp_ent_val.to(self.device)
+
+    def save(self, path):
+        torch.save(self.state_dict(), path)
+
+    def load(self, path):
+        self.load_state_dict(torch.load(path))
 
 class MultiHeadPPO:
     def __init__(self, network : ZeldaMultiHeadNetwork, device, train_callback = None):
@@ -276,6 +326,7 @@ class MultiHeadPPO:
         next_obs, _ = env.reset()
         next_obs = self._obs_to_batched(next_obs)
         next_done = 0.0
+        next_mask = None
 
         max_steps = math.ceil(iterations / self.memory_length) * self.memory_length
         progress = tqdm(total=max_steps, desc='Training', unit='steps')
@@ -285,10 +336,12 @@ class MultiHeadPPO:
                 for i in range(self.memory_length):
                     self.total_steps += 1
 
-                    act_logp_ent_val = self.network.get_act_logp_ent_val(next_obs[0], next_obs[1])
+                    act_logp_ent_val = self.network.get_act_logp_ent_val(next_obs[0], next_obs[1],
+                                                                         masks=next_mask)
                     self.act_logp_ent_val[i] = act_logp_ent_val[0]
                     actions = act_logp_ent_val[0, :, 0]
-                    obs, reward, terminated, truncated, _ = env.step(actions)
+                    obs, reward, terminated, truncated, info = env.step(actions)
+                    next_mask = info.get('masks', None)
 
                     obs = self._obs_to_batched(obs)
                     done = 1.0 if terminated or truncated else 0.0
@@ -298,8 +351,15 @@ class MultiHeadPPO:
                     self.dones[i] = next_done
                     self.rewards[i] = torch.tensor(reward, dtype=torch.float32, device=self.device)
 
-                    next_obs = obs
-                    next_done = done
+                    if terminated or truncated:
+                        next_obs, _ = env.reset()
+                        next_obs = self._obs_to_batched(next_obs)
+                        next_done = 0.0
+                        next_mask = None
+                    else:
+                        next_obs = obs
+                        next_done = done
+
                     progress.update(1)
 
                 self.dones[self.memory_length] = next_done
