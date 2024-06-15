@@ -48,7 +48,8 @@ def mahattan_distance(y, x, ny, nx):
 WALKABLE_TILES = [TileState.WALKABLE.value,
                            TileState.DANGER.value,
                            TileState.WARNING.value,
-                           TileState.BRICK.value
+                           TileState.BRICK.value,
+                           None # offscreen
                            ]
 
 TOP_WALKABLE_TILES = WALKABLE_TILES + [TileState.HALF_WALKABLE.value]
@@ -109,7 +110,6 @@ def a_star(link_bottom_left_tile, tile_weight_map, direction):
     """
     A* algorithm implementation for pathfinding.
     """
-
     # quick out for touching the map's edge
     if direction == Direction.W and link_bottom_left_tile[1] <= 0:
         return [get_tile_from_direction(link_bottom_left_tile, direction)]
@@ -152,7 +152,9 @@ def a_star(link_bottom_left_tile, tile_weight_map, direction):
             return reconstruct_path(start, came_from, current, direction)
 
         for neighbor in get_neighbors(current, tile_weight_map):
-            tentative_g_score = g_score[current] + tile_weight_map[current]
+            tile_weight = get_tile_weight(*neighbor, tile_weight_map)
+            tile_weight = tile_weight if tile_weight is not None else 1
+            tentative_g_score = g_score[current] + tile_weight
             if tentative_g_score < g_score.get(neighbor, float('inf')):
                 came_from[neighbor] = current
                 g_score[neighbor] = tentative_g_score
