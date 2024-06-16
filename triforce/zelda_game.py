@@ -154,6 +154,10 @@ def is_room_loaded(tiles):
     any_walkable = np.isin(tiles, WALKABLE_TILES).any()
     return any_walkable
 
+def is_tile_walkable(tile):
+    """Returns True if the tile is walkable."""
+    return tile in WALKABLE_TILES
+
 class TileState(Enum):
     """The state of a tile."""
     HALF_WALKABLE = 99
@@ -213,9 +217,9 @@ class Direction(Enum):
         x, y = tile
         nx, ny = next_tile
 
-        if nx > x:
-            return Direction.E
         if nx < x:
+            return Direction.E
+        if nx > x:
             return Direction.W
         if ny > y:
             return Direction.S
@@ -484,4 +488,5 @@ __all__ = [
     AnimationState.__name__,
     tiles_to_weights.__name__,
     is_room_loaded.__name__,
+    is_tile_walkable.__name__,
     ]
