@@ -34,6 +34,32 @@ ACTION_HIDDEN_SIZE = 0
 #pylint: disable=missing-class-docstring
 #pylint: disable=missing-function-docstring
 
+class ActionLayout(Enum):
+    """The layout of the action space."""
+    PATHFINDING = 0
+    DANGER_SENSE = 1
+    SELECTED_ACTION = 2
+
+    @staticmethod
+    def decode(action : torch.tensor):
+        """Decodes the action tensor into a list of actions."""
+        actions = action.tolist()
+        return SelectedDirection(actions[0]), SelectedDirection(actions[1]), SelectedAction(actions[2])
+
+class SelectedAction(Enum):
+    """Enumeration of possible actions."""
+    MOVEMENT = 0
+    ATTACK = 1
+    BEAMS = 2
+
+class SelectedDirection(Enum):
+    """Enumeration of possible directions."""
+    E = 0
+    W = 1
+    S = 2
+    N = 3
+    NONE = 4
+
 class ZeldaMultiHeadNetwork(nn.Module):
     def __init__(self, viewport_size, num_features, device, **kwargs):
         super().__init__()
@@ -189,30 +215,15 @@ class ZeldaMultiHeadNetwork(nn.Module):
         shared, combat = self._forward_steps(image, features)
 
         # Choose the pathfinding (movement) direction
-        pathfinding_logits = self.pathfinder(shared)
-        pathfinding_mask = None if masks is None else masks[0]
-        if pathfinding_mask is not None:
-            pathfinding_logits += (1 - pathfinding_mask.to(self.device)) * -1e9
-
+        pathfinding_logits = self._get_pathfinding_logits(masks, shared)
         pathfinding_direction = torch.distributions.Categorical(logits=pathfinding_logits).sample()
 
         # Choose the action the agent will take
-        selected_action_logits = self.action_selector(combat)
-        selected_action_mask = None if masks is None else masks[2]
-        if selected_action_mask is not None:
-            selected_action_logits += (1 - selected_action_mask.to(self.device)) * -1e9
-
+        selected_action_logits = self._get_selected_action_logits(masks, combat)
         selected_action = torch.distributions.Categorical(logits=selected_action_logits).sample()
 
-        # If we choose to attack, we cannot chose no danger direction
-        danger_sense_logits = self.danger_sense(combat)
-        if selected_action != 0:
-            danger_sense_mask = torch.ones(5, dtype=torch.float32) if masks is None else masks[1]
-            danger_sense_mask[4] = 0.0
-
-            if danger_sense_mask is not None:
-                danger_sense_logits += (1 - danger_sense_mask.to(self.device)) * -1e9
-
+        # Choose danger sense direction. If we choose to attack, we cannot chose no danger direction
+        danger_sense_logits = self._get_danger_sense_logits(masks, combat, selected_action)
         danger_sense_direction = torch.distributions.Categorical(logits=danger_sense_logits).sample()
 
         return pathfinding_direction, danger_sense_direction, selected_action
@@ -221,32 +232,17 @@ class ZeldaMultiHeadNetwork(nn.Module):
         shared, combat = self._forward_steps(image, features)
 
         # Choose the pathfinding (movement) direction
-        pathfinding_logits = self.pathfinder(shared)
-        pathfinding_mask = None if masks is None else masks[0]
-        if pathfinding_mask is not None:
-            pathfinding_logits += (1 - pathfinding_mask.to(self.device)) * -1e9
-
+        pathfinding_logits = self._get_pathfinding_logits(masks, shared)
         pathfinding_dists = torch.distributions.Categorical(logits=pathfinding_logits)
         pathfinding_direction = pathfinding_dists.sample() if actions is None else actions[:, 0]
 
         # Choose the action the agent will take
-        selected_action_logits = self.action_selector(combat)
-        selected_action_mask = None if masks is None else masks[2]
-        if selected_action_mask is not None:
-            selected_action_logits += (1 - selected_action_mask.to(self.device)) * -1e9
-
+        selected_action_logits = self._get_selected_action_logits(masks, combat)
         selected_action_dists = torch.distributions.Categorical(logits=selected_action_logits)
         selected_action = selected_action_dists.sample() if actions is None else actions[:, 2]
 
-        # If we choose to attack, we cannot chose no danger direction
-        danger_sense_logits = self.danger_sense(combat)
-        if selected_action != 0:
-            danger_sense_mask = torch.ones(5, dtype=torch.float32) if masks is None else masks[1]
-            danger_sense_mask[4] = 0.0
-
-            if danger_sense_mask is not None:
-                danger_sense_logits += (1 - danger_sense_mask.to(self.device)) * -1e9
-
+        # Choose danger sense direction. If we choose to attack, we cannot chose no danger direction
+        danger_sense_logits = self._get_danger_sense_logits(masks, combat, selected_action)
         danger_sense_dists = torch.distributions.Categorical(logits=danger_sense_logits)
         danger_sense_direction = danger_sense_dists.sample() if actions is None else actions[:, 1]
 
@@ -274,13 +270,32 @@ class ZeldaMultiHeadNetwork(nn.Module):
             logprob_tensor = torch.stack(logprobs, dim=1).to(self.device)
 
         entropy_tensor = torch.stack([dist.entropy() for dist in dists], dim=1).to(self.device)
-
         act_logp_ent_val = torch.stack([actions_tensor, logprob_tensor, entropy_tensor, value_tensor], dim=2)
-
-        if actions_tensor[0, 2] != 0 and actions_tensor[0, 1] == 4:
-            raise ValueError("Invalid masks")
-
+        assert actions_tensor[0, 2] == 0 or actions_tensor[0, 1] != 4
         return act_logp_ent_val.to(self.device)
+
+    def _get_pathfinding_logits(self, masks, shared):
+        logits = self.pathfinder(shared)
+        mask = None if masks is None else masks[ActionLayout.PATHFINDING.value]
+        if mask is not None:
+            logits += (1 - mask.to(self.device)) * -1e9
+        return logits
+
+    def _get_selected_action_logits(self, masks, combat):
+        logits = self.action_selector(combat)
+        mask = None if masks is None else masks[ActionLayout.SELECTED_ACTION.value]
+        if mask is not None:
+            logits += (1 - mask.to(self.device)) * -1e9
+        return logits
+
+    def _get_danger_sense_logits(self, masks, combat, selected_action):
+        logits = self.danger_sense(combat)
+        if selected_action != SelectedAction.MOVEMENT.value:
+            mask = torch.ones(5, dtype=torch.float32) if masks is None else masks[ActionLayout.DANGER_SENSE.value]
+            mask[SelectedDirection.NONE.value] = 0.0
+            if mask is not None:
+                logits += (1 - mask.to(self.device)) * -1e9
+        return logits
 
     def save(self, path):
         torch.save(self.state_dict(), path)
@@ -478,24 +493,6 @@ def direction_to_action(direction):
         case Direction.E: return 3
         case None: return 4
         case _: raise ValueError(f"Invalid direction: {direction}")
-
-class SelectedAction(Enum):
-    """Enumeration of possible actions."""
-    MOVEMENT = 0
-    ATTACK = 1
-    BEAMS = 2
-
-    @staticmethod
-    def get_mask(disabled_actions):
-        """Returns a mask for the given actions."""
-        mask = torch.ones(3, dtype=torch.float32)
-        for action in disabled_actions:
-            if isinstance(action, SelectedAction):
-                mask[action.value] = 0.0
-            else:
-                mask[action] = 0.0
-
-        return mask
 
 def mask_actions(disabled_actions):
     """Returns a mask for the given actions."""
