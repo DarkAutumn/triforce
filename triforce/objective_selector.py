@@ -363,4 +363,9 @@ class Dungeon1Orchestrator:
         """Returns True if the room is dangerous.  This is used to avoid picking up low-value items."""
         return info['location'] == 0x45 and info['enemies']
 
-__all__ = [ObjectiveSelector.__name__, ObjectiveKind.__name__]
+__all__ = [
+    ObjectiveSelector.__name__,
+    ObjectiveKind.__name__,
+    OverworldOrchestrator.__name__,
+    Dungeon1Orchestrator.__name__
+    ]
