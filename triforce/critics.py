@@ -1,12 +1,13 @@
 """Gameplay critics for Zelda."""
 
-from typing import Dict, OrderedDict, Tuple
+from typing import Dict, OrderedDict
 import numpy as np
 import gymnasium as gym
 import torch
 
-from .astar import a_star
-from .ml_torch import action_to_direction, SelectedAction, direction_to_action
+from triforce.wavefront import RoomWavefront
+
+from .ml_torch import SelectedAction, direction_to_action, SelectedDirection
 from .objective_selector import ObjectiveKind
 from .zelda_wrapper import ActionType
 from .zelda_game import Direction, TileState, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
@@ -731,66 +732,13 @@ DANGER_SENSE_REWARD = REWARD_LARGE
 
 MAX_DANGER_DISTANCE = 240
 
-class PathReward:
-    def __init__(self, path):
-        self.weight = len(path)
-        self.rewards = [None] * 4
-        self.second_turn = _find_second_turn(path)
-
-class PathingData:
-    """Pathing rewards for a single location."""
-    def __init__(self, room_info, target, tile_map):
-        self._tile_rewards = {}
-        self.room_info = room_info
-        self.target = target
-        self.tile_map = tile_map
-
-    def get_pathing_rewards(self, start_tile) -> PathReward:
-        data = self._tile_rewards.get(start_tile, None)
-        if data is None:
-            path = a_star(start_tile, self.tile_map, self.target)
-            if len(path) == 1:
-                pass
-
-            pathing = self if path[-1] == self.target else self.room_info.get_pathing_data(path[-1], self.tile_map)
-            pathing.update(start_tile, path)
-            data = pathing.get_pathing_rewards(start_tile)
-
-        return data
-
-    def update(self, start_tile, path):
-        for i, next_tile in enumerate(path):
-            tile = path[i - 1] if i > 0 else start_tile
-            next_tile = path[i]
-
-            if tile not in self._tile_rewards:
-                path_reward = PathReward(path)
-                self._tile_rewards[tile] = path_reward
-            else:
-                path_reward = self._tile_rewards[tile]
-
-            direction = Direction.from_position_change(tile, next_tile)
-            path_reward.rewards[direction_to_action(direction)] = MOVE_CLOSER_REWARD
-
-            opposite = direction.opposite()
-            path_reward.rewards[direction_to_action(opposite)] = MOVE_FURTHER_PENALTY
-
 class RoomInformation:
     """Information about a single Zelda room."""
-    def __init__(self, level, location):
+    def __init__(self, level, location, tiles):
         self.level = level
         self.location = location
         self._pathing_cache = OrderedDict()
-
-    def get_pathing_data(self, target, tile_map) -> PathingData:
-        if target not in self._pathing_cache:
-            if len(self._pathing_cache) >= CACHE_CAPACITY:
-                self._pathing_cache.popitem(last=False)
-
-            self._pathing_cache[target] = PathingData(self, target, tile_map)
-
-        return self._pathing_cache[target]
-
+        self.wavefront = RoomWavefront((level, location), tiles)
 
 def calculate_alignment_factor(distance, alignment_distance):
     """Calculates alignment factor based on how close the enemy is to the beam path."""
@@ -810,8 +758,8 @@ def calculate_danger_sense_accuracy(link_pos, enemies, direction):
     max_reward = 0
 
     for enemy_pos in enemies:
-        dx = enemy_pos[0] - link_pos[0]
-        dy = enemy_pos[1] - link_pos[1]
+        dx = enemy_pos.position[0] - link_pos[0]
+        dy = enemy_pos.position[1] - link_pos[1]
 
         distance = np.sqrt(dx**2 + dy**2)
 
@@ -875,7 +823,6 @@ class MultiHeadCritic(gym.Wrapper):
 
     def reset(self, *, seed = None, options = None):
         obs, info = super().reset(seed=seed, options=options)
-        self._step_movement_reward(info)
         self._last = info
         return obs, info
 
@@ -883,25 +830,26 @@ class MultiHeadCritic(gym.Wrapper):
         obs, _, terminated, truncated, info = self.env.step(action)
 
         rewards = self.critique_gameplay(action, self._last, info)
+        self._last = info
         return obs, rewards, terminated, truncated, info
 
     def critique_gameplay(self, action, last_info, info):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
         pathfinding, danger_sense, selection = action.squeeze(0).tolist()
-        pathfinding = action_to_direction(pathfinding)
-        danger_sense = action_to_direction(danger_sense)
+        pathfinding = SelectedDirection(pathfinding)
+        danger_sense = SelectedDirection(danger_sense)
         selection = SelectedAction(selection)
 
         movement_reward = self._critique_movement(selection, pathfinding, last_info, info)
         danger_sense_reward = self._critique_danger_sense(selection, danger_sense, last_info, info)
-        action_reward = self._critique_action(action, last_info, info)
+        action_reward = self._critique_action()
 
         info['masks'] = self.pathfinding_mask, self._get_danger_sense_mask(info), \
                             self._get_action_mask(info)
 
         return movement_reward, action_reward, danger_sense_reward
 
-    def _critique_action(self, action, old, new):
+    def _critique_action(self):
         return 0.0
 
     def _critique_movement(self, selection, direction, old, new):
@@ -921,56 +869,52 @@ class MultiHeadCritic(gym.Wrapper):
 
         self.pathfinding_mask = None
 
-        # Ok, we have a movement action, let's see if went in the right direction
-        last_path_reward = self._step_movement_reward(new)
-        directional_rewards = last_path_reward.rewards[index]
+        wavefront = self._get_wavefront_values(old)
+        y, x = new['link'].tile_coordinates[0]
+        ny, nx = self._apply_direction(y, x, direction)
 
-        # if we don't have a directional reward, it means the actor did not follow the path,
-        # we can see if this is a good or bad thing by comparing the last and new path weight
-        if directional_rewards is None:
-            tiles = new['tiles']
-            vector = direction.to_vector()
-            tile_to_test = new['link'].tile_coordinates[1] + vector * (2 if direction == Direction.E else 1)
+        # Did we move within the map?
+        if 0 <= ny <= wavefront.shape[0] and 0 <= nx <= wavefront.shape[1]:
+            if wavefront[y, x] <= wavefront[ny, nx]:
+                return MOVE_FURTHER_PENALTY
 
-            if is_walkable(tiles, *tile_to_test):
-                new_tile = new['link'].tile_coordinates[1] + vector
-                new_tile = tuple(new_tile.tolist())
-                path_data = self._get_pathing_data(new)
-                weight = path_data.get_pathing_rewards(new_tile).weight
+            old_link_pos = np.array(old['link_pos'], dtype=np.float32)
+            new_link_pos =  np.array(new['link_pos'], dtype=np.float32)
+            match direction:
+                case SelectedDirection.N:
+                    dir_vec = np.array([0, -1], dtype=np.float32)
+                case SelectedDirection.S:
+                    dir_vec = np.array([0, 1], dtype=np.float32)
+                case SelectedDirection.W:
+                    dir_vec = np.array([-1, 0], dtype=np.float32)
+                case SelectedDirection.E:
+                    dir_vec = np.array([1, 0], dtype=np.float32)
+                case _:
+                    raise ValueError(f"Invalid direction: {direction}")
 
-                # todo:  check if we can move in that direction, if so, do the calculation with new tile
-                if last_path_reward.weight < weight:
-                    reward =  MOVE_FURTHER_PENALTY
-                else:
-                    reward = MOVE_CLOSER_REWARD
+            movement_vect = new_link_pos - old_link_pos
+            dist_in_dir = np.dot(movement_vect, dir_vec)
+            return dist_in_dir / MOVEMENT_SCALE_FACTOR * MOVE_CLOSER_REWARD
 
-            else:
-                if self.pathfinding_mask is None:
-                    self.pathfinding_mask = torch.ones(4, dtype=torch.float32)
-                self.pathfinding_mask[index] = 0
-                return NO_MOVEMENT_PENALTY
+        # We moved off the map.  See if we are moving in the right direction
+        pos_dir = old['position_or_direction']
+        if isinstance(pos_dir, Direction) and pos_dir == direction:
+            return MOVE_CLOSER_REWARD
 
-            directional_rewards = last_path_reward.rewards[index] = reward
+        return MOVE_FURTHER_PENALTY
 
-        # Scale movement in the right direction to make sure we don't over-reward the agent
-        if directional_rewards > 0:
-            old_pos = old['link'].position
-            new_pos = new['link'].position
-            progress = _get_progress(direction, old_pos, new_pos, last_path_reward.second_turn)
-            directional_rewards *= min(abs(progress / MOVEMENT_SCALE_FACTOR), 1)
-
-        return directional_rewards
-
-    def _step_movement_reward(self, new) -> Tuple[PathReward, PathReward]:
-        last_movement_reward = self.next_movement_reward
-        pathing_data = self._get_pathing_data(new)
-        self.next_movement_reward = pathing_data.get_pathing_rewards(new['link'].tile_coordinates[1])
-        return last_movement_reward
-
-    def _get_pathing_data(self, new):
-        room_info = self._get_room_info(new['level'], new['location'])
-        pathing_data = room_info.get_pathing_data(new['objective_pos_or_dir'], new['tile_states'])
-        return pathing_data
+    def _apply_direction(self, y, x, direction):
+        match direction:
+            case SelectedDirection.N:
+                return y - 1, x
+            case SelectedDirection.S:
+                return y + 1, x
+            case SelectedDirection.W:
+                return y, x - 1
+            case SelectedDirection.E:
+                return y, x + 1
+            case _:
+                raise ValueError(f"Invalid direction: {direction}")
 
     def _critique_danger_sense(self, selection, direction, old, new):
         selected_is_attack = selection != SelectedAction.MOVEMENT
@@ -1013,9 +957,16 @@ class MultiHeadCritic(gym.Wrapper):
 
         return mask
 
-    def _get_room_info(self, level, location):
-        key = (level, location)
+    def _get_room_info(self, info) -> RoomInformation:
+        level = info['level']
+        location = info['location']
+        key = level, location
         if key not in self._room_info:
-            self._room_info[key] = RoomInformation(level, location)
+            self._room_info[key] = RoomInformation(level, location, info['tiles'])
 
         return self._room_info[key]
+
+    def _get_wavefront_values(self, info):
+        room_info = self._get_room_info(info)
+        wavefront = room_info.wavefront.get_wavefront(info)
+        return wavefront.values
