@@ -1,8 +1,7 @@
 import gymnasium as gym
 import numpy as np
 
-from .ml_torch import action_to_direction
-from .zelda_game import Direction
+from .ml_torch import SelectedDirection
 
 class ZeldaActionSpace(gym.ActionWrapper):
     """A wrapper that shrinks the action space down to what's actually used in the game."""
@@ -69,13 +68,13 @@ class MultiHeadInputWrapper(gym.Wrapper):
         obs, reward, terminated, truncated, info = self.env.step(action)
         return obs, reward, terminated, truncated, info
 
-    def _assign_button_fron_direction(self, action,  buttons, allow_none=False):
-        action = action_to_direction(action)
+    def _assign_button_from_direction(self, action,  buttons, allow_none=False):
+        action = SelectedDirection(action)
         match action:
-            case Direction.N: buttons[self.up_button] = True
-            case Direction.S: buttons[self.down_button] = True
-            case Direction.W: buttons[self.left_button] = True
-            case Direction.E: buttons[self.right_button] = True
+            case SelectedDirection.N: buttons[self.up_button] = True
+            case SelectedDirection.S: buttons[self.down_button] = True
+            case SelectedDirection.W: buttons[self.left_button] = True
+            case SelectedDirection.E: buttons[self.right_button] = True
             case _:
                 if not allow_none:
                     raise ValueError(f"Invalid direction: {action}")
@@ -86,14 +85,14 @@ class MultiHeadInputWrapper(gym.Wrapper):
 
         match decision:
             case 0:
-                self._assign_button_fron_direction(pathfinding, buttons)
+                self._assign_button_from_direction(pathfinding, buttons)
 
             case 1:
-                self._assign_button_fron_direction(danger, buttons)
+                self._assign_button_from_direction(danger, buttons)
                 buttons[self.a_button] = True
 
             case 2:
-                self._assign_button_fron_direction(danger, buttons)
+                self._assign_button_from_direction(danger, buttons)
                 buttons[self.a_button] = True
 
             case _: raise ValueError(f"Invalid button action: {decision}")

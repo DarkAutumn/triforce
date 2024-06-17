@@ -226,7 +226,7 @@ class ZeldaMultiHeadNetwork(nn.Module):
         danger_sense_logits = self._get_danger_sense_logits(masks, combat, selected_action)
         danger_sense_direction = torch.distributions.Categorical(logits=danger_sense_logits).sample()
 
-        return pathfinding_direction, danger_sense_direction, selected_action
+        return torch.stack([pathfinding_direction, danger_sense_direction, selected_action], dim=1).to(self.device)
 
     def get_act_logp_ent_val(self, image, features, actions = None, masks = None):
         shared, combat = self._forward_steps(image, features)
@@ -243,6 +243,7 @@ class ZeldaMultiHeadNetwork(nn.Module):
 
         # Choose danger sense direction. If we choose to attack, we cannot chose no danger direction
         danger_sense_logits = self._get_danger_sense_logits(masks, combat, selected_action)
+
         danger_sense_dists = torch.distributions.Categorical(logits=danger_sense_logits)
         danger_sense_direction = danger_sense_dists.sample() if actions is None else actions[:, 1]
 
@@ -271,7 +272,8 @@ class ZeldaMultiHeadNetwork(nn.Module):
 
         entropy_tensor = torch.stack([dist.entropy() for dist in dists], dim=1).to(self.device)
         act_logp_ent_val = torch.stack([actions_tensor, logprob_tensor, entropy_tensor, value_tensor], dim=2)
-        assert actions_tensor[0, 2] == 0 or actions_tensor[0, 1] != 4
+        assert actions_tensor[0, ActionLayout.SELECTED_ACTION.value] == SelectedAction.MOVEMENT.value \
+             or actions_tensor[0, ActionLayout.DANGER_SENSE.value] != SelectedDirection.NONE.value
         return act_logp_ent_val.to(self.device)
 
     def _get_pathfinding_logits(self, masks, shared):
@@ -289,12 +291,24 @@ class ZeldaMultiHeadNetwork(nn.Module):
         return logits
 
     def _get_danger_sense_logits(self, masks, combat, selected_action):
+        batch_size = selected_action.shape[0]
+
+        if masks is None:
+            mask = torch.ones((batch_size, 5), dtype=torch.float32)
+
+        else:
+            # Use the provided mask for the DANGER_SENSE action
+            mask = masks[ActionLayout.DANGER_SENSE.value]
+            if mask.ndimension() == 1:
+                mask = mask.unsqueeze(0).expand(batch_size, -1)
+
+        # Iterate through the batch and set the NONE direction to 0 where selected_action matches MOVEMENT
+        for i in range(batch_size):
+            if selected_action[i] != SelectedAction.MOVEMENT.value:
+                mask[i, SelectedDirection.NONE.value] = 0.0
+
         logits = self.danger_sense(combat)
-        if selected_action != SelectedAction.MOVEMENT.value:
-            mask = torch.ones(5, dtype=torch.float32) if masks is None else masks[ActionLayout.DANGER_SENSE.value]
-            mask[SelectedDirection.NONE.value] = 0.0
-            if mask is not None:
-                logits += (1 - mask.to(self.device)) * -1e9
+        logits += (1 - mask.to(self.device)) * -1e9
         return logits
 
     def save(self, path):
@@ -474,23 +488,13 @@ class MultiHeadPPO:
 
         self.network.trained_steps += self.memory_length
 
-def action_to_direction(action):
-    """Converts a model action into a direction."""
-    match action:
-        case 0: return Direction.N
-        case 1: return Direction.S
-        case 2: return Direction.W
-        case 3: return Direction.E
-        case 4: return None
-        case _: raise ValueError(f"Invalid pathfinding action: {action}")
-
 def direction_to_action(direction):
     """Converts a direction into a model action."""
     match direction:
-        case Direction.N: return 0
-        case Direction.S: return 1
-        case Direction.W: return 2
-        case Direction.E: return 3
+        case SelectedDirection.N: return 0
+        case SelectedDirection.S: return 1
+        case SelectedDirection.W: return 2
+        case SelectedDirection.E: return 3
         case None: return 4
         case _: raise ValueError(f"Invalid direction: {direction}")
 
@@ -525,7 +529,6 @@ def action_to_selection(action):
 __all__ = [
     MultiHeadPPO.__name__,
     ZeldaMultiHeadNetwork.__name__,
-    action_to_direction.__name__,
     direction_to_action.__name__,
     SelectedAction.__name__,
     mask_actions.__name__,
