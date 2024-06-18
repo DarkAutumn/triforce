@@ -20,6 +20,11 @@ REWARD_MEDIUM = 0.5
 REWARD_LARGE = 0.75
 REWARD_MAXIMUM = 1.0
 
+def is_deflecting(old, new):
+    """Returns True if the agent is deflecting an arrow, False otherwise."""
+    arrow_deflected = ZeldaSoundsPulse1.ArrowDeflected.value
+    return new['sound_pulse_1'] & arrow_deflected and (old['sound_pulse_1'] & arrow_deflected) != arrow_deflected
+
 def _manhattan_distance(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
@@ -303,12 +308,8 @@ class GameplayCritic(ZeldaCritic):
             new (Dict[str, int]): The new state of tnhe game.
             rewards (Dict[str, float]): The rewards obtained during gameplay.
         """
-        if self._is_deflecting(old, new):
+        if is_deflecting(old, new):
             rewards['reward-block'] = self.block_projectile_reward
-
-    def _is_deflecting(self, old, new):
-        arrow_deflected = ZeldaSoundsPulse1.ArrowDeflected.value
-        return new['sound_pulse_1'] & arrow_deflected and (old['sound_pulse_1'] & arrow_deflected) != arrow_deflected
 
     def critique_aligned_enemy(self, old, new, rewards):
         """Critiques whether the agent fired sword beams towards an aligned enemy or not."""
@@ -494,7 +495,7 @@ class GameplayCritic(ZeldaCritic):
         """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted
         independent of other movement rewards.  This ensures that even if the agent is moving in the right direction,
         it is still wary of moving too close to an enemy."""
-        if not old['took_damage'] and not self._is_deflecting(old, new):
+        if not old['took_damage'] and not is_deflecting(old, new):
             warning_diff = new['link_warning_tiles'] - old['link_warning_tiles']
             danger_diff = new['link_danger_tiles'] - old['link_danger_tiles']
 
@@ -729,6 +730,7 @@ DAMAGE_PENALTY = -REWARD_LARGE
 NO_MOVEMENT_PENALTY = -REWARD_LARGE
 ENEMY_HIT_REWARD = REWARD_LARGE
 DANGER_SENSE_REWARD = REWARD_SMALL
+BLOCK_REWARD = REWARD_MAXIMUM
 
 MAX_DANGER_DISTANCE = 240
 
@@ -874,6 +876,10 @@ class MultiHeadCritic(gym.Wrapper):
             if old['location_objective'] == new['location']:
                 return MOVE_CLOSER_REWARD
             return WRONG_ROOM_PENALTY
+
+        # if we blocked a projectile, reward the agent no matter the wavefront
+        if selection == SelectedAction.MOVEMENT and is_deflecting(old, new):
+            return BLOCK_REWARD
 
         # If link ran into a wall, penalize the agent, but also mask the direction so we get better actions to
         # learn from
