@@ -847,7 +847,7 @@ class MultiHeadCritic(gym.Wrapper):
         info['masks'] = self.pathfinding_mask, self._get_danger_sense_mask(info), \
                             self._get_action_mask(info)
 
-        return movement_reward, action_reward, danger_sense_reward
+        return movement_reward, danger_sense_reward, action_reward
 
     def _critique_action(self):
         return 0.0
