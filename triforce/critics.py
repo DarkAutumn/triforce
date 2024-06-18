@@ -892,6 +892,7 @@ class MultiHeadCritic(gym.Wrapper):
         self.pathfinding_mask = None
 
         y, x = new['link'].tile_coordinates[0]
+        y += 1  # use the bottom of the link sprite to avoid half-tile issues
         ny, nx = self._apply_direction(y, x, direction)
 
         # Did we move within the map?
