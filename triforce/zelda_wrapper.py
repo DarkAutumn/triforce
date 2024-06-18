@@ -13,9 +13,9 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, get_bomb_state, is_health_full, is_in_cave, \
-                        is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, ZeldaObjectData, \
-                        is_room_loaded, is_sword_frozen, get_heart_halves, position_to_tile_index, tiles_to_weights
+from .zelda_game import ANIMATION_BEAMS_HIT, BEAM_HIT_COOLDOWN, AnimationState, Direction, TileState, ZeldaEnemy, \
+    get_bomb_state, is_health_full, is_in_cave, is_link_stunned, is_mode_death, get_beam_state, is_mode_scrolling, \
+    ZeldaObjectData, is_room_loaded, is_sword_frozen, get_heart_halves, position_to_tile_index, tiles_to_weights
 from .model_parameters import MAX_MOVEMENT_FRAMES, ATTACK_COOLDOWN, ITEM_COOLDOWN, CAVE_COOLDOWN, WS_ADJUSTMENT_FRAMES
 
 class ActionType(Enum):
@@ -51,9 +51,9 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._last_enemies = [None] * 12
 
         # per-reset state
+        self._beam_hit_frames = 0
         self._location = None
         self._last_info = None
-        self._beams_already_active = False
         self._prev_enemies = None
         self._prev_health = None
         self.was_link_in_cave = False
@@ -61,8 +61,8 @@ class ZeldaGameWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
         self._last_info = None
+        self._beam_hit_frames = 0
         self._location = None
-        self._beams_already_active = False
         self._prev_enemies = None
         self._prev_health = None
 
@@ -121,7 +121,12 @@ class ZeldaGameWrapper(gym.Wrapper):
         # add information about beam state
         health_full = is_health_full(info)
         info['health_full'] = health_full
-        info['beams_available'] = health_full and get_beam_state(info) == AnimationState.INACTIVE
+
+        beams_available = get_beam_state(info) == AnimationState.INACTIVE
+        beams_available = beams_available or \
+            (self._beam_hit_frames > BEAM_HIT_COOLDOWN and get_beam_state(info) == AnimationState.HIT)
+        beams_available = health_full and beams_available
+        info['beams_available'] = beams_available
 
         # enemies the aligned with beams
         info['aligned_enemies'] = self._get_aligned_enemies(info)
@@ -368,6 +373,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']):
             obs, _, terminated, truncated, info = self.env.step(self._none_action)
             frames_skipped += 1
+            self._beam_hit_frames = self._beam_hit_frames + 1 if info['beam_animation'] == ANIMATION_BEAMS_HIT else 0
 
             assert not terminated and not truncated
 
@@ -380,17 +386,29 @@ class ZeldaGameWrapper(gym.Wrapper):
         direction = self._get_button_direction(act)
         self._set_direction(direction)
 
+        ram = self.env.unwrapped.get_ram()
+        beams = ram[0xba]
+
         if action_kind == ActionType.ATTACK:
             obs, rewards, terminated, truncated, info = self.env.step(self._attack_action)
+            self._beam_hit_frames = self._beam_hit_frames + 1 if info['beam_animation'] == ANIMATION_BEAMS_HIT else 0
             cooldown = ATTACK_COOLDOWN
 
         elif action_kind == ActionType.ITEM:
             obs, rewards, terminated, truncated, info = self.env.step(self._item_action)
+            self._beam_hit_frames = self._beam_hit_frames + 1 if info['beam_animation'] == ANIMATION_BEAMS_HIT else 0
             cooldown = ITEM_COOLDOWN
+
+        ram = self.env.unwrapped.get_ram()
+        new_beams = ram[0xba]
 
         total_frames += cooldown + 1
         obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
         rewards += rew
+
+        ram = self.env.unwrapped.get_ram()
+        next_beams = ram[0xba]
+        print(f"Beams changed from {beams} -> {new_beams} -> {next_beams}")
 
         return obs, rew, terminated, truncated, info, total_frames
 
@@ -404,6 +422,7 @@ class ZeldaGameWrapper(gym.Wrapper):
             obs, rewards, terminated, truncated, info = self.env.step(act)
             total_frames += 1
             last_pos = info['link_pos']
+            self._beam_hit_frames = self._beam_hit_frames + 1 if info['beam_animation'] == ANIMATION_BEAMS_HIT else 0
 
         last_pos = np.array(last_pos, dtype=np.uint8)
         old_tile_index = position_to_tile_index(*last_pos)
@@ -412,6 +431,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         prev = last_pos
         for _ in range(MAX_MOVEMENT_FRAMES):
             obs, rewards, terminated, truncated, info = self.env.step(act)
+            self._beam_hit_frames = self._beam_hit_frames + 1 if info['beam_animation'] == ANIMATION_BEAMS_HIT else 0
             total_frames += 1
             x, y = info['link_x'], info['link_y']
             new_tile_index = position_to_tile_index(x, y)
@@ -449,6 +469,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         rewards = 0
         for _ in range(cooldown):
             obs, rew, terminated, truncated, info = self.env.step(act)
+            self._beam_hit_frames = self._beam_hit_frames + 1 if info['beam_animation'] == ANIMATION_BEAMS_HIT else 0
+
             rewards += rew
 
         return obs, rewards, terminated, truncated, info

@@ -960,7 +960,9 @@ class MultiHeadCritic(gym.Wrapper):
             mask[SelectedAction.MOVEMENT.value] = 1
         else:
             mask = torch.ones(3, dtype=torch.float32)
-            if not info['beams_available']:
+            if info['beams_available']:
+                mask[SelectedAction.ATTACK.value] = 0
+            else:
                 mask[SelectedAction.BEAMS.value] = 0
 
         return mask
