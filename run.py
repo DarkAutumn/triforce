@@ -24,7 +24,7 @@ def main():
         return
 
     if args.torch:
-        display = DisplayWindowTorch(scenario, args.model_path)
+        display = DisplayWindowTorch(scenario, args.model_path[0] if args.model_path else None)
         display.show(args.headless_recording)
     else:
         model_path = args.model_path[0] if args.model_path else \

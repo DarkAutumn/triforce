@@ -314,7 +314,8 @@ class ZeldaMultiHeadNetwork(nn.Module):
         torch.save(self.state_dict(), path)
 
     def load(self, path):
-        self.load_state_dict(torch.load(path))
+        data = torch.load(path)
+        self.load_state_dict(data)
 
 class MultiHeadPPO:
     def __init__(self, network : ZeldaMultiHeadNetwork, device, train_callback = None,

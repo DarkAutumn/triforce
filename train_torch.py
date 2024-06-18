@@ -13,6 +13,7 @@ def parse_args():
     parser.add_argument("output", nargs='?', type=str, help="Location to write to.")
     parser.add_argument("--iterations", type=int, default=-1, help="Override iteration count.")
     parser.add_argument("--log-dir", type=str, help="Location to write logs to.")
+    parser.add_argument("--intermediate", type=str, help="Location to save intermediate models to.")
 
     try:
         args = parser.parse_args()
@@ -24,15 +25,25 @@ def parse_args():
         parser.print_help()
         sys.exit(0)
 
-def main(args):
-    """Entry point to train the multi-headed model."""
-    output = args.output
-    if output:
-        parentdir = os.path.dirname(output)
+def make_dirs(args):
+    """Create directories for the output."""
+    if args.output:
+        parentdir = os.path.dirname(args.output)
         os.makedirs(parentdir, exist_ok=True)
 
     if args.log_dir:
         os.makedirs(args.log_dir, exist_ok=True)
+
+    if args.intermediate:
+        os.makedirs(args.intermediate, exist_ok=True)
+
+def main(args):
+    """Entry point to train the multi-headed model."""
+    make_dirs(args)
+
+    def save_intermediate(iteration, agent):
+        filename = f"{args.intermediate}/model_{iteration}.pt"
+        agent.network.save(filename)
 
     iterations = 10_000 if args.iterations <= 0 else args.iterations
 
@@ -43,11 +54,13 @@ def main(args):
         image_dim = obs_space[0].shape[-1]
         features = math.prod(obs_space[1].shape)
         network = ZeldaMultiHeadNetwork(image_dim, features, device)
-        ppo = MultiHeadPPO(network, device, tensorboard_dir=args.log_dir)
+
+        callback = save_intermediate if args.intermediate else None
+        ppo = MultiHeadPPO(network, device, train_callback=callback, tensorboard_dir=args.log_dir)
 
         ppo.train(env, iterations)
-        if output:
-            network.save(output)
+        if args.output:
+            network.save(args.output)
 
     finally:
         env.close()
