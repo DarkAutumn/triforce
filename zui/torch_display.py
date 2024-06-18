@@ -343,12 +343,15 @@ class DisplayWindowTorch:
         return new_y
 
     def _render_one_observation(self, surface, x, y, img):
-        if img.shape[2] == 1:
-            img = img.repeat(1, 1, 3)
+        if img.shape[0] == 1:
+            img = img.repeat(3, 1, 1).permute(2, 1, 0)
 
-        np_array = img.squeeze(0).cpu().numpy()
-        observation_surface = pygame.surfarray.make_surface(np_array) # .permute(1, 0, 2)
-        observation_surface = pygame.transform.scale(observation_surface, (img.shape[1], img.shape[0]))
+        np_array = img.cpu().numpy().copy()
+        np_array *= 255
+        np_array = np_array.astype(np.uint8)
+
+        observation_surface = pygame.surfarray.make_surface(np_array)
+        observation_surface = pygame.transform.scale(observation_surface, (np_array.shape[1], np_array.shape[0]))
         surface.blit(observation_surface, (x, y))
 
         y += img.shape[0]
