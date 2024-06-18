@@ -5,8 +5,8 @@ import pygame
 import torch
 
 from triforce import make_multihead_zelda_env, ZeldaScenario, ZeldaMultiHeadNetwork
-from triforce.zelda_game import Direction, is_in_cave
-from triforce.ml_torch import SelectedAction
+from triforce.zelda_game import is_in_cave
+from triforce.ml_torch import SelectedAction, SelectedDirection
 
 def render_text(surface, font, text, position, color=(255, 255, 255)):
     """Render text on the surface and returns the new y position."""
@@ -51,7 +51,6 @@ class DisplayWindowTorch:
         self.total_height = max(self.game_height + self.details_height, self.text_height)
         self.dimensions = (self.total_width, self.total_height)
 
-        self.total_rewards = 0.0
         self._last_location = None
         self.start_time = None
 
@@ -68,7 +67,6 @@ class DisplayWindowTorch:
         clock = pygame.time.Clock()
 
         endings = {}
-        reward_map = {}
         next_action = None
 
         model_requested = 0
@@ -84,9 +82,13 @@ class DisplayWindowTorch:
         truncated = False
 
         info = {}
-        sense = torch.zeros(5, dtype=torch.float32)
+        sense_key = torch.zeros(5, dtype=torch.float32)
 
         rendered_buttons = []
+
+        act_rew = deque(maxlen=16)
+        sense_key = SelectedDirection.NONE
+        pathfinding_key = SelectedDirection.N
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
         mode = 'c'
@@ -96,21 +98,20 @@ class DisplayWindowTorch:
                     endings[info['end']] = endings.get(info['end'], 0) + 1
 
                 obs, info = env.reset()
-                self.total_rewards = 0.0
-                reward_map.clear()
+                act_rew.clear()
 
 
             # Perform a step in the environment
             if mode in ('c', 'n'):
-                if next_action:
+                if next_action is not None:
                     action = next_action
                     model_name = "keyboard input"
                     next_action = None
                 else:
                     action = self._get_action_from_model(obs, info)
 
-                last_info = info
-                obs, _, terminated, truncated, info = env.step(action)
+                obs, rewards, terminated, truncated, info = env.step(action)
+                act_rew.append((action, rewards))
 
                 if mode == 'n':
                     mode = 'p'
@@ -124,6 +125,7 @@ class DisplayWindowTorch:
                 surface.fill((0, 0, 0))
 
                 self._show_observation(surface, obs)
+                self._show_act_rew(surface, act_rew, (self.text_x, self.text_y))
 
                 # render the gameplay
                 self._render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width,
@@ -179,7 +181,7 @@ class DisplayWindowTorch:
                             mode = 'c'
 
                         elif event.key == pygame.K_o:
-                            overlay = (overlay + 1) % 4
+                            overlay = (overlay + 1) % 2
 
                         elif event.key == pygame.K_e:
                             show_endings = not show_endings
@@ -191,15 +193,60 @@ class DisplayWindowTorch:
                             cap_fps = not cap_fps
 
                         elif event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
-                            keys = pygame.key.get_pressed()
-                            next_action = self._get_action_from_keys(keys, sense, info)
+                            pathfinding_key = self._get_pathfinding(pygame.key.get_pressed())
+                            if pathfinding_key is not None:
+                                items = [pathfinding_key, sense_key, SelectedAction.MOVEMENT]
+                                items = [x.value for x in items]
+                                next_action = torch.tensor(items, dtype=torch.int64).unsqueeze(0)
+                                mode = 'n'
+
+                        elif event.key == pygame.K_a:
+                            action = SelectedAction.BEAMS if info['beams_available'] else SelectedAction.ATTACK
+                            sense = sense_key if sense_key != SelectedDirection.NONE else pathfinding_key
+                            items = [pathfinding_key, sense, action]
+                            items = [x.value for x in items]
+                            next_action = torch.tensor(items, dtype=torch.int64).unsqueeze(0)
                             mode = 'n'
 
                         elif event.key in (pygame.K_KP_8, pygame.K_KP_2, pygame.K_KP_4, pygame.K_KP_6):
-                            sense = self._get_danger_sense_from_keys(pygame.key.get_pressed())
+                            key_temp = self._map_sense_key(pygame.key.get_pressed())
+                            if key_temp is not None:
+                                sense_key = key_temp
 
         env.close()
         pygame.quit()
+
+    def _direction_to_arrow_vector(self, direction):
+        if direction == SelectedDirection.N:
+            return 0, -1
+        if direction == SelectedDirection.S:
+            return 0, 1
+        if direction == SelectedDirection.W:
+            return -1, 0
+        if direction == SelectedDirection.E:
+            return 1, 0
+
+        return 0, 0
+
+    def _show_act_rew(self, surface, act_rew, pos):
+        y = render_text(surface, self.font, "Action/Reward", pos)
+        radius = 20
+        for action, rewards in reversed(act_rew):
+            pathfinding, sense, decision = action.squeeze(0).tolist()
+            pathfinding = self._direction_to_arrow_vector(SelectedDirection(pathfinding))
+            sense = self._direction_to_arrow_vector(SelectedDirection(sense))
+            decision = SelectedAction(decision)
+
+            _ = self._draw_arrow(surface, f"{rewards[0]:.2f}", (pos[0], y), pathfinding,
+                                 radius=radius, color=(255, 255, 255), width=3)
+            x = pos[0] + radius * 2 + 10
+            new_y = self._draw_arrow(surface, f"{rewards[1]:.2f}", (x, y), sense, radius=20,
+                                     color=(255, 255, 255), width=3)
+
+            x += radius * 2 + 10
+            render_text(surface, self.font, f"{decision.name} {rewards[2]:.2f}", (x, y))
+
+            y = new_y
 
     def _render_game_view(self, surface, rgb_array, pos, game_width, game_height):
         frame = pygame.surfarray.make_surface(np.swapaxes(rgb_array, 0, 1))
@@ -213,13 +260,12 @@ class DisplayWindowTorch:
         y_pos = self.obs_y
         y_pos = self._render_observation_view(surface, x_pos, y_pos, img)
 
-        for i in range(6):
+        for i in range(features.shape[0]):
             feature = features[i]
-            x, y, temp = feature
+            x, y, temp = feature[i].tolist()
 
             y_pos = self._draw_arrow(surface, f"{temp:.1f}", (x_pos + self.obs_width // 4, y_pos), np.array([x, y]),
                                 radius=self.obs_width // 4, color=(255, 255, 255), width=3)
-
 
     def _draw_arrow(self, surface, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
         render_text(surface, self.font, label, (start_pos[0], start_pos[1]))
@@ -245,6 +291,41 @@ class DisplayWindowTorch:
 
         return circle_start[1] + radius * 2
 
+    def _overlay_grid_and_text(self, surface, kind, offset, text_color, scale, info):
+        if kind == 0:
+            return
+
+        tile_states = info['wavefront']
+
+        grid_width = 32
+        grid_height = 22
+        tile_width = 8 * scale
+        tile_height = 8 * scale
+
+        # Pygame font setup
+        font_size = int(min(tile_width, tile_height) // 2)
+        font = pygame.font.Font(None, font_size)
+
+        for tile_x in range(grid_width):
+            for tile_y in range(grid_height):
+                x = offset[0] + tile_x * tile_width - 8 * scale
+                y = 56 * scale + offset[1] + tile_y * tile_height
+                color = (0, 0, 0)
+                pygame.draw.rect(surface, color, (x, y, tile_width, tile_height), 1)
+
+                tile_number = tile_states[tile_y, tile_x]
+                if tile_number > 256:
+                    continue
+
+                text = f"{tile_number:02X}"
+
+                # Render the text
+                text_surface = font.render(text, True, text_color)
+                text_rect = text_surface.get_rect(center=(x + tile_width // 2, y + tile_height // 2))
+
+                # Draw the text
+                surface.blit(text_surface, text_rect)
+
     def _render_observation_view(self, surface, x, y, img):
         render_text(surface, self.font, "Observation", (x, y))
         y += 20
@@ -267,50 +348,37 @@ class DisplayWindowTorch:
         if img.shape[2] == 1:
             img = img.repeat(1, 1, 3)
 
-        observation_surface = pygame.surfarray.make_surface(img.permute(1, 0, 2).cpu().numpy())
+        np_array = img.squeeze(0).cpu().numpy()
+        observation_surface = pygame.surfarray.make_surface(np_array) # .permute(1, 0, 2)
         observation_surface = pygame.transform.scale(observation_surface, (img.shape[1], img.shape[0]))
         surface.blit(observation_surface, (x, y))
 
         y += img.shape[0]
         return y
 
-    def _get_action_from_keys(self, keys, sense, info):
-        pathfinding = torch.zeros(4, dtype=torch.float32)
-        actions = torch.zeros(3, dtype=torch.float32)
-
-        # pygame.K_s for items
-        if keys[pygame.K_a]:
-            if info['beams_available']:
-                actions[SelectedAction.BEAMS.value] = 1.0
-            else:
-                actions[SelectedAction.ATTACK.value] = 1.0
-        else:
-            actions[SelectedAction.MOVEMENT.value] = 1.0
-
+    def _get_pathfinding(self, keys):
         if keys[pygame.K_LEFT]:
-            pathfinding[Direction.W.value] = 1.0
-        elif keys[pygame.K_RIGHT]:
-            pathfinding[Direction.E.value] = 1.0
-        elif keys[pygame.K_UP]:
-            pathfinding[Direction.N.value] = 1.0
-        elif keys[pygame.K_DOWN]:
-            pathfinding[Direction.S.value] = 1.0
+            return SelectedDirection.W
+        if keys[pygame.K_RIGHT]:
+            return SelectedDirection.E
+        if keys[pygame.K_UP]:
+            return SelectedDirection.N
+        if keys[pygame.K_DOWN]:
+            return SelectedDirection.S
 
-        return pathfinding, sense, actions
+        return None
 
-    def _get_danger_sense_from_keys(self, keys):
-        sense = torch.zeros(5, dtype=torch.float32)
-
+    def _map_sense_key(self, keys):
         if keys[pygame.K_KP_8]:
-            sense[Direction.N.value] = 1.0
-        elif keys[pygame.K_KP_2]:
-            sense[Direction.S.value] = 1.0
-        elif keys[pygame.K_KP_4]:
-            sense[Direction.W.value] = 1.0
-        elif keys[pygame.K_KP_6]:
-            sense[Direction.E.value] = 1.0
+            return SelectedDirection.N
+        if keys[pygame.K_KP_2]:
+            return SelectedDirection.S
+        if keys[pygame.K_KP_4]:
+            return SelectedDirection.W
+        if keys[pygame.K_KP_6]:
+            return SelectedDirection.E
 
-        return sense
+        return SelectedDirection.NONE
 
     def _print_location_info(self, info):
         if self._last_location is not None:
