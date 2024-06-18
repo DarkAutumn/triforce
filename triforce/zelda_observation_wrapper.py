@@ -169,6 +169,13 @@ MAX_DIST = 175
 SLOPE =  (TEMP_MAX - TEMP_MIN) / (MAX_DIST - MIN_DIST)
 INTERCEPT = TEMP_MAX - SLOPE * MAX_DIST
 
+# Shape:
+# 6x3 - 6 enemies with a vector and a threat temperature
+# 3x3 - 3 projectiles with a vector and a threat temperature
+# 3x3 - 3 items with a vector and a temperature
+# 1x3 - objective vector (unused temp)
+# = 6x3 + 3x3 + 3x3 + 1x2 = 18 + 9 + 9 + 2 = 39
+
 class MultiHeadObservationWrapper(gym.Wrapper):
     """An observation wrapper used for the torch based PPO/multi-head model.  This is similar to
     ZeldaObservationWrapper and ZeldaVectorFeatures, but sufficiently different that it's in a new class.
@@ -181,7 +188,7 @@ class MultiHeadObservationWrapper(gym.Wrapper):
         self.grayscale_weights = torch.tensor([0.2989, 0.5870, 0.1140]).to(device)
         self.observation_space = gym.spaces.Tuple((
             gym.spaces.Box(low=0.0, high=1.0, shape=(1, viewport_size, viewport_size), dtype=np.float32),
-            gym.spaces.Box(low=0.0, high=1.0, shape=(3, 6, 3), dtype=np.float32)
+            gym.spaces.Box(low=0.0, high=1.0, shape=(13, 3), dtype=np.float32)
         ))
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
@@ -231,21 +238,22 @@ class MultiHeadObservationWrapper(gym.Wrapper):
         return frame
 
     def _get_features(self, info):
-        features = torch.zeros(3, 6, 3, dtype=torch.float32, device=self.device)
-        self._assign_vector(features, 0, info['active_enemies'])
-        self._assign_vector(features, 1, info['projectiles'])
-        self._assign_vector(features, 2, info['items'])
-        return features
+        values = []
+        values.extend(self._get_values(info['active_enemies'], 6))
+        values.extend(self._get_values(info['projectiles'], 3))
+        values.extend(self._get_values(info['items'], 3))
+        obj_vect = info['objective_vector']
+        values.append((obj_vect[0], obj_vect[1], 0.0))
+        values = [float(item) for sublist in values for item in sublist]
 
-    def _assign_vector(self, features, obj_type, objects):
-        if objects:
-            object_tensor = torch.zeros(6, 3, dtype=torch.float32).to(self.device)
-            for i, obj in enumerate(objects):
-                vect = torch.from_numpy(obj.vector)
-                object_tensor[i, 0] = vect[0]
-                object_tensor[i, 1] = vect[1]
-                object_tensor[i, 2] = np.clip(SLOPE * obj.distance + INTERCEPT, 0.1, 1.0)
+        return torch.tensor(values, device=self.device).unsqueeze(0)
 
-            features[obj_type, :] = object_tensor
+    def _get_values(self, objects, length):
+        result = [(0, 0, 0)] * length
+        for i, obj in enumerate(objects):
+            vect = torch.from_numpy(obj.vector)
+            result[i] = (vect[0], vect[1], np.clip(SLOPE * obj.distance + INTERCEPT, 0.1, 1.0))
+
+        return result
 
 __all__ = ['ZeldaObservationWrapper', 'FrameCaptureWrapper', 'MultiHeadObservationWrapper']

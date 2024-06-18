@@ -55,7 +55,7 @@ class DisplayWindowTorch:
         self.start_time = None
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self._model = ZeldaMultiHeadNetwork(128, 54, device)
+        self._model = ZeldaMultiHeadNetwork(128, 39, device)
         if model_path:
             self._model.load(model_path)
 
@@ -260,9 +260,10 @@ class DisplayWindowTorch:
         y_pos = self.obs_y
         y_pos = self._render_observation_view(surface, x_pos, y_pos, img)
 
+        features = features.reshape(13, 3)
+
         for i in range(features.shape[0]):
-            feature = features[i]
-            x, y, temp = feature[i].tolist()
+            x, y, temp = features[i].cpu().tolist()
 
             y_pos = self._draw_arrow(surface, f"{temp:.1f}", (x_pos + self.obs_width // 4, y_pos), np.array([x, y]),
                                 radius=self.obs_width // 4, color=(255, 255, 255), width=3)
@@ -295,8 +296,6 @@ class DisplayWindowTorch:
         if kind == 0:
             return
 
-        tile_states = info['wavefront']
-
         grid_width = 32
         grid_height = 22
         tile_width = 8 * scale
@@ -310,10 +309,9 @@ class DisplayWindowTorch:
             for tile_y in range(grid_height):
                 x = offset[0] + tile_x * tile_width - 8 * scale
                 y = 56 * scale + offset[1] + tile_y * tile_height
-                color = (0, 0, 0)
-                pygame.draw.rect(surface, color, (x, y, tile_width, tile_height), 1)
+                pygame.draw.rect(surface, (0, 0, 0), (x, y, tile_width, tile_height), 1)
 
-                tile_number = tile_states[tile_y, tile_x]
+                tile_number = info['wavefront'][tile_y, tile_x]
                 if tile_number > 256:
                     continue
 
