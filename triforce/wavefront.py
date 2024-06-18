@@ -35,7 +35,15 @@ class RoomWavefront:
     def get_wavefront(self, info):
         """Get the wavefront for the room."""
         link_pos =  np.array(info['link_pos'], dtype=np.float32)
-        location_objective, objective_vector, pos_dir, kind = self.orchestrator.get_objectives(info, link_pos)
+        objectives = self.orchestrator.get_objectives(info, link_pos)
+        if objectives is None:
+            info['objective_vector'] = np.zeros(2, dtype=np.float32)
+            info['location_objective'] = None
+            info['position_or_direction'] = None
+            maxint = np.iinfo(np.int32).max
+            return Wave(None, np.full(self.tiles.shape, maxint, dtype=np.int32))
+
+        location_objective, objective_vector, pos_dir, kind = objectives
         if objective_vector is None:
             objective_vector = self._get_objective_vector(info['link'], pos_dir)
 
