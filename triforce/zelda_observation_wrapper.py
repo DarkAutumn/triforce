@@ -250,7 +250,7 @@ class MultiHeadObservationWrapper(gym.Wrapper):
 
     def _get_values(self, objects, length):
         result = [(0, 0, 0)] * length
-        for i, obj in enumerate(objects):
+        for i, obj in enumerate(objects[:length]):
             vect = torch.from_numpy(obj.vector)
             result[i] = (vect[0], vect[1], np.clip(SLOPE * obj.distance + INTERCEPT, 0.1, 1.0))
 
