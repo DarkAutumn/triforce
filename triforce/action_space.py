@@ -1,7 +1,7 @@
 import gymnasium as gym
 import numpy as np
 
-from .ml_torch import SelectedDirection
+from .ml_torch import SelectedAction, SelectedDirection
 
 class ZeldaActionSpace(gym.ActionWrapper):
     """A wrapper that shrinks the action space down to what's actually used in the game."""
@@ -83,15 +83,15 @@ class MultiHeadInputWrapper(gym.Wrapper):
         pathfinding, danger, decision = actions.squeeze(0).tolist()
         buttons = [False] * self.button_len
 
-        match decision:
-            case 0:
+        match SelectedAction(decision):
+            case SelectedAction.MOVEMENT:
                 self._assign_button_from_direction(pathfinding, buttons)
 
-            case 1:
+            case SelectedAction.ATTACK:
                 self._assign_button_from_direction(danger, buttons)
                 buttons[self.a_button] = True
 
-            case 2:
+            case SelectedAction.BEAMS:
                 self._assign_button_from_direction(danger, buttons)
                 buttons[self.a_button] = True
 
