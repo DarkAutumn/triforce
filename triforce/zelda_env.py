@@ -3,6 +3,7 @@
 import retro
 
 from .critics import MultiHeadCritic
+from .end_conditions import EndConditionWrapper
 from .objective_selector import ObjectiveSelector
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import MultiHeadInputWrapper, ZeldaActionSpace
@@ -70,6 +71,7 @@ def make_multihead_zelda_env(save_state, *, render_mode = None, device = 'cpu', 
     env = MultiHeadInputWrapper(env)
     env = MultiHeadCritic(env)
     env = MultiHeadObservationWrapper(env, 128, device)
+    env = EndConditionWrapper(env)
 
     return env
 

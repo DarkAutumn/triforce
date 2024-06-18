@@ -1,6 +1,7 @@
 """All end conditions for training."""
 
 from typing import Dict
+import gymnasium as gym
 from .zelda_game import get_num_triforce_pieces, is_mode_death
 
 class ZeldaEndCondition:
@@ -98,9 +99,12 @@ class EnteredDungeon(ZeldaEndCondition):
 class LeftOverworld1Area(ZeldaEndCondition):
     """End the scenario if the agent leaves the allowable areas between the start room and dungeon 1."""
     overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
+    def __init__(self):
+        super().__init__()
+        self.rooms = self.overworld_dungeon1_walk_rooms.copy()
 
     def is_scenario_ended(self, old : Dict[str, int], new : Dict[str, int]) -> tuple[bool, bool, str]:
-        if new['level'] == 0 and new['location'] not in self.overworld_dungeon1_walk_rooms:
+        if new['level'] == 0 and new['location'] not in self.rooms:
             return True, False, "failure-left-play-area"
 
         return False, False, None
@@ -137,3 +141,50 @@ class LeftRoom(ZeldaEndCondition):
             return True, False, "failure-left-room"
 
         return False, False, None
+
+class SamePositionTimeout(ZeldaEndCondition):
+    """A timeout for being in the same position more than N times."""
+    def __init__(self, timeout=25):
+        super().__init__()
+        self.position_timeout = timeout
+        self._positions = {}
+
+    def clear(self):
+        self._positions.clear()
+
+    def is_scenario_ended(self, old: Dict[str, int], new: Dict[str, int]) -> tuple[bool, bool, str]:
+        if old['location'] != new['location']:
+            self._positions.clear()
+            return False, False, None
+
+        key = new['link'].tile_coordinates[0]
+        count = self._positions.get(key, 0) + 1
+        self._positions[key] = count
+        if count > self.position_timeout:
+            return False, True, "truncated-same-position"
+
+        return False, False, None
+
+class EndConditionWrapper(gym.Wrapper):
+    """A standalone wrapper to apply end conditions to the environment."""
+    def __init__(self, env: gym.Env):
+        super().__init__(env)
+        overworld1area = LeftOverworld1Area()
+        overworld1area.rooms.remove(0x77)
+        self.end_conditions = EnteredDungeon(), overworld1area, GameOver(), SamePositionTimeout()
+        self._last_info = None
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        self._last_info = info
+        return obs, info
+
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        for end_condition in self.end_conditions:
+            terminated, truncated, reason = end_condition.is_scenario_ended(self._last_info, info)
+            if terminated or truncated:
+                info['end_reason'] = reason
+                return obs, reward, terminated, truncated, info
+
+        return obs, reward, terminated, truncated, info
