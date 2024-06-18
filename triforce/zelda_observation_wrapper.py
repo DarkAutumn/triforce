@@ -164,8 +164,8 @@ class ZeldaObservationWrapper(gym.Wrapper):
 # I'm calling a 'threat temperature'.
 TEMP_MAX = 1.0
 TEMP_MIN = 0.1
-MIN_DIST = 8
-MAX_DIST = 175
+MIN_DIST = 175
+MAX_DIST = 8
 SLOPE =  (TEMP_MAX - TEMP_MIN) / (MAX_DIST - MIN_DIST)
 INTERCEPT = TEMP_MAX - SLOPE * MAX_DIST
 
