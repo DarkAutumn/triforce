@@ -902,7 +902,7 @@ class MultiHeadCritic(gym.Wrapper):
 
         # We moved off the map.  See if we are moving in the right direction
         pos_dir = old['position_or_direction']
-        if isinstance(pos_dir, Direction) and pos_dir == direction:
+        if isinstance(pos_dir, Direction) and pos_dir.name == direction.name:
             return MOVE_CLOSER_REWARD
 
         return MOVE_FURTHER_PENALTY
