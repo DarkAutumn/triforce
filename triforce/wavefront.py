@@ -26,7 +26,7 @@ class RoomWavefront:
     """The wavefront for a single room."""
     def __init__(self, room_id, tiles):
         self.cache_len = 256
-        level, _ = room_id
+        level, _, _ = room_id
         self.room_id = room_id
         self.orchestrator = ORCHESTRATORS[level]
         self.tiles = tiles
@@ -36,8 +36,11 @@ class RoomWavefront:
         """Get the wavefront for the room."""
         link_pos =  np.array(info['link_pos'], dtype=np.float32)
         location_objective, objective_vector, pos_dir, kind = self.orchestrator.get_objectives(info, link_pos)
+        if objective_vector is None:
+            objective_vector = self._get_objective_vector(info['link'], pos_dir)
+
+        info['objective_vector'] = objective_vector
         info['location_objective'] = location_objective
-        info['objective_vector'] = objective_vector or self._get_objective_vector(info['link'], pos_dir)
         info['position_or_direction'] = pos_dir
 
         targets = []
@@ -62,7 +65,6 @@ class RoomWavefront:
             targets.extend(item.tile_coordinates)
 
         targets = tuple(sorted(set(targets)))
-        assert targets
         if (result := self._get_lru(targets)) is not None:
             return result
 
@@ -73,6 +75,8 @@ class RoomWavefront:
     def _get_objective_vector(self, link, pos_dir):
         if isinstance(pos_dir, Direction):
             border_tiles = list(self._get_border_tiles(pos_dir, extend=True))
+            if not border_tiles:
+                return np.array([0, 0], dtype=np.float32)
             tile = min(border_tiles, key=lambda x: np.linalg.norm(np.array(x) - np.array(link.tile_coordinates[0])))
             pos_dir = tile_index_to_position(tile)
 

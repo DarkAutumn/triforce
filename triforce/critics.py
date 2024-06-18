@@ -727,20 +727,26 @@ WRONG_ROOM_PENALTY = -REWARD_MAXIMUM
 MOVE_CLOSER_REWARD = REWARD_TINY
 MOVE_FURTHER_PENALTY = -REWARD_TINY - REWARD_MINIMUM
 DAMAGE_PENALTY = -REWARD_LARGE
+GAINED_HEALTH_REWARD = REWARD_LARGE
 NO_MOVEMENT_PENALTY = -REWARD_LARGE
 ENEMY_HIT_REWARD = REWARD_LARGE
+ENEMY_MISS_PENALTY = -REWARD_TINY
+CLOSE_MISS_PENALTY = -REWARD_MINIMUM
 DANGER_SENSE_REWARD = REWARD_SMALL
 BLOCK_REWARD = REWARD_MAXIMUM
+SELECTED_MOVEMENT_IN_DANGER = REWARD_TINY
 
 MAX_DANGER_DISTANCE = 240
 
 class RoomInformation:
     """Information about a single Zelda room."""
-    def __init__(self, level, location, tiles):
+    def __init__(self, key, tiles):
+        level, location, cave = key
         self.level = level
         self.location = location
+        self.cave = cave
         self._pathing_cache = OrderedDict()
-        self.wavefront = RoomWavefront((level, location), tiles)
+        self.wavefront = RoomWavefront(key, tiles)
 
 def get_aligned_tile_dist(enemy : ZeldaObject, link : ZeldaObject, direction : SelectedDirection):
     """Get the distance to the nearest aligned enemy in the given direction."""
@@ -855,15 +861,49 @@ class MultiHeadCritic(gym.Wrapper):
 
         movement_reward = self._critique_movement(selection, pathfinding, last_info, info)
         danger_sense_reward = self._critique_danger_sense(danger_sense, last_info)
-        action_reward = self._critique_action()
+        action_reward = self._critique_action(selection, danger_sense, last_info, info)
 
         info['masks'] = self.pathfinding_mask, self._get_danger_sense_mask(info), \
                             self._get_action_mask(info)
 
         return movement_reward, danger_sense_reward, action_reward
 
-    def _critique_action(self):
+    def _critique_action(self, selection, danger_sense, old, new):
+        if get_heart_halves(old) > get_heart_halves(new):
+            # If we took damage, movement was the right choice, we probably just moved in the wrong direction
+            if selection == SelectedAction.MOVEMENT:
+                return SELECTED_MOVEMENT_IN_DANGER
+
+            # If we took damage while trying to attack, we shouldn't have attacked
+            return DAMAGE_PENALTY
+
+        if selection == SelectedAction.MOVEMENT:
+            # if we blocked a projectile, moving was correct
+            if is_deflecting(old, new):
+                return BLOCK_REWARD
+
+            # otherwise, movement is generally good
+            return REWARD_MINIMUM
+
+        if selection in (SelectedAction.ATTACK, SelectedAction.BEAMS):
+            if not old['active_enemies']:
+                return -REWARD_SMALL
+
+            if danger_sense == SelectedDirection.NONE:
+                return -REWARD_SMALL
+
+            if new['step_hits']:
+                return ENEMY_HIT_REWARD
+
+            # we missed, but see if there was something there
+            accuracy = calculate_danger_sense_accuracy(old['link'], old['active_enemies'], danger_sense)
+            if accuracy > 0:
+                return CLOSE_MISS_PENALTY
+
+            return ENEMY_MISS_PENALTY
+
         return 0.0
+
 
     def _critique_movement(self, selection, direction, old, new):
         # Make sure we didn't select "no direction" and "movement".  This isn't an allowed state, so it shouldn't
@@ -877,19 +917,26 @@ class MultiHeadCritic(gym.Wrapper):
                 return MOVE_CLOSER_REWARD
             return WRONG_ROOM_PENALTY
 
-        # if we blocked a projectile, reward the agent no matter the wavefront
-        if selection == SelectedAction.MOVEMENT and is_deflecting(old, new):
-            return BLOCK_REWARD
+        if selection == SelectedAction.MOVEMENT:
+            # if we took damage, moving in the direction we did was incorrect
+            if get_heart_halves(old) > get_heart_halves(new):
+                return DAMAGE_PENALTY
+            elif get_heart_halves(old) < get_heart_halves(new):
+                return GAINED_HEALTH_REWARD
 
-        # If link ran into a wall, penalize the agent, but also mask the direction so we get better actions to
-        # learn from
-        if selection == SelectedAction.MOVEMENT and old['link'].position == new['link'].position:
-            if self.pathfinding_mask is None:
-                self.pathfinding_mask = torch.ones(4, dtype=torch.float32)
-            self.pathfinding_mask[direction_to_action(direction)] = 0
-            return NO_MOVEMENT_PENALTY
+            # if we blocked a projectile, reward the agent no matter the wavefront
+            if is_deflecting(old, new):
+                return BLOCK_REWARD
 
-        self.pathfinding_mask = None
+            # If link ran into a wall, penalize the agent, but also mask the direction so we get better actions to
+            # learn from
+            if old['link'].position == new['link'].position:
+                if self.pathfinding_mask is None:
+                    self.pathfinding_mask = torch.ones(4, dtype=torch.float32)
+                self.pathfinding_mask[direction_to_action(direction)] = 0
+                return NO_MOVEMENT_PENALTY
+
+            self.pathfinding_mask = None
 
         y, x = new['link'].tile_coordinates[0]
         y += 1  # use the bottom of the link sprite to avoid half-tile issues
@@ -897,7 +944,7 @@ class MultiHeadCritic(gym.Wrapper):
 
         # Did we move within the map?
         wavefront = old['wavefront']
-        if 0 <= ny <= wavefront.shape[0] and 0 <= nx <= wavefront.shape[1]:
+        if 0 <= ny < wavefront.shape[0] and 0 <= nx < wavefront.shape[1]:
             if wavefront[y, x] < wavefront[ny, nx]:
                 return MOVE_FURTHER_PENALTY
             if wavefront[y, x] == wavefront[ny, nx]:
@@ -971,9 +1018,9 @@ class MultiHeadCritic(gym.Wrapper):
     def _get_room_info(self, info) -> RoomInformation:
         level = info['level']
         location = info['location']
-        key = level, location
+        key = level, location, is_in_cave(info)
         if key not in self._room_info:
-            self._room_info[key] = RoomInformation(level, location, info['tiles'])
+            self._room_info[key] = RoomInformation(key, info['tiles'])
 
         return self._room_info[key]
 
