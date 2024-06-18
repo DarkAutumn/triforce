@@ -12,6 +12,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Triforce - An ML agent to play The Legend of Zelda (NES).")
     parser.add_argument("output", nargs='?', type=str, help="Location to write to.")
     parser.add_argument("--iterations", type=int, default=-1, help="Override iteration count.")
+    parser.add_argument("--log-dir", type=str, help="Location to write logs to.")
 
     try:
         args = parser.parse_args()
@@ -30,6 +31,9 @@ def main(args):
         parentdir = os.path.dirname(output)
         os.makedirs(parentdir, exist_ok=True)
 
+    if args.log_dir:
+        os.makedirs(args.log_dir, exist_ok=True)
+
     iterations = 10_000 if args.iterations <= 0 else args.iterations
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -39,7 +43,7 @@ def main(args):
         image_dim = obs_space[0].shape[-1]
         features = math.prod(obs_space[1].shape)
         network = ZeldaMultiHeadNetwork(image_dim, features, device)
-        ppo = MultiHeadPPO(network, device)
+        ppo = MultiHeadPPO(network, device, tensorboard_dir=args.log_dir)
 
         ppo.train(env, iterations)
         if output:

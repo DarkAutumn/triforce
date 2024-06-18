@@ -5,6 +5,7 @@ import math
 import torch
 import numpy as np
 from torch import nn
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 NORM_ADVANTAGES = True
@@ -316,10 +317,12 @@ class ZeldaMultiHeadNetwork(nn.Module):
         self.load_state_dict(torch.load(path))
 
 class MultiHeadPPO:
-    def __init__(self, network : ZeldaMultiHeadNetwork, device, train_callback = None):
+    def __init__(self, network : ZeldaMultiHeadNetwork, device, train_callback = None,
+                 tensorboard_dir = None):
         self.network = network
         self.device = device
         self.train_callback = train_callback
+        self.tensorboard = SummaryWriter(tensorboard_dir) if tensorboard_dir else None
 
         self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=1e-5)
 
@@ -393,12 +396,23 @@ class MultiHeadPPO:
                 next_value = self.network.get_value(next_obs[0], next_obs[1])
                 self._update_tensors(next_value[0])
 
-
             self._optimize(epochs)
+            self._update_stats(progress)
             if self.train_callback and self.train_callback(self.total_steps, self):
                 break
 
         progress.close()
+
+    def _update_stats(self, progress):
+        rewards = self.rewards.mean(dim=0, keepdim=True).squeeze(0).tolist()
+        if self.tensorboard:
+            self.tensorboard.add_scalar('rewards/pathfinding', rewards[0], self.total_steps)
+            self.tensorboard.add_scalar('rewards/danger_sense', rewards[1], self.total_steps)
+            self.tensorboard.add_scalar('rewards/selected_action', rewards[2], self.total_steps)
+            self.tensorboard.flush()
+
+        rewards = " ".join(f"{r:.2f}" for r in rewards)
+        progress.set_postfix(rewards=rewards)
 
     def _update_tensors(self, last_value):
         self.advantages = torch.zeros_like(self.advantages).to(self.device)
