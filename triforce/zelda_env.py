@@ -67,10 +67,9 @@ def make_multihead_zelda_env(save_state, *, render_mode = None, device = 'cpu', 
         env = FrameCaptureWrapper(env, rgb_render=rgb_deque)
 
     env = ZeldaGameWrapper(env)
-    env = ObjectiveSelector(env, produce_astar=False)
-    env = MultiHeadObservationWrapper(env, 128, device)
     env = MultiHeadInputWrapper(env)
     env = MultiHeadCritic(env)
+    env = MultiHeadObservationWrapper(env, 128, device)
 
     return env
 

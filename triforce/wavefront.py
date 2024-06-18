@@ -3,7 +3,7 @@
 from typing import OrderedDict
 import numpy as np
 
-from .zelda_game import WALKABLE_TILES, BRICK_TILE, Direction, ZeldaItem, is_health_full, position_to_tile_index
+from .zelda_game import WALKABLE_TILES, BRICK_TILE, Direction, ZeldaItem, is_health_full, position_to_tile_index, tile_index_to_position
 from .objective_selector import ObjectiveKind, Dungeon1Orchestrator, OverworldOrchestrator
 
 def is_walkable(tile):
@@ -36,7 +36,7 @@ class RoomWavefront:
         link_pos =  np.array(info['link_pos'], dtype=np.float32)
         location_objective, objective_vector, pos_dir, kind = self.orchestrator.get_objectives(info, link_pos)
         info['location_objective'] = location_objective
-        info['objective_vector'] = objective_vector
+        info['objective_vector'] = objective_vector or self._get_objective_vector(info['link'], pos_dir)
         info['position_or_direction'] = pos_dir
 
         targets = []
@@ -44,17 +44,8 @@ class RoomWavefront:
             targets.extend(x.tile_coordinates for x in info['active_enemies'])
 
         if isinstance(pos_dir, Direction):
-            if pos_dir in (Direction.S, Direction.N):
-                y = self.tiles.shape[0] - 1 if pos_dir == Direction.S else 0
-                for x in range(self.tiles.shape[1]):
-                    if is_walkable(self.tiles[y, x]):
-                        targets.append((y, x))
-
-            else:
-                x = self.tiles.shape[1] - 1 if pos_dir == Direction.E else 0
-                for y in range(self.tiles.shape[0]):
-                    if is_walkable(self.tiles[y, x]):
-                        targets.append((y, x))
+            border_tiles = self._get_border_tiles(pos_dir)
+            targets.extend(border_tiles)
         else:
             targets.append(position_to_tile_index(*pos_dir))
 
@@ -77,6 +68,35 @@ class RoomWavefront:
         result = self._calculate_wavefront(targets)
         self._put_lru(targets, result)
         return result
+
+    def _get_objective_vector(self, link, pos_dir):
+        if isinstance(pos_dir, Direction):
+            border_tiles = list(self._get_border_tiles(pos_dir, extend=True))
+            tile = min(border_tiles, key=lambda x: np.linalg.norm(np.array(x) - np.array(link.tile_coordinates[0])))
+            pos_dir = tile_index_to_position(tile)
+
+        vect = np.array(pos_dir, dtype=np.float32) - np.array(link.position, dtype=np.float32)
+        norm = np.linalg.norm(vect)
+        if np.isclose(norm, 0.0):
+            return np.array([0, 0], dtype=np.float32)
+        return vect / norm
+
+    def _get_border_tiles(self, pos_dir, extend=False):
+        if isinstance(pos_dir, Direction):
+            if pos_dir in (Direction.S, Direction.N):
+                y = self.tiles.shape[0] - 1 if pos_dir == Direction.S else 0
+                for x in range(self.tiles.shape[1]):
+                    if is_walkable(self.tiles[y, x]):
+                        extension = 0 if not extend else 1 if pos_dir == Direction.S else -1
+                        yield (y + extension, x)
+
+            else:
+                x = self.tiles.shape[1] - 1 if pos_dir == Direction.E else 0
+                for y in range(self.tiles.shape[0]):
+                    if is_walkable(self.tiles[y, x]):
+                        extension = 0 if not extend else 1 if pos_dir == Direction.E else -1
+                        yield (y, x + extension)
+
 
     def _calculate_wavefront(self, targets):
         """Calculate the wavefront for the room."""
