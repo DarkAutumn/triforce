@@ -3,7 +3,8 @@
 from typing import OrderedDict
 import numpy as np
 
-from .zelda_game import WALKABLE_TILES, BRICK_TILE, Direction, ZeldaItem, is_health_full, position_to_tile_index, tile_index_to_position
+from .zelda_game import WALKABLE_TILES, BRICK_TILE, Direction, ZeldaItem, is_health_full, position_to_tile_index, \
+                        tile_index_to_position
 from .objective_selector import ObjectiveKind, Dungeon1Orchestrator, OverworldOrchestrator
 
 def is_walkable(tile):
