@@ -7,8 +7,6 @@ import numpy as np
 from torch import nn
 from tqdm import tqdm
 
-from triforce.zelda_game import Direction
-
 NORM_ADVANTAGES = True
 CLIP_VAL_LOSS = True
 LEARNING_RATE = 0.00025
