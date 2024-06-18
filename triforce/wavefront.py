@@ -67,7 +67,7 @@ class RoomWavefront:
             if ignore_bombs and item.id == ZeldaItem.Bombs:
                 continue
 
-            targets.append(item.tile_coordinates)
+            targets.extend(item.tile_coordinates)
 
         targets = tuple(sorted(set(targets)))
         assert targets
