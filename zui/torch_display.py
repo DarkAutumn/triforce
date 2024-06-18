@@ -29,7 +29,7 @@ class DisplayWindowTorch:
         self.game_width = game_w * self.scale
         self.game_height = game_h * self.scale
 
-        self.obs_width = 128
+        self.obs_width = 256
         self.obs_height = self.game_height
         self.obs_x = 0
         self.obs_y = 0
@@ -265,8 +265,22 @@ class DisplayWindowTorch:
         for i in range(features.shape[0]):
             x, y, temp = features[i].cpu().tolist()
 
-            y_pos = self._draw_arrow(surface, f"{temp:.1f}", (x_pos + self.obs_width // 4, y_pos), np.array([x, y]),
-                                radius=self.obs_width // 4, color=(255, 255, 255), width=3)
+            if i >= 12:
+                color = (0, 0, 255)
+            elif i >= 9:
+                color = (0, 255, 0)
+            elif i >= 6:
+                color = (255, 0, 0)
+            else:
+                color = (255, 255, 255)
+
+            radius = self.obs_width // 6
+            x_pos = self.obs_x + (i % 3) * (radius * 2)
+            new_y = self._draw_arrow(surface, f"{temp:.1f}", (x_pos, y_pos), np.array([x, y]),
+                                radius=radius, color=color, width=3)
+
+            if i % 3 == 2:
+                y_pos = new_y
 
     def _draw_arrow(self, surface, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
         render_text(surface, self.font, label, (start_pos[0], start_pos[1]))
@@ -274,7 +288,7 @@ class DisplayWindowTorch:
         centerpoint = (circle_start[0] + radius, circle_start[1] + radius)
         end_pos = (centerpoint[0] + direction[0] * radius, centerpoint[1] + direction[1] * radius)
 
-        pygame.draw.circle(surface, (255, 255, 255), centerpoint, radius, 1)
+        pygame.draw.circle(surface, color, centerpoint, radius, 1)
 
         if direction[0] != 0 or direction[1] != 0:
             pygame.draw.line(surface, color, centerpoint, end_pos, width)
@@ -351,10 +365,10 @@ class DisplayWindowTorch:
         np_array = np_array.astype(np.uint8)
 
         observation_surface = pygame.surfarray.make_surface(np_array)
-        observation_surface = pygame.transform.scale(observation_surface, (np_array.shape[1], np_array.shape[0]))
+        observation_surface = pygame.transform.scale(observation_surface, (self.obs_width, self.obs_width))
         surface.blit(observation_surface, (x, y))
 
-        y += img.shape[0]
+        y += self.obs_width
         return y
 
     def _get_pathfinding(self, keys):
