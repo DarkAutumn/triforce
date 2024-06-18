@@ -823,11 +823,13 @@ class MultiHeadCritic(gym.Wrapper):
 
     def reset(self, *, seed = None, options = None):
         obs, info = super().reset(seed=seed, options=options)
+        info['wavefront'] = self._get_wavefront_values(info)
         self._last = info
         return obs, info
 
     def step(self, action):
         obs, _, terminated, truncated, info = self.env.step(action)
+        info['wavefront'] = self._get_wavefront_values(info)
 
         rewards = self.critique_gameplay(action, self._last, info)
         self._last = info
@@ -869,14 +871,16 @@ class MultiHeadCritic(gym.Wrapper):
 
         self.pathfinding_mask = None
 
-        wavefront = self._get_wavefront_values(old)
         y, x = new['link'].tile_coordinates[0]
         ny, nx = self._apply_direction(y, x, direction)
 
         # Did we move within the map?
+        wavefront = old['wavefront']
         if 0 <= ny <= wavefront.shape[0] and 0 <= nx <= wavefront.shape[1]:
-            if wavefront[y, x] <= wavefront[ny, nx]:
+            if wavefront[y, x] < wavefront[ny, nx]:
                 return MOVE_FURTHER_PENALTY
+            if wavefront[y, x] == wavefront[ny, nx]:
+                return 0.0
 
             old_link_pos = np.array(old['link_pos'], dtype=np.float32)
             new_link_pos =  np.array(new['link_pos'], dtype=np.float32)
