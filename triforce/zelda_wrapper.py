@@ -386,9 +386,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         direction = self._get_button_direction(act)
         self._set_direction(direction)
 
-        ram = self.env.unwrapped.get_ram()
-        beams = ram[0xba]
-
         if action_kind == ActionType.ATTACK:
             obs, rewards, terminated, truncated, info = self.env.step(self._attack_action)
             self._beam_hit_frames = self._beam_hit_frames + 1 if info['beam_animation'] == ANIMATION_BEAMS_HIT else 0
@@ -399,16 +396,9 @@ class ZeldaGameWrapper(gym.Wrapper):
             self._beam_hit_frames = self._beam_hit_frames + 1 if info['beam_animation'] == ANIMATION_BEAMS_HIT else 0
             cooldown = ITEM_COOLDOWN
 
-        ram = self.env.unwrapped.get_ram()
-        new_beams = ram[0xba]
-
         total_frames += cooldown + 1
         obs, rew, terminated, truncated, info = self.skip(self._none_action, cooldown)
         rewards += rew
-
-        ram = self.env.unwrapped.get_ram()
-        next_beams = ram[0xba]
-        print(f"Beams changed from {beams} -> {new_beams} -> {next_beams}")
 
         return obs, rew, terminated, truncated, info, total_frames
 
