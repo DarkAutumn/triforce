@@ -44,16 +44,15 @@ class RoomWavefront:
             return Wave(None, np.full(self.tiles.shape, maxint, dtype=np.int32))
 
         location_objective, objective_vector, pos_dir, kind = objectives
-        if objective_vector is None:
-            objective_vector = self._get_objective_vector(info['link'], pos_dir)
-
-        info['objective_vector'] = objective_vector
         info['location_objective'] = location_objective
         info['position_or_direction'] = pos_dir
 
         targets = []
+        enemies = []
         if kind == ObjectiveKind.FIGHT:
-            targets.extend(x.tile_coordinates for x in info['active_enemies'])
+            enemies.extend(x.tile_coordinates for x in info['active_enemies'])
+
+        targets.extend(enemies)
 
         if isinstance(pos_dir, Direction):
             border_tiles = self._get_border_tiles(pos_dir)
@@ -63,6 +62,7 @@ class RoomWavefront:
 
         ignore_hearts = is_health_full(info)
         ignore_bombs = info['bombs'] == info['bomb_max']
+        items = []
         for item in info['items']:
             if ignore_hearts and item.id in (ZeldaItem.Heart, ZeldaItem.Fairy):
                 continue
@@ -70,8 +70,14 @@ class RoomWavefront:
             if ignore_bombs and item.id == ZeldaItem.Bombs:
                 continue
 
-            targets.extend(item.tile_coordinates)
+            items.extend(item.tile_coordinates)
 
+        if objective_vector is None:
+            objective_vector = self._get_objective_vector(info['link'], pos_dir, enemies, items)
+
+        info['objective_vector'] = objective_vector
+
+        targets.extend(items)
         targets = tuple(sorted(set(targets)))
         if (result := self._get_lru(targets)) is not None:
             return result
@@ -80,9 +86,9 @@ class RoomWavefront:
         self._put_lru(targets, result)
         return result
 
-    def _get_objective_vector(self, link, pos_dir):
+    def _get_objective_vector(self, link, pos_dir, enemies, items):
         if isinstance(pos_dir, Direction):
-            border_tiles = list(self._get_border_tiles(pos_dir, extend=True))
+            border_tiles = list(self._get_border_tiles(pos_dir, extend=True)) + enemies + items
             if not border_tiles:
                 return np.array([0, 0], dtype=np.float32)
             tile = min(border_tiles, key=lambda x: np.linalg.norm(np.array(x) - np.array(link.tile_coordinates[0])))
