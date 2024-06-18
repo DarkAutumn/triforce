@@ -208,7 +208,7 @@ class DisplayWindowTorch:
                             next_action = torch.tensor(items, dtype=torch.int64).unsqueeze(0)
                             mode = 'n'
 
-                        elif event.key in (pygame.K_KP_8, pygame.K_KP_2, pygame.K_KP_4, pygame.K_KP_6):
+                        elif event.key in (pygame.K_KP_8, pygame.K_KP_2, pygame.K_KP_4, pygame.K_KP_6, pygame.K_KP_5):
                             key_temp = self._map_sense_key(pygame.key.get_pressed())
                             if key_temp is not None:
                                 sense_key = key_temp

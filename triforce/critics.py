@@ -10,7 +10,7 @@ from triforce.wavefront import RoomWavefront
 from .ml_torch import SelectedAction, direction_to_action, SelectedDirection
 from .objective_selector import ObjectiveKind
 from .zelda_wrapper import ActionType
-from .zelda_game import Direction, TileState, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
+from .zelda_game import Direction, TileState, ZeldaObject, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
     get_num_triforce_pieces, is_in_cave, is_sword_frozen, is_tile_walkable
 
 REWARD_MINIMUM = 0.01
@@ -728,8 +728,7 @@ MOVE_FURTHER_PENALTY = -REWARD_TINY - REWARD_MINIMUM
 DAMAGE_PENALTY = -REWARD_LARGE
 NO_MOVEMENT_PENALTY = -REWARD_LARGE
 ENEMY_HIT_REWARD = REWARD_LARGE
-NO_DANGER_REWARD = REWARD_MEDIUM
-DANGER_SENSE_REWARD = REWARD_LARGE
+DANGER_SENSE_REWARD = REWARD_SMALL
 
 MAX_DANGER_DISTANCE = 240
 
@@ -741,67 +740,76 @@ class RoomInformation:
         self._pathing_cache = OrderedDict()
         self.wavefront = RoomWavefront((level, location), tiles)
 
-def calculate_alignment_factor(distance, alignment_distance):
-    """Calculates alignment factor based on how close the enemy is to the beam path."""
-    if distance <= 8:
-        max_alignment_distance = 8
-    else:
-        max_alignment_distance = 8 + (8 * (distance - 8) / (175 - 8))
+def get_aligned_tile_dist(enemy : ZeldaObject, link : ZeldaObject, direction : SelectedDirection):
+    """Get the distance to the nearest aligned enemy in the given direction."""
+    match direction:
+        case SelectedDirection.N:
+            dir_vect = np.array([-1, 0], dtype=np.float32)
+            link_tile = link.tile_coordinates[0] + np.array([0, 1])
+        case SelectedDirection.S:
+            dir_vect = np.array([1, 0], dtype=np.float32)
+            link_tile = link.tile_coordinates[0]
+        case SelectedDirection.W:
+            dir_vect = np.array([0, -1], dtype=np.float32)
+            link_tile = link.tile_coordinates[0] + np.array([1, 0])
+        case SelectedDirection.E:
+            dir_vect = np.array([0, 1], dtype=np.float32)
+            link_tile = link.tile_coordinates[0]
+        case _:
+            raise ValueError(f"Invalid direction: {direction}")
 
-    alignment_factor = max(0, 1 - (alignment_distance / max_alignment_distance))
-    return alignment_factor
+    vector = np.array(enemy.tile_coordinates[0], dtype=np.float32) - np.array(link_tile, dtype=np.float32)
+    tile_distance = np.dot(vector, dir_vect)
 
-def calculate_danger_sense_accuracy(link_pos, enemies, direction):
+    if tile_distance < 0:
+        return None
+
+    if direction in (SelectedDirection.N, SelectedDirection.S):
+        link_tiles = link.tile_coordinates[0][1]
+        link_tiles = link_tiles, link_tiles + 1
+        enemy_tiles = enemy.tile_coordinates[0][1]
+        enemy_tiles = enemy_tiles, enemy_tiles + 1
+        if tile_distance > 3:
+            enemy_tiles = *enemy_tiles, enemy_tiles[0] - 1, enemy_tiles[1] + 1
+
+    elif direction in (SelectedDirection.W, SelectedDirection.E):
+        link_tiles = link.tile_coordinates[0][0]
+        link_tiles = link_tiles, link_tiles + 1
+        enemy_tiles = enemy.tile_coordinates[0][0]
+        enemy_tiles = enemy_tiles, enemy_tiles + 1
+        if tile_distance > 3:
+            enemy_tiles = *enemy_tiles, enemy_tiles[0] - 1, enemy_tiles[1] + 1
+
+    if any(tile in link_tiles for tile in enemy_tiles):
+        # found overlap
+        return tile_distance
+
+    return None
+
+def calculate_danger_sense_accuracy(link, enemies, direction):
     """Calculates how much reward should be given for the agent sensing danger in a particular direction."""
-    max_distance = 175
-    min_distance = 8
+    closest_point = 3
+    farthest_point = 14
 
-    max_reward = 0
+    reward = 0
 
-    for enemy_pos in enemies:
-        dx = enemy_pos.position[0] - link_pos[0]
-        dy = enemy_pos.position[1] - link_pos[1]
+    if direction == SelectedDirection.NONE:
+        any_danger = False
+        for i in range(4):
+            d = SelectedDirection(i)
+            any_danger = any_danger or any(get_aligned_tile_dist(enemy, link, d) is not None for enemy in enemies)
 
-        distance = np.sqrt(dx**2 + dy**2)
+        return -1.0 if any_danger else 1.0
 
-        if distance > max_distance:
-            continue
+    distances = [get_aligned_tile_dist(enemy, link, direction) for enemy in enemies]
+    distances = [d for d in distances if d is not None]
+    if distances:
+        closest = min(distances)
+        reward = 0.1 + (closest - farthest_point) * 0.9 / (closest_point - farthest_point)
+        reward = np.clip(reward, 0.1, 1.0)
+        return reward
 
-        # Distance reward
-        if distance <= min_distance:
-            distance_reward = 1.0
-        else:
-            distance_reward = np.clip(1.0 - (distance - min_distance) / (max_distance - min_distance) * 0.9, 0.1, 1.0)
-
-        # Calculate alignment distance for the chosen direction
-        if direction == 'up' and dy < 0:
-            alignment_distance = abs(dx)
-        elif direction == 'down' and dy > 0:
-            alignment_distance = abs(dx)
-        elif direction == 'left' and dx < 0:
-            alignment_distance = abs(dy)
-        elif direction == 'right' and dx > 0:
-            alignment_distance = abs(dy)
-        else:
-            alignment_distance = float('inf')
-
-        if alignment_distance != float('inf'):
-            if distance <= 8:
-                max_alignment_distance = 8
-            else:
-                max_alignment_distance = 8 + (8 * (distance - 8) / (175 - 8))
-
-            alignment_factor = max(0, 1 - (alignment_distance / max_alignment_distance))
-            total_reward = distance_reward * alignment_factor
-            max_reward = max(max_reward, total_reward)
-
-    if max_reward <= 0.1:
-        max_reward = -1.0
-
-    # Normalize reward to be between 0.1 and 1.0
-    max_reward = np.clip(max_reward, 0.1, 1.0)
-
-    return max_reward
+    return -1.0
 
 def is_walkable(tiles, x, y):
     """Check if a tile is walkable."""
@@ -844,7 +852,7 @@ class MultiHeadCritic(gym.Wrapper):
         selection = SelectedAction(selection)
 
         movement_reward = self._critique_movement(selection, pathfinding, last_info, info)
-        danger_sense_reward = self._critique_danger_sense(selection, danger_sense, last_info, info)
+        danger_sense_reward = self._critique_danger_sense(danger_sense, last_info)
         action_reward = self._critique_action()
 
         info['masks'] = self.pathfinding_mask, self._get_danger_sense_mask(info), \
@@ -926,25 +934,9 @@ class MultiHeadCritic(gym.Wrapper):
             case _:
                 raise ValueError(f"Invalid direction: {direction}")
 
-    def _critique_danger_sense(self, selection, direction, old, new):
-        selected_is_attack = selection != SelectedAction.MOVEMENT
-        if selected_is_attack:
-            if new['step_hits']:
-                return ENEMY_HIT_REWARD
-
-            return -ENEMY_HIT_REWARD
-
-        if direction is None:
-            if not new['active_enemies']:
-                return NO_DANGER_REWARD
-
-            return -NO_DANGER_REWARD
-
-        factor = calculate_danger_sense_accuracy(old['link'].position, old['active_enemies'], direction)
-        if factor > 0:
-            return DANGER_SENSE_REWARD * factor
-
-        return -DANGER_SENSE_REWARD
+    def _critique_danger_sense(self, direction, old):
+        factor = calculate_danger_sense_accuracy(old['link'], old['active_enemies'], direction)
+        return DANGER_SENSE_REWARD * factor
 
     def _get_danger_sense_mask(self, info):
         if not info['active_enemies']:
