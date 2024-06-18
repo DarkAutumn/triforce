@@ -722,6 +722,7 @@ class OverworldSwordCritic(GameplayCritic):
 CACHE_CAPACITY = 256
 MOVEMENT_SCALE_FACTOR = 9.0
 
+WRONG_ROOM_PENALTY = -REWARD_MAXIMUM
 MOVE_CLOSER_REWARD = REWARD_TINY
 MOVE_FURTHER_PENALTY = -REWARD_TINY - REWARD_MINIMUM
 DAMAGE_PENALTY = -REWARD_LARGE
@@ -857,16 +858,21 @@ class MultiHeadCritic(gym.Wrapper):
     def _critique_movement(self, selection, direction, old, new):
         # Make sure we didn't select "no direction" and "movement".  This isn't an allowed state, so it shouldn't
         # happen, but we should check to make sure.
-        index = direction_to_action(direction)
         if selection == SelectedAction.MOVEMENT and direction is None:
             return NO_MOVEMENT_PENALTY
+
+        # if we moved locations, make sure it was to the right place
+        if old['location'] != new['location']:
+            if old['location_objective'] == new['location']:
+                return MOVE_CLOSER_REWARD
+            return WRONG_ROOM_PENALTY
 
         # If link ran into a wall, penalize the agent, but also mask the direction so we get better actions to
         # learn from
         if selection == SelectedAction.MOVEMENT and old['link'].position == new['link'].position:
             if self.pathfinding_mask is None:
                 self.pathfinding_mask = torch.ones(4, dtype=torch.float32)
-            self.pathfinding_mask[index] = 0
+            self.pathfinding_mask[direction_to_action(direction)] = 0
             return NO_MOVEMENT_PENALTY
 
         self.pathfinding_mask = None
