@@ -33,6 +33,13 @@ def make_dirs(args):
         os.makedirs(parentdir, exist_ok=True)
 
     if args.log_dir:
+        for i in range(4096):
+            subdir = f"run{i:04d}"
+            full_path = os.path.join(args.log_dir, subdir)
+            if not os.path.exists(full_path):
+                break
+
+        args.log_dir = full_path
         os.makedirs(args.log_dir, exist_ok=True)
 
     if args.intermediate:
