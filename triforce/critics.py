@@ -859,74 +859,99 @@ class MultiHeadCritic(gym.Wrapper):
         danger_sense = SelectedDirection(danger_sense)
         selection = SelectedAction(selection)
 
-        movement_reward = self._critique_movement(selection, pathfinding, last_info, info)
-        danger_sense_reward = self._critique_danger_sense(danger_sense, last_info)
-        action_reward = self._critique_action(selection, danger_sense, last_info, info)
+        rewards = {}
+        self._critique_movement(selection, pathfinding, last_info, info, rewards)
+        self._critique_danger_sense(danger_sense, last_info, rewards)
+        self._critique_action(selection, danger_sense, last_info, info, rewards)
 
+        pathfinding_reward = sum(reward for key, reward in rewards.items() if key.startswith('pf-'))
+        danger_sense_reward = sum(reward for key, reward in rewards.items() if key.startswith('ds-'))
+        action_reward = sum(reward for key, reward in rewards.items() if key.startswith('sa-'))
+        assert all(key.startswith('pf-') or key.startswith("ds-") or key.startswith("sa-") for key in rewards.keys())
+            
         info['masks'] = self.pathfinding_mask, self._get_danger_sense_mask(info), \
                             self._get_action_mask(info)
+        
+        info['rewards'] = rewards
 
-        return movement_reward, danger_sense_reward, action_reward
+        return pathfinding_reward, danger_sense_reward, action_reward
 
-    def _critique_action(self, selection, danger_sense, old, new):
+    def _critique_action(self, selection, danger_sense, old, new, rewards):
         if get_heart_halves(old) > get_heart_halves(new):
             # If we took damage, movement was the right choice, we probably just moved in the wrong direction
             if selection == SelectedAction.MOVEMENT:
-                return SELECTED_MOVEMENT_IN_DANGER
+                rewards['sa-damage-taken'] = SELECTED_MOVEMENT_IN_DANGER
+                return
 
             # If we took damage while trying to attack, we shouldn't have attacked
-            return DAMAGE_PENALTY
+            rewards['sa-damage-taken'] = DAMAGE_PENALTY
+            return
 
         if selection == SelectedAction.MOVEMENT:
             # if we blocked a projectile, moving was correct
             if is_deflecting(old, new):
-                return BLOCK_REWARD
+                rewards['sa-blocked-projectile'] = BLOCK_REWARD
+                return
 
             # otherwise, movement is generally good
-            return REWARD_MINIMUM
+            rewards['sa-movement'] = REWARD_MINIMUM
+            return
 
         if selection in (SelectedAction.ATTACK, SelectedAction.BEAMS):
             if not old['active_enemies']:
-                return -REWARD_SMALL
+                rewards['sa-no-enemies'] = -REWARD_SMALL
+                return
 
             if danger_sense == SelectedDirection.NONE:
-                return -REWARD_SMALL
+                rewards['sa-no-danger-sense'] = -REWARD_SMALL
+                return
 
             if new['step_hits']:
-                return ENEMY_HIT_REWARD
+                rewards['sa-hit'] = ENEMY_HIT_REWARD
+                return
 
             # we missed, but see if there was something there
             accuracy = calculate_danger_sense_accuracy(old['link'], old['active_enemies'], danger_sense)
             if accuracy > 0:
-                return CLOSE_MISS_PENALTY
+                rewards['sa-close-miss'] = CLOSE_MISS_PENALTY
+                return
+            
+            rewards['sa-miss'] = ENEMY_MISS_PENALTY
+            return
 
-            return ENEMY_MISS_PENALTY
+        rewards['sa-none'] = 0.0
+        return
 
-        return 0.0
-
-
-    def _critique_movement(self, selection, direction, old, new):
+    def _critique_movement(self, selection, direction, old, new, rewards):
         # Make sure we didn't select "no direction" and "movement".  This isn't an allowed state, so it shouldn't
         # happen, but we should check to make sure.
         if selection == SelectedAction.MOVEMENT and direction is None:
-            return NO_MOVEMENT_PENALTY
+            rewards['pf-no-direction'] = NO_MOVEMENT_PENALTY
+            return
 
         # if we moved locations, make sure it was to the right place
         if old['location'] != new['location']:
             if old['location_objective'] == new['location']:
-                return MOVE_CLOSER_REWARD
-            return WRONG_ROOM_PENALTY
+                rewards['pf-correct-location'] = MOVE_CLOSER_REWARD
+                return
+            
+            rewards['pf-wrong-location'] = WRONG_ROOM_PENALTY
+            return
 
         if selection == SelectedAction.MOVEMENT:
             # if we took damage, moving in the direction we did was incorrect
             if get_heart_halves(old) > get_heart_halves(new):
-                return DAMAGE_PENALTY
+                rewards['pf-damage-taken'] = DAMAGE_PENALTY
+                return
+            
             elif get_heart_halves(old) < get_heart_halves(new):
-                return GAINED_HEALTH_REWARD
+                rewards['pf-gained-health'] = GAINED_HEALTH_REWARD
+                return
 
             # if we blocked a projectile, reward the agent no matter the wavefront
             if is_deflecting(old, new):
-                return BLOCK_REWARD
+                rewards['pf-blocked-projectile'] = BLOCK_REWARD
+                return
 
             # If link ran into a wall, penalize the agent, but also mask the direction so we get better actions to
             # learn from
@@ -934,7 +959,7 @@ class MultiHeadCritic(gym.Wrapper):
                 if self.pathfinding_mask is None:
                     self.pathfinding_mask = torch.ones(4, dtype=torch.float32)
                 self.pathfinding_mask[direction_to_action(direction)] = 0
-                return NO_MOVEMENT_PENALTY
+                rewards['pf-wall-collision'] = NO_MOVEMENT_PENALTY
 
             self.pathfinding_mask = None
 
@@ -946,9 +971,12 @@ class MultiHeadCritic(gym.Wrapper):
         wavefront = old['wavefront']
         if 0 <= ny < wavefront.shape[0] and 0 <= nx < wavefront.shape[1]:
             if wavefront[y, x] < wavefront[ny, nx]:
-                return MOVE_FURTHER_PENALTY
+                rewards['pf-move-further'] = MOVE_FURTHER_PENALTY
+                return
+            
             if wavefront[y, x] == wavefront[ny, nx]:
-                return 0.0
+                rewards['pf-lateral-move'] = 0.0
+                return
 
             old_link_pos = np.array(old['link_pos'], dtype=np.float32)
             new_link_pos =  np.array(new['link_pos'], dtype=np.float32)
@@ -966,15 +994,19 @@ class MultiHeadCritic(gym.Wrapper):
 
             movement_vect = new_link_pos - old_link_pos
             dist_in_dir = np.dot(movement_vect, dir_vec)
-            return dist_in_dir / MOVEMENT_SCALE_FACTOR * MOVE_CLOSER_REWARD
+            result = dist_in_dir / MOVEMENT_SCALE_FACTOR * MOVE_CLOSER_REWARD
+            rewards['pf-move-closer'] = result
+            return
 
         # We moved off the map.  See if we are moving in the right direction
         pos_dir = old['position_or_direction']
         if isinstance(pos_dir, Direction) and pos_dir.name == direction.name:
-            return MOVE_CLOSER_REWARD
+            rewards['pf-move-closer'] = MOVE_CLOSER_REWARD
+            return
 
-        return MOVE_FURTHER_PENALTY
-
+        rewards['pf-move-further'] = MOVE_FURTHER_PENALTY
+        return
+    
     def _apply_direction(self, y, x, direction):
         match direction:
             case SelectedDirection.N:
@@ -988,9 +1020,11 @@ class MultiHeadCritic(gym.Wrapper):
             case _:
                 raise ValueError(f"Invalid direction: {direction}")
 
-    def _critique_danger_sense(self, direction, old):
+    def _critique_danger_sense(self, direction, old, rewards):
         factor = calculate_danger_sense_accuracy(old['link'], old['active_enemies'], direction)
-        return DANGER_SENSE_REWARD * factor
+        result = DANGER_SENSE_REWARD * factor
+        rewards['ds-accuracy'] = result
+        return result
 
     def _get_danger_sense_mask(self, info):
         if not info['active_enemies']:

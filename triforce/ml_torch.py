@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+from collections import Counter
 from enum import Enum
 import math
 import torch
@@ -332,8 +333,9 @@ class MultiHeadPPO:
         self.minibatches = 4
         self.minibatch_size = self.batch_size // self.minibatches
         self.num_epochs = 4
-
         self.total_steps = 0
+
+        self.stats = {}
 
         self.obs_image = torch.empty(self.memory_length + 1, 1, network.viewport_size,
                                      network.viewport_size, device=device)
@@ -355,6 +357,7 @@ class MultiHeadPPO:
 
     def train(self, env, iterations, epochs=4):
         next_obs, _ = env.reset()
+        ep_steps = 0
         next_obs = self._obs_to_batched(next_obs)
         next_done = 0.0
         next_mask = None
@@ -362,10 +365,13 @@ class MultiHeadPPO:
         max_steps = math.ceil(iterations / self.memory_length) * self.memory_length
         progress = tqdm(total=max_steps, desc='Training', unit='steps')
 
+        stats = {}
+
         while self.total_steps < iterations:
             with torch.no_grad():
                 for i in range(self.memory_length):
                     self.total_steps += 1
+                    ep_steps += 1
 
                     act_logp_ent_val = self.network.get_act_logp_ent_val(next_obs[0], next_obs[1],
                                                                          masks=next_mask)
@@ -382,11 +388,16 @@ class MultiHeadPPO:
                     self.dones[i] = next_done
                     self.rewards[i] = torch.tensor(reward, dtype=torch.float32, device=self.device)
 
+                    self._update_step(stats, info)
                     if terminated or truncated:
                         next_obs, _ = env.reset()
                         next_obs = self._obs_to_batched(next_obs)
                         next_done = 0.0
                         next_mask = None
+
+                        self._update_episode_complete(stats, ep_steps)
+                        ep_steps = 0
+
                     else:
                         next_obs = obs
                         next_done = done
@@ -395,6 +406,7 @@ class MultiHeadPPO:
 
                 self.dones[self.memory_length] = next_done
                 next_value = self.network.get_value(next_obs[0], next_obs[1])
+
                 self._update_tensors(next_value[0])
 
             self._optimize(epochs)
@@ -404,16 +416,95 @@ class MultiHeadPPO:
 
         progress.close()
 
+    def _update_step(self, stats, info):
+        if (reward_values := info.get('rewards', None)):
+            for key, value in reward_values.items():
+                if key.startswith('pf-'):
+                    kind = 'pathfinding'
+                    new_name = key[3:]
+                elif key.startswith('ds-'):
+                    kind = 'danger_sense'
+                    new_name = key[3:]
+                elif key.startswith('sa-'):
+                    kind = 'action'
+                    new_name = key[3:]
+
+                counts = stats.setdefault(f"{kind}-counts", {})
+                counts[new_name] = counts.get(key, 0) + 1
+
+                values = stats.setdefault(kind, {})
+                values[new_name] = values.get(key, 0) + value
+
+        if (end_reason := info.get('end_reason', None)):
+            endings = self.stats.setdefault('endings', {})
+            endings[end_reason] = endings.get(end_reason, 0) + 1
+
+    def _update_episode_complete(self, stats, steps):
+        for key, value in stats.items():
+            if isinstance(value, dict):
+                self._update_dictionary(key, value)
+
+        self.stats.setdefault('ep_len', []).append(steps)
+
+    def _update_dictionary(self, name, dictionary):
+        global_stats = self.stats.setdefault(name, {})
+        for key, value in dictionary.items():
+            global_stats.setdefault(key, []).append(value)
+
+    def _clear_stats(self, stats):
+        if isinstance(stats, dict):
+            for key, value in stats.items():
+                if isinstance(value, int):
+                    stats[key] = 0
+                elif isinstance(value, list):
+                    value.clear()
+                elif isinstance(value, dict):
+                    self._clear_stats(value)
+                else:
+                    raise ValueError(f"Unknown value type {type(value)}")
+        elif isinstance(stats, list):
+            stats.clear()
+
     def _update_stats(self, progress):
         rewards = self.rewards.mean(dim=0, keepdim=True).squeeze(0).tolist()
         if self.tensorboard:
             self.tensorboard.add_scalar('rewards/pathfinding', rewards[0], self.total_steps)
             self.tensorboard.add_scalar('rewards/danger_sense', rewards[1], self.total_steps)
             self.tensorboard.add_scalar('rewards/selected_action', rewards[2], self.total_steps)
+            self.tensorboard.add_scalar('rewards/total', sum(rewards), self.total_steps)
+
+            if (ep_len := self.stats.get('ep_len', None)) and len(ep_len) > 0:
+                self.tensorboard.add_scalar('rollout/ep_len', np.average(ep_len), self.total_steps)
+
+            for key, value in self.stats.items():
+                if isinstance(value, dict):
+                    self._write_one_dictionary(key, value)
+
             self.tensorboard.flush()
+
+        self._clear_stats(self.stats)
 
         rewards = " ".join(f"{r:.2f}" for r in rewards)
         progress.set_postfix(rewards=rewards)
+
+    def _write_one_dictionary(self, kind, dictionary):
+        if len(dictionary) == 0:
+            return
+
+        if isinstance(next(iter(dictionary.values()), None), list):
+            length = max(len(x) for x in dictionary.values())
+            if length == 0:
+                length = 1
+
+            for key, value in dictionary.items():
+                avg = np.sum(value) / length if value else 0
+                self.tensorboard.add_scalar(f'{kind}/{key}', avg, self.total_steps)
+                value.clear()
+        else:
+            for key, value in dictionary.items():
+                self.tensorboard.add_scalar(f'{kind}/{key}', value, self.total_steps)
+                dictionary[key] = 0
+
 
     def _update_tensors(self, last_value):
         self.advantages = torch.zeros_like(self.advantages).to(self.device)
