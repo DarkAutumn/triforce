@@ -176,6 +176,10 @@ class EndConditionWrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
+
+        for end_condition in self.end_conditions:
+            end_condition.clear()
+
         self._last_info = info
         return obs, info
 
