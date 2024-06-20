@@ -868,10 +868,10 @@ class MultiHeadCritic(gym.Wrapper):
         danger_sense_reward = sum(reward for key, reward in rewards.items() if key.startswith('ds-'))
         action_reward = sum(reward for key, reward in rewards.items() if key.startswith('sa-'))
         assert all(key.startswith('pf-') or key.startswith("ds-") or key.startswith("sa-") for key in rewards.keys())
-            
+
         info['masks'] = self.pathfinding_mask, self._get_danger_sense_mask(info), \
                             self._get_action_mask(info)
-        
+
         info['rewards'] = rewards
 
         return pathfinding_reward, danger_sense_reward, action_reward
@@ -915,7 +915,7 @@ class MultiHeadCritic(gym.Wrapper):
             if accuracy > 0:
                 rewards['sa-close-miss'] = CLOSE_MISS_PENALTY
                 return
-            
+
             rewards['sa-miss'] = ENEMY_MISS_PENALTY
             return
 
@@ -934,7 +934,7 @@ class MultiHeadCritic(gym.Wrapper):
             if old['location_objective'] == new['location']:
                 rewards['pf-correct-location'] = MOVE_CLOSER_REWARD
                 return
-            
+
             rewards['pf-wrong-location'] = WRONG_ROOM_PENALTY
             return
 
@@ -943,7 +943,7 @@ class MultiHeadCritic(gym.Wrapper):
             if get_heart_halves(old) > get_heart_halves(new):
                 rewards['pf-damage-taken'] = DAMAGE_PENALTY
                 return
-            
+
             elif get_heart_halves(old) < get_heart_halves(new):
                 rewards['pf-gained-health'] = GAINED_HEALTH_REWARD
                 return
@@ -963,7 +963,7 @@ class MultiHeadCritic(gym.Wrapper):
 
             self.pathfinding_mask = None
 
-        y, x = new['link'].tile_coordinates[0]
+        y, x = old['link'].tile_coordinates[0]
         y += 1  # use the bottom of the link sprite to avoid half-tile issues
         ny, nx = self._apply_direction(y, x, direction)
 
@@ -973,7 +973,7 @@ class MultiHeadCritic(gym.Wrapper):
             if wavefront[y, x] < wavefront[ny, nx]:
                 rewards['pf-move-further'] = MOVE_FURTHER_PENALTY
                 return
-            
+
             if wavefront[y, x] == wavefront[ny, nx]:
                 rewards['pf-lateral-move'] = 0.0
                 return
@@ -1006,7 +1006,7 @@ class MultiHeadCritic(gym.Wrapper):
 
         rewards['pf-move-further'] = MOVE_FURTHER_PENALTY
         return
-    
+
     def _apply_direction(self, y, x, direction):
         match direction:
             case SelectedDirection.N:
