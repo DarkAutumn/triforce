@@ -127,6 +127,9 @@ class RoomWavefront:
         while curr_tiles:
             next_tiles = []
             for curr in curr_tiles:
+                if not (0 <= curr[0] < wavefront.shape[0] and 0 <= curr[1] < wavefront.shape[1]):
+                    continue
+
                 tile = self.tiles[curr[0], curr[1]]
                 value = wavefront[curr[0], curr[1]]
                 if value == maxint and is_walkable(tile):
