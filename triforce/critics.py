@@ -726,6 +726,7 @@ MOVEMENT_SCALE_FACTOR = 9.0
 WRONG_ROOM_PENALTY = -REWARD_MAXIMUM
 MOVE_CLOSER_REWARD = REWARD_TINY
 MOVE_FURTHER_PENALTY = -REWARD_TINY - REWARD_MINIMUM
+LATERAL_MOVE_PENALTY = -REWARD_MINIMUM
 DAMAGE_PENALTY = -REWARD_LARGE
 GAINED_HEALTH_REWARD = REWARD_LARGE
 NO_MOVEMENT_PENALTY = -REWARD_LARGE
@@ -975,7 +976,7 @@ class MultiHeadCritic(gym.Wrapper):
                 return
 
             if wavefront[y, x] == wavefront[ny, nx]:
-                rewards['pf-lateral-move'] = 0.0
+                rewards['pf-lateral-move'] = LATERAL_MOVE_PENALTY
                 return
 
             old_link_pos = np.array(old['link_pos'], dtype=np.float32)
