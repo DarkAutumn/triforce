@@ -142,7 +142,7 @@ class GameplayCritic(ZeldaCritic):
         self.moved_to_safety_reward = REWARD_TINY
 
         # state tracking
-        self._visted_locations = set()
+        self._visited_locations = set()
 
         # missed attack
         self.distance_threshold = 28
@@ -156,7 +156,7 @@ class GameplayCritic(ZeldaCritic):
 
     def clear(self):
         super().clear()
-        self._visted_locations.clear()
+        self._visited_locations.clear()
 
     def critique_gameplay(self, old : Dict[str, int], new : Dict[str, int], rewards : Dict[str, float]):
         """
@@ -167,7 +167,7 @@ class GameplayCritic(ZeldaCritic):
             new (Dict[str, int]): The new state of the game.
             rewards (Dict[str, float]): The rewards obtained during gameplay.
         """
-        if not self._visted_locations:
+        if not self._visited_locations:
             self.__mark_visited(new['level'], new['location'])
 
         # triforce
@@ -305,7 +305,7 @@ class GameplayCritic(ZeldaCritic):
 
         Args:
             old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of tnhe game.
+            new (Dict[str, int]): The new state of the game.
             rewards (Dict[str, float]): The rewards obtained during gameplay.
         """
         if is_deflecting(old, new):
@@ -521,10 +521,10 @@ class GameplayCritic(ZeldaCritic):
 
     # state helpers, some states are calculated
     def __has_visited(self, level, location):
-        return (level, location) in self._visted_locations
+        return (level, location) in self._visited_locations
 
     def __mark_visited(self, level, location):
-        self._visted_locations.add((level, location))
+        self._visited_locations.add((level, location))
 
 
 class Dungeon1Critic(GameplayCritic):
@@ -678,7 +678,7 @@ class OverworldSwordCritic(GameplayCritic):
     def __init__(self):
         super().__init__()
 
-        self.cave_tranistion_reward = REWARD_LARGE
+        self.cave_transition_reward = REWARD_LARGE
         self.cave_transition_penalty = -REWARD_MAXIMUM
         self.new_location_reward = REWARD_LARGE
 
@@ -688,12 +688,12 @@ class OverworldSwordCritic(GameplayCritic):
             if new['sword']:
                 rewards['penalty-reentered-cave'] = self.cave_transition_penalty
             else:
-                rewards['reward-entered-cave'] = self.cave_tranistion_reward
+                rewards['reward-entered-cave'] = self.cave_transition_reward
 
         # left cave
         elif is_in_cave(old) and not is_in_cave(new):
             if new['sword']:
-                rewards['reward-left-cave'] = self.cave_tranistion_reward
+                rewards['reward-left-cave'] = self.cave_transition_reward
             else:
                 rewards['penalty-left-cave-early'] = self.cave_transition_penalty
 
@@ -868,7 +868,7 @@ class MultiHeadCritic(gym.Wrapper):
         pathfinding_reward = sum(reward for key, reward in rewards.items() if key.startswith('pf-'))
         danger_sense_reward = sum(reward for key, reward in rewards.items() if key.startswith('ds-'))
         action_reward = sum(reward for key, reward in rewards.items() if key.startswith('sa-'))
-        assert all(key.startswith('pf-') or key.startswith("ds-") or key.startswith("sa-") for key in rewards.keys())
+        assert all(key.startswith('pf-') or key.startswith("ds-") or key.startswith("sa-") for key in rewards)
 
         info['masks'] = self.pathfinding_mask, self._get_danger_sense_mask(info), \
                             self._get_action_mask(info)
