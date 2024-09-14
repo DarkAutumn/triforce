@@ -10,7 +10,7 @@ from .model_selector import ModelSelector
 from .zelda_env import make_zelda_env, make_multihead_zelda_env
 from .models_and_scenarios import ZeldaModelDefinition, ZeldaScenario, ZELDA_MODELS, TRAINING_SCENARIOS
 from .ml_stable_baslines import ZeldaAI
-from .ml_torch import ZeldaMultiHeadNetwork, MultiHeadPPO
+from .ml_torch_multihead import ZeldaMultiHeadNetwork, MultiHeadPPO
 from .simulate_critic import simulate_critique
 
 # add custom integrations to retro

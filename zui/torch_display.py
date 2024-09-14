@@ -6,7 +6,7 @@ import torch
 
 from triforce import make_multihead_zelda_env, ZeldaScenario, ZeldaMultiHeadNetwork
 from triforce.zelda_game import is_in_cave
-from triforce.ml_torch import SelectedAction, SelectedDirection
+from triforce.ml_torch_multihead import SelectedAction, SelectedDirection
 
 def render_text(surface, font, text, position, color=(255, 255, 255)):
     """Render text on the surface and returns the new y position."""

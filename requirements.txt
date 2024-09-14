@@ -15,4 +15,4 @@ tqdm
 pyarrow
 pylint
 pydantic
-pytorch
+torch

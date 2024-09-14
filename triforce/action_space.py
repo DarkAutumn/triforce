@@ -1,7 +1,7 @@
 import gymnasium as gym
 import numpy as np
 
-from .ml_torch import SelectedAction, SelectedDirection
+from .ml_torch_multihead import SelectedAction, SelectedDirection
 
 class ZeldaActionSpace(gym.ActionWrapper):
     """A wrapper that shrinks the action space down to what's actually used in the game."""

@@ -7,7 +7,7 @@ import torch
 
 from triforce.wavefront import RoomWavefront
 
-from .ml_torch import SelectedAction, direction_to_action, SelectedDirection
+from .ml_torch_multihead import SelectedAction, direction_to_action, SelectedDirection
 from .objective_selector import ObjectiveKind
 from .zelda_wrapper import ActionType
 from .zelda_game import Direction, TileState, ZeldaObject, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
