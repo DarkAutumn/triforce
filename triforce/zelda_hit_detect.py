@@ -7,6 +7,14 @@ import gymnasium as gym
 from .zelda_game import ZeldaObjectData, AnimationState, is_mode_death, \
     get_bomb_state, get_beam_state, get_boomerang_state, get_arrow_state
 
+class HitsDetected:
+    """Contains information about hits that occurred during a step."""
+    def __init__(self):
+        self.hits = 0
+        self.damage = 0
+        self.stuns = 0
+        self.items = []
+
 class ZeldaHitDetect(gym.Wrapper):
     """Interprets the game state and produces more information in the 'info' dictionary."""
     def __init__(self, env):
@@ -27,24 +35,24 @@ class ZeldaHitDetect(gym.Wrapper):
     def step(self, action):
         obs, rewards, terminated, truncated, info = self.env.step(action)
 
+        # Only check hits if we didn't move room locations
         if info['new_location']:
             self._prev_health = None
             self._state.clear()
-            hits, stuns, items = 0, 0, []
-        else:
-            # Only check hits if we didn't move room locations
-            hits, stuns, items = self._get_step_hits(action, info)
+            result = None
 
-        info['step_hits'] = hits
-        info['step_stuns'] = stuns
-        info['step_items'] = items
+        else:
+            result = self._get_step_hits(action, info)
+
+        info['step_damage'] = result.damage if result else 0
+        info['step_hits'] = result.hits if result else 0
+        info['step_stuns'] = result.stuns if result else 0
+        info['step_items'] = result.items if result else []
 
         return obs, rewards, terminated, truncated, info
 
     def _get_step_hits(self, act, info):
-        step_hits = 0
-        step_stuns = 0
-        step_items = []
+        detected = HitsDetected()
 
         # capture enemy health data
         curr_enemy_health = {}
@@ -65,8 +73,10 @@ class ZeldaHitDetect(gym.Wrapper):
         # check if we killed or injured anything
         if self._prev_health:
             for eid, health in self._prev_health.items():
-                if eid in curr_enemy_health and curr_enemy_health[eid] < health:
-                    step_hits += 1
+                damage_amount = health - curr_enemy_health.get(eid, health)
+                if damage_amount > 0:
+                    detected.hits += 1
+                    detected.damage += damage_amount
 
         # capture item information
         curr_items = {x: objects.get_obj_timer(x) for x in objects.enumerate_item_ids()}
@@ -75,43 +85,42 @@ class ZeldaHitDetect(gym.Wrapper):
         frames_elapsed = info['total_frames'] - self._last_frame
         for item, timer in self._prev_items.items():
             if frames_elapsed < timer and item not in curr_items:
-                step_items.append(objects.get_object_id(item))
+                detected.items.append(objects.get_object_id(item))
+
 
 
         # check if beams, bombs, arrows, etc are active and if they will hit in the future,
         # as we need to count them as rewards/results of this action so the model trains properly
-        step_hits = self._handle_future_hits(act, info, objects, step_hits, 'beam_hits',
-                                    lambda st: get_beam_state(st) == AnimationState.ACTIVE, self._set_beams_only)
-        step_hits = self._handle_future_hits(act, info, objects, step_hits, 'bomb1_hits',
-                                    lambda st: get_bomb_state(st, 0) == AnimationState.ACTIVE, self._set_bomb1_only)
-        step_hits = self._handle_future_hits(act, info, objects, step_hits, 'bomb2_hits',
-                                    lambda st: get_bomb_state(st, 1) == AnimationState.ACTIVE, self._set_bomb2_only)
+        self._handle_future_hits(detected, act, info, objects,  'beam_hits',
+                                lambda st: get_beam_state(st) == AnimationState.ACTIVE, self._set_beams_only)
+        self._handle_future_hits(detected, act, info, objects, 'bomb1_hits',
+                                lambda st: get_bomb_state(st, 0) == AnimationState.ACTIVE, self._set_bomb1_only)
+        self._handle_future_hits(detected, act, info, objects, 'bomb2_hits',
+                                lambda st: get_bomb_state(st, 1) == AnimationState.ACTIVE, self._set_bomb2_only)
 
         # arrows can pick up items but not stun
-        step_hits, _, step_items = self._handle_future_effects(act, info, objects, step_hits, step_stuns, step_items,
-                                                               'arrow_hits',
-                                                               lambda st: get_arrow_state(st) == AnimationState.ACTIVE,
-                                                               self._set_arrow_only)
+        self._handle_future_effects(detected, act, info, objects, 'arrow_hits',
+                                    lambda st: get_arrow_state(st) == AnimationState.ACTIVE,
+                                    self._set_arrow_only)
 
         # boomerangs can stun, kill, and pick up items
-        step_hits, step_stuns, step_items = self._handle_future_effects(act, info, objects, step_hits, step_stuns,
-                                                step_items, 'boomerang_hits',
-                                                lambda st: get_boomerang_state(st) == AnimationState.ACTIVE,
-                                                self._set_boomerang_only)
+        self._handle_future_effects(detected, act, info, objects, 'boomerang_hits',
+                                    lambda st: get_boomerang_state(st) == AnimationState.ACTIVE,
+                                    self._set_boomerang_only)
 
         self._prev_health = curr_enemy_health
         self._prev_items = curr_items
         self._last_frame = info['total_frames']
-        return step_hits, step_stuns, step_items
+        return detected
 
     def _capture_items(self, objects):
         items = {}
         for item in objects.enumerate_item_ids():
             items[item] = objects.get_obj_timer(item)
 
-    def _handle_future_effects(self, act, info, objects, step_hits, step_stuns, items_obtained, name,
-                               condition_check, disable_others):
+    def _handle_future_effects(self, detected, act, info, objects, name, condition_check, disable_others):
         already_active_name = name + '_already_active'
+        discounted_damage = name + '_discounted_damage'
         discounted_hits = name + '_discounted_hits'
         discounted_stuns = name + '_discounted_stuns'
         discounted_items = name + '_discounted_items'
@@ -119,11 +128,16 @@ class ZeldaHitDetect(gym.Wrapper):
         # check if boomerang is active and if it will hit in the future
         if condition_check(info):
             if not self._state.get(already_active_name, False):
-                future_hits, future_stuns, future_items = self._predict_future_effects(act, info, objects,
-                                                   condition_check, disable_others)
+                result = self._predict_future_effects(act, info, objects, condition_check, disable_others)
 
-                step_hits += future_hits
-                step_stuns += future_stuns
+                future_damage, future_hits, future_stuns, future_items = result
+
+                detected.damage += future_damage
+                detected.hits += future_hits
+                detected.stuns += future_stuns
+                detected.items.extend(future_items)
+
+                self._state[discounted_damage] = future_damage
                 self._state[discounted_hits] = future_hits
                 self._state[discounted_stuns] = future_stuns
                 self._state[discounted_items] = future_items
@@ -132,18 +146,17 @@ class ZeldaHitDetect(gym.Wrapper):
         else:
             self._state[already_active_name] = False
 
-            step_hits = self._discount(step_hits, discounted_hits)
-            step_stuns = self._discount(step_stuns, discounted_stuns)
+            detected.damage = self._discount(detected.damage, discounted_damage)
+            detected.hits = self._discount(detected.hits, discounted_hits)
+            detected.stuns = self._discount(detected.stuns, discounted_stuns)
 
             # discount items we already picked up with the boomerang
             discounted_items = self._state.get(discounted_items, None)
-            if discounted_items and items_obtained:
+            if discounted_items and detected.items:
                 for item in discounted_items.copy():
-                    if item in items_obtained:
-                        items_obtained.remove(item)
+                    if item in detected.items:
+                        detected.items.remove(item)
                         discounted_items.remove(item)
-
-        return step_hits, step_stuns, items_obtained
 
     def _discount(self, curr_total, name):
         to_discount = self._state.get(name, 0)
@@ -165,8 +178,7 @@ class ZeldaHitDetect(gym.Wrapper):
         # disable beams, bombs, or other active damaging effects until the current one is resolved
         disable_others(data)
 
-        start_enemies = list(objects.enumerate_enemy_ids())
-        start_health = {x: objects.get_obj_health(x) for x in start_enemies}
+        start_enemies, start_health = self._get_enemy_health(objects)
         unstunned_enemies = [eid for eid in start_enemies if objects.get_obj_stun_timer(eid) == 0]
 
         item_timers = {}
@@ -196,14 +208,7 @@ class ZeldaHitDetect(gym.Wrapper):
                 stuns += 1
 
         # check health
-        hits = 0
-        end_health = {x: objects.get_obj_health(x) for x in objects.enumerate_enemy_ids()}
-        for enemy in start_enemies:
-            start = start_health.get(enemy, 0)
-            end = objects.get_obj_health(enemy)
-
-            if enemy not in end_health or end < start:
-                hits += 1
+        dmg, hits = self._get_dmg_hits(objects, start_enemies, start_health)
 
         # check items
         items_obtained = []
@@ -213,25 +218,50 @@ class ZeldaHitDetect(gym.Wrapper):
                 items_obtained.append(item)
 
         unwrapped.em.set_state(savestate)
-        return hits, stuns, items_obtained
+        return dmg, hits, stuns, items_obtained
 
-    def _handle_future_hits(self, act, info, objects, step_hits, name, condition_check, disable_others):
+    def _get_dmg_hits(self, objects, start_enemies, start_health):
+        dmg = 0
+        hits = 0
+        end_health = {x: objects.get_obj_health(x) for x in objects.enumerate_enemy_ids()}
+        for enemy in start_enemies:
+            curr_health = objects.get_obj_health(enemy)
+            prev_health = start_health.get(enemy, curr_health)
+
+            health_loss = prev_health - curr_health
+            if enemy not in end_health:
+                health_loss = prev_health
+
+            if health_loss > 0:
+                hits += 1
+                dmg += health_loss
+
+        return dmg, hits
+
+    def _get_enemy_health(self, objects):
+        start_enemies = list(objects.enumerate_enemy_ids())
+        start_health = {x: objects.get_obj_health(x) for x in start_enemies}
+        return start_enemies,start_health
+
+    def _handle_future_hits(self, detected, act, info, objects, name, condition_check, disable_others):
         info[name] = 0
 
         already_active_name = name + '_already_active'
+        discounted_damage = name + '_discounted_damage'
         discounted_hits = name + '_discounted_hits'
 
         if condition_check(info):
             already_active = self._state.get(already_active_name, False)
             if not already_active:
                 # check if beams will hit something
-                future_hits = self._predict_future_hits(act, info, objects, condition_check, disable_others)
-                info[name] = future_hits
+                dmg, hits = self._predict_future_hits(act, info, objects, condition_check, disable_others)
 
                 # count the future hits now, discount them from the later hit
-                step_hits += future_hits
+                detected.hits += hits
+                detected.damage += dmg
 
-                self._state[discounted_hits] = future_hits
+                self._state[discounted_hits] = hits
+                self._state[discounted_damage] = dmg
                 self._state[already_active_name] = True
 
         else:
@@ -239,9 +269,8 @@ class ZeldaHitDetect(gym.Wrapper):
             # the beams.  Make sure we are ready to process them again, and discount any kills
             # we found.
             self._state[already_active_name] = False
-            step_hits = self._discount(step_hits, discounted_hits)
-
-        return step_hits
+            detected.hits = self._discount(detected.hits, discounted_hits)
+            detected.damage = self._discount(detected.damage, discounted_damage)
 
     def _predict_future_hits(self, act, info, objects, should_continue, disable_others):
         # pylint: disable=too-many-locals
@@ -252,8 +281,7 @@ class ZeldaHitDetect(gym.Wrapper):
         # disable beams, bombs, or other active damaging effects until the current one is resolved
         disable_others(data)
 
-        start_enemies = list(objects.enumerate_enemy_ids())
-        start_health = {x: objects.get_obj_health(x) for x in start_enemies}
+        start_enemies, start_health = self._get_enemy_health(objects)
 
         # Step over until should_continue is false, or until we left this room or hit a termination condition.
         # Update info at each iteration.
@@ -267,19 +295,11 @@ class ZeldaHitDetect(gym.Wrapper):
             if terminated or truncated:
                 break
 
-        hits = 0
-
         objects = ZeldaObjectData(unwrapped.get_ram())
-        end_health = {x: objects.get_obj_health(x) for x in objects.enumerate_enemy_ids()}
-        for enemy in start_enemies:
-            start = start_health.get(enemy, 0)
-            end = objects.get_obj_health(enemy)
-
-            if enemy not in end_health or end < start:
-                hits += 1
+        dmg, hits = self._get_dmg_hits(objects, start_enemies, start_health)
 
         unwrapped.em.set_state(savestate)
-        return hits
+        return dmg, hits
 
     def _set_beams_only(self, data):
         self._set_only(data, 'beam_animation')

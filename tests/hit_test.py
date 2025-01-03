@@ -13,6 +13,7 @@ def assert_no_hit( env, command):
         assert not terminated
         assert not truncated
         assert info['step_hits'] == 0
+        assert info['step_damage'] == 0
 
 def run( env, command):
     for c in command:
@@ -103,7 +104,7 @@ def test_arrow_injury():
     assert_no_hit(replay, "lllllll")
 
 def test_boomerang_stun():
-    replay = ZeldaActionReplay("1_44e.state", render_mode='human')
+    replay = ZeldaActionReplay("1_44e.state")
 
     data = replay.env.unwrapped.data
     data.set_value('hearts_and_containers', 0xff)
@@ -132,7 +133,7 @@ def test_bombs_kill():
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 3
-    assert info['bomb1_hits'] == 3
+    assert info['step_damage'] == 9
     assert info['action'] == ActionType.ITEM
 
     assert_no_hit(replay, "uuurrrrrr")
