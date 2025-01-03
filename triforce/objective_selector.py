@@ -2,8 +2,8 @@ from enum import Enum
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import Direction, get_num_triforce_pieces, is_in_cave, position_to_tile_index, tile_index_to_position, is_health_full, \
-                        ZeldaItem
+from .zelda_game import Direction, get_num_triforce_pieces, is_in_cave, position_to_tile_index, \
+     tile_index_to_position, is_health_full, ZeldaItem
 from .astar import a_star
 
 class ObjectiveKind(Enum):
@@ -212,6 +212,7 @@ class OverworldOrchestrator:
         location = info['location']
 
         location_map = self._get_direction_map(info)
+        location_objective = None
         if location in location_map:
             direction = location_map[location]
             location_objective = get_location_from_direction(location, direction)

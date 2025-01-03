@@ -341,6 +341,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         return obs, rew, terminated, truncated, info, total_frames
 
     def _act_movement(self, act):
+        # pylint: disable=too-many-locals
         total_frames = 0
 
         direction = self._get_button_direction(act)
