@@ -107,14 +107,15 @@ class ZeldaHitDetect(gym.Wrapper):
                                 lambda st: get_bomb_state(st, 1) == AnimationState.ACTIVE, self._set_bomb2_only)
 
         # arrows can pick up items but not stun
+        silver_arrow_delay = 16 if info['arrows'] == 2 else 0
         self._handle_future_effects(detected, act, info, objects, 'arrow_hits',
                                     lambda st: get_arrow_state(st) == AnimationState.ACTIVE,
-                                    self._set_arrow_only)
+                                    self._set_arrow_only, silver_arrow_delay)
 
         # boomerangs can stun, kill, and pick up items
         self._handle_future_effects(detected, act, info, objects, 'boomerang_hits',
                                     lambda st: get_boomerang_state(st) == AnimationState.ACTIVE,
-                                    self._set_boomerang_only)
+                                    self._set_boomerang_only, 0)
 
         self._prev_health = curr_enemy_health
         self._prev_items = curr_items
@@ -126,7 +127,7 @@ class ZeldaHitDetect(gym.Wrapper):
         for item in objects.enumerate_item_ids():
             items[item] = objects.get_obj_timer(item)
 
-    def _handle_future_effects(self, detected, act, info, objects, name, condition_check, disable_others):
+    def _handle_future_effects(self, detected, act, info, objects, name, condition_check, disable_others, delay):
         already_active_name = name + '_already_active'
         discounted_damage = name + '_discounted_damage'
         discounted_hits = name + '_discounted_hits'
@@ -136,7 +137,7 @@ class ZeldaHitDetect(gym.Wrapper):
         # check if boomerang is active and if it will hit in the future
         if condition_check(info):
             if not self._state.get(already_active_name, False):
-                result = self._predict_future_effects(act, info, objects, condition_check, disable_others)
+                result = self._predict_future_effects(act, info, objects, condition_check, disable_others, delay)
 
                 future_damage, future_hits, future_stuns, future_items = result
 
@@ -177,7 +178,7 @@ class ZeldaHitDetect(gym.Wrapper):
 
         return curr_total
 
-    def _predict_future_effects(self, act, info, objects, should_continue, disable_others):
+    def _predict_future_effects(self, act, info, objects, should_continue, disable_others, delay):
         # pylint: disable=too-many-locals
         unwrapped = self.env.unwrapped
         savestate = unwrapped.em.get_state()
@@ -206,6 +207,9 @@ class ZeldaHitDetect(gym.Wrapper):
             frames += 1
             if terminated or truncated:
                 break
+
+        for _ in range(delay):
+            _, _, terminated, truncated, info = unwrapped.step(act)
 
         objects = ZeldaObjectData(unwrapped.get_ram())
 

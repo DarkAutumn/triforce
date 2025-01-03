@@ -25,6 +25,8 @@ ANIMATION_BOMBS_EXPLODED = 20
 ANIMATION_ARROW_ACTIVE = 10
 ANIMATION_ARROW_HIT = 20
 ANIMATION_ARROW_END = 21
+ANIMATION_ARROW_SILVER_HIT=32
+ANIMATION_ARROW_SILVER_HIT2=40
 
 ANIMATION_BOOMERANG_MIN = 10
 ANIMATION_BOOMERANG_MAX = 57
@@ -99,6 +101,12 @@ def get_arrow_state(state) -> AnimationState:
 
     if ANIMATION_ARROW_ACTIVE <= arrows <= ANIMATION_ARROW_END:
         return AnimationState.ACTIVE
+
+    if arrows == ANIMATION_ARROW_SILVER_HIT or arrows == ANIMATION_ARROW_SILVER_HIT2:
+        return AnimationState.ACTIVE
+
+    if arrows:
+        pass
 
     return AnimationState.INACTIVE
 
