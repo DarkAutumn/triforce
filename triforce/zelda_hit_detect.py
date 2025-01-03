@@ -4,7 +4,7 @@ Performs all hit-detection for the game.  This fills entries in the info diction
 
 import gymnasium as gym
 
-from .zelda_game import STUN_FLAG, ZeldaObjectData, AnimationState, is_mode_death, \
+from .zelda_game import ZeldaObjectData, AnimationState, is_mode_death, \
     get_bomb_state, get_beam_state, get_boomerang_state, get_arrow_state
 
 class ZeldaHitDetect(gym.Wrapper):
