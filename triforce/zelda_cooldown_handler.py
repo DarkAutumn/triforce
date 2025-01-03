@@ -1,0 +1,154 @@
+"""
+Handles performing actions by stepping until control returns to Link.  This ensures that after act_and_wait is
+called, the agent is in a state where it can control Link again.
+"""
+
+import numpy as np
+
+from .zelda_game import Direction, is_in_cave, is_link_stunned, is_mode_scrolling, position_to_tile_index
+from .zelda_action_type import ActionType, ActionTranslator
+
+# movement related constants
+WS_ADJUSTMENT_FRAMES = 4
+MAX_MOVEMENT_FRAMES = 16
+ATTACK_COOLDOWN = 15
+ITEM_COOLDOWN = 10
+CAVE_COOLDOWN = 60
+
+class ZeldaCooldownHandler:
+    """Handles performing actions by stepping until control returns to Link."""
+    def __init__(self, env, action_translator : ActionTranslator):
+        self.env = env
+        self.was_link_in_cave = False
+        self.action_translator = action_translator
+
+        self.none_action = np.zeros(9, dtype=bool)
+        self._attack_action = np.zeros(9, dtype=bool)
+        self._attack_action[action_translator.a_button] = True
+        self._item_action = np.zeros(9, dtype=bool)
+        self._item_action[action_translator.b_button] = True
+
+    def reset(self):
+        """Resets the handler."""
+        self.was_link_in_cave = False
+
+    def skip(self, frames):
+        """Skips a number of frames, returning the final state."""
+        return self.act_for(self.none_action, frames)
+
+    def act_for(self, act, frames):
+        """Skips a number of frames, returning the final state."""
+        for _ in range(frames):
+            obs, _, terminated, truncated, info = self.env.step(act)
+
+        return obs, terminated, truncated, info
+
+    def skip_uncontrollable_states(self, info):
+        """Skips screen scrolling or other uncontrollable states.  The model should only get to see the game when it is
+        in a state where the agent can control Link."""
+        frames_skipped = 0
+        while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']):
+            obs, _, terminated, truncated, info = self.env.step(self.none_action)
+            frames_skipped += 1
+
+            assert not terminated and not truncated
+
+        obs, _, _, info = self.act_for(self.none_action, 1)
+        return obs, info, frames_skipped
+
+    def act_and_wait(self, action, link_position):
+        """Performs the given action, then waits until Link is controllable again."""
+        action_kind = self.action_translator.get_action_type(action)
+        match action_kind:
+            case ActionType.MOVEMENT:
+                obs, terminated, truncated, info, total_frames = self._act_movement(action, link_position)
+
+            case ActionType.ATTACK:
+                obs, terminated, truncated, info, total_frames = self._act_attack_or_item(action, action_kind)
+
+            case ActionType.ITEM:
+                obs, terminated, truncated, info, total_frames = self._act_attack_or_item(action, action_kind)
+
+            case _:
+                raise ValueError(f'Unknown action type: {action_kind}')
+
+        in_cave = is_in_cave(info)
+        if in_cave and not self.was_link_in_cave:
+            obs, terminated, truncated, info = self.act_for(self.none_action, CAVE_COOLDOWN)
+            total_frames += CAVE_COOLDOWN
+
+        self.was_link_in_cave = in_cave
+
+        # skip scrolling
+        obs, info, skipped = self.skip_uncontrollable_states(info)
+        total_frames += skipped
+
+        return obs, terminated, truncated, info, total_frames
+
+
+    def _act_attack_or_item(self, action, action_kind):
+        total_frames = 0
+        direction = self.action_translator.get_button_direction(action)
+        self._set_direction(direction)
+
+        cooldown = 0
+        if action_kind == ActionType.ATTACK:
+            obs, _, terminated, truncated, info = self.env.step(self._attack_action)
+            cooldown = ATTACK_COOLDOWN
+
+        elif action_kind == ActionType.ITEM:
+            obs, _, terminated, truncated, info = self.env.step(self._item_action)
+            cooldown = ITEM_COOLDOWN
+
+        total_frames += cooldown + 1
+        obs, terminated, truncated, info = self.act_for(self.none_action, cooldown)
+
+        return obs, terminated, truncated, info, total_frames
+
+    def _act_movement(self, action, start_pos):
+        total_frames = 0
+
+        direction = self.action_translator.get_button_direction(action)
+        if start_pos is None:
+            obs, _, terminated, truncated, info = self.env.step(action)
+            total_frames += 1
+            start_pos = info['link_pos']
+
+        start_pos = np.array(start_pos, dtype=np.uint8)
+        old_tile_index = position_to_tile_index(*start_pos)
+
+        stuck_count = 0
+        prev = start_pos
+        for _ in range(MAX_MOVEMENT_FRAMES):
+            obs, _, terminated, truncated, info = self.env.step(action)
+            total_frames += 1
+            x, y = info['link_x'], info['link_y']
+            new_tile_index = position_to_tile_index(x, y)
+            match direction:
+                case Direction.N:
+                    if old_tile_index[0] != new_tile_index[0]:
+                        break
+                case Direction.S:
+                    if old_tile_index[0] != new_tile_index[0]:
+                        obs, terminated, truncated, info = self.act_for(action, WS_ADJUSTMENT_FRAMES)
+                        total_frames += WS_ADJUSTMENT_FRAMES
+                        break
+                case Direction.E:
+                    if old_tile_index[1] != new_tile_index[1]:
+                        break
+                case Direction.W:
+                    if old_tile_index[1] != new_tile_index[1]:
+                        obs, terminated, truncated, info = self.act_for(action, WS_ADJUSTMENT_FRAMES)
+                        total_frames += WS_ADJUSTMENT_FRAMES
+                        break
+
+            if prev[0] == x and prev[1] == y:
+                stuck_count += 1
+
+            if stuck_count > 1:
+                break
+
+        return obs, terminated, truncated, info, total_frames
+
+    def _set_direction(self, direction : Direction):
+        self.env.unwrapped.data.set_value('link_direction', direction.value)

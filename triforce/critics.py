@@ -4,7 +4,7 @@ from typing import Dict
 import numpy as np
 
 from .objective_selector import ObjectiveKind
-from .zelda_wrapper import ActionType
+from .zelda_action_type import ActionType
 from .zelda_game import Direction, TileState, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
     get_num_triforce_pieces, is_in_cave
 

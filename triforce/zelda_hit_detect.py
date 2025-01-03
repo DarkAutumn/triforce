@@ -17,7 +17,6 @@ class ZeldaHitDetect(gym.Wrapper):
         self._prev_health = None
         return obs, info
 
-
     def step(self, action):
         obs, rewards, terminated, truncated, info = self.env.step(action)
 
@@ -69,7 +68,6 @@ class ZeldaHitDetect(gym.Wrapper):
 
         self._prev_health = curr_enemy_health
         return step_hits
-
 
     def _clear_variables(self, name):
         self._clear_item(name + '_already_active')
