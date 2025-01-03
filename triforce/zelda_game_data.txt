@@ -36,6 +36,7 @@
 # animations
 0x0b9 sword_animation
 0x0ba beam_animation
+0x0bb bait_or_boomerang_animation
 0x0bc bomb_or_flame_animation
 0x0bd bomb_or_flame_animation2
 0x0be arrow_magic_animation

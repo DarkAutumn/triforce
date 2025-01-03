@@ -84,6 +84,10 @@
             "address": 186,
             "type": "=u1"
         },
+        "bait_or_boomerang_animation": {
+            "address": 187,
+            "type": "=u1"
+        },
         "bomb_or_flame_animation": {
             "address": 188,
             "type": "=u1"
