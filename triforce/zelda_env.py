@@ -1,6 +1,8 @@
 # A wrapper to create a Zelda environment.
 
 import retro
+
+from .zelda_hit_detect import ZeldaHitDetect
 from .objective_selector import ObjectiveSelector
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
@@ -31,6 +33,9 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
     # Wrap the game to produce new info about game state and to hold the button down after the action is
     # taken to achieve the desired number of actions per second.
     env = ZeldaGameWrapper(env)
+
+    # Detect hits.
+    env = ZeldaHitDetect(env)
 
     # The AI orchestration piece.  This is responsible for selecting the model to use and the target
     # objective.
