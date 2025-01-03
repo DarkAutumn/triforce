@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from triforce.zelda_cooldown_handler import ActionType
 from utilities import ZeldaActionReplay
+from triforce.zelda_game import ZeldaItem, get_bomb_state, AnimationState
 
 def assert_no_hit( env, command):
     for _, _, terminated, truncated, info in run(env, command):
@@ -14,6 +15,8 @@ def assert_no_hit( env, command):
         assert not truncated
         assert info['step_hits'] == 0
         assert info['step_damage'] == 0
+
+    return info
 
 def run( env, command):
     for c in command:
@@ -87,10 +90,7 @@ def test_arrow_injury():
 
     data = replay.env.unwrapped.data
     data.set_value('hearts_and_containers', 0xff)
-    data.set_value('arrows', 1)
-    data.set_value('bow', 1)
-    data.set_value('rupees', 1)
-    data.set_value('selected_item', 2)
+    _select_arrows(data)
 
     assert_no_hit(replay, 'll')
 
@@ -125,7 +125,7 @@ def test_boomerang_stun():
 
 
 def test_bombs_kill():
-    replay = ZeldaActionReplay("1_44e.state")
+    replay = ZeldaActionReplay("1_44e.state", render_mode="human")
 
     assert_no_hit(replay, 'llluuuullllllllllllllld')
 
@@ -137,3 +137,57 @@ def test_bombs_kill():
     assert info['action'] == ActionType.ITEM
 
     assert_no_hit(replay, "uuurrrrrr")
+
+def test_boomerang_item_pickup():
+    replay = _line_up_item()
+
+    data = replay.env.unwrapped.data
+    data.set_value('selected_item', 0)
+    _, _, terminated, truncated, info = replay.step('b')
+    assert not terminated
+    assert not truncated
+
+    items = info['step_items']
+    assert len(items) == 1
+    assert items[0] == ZeldaItem.Bombs
+
+def test_arrow_item_pickup():
+    replay = _line_up_item()
+    data = replay.env.unwrapped.data
+    _select_arrows(data)
+
+    _, _, terminated, truncated, info = replay.step('b')
+    assert not terminated
+    assert not truncated
+
+    items = info['step_items']
+    assert len(items) == 1
+    assert items[0] == ZeldaItem.Bombs
+
+def _select_arrows(data):
+    data.set_value('arrows', 1)
+    data.set_value('bow', 1)
+    data.set_value('rupees', 1)
+    data.set_value('selected_item', 2)
+
+def _line_up_item():
+    replay = ZeldaActionReplay("1_44e.state")
+
+    data = replay.env.unwrapped.data
+    data.set_value('regular_boomerang', 1)
+    data.set_value('magic_boomerang', 2)
+
+    assert_no_hit(replay, 'llluuuullllllllllllllld')
+
+    _, _, terminated, truncated, info = replay.step('b')
+    assert not terminated
+    assert not truncated
+    assert info['step_hits'] == 3
+    assert info['step_damage'] == 9
+    assert info['action'] == ActionType.ITEM
+
+    info = assert_no_hit(replay, "rrrrrrrrdd")
+
+    while get_bomb_state(info, 0) != AnimationState.INACTIVE:
+        info = assert_no_hit(replay, "rl")
+    return replay

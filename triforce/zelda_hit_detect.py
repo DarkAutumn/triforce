@@ -5,7 +5,7 @@ Performs all hit-detection for the game.  This fills entries in the info diction
 import gymnasium as gym
 
 from .zelda_game import ZeldaObjectData, AnimationState, is_mode_death, \
-    get_bomb_state, get_beam_state, get_boomerang_state, get_arrow_state
+    get_bomb_state, get_beam_state, get_boomerang_state, get_arrow_state, ITEM_MAP
 
 class HitsDetected:
     """Contains information about hits that occurred during a step."""
@@ -16,7 +16,14 @@ class HitsDetected:
         self.items = []
 
 class ZeldaHitDetect(gym.Wrapper):
-    """Interprets the game state and produces more information in the 'info' dictionary."""
+    """
+    Determines whether attacks hit and whether link picked up an item.  Fills in:
+    info['step_damage']
+    info['step_hits']
+    info['step_stuns']
+    info['step_items']
+    """
+
     def __init__(self, env):
         super().__init__(env)
         self._last_frame = None
@@ -85,9 +92,7 @@ class ZeldaHitDetect(gym.Wrapper):
         frames_elapsed = info['total_frames'] - self._last_frame
         for item, timer in self._prev_items.items():
             if frames_elapsed < timer and item not in curr_items:
-                detected.items.append(objects.get_object_id(item))
-
-
+                detected.items.append(ITEM_MAP[objects.get_object_id(item)])
 
         # check if beams, bombs, arrows, etc are active and if they will hit in the future,
         # as we need to count them as rewards/results of this action so the model trains properly
@@ -215,7 +220,8 @@ class ZeldaHitDetect(gym.Wrapper):
         remaining_items = list(objects.enumerate_item_ids())
         for item, timer in item_timers.items():
             if frames < timer and item not in remaining_items:
-                items_obtained.append(item)
+                item_id = objects.get_object_id(item)
+                items_obtained.append(ITEM_MAP[item_id])
 
         unwrapped.em.set_state(savestate)
         return dmg, hits, stuns, items_obtained
