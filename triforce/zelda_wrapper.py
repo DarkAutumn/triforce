@@ -10,8 +10,7 @@ from random import randint
 import gymnasium as gym
 import numpy as np
 
-from .zelda_action_type import ActionTranslator
-from .zelda_cooldown_handler import ZeldaCooldownHandler
+from .zelda_cooldown_handler import ZeldaCooldownHandler, ActionTranslator
 
 from .zelda_game_data import zelda_game_data
 from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, is_health_full, is_in_cave, \
@@ -275,3 +274,5 @@ class ZeldaGameWrapper(gym.Wrapper):
             if act[i]:
                 result.append(b)
         return result
+
+__all__ = [ZeldaGameWrapper.__name__]
