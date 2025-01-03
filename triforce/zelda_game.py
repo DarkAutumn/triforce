@@ -96,13 +96,11 @@ def get_boomerang_state(state) -> AnimationState:
 def get_arrow_state(state) -> AnimationState:
     """Returns the state of link's arrows."""
     arrows = state['arrow_magic_animation']
-    if arrows == 0:
-        return AnimationState.INACTIVE
 
-    if arrows == ANIMATION_ARROW_ACTIVE:
+    if ANIMATION_ARROW_ACTIVE <= arrows <= ANIMATION_ARROW_END:
         return AnimationState.ACTIVE
 
-    return AnimationState.HIT
+    return AnimationState.INACTIVE
 
 def get_num_triforce_pieces(state):
     """Returns the number of triforce pieces collected."""
@@ -377,6 +375,11 @@ class ZeldaObjectData:
         """Returns the status of the object."""
         obj_status = getattr(self, 'obj_status')
         return obj_status[obj]
+
+    def get_obj_stun_timer(self, obj : int):
+        """Returns the stun timer of the object."""
+        obj_stun = getattr(self, 'obj_stun_timer')
+        return obj_stun[obj]
 
     def get_obj_timer(self, obj : int):
         """Returns the timer of the item."""

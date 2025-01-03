@@ -122,6 +122,7 @@ class ZeldaHitDetect(gym.Wrapper):
                 future_hits, future_stuns, future_items = self._predict_future_effects(act, info, objects,
                                                    condition_check, disable_others)
 
+                step_hits += future_hits
                 step_stuns += future_stuns
                 self._state[discounted_hits] = future_hits
                 self._state[discounted_stuns] = future_stuns
@@ -164,10 +165,9 @@ class ZeldaHitDetect(gym.Wrapper):
         # disable beams, bombs, or other active damaging effects until the current one is resolved
         disable_others(data)
 
-
         start_enemies = list(objects.enumerate_enemy_ids())
         start_health = {x: objects.get_obj_health(x) for x in start_enemies}
-        unstunned_enemies = [eid for eid in start_enemies if objects.get_obj_status(eid) != STUN_FLAG]
+        unstunned_enemies = [eid for eid in start_enemies if objects.get_obj_stun_timer(eid) == 0]
 
         item_timers = {}
         for item in objects.enumerate_item_ids():
@@ -192,7 +192,7 @@ class ZeldaHitDetect(gym.Wrapper):
         # check stun
         stuns = 0
         for enemy in unstunned_enemies:
-            if objects.get_obj_status(enemy) == STUN_FLAG:
+            if objects.get_obj_stun_timer(enemy):
                 stuns += 1
 
         # check health
