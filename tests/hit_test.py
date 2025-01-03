@@ -5,7 +5,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
-from triforce.zelda_wrapper import ActionType
+from triforce.zelda_cooldown_handler import ActionType
 from utilities import ZeldaActionReplay
 
 def assert_no_hit( env, command):
