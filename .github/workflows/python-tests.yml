@@ -41,4 +41,4 @@ jobs:
 
     - name: Lint with pylint
       run: |
-        pylint triforce/ evaluate.py run.py train.py
+        pylint --rcfile=.pylintrc triforce/ evaluate.py run.py train.py
