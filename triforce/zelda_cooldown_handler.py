@@ -63,7 +63,6 @@ class ActionTranslator:
 
         return ActionType.NOTHING
 
-
 class ZeldaCooldownHandler:
     """Handles performing actions by stepping until control returns to Link."""
     def __init__(self, env, action_translator : ActionTranslator):
