@@ -62,31 +62,15 @@ class ZeldaHitDetect(gym.Wrapper):
         detected = HitsDetected()
 
         # capture enemy health data
-        curr_enemy_health = {}
         objects = info['objects']
-        for eid in objects.enumerate_enemy_ids():
-            health = objects.get_obj_health(eid)
-
-            # Some enemies, like gels and keese, do not have health.  This makes calculating hits very challenging.
-            # Instead, just set those 0 health enemies to 1 health, which doesn't otherwise affect the game.  The
-            # game will set them to 0 health when they die.
-            if not health and (not self._prev_health or self._prev_health.get(eid, 0) == 0):
-                data = self.env.unwrapped.data
-                data.set_value(f'obj_health_{eid:x}', 0x10)
-                health = 1
-
-            curr_enemy_health[eid] = health
-
-        # check if we killed or injured anything
-        if self._prev_health:
-            for eid, health in self._prev_health.items():
-                damage_amount = health - curr_enemy_health.get(eid, health)
-                if damage_amount > 0:
-                    detected.hits += 1
-                    detected.damage += damage_amount
+        curr_enemy_health = self._get_live_enemy_health(objects)
+        curr_dmg, curr_hits = self._compare_health(self._prev_health, curr_enemy_health)
+        detected.hits += curr_hits
+        detected.damage += curr_dmg
 
         # capture item information
         curr_items = {x: objects.get_obj_timer(x) for x in objects.enumerate_item_ids()}
+
 
         # check if we picked up any items
         frames_elapsed = info['total_frames'] - self._last_frame
@@ -114,13 +98,48 @@ class ZeldaHitDetect(gym.Wrapper):
 
         # boomerangs can stun, kill, and pick up items
         self._handle_future_effects(detected, act, info, objects, 'boomerang_hits',
-                                    lambda st: get_boomerang_state(st) == AnimationState.ACTIVE,
+                                    lambda st: get_boomerang_state(st) != AnimationState.INACTIVE,
                                     self._set_boomerang_only, 0)
 
         self._prev_health = curr_enemy_health
         self._prev_items = curr_items
         self._last_frame = info['total_frames']
         return detected
+
+    def _get_live_enemy_health(self, objects):
+        result = {}
+        for eid in objects.enumerate_enemy_ids():
+            health = objects.get_obj_health(eid)
+            if health == 0:
+                spawn_state = objects.get_obj_spawn_state(eid)
+                if spawn_state == 0:
+                    # enemy is alive but doesn't have a health value
+                    health = True
+
+            if health:
+                result[eid] = health
+
+        return result
+
+    def _compare_health(self, prev_health, curr_health):
+        dmg = 0
+        hits = 0
+
+        if prev_health:
+            for eid, health in prev_health.items():
+                if eid in curr_health:
+                    # If we have a health value, calculate the damage.  If we don't have a health value,
+                    # then we rely on whether the value is in the dictionary to determine if the enemy is alive.
+                    if health is not True:
+                        diff = health - curr_health[eid]
+                        if diff > 0:
+                            hits += 1
+                            dmg += diff
+                else:
+                    hits += 1
+                    dmg += health if health is not True else 1
+
+        return dmg, hits
 
     def _capture_items(self, objects):
         items = {}
@@ -187,8 +206,8 @@ class ZeldaHitDetect(gym.Wrapper):
         # disable beams, bombs, or other active damaging effects until the current one is resolved
         disable_others(data)
 
-        start_enemies, start_health = self._get_enemy_health(objects)
-        unstunned_enemies = [eid for eid in start_enemies if objects.get_obj_stun_timer(eid) == 0]
+        start_health = self._get_live_enemy_health(objects)
+        unstunned_enemies = [eid for eid in start_health if objects.get_obj_stun_timer(eid) == 0]
 
         item_timers = {}
         for item in objects.enumerate_item_ids():
@@ -220,7 +239,8 @@ class ZeldaHitDetect(gym.Wrapper):
                 stuns += 1
 
         # check health
-        dmg, hits = self._get_dmg_hits(objects, start_enemies, start_health)
+        end_health = self._get_live_enemy_health(objects)
+        dmg, hits = self._compare_health(start_health, end_health)
 
         # check items
         items_obtained = []
@@ -233,28 +253,6 @@ class ZeldaHitDetect(gym.Wrapper):
         unwrapped.em.set_state(savestate)
         return dmg, hits, stuns, items_obtained
 
-    def _get_dmg_hits(self, objects, start_enemies, start_health):
-        dmg = 0
-        hits = 0
-        end_health = {x: objects.get_obj_health(x) for x in objects.enumerate_enemy_ids()}
-        for enemy in start_enemies:
-            curr_health = objects.get_obj_health(enemy)
-            prev_health = start_health.get(enemy, curr_health)
-
-            health_loss = prev_health - curr_health
-            if enemy not in end_health:
-                health_loss = prev_health
-
-            if health_loss > 0:
-                hits += 1
-                dmg += health_loss
-
-        return dmg, hits
-
-    def _get_enemy_health(self, objects):
-        start_enemies = list(objects.enumerate_enemy_ids())
-        start_health = {x: objects.get_obj_health(x) for x in start_enemies}
-        return start_enemies,start_health
 
     def _handle_future_hits(self, detected, act, info, objects, name, condition_check, disable_others):
         info[name] = 0
@@ -294,7 +292,7 @@ class ZeldaHitDetect(gym.Wrapper):
         # disable beams, bombs, or other active damaging effects until the current one is resolved
         disable_others(data)
 
-        start_enemies, start_health = self._get_enemy_health(objects)
+        start_health = self._get_live_enemy_health(objects)
 
         # Step over until should_continue is false, or until we left this room or hit a termination condition.
         # Update info at each iteration.
@@ -309,7 +307,8 @@ class ZeldaHitDetect(gym.Wrapper):
                 break
 
         objects = ZeldaObjectData(unwrapped.get_ram())
-        dmg, hits = self._get_dmg_hits(objects, start_enemies, start_health)
+        end_health = self._get_live_enemy_health(objects)
+        dmg, hits = self._compare_health(start_health, end_health)
 
         unwrapped.em.set_state(savestate)
         return dmg, hits

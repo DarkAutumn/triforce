@@ -93,6 +93,9 @@ def get_boomerang_state(state) -> AnimationState:
     if ANIMATION_BOOMERANG_MIN <= boomerang <= ANIMATION_BOOMERANG_MAX:
         return AnimationState.ACTIVE
 
+    if boomerang in (80, 81, 82):
+        return AnimationState.INACTIVE
+
     return AnimationState.INACTIVE
 
 def get_arrow_state(state) -> AnimationState:
@@ -388,6 +391,11 @@ class ZeldaObjectData:
         """Returns the stun timer of the object."""
         obj_stun = getattr(self, 'obj_stun_timer')
         return obj_stun[obj]
+
+    def get_obj_spawn_state(self, obj : int):
+        """Returns the spawn state of the object."""
+        obj_spawn_state = getattr(self, 'obj_spawn_state')
+        return obj_spawn_state[obj]
 
     def get_obj_timer(self, obj : int):
         """Returns the timer of the item."""

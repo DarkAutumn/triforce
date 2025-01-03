@@ -66,6 +66,16 @@ class ItemSelector:
         data.set_value("food", 1)
         self._select_item(data, ItemOrder.FOOD)
 
+    def select_sword(self, level=1):
+        data = self.env.unwrapped.data
+        data.set_value("sword", level)
+        data.set_value("hearts_and_containers", 0xfe)
+
+    def select_beams(self, level=1):
+        data = self.env.unwrapped.data
+        data.set_value("sword", level)
+        data.set_value("hearts_and_containers", 0xff)
+
     def _select_item(self, data, item : ItemOrder):
         data.set_value("selected_item", item.value)
 

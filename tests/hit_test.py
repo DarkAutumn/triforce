@@ -24,12 +24,16 @@ def run( env, command):
         yield env.step(c)
 
 def test_bat_injury():
-    replay = ZeldaActionReplay("1_72e.state")
+    replay = ZeldaActionReplay("1_72e.state", render_mode="human")
     assert_no_hit(replay, 'llllllllllldddllllllllll')
+    selector = ItemSelector(replay.env)
+    selector.select_sword()
+
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 2
+    assert info['step_damage'] == 2
     assert info['action'] == ActionType.ATTACK
 
     assert_no_hit(replay, 'dddddddddddddddddddddddddddddddddd')
@@ -38,8 +42,8 @@ def test_stalfos_injury():
     replay = ZeldaActionReplay("1_74w.state")
     assert_no_hit(replay, 'rrddddr')
 
-    unwrapped = replay.env.unwrapped
-    unwrapped.data.set_value('hearts_and_containers', 0xff)
+    selector = ItemSelector(replay.env)
+    selector.select_beams()
 
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
@@ -62,12 +66,32 @@ def test_sword_injury():
     replay = ZeldaActionReplay("1_44e.state")
 
     assert_no_hit(replay, 'llluuuullllllllllllllld')
+    selector = ItemSelector(replay.env)
+    selector.select_sword()
 
     _, _, terminated, truncated, info = replay.step('a')
+
     assert not terminated
     assert not truncated
     assert info['step_hits'] == 2
     assert info['action'] == ActionType.ATTACK
+
+    assert_no_hit(replay, 'u')
+
+def test_boomerang_bat_kill():
+    replay = ZeldaActionReplay("1_72e.state", render_mode="human")
+    assert_no_hit(replay, 'llllllllll')
+    selector = ItemSelector(replay.env)
+    selector.select_boomerang(False)
+
+    _, _, terminated, truncated, info = replay.step('b')
+
+    assert not terminated
+    assert not truncated
+    assert info['step_hits'] == 1
+    assert info['action'] == ActionType.ITEM
+
+    assert_no_hit(replay, 'ldddllllllll')
 
     assert_no_hit(replay, 'u')
 
@@ -176,6 +200,10 @@ def test_boomerang_stun():
 
     assert_no_hit(replay, "lllllll")
 
+# Wand tests
+
+
+
 # Bomb tests
 
 def test_bombs_kill():
@@ -197,7 +225,7 @@ def test_bombs_kill():
 # Helpers
 
 def _line_up_item():
-    replay = ZeldaActionReplay("1_44e.state")
+    replay = ZeldaActionReplay("1_44e.state", render_mode="human")
 
     assert_no_hit(replay, 'llluuuullllllllllllllld')
 
