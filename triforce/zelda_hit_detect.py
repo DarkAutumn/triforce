@@ -96,6 +96,9 @@ class ZeldaHitDetect(gym.Wrapper):
 
         # check if beams, bombs, arrows, etc are active and if they will hit in the future,
         # as we need to count them as rewards/results of this action so the model trains properly
+
+        # Beams and bombs can only damage, not pick up items or stun.  (The sword swing can pick up items,
+        # but that will occur within a single action and detected the same way as link walking over one.)
         self._handle_future_hits(detected, act, info, objects,  'beam_hits',
                                 lambda st: get_beam_state(st) == AnimationState.ACTIVE, self._set_beams_only)
         self._handle_future_hits(detected, act, info, objects, 'bomb1_hits',
