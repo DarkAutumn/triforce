@@ -32,7 +32,7 @@ class ZeldaHitDetect(gym.Wrapper):
         self._state = {}
 
     def reset(self, **kwargs):
-        obs, info = super().reset(**kwargs)
+        obs, info = self.env.reset(**kwargs)
         self._last_frame = info['total_frames']
         self._prev_health = None
         self._prev_items.clear()
@@ -76,7 +76,8 @@ class ZeldaHitDetect(gym.Wrapper):
         frames_elapsed = info['total_frames'] - self._last_frame
         for item, timer in self._prev_items.items():
             if frames_elapsed < timer and item not in curr_items:
-                detected.items.append(ITEM_MAP[objects.get_object_id(item)])
+                objid = objects.get_object_id(item)
+                detected.items.append(ITEM_MAP.get(objid, objid))
 
         # check if beams, bombs, arrows, etc are active and if they will hit in the future,
         # as we need to count them as rewards/results of this action so the model trains properly
@@ -247,7 +248,7 @@ class ZeldaHitDetect(gym.Wrapper):
         for item, timer in item_timers.items():
             if frames < timer and item not in remaining_items:
                 item_id = objects.get_object_id(item)
-                items_obtained.append(ITEM_MAP[item_id])
+                items_obtained.append(ITEM_MAP.get(item_id, item_id))
 
         unwrapped.em.set_state(savestate)
         return dmg, hits, stuns, items_obtained

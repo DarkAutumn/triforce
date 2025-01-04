@@ -12,10 +12,8 @@ import numpy as np
 
 from .zelda_cooldown_handler import ZeldaCooldownHandler, ActionTranslator
 
-from .zelda_game_data import zelda_game_data
-from .zelda_game import AnimationState, Direction, TileState, ZeldaEnemy, is_health_full, is_in_cave, \
-                        get_beam_state, ZeldaObjectData, \
-                        is_room_loaded, is_sword_frozen, get_heart_halves, tiles_to_weights
+from .zelda_game import AnimationState, Direction, ZeldaEnemy, is_health_full, is_in_cave, \
+                        get_beam_state, ZeldaObjectData, is_sword_frozen, get_heart_halves
 
 class ZeldaGameWrapper(gym.Wrapper):
     """Interprets the game state and produces more information in the 'info' dictionary."""
@@ -28,39 +26,35 @@ class ZeldaGameWrapper(gym.Wrapper):
         self.action_translator = action_translator
         self.cooldown_handler = ZeldaCooldownHandler(env, action_translator)
 
-        self._room_maps = {}
-        self._rooms_with_locks = set()
-        self._rooms_with_locks.add((1, 0x35, False))
         self._last_enemies = [None] * 12
-
-        self._total_frames = 0
 
         # per-reset state
         self._location = None
         self._last_info = None
         self._beams_already_active = False
-        self.was_link_in_cave = False
+        self._total_frames = 0
 
     def reset(self, **kwargs):
-        super().reset(**kwargs)
-        self._last_info = None
-        self._location = None
-        self._beams_already_active = False
+        obs, info = self.env.reset(**kwargs)
 
+        # Randomize the RNG if requested
         if not self.deterministic:
             for i in range(12):
                 self.unwrapped.data.set_value(f'rng_{i}', randint(1, 255))
 
+        # Move forward to the first frame where the agent can control Link
         self.cooldown_handler.reset()
         _, _, _, info = self.cooldown_handler.skip(1)
         obs, info, frames_skipped = self.cooldown_handler.skip_uncontrollable_states(info)
+
+        # Per-reset state
+        self._last_info = None
+        self._location = None
+        self._beams_already_active = False
         self._total_frames = frames_skipped + 1
 
-        self.was_link_in_cave = is_in_cave(info)
+        # Reset/start the info dictionary
         self.update_info(info)
-
-        for room in self._rooms_with_locks:
-            self._room_maps.pop(room, None)
 
         return obs, info
 
@@ -101,9 +95,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['enemies'], info['items'], info['projectiles'] = objects.get_all_objects(link_pos)
         info['active_enemies'] = [x for x in info['enemies'] if x.is_active]
         self.update_enemy_info(info)
-
-        # add the tile layout of the room
-        self._create_tile_maps(info, ram, link)
 
         # add information about beam state
         health_full = is_health_full(info)
@@ -161,109 +152,6 @@ class ZeldaGameWrapper(gym.Wrapper):
                     result.append(enemy)
 
         return result
-
-    def _create_tile_maps(self, info, ram, link):
-        tiles = self._get_tiles(info, ram)
-        tile_states = ZeldaGameWrapper._get_tile_states(tiles, info['enemies'], info['projectiles'])
-        info['tiles'] = tiles
-        info['tile_states'] = tile_states
-
-        # calculate how many squares link overlaps with dangerous tiles
-        warning_tiles, danger_tiles = self._count_danger_tile_overlaps(link, tile_states)
-        info['link_warning_tiles'] = warning_tiles
-        info['link_danger_tiles'] = danger_tiles
-
-        north_locked = tiles[2, 16] == 0x9a
-        if north_locked:
-            self._rooms_with_locks.add(self._get_full_location(info))
-
-    def _get_tiles(self, info, ram):
-        index = self._get_full_location(info)
-
-        # check if we spent a key, if so the tile layout of the room changed
-        if self._last_info:
-            curr_keys = info['keys']
-            last_keys = self._last_info.get('keys', curr_keys)
-            if curr_keys < last_keys:
-                self._room_maps.pop(index, None)
-
-            if len(self._last_info['enemies']) != len(info['enemies']):
-                self._room_maps.pop(index, None)
-
-        if index not in self._room_maps:
-            map_offset, map_len = zelda_game_data.tables['tile_layout']
-            tiles = ram[map_offset:map_offset+map_len]
-            tiles = tiles.reshape((32, 22)).T
-
-            if is_room_loaded(tiles):
-                self._room_maps[index] = tiles
-        else:
-            tiles = self._room_maps[index]
-
-        return tiles
-
-    @staticmethod
-    def _get_tile_states(tiles, enemies, projectiles):
-        tiles = tiles.copy()
-        tiles_to_weights(tiles)
-        saw_wallmaster = False
-        for obj in enemies:
-            if obj.is_active:
-                ZeldaGameWrapper._add_enemy_or_projectile(tiles, obj.tile_coordinates)
-
-            if obj.id == ZeldaEnemy.WallMaster and not saw_wallmaster:
-                saw_wallmaster = True
-                ZeldaGameWrapper._add_wallmaster_tiles(tiles)
-
-        for proj in projectiles:
-            ZeldaGameWrapper._add_enemy_or_projectile(tiles, proj.tile_coordinates)
-
-        return tiles
-
-    @staticmethod
-    def _add_wallmaster_tiles(result):
-        x = 4
-        while x < 28:
-            result[4, x] = TileState.WARNING.value
-            result[17, x] = TileState.WARNING.value
-            x += 1
-
-        y = 4
-        while y < 18:
-            result[(y, 4)] = TileState.WARNING.value
-            result[(y, 27)] = TileState.WARNING.value
-            y += 1
-
-    @staticmethod
-    def _add_enemy_or_projectile(tiles, coords):
-        min_y = min(coord[0] for coord in coords)
-        max_y = max(coord[0] for coord in coords)
-        min_x = min(coord[1] for coord in coords)
-        max_x = max(coord[1] for coord in coords)
-
-        for coord in coords:
-            if 0 <= coord[0] < tiles.shape[0] and 0 <= coord[1] < tiles.shape[1]:
-                tiles[coord] = TileState.DANGER.value
-
-        for ny in range(min_y - 1, max_y + 2):
-            for nx in range(min_x - 1, max_x + 2):
-                if 0 <= ny < tiles.shape[0] and 0 <= nx < tiles.shape[1]:
-                    if tiles[ny, nx] == TileState.WALKABLE.value:
-                        tiles[ny, nx] = TileState.WARNING.value
-
-    def _count_danger_tile_overlaps(self, link, tile_states):
-        warning_tiles = 0
-        danger_tiles = 0
-        for pos in link.tile_coordinates:
-            y, x = pos
-            if 0 <= y < tile_states.shape[0] and 0 <= x < tile_states.shape[1]:
-                state = tile_states[y, x]
-                if state == TileState.WARNING.value:
-                    warning_tiles += 1
-                elif state == TileState.DANGER.value:
-                    danger_tiles += 1
-
-        return warning_tiles, danger_tiles
 
     def _get_full_location(self, info):
         return (info['level'], info['location'], is_in_cave(info))
