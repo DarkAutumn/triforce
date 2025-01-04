@@ -7,8 +7,20 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 from .zelda_game_data import zelda_game_data
+from .model_parameters import GAMEPLAY_START_Y
 
 MODE_CAVE = 11
+ENEMY_STUNNED = 0x40
+ENEMY_INVULNERABLE = 0x100
+
+# TODO: change to x, y
+def position_to_tile_index(x, y):
+    """Converts a screen position to a tile index."""
+    return (int((y - GAMEPLAY_START_Y) // 8), int(x // 8))
+
+def tile_index_to_position(tile_index):
+    """Converts a tile index to a screen position."""
+    return (tile_index[1] * 8, tile_index[0] * 8 + GAMEPLAY_START_Y)
 
 class Direction(Enum):
     """The four cardinal directions, as the game defines them."""
@@ -95,6 +107,43 @@ class ZeldaObjectBase:
     id : ZeldaItemId | ZeldaEnemyId | ZeldaProjectileId | int
     position : Tuple[int, int]
 
+    @property
+    def tile_coordinates(self):
+        """The tile coordinates of the object."""
+
+        # TODO:  Swap to x, y coordinates, and a 2d array
+        y, x = position_to_tile_index(*self.position)
+        return [(y, x), (y, x+1),
+                (y+1, x), (y+1, x+1)]
+
+    @property
+    def distance(self):
+        """The distance from link to the object."""
+        value = np.linalg.norm(self.vector_from_link)
+        if np.isclose(value, 0, atol=1e-5):
+            return 0
+
+        return value
+
+    @property
+    def vector(self):
+        """The normalized direction vector from link to the object."""
+        distance = self.distance
+        if distance == 0:
+            return np.array([0, 0])
+
+        return self.vector_from_link / distance
+
+    @property
+    def vector_from_link(self):
+        """The (un-normalized) vector from link to the object."""
+        vector = self.__dict__.get('_vector', None)
+        if vector is None:
+            link_pos = self.game.link.position
+            vector = self.__dict__['_vector'] = np.array(self.position) - np.array(link_pos)
+
+        return vector
+
 
 @dataclass
 class Link(ZeldaObjectBase):
@@ -111,6 +160,45 @@ class ZeldaEnemy(ZeldaObjectBase):
     health : int
     spawn_state : int
     status : int
+
+    @property
+    def is_dying(self) -> bool:
+        """Returns True if the enemy has been dealt enough damage to die, but hasn't yet been removed
+        from the game state."""
+
+        # This is through trial and error.  The dying state of enemies seems to start and 16 and increase
+        # by one frame until they are removed.  I'm not sure if it ends with 19 or not.
+        return 16 <= self.spawn_state <= 19
+
+    @property
+    def is_active(self) -> bool:
+        """Returns True if the enemy is 'active', meaning it is targetable by link.  This used for enemies like the
+        lever or zora, which peroidically go underground/underwater, or the wallmaster which disappears behind the
+        wall.  An enemy not active cannot take or deal damage to link by touching him."""
+        if not self.is_dying or not self.health:
+            return False
+
+        # status == 3 means the lever/zora is up
+        status = self.status & 0xff
+        if self.id in (ZeldaEnemyId.RedLever, ZeldaEnemyId.BlueLever, ZeldaEnemyId.Zora):
+            return status & 0xff == 3
+
+        # status == 1 means the wallmaster is active
+        if self.id == ZeldaEnemyId.WallMaster:
+            return status == 1
+
+        # spawn_state of 0 means the object is active
+        return not self.spawn_state
+
+    @property
+    def is_stunned(self) -> bool:
+        """Returns True if the enemy is stunned."""
+        return self.status & ENEMY_STUNNED == ENEMY_STUNNED
+
+    @property
+    def is_invulnerable(self) -> bool:
+        """Returns True if the enemy is invulnerable and cannot take damage."""
+        return not self.is_active or self.status & ENEMY_INVULNERABLE == ENEMY_INVULNERABLE
 
 @dataclass
 class ZeldaProjectile(ZeldaObjectBase):

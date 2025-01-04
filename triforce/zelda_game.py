@@ -2,9 +2,9 @@
 from enum import Enum
 import numpy as np
 
-from .zelda_game_state import ID_MAP, ITEM_MAP, ZeldaEnemyId, Direction, ZeldaItemId
+from .zelda_game_state import ID_MAP, ITEM_MAP, ZeldaEnemyId, Direction, ZeldaItemId, tile_index_to_position, \
+        position_to_tile_index
 from .zelda_game_data import zelda_game_data
-from .model_parameters import GAMEPLAY_START_Y
 
 MODE_REVEAL = 3
 MODE_SCROLL_COMPLETE = 4
@@ -195,15 +195,6 @@ class TileState(Enum):
     WARNING = 2    # tiles next to enemy, or the walls in a wallmaster room
     DANGER = 3     # enemy or projectile
     BRICK = 4      # dungeon bricks
-
-def position_to_tile_index(x, y):
-    """Converts a screen position to a tile index."""
-    return (int((y - GAMEPLAY_START_Y) // 8), int(x // 8))
-
-def tile_index_to_position(tile_index):
-    """Converts a tile index to a screen position."""
-    return (tile_index[1] * 8, tile_index[0] * 8 + GAMEPLAY_START_Y)
-
 
 class ZeldaSoundsPulse1(Enum):
     """Sound codes for the game."""
