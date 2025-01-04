@@ -20,18 +20,20 @@ ANIMATION_BEAMS_ACTIVE = 16
 ANIMATION_BEAMS_HIT = 17
 
 ANIMATION_BOMBS_ACTIVE = 18
-ANIMATION_BOMBS_EXPLODED = 20
+ANIMATION_BOMBS_EXPLODED = (19, 20)
 
 ANIMATION_ARROW_ACTIVE = 10
 ANIMATION_ARROW_HIT = 20
 ANIMATION_ARROW_END = 21
-ANIMATION_ARROW_SILVER_HIT=32
-ANIMATION_ARROW_SILVER_HIT2=40
 
 ANIMATION_BOOMERANG_MIN = 10
 ANIMATION_BOOMERANG_MAX = 57
 
+
 STUN_FLAG = 0x40
+
+def is_spawn_state_dying(spawn_state):
+    return 16 <= spawn_state <= 19
 
 def is_in_cave(state):
     """Returns True if link is in a cave."""
@@ -78,14 +80,13 @@ def get_bomb_state(state, i) -> AnimationState:
     if bombs == 0:
         return AnimationState.INACTIVE
 
-    if ANIMATION_BOMBS_ACTIVE <= bombs < ANIMATION_BOMBS_EXPLODED:
+    if ANIMATION_BOMBS_ACTIVE == bombs:
         return AnimationState.ACTIVE
 
-    if bombs == ANIMATION_BOMBS_EXPLODED:
+    if bombs in ANIMATION_BOMBS_EXPLODED:
         return AnimationState.HIT
 
     return 0
-
 
 def get_boomerang_state(state) -> AnimationState:
     """Returns the state of link's boomerang."""
@@ -104,12 +105,6 @@ def get_arrow_state(state) -> AnimationState:
 
     if ANIMATION_ARROW_ACTIVE <= arrows <= ANIMATION_ARROW_END:
         return AnimationState.ACTIVE
-
-    if arrows == ANIMATION_ARROW_SILVER_HIT or arrows == ANIMATION_ARROW_SILVER_HIT2:
-        return AnimationState.ACTIVE
-
-    if arrows:
-        pass
 
     return AnimationState.INACTIVE
 

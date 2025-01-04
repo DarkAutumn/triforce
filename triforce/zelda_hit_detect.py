@@ -5,7 +5,7 @@ Performs all hit-detection for the game.  This fills entries in the info diction
 import gymnasium as gym
 
 from .zelda_game import ZeldaObjectData, AnimationState, is_mode_death, \
-    get_bomb_state, get_beam_state, get_boomerang_state, get_arrow_state, ITEM_MAP
+    get_bomb_state, get_beam_state, get_boomerang_state, get_arrow_state, ITEM_MAP, is_spawn_state_dying
 
 class HitsDetected:
     """Contains information about hits that occurred during a step."""
@@ -84,22 +84,21 @@ class ZeldaHitDetect(gym.Wrapper):
         # Beams and bombs can only damage, not pick up items or stun.  (The sword swing can pick up items,
         # but that will occur within a single action and detected the same way as link walking over one.)
         self._handle_future_hits(detected, act, info, objects,  'beam_hits',
-                                lambda st: get_beam_state(st) == AnimationState.ACTIVE, self._set_beams_only)
+                                get_beam_state, self._set_beams_only)
         self._handle_future_hits(detected, act, info, objects, 'bomb1_hits',
-                                lambda st: get_bomb_state(st, 0) == AnimationState.ACTIVE, self._set_bomb1_only)
+                                lambda st: get_bomb_state(st, 0), self._set_bomb1_only)
         self._handle_future_hits(detected, act, info, objects, 'bomb2_hits',
-                                lambda st: get_bomb_state(st, 1) == AnimationState.ACTIVE, self._set_bomb2_only)
+                                lambda st: get_bomb_state(st, 1), self._set_bomb2_only)
 
         # arrows can pick up items but not stun
-        silver_arrow_delay = 16 if info['arrows'] == 2 else 0
         self._handle_future_effects(detected, act, info, objects, 'arrow_hits',
-                                    lambda st: get_arrow_state(st) == AnimationState.ACTIVE,
-                                    self._set_arrow_only, silver_arrow_delay)
+                                    get_arrow_state,
+                                    self._set_arrow_only)
 
         # boomerangs can stun, kill, and pick up items
         self._handle_future_effects(detected, act, info, objects, 'boomerang_hits',
-                                    lambda st: get_boomerang_state(st) != AnimationState.INACTIVE,
-                                    self._set_boomerang_only, 0)
+                                    get_boomerang_state,
+                                    self._set_boomerang_only)
 
         self._prev_health = curr_enemy_health
         self._prev_items = curr_items
@@ -110,11 +109,13 @@ class ZeldaHitDetect(gym.Wrapper):
         result = {}
         for eid in objects.enumerate_enemy_ids():
             health = objects.get_obj_health(eid)
-            if health == 0:
-                spawn_state = objects.get_obj_spawn_state(eid)
-                if spawn_state == 0:
-                    # enemy is alive but doesn't have a health value
-                    health = True
+            spawn_state = objects.get_obj_spawn_state(eid)
+            if is_spawn_state_dying(spawn_state):
+                continue
+
+            if health == 0 and spawn_state == 0:
+                # enemy is alive but doesn't have a health value
+                health = True
 
             if health:
                 result[eid] = health
@@ -146,7 +147,7 @@ class ZeldaHitDetect(gym.Wrapper):
         for item in objects.enumerate_item_ids():
             items[item] = objects.get_obj_timer(item)
 
-    def _handle_future_effects(self, detected, act, info, objects, name, condition_check, disable_others, delay):
+    def _handle_future_effects(self, detected, act, info, objects, name, get_animation, disable_others):
         already_active_name = name + '_already_active'
         discounted_damage = name + '_discounted_damage'
         discounted_hits = name + '_discounted_hits'
@@ -154,9 +155,9 @@ class ZeldaHitDetect(gym.Wrapper):
         discounted_items = name + '_discounted_items'
 
         # check if boomerang is active and if it will hit in the future
-        if condition_check(info):
+        if get_animation(info) == AnimationState.ACTIVE:
             if not self._state.get(already_active_name, False):
-                result = self._predict_future_effects(act, info, objects, condition_check, disable_others, delay)
+                result = self._predict_future_effects(act, info, objects, get_animation, disable_others)
 
                 future_damage, future_hits, future_stuns, future_items = result
 
@@ -197,7 +198,7 @@ class ZeldaHitDetect(gym.Wrapper):
 
         return curr_total
 
-    def _predict_future_effects(self, act, info, objects, should_continue, disable_others, delay):
+    def _predict_future_effects(self, act, info, objects, get_animation, disable_others):
         # pylint: disable=too-many-locals
         unwrapped = self.env.unwrapped
         savestate = unwrapped.em.get_state()
@@ -218,7 +219,7 @@ class ZeldaHitDetect(gym.Wrapper):
         location = (info['level'], info['location'])
 
         frames = 1
-        while should_continue(info) and not is_mode_death(info['mode']) and \
+        while get_animation(info) != AnimationState.INACTIVE and not is_mode_death(info['mode']) and \
                 location == (info['level'], info['location']):
             data.set_value('hearts_and_containers', 0xff) # make sure we don't die
 
@@ -227,9 +228,7 @@ class ZeldaHitDetect(gym.Wrapper):
             if terminated or truncated:
                 break
 
-        for _ in range(delay):
-            _, _, terminated, truncated, info = unwrapped.step(act)
-
+        # Update data
         objects = ZeldaObjectData(unwrapped.get_ram())
 
         # check stun
@@ -253,19 +252,18 @@ class ZeldaHitDetect(gym.Wrapper):
         unwrapped.em.set_state(savestate)
         return dmg, hits, stuns, items_obtained
 
-
-    def _handle_future_hits(self, detected, act, info, objects, name, condition_check, disable_others):
+    def _handle_future_hits(self, detected, act, info, objects, name, get_animation, disable_others):
         info[name] = 0
 
         already_active_name = name + '_already_active'
         discounted_damage = name + '_discounted_damage'
         discounted_hits = name + '_discounted_hits'
 
-        if condition_check(info):
+        if get_animation(info) == AnimationState.ACTIVE:
             already_active = self._state.get(already_active_name, False)
             if not already_active:
                 # check if beams will hit something
-                dmg, hits = self._predict_future_hits(act, info, objects, condition_check, disable_others)
+                dmg, hits = self._predict_future_hits(act, info, objects, get_animation, disable_others)
 
                 # count the future hits now, discount them from the later hit
                 detected.hits += hits
@@ -283,7 +281,7 @@ class ZeldaHitDetect(gym.Wrapper):
             detected.hits = self._discount(detected.hits, discounted_hits)
             detected.damage = self._discount(detected.damage, discounted_damage)
 
-    def _predict_future_hits(self, act, info, objects, should_continue, disable_others):
+    def _predict_future_hits(self, act, info, objects, get_animation, disable_others):
         # pylint: disable=too-many-locals
         unwrapped = self.env.unwrapped
         savestate = unwrapped.em.get_state()
@@ -294,11 +292,11 @@ class ZeldaHitDetect(gym.Wrapper):
 
         start_health = self._get_live_enemy_health(objects)
 
-        # Step over until should_continue is false, or until we left this room or hit a termination condition.
+        # Step over until the animation is no longer active, or until we left this room or hit a termination condition.
         # Update info at each iteration.
         location = (info['level'], info['location'])
 
-        while should_continue(info) and not is_mode_death(info['mode']) and \
+        while get_animation(info) != AnimationState.INACTIVE  and not is_mode_death(info['mode']) and \
                 location == (info['level'], info['location']):
             data.set_value('hearts_and_containers', 0xff) # make sure we don't die
 
