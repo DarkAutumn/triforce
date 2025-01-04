@@ -10,9 +10,10 @@ from random import randint
 import gymnasium as gym
 import numpy as np
 
+from .zelda_game_state import ZeldaGameState
 from .zelda_cooldown_handler import ZeldaCooldownHandler, ActionTranslator
 
-from .zelda_game import AnimationState, Direction, ZeldaEnemyId, is_health_full, is_in_cave, \
+from .zelda_game import AnimationState, ZeldaEnemyId, is_health_full, is_in_cave, \
                         get_beam_state, ZeldaObjectData, is_sword_frozen, get_heart_halves
 
 class ZeldaGameWrapper(gym.Wrapper):
@@ -69,6 +70,8 @@ class ZeldaGameWrapper(gym.Wrapper):
 
     def update_info(self, info):
         """Updates the info dictionary with new information about the game state."""
+        info['state'] = ZeldaGameState(self, info, self._total_frames)
+
         info['total_frames'] = self._total_frames
 
         ram = self.env.unwrapped.get_ram()
@@ -81,7 +84,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['link_pos'] = link_pos
         link_pos = np.array(link_pos, dtype=np.float32)
 
-        info['link_direction'] = Direction.from_ram_value(info['link_direction'])
         info['is_sword_frozen'] = is_sword_frozen(info)
 
         if self._last_info:

@@ -266,7 +266,7 @@ class GameplayCritic(ZeldaCritic):
 
                 case ActionType.ATTACK:
                     vector = aligned_enemies[0].vector
-                    link_vector = new['link_direction'].to_vector()
+                    link_vector = new['state'].link.direction.to_vector()
                     dotproduct = np.dot(vector, link_vector)
                     if dotproduct > 0.8:
                         rewards['reward-fired-correctly'] = self.fired_correctly_reward
@@ -296,7 +296,8 @@ class GameplayCritic(ZeldaCritic):
             elif new['active_enemies']:
                 enemy_vectors = [enemy.vector for enemy in new['active_enemies'] if abs(enemy.distance) > 0]
                 if enemy_vectors:
-                    dotproducts = np.sum(new['link_direction'].to_vector() * enemy_vectors, axis=1)
+                    link_vector = new['state'].link.direction.to_vector()
+                    dotproducts = np.sum(link_vector * enemy_vectors, axis=1)
                     if not np.any(dotproducts > np.sqrt(2) / 2):
                         rewards['penalty-attack-miss'] = self.attack_miss_penalty
                     elif not old['beams_available']:
@@ -370,7 +371,9 @@ class GameplayCritic(ZeldaCritic):
 
         old_path = old.get("a*_path", [])
         new_path = new.get("a*_path", [])
-        movement_direction = new['link_direction']
+
+        new_state = new['state']
+        movement_direction = new_state.link.direction
 
         # If an action put us into alignment for a sword beam shot, we should avoid penalizing the agent for this
         # move.  The agent shouldn't be able to get infinite rewards for moving into alignment since the enemy's motion

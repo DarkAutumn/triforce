@@ -24,6 +24,7 @@ def tile_index_to_position(tile_index):
 
 class Direction(Enum):
     """The four cardinal directions, as the game defines them."""
+    UNINITIALIZED = 0
     E = 1
     W = 2
     S = 4
@@ -42,7 +43,7 @@ class Direction(Enum):
             case 8:
                 return Direction.N
             case _:
-                raise ValueError(f"Invalid value for Direction: {value}")
+                return Direction.UNINITIALIZED
 
     def to_vector(self):
         """Returns the vector for the direction."""
@@ -232,7 +233,7 @@ class ZeldaGameState:
         self.frames : int = frame_count
 
         self.level = info['level']
-        self.room = info['room']
+        self.location = info['location']
         self.in_cave = info['mode'] == MODE_CAVE
 
         ram = env.unwrapped.get_ram()
@@ -257,7 +258,7 @@ class ZeldaGameState:
     @property
     def full_location(self):
         """The full location of the room."""
-        return (self.level, self.room, self.in_cave)
+        return (self.level, self.location, self.in_cave)
 
     def init_from_ram(self, info, env, tables : Dict[str, Tuple[int, int]]):
         """Fills all objects from the game state."""
@@ -286,8 +287,7 @@ class ZeldaGameState:
         status = tables.read("obj_status")[index]
         spawn_state = tables.read("obj_spawn_state")[index]
         pos = self._read_position(tables, index)
-        direction = tables.read("obj_direction")[index]
-        direction = Direction.from_ram_value(direction)
+        direction = self._read_direction(tables, index)
         enemy = ZeldaEnemy(self, index, obj_id, pos, direction, health, spawn_state, status)
         return enemy
 
@@ -297,15 +297,19 @@ class ZeldaGameState:
     def _read_position(self, tables, index):
         x = tables.read('obj_pos_x')[index]
         y = tables.read('obj_pos_y')[index]
-        return x,y
+        return x, y
+
+    def _read_direction(self, tables, index):
+        direction = tables.read("obj_direction")[index]
+        direction = Direction.from_ram_value(direction)
+        return direction
 
     def _build_link_status(self, tables):
         pos = self._read_position(tables, 0)
-        status = tables.read('link_status')[0]
+        status = tables.read('obj_status')[0]
         health = 0.5 * self._get_heart_halves()
         max_health = self._get_heart_containers()
-        direction = self._info['link_direction']
-        direction = Direction.from_ram_value(direction)
+        direction = self._read_direction(tables, 0)
         return Link(self, 0, -1, pos, direction, max_health, health, status)
 
     def _get_full_hearts(self):
