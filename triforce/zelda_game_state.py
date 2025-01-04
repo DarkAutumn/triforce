@@ -471,6 +471,7 @@ class ZeldaEnemy(ZeldaObjectBase):
     """Structured data for an enemy."""
     direction : Direction
     health : int
+    stun_timer : int
     spawn_state : int
     status : int
 
@@ -488,11 +489,9 @@ class ZeldaEnemy(ZeldaObjectBase):
         """Returns True if the enemy is 'active', meaning it is targetable by link.  This used for enemies like the
         lever or zora, which peroidically go underground/underwater, or the wallmaster which disappears behind the
         wall.  An enemy not active cannot take or deal damage to link by touching him."""
-        if not self.is_dying or not self.health:
-            return False
+        status = self.status & 0xff
 
         # status == 3 means the lever/zora is up
-        status = self.status & 0xff
         if self.id in (ZeldaEnemyId.RedLever, ZeldaEnemyId.BlueLever, ZeldaEnemyId.Zora):
             return status & 0xff == 3
 
@@ -506,7 +505,7 @@ class ZeldaEnemy(ZeldaObjectBase):
     @property
     def is_stunned(self) -> bool:
         """Returns True if the enemy is stunned."""
-        return self.status & ENEMY_STUNNED == ENEMY_STUNNED
+        return self.stun_timer > 0
 
     @property
     def is_invulnerable(self) -> bool:
@@ -667,10 +666,11 @@ class ZeldaGameState:
     def _build_enemy(self, tables, index, obj_id):
         health = tables.read("obj_health")[index] >> 4
         status = tables.read("obj_status")[index]
+        stun_timer = tables.read("obj_stun_timer")[index]
         spawn_state = tables.read("obj_spawn_state")[index]
         pos = self._read_position(tables, index)
         direction = self._read_direction(tables, index)
-        enemy = ZeldaEnemy(self, index, obj_id, pos, direction, health, spawn_state, status)
+        enemy = ZeldaEnemy(self, index, obj_id, pos, direction, health, stun_timer, spawn_state, status)
         return enemy
 
     def _build_projectile(self, tables, index, obj_id):

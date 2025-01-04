@@ -23,10 +23,23 @@ class ZeldaStateChange:
             discounts.clear()
 
         else:
+            # Check for changes to health and items
             self._compare_health_status(prev, curr, self.__dict__)
             self._compare_items(prev, curr, self.__dict__)
-            self._detect_future_damage(env, prev, curr, discounts)
+
+            # But discount any effects that we already rewarded in the past
             self._discount_damage(self.__dict__, discounts)
+
+            # Find if this action will cause future damage
+            self._detect_future_damage(env, prev, curr, discounts)
+
+    @property
+    def damage_dealt(self):
+        return sum(self.enemies_hit.values())
+    
+    @property
+    def hits(self):
+        return len(self.enemies_hit)
 
     def _compare_health_status(self, prev : ZeldaGameState, curr : ZeldaGameState, result):
         # Walk all enemies alive (and not dying) in the previous snapshot
@@ -47,7 +60,7 @@ class ZeldaStateChange:
                     enemies_hit = result.setdefault('enemies_hit', {})
                     enemies_hit[enemy.index] = enemies_hit.get(enemy.index, 0) + health
 
-                if enemy.is_stunned and not curr_enemy.is_stunned:
+                if curr_enemy.is_stunned and not enemy.is_stunned:
                     enemies_stunned = result.setdefault('enemies_stunned', [])
                     enemies_stunned.append(enemy.index)
 
@@ -130,11 +143,13 @@ class ZeldaStateChange:
 
             curr = ZeldaGameState(env, info, curr.frames + 1)
 
-        # Check if we hit any enemies and store those into discounts
+        # Check if we hit any enemies and store those into our damage counters and the discount of future hits
+        self._compare_health_status(start, curr, self.__dict__)
         self._compare_health_status(start, curr, discounts)
 
         # If we fired a boomerang or arrow, check if we hit any items as they will be picked up
         if equipment in [ZeldaAnimationId.BOOMERANG, ZeldaAnimationId.ARROW]:
+            self._compare_items(start, curr, self.__dict__)
             self._compare_items(start, curr, discounts)
 
         # Restore the state.  We only touched data.values, so we should be clear of any modifications
