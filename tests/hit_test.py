@@ -24,7 +24,7 @@ def run( env, command):
         yield env.step(c)
 
 def test_bat_injury():
-    replay = ZeldaActionReplay("1_72e.state", render_mode="human")
+    replay = ZeldaActionReplay("1_72e.state")
     assert_no_hit(replay, 'llllllllllldddllllllllll')
     selector = ItemSelector(replay.env)
     selector.select_sword()
@@ -79,7 +79,7 @@ def test_sword_injury():
     assert_no_hit(replay, 'u')
 
 def test_boomerang_bat_kill():
-    replay = ZeldaActionReplay("1_72e.state", render_mode="human")
+    replay = ZeldaActionReplay("1_72e.state")
     assert_no_hit(replay, 'llllllllll')
     selector = ItemSelector(replay.env)
     selector.select_boomerang(False)
@@ -200,10 +200,6 @@ def test_boomerang_stun():
 
     assert_no_hit(replay, "lllllll")
 
-# Wand tests
-
-
-
 # Bomb tests
 
 def test_bombs_kill():
@@ -225,7 +221,7 @@ def test_bombs_kill():
 # Helpers
 
 def _line_up_item():
-    replay = ZeldaActionReplay("1_44e.state", render_mode="human")
+    replay = ZeldaActionReplay("1_44e.state")
 
     assert_no_hit(replay, 'llluuuullllllllllllllld')
 
