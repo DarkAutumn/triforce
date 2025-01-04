@@ -105,12 +105,12 @@ class ZeldaCooldownHandler:
         obs, _, _, info = self.act_for(self.none_action, 1)
         return obs, info, frames_skipped
 
-    def act_and_wait(self, action, link_position):
+    def act_and_wait(self, action):
         """Performs the given action, then waits until Link is controllable again."""
         action_kind = self.action_translator.get_action_type(action)
         match action_kind:
             case ActionType.MOVEMENT:
-                obs, terminated, truncated, info, total_frames = self._act_movement(action, link_position)
+                obs, terminated, truncated, info, total_frames = self._act_movement(action)
 
             case ActionType.ATTACK:
                 obs, terminated, truncated, info, total_frames = self._act_attack_or_item(action, action_kind)
@@ -138,7 +138,7 @@ class ZeldaCooldownHandler:
     def _act_attack_or_item(self, action, action_kind):
         total_frames = 0
         direction = self.action_translator.get_button_direction(action)
-        self._set_direction(direction)
+        self.env.unwrapped.data.set_value('link_direction', direction.value)
 
         cooldown = 0
         if action_kind == ActionType.ATTACK:
@@ -154,39 +154,42 @@ class ZeldaCooldownHandler:
 
         return obs, terminated, truncated, info, total_frames
 
-    def _act_movement(self, action, start_pos):
-        total_frames = 0
+    def _act_movement(self, action):
+        # Always move one frame, assume it's a success
+        obs, _, terminated, truncated, info = self.env.step(action)
+        total_frames = 1
 
-        direction = self.action_translator.get_button_direction(action)
-        if start_pos is None:
-            obs, _, terminated, truncated, info = self.env.step(action)
-            total_frames += 1
-            start_pos = info['link_pos']
-
-        start_pos = np.array(start_pos, dtype=np.uint8)
-        old_tile_index = position_to_tile_index(*start_pos)
-
+        # Track how many times we tried to move but couldn't.  Some locations cost two
+        # frames to move through (like walking up stairs), so we break after we are stuck
+        # in the same location for two or more frames.
         stuck_count = 0
-        prev = start_pos
-        for _ in range(MAX_MOVEMENT_FRAMES):
+        start_pos = info['link_x'], info['link_y']
+        prev = np.array(start_pos, dtype=np.uint8)
+
+        # We are done when we've moved one tile in the direction of the button press
+        start_tile_index = position_to_tile_index(*start_pos)
+        direction = self.action_translator.get_button_direction(action)
+
+        # But stop if we've moved the maximum number of frames
+        while total_frames < MAX_MOVEMENT_FRAMES:
             obs, _, terminated, truncated, info = self.env.step(action)
             total_frames += 1
             x, y = info['link_x'], info['link_y']
             new_tile_index = position_to_tile_index(x, y)
             match direction:
                 case Direction.N:
-                    if old_tile_index[0] != new_tile_index[0]:
+                    if start_tile_index[0] != new_tile_index[0]:
                         break
                 case Direction.S:
-                    if old_tile_index[0] != new_tile_index[0]:
+                    if start_tile_index[0] != new_tile_index[0]:
                         obs, terminated, truncated, info = self.act_for(action, WS_ADJUSTMENT_FRAMES)
                         total_frames += WS_ADJUSTMENT_FRAMES
                         break
                 case Direction.E:
-                    if old_tile_index[1] != new_tile_index[1]:
+                    if start_tile_index[1] != new_tile_index[1]:
                         break
                 case Direction.W:
-                    if old_tile_index[1] != new_tile_index[1]:
+                    if start_tile_index[1] != new_tile_index[1]:
                         obs, terminated, truncated, info = self.act_for(action, WS_ADJUSTMENT_FRAMES)
                         total_frames += WS_ADJUSTMENT_FRAMES
                         break
@@ -198,9 +201,6 @@ class ZeldaCooldownHandler:
                 break
 
         return obs, terminated, truncated, info, total_frames
-
-    def _set_direction(self, direction : Direction):
-        self.env.unwrapped.data.set_value('link_direction', direction.value)
 
 __all__ = [
     ActionType.__name__,

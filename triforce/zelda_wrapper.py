@@ -58,8 +58,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         return obs, info
 
     def step(self, action):
-        link_position = self._last_info.get('link_pos', None) if self._last_info else None
-        obs, terminated, truncated, info, frames = self.cooldown_handler.act_and_wait(action, link_position)
+        obs, terminated, truncated, info, frames = self.cooldown_handler.act_and_wait(action)
         self._total_frames += frames
 
         info['action'] = self.action_translator.get_action_type(action)
