@@ -1,7 +1,7 @@
 import gymnasium as gym
 
 from .zelda_game_data import zelda_game_data
-from .zelda_game import TileState, ZeldaEnemy, is_in_cave, is_room_loaded, tiles_to_weights
+from .zelda_game import TileState, ZeldaEnemyId, is_in_cave, is_room_loaded, tiles_to_weights
 
 class ZeldaRoomMapWrapper(gym.Wrapper):
     """Generates a tile map for the current room."""
@@ -95,7 +95,7 @@ class ZeldaRoomMapWrapper(gym.Wrapper):
             if obj.is_active:
                 ZeldaRoomMapWrapper._add_enemy_or_projectile(tiles, obj.tile_coordinates)
 
-            if obj.id == ZeldaEnemy.WallMaster and not saw_wallmaster:
+            if obj.id == ZeldaEnemyId.WallMaster and not saw_wallmaster:
                 saw_wallmaster = True
                 ZeldaRoomMapWrapper._add_wallmaster_tiles(tiles)
 

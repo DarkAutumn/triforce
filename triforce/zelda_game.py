@@ -1,6 +1,8 @@
 # responsible for decoding difficult parts of zelda gamestate
 from enum import Enum
 import numpy as np
+
+from .zelda_game_state import ID_MAP, ITEM_MAP, ZeldaEnemyId, Direction, ZeldaItemId
 from .zelda_game_data import zelda_game_data
 from .model_parameters import GAMEPLAY_START_Y
 
@@ -202,68 +204,6 @@ def tile_index_to_position(tile_index):
     """Converts a tile index to a screen position."""
     return (tile_index[1] * 8, tile_index[0] * 8 + GAMEPLAY_START_Y)
 
-class Direction(Enum):
-    """The four cardinal directions, as the game defines them."""
-    E = 1
-    W = 2
-    S = 4
-    N = 8
-
-    @staticmethod
-    def from_ram_value(value):
-        """Creates a Direction from the direction value stored in the game's RAM."""
-        match value:
-            case 1:
-                return Direction.E
-            case 2:
-                return Direction.W
-            case 4:
-                return Direction.S
-            case 8:
-                return Direction.N
-            case _:
-                raise ValueError(f"Invalid value for Direction: {value}")
-
-    def to_vector(self):
-        """Returns the vector for the direction."""
-        match self:
-            case Direction.E:
-                return np.array([1, 0])
-            case Direction.W:
-                return np.array([-1, 0])
-            case Direction.S:
-                return np.array([0, 1])
-            case Direction.N:
-                return np.array([0, -1])
-            case _:
-                raise ValueError(f"Unhandled Direction: {self}")
-
-class ZeldaEnemy(Enum):
-    """Enemy codes for the game."""
-    # pylint: disable=invalid-name
-    BlueMoblin : int = 0x03
-    RedMoblin : int = 0x04
-    Goriya : int = 0x06
-    Octorok : int = 0x07
-    OctorokFast : int = 0x7
-    OctorokBlue : int = 0x8
-    BlueLever : int = 0xf
-    RedLever : int = 0x10
-    Zora : int = 0x11
-    PeaHat : int = 0x1a
-    Keese : int = 0x1b
-    WallMaster : int = 0x27
-    Stalfos : int = 0x2a
-    Item : int = 0x60
-
-class ZeldaItem(Enum):
-    """Item codes for the game."""
-    # pylint: disable=invalid-name
-    Bombs : int = 0x00
-    BlueRupee : int = 0x0f
-    Rupee : int = 0x18
-    Heart : int = 0x22
-    Fairy : int = 0x23
 
 class ZeldaSoundsPulse1(Enum):
     """Sound codes for the game."""
@@ -275,9 +215,6 @@ class ZeldaSoundsPulse1(Enum):
     SmallHeartPickup : int = 0x10
     SetBomb : int = 0x20
     HeartWarning : int = 0x40
-
-ID_MAP = {x.value: x for x in ZeldaEnemy}
-ITEM_MAP = {x.value: x for x in ZeldaItem}
 
 class ZeldaObject:
     """Structured data for a single object.  ZeldaObjects are enemies, items, and projectiles."""
@@ -314,11 +251,11 @@ class ZeldaObject:
 
         # status == 3 means the lever/zora is up
         status = self.status & 0xff
-        if self.id in (ZeldaEnemy.RedLever, ZeldaEnemy.BlueLever, ZeldaEnemy.Zora):
+        if self.id in (ZeldaEnemyId.RedLever, ZeldaEnemyId.BlueLever, ZeldaEnemyId.Zora):
             return status & 0xff == 3
 
         # status == 1 means the wallmaster is active
-        if self.id == ZeldaEnemy.WallMaster:
+        if self.id == ZeldaEnemyId.WallMaster:
             return status == 1
 
         # spawn_state of 0 means the object is active
@@ -452,7 +389,7 @@ class ZeldaObjectData:
             else:
                 vector = np.array([0, 0], dtype=np.float32)
 
-            if obj_id == ZeldaEnemy.Item.value:
+            if obj_id == ZeldaEnemyId.Item.value:
                 obj_id = obj_status[i]
                 obj_id = ITEM_MAP.get(obj_id, obj_id)
                 timer = item_timer[i]
@@ -507,8 +444,10 @@ __all__ = [
     'is_health_full',
     ZeldaSoundsPulse1.__name__,
     ZeldaObjectData.__name__,
-    ZeldaEnemy.__name__,
+    ZeldaEnemyId.__name__,
+    ZeldaItemId.__name__,
     AnimationState.__name__,
     tiles_to_weights.__name__,
     is_room_loaded.__name__,
+    Direction.__name__,
     ]

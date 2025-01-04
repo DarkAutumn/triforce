@@ -3,7 +3,7 @@ import gymnasium as gym
 import numpy as np
 
 from .zelda_game import Direction, get_num_triforce_pieces, is_in_cave, position_to_tile_index, \
-     tile_index_to_position, is_health_full, ZeldaItem
+     tile_index_to_position, is_health_full, ZeldaItemId
 from .astar import a_star
 
 class ObjectiveKind(Enum):
@@ -154,15 +154,15 @@ class ObjectiveSelector(gym.Wrapper):
         items_to_ignore = []
 
         if is_health_full(info):
-            items_to_ignore.append(ZeldaItem.Heart)
-            items_to_ignore.append(ZeldaItem.Fairy)
+            items_to_ignore.append(ZeldaItemId.Heart)
+            items_to_ignore.append(ZeldaItemId.Fairy)
 
         if info['bombs'] == info['bomb_max']:
-            items_to_ignore.append(ZeldaItem.Bombs)
+            items_to_ignore.append(ZeldaItemId.Bombs)
 
         if sub_orchestrator and sub_orchestrator.is_dangerous_room(info):
-            items_to_ignore.append(ZeldaItem.Rupee)
-            items_to_ignore.append(ZeldaItem.BlueRupee)
+            items_to_ignore.append(ZeldaItemId.Rupee)
+            items_to_ignore.append(ZeldaItemId.BlueRupee)
         return items_to_ignore
 
     def _get_first_non_zero(self, items):

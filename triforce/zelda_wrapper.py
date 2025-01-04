@@ -12,7 +12,7 @@ import numpy as np
 
 from .zelda_cooldown_handler import ZeldaCooldownHandler, ActionTranslator
 
-from .zelda_game import AnimationState, Direction, ZeldaEnemy, is_health_full, is_in_cave, \
+from .zelda_game import AnimationState, Direction, ZeldaEnemyId, is_health_full, is_in_cave, \
                         get_beam_state, ZeldaObjectData, is_sword_frozen, get_heart_halves
 
 class ZeldaGameWrapper(gym.Wrapper):
@@ -31,7 +31,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         # per-reset state
         self._location = None
         self._last_info = None
-        self._beams_already_active = False
         self._total_frames = 0
 
     def reset(self, **kwargs):
@@ -50,7 +49,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         # Per-reset state
         self._last_info = None
         self._location = None
-        self._beams_already_active = False
         self._total_frames = frames_skipped + 1
 
         # Reset/start the info dictionary
@@ -120,12 +118,12 @@ class ZeldaGameWrapper(gym.Wrapper):
         enemies = info['enemies']
         for enemy in enemies:
             match enemy.id:
-                case ZeldaEnemy.PeaHat:
+                case ZeldaEnemyId.PeaHat:
                     prev = self._last_enemies[enemy.index]
                     if prev is not None and (enemy.position != prev.position or enemy.health < prev.health):
                         enemy.status = 0x100 | enemy.status
 
-                case ZeldaEnemy.Zora:
+                case ZeldaEnemyId.Zora:
                     if info['sword'] < 2:
                         enemy.status = 0x100 | enemy.status
 

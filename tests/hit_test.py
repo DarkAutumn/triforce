@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from triforce.item_selector import ItemSelector
 from triforce.zelda_cooldown_handler import ActionType
 from utilities import ZeldaActionReplay
-from triforce.zelda_game import ZeldaItem, get_bomb_state, AnimationState
+from triforce.zelda_game import ZeldaItemId, get_bomb_state, AnimationState
 
 def assert_no_hit( env, command):
     for _, _, terminated, truncated, info in run(env, command):
@@ -131,7 +131,7 @@ def _test_arrow_item_pickup(silver):
 
     items = info['step_items']
     assert len(items) == 1
-    assert items[0] == ZeldaItem.Bombs
+    assert items[0] == ZeldaItemId.Bombs
 
 def test_arrow_injury():
     _test_arrow(False)
@@ -178,7 +178,7 @@ def _test_boomerang(magic):
 
     items = info['step_items']
     assert len(items) == 1
-    assert items[0] == ZeldaItem.Bombs
+    assert items[0] == ZeldaItemId.Bombs
 
 def test_boomerang_stun():
     replay = ZeldaActionReplay("1_44e.state")

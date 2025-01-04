@@ -1,0 +1,241 @@
+"""Structured data for Zelda game state."""
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import Dict, List, Tuple
+
+import numpy as np
+
+from .zelda_game_data import zelda_game_data
+
+MODE_CAVE = 11
+
+class Direction(Enum):
+    """The four cardinal directions, as the game defines them."""
+    E = 1
+    W = 2
+    S = 4
+    N = 8
+
+    @staticmethod
+    def from_ram_value(value):
+        """Creates a Direction from the direction value stored in the game's RAM."""
+        match value:
+            case 1:
+                return Direction.E
+            case 2:
+                return Direction.W
+            case 4:
+                return Direction.S
+            case 8:
+                return Direction.N
+            case _:
+                raise ValueError(f"Invalid value for Direction: {value}")
+
+    def to_vector(self):
+        """Returns the vector for the direction."""
+        match self:
+            case Direction.E:
+                return np.array([1, 0])
+            case Direction.W:
+                return np.array([-1, 0])
+            case Direction.S:
+                return np.array([0, 1])
+            case Direction.N:
+                return np.array([0, -1])
+            case _:
+                raise ValueError(f"Unhandled Direction: {self}")
+
+class ZeldaEnemyId(Enum):
+    """Enemy codes for the game."""
+    # pylint: disable=invalid-name
+    BlueMoblin : int = 0x03
+    RedMoblin : int = 0x04
+    Goriya : int = 0x06
+    Octorok : int = 0x07
+    OctorokFast : int = 0x7
+    OctorokBlue : int = 0x8
+    BlueLever : int = 0xf
+    RedLever : int = 0x10
+    Zora : int = 0x11
+    PeaHat : int = 0x1a
+    Keese : int = 0x1b
+    WallMaster : int = 0x27
+    Stalfos : int = 0x2a
+    Item : int = 0x60
+
+class ZeldaItemId(Enum):
+    """Item codes for the game."""
+    # pylint: disable=invalid-name
+    Bombs : int = 0x00
+    BlueRupee : int = 0x0f
+    Rupee : int = 0x18
+    Heart : int = 0x22
+    Fairy : int = 0x23
+
+ID_MAP = {x.value: x for x in ZeldaEnemyId}
+ITEM_MAP = {x.value: x for x in ZeldaItemId}
+
+class ZeldaProjectileId(Enum):
+    """Projectile codes for the game."""
+
+@dataclass
+class ZeldaObjectBase:
+    """
+    Structured data for objects on screen.
+
+    Attributes:
+        game: The game state containing this object.
+        index: The index of the object as it appears in the game's memory.
+        id: The id of the object.
+        position: The position of the object.
+    """
+    game : 'ZeldaGameState'
+    index : int
+    id : ZeldaItemId | ZeldaEnemyId | ZeldaProjectileId | int
+    position : Tuple[int, int]
+
+
+@dataclass
+class LinkStatus:
+    """Structured data for Link's status."""
+    game : 'ZeldaGameState'
+    position : Tuple[int, int]
+    direction : Direction
+    max_health : float
+    health : float
+    status : int
+
+@dataclass
+class ZeldaEnemy(ZeldaObjectBase):
+    """Structured data for an enemy."""
+    direction : Direction
+    health : int
+    spawn_state : int
+    status : int
+
+@dataclass
+class ZeldaProjectile(ZeldaObjectBase):
+    """Structured data for a projectile."""
+
+@dataclass
+class ZeldaItem(ZeldaObjectBase):
+    """Structured data for an item."""
+    timer : int
+
+class ObjectTables:
+    """A class for managing Zelda in memory object tables."""
+    def __init__(self, ram):
+        self.ram = ram
+        self._cache = {}
+
+    def read(self, table):
+        """Returns the table from the RAM."""
+        if table not in self._cache:
+            offset, length = zelda_game_data.tables[table]
+            self._cache[table] = self.ram[offset:offset+length]
+
+        return self._cache[table]
+
+class ZeldaGameState:
+    """The current state of a zelda game."""
+
+    def __init__(self, env, info, frame_count):
+        self._env = env
+        self._info = info
+        self.frames : int = frame_count
+
+        self.level = info['level']
+        self.room = info['room']
+        self.in_cave = info['mode'] == MODE_CAVE
+
+        ram = env.unwrapped.get_ram()
+        tables = ObjectTables(ram)
+
+        self.link : LinkStatus = self._build_link_status(tables)
+
+        self.items : List[ZeldaItem] = []
+        self.enemies : List[ZeldaEnemy] = []
+        self.projectiles : List[ZeldaObjectBase] = []
+
+        for (index, obj_id) in self._enumerate_active_ids(tables):
+            if obj_id == ZeldaEnemyId.Item.value:
+                self.items.append(self._build_item(tables, index))
+
+            elif self._is_id_enemy(obj_id):
+                self.enemies.append(self._build_enemy(tables, index, obj_id))
+
+            elif self._is_projectile(obj_id):
+                self.projectiles.append(self._build_projectile(tables, index, obj_id))
+
+    @property
+    def full_location(self):
+        """The full location of the room."""
+        return (self.level, self.room, self.in_cave)
+
+    def init_from_ram(self, info, env, tables : Dict[str, Tuple[int, int]]):
+        """Fills all objects from the game state."""
+
+    def _enumerate_active_ids(self, tables):
+        object_ids = tables.read('obj_id')
+        return [(i, object_ids[i]) for i in range(1, 0xc) if object_ids[i] != 0]
+
+    def _is_id_enemy(self, obj_id):
+        return 1 <= obj_id <= 0x48
+
+    def _is_projectile(self, obj_id):
+        return obj_id > 0x48 and obj_id != 0x60 and obj_id != 0x63 and obj_id != 0x64 and obj_id != 0x68 \
+                and obj_id != 0x6a
+
+    def _build_item(self, tables, index):
+        obj_id = tables.read('obj_status')[index]
+        obj_id = ITEM_MAP.get(obj_id, obj_id)
+        pos = self._read_position(tables, index)
+        timer = tables.read('item_timer')[index]
+        item = ZeldaItem(self, index, obj_id, pos, timer)
+        return item
+
+    def _build_enemy(self, tables, index, obj_id):
+        health = tables.read("obj_health")[index] >> 4
+        status = tables.read("obj_status")[index]
+        spawn_state = tables.read("obj_spawn_state")[index]
+        pos = self._read_position(tables, index)
+        direction = tables.read("obj_direction")[index]
+        direction = Direction.from_ram_value(direction)
+        enemy = ZeldaEnemy(self, index, obj_id, pos, direction, health, spawn_state, status)
+        return enemy
+
+    def _build_projectile(self, tables, index, obj_id):
+        return ZeldaProjectile(self, index, obj_id, self._read_position(tables, index))
+
+    def _read_position(self, tables, index):
+        x = tables.read('obj_pos_x')[index]
+        y = tables.read('obj_pos_y')[index]
+        return x,y
+
+    def _build_link_status(self, tables):
+        pos = self._read_position(tables, 0)
+        status = tables.read('link_status')[0]
+        health = 0.5 * self._get_heart_halves()
+        max_health = self._get_heart_containers()
+        direction = self._info['link_direction']
+        direction = Direction.from_ram_value(direction)
+        return LinkStatus(self, pos, direction, max_health, health, status)
+
+    def _get_full_hearts(self):
+        """Returns the number of full hearts link has."""
+        return (self._info["hearts_and_containers"] & 0x0F) + 1
+
+    def _get_heart_halves(self):
+        """Returns the number of half hearts link has."""
+        full = self._get_full_hearts() * 2
+        partial_hearts = self._info["partial_hearts"]
+        if partial_hearts > 0xf0:
+            return full
+
+        partial_count = 1 if partial_hearts > 0 else 0
+        return full - 2 + partial_count
+
+    def _get_heart_containers(self):
+        """Returns the number of heart containers link has."""
+        return (self._info["hearts_and_containers"] >> 4) + 1
