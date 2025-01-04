@@ -69,6 +69,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
     def update_info(self, info):
         info['total_frames'] = self._total_frames
+        info['state'] = ZeldaGameState(self, info, self._total_frames)
 
         ram = self.env.unwrapped.get_ram()
         objects = ZeldaObjectData(ram)

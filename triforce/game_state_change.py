@@ -42,6 +42,11 @@ class ZeldaStateChange:
                     enemies_hit = result.setdefault('enemies_hit', {})
                     enemies_hit[enemy.index] = enemies_hit.get(enemy.index, 0) + dmg
 
+                elif curr_enemy.is_dying:
+                    health = enemy.health if enemy.health > 0 else 1
+                    enemies_hit = result.setdefault('enemies_hit', {})
+                    enemies_hit[enemy.index] = enemies_hit.get(enemy.index, 0) + health
+
                 if enemy.is_stunned and not curr_enemy.is_stunned:
                     enemies_stunned = result.setdefault('enemies_stunned', [])
                     enemies_stunned.append(enemy.index)
