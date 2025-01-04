@@ -97,10 +97,8 @@ class ZeldaObjectBase:
 
 
 @dataclass
-class LinkStatus:
+class Link(ZeldaObjectBase):
     """Structured data for Link's status."""
-    game : 'ZeldaGameState'
-    position : Tuple[int, int]
     direction : Direction
     max_health : float
     health : float
@@ -152,7 +150,7 @@ class ZeldaGameState:
         ram = env.unwrapped.get_ram()
         tables = ObjectTables(ram)
 
-        self.link : LinkStatus = self._build_link_status(tables)
+        self.link : Link = self._build_link_status(tables)
 
         self.items : List[ZeldaItem] = []
         self.enemies : List[ZeldaEnemy] = []
@@ -220,7 +218,7 @@ class ZeldaGameState:
         max_health = self._get_heart_containers()
         direction = self._info['link_direction']
         direction = Direction.from_ram_value(direction)
-        return LinkStatus(self, pos, direction, max_health, health, status)
+        return Link(self, 0, -1, pos, direction, max_health, health, status)
 
     def _get_full_hearts(self):
         """Returns the number of full hearts link has."""
