@@ -52,6 +52,7 @@ class ZeldaActionReplay:
         env = retro.make(game='Zelda-NES', state=savestate, inttype=retro.data.Integrations.CUSTOM_ONLY, render_mode=render_mode)
         self.data = env.data
         env = ZeldaGameWrapper(env, deterministic=True)
+        env = ZeldaStateChangeWrapper(env)
         env = ZeldaRoomMapWrapper(env)
         env = ZeldaHitDetect(env)
         env = ObjectiveSelector(env)

@@ -50,6 +50,24 @@ class SelectedEquipment(Enum):
     POTION = 7
     WAND = 8
 
+class AnimationState(Enum):
+    """The state of link's sword beams."""
+    INACTIVE = 0
+    ACTIVE = 1
+    HIT = 2
+
+class ZeldaAnimationId(Enum):
+    """Animation states"""
+    BEAMS = 0
+    BOMB_1 = 1
+    BOMB_2 = 2
+    FLAME_1 = 3
+    FLAME_2 = 4
+    MAGIC = 5
+    ARROW = 6
+    BOOMERANG = 7
+    BAIT = 8
+
 class ZeldaEnemyId(Enum):
     """Enemy codes for the game."""
     # pylint: disable=invalid-name

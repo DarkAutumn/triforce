@@ -68,9 +68,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         return obs, 0, terminated, truncated, info
 
     def update_info(self, info):
-        """Updates the info dictionary with new information about the game state."""
-        info['state'] = ZeldaGameState(self, info, self._total_frames)
-
         info['total_frames'] = self._total_frames
 
         ram = self.env.unwrapped.get_ram()

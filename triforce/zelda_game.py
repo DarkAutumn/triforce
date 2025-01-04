@@ -2,6 +2,7 @@
 from enum import Enum
 import numpy as np
 
+from .zelda_enums import AnimationState
 from .zelda_game_state import ID_MAP, ITEM_MAP, ZeldaEnemyId, Direction, ZeldaItemId, tile_index_to_position, \
         position_to_tile_index
 from .zelda_game_data import zelda_game_data
@@ -53,12 +54,6 @@ def is_link_stunned(status_ac):
 def is_mode_death(state):
     """Returns True if the game is over due to dying."""
     return state in (MODE_DYING, MODE_GAME_OVER)
-
-class AnimationState(Enum):
-    """The state of link's sword beams."""
-    INACTIVE = 0
-    ACTIVE = 1
-    HIT = 2
 
 def get_beam_state(state) -> AnimationState:
     """Returns the state of link's sword beams."""

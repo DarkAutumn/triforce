@@ -2,19 +2,44 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
-from .zelda_enums import ArrowKind, BoomerangKind, CandleKind, PotionKind, SelectedEquipment, SwordKind, ZeldaEnemyId, ZeldaItemId, Direction
+from .zelda_enums import AnimationState, ArrowKind, BoomerangKind, CandleKind, PotionKind, SelectedEquipment, SwordKind, ZeldaAnimationId, ZeldaEnemyId, ZeldaItemId, Direction
 from .zelda_game_data import zelda_game_data
 from .model_parameters import GAMEPLAY_START_Y
 
 # pylint: disable=too-many-public-methods
 
+
+MODE_REVEAL = 3
+MODE_SCROLL_COMPLETE = 4
+MODE_GAMEPLAY = 5
+MODE_SCROLL_START = 6
+MODE_SCROLL = 7
+MODE_GAME_OVER = 8
+MODE_UNDERGROUND = 9
+MODE_UNDERGROUND_TRANSITION = 10
 MODE_CAVE = 11
+MODE_CAVE_TRANSITION = 16
+MODE_DYING = 17
+
 ENEMY_STUNNED = 0x40
 ENEMY_INVULNERABLE = 0x100
+
+ANIMATION_BEAMS_ACTIVE = 16
+ANIMATION_BEAMS_HIT = 17
+
+ANIMATION_BOMBS_ACTIVE = 18
+ANIMATION_BOMBS_EXPLODED = (19, 20)
+
+ANIMATION_ARROW_ACTIVE = 10
+ANIMATION_ARROW_HIT = 20
+ANIMATION_ARROW_END = 21
+
+ANIMATION_BOOMERANG_MIN = 10
+ANIMATION_BOOMERANG_MAX = 57
 
 # TODO: change to x, y
 def position_to_tile_index(x, y):
@@ -170,6 +195,56 @@ class Link(ZeldaObjectBase):
     def is_invincible(self) -> bool:
         """Returns True if link is invincible."""
         return self.is_sword_frozen or self.clock
+
+    # Animation States
+    def get_animation_state(self, animation_id: ZeldaAnimationId) -> AnimationState:
+        """Returns the state of the given animation."""
+        match animation_id:
+            case ZeldaAnimationId.BEAMS:
+                beams = self.game.beam_animation
+
+                if beams == ANIMATION_BEAMS_ACTIVE:
+                    return AnimationState.ACTIVE
+
+                if beams == ANIMATION_BEAMS_HIT:
+                    return AnimationState.HIT
+
+                return AnimationState.INACTIVE
+
+            case ZeldaAnimationId.BOMB_1:
+                return self._get_bomb_state(self.game.bomb_or_flame_animation)
+
+            case ZeldaAnimationId.BOMB_2:
+                return self._get_bomb_state(self.game.bomb_or_flame_animation2)
+
+            case ZeldaAnimationId.ARROW:
+                arrows = self.game.arrow_magic_animation
+
+                if ANIMATION_ARROW_ACTIVE <= arrows <= ANIMATION_ARROW_END:
+                    return AnimationState.ACTIVE
+
+                return AnimationState.INACTIVE
+
+            case ZeldaAnimationId.BOOMERANG:
+                boomerang = self.game.bait_or_boomerang_animation
+
+                if ANIMATION_BOOMERANG_MIN <= boomerang <= ANIMATION_BOOMERANG_MAX:
+                    return AnimationState.ACTIVE
+
+                return AnimationState.INACTIVE
+
+            case _:
+                raise ValueError(f"Not yet implemented: {animation_id}")
+
+    def _get_bomb_state(self, bombs):
+        """Returns the state of the bomb animation."""
+        if ANIMATION_BOMBS_ACTIVE == bombs:
+            return AnimationState.ACTIVE
+
+        if bombs in ANIMATION_BOMBS_EXPLODED:
+            return AnimationState.HIT
+
+        return AnimationState.INACTIVE
 
     # Rupees, Bombs, Shield
     @property
@@ -530,11 +605,40 @@ class ZeldaGameState:
         else:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
+    def get_enemy_by_index(self, index) -> Optional[ZeldaEnemy]:
+        """Returns the enemy with the given index."""
+        for enemy in self.enemies:
+            if enemy.index == index:
+                return enemy
+
+        return None
+
+    def get_item_by_index(self, index) -> Optional[ZeldaItem]:
+        """Returns the item with the given index."""
+        for item in self.items:
+            if item.index == index:
+                return item
+
+        return None
+
+    def get_projectile_by_index(self, index) -> Optional[ZeldaProjectile]:
+        """Returns the projectile with the given index."""
+        for projectile in self.projectiles:
+            if projectile.index == index:
+                return projectile
+
+        return None
+
+    @property
+    def game_over(self):
+        """Returns True if the game is over."""
+
+        return self.mode in (MODE_DYING, MODE_GAME_OVER)
+
     @property
     def full_location(self):
         """The full location of the room."""
         return (self.level, self.location, self.in_cave)
-
 
     @property
     def rupees_to_add(self):
