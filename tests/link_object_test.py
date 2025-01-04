@@ -4,9 +4,15 @@ from tests.hit_test import assert_no_hit
 from tests.utilities import ZeldaActionReplay
 from triforce.zelda_game_state import ZeldaGameState
 
+def _initialize_gamestate():
+    replay = ZeldaActionReplay("1_44e.state")
+    info = assert_no_hit(replay, 'lll')
+    gamestate : ZeldaGameState = info['state']
+    return gamestate
+
 
 def test_health():
-    gamestate = initialize_gamestate()
+    gamestate = _initialize_gamestate()
     link = gamestate.link
 
     assert link.max_health == 16
@@ -22,10 +28,3 @@ def test_health():
     link.health = 16
     assert link.health == 16
     assert link.has_beams
-
-def initialize_gamestate():
-    replay = ZeldaActionReplay("1_44e.state")
-    info = assert_no_hit(replay, 'lll')
-    gamestate : ZeldaGameState = info['state']
-    return gamestate
-

@@ -7,7 +7,8 @@ from enum import Enum
 from typing import Optional
 import numpy as np
 
-from .zelda_game import Direction, is_in_cave, is_link_stunned, is_mode_scrolling, position_to_tile_index
+from .zelda_enums import Direction
+from .zelda_game import is_in_cave, is_link_stunned, is_mode_scrolling, position_to_tile_index
 
 # movement related constants
 WS_ADJUSTMENT_FRAMES = 4

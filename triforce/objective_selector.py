@@ -2,8 +2,9 @@ from enum import Enum
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game import Direction, get_num_triforce_pieces, is_in_cave, position_to_tile_index, \
-     tile_index_to_position, is_health_full, ZeldaItemId
+from .zelda_enums import Direction, ZeldaItemId
+from .zelda_game import get_num_triforce_pieces, is_in_cave, position_to_tile_index, \
+     tile_index_to_position, is_health_full
 from .astar import a_star
 
 class ObjectiveKind(Enum):
