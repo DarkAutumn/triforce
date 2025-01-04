@@ -20,9 +20,20 @@ ANIMATION_BEAMS_ACTIVE = 16
 ANIMATION_BEAMS_HIT = 17
 
 ANIMATION_BOMBS_ACTIVE = 18
-ANIMATION_BOMBS_EXPLODED = 20
+ANIMATION_BOMBS_EXPLODED = (19, 20)
+
+ANIMATION_ARROW_ACTIVE = 10
+ANIMATION_ARROW_HIT = 20
+ANIMATION_ARROW_END = 21
+
+ANIMATION_BOOMERANG_MIN = 10
+ANIMATION_BOOMERANG_MAX = 57
+
 
 STUN_FLAG = 0x40
+
+def is_spawn_state_dying(spawn_state):
+    return 16 <= spawn_state <= 19
 
 def is_in_cave(state):
     """Returns True if link is in a cave."""
@@ -69,13 +80,33 @@ def get_bomb_state(state, i) -> AnimationState:
     if bombs == 0:
         return AnimationState.INACTIVE
 
-    if ANIMATION_BOMBS_ACTIVE <= bombs < ANIMATION_BOMBS_EXPLODED:
+    if ANIMATION_BOMBS_ACTIVE == bombs:
         return AnimationState.ACTIVE
 
-    if bombs == ANIMATION_BOMBS_EXPLODED:
+    if bombs in ANIMATION_BOMBS_EXPLODED:
         return AnimationState.HIT
 
     return 0
+
+def get_boomerang_state(state) -> AnimationState:
+    """Returns the state of link's boomerang."""
+    boomerang = state['bait_or_boomerang_animation']
+    if ANIMATION_BOOMERANG_MIN <= boomerang <= ANIMATION_BOOMERANG_MAX:
+        return AnimationState.ACTIVE
+
+    if boomerang in (80, 81, 82):
+        return AnimationState.INACTIVE
+
+    return AnimationState.INACTIVE
+
+def get_arrow_state(state) -> AnimationState:
+    """Returns the state of link's arrows."""
+    arrows = state['arrow_magic_animation']
+
+    if ANIMATION_ARROW_ACTIVE <= arrows <= ANIMATION_ARROW_END:
+        return AnimationState.ACTIVE
+
+    return AnimationState.INACTIVE
 
 def get_num_triforce_pieces(state):
     """Returns the number of triforce pieces collected."""
@@ -261,6 +292,7 @@ class ZeldaObject:
         self.health = health
         self.status = status
         self.spawn_state = spawn_state
+        self.timer = None
 
     @property
     def tile_coordinates(self):
@@ -291,6 +323,11 @@ class ZeldaObject:
 
         # spawn_state of 0 means the object is active
         return not self.spawn_state
+
+    @property
+    def is_stunned(self) -> bool:
+        """Returns True if the object is stunned."""
+        return self.status & STUN_FLAG == STUN_FLAG
 
     @property
     def is_invulnerable(self) -> bool:
@@ -345,6 +382,21 @@ class ZeldaObjectData:
         obj_status = getattr(self, 'obj_status')
         return obj_status[obj]
 
+    def get_obj_stun_timer(self, obj : int):
+        """Returns the stun timer of the object."""
+        obj_stun = getattr(self, 'obj_stun_timer')
+        return obj_stun[obj]
+
+    def get_obj_spawn_state(self, obj : int):
+        """Returns the spawn state of the object."""
+        obj_spawn_state = getattr(self, 'obj_spawn_state')
+        return obj_spawn_state[obj]
+
+    def get_obj_timer(self, obj : int):
+        """Returns the timer of the item."""
+        item_timer = getattr(self, 'item_timer')
+        return item_timer[obj]
+
     def is_enemy(self, obj_id : int):
         """Returns True if the object is an enemy."""
         return 1 <= obj_id <= 0x48
@@ -386,6 +438,7 @@ class ZeldaObjectData:
         obj_pos_y = getattr(self, 'obj_pos_y')
         obj_status = getattr(self, 'obj_status')
         obj_spawn_state = getattr(self, 'obj_spawn_state')
+        item_timer = getattr(self, 'item_timer')
 
         for i in range(1, 0xc):
             obj_id = obj_ids[i]
@@ -402,7 +455,11 @@ class ZeldaObjectData:
             if obj_id == ZeldaEnemy.Item.value:
                 obj_id = obj_status[i]
                 obj_id = ITEM_MAP.get(obj_id, obj_id)
-                items.append(ZeldaObject(i, obj_id, pos, distance, vector, None, None))
+                timer = item_timer[i]
+                item = ZeldaObject(i, obj_id, pos, distance, vector, None, None)
+                item.timer = timer
+                items.append(item)
+
 
             # enemies
             elif 1 <= obj_id <= 0x48:
