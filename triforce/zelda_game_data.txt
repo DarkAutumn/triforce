@@ -85,6 +85,7 @@
 0x666 letter
 0x674 regular_boomerang
 0x675 magic_boomerang
+0x676 magic_shield
 
 0x667 compass
 0x668 map
