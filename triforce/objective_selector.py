@@ -106,7 +106,7 @@ class ObjectiveSelector(gym.Wrapper):
                                             else position_to_tile_index(*objective_pos_dir)
             path = self._get_a_star_path(info, a_star_tile)
 
-            info['a*_path'] = path
+            info['a_star_path'] = path
 
             objective_vector = self._get_objective_vector(link_pos, objective_vector, objective_pos_dir, path)
 

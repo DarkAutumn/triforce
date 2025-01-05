@@ -10,8 +10,16 @@ from .zelda_game_state import ZeldaGameState
 class ZeldaStateChange:
     """Tracks the changes between two Zelda game states."""
     def __init__(self, env, prev : ZeldaGameState, curr : ZeldaGameState, discounts):
-        self.prev : ZeldaGameState = prev
-        self.curr : ZeldaGameState = curr
+        self.previous : ZeldaGameState = prev
+        self.current : ZeldaGameState = curr
+
+        self.health_lost = max(0, prev.link.health - curr.link.health) \
+                           if prev.link.max_health == curr.link.max_health \
+                           else max(0, prev.link.max_health - curr.link.max_health)
+
+        self.health_gained = max(0, curr.link.health - prev.link.health) \
+                             if prev.link.max_health == curr.link.max_health \
+                             else max(0, curr.link.max_health - prev.link.max_health)
 
         self.enemies_hit : Dict[int, int] = {}
         self.enemies_stunned : List[int] = []
@@ -35,10 +43,12 @@ class ZeldaStateChange:
 
     @property
     def damage_dealt(self):
+        """The total damage dealt by link to enemies this turn."""
         return sum(self.enemies_hit.values())
-    
+
     @property
     def hits(self):
+        """The total number of enemies hit by link this turn."""
         return len(self.enemies_hit)
 
     def _compare_health_status(self, prev : ZeldaGameState, curr : ZeldaGameState, result):

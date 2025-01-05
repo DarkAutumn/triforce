@@ -1,12 +1,15 @@
 """Gameplay critics for Zelda."""
 
+from enum import Enum
 from typing import Dict
 import numpy as np
 
 from .objective_selector import ObjectiveKind
 from .zelda_cooldown_handler import ActionType
-from .zelda_game import Direction, TileState, ZeldaSoundsPulse1, get_heart_containers, get_heart_halves, \
-    get_num_triforce_pieces, is_in_cave
+from .zelda_game import TileState
+
+from .zelda_enums import Direction, SelectedEquipment, SwordKind, ZeldaAnimationId, AnimationState
+from .game_state_change import ZeldaStateChange
 
 REWARD_MINIMUM = 0.01
 REWARD_TINY = 0.05
@@ -24,25 +27,18 @@ class ZeldaCritic:
         """Called when the environment is reset to clear any saved state."""
         self.health_lost = 0
 
-    def critique_gameplay(self, old: Dict[str, int], new: Dict[str, int], rewards: Dict[str, float]):
-        """
-        Critiques the gameplay by comparing the old and new states and the rewards obtained.
-
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
+    def critique_gameplay(self, state_change : ZeldaStateChange, rewards: Dict[str, float]):
+        """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
         raise NotImplementedError()
 
-    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+    def get_score(self, state_change : ZeldaStateChange):
         """Override to set info['score']"""
 
-        diff = get_heart_halves(new) - get_heart_halves(old)
+        diff = state_change.current.link.health - state_change.previous.link.health
         if diff < 0:
             self.health_lost += diff
 
-        new['score'] = self.health_lost
+        return self.health_lost
 
 class GameplayCritic(ZeldaCritic):
     """Base class for Zelda gameplay critics."""
@@ -99,127 +95,107 @@ class GameplayCritic(ZeldaCritic):
         super().clear()
         self._visted_locations.clear()
 
-    def critique_gameplay(self, old : Dict[str, int], new : Dict[str, int], rewards : Dict[str, float]):
-        """
-        Critiques the gameplay by comparing the old and new states and the rewards obtained.
-
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
+    def critique_gameplay(self, state_change : ZeldaStateChange, rewards : Dict[str, float]):
+        """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
+        curr = state_change.current
         if not self._visted_locations:
-            self.__mark_visited(new['level'], new['location'])
+            self.__mark_visited(curr.level, curr.location)
 
         # triforce
-        self.critique_triforce(old, new, rewards)
+        self.critique_triforce(state_change, rewards)
 
         # combat
-        self.critique_block(old, new, rewards)
-        self.critique_attack(old, new, rewards)
-        self.critique_item_usage(old, new, rewards)
-        self.critique_aligned_enemy(old, new, rewards)
+        self.critique_block(state_change, rewards)
+        self.critique_attack(state_change, rewards)
+        self.critique_item_usage(state_change, rewards)
+        self.critique_aligned_enemy(state_change, rewards)
 
         # items
-        self.critique_item_pickup(old, new, rewards)
-        self.critique_key_pickup_usage(old, new, rewards)
-        self.critique_equipment_pickup(old, new, rewards)
+        self.critique_item_pickup(state_change, rewards)
+        self.critique_key_pickup_usage(state_change, rewards)
+        self.critique_equipment_pickup(state_change, rewards)
 
         # movement
-        self.critique_location_discovery(old, new, rewards)
-        self.critique_movement(old, new, rewards)
+        self.critique_location_discovery(state_change, rewards)
+        self.critique_movement(state_change, rewards)
 
         # health - must be last
-        self.critique_health_change(old, new, rewards)
+        self.critique_health_change(state_change, rewards)
 
     # reward helpers, may be overridden
-    def critique_equipment_pickup(self, old, new, rewards):
-        """
-        Critiques the pickup of equipment items.
-
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
+    def critique_equipment_pickup(self, state_change : ZeldaStateChange, rewards):
+        """Critiques the pickup of equipment items."""
         if not self.equipment_reward:
             return
 
-        self.__check_one_item(old, new, rewards, 'sword')
-        self.__check_one_item(old, new, rewards, 'arrows')
-        self.__check_one_item(old, new, rewards, 'bow')
-        self.__check_one_item(old, new, rewards, 'candle')
-        self.__check_one_item(old, new, rewards, 'whistle')
-        self.__check_one_item(old, new, rewards, 'food')
-        self.__check_one_item(old, new, rewards, 'potion')
-        self.__check_one_item(old, new, rewards, 'magic_rod')
-        self.__check_one_item(old, new, rewards, 'raft')
-        self.__check_one_item(old, new, rewards, 'magic_book')
-        self.__check_one_item(old, new, rewards, 'ring')
-        self.__check_one_item(old, new, rewards, 'step_ladder')
-        self.__check_one_item(old, new, rewards, 'magic_key')
-        self.__check_one_item(old, new, rewards, 'power_bracelet')
-        self.__check_one_item(old, new, rewards, 'letter')
-        self.__check_one_item(old, new, rewards, 'regular_boomerang')
-        self.__check_one_item(old, new, rewards, 'magic_boomerang')
-        self.__check_one_item(old, new, rewards, 'compass')
-        self.__check_one_item(old, new, rewards, 'map')
-        self.__check_one_item(old, new, rewards, 'compass9')
-        self.__check_one_item(old, new, rewards, 'map9')
+        self.__check_one_equipment(state_change, rewards, 'sword')
+        self.__check_one_equipment(state_change, rewards, 'arrows')
+        self.__check_one_equipment(state_change, rewards, 'bow')
+        self.__check_one_equipment(state_change, rewards, 'candle')
+        self.__check_one_equipment(state_change, rewards, 'whistle')
+        self.__check_one_equipment(state_change, rewards, 'food')
+        self.__check_one_equipment(state_change, rewards, 'potion')
+        self.__check_one_equipment(state_change, rewards, 'magic_rod')
+        self.__check_one_equipment(state_change, rewards, 'raft')
+        self.__check_one_equipment(state_change, rewards, 'book')
+        self.__check_one_equipment(state_change, rewards, 'ring')
+        self.__check_one_equipment(state_change, rewards, 'ladder')
+        self.__check_one_equipment(state_change, rewards, 'magic_key')
+        self.__check_one_equipment(state_change, rewards, 'power_bracelet')
+        self.__check_one_equipment(state_change, rewards, 'letter')
+        self.__check_one_equipment(state_change, rewards, 'boomerang')
+        self.__check_one_equipment(state_change, rewards, 'compass')
+        self.__check_one_equipment(state_change, rewards, 'map')
 
-    def __check_one_item(self, old, new, rewards, item):
-        if old[item] < new[item]:
+    def __check_one_equipment(self, state_change : ZeldaStateChange, rewards, item):
+        prev, curr = self.__get_equipment_change(state_change.previous.link, state_change.current.link, item)
+        if prev < curr:
             rewards[f'reward-{item}-gained'] = self.equipment_reward
 
-    def critique_key_pickup_usage(self, old, new, rewards):
-        """
-        Critiques the pickup and usage of keys.
+    def __get_equipment_change(self, prev_state, curr_state, item):
+        prev = getattr(prev_state, item)
+        curr = getattr(curr_state, item)
 
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
-        old_hearts = get_heart_halves(old)
-        new_hearts = get_heart_halves(new)
+        if isinstance(prev, Enum):
+            prev = prev.value
+        elif isinstance(prev, bool):
+            prev = int(prev)
 
-        if old['keys'] > new['keys']:
+        if isinstance(curr, Enum):
+            curr = curr.value
+        elif isinstance(curr, bool):
+            curr = int(curr)
+        return prev,curr
+
+    def critique_key_pickup_usage(self, state_change : ZeldaStateChange, rewards):
+        """Critiques the pickup and usage of keys."""
+        prev_link = state_change.previous.link
+        curr_link = state_change.current.link
+
+        if prev_link.keys > curr_link.keys:
             rewards['reward-used-key'] = self.key_reward
-        elif old['keys'] < new['keys'] and old_hearts <= new_hearts:
+        elif prev_link.keys < curr_link.keys:
             rewards['reward-gained-key'] = self.key_reward
 
-    def critique_item_pickup(self, old, new, rewards):
-        """
-        Critiques the pickup of items.
-
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
-        if old['rupees_to_add'] < new['rupees_to_add']:
+    def critique_item_pickup(self, state_change : ZeldaStateChange, rewards):
+        """Critiques the pickup of items."""
+        prev, curr = state_change.previous, state_change.current
+        if prev.rupees_to_add < curr.rupees_to_add:
             rewards['reward-gained-rupees'] = self.rupee_reward
 
-        if old['bombs'] != 0 < new['bombs'] == 0:
+        if prev.link.bombs != 0 < curr.link.bombs == 0:
             rewards['reward-gained-bombs'] = self.bomb_pickup_reward
 
-    def critique_health_change(self, old, new, rewards):
-        """
-        Critiques the change in health.
-
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
-        old_hearts = get_heart_halves(old)
-        new_hearts = get_heart_halves(new)
-
-        if get_heart_containers(old) < get_heart_containers(new):
+    def critique_health_change(self, state_change : ZeldaStateChange, rewards):
+        """Critiques the change in health."""
+        prev_link, curr_link = state_change.previous.link, state_change.current.link
+        if prev_link.max_health < curr_link.max_health:
             rewards['reward-gained-heart-container'] = self.heart_container_reward
-        elif new_hearts > old_hearts:
+
+        elif state_change.health_gained:
             rewards['reward-gaining-health'] = self.health_gained_reward
-        elif new_hearts < old_hearts:
+
+        elif state_change.health_lost:
             rewards['penalty-losing-health'] = self.health_lost_penalty
 
             if self.wipeout_reward_on_hits:
@@ -227,158 +203,133 @@ class GameplayCritic(ZeldaCritic):
                     if value > 0:
                         rewards[key] = 0
 
-    def critique_triforce(self, old, new, rewards):
-        """
-        Critiques the acquisition of the triforce.
-
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
-        if get_num_triforce_pieces(old) < get_num_triforce_pieces(new) or \
-                (old["triforce_of_power"] == 0 and new["triforce_of_power"] == 1):
+    def critique_triforce(self, state_change : ZeldaStateChange, rewards):
+        """Critiques the acquisition of the triforce."""
+        prev_link, curr_link = state_change.previous.link, state_change.current.link
+        if prev_link.triforce_pieces < curr_link.triforce_pieces:
             rewards['reward-gained-triforce'] = self.triforce_reward
 
-    def critique_block(self, old, new, rewards):
-        """
-        Critiques blocking of projectiles.
+        if not prev_link.triforce_of_power and curr_link.triforce_of_power:
+            rewards['reward-gained-triforce'] = self.triforce_reward
 
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of tnhe game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
-        if self._is_deflecting(old, new):
+    def critique_block(self, state_change : ZeldaStateChange, rewards):
+        """Critiques blocking of projectiles."""
+        prev_link, curr_link = state_change.previous.link, state_change.current.link
+        if not prev_link.is_blocking and curr_link.is_blocking:
             rewards['reward-block'] = self.block_projectile_reward
 
-    def _is_deflecting(self, old, new):
-        arrow_deflected = ZeldaSoundsPulse1.ArrowDeflected.value
-        return new['sound_pulse_1'] & arrow_deflected and (old['sound_pulse_1'] & arrow_deflected) != arrow_deflected
-
-    def critique_aligned_enemy(self, old, new, rewards):
+    def critique_aligned_enemy(self, state_change : ZeldaStateChange, rewards):
         """Critiques whether the agent fired sword beams towards an aligned enemy or not."""
-        aligned_enemies = old['aligned_enemies']
-        if aligned_enemies and old['beams_available']:
-            match new['action']:
+        prev, curr = state_change.previous, state_change.current
+        aligned_enemies = prev.aligned_enemies
+        if aligned_enemies and prev.link.are_beams_available:
+            match curr.action:
                 case ActionType.MOVEMENT:
                     rewards['penalty-didnt-fire'] = self.didnt_fire_penalty
 
                 case ActionType.ATTACK:
                     vector = aligned_enemies[0].vector
-                    link_vector = new['state'].link.direction.to_vector()
+                    link_vector = curr.link.direction.to_vector()
                     dotproduct = np.dot(vector, link_vector)
                     if dotproduct > 0.8:
                         rewards['reward-fired-correctly'] = self.fired_correctly_reward
 
-    def critique_attack(self, old, new, rewards):
-        """Critiques attacks made by the player. """
+    def critique_attack(self, state_change : ZeldaStateChange, rewards):
+        """Critiques attacks made by the player."""
         # pylint: disable=too-many-branches
-        if 'beam_hits' in new and new['beam_hits']:
+
+        prev, curr = state_change.previous, state_change.current
+        if state_change.hits and prev.link.are_beams_available \
+                             and curr.link.get_animation_state(ZeldaAnimationId.BEAMS) != AnimationState.INACTIVE:
             rewards['reward-beam-hit'] = self.injure_kill_reward
 
-        elif new['step_hits']:
-            if not is_in_cave(new):
-                if new['objective_kind'] == ObjectiveKind.FIGHT:
+        elif state_change.hits:
+            if not curr.in_cave:
+                if prev.objective_kind == ObjectiveKind.FIGHT:
                     rewards['reward-hit'] = self.injure_kill_reward
                 else:
                     rewards['reward-hit-move-room'] = self.inure_kill_movement_room_reward
             else:
                 rewards['penalty-hit-cave'] = -self.injure_kill_reward
 
-        elif new['action'] == ActionType.ATTACK:
-            if not new['active_enemies']:
+        elif curr.action == ActionType.ATTACK:
+            if not curr.enemies:
                 rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
 
-            elif new['is_sword_frozen']:
+            elif curr.link.is_sword_frozen:
                 rewards['penalty-attack-offscreen'] = self.attack_miss_penalty
 
-            elif new['active_enemies']:
-                enemy_vectors = [enemy.vector for enemy in new['active_enemies'] if abs(enemy.distance) > 0]
+            elif (active_enemies := curr.active_enemies):
+                enemy_vectors = [enemy.vector for enemy in active_enemies if abs(enemy.distance) > 0]
                 if enemy_vectors:
-                    link_vector = new['state'].link.direction.to_vector()
+                    link_vector = curr.link.direction.to_vector()
                     dotproducts = np.sum(link_vector * enemy_vectors, axis=1)
                     if not np.any(dotproducts > np.sqrt(2) / 2):
                         rewards['penalty-attack-miss'] = self.attack_miss_penalty
-                    elif not old['beams_available']:
-                        distance = new['active_enemies'][0].distance
+                    elif not prev.link.are_beams_available:
+                        distance = active_enemies[0].distance
                         if distance > self.distance_threshold:
                             rewards['penalty-attack-miss'] = self.attack_miss_penalty
 
-    def critique_item_usage(self, _, new, rewards):
-        """
-        Critiques the usage of items.
-
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
-        if new['action'] == ActionType.ITEM:
-            selected = new['selected_item']
-            if selected == 0 and not new['regular_boomerang'] and not new['magic_boomerang']:
+    def critique_item_usage(self, state_change : ZeldaStateChange, rewards):
+        """Critiques the usage of items."""
+        curr = state_change.current
+        if curr.action == ActionType.ITEM:
+            selected = curr.link.selected_equipment
+            if selected == SelectedEquipment.NONE:
                 rewards['used-null-item'] = self.used_null_item_penalty
-            elif selected == 1:  # bombs
-                total_hits = new.get('bomb1_hits', 0) + new.get('bomb2_hits', 0)
-                if total_hits == 0:
+            elif selected == SelectedEquipment.BOMBS:
+                if state_change.hits == 0:
                     rewards['penalty-bomb-miss'] = self.bomb_miss_penalty
                 else:
-                    rewards['reward-bomb-hit'] = min(self.bomb_hit_reward * total_hits, 1.0)
+                    rewards['reward-bomb-hit'] = min(self.bomb_hit_reward * state_change.hits, 1.0)
 
-    def critique_location_discovery(self, old, new, rewards):
-        """
-        Critiques the discovery of new locations.
+    def critique_location_discovery(self, state_change : ZeldaStateChange, rewards):
+        """Critiques the discovery of new locations."""
+        prev = state_change.previous
+        prev = (prev.location, prev.level)
 
-        Args:
-            old (Dict[str, int]): The old state of the game.
-            new (Dict[str, int]): The new state of the game.
-            rewards (Dict[str, float]): The rewards obtained during gameplay.
-        """
-        prev = (old['level'], old['location'])
-        curr = (new['level'], new['location'])
+        curr = state_change.current
+        curr = (curr.location, curr.level)
 
         if self.new_location_reward and prev != curr and not self.__has_visited(*curr):
             self.__mark_visited(*curr)
             rewards['reward-new-location'] = self.new_location_reward
 
-    def critique_movement(self, old, new, rewards):
+    def critique_movement(self, state_change : ZeldaStateChange, rewards):
         """
         Critiques movement on the current screen.  This is the most difficult method to get right.  Movement in Zelda
         is complicated and unintended consequences are common.
-
-        Args:
-            old (dict): The old game state.
-            new (dict): The new game state.
-            rewards (dict): The rewards dictionary to update.
-
-        Returns:
-            None
         """
         # pylint: disable=too-many-branches, too-many-locals
 
+        prev = state_change.previous
+        curr = state_change.current
+
+        prev_link = prev.link
+        curr_link = curr.link
+
         # Don't score movement if we moved to a new location or took damage.  The "movement" which occurs from
         # damage should never be rewarded, and it will be penalized by the health loss critic.
-        if new['action'] != ActionType.MOVEMENT or new['took_damage'] or \
-                old['location'] != new['location'] or is_in_cave(old) != is_in_cave(new):
+        if curr.action != ActionType.MOVEMENT or state_change.health_lost or prev.full_location != curr.full_location:
             return
 
         # Did link run into a wall?
-        if old['link_pos'] == new['link_pos']:
+        if prev_link.position == curr_link.position:
             rewards['penalty-wall-collision'] = self.wall_collision_penalty
             return
 
-        self.critique_moving_into_danger(old, new, rewards)
+        self.critique_moving_into_danger(state_change, rewards)
 
-        old_path = old.get("a*_path", [])
-        new_path = new.get("a*_path", [])
+        old_path = prev.get("a_star_path", [])
+        new_path = curr.get("a_star_path", [])
 
-        new_state = new['state']
-        movement_direction = new_state.link.direction
+        movement_direction = curr_link.direction
 
         # If an action put us into alignment for a sword beam shot, we should avoid penalizing the agent for this
         # move.  The agent shouldn't be able to get infinite rewards for moving into alignment since the enemy's motion
         # is fairly unpredictable
-        moved_to_alignment = not old['aligned_enemies'] and new['aligned_enemies'] and old['health_full']
+        moved_to_alignment = not prev.aligned_enemies and curr.aligned_enemies and prev_link.are_beams_available
 
         # We check health_full here (not beams_available) because we still want to avoid penalizing the agent for
         # lining up the next shot, even if sword beams are already active.
@@ -387,7 +338,7 @@ class GameplayCritic(ZeldaCritic):
         # There are places that can be clipped to that are impassible.  If this happens, we need to make sure not to
         # reward the agent for finding them.  This is because it's likely the agent will use this to break the
         # reward system for infinite rewards.
-        if self.__any_impassible_tiles(new):
+        if self.__any_impassible_tiles(curr.tile_states, curr_link.tile_coordinates):
             rewards['penalty-bad-path'] = self.move_away_penalty  # don't take alignment into account for this
 
         # If we are headed to the same location as last time, simply check whether we made progress towards it.
@@ -405,8 +356,8 @@ class GameplayCritic(ZeldaCritic):
             target_y, target_x = self.__find_second_turn(old_path)
             target_tile = target_x, target_y
 
-            old_link_tile = self.__xy_from_coord(old['link'].tile_coordinates[1])
-            new_link_tile = self.__xy_from_coord(new['link'].tile_coordinates[1])
+            old_link_tile = self.__xy_from_coord(prev_link.tile_coordinates[1])
+            new_link_tile = self.__xy_from_coord(curr_link.tile_coordinates[1])
 
             progress = self.__get_progress(movement_direction, old_link_tile, new_link_tile, target_tile)
 
@@ -417,9 +368,9 @@ class GameplayCritic(ZeldaCritic):
 
         # This should be relatively rare, but in cases where A* couldn't find a path to the target (usually because
         # a monster moved into a wall), we will reward simply moving closer.
-        elif (target := new.get('objective_pos_or_dir', None)) is not None:
-            old_link_pos = np.array(old.get('link_pos', (0, 0)), dtype=np.float32)
-            new_link_pos = np.array(new.get('link_pos', (0, 0)), dtype=np.float32)
+        elif (target := curr.get('objective_pos_or_dir', None)) is not None:
+            old_link_pos = np.array(prev_link.position, dtype=np.float32)
+            new_link_pos = np.array(curr_link.position, dtype=np.float32)
 
             if isinstance(target, Direction):
                 if target == Direction.N:
@@ -439,28 +390,29 @@ class GameplayCritic(ZeldaCritic):
             else:
                 rewards['penalty-move-farther'] = move_away_penalty
 
-    def critique_moving_into_danger(self, old, new, rewards):
+    def critique_moving_into_danger(self, state_change : ZeldaStateChange, rewards):
         """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted
         independent of other movement rewards.  This ensures that even if the agent is moving in the right direction,
         it is still wary of moving too close to an enemy."""
-        if not old['took_damage'] and not self._is_deflecting(old, new):
-            warning_diff = new['link_warning_tiles'] - old['link_warning_tiles']
-            danger_diff = new['link_danger_tiles'] - old['link_danger_tiles']
+        prev, curr = state_change.previous, state_change.current
+
+        if not state_change.health_lost and not curr.link.is_blocking:
+            warning_diff = curr.link_warning_tiles - prev.link_warning_tiles
+            danger_diff = curr.link_danger_tiles - prev.link_danger_tiles
 
             if danger_diff > 0:
                 rewards['penalty-dangerous-move'] = self.danger_tile_penalty
             elif danger_diff < 0:
-                if len(old['active_enemies']) == len(new['active_enemies']):
+                if len(prev.active_enemies) == len(curr.active_enemies):
                     rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
             elif warning_diff > 0:
                 rewards['penalty-risky-move'] = self.warning_tile_penalty
             elif warning_diff < 0:
-                if len(old['active_enemies']) == len(new['active_enemies']):
+                if len(prev.active_enemies) == len(curr.active_enemies):
                     rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
 
-    def __any_impassible_tiles(self, new):
-        tile_states = new['tile_states']
-        for tile in new['link'].tile_coordinates:
+    def __any_impassible_tiles(self, tile_states, tile_coordinates):
+        for tile in tile_coordinates:
             if 0 <= tile[0] < tile_states.shape[0] and 0 <= tile[1] < tile_states.shape[1] \
                     and tile_states[tile] == TileState.IMPASSABLE.value:
                 return True
@@ -539,31 +491,25 @@ class Dungeon1Critic(GameplayCritic):
         self.seen.clear()
         self.health_lost = 0
 
-    def critique_location_discovery(self, old: Dict[str, int], new: Dict[str, int], rewards: Dict[str, float]):
-        """
-        Critiques the location discovery based on the old and new states and assigns rewards or penalties accordingly.
-
-        Args:
-            old (Dict[str, int]): The old state containing information about the previous location.
-            new (Dict[str, int]): The new state containing information about the current location.
-            rewards (Dict[str, float]): The rewards dictionary to update with rewards or penalties.
-
-        Returns:
-            None
-        """
-        if new['level'] != 1:
+    def critique_location_discovery(self, state_change : ZeldaStateChange, rewards: Dict[str, float]):
+        """Critiques the location discovery based on the old and new states and assigns rewards or penalties
+        accordingly."""
+        prev, curr = state_change.previous, state_change.current
+        if curr.level != 1:
             rewards['penalty-left-dungeon'] = self.leave_dungeon_penalty
-        elif old['location'] != new['location']:
-            if old['location_objective'] == new['location']:
+        elif prev.location != curr.location:
+            if prev.location_objective == curr.location:
                 rewards['reward-new-location'] = self.new_location_reward
             else:
                 rewards['penalty-left-early'] = self.leave_early_penalty
 
-    def critique_key_pickup_usage(self, old, new, rewards):
-        if old['keys'] > new['keys'] and new['location'] == 0x73 and new['location_objective'] != 0x63:
+    def critique_key_pickup_usage(self, state_change : ZeldaStateChange, rewards):
+        prev, curr = state_change.previous, state_change.current
+
+        if prev.link.keys > curr.link.keys and curr.location == 0x73 and curr.location_objective != 0x63:
             pass # do not give a reward for prematurely using a key
         else:
-            super().critique_key_pickup_usage(old, new, rewards)
+            super().critique_key_pickup_usage(state_change, rewards)
 
 
 class Dungeon1BombCritic(Dungeon1Critic):
@@ -578,18 +524,16 @@ class Dungeon1BombCritic(Dungeon1Critic):
         self.score = 0
         self.bomb_miss_penalty = -REWARD_SMALL
 
-    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
-        if new['action'] == ActionType.ITEM:
-            selected = new['selected_item']
-            # bombs
-            if selected == 1:
-                hits = new.get('bomb1_hits', 0) + new.get('bomb2_hits', 0)
-                if hits:
-                    self.score += hits
-                else:
-                    self.score -= 1
+    def get_score(self, state_change: ZeldaStateChange):
+        state = state_change.current
+        if state.action == ActionType.ITEM and state.link.selected_equipment == SelectedEquipment.BOMBS:
+            hits = state_change.damage_dealt
+            if hits:
+                self.score += hits
+            else:
+                self.score -= 1
 
-        new['score'] = self.score
+        return self.score
 
 class Dungeon1BossCritic(Dungeon1Critic):
     """Critic specifically for dungeon 1 with the boss."""
@@ -624,36 +568,34 @@ class OverworldCritic(GameplayCritic):
         self.equipment_reward = None
         self.health_lost = 0
 
-    def critique_location_discovery(self, old, new, rewards):
-        if old['location'] != new['location']:
-            if old['location_objective'] and old['location_objective'] != new['location']:
+    def critique_location_discovery(self, state_change : ZeldaStateChange, rewards):
+        prev, curr = state_change.previous, state_change.current
+
+        if prev.location != curr.location:
+            if prev.location_objective != curr.location:
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 
-            if old['objective_kind'] == ObjectiveKind.ENTER_CAVE:
+            if prev.objective_kind == ObjectiveKind.ENTER_CAVE:
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 
-        level = new['level']
-        location = new['location']
-        triforce_pieces = get_num_triforce_pieces(new)
-
-        if not is_in_cave(old) and location == 0x77 and is_in_cave(new):
+        if prev.in_cave and curr.location == 0x77 and curr.in_cave:
             rewards['penalty-entered-cave'] = self.entered_cave_penalty
 
-        elif level == 0:
-            if location not in self._get_allowed_rooms(triforce_pieces):
+        elif curr.level == 0:
+            if curr.location not in self._get_allowed_rooms(curr.link.triforce_pieces):
                 rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
 
-            elif old['location'] == 0x77 and location != 0x77 and not new['sword']:
+            elif prev.location == 0x77 and curr.location != 0x77 and prev.link.sword == SwordKind.NONE:
                 rewards['penalty-no-sword'] = self.left_without_sword_penalty
 
             else:
-                super().critique_location_discovery(old, new, rewards)
+                super().critique_location_discovery(state_change, rewards)
 
-        elif level == triforce_pieces + 1:
+        elif curr.level == curr.link.triforce_pieces + 1:
             # don't forget to reward for reaching the correct dungeon
-            super().critique_location_discovery(old, new, rewards)
+            super().critique_location_discovery(state_change, rewards)
 
         else:
             rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
@@ -678,41 +620,44 @@ class OverworldSwordCritic(GameplayCritic):
         self.cave_transition_penalty = -REWARD_MAXIMUM
         self.new_location_reward = REWARD_LARGE
 
-    def critique_location_discovery(self, old, new, rewards):
-
+    def critique_location_discovery(self, state_change : ZeldaStateChange, rewards):
         # entered cave
-        if not is_in_cave(old) and is_in_cave(new):
-            if new['sword']:
+        prev, curr = state_change.previous, state_change.current
+
+        if not prev.in_cave and curr.in_cave:
+            if curr.link.sword != SwordKind.NONE:
                 rewards['penalty-reentered-cave'] = self.cave_transition_penalty
             else:
                 rewards['reward-entered-cave'] = self.cave_tranistion_reward
 
         # left cave
-        elif is_in_cave(old) and not is_in_cave(new):
-            if new['sword']:
+        elif prev.in_cave and not curr.in_cave:
+            if curr.link.sword != SwordKind.NONE:
                 rewards['reward-left-cave'] = self.cave_tranistion_reward
             else:
                 rewards['penalty-left-cave-early'] = self.cave_transition_penalty
 
-        elif new['location'] != 0x77:
-            if new['sword']:
+        elif curr.location != 0x77:
+            if curr.link.sword != SwordKind.NONE:
                 rewards['reward-new-location'] = self.new_location_reward
             else:
                 rewards['penalty-left-scenario'] = -self.new_location_reward
 
-    def set_score(self, old : Dict[str, int], new : Dict[str, int]):
+    def get_score(self, state_change : ZeldaStateChange):
+        state = state_change.current
+
         score = 0
-        if is_in_cave(new):
+        if state.in_cave:
             score += 1
 
-            if new['sword']:
+            if state.link.sword != SwordKind.NONE:
                 score += 1
 
         else:
-            if new['sword']:
+            if state.link.sword != SwordKind.NONE:
                 score += 3
 
-            if new['location'] != 0x77:
+            if state.location != 0x77:
                 score += 1
 
-        new['score'] = score
+        return score

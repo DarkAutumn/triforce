@@ -4,6 +4,24 @@ from enum import Enum
 
 import numpy as np
 
+
+class ZeldaSounds(Enum):
+    """Sound codes for the game."""
+    # pylint: disable=invalid-name
+    ArrowDeflected : int = 0x01
+    BoomerangStun : int = 0x02
+    MagicCast : int = 0x04
+    KeyPickup : int = 0x08
+    SmallHeartPickup : int = 0x10
+    SetBomb : int = 0x20
+    HeartWarning : int = 0x40
+
+class RingKind(Enum):
+    """The status of Link's ring."""
+    NONE = 0
+    BLUE = 1
+    RED = 2
+
 class SwordKind(Enum):
     """The status of Link's sword."""
     NONE = 0

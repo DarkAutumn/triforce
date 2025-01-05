@@ -24,8 +24,6 @@ class ScenarioWrapper(gym.Wrapper):
         self._curr_room = -1
         self.game_data = zelda_game_data
 
-        self._last_state = None
-
     def reset(self, **kwargs):
         if len(self._scenario.start) > 1:
             self._curr_room = (self._curr_room + 1) % len(self._scenario.start)
@@ -46,7 +44,6 @@ class ScenarioWrapper(gym.Wrapper):
         for ec in self._conditions:
             ec.clear()
 
-        self._last_state = info
         return obs, info
 
     def __set_data(self, env_unwrapped, data, info):
@@ -60,35 +57,34 @@ class ScenarioWrapper(gym.Wrapper):
     def step(self, action):
         obs, rewards, terminated, truncated, info = self.env.step(action)
 
-        if self._last_state is not None:
-            reward_dict = {}
+        reward_dict = {}
+        state_change = info['state_change']
 
-            self._critic.critique_gameplay(self._last_state, info, reward_dict)
-            self._critic.set_score(self._last_state, info)
+        self._critic.critique_gameplay(state_change, reward_dict)
+        info['score'] = self._critic.get_score(state_change)
 
-            if reward_dict:
-                for value in reward_dict.values():
-                    rewards += value
+        if reward_dict:
+            for value in reward_dict.values():
+                rewards += value
 
-            info['rewards'] = reward_dict
+        info['rewards'] = reward_dict
 
-            end = (x.is_scenario_ended(self._last_state, info) for x in self._conditions)
-            end = [x for x in end if x is not None]
-            terminated = terminated or any((x[0] for x in end))
-            truncated = truncated or any((x[1] for x in end))
-            reason = [x[2] for x in end if x[2]]
+        end = (x.is_scenario_ended(state_change) for x in self._conditions)
+        end = [x for x in end if x is not None]
+        terminated = terminated or any((x[0] for x in end))
+        truncated = truncated or any((x[1] for x in end))
+        reason = [x[2] for x in end if x[2]]
 
-            success = any(end.startswith("success") for end in reason)
-            if reason:
-                # I guess we could have more than one reason, but I'm not going to cover that corner case
-                info['end'] = reason[0]
+        success = any(end.startswith("success") for end in reason)
+        if reason:
+            # I guess we could have more than one reason, but I'm not going to cover that corner case
+            info['end'] = reason[0]
 
-            if truncated or terminated:
-                if 'score' in info and success:
-                    info['final-score'] = info['score']
+        if truncated or terminated:
+            if 'score' in info and success:
+                info['final-score'] = info['score']
 
         self.__set_data(self.unwrapped, self._scenario.fixed, info)
-        self._last_state = info
         return obs, rewards, terminated, truncated, info
 
 __all__ = [ScenarioWrapper.__name__]

@@ -125,7 +125,7 @@ def test_beam_injury():
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
-    
+
     state_change : ZeldaStateChange = info['state_change']
     assert state_change.hits == 1
     assert state_change.damage_dealt == 1
@@ -208,8 +208,6 @@ def test_boomerang_stun():
     _, _, terminated, truncated, info = replay.step('b')
     assert not terminated
     assert not truncated
-
-    assert info['step_stuns'] == 1
 
     state_change : ZeldaStateChange = info['state_change']
     assert state_change.hits == 0

@@ -196,7 +196,7 @@
             "address": 1632,
             "type": "=u1"
         },
-        "magic_book": {
+        "book": {
             "address": 1633,
             "type": "=u1"
         },

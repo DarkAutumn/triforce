@@ -4,9 +4,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Tuple
 
+import gymnasium as gym
 import numpy as np
 
-from .zelda_enums import AnimationState, ArrowKind, BoomerangKind, CandleKind, PotionKind, SelectedEquipment, SwordKind, ZeldaAnimationId, ZeldaEnemyId, ZeldaItemId, Direction
+from .zelda_enums import AnimationState, ArrowKind, BoomerangKind, CandleKind, PotionKind, RingKind, SelectedEquipment, \
+    SwordKind, ZeldaAnimationId, ZeldaEnemyId, ZeldaItemId, Direction, ZeldaSounds
 from .zelda_game_data import zelda_game_data
 from .model_parameters import GAMEPLAY_START_Y
 
@@ -178,8 +180,13 @@ class Link(ZeldaObjectBase):
     # Calculated status
     @property
     def has_beams(self) -> bool:
-        """Returns True if link has beams."""
-        return self.heart_halves == self.max_health * 2
+        """Returns True if link is able to fire sword beams in general."""
+        return self.sword != SwordKind.NONE and self.heart_halves == self.max_health * 2
+
+    @property
+    def are_beams_available(self) -> bool:
+        """Returns True if link can immediately fire beams (e.g. has_beams and no sword is currently firing)."""
+        return self.get_animation_state(ZeldaAnimationId.BEAMS) == AnimationState.INACTIVE and self.has_beams
 
     @property
     def is_sword_frozen(self) -> bool:
@@ -246,6 +253,12 @@ class Link(ZeldaObjectBase):
 
         return AnimationState.INACTIVE
 
+    @property
+    def is_blocking(self) -> bool:
+        """Whether or not link is currently blocking a projectile (this returns true for as long as the block sound)
+        is playing."""
+        return self.game.is_sound_playing(ZeldaSounds.ArrowDeflected)
+
     # Rupees, Bombs, Shield
     @property
     def rupees(self) -> int:
@@ -286,6 +299,82 @@ class Link(ZeldaObjectBase):
     def magic_shield(self, value: bool) -> None:
         """Set the magic shield for link."""
         self.game.magic_shield = value
+
+    # Dungeon items
+    @property
+    def triforce_pieces(self) -> int:
+        """The number of triforce pieces link has (does not include Triforce of Power in level 9)."""
+        return np.binary_repr(self.game.triforce).count('1')
+
+    @property
+    def triforce_of_power(self) -> bool:
+        """Whether link has the triforce of power (Level 9)."""
+        return bool(self.game.triforce_of_power)
+
+    @triforce_of_power.setter
+    def triforce_of_power(self, value) -> None:
+        self.game.triforce_of_power = value
+
+    @property
+    def keys(self) -> int:
+        """How many keys link currently posesses."""
+        return self.game.keys
+
+    @keys.setter
+    def keys(self, value) -> int:
+        self.game.keys = value
+
+    @property
+    def compass(self) -> bool:
+        """Whether link has the compass for the current dungeon."""
+        match self.game.level:
+            case 0:
+                return False
+
+            case 9:
+                return self.game.compass9
+
+            case _:
+                return self.game.compass
+
+    @compass.setter
+    def compass(self, value) -> None:
+        value = 1 if value else 0
+        match self.game.level:
+            case 0:
+                raise ValueError("Cannot set compass outside of a dungeon.")
+
+            case 9:
+                self.game.compass9 = value
+
+            case _:
+                self.game.compass = value
+
+    @property
+    def map(self) -> bool:
+        """Whether link has the map for the current dungeon."""
+        match self.game.level:
+            case 0:
+                return False
+
+            case 9:
+                return self.game.map9
+
+            case _:
+                return self.game.map
+
+    @map.setter
+    def map(self, value) -> None:
+        value = 1 if value else 0
+        match self.game.level:
+            case 0:
+                raise ValueError("Cannot set map outside of a dungeon.")
+
+            case 9:
+                self.game.map9 = value
+
+            case _:
+                self.game.map = value
 
     # Weapons and Equipment
     @property
@@ -329,20 +418,10 @@ class Link(ZeldaObjectBase):
         if self.game.magic_boomerang:
             return BoomerangKind.MAGIC
 
-        if self.game.boomerang:
+        if self.game.regular_boomerang:
             return BoomerangKind.NORMAL
 
         return BoomerangKind.NONE
-
-    @property
-    def bow(self) -> bool:
-        """Returns True if link has the bow."""
-        return self.game.bow
-
-    @bow.setter
-    def bow(self, value: bool) -> None:
-        """Set the bow for link."""
-        self.game.bow = value
 
     @boomerang.setter
     def boomerang(self, value: BoomerangKind) -> None:
@@ -354,6 +433,16 @@ class Link(ZeldaObjectBase):
         else:
             self.game.magic_boomerang = 0
             self.game.regular_boomerang = 0
+
+    @property
+    def bow(self) -> bool:
+        """Returns True if link has the bow."""
+        return self.game.bow
+
+    @bow.setter
+    def bow(self, value: bool) -> None:
+        """Set the bow for link."""
+        self.game.bow = value
 
     @property
     def magic_rod(self) -> bool:
@@ -434,6 +523,16 @@ class Link(ZeldaObjectBase):
     def power_bracelet(self, value: bool) -> None:
         """Set the power bracelet for link."""
         self.game.power_bracelet = value
+
+    @property
+    def ring(self) -> RingKind:
+        """Returns the kind of ring link is wearing."""
+        return RingKind(self.game.ring)
+
+    @ring.setter
+    def ring(self, value : RingKind) -> None:
+        """Sets which ring link is wearing."""
+        self.game.ring = value
 
     @property
     def raft(self) -> bool:
@@ -537,7 +636,7 @@ class ObjectTables:
 
 class ZeldaGameState:
     """The current state of a zelda game."""
-    _env : 'gym.Env'
+    _env : gym.Env
     _info : dict
     frames : int
     level : int
@@ -575,6 +674,13 @@ class ZeldaGameState:
 
             elif self._is_projectile(obj_id):
                 self.projectiles.append(self._build_projectile(tables, index, obj_id))
+
+    def get(self, name, default):
+        """Gets the property from the info dict with a default."""
+        if hasattr(self, name):
+            return getattr(self, name)
+
+        return self._info.get(name, default)
 
     def __getattr__(self, name):
         if name in self._info:
@@ -627,6 +733,17 @@ class ZeldaGameState:
                 return projectile
 
         return None
+
+    def is_sound_playing(self, sound : ZeldaSounds) -> bool:
+        """Whether the given sound is currently playing."""
+        if isinstance(sound, Enum):
+            sound = sound.value
+        return bool(self.sound_pulse_1 & sound)
+
+    @property
+    def active_enemies(self):
+        """Enemies which are both alive an active."""
+        return [x for x in self.enemies if x.is_active and not x.is_dying]
 
     @property
     def game_over(self):

@@ -2,8 +2,6 @@
 Responsible for interpreting complex game state and producing an object model in the 'info' dictionary.
 Zelda has a very complicated combat system.  This class is responsible for detecting when the
 agent has killed or injured an enemy.
-
-This consumes some state and produces values like 'step_hits'.
 """
 
 from random import randint
@@ -53,7 +51,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._total_frames = frames_skipped + 1
 
         # Reset/start the info dictionary
-        self.update_info(info)
+        self._update_info(info)
 
         return obs, info
 
@@ -65,10 +63,10 @@ class ZeldaGameWrapper(gym.Wrapper):
         info['action'] = self.action_translator.get_action_type(action)
         info['buttons'] = self._get_button_names(action, self.env.unwrapped.buttons)
 
-        self.update_info(info)
+        self._update_info(info)
         return obs, 0, terminated, truncated, info
 
-    def update_info(self, info):
+    def _update_info(self, info):
         info['total_frames'] = self._total_frames
         info['state'] = ZeldaGameState(self, info, self._total_frames)
 
