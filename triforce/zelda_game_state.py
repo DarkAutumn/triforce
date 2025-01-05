@@ -7,13 +7,12 @@ from typing import List, Optional, Tuple
 import gymnasium as gym
 import numpy as np
 
-from .zelda_enums import AnimationState, ArrowKind, BoomerangKind, CandleKind, PotionKind, RingKind, SelectedEquipment, \
-    SwordKind, ZeldaAnimationId, ZeldaEnemyId, ZeldaItemId, Direction, ZeldaSounds
+from .zelda_enums import AnimationState, ArrowKind, BoomerangKind, CandleKind, PotionKind, RingKind, \
+    SelectedEquipment, SwordKind, ZeldaAnimationId, ZeldaEnemyId, ZeldaItemId, Direction, ZeldaSounds
 from .zelda_game_data import zelda_game_data
 from .model_parameters import GAMEPLAY_START_Y
 
 # pylint: disable=too-many-public-methods
-
 
 MODE_REVEAL = 3
 MODE_SCROLL_COMPLETE = 4
@@ -98,7 +97,7 @@ class ZeldaObjectBase:
         """The normalized direction vector from link to the object."""
         distance = self.distance
         if distance == 0:
-            return np.array([0, 0])
+            return np.array([0, 0], dtype=np.float32)
 
         return self.vector_from_link / distance
 
@@ -108,7 +107,8 @@ class ZeldaObjectBase:
         vector = self.__dict__.get('_vector', None)
         if vector is None:
             link_pos = self.game.link.position
-            vector = self.__dict__['_vector'] = np.array(self.position) - np.array(link_pos)
+            vector = np.array(self.position, dtype=np.float32) - np.array(link_pos, dtype=np.float32)
+            self.__dict__['_vector']  = vector
 
         return vector
 
@@ -179,9 +179,14 @@ class Link(ZeldaObjectBase):
 
     # Calculated status
     @property
+    def is_health_full(self) -> bool:
+        """Is link's health full."""
+        return self.heart_halves == self.max_health * 2
+
+    @property
     def has_beams(self) -> bool:
         """Returns True if link is able to fire sword beams in general."""
-        return self.sword != SwordKind.NONE and self.heart_halves == self.max_health * 2
+        return self.sword != SwordKind.NONE and self.is_health_full
 
     @property
     def are_beams_available(self) -> bool:
@@ -689,10 +694,7 @@ class ZeldaGameState:
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name, value):
-        if name.startswith('_') or name in self.__dict__:
-            super().__setattr__(name, value)
-
-        elif name in self._info:
+        if name in zelda_game_data.memory:
             if isinstance(value, Enum):
                 value = value.value
 
@@ -707,8 +709,11 @@ class ZeldaGameState:
             self._env.unwrapped.data.set_value(name, value)
             self._info[name] = value
 
+        elif name in self.__dict__:
+            self.__dict__[name] = value
+
         else:
-            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+            self._info[name] = value
 
     def get_enemy_by_index(self, index) -> Optional[ZeldaEnemy]:
         """Returns the enemy with the given index."""
@@ -739,6 +744,14 @@ class ZeldaGameState:
         if isinstance(sound, Enum):
             sound = sound.value
         return bool(self.sound_pulse_1 & sound)
+
+    @property
+    def treasure_location(self) -> Optional[Tuple[int, int]]:
+        """Returns the location of the treasure in the current room, or None if there isn't one."""
+        if self.treasure_flag == 0:
+            return self.treasure_x, self.treasure_y
+
+        return None
 
     @property
     def active_enemies(self):
