@@ -4,7 +4,6 @@ import retro
 
 from .game_change_wrapper import ZeldaStateChangeWrapper
 from .zelda_room_map_wrapper import ZeldaRoomMapWrapper
-from .zelda_hit_detect import ZeldaHitDetect
 from .objective_selector import ObjectiveSelector
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
@@ -40,9 +39,6 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
 
     # Provide a tile map of the room.
     env = ZeldaRoomMapWrapper(env)
-
-    # Detect hits.
-    env = ZeldaHitDetect(env)
 
     # The AI orchestration piece.  This is responsible for selecting the model to use and the target
     # objective.

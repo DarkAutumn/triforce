@@ -40,8 +40,6 @@ The triforce project itself is divided into some key areas:
 
 [ZeldaGameWrapper](triforce/zelda_wrapper.py) reinterprets game state and RAM into something that can be provided to critics or observation wrappers.  This code finds all enemies, items, and projectiles on screen and produces that in the `info` dictionary.  This generally makes other wrappers easier to implement.
 
-[ZeldaHitDetect](triforce/zelda_hit_detect.py) determines when link will hit when he shoots his sword beams or drops a bomb onscreen.  We have to reward the exact action that shot sword beams for the game to learn properly, and not when the sword or bomb will hit, and this wrapper is what does that work by running the game forward to see the outcome of actions.
-
 [ObjectiveSelector](triforce/objective_selector.py) sets the goal/objective that the model *should* be doing at any given time.  This creates an objective vector that ZeldaVectorFeatures puts into the observation, but this is also used by critics to reward/punish the model when it gets closer to/further from completing objectives.
 
 [zelda_game.py](triforce/zelda_game.py) does a lot of the nitty gritty of interpreting raw RAM state into something more usable.  A lot of game interpretation is also done throughout, including in `ZeldaGameWrapper`.

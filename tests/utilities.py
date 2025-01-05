@@ -5,7 +5,6 @@ import retro
 from triforce.action_space import ZeldaActionSpace
 from triforce.game_change_wrapper import ZeldaStateChangeWrapper
 from triforce.objective_selector import ObjectiveSelector
-from triforce.zelda_hit_detect import ZeldaHitDetect
 from triforce.zelda_room_map_wrapper import ZeldaRoomMapWrapper
 from triforce.zelda_wrapper import ZeldaGameWrapper
 
@@ -55,7 +54,6 @@ class ZeldaActionReplay:
         env = ZeldaGameWrapper(env, deterministic=True)
         env = ZeldaStateChangeWrapper(env)
         env = ZeldaRoomMapWrapper(env)
-        env = ZeldaHitDetect(env)
         env = ObjectiveSelector(env)
         env = ZeldaActionSpace(env, 'all')
         if wrapper:
