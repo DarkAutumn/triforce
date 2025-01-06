@@ -4,14 +4,14 @@ from typing import Dict, List
 
 import numpy as np
 
-from .zelda_enums import AnimationState, ZeldaItemId, ZeldaAnimationId
-from .zelda_game_state import ZeldaGameState
+from .zelda_enums import AnimationState, ZeldaItemKind, ZeldaAnimationKind
+from .zelda_game import ZeldaGame
 
 class ZeldaStateChange:
     """Tracks the changes between two Zelda game states."""
-    def __init__(self, env, prev : ZeldaGameState, curr : ZeldaGameState, discounts):
-        self.previous : ZeldaGameState = prev
-        self.current : ZeldaGameState = curr
+    def __init__(self, env, prev : ZeldaGame, curr : ZeldaGame, discounts):
+        self.previous : ZeldaGame = prev
+        self.current : ZeldaGame = curr
 
         self.health_lost = max(0, prev.link.health - curr.link.health) \
                            if prev.link.max_health == curr.link.max_health \
@@ -23,7 +23,7 @@ class ZeldaStateChange:
 
         self.enemies_hit : Dict[int, int] = {}
         self.enemies_stunned : List[int] = []
-        self.items_gained : List[ZeldaItemId] = []
+        self.items_gained : List[ZeldaItemKind] = []
 
         self.changed_location = prev.full_location != curr.full_location
 
@@ -51,7 +51,7 @@ class ZeldaStateChange:
         """The total number of enemies hit by link this turn."""
         return len(self.enemies_hit)
 
-    def _compare_health_status(self, prev : ZeldaGameState, curr : ZeldaGameState, result):
+    def _compare_health_status(self, prev : ZeldaGame, curr : ZeldaGame, result):
         # Walk all enemies alive (and not dying) in the previous snapshot
         for enemy in prev.enemies:
             if enemy.is_dying:
@@ -79,7 +79,7 @@ class ZeldaStateChange:
                 enemies_hit = result.setdefault('enemies_hit', {})
                 enemies_hit[enemy.index] = enemies_hit.get(enemy.index, 0) + dmg
 
-    def _compare_items(self, prev : ZeldaGameState, curr : ZeldaGameState, result):
+    def _compare_items(self, prev : ZeldaGame, curr : ZeldaGame, result):
         # Walk all items in the previous snapshot
         elapsed_frames = curr.frames - prev.frames
         for item in prev.items:
@@ -116,13 +116,13 @@ class ZeldaStateChange:
     def _detect_future_damage(self, env, prev, curr, discounts):
         # check if beams, bombs, arrows, etc are active and if they will hit in the future,
         # as we need to count them as rewards/results of this action so the model trains properly
-        self._handle_future_effects(env, prev, curr, ZeldaAnimationId.BEAMS, discounts)
-        self._handle_future_effects(env, prev, curr, ZeldaAnimationId.BOMB_1, discounts)
-        self._handle_future_effects(env, prev, curr, ZeldaAnimationId.BOMB_2, discounts)
-        self._handle_future_effects(env, prev, curr, ZeldaAnimationId.ARROW, discounts)
-        self._handle_future_effects(env, prev, curr, ZeldaAnimationId.BOOMERANG, discounts)
+        self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.BEAMS, discounts)
+        self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.BOMB_1, discounts)
+        self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.BOMB_2, discounts)
+        self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.ARROW, discounts)
+        self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.BOOMERANG, discounts)
 
-    def _handle_future_effects(self, env, prev : ZeldaGameState, curr : ZeldaGameState,  equipment, discounts):
+    def _handle_future_effects(self, env, prev : ZeldaGame, curr : ZeldaGame,  equipment, discounts):
         # If the current state is not active, we don't need to check for future effects
         curr_ani = curr.link.get_animation_state(equipment)
         if curr_ani != AnimationState.ACTIVE:
@@ -133,7 +133,7 @@ class ZeldaStateChange:
         if prev_ani != AnimationState.ACTIVE:
             self._predict_future_effects(env, curr, equipment, discounts)
 
-    def _predict_future_effects(self, env, start : ZeldaGameState, equipment, discounts):
+    def _predict_future_effects(self, env, start : ZeldaGame, equipment, discounts):
         unwrapped = env.unwrapped
         savestate = unwrapped.em.get_state()
         data = unwrapped.data
@@ -151,14 +151,14 @@ class ZeldaStateChange:
             if terminated or truncated:
                 break
 
-            curr = ZeldaGameState(curr, env, info, curr.frames + 1)
+            curr = ZeldaGame(curr, env, info, curr.frames + 1)
 
         # Check if we hit any enemies and store those into our damage counters and the discount of future hits
         self._compare_health_status(start, curr, self.__dict__)
         self._compare_health_status(start, curr, discounts)
 
         # If we fired a boomerang or arrow, check if we hit any items as they will be picked up
-        if equipment in [ZeldaAnimationId.BOOMERANG, ZeldaAnimationId.ARROW]:
+        if equipment in [ZeldaAnimationKind.BOOMERANG, ZeldaAnimationKind.ARROW]:
             self._compare_items(start, curr, self.__dict__)
             self._compare_items(start, curr, discounts)
 
@@ -170,15 +170,15 @@ class ZeldaStateChange:
                      'bait_or_boomerang_animation', 'arrow_magic_animation']
 
         match equipment:
-            case ZeldaAnimationId.BEAMS:
+            case ZeldaAnimationKind.BEAMS:
                 all_names.remove('beam_animation')
-            case ZeldaAnimationId.BOMB_1:
+            case ZeldaAnimationKind.BOMB_1:
                 all_names.remove('bomb_or_flame_animation')
-            case ZeldaAnimationId.BOMB_2:
+            case ZeldaAnimationKind.BOMB_2:
                 all_names.remove('bomb_or_flame_animation2')
-            case ZeldaAnimationId.ARROW:
+            case ZeldaAnimationKind.ARROW:
                 all_names.remove('arrow_magic_animation')
-            case ZeldaAnimationId.BOOMERANG:
+            case ZeldaAnimationKind.BOOMERANG:
                 all_names.remove('bait_or_boomerang_animation')
             case _:
                 raise ValueError("Invalid equipment")

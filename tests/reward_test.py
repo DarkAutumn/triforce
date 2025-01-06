@@ -3,7 +3,7 @@
 import os
 import sys
 
-from triforce.zelda_game_state import ZeldaGameState
+from triforce.zelda_game import ZeldaGame
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
@@ -45,7 +45,7 @@ def test_close_distance():
     assert 'rewards' in info
     assert 'reward-move-closer' not in info['rewards']
 
-def get_state(info) -> ZeldaGameState:
+def get_state(info) -> ZeldaGame:
     return info['state']
 
 def test_position():

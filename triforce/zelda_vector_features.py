@@ -1,7 +1,7 @@
 import gymnasium as gym
 import numpy as np
 
-from triforce.zelda_game_state import ZeldaGameState
+from triforce.zelda_game import ZeldaGame
 
 NUM_DIRECTION_VECTORS = 5
 
@@ -37,7 +37,7 @@ class ZeldaVectorFeatures(gym.Wrapper):
 
         return {"image": observation, "vectors": vectors, "features": features}
 
-    def _get_enemy_vectors(self, objective, state : ZeldaGameState):
+    def _get_enemy_vectors(self, objective, state : ZeldaGame):
         result = [np.zeros(2, dtype=np.float32)] * NUM_DIRECTION_VECTORS
 
         if objective is not None:
@@ -53,7 +53,7 @@ class ZeldaVectorFeatures(gym.Wrapper):
     def _get_first_vector(self, entries):
         return entries[0].vector if entries else np.zeros(2, dtype=np.float32)
 
-    def _get_features(self, state : ZeldaGameState):
+    def _get_features(self, state : ZeldaGame):
         result = np.zeros(2, dtype=np.float32)
 
         result[0] = 1.0 if state.active_enemies else 0.0

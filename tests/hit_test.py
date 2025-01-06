@@ -4,8 +4,8 @@ import os
 import sys
 
 from triforce.game_state_change import ZeldaStateChange
-from triforce.zelda_enums import AnimationState, ArrowKind, SelectedEquipment, SwordKind, BoomerangKind, ITEM_MAP, ZeldaAnimationId, ZeldaItemId
-from triforce.zelda_game_state import ZeldaGameState
+from triforce.zelda_enums import AnimationState, ArrowKind, SelectedEquipmentKind, SwordKind, BoomerangKind, ITEM_MAP, ZeldaAnimationKind, ZeldaItemKind
+from triforce.zelda_game import ZeldaGame
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
@@ -151,7 +151,7 @@ def _test_arrow_item_pickup(silver):
     assert not truncated
 
     state_change : ZeldaStateChange = info['state_change']
-    assert state_change.items_gained == [ZeldaItemId.BlueRupee]
+    assert state_change.items_gained == [ZeldaItemKind.BlueRupee]
 
 def test_arrow_injury():
     _test_arrow(False)
@@ -196,7 +196,7 @@ def _test_boomerang(magic):
     state_change : ZeldaStateChange = info['state_change']
     assert state_change.hits == 0
     assert state_change.damage_dealt == 0
-    assert state_change.items_gained == [ZeldaItemId.BlueRupee]
+    assert state_change.items_gained == [ZeldaItemKind.BlueRupee]
 
 def test_boomerang_stun():
     replay = ZeldaActionReplay("1_44e.state",)
@@ -256,12 +256,12 @@ def _line_up_item():
     assert info['action'] == ActionType.ITEM
 
     info = assert_no_hit(replay, "rrrrrrrrdd")
-    while info['state'].link.get_animation_state(ZeldaAnimationId.BOMB_1) != AnimationState.INACTIVE:
+    while info['state'].link.get_animation_state(ZeldaAnimationKind.BOMB_1) != AnimationState.INACTIVE:
         info = assert_no_hit(replay, "rl")
 
     return replay, info
 
-def _select_sword(gamestate : ZeldaGameState, beams=False):
+def _select_sword(gamestate : ZeldaGame, beams=False):
     link = gamestate.link
     link.sword = SwordKind.WOOD
 
@@ -272,19 +272,19 @@ def _select_sword(gamestate : ZeldaGameState, beams=False):
         link.health = link.max_health - 0.5
         assert not link.has_beams
 
-def _select_boomerang(gamestate : ZeldaGameState, magic):
+def _select_boomerang(gamestate : ZeldaGame, magic):
     link = gamestate.link
     link.boomerang = BoomerangKind.MAGIC if magic else BoomerangKind.NORMAL
-    link.selected_equipment = SelectedEquipment.BOOMERANG
+    link.selected_equipment = SelectedEquipmentKind.BOOMERANG
 
-def _select_bombs(gamestate : ZeldaGameState):
+def _select_bombs(gamestate : ZeldaGame):
     link = gamestate.link
     link.bombs = 8
-    link.selected_equipment = SelectedEquipment.BOMBS
+    link.selected_equipment = SelectedEquipmentKind.BOMBS
 
-def _select_arrows(gamestate : ZeldaGameState, silver):
+def _select_arrows(gamestate : ZeldaGame, silver):
     link = gamestate.link
     link.arrows = ArrowKind.SILVER if silver else ArrowKind.WOOD
     link.bow = 1
     link.rupees = 100
-    link.selected_equipment = SelectedEquipment.ARROWS
+    link.selected_equipment = SelectedEquipmentKind.ARROWS

@@ -3,8 +3,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from .zelda_enums import AnimationState, ArrowKind, BoomerangKind, CandleKind, Direction, PotionKind, RingKind, \
-    SelectedEquipment, SwordKind, ZeldaAnimationId, ZeldaSounds
-from .zelda_objects import ZeldaObjectBase
+    SelectedEquipmentKind, SwordKind, ZeldaAnimationKind, SoundKind
+from .zelda_objects import ZeldaObject
 
 ANIMATION_BEAMS_ACTIVE = 16
 ANIMATION_BEAMS_HIT = 17
@@ -22,7 +22,7 @@ ANIMATION_BOOMERANG_MAX = 57
 # pylint: disable=too-many-public-methods
 
 @dataclass
-class Link(ZeldaObjectBase):
+class Link(ZeldaObject):
     """Structured data for Link's status."""
 
     direction : Direction
@@ -100,7 +100,7 @@ class Link(ZeldaObjectBase):
     @property
     def are_beams_available(self) -> bool:
         """Returns True if link can immediately fire beams (e.g. has_beams and no sword is currently firing)."""
-        return self.get_animation_state(ZeldaAnimationId.BEAMS) == AnimationState.INACTIVE and self.has_beams
+        return self.get_animation_state(ZeldaAnimationKind.BEAMS) == AnimationState.INACTIVE and self.has_beams
 
     @property
     def is_sword_frozen(self) -> bool:
@@ -118,10 +118,10 @@ class Link(ZeldaObjectBase):
         return self.is_sword_frozen or self.clock
 
     # Animation States
-    def get_animation_state(self, animation_id: ZeldaAnimationId) -> AnimationState:
+    def get_animation_state(self, animation_id: ZeldaAnimationKind) -> AnimationState:
         """Returns the state of the given animation."""
         match animation_id:
-            case ZeldaAnimationId.BEAMS:
+            case ZeldaAnimationKind.BEAMS:
                 beams = self.game.beam_animation
 
                 if beams == ANIMATION_BEAMS_ACTIVE:
@@ -132,13 +132,13 @@ class Link(ZeldaObjectBase):
 
                 return AnimationState.INACTIVE
 
-            case ZeldaAnimationId.BOMB_1:
+            case ZeldaAnimationKind.BOMB_1:
                 return self._get_bomb_state(self.game.bomb_or_flame_animation)
 
-            case ZeldaAnimationId.BOMB_2:
+            case ZeldaAnimationKind.BOMB_2:
                 return self._get_bomb_state(self.game.bomb_or_flame_animation2)
 
-            case ZeldaAnimationId.ARROW:
+            case ZeldaAnimationKind.ARROW:
                 arrows = self.game.arrow_magic_animation
 
                 if ANIMATION_ARROW_ACTIVE <= arrows <= ANIMATION_ARROW_END:
@@ -146,7 +146,7 @@ class Link(ZeldaObjectBase):
 
                 return AnimationState.INACTIVE
 
-            case ZeldaAnimationId.BOOMERANG:
+            case ZeldaAnimationKind.BOOMERANG:
                 boomerang = self.game.bait_or_boomerang_animation
 
                 if ANIMATION_BOOMERANG_MIN <= boomerang <= ANIMATION_BOOMERANG_MAX:
@@ -171,7 +171,7 @@ class Link(ZeldaObjectBase):
     def is_blocking(self) -> bool:
         """Whether or not link is currently blocking a projectile (this returns true for as long as the block sound)
         is playing."""
-        return self.game.is_sound_playing(ZeldaSounds.ArrowDeflected)
+        return self.game.is_sound_playing(SoundKind.ArrowDeflected)
 
     # Rupees, Bombs, Shield
     @property
@@ -292,12 +292,12 @@ class Link(ZeldaObjectBase):
 
     # Weapons and Equipment
     @property
-    def selected_equipment(self) -> SelectedEquipment:
+    def selected_equipment(self) -> SelectedEquipmentKind:
         """The currently selected equipment."""
-        return SelectedEquipment(self.game.selected_item)
+        return SelectedEquipmentKind(self.game.selected_item)
 
     @selected_equipment.setter
-    def selected_equipment(self, value: SelectedEquipment) -> None:
+    def selected_equipment(self, value: SelectedEquipmentKind) -> None:
         """Set the currently selected equipment."""
         self.game.selected_item = value.value
 

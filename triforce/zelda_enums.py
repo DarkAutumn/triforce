@@ -4,7 +4,7 @@ from enum import Enum
 
 import numpy as np
 
-class ZeldaSounds(Enum):
+class SoundKind(Enum):
     """Sound codes for the game."""
     # pylint: disable=invalid-name
     ArrowDeflected : int = 0x01
@@ -55,7 +55,7 @@ class PotionKind(Enum):
     RED = 1
     BLUE = 2
 
-class SelectedEquipment(Enum):
+class SelectedEquipmentKind(Enum):
     """The currently selected equipment (B button)."""
     NONE = -1
     BOOMERANG = 0
@@ -73,7 +73,7 @@ class AnimationState(Enum):
     ACTIVE = 1
     HIT = 2
 
-class ZeldaAnimationId(Enum):
+class ZeldaAnimationKind(Enum):
     """Animation states"""
     BEAMS = 0
     BOMB_1 = 1
@@ -85,7 +85,7 @@ class ZeldaAnimationId(Enum):
     BOOMERANG = 7
     BAIT = 8
 
-class ZeldaEnemyId(Enum):
+class ZeldaEnemyKind(Enum):
     """Enemy codes for the game."""
     # pylint: disable=invalid-name
     BlueMoblin : int = 0x03
@@ -103,7 +103,7 @@ class ZeldaEnemyId(Enum):
     Stalfos : int = 0x2a
     Item : int = 0x60
 
-class ZeldaItemId(Enum):
+class ZeldaItemKind(Enum):
     """Item codes for the game."""
     # pylint: disable=invalid-name
     Bombs : int = 0x00
@@ -149,5 +149,5 @@ class Direction(Enum):
             case _:
                 raise ValueError(f"Unhandled Direction: {self}")
 
-ID_MAP = {x.value: x for x in ZeldaEnemyId}
-ITEM_MAP = {x.value: x for x in ZeldaItemId}
+ID_MAP = {x.value: x for x in ZeldaEnemyKind}
+ITEM_MAP = {x.value: x for x in ZeldaItemKind}

@@ -4,7 +4,7 @@ from typing import List
 
 from triforce.link import Link
 from triforce.zelda_enums import SwordKind
-from triforce.zelda_game_state import ZeldaGameState
+from triforce.zelda_game import ZeldaGame
 from .models_and_scenarios import ZeldaModelDefinition, ZELDA_MODELS
 
 class ModelSelector:
@@ -13,12 +13,12 @@ class ModelSelector:
         self.models_by_priority = sorted((model for model in ZELDA_MODELS.values()),
                                          key=lambda x: x.priority, reverse=True)
 
-    def find_acceptable_models(self, state : ZeldaGameState) -> List[ZeldaModelDefinition]:
+    def find_acceptable_models(self, state : ZeldaGame) -> List[ZeldaModelDefinition]:
         """Selects a model based on the current game state."""
         acceptable_models = [model for model in self.models_by_priority if self.__is_model_acceptable(model, state)]
         return acceptable_models or self.models_by_priority
 
-    def __is_model_acceptable(self, model : ZeldaModelDefinition, state : ZeldaGameState) -> bool:
+    def __is_model_acceptable(self, model : ZeldaModelDefinition, state : ZeldaGame) -> bool:
         matches_level = state.level in model.levels
         matches_room = model.rooms is None or state.location in model.rooms
         matches_enemy_requirements = not model.requires_enemies or state.enemies

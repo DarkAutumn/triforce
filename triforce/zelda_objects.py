@@ -4,7 +4,7 @@ from typing import Tuple
 
 import numpy as np
 
-from .zelda_enums import Direction, ZeldaEnemyId, ZeldaItemId
+from .zelda_enums import Direction, ZeldaEnemyKind, ZeldaItemKind
 from .tile_states import position_to_tile_index
 
 ENEMY_STUNNED = 0x40
@@ -14,7 +14,7 @@ class ZeldaProjectileId(Enum):
     """Projectile codes for the game."""
 
 @dataclass
-class ZeldaObjectBase:
+class ZeldaObject:
     """
     Structured data for objects on screen.
 
@@ -24,9 +24,9 @@ class ZeldaObjectBase:
         id: The id of the object.
         position: The position of the object.
     """
-    game : 'ZeldaGameState'
+    game : 'ZeldaGame'
     index : int
-    id : ZeldaItemId | ZeldaEnemyId | ZeldaProjectileId | int
+    id : ZeldaItemKind | ZeldaEnemyKind | ZeldaProjectileId | int
     position : Tuple[int, int]
 
     @property
@@ -68,7 +68,7 @@ class ZeldaObjectBase:
         return vector
 
 @dataclass
-class ZeldaEnemy(ZeldaObjectBase):
+class Enemy(ZeldaObject):
     """Structured data for an enemy."""
     direction : Direction
     health : int
@@ -97,11 +97,11 @@ class ZeldaEnemy(ZeldaObjectBase):
         status = self.status & 0xff
 
         # status == 3 means the lever/zora is up
-        if self.id in (ZeldaEnemyId.RedLever, ZeldaEnemyId.BlueLever, ZeldaEnemyId.Zora):
+        if self.id in (ZeldaEnemyKind.RedLever, ZeldaEnemyKind.BlueLever, ZeldaEnemyKind.Zora):
             return status & 0xff == 3
 
         # status == 1 means the wallmaster is active
-        if self.id == ZeldaEnemyId.WallMaster:
+        if self.id == ZeldaEnemyKind.WallMaster:
             return status == 1
 
         # spawn_state of 0 means the object is active
@@ -118,10 +118,10 @@ class ZeldaEnemy(ZeldaObjectBase):
         return not self.is_active or self.status & ENEMY_INVULNERABLE == ENEMY_INVULNERABLE
 
 @dataclass
-class ZeldaProjectile(ZeldaObjectBase):
+class Projectile(ZeldaObject):
     """Structured data for a projectile."""
 
 @dataclass
-class ZeldaItem(ZeldaObjectBase):
+class Item(ZeldaObject):
     """Structured data for an item."""
     timer : int

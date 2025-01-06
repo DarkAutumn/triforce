@@ -1,10 +1,10 @@
 import gymnasium as gym
 
 from .link import Link
-from .zelda_enums import ZeldaEnemyId
+from .zelda_enums import ZeldaEnemyKind
 from .zelda_game_data import zelda_game_data
 from .tile_states import TileState, is_room_loaded, tiles_to_weights
-from .zelda_game_state import ZeldaGameState
+from .zelda_game import ZeldaGame
 
 class ZeldaRoomMapWrapper(gym.Wrapper):
     """Generates a tile map for the current room."""
@@ -39,7 +39,7 @@ class ZeldaRoomMapWrapper(gym.Wrapper):
         result = self._get_tile_maps(ram, prev, curr)
         info['tiles'], info['tile_states'], info['link_warning_tiles'], info['link_danger_tiles'] = result
 
-    def _get_tile_maps(self, ram, prev : ZeldaGameState, curr : ZeldaGameState):
+    def _get_tile_maps(self, ram, prev : ZeldaGame, curr : ZeldaGame):
         tiles = self._get_tiles(ram, prev, curr)
         tile_states = ZeldaRoomMapWrapper._get_tile_states(tiles, curr.enemies, curr.projectiles)
         # calculate how many squares link overlaps with dangerous tiles
@@ -51,7 +51,7 @@ class ZeldaRoomMapWrapper(gym.Wrapper):
 
         return tiles, tile_states, warning_tiles, danger_tiles
 
-    def _get_tiles(self, ram, prev : ZeldaGameState, curr : ZeldaGameState):
+    def _get_tiles(self, ram, prev : ZeldaGame, curr : ZeldaGame):
         index = curr.full_location
 
         # check if we spent a key, if so the tile layout of the room changed
@@ -96,7 +96,7 @@ class ZeldaRoomMapWrapper(gym.Wrapper):
             if obj.is_active:
                 ZeldaRoomMapWrapper._add_enemy_or_projectile(tiles, obj.tile_coordinates)
 
-            if obj.id == ZeldaEnemyId.WallMaster and not saw_wallmaster:
+            if obj.id == ZeldaEnemyKind.WallMaster and not saw_wallmaster:
                 saw_wallmaster = True
                 ZeldaRoomMapWrapper._add_wallmaster_tiles(tiles)
 

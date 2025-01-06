@@ -9,7 +9,7 @@ from random import randint
 import gymnasium as gym
 
 from .game_state_change import ZeldaStateChange
-from .zelda_game_state import ZeldaGameState
+from .zelda_game import ZeldaGame
 from .zelda_cooldown_handler import ZeldaCooldownHandler, ActionTranslator
 
 class ZeldaGameWrapper(gym.Wrapper):
@@ -47,7 +47,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._total_frames = frames_skipped + 1
 
         # Initial game state
-        state = ZeldaGameState(None, self, info, self._total_frames)
+        state = ZeldaGame(None, self, info, self._total_frames)
         self.states.append(state)
 
         # Update info dictionary
@@ -66,7 +66,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._total_frames += frames
 
         # Save the current state
-        curr = ZeldaGameState(prev, self, info, self._total_frames)
+        curr = ZeldaGame(prev, self, info, self._total_frames)
         self.states.append(curr)
 
         # Update info dictionary

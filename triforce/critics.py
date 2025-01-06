@@ -8,7 +8,7 @@ from .objective_selector import ObjectiveKind
 from .zelda_cooldown_handler import ActionType
 from .tile_states import TileState
 
-from .zelda_enums import Direction, SelectedEquipment, SwordKind, ZeldaAnimationId, AnimationState
+from .zelda_enums import Direction, SelectedEquipmentKind, SwordKind, ZeldaAnimationKind, AnimationState
 from .game_state_change import ZeldaStateChange
 
 REWARD_MINIMUM = 0.01
@@ -240,7 +240,7 @@ class GameplayCritic(ZeldaCritic):
 
         prev, curr = state_change.previous, state_change.current
         if state_change.hits and prev.link.are_beams_available \
-                             and curr.link.get_animation_state(ZeldaAnimationId.BEAMS) != AnimationState.INACTIVE:
+                             and curr.link.get_animation_state(ZeldaAnimationKind.BEAMS) != AnimationState.INACTIVE:
             rewards['reward-beam-hit'] = self.injure_kill_reward
 
         elif state_change.hits:
@@ -276,9 +276,9 @@ class GameplayCritic(ZeldaCritic):
         curr = state_change.current
         if curr.action == ActionType.ITEM:
             selected = curr.link.selected_equipment
-            if selected == SelectedEquipment.NONE:
+            if selected == SelectedEquipmentKind.NONE:
                 rewards['used-null-item'] = self.used_null_item_penalty
-            elif selected == SelectedEquipment.BOMBS:
+            elif selected == SelectedEquipmentKind.BOMBS:
                 if state_change.hits == 0:
                     rewards['penalty-bomb-miss'] = self.bomb_miss_penalty
                 else:
@@ -526,7 +526,7 @@ class Dungeon1BombCritic(Dungeon1Critic):
 
     def get_score(self, state_change: ZeldaStateChange):
         state = state_change.current
-        if state.action == ActionType.ITEM and state.link.selected_equipment == SelectedEquipment.BOMBS:
+        if state.action == ActionType.ITEM and state.link.selected_equipment == SelectedEquipmentKind.BOMBS:
             hits = state_change.damage_dealt
             if hits:
                 self.score += hits

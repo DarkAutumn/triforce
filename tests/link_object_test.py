@@ -2,12 +2,12 @@
 
 from tests.hit_test import assert_no_hit
 from tests.utilities import ZeldaActionReplay
-from triforce.zelda_game_state import ZeldaGameState
+from triforce.zelda_game import ZeldaGame
 
 def _initialize_gamestate():
     replay = ZeldaActionReplay("1_44e.state")
     info = assert_no_hit(replay, 'lll')
-    gamestate : ZeldaGameState = info['state']
+    gamestate : ZeldaGame = info['state']
     return gamestate
 
 

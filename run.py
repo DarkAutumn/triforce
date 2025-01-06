@@ -20,7 +20,7 @@ from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulat
                      TRAINING_SCENARIOS
 from triforce.game_state_change import ZeldaStateChange
 from triforce.tile_states import TileState
-from triforce.zelda_game_state import ZeldaGameState
+from triforce.zelda_game import ZeldaGame
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
 class Recording:
@@ -571,7 +571,7 @@ class DisplayWindow:
 
         return result
 
-    def _overlay_grid_and_text(self, surface, kind, offset, text_color, scale, state : ZeldaGameState):
+    def _overlay_grid_and_text(self, surface, kind, offset, text_color, scale, state : ZeldaGame):
         match kind:
             case 0:
                 # no overlay, just return
@@ -630,7 +630,7 @@ class DisplayWindow:
                 # Draw the text
                 surface.blit(text_surface, text_rect)
 
-    def _find_special_tiles(self, state : ZeldaGameState):
+    def _find_special_tiles(self, state : ZeldaGame):
         tiles = []
         tile_states = state.tile_states
         for y in range(tile_states.shape[0]):
