@@ -4,14 +4,13 @@ import os
 import sys
 
 from triforce.game_state_change import ZeldaStateChange
-from triforce.zelda_enums import ArrowKind, SelectedEquipment, SwordKind, BoomerangKind, ITEM_MAP
+from triforce.zelda_enums import AnimationState, ArrowKind, SelectedEquipment, SwordKind, BoomerangKind, ITEM_MAP, ZeldaAnimationId, ZeldaItemId
 from triforce.zelda_game_state import ZeldaGameState
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from triforce.zelda_cooldown_handler import ActionType
 from utilities import ZeldaActionReplay
-from triforce.zelda_game import ZeldaItemId, get_bomb_state, AnimationState
 
 def assert_no_hit( env, command):
     for _, _, terminated, truncated, info in run(env, command):
@@ -257,8 +256,7 @@ def _line_up_item():
     assert info['action'] == ActionType.ITEM
 
     info = assert_no_hit(replay, "rrrrrrrrdd")
-
-    while get_bomb_state(info, 0) != AnimationState.INACTIVE:
+    while info['state'].link.get_animation_state(ZeldaAnimationId.BOMB_1) != AnimationState.INACTIVE:
         info = assert_no_hit(replay, "rl")
 
     return replay, info

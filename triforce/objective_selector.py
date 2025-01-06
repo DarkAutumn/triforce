@@ -4,7 +4,7 @@ import numpy as np
 
 from .zelda_game_state import ZeldaGameState
 from .zelda_enums import Direction, SwordKind, ZeldaItemId
-from .zelda_game import position_to_tile_index, tile_index_to_position
+from .tile_states import position_to_tile_index, tile_index_to_position
 from .astar import a_star
 
 class ObjectiveKind(Enum):

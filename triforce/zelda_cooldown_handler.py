@@ -8,7 +8,7 @@ from typing import Optional
 import numpy as np
 
 from .zelda_enums import Direction
-from .zelda_game import position_to_tile_index
+from .tile_states import position_to_tile_index
 
 # movement related constants
 WS_ADJUSTMENT_FRAMES = 4

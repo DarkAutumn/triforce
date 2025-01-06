@@ -1,7 +1,7 @@
 # pylint: disable=all
 
 from utilities import ZeldaActionReplay
-from triforce.zelda_game import position_to_tile_index, tile_index_to_position
+from triforce.tile_states import position_to_tile_index, tile_index_to_position
 
 def test_tile_load():
     env = ZeldaActionReplay("1_73s.state")

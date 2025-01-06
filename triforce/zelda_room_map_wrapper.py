@@ -1,8 +1,7 @@
 import gymnasium as gym
 
-from triforce.link import Link
-from triforce.zelda_enums import ZeldaEnemyId
-
+from .link import Link
+from .zelda_enums import ZeldaEnemyId
 from .zelda_game_data import zelda_game_data
 from .tile_states import TileState, is_room_loaded, tiles_to_weights
 from .zelda_game_state import ZeldaGameState
