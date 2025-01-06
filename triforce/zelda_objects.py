@@ -76,6 +76,10 @@ class ZeldaEnemy(ZeldaObjectBase):
     spawn_state : int
     status : int
 
+    def mark_invulnerable(self):
+        """Marks the enemy as invulnerable."""
+        self.status |= ENEMY_INVULNERABLE
+
     @property
     def is_dying(self) -> bool:
         """Returns True if the enemy has been dealt enough damage to die, but hasn't yet been removed

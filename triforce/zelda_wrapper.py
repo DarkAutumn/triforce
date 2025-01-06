@@ -68,7 +68,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
     def _update_info(self, info):
         info['total_frames'] = self._total_frames
-        info['state'] = ZeldaGameState(self, info, self._total_frames)
+        info['state'] = ZeldaGameState(None, self, info, self._total_frames) # todo
 
         ram = self.env.unwrapped.get_ram()
         objects = ZeldaObjectData(ram)
@@ -103,7 +103,6 @@ class ZeldaGameWrapper(gym.Wrapper):
         # add information about the room location
         location = self._get_full_location(info)
         new_location = self._location != location
-        info['new_location'] = new_location
 
         if new_location:
             self._location = location

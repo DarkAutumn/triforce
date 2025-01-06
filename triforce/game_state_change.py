@@ -151,7 +151,7 @@ class ZeldaStateChange:
             if terminated or truncated:
                 break
 
-            curr = ZeldaGameState(env, info, curr.frames + 1)
+            curr = ZeldaGameState(curr, env, info, curr.frames + 1)
 
         # Check if we hit any enemies and store those into our damage counters and the discount of future hits
         self._compare_health_status(start, curr, self.__dict__)

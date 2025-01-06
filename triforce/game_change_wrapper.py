@@ -21,7 +21,7 @@ class ZeldaStateChangeWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
         self.states.clear()
-        state = ZeldaGameState(self, info, info['total_frames'])
+        state = ZeldaGameState(None, self, info, info['total_frames'])
         self.states.append(state)
 
         self._discounts = {}
@@ -33,7 +33,7 @@ class ZeldaStateChangeWrapper(gym.Wrapper):
 
         # Save the current state
         prev = self.states[-1] if self.states else None
-        curr = ZeldaGameState(self, info, info['total_frames'])
+        curr = ZeldaGameState(prev, self, info, info['total_frames'])
         self.states.append(curr)
 
         info['state_change'] = ZeldaStateChange(self, prev, curr, self._discounts)

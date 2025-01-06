@@ -7,7 +7,7 @@ import gymnasium as gym
 
 from .zelda_objects import ZeldaEnemy, ZeldaItem, ZeldaProjectile
 from .link import Link
-from .zelda_enums import ITEM_MAP, ZeldaEnemyId, Direction, ZeldaSounds
+from .zelda_enums import ITEM_MAP, SwordKind, ZeldaEnemyId, Direction, ZeldaSounds
 from .zelda_game_data import zelda_game_data
 
 MODE_REVEAL = 3
@@ -49,7 +49,7 @@ class ZeldaGameState:
     enemies : List[ZeldaEnemy]
     projectiles : List[ZeldaProjectile]
 
-    def __init__(self, env, info, frame_count):
+    def __init__(self, prev : 'ZeldaGameState', env, info, frame_count):
         # Using __dict__ to avoid the __setattr__ method.
         self.__dict__['_env'] = env
         self.__dict__['_info'] = info
@@ -76,6 +76,23 @@ class ZeldaGameState:
 
             elif self._is_projectile(obj_id):
                 self.projectiles.append(self._build_projectile(tables, index, obj_id))
+
+        self._update_enemies(prev)
+
+    def _update_enemies(self, prev : 'ZeldaGameState'):
+        if prev is None:
+            return
+
+        for enemy in self.enemies:
+            match enemy.id:
+                case ZeldaEnemyId.PeaHat:
+                    prev = self._last_enemies[enemy.index]
+                    if prev is not None and (enemy.position != prev.position or enemy.health < prev.health):
+                        enemy.mark_invulnerable()
+
+                case ZeldaEnemyId.Zora:
+                    if self.link.sword in (SwordKind.NONE, SwordKind.WOOD):
+                        enemy.mark_invulnerable()
 
     def get(self, name, default):
         """Gets the property from the info dict with a default."""
