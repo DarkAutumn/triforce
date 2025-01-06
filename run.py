@@ -19,7 +19,7 @@ import tqdm
 from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
                      TRAINING_SCENARIOS
 from triforce.game_state_change import ZeldaStateChange
-from triforce.zelda_game import TileState, is_in_cave
+from triforce.zelda_game import TileState
 from triforce.zelda_game_state import ZeldaGameState
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
@@ -226,7 +226,7 @@ class DisplayWindow:
                 self._render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width,
                                        self.game_height)
                 if overlay:
-                    color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
+                    color = "black" if info['level'] == 0 and not state_change.current.in_cave else "white"
                     self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), color, \
                                                 self.scale, state_change.current)
 

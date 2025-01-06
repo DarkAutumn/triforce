@@ -6,9 +6,10 @@ of motion over time.
 """
 
 from collections import deque
-import pickle
 import gymnasium as gym
 import numpy as np
+
+from .zelda_game_state import Link
 from .model_parameters import VIEWPORT_PIXELS, GAMEPLAY_START_Y
 
 class FrameCaptureWrapper(gym.Wrapper):
@@ -101,22 +102,19 @@ class ZeldaObservationWrapper(gym.Wrapper):
             return result
 
         frame = self.frames[-1]
-        frame = self.trim_normalize_grayscale(info, frame)
+        frame = self.trim_normalize_grayscale(info['state'].link, frame)
         return frame
 
-    def trim_normalize_grayscale(self, info, frame):
+    def trim_normalize_grayscale(self, link : Link, frame):
         """Trim the HUD, normalize the frame, and convert it to grayscale."""
         if self.trim:
             frame = frame[self.trim:, :, :]
 
         if self.viewport_size:
-            if 'link_pos' in info:
-                x, y = info.get('link_pos')
-                y -= self.trim
-            else:
-                x, y = 0, 0
+            x, y = link.position
+            y -= self.trim
 
-            frame = self.extract_viewport(info, frame, x, y)
+            frame = self.extract_viewport(frame, x, y)
 
         if self.grayscale:
             frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
@@ -124,7 +122,7 @@ class ZeldaObservationWrapper(gym.Wrapper):
 
         return frame
 
-    def extract_viewport(self, info, frame, x, y):
+    def extract_viewport(self, frame, x, y):
         """Extract the viewport around link.  If link is offscreen, pad the frame with the edge color."""
         half_vp = self.viewport_size // 2
         padded_frame = np.pad(frame, ((half_vp, half_vp), (half_vp, half_vp), (0, 0)), mode='edge')
@@ -134,11 +132,11 @@ class ZeldaObservationWrapper(gym.Wrapper):
 
         # link can sometimes be offscreen due to overscan
         if frame.shape[0] != self.viewport_size or frame.shape[1] != self.viewport_size:
-            frame = self.reshape(info, frame, x, y)
+            frame = self.reshape(frame)
 
         return frame
 
-    def reshape(self, info, frame, x, y):
+    def reshape(self, frame):
         """
         Occasionally link can be offscreen due to overscan, so we pad the frame with the edge color.
         This shouldn't really happen, so we are saving a 'reshape_error.pkl' file to debug this issue.
@@ -147,9 +145,4 @@ class ZeldaObservationWrapper(gym.Wrapper):
             return np.pad(frame, ((0, self.viewport_size - frame.shape[0]), (0, self.viewport_size - frame.shape[1]),
                                   (0, 0)), mode='edge')
         except ValueError:
-            result = { 'info': info, 'frame' : self.frames[-1], 'reshape_input': frame, 'pos' : (x, y) }
-
-            with open('reshape_error.pkl', 'wb') as f:
-                pickle.dump(result, f)
-
             return np.zeros((self.viewport_size, self.viewport_size, 3), dtype=np.uint8)

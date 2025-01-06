@@ -190,7 +190,7 @@ class ZeldaCooldownHandler:
         if start_pos is None:
             obs, _, terminated, truncated, info = self.env.step(action)
             total_frames += 1
-            start_pos = info['link_pos']
+            start_pos = info['link_x'], info['link_y']
 
         start_pos = np.array(start_pos, dtype=np.uint8)
         old_tile_index = position_to_tile_index(*start_pos)

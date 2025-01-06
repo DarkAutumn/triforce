@@ -4,6 +4,7 @@ import gymnasium as gym
 import retro
 from triforce.action_space import ZeldaActionSpace
 from triforce.game_change_wrapper import ZeldaStateChangeWrapper
+from triforce.game_state_change import ZeldaStateChange
 from triforce.objective_selector import ObjectiveSelector
 from triforce.zelda_room_map_wrapper import ZeldaRoomMapWrapper
 from triforce.zelda_wrapper import ZeldaGameWrapper
@@ -18,6 +19,7 @@ class CriticWrapper(gym.Wrapper):
         self.critics = critics or []
         self.end_conditions = end_conditions or []
         self._last = None
+        self._discounts = {}
 
     def reset(self, **kwargs):
         state = super().reset(**kwargs)
@@ -29,23 +31,25 @@ class CriticWrapper(gym.Wrapper):
             ec.clear()
 
         self._last = state[1]
+        self._discounts.clear()
         return state
 
     def step(self, act):
-        obs, rewards, terminated, truncated, state = self.env.step(act)
+        obs, rewards, terminated, truncated, info = self.env.step(act)
         reward_dict = {}
 
+        change = ZeldaStateChange(self.env, self._last['state'], info['state'], self._discounts)
         for c in self.critics:
-            c.critique_gameplay(self._last, state, reward_dict)
+            c.critique_gameplay(change, reward_dict)
 
-        end = [x.is_scenario_ended(self._last, state) for x in self.end_conditions]
+        end = [x.is_scenario_ended(info['state']) for x in self.end_conditions]
         terminated = terminated or any((x[0] for x in end))
         truncated = truncated or any((x[1] for x in end))
 
-        state['rewards'] = reward_dict
+        info['rewards'] = reward_dict
 
-        self._last = state
-        return obs, rewards, terminated, truncated, state
+        self._last = info
+        return obs, rewards, terminated, truncated, info
 
 class ZeldaActionReplay:
     def __init__(self, savestate, wrapper=None, render_mode=None):
