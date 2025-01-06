@@ -1,6 +1,8 @@
 import gymnasium as gym
 import numpy as np
 
+from triforce.zelda_game_state import ZeldaGameState
+
 NUM_DIRECTION_VECTORS = 5
 
 class ZeldaVectorFeatures(gym.Wrapper):
@@ -27,21 +29,23 @@ class ZeldaVectorFeatures(gym.Wrapper):
         return self._augment_observation(observation, info), info
 
     def _augment_observation(self, observation, info):
-        # Extract features and store them in the dictionary format
-        vectors = self._get_enemy_vectors(info)
-        features = self._get_features(info)
+        game_state = info['state']
+        objective = info.get('objective_vector', None)
+
+        vectors = self._get_enemy_vectors(objective, game_state)
+        features = self._get_features(game_state)
+
         return {"image": observation, "vectors": vectors, "features": features}
 
-    def _get_enemy_vectors(self, info):
+    def _get_enemy_vectors(self, objective, state : ZeldaGameState):
         result = [np.zeros(2, dtype=np.float32)] * NUM_DIRECTION_VECTORS
-        if info is None or 'objective_vector' not in info:
-            return result
 
-        result[0] = info['objective_vector']
-        result[1] = self._get_first_vector(info['active_enemies'])
-        result[2] = self._get_first_vector(info['projectiles'])
-        result[3] = self._get_first_vector(info['items'])
-        result[4] = self._get_first_vector(info['aligned_enemies'])
+        if objective is not None:
+            result[0] = objective
+        result[1] = self._get_first_vector(state.active_enemies)
+        result[2] = self._get_first_vector(state.projectiles)
+        result[3] = self._get_first_vector(state.items)
+        result[4] = self._get_first_vector(state.aligned_enemies)
 
         # create an np array of the vectors
         return np.array(result, dtype=np.float32)
@@ -49,12 +53,10 @@ class ZeldaVectorFeatures(gym.Wrapper):
     def _get_first_vector(self, entries):
         return entries[0].vector if entries else np.zeros(2, dtype=np.float32)
 
-    def _get_features(self, info):
+    def _get_features(self, state : ZeldaGameState):
         result = np.zeros(2, dtype=np.float32)
 
-        result[0] = 1.0 if 'active_enemies' in info and info['active_enemies'] else 0.0
-
-        if 'beams_available' in info:
-            result[1] = 1.0 if info['beams_available'] else 0.0
+        result[0] = 1.0 if state.active_enemies else 0.0
+        result[1] = 1.0 if state.link.are_beams_available else 0.0
 
         return result

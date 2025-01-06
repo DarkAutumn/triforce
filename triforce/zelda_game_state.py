@@ -173,6 +173,29 @@ class ZeldaGameState:
         return [x for x in self.enemies if x.is_active and not x.is_dying]
 
     @property
+    def aligned_enemies(self):
+        """Gets enemies that are aligned with the player."""
+        active_enemies = self.active_enemies
+        if not active_enemies:
+            return []
+
+        link_top_left = self.link.tile_coordinates[0]
+        link_ys = (link_top_left[0], link_top_left[0] + 1)
+        link_xs = (link_top_left[1], link_top_left[1] + 1)
+
+        result = []
+        for enemy in active_enemies:
+            if not enemy.is_invulnerable:
+                enemy_topleft = enemy.tile_coordinates[0]
+                if enemy_topleft[0] in link_ys or enemy_topleft[0] + 1 in link_ys:
+                    result.append(enemy)
+
+                if enemy_topleft[1] in link_xs or enemy_topleft[1] + 1 in link_xs:
+                    result.append(enemy)
+
+        return result
+
+    @property
     def game_over(self):
         """Returns True if the game is over."""
 
