@@ -5,7 +5,8 @@ from typing import List, Optional, Tuple
 
 import gymnasium as gym
 
-from .zelda_objects import Enemy, Item, Projectile
+from .zelda_objects import Item, Projectile
+from .enemy import Enemy
 from .link import Link
 from .zelda_enums import ITEM_MAP, SwordKind, ZeldaEnemyKind, Direction, SoundKind
 from .zelda_game_data import zelda_game_data
