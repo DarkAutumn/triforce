@@ -19,7 +19,7 @@ import tqdm
 from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
                      TRAINING_SCENARIOS
 from triforce.game_state_change import ZeldaStateChange
-from triforce.zelda_game import TileState
+from triforce.tile_states import TileState
 from triforce.zelda_game_state import ZeldaGameState
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 

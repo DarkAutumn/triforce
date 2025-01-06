@@ -4,7 +4,6 @@ from enum import Enum
 
 import numpy as np
 
-
 class ZeldaSounds(Enum):
     """Sound codes for the game."""
     # pylint: disable=invalid-name
@@ -149,3 +148,6 @@ class Direction(Enum):
                 return np.array([0, -1])
             case _:
                 raise ValueError(f"Unhandled Direction: {self}")
+
+ID_MAP = {x.value: x for x in ZeldaEnemyId}
+ITEM_MAP = {x.value: x for x in ZeldaItemId}

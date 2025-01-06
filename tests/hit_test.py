@@ -4,7 +4,7 @@ import os
 import sys
 
 from triforce.game_state_change import ZeldaStateChange
-from triforce.zelda_enums import ArrowKind, SelectedEquipment, SwordKind, BoomerangKind, ZeldaEnemyId
+from triforce.zelda_enums import ArrowKind, SelectedEquipment, SwordKind, BoomerangKind, ITEM_MAP
 from triforce.zelda_game_state import ZeldaGameState
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))

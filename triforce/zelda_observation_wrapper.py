@@ -9,7 +9,7 @@ from collections import deque
 import gymnasium as gym
 import numpy as np
 
-from .zelda_game_state import Link
+from .link import Link
 from .model_parameters import VIEWPORT_PIXELS, GAMEPLAY_START_Y
 
 class FrameCaptureWrapper(gym.Wrapper):

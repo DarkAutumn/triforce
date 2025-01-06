@@ -1,7 +1,11 @@
 import gymnasium as gym
 
+from triforce.link import Link
+from triforce.zelda_enums import ZeldaEnemyId
+
 from .zelda_game_data import zelda_game_data
-from .zelda_game import TileState, ZeldaEnemyId, is_in_cave, is_room_loaded, tiles_to_weights
+from .tile_states import TileState, is_room_loaded, tiles_to_weights
+from .zelda_game_state import ZeldaGameState
 
 class ZeldaRoomMapWrapper(gym.Wrapper):
     """Generates a tile map for the current room."""
@@ -10,7 +14,6 @@ class ZeldaRoomMapWrapper(gym.Wrapper):
         self._room_maps = {}
         self._rooms_with_locks = set()
         self._rooms_with_locks.add((1, 0x35, False))
-        self._last_info = None
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
@@ -18,47 +21,46 @@ class ZeldaRoomMapWrapper(gym.Wrapper):
         for room in self._rooms_with_locks:
             self._room_maps.pop(room, None)
 
-        self._create_tile_maps(info, self.env.unwrapped.get_ram(), info['link'])
-        self._last_info = info
+        self._create_tile_maps(self.env.unwrapped.get_ram(), info)
         return obs, info
 
     def step(self, action):
         obs, rewards, terminated, truncated, info = self.env.step(action)
-        self._create_tile_maps(info, self.env.unwrapped.get_ram(), info['link'])
+        self._create_tile_maps(self.env.unwrapped.get_ram(), info)
 
-        self._last_info = info
         return obs, rewards, terminated, truncated, info
 
-    def _get_full_location(self, info):
-        return (info['level'], info['location'], is_in_cave(info))
+    def _create_tile_maps(self, ram, info):
+        if 'state_change' in info:
+            change = info['state_change']
+            prev = change.previous
+            curr = change.current
+        else:
+            prev = curr = info['state']
+        result = self._get_tile_maps(ram, prev, curr)
+        info['tiles'], info['tile_states'], info['link_warning_tiles'], info['link_danger_tiles'] = result
 
-    def _create_tile_maps(self, info, ram, link):
-        tiles = self._get_tiles(info, ram)
-        tile_states = ZeldaRoomMapWrapper._get_tile_states(tiles, info['enemies'], info['projectiles'])
-        info['tiles'] = tiles
-        info['tile_states'] = tile_states
-
+    def _get_tile_maps(self, ram, prev : ZeldaGameState, curr : ZeldaGameState):
+        tiles = self._get_tiles(ram, prev, curr)
+        tile_states = ZeldaRoomMapWrapper._get_tile_states(tiles, curr.enemies, curr.projectiles)
         # calculate how many squares link overlaps with dangerous tiles
-        warning_tiles, danger_tiles = self._count_danger_tile_overlaps(link, tile_states)
-        info['link_warning_tiles'] = warning_tiles
-        info['link_danger_tiles'] = danger_tiles
+        warning_tiles, danger_tiles = self._count_danger_tile_overlaps(curr.link, tile_states)
 
         north_locked = tiles[2, 16] == 0x9a
         if north_locked:
-            self._rooms_with_locks.add(self._get_full_location(info))
+            self._rooms_with_locks.add(curr.full_location)
 
-    def _get_tiles(self, info, ram):
-        index = self._get_full_location(info)
+        return tiles, tile_states, warning_tiles, danger_tiles
+
+    def _get_tiles(self, ram, prev : ZeldaGameState, curr : ZeldaGameState):
+        index = curr.full_location
 
         # check if we spent a key, if so the tile layout of the room changed
-        if self._last_info:
-            curr_keys = info['keys']
-            last_keys = self._last_info.get('keys', curr_keys)
-            if curr_keys < last_keys:
-                self._room_maps.pop(index, None)
+        if curr.link.keys < prev.link.keys:
+            self._room_maps.pop(index, None)
 
-            if len(self._last_info['enemies']) != len(info['enemies']):
-                self._room_maps.pop(index, None)
+        if len(prev.enemies) != len(curr.enemies):
+            self._room_maps.pop(index, None)
 
         if index not in self._room_maps:
             map_offset, map_len = zelda_game_data.tables['tile_layout']
@@ -72,7 +74,7 @@ class ZeldaRoomMapWrapper(gym.Wrapper):
 
         return tiles
 
-    def _count_danger_tile_overlaps(self, link, tile_states):
+    def _count_danger_tile_overlaps(self, link : Link, tile_states):
         warning_tiles = 0
         danger_tiles = 0
         for pos in link.tile_coordinates:

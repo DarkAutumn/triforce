@@ -6,7 +6,7 @@ import numpy as np
 
 from .objective_selector import ObjectiveKind
 from .zelda_cooldown_handler import ActionType
-from .zelda_game import TileState
+from .tile_states import TileState
 
 from .zelda_enums import Direction, SelectedEquipment, SwordKind, ZeldaAnimationId, AnimationState
 from .game_state_change import ZeldaStateChange
