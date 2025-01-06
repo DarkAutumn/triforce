@@ -30,7 +30,6 @@ class ZeldaObject:
     def tile_coordinates(self):
         """The tile coordinates of the object."""
 
-        # TODO:  Swap to x, y coordinates, and a 2d array
         y, x = position_to_tile_index(*self.position)
         return [(y, x), (y, x+1),
                 (y+1, x), (y+1, x+1)]

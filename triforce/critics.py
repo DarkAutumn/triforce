@@ -353,8 +353,7 @@ class GameplayCritic(ZeldaCritic):
         # the second turn in the path.  That way we can reward any progress towards the target, even if the path
         # is the transpose of what A* picked.
         elif len(old_path) >= 2:
-            target_y, target_x = self.__find_second_turn(old_path)
-            target_tile = target_x, target_y
+            target_tile = self.__find_second_turn(old_path)
 
             old_link_tile = self.__xy_from_coord(prev_link.tile_coordinates[1])
             new_link_tile = self.__xy_from_coord(curr_link.tile_coordinates[1])

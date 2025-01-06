@@ -1,5 +1,3 @@
-
-# TODO: change to x, y
 from enum import Enum
 
 import numpy as np

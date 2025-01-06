@@ -11,16 +11,8 @@ from .link import Link
 from .zelda_enums import ITEM_MAP, SwordKind, ZeldaEnemyKind, Direction, SoundKind
 from .zelda_game_data import zelda_game_data
 
-MODE_REVEAL = 3
-MODE_SCROLL_COMPLETE = 4
-MODE_GAMEPLAY = 5
-MODE_SCROLL_START = 6
-MODE_SCROLL = 7
 MODE_GAME_OVER = 8
-MODE_UNDERGROUND = 9
-MODE_UNDERGROUND_TRANSITION = 10
 MODE_CAVE = 11
-MODE_CAVE_TRANSITION = 16
 MODE_DYING = 17
 
 class ObjectTables:

@@ -120,42 +120,40 @@ class Link(ZeldaObject):
     # Animation States
     def get_animation_state(self, animation_id: ZeldaAnimationKind) -> AnimationState:
         """Returns the state of the given animation."""
+        state = AnimationState.INACTIVE
+
         match animation_id:
             case ZeldaAnimationKind.BEAMS:
                 beams = self.game.beam_animation
+                state = AnimationState.INACTIVE
 
                 if beams == ANIMATION_BEAMS_ACTIVE:
-                    return AnimationState.ACTIVE
+                    state = AnimationState.ACTIVE
 
                 if beams == ANIMATION_BEAMS_HIT:
-                    return AnimationState.HIT
-
-                return AnimationState.INACTIVE
+                    state = AnimationState.HIT
 
             case ZeldaAnimationKind.BOMB_1:
-                return self._get_bomb_state(self.game.bomb_or_flame_animation)
+                state = self._get_bomb_state(self.game.bomb_or_flame_animation)
 
             case ZeldaAnimationKind.BOMB_2:
-                return self._get_bomb_state(self.game.bomb_or_flame_animation2)
+                state = self._get_bomb_state(self.game.bomb_or_flame_animation2)
 
             case ZeldaAnimationKind.ARROW:
                 arrows = self.game.arrow_magic_animation
-
                 if ANIMATION_ARROW_ACTIVE <= arrows <= ANIMATION_ARROW_END:
-                    return AnimationState.ACTIVE
-
-                return AnimationState.INACTIVE
+                    state = AnimationState.ACTIVE
 
             case ZeldaAnimationKind.BOOMERANG:
                 boomerang = self.game.bait_or_boomerang_animation
 
                 if ANIMATION_BOOMERANG_MIN <= boomerang <= ANIMATION_BOOMERANG_MAX:
-                    return AnimationState.ACTIVE
-
-                return AnimationState.INACTIVE
+                    state = AnimationState.ACTIVE
 
             case _:
                 raise ValueError(f"Not yet implemented: {animation_id}")
+
+        return state
 
     def _get_bomb_state(self, bombs):
         """Returns the state of the bomb animation."""
