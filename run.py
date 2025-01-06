@@ -200,7 +200,7 @@ class DisplayWindow:
                     model_name = "keyboard input"
                     next_action = None
                 else:
-                    model_name, action = self._get_action_from_model(model_requested, info, obs)
+                    model_name, action = self._get_action_from_model(model_requested, info['state'], obs)
 
                 last_info = info
                 obs, _, terminated, truncated, info = env.step(action)
@@ -334,8 +334,8 @@ class DisplayWindow:
         env.close()
         pygame.quit()
 
-    def _get_action_from_model(self, model_requested, info, obs):
-        zelda_model = self._select_model(info)
+    def _get_action_from_model(self, model_requested, state, obs):
+        zelda_model = self._select_model(state)
         ai, loaded_name = self._select_available_model(zelda_model, model_requested)
         model_name = f"{zelda_model.name} ({loaded_name}) {ai.num_timesteps:,} timesteps"
 
@@ -357,8 +357,8 @@ class DisplayWindow:
         return None
 
 
-    def _select_model(self, info) -> ZeldaModelDefinition:
-        acceptable_models = self.orchestrator.find_acceptable_models(info)
+    def _select_model(self, state) -> ZeldaModelDefinition:
+        acceptable_models = self.orchestrator.find_acceptable_models(state)
         for model in acceptable_models:
             if (models_available := self._available_models.get(model.name)) is None:
                 models_available = model.find_available_models(self.model_path)
