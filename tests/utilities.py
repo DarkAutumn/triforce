@@ -3,7 +3,6 @@
 import gymnasium as gym
 import retro
 from triforce.action_space import ZeldaActionSpace
-from triforce.game_change_wrapper import ZeldaStateChangeWrapper
 from triforce.game_state_change import ZeldaStateChange
 from triforce.objective_selector import ObjectiveSelector
 from triforce.zelda_room_map_wrapper import ZeldaRoomMapWrapper
@@ -56,7 +55,6 @@ class ZeldaActionReplay:
         env = retro.make(game='Zelda-NES', state=savestate, inttype=retro.data.Integrations.CUSTOM_ONLY, render_mode=render_mode)
         self.data = env.data
         env = ZeldaGameWrapper(env, deterministic=True)
-        env = ZeldaStateChangeWrapper(env)
         env = ZeldaRoomMapWrapper(env)
         env = ObjectiveSelector(env)
         env = ZeldaActionSpace(env, 'all')
