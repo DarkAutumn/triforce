@@ -2,7 +2,6 @@
 
 import retro
 
-from .game_change_wrapper import ZeldaStateChangeWrapper
 from .zelda_room_map_wrapper import ZeldaRoomMapWrapper
 from .objective_selector import ObjectiveSelector
 from .zelda_wrapper import ZeldaGameWrapper
@@ -34,8 +33,6 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
     # Wrap the game to produce new info about game state and to hold the button down after the action is
     # taken to achieve the desired number of actions per second.
     env = ZeldaGameWrapper(env)
-
-    env = ZeldaStateChangeWrapper(env)
 
     # Provide a tile map of the room.
     env = ZeldaRoomMapWrapper(env)
