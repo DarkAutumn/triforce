@@ -1,7 +1,7 @@
 """All end conditions for training."""
 
-from triforce.game_state_change import ZeldaStateChange
-from triforce.zelda_enums import SwordKind
+from .game_state_change import ZeldaStateChange
+from .zelda_enums import SwordKind
 
 class ZeldaEndCondition:
     """

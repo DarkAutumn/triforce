@@ -1,7 +1,7 @@
 import gymnasium as gym
 import numpy as np
 
-from triforce.zelda_game import ZeldaGame
+from .zelda_game import ZeldaGame
 
 NUM_DIRECTION_VECTORS = 5
 

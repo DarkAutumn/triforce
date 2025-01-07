@@ -1,8 +1,8 @@
 """The class that represents an enemy in the game state."""
 
 from dataclasses import dataclass
-from triforce.zelda_enums import Direction, ZeldaEnemyKind
-from triforce.zelda_objects import ZeldaObject
+from .zelda_enums import Direction, ZeldaEnemyKind
+from .zelda_objects import ZeldaObject
 
 ENEMY_INVULNERABLE = 0x100
 

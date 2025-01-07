@@ -2,9 +2,9 @@
 
 from typing import List
 
-from triforce.link import Link
-from triforce.zelda_enums import SwordKind
-from triforce.zelda_game import ZeldaGame
+from .link import Link
+from .zelda_enums import SwordKind
+from .zelda_game import ZeldaGame
 from .models_and_scenarios import ZeldaModelDefinition, ZELDA_MODELS
 
 class ModelSelector:
