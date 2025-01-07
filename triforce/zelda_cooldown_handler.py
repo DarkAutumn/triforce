@@ -7,7 +7,8 @@ from enum import Enum
 from typing import Optional
 import numpy as np
 
-from .zelda_game import Direction, is_in_cave, is_link_stunned, is_mode_scrolling, position_to_tile_index
+from .zelda_enums import Direction
+from .tile_states import position_to_tile_index
 
 # movement related constants
 WS_ADJUSTMENT_FRAMES = 4
@@ -15,6 +16,33 @@ MAX_MOVEMENT_FRAMES = 16
 ATTACK_COOLDOWN = 15
 ITEM_COOLDOWN = 10
 CAVE_COOLDOWN = 60
+
+MODE_REVEAL = 3
+MODE_SCROLL_COMPLETE = 4
+MODE_GAMEPLAY = 5
+MODE_SCROLL_START = 6
+MODE_SCROLL = 7
+MODE_UNDERGROUND = 9
+MODE_UNDERGROUND_TRANSITION = 10
+MODE_CAVE = 11
+MODE_CAVE_TRANSITION = 16
+
+STUN_FLAG = 0x40
+
+
+def is_in_cave(state):
+    """Returns True if link is in a cave."""
+    return state['mode'] == MODE_CAVE
+
+def is_mode_scrolling(state):
+    """Returns True if the game is in a scrolling mode, and therefore we cannot take actions."""
+    return state in (MODE_SCROLL_COMPLETE, MODE_SCROLL, MODE_SCROLL_START, MODE_UNDERGROUND_TRANSITION, \
+                     MODE_CAVE_TRANSITION, MODE_REVEAL)
+
+def is_link_stunned(status_ac):
+    """Returns True if link is stunned.  This is used to determine if link can take actions."""
+    return status_ac & STUN_FLAG
+
 
 class ActionType(Enum):
     """The kind of action that the agent took."""
@@ -160,7 +188,7 @@ class ZeldaCooldownHandler:
         if start_pos is None:
             obs, _, terminated, truncated, info = self.env.step(action)
             total_frames += 1
-            start_pos = info['link_pos']
+            start_pos = info['link_x'], info['link_y']
 
         start_pos = np.array(start_pos, dtype=np.uint8)
         old_tile_index = position_to_tile_index(*start_pos)

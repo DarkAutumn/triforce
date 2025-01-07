@@ -38,13 +38,12 @@ The triforce project itself is divided into some key areas:
 
 [ZeldaVectorFeatures](triforce/zelda_vector_features.py) provides a few more observations to the model.  Since we don't give the model the view of the entire screen (or the hud, including link's health), it isn't able to "see" enemies, items, and objectives outside of that viewport.  Instead, we provide it with some limited data to help it know about things outside of its view.  This includes whether link has full health to shoot sword beams, vectors pointing to the nearest enemy, item, projectile, and the objective.  The goal is to give the model enough to play the game with a small viewport, but not enough to feel like it's 'cheating'.
 
-[ZeldaGameWrapper](triforce/zelda_wrapper.py) reinterprets game state and RAM into something that can be provided to critics or observation wrappers.  This code finds all enemies, items, and projectiles on screen and produces that in the `info` dictionary.  This generally makes other wrappers easier to implement.
+[zelda_game.py](triforce/zelda_game.py) does a lot of the nitty gritty of interpreting raw RAM state into something more usable.  This produces `ZeldaGameState`, which contains properties for `Link`, enemies on screen (`Enemy`), and projectiles (`Projectile`).
 
-[ZeldaHitDetect](triforce/zelda_hit_detect.py) determines when link will hit when he shoots his sword beams or drops a bomb onscreen.  We have to reward the exact action that shot sword beams for the game to learn properly, and not when the sword or bomb will hit, and this wrapper is what does that work by running the game forward to see the outcome of actions.
+[ZeldaGameWrapper](triforce/zelda_wrapper.py) is the base wrapper around the Zelda environment.  It produces `info['state']` and `info['gamestate']` which are used to interpret what is going on within the game.
 
 [ObjectiveSelector](triforce/objective_selector.py) sets the goal/objective that the model *should* be doing at any given time.  This creates an objective vector that ZeldaVectorFeatures puts into the observation, but this is also used by critics to reward/punish the model when it gets closer to/further from completing objectives.
 
-[zelda_game.py](triforce/zelda_game.py) does a lot of the nitty gritty of interpreting raw RAM state into something more usable.  A lot of game interpretation is also done throughout, including in `ZeldaGameWrapper`.
 
 ### Critics and End Conditions
 

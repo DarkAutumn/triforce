@@ -5,17 +5,21 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
-from triforce.item_selector import ItemSelector
+from triforce.game_state_change import ZeldaStateChange
+from triforce.zelda_enums import AnimationState, ArrowKind, SelectedEquipmentKind, SwordKind, BoomerangKind, ITEM_MAP, ZeldaAnimationKind, ZeldaItemKind
+from triforce.zelda_game import ZeldaGame
 from triforce.zelda_cooldown_handler import ActionType
 from utilities import ZeldaActionReplay
-from triforce.zelda_game import ZeldaItem, get_bomb_state, AnimationState
 
 def assert_no_hit( env, command):
     for _, _, terminated, truncated, info in run(env, command):
         assert not terminated
         assert not truncated
-        assert info['step_hits'] == 0
-        assert info['step_damage'] == 0
+
+        state_change : ZeldaStateChange = info['state_change']
+        assert state_change.damage_dealt == 0
+        assert state_change.hits == 0
+        assert len(state_change.items_gained) == 0
 
     return info
 
@@ -25,37 +29,45 @@ def run( env, command):
 
 def test_bat_injury():
     replay = ZeldaActionReplay("1_72e.state")
-    assert_no_hit(replay, 'llllllllllldddllllllllll')
-    selector = ItemSelector(replay.env)
-    selector.select_sword()
+    info = assert_no_hit(replay, 'llllllllllldddllllllllll')
+    _select_sword(info['state'])
 
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
-    assert info['step_hits'] == 2
-    assert info['step_damage'] == 2
-    assert info['action'] == ActionType.ATTACK
+
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.damage_dealt == 2
+    assert state_change.hits == 2
 
     assert_no_hit(replay, 'dddddddddddddddddddddddddddddddddd')
+    pass
 
 def test_stalfos_injury():
     replay = ZeldaActionReplay("1_74w.state")
-    assert_no_hit(replay, 'rrddddr')
+    info = assert_no_hit(replay, 'rrddddr')
 
-    selector = ItemSelector(replay.env)
-    selector.select_beams()
+    _select_sword(info['state'], beams=True)
 
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
-    assert info['step_hits'] == 1
+
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.damage_dealt == 1
+    assert state_change.hits == 1
+
     assert info['action'] == ActionType.ATTACK
     assert_no_hit(replay, 'lllllllllr')
 
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
-    assert info['step_hits'] == 1
+
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.hits == 1
+    assert state_change.damage_dealt == 1
+
     assert info['action'] == ActionType.ATTACK
 
     assert_no_hit(replay, 'lllllll')
@@ -65,30 +77,37 @@ def test_stalfos_injury():
 def test_sword_injury():
     replay = ZeldaActionReplay("1_44e.state")
 
-    assert_no_hit(replay, 'llluuuullllllllllllllld')
-    selector = ItemSelector(replay.env)
-    selector.select_sword()
+    info = assert_no_hit(replay, 'llluuuullllllllllllllld')
+    _select_sword(info['state'])
 
     _, _, terminated, truncated, info = replay.step('a')
 
     assert not terminated
     assert not truncated
-    assert info['step_hits'] == 2
+
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.hits == 2
+    assert state_change.damage_dealt == 2
+
     assert info['action'] == ActionType.ATTACK
 
     assert_no_hit(replay, 'u')
 
 def test_boomerang_bat_kill():
     replay = ZeldaActionReplay("1_72e.state")
-    assert_no_hit(replay, 'llllllllll')
-    selector = ItemSelector(replay.env)
-    selector.select_boomerang(False)
+    info = assert_no_hit(replay, 'llllllllll')
+
+    _select_boomerang(info['state'], False)
 
     _, _, terminated, truncated, info = replay.step('b')
 
     assert not terminated
     assert not truncated
-    assert info['step_hits'] == 1
+
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.hits == 1
+    assert state_change.damage_dealt == 1
+
     assert info['action'] == ActionType.ITEM
 
     assert_no_hit(replay, 'ldddllllllll')
@@ -98,15 +117,17 @@ def test_boomerang_bat_kill():
 def test_beam_injury():
     replay = ZeldaActionReplay("1_44e.state")
 
-    data = replay.env.unwrapped.data
-    data.set_value('hearts_and_containers', 0xff)
-
-    assert_no_hit(replay, 'll')
+    info = assert_no_hit(replay, 'll')
+    _select_sword(info['state'], beams=True)
 
     _, _, terminated, truncated, info = replay.step('a')
     assert not terminated
     assert not truncated
-    assert info['step_hits'] == 1
+
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.hits == 1
+    assert state_change.damage_dealt == 1
+
     assert info['action'] == ActionType.ATTACK
 
     assert_no_hit(replay, "lllllll")
@@ -120,18 +141,16 @@ def test_silver_arrow_pickup():
     _test_arrow_item_pickup(True)
 
 def _test_arrow_item_pickup(silver):
-    replay = _line_up_item()
-    data = replay.env.unwrapped.data
-    selector = ItemSelector(replay.env)
-    selector.select_arrows(silver)
+    replay, info = _line_up_item()
+
+    _select_arrows(info['state'], silver)
 
     _, _, terminated, truncated, info = replay.step('b')
     assert not terminated
     assert not truncated
 
-    items = info['step_items']
-    assert len(items) == 1
-    assert items[0] == ZeldaItem.Bombs
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.items_gained == [ZeldaItemKind.BlueRupee]
 
 def test_arrow_injury():
     _test_arrow(False)
@@ -142,19 +161,17 @@ def test_silver_arrow_injury():
 def _test_arrow(silver):
     replay = ZeldaActionReplay("1_44e.state")
 
-    data = replay.env.unwrapped.data
-    data.set_value('hearts_and_containers', 0xff)
-    selector = ItemSelector(replay.env)
-    selector.select_arrows(silver)
-
-    assert_no_hit(replay, 'll')
+    info = assert_no_hit(replay, 'll')
+    _select_arrows(info['state'], silver)
 
     _, _, terminated, truncated, info = replay.step('b')
     assert not terminated
     assert not truncated
-    assert info['step_hits'] == 1
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.hits == 1
+    assert state_change.damage_dealt == 3 if silver else 2
+
     assert info['action'] == ActionType.ITEM
-    assert info['step_damage'] == 3 if silver else 2
 
     assert_no_hit(replay, "lllllll")
 
@@ -167,53 +184,56 @@ def test_magic_boomerang_item_pickup():
     _test_boomerang(True)
 
 def _test_boomerang(magic):
-    replay = _line_up_item()
+    replay, info = _line_up_item()
 
-    selector = ItemSelector(replay.env)
-    selector.select_boomerang(magic)
+    _select_boomerang(info['state'], magic)
 
     _, _, terminated, truncated, info = replay.step('b')
     assert not terminated
     assert not truncated
 
-    items = info['step_items']
-    assert len(items) == 1
-    assert items[0] == ZeldaItem.Bombs
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.hits == 0
+    assert state_change.damage_dealt == 0
+    assert state_change.items_gained == [ZeldaItemKind.BlueRupee]
 
 def test_boomerang_stun():
-    replay = ZeldaActionReplay("1_44e.state")
+    replay = ZeldaActionReplay("1_44e.state",)
 
-    data = replay.env.unwrapped.data
-    data.set_value('hearts_and_containers', 0xff)
-    data.set_value('regular_boomerang', 1)
-    data.set_value('magic_boomerang', 2)
-    data.set_value('selected_item', 0)
-
-    assert_no_hit(replay, 'll')
+    info = assert_no_hit(replay, 'll')
+    _select_boomerang(info['state'], True)
 
     _, _, terminated, truncated, info = replay.step('b')
     assert not terminated
     assert not truncated
-    assert info['step_hits'] == 0
-    assert info['step_stuns'] == 1
+
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.hits == 0
+    assert state_change.damage_dealt == 0
+    assert len(state_change.enemies_stunned) == 1
     assert info['action'] == ActionType.ITEM
 
-    assert_no_hit(replay, "lllllll")
+
+    assert_no_hit(replay, "llllllllllll")
+
+    pass
 
 # Bomb tests
 
 def test_bombs_kill():
     replay = ZeldaActionReplay("1_44e.state")
 
-    assert_no_hit(replay, 'llluuuullllllllllllllld')
-    selector = ItemSelector(replay.env)
-    selector.select_bombs()
+    info = assert_no_hit(replay, 'llluuuullllllllllllllld')
+    _select_bombs(info['state'])
 
     _, _, terminated, truncated, info = replay.step('b')
     assert not terminated
     assert not truncated
-    assert info['step_hits'] == 3
-    assert info['step_damage'] == 9
+
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.hits == 3
+    assert state_change.damage_dealt == 9
+
     assert info['action'] == ActionType.ITEM
 
     assert_no_hit(replay, "uuurrrrrr")
@@ -228,12 +248,42 @@ def _line_up_item():
     _, _, terminated, truncated, info = replay.step('b')
     assert not terminated
     assert not truncated
-    assert info['step_hits'] == 3
-    assert info['step_damage'] == 9
+
+    state_change : ZeldaStateChange = info['state_change']
+    assert state_change.hits == 3
+    assert state_change.damage_dealt == 9
     assert info['action'] == ActionType.ITEM
 
     info = assert_no_hit(replay, "rrrrrrrrdd")
-
-    while get_bomb_state(info, 0) != AnimationState.INACTIVE:
+    while info['state'].link.get_animation_state(ZeldaAnimationKind.BOMB_1) != AnimationState.INACTIVE:
         info = assert_no_hit(replay, "rl")
-    return replay
+
+    return replay, info
+
+def _select_sword(gamestate : ZeldaGame, beams=False):
+    link = gamestate.link
+    link.sword = SwordKind.WOOD
+
+    if beams:
+        link.health = link.max_health
+        assert link.has_beams
+    else:
+        link.health = link.max_health - 0.5
+        assert not link.has_beams
+
+def _select_boomerang(gamestate : ZeldaGame, magic):
+    link = gamestate.link
+    link.boomerang = BoomerangKind.MAGIC if magic else BoomerangKind.NORMAL
+    link.selected_equipment = SelectedEquipmentKind.BOOMERANG
+
+def _select_bombs(gamestate : ZeldaGame):
+    link = gamestate.link
+    link.bombs = 8
+    link.selected_equipment = SelectedEquipmentKind.BOMBS
+
+def _select_arrows(gamestate : ZeldaGame, silver):
+    link = gamestate.link
+    link.arrows = ArrowKind.SILVER if silver else ArrowKind.WOOD
+    link.bow = 1
+    link.rupees = 100
+    link.selected_equipment = SelectedEquipmentKind.ARROWS

@@ -1,8 +1,11 @@
 """Model selection based on the current game state."""
 
 from typing import List
+
+from .link import Link
+from .zelda_enums import SwordKind
+from .zelda_game import ZeldaGame
 from .models_and_scenarios import ZeldaModelDefinition, ZELDA_MODELS
-from .zelda_game import get_num_triforce_pieces, has_beams
 
 class ModelSelector:
     """Selects the best model for the current game state."""
@@ -10,38 +13,35 @@ class ModelSelector:
         self.models_by_priority = sorted((model for model in ZELDA_MODELS.values()),
                                          key=lambda x: x.priority, reverse=True)
 
-    def find_acceptable_models(self, info) -> List[ZeldaModelDefinition]:
+    def find_acceptable_models(self, state : ZeldaGame) -> List[ZeldaModelDefinition]:
         """Selects a model based on the current game state."""
-        acceptable_models = [model for model in self.models_by_priority if self.__is_model_acceptable(model, info)]
+        acceptable_models = [model for model in self.models_by_priority if self.__is_model_acceptable(model, state)]
         return acceptable_models or self.models_by_priority
 
-    def __is_model_acceptable(self, model : ZeldaModelDefinition, info):
-        location = info['location']
-        level = info['level']
-
-        matches_level = level in model.levels
-        matches_room = model.rooms is None or location in model.rooms
-        matches_enemy_requirements = not model.requires_enemies or info['enemies']
-        matches_equipment = self.__matches_equipment(model, info)
+    def __is_model_acceptable(self, model : ZeldaModelDefinition, state : ZeldaGame) -> bool:
+        matches_level = state.level in model.levels
+        matches_room = model.rooms is None or state.location in model.rooms
+        matches_enemy_requirements = not model.requires_enemies or state.enemies
+        matches_equipment = self.__matches_equipment(model, state.link)
 
         return matches_level and matches_room and matches_enemy_requirements and matches_equipment
 
-    def __matches_equipment(self, model : ZeldaModelDefinition, info):
+    def __matches_equipment(self, model : ZeldaModelDefinition, link : Link):
         if model.requires_triforce is not None:
-            if get_num_triforce_pieces(info) < model.requires_triforce:
+            if link.triforce_pieces < model.requires_triforce:
                 return False
 
         for equipment in model.equipment_required:
             if equipment == "beams":
-                if not has_beams(info):
+                if not link.has_beams:
                     return False
 
             elif equipment == "bombs":
-                if info['bombs'] == 0:
+                if link.bombs == 0:
                     return False
 
             elif equipment == "nosword":
-                if info['sword']:
+                if link.sword != SwordKind.NONE:
                     return False
 
             else:

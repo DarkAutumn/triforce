@@ -196,7 +196,7 @@
             "address": 1632,
             "type": "=u1"
         },
-        "magic_book": {
+        "book": {
             "address": 1633,
             "type": "=u1"
         },
@@ -226,6 +226,10 @@
         },
         "magic_boomerang": {
             "address": 1653,
+            "type": "=u1"
+        },
+        "magic_shield": {
+            "address": 1654,
             "type": "=u1"
         },
         "compass": {

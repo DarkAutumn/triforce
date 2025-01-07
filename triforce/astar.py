@@ -1,7 +1,8 @@
 """A* algorithm implementation for pathfinding.  Used to train the model how to move around the map."""
 
 import heapq
-from .zelda_game import TileState, Direction
+from .tile_states import TileState
+from .zelda_enums import Direction
 
 def get_tile_weight(ny, nx, tile_weight_map):
     """Returns the weight of the tile at the given position."""

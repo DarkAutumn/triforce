@@ -18,7 +18,9 @@ import tqdm
 
 from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
                      TRAINING_SCENARIOS
-from triforce.zelda_game import TileState, is_in_cave
+from triforce.game_state_change import ZeldaStateChange
+from triforce.tile_states import TileState
+from triforce.zelda_game import ZeldaGame
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
 class Recording:
@@ -168,6 +170,7 @@ class DisplayWindow:
 
         last_info = {}
         info = {}
+        state_change : ZeldaStateChange = None
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
         mode = 'c'
@@ -197,10 +200,11 @@ class DisplayWindow:
                     model_name = "keyboard input"
                     next_action = None
                 else:
-                    model_name, action = self._get_action_from_model(model_requested, info, obs)
+                    model_name, action = self._get_action_from_model(model_requested, info['state'], obs)
 
                 last_info = info
                 obs, _, terminated, truncated, info = env.step(action)
+                state_change : ZeldaStateChange = info['state_change']
 
                 if mode == 'n':
                     mode = 'p'
@@ -222,8 +226,10 @@ class DisplayWindow:
                 self._render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width,
                                        self.game_height)
                 if overlay:
-                    color = "black" if info['level'] == 0 and not is_in_cave(info) else "white"
-                    self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), color, self.scale, info)
+                    color = "black" if info['level'] == 0 and not state_change.current.in_cave else "white"
+                    self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), color, \
+                                                self.scale, state_change.current)
+
                 render_text(surface, self.font, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:
                     render_text(surface, self.font, f"Location: {hex(info['location'])}",
@@ -328,8 +334,8 @@ class DisplayWindow:
         env.close()
         pygame.quit()
 
-    def _get_action_from_model(self, model_requested, info, obs):
-        zelda_model = self._select_model(info)
+    def _get_action_from_model(self, model_requested, state, obs):
+        zelda_model = self._select_model(state)
         ai, loaded_name = self._select_available_model(zelda_model, model_requested)
         model_name = f"{zelda_model.name} ({loaded_name}) {ai.num_timesteps:,} timesteps"
 
@@ -351,8 +357,8 @@ class DisplayWindow:
         return None
 
 
-    def _select_model(self, info) -> ZeldaModelDefinition:
-        acceptable_models = self.orchestrator.find_acceptable_models(info)
+    def _select_model(self, state) -> ZeldaModelDefinition:
+        acceptable_models = self.orchestrator.find_acceptable_models(state)
         for model in acceptable_models:
             if (models_available := self._available_models.get(model.name)) is None:
                 models_available = model.find_available_models(self.model_path)
@@ -565,23 +571,23 @@ class DisplayWindow:
 
         return result
 
-    def _overlay_grid_and_text(self, surface, kind, offset, text_color, scale, info):
+    def _overlay_grid_and_text(self, surface, kind, offset, text_color, scale, state : ZeldaGame):
         match kind:
             case 0:
                 # no overlay, just return
                 return
             case 1:
                 # show the path overlay
-                tiles_to_show = self._get_optimal_path(info) + self._find_special_tiles(info)
+                tiles_to_show = state.get("a_star_path", []) + self._find_special_tiles(state)
             case 2:
                 # show tiles other than walkable and impassable
-                tiles_to_show = self._find_special_tiles(info)
+                tiles_to_show = self._find_special_tiles(state)
             case _:
                 # show all tile codes
                 tiles_to_show = None
 
-        tiles = info['tiles']
-        tile_states = info['tile_states']
+        tiles = state.tiles
+        tile_states = state.tile_states
 
         grid_width = 32
         grid_height = 22
@@ -624,19 +630,16 @@ class DisplayWindow:
                 # Draw the text
                 surface.blit(text_surface, text_rect)
 
-    def _get_optimal_path(self, info):
-        return info['a*_path'] if 'a*_path' in info else []
-
-    def _find_special_tiles(self, info):
+    def _find_special_tiles(self, state : ZeldaGame):
         tiles = []
-        tile_states = info['tile_states']
+        tile_states = state.tile_states
         for y in range(tile_states.shape[0]):
             for x in range(tile_states.shape[1]):
                 if tile_states[y, x] not in (TileState.WALKABLE.value, TileState.IMPASSABLE.value,
                                              TileState.BRICK.value, TileState.HALF_WALKABLE.value):
                     tiles.append((y, x))
 
-        tiles += info['link'].tile_coordinates
+        tiles += state.link.tile_coordinates
         return tiles
 
 class DebugReward:

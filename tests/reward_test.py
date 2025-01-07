@@ -2,9 +2,9 @@
 
 import os
 import sys
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
+from triforce.zelda_game import ZeldaGame
 from triforce.critics import GameplayCritic
 from utilities import CriticWrapper, ZeldaActionReplay
 
@@ -43,28 +43,32 @@ def test_close_distance():
     assert 'rewards' in info
     assert 'reward-move-closer' not in info['rewards']
 
+def get_state(info) -> ZeldaGame:
+    return info['state']
 
 def test_position():
     # note the position may change for the other axis as link snaps to the grid
     actions = ZeldaActionReplay("1_44e.state")
     prev = actions.step('l')[-1]
-    assert prev['link_pos'] == (prev['link_x'], prev['link_y'])
+    prev = get_state(prev).link
+    prev_pos = prev.game.link_x, prev.game.link_y
+    assert prev.position == prev_pos
 
     curr = actions.step('l')[-1]
-    assert curr['link_pos'] == (curr['link_x'], curr['link_y'])
-    assert prev['link_x'] > curr['link_x']
+    curr = get_state(curr).link
+    assert prev.position[0] > curr.position[0]
 
     prev = curr
     curr = actions.step('u')[-1]
-    assert curr['link_pos'] == (curr['link_x'], curr['link_y'])
-    assert prev['link_y'] > curr['link_y']
+    curr = get_state(curr).link
+    assert prev.position[1] > curr.position[1]
 
     prev = curr
     curr = actions.step('d')[-1]
-    assert curr['link_pos'] == (curr['link_x'], curr['link_y'])
-    assert prev['link_y'] < curr['link_y']
+    curr = get_state(curr).link
+    assert prev.position[1] < curr.position[1]
 
     prev = curr
     curr = actions.step('r')[-1]
-    assert curr['link_pos'] == (curr['link_x'], curr['link_y'])
-    assert prev['link_x'] < curr['link_x']
+    curr = get_state(curr).link
+    assert prev.position[0] < curr.position[0]
