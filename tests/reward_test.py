@@ -2,11 +2,9 @@
 
 import os
 import sys
-
-from triforce.zelda_game import ZeldaGame
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
+from triforce.zelda_game import ZeldaGame
 from triforce.critics import GameplayCritic
 from utilities import CriticWrapper, ZeldaActionReplay
 

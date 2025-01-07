@@ -3,12 +3,11 @@
 import os
 import sys
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
 from triforce.game_state_change import ZeldaStateChange
 from triforce.zelda_enums import AnimationState, ArrowKind, SelectedEquipmentKind, SwordKind, BoomerangKind, ITEM_MAP, ZeldaAnimationKind, ZeldaItemKind
 from triforce.zelda_game import ZeldaGame
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
-
 from triforce.zelda_cooldown_handler import ActionType
 from utilities import ZeldaActionReplay
 
