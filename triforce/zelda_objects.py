@@ -21,7 +21,7 @@ class ZeldaObject:
         id: The id of the object.
         position: The position of the object.
     """
-    game : 'ZeldaGame'
+    game : 'ZeldaGame' # type: ignore
     index : int
     id : ZeldaItemKind | ZeldaEnemyKind | ZeldaProjectileId | int
     position : Tuple[int, int]
