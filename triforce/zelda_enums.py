@@ -40,7 +40,7 @@ class ArrowKind(Enum):
 class BoomerangKind(Enum):
     """The type of boomerang Link has."""
     NONE = 0
-    NORMAL = 1
+    WOOD = 1
     MAGIC = 2
 
 class CandleKind(Enum):
@@ -106,11 +106,28 @@ class ZeldaEnemyKind(Enum):
 class ZeldaItemKind(Enum):
     """Item codes for the game."""
     # pylint: disable=invalid-name
+    Triforce1 : int = -101
+    Triforce2 : int = -102
+    Triforce3 : int = -103
+    Triforce4 : int = -104
+    Triforce5 : int = -105
+    Triforce6 : int = -106
+    Triforce7 : int = -107
+    Triforce8 : int = -108
+    TriforceOfPower = -109
+    HeartContainer : int = -1
+    Key : int = -1
     Bombs : int = 0x00
     BlueRupee : int = 0x0f
     Rupee : int = 0x18
     Heart : int = 0x22
     Fairy : int = 0x23
+
+    @property
+    def is_triforce(self):
+        """Returns True if the item is a triforce piece."""
+        return -109 <= self.value <= -101
+
 
 class Direction(Enum):
     """The four cardinal directions, as the game defines them."""

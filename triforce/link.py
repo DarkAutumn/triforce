@@ -356,7 +356,7 @@ class Link(ZeldaObject):
             return BoomerangKind.MAGIC
 
         if self.game.regular_boomerang:
-            return BoomerangKind.NORMAL
+            return BoomerangKind.WOOD
 
         return BoomerangKind.NONE
 
@@ -365,7 +365,7 @@ class Link(ZeldaObject):
         """Set the boomerang for Link in the game."""
         if value == BoomerangKind.MAGIC:
             self.game.magic_boomerang = 2
-        elif value == BoomerangKind.NORMAL:
+        elif value == BoomerangKind.WOOD:
             self.game.regular_boomerang = 1
         else:
             self.game.magic_boomerang = 0

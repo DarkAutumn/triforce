@@ -273,7 +273,7 @@ def _select_sword(gamestate : ZeldaGame, beams=False):
 
 def _select_boomerang(gamestate : ZeldaGame, magic):
     link = gamestate.link
-    link.boomerang = BoomerangKind.MAGIC if magic else BoomerangKind.NORMAL
+    link.boomerang = BoomerangKind.MAGIC if magic else BoomerangKind.WOOD
     link.selected_equipment = SelectedEquipmentKind.BOOMERANG
 
 def _select_bombs(gamestate : ZeldaGame):
