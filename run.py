@@ -287,7 +287,7 @@ class DisplayWindow:
                             mode = 'c'
 
                         elif event.key == pygame.K_o:
-                            overlay = (overlay + 1) % 4
+                            overlay = (overlay + 1) % 5
 
                         elif event.key == pygame.K_e:
                             show_endings = not show_endings
@@ -573,7 +573,6 @@ class DisplayWindow:
         return result
 
     def _overlay_grid_and_text(self, surface, kind, offset, text_color, scale, state : ZeldaGame):
-        use_wavefront = False
         if not kind:
             return
 
@@ -596,7 +595,6 @@ class DisplayWindow:
 
                 color = (0, 0, 0)
 
-
                 pygame.draw.rect(surface, color, (x, y, tile_width, tile_height), 1)
 
                 if kind == 1:
@@ -605,9 +603,11 @@ class DisplayWindow:
                 elif kind == 2:
                     tile_number = tiles[tile_x, tile_y]
                     text = f"{tile_number:02X}" if tile_number is not None else ""
+                elif kind == 3:
+                    walkable = state.room.walkable[tile_x, tile_y]
+                    text = "X" if walkable else ""
                 else:
                     text = f"{tile_x:02X} {tile_y:02X}"
-
 
                 # Render the text
                 text_surface = font.render(text, True, text_color)
