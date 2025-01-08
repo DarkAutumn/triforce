@@ -574,18 +574,11 @@ class DisplayWindow:
 
     def _overlay_grid_and_text(self, surface, kind, offset, text_color, scale, state : ZeldaGame):
         use_wavefront = False
-        match kind:
-            case 0:
-                # no overlay, just return
-                return
-            case 1:
-                use_wavefront = True
-            case _:
-                # show all tile codes
-                tiles_to_show = None
+        if not kind:
+            return
 
         tiles = state.room.tiles
-        wavefront = state.room.calculate_wavefront_for_link([Direction.N, Direction.E])
+        wavefront = state.wavefront
 
         grid_width = 32
         grid_height = 22
@@ -606,12 +599,15 @@ class DisplayWindow:
 
                 pygame.draw.rect(surface, color, (x, y, tile_width, tile_height), 1)
 
-                if use_wavefront:
+                if kind == 1:
                     tile_number = wavefront.get((tile_x, tile_y), None)
-                else:
+                    text = f"{tile_number:02X}" if tile_number is not None else ""
+                elif kind == 2:
                     tile_number = tiles[tile_x, tile_y]
+                    text = f"{tile_number:02X}" if tile_number is not None else ""
+                else:
+                    text = f"{tile_x:02X} {tile_y:02X}"
 
-                text = f"{tile_number:02X}" if tile_number is not None else ""
 
                 # Render the text
                 text_surface = font.render(text, True, text_color)

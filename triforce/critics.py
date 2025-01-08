@@ -70,9 +70,9 @@ class GameplayCritic(ZeldaCritic):
         # same room movement rewards
         self.wall_collision_penalty = -REWARD_TINY
         self.move_closer_reward = REWARD_TINY
-
-        self.movement_scale_factor = 9.0
         self.move_away_penalty = -self.move_closer_reward - REWARD_MINIMUM
+        self.lateral_move_penalty = -REWARD_MINIMUM
+        self.movement_scale_factor = 9.0
 
         self.warning_tile_penalty = -REWARD_TINY
         self.danger_tile_penalty = -REWARD_MEDIUM

@@ -86,7 +86,7 @@ class Room:
                     walkable_tiles[x, y] = walkable
 
             result = Room(level, location, cave, tiles, walkable_tiles)
-            if result.is_loaded():
+            if result.is_loaded:
                 Room._cache[key] = result
 
         return result
@@ -98,9 +98,10 @@ class Room:
         self.tiles : np.ndarray = tiles
         self.walkable : np.ndarray = walkable
         self.exits = self._get_exit_tiles()
-        self.cave = self._get_cave_coordinates()
+        self.cave_tile = self._get_cave_coordinates()
         self._wf_lru = OrderedDict()
 
+    @property
     def is_loaded(self):
         """Returns True if the room is loaded."""
         any_walkable = np.isin(self.tiles, WALKABLE_TILES).any()
@@ -121,7 +122,7 @@ class Room:
                 exits[(0, y)] = Direction.W
 
         curr = exits[Direction.S] = []
-        y = self.tiles.shape[1] - 1
+        y = self.tiles.shape[1] - 2
         for x in range(0, self.tiles.shape[0] - 1):
             if self.walkable[(x, y)]:
                 curr.append((x, y))
