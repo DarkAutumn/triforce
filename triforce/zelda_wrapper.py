@@ -76,7 +76,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         info['state'] = curr
         info['total_frames'] = self._total_frames
-        info['objectives'], targets = self._objectives.get_current_objectives(curr)
+        info['objectives'], targets = self._objectives.get_current_objectives(prev, curr)
         info['targets'] = targets
         info['wavefront'] = curr.room.calculate_wavefront_for_link(targets)
 

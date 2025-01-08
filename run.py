@@ -20,7 +20,6 @@ from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulat
                      TRAINING_SCENARIOS
 from triforce.game_state_change import ZeldaStateChange
 from triforce.tile_states import TileState
-from triforce.zelda_enums import Direction
 from triforce.zelda_game import ZeldaGame
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 

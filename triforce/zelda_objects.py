@@ -5,7 +5,7 @@ from typing import Tuple
 import numpy as np
 
 from .zelda_enums import ZeldaEnemyKind, ZeldaItemKind
-from .tile_states import position_to_tile_index, tile_index_to_position
+from .tile_states import position_to_tile_index
 
 class ZeldaProjectileId(Enum):
     """Projectile codes for the game."""
@@ -43,7 +43,7 @@ class ZeldaObject:
         x_dim, y_dim = self.dimensions
         for x in range(-1, x_dim):
             for y in range(-1, y_dim):
-                result.append((self.tile[0] + y, self.tile[1] + x))
+                result.append((self.tile[1] + x, self.tile[0] + y))
 
         return result
 

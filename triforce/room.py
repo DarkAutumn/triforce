@@ -38,7 +38,6 @@ def init_half_walkable_tiles():
 WALKABLE_TILES = init_walkable_tiles()
 HALF_WALKABLE_TILES = init_half_walkable_tiles()
 BRICK_TILE = 0xf6
-DOOR_TILES = [0x98]
 
 class TileKind(Enum):
     """The general kind of a tile (walkability)."""
@@ -88,6 +87,20 @@ class Room:
 
                     y -= 1
                     walkable_tiles[x, y] = walkable
+
+            if level != 0:
+                west_open = tiles[2, 0xa] in WALKABLE_TILES
+                east_open = tiles[0x1d, 0xa] in WALKABLE_TILES
+                north_open = tiles[0xf, 2] in WALKABLE_TILES
+                south_open = tiles[0xf, 0x13] in WALKABLE_TILES
+
+                for x in range (4):
+                    walkable_tiles[x, 0xa] = west_open
+                    walkable_tiles[walkable_tiles.shape[0] - x - 1, 0xa] = east_open
+
+                for y in range(4):
+                    walkable_tiles[0xf, y] = north_open
+                    walkable_tiles[0xf, walkable_tiles.shape[1] - y - 1] = south_open
 
             result = Room(level, location, cave, tiles, walkable_tiles, env)
             if result.is_loaded:
@@ -168,16 +181,20 @@ class Room:
         else:
             # dungeons only have the exit in one position:
             if self.walkable[NORTH_DOOR_TILE]:
-                exits[Direction.N] = NORTH_DOOR_TILE[0], 0
+                exits[Direction.N] = [(NORTH_DOOR_TILE[0], 0)]
+                exits[NORTH_DOOR_TILE] = Direction.N
 
             if self.walkable[SOUTH_DOOR_TILE]:
-                exits[Direction.S] = SOUTH_DOOR_TILE[0], self.tiles.shape[1] - 1
+                exits[Direction.S] = [(SOUTH_DOOR_TILE[0], self.tiles.shape[1] - 1)]
+                exits[SOUTH_DOOR_TILE] = Direction.S
 
             if self.walkable[WEST_DOOR_TILE]:
-                exits[Direction.W] = 0, WEST_DOOR_TILE[1]
+                exits[Direction.W] = [(0, WEST_DOOR_TILE[1])]
+                exits[WEST_DOOR_TILE] = Direction.W
 
             if self.walkable[EAST_DOOR_TILE]:
-                exits[Direction.E] = self.tiles.shape[0] - 1, EAST_DOOR_TILE[1]
+                exits[Direction.E] = [(self.tiles.shape[0] - 1, EAST_DOOR_TILE[1])]
+                exits[EAST_DOOR_TILE] = Direction.E
 
         return exits
 
