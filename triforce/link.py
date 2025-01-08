@@ -95,6 +95,23 @@ class Link(ZeldaObject):
         return self.__dict__['_heart_containers']
 
     # Calculated status
+    def has_item(self, item : SwordKind | BoomerangKind | ArrowKind):
+        """Return whether Link has the given piece of equipment."""
+        if isinstance(item, SwordKind):
+            return self.sword.value >= item.value
+
+        if isinstance(item, BoomerangKind):
+            return self.boomerang.value >= item.value
+
+        if isinstance(item, ArrowKind):
+            return self.arrows.value >= item.value
+
+        raise NotImplementedError(f"Item type {item} not yet implemented.")
+
+    def has_triforce(self, level):
+        """Returns whether link has the triforce for the given level."""
+        return self.game.triforce & (1 << level)
+
     @property
     def is_health_full(self) -> bool:
         """Is link's health full."""
