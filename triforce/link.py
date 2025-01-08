@@ -28,6 +28,14 @@ class Link(ZeldaObject):
     direction : Direction
     status : int
 
+    @property
+    def link_overlap_tiles(self):
+        """The tiles that the object overlaps with link's top-left tile."""
+        x_dim, y_dim = self.dimensions
+        for x in range(0, x_dim):
+            for y in range(0, y_dim):
+                yield (self.tile[0] + y, self.tile[1] + x)
+
     # Health
     @property
     def max_health(self):

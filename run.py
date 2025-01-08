@@ -20,6 +20,7 @@ from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulat
                      TRAINING_SCENARIOS
 from triforce.game_state_change import ZeldaStateChange
 from triforce.tile_states import TileState
+from triforce.zelda_enums import Direction
 from triforce.zelda_game import ZeldaGame
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
@@ -572,22 +573,19 @@ class DisplayWindow:
         return result
 
     def _overlay_grid_and_text(self, surface, kind, offset, text_color, scale, state : ZeldaGame):
+        use_wavefront = False
         match kind:
             case 0:
                 # no overlay, just return
                 return
             case 1:
-                # show the path overlay
-                tiles_to_show = state.get("a_star_path", []) + self._find_special_tiles(state)
-            case 2:
-                # show tiles other than walkable and impassable
-                tiles_to_show = self._find_special_tiles(state)
+                use_wavefront = True
             case _:
                 # show all tile codes
                 tiles_to_show = None
 
-        tiles = state.tiles
-        tile_states = state.tile_states
+        tiles = state.room.tiles
+        wavefront = state.room.calculate_wavefront_for_link([Direction.N, Direction.E])
 
         grid_width = 32
         grid_height = 22
@@ -600,28 +598,20 @@ class DisplayWindow:
 
         for tile_x in range(grid_width):
             for tile_y in range(grid_height):
-                if tiles_to_show is not None and (tile_y, tile_x) not in tiles_to_show:
-                    continue
-
                 x = offset[0] + tile_x * tile_width - 8 * scale
                 y = 56 * scale + offset[1] + tile_y * tile_height
 
-                # red for DANGER, yellow for WARNING, blue for WALKABLE, black otherwise
-                match tile_states[tile_y, tile_x]:
-                    case TileState.DANGER.value:
-                        color = (255, 0, 0)
-                    case TileState.WARNING.value:
-                        color = (255, 255, 0)
-                    case TileState.WALKABLE.value:
-                        color = (0, 0, 255)
-                    case _:
-                        color = (0, 0, 0)
+                color = (0, 0, 0)
 
 
                 pygame.draw.rect(surface, color, (x, y, tile_width, tile_height), 1)
 
-                tile_number = tiles[tile_y, tile_x]
-                text = f"{tile_number:02X}"
+                if use_wavefront:
+                    tile_number = wavefront.get((tile_x, tile_y), None)
+                else:
+                    tile_number = tiles[tile_x, tile_y]
+
+                text = f"{tile_number:02X}" if tile_number is not None else ""
 
                 # Render the text
                 text_surface = font.render(text, True, text_color)

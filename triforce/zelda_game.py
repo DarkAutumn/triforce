@@ -5,6 +5,8 @@ from typing import List, Optional, Tuple
 
 import gymnasium as gym
 
+from .room import Room
+
 from .zelda_objects import Item, Projectile
 from .enemy import Enemy
 from .link import Link
@@ -38,11 +40,15 @@ class ZeldaGame:
     location : int
     in_cave : bool
     link : Link
+    room : Room
     items : List[Item]
     enemies : List[Enemy]
     projectiles : List[Projectile]
 
     def __init__(self, prev : 'ZeldaGame', env, info, frame_count):
+        ram = env.unwrapped.get_ram()
+        tables = ObjectTables(ram)
+
         # Using __dict__ to avoid the __setattr__ method.
         self.__dict__['_env'] = env
         self.__dict__['_info'] = info
@@ -50,9 +56,7 @@ class ZeldaGame:
         self.__dict__['level'] = info['level']
         self.__dict__['location'] = info['location']
         self.__dict__['in_cave'] = info['mode'] == MODE_CAVE
-
-        ram = env.unwrapped.get_ram()
-        tables = ObjectTables(ram)
+        self.__dict__['room'] = Room.get_or_create(info['level'], info['location'], info['mode'] == MODE_CAVE, ram)
 
         self.__dict__['link'] = self._build_link_status(tables)
 

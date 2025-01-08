@@ -5,7 +5,7 @@ from typing import Tuple
 import numpy as np
 
 from .zelda_enums import ZeldaEnemyKind, ZeldaItemKind
-from .tile_states import position_to_tile_index
+from .tile_states import position_to_tile_index, tile_index_to_position
 
 class ZeldaProjectileId(Enum):
     """Projectile codes for the game."""
@@ -25,6 +25,27 @@ class ZeldaObject:
     index : int
     id : ZeldaItemKind | ZeldaEnemyKind | ZeldaProjectileId | int
     position : Tuple[int, int]
+
+    @property
+    def dimensions(self) -> Tuple[int, int]:
+        """The dimensions of the object."""
+        return 2, 2
+
+    @property
+    def tile(self):
+        """The x, y coordinates of the top-left tile in this object."""
+        return position_to_tile_index(*self.position)
+
+    @property
+    def link_overlap_tiles(self):
+        """The tiles that the object overlaps with link's top-left tile."""
+        result = []
+        x_dim, y_dim = self.dimensions
+        for x in range(-1, x_dim):
+            for y in range(-1, y_dim):
+                result.append((self.tile[0] + y, self.tile[1] + x))
+
+        return result
 
     @property
     def tile_coordinates(self):
@@ -71,3 +92,8 @@ class Projectile(ZeldaObject):
 class Item(ZeldaObject):
     """Structured data for an item."""
     timer : int
+
+    @property
+    def dimensions(self) -> Tuple[int, int]:
+        """The dimensions of the object."""
+        return 1, 1
