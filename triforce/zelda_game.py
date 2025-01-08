@@ -56,7 +56,7 @@ class ZeldaGame:
         self.__dict__['level'] = info['level']
         self.__dict__['location'] = info['location']
         self.__dict__['in_cave'] = info['mode'] == MODE_CAVE
-        self.__dict__['room'] = Room.get_or_create(info['level'], info['location'], info['mode'] == MODE_CAVE, ram)
+        self.__dict__['room'] = Room.get_or_create(info['level'], info['location'], info['mode'] == MODE_CAVE, env)
 
         self.__dict__['link'] = self._build_link_status(tables)
 

@@ -137,6 +137,47 @@ class Direction(Enum):
     S = 4
     N = 8
 
+
+    @staticmethod
+    def get_location_in_direction(start, direction):
+        """Gets the location of the tile in the given direction."""
+        start_row, start_col = (start & 0xF0) >> 4, start & 0x0F
+
+        if direction == Direction.N:
+            new_row, new_col = start_row - 1, start_col
+        elif direction == Direction.S:
+            new_row, new_col = start_row + 1, start_col
+        elif direction == Direction.E:
+            new_row, new_col = start_row, start_col + 1
+        elif direction == Direction.W:
+            new_row, new_col = start_row, start_col - 1
+        else:
+            raise ValueError("Invalid direction provided.")
+
+        # Combine the new row and column into a single hex value
+        if not (0 <= new_row <= 0xF and 0 <= new_col <= 0xF):
+            raise ValueError("Resulting location is out of bounds.")
+
+        return (new_row << 4) | new_col
+
+    @staticmethod
+    def get_direction_from_movement(start, end):
+        """Gets the direction of movement from curr -> dest."""
+        start_row, start_col = (start & 0xF0) >> 4, start & 0x0F
+        end_row, end_col = (end & 0xF0) >> 4, end & 0x0F
+
+        if start_row > end_row:
+            return Direction.N
+        if start_row < end_row:
+            return Direction.S
+        if start_col < end_col:
+            return Direction.E
+        if start_col > end_col:
+            return Direction.W
+
+        raise ValueError("Start and end locations are the same, no movement occurred.")
+
+
     @staticmethod
     def from_ram_value(value):
         """Creates a Direction from the direction value stored in the game's RAM."""

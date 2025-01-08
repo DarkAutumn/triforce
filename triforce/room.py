@@ -10,6 +10,11 @@ from .zelda_objects import ZeldaObject
 from .zelda_enums import Direction
 from .zelda_game_data import zelda_game_data
 
+NORTH_DOOR_TILE = 0xf, 0x2
+WEST_DOOR_TILE = 0x2, 0xa
+EAST_DOOR_TILE = 0x1c, 0xa
+SOUTH_DOOR_TILE = 0xf, 0x12
+
              # north                     east
 DOOR_TILES = list(range(0x98, 0x9b+1)) + list(range(0xa4, 0xa7+1))
 TOP_CAVE_TILE = 0xf3
@@ -21,6 +26,7 @@ def init_walkable_tiles():
     tiles = [0x26, 0x24, 0xf3, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d]
     tiles += [0x84, 0x85, 0x86, 0x87]
     tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
+    tiles += DOOR_TILES    # we allow walking through doors for pathfinding
     return tiles
 
 def init_half_walkable_tiles():
@@ -46,15 +52,13 @@ class Room:
     """A room in the game."""
     _cache = {}
     @staticmethod
-    def get_or_create(level, location, cave, ram):
+    def get_or_create(level, location, cave, env):
         """Gets or creates a room."""
         key = (level, location, cave)
         if key in Room._cache:
             result = Room._cache[key]
         else:
-            map_offset, map_len = zelda_game_data.tables['tile_layout']
-            tiles = ram[map_offset:map_offset+map_len]
-            tiles = tiles.reshape((32, 22)).T.swapaxes(0, 1)
+            tiles = Room._get_tiles_from_ram(env)
             walkable_tiles = np.zeros(((tiles.shape[0] + 1, tiles.shape[1] + 1)), dtype=bool)
             for x in range(-1, tiles.shape[0]):
                 for y in range(-1, tiles.shape[1]):
@@ -85,21 +89,47 @@ class Room:
                     y -= 1
                     walkable_tiles[x, y] = walkable
 
-            result = Room(level, location, cave, tiles, walkable_tiles)
+            result = Room(level, location, cave, tiles, walkable_tiles, env)
             if result.is_loaded:
                 Room._cache[key] = result
 
         return result
 
-    def __init__(self, level, location, cave, tiles : np.ndarray, walkable : np.ndarray):
+    @staticmethod
+    def _get_tiles_from_ram(env):
+        map_offset, map_len = zelda_game_data.tables['tile_layout']
+        ram = env.unwrapped.get_ram()
+        tiles = ram[map_offset:map_offset+map_len]
+        tiles = tiles.reshape((32, 22)).T.swapaxes(0, 1)
+        return tiles
+
+    def __init__(self, level, location, cave, tiles : np.ndarray, walkable : np.ndarray, env):
         self.level = level
         self.location = location
         self.in_cave = cave
         self.tiles : np.ndarray = tiles
         self.walkable : np.ndarray = walkable
+        self.env = env
         self.exits = self._get_exit_tiles()
         self.cave_tile = self._get_cave_coordinates()
         self._wf_lru = OrderedDict()
+
+    def is_door_locked(self, direction : Direction):
+        """Returns whether the door in a particular direction is locked."""
+        match direction:
+            case Direction.N:
+                location = NORTH_DOOR_TILE
+            case Direction.E:
+                location = EAST_DOOR_TILE
+            case Direction.W:
+                location = WEST_DOOR_TILE
+            case Direction.S:
+                location = SOUTH_DOOR_TILE
+            case _:
+                raise ValueError(f"Invalid direction {direction}")
+
+        fresh_tiles = self._get_tiles_from_ram(self.env)
+        return fresh_tiles[location] in DOOR_TILES
 
     @property
     def is_loaded(self):
@@ -109,31 +139,45 @@ class Room:
 
     def _get_exit_tiles(self):
         exits = {}
-        curr = exits[Direction.N] = []
-        for x in range(0, self.tiles.shape[0] - 1):
-            if self.walkable[(x, 0)]:
-                curr.append((x, 0))
-                exits[(x, 0)] = Direction.N
+        if self.level == 0:
+            curr = exits[Direction.N] = []
+            for x in range(0, self.tiles.shape[0] - 1):
+                if self.walkable[(x, 0)]:
+                    curr.append((x, 0))
+                    exits[(x, 0)] = Direction.N
 
-        curr = exits[Direction.W] = []
-        for y in range(0, self.tiles.shape[1] - 1):
-            if self.walkable[(0, y)]:
-                curr.append((0, y))
-                exits[(0, y)] = Direction.W
+            curr = exits[Direction.S] = []
+            y = self.tiles.shape[1] - 2
+            for x in range(0, self.tiles.shape[0] - 1):
+                if self.walkable[(x, y)]:
+                    curr.append((x, y))
+                    exits[(x, y)] = Direction.S
 
-        curr = exits[Direction.S] = []
-        y = self.tiles.shape[1] - 2
-        for x in range(0, self.tiles.shape[0] - 1):
-            if self.walkable[(x, y)]:
-                curr.append((x, y))
-                exits[(x, y)] = Direction.S
+            curr = exits[Direction.E] = []
+            x = self.tiles.shape[0] - 1
+            for y in range(0, self.tiles.shape[1] - 1):
+                if self.walkable[(x, y)]:
+                    curr.append((x, y))
+                    exits[(x, y)] = Direction.E
 
-        curr = exits[Direction.E] = []
-        x = self.tiles.shape[0] - 1
-        for y in range(0, self.tiles.shape[1] - 1):
-            if self.walkable[(x, y)]:
-                curr.append((x, y))
-                exits[(x, y)] = Direction.E
+            curr = exits[Direction.W] = []
+            for y in range(0, self.tiles.shape[1] - 1):
+                if self.walkable[(0, y)]:
+                    curr.append((0, y))
+                    exits[(0, y)] = Direction.W
+        else:
+            # dungeons only have the exit in one position:
+            if self.walkable[NORTH_DOOR_TILE]:
+                exits[Direction.N] = NORTH_DOOR_TILE[0], 0
+
+            if self.walkable[SOUTH_DOOR_TILE]:
+                exits[Direction.S] = SOUTH_DOOR_TILE[0], self.tiles.shape[1] - 1
+
+            if self.walkable[WEST_DOOR_TILE]:
+                exits[Direction.W] = 0, WEST_DOOR_TILE[1]
+
+            if self.walkable[EAST_DOOR_TILE]:
+                exits[Direction.E] = self.tiles.shape[0] - 1, EAST_DOOR_TILE[1]
 
         return exits
 
