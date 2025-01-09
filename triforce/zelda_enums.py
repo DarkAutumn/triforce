@@ -170,21 +170,18 @@ class Direction(Enum):
             case _:
                 raise ValueError(f"Unhandled Direction: {self}")
 
-def position_to_tile_index(x, y):
-    """Converts a screen position to a tile index."""
-    return (int(x // 8), int((y - GAMEPLAY_START_Y) // 8))
-
-def tile_index_to_position(x, y):
-    """Converts a tile index to a screen position."""
-    return (x * 8, y * 8 + GAMEPLAY_START_Y)
-
 ID_MAP = {x.value: x for x in ZeldaEnemyKind}
 ITEM_MAP = {x.value: x for x in ZeldaItemKind}
-
 
 class Coordinates:
     """Base class of coordinates in the game world."""
     def __init__(self, x: int, y: int):
+        if np.isscalar(x) and isinstance(x, np.uint8):
+            x = int(x)
+
+        if np.isscalar(y) and isinstance(y, np.uint8):
+            y = int(y)
+
         if not isinstance(x, int) or not isinstance(y, int):
             raise TypeError("Both elements must be integers.")
         self._x = x
@@ -235,16 +232,25 @@ class Coordinates:
             return NotImplemented
         return (self.x, self.y) < (other.x, other.y)
 
+    @property
+    def numpy(self):
+        """Returns the position as a numpy array."""
+        return np.array([self.x, self.y], dtype=np.float32)
+
 class Position(Coordinates):
     """A position in the game world."""
+    def __repr__(self):
+        return f"Pos({self.x}, {self.y})"
+
     @property
     def tile_index(self) -> 'TileIndex':
         """The tile coordinates of the position."""
         return TileIndex(int(self.x // 8), int((self.y - GAMEPLAY_START_Y) // 8))
 
-
 class TileIndex(Coordinates):
     """A tile index in the game world."""
+    def __repr__(self) -> str:
+        return f"Tile({self.x}, {self.y})"
 
     @property
     def position(self) -> Position:

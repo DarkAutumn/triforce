@@ -5,10 +5,9 @@ import json
 from typing import Sequence, Tuple
 import numpy as np
 
-from .model_parameters import GAMEPLAY_START_Y
 from .wavefront import Wavefront
 from .zelda_objects import ZeldaObject
-from .zelda_enums import Direction
+from .zelda_enums import Direction, TileIndex
 from .zelda_game_data import zelda_game_data
 
 NORTH_DOOR_TILE = 0xf, 0x2
@@ -155,46 +154,54 @@ class Room:
         if self.level == 0:
             curr = exits[Direction.N] = []
             for x in range(0, self.tiles.shape[0] - 1):
-                if self.walkable[(x, 0)]:
-                    curr.append((x, 0))
-                    exits[(x, 0)] = Direction.N
+                index = TileIndex(x, 0)
+                if self.walkable[index]:
+                    curr.append(index)
+                    exits[index] = Direction.N
 
             curr = exits[Direction.S] = []
             y = self.tiles.shape[1] - 2
             for x in range(0, self.tiles.shape[0] - 1):
-                if self.walkable[(x, y)]:
-                    curr.append((x, y))
-                    exits[(x, y)] = Direction.S
+                index = TileIndex(x, y)
+                if self.walkable[index]:
+                    curr.append(index)
+                    exits[index] = Direction.S
 
             curr = exits[Direction.E] = []
             x = self.tiles.shape[0] - 1
             for y in range(0, self.tiles.shape[1] - 1):
-                if self.walkable[(x, y)]:
-                    curr.append((x, y))
-                    exits[(x, y)] = Direction.E
+                index = TileIndex(x, y)
+                if self.walkable[index]:
+                    curr.append(index)
+                    exits[index] = Direction.E
 
             curr = exits[Direction.W] = []
             for y in range(0, self.tiles.shape[1] - 1):
-                if self.walkable[(0, y)]:
-                    curr.append((0, y))
-                    exits[(0, y)] = Direction.W
+                index = TileIndex(0, y)
+                if self.walkable[index]:
+                    curr.append(index)
+                    exits[index] = Direction.W
         else:
             # dungeons only have the exit in one position:
             if self.walkable[NORTH_DOOR_TILE]:
-                exits[Direction.N] = [(NORTH_DOOR_TILE[0], 0)]
-                exits[NORTH_DOOR_TILE] = Direction.N
+                index = TileIndex(*NORTH_DOOR_TILE)
+                exits[Direction.N] = [TileIndex(index.x, 0)]
+                exits[index] = Direction.N
 
             if self.walkable[SOUTH_DOOR_TILE]:
-                exits[Direction.S] = [(SOUTH_DOOR_TILE[0], self.tiles.shape[1] - 1)]
-                exits[SOUTH_DOOR_TILE] = Direction.S
+                index = TileIndex(*SOUTH_DOOR_TILE)
+                exits[Direction.S] = [TileIndex(index.x, self.tiles.shape[1] - 1)]
+                exits[index] = Direction.S
 
             if self.walkable[WEST_DOOR_TILE]:
-                exits[Direction.W] = [(0, WEST_DOOR_TILE[1])]
-                exits[WEST_DOOR_TILE] = Direction.W
+                index = TileIndex(*WEST_DOOR_TILE)
+                exits[Direction.W] = [TileIndex(0, index.y)]
+                exits[index] = Direction.W
 
             if self.walkable[EAST_DOOR_TILE]:
-                exits[Direction.E] = [(self.tiles.shape[0] - 1, EAST_DOOR_TILE[1])]
-                exits[EAST_DOOR_TILE] = Direction.E
+                index = TileIndex(*EAST_DOOR_TILE)
+                exits[Direction.E] = [TileIndex(self.tiles.shape[0] - 1, index.y)]
+                exits[index] = Direction.E
 
         return exits
 
@@ -274,10 +281,10 @@ class Room:
                     start_tiles.add(tile)
 
             elif isinstance(target, Direction):
-                for pos in self.exits[target]:
-                    start_tiles.add(pos)
+                for tile in self.exits[target]:
+                    start_tiles.add(tile)
 
-            elif isinstance(target, tuple) and len(target) == 2:
+            elif isinstance(target, TileIndex):
                 start_tiles.add(target)
 
             else:

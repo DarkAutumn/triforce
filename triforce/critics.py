@@ -342,7 +342,7 @@ class GameplayCritic(ZeldaCritic):
                 case Direction.W:
                     dir_vect = np.array([-1, 0], dtype=np.float32)
 
-            movement = np.array(curr_link.position, dtype=np.float32) - np.array(prev_link.position, dtype=np.float32)
+            movement = curr_link.position.numpy - prev_link.position.numpy
             progress = np.dot(movement, dir_vect)
             rewards['reward-move-closer'] = self.move_closer_reward * progress / self.movement_scale_factor
 

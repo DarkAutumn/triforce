@@ -1,10 +1,10 @@
-from typing import Sequence, Tuple
+from typing import Sequence
 import gymnasium as gym
 import numpy as np
 
+from .zelda_enums import TileIndex
 from .link import Link
 from .zelda_objects import ZeldaObject
-
 from .zelda_game import ZeldaGame
 
 NUM_DIRECTION_VECTORS = 5
@@ -51,14 +51,15 @@ class ZeldaVectorFeatures(gym.Wrapper):
         # create an np array of the vectors
         return np.array(result, dtype=np.float32)
 
-    def _get_all_tiles(self, link : Link, group : Sequence[ZeldaObject|Tuple[int, int]]):
-
+    def _get_all_tiles(self, link : Link, group : Sequence[ZeldaObject|TileIndex]):
         result = []
         for item in group:
             if isinstance(item, ZeldaObject):
                 result.extend(x for x in item.self_tiles if x not in link.self_tiles)
-            elif item not in link.self_tiles:
+            elif isinstance(item, TileIndex):
                 result.append(item)
+            else:
+                raise ValueError(f"Unknown type: {type(item)}")
 
         return result
 

@@ -3,7 +3,7 @@ from typing import Tuple
 
 import numpy as np
 
-from .zelda_enums import ZeldaEnemyKind, ZeldaItemKind, ZeldaProjectileId, position_to_tile_index
+from .zelda_enums import TileIndex, ZeldaEnemyKind, ZeldaItemKind, ZeldaProjectileId, Position
 
 @dataclass
 class ZeldaObject:
@@ -19,7 +19,7 @@ class ZeldaObject:
     game : 'ZeldaGame' # type: ignore
     index : int
     id : ZeldaItemKind | ZeldaEnemyKind | ZeldaProjectileId | int
-    position : Tuple[int, int]
+    position : Position
 
     @property
     def dimensions(self) -> Tuple[int, int]:
@@ -29,7 +29,7 @@ class ZeldaObject:
     @property
     def tile(self):
         """The x, y coordinates of the top-left tile in this object."""
-        return position_to_tile_index(*self.position)
+        return self.position.tile_index
 
     @property
     def link_overlap_tiles(self):
@@ -38,7 +38,7 @@ class ZeldaObject:
         x_dim, y_dim = self.dimensions
         for x in range(-1, x_dim):
             for y in range(-1, y_dim):
-                result.append((self.tile[0] + x, self.tile[1] + y))
+                result.append(TileIndex(self.tile[0] + x, self.tile[1] + y))
 
         return result
 
@@ -49,7 +49,7 @@ class ZeldaObject:
         x_dim, y_dim = self.dimensions
         for x in range(x_dim):
             for y in range(y_dim):
-                result.append((self.tile[0] + x, self.tile[1] + y))
+                result.append(TileIndex(self.tile[0] + x, self.tile[1] + y))
 
         return result
 
@@ -76,8 +76,7 @@ class ZeldaObject:
         """The (un-normalized) vector from link to the object."""
         vector = self.__dict__.get('_vector', None)
         if vector is None:
-            link_pos = self.game.link.position
-            vector = np.array(self.position, dtype=np.float32) - np.array(link_pos, dtype=np.float32)
+            vector = self.position.numpy - self.game.link.position.numpy
             self.__dict__['_vector']  = vector
 
         return vector

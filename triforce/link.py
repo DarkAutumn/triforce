@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from .zelda_enums import AnimationState, ArrowKind, BoomerangKind, CandleKind, Direction, PotionKind, RingKind, \
-    SelectedEquipmentKind, SwordKind, ZeldaAnimationKind, SoundKind
+    SelectedEquipmentKind, SwordKind, TileIndex, ZeldaAnimationKind, SoundKind
 from .zelda_objects import ZeldaObject
 
 ANIMATION_BEAMS_ACTIVE = 16
@@ -34,7 +34,7 @@ class Link(ZeldaObject):
         x_dim, y_dim = self.dimensions
         for x in range(0, x_dim):
             for y in range(0, y_dim):
-                yield (self.tile[0] + y, self.tile[1] + x)
+                yield TileIndex(self.tile[0] + y, self.tile[1] + x)
 
     # Health
     @property
