@@ -209,7 +209,7 @@ class DisplayWindow:
                     mode = 'p'
 
             # update rewards for display
-            self._update_rewards(reward_map, buttons, last_info, info)
+            self._update_rewards(env, reward_map, buttons, last_info, info)
 
             while True:
                 if rgb_deque:
@@ -437,7 +437,7 @@ class DisplayWindow:
                                            self.obs_width)
         y_pos = self._write_key_val_aligned(surface, "Beams", f"{obs['features'][1]:.1f}", x_pos, y_pos, self.obs_width)
 
-    def _update_rewards(self, reward_map, buttons, last_info, info):
+    def _update_rewards(self, env, reward_map, buttons, last_info, info):
         curr_rewards = {}
         if 'rewards' in info:
             for k, v in info['rewards'].items():
@@ -452,7 +452,7 @@ class DisplayWindow:
         if prev is not None and prev.rewards == curr_rewards and prev.action == action:
             prev.count += 1
         else:
-            on_press = DebugReward(self.scenario, last_info, info)
+            on_press = DebugReward(env, self.scenario, last_info, info)
             buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, self.text_width, on_press))
 
     def _draw_arrow(self, surface, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
@@ -617,13 +617,15 @@ class DisplayWindow:
 
 class DebugReward:
     """An action to take when a reward button is clicked."""
-    def __init__(self, scenario : ZeldaScenario, last_info, info):
+    def __init__(self, env, scenario : ZeldaScenario, last_info, info):
+        self.env = env
         self.scenario = scenario
         self.last_info = last_info
         self.info = info
 
     def __call__(self):
-        reward_dict, terminated, truncated, reason = simulate_critique(self.scenario, self.last_info, self.info)
+        result = simulate_critique(self.env, self.scenario, self.last_info, self.info)
+        reward_dict, terminated, truncated, reason = result
         print(f"{reward_dict = }")
         print(f"{terminated = }")
         print(f"{truncated = }")
