@@ -53,6 +53,8 @@ class Room:
     @staticmethod
     def get_or_create(level, location, cave, env):
         """Gets or creates a room."""
+        # pylint: disable=too-many-locals
+
         key = (level, location, cave)
         if key in Room._cache:
             result = Room._cache[key]
@@ -150,6 +152,7 @@ class Room:
         return any_walkable
 
     def _get_exit_tiles(self):
+        # pylint: disable=too-many-branches
         exits = {}
         if self.level == 0:
             curr = exits[Direction.N] = []
