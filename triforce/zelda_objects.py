@@ -1,13 +1,9 @@
 from dataclasses import dataclass
-from enum import Enum
 from typing import Tuple
 
 import numpy as np
 
-from .zelda_enums import ZeldaEnemyKind, ZeldaItemKind, position_to_tile_index
-
-class ZeldaProjectileId(Enum):
-    """Projectile codes for the game."""
+from .zelda_enums import ZeldaEnemyKind, ZeldaItemKind, ZeldaProjectileId, position_to_tile_index
 
 @dataclass
 class ZeldaObject:

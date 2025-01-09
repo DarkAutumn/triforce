@@ -9,7 +9,7 @@ from .room import Room
 from .zelda_objects import Item, Projectile
 from .enemy import Enemy
 from .link import Link
-from .zelda_enums import ITEM_MAP, SwordKind, ZeldaEnemyKind, Direction, SoundKind, position_to_tile_index
+from .zelda_enums import ITEM_MAP, MapLocation, SwordKind, ZeldaEnemyKind, Direction, SoundKind, position_to_tile_index
 from .zelda_game_data import zelda_game_data
 
 MODE_GAME_OVER = 8
@@ -209,7 +209,7 @@ class ZeldaGame:
     @property
     def full_location(self):
         """The full location of the room."""
-        return (self.level, self.location, self.in_cave)
+        return MapLocation(self.level, self.location, self.in_cave)
 
     @property
     def rupees_to_add(self):

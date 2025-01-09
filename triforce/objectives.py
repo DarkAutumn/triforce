@@ -3,7 +3,7 @@ from enum import Enum
 import heapq
 from typing import Dict, Optional
 from .zelda_game import ZeldaGame
-from .zelda_enums import BoomerangKind, Direction, SwordKind, ZeldaItemKind
+from .zelda_enums import BoomerangKind, Direction, MapLocation, SwordKind, ZeldaItemKind
 
 LOCKED_DISTANCE = 4
 
@@ -52,11 +52,11 @@ CAVE_TREASURE_TILE = 0x0f, 0x0b
 
 class RoomMemory:
     """What the agent learns over the course of the playthrough."""
-    def __init__(self, rooms, state : ZeldaGame):
+    def __init__(self, state : ZeldaGame):
         self.level = state.level
-        self.location = state.location
+        self.full_location = state.full_location
         self.exits = state.room.exits.copy()
-        if self.location in dungeon_entrances.values():
+        if state.location in dungeon_entrances.values():
             self.exits[Direction.S] = []
 
         self.locked = None
@@ -64,8 +64,6 @@ class RoomMemory:
         item_map = overworld_to_item if self.level == 0 else dungeon_to_item
         self.item = item_map.get(state.location, None)
         self.referesh_state(state)
-
-        rooms[self.level, self.location] = self
 
 
     def referesh_state(self, state):
@@ -76,7 +74,7 @@ class RoomMemory:
     def enumerate_adjacent_rooms(self):
         """Returns the list of all rooms connected to this one."""
         for direction in (x for x in self.exits if isinstance(x, Direction) and self.exits[x]):
-            yield direction, Direction.get_location_in_direction(self.location, direction)
+            yield direction, self.full_location.get_location_in_direction(direction)
 
 class Objectives:
     """Determines the current objectives for the agent."""
@@ -104,11 +102,11 @@ class Objectives:
             return
 
         assert state.room.is_loaded
-        key = state.level, state.location
-        if key not in self._rooms:
-            RoomMemory(self._rooms, state)
+        if state.full_location not in self._rooms:
+            room = RoomMemory(state)
+            self._rooms[state.full_location] = room
         else:
-            self._rooms[key].referesh_state(state)
+            self._rooms[state.full_location].referesh_state(state)
 
     def _get_dungeon_objectives(self, prev : Optional[ZeldaGame], state : ZeldaGame):
         # If treasure is already dropped, get it
@@ -117,7 +115,7 @@ class Objectives:
             return Objective(ObjectiveKind.TREASURE, [treasure_tile])
 
         # If we collect the treasure, mark it as taken
-        room_memory : RoomMemory = self._rooms.get((state.level, state.location))
+        room_memory : RoomMemory = self._rooms.get(state.full_location, None)
         if room_memory.item and prev and prev.treasure_tile is not None:
             room_memory.item = None
 
@@ -147,7 +145,7 @@ class Objectives:
 
     def _paths_to_targets(self, state, paths):
         next_rooms = set(x[1] for x in paths if len(x) > 1)
-        directions = [Direction.get_direction_from_movement(state.location, x) for x in next_rooms]
+        directions = [state.full_location.get_direction_of_movement(x) for x in next_rooms]
 
         targets = []
         for direction in directions:
@@ -176,11 +174,11 @@ class Objectives:
     def _get_route_to_dungeon_objective(self, state : ZeldaGame):
         # level 2 is pretty easy, we'll allow going there first
         if state.link.triforce_pieces == 0:
-            dungeon_location = item_to_overworld[1]
-            dist = self._map_mahnattan_distance(state.location, dungeon_location)
+            dungeon_location = MapLocation(0, item_to_overworld[1], False)
+            dist = state.full_location.manhattan_distance(dungeon_location)
 
-            dungeon2 = item_to_overworld[2]
-            if dist >self._map_mahnattan_distance(state.location, dungeon2):
+            dungeon2 = MapLocation(0, item_to_overworld[2], False)
+            if dist > state.full_location.manhattan_distance(dungeon2):
                 dungeon_location = dungeon2
         else:
             for i in range(1, 9):
@@ -224,25 +222,17 @@ class Objectives:
 
         # otherwise we'll just assume every room is connected
         else:
-            for diff in [0x10, -0x10, 1, -1]:
-                curr = location + diff
-                if 0 <= curr < 255:
-                    yield curr, False
-
-    def _map_mahnattan_distance(self, start, end):
-        start = start >> 4, start & 0xF
-        end = end >> 4, end & 0xF
-        return abs(start[0] - end[0]) + abs(start[1] - end[1])
+            for next_room in location.enumerate_possible_neighbors():
+                yield next_room, False
 
     def _get_route_with_astar(self, level, start, end, key_count):
-        # pylint: disable=too-many-locals
-        def heuristic(a, b):
-            a = (a & 0xF0) >> 4, a & 0x0F
-            b = (b & 0xF0) >> 4, b & 0x0F
-
-            return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
+        # pylint: disable=too-many-locals, too-many-branches
         # Special case: if start == end, return immediately
+        if not isinstance(start, MapLocation):
+            start = MapLocation(level, start, False)
+        if not isinstance(end, MapLocation):
+            end = MapLocation(level, end, False)
+
         if start == end:
             return [[start]]
 
@@ -250,7 +240,7 @@ class Objectives:
         #   g = cost_so_far to reach `room`
         #   f = g + heuristic(room, end)
         open_list = []
-        start_h = heuristic(start, end)
+        start_h = start.manhattan_distance(end)
         heapq.heappush(open_list, (start_h, 0, start))
 
         # cost_so_far[node] = minimal cost to get to that node
@@ -293,7 +283,7 @@ class Objectives:
                     # We found a strictly better path to `next_room`
                     cost_so_far[next_room] = new_cost
                     parents[next_room] = [current_room]
-                    new_f = new_cost + heuristic(next_room, end)
+                    new_f = new_cost + next_room.manhattan_distance(end)
                     heapq.heappush(open_list, (new_f, new_cost, next_room))
 
                 elif new_cost == cost_so_far[next_room]:
