@@ -69,17 +69,17 @@ class ZeldaGameWrapper(gym.Wrapper):
             info['action'] = self.action_translator.get_action_type(action)
             info['buttons'] = self._get_button_names(action, self.env.unwrapped.buttons)
 
-        curr = ZeldaGame(prev, self, info, self._total_frames)
-        self.states.append(curr)
+        state = ZeldaGame(prev, self, info, self._total_frames)
+        self.states.append(state)
         if prev is not None:
-            info['state_change'] = ZeldaStateChange(self, prev, curr, self._discounts)
+            info['state_change'] = ZeldaStateChange(self, prev, state, self._discounts)
 
-        info['state'] = curr
-        info['total_frames'] = self._total_frames
+        info['state'] = state
+        state.total_frames = self._total_frames
 
-        objectives = self._objectives.get_current_objectives(prev, curr)
-        info['objectives'] = objectives
-        info['wavefront'] = curr.room.calculate_wavefront_for_link(objectives.targets)
+        objectives = self._objectives.get_current_objectives(prev, state)
+        state.objectives = objectives
+        state.wavefront = state.room.calculate_wavefront_for_link(objectives.targets)
 
     def _get_button_names(self, act, buttons):
         result = []
