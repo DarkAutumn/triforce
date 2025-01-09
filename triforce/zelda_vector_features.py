@@ -54,7 +54,7 @@ class ZeldaVectorFeatures(gym.Wrapper):
         state_change : ZeldaStateChange = self.state_change
 
         if state_change.previous.full_location != state_change.current.full_location:
-            self._prev_loc = state_change.current.full_location
+            self._prev_loc = state_change.previous.full_location
 
         augmented_observation = self._augment_observation(observation, state_change.current)
         return augmented_observation, reward, terminated, truncated, info
@@ -105,7 +105,7 @@ class ZeldaVectorFeatures(gym.Wrapper):
         objectives = self._get_objectives_vector(state, state.objectives)
 
         source_direction = np.zeros(4, dtype=np.float32)
-        self._assign_direction(source_direction, self._prev_loc.get_direction_of_movement(state.full_location))
+        self._assign_direction(source_direction, state.full_location.get_direction_of_movement(self._prev_loc))
 
         features = np.zeros(2, dtype=np.float32)
         features[0] = 1.0 if state.active_enemies else 0.0
