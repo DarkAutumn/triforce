@@ -213,7 +213,7 @@ class Room:
         for x in range(self.tiles.shape[0]):
             for y in range(self.tiles.shape[1]):
                 if self.tiles[x, y] == TOP_CAVE_TILE:
-                    return (x, y)
+                    return TileIndex(x, y)
 
         return None
 
