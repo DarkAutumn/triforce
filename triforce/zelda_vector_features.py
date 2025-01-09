@@ -10,7 +10,7 @@ from .zelda_game import ZeldaGame
 
 OBJECT_KINDS = 3
 OBJECTS_PER_KIND = 2
-BOOLEAN_FEATURES = 15
+BOOLEAN_FEATURES = 12
 DISTANCE_SCALE = 100.0
 
 # Object features are defined as a normalized vector (x, y) and a distance scaled to [0, 1]:
@@ -40,12 +40,10 @@ class ZeldaVectorFeatures(gym.Wrapper):
     """A wrapper that adds additional (non-image) features to the observation space."""
     def __init__(self, env):
         super().__init__(env)
-        # Original image observation space
         self.image_obs_space = env.observation_space
-        # Define a new observation space as a dictionary
         self.observation_space = gym.spaces.Dict({
             "image": self.image_obs_space,
-            "objects" : gym.spaces.Box(low=-1.0, high=1.0, shape=(OBJECT_KINDS, OBJECTS_PER_KIND, 3), dtype=np.float32),
+            "vectors" : gym.spaces.Box(low=-1.0, high=1.0, shape=(OBJECT_KINDS, OBJECTS_PER_KIND, 3), dtype=np.float32),
             "information" : gym.spaces.MultiBinary(BOOLEAN_FEATURES)
         })
 
@@ -53,7 +51,7 @@ class ZeldaVectorFeatures(gym.Wrapper):
 
     def step(self, action):
         observation, reward, terminated, truncated, info = self.env.step(action)
-        state_change : ZeldaStateChange = info['state_change']
+        state_change : ZeldaStateChange = self.state_change
 
         if state_change.previous.full_location != state_change.current.full_location:
             self._prev_loc = state_change.current.full_location
@@ -63,7 +61,7 @@ class ZeldaVectorFeatures(gym.Wrapper):
 
     def reset(self, **_):
         observation, info = self.env.reset()
-        state = info['state']
+        state = self.env.state
         self._prev_loc = state.full_location
         return self._augment_observation(observation, state), info
 
