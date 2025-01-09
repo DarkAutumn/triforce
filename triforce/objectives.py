@@ -118,7 +118,7 @@ class Objectives:
 
         # If we collect the treasure, mark it as taken
         room_memory : RoomMemory = self._rooms.get((state.level, state.location))
-        if room_memory and room_memory.item and prev.treasure_tile is not None:
+        if room_memory.item and prev and prev.treasure_tile is not None:
             room_memory.item = None
 
         # If we know there's treasure in the room not spawned, kill enemies.
