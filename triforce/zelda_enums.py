@@ -237,6 +237,20 @@ class Coordinates:
         """Returns the position as a numpy array."""
         return np.array([self.x, self.y], dtype=np.float32)
 
+    def __add__(self, other):
+        if isinstance(other, Coordinates):
+            return Coordinates(self.x + other.x, self.y + other.y)
+        if len(other) == 2:
+            return Coordinates(self.x + other[0], self.y + other[1])
+        raise TypeError("Can only add Coordinates or a tuple of length 2.")
+
+    def __sub__(self, other):
+        if isinstance(other, Coordinates):
+            return Coordinates(self.x - other.x, self.y - other.y)
+        if isinstance(other, tuple) and len(other) == 2:
+            return Coordinates(self.x - other[0], self.y - other[1])
+        raise TypeError("Can only subtract Coordinates or a tuple of length 2.")
+
 class Position(Coordinates):
     """A position in the game world."""
     def __repr__(self):
