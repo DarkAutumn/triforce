@@ -112,23 +112,18 @@ class Objectives:
 
     def _get_dungeon_objectives(self, prev : Optional[ZeldaGame], state : ZeldaGame):
         # If treasure is already dropped, get it
-        room_memory : RoomMemory = self._rooms.get((state.level, state.location))
-
         treasure_tile = state.treasure_tile
         if treasure_tile is not None:
             return Objective(ObjectiveKind.TREASURE, [treasure_tile])
 
-        if room_memory.item and prev.treasure_tile is not None:
+        # If we collect the treasure, mark it as taken
+        room_memory : RoomMemory = self._rooms.get((state.level, state.location))
+        if room_memory and room_memory.item and prev.treasure_tile is not None:
             room_memory.item = None
 
         # If we know there's treasure in the room not spawned, kill enemies.
         if room_memory.item is not None:
-            if state.enemies:
-                targets = [ tile
-                            for enemy in state.enemies if enemy.is_active
-                            for tile in enemy.link_overlap_tiles
-                            ]
-
+            if targets := self._get_enemy_targets(state.enemies):
                 return Objective(ObjectiveKind.FIGHT, targets)
 
             room_memory.item = None
@@ -137,6 +132,18 @@ class Objectives:
         target_item = ZeldaItemKind(ZeldaItemKind.Triforce1.value - state.level + 1)
         item_location = item_to_dungeon[target_item]
         return self._get_route_objective(state, item_location)
+
+    def _get_enemy_targets(self, enemies):
+        if not enemies:
+            return []
+
+        # Enemies could still be loading in.  We either want to target just the active enemies (if there are any)
+        # or all enemies if there are none active.
+        return [ tile
+                 for enemy in enemies if enemy.is_active
+                 for tile in enemy.link_overlap_tiles
+                 ] or [tile for enemy in enemies for tile in enemy.self_tiles]
+
 
     def _paths_to_targets(self, state, paths):
         next_rooms = set(x[1] for x in paths if len(x) > 1)
