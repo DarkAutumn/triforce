@@ -58,13 +58,6 @@ class ZeldaObject:
         return result
 
     @property
-    def tile_coordinates(self):
-        """The tile coordinates of the object."""
-
-        x, y = position_to_tile_index(*self.position)
-        return [(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)]
-
-    @property
     def distance(self):
         """The distance from link to the object."""
         value = np.linalg.norm(self.vector_from_link)

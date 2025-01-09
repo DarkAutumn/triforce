@@ -183,18 +183,16 @@ class ZeldaGame:
         if not active_enemies:
             return []
 
-        link_top_left = self.link.tile_coordinates[0]
-        link_ys = (link_top_left[0], link_top_left[0] + 1)
-        link_xs = (link_top_left[1], link_top_left[1] + 1)
+        link_xs = (self.link.tile[0], self.link.tile[0] + 1)
+        link_ys = (self.link.tile[1], self.link.tile[1] + 1)
 
         result = []
         for enemy in active_enemies:
             if not enemy.is_invulnerable:
-                enemy_topleft = enemy.tile_coordinates[0]
-                if enemy_topleft[0] in link_ys or enemy_topleft[0] + 1 in link_ys:
+                if enemy.tile[0] in link_xs or enemy.tile[0] + 1 in link_xs:
                     result.append(enemy)
 
-                if enemy_topleft[1] in link_xs or enemy_topleft[1] + 1 in link_xs:
+                if enemy.tile[1] in link_ys or enemy.tile[1] + 1 in link_ys:
                     result.append(enemy)
 
         return result
