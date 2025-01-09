@@ -42,7 +42,7 @@ class ZeldaObject:
         x_dim, y_dim = self.dimensions
         for x in range(-1, x_dim):
             for y in range(-1, y_dim):
-                result.append((self.tile[1] + x, self.tile[0] + y))
+                result.append((self.tile[0] + x, self.tile[1] + y))
 
         return result
 
