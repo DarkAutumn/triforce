@@ -317,6 +317,9 @@ class MapLocation(Coordinates):
         """Gets the direction of movement from curr -> dest."""
         assert self.manhattan_distance(next_room) in (0, 1)
 
+        if self.in_cave and not next_room.in_cave:
+            return Direction.S
+
         if self.x < next_room.x:
             return Direction.E
         if self.x > next_room.x:
@@ -330,6 +333,10 @@ class MapLocation(Coordinates):
 
     def manhattan_distance(self, other):
         """Calculates the Manhattan distance between two locations."""
+        if self.in_cave != other.in_cave:
+            assert self.level == other.level and self.x == other.x and self.y == other.y
+            return 1
+
         assert self.level == other.level and self.in_cave == other.in_cave
         return abs(self.x - other.x) + abs(self.y - other.y)
 
