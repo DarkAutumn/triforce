@@ -1,7 +1,7 @@
 """Structured data for Zelda game state."""
 
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import gymnasium as gym
 
@@ -9,7 +9,7 @@ from .room import Room
 from .zelda_objects import Item, Projectile
 from .enemy import Enemy
 from .link import Link
-from .zelda_enums import ITEM_MAP, MapLocation, Position, SwordKind, ZeldaEnemyKind, Direction, SoundKind
+from .zelda_enums import ITEM_MAP, MapLocation, Position, SwordKind, TileIndex, ZeldaEnemyKind, Direction, SoundKind
 from .zelda_game_data import zelda_game_data
 
 MODE_GAME_OVER = 8
@@ -156,7 +156,7 @@ class ZeldaGame:
         return bool(self.sound_pulse_1 & sound)
 
     @property
-    def treasure_location(self) -> Optional[Tuple[int, int]]:
+    def treasure_location(self) -> Optional[Position]:
         """Returns the location of the treasure in the current room, or None if there isn't one."""
         if self.treasure_flag == 0:
             return Position(self.treasure_x, self.treasure_y)
@@ -164,7 +164,7 @@ class ZeldaGame:
         return None
 
     @property
-    def treasure_tile(self) -> Optional[Tuple[int, int]]:
+    def treasure_tile(self) -> Optional[TileIndex]:
         """Returns the tile coordinates of the treasure in the current room, or None if there isn't one."""
         location = self.treasure_location
         return location.tile_index if location is not None else None
