@@ -5,14 +5,11 @@ from typing import List, Optional, Tuple
 
 import gymnasium as gym
 
-from .tile_states import position_to_tile_index
-
 from .room import Room
-
 from .zelda_objects import Item, Projectile
 from .enemy import Enemy
 from .link import Link
-from .zelda_enums import ITEM_MAP, SwordKind, ZeldaEnemyKind, Direction, SoundKind
+from .zelda_enums import ITEM_MAP, SwordKind, ZeldaEnemyKind, Direction, SoundKind, position_to_tile_index
 from .zelda_game_data import zelda_game_data
 
 MODE_GAME_OVER = 8
@@ -170,8 +167,7 @@ class ZeldaGame:
     def treasure_tile(self) -> Optional[Tuple[int, int]]:
         """Returns the tile coordinates of the treasure in the current room, or None if there isn't one."""
         if self.treasure_flag == 0:
-            y, x = position_to_tile_index(self.treasure_x, self.treasure_y)
-            return x, y # TODO
+            return position_to_tile_index(self.treasure_x, self.treasure_y)
 
         return None
 

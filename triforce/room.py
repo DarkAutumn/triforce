@@ -5,6 +5,7 @@ import json
 from typing import Sequence, Tuple
 import numpy as np
 
+from .model_parameters import GAMEPLAY_START_Y
 from .wavefront import Wavefront
 from .zelda_objects import ZeldaObject
 from .zelda_enums import Direction

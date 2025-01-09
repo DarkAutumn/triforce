@@ -6,7 +6,6 @@ import numpy as np
 
 from .objectives import ObjectiveKind
 from .zelda_cooldown_handler import ActionType
-from .tile_states import TileState
 
 from .zelda_enums import Direction, SelectedEquipmentKind, SwordKind, ZeldaAnimationKind, AnimationState
 from .game_state_change import ZeldaStateChange
@@ -338,7 +337,7 @@ class GameplayCritic(ZeldaCritic):
         # There are places that can be clipped to that are impassible.  If this happens, we need to make sure not to
         # reward the agent for finding them.  This is because it's likely the agent will use this to break the
         # reward system for infinite rewards.
-        if self.__any_impassible_tiles(curr.tile_states, curr_link.tile_coordinates):
+        if self.__any_impassible_tiles():
             rewards['penalty-bad-path'] = self.move_away_penalty  # don't take alignment into account for this
 
         # If we are headed to the same location as last time, simply check whether we made progress towards it.
@@ -395,27 +394,30 @@ class GameplayCritic(ZeldaCritic):
         it is still wary of moving too close to an enemy."""
         prev, curr = state_change.previous, state_change.current
 
+
         if not state_change.health_lost and not curr.link.is_blocking:
-            warning_diff = curr.link_warning_tiles - prev.link_warning_tiles
-            danger_diff = curr.link_danger_tiles - prev.link_danger_tiles
+            prev_active = [enemy.index for enemy in prev.active_enemies]
+
+            prev_overlap = [tile
+                            for enemy in prev.active_enemies
+                            for tile in enemy.link_overlap_tiles
+                            if tile in prev.link.self_tiles]
+
+            curr_overlap = [tile
+                            for enemy in curr.active_enemies
+                            if enemy.index in prev_active
+                            for tile in enemy.link_overlap_tiles
+                            if tile in curr.link.self_tiles]
+
+            danger_diff = len(curr_overlap) - len(prev_overlap)
 
             if danger_diff > 0:
                 rewards['penalty-dangerous-move'] = self.danger_tile_penalty
             elif danger_diff < 0:
                 if len(prev.active_enemies) == len(curr.active_enemies):
                     rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
-            elif warning_diff > 0:
-                rewards['penalty-risky-move'] = self.warning_tile_penalty
-            elif warning_diff < 0:
-                if len(prev.active_enemies) == len(curr.active_enemies):
-                    rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
 
-    def __any_impassible_tiles(self, tile_states, tile_coordinates):
-        for tile in tile_coordinates:
-            if 0 <= tile[0] < tile_states.shape[0] and 0 <= tile[1] < tile_states.shape[1] \
-                    and tile_states[tile] == TileState.IMPASSABLE.value:
-                return True
-
+    def __any_impassible_tiles(self):
         return False
 
     def __xy_from_coord(self, bottom_left):

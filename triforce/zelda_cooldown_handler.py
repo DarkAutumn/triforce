@@ -7,8 +7,7 @@ from enum import Enum
 from typing import Optional
 import numpy as np
 
-from .zelda_enums import Direction
-from .tile_states import position_to_tile_index
+from .zelda_enums import Direction, position_to_tile_index
 
 # movement related constants
 WS_ADJUSTMENT_FRAMES = 4
@@ -202,18 +201,18 @@ class ZeldaCooldownHandler:
             new_tile_index = position_to_tile_index(x, y)
             match direction:
                 case Direction.N:
-                    if old_tile_index[0] != new_tile_index[0]:
+                    if old_tile_index[1] != new_tile_index[1]:
                         break
                 case Direction.S:
-                    if old_tile_index[0] != new_tile_index[0]:
+                    if old_tile_index[1] != new_tile_index[1]:
                         obs, terminated, truncated, info = self.act_for(action, WS_ADJUSTMENT_FRAMES)
                         total_frames += WS_ADJUSTMENT_FRAMES
                         break
                 case Direction.E:
-                    if old_tile_index[1] != new_tile_index[1]:
+                    if old_tile_index[0] != new_tile_index[0]:
                         break
                 case Direction.W:
-                    if old_tile_index[1] != new_tile_index[1]:
+                    if old_tile_index[0] != new_tile_index[0]:
                         obs, terminated, truncated, info = self.act_for(action, WS_ADJUSTMENT_FRAMES)
                         total_frames += WS_ADJUSTMENT_FRAMES
                         break

@@ -2,7 +2,6 @@
 
 import retro
 
-from .zelda_room_map_wrapper import ZeldaRoomMapWrapper
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
@@ -32,9 +31,6 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
     # Wrap the game to produce new info about game state and to hold the button down after the action is
     # taken to achieve the desired number of actions per second.
     env = ZeldaGameWrapper(env)
-
-    # Provide a tile map of the room.
-    env = ZeldaRoomMapWrapper(env)
 
     # Frame stack and convert to grayscale if requested
     env = ZeldaObservationWrapper(env, captured_frames, grayscale, kind=obs_kind, framestack=framestack)

@@ -7,7 +7,6 @@ import gymnasium as gym
 import retro
 from triforce.action_space import ZeldaActionSpace
 from triforce.game_state_change import ZeldaStateChange
-from triforce.zelda_room_map_wrapper import ZeldaRoomMapWrapper
 from triforce.zelda_wrapper import ZeldaGameWrapper
 
 class CriticWrapper(gym.Wrapper):
@@ -57,7 +56,6 @@ class ZeldaActionReplay:
         env = retro.make(game='Zelda-NES', state=savestate, inttype=retro.data.Integrations.CUSTOM_ONLY, render_mode=render_mode)
         self.data = env.data
         env = ZeldaGameWrapper(env, deterministic=True)
-        env = ZeldaRoomMapWrapper(env)
         env = ZeldaActionSpace(env, 'all')
         if wrapper:
             env = wrapper(env)

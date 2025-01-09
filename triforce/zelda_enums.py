@@ -4,6 +4,8 @@ from enum import Enum
 
 import numpy as np
 
+from .model_parameters import GAMEPLAY_START_Y
+
 class SoundKind(Enum):
     """Sound codes for the game."""
     # pylint: disable=invalid-name
@@ -128,7 +130,6 @@ class ZeldaItemKind(Enum):
         """Returns True if the item is a triforce piece."""
         return -109 <= self.value <= -101
 
-
 class Direction(Enum):
     """The four cardinal directions, as the game defines them."""
     UNINITIALIZED = 0
@@ -206,6 +207,14 @@ class Direction(Enum):
                 return np.array([0, -1])
             case _:
                 raise ValueError(f"Unhandled Direction: {self}")
+
+def position_to_tile_index(x, y):
+    """Converts a screen position to a tile index."""
+    return (int(x // 8), int((y - GAMEPLAY_START_Y) // 8))
+
+def tile_index_to_position(x, y):
+    """Converts a tile index to a screen position."""
+    return (x * 8, y * 8 + GAMEPLAY_START_Y)
 
 ID_MAP = {x.value: x for x in ZeldaEnemyKind}
 ITEM_MAP = {x.value: x for x in ZeldaItemKind}

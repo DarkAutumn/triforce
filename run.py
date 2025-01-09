@@ -19,7 +19,6 @@ import tqdm
 from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
                      TRAINING_SCENARIOS
 from triforce.game_state_change import ZeldaStateChange
-from triforce.tile_states import TileState
 from triforce.zelda_game import ZeldaGame
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
@@ -615,17 +614,6 @@ class DisplayWindow:
                 # Draw the text
                 surface.blit(text_surface, text_rect)
 
-    def _find_special_tiles(self, state : ZeldaGame):
-        tiles = []
-        tile_states = state.tile_states
-        for y in range(tile_states.shape[0]):
-            for x in range(tile_states.shape[1]):
-                if tile_states[y, x] not in (TileState.WALKABLE.value, TileState.IMPASSABLE.value,
-                                             TileState.BRICK.value, TileState.HALF_WALKABLE.value):
-                    tiles.append((y, x))
-
-        tiles += state.link.tile_coordinates
-        return tiles
 
 class DebugReward:
     """An action to take when a reward button is clicked."""
