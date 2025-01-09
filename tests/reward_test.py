@@ -29,17 +29,17 @@ def test_wall_collision():
     assert info['rewards']['penalty-wall-collision'] < 0
 
 def test_close_distance():
-    actions = ZeldaActionReplay("1_44e.state")
+    actions = ZeldaActionReplay("1_44w.state")
     actions.env = CriticWrapper(actions.env, critics=[GameplayCritic()])
     actions.reset()
 
     for i in range(2):
-        _, _, _, _, info = actions.step('l')
+        _, _, _, _, info = actions.step('r')
         assert 'rewards' in info
         assert 'reward-move-closer' in info['rewards']
         assert info['rewards']['reward-move-closer'] > 0
 
-    _, _, _, _, info = actions.step('r')
+    _, _, _, _, info = actions.step('l')
     assert 'rewards' in info
     assert 'reward-move-closer' not in info['rewards']
 
