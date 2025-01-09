@@ -315,7 +315,7 @@ class MapLocation(Coordinates):
 
     def get_direction_of_movement(self, next_room):
         """Gets the direction of movement from curr -> dest."""
-        assert self.manhattan_distance(next_room) == 1
+        assert self.manhattan_distance(next_room) in (0, 1)
 
         if self.x < next_room.x:
             return Direction.E
