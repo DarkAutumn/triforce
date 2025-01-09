@@ -102,7 +102,7 @@ class Room:
                     walkable_tiles[0xf, y] = north_open
                     walkable_tiles[0xf, walkable_tiles.shape[1] - y - 1] = south_open
 
-            result = Room(level, location, cave, tiles, walkable_tiles, env)
+            result = Room(level, location, cave, tiles, walkable_tiles)
             if result.is_loaded:
                 Room._cache[key] = result
 
@@ -116,18 +116,17 @@ class Room:
         tiles = tiles.reshape((32, 22)).T.swapaxes(0, 1)
         return tiles
 
-    def __init__(self, level, location, cave, tiles : np.ndarray, walkable : np.ndarray, env):
+    def __init__(self, level, location, cave, tiles : np.ndarray, walkable : np.ndarray):
         self.level = level
         self.location = location
         self.in_cave = cave
         self.tiles : np.ndarray = tiles
         self.walkable : np.ndarray = walkable
-        self.env = env
         self.exits = self._get_exit_tiles()
         self.cave_tile = self._get_cave_coordinates()
         self._wf_lru = OrderedDict()
 
-    def is_door_locked(self, direction : Direction):
+    def is_door_locked(self, direction : Direction, env):
         """Returns whether the door in a particular direction is locked."""
         match direction:
             case Direction.N:
@@ -141,7 +140,7 @@ class Room:
             case _:
                 raise ValueError(f"Invalid direction {direction}")
 
-        fresh_tiles = self._get_tiles_from_ram(self.env)
+        fresh_tiles = self._get_tiles_from_ram(env)
         return fresh_tiles[location] in DOOR_TILES
 
     @property

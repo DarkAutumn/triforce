@@ -1,7 +1,7 @@
 from enum import Enum
 
 import heapq
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from .zelda_game import ZeldaGame
 from .zelda_enums import BoomerangKind, Direction, SwordKind, ZeldaItemKind
 
@@ -71,7 +71,7 @@ class RoomMemory:
     def referesh_state(self, state):
         """On entry, refresh the state of the room's door locks."""
         self.locked = [x for x in self.exits if isinstance(x, Direction) and \
-                       state.room.is_door_locked(x)]
+                       state.is_door_locked(x)]
 
     def enumerate_adjacent_rooms(self):
         """Returns the list of all rooms connected to this one."""

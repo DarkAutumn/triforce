@@ -203,10 +203,13 @@ class ZeldaGame:
 
         return result
 
+    def is_door_locked(self, direction):
+        """Returns True if the door in the given direction is locked."""
+        return self.room.is_door_locked(direction, self._env)
+
     @property
     def game_over(self):
         """Returns True if the game is over."""
-
         return self.mode in (MODE_DYING, MODE_GAME_OVER)
 
     @property
