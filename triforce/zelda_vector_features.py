@@ -46,7 +46,6 @@ class ZeldaVectorFeatures(gym.Wrapper):
         result[1] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.active_enemies))
         result[2] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.projectiles))
         result[3] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.items))
-        result[4] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.aligned_enemies))
 
         # create an np array of the vectors
         return np.array(result, dtype=np.float32)

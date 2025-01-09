@@ -216,22 +216,6 @@ class GameplayCritic(ZeldaCritic):
         if not prev_link.is_blocking and curr_link.is_blocking:
             rewards['reward-block'] = self.block_projectile_reward
 
-    def critique_aligned_enemy(self, state_change : ZeldaStateChange, rewards):
-        """Critiques whether the agent fired sword beams towards an aligned enemy or not."""
-        prev, curr = state_change.previous, state_change.current
-        aligned_enemies = prev.aligned_enemies
-        if aligned_enemies and prev.link.are_beams_available:
-            match curr.action:
-                case ActionType.MOVEMENT:
-                    rewards['penalty-didnt-fire'] = self.didnt_fire_penalty
-
-                case ActionType.ATTACK:
-                    vector = aligned_enemies[0].vector
-                    link_vector = curr.link.direction.to_vector()
-                    dotproduct = np.dot(vector, link_vector)
-                    if dotproduct > 0.8:
-                        rewards['reward-fired-correctly'] = self.fired_correctly_reward
-
     def critique_attack(self, state_change : ZeldaStateChange, rewards):
         """Critiques attacks made by the player."""
         # pylint: disable=too-many-branches

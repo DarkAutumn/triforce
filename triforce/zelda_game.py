@@ -174,27 +174,6 @@ class ZeldaGame:
         """Enemies which are both alive an active."""
         return [x for x in self.enemies if x.is_active and not x.is_dying]
 
-    @property
-    def aligned_enemies(self):
-        """Gets enemies that are aligned with the player."""
-        active_enemies = self.active_enemies
-        if not active_enemies:
-            return []
-
-        link_xs = (self.link.tile[0], self.link.tile[0] + 1)
-        link_ys = (self.link.tile[1], self.link.tile[1] + 1)
-
-        result = []
-        for enemy in active_enemies:
-            if not enemy.is_invulnerable:
-                if enemy.tile[0] in link_xs or enemy.tile[0] + 1 in link_xs:
-                    result.append(enemy)
-
-                if enemy.tile[1] in link_ys or enemy.tile[1] + 1 in link_ys:
-                    result.append(enemy)
-
-        return result
-
     def is_door_locked(self, direction):
         """Returns True if the door in the given direction is locked."""
         return self.room.is_door_locked(direction, self._env)
