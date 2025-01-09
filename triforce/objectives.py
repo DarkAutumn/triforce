@@ -2,6 +2,8 @@ from enum import Enum
 
 import heapq
 from typing import Dict, Optional, Sequence
+
+from .zelda_objects import ZeldaObject
 from .zelda_game import ZeldaGame
 from .zelda_enums import BoomerangKind, Direction, MapLocation, SwordKind, TileIndex, ZeldaItemKind
 
@@ -45,8 +47,16 @@ class Objective:
     """The current objective for the agent."""
     def __init__(self, kind : ObjectiveKind, targets, next_rooms : set[int] = None):
         self.kind : ObjectiveKind = kind
-        self.targets : Sequence[TileIndex] = targets
         self.next_rooms : Sequence[MapLocation] = next_rooms if next_rooms is not None else set()
+
+        self.targets : Sequence[TileIndex] = []
+        for target in targets:
+            if isinstance(target, ZeldaObject):
+                self.targets.extend(target.self_tiles)
+            elif isinstance(target, TileIndex):
+                self.targets.append(target)
+            else:
+                raise ValueError(f"Invalid target type: {type(target)}")
 
 CAVE_TREASURE_TILE = 0x0f, 0x0b
 
@@ -205,7 +215,8 @@ class Objectives:
 
         item = overworld_to_item.get(state.room.location, None)
         if state.link.has_item(item):
-            return Objective(ObjectiveKind.MOVE, Direction.S, set([state.room.location]))
+            target_room = MapLocation(state.level, state.room.location, False)
+            return Objective(ObjectiveKind.MOVE, [], set([target_room]))
 
         # Cave equipment doesn't follow normal treasure rules
         return Objective(ObjectiveKind.TREASURE, CAVE_TREASURE_TILE)
