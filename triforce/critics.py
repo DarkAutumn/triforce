@@ -106,7 +106,6 @@ class GameplayCritic(ZeldaCritic):
         self.critique_block(state_change, rewards)
         self.critique_attack(state_change, rewards)
         self.critique_item_usage(state_change, rewards)
-        self.critique_aligned_enemy(state_change, rewards)
 
         # items
         self.critique_item_pickup(state_change, rewards)

@@ -158,7 +158,7 @@ class Room:
             curr = exits[Direction.N] = []
             for x in range(0, self.tiles.shape[0] - 1):
                 index = TileIndex(x, 0)
-                if self.walkable[index]:
+                if self.walkable[index.x, index.y]:
                     curr.append(index)
                     exits[index] = Direction.N
 
@@ -166,7 +166,7 @@ class Room:
             y = self.tiles.shape[1] - 2
             for x in range(0, self.tiles.shape[0] - 1):
                 index = TileIndex(x, y)
-                if self.walkable[index]:
+                if self.walkable[index.x, index.y]:
                     curr.append(index)
                     exits[index] = Direction.S
 
@@ -174,14 +174,14 @@ class Room:
             x = self.tiles.shape[0] - 1
             for y in range(0, self.tiles.shape[1] - 1):
                 index = TileIndex(x, y)
-                if self.walkable[index]:
+                if self.walkable[index.x, index.y]:
                     curr.append(index)
                     exits[index] = Direction.E
 
             curr = exits[Direction.W] = []
             for y in range(0, self.tiles.shape[1] - 1):
                 index = TileIndex(0, y)
-                if self.walkable[index]:
+                if self.walkable[index.x, index.y]:
                     curr.append(index)
                     exits[index] = Direction.W
         else:
