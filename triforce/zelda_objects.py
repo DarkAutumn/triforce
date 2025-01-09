@@ -34,7 +34,8 @@ class ZeldaObject:
     @property
     def tile(self):
         """The x, y coordinates of the top-left tile in this object."""
-        return position_to_tile_index(*self.position)
+        y, x = position_to_tile_index(*self.position)
+        return x, y
 
     @property
     def link_overlap_tiles(self):
@@ -44,6 +45,17 @@ class ZeldaObject:
         for x in range(-1, x_dim):
             for y in range(-1, y_dim):
                 result.append((self.tile[1] + x, self.tile[0] + y))
+
+        return result
+
+    @property
+    def self_tiles(self):
+        """The tiles that the object occupies."""
+        result = []
+        x_dim, y_dim = self.dimensions
+        for x in range(x_dim):
+            for y in range(y_dim):
+                result.append((self.tile[0] + x, self.tile[1] + y))
 
         return result
 
