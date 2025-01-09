@@ -210,9 +210,9 @@ class Objectives:
         # Cave equipment doesn't follow normal treasure rules
         return Objective(ObjectiveKind.TREASURE, CAVE_TREASURE_TILE)
 
-    def _enumerate_attached_rooms(self, level, location, key_count):
+    def _enumerate_attached_rooms(self, location, key_count):
         # if we have memory of the room, use that
-        if (room_memory := self._rooms.get((level, location))) is not None:
+        if (room_memory := self._rooms.get(location, None)) is not None:
             for direction, next_room in room_memory.enumerate_adjacent_rooms():
                 locked = direction in room_memory.locked
                 if locked and not key_count:
@@ -271,7 +271,7 @@ class Objectives:
                 continue
 
             # Explore neighbors
-            for next_room, locked in self._enumerate_attached_rooms(level, current_room, key_count):
+            for next_room, locked in self._enumerate_attached_rooms(current_room, key_count):
                 move_cost = LOCKED_DISTANCE if locked else 1
                 new_cost = g + move_cost
 
