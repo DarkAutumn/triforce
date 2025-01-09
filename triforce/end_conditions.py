@@ -138,7 +138,7 @@ class LeftRoom(ZeldaEndCondition):
         prev, curr = state_change.previous, state_change.current
 
         if prev.location != curr.location:
-            if prev.location_objective == curr.location:
+            if curr.location in prev.objectives.locations:
                 return False, True, "truncated-left-room"
 
             return True, False, "failure-left-room"

@@ -1,14 +1,9 @@
 from dataclasses import dataclass
-from enum import Enum
 from typing import Tuple
 
 import numpy as np
 
-from .zelda_enums import ZeldaEnemyKind, ZeldaItemKind
-from .tile_states import position_to_tile_index
-
-class ZeldaProjectileId(Enum):
-    """Projectile codes for the game."""
+from .zelda_enums import TileIndex, ZeldaEnemyKind, ZeldaItemKind, ZeldaProjectileId, Position
 
 @dataclass
 class ZeldaObject:
@@ -21,18 +16,42 @@ class ZeldaObject:
         id: The id of the object.
         position: The position of the object.
     """
-    game : 'ZeldaGame'
+    game : 'ZeldaGame' # type: ignore
     index : int
     id : ZeldaItemKind | ZeldaEnemyKind | ZeldaProjectileId | int
-    position : Tuple[int, int]
+    position : Position
 
     @property
-    def tile_coordinates(self):
-        """The tile coordinates of the object."""
+    def dimensions(self) -> Tuple[int, int]:
+        """The dimensions of the object."""
+        return 2, 2
 
-        y, x = position_to_tile_index(*self.position)
-        return [(y, x), (y, x+1),
-                (y+1, x), (y+1, x+1)]
+    @property
+    def tile(self):
+        """The x, y coordinates of the top-left tile in this object."""
+        return self.position.tile_index
+
+    @property
+    def link_overlap_tiles(self):
+        """The tiles that the object overlaps with link's top-left tile."""
+        result = []
+        x_dim, y_dim = self.dimensions
+        for x in range(-1, x_dim):
+            for y in range(-1, y_dim):
+                result.append(TileIndex(self.tile[0] + x, self.tile[1] + y))
+
+        return result
+
+    @property
+    def self_tiles(self):
+        """The tiles that the object occupies."""
+        result = []
+        x_dim, y_dim = self.dimensions
+        for x in range(x_dim):
+            for y in range(y_dim):
+                result.append(TileIndex(self.tile[0] + x, self.tile[1] + y))
+
+        return result
 
     @property
     def distance(self):
@@ -57,8 +76,7 @@ class ZeldaObject:
         """The (un-normalized) vector from link to the object."""
         vector = self.__dict__.get('_vector', None)
         if vector is None:
-            link_pos = self.game.link.position
-            vector = np.array(self.position, dtype=np.float32) - np.array(link_pos, dtype=np.float32)
+            vector = self.position.numpy - self.game.link.position.numpy
             self.__dict__['_vector']  = vector
 
         return vector
@@ -71,3 +89,8 @@ class Projectile(ZeldaObject):
 class Item(ZeldaObject):
     """Structured data for an item."""
     timer : int
+
+    @property
+    def dimensions(self) -> Tuple[int, int]:
+        """The dimensions of the object."""
+        return 1, 1

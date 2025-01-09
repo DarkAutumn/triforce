@@ -19,7 +19,6 @@ import tqdm
 from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
                      TRAINING_SCENARIOS
 from triforce.game_state_change import ZeldaStateChange
-from triforce.tile_states import TileState
 from triforce.zelda_game import ZeldaGame
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
@@ -210,7 +209,7 @@ class DisplayWindow:
                     mode = 'p'
 
             # update rewards for display
-            self._update_rewards(reward_map, buttons, last_info, info)
+            self._update_rewards(env, reward_map, buttons, last_info, info)
 
             while True:
                 if rgb_deque:
@@ -286,7 +285,7 @@ class DisplayWindow:
                             mode = 'c'
 
                         elif event.key == pygame.K_o:
-                            overlay = (overlay + 1) % 4
+                            overlay = (overlay + 1) % 5
 
                         elif event.key == pygame.K_e:
                             show_endings = not show_endings
@@ -438,7 +437,7 @@ class DisplayWindow:
                                            self.obs_width)
         y_pos = self._write_key_val_aligned(surface, "Beams", f"{obs['features'][1]:.1f}", x_pos, y_pos, self.obs_width)
 
-    def _update_rewards(self, reward_map, buttons, last_info, info):
+    def _update_rewards(self, env, reward_map, buttons, last_info, info):
         curr_rewards = {}
         if 'rewards' in info:
             for k, v in info['rewards'].items():
@@ -453,7 +452,7 @@ class DisplayWindow:
         if prev is not None and prev.rewards == curr_rewards and prev.action == action:
             prev.count += 1
         else:
-            on_press = DebugReward(self.scenario, last_info, info)
+            on_press = DebugReward(env, self.scenario, last_info, info)
             buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, self.text_width, on_press))
 
     def _draw_arrow(self, surface, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
@@ -572,22 +571,11 @@ class DisplayWindow:
         return result
 
     def _overlay_grid_and_text(self, surface, kind, offset, text_color, scale, state : ZeldaGame):
-        match kind:
-            case 0:
-                # no overlay, just return
-                return
-            case 1:
-                # show the path overlay
-                tiles_to_show = state.get("a_star_path", []) + self._find_special_tiles(state)
-            case 2:
-                # show tiles other than walkable and impassable
-                tiles_to_show = self._find_special_tiles(state)
-            case _:
-                # show all tile codes
-                tiles_to_show = None
+        if not kind:
+            return
 
-        tiles = state.tiles
-        tile_states = state.tile_states
+        tiles = state.room.tiles
+        wavefront = state.wavefront
 
         grid_width = 32
         grid_height = 22
@@ -600,28 +588,24 @@ class DisplayWindow:
 
         for tile_x in range(grid_width):
             for tile_y in range(grid_height):
-                if tiles_to_show is not None and (tile_y, tile_x) not in tiles_to_show:
-                    continue
-
                 x = offset[0] + tile_x * tile_width - 8 * scale
                 y = 56 * scale + offset[1] + tile_y * tile_height
 
-                # red for DANGER, yellow for WARNING, blue for WALKABLE, black otherwise
-                match tile_states[tile_y, tile_x]:
-                    case TileState.DANGER.value:
-                        color = (255, 0, 0)
-                    case TileState.WARNING.value:
-                        color = (255, 255, 0)
-                    case TileState.WALKABLE.value:
-                        color = (0, 0, 255)
-                    case _:
-                        color = (0, 0, 0)
-
+                color = (0, 0, 0)
 
                 pygame.draw.rect(surface, color, (x, y, tile_width, tile_height), 1)
 
-                tile_number = tiles[tile_y, tile_x]
-                text = f"{tile_number:02X}"
+                if kind == 1:
+                    tile_number = wavefront.get((tile_x, tile_y), None)
+                    text = f"{tile_number:02X}" if tile_number is not None else ""
+                elif kind == 2:
+                    tile_number = tiles[tile_x, tile_y]
+                    text = f"{tile_number:02X}" if tile_number is not None else ""
+                elif kind == 3:
+                    walkable = state.room.walkable[tile_x, tile_y]
+                    text = "X" if walkable else ""
+                else:
+                    text = f"{tile_x:02X} {tile_y:02X}"
 
                 # Render the text
                 text_surface = font.render(text, True, text_color)
@@ -630,27 +614,18 @@ class DisplayWindow:
                 # Draw the text
                 surface.blit(text_surface, text_rect)
 
-    def _find_special_tiles(self, state : ZeldaGame):
-        tiles = []
-        tile_states = state.tile_states
-        for y in range(tile_states.shape[0]):
-            for x in range(tile_states.shape[1]):
-                if tile_states[y, x] not in (TileState.WALKABLE.value, TileState.IMPASSABLE.value,
-                                             TileState.BRICK.value, TileState.HALF_WALKABLE.value):
-                    tiles.append((y, x))
-
-        tiles += state.link.tile_coordinates
-        return tiles
 
 class DebugReward:
     """An action to take when a reward button is clicked."""
-    def __init__(self, scenario : ZeldaScenario, last_info, info):
+    def __init__(self, env, scenario : ZeldaScenario, last_info, info):
+        self.env = env
         self.scenario = scenario
         self.last_info = last_info
         self.info = info
 
     def __call__(self):
-        reward_dict, terminated, truncated, reason = simulate_critique(self.scenario, self.last_info, self.info)
+        result = simulate_critique(self.env, self.scenario, self.last_info, self.info)
+        reward_dict, terminated, truncated, reason = result
         print(f"{reward_dict = }")
         print(f"{terminated = }")
         print(f"{truncated = }")

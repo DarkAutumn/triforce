@@ -4,6 +4,8 @@ from enum import Enum
 
 import numpy as np
 
+from .model_parameters import GAMEPLAY_START_Y
+
 class SoundKind(Enum):
     """Sound codes for the game."""
     # pylint: disable=invalid-name
@@ -40,7 +42,7 @@ class ArrowKind(Enum):
 class BoomerangKind(Enum):
     """The type of boomerang Link has."""
     NONE = 0
-    NORMAL = 1
+    WOOD = 1
     MAGIC = 2
 
 class CandleKind(Enum):
@@ -103,14 +105,33 @@ class ZeldaEnemyKind(Enum):
     Stalfos : int = 0x2a
     Item : int = 0x60
 
+class ZeldaProjectileId(Enum):
+    """Projectile codes for the game."""
+
 class ZeldaItemKind(Enum):
     """Item codes for the game."""
     # pylint: disable=invalid-name
+    Triforce1 : int = -101
+    Triforce2 : int = -102
+    Triforce3 : int = -103
+    Triforce4 : int = -104
+    Triforce5 : int = -105
+    Triforce6 : int = -106
+    Triforce7 : int = -107
+    Triforce8 : int = -108
+    TriforceOfPower = -109
+    HeartContainer : int = -2
+    Key : int = -1
     Bombs : int = 0x00
     BlueRupee : int = 0x0f
     Rupee : int = 0x18
     Heart : int = 0x22
     Fairy : int = 0x23
+
+    @property
+    def is_triforce(self):
+        """Returns True if the item is a triforce piece."""
+        return -109 <= self.value <= -101
 
 class Direction(Enum):
     """The four cardinal directions, as the game defines them."""
@@ -151,3 +172,177 @@ class Direction(Enum):
 
 ID_MAP = {x.value: x for x in ZeldaEnemyKind}
 ITEM_MAP = {x.value: x for x in ZeldaItemKind}
+
+class Coordinates:
+    """Base class of coordinates in the game world."""
+    def __init__(self, x: int, y: int):
+        if np.isscalar(x) and isinstance(x, np.uint8):
+            x = int(x)
+
+        if np.isscalar(y) and isinstance(y, np.uint8):
+            y = int(y)
+
+        if not isinstance(x, int) or not isinstance(y, int):
+            raise TypeError("Both elements must be integers.")
+        self._x = x
+        self._y = y
+
+    @property
+    def x(self) -> int:
+        """The x coordinate."""
+        return self._x
+
+    @property
+    def y(self) -> int:
+        """The y coordinate."""
+        return self._y
+
+    def __getitem__(self, index: int) -> int:
+        if index == 0:
+            return self._x
+
+        if index == 1:
+            return self._y
+
+        raise IndexError("Index out of range. Valid indices are 0 and 1.")
+
+    def __len__(self) -> int:
+        return 2
+
+    def __iter__(self):
+        return iter((self._x, self._y))
+
+    def __repr__(self) -> str:
+        return f"({self._x}, {self._y})"
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, Coordinates):
+            return self._x == other._x and self._y == other._y
+
+        if isinstance(other, tuple):
+            return (self._x, self._y) == other
+
+        return False
+
+    def __hash__(self):
+        return hash((self.x, self.y))
+
+    def __lt__(self, other):
+        if not isinstance(other, Coordinates):
+            return NotImplemented
+        return (self.x, self.y) < (other.x, other.y)
+
+    @property
+    def numpy(self):
+        """Returns the position as a numpy array."""
+        return np.array([self.x, self.y], dtype=np.float32)
+
+class Position(Coordinates):
+    """A position in the game world."""
+    def __repr__(self):
+        return f"Pos({self.x}, {self.y})"
+
+    @property
+    def tile_index(self) -> 'TileIndex':
+        """The tile coordinates of the position."""
+        return TileIndex(int(self.x // 8), int((self.y - GAMEPLAY_START_Y) // 8))
+
+class TileIndex(Coordinates):
+    """A tile index in the game world."""
+    def __repr__(self) -> str:
+        return f"Tile({self.x}, {self.y})"
+
+    @property
+    def position(self) -> Position:
+        """The screen coordinates of the top-left corner of this tile in the gameworld."""
+        return (self.x * 8, self.y * 8 + GAMEPLAY_START_Y)
+
+class MapLocation(Coordinates):
+    """A location on the map of the game world."""
+    def __init__(self, level : int, location : int, in_cave : bool):
+        super().__init__(location & 0x0F, (location & 0xF0) >> 4)
+
+        assert 0 <= level <= 9
+        self.level = level
+        self.value = location
+        self.in_cave = in_cave
+
+    def __eq__(self, other) -> bool:
+        return super().__eq__(other) and self.level == other.level and self.in_cave == other.in_cave
+
+    def __hash__(self):
+        return hash((self.x, self.y, self.level, self.in_cave))
+
+    @property
+    def tile_index(self) -> 'TileIndex':
+        """The tile coordinates of the location."""
+        return TileIndex(int(self.x // 8), int((self.y - GAMEPLAY_START_Y) // 8))
+
+    @property
+    def position(self) -> Position:
+        """The screen coordinates of the top-left corner of this tile in the gameworld."""
+        return (self.x * 8, self.y * 8 + GAMEPLAY_START_Y)
+
+    def __repr__(self) -> str:
+        return f"({self.x}, {self.y}), loc={self.value:02X}"
+
+    @staticmethod
+    def from_coordinates(level, x, y, in_cave):
+        """Creates a MapLocation from x, y coordinates."""
+        return MapLocation(level, (y << 4) | x, in_cave)
+
+    def get_location_in_direction(self, direction):
+        """Gets the location of the tile in the given direction."""
+        x, y = self
+
+        match direction:
+            case Direction.N:
+                y -= 1
+            case Direction.S:
+                y += 1
+            case Direction.E:
+                x += 1
+            case Direction.W:
+                x -= 1
+            case _:
+                raise ValueError("Invalid direction provided.")
+
+        # Combine the new row and column into a single hex value
+        if not (0 <= x <= 0xF and 0 <= y <= 0xF):
+            raise ValueError("Resulting location is out of bounds.")
+
+        return MapLocation.from_coordinates(self.level, x, y, self.in_cave)
+
+    def get_direction_of_movement(self, next_room):
+        """Gets the direction of movement from curr -> dest."""
+        assert self.manhattan_distance(next_room) == 1
+
+        if self.x < next_room.x:
+            return Direction.E
+        if self.x > next_room.x:
+            return Direction.W
+        if self.y < next_room.y:
+            return Direction.S
+        if self.y > next_room.y:
+            return Direction.N
+
+        return Direction.UNINITIALIZED
+
+    def manhattan_distance(self, other):
+        """Calculates the Manhattan distance between two locations."""
+        assert self.level == other.level and self.in_cave == other.in_cave
+        return abs(self.x - other.x) + abs(self.y - other.y)
+
+    def enumerate_possible_neighbors(self):
+        """Returns the possible neighbors of this location."""
+        if self.x > 0:
+            yield MapLocation.from_coordinates(self.level, self.x - 1, self.y, self.in_cave)
+
+        if self.x < 0xF:
+            yield MapLocation.from_coordinates(self.level, self.x + 1, self.y, self.in_cave)
+
+        if self.y > 0:
+            yield MapLocation.from_coordinates(self.level, self.x, self.y - 1, self.in_cave)
+
+        if self.y < 0xF:
+            yield MapLocation.from_coordinates(self.level, self.x, self.y + 1, self.in_cave)

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from .zelda_enums import AnimationState, ArrowKind, BoomerangKind, CandleKind, Direction, PotionKind, RingKind, \
-    SelectedEquipmentKind, SwordKind, ZeldaAnimationKind, SoundKind
+    SelectedEquipmentKind, SwordKind, TileIndex, ZeldaAnimationKind, SoundKind
 from .zelda_objects import ZeldaObject
 
 ANIMATION_BEAMS_ACTIVE = 16
@@ -27,6 +27,14 @@ class Link(ZeldaObject):
 
     direction : Direction
     status : int
+
+    @property
+    def link_overlap_tiles(self):
+        """The tiles that the object overlaps with link's top-left tile."""
+        x_dim, y_dim = self.dimensions
+        for x in range(0, x_dim):
+            for y in range(0, y_dim):
+                yield TileIndex(self.tile[0] + y, self.tile[1] + x)
 
     # Health
     @property
@@ -87,6 +95,23 @@ class Link(ZeldaObject):
         return self.__dict__['_heart_containers']
 
     # Calculated status
+    def has_item(self, item : SwordKind | BoomerangKind | ArrowKind):
+        """Return whether Link has the given piece of equipment."""
+        if isinstance(item, SwordKind):
+            return self.sword.value >= item.value
+
+        if isinstance(item, BoomerangKind):
+            return self.boomerang.value >= item.value
+
+        if isinstance(item, ArrowKind):
+            return self.arrows.value >= item.value
+
+        raise NotImplementedError(f"Item type {item} not yet implemented.")
+
+    def has_triforce(self, level):
+        """Returns whether link has the triforce for the given level."""
+        return self.game.triforce & (1 << level)
+
     @property
     def is_health_full(self) -> bool:
         """Is link's health full."""
@@ -331,7 +356,7 @@ class Link(ZeldaObject):
             return BoomerangKind.MAGIC
 
         if self.game.regular_boomerang:
-            return BoomerangKind.NORMAL
+            return BoomerangKind.WOOD
 
         return BoomerangKind.NONE
 
@@ -340,7 +365,7 @@ class Link(ZeldaObject):
         """Set the boomerang for Link in the game."""
         if value == BoomerangKind.MAGIC:
             self.game.magic_boomerang = 2
-        elif value == BoomerangKind.NORMAL:
+        elif value == BoomerangKind.WOOD:
             self.game.regular_boomerang = 1
         else:
             self.game.magic_boomerang = 0

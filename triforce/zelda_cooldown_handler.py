@@ -7,8 +7,7 @@ from enum import Enum
 from typing import Optional
 import numpy as np
 
-from .zelda_enums import Direction
-from .tile_states import position_to_tile_index
+from .zelda_enums import Direction, Position
 
 # movement related constants
 WS_ADJUSTMENT_FRAMES = 4
@@ -188,37 +187,36 @@ class ZeldaCooldownHandler:
         if start_pos is None:
             obs, _, terminated, truncated, info = self.env.step(action)
             total_frames += 1
-            start_pos = info['link_x'], info['link_y']
+            start_pos = Position(info['link_x'], info['link_y'])
 
-        start_pos = np.array(start_pos, dtype=np.uint8)
-        old_tile_index = position_to_tile_index(*start_pos)
+        old_tile_index = start_pos.tile_index
 
         stuck_count = 0
-        prev = start_pos
+        prev_pos = start_pos
         for _ in range(MAX_MOVEMENT_FRAMES):
             obs, _, terminated, truncated, info = self.env.step(action)
             total_frames += 1
-            x, y = info['link_x'], info['link_y']
-            new_tile_index = position_to_tile_index(x, y)
+            pos = Position(info['link_x'], info['link_y'])
+            new_tile_index = pos.tile_index
             match direction:
                 case Direction.N:
-                    if old_tile_index[0] != new_tile_index[0]:
+                    if old_tile_index.y != new_tile_index.y:
                         break
                 case Direction.S:
-                    if old_tile_index[0] != new_tile_index[0]:
+                    if old_tile_index.y != new_tile_index.y:
                         obs, terminated, truncated, info = self.act_for(action, WS_ADJUSTMENT_FRAMES)
                         total_frames += WS_ADJUSTMENT_FRAMES
                         break
                 case Direction.E:
-                    if old_tile_index[1] != new_tile_index[1]:
+                    if old_tile_index.x != new_tile_index.x:
                         break
                 case Direction.W:
-                    if old_tile_index[1] != new_tile_index[1]:
+                    if old_tile_index.x != new_tile_index.x:
                         obs, terminated, truncated, info = self.act_for(action, WS_ADJUSTMENT_FRAMES)
                         total_frames += WS_ADJUSTMENT_FRAMES
                         break
 
-            if prev[0] == x and prev[1] == y:
+            if prev_pos == pos:
                 stuck_count += 1
 
             if stuck_count > 1:

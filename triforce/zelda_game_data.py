@@ -1,6 +1,6 @@
 import os
 
-class ZeldaRoom:
+class RoomInformation:
     """
     Stores information about a room in the game Zelda-NES. This includes the level, location, exits, enemies, reward,
     and bomb secrets.
@@ -16,12 +16,12 @@ class ZeldaRoom:
 
         self.save_states = []
 
-        if not ZeldaRoom.all_save_files:
+        if not RoomInformation.all_save_files:
             data_dir = os.path.dirname(os.path.realpath(__file__))
             save_state_dir = os.path.join(data_dir, 'custom_integrations', 'Zelda-NES')
-            ZeldaRoom.all_save_files = os.listdir(save_state_dir)
+            RoomInformation.all_save_files = os.listdir(save_state_dir)
 
-        self.save_states = [x for x in ZeldaRoom.all_save_files if x.startswith(f'{level}_{location}')]
+        self.save_states = [x for x in RoomInformation.all_save_files if x.startswith(f'{level}_{location}')]
 
 class ZeldaGameData:
     """Information about the game Zelda-NES. This includes room data, memory addresses, and tables.
@@ -73,7 +73,7 @@ class ZeldaGameData:
                 parts = [x for x in line.split(' ') if x]
 
                 if is_room:
-                    room = ZeldaRoom(*parts)
+                    room = RoomInformation(*parts)
                     self.rooms[f'{room.level}_{room.location}'] = room
 
                 elif is_memory:

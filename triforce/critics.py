@@ -4,9 +4,8 @@ from enum import Enum
 from typing import Dict
 import numpy as np
 
-from .objective_selector import ObjectiveKind
+from .objectives import ObjectiveKind
 from .zelda_cooldown_handler import ActionType
-from .tile_states import TileState
 
 from .zelda_enums import Direction, SelectedEquipmentKind, SwordKind, ZeldaAnimationKind, AnimationState
 from .game_state_change import ZeldaStateChange
@@ -70,11 +69,10 @@ class GameplayCritic(ZeldaCritic):
         # same room movement rewards
         self.wall_collision_penalty = -REWARD_TINY
         self.move_closer_reward = REWARD_TINY
-
-        self.movement_scale_factor = 9.0
         self.move_away_penalty = -self.move_closer_reward - REWARD_MINIMUM
+        self.lateral_move_penalty = -REWARD_MINIMUM
+        self.movement_scale_factor = 9.0
 
-        self.warning_tile_penalty = -REWARD_TINY
         self.danger_tile_penalty = -REWARD_MEDIUM
         self.moved_to_safety_reward = REWARD_TINY
 
@@ -245,7 +243,7 @@ class GameplayCritic(ZeldaCritic):
 
         elif state_change.hits:
             if not curr.in_cave:
-                if prev.objective_kind == ObjectiveKind.FIGHT:
+                if prev.objectives.kind == ObjectiveKind.FIGHT:
                     rewards['reward-hit'] = self.injure_kill_reward
                 else:
                     rewards['reward-hit-move-room'] = self.inure_kill_movement_room_reward
@@ -319,75 +317,34 @@ class GameplayCritic(ZeldaCritic):
             rewards['penalty-wall-collision'] = self.wall_collision_penalty
             return
 
+        # Did link get too close to an enemy?
         self.critique_moving_into_danger(state_change, rewards)
 
-        old_path = prev.get("a_star_path", [])
-        new_path = curr.get("a_star_path", [])
+        # Did we move to a place we didn't think Link could get to?
+        old_wavefront = prev.wavefront[prev_link.tile]
+        new_wavefront = curr.wavefront[curr_link.tile]
+        if old_wavefront < new_wavefront:
+            rewards['penalty-move-farther'] = self.move_away_penalty
 
-        movement_direction = curr_link.direction
+        elif old_wavefront == new_wavefront:
+            rewards['penalty-lateral-move'] = self.lateral_move_penalty
 
-        # If an action put us into alignment for a sword beam shot, we should avoid penalizing the agent for this
-        # move.  The agent shouldn't be able to get infinite rewards for moving into alignment since the enemy's motion
-        # is fairly unpredictable
-        moved_to_alignment = not prev.aligned_enemies and curr.aligned_enemies and prev_link.are_beams_available
+        else:
+            # We moved closer, but scale the reward by the pixels moved in case the agent finds a way to exploit
+            # our reward system.
+            match curr_link.direction:
+                case Direction.N:
+                    dir_vect = np.array([0, -1], dtype=np.float32)
+                case Direction.S:
+                    dir_vect = np.array([0, 1], dtype=np.float32)
+                case Direction.E:
+                    dir_vect = np.array([1, 0], dtype=np.float32)
+                case Direction.W:
+                    dir_vect = np.array([-1, 0], dtype=np.float32)
 
-        # We check health_full here (not beams_available) because we still want to avoid penalizing the agent for
-        # lining up the next shot, even if sword beams are already active.
-        move_away_penalty = self.move_away_penalty if not moved_to_alignment else 0
-
-        # There are places that can be clipped to that are impassible.  If this happens, we need to make sure not to
-        # reward the agent for finding them.  This is because it's likely the agent will use this to break the
-        # reward system for infinite rewards.
-        if self.__any_impassible_tiles(curr.tile_states, curr_link.tile_coordinates):
-            rewards['penalty-bad-path'] = self.move_away_penalty  # don't take alignment into account for this
-
-        # If we are headed to the same location as last time, simply check whether we made progress towards it.
-        elif old_path and new_path and old_path[-1] == new_path[-1]:
-            diff = len(old_path) - len(new_path)
-            if diff > 0:
-                rewards['reward-move-closer'] = self.move_closer_reward
-            elif diff < 0:
-                rewards['penalty-move-farther'] = move_away_penalty * abs(diff)
-
-        # For most other cases, we calculate the progress towards the target using the manhattan distance towards
-        # the second turn in the path.  That way we can reward any progress towards the target, even if the path
-        # is the transpose of what A* picked.
-        elif len(old_path) >= 2:
-            target_tile = self.__find_second_turn(old_path)
-
-            old_link_tile = self.__xy_from_coord(prev_link.tile_coordinates[1])
-            new_link_tile = self.__xy_from_coord(curr_link.tile_coordinates[1])
-
-            progress = self.__get_progress(movement_direction, old_link_tile, new_link_tile, target_tile)
-
-            if progress > 0:
-                rewards['reward-move-closer'] = self.move_closer_reward
-            elif progress < 0:
-                rewards['penalty-move-farther'] = move_away_penalty
-
-        # This should be relatively rare, but in cases where A* couldn't find a path to the target (usually because
-        # a monster moved into a wall), we will reward simply moving closer.
-        elif (target := curr.get('objective_pos_or_dir', None)) is not None:
-            old_link_pos = np.array(prev_link.position, dtype=np.float32)
-            new_link_pos = np.array(curr_link.position, dtype=np.float32)
-
-            if isinstance(target, Direction):
-                if target == Direction.N:
-                    progress = old_link_pos[1] - new_link_pos[1]
-                elif target == Direction.S:
-                    progress = new_link_pos[1] - old_link_pos[1]
-                elif target == Direction.E:
-                    progress = new_link_pos[0] - old_link_pos[0]
-                elif target == Direction.W:
-                    progress = old_link_pos[0] - new_link_pos[0]
-            else:
-                progress = self.__get_progress(movement_direction, old_link_pos, new_link_pos, target)
-
-            if progress > 0:
-                percent = min(abs(progress / self.movement_scale_factor), 1)
-                rewards['reward-move-closer'] = self.move_closer_reward * percent
-            else:
-                rewards['penalty-move-farther'] = move_away_penalty
+            movement = curr_link.position.numpy - prev_link.position.numpy
+            progress = np.dot(movement, dir_vect)
+            rewards['reward-move-closer'] = self.move_closer_reward * progress / self.movement_scale_factor
 
     def critique_moving_into_danger(self, state_change : ZeldaStateChange, rewards):
         """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted
@@ -396,75 +353,27 @@ class GameplayCritic(ZeldaCritic):
         prev, curr = state_change.previous, state_change.current
 
         if not state_change.health_lost and not curr.link.is_blocking:
-            warning_diff = curr.link_warning_tiles - prev.link_warning_tiles
-            danger_diff = curr.link_danger_tiles - prev.link_danger_tiles
+            prev_active = [enemy.index for enemy in prev.active_enemies]
+
+            prev_overlap = [tile
+                            for enemy in prev.active_enemies
+                            for tile in enemy.link_overlap_tiles
+                            if tile in prev.link.self_tiles]
+
+            curr_overlap = [tile
+                            for enemy in curr.active_enemies
+                            if enemy.index in prev_active
+                            for tile in enemy.link_overlap_tiles
+                            if tile in curr.link.self_tiles]
+
+            danger_diff = len(curr_overlap) - len(prev_overlap)
 
             if danger_diff > 0:
                 rewards['penalty-dangerous-move'] = self.danger_tile_penalty
             elif danger_diff < 0:
                 if len(prev.active_enemies) == len(curr.active_enemies):
                     rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
-            elif warning_diff > 0:
-                rewards['penalty-risky-move'] = self.warning_tile_penalty
-            elif warning_diff < 0:
-                if len(prev.active_enemies) == len(curr.active_enemies):
-                    rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
 
-    def __any_impassible_tiles(self, tile_states, tile_coordinates):
-        for tile in tile_coordinates:
-            if 0 <= tile[0] < tile_states.shape[0] and 0 <= tile[1] < tile_states.shape[1] \
-                    and tile_states[tile] == TileState.IMPASSABLE.value:
-                return True
-
-        return False
-
-    def __xy_from_coord(self, bottom_left):
-        y, x = bottom_left
-        old_link_tile = np.array([x, y], dtype=np.float32)
-        return old_link_tile
-
-    def __get_progress(self, direction, old_link_pos, new_link_pos, target):
-        direction_vector = direction.to_vector()
-
-        disp = new_link_pos - old_link_pos
-        direction_movement = np.dot(disp, direction_vector) * direction_vector
-
-        projected_new_pos = old_link_pos + direction_movement
-
-        old_distance = self.__manhattan_distance(target, old_link_pos)
-        new_distance = self.__manhattan_distance(target, projected_new_pos)
-
-        return old_distance - new_distance
-
-    def __manhattan_distance(self, a, b):
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
-    def __find_second_turn(self, path):
-        turn = 0
-        direction = self.__get_direction(path[0], path[1])
-        for i in range(2, len(path)):
-            old_index = path[i - 1]
-            new_index = path[i]
-
-            new_direction = self.__get_direction(old_index, new_index)
-            if new_direction != direction:
-                turn += 1
-                direction = new_direction
-                if turn == 2:
-                    return old_index
-
-        return path[-1]
-
-    def __get_direction(self, old, new):
-        if new[0] > old[0]:
-            return Direction.S
-        if new[0] < old[0]:
-            return Direction.N
-        if new[1] > old[1]:
-            return Direction.E
-        if new[1] < old[1]:
-            return Direction.W
-        return None
 
     # state helpers, some states are calculated
     def __has_visited(self, level, location):
@@ -497,19 +406,10 @@ class Dungeon1Critic(GameplayCritic):
         if curr.level != 1:
             rewards['penalty-left-dungeon'] = self.leave_dungeon_penalty
         elif prev.location != curr.location:
-            if prev.location_objective == curr.location:
+            if curr.location in prev.objectives.next_rooms:
                 rewards['reward-new-location'] = self.new_location_reward
             else:
                 rewards['penalty-left-early'] = self.leave_early_penalty
-
-    def critique_key_pickup_usage(self, state_change : ZeldaStateChange, rewards):
-        prev, curr = state_change.previous, state_change.current
-
-        if prev.link.keys > curr.link.keys and curr.location == 0x73 and curr.location_objective != 0x63:
-            pass # do not give a reward for prematurely using a key
-        else:
-            super().critique_key_pickup_usage(state_change, rewards)
-
 
 class Dungeon1BombCritic(Dungeon1Critic):
     """Critic specifically for dungeon 1 with bombs."""
@@ -571,11 +471,11 @@ class OverworldCritic(GameplayCritic):
         prev, curr = state_change.previous, state_change.current
 
         if prev.location != curr.location:
-            if prev.location_objective != curr.location:
+            if curr.location not in prev.objectives.next_room:
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 
-            if prev.objective_kind == ObjectiveKind.ENTER_CAVE:
+            if prev.objectives.kind == ObjectiveKind.CAVE:
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 
