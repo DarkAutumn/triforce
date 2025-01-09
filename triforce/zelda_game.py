@@ -104,7 +104,7 @@ class ZeldaGame:
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name, value):
-        if name in zelda_game_data.memory:
+        if name in zelda_game_data.memory or name in self._info:
             if isinstance(value, Enum):
                 value = value.value
 
@@ -119,11 +119,8 @@ class ZeldaGame:
             self._env.unwrapped.data.set_value(name, value)
             self._info[name] = value
 
-        elif name in self.__dict__:
-            self.__dict__[name] = value
-
         else:
-            self._info[name] = value
+            self.__dict__[name] = value
 
     def get_enemy_by_index(self, index) -> Optional[Enemy]:
         """Returns the enemy with the given index."""

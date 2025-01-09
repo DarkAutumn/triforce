@@ -10,7 +10,7 @@ from triforce.zelda_game import ZeldaGame
 def _initialize_gamestate():
     replay = ZeldaActionReplay("1_44e.state")
     info = assert_no_hit(replay, 'lll')
-    gamestate : ZeldaGame = info['state']
+    gamestate : ZeldaGame = replay.state
     return gamestate
 
 

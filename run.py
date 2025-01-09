@@ -199,11 +199,11 @@ class DisplayWindow:
                     model_name = "keyboard input"
                     next_action = None
                 else:
-                    model_name, action = self._get_action_from_model(model_requested, info['state'], obs)
+                    model_name, action = self._get_action_from_model(model_requested, env.state, obs)
 
                 last_info = info
                 obs, _, terminated, truncated, info = env.step(action)
-                state_change : ZeldaStateChange = info['state_change']
+                state_change : ZeldaStateChange = env.state_change
 
                 if mode == 'n':
                     mode = 'p'

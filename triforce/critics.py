@@ -454,7 +454,7 @@ class OverworldCritic(GameplayCritic):
         prev, curr = state_change.previous, state_change.current
 
         if prev.location != curr.location:
-            if curr.location not in prev.objectives.next_room:
+            if curr.location not in prev.objectives.next_rooms:
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 

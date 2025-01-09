@@ -102,7 +102,7 @@ class ZeldaObservationWrapper(gym.Wrapper):
             return result
 
         frame = self.frames[-1]
-        frame = self.trim_normalize_grayscale(info['state'].link, frame)
+        frame = self.trim_normalize_grayscale(self.state.link, frame)
         return frame
 
     def trim_normalize_grayscale(self, link : Link, frame):

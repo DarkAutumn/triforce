@@ -58,7 +58,7 @@ class ScenarioWrapper(gym.Wrapper):
         obs, rewards, terminated, truncated, info = self.env.step(action)
 
         reward_dict = {}
-        state_change = info['state_change']
+        state_change = self.state_change
 
         self._critic.critique_gameplay(state_change, reward_dict)
         info['score'] = self._critic.get_score(state_change)
