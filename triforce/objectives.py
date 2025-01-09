@@ -1,9 +1,9 @@
 from enum import Enum
 
 import heapq
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence
 from .zelda_game import ZeldaGame
-from .zelda_enums import BoomerangKind, Direction, MapLocation, SwordKind, ZeldaItemKind
+from .zelda_enums import BoomerangKind, Direction, MapLocation, SwordKind, TileIndex, ZeldaItemKind
 
 LOCKED_DISTANCE = 4
 
@@ -44,9 +44,9 @@ class ObjectiveKind(Enum):
 class Objective:
     """The current objective for the agent."""
     def __init__(self, kind : ObjectiveKind, targets, next_rooms : set[int] = None):
-        self.kind = kind
-        self.targets = targets
-        self.next_rooms = next_rooms if next_rooms is not None else set()
+        self.kind : ObjectiveKind = kind
+        self.targets : Sequence[TileIndex] = targets
+        self.next_rooms : Sequence[MapLocation] = next_rooms if next_rooms is not None else set()
 
 CAVE_TREASURE_TILE = 0x0f, 0x0b
 
