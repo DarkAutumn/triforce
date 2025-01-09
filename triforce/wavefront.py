@@ -34,12 +34,30 @@ class Wavefront:
                 wavefront[neighbor] = dist + 1
                 heapq.heappush(todo, (dist + 1, neighbor))
 
+        # fill in the remaineder of the room
+        for tile, dist in wavefront.items():
+            heapq.heappush(todo, (dist, tile))
+
+        while todo:
+            dist, tile = heapq.heappop(todo)
+            for neighbor in self._get_neighbors(room, tile):
+                if neighbor in wavefront:
+                    continue
+
+                wavefront[neighbor] = dist + 1
+                heapq.heappush(todo, (dist + 1, neighbor))
+
         self._wavefront = wavefront
+        self._targets = targets
 
     def __getitem__(self, tile):
+        if tile not in self._wavefront:
+            return 1000
+
         return self._wavefront[tile]
 
     def get(self, tile, default=None):
+        """Get the distance to a tile, or a default value if the tile is not reachable."""
         return self._wavefront.get(tile, default)
 
     def _get_neighbors(self, room, tile):
