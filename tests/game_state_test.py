@@ -2,12 +2,12 @@
 import os
 import sys
 
-from triforce.zelda_enums import Direction
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from hit_test import assert_no_hit
 from utilities import ZeldaActionReplay
 from triforce.zelda_game import ZeldaGame
+from triforce.zelda_enums import Direction
 
 def _initialize_gamestate():
     replay = ZeldaActionReplay("1_73s.state")
