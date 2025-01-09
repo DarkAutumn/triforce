@@ -1,5 +1,9 @@
+from typing import Sequence, Tuple
 import gymnasium as gym
 import numpy as np
+
+from .link import Link
+from .zelda_objects import ZeldaObject
 
 from .zelda_game import ZeldaGame
 
@@ -30,28 +34,46 @@ class ZeldaVectorFeatures(gym.Wrapper):
 
     def _augment_observation(self, observation, info):
         game_state = info['state']
-        objective = info.get('objective_vector', None)
-
-        vectors = self._get_enemy_vectors(objective, game_state)
+        vectors = self._get_enemy_vectors(game_state)
         features = self._get_features(game_state)
 
         return {"image": observation, "vectors": vectors, "features": features}
 
-    def _get_enemy_vectors(self, objective, state : ZeldaGame):
+    def _get_enemy_vectors(self, state : ZeldaGame):
         result = [np.zeros(2, dtype=np.float32)] * NUM_DIRECTION_VECTORS
 
-        if objective is not None:
-            result[0] = objective
-        result[1] = self._get_first_vector(state.active_enemies)
-        result[2] = self._get_first_vector(state.projectiles)
-        result[3] = self._get_first_vector(state.items)
-        result[4] = self._get_first_vector(state.aligned_enemies)
+        result[0] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.targets))
+        result[1] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.active_enemies))
+        result[2] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.projectiles))
+        result[3] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.items))
+        result[4] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.aligned_enemies))
 
         # create an np array of the vectors
         return np.array(result, dtype=np.float32)
 
-    def _get_first_vector(self, entries):
-        return entries[0].vector if entries else np.zeros(2, dtype=np.float32)
+    def _get_all_tiles(self, link : Link, group : Sequence[ZeldaObject|Tuple[int, int]]):
+
+        result = []
+        for item in group:
+            if isinstance(item, ZeldaObject):
+                result.extend(x for x in item.self_tiles if x not in link.self_tiles)
+            elif item not in link.self_tiles:
+                result.append(item)
+
+        return result
+
+    def _find_closest_non_zero(self, link : Link, targets):
+        if not targets:
+            return np.zeros(2, dtype=np.float32)
+
+        targets = np.array(targets, dtype=np.float32)
+        link_tile = np.array(link.tile, dtype=np.float32)
+
+        vectors = targets - link_tile
+        dists = np.linalg.norm(vectors, axis=1)
+        closest = np.argmin(dists)
+        result = vectors[closest] / dists[closest]
+        return result
 
     def _get_features(self, state : ZeldaGame):
         result = np.zeros(2, dtype=np.float32)
