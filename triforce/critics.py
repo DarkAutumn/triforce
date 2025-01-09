@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Dict
 import numpy as np
 
-from .objective_selector import ObjectiveKind
+from .objectives import ObjectiveKind
 from .zelda_cooldown_handler import ActionType
 from .tile_states import TileState
 
@@ -245,7 +245,7 @@ class GameplayCritic(ZeldaCritic):
 
         elif state_change.hits:
             if not curr.in_cave:
-                if prev.objective_kind == ObjectiveKind.FIGHT:
+                if prev.objectives.kind == ObjectiveKind.FIGHT:
                     rewards['reward-hit'] = self.injure_kill_reward
                 else:
                     rewards['reward-hit-move-room'] = self.inure_kill_movement_room_reward
@@ -497,19 +497,10 @@ class Dungeon1Critic(GameplayCritic):
         if curr.level != 1:
             rewards['penalty-left-dungeon'] = self.leave_dungeon_penalty
         elif prev.location != curr.location:
-            if prev.location_objective == curr.location:
+            if curr.location in prev.objectives.next_rooms:
                 rewards['reward-new-location'] = self.new_location_reward
             else:
                 rewards['penalty-left-early'] = self.leave_early_penalty
-
-    def critique_key_pickup_usage(self, state_change : ZeldaStateChange, rewards):
-        prev, curr = state_change.previous, state_change.current
-
-        if prev.link.keys > curr.link.keys and curr.location == 0x73 and curr.location_objective != 0x63:
-            pass # do not give a reward for prematurely using a key
-        else:
-            super().critique_key_pickup_usage(state_change, rewards)
-
 
 class Dungeon1BombCritic(Dungeon1Critic):
     """Critic specifically for dungeon 1 with bombs."""
@@ -571,11 +562,11 @@ class OverworldCritic(GameplayCritic):
         prev, curr = state_change.previous, state_change.current
 
         if prev.location != curr.location:
-            if prev.location_objective != curr.location:
+            if curr.location not in prev.objectives.next_room:
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 
-            if prev.objective_kind == ObjectiveKind.ENTER_CAVE:
+            if prev.objectives.kind == ObjectiveKind.CAVE:
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 

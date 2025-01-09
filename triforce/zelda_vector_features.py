@@ -42,7 +42,7 @@ class ZeldaVectorFeatures(gym.Wrapper):
     def _get_enemy_vectors(self, state : ZeldaGame):
         result = [np.zeros(2, dtype=np.float32)] * NUM_DIRECTION_VECTORS
 
-        result[0] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.targets))
+        result[0] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.objectives.targets))
         result[1] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.active_enemies))
         result[2] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.projectiles))
         result[3] = self._find_closest_non_zero(state.link, self._get_all_tiles(state.link, state.items))

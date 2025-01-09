@@ -42,7 +42,7 @@ The triforce project itself is divided into some key areas:
 
 [ZeldaGameWrapper](triforce/zelda_wrapper.py) is the base wrapper around the Zelda environment.  It produces `info['state']` and `info['gamestate']` which are used to interpret what is going on within the game.
 
-[ObjectiveSelector](triforce/objective_selector.py) sets the goal/objective that the model *should* be doing at any given time.  This creates an objective vector that ZeldaVectorFeatures puts into the observation, but this is also used by critics to reward/punish the model when it gets closer to/further from completing objectives.
+[Objectives](triforce/objectives.py) sets the current goal of the model.  The objective selector starts with some game knowledge required to make progress in the game (such as which rooms contain treasure if you kill all enemies, what the coordinates of each dungeon are on the world map).  This is similar to if you were playing the game with a game guide, as that's how I chose to build an AI to tackle this game.  It does not know what each room looks like or how rooms connect together, only the locations of items and dungeons.  From that basic information, it will slowly build up state over the course of a single run (which is wiped out on reset).  The class will select a goal which is an enum of what link should do {MoveNorth, MoveSouth, FightEnemies, CollectTreasure, etc} and a list of tiles that those objectives live on.  This is all local to the current screen that link is on.
 
 
 ### Critics and End Conditions

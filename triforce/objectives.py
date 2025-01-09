@@ -1,7 +1,7 @@
 from enum import Enum
 
 import heapq
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from .zelda_game import ZeldaGame
 from .zelda_enums import BoomerangKind, Direction, SwordKind, ZeldaItemKind
 
@@ -32,7 +32,7 @@ item_to_overworld = {v: k for k, v in overworld_to_item.items()}
 
 item_to_dungeon = {v: k for k, v in dungeon_to_item.items() if v != ZeldaItemKind.Key}
 
-class Objective(Enum):
+class ObjectiveKind(Enum):
     """The objective that the agent should be persuing."""
     NONE = 0
     MOVE = 1
@@ -40,6 +40,13 @@ class Objective(Enum):
     TREASURE = 3
     FIGHT = 4
     ITEM = 5
+
+class Objective:
+    """The current objective for the agent."""
+    def __init__(self, kind : ObjectiveKind, targets, next_rooms : set[int] = None):
+        self.kind = kind
+        self.targets = targets
+        self.next_rooms = next_rooms if next_rooms is not None else set()
 
 CAVE_TREASURE_TILE = 0x0f, 0x0b
 
@@ -77,7 +84,7 @@ class Objectives:
         self._rooms : Dict[RoomMemory] = {}
         self._last_route = 0, 0, []
 
-    def get_current_objectives(self, prev : Optional[ZeldaGame], state : ZeldaGame):
+    def get_current_objectives(self, prev : Optional[ZeldaGame], state : ZeldaGame) -> Objective:
         """Get the current objectives for the agent."""
         self._update_exits(state)
 
@@ -85,7 +92,7 @@ class Objectives:
         if state.items:
             targets = [item for item in state.items if item.distance < 200]
             if targets:
-                return Objective.ITEM, targets
+                return Objective(ObjectiveKind.ITEM, targets)
 
         if state.level == 0:
             return self._get_overworld_objectives(state)
@@ -109,7 +116,7 @@ class Objectives:
 
         treasure_tile = state.treasure_tile
         if treasure_tile is not None:
-            return Objective.TREASURE, [treasure_tile]
+            return Objective(ObjectiveKind.TREASURE, [treasure_tile])
 
         if room_memory.item and prev.treasure_tile is not None:
             room_memory.item = None
@@ -122,21 +129,14 @@ class Objectives:
                             for tile in enemy.link_overlap_tiles
                             ]
 
-                return Objective.FIGHT, targets
+                return Objective(ObjectiveKind.FIGHT, targets)
 
             room_memory.item = None
 
         # otherwise, head to the triforce piece
-        if self._last_route[:2] == (state.level, state.location):
-            return Objective.MOVE, self._last_route[2]
-
-        target = ZeldaItemKind(ZeldaItemKind.Triforce1.value - state.level + 1)
-        target = item_to_dungeon[target]
-        paths = self._get_route_with_astar(state.level, state.location, target, state.link.keys)
-        targets = self._paths_to_targets(state, paths)
-
-        self._last_route = state.level, state.location, targets
-        return Objective.MOVE, targets
+        target_item = ZeldaItemKind(ZeldaItemKind.Triforce1.value - state.level + 1)
+        item_location = item_to_dungeon[target_item]
+        return self._get_route_objective(state, item_location)
 
     def _paths_to_targets(self, state, paths):
         next_rooms = set(x[1] for x in paths if len(x) > 1)
@@ -145,61 +145,65 @@ class Objectives:
         targets = []
         for direction in directions:
             targets += state.room.exits[direction]
-        return targets
+
+        return targets, next_rooms
 
     def _get_overworld_objectives(self, state : ZeldaGame):
         # If we are in a cave, either get the item or leave
         if state.in_cave:
-            objective, target = self._get_cave_objective(state)
-            return objective, [target]
+            return self._get_cave_objective(state)
 
         # If the current screen has a cave, only go inside if we need the item
         cave_tile = state.room.cave_tile
         if cave_tile is not None and (item := overworld_to_item.get(state.location, None)) is not None:
             if isinstance(item, int):
                 if not state.link.has_triforce(item):
-                    return Objective.CAVE, [cave_tile]
+                    return Objective(ObjectiveKind.CAVE, [cave_tile])
+
             elif not state.link.has_item(item):
-                return Objective.CAVE, [cave_tile]
+                return Objective(ObjectiveKind.CAVE, [cave_tile])
 
         # Otherwise look for the next dungeon to go into.
-        targets = self._get_route_to_next_dungeon(state)
-        return Objective.MOVE, targets
+        return self._get_route_to_dungeon_objective(state)
 
-    def _get_route_to_next_dungeon(self, state : ZeldaGame):
+    def _get_route_to_dungeon_objective(self, state : ZeldaGame):
         # level 2 is pretty easy, we'll allow going there first
         if state.link.triforce_pieces == 0:
-            target = item_to_overworld[1]
-            dist = self._map_mahnattan_distance(state.location, target)
+            dungeon_location = item_to_overworld[1]
+            dist = self._map_mahnattan_distance(state.location, dungeon_location)
 
             dungeon2 = item_to_overworld[2]
             if dist >self._map_mahnattan_distance(state.location, dungeon2):
-                target = dungeon2
-
-        for i in range(1, 9):
-            if not state.link.has_triforce(i):
-                target = item_to_overworld[i]
-                break
+                dungeon_location = dungeon2
+        else:
+            for i in range(1, 9):
+                if not state.link.has_triforce(i):
+                    dungeon_location = item_to_overworld[i]
+                    break
 
         # we now have a location to move to
+        return self._get_route_objective(state, dungeon_location)
+
+    def _get_route_objective(self, state, target):
         if self._last_route[:2] == (state.level, state.location):
             return self._last_route[2]
 
         paths = self._get_route_with_astar(state.level, state.location, target, state.link.keys)
-        targets = self._paths_to_targets(state, paths)
+        targets, next_rooms = self._paths_to_targets(state, paths)
 
-        self._last_route = state.level, state.location, targets
-        return targets
+        result = Objective(ObjectiveKind.MOVE, targets, next_rooms)
+        self._last_route = state.level, state.location, result
+        return result
 
     def _get_cave_objective(self, state : ZeldaGame):
         assert state.in_cave
 
         item = overworld_to_item.get(state.room.location, None)
         if state.link.has_item(item):
-            return Objective.MOVE, Direction.S
+            return Objective(ObjectiveKind.MOVE, Direction.S, set([state.room.location]))
 
         # Cave equipment doesn't follow normal treasure rules
-        return Objective.TREASURE, CAVE_TREASURE_TILE
+        return Objective(ObjectiveKind.TREASURE, CAVE_TREASURE_TILE)
 
     def _enumerate_attached_rooms(self, level, location, key_count):
         # if we have memory of the room, use that
@@ -224,6 +228,7 @@ class Objectives:
         return abs(start[0] - end[0]) + abs(start[1] - end[1])
 
     def _get_route_with_astar(self, level, start, end, key_count):
+        # pylint: disable=too-many-locals
         def heuristic(a, b):
             a = (a & 0xF0) >> 4, a & 0x0F
             b = (b & 0xF0) >> 4, b & 0x0F

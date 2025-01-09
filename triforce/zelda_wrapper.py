@@ -76,9 +76,10 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         info['state'] = curr
         info['total_frames'] = self._total_frames
-        info['objectives'], targets = self._objectives.get_current_objectives(prev, curr)
-        info['targets'] = targets
-        info['wavefront'] = curr.room.calculate_wavefront_for_link(targets)
+
+        objectives = self._objectives.get_current_objectives(prev, curr)
+        info['objectives'] = objectives
+        info['wavefront'] = curr.room.calculate_wavefront_for_link(objectives.targets)
 
     def _get_button_names(self, act, buttons):
         result = []
