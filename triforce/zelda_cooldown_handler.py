@@ -147,6 +147,10 @@ class ZeldaCooldownHandler:
             case _:
                 raise ValueError(f'Unknown action type: {action_kind}')
 
+        # skip scrolling
+        obs, info, skipped = self.skip_uncontrollable_states(info)
+        total_frames += skipped
+
         in_cave = is_in_cave(info)
         if in_cave and not self.was_link_in_cave:
             obs, terminated, truncated, info = self.act_for(self.none_action, CAVE_COOLDOWN)
