@@ -47,7 +47,6 @@ class GameplayCritic(ZeldaCritic):
         # reward values
         self.rupee_reward = REWARD_SMALL
         self.health_gained_reward = REWARD_LARGE
-        self.new_location_reward = REWARD_MEDIUM
 
         # combat values
         self.wipeout_reward_on_hits = True
@@ -89,9 +88,12 @@ class GameplayCritic(ZeldaCritic):
         self.bomb_miss_penalty = -REWARD_SMALL
         self.bomb_hit_reward = REWARD_MEDIUM
 
+        self._room_enter_health = None
+
     def clear(self):
         super().clear()
         self._visted_locations.clear()
+        self._room_enter_health = None
 
     def critique_gameplay(self, state_change : ZeldaStateChange, rewards : Dict[str, float]):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
@@ -113,7 +115,7 @@ class GameplayCritic(ZeldaCritic):
         self.critique_equipment_pickup(state_change, rewards)
 
         # movement
-        self.critique_location_discovery(state_change, rewards)
+        self.critique_location_change(state_change, rewards)
         self.critique_movement(state_change, rewards)
 
         # health - must be last
@@ -265,17 +267,23 @@ class GameplayCritic(ZeldaCritic):
                 else:
                     rewards['reward-bomb-hit'] = min(self.bomb_hit_reward * state_change.hits, 1.0)
 
-    def critique_location_discovery(self, state_change : ZeldaStateChange, rewards):
+    def critique_location_change(self, state_change : ZeldaStateChange, rewards):
         """Critiques the discovery of new locations."""
-        prev = state_change.previous
-        prev = (prev.location, prev.level)
+        if self._room_enter_health is None:
+            self._room_enter_health = state_change.previous.link.health
 
-        curr = state_change.current
-        curr = (curr.location, curr.level)
+        curr = state_change.current.full_location
+        if state_change.previous.full_location != curr:
+            health_change = state_change.previous.link.health - self._room_enter_health
+            reward = (np.clip(health_change, -3.0, 3.0) + 3) / 6
+            reward = np.clip(reward, REWARD_MINIMUM, REWARD_MAXIMUM)
 
-        if self.new_location_reward and prev != curr and not self.__has_visited(*curr):
-            self.__mark_visited(*curr)
-            rewards['reward-new-location'] = self.new_location_reward
+            if curr in state_change.previous.objectives.next_rooms:
+                rewards['reward-new-location'] = reward
+            else:
+                rewards['penalty-wrong-location'] = -reward - REWARD_MINIMUM
+
+            self._room_enter_health = state_change.current.link.health
 
     def critique_movement(self, state_change : ZeldaStateChange, rewards):
         """
@@ -382,7 +390,7 @@ class Dungeon1Critic(GameplayCritic):
         self.seen.clear()
         self.health_lost = 0
 
-    def critique_location_discovery(self, state_change : ZeldaStateChange, rewards: Dict[str, float]):
+    def critique_location_change(self, state_change : ZeldaStateChange, rewards: Dict[str, float]):
         """Critiques the location discovery based on the old and new states and assigns rewards or penalties
         accordingly."""
         prev, curr = state_change.previous, state_change.current
@@ -450,7 +458,7 @@ class OverworldCritic(GameplayCritic):
         self.equipment_reward = None
         self.health_lost = 0
 
-    def critique_location_discovery(self, state_change : ZeldaStateChange, rewards):
+    def critique_location_change(self, state_change : ZeldaStateChange, rewards):
         prev, curr = state_change.previous, state_change.current
 
         if prev.full_location != curr.full_location:
@@ -473,11 +481,11 @@ class OverworldCritic(GameplayCritic):
                 rewards['penalty-no-sword'] = self.left_without_sword_penalty
 
             else:
-                super().critique_location_discovery(state_change, rewards)
+                super().critique_location_change(state_change, rewards)
 
         elif curr.level == curr.link.triforce_pieces + 1:
             # don't forget to reward for reaching the correct dungeon
-            super().critique_location_discovery(state_change, rewards)
+            super().critique_location_change(state_change, rewards)
 
         else:
             rewards['penalty-left-allowed-area'] = self.left_allowed_area_penalty
@@ -502,7 +510,7 @@ class OverworldSwordCritic(GameplayCritic):
         self.cave_transition_penalty = -REWARD_MAXIMUM
         self.new_location_reward = REWARD_LARGE
 
-    def critique_location_discovery(self, state_change : ZeldaStateChange, rewards):
+    def critique_location_change(self, state_change : ZeldaStateChange, rewards):
         # entered cave
         prev, curr = state_change.previous, state_change.current
 
