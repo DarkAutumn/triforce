@@ -14,7 +14,7 @@ SOUTH_DOOR_TILE = 0xf, 0x12
 
              # north                     east
 DOOR_TILES = list(range(0x98, 0x9b+1)) + list(range(0xa4, 0xa7+1))
-BARRED_DOOR_TILES = []
+BARRED_DOOR_TILES = list(range(0xac, 0xaf+1))
 TOP_CAVE_TILE = 0xf3
 BOTTOM_CAVE_TILE = 0x24
 CAVE_TILES = [TOP_CAVE_TILE, BOTTOM_CAVE_TILE]
@@ -25,6 +25,7 @@ def init_walkable_tiles():
     tiles += [0x84, 0x85, 0x86, 0x87]
     tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
     tiles += DOOR_TILES    # we allow walking through doors for pathfinding
+    tiles += BARRED_DOOR_TILES
     return tiles
 
 def init_half_walkable_tiles():
@@ -122,7 +123,8 @@ class Room:
             case _:
                 raise ValueError(f"Invalid direction {direction}")
 
-        return fresh_tiles[location] in DOOR_TILES
+        tile = fresh_tiles[location]
+        return tile in DOOR_TILES
 
     def is_door_barred(self, direction : Direction, fresh_tiles):
         """Returns whether the door in a particular direction is barred."""
@@ -138,7 +140,8 @@ class Room:
             case _:
                 raise ValueError(f"Invalid direction {direction}")
 
-        return fresh_tiles[location] in BARRED_DOOR_TILES
+        tile = fresh_tiles[location]
+        return tile in BARRED_DOOR_TILES
 
     @property
     def is_loaded(self):
