@@ -123,11 +123,20 @@ class ZeldaCooldownHandler:
         """Skips screen scrolling or other uncontrollable states.  The model should only get to see the game when it is
         in a state where the agent can control Link."""
         frames_skipped = 0
+        in_cave = is_in_cave(info)
         while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']) \
-                or self._is_level_transition(start_location, info):
-            obs, _, terminated, truncated, info = self.env.step(self.none_action)
-            frames_skipped += 1
+                or self._is_level_transition(start_location, info) \
+                or (in_cave and not self.was_link_in_cave):
 
+            if in_cave and not self.was_link_in_cave:
+                obs, terminated, truncated, info = self.act_for(self.none_action, CAVE_COOLDOWN)
+                frames_skipped += CAVE_COOLDOWN
+                self.was_link_in_cave = True
+            else:
+                obs, _, terminated, truncated, info = self.env.step(self.none_action)
+                frames_skipped += 1
+
+            in_cave = is_in_cave(info)
             assert not terminated and not truncated
 
         obs, _, _, info = self.act_for(self.none_action, 1)
@@ -164,12 +173,6 @@ class ZeldaCooldownHandler:
         obs, info, skipped = self.skip_uncontrollable_states(loc, info)
         total_frames += skipped
 
-        in_cave = is_in_cave(info)
-        if in_cave and not self.was_link_in_cave:
-            obs, terminated, truncated, info, = self.act_for(self.none_action, CAVE_COOLDOWN)
-            total_frames += CAVE_COOLDOWN
-
-        self.was_link_in_cave = in_cave
         return obs, terminated, truncated, info, total_frames
 
 
