@@ -184,22 +184,31 @@ class Objectives:
         return self._get_route_to_dungeon_objective(state)
 
     def _get_route_to_dungeon_objective(self, state : ZeldaGame):
+        if state.link.sword == SwordKind.NONE:
+            target = item_to_overworld[SwordKind.WOOD]
+
+        elif state.link.sword == SwordKind.WOOD and state.link.max_health >= 5:
+            target = item_to_overworld[SwordKind.WHITE]
+
+        elif state.link.max_health >= 13:
+            target = item_to_overworld[SwordKind.MAGIC]
+
         # level 2 is pretty easy, we'll allow going there first
-        if state.link.triforce_pieces == 0:
-            dungeon_location = MapLocation(0, item_to_overworld[1], False)
-            dist = state.full_location.manhattan_distance(dungeon_location)
+        elif state.link.triforce_pieces == 0:
+            target = MapLocation(0, item_to_overworld[1], False)
+            dist = state.full_location.manhattan_distance(target)
 
             dungeon2 = MapLocation(0, item_to_overworld[2], False)
             if dist > state.full_location.manhattan_distance(dungeon2):
-                dungeon_location = dungeon2
+                target = dungeon2
         else:
             for i in range(1, 9):
                 if not state.link.has_triforce(i):
-                    dungeon_location = item_to_overworld[i]
+                    target = item_to_overworld[i]
                     break
 
         # we now have a location to move to
-        return self._get_route_objective(state, dungeon_location)
+        return self._get_route_objective(state, target)
 
     def _get_route_objective(self, state, target):
         if self._last_route[:2] == (state.level, state.location):
