@@ -55,7 +55,7 @@ class ScenarioWrapper(gym.Wrapper):
             for value in reward_dict.values():
                 rewards += value
 
-        state.rewards = reward_dict
+        state.info['rewards'] = reward_dict
 
         end = (x.is_scenario_ended(state_change) for x in self._conditions)
         end = [x for x in end if x is not None]
