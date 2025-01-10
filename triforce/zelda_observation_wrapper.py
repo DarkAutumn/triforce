@@ -85,24 +85,24 @@ class ZeldaObservationWrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         _, state = self.env.reset(**kwargs)
-        return self._get_observation(state.info), state
+        return self._get_observation(state), state
 
     def step(self, action):
         _, reward, terminated, truncated, state_change = self.env.step(action)
-        return self._get_observation(state_change), reward, terminated, truncated, state_change
+        return self._get_observation(state_change.state), reward, terminated, truncated, state_change
 
-    def _get_observation(self, state_change):
+    def _get_observation(self, state):
         if self.framestack > 1:
             frames = []
             for i in range(self.framestack):
                 frame = self.frames[-i * 2 - 1]
-                frame = self.trim_normalize_grayscale(state_change.state.link, frame)
+                frame = self.trim_normalize_grayscale(state.link, frame)
                 frames.append(frame)
             result = np.concatenate(frames, axis=0)
             return result
 
         frame = self.frames[-1]
-        frame = self.trim_normalize_grayscale(state_change.state.link, frame)
+        frame = self.trim_normalize_grayscale(state.link, frame)
         return frame
 
     def trim_normalize_grayscale(self, link : Link, frame):
