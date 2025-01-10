@@ -96,8 +96,8 @@ class ZeldaGame:
         for enemy in self.enemies:
             match enemy.id:
                 case ZeldaEnemyKind.PeaHat:
-                    prev = self._last_enemies[enemy.index]
-                    if prev is not None and (enemy.position != prev.position or enemy.health < prev.health):
+                    last = self.get_enemy_by_index(enemy.index)
+                    if last is not None and (enemy.position != last.position or enemy.health < last.health):
                         enemy.mark_invulnerable()
 
                 case ZeldaEnemyKind.Zora:
