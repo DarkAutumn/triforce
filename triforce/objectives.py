@@ -230,7 +230,7 @@ class Objectives:
 
         item = overworld_to_item.get(state.location, None)
         if item is None or state.link.has_item(item):
-            target_room = MapLocation(state.level, state.room.location, False)
+            target_room = MapLocation(state.level, state.location, False)
             return Objective(ObjectiveKind.MOVE, state.room.exits[Direction.S], set([target_room]))
 
         # Cave equipment doesn't follow normal treasure rules
