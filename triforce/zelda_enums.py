@@ -11,7 +11,7 @@ class ActionKind(Enum):
     MOVE = "MOVE"
     SWORD = "SWORD"
     BEAMS = "BEAMS"
-    BOMBS = "BOMB"
+    BOMBS = "BOMBS"
     ARROW = "ARROW"
     WAND = "WAND"
     BOOMERANG = "BOOMERANG"
