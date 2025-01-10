@@ -58,7 +58,7 @@ class Objective:
             else:
                 raise ValueError(f"Invalid target type: {type(target)}")
 
-CAVE_TREASURE_TILE = 0x0f, 0x0b
+CAVE_TREASURE_TILE = TileIndex(0x0f, 0x0b)
 
 class RoomMemory:
     """What the agent learns over the course of the playthrough."""
@@ -173,7 +173,8 @@ class Objectives:
         if cave_tile is not None and (item := overworld_to_item.get(state.location, None)) is not None:
             if isinstance(item, int):
                 if not state.link.has_triforce(item):
-                    return Objective(ObjectiveKind.CAVE, [cave_tile])
+                    next_rooms = [MapLocation(state.level, state.location, True)]
+                    return Objective(ObjectiveKind.CAVE, [cave_tile], next_rooms)
 
             elif not state.link.has_item(item):
                 return Objective(ObjectiveKind.CAVE, [cave_tile])
