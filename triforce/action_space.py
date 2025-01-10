@@ -3,6 +3,7 @@
 # - The action space is reduced to only the actions that are possible in the game.
 # - We keep an accurate
 
+from numbers import Integral
 from typing import List, Sequence
 import gymnasium as gym
 import numpy as np
@@ -197,7 +198,7 @@ class ZeldaActionSpace(gym.Wrapper):
         if isinstance(action, tuple):
             action = self._translate_action(*action)
 
-        if isinstance(action, int):
+        if isinstance(action, Integral):
             action = ActionTaken(self, action)
         elif not isinstance(action, ActionTaken):
             raise ValueError(f"Invalid action type {type(action)}.")

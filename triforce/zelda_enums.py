@@ -1,6 +1,7 @@
 """Various enumerations of equipment, item, and enemy types in the game."""
 
 from enum import Enum
+from numbers import Integral
 
 import numpy as np
 
@@ -195,14 +196,15 @@ ITEM_MAP = {x.value: x for x in ZeldaItemKind}
 class Coordinates:
     """Base class of coordinates in the game world."""
     def __init__(self, x: int, y: int):
-        if np.isscalar(x) and isinstance(x, np.uint8):
+        if isinstance(x, Integral):
             x = int(x)
 
-        if np.isscalar(y) and isinstance(y, np.uint8):
+        if isinstance(y, Integral):
             y = int(y)
 
         if not isinstance(x, int) or not isinstance(y, int):
             raise TypeError("Both elements must be integers.")
+
         self._x = x
         self._y = y
 
