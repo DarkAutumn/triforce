@@ -106,21 +106,23 @@ class ActionKind(Enum):
         """Converts the selected equipment to an action."""
         match selected_equipment:
             case SelectedEquipmentKind.BOOMERANG:
-                return ActionKind.BOOMERANG
+                kind = ActionKind.BOOMERANG
             case SelectedEquipmentKind.BOMBS:
-                return ActionKind.BOMBS
+                kind = ActionKind.BOMBS
             case SelectedEquipmentKind.ARROWS:
-                return ActionKind.ARROW
+                kind = ActionKind.ARROW
             case SelectedEquipmentKind.CANDLE:
-                return ActionKind.CANDLE
+                kind = ActionKind.CANDLE
             case SelectedEquipmentKind.WAND:
-                return ActionKind.WAND
+                kind = ActionKind.WAND
             case SelectedEquipmentKind.FOOD:
-                return ActionKind.FOOD
+                kind = ActionKind.FOOD
             case SelectedEquipmentKind.POTION:
-                return ActionKind.POTION
+                kind = ActionKind.POTION
             case _:
-                return ActionKind.SWORD
+                kind = ActionKind.SWORD
+
+        return kind
 
 class AnimationState(Enum):
     """The state of link's sword beams."""

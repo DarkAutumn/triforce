@@ -371,8 +371,10 @@ class DisplayWindow:
 
         if keys[pygame.K_s]:
             equipment = ActionKind.from_selected_equipment(state.link.selected_equipment)
-            if equipment in available:
+            if equipment.is_equipment and equipment in available:
                 return (equipment, direction)
+
+            return None
 
         return (ActionKind.MOVE, direction)
 
