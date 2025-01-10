@@ -9,12 +9,15 @@ from .room import Room
 from .zelda_objects import Item, Projectile
 from .enemy import Enemy
 from .link import Link
-from .zelda_enums import ITEM_MAP, MapLocation, Position, SwordKind, TileIndex, ZeldaEnemyKind, Direction, SoundKind
+from .zelda_enums import ENEMY_MAP, ITEM_MAP, MapLocation, Position, SwordKind, TileIndex, ZeldaEnemyKind, \
+        Direction, SoundKind
 from .zelda_game_data import zelda_game_data
 
 MODE_GAME_OVER = 8
 MODE_CAVE = 11
 MODE_DYING = 17
+
+OBJ_ITEM_ID = 0x60
 
 class ObjectTables:
     """A class for managing Zelda in memory object tables."""
@@ -64,7 +67,7 @@ class ZeldaGame:
         self.projectiles = []
 
         for (index, obj_id) in self._enumerate_active_ids(tables):
-            if obj_id == ZeldaEnemyKind.Item.value:
+            if obj_id == OBJ_ITEM_ID:
                 self.items.append(self._build_item(tables, index))
 
             elif self._is_id_enemy(obj_id):
@@ -246,6 +249,7 @@ class ZeldaGame:
         spawn_state = tables.read("obj_spawn_state")[index]
         pos = self._read_position(tables, index)
         direction = self._read_direction(tables, index)
+        obj_id = ENEMY_MAP.get(obj_id, obj_id)
         enemy = Enemy(self, index, obj_id, pos, direction, health, stun_timer, spawn_state, status)
         return enemy
 

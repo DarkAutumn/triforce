@@ -103,7 +103,7 @@ class ZeldaEnemyKind(Enum):
     Keese : int = 0x1b
     WallMaster : int = 0x27
     Stalfos : int = 0x2a
-    Item : int = 0x60
+    AquaMentus : int = 0x3d
 
 class ZeldaProjectileId(Enum):
     """Projectile codes for the game."""
@@ -170,7 +170,7 @@ class Direction(Enum):
             case _:
                 raise ValueError(f"Unhandled Direction: {self}")
 
-ID_MAP = {x.value: x for x in ZeldaEnemyKind}
+ENEMY_MAP = {x.value: x for x in ZeldaEnemyKind}
 ITEM_MAP = {x.value: x for x in ZeldaItemKind}
 
 class Coordinates:
