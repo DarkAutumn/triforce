@@ -220,7 +220,7 @@ class Objectives:
             return Objective(ObjectiveKind.MOVE, [], set([target_room]))
 
         # Cave equipment doesn't follow normal treasure rules
-        return Objective(ObjectiveKind.TREASURE, CAVE_TREASURE_TILE)
+        return Objective(ObjectiveKind.TREASURE, [CAVE_TREASURE_TILE])
 
     def _enumerate_attached_rooms(self, location, key_count):
         # if we have memory of the room, use that
