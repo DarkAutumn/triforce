@@ -225,7 +225,7 @@ class Objectives:
         assert state.in_cave
 
         item = overworld_to_item.get(state.room.location, None)
-        if state.link.has_item(item):
+        if item is None or state.link.has_item(item):
             target_room = MapLocation(state.level, state.room.location, False)
             return Objective(ObjectiveKind.MOVE, state.room.exits[Direction.S], set([target_room]))
 
