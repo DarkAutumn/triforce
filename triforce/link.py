@@ -2,8 +2,8 @@
 from dataclasses import dataclass
 
 import numpy as np
-from .zelda_enums import AnimationState, ArrowKind, BoomerangKind, CandleKind, Direction, PotionKind, RingKind, \
-    SelectedEquipmentKind, SwordKind, TileIndex, ZeldaAnimationKind, SoundKind
+from .zelda_enums import ActionKind, AnimationState, ArrowKind, BoomerangKind, CandleKind, Direction, PotionKind, \
+    RingKind, SelectedEquipmentKind, SwordKind, TileIndex, ZeldaAnimationKind, SoundKind
 from .zelda_objects import ZeldaObject
 
 ANIMATION_BEAMS_ACTIVE = 16
@@ -95,6 +95,47 @@ class Link(ZeldaObject):
         return self.__dict__['_heart_containers']
 
     # Calculated status
+    def get_available_actions(self):
+        """Returns the actions that are available to the agent."""
+        # pylint: disable=too-many-branches
+        available = []
+
+        # Always able to move in at least one direction
+        available.append(ActionKind.MOVE)
+
+        if self.sword != SwordKind.NONE and not self.is_sword_frozen and not self.has_beams:
+            available.append(ActionKind.SWORD)
+
+        if self.has_beams:
+            available.append(ActionKind.BEAMS)
+
+        if self.bombs:
+            available.append(ActionKind.BOMBS)
+
+        if self.arrows != ArrowKind.NONE and self.rupees > 0 and self.bow:
+            available.append(ActionKind.ARROW)
+
+        if self.magic_rod:
+            available.append(ActionKind.WAND)
+
+        if self.candle != CandleKind.NONE:
+            available.append(ActionKind.CANDLE)
+
+        if self.boomerang != BoomerangKind.NONE:
+            available.append(ActionKind.BOOMERANG)
+
+        if self.whistle:
+            available.append(ActionKind.WHISTLE)
+
+        if self.potion != PotionKind.NONE:
+            available.append(ActionKind.POTION)
+
+        if self.food:
+            available.append(ActionKind.FOOD)
+
+        return available
+
+
     def has_item(self, item : SwordKind | BoomerangKind | ArrowKind):
         """Return whether Link has the given piece of equipment."""
         if isinstance(item, SwordKind):
@@ -120,7 +161,7 @@ class Link(ZeldaObject):
     @property
     def has_beams(self) -> bool:
         """Returns True if link is able to fire sword beams in general."""
-        return self.sword != SwordKind.NONE and self.is_health_full
+        return self.sword != SwordKind.NONE and self.is_health_full and not self.is_sword_frozen
 
     @property
     def are_beams_available(self) -> bool:

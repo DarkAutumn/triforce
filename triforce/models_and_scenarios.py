@@ -23,7 +23,7 @@ class ZeldaModelDefinition(BaseModel):
     which are a trained version of this defined model.
     """
     name : str
-    action_space : str
+    action_space : List[str]
     priority : int
 
     levels : List[int]

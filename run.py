@@ -700,6 +700,8 @@ class DirectionalCircle(LabeledCircle):
                     self._draw_arrow(surface, self.centerpoint, np.array([-1, 0], dtype=np.float32), 1)
                 case Direction.E:
                     self._draw_arrow(surface, self.centerpoint, np.array([1, 0], dtype=np.float32), 1)
+                case _:
+                    raise ValueError(f"Unsupported direction {direction}")
 
 
         if self.directions:

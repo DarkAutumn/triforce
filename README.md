@@ -32,7 +32,7 @@ The triforce project itself is divided into some key areas:
 
 [ScenarioWrapper](triforce/scenario_wrapper.py) keeps track of the scenario we are running or training on, and all of the critics and end conditions associated with it.
 
-[ZeldaActionSpace](triforce/action_space.py) sets the allowed action space.  Zelda doesn't allow you to press all buttons a the same time to do anything meaningful, so we reduce the action space down to "move-only" at times, or just allow movement and attacks, etc.  Models are defined with the action space they support, and ZeldaActionSpace enables that.
+[ZeldaActionSpace](triforce/action_space.py) sets the allowed action space.  Zelda doesn't allow you to press all buttons a the same time to do anything meaningful, so we reduce the action space down to specific actions which can be taken at the given moment in game.
 
 [ZeldaObservationWrapper](triforce/zelda_observation_wrapper.py) controls what the model "sees" in terms of the image.  It was clear from early on that the basic neural networks defined by stable-baselines3 could not interpret the entire view of the game.  It's too hard for it to find link on the screen and interpret enemies around him.  Instead we create a viewport around link, so the model always has link centered in its view.  We also convert to grayscale because (so far) it seems the model plays better with less color channels to interpret.
 

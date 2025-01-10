@@ -33,12 +33,11 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
     # taken to achieve the desired number of actions per second.
     env = ZeldaGameWrapper(env, scenario)
 
+    # Reduces the action space to only the actions we want the model to take, and what is actually possible in game.
+    env = ZeldaActionSpace(env, action_space)
+
     # Frame stack and convert to grayscale if requested
     env = ZeldaObservationWrapper(env, captured_frames, grayscale, kind=obs_kind, framestack=framestack)
-
-    # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
-    # since that doesn't make any sense in Zelda)
-    env = ZeldaActionSpace(env, action_space)
 
     # Extract features from the game for the model, like whether link has beams or has keys and expose
     # these as observations.

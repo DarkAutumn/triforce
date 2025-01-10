@@ -140,3 +140,15 @@ class ZeldaVectorFeatures(gym.Wrapper):
                 result[2] = 1.0
             case Direction.W:
                 result[3] = 1.0
+            case Direction.NW:
+                result[0] = 1.0
+                result[3] = 1.0
+            case Direction.NE:
+                result[0] = 1.0
+                result[2] = 1.0
+            case Direction.SW:
+                result[1] = 1.0
+                result[3] = 1.0
+            case Direction.SE:
+                result[1] = 1.0
+                result[2] = 1.0

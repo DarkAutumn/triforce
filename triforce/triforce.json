@@ -3,7 +3,7 @@
     [
         {
             "name" : "full-game",
-            "action_space" : "attack-only",
+            "action_space" : ["MOVE", "SWORD", "BEAMS", "BOMBS"],
             "priority" : 0,
             "levels" : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
             "rooms" : ["0x77"],
@@ -14,7 +14,7 @@
         },
         {
             "name" : "overworld-sword",
-            "action_space" : "move-only",
+            "action_space" : ["MOVE"],
             "priority" : 2,
             "levels" : 0,
             "rooms" : ["0x77"],
@@ -25,7 +25,7 @@
         },
         {
             "name" : "overworld1beams",
-            "action_space" : "attack-only",
+            "action_space" : ["MOVE", "BEAMS"],
             "priority" : 0,
             "levels" : 0,
             "requires_enemies" : false,
@@ -36,7 +36,7 @@
         },
         {
             "name" : "overworld2beams",
-            "action_space" : "attack-only",
+            "action_space" : ["MOVE", "BEAMS"],
             "priority" : 2,
             "levels" : 0,
             "requires_enemies" : false,
@@ -48,7 +48,7 @@
         },
         {
             "name" : "overworld1nobeams",
-            "action_space" : "attack-only",
+            "action_space" : ["MOVE", "BEAMS"],
             "priority" : 0,
             "levels" : 0,
             "requires_enemies" : false,
@@ -58,7 +58,7 @@
         },
         {
             "name" : "dungeon1entrance",
-            "action_space" : "move-only",
+            "action_space" : ["MOVE"],
             "priority" : 10,
             "levels" : 1,
             "rooms" : ["0x73"],
@@ -69,7 +69,7 @@
         },
         {
             "name" : "dungeon1nobeams",
-            "action_space" : "attack-only",
+            "action_space" : ["MOVE", "SWORD"],
             "priority" : 0,
             "levels" : 1,
             "requires_enemies" : false,
@@ -79,7 +79,7 @@
         },
         {
             "name" : "dungeon1beams",
-            "action_space" : "attack-only",
+            "action_space" : ["MOVE", "BEAMS"],
             "priority" : 1,
             "levels" : 1,
             "requires_enemies" : false,
@@ -90,7 +90,7 @@
         },
         {
             "name" : "dungeon1bombs",
-            "action_space" : "directional-item",
+            "action_space" : ["MOVE", "SWORD", "BEAMS", "BOMBS"],
             "priority" : 2,
             "levels" : 1,
             "requires_enemies" : false,
@@ -101,7 +101,7 @@
         },
         {
             "name" : "dungeon1boss",
-            "action_space" : "attack-only",
+            "action_space" : ["MOVE", "SWORD", "BEAMS"],
             "priority" : 10,
             "levels" : 1,
             "rooms" : ["0x35", "0x36"],
@@ -128,6 +128,10 @@
             "per_room":
             {
                 "health" : "max_health"
+            },
+            "per_reset":
+            {
+                "bombs" : 3
             }
         },
         {

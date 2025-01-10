@@ -3,10 +3,9 @@ Handles performing actions by stepping until control returns to Link.  This ensu
 called, the agent is in a state where it can control Link again.
 """
 
-from enum import Enum
-from typing import Optional
 import numpy as np
 
+from .action_space import ActionKind, ActionTaken
 from .zelda_enums import Direction, MapLocation, Position
 
 # movement related constants
@@ -43,66 +42,12 @@ def is_link_stunned(status_ac):
     """Returns True if link is stunned.  This is used to determine if link can take actions."""
     return status_ac & STUN_FLAG
 
-
-class ActionType(Enum):
-    """The kind of action that the agent took."""
-    NOTHING = 0
-    MOVEMENT = 1
-    ATTACK = 2
-    ITEM = 3
-
-class ActionTranslator:
-    """Translates button presses into actions for the Zelda environment."""
-    def __init__(self, env):
-        self.env = env
-
-        self.a_button = env.unwrapped.buttons.index('A')
-        self.b_button = env.unwrapped.buttons.index('B')
-        self.up_button = env.unwrapped.buttons.index('UP')
-        self.down_button = env.unwrapped.buttons.index('DOWN')
-        self.left_button = env.unwrapped.buttons.index('LEFT')
-        self.right_button = env.unwrapped.buttons.index('RIGHT')
-
-    def get_button_direction(self, action) -> Optional[Direction]:
-        """Returns the direction pressed by the action, or None if no direction is pressed."""
-        if action[self.up_button]:
-            return Direction.N
-
-        if action[self.down_button]:
-            return Direction.S
-
-        if action[self.left_button]:
-            return Direction.W
-
-        if action[self.right_button]:
-            return Direction.E
-
-        return None
-
-    def get_action_type(self, action) -> ActionType:
-        """Returns the type of action taken by the agent."""
-
-        if action[self.a_button]:
-            return ActionType.ATTACK
-        if action[self.b_button]:
-            return ActionType.ITEM
-        if self.get_button_direction(action) is not None:
-            return ActionType.MOVEMENT
-
-        return ActionType.NOTHING
-
 class ZeldaCooldownHandler:
     """Handles performing actions by stepping until control returns to Link."""
-    def __init__(self, env, action_translator : ActionTranslator):
+    def __init__(self, env):
         self.env = env
         self.was_link_in_cave = False
-        self.action_translator = action_translator
-
         self.none_action = np.zeros(9, dtype=bool)
-        self._attack_action = np.zeros(9, dtype=bool)
-        self._attack_action[action_translator.a_button] = True
-        self._item_action = np.zeros(9, dtype=bool)
-        self._item_action[action_translator.b_button] = True
 
     def reset(self):
         """Resets the handler."""
@@ -110,10 +55,15 @@ class ZeldaCooldownHandler:
 
     def skip(self, frames):
         """Skips a number of frames, returning the final state."""
-        return self.act_for(self.none_action, frames)
+        return self.act_for(None, frames)
 
     def act_for(self, act, frames):
         """Skips a number of frames, returning the final state."""
+        if act is None:
+            act = self.none_action
+        elif not isinstance(act, ActionTaken):
+            raise ValueError(f'Unsupported action type: {type(act)}')
+
         for _ in range(frames):
             obs, _, terminated, truncated, info = self.env.step(act)
 
@@ -129,7 +79,7 @@ class ZeldaCooldownHandler:
                 or (in_cave and not self.was_link_in_cave):
 
             if in_cave and not self.was_link_in_cave:
-                obs, terminated, truncated, info = self.act_for(self.none_action, CAVE_COOLDOWN)
+                obs, terminated, truncated, info = self.act_for(None, CAVE_COOLDOWN)
                 frames_skipped += CAVE_COOLDOWN
                 self.was_link_in_cave = True
             else:
@@ -139,7 +89,7 @@ class ZeldaCooldownHandler:
             in_cave = is_in_cave(info)
             assert not terminated and not truncated
 
-        obs, _, _, info = self.act_for(self.none_action, 1)
+        obs, _, _, info = self.act_for(None, 1)
         return obs, info, frames_skipped
 
     def _is_level_transition(self, loc, info):
@@ -152,22 +102,12 @@ class ZeldaCooldownHandler:
 
         return loc.level != loc2.level and loc.value == loc2.value
 
-
-    def act_and_wait(self, action, link_position):
+    def act_and_wait(self, action : ActionTaken, link_position):
         """Performs the given action, then waits until Link is controllable again."""
-        action_kind = self.action_translator.get_action_type(action)
-        match action_kind:
-            case ActionType.MOVEMENT:
-                obs, terminated, truncated, info, total_frames, loc = self._act_movement(action, link_position)
-
-            case ActionType.ATTACK:
-                obs, terminated, truncated, info, total_frames, loc = self._act_attack_or_item(action, action_kind)
-
-            case ActionType.ITEM:
-                obs, terminated, truncated, info, total_frames, loc = self._act_attack_or_item(action, action_kind)
-
-            case _:
-                raise ValueError(f'Unknown action type: {action_kind}')
+        if action.kind == ActionKind.MOVE:
+            obs, terminated, truncated, info, total_frames, loc = self._act_movement(action, link_position)
+        else:
+            obs, terminated, truncated, info, total_frames, loc = self._act_attack_or_item(action)
 
         # skip scrolling
         obs, info, skipped = self.skip_uncontrollable_states(loc, info)
@@ -176,34 +116,34 @@ class ZeldaCooldownHandler:
         return obs, terminated, truncated, info, total_frames
 
 
-    def _act_attack_or_item(self, action, action_kind):
+    def _act_attack_or_item(self, action):
         total_frames = 0
-        direction = self.action_translator.get_button_direction(action)
-        self._set_direction(direction)
+        if action.direction in (Direction.N, Direction.S, Direction.E, Direction.W):
+            self._set_direction(action.direction)
+        elif action.direction in (Direction.NW, Direction.NE):
+            self._set_direction(Direction.N)
+        elif action.direction in (Direction.SW, Direction.SE):
+            self._set_direction(Direction.S)
 
         cooldown = 0
-        if action_kind == ActionType.ATTACK:
-            obs, _, terminated, truncated, info = self.env.step(self._attack_action)
+        if action.kind in (ActionKind.SWORD, ActionKind.BEAMS):
+            obs, _, terminated, truncated, info = self.env.step(action)
             cooldown = ATTACK_COOLDOWN
             loc = self._get_location(info)
 
-        elif action_kind == ActionType.ITEM:
-            obs, _, terminated, truncated, info = self.env.step(self._item_action)
+        else:
+            obs, _, terminated, truncated, info = self.env.step(action)
             cooldown = ITEM_COOLDOWN
             loc = self._get_location(info)
 
-        else:
-            raise ValueError(f'Unknown action type: {action_kind}')
-
         total_frames += cooldown + 1
-        obs, terminated, truncated, info = self.act_for(self.none_action, cooldown)
+        obs, terminated, truncated, info = self.act_for(None, cooldown)
 
         return obs, terminated, truncated, info, total_frames, loc
 
-    def _act_movement(self, action, start_pos):
+    def _act_movement(self, action : ActionTaken, start_pos):
         total_frames = 0
 
-        direction = self.action_translator.get_button_direction(action)
         if start_pos is None:
             obs, _, terminated, truncated, info = self.env.step(action)
             total_frames += 1
@@ -223,7 +163,7 @@ class ZeldaCooldownHandler:
             total_frames += 1
             pos = Position(info['link_x'], info['link_y'])
             new_tile_index = pos.tile_index
-            match direction:
+            match action.direction:
                 case Direction.N:
                     if old_tile_index.y != new_tile_index.y:
                         break
@@ -240,6 +180,8 @@ class ZeldaCooldownHandler:
                         obs, terminated, truncated, info = self.act_for(action, WS_ADJUSTMENT_FRAMES)
                         total_frames += WS_ADJUSTMENT_FRAMES
                         break
+                case _:
+                    raise ValueError(f'Unsupported direction: {action.direction}')
 
             if prev_pos == pos:
                 stuck_count += 1
@@ -256,7 +198,5 @@ class ZeldaCooldownHandler:
         self.env.unwrapped.data.set_value('link_direction', direction.value)
 
 __all__ = [
-    ActionType.__name__,
-    ActionTranslator.__name__,
     ZeldaCooldownHandler.__name__,
 ]

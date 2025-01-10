@@ -4,10 +4,11 @@ from enum import Enum
 from typing import Dict
 import numpy as np
 
-from .objectives import ObjectiveKind
-from .zelda_cooldown_handler import ActionType
+from triforce.action_space import ActionKind
 
-from .zelda_enums import Direction, SelectedEquipmentKind, SwordKind, ZeldaAnimationKind, AnimationState
+from .objectives import ObjectiveKind
+
+from .zelda_enums import Direction, SwordKind, ZeldaAnimationKind, AnimationState
 from .game_state_change import ZeldaStateChange
 
 REWARD_MINIMUM = 0.01
@@ -101,7 +102,6 @@ class GameplayCritic(ZeldaCritic):
         self.critique_triforce(state_change, rewards)
 
         # combat
-        self.critique_block(state_change, rewards)
         self.critique_attack(state_change, rewards)
         self.critique_item_usage(state_change, rewards)
 
@@ -111,8 +111,12 @@ class GameplayCritic(ZeldaCritic):
         self.critique_equipment_pickup(state_change, rewards)
 
         # movement
-        self.critique_location_change(state_change, rewards)
-        self.critique_movement(state_change, rewards)
+        if state_change.action.kind == ActionKind.MOVE:
+            self.critique_location_change(state_change, rewards)
+            self.critique_movement(state_change, rewards)
+
+            # Blocking projectiles only happens when not using an item
+            self.critique_block(state_change, rewards)
 
         # health - must be last
         self.critique_health_change(state_change, rewards)
@@ -231,7 +235,7 @@ class GameplayCritic(ZeldaCritic):
             else:
                 rewards['penalty-hit-cave'] = -self.injure_kill_reward
 
-        elif curr.action == ActionType.ATTACK:
+        elif state_change.action.kind in (ActionKind.SWORD, ActionKind.BEAMS):
             if not curr.enemies:
                 rewards['penalty-attack-no-enemies'] = self.attack_no_enemies_penalty
 
@@ -252,16 +256,11 @@ class GameplayCritic(ZeldaCritic):
 
     def critique_item_usage(self, state_change : ZeldaStateChange, rewards):
         """Critiques the usage of items."""
-        curr = state_change.state
-        if curr.action == ActionType.ITEM:
-            selected = curr.link.selected_equipment
-            if selected == SelectedEquipmentKind.NONE:
-                rewards['used-null-item'] = self.used_null_item_penalty
-            elif selected == SelectedEquipmentKind.BOMBS:
-                if state_change.hits == 0:
-                    rewards['penalty-bomb-miss'] = self.bomb_miss_penalty
-                else:
-                    rewards['reward-bomb-hit'] = min(self.bomb_hit_reward * state_change.hits, 1.0)
+        if state_change.action.kind == ActionKind.BOMBS:
+            if state_change.hits == 0:
+                rewards['penalty-bomb-miss'] = self.bomb_miss_penalty
+            else:
+                rewards['reward-bomb-hit'] = min(self.bomb_hit_reward * state_change.hits, 1.0)
 
     def critique_location_change(self, state_change : ZeldaStateChange, rewards):
         """Critiques the discovery of new locations."""
@@ -301,9 +300,15 @@ class GameplayCritic(ZeldaCritic):
         prev_link = prev.link
         curr_link = curr.link
 
+        if state_change.action.kind != ActionKind.MOVE:
+            return
+
         # Don't score movement if we moved to a new location or took damage.  The "movement" which occurs from
         # damage should never be rewarded, and it will be penalized by the health loss critic.
-        if curr.action != ActionType.MOVEMENT or state_change.health_lost or prev.full_location != curr.full_location:
+        if state_change.action.kind != ActionKind.MOVE \
+                or state_change.health_lost \
+                or prev.full_location != curr.full_location:
+
             return
 
         # Did link run into a wall?
@@ -335,6 +340,8 @@ class GameplayCritic(ZeldaCritic):
                     dir_vect = np.array([1, 0], dtype=np.float32)
                 case Direction.W:
                     dir_vect = np.array([-1, 0], dtype=np.float32)
+                case _:
+                    raise ValueError("Invalid direction")
 
             movement = curr_link.position.numpy - prev_link.position.numpy
             progress = np.dot(movement, dir_vect)
@@ -396,29 +403,6 @@ class Dungeon1Critic(GameplayCritic):
                 rewards['reward-new-location'] = self.new_location_reward
             else:
                 rewards['penalty-left-early'] = self.leave_early_penalty
-
-class Dungeon1BombCritic(Dungeon1Critic):
-    """Critic specifically for dungeon 1 with bombs."""
-    def __init__(self):
-        super().__init__()
-        self.bomb_miss_penalty = -REWARD_SMALL
-        self.score = 0
-
-    def clear(self):
-        super().clear()
-        self.score = 0
-        self.bomb_miss_penalty = -REWARD_SMALL
-
-    def get_score(self, state_change: ZeldaStateChange):
-        state = state_change.state
-        if state.action == ActionType.ITEM and state.link.selected_equipment == SelectedEquipmentKind.BOMBS:
-            hits = state_change.damage_dealt
-            if hits:
-                self.score += hits
-            else:
-                self.score -= 1
-
-        return self.score
 
 class Dungeon1BossCritic(Dungeon1Critic):
     """Critic specifically for dungeon 1 with the boss."""

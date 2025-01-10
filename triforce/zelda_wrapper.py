@@ -12,18 +12,16 @@ from .models_and_scenarios import ZeldaScenario
 from .objectives import Objectives
 from .game_state_change import ZeldaStateChange
 from .zelda_game import ZeldaGame
-from .zelda_cooldown_handler import ZeldaCooldownHandler, ActionTranslator
+from .zelda_cooldown_handler import ZeldaCooldownHandler
 
 class ZeldaGameWrapper(gym.Wrapper):
     """Interprets the game state and produces more information in the 'info' dictionary."""
-    def __init__(self, env, scenario : ZeldaScenario = None, deterministic=False, action_translator=None):
+    def __init__(self, env, scenario : ZeldaScenario = None, deterministic=False):
         super().__init__(env)
 
         self.deterministic = deterministic
 
-        action_translator = action_translator or ActionTranslator(env)
-        self.action_translator = action_translator
-        self.cooldown_handler = ZeldaCooldownHandler(env, action_translator)
+        self.cooldown_handler = ZeldaCooldownHandler(env)
 
         # per-reset state
         self._total_frames = 0
@@ -63,7 +61,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         obs, info, frames_skipped = self.cooldown_handler.skip_uncontrollable_states(None, info)
         self._total_frames = frames_skipped + 1
 
-        state = self._update_dictionary(None, info)
+        state = self._update_state(None, info)
         return obs, state
 
     def step(self, action) -> Tuple[gym.spaces.Box, float, bool, bool, ZeldaStateChange]:
@@ -74,14 +72,10 @@ class ZeldaGameWrapper(gym.Wrapper):
         obs, terminated, truncated, info, frames = self.cooldown_handler.act_and_wait(action, link_position)
         self._total_frames += frames
 
-        change = self._update_dictionary(action, info)
+        change = self._update_state(action, info)
         return obs, 0, terminated, truncated, change
 
-    def _update_dictionary(self, action, info):
-        if action is not None:
-            info['action'] = self.action_translator.get_action_type(action)
-            info['buttons'] = self._get_button_names(action, self.env.unwrapped.buttons)
-
+    def _update_state(self, action, info):
         prev, state = self._create_and_set_state(info)
         health_changed = self._apply_modifications(prev, state)
 

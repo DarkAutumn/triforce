@@ -6,6 +6,20 @@ import numpy as np
 
 from .model_parameters import GAMEPLAY_START_Y
 
+class ActionKind(Enum):
+    """Actions which may be taken by the agent."""
+    MOVE = "MOVE"
+    SWORD = "SWORD"
+    BEAMS = "BEAMS"
+    BOMBS = "BOMB"
+    ARROW = "ARROW"
+    WAND = "WAND"
+    BOOMERANG = "BOOMERANG"
+    WHISTLE = "WHISTLE"
+    FOOD = "FOOD"
+    POTION = "POTION"
+    CANDLE = "CANDLE"
+
 class SoundKind(Enum):
     """Sound codes for the game."""
     # pylint: disable=invalid-name
@@ -135,11 +149,16 @@ class ZeldaItemKind(Enum):
 
 class Direction(Enum):
     """The four cardinal directions, as the game defines them."""
-    UNINITIALIZED = 0
+    NONE = 0
     E = 1
     W = 2
     S = 4
     N = 8
+
+    NE = N | E
+    NW = N | W
+    SE = S | E
+    SW = S | W
 
     @staticmethod
     def from_ram_value(value):
@@ -154,7 +173,7 @@ class Direction(Enum):
             case 8:
                 return Direction.N
             case _:
-                return Direction.UNINITIALIZED
+                return Direction.NONE
 
     def to_vector(self):
         """Returns the vector for the direction."""
@@ -340,7 +359,7 @@ class MapLocation(Coordinates):
 
         assert self.manhattan_distance(next_room) in (0, 1)
 
-        result = Direction.UNINITIALIZED
+        result = Direction.NONE
         if self.x < next_room.x:
             result = Direction.E
         elif self.x > next_room.x:
