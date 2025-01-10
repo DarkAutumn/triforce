@@ -15,7 +15,7 @@ from triforce.zelda_enums import Direction
 def _initialize_gamestate():
     replay = ZeldaActionReplay("1_73s.state")
     game_state = assert_no_hit(replay, 'uuu')
-    gamestate : ZeldaGame = game_state.current
+    gamestate : ZeldaGame = game_state.state
     return gamestate
 
 
@@ -29,7 +29,7 @@ def test_locked_room():
 def test_picklable_infos():
     replay = ZeldaActionReplay("1_73s.state")
     state_change = assert_no_hit(replay, 'uuu')
-    for key, value in state_change.current.info.items():
+    for key, value in state_change.state.info.items():
         try:
             pickle.dumps(value)
         except Exception as e:

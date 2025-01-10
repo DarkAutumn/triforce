@@ -230,9 +230,9 @@ class DisplayWindow:
                 self._render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width,
                                        self.game_height)
                 if overlay:
-                    color = "black" if info['level'] == 0 and not state_change.current.in_cave else "white"
+                    color = "black" if info['level'] == 0 and not state_change.state.in_cave else "white"
                     self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), color, \
-                                                self.scale, state_change.current)
+                                                self.scale, state_change.state)
 
                 render_text(surface, self.font, f"Model: {model_name}", (self.game_x, self.game_y))
                 if "location" in info:

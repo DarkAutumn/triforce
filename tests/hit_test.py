@@ -11,7 +11,7 @@ from triforce.zelda_game import ZeldaGame
 from triforce.zelda_cooldown_handler import ActionType
 from utilities import ZeldaActionReplay
 
-def assert_no_hit(env, command):
+def assert_no_hit(env, command) -> ZeldaStateChange:
     for _, _, terminated, truncated, state_change in run(env, command):
         assert not terminated
         assert not truncated
@@ -29,7 +29,7 @@ def run( env, command):
 def test_bat_injury():
     replay = ZeldaActionReplay("1_72e.state")
     state_change = assert_no_hit(replay, 'llllllllllldddllllllllll')
-    _select_sword(state_change.current)
+    _select_sword(state_change.state)
 
     _, _, terminated, truncated, state_change = replay.step('a')
     assert not terminated
@@ -45,7 +45,7 @@ def test_stalfos_injury():
     replay = ZeldaActionReplay("1_74w.state")
     state_change = assert_no_hit(replay, 'rrddddr')
 
-    _select_sword(state_change.current, beams=True)
+    _select_sword(state_change.state, beams=True)
 
     _, _, terminated, truncated, state_change = replay.step('a')
     assert not terminated
@@ -54,7 +54,7 @@ def test_stalfos_injury():
     assert state_change.damage_dealt == 1
     assert state_change.hits == 1
 
-    assert state_change.current.action == ActionType.ATTACK
+    assert state_change.state.action == ActionType.ATTACK
     assert_no_hit(replay, 'lllllllllr')
 
     _, _, terminated, truncated, state_change = replay.step('a')
@@ -64,7 +64,7 @@ def test_stalfos_injury():
     assert state_change.hits == 1
     assert state_change.damage_dealt == 1
 
-    assert state_change.current.action == ActionType.ATTACK
+    assert state_change.state.action == ActionType.ATTACK
 
     assert_no_hit(replay, 'lllllll')
 
@@ -74,7 +74,7 @@ def test_sword_injury():
     replay = ZeldaActionReplay("1_44e.state")
 
     state_change = assert_no_hit(replay, 'llluuuullllllllllllllld')
-    _select_sword(state_change.current)
+    _select_sword(state_change.state)
 
     _, _, terminated, truncated, state_change = replay.step('a')
     assert not terminated
@@ -82,7 +82,7 @@ def test_sword_injury():
 
     assert state_change.hits == 2
     assert state_change.damage_dealt == 2
-    assert state_change.current.action == ActionType.ATTACK
+    assert state_change.state.action == ActionType.ATTACK
 
     assert_no_hit(replay, 'u')
 
@@ -90,7 +90,7 @@ def test_boomerang_bat_kill():
     replay = ZeldaActionReplay("1_72e.state")
     state_change = assert_no_hit(replay, 'llllllllll')
 
-    _select_boomerang(state_change.current, False)
+    _select_boomerang(state_change.state, False)
 
     _, _, terminated, truncated, state_change = replay.step('b')
     assert not terminated
@@ -98,7 +98,7 @@ def test_boomerang_bat_kill():
 
     assert state_change.hits == 1
     assert state_change.damage_dealt == 1
-    assert state_change.current.action == ActionType.ITEM
+    assert state_change.state.action == ActionType.ITEM
 
     assert_no_hit(replay, 'ldddllllllll')
 
@@ -108,7 +108,7 @@ def test_beam_injury():
     replay = ZeldaActionReplay("1_44e.state")
 
     state_change = assert_no_hit(replay, 'll')
-    _select_sword(state_change.current, beams=True)
+    _select_sword(state_change.state, beams=True)
 
     _, _, terminated, truncated, state_change = replay.step('a')
     assert not terminated
@@ -117,7 +117,7 @@ def test_beam_injury():
     assert state_change.hits == 1
     assert state_change.damage_dealt == 1
 
-    assert state_change.current.action == ActionType.ATTACK
+    assert state_change.state.action == ActionType.ATTACK
 
     assert_no_hit(replay, "lllllll")
 
@@ -132,7 +132,7 @@ def test_silver_arrow_pickup():
 def _test_arrow_item_pickup(silver):
     replay, state_change = _line_up_item()
 
-    _select_arrows(state_change.current, silver)
+    _select_arrows(state_change.state, silver)
 
     _, _, terminated, truncated, state_change = replay.step('b')
     assert not terminated
@@ -150,7 +150,7 @@ def _test_arrow(silver):
     replay = ZeldaActionReplay("1_44e.state")
 
     state_change = assert_no_hit(replay, 'll')
-    _select_arrows(state_change.current, silver)
+    _select_arrows(state_change.state, silver)
 
     _, _, terminated, truncated, state_change = replay.step('b')
     assert not terminated
@@ -158,7 +158,7 @@ def _test_arrow(silver):
 
     assert state_change.hits == 1
     assert state_change.damage_dealt == 3 if silver else 2
-    assert state_change.current.action == ActionType.ITEM
+    assert state_change.state.action == ActionType.ITEM
 
     assert_no_hit(replay, "lllllll")
 
@@ -173,7 +173,7 @@ def test_magic_boomerang_item_pickup():
 def _test_boomerang(magic):
     replay, state_change = _line_up_item()
 
-    _select_boomerang(state_change.current, magic)
+    _select_boomerang(state_change.state, magic)
 
     _, _, terminated, truncated, state_change = replay.step('b')
     assert not terminated
@@ -187,7 +187,7 @@ def test_boomerang_stun():
     replay = ZeldaActionReplay("1_44e.state",)
 
     state_change = assert_no_hit(replay, 'll')
-    _select_boomerang(state_change.current, True)
+    _select_boomerang(state_change.state, True)
 
     _, _, terminated, truncated, state_change = replay.step('b')
     assert not terminated
@@ -196,7 +196,7 @@ def test_boomerang_stun():
     assert state_change.hits == 0
     assert state_change.damage_dealt == 0
     assert len(state_change.enemies_stunned) == 1
-    assert state_change.current.action == ActionType.ITEM
+    assert state_change.state.action == ActionType.ITEM
 
     assert_no_hit(replay, "llllllllllll")
 
@@ -206,7 +206,7 @@ def test_bombs_kill():
     replay = ZeldaActionReplay("1_44e.state")
 
     state_change = assert_no_hit(replay, 'llluuuullllllllllllllld')
-    _select_bombs(state_change.current)
+    _select_bombs(state_change.state)
 
     _, _, terminated, truncated, state_change = replay.step('b')
     assert not terminated
@@ -214,7 +214,7 @@ def test_bombs_kill():
 
     assert state_change.hits == 3
     assert state_change.damage_dealt == 9
-    assert state_change.current.action == ActionType.ITEM
+    assert state_change.state.action == ActionType.ITEM
 
     assert_no_hit(replay, "uuurrrrrr")
 
@@ -231,10 +231,10 @@ def _line_up_item():
 
     assert state_change.hits == 3
     assert state_change.damage_dealt == 9
-    assert state_change.current.action == ActionType.ITEM
+    assert state_change.state.action == ActionType.ITEM
 
     state_change = assert_no_hit(replay, "rrrrrrrrdd")
-    while state_change.current.link.get_animation_state(ZeldaAnimationKind.BOMB_1) != AnimationState.INACTIVE:
+    while state_change.state.link.get_animation_state(ZeldaAnimationKind.BOMB_1) != AnimationState.INACTIVE:
         state_change = assert_no_hit(replay, "rl")
 
     return replay, state_change

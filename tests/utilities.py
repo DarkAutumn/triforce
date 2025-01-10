@@ -44,7 +44,7 @@ class CriticWrapper(gym.Wrapper):
         terminated = terminated or any((x[0] for x in end))
         truncated = truncated or any((x[1] for x in end))
 
-        change.current.rewards = reward_dict
+        change.state.rewards = reward_dict
 
         return obs, rewards, terminated, truncated, change
 
@@ -83,7 +83,7 @@ class ZeldaActionReplay:
     def _set_prev(self, state):
         self.deactivate()
         if isinstance(state, ZeldaStateChange):
-            state = state.current
+            state = state.state
 
         self._prev = state
 

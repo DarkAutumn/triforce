@@ -12,7 +12,7 @@ class ZeldaStateChange:
     def __init__(self, env, prev : ZeldaGame, curr : ZeldaGame, action, discounts, health_changed = 0):
         self.action = action
         self.previous : ZeldaGame = prev
-        self.current : ZeldaGame = curr
+        self.state : ZeldaGame = curr
 
         self.health_lost = (max(0, prev.link.health - curr.link.health + health_changed) \
                            if prev.link.max_health == curr.link.max_health \

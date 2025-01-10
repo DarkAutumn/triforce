@@ -9,8 +9,8 @@ from triforce.zelda_game import ZeldaGame
 
 def _initialize_gamestate() -> ZeldaGame:
     replay = ZeldaActionReplay("1_44e.state")
-    state_cahnge = assert_no_hit(replay, 'lll')
-    return state_cahnge.current
+    state_change = assert_no_hit(replay, 'lll')
+    return state_change.state
 
 
 def test_health():

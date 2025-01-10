@@ -51,10 +51,10 @@ class ZeldaVectorFeatures(gym.Wrapper):
     def step(self, action):
         observation, reward, terminated, truncated, state_change = self.env.step(action)
 
-        if state_change.previous.full_location != state_change.current.full_location:
+        if state_change.previous.full_location != state_change.state.full_location:
             self._prev_loc = state_change.previous.full_location
 
-        augmented_observation = self._augment_observation(observation, state_change.current)
+        augmented_observation = self._augment_observation(observation, state_change.state)
         return augmented_observation, reward, terminated, truncated, state_change
 
     def reset(self, **_):

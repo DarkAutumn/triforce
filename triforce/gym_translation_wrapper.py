@@ -10,6 +10,6 @@ class GymTranslationWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, terminated, truncated, change = super().step(action)
-        state = change.current
+        state = change.state
         state.deactivate()
         return obs, reward, terminated, truncated, change

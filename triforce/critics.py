@@ -33,7 +33,7 @@ class ZeldaCritic:
     def get_score(self, state_change : ZeldaStateChange):
         """Override to set info['score']"""
 
-        diff = state_change.current.link.health - state_change.previous.link.health
+        diff = state_change.state.link.health - state_change.previous.link.health
         if diff < 0:
             self.health_lost += diff
 
@@ -143,7 +143,7 @@ class GameplayCritic(ZeldaCritic):
         self.__check_one_equipment(state_change, rewards, 'map')
 
     def __check_one_equipment(self, state_change : ZeldaStateChange, rewards, item):
-        prev, curr = self.__get_equipment_change(state_change.previous.link, state_change.current.link, item)
+        prev, curr = self.__get_equipment_change(state_change.previous.link, state_change.state.link, item)
         if prev < curr:
             rewards[f'reward-{item}-gained'] = self.equipment_reward
 
@@ -165,7 +165,7 @@ class GameplayCritic(ZeldaCritic):
     def critique_key_pickup_usage(self, state_change : ZeldaStateChange, rewards):
         """Critiques the pickup and usage of keys."""
         prev_link = state_change.previous.link
-        curr_link = state_change.current.link
+        curr_link = state_change.state.link
 
         if prev_link.keys > curr_link.keys:
             rewards['reward-used-key'] = self.key_reward
@@ -174,7 +174,7 @@ class GameplayCritic(ZeldaCritic):
 
     def critique_item_pickup(self, state_change : ZeldaStateChange, rewards):
         """Critiques the pickup of items."""
-        prev, curr = state_change.previous, state_change.current
+        prev, curr = state_change.previous, state_change.state
         if prev.rupees_to_add < curr.rupees_to_add:
             rewards['reward-gained-rupees'] = self.rupee_reward
 
@@ -183,7 +183,7 @@ class GameplayCritic(ZeldaCritic):
 
     def critique_health_change(self, state_change : ZeldaStateChange, rewards):
         """Critiques the change in health."""
-        prev_link, curr_link = state_change.previous.link, state_change.current.link
+        prev_link, curr_link = state_change.previous.link, state_change.state.link
         if prev_link.max_health < curr_link.max_health:
             rewards['reward-gained-heart-container'] = self.heart_container_reward
 
@@ -200,7 +200,7 @@ class GameplayCritic(ZeldaCritic):
 
     def critique_triforce(self, state_change : ZeldaStateChange, rewards):
         """Critiques the acquisition of the triforce."""
-        prev_link, curr_link = state_change.previous.link, state_change.current.link
+        prev_link, curr_link = state_change.previous.link, state_change.state.link
         if prev_link.triforce_pieces < curr_link.triforce_pieces:
             rewards['reward-gained-triforce'] = self.triforce_reward
 
@@ -209,7 +209,7 @@ class GameplayCritic(ZeldaCritic):
 
     def critique_block(self, state_change : ZeldaStateChange, rewards):
         """Critiques blocking of projectiles."""
-        prev_link, curr_link = state_change.previous.link, state_change.current.link
+        prev_link, curr_link = state_change.previous.link, state_change.state.link
         if not prev_link.is_blocking and curr_link.is_blocking:
             rewards['reward-block'] = self.block_projectile_reward
 
@@ -217,7 +217,7 @@ class GameplayCritic(ZeldaCritic):
         """Critiques attacks made by the player."""
         # pylint: disable=too-many-branches
 
-        prev, curr = state_change.previous, state_change.current
+        prev, curr = state_change.previous, state_change.state
         if state_change.hits and prev.link.are_beams_available \
                              and curr.link.get_animation_state(ZeldaAnimationKind.BEAMS) != AnimationState.INACTIVE:
             rewards['reward-beam-hit'] = self.injure_kill_reward
@@ -252,7 +252,7 @@ class GameplayCritic(ZeldaCritic):
 
     def critique_item_usage(self, state_change : ZeldaStateChange, rewards):
         """Critiques the usage of items."""
-        curr = state_change.current
+        curr = state_change.state
         if curr.action == ActionType.ITEM:
             selected = curr.link.selected_equipment
             if selected == SelectedEquipmentKind.NONE:
@@ -269,7 +269,7 @@ class GameplayCritic(ZeldaCritic):
             self._room_enter_health = state_change.previous.link.health
 
         prev = state_change.previous.full_location
-        curr = state_change.current.full_location
+        curr = state_change.state.full_location
 
         if prev != curr:
             health_change = state_change.previous.link.health - self._room_enter_health
@@ -286,7 +286,7 @@ class GameplayCritic(ZeldaCritic):
             else:
                 rewards['penalty-wrong-location'] = -reward - REWARD_SMALL
 
-            self._room_enter_health = state_change.current.link.health
+            self._room_enter_health = state_change.state.link.health
 
     def critique_movement(self, state_change : ZeldaStateChange, rewards):
         """
@@ -296,7 +296,7 @@ class GameplayCritic(ZeldaCritic):
         # pylint: disable=too-many-branches, too-many-locals
 
         prev = state_change.previous
-        curr = state_change.current
+        curr = state_change.state
 
         prev_link = prev.link
         curr_link = curr.link
@@ -344,7 +344,7 @@ class GameplayCritic(ZeldaCritic):
         """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted
         independent of other movement rewards.  This ensures that even if the agent is moving in the right direction,
         it is still wary of moving too close to an enemy."""
-        prev, curr = state_change.previous, state_change.current
+        prev, curr = state_change.previous, state_change.state
 
         if not state_change.health_lost and not curr.link.is_blocking:
             prev_active = [enemy.index for enemy in prev.active_enemies]
@@ -388,7 +388,7 @@ class Dungeon1Critic(GameplayCritic):
     def critique_location_change(self, state_change : ZeldaStateChange, rewards: Dict[str, float]):
         """Critiques the location discovery based on the old and new states and assigns rewards or penalties
         accordingly."""
-        prev, curr = state_change.previous, state_change.current
+        prev, curr = state_change.previous, state_change.state
         if curr.level != 1:
             rewards['penalty-left-dungeon'] = self.leave_dungeon_penalty
         elif prev.location != curr.location:
@@ -410,7 +410,7 @@ class Dungeon1BombCritic(Dungeon1Critic):
         self.bomb_miss_penalty = -REWARD_SMALL
 
     def get_score(self, state_change: ZeldaStateChange):
-        state = state_change.current
+        state = state_change.state
         if state.action == ActionType.ITEM and state.link.selected_equipment == SelectedEquipmentKind.BOMBS:
             hits = state_change.damage_dealt
             if hits:
@@ -454,7 +454,7 @@ class OverworldCritic(GameplayCritic):
         self.health_lost = 0
 
     def critique_location_change(self, state_change : ZeldaStateChange, rewards):
-        prev, curr = state_change.previous, state_change.current
+        prev, curr = state_change.previous, state_change.state
 
         if prev.full_location != curr.full_location:
             if curr.full_location not in prev.objectives.next_rooms:
@@ -507,7 +507,7 @@ class OverworldSwordCritic(GameplayCritic):
 
     def critique_location_change(self, state_change : ZeldaStateChange, rewards):
         # entered cave
-        prev, curr = state_change.previous, state_change.current
+        prev, curr = state_change.previous, state_change.state
 
         if not prev.in_cave and curr.in_cave:
             if curr.link.sword != SwordKind.NONE:
@@ -529,7 +529,7 @@ class OverworldSwordCritic(GameplayCritic):
                 rewards['penalty-left-scenario'] = -self.new_location_reward
 
     def get_score(self, state_change : ZeldaStateChange):
-        state = state_change.current
+        state = state_change.state
 
         score = 0
         if state.in_cave:

@@ -96,13 +96,13 @@ class ZeldaObservationWrapper(gym.Wrapper):
             frames = []
             for i in range(self.framestack):
                 frame = self.frames[-i * 2 - 1]
-                frame = self.trim_normalize_grayscale(state_change.current.link, frame)
+                frame = self.trim_normalize_grayscale(state_change.state.link, frame)
                 frames.append(frame)
             result = np.concatenate(frames, axis=0)
             return result
 
         frame = self.frames[-1]
-        frame = self.trim_normalize_grayscale(state_change.current.link, frame)
+        frame = self.trim_normalize_grayscale(state_change.state.link, frame)
         return frame
 
     def trim_normalize_grayscale(self, link : Link, frame):
