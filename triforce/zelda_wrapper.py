@@ -16,7 +16,7 @@ from .zelda_cooldown_handler import ZeldaCooldownHandler, ActionTranslator
 
 class ZeldaGameWrapper(gym.Wrapper):
     """Interprets the game state and produces more information in the 'info' dictionary."""
-    def __init__(self, env, scenario : ZeldaScenario, deterministic=False, action_translator=None):
+    def __init__(self, env, scenario : ZeldaScenario = None, deterministic=False, action_translator=None):
         super().__init__(env)
 
         self.deterministic = deterministic
@@ -31,17 +31,19 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._discounts = {}
         self._objectives : Objectives = None
 
-        self.per_frame = []
-        for key, value in scenario.per_frame.items():
-            self.per_frame.append((key, value))
-
         self.per_reset = []
-        for key, value in scenario.per_reset.items():
-            self.per_reset.append((key, value))
-
         self.per_room = []
-        for key, value in scenario.per_room.items():
-            self.per_room.append((key, value))
+        self.per_frame = []
+
+        if scenario is not None:
+            for key, value in scenario.per_reset.items():
+                self.per_reset.append((key, value))
+
+            for key, value in scenario.per_room.items():
+                self.per_room.append((key, value))
+
+            for key, value in scenario.per_frame.items():
+                self.per_frame.append((key, value))
 
     def __getattr__(self, name):
         if name == 'state':
