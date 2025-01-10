@@ -30,7 +30,7 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
 
     # Wrap the game to produce new info about game state and to hold the button down after the action is
     # taken to achieve the desired number of actions per second.
-    env = ZeldaGameWrapper(env)
+    env = ZeldaGameWrapper(env, scenario)
 
     # Frame stack and convert to grayscale if requested
     env = ZeldaObservationWrapper(env, captured_frames, grayscale, kind=obs_kind, framestack=framestack)

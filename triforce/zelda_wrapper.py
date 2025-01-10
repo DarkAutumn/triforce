@@ -8,6 +8,7 @@ from random import randint
 from typing import Union
 import gymnasium as gym
 
+from .models_and_scenarios import ZeldaScenario
 from .objectives import Objectives
 from .game_state_change import ZeldaStateChange
 from .zelda_game import ZeldaGame
@@ -15,7 +16,7 @@ from .zelda_cooldown_handler import ZeldaCooldownHandler, ActionTranslator
 
 class ZeldaGameWrapper(gym.Wrapper):
     """Interprets the game state and produces more information in the 'info' dictionary."""
-    def __init__(self, env, deterministic=False, action_translator=None):
+    def __init__(self, env, scenario : ZeldaScenario, deterministic=False, action_translator=None):
         super().__init__(env)
 
         self.deterministic = deterministic
@@ -29,6 +30,18 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._state_change : Union[ZeldaGame | ZeldaStateChange] = None
         self._discounts = {}
         self._objectives : Objectives = None
+
+        self.per_frame = []
+        for key, value in scenario.per_frame.items():
+            self.per_frame.append((key, value))
+
+        self.per_reset = []
+        for key, value in scenario.per_reset.items():
+            self.per_reset.append((key, value))
+
+        self.per_room = []
+        for key, value in scenario.per_room.items():
+            self.per_room.append((key, value))
 
     def __getattr__(self, name):
         if name == 'state':
@@ -82,9 +95,10 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         prev = self.state
         state = ZeldaGame(prev, self, info, self._total_frames)
+        health_changed = self._apply_modifications(prev, state)
 
         if prev is not None:
-            self._state_change = ZeldaStateChange(self, prev, state, self._discounts)
+            self._state_change = ZeldaStateChange(self, prev, state, self._discounts, health_changed)
         else:
             self._state_change = state
 
@@ -99,5 +113,31 @@ class ZeldaGameWrapper(gym.Wrapper):
             if act[i]:
                 result.append(b)
         return result
+
+    def _apply_modifications(self, prev : ZeldaGame, curr : ZeldaGame) -> float:
+        health = curr.link.health
+
+        if prev is None:
+            for name, value in self.per_reset:
+                self._set_value(curr, name, value)
+
+        elif prev.full_location != curr.full_location:
+            for name, value in self.per_room:
+                self._set_value(curr, name, value)
+
+        for name, value in self.per_frame:
+            self._set_value(curr, name, value)
+
+        return curr.link.health - health
+
+    def _set_value(self, obj, name, value):
+        if not hasattr(obj, name):
+            obj = obj.link
+
+        if isinstance(value, str):
+            value = getattr(obj, value)
+
+        setattr(obj, name, value)
+
 
 __all__ = [ZeldaGameWrapper.__name__]

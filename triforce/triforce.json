@@ -2,6 +2,17 @@
     "models" :
     [
         {
+            "name" : "full-game",
+            "action_space" : "attack-only",
+            "priority" : 0,
+            "levels" : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "rooms" : ["0x77"],
+            "requires_enemies" : false,
+
+            "training_scenario" : "full-game-training",
+            "iterations" : 1000000
+        },
+        {
             "name" : "overworld-sword",
             "action_space" : "move-only",
             "priority" : 2,
@@ -109,12 +120,23 @@
             "start": ["0_77"]
         },
         {
+            "name": "full-game-training",
+            "description": "The full game with training variables",
+            "critic": "GameplayCritic",
+            "end_conditions": ["GainedTriforce", "GameOver", "Timeout"],
+            "start": ["0_77"],
+            "per_room":
+            {
+                "health" : "max_health"
+            }
+        },
+        {
             "name": "overworld-sword",
             "description": "Start of the game to the sword",
             "critic": "OverworldSwordCritic",
             "end_conditions": ["StartingRoomConditions", "Timeout"],
             "start": ["0_77"],
-            "data":
+            "per_reset":
             {
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
@@ -126,7 +148,7 @@
             "critic": "OverworldCritic",
             "end_conditions": ["EnteredDungeon", "LeftOverworld1Area", "GameOver", "Timeout"],
             "start": ["0_67s"],
-            "data":
+            "per_reset":
             {
                 "bombs" : 0,
                 "keys" : 0,
@@ -134,7 +156,7 @@
                 "partial_hearts" : 254,
                 "sword" : 1
             },
-            "fixed":
+            "per_frame":
             {
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
@@ -146,7 +168,7 @@
             "critic": "OverworldCritic",
             "end_conditions": ["EnteredDungeon", "GameOver", "Timeout"],
             "start": ["0_37c"],
-            "data":
+            "per_reset":
             {
                 "bombs" : 0,
                 "keys" : 0,
@@ -154,7 +176,7 @@
                 "partial_hearts" : 254,
                 "sword" : 1
             },
-            "fixed":
+            "per_frame":
             {
                 "hearts_and_containers" : 51,
                 "partial_hearts" : 254
@@ -166,7 +188,7 @@
             "critic": "OverworldCritic",
             "end_conditions": ["EnteredDungeon", "LeftOverworld1Area", "GameOver", "Timeout"],
             "start": ["0_67s"],
-            "data":
+            "per_reset":
             {
                 "bombs" : 0,
                 "keys" : 0,
@@ -174,7 +196,7 @@
                 "partial_hearts" : 254,
                 "sword" : 1
             },
-            "fixed":
+            "per_frame":
             {
                 "hearts_and_containers" : 33,
                 "partial_hearts" : 100
@@ -186,7 +208,7 @@
             "critic": "Dungeon1Critic",
             "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "start": ["1_73s"],
-            "data":
+            "per_reset":
             {
                 "bombs" : 0,
                 "keys" : 0,
@@ -208,14 +230,14 @@
             "critic": "Dungeon1Critic",
             "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "start": ["1_72e"],
-            "data":
+            "per_reset":
             {
                 "bombs" : 0,
                 "keys" : 0,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
             },
-            "fixed":
+            "per_frame":
             {
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
@@ -227,14 +249,14 @@
             "critic": "Dungeon1BombCritic",
             "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "start": ["1_72e"],
-            "data":
+            "per_reset":
             {
                 "bombs" : 0,
                 "keys" : 0,
                 "hearts_and_containers" : 34,
                 "partial_hearts" : 254
             },
-            "fixed":
+            "per_frame":
             {
                 "bombs" : 3,
                 "hearts_and_containers" : 33,
@@ -247,14 +269,14 @@
             "critic": "Dungeon1Critic",
             "end_conditions": ["GainedTriforce", "LeftDungeon", "GameOver", "Timeout"],
             "start": ["1_72e"],
-            "data":
+            "per_reset":
             {
                 "bombs" : 0,
                 "keys" : 0,
                 "hearts_and_containers" : 33,
                 "partial_hearts" : 100
             },
-            "fixed":
+            "per_frame":
             {
                 "hearts_and_containers" : 33,
                 "partial_hearts" : 100
@@ -266,7 +288,7 @@
             "critic": "Dungeon1BossCritic",
             "end_conditions": ["GainedTriforce", "DefeatedBoss", "GameOver", "Timeout"],
             "start": ["1_35s"],
-            "data":
+            "per_reset":
             {
                 "bombs" : 0,
                 "keys" : 0,

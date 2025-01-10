@@ -15,7 +15,7 @@ def simulate_critique(env, scenario : ZeldaScenario, old : Dict, new : Dict):
     critic.clear()
     prev = ZeldaGame(None, env, old, 0)
     state = ZeldaGame(prev, env, new, 0)
-    change = ZeldaStateChange(env, prev, state, {})
+    change = ZeldaStateChange(env, prev, state, {}, 0)
     critic.critique_gameplay(change, rewards)
 
     terminated = False

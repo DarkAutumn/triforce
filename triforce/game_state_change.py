@@ -9,17 +9,17 @@ from .zelda_game import ZeldaGame
 
 class ZeldaStateChange:
     """Tracks the changes between two Zelda game states."""
-    def __init__(self, env, prev : ZeldaGame, curr : ZeldaGame, discounts):
+    def __init__(self, env, prev : ZeldaGame, curr : ZeldaGame, discounts, health_changed = 0):
         self.previous : ZeldaGame = prev
         self.current : ZeldaGame = curr
 
         self.health_lost = max(0, prev.link.health - curr.link.health) \
                            if prev.link.max_health == curr.link.max_health \
-                           else max(0, prev.link.max_health - curr.link.max_health)
+                           else max(0, prev.link.max_health - curr.link.max_health) + health_changed
 
         self.health_gained = max(0, curr.link.health - prev.link.health) \
                              if prev.link.max_health == curr.link.max_health \
-                             else max(0, curr.link.max_health - prev.link.max_health)
+                             else max(0, curr.link.max_health - prev.link.max_health) - health_changed
 
         self.enemies_hit : Dict[int, int] = {}
         self.enemies_stunned : List[int] = []
