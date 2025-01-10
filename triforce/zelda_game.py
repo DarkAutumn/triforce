@@ -49,7 +49,7 @@ class ZeldaGame:
         self.__dict__['_info'] = info
 
         self._env = env
-        self._frames = frame_count
+        self.frames = frame_count
         self._fresh_tiles = None
 
         room = Room.get(self.full_location)
