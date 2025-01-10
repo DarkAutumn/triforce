@@ -191,6 +191,8 @@ class ZeldaActionSpace(gym.Wrapper):
     def step(self, action):
         if isinstance(action, tuple):
             action = self._translate_action(*action)
+        elif isinstance(action, np.ndarray):
+            action = action.item()
 
         if isinstance(action, Integral):
             action = ActionTaken(self, action)

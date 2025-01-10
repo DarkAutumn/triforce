@@ -11,7 +11,7 @@ from .scenario_wrapper import ScenarioWrapper
 from .models_and_scenarios import ZeldaScenario
 
 def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = True, framestack = 1,
-                   obs_kind = 'viewport', render_mode = None):
+                   obs_kind = 'viewport', render_mode = None, translation=True):
     """
     Creates a Zelda retro environment for the given scenario.
     Args:
@@ -48,7 +48,8 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
     env = ScenarioWrapper(env, scenario)
 
     # Translate our object-oriented environment into a gym environment.
-    env = GymTranslationWrapper(env)
+    if translation:
+        env = GymTranslationWrapper(env)
 
     return env
 
