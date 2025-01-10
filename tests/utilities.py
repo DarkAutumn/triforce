@@ -1,6 +1,7 @@
 # pylint: disable=all
 import os
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import gymnasium as gym
@@ -18,11 +19,10 @@ class CriticWrapper(gym.Wrapper):
 
         self.critics = critics or []
         self.end_conditions = end_conditions or []
-        self._last = None
         self._discounts = {}
 
     def reset(self, **kwargs):
-        state = super().reset(**kwargs)
+        obs, state = super().reset(**kwargs)
 
         for c in self.critics:
             c.clear()
@@ -30,15 +30,13 @@ class CriticWrapper(gym.Wrapper):
         for ec in self.end_conditions:
             ec.clear()
 
-        self._last = state[1]
         self._discounts.clear()
-        return state
+        return obs, state
 
     def step(self, act):
-        obs, rewards, terminated, truncated, info = self.env.step(act)
+        obs, rewards, terminated, truncated, change = self.env.step(act)
         reward_dict = {}
 
-        change = self.env.state_change
         for c in self.critics:
             c.critique_gameplay(change, reward_dict)
 
@@ -46,10 +44,9 @@ class CriticWrapper(gym.Wrapper):
         terminated = terminated or any((x[0] for x in end))
         truncated = truncated or any((x[1] for x in end))
 
-        info['rewards'] = reward_dict
+        change.current.rewards = reward_dict
 
-        self._last = info
-        return obs, rewards, terminated, truncated, info
+        return obs, rewards, terminated, truncated, change
 
 class ZeldaActionReplay:
     def __init__(self, savestate, wrapper=None, render_mode=None):
@@ -61,6 +58,7 @@ class ZeldaActionReplay:
             env = wrapper(env)
 
         self.actions = env.actions
+        self._prev = None
 
         self.buttons = {
             'u': 'UP',
@@ -71,14 +69,26 @@ class ZeldaActionReplay:
             'b': 'B',
         }
 
-        env.reset()
+        _, state = env.reset()
+        self._set_prev(state)
+
         self.actions_taken = ""
         self.env = env
 
-    def __getattr__(self, name):
-        return getattr(self.env, name)
+    def deactivate(self):
+        if self._prev:
+            self._prev.deactivate()
+            self._prev = None
+
+    def _set_prev(self, state):
+        self.deactivate()
+        if isinstance(state, ZeldaStateChange):
+            state = state.current
+
+        self._prev = state
 
     def __delattr__(self, __name: str) -> None:
+        self.deactivate()
         self.env.close()
 
     def reset(self):
@@ -131,6 +141,7 @@ class ZeldaActionReplay:
             result =  self.env.step(act)
             self.env.render()
 
+            self._set_prev(result[-1])
             return result
 
     def get_real_action(self, action):

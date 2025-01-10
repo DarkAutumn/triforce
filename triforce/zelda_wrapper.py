@@ -5,7 +5,7 @@ agent has killed or injured an enemy.
 """
 
 from random import randint
-from typing import Union
+from typing import Tuple
 import gymnasium as gym
 
 from .models_and_scenarios import ZeldaScenario
@@ -27,7 +27,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         # per-reset state
         self._total_frames = 0
-        self._state_change : Union[ZeldaGame | ZeldaStateChange] = None
+        self._prev_state = None
         self._discounts = {}
         self._objectives : Objectives = None
 
@@ -45,23 +45,10 @@ class ZeldaGameWrapper(gym.Wrapper):
             for key, value in scenario.per_frame.items():
                 self.per_frame.append((key, value))
 
-    def __getattr__(self, name):
-        if name == 'state':
-            if isinstance(self._state_change, ZeldaStateChange):
-                return self._state_change.current
-
-            return self._state_change
-
-        if name == 'state_change':
-            return self._state_change if isinstance(self._state_change, ZeldaStateChange) else None
-
-        return super().__getattr__(name)
-
-    def reset(self, **kwargs):
+    def reset(self, **kwargs) -> Tuple[gym.spaces.Box, ZeldaGame]:
         obs, info = self.env.reset(**kwargs)
 
         # Per-reset state
-        self._state_change = None
         self._discounts.clear()
         self.cooldown_handler.reset()
         self._objectives = Objectives()
@@ -76,38 +63,45 @@ class ZeldaGameWrapper(gym.Wrapper):
         obs, info, frames_skipped = self.cooldown_handler.skip_uncontrollable_states(None, info)
         self._total_frames = frames_skipped + 1
 
-        self._update_dictionary(None, info)
-        return obs, info
+        state = self._update_dictionary(None, info)
+        return obs, state
 
-    def step(self, action):
+    def step(self, action) -> Tuple[gym.spaces.Box, float, bool, bool, ZeldaStateChange]:
         # get link position for movement actions
-        link_position = self.state.link.position
+        link_position = self._prev_state.link.position
 
         # Take action
         obs, terminated, truncated, info, frames = self.cooldown_handler.act_and_wait(action, link_position)
         self._total_frames += frames
 
-        self._update_dictionary(action, info)
-        return obs, 0, terminated, truncated, info
+        change = self._update_dictionary(action, info)
+        return obs, 0, terminated, truncated, change
 
     def _update_dictionary(self, action, info):
         if action is not None:
             info['action'] = self.action_translator.get_action_type(action)
             info['buttons'] = self._get_button_names(action, self.env.unwrapped.buttons)
 
-        prev = self.state
-        state = ZeldaGame(prev, self, info, self._total_frames)
+        prev, state = self._create_and_set_state(info)
         health_changed = self._apply_modifications(prev, state)
-
-        if prev is not None:
-            self._state_change = ZeldaStateChange(self, prev, state, self._discounts, health_changed)
-        else:
-            self._state_change = state
 
         objectives = self._objectives.get_current_objectives(prev, state)
         state.objectives = objectives
         state.wavefront = state.room.calculate_wavefront_for_link(objectives.targets)
         state.total_frames = self._total_frames
+
+        if prev:
+            return ZeldaStateChange(self, prev, state, action, self._discounts, health_changed)
+
+        return state
+
+    def _create_and_set_state(self, info):
+        prev = self._prev_state
+        state = ZeldaGame(prev, self, info, self._total_frames)
+        state.activate()
+
+        self._prev_state = state
+        return prev, state
 
     def _get_button_names(self, act, buttons):
         result = []

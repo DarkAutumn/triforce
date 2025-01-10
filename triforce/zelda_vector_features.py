@@ -2,7 +2,6 @@ from typing import Sequence
 import gymnasium as gym
 import numpy as np
 
-from .game_state_change import ZeldaStateChange
 from .zelda_enums import Direction
 from .objectives import Objective, ObjectiveKind
 from .zelda_objects import ZeldaObject
@@ -50,20 +49,18 @@ class ZeldaVectorFeatures(gym.Wrapper):
         self._prev_loc = None
 
     def step(self, action):
-        observation, reward, terminated, truncated, info = self.env.step(action)
-        state_change : ZeldaStateChange = self.state_change
+        observation, reward, terminated, truncated, state_change = self.env.step(action)
 
         if state_change.previous.full_location != state_change.current.full_location:
             self._prev_loc = state_change.previous.full_location
 
         augmented_observation = self._augment_observation(observation, state_change.current)
-        return augmented_observation, reward, terminated, truncated, info
+        return augmented_observation, reward, terminated, truncated, state_change
 
     def reset(self, **_):
-        observation, info = self.env.reset()
-        state = self.env.state
+        observation, state = self.env.reset()
         self._prev_loc = state.full_location
-        return self._augment_observation(observation, state), info
+        return self._augment_observation(observation, state), state
 
     def _augment_observation(self, observation, state):
         vectors = self._get_vectors(state)

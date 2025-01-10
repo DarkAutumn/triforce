@@ -2,6 +2,7 @@
 
 import retro
 
+from .gym_translation_wrapper import GymTranslationWrapper
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
@@ -46,6 +47,9 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
     # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new
     # info state provded by ZeldaGameWrapper above.
     env = ScenarioWrapper(env, scenario)
+
+    # Translate our object-oriented environment into a gym environment.
+    env = GymTranslationWrapper(env)
 
     return env
 

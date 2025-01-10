@@ -7,16 +7,15 @@ from hit_test import assert_no_hit
 from utilities import ZeldaActionReplay
 from triforce.zelda_game import ZeldaGame
 
-def _initialize_gamestate():
+def _initialize_gamestate() -> ZeldaGame:
     replay = ZeldaActionReplay("1_44e.state")
-    info = assert_no_hit(replay, 'lll')
-    gamestate : ZeldaGame = replay.state
-    return gamestate
+    state_cahnge = assert_no_hit(replay, 'lll')
+    return state_cahnge.current
 
 
 def test_health():
-    gamestate = _initialize_gamestate()
-    link = gamestate.link
+    state = _initialize_gamestate()
+    link = state.link
 
     assert link.max_health == 16
     for i in range(1, 16):

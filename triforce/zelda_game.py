@@ -35,8 +35,10 @@ class ObjectTables:
 
 class ZeldaGame:
     """The current state of a zelda game."""
+    __active = None
+
     _env : gym.Env
-    _info : dict
+    info : dict
     frames : int
     link : Link
     room : Room
@@ -49,7 +51,7 @@ class ZeldaGame:
         tables = ObjectTables(ram)
 
         # Prepare __setattr__ for the info dict
-        self.__dict__['_info'] = info
+        self.__dict__['info'] = info
 
         self._env = env
         self.frames = frame_count
@@ -78,6 +80,14 @@ class ZeldaGame:
 
         self._update_enemies(prev)
 
+    def activate(self):
+        """Sets this state as active, allowing it to be modified."""
+        ZeldaGame.__active = self.frames
+
+    def deactivate(self):
+        """Deactivates this state, preventing it from being modified."""
+        if ZeldaGame.__active == self.frames:
+            ZeldaGame.__active = None
 
     def _update_enemies(self, prev : 'ZeldaGame'):
         if prev is None:
@@ -99,16 +109,19 @@ class ZeldaGame:
         if hasattr(self, name):
             return getattr(self, name)
 
-        return self._info.get(name, default)
+        return self.info.get(name, default)
 
     def __getattr__(self, name):
-        if name in self._info:
-            return self._info[name]
+        if name in self.info:
+            return self.info[name]
 
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name, value):
-        if name in zelda_game_data.memory or name in self._info:
+        if name in zelda_game_data.memory or name in self.info:
+            if ZeldaGame.__active != self.frames:
+                raise AttributeError("Cannot set attributes on inactive ZeldaGame instances")
+
             if isinstance(value, Enum):
                 value = value.value
 
@@ -121,7 +134,7 @@ class ZeldaGame:
             assert 0 <= value < 256, f"Expected a value between 0 and 255, got {value}"
 
             self._env.unwrapped.data.set_value(name, value)
-            self._info[name] = value
+            self.info[name] = value
 
         else:
             self.__dict__[name] = value
@@ -201,17 +214,17 @@ class ZeldaGame:
     @property
     def level(self):
         """The current level of the game."""
-        return self._info['level']
+        return self.info['level']
 
     @property
     def location(self):
         """The current location of the game."""
-        return self._info['location']
+        return self.info['location']
 
     @property
     def in_cave(self):
         """Whether the game is in a cave."""
-        return self._info['mode'] == MODE_CAVE
+        return self.info['mode'] == MODE_CAVE
 
     @property
     def full_location(self):
@@ -221,7 +234,7 @@ class ZeldaGame:
     @property
     def rupees_to_add(self):
         """The number of rupees collected by the player but not yet added to their total."""
-        return self._info['rupees_to_add']
+        return self.info['rupees_to_add']
 
     def _enumerate_active_ids(self, tables):
         object_ids = tables.read('obj_id')
