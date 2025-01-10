@@ -192,6 +192,9 @@ class ZeldaCooldownHandler:
             cooldown = ITEM_COOLDOWN
             loc = self._get_location(info)
 
+        else:
+            raise ValueError(f'Unknown action type: {action_kind}')
+
         total_frames += cooldown + 1
         obs, terminated, truncated, info = self.act_for(self.none_action, cooldown)
 
