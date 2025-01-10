@@ -123,7 +123,7 @@
             "name": "full-game-training",
             "description": "The full game with training variables",
             "critic": "GameplayCritic",
-            "end_conditions": ["GainedTriforce", "GameOver", "Timeout"],
+            "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
             "start": ["0_77"],
             "per_room":
             {
