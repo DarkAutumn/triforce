@@ -453,8 +453,8 @@ class OverworldCritic(GameplayCritic):
     def critique_location_discovery(self, state_change : ZeldaStateChange, rewards):
         prev, curr = state_change.previous, state_change.current
 
-        if prev.location != curr.location:
-            if curr.location not in prev.objectives.next_rooms:
+        if prev.full_location != curr.full_location:
+            if curr.full_location not in prev.objectives.next_rooms:
                 rewards['penalty-left-early'] = self.leave_early_penalty
                 return
 
