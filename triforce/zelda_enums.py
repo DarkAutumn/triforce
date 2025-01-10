@@ -340,17 +340,17 @@ class MapLocation(Coordinates):
 
         assert self.manhattan_distance(next_room) in (0, 1)
 
-
+        result = Direction.UNINITIALIZED
         if self.x < next_room.x:
-            return Direction.E
-        if self.x > next_room.x:
-            return Direction.W
-        if self.y < next_room.y:
-            return Direction.S
-        if self.y > next_room.y:
-            return Direction.N
+            result = Direction.E
+        elif self.x > next_room.x:
+            result = Direction.W
+        elif self.y < next_room.y:
+            result = Direction.S
+        elif self.y > next_room.y:
+            result = Direction.N
 
-        return Direction.UNINITIALIZED
+        return result
 
     def manhattan_distance(self, other):
         """Calculates the Manhattan distance between two locations."""
