@@ -70,6 +70,7 @@ class RoomMemory:
             self.exits[Direction.S] = []
 
         self.locked = None
+        self.barred = None
 
         item_map = overworld_to_item if self.level == 0 else dungeon_to_item
         self.item = item_map.get(state.location, None)
@@ -80,6 +81,9 @@ class RoomMemory:
         """On entry, refresh the state of the room's door locks."""
         self.locked = [x for x in self.exits if isinstance(x, Direction) and \
                        state.is_door_locked(x)]
+
+        self.barred = [x for x in self.exits if isinstance(x, Direction) and \
+                        state.is_door_barred(x)]
 
     def enumerate_adjacent_rooms(self):
         """Returns the list of all rooms connected to this one."""
@@ -238,6 +242,9 @@ class Objectives:
             for direction, next_room in room_memory.enumerate_adjacent_rooms():
                 locked = direction in room_memory.locked
                 if locked and not key_count:
+                    continue
+
+                if direction in room_memory.barred:
                     continue
 
                 yield next_room, locked
