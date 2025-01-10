@@ -124,7 +124,7 @@
             "description": "The full game with training variables",
             "critic": "GameplayCritic",
             "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
-            "start": ["0_77"],
+            "start": ["0_67s"],
             "per_room":
             {
                 "health" : "max_health"
