@@ -81,7 +81,7 @@ class ZeldaActionSpace(gym.Wrapper):
 
         self.move_mask = np.ones(4, dtype=bool)
 
-        self._setup_actions(actions_allowed)
+        self._setup_actions(self.actions_allowed)
 
         assert isinstance(env.action_space, gym.spaces.MultiBinary)
         self.total_actions = len(self.index_to_button_names)
