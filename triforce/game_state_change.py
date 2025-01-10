@@ -13,13 +13,13 @@ class ZeldaStateChange:
         self.previous : ZeldaGame = prev
         self.current : ZeldaGame = curr
 
-        self.health_lost = max(0, prev.link.health - curr.link.health) \
+        self.health_lost = (max(0, prev.link.health - curr.link.health + health_changed) \
                            if prev.link.max_health == curr.link.max_health \
-                           else max(0, prev.link.max_health - curr.link.max_health) + health_changed
+                           else max(0, prev.link.max_health - curr.link.max_health + health_changed))
 
-        self.health_gained = max(0, curr.link.health - prev.link.health) \
+        self.health_gained = (max(0, curr.link.health - prev.link.health - health_changed) \
                              if prev.link.max_health == curr.link.max_health \
-                             else max(0, curr.link.max_health - prev.link.max_health) - health_changed
+                             else max(0, curr.link.max_health - prev.link.max_health - health_changed))
 
         self.enemies_hit : Dict[int, int] = {}
         self.enemies_stunned : List[int] = []
