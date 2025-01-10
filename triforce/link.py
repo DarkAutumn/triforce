@@ -98,40 +98,40 @@ class Link(ZeldaObject):
     def get_available_actions(self):
         """Returns the actions that are available to the agent."""
         # pylint: disable=too-many-branches
-        available = []
+        available = set()
 
         # Always able to move in at least one direction
-        available.append(ActionKind.MOVE)
+        available.add(ActionKind.MOVE)
 
         if self.sword != SwordKind.NONE and not self.is_sword_frozen and not self.has_beams:
-            available.append(ActionKind.SWORD)
+            available.add(ActionKind.SWORD)
 
         if self.has_beams:
-            available.append(ActionKind.BEAMS)
+            available.add(ActionKind.BEAMS)
 
         if self.bombs:
-            available.append(ActionKind.BOMBS)
+            available.add(ActionKind.BOMBS)
 
         if self.arrows != ArrowKind.NONE and self.rupees > 0 and self.bow:
-            available.append(ActionKind.ARROW)
+            available.add(ActionKind.ARROW)
 
         if self.magic_rod:
-            available.append(ActionKind.WAND)
+            available.add(ActionKind.WAND)
 
         if self.candle != CandleKind.NONE:
-            available.append(ActionKind.CANDLE)
+            available.add(ActionKind.CANDLE)
 
         if self.boomerang != BoomerangKind.NONE:
-            available.append(ActionKind.BOOMERANG)
+            available.add(ActionKind.BOOMERANG)
 
         if self.whistle:
-            available.append(ActionKind.WHISTLE)
+            available.add(ActionKind.WHISTLE)
 
         if self.potion != PotionKind.NONE:
-            available.append(ActionKind.POTION)
+            available.add(ActionKind.POTION)
 
         if self.food:
-            available.append(ActionKind.FOOD)
+            available.add(ActionKind.FOOD)
 
         return available
 

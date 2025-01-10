@@ -7,20 +7,6 @@ import numpy as np
 
 from .model_parameters import GAMEPLAY_START_Y
 
-class ActionKind(Enum):
-    """Actions which may be taken by the agent."""
-    MOVE = "MOVE"
-    SWORD = "SWORD"
-    BEAMS = "BEAMS"
-    BOMBS = "BOMBS"
-    ARROW = "ARROW"
-    WAND = "WAND"
-    BOOMERANG = "BOOMERANG"
-    WHISTLE = "WHISTLE"
-    FOOD = "FOOD"
-    POTION = "POTION"
-    CANDLE = "CANDLE"
-
 class SoundKind(Enum):
     """Sound codes for the game."""
     # pylint: disable=invalid-name
@@ -83,6 +69,58 @@ class SelectedEquipmentKind(Enum):
     FOOD = 6
     POTION = 7
     WAND = 8
+
+class ActionKind(Enum):
+    """Actions which may be taken by the agent."""
+    MOVE = "MOVE"
+    SWORD = "SWORD"
+    BEAMS = "BEAMS"
+    BOMBS = "BOMBS"
+    ARROW = "ARROW"
+    WAND = "WAND"
+    BOOMERANG = "BOOMERANG"
+    WHISTLE = "WHISTLE"
+    FOOD = "FOOD"
+    POTION = "POTION"
+    CANDLE = "CANDLE"
+
+    @property
+    def is_equipment(self):
+        """Returns True if the action is an equipment action."""
+        return self not in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS)
+
+    @staticmethod
+    def get_from_list(actions_allowed):
+        """Converts a list of strings to a set of ActionKind."""
+        if actions_allowed == 'all':
+            actions_allowed = list(ActionKind)
+        else:
+            for i, action in enumerate(actions_allowed):
+                if isinstance(action, str):
+                    actions_allowed[i] = ActionKind(action)
+
+        return set(actions_allowed)
+
+    @staticmethod
+    def from_selected_equipment(selected_equipment):
+        """Converts the selected equipment to an action."""
+        match selected_equipment:
+            case SelectedEquipmentKind.BOOMERANG:
+                return ActionKind.BOOMERANG
+            case SelectedEquipmentKind.BOMBS:
+                return ActionKind.BOMBS
+            case SelectedEquipmentKind.ARROWS:
+                return ActionKind.ARROW
+            case SelectedEquipmentKind.CANDLE:
+                return ActionKind.CANDLE
+            case SelectedEquipmentKind.WAND:
+                return ActionKind.WAND
+            case SelectedEquipmentKind.FOOD:
+                return ActionKind.FOOD
+            case SelectedEquipmentKind.POTION:
+                return ActionKind.POTION
+            case _:
+                return ActionKind.SWORD
 
 class AnimationState(Enum):
     """The state of link's sword beams."""

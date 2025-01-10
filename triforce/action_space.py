@@ -61,17 +61,11 @@ class ZeldaActionSpace(gym.Wrapper):
     def __init__(self, env, actions_allowed : Sequence[ActionKind | str], prevent_wall_bumping : bool = True):
         super().__init__(env)
 
-        if actions_allowed == 'all':
-            actions_allowed = list(ActionKind)
-        else:
-            for i, action in enumerate(actions_allowed):
-                if isinstance(action, str):
-                    actions_allowed[i] = ActionKind(action)
+        self.actions_allowed = ActionKind.get_from_list(actions_allowed)
 
         self.prevent_wall_bumping = prevent_wall_bumping
         self.button_count = env.action_space.n
 
-        self.actions_allowed = set(actions_allowed)
         self.action_to_index = {}
         self.index_to_action_direction = []
         self.index_to_button_names = []
@@ -261,7 +255,7 @@ class ZeldaActionSpace(gym.Wrapper):
     def get_action_mask(self, state : ZeldaGame):
         """Returns the actions that are available to the agent."""
 
-        actions_possible = self.actions_allowed & set(state.link.get_available_actions())
+        actions_possible = self.actions_allowed & state.link.get_available_actions()
         assert actions_possible, "No actions available, we should have at least MOVE."
 
         mask = np.zeros(self.total_actions, dtype=bool)
