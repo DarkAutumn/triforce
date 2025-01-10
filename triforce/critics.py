@@ -97,10 +97,6 @@ class GameplayCritic(ZeldaCritic):
 
     def critique_gameplay(self, state_change : ZeldaStateChange, rewards : Dict[str, float]):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
-        curr = state_change.current
-        if not self._visted_locations:
-            self.__mark_visited(curr.level, curr.location)
-
         # triforce
         self.critique_triforce(state_change, rewards)
 
@@ -272,16 +268,23 @@ class GameplayCritic(ZeldaCritic):
         if self._room_enter_health is None:
             self._room_enter_health = state_change.previous.link.health
 
+        prev = state_change.previous.full_location
         curr = state_change.current.full_location
-        if state_change.previous.full_location != curr:
+
+        if prev != curr:
             health_change = state_change.previous.link.health - self._room_enter_health
             reward = (np.clip(health_change, -3.0, 3.0) + 3) / 6
             reward = np.clip(reward, REWARD_MINIMUM, REWARD_MAXIMUM)
 
             if curr in state_change.previous.objectives.next_rooms:
+                if (curr, prev) in self._visted_locations:
+                    reward = REWARD_MINIMUM
+                else:
+                    self._visted_locations.add((curr, prev))
+
                 rewards['reward-new-location'] = reward
             else:
-                rewards['penalty-wrong-location'] = -reward - REWARD_MINIMUM
+                rewards['penalty-wrong-location'] = -reward - REWARD_SMALL
 
             self._room_enter_health = state_change.current.link.health
 
@@ -365,21 +368,13 @@ class GameplayCritic(ZeldaCritic):
                 if len(prev.active_enemies) == len(curr.active_enemies):
                     rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
 
-
-    # state helpers, some states are calculated
-    def __has_visited(self, level, location):
-        return (level, location) in self._visted_locations
-
-    def __mark_visited(self, level, location):
-        self._visted_locations.add((level, location))
-
-
 class Dungeon1Critic(GameplayCritic):
     """Critic specifically for dungeon 1."""
     def __init__(self):
         super().__init__()
 
         self.health_change_reward = REWARD_LARGE
+        self.new_location_reward = REWARD_LARGE
         self.leave_dungeon_penalty = -REWARD_MAXIMUM
         self.leave_early_penalty = -REWARD_MAXIMUM
         self.seen = set()
