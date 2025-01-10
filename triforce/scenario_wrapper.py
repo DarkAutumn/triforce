@@ -34,28 +34,28 @@ class ScenarioWrapper(gym.Wrapper):
         else:
             env_unwrapped = self.unwrapped
 
-        obs, info = super().reset(**kwargs)
+        obs, state = super().reset(**kwargs)
 
         self._critic.clear()
         for ec in self._conditions:
             ec.clear()
 
-        return obs, info
+        return obs, state
 
     def step(self, action):
-        obs, rewards, terminated, truncated, info = self.env.step(action)
+        obs, rewards, terminated, truncated, state_change = self.env.step(action)
+        state = state_change.state
 
         reward_dict = {}
-        state_change = self.state_change
 
         self._critic.critique_gameplay(state_change, reward_dict)
-        info['score'] = self._critic.get_score(state_change)
+        state.score = self._critic.get_score(state_change)
 
         if reward_dict:
             for value in reward_dict.values():
                 rewards += value
 
-        info['rewards'] = reward_dict
+        state.info['rewards'] = reward_dict
 
         end = (x.is_scenario_ended(state_change) for x in self._conditions)
         end = [x for x in end if x is not None]
@@ -63,15 +63,15 @@ class ScenarioWrapper(gym.Wrapper):
         truncated = truncated or any((x[1] for x in end))
         reason = [x[2] for x in end if x[2]]
 
-        success = any(end.startswith("success") for end in reason)
         if reason:
             # I guess we could have more than one reason, but I'm not going to cover that corner case
-            info['end'] = reason[0]
+            state.end = reason[0]
 
         if truncated or terminated:
-            if 'score' in info and success:
-                info['final-score'] = info['score']
+            success = any(end.startswith("success") for end in reason)
+            if success and hasattr(state, 'score'):
+                state.final_score = state.score
 
-        return obs, rewards, terminated, truncated, info
+        return obs, rewards, terminated, truncated, state_change
 
 __all__ = [ScenarioWrapper.__name__]

@@ -84,25 +84,25 @@ class ZeldaObservationWrapper(gym.Wrapper):
             self.observation_space = gym.spaces.Box(low=0, high=255, shape=new_shape, dtype=np.uint8)
 
     def reset(self, **kwargs):
-        _, info = self.env.reset(**kwargs)
-        return self._get_observation(info), info
+        _, state = self.env.reset(**kwargs)
+        return self._get_observation(state), state
 
     def step(self, action):
-        _, reward, terminated, truncated, info = self.env.step(action)
-        return self._get_observation(info), reward, terminated, truncated, info
+        _, reward, terminated, truncated, state_change = self.env.step(action)
+        return self._get_observation(state_change.state), reward, terminated, truncated, state_change
 
-    def _get_observation(self, info):
+    def _get_observation(self, state):
         if self.framestack > 1:
             frames = []
             for i in range(self.framestack):
                 frame = self.frames[-i * 2 - 1]
-                frame = self.trim_normalize_grayscale(info, frame)
+                frame = self.trim_normalize_grayscale(state.link, frame)
                 frames.append(frame)
             result = np.concatenate(frames, axis=0)
             return result
 
         frame = self.frames[-1]
-        frame = self.trim_normalize_grayscale(self.state.link, frame)
+        frame = self.trim_normalize_grayscale(state.link, frame)
         return frame
 
     def trim_normalize_grayscale(self, link : Link, frame):
@@ -139,7 +139,6 @@ class ZeldaObservationWrapper(gym.Wrapper):
     def reshape(self, frame):
         """
         Occasionally link can be offscreen due to overscan, so we pad the frame with the edge color.
-        This shouldn't really happen, so we are saving a 'reshape_error.pkl' file to debug this issue.
         """
         try:
             return np.pad(frame, ((0, self.viewport_size - frame.shape[0]), (0, self.viewport_size - frame.shape[1]),

@@ -1,11 +1,13 @@
 # pylint: disable=all
 import os
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import gymnasium as gym
 import retro
-from triforce.action_space import ZeldaActionSpace
+from triforce.zelda_enums import Direction
+from triforce.action_space import ActionKind, ActionTaken, ZeldaActionSpace
 from triforce.game_state_change import ZeldaStateChange
 from triforce.zelda_wrapper import ZeldaGameWrapper
 
@@ -18,11 +20,10 @@ class CriticWrapper(gym.Wrapper):
 
         self.critics = critics or []
         self.end_conditions = end_conditions or []
-        self._last = None
         self._discounts = {}
 
     def reset(self, **kwargs):
-        state = super().reset(**kwargs)
+        obs, state = super().reset(**kwargs)
 
         for c in self.critics:
             c.clear()
@@ -30,15 +31,13 @@ class CriticWrapper(gym.Wrapper):
         for ec in self.end_conditions:
             ec.clear()
 
-        self._last = state[1]
         self._discounts.clear()
-        return state
+        return obs, state
 
     def step(self, act):
-        obs, rewards, terminated, truncated, info = self.env.step(act)
+        obs, rewards, terminated, truncated, change = self.env.step(act)
         reward_dict = {}
 
-        change = self.env.state_change
         for c in self.critics:
             c.critique_gameplay(change, reward_dict)
 
@@ -46,10 +45,9 @@ class CriticWrapper(gym.Wrapper):
         terminated = terminated or any((x[0] for x in end))
         truncated = truncated or any((x[1] for x in end))
 
-        info['rewards'] = reward_dict
+        change.state.rewards = reward_dict
 
-        self._last = info
-        return obs, rewards, terminated, truncated, info
+        return obs, rewards, terminated, truncated, change
 
 class ZeldaActionReplay:
     def __init__(self, savestate, wrapper=None, render_mode=None):
@@ -57,32 +55,36 @@ class ZeldaActionReplay:
         self.data = env.data
         env = ZeldaGameWrapper(env, deterministic=True)
         env = ZeldaActionSpace(env, 'all')
+        self.action_space = env
         if wrapper:
             env = wrapper(env)
 
-        self.actions = env.actions
+        self._prev = None
 
-        self.buttons = {
-            'u': 'UP',
-            'd': 'DOWN',
-            'l': 'LEFT',
-            'r': 'RIGHT',
-            'a': 'A',
-            'b': 'B',
-        }
+        _, state = env.reset()
+        self._set_prev(state)
 
-        env.reset()
-        self.actions_taken = ""
+        self.actions_taken = []
         self.env = env
 
-    def __getattr__(self, name):
-        return getattr(self.env, name)
+    def deactivate(self):
+        if self._prev:
+            self._prev.deactivate()
+            self._prev = None
+
+    def _set_prev(self, state):
+        self.deactivate()
+        if isinstance(state, ZeldaStateChange):
+            state = state.state
+
+        self._prev = state
 
     def __delattr__(self, __name: str) -> None:
+        self.deactivate()
         self.env.close()
 
     def reset(self):
-        self.actions_taken = ""
+        self.actions_taken = []
         result = self.env.reset()
         self.data.set_value('hearts_and_containers', 0xff)
         return result
@@ -103,43 +105,33 @@ class ZeldaActionReplay:
                 idx += 1
 
             for i in range(max(count, 1)):
-                yield self.step(a)
+                yield self.move(a)
 
             i = idx
 
-    def step(self, button):
-        if button == 'x':
-            self.reset()
-            self.actions_taken = self.actions_taken[:-1]
+    def move(self, direction):
+        if direction in ['u', 'd', 'l', 'r']:
+            if direction == 'u':
+                direction = Direction.N
+            elif direction == 'd':
+                direction = Direction.S
+            elif direction == 'l':
+                direction = Direction.W
+            elif direction == 'r':
+                direction = Direction.E
 
-            for button in self.actions_taken:
-                self.step(button)
+        return self.act(ActionKind.MOVE, direction)
 
-        elif button == 'c':
-            self.reset()
-            self.actions_taken = ""
+    def act(self, action : ActionKind, direction : Direction):
+        assert action in self._prev.link.get_available_actions()
+        return self.step((action, direction))
 
-        else:
-            self.actions_taken += button
 
-            action = self.buttons[button]
-            if action in ['A', 'B']:
-                action = [self.get_prev_direction(), action]
+    def step(self, action):
+        self.actions_taken.append(action)
+        result = self.env.step(action)
+        self.env.render()
 
-            act = self.get_real_action(action)
-
-            result =  self.env.step(act)
-            self.env.render()
-
-            return result
-
-    def get_real_action(self, action):
-        if not isinstance(action, list):
-            action = [action]
-
-        return self.actions.index(action)
-
-    def get_prev_direction(self):
-        for x in reversed(self.actions_taken):
-            if x in ['u', 'd', 'l', 'r']:
-                return self.buttons[x]
+        state_change : ZeldaStateChange = result[-1]
+        self._set_prev(state_change)
+        return result

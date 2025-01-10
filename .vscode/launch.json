@@ -108,7 +108,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
-            "args": ["full-game", "--iterations", "1000000", "--parallel", "1"],
+            "args": ["full-game", "--iterations", "1000000", "--parallel", "1", "--output", "training-debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

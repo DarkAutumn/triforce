@@ -18,7 +18,7 @@ class ZeldaEndCondition:
 class GameOver(ZeldaEndCondition):
     """Whether the game mode is death."""
     def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:
-        if state_change.current.game_over:
+        if state_change.state.game_over:
             return True, False, "failure-terminated-death"
 
         return False, False, None
@@ -42,7 +42,7 @@ class Timeout(ZeldaEndCondition):
 
     def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:
         # Check if link is stuck in one position on the screen
-        prev, curr = state_change.previous, state_change.current
+        prev, curr = state_change.previous, state_change.state
 
         if self.position_timeout:
             if prev.link.position == curr.link.position and not state_change.hits:
@@ -70,7 +70,7 @@ class Timeout(ZeldaEndCondition):
 class StartingSwordCondition(ZeldaEndCondition):
     """End conditions for 'pick up the sword' scenario."""
     def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:
-        state = state_change.current
+        state = state_change.state
         if state.location != 0x77 and state.link.sword == SwordKind.NONE:
             return True, False, "failure-no-sword"
 
@@ -79,7 +79,7 @@ class StartingSwordCondition(ZeldaEndCondition):
 class GainedTriforce(ZeldaEndCondition):
     """End the scenario if the agent gains a piece of triforce."""
     def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:
-        prev_link, curr_link = state_change.previous.link, state_change.current.link
+        prev_link, curr_link = state_change.previous.link, state_change.state.link
         if prev_link.triforce_pieces < curr_link.triforce_pieces \
                 or prev_link.triforce_of_power < curr_link.triforce_of_power:
             return True, False, "success-gained-triforce"
@@ -89,7 +89,7 @@ class GainedTriforce(ZeldaEndCondition):
 class LeftDungeon(ZeldaEndCondition):
     """End the scenario if the agent leaves the dungeon."""
     def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:
-        if state_change.current.level == 0:
+        if state_change.state.level == 0:
             return True, False, "failure-left-dungeon"
 
         return False, False, None
@@ -97,7 +97,7 @@ class LeftDungeon(ZeldaEndCondition):
 class EnteredDungeon(ZeldaEndCondition):
     """End the scenario if the agent enters the dungeon."""
     def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:
-        state = state_change.current
+        state = state_change.state
         if state.level == 0:
             return False, False, None
 
@@ -111,7 +111,7 @@ class LeftOverworld1Area(ZeldaEndCondition):
     overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
 
     def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:
-        state = state_change.current
+        state = state_change.state
         if state.level == 0 and state.location not in self.overworld_dungeon1_walk_rooms:
             return True, False, "failure-left-play-area"
 
@@ -120,7 +120,7 @@ class LeftOverworld1Area(ZeldaEndCondition):
 class StartingRoomConditions(ZeldaEndCondition):
     """End conditions for 'pick up the sword' scenario."""
     def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:
-        state = state_change.current
+        state = state_change.state
         if state.location != 0x77:
             if state.link.sword != SwordKind.NONE:
                 return True, False, "success-found-sword"
@@ -132,7 +132,7 @@ class StartingRoomConditions(ZeldaEndCondition):
 class DefeatedBoss(ZeldaEndCondition):
     """End condition for killing the boss."""
     def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:
-        state = state_change.current
+        state = state_change.state
         if not state.enemies:
             return True, False, "success-killed-boss"
 
@@ -144,7 +144,7 @@ class DefeatedBoss(ZeldaEndCondition):
 class LeftRoom(ZeldaEndCondition):
     """End condition for leaving the current room."""
     def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:
-        prev, curr = state_change.previous, state_change.current
+        prev, curr = state_change.previous, state_change.state
 
         if prev.location != curr.location:
             if curr.location in prev.objectives.locations:

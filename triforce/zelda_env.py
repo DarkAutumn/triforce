@@ -2,6 +2,7 @@
 
 import retro
 
+from .gym_translation_wrapper import GymTranslationWrapper
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
 from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
@@ -10,7 +11,7 @@ from .scenario_wrapper import ScenarioWrapper
 from .models_and_scenarios import ZeldaScenario
 
 def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = True, framestack = 1,
-                   obs_kind = 'viewport', render_mode = None):
+                   obs_kind = 'viewport', render_mode = None, translation=True):
     """
     Creates a Zelda retro environment for the given scenario.
     Args:
@@ -32,12 +33,11 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
     # taken to achieve the desired number of actions per second.
     env = ZeldaGameWrapper(env, scenario)
 
+    # Reduces the action space to only the actions we want the model to take, and what is actually possible in game.
+    env = ZeldaActionSpace(env, action_space)
+
     # Frame stack and convert to grayscale if requested
     env = ZeldaObservationWrapper(env, captured_frames, grayscale, kind=obs_kind, framestack=framestack)
-
-    # Reduce the action space to only the actions we want the model to take (no need for A+B for example,
-    # since that doesn't make any sense in Zelda)
-    env = ZeldaActionSpace(env, action_space)
 
     # Extract features from the game for the model, like whether link has beams or has keys and expose
     # these as observations.
@@ -46,6 +46,10 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
     # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new
     # info state provded by ZeldaGameWrapper above.
     env = ScenarioWrapper(env, scenario)
+
+    # Translate our object-oriented environment into a gym environment.
+    if translation:
+        env = GymTranslationWrapper(env)
 
     return env
 

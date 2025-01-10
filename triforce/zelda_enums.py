@@ -1,6 +1,7 @@
 """Various enumerations of equipment, item, and enemy types in the game."""
 
 from enum import Enum
+from numbers import Integral
 
 import numpy as np
 
@@ -69,6 +70,60 @@ class SelectedEquipmentKind(Enum):
     POTION = 7
     WAND = 8
 
+class ActionKind(Enum):
+    """Actions which may be taken by the agent."""
+    MOVE = "MOVE"
+    SWORD = "SWORD"
+    BEAMS = "BEAMS"
+    BOMBS = "BOMBS"
+    ARROW = "ARROW"
+    WAND = "WAND"
+    BOOMERANG = "BOOMERANG"
+    WHISTLE = "WHISTLE"
+    FOOD = "FOOD"
+    POTION = "POTION"
+    CANDLE = "CANDLE"
+
+    @property
+    def is_equipment(self):
+        """Returns True if the action is an equipment action."""
+        return self not in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS)
+
+    @staticmethod
+    def get_from_list(actions_allowed):
+        """Converts a list of strings to a set of ActionKind."""
+        if actions_allowed == 'all':
+            actions_allowed = list(ActionKind)
+        else:
+            for i, action in enumerate(actions_allowed):
+                if isinstance(action, str):
+                    actions_allowed[i] = ActionKind(action)
+
+        return set(actions_allowed)
+
+    @staticmethod
+    def from_selected_equipment(selected_equipment):
+        """Converts the selected equipment to an action."""
+        match selected_equipment:
+            case SelectedEquipmentKind.BOOMERANG:
+                kind = ActionKind.BOOMERANG
+            case SelectedEquipmentKind.BOMBS:
+                kind = ActionKind.BOMBS
+            case SelectedEquipmentKind.ARROWS:
+                kind = ActionKind.ARROW
+            case SelectedEquipmentKind.CANDLE:
+                kind = ActionKind.CANDLE
+            case SelectedEquipmentKind.WAND:
+                kind = ActionKind.WAND
+            case SelectedEquipmentKind.FOOD:
+                kind = ActionKind.FOOD
+            case SelectedEquipmentKind.POTION:
+                kind = ActionKind.POTION
+            case _:
+                kind = ActionKind.SWORD
+
+        return kind
+
 class AnimationState(Enum):
     """The state of link's sword beams."""
     INACTIVE = 0
@@ -135,11 +190,16 @@ class ZeldaItemKind(Enum):
 
 class Direction(Enum):
     """The four cardinal directions, as the game defines them."""
-    UNINITIALIZED = 0
+    NONE = 0
     E = 1
     W = 2
     S = 4
     N = 8
+
+    NE = N | E
+    NW = N | W
+    SE = S | E
+    SW = S | W
 
     @staticmethod
     def from_ram_value(value):
@@ -154,7 +214,7 @@ class Direction(Enum):
             case 8:
                 return Direction.N
             case _:
-                return Direction.UNINITIALIZED
+                return Direction.NONE
 
     def to_vector(self):
         """Returns the vector for the direction."""
@@ -176,14 +236,15 @@ ITEM_MAP = {x.value: x for x in ZeldaItemKind}
 class Coordinates:
     """Base class of coordinates in the game world."""
     def __init__(self, x: int, y: int):
-        if np.isscalar(x) and isinstance(x, np.uint8):
+        if isinstance(x, Integral):
             x = int(x)
 
-        if np.isscalar(y) and isinstance(y, np.uint8):
+        if isinstance(y, Integral):
             y = int(y)
 
         if not isinstance(x, int) or not isinstance(y, int):
             raise TypeError("Both elements must be integers.")
+
         self._x = x
         self._y = y
 
@@ -340,7 +401,7 @@ class MapLocation(Coordinates):
 
         assert self.manhattan_distance(next_room) in (0, 1)
 
-        result = Direction.UNINITIALIZED
+        result = Direction.NONE
         if self.x < next_room.x:
             result = Direction.E
         elif self.x > next_room.x:

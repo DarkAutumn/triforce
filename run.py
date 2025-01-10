@@ -19,7 +19,7 @@ import tqdm
 from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
                      TRAINING_SCENARIOS
 from triforce.game_state_change import ZeldaStateChange
-from triforce.zelda_enums import Coordinates, Direction
+from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
@@ -141,7 +141,8 @@ class DisplayWindow:
 
     def show(self, headless_recording=False):
         """Shows the game and the AI model."""
-        env = make_zelda_env(self.scenario, 'full', render_mode='rgb_array')
+        model = self._select_model()
+        env = make_zelda_env(self.scenario, model.action_space, render_mode='rgb_array', translation=False)
         rgb_deque = self._get_rgb_deque(env)
 
         clock = pygame.time.Clock()
@@ -172,25 +173,25 @@ class DisplayWindow:
         terminated = True
         truncated = False
 
-        last_info = {}
-        info = {}
         state_change : ZeldaStateChange = None
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
         mode = 'c'
         while mode != 'q':
             if terminated or truncated:
-                if 'end' in info:
-                    endings[info['end']] = endings.get(info['end'], 0) + 1
 
-                last_info = info
-                obs, info = env.reset()
+                if state_change is not None and 'end' in state_change.state.info:
+                    self._print_end_info(state_change.state.info, terminated)
+
+                obs, _ = env.reset()
+                state_change = None
                 self.total_rewards = 0.0
                 reward_map.clear()
 
                 # we use buffer_size to check if we only want to record on a win
                 if recording:
-                    if not force_save and recording.buffer_size > 1 and not last_info['triforce']:
+                    if not force_save and recording.buffer_size > 1 and \
+                            state_change is not None and not state_change.previous.info.get('triforce', 0):
                         recording.buffer.clear()
 
                     recording.close()
@@ -206,15 +207,13 @@ class DisplayWindow:
                 else:
                     model_name, action = self._get_action_from_model(model_requested, obs)
 
-                last_info = info
-                obs, _, terminated, truncated, info = env.step(action)
-                state_change : ZeldaStateChange = env.state_change
+                obs, _, terminated, truncated, state_change = env.step(action)
 
                 if mode == 'n':
                     mode = 'p'
 
             # update rewards for display
-            self._update_rewards(env, reward_map, buttons, last_info, info)
+            self._update_rewards(env, reward_map, buttons, state_change)
 
             while True:
                 if rgb_deque:
@@ -229,15 +228,16 @@ class DisplayWindow:
                 # render the gameplay
                 self._render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width,
                                        self.game_height)
+
+                state = state_change.state
                 if overlay:
-                    color = "black" if info['level'] == 0 and not state_change.current.in_cave else "white"
+                    color = "black" if state.level == 0 and not state.in_cave else "white"
                     self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), color, \
-                                                self.scale, state_change.current)
+                                                self.scale, state_change.state)
 
                 render_text(surface, self.font, f"Model: {model_name}", (self.game_x, self.game_y))
-                if "location" in info:
-                    render_text(surface, self.font, f"Location: {hex(info['location'])}",
-                                (self.game_x + self.game_width - 120, self.game_y))
+                render_text(surface, self.font, f"Location: {hex(state.location)}",
+                            (self.game_x + self.game_width - 120, self.game_y))
 
                 # render rewards graph and values
                 ending_render = endings if show_endings else None
@@ -253,7 +253,7 @@ class DisplayWindow:
                     pygame.display.flip()
 
                 else:
-                    self._print_location_info(info)
+                    self._print_location_info(state)
 
                 if cap_fps:
                     clock.tick(60.1)
@@ -303,7 +303,7 @@ class DisplayWindow:
 
                         elif event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
                             keys = pygame.key.get_pressed()
-                            next_action = self._get_action_from_keys(keys)
+                            next_action = self._get_action_from_keys(self._select_model(), state, keys)
                             mode = 'n'
 
                         elif event.key == pygame.K_s:
@@ -346,20 +346,37 @@ class DisplayWindow:
         action = ai.predict(obs, deterministic=False)
         return model_name, action
 
-    def _get_action_from_keys(self, keys):
-        a = ["A"] if keys[pygame.K_a] else []
-        b = ["B"] if keys[pygame.K_s] else []
+    def _get_action_from_keys(self, model : ZeldaModelDefinition, state : ZeldaGame, keys):
         if keys[pygame.K_LEFT]:
-            return ['LEFT'] + a + b
-        if keys[pygame.K_RIGHT]:
-            return ['RIGHT'] + a + b
-        if keys[pygame.K_UP]:
-            return ['UP'] + a + b
-        if keys[pygame.K_DOWN]:
-            return ['DOWN'] + a + b
+            direction = Direction.W
+        elif keys[pygame.K_RIGHT]:
+            direction = Direction.E
+        elif keys[pygame.K_UP]:
+            direction = Direction.N
+        elif keys[pygame.K_DOWN]:
+            direction = Direction.S
+        else:
+            return None
 
-        return None
+        available = state.link.get_available_actions() & ActionKind.get_from_list(model.action_space)
+        sword_available = ActionKind.SWORD in available or ActionKind.BEAMS in available
+        if keys[pygame.K_a]:
+            if not sword_available:
+                return None
 
+            if ActionKind.BEAMS in available:
+                return (ActionKind.BEAMS, direction)
+
+            return (ActionKind.SWORD, direction)
+
+        if keys[pygame.K_s]:
+            equipment = ActionKind.from_selected_equipment(state.link.selected_equipment)
+            if equipment.is_equipment and equipment in available:
+                return (equipment, direction)
+
+            return None
+
+        return (ActionKind.MOVE, direction)
 
     def _select_model(self) -> ZeldaModelDefinition:
         acceptable_models = self.orchestrator.find_acceptable_models()
@@ -395,22 +412,22 @@ class DisplayWindow:
 
         return None
 
-    def _print_location_info(self, info):
+    def _print_location_info(self, state):
         if self._last_location is not None:
             last_level, last_location = self._last_location
-            if last_level != info['level']:
-                if info['level'] == 0:
+            if last_level != state.level:
+                if state.level == 0:
                     print("Overworld")
                 else:
-                    print(f"Dungeon {info['level']}")
+                    print(f"Dungeon {state.level}")
 
-            if last_location != info['location']:
-                print(f"Location: {hex(last_location)} -> {hex(info['location'])}")
+            if last_location != state.location:
+                print(f"Location: {hex(last_location)} -> {hex(state.location)}")
         else:
-            print("Overworld" if info['level'] == 0 else f"Dungeon {info['level']}")
-            print(f"Location: {hex(info['location'])}")
+            print("Overworld" if state.level == 0 else f"Dungeon {state.level}")
+            print(f"Location: {hex(state.location)}")
 
-        self._last_location = (info['level'], info['location'])
+        self._last_location = (state.level, state.location)
 
     def _print_end_info(self, info, terminated):
         total_time = (pygame.time.get_ticks() - self.start_time) / 1000
@@ -456,6 +473,9 @@ class DisplayWindow:
         self.move_widgets['came-from'].directions = self._get_directions_for_vectors(obs["information"][6:10])
         self.move_widgets['came-from'].draw(surface)
 
+        return Coordinates(0, y_pos)
+
+
 
     def _get_directions_for_vectors(self, vectors):
         directions = []
@@ -471,8 +491,10 @@ class DisplayWindow:
         return directions
 
 
-    def _update_rewards(self, env, reward_map, buttons, last_info, info):
+    def _update_rewards(self, env, reward_map, buttons, state_change : ZeldaStateChange):
         curr_rewards = {}
+        last_info = state_change.previous.info
+        info = state_change.state.info
         if 'rewards' in info:
             for k, v in info['rewards'].items():
                 if k not in reward_map:
@@ -482,7 +504,7 @@ class DisplayWindow:
                 self.total_rewards += v
 
         prev = buttons[0] if buttons else None
-        action = "+".join(info['buttons'])
+        action = f"{state_change.action.direction.name} {state_change.action.kind.name}"
         if prev is not None and prev.rewards == curr_rewards and prev.action == action:
             prev.count += 1
         else:
@@ -700,6 +722,8 @@ class DirectionalCircle(LabeledCircle):
                     self._draw_arrow(surface, self.centerpoint, np.array([-1, 0], dtype=np.float32), 1)
                 case Direction.E:
                     self._draw_arrow(surface, self.centerpoint, np.array([1, 0], dtype=np.float32), 1)
+                case _:
+                    raise ValueError(f"Unsupported direction {direction}")
 
 
         if self.directions:

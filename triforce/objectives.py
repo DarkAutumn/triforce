@@ -228,9 +228,9 @@ class Objectives:
     def _get_cave_objective(self, state : ZeldaGame):
         assert state.in_cave
 
-        item = overworld_to_item.get(state.room.location, None)
+        item = overworld_to_item.get(state.location, None)
         if item is None or state.link.has_item(item):
-            target_room = MapLocation(state.level, state.room.location, False)
+            target_room = MapLocation(state.level, state.location, False)
             return Objective(ObjectiveKind.MOVE, state.room.exits[Direction.S], set([target_room]))
 
         # Cave equipment doesn't follow normal treasure rules
