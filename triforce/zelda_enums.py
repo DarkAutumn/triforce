@@ -329,10 +329,17 @@ class MapLocation(Coordinates):
 
     def get_direction_of_movement(self, next_room):
         """Gets the direction of movement from curr -> dest."""
-        assert self.manhattan_distance(next_room) in (0, 1)
-
         if self.in_cave and not next_room.in_cave:
             return Direction.S
+
+        if self.level == 0 and next_room.level != 0:
+            return Direction.S
+
+        if self.level != 0 and next_room.level == 0:
+            return Direction.N
+
+        assert self.manhattan_distance(next_room) in (0, 1)
+
 
         if self.x < next_room.x:
             return Direction.E
