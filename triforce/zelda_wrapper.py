@@ -50,6 +50,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._discounts.clear()
         self.cooldown_handler.reset()
         self._objectives = Objectives()
+        self._prev_state = None
 
         # Randomize the RNG if requested
         if not self.deterministic:
