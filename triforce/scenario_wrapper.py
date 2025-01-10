@@ -36,29 +36,17 @@ class ScenarioWrapper(gym.Wrapper):
 
         obs, info = super().reset(**kwargs)
 
-        # assign data for the scenario
-        self.__set_data(env_unwrapped, self._scenario.data, info)
-        self.__set_data(self.unwrapped, self._scenario.fixed, info)
-
         self._critic.clear()
         for ec in self._conditions:
             ec.clear()
 
         return obs, info
 
-    def __set_data(self, env_unwrapped, data, info):
-        if data:
-            game_data = env_unwrapped.data
-            for key, value in data.items():
-                game_data.set_value(key, value)
-                assert key in info
-                info[key] = value
-
     def step(self, action):
         obs, rewards, terminated, truncated, info = self.env.step(action)
 
         reward_dict = {}
-        state_change = info['state_change']
+        state_change = self.state_change
 
         self._critic.critique_gameplay(state_change, reward_dict)
         info['score'] = self._critic.get_score(state_change)
@@ -84,7 +72,6 @@ class ScenarioWrapper(gym.Wrapper):
             if 'score' in info and success:
                 info['final-score'] = info['score']
 
-        self.__set_data(self.unwrapped, self._scenario.fixed, info)
         return obs, rewards, terminated, truncated, info
 
 __all__ = [ScenarioWrapper.__name__]

@@ -43,32 +43,30 @@ def test_close_distance():
     assert 'rewards' in info
     assert 'reward-move-closer' not in info['rewards']
 
-def get_state(info) -> ZeldaGame:
-    return info['state']
 
 def test_position():
     # note the position may change for the other axis as link snaps to the grid
-    actions = ZeldaActionReplay("1_44e.state")
-    prev = actions.step('l')[-1]
-    prev = get_state(prev).link
+    replay = ZeldaActionReplay("1_44e.state")
+    prev = replay.step('l')[-1]
+    prev = replay.state.link
     prev_pos = prev.game.link_x, prev.game.link_y
     assert prev.position == prev_pos
 
-    curr = actions.step('l')[-1]
-    curr = get_state(curr).link
+    curr = replay.step('l')[-1]
+    curr = replay.state.link
     assert prev.position[0] > curr.position[0]
 
     prev = curr
-    curr = actions.step('u')[-1]
-    curr = get_state(curr).link
+    curr = replay.step('u')[-1]
+    curr = replay.state.link
     assert prev.position[1] > curr.position[1]
 
     prev = curr
-    curr = actions.step('d')[-1]
-    curr = get_state(curr).link
+    curr = replay.step('d')[-1]
+    curr = replay.state.link
     assert prev.position[1] < curr.position[1]
 
     prev = curr
-    curr = actions.step('r')[-1]
-    curr = get_state(curr).link
+    curr = replay.step('r')[-1]
+    curr = replay.state.link
     assert prev.position[0] < curr.position[0]

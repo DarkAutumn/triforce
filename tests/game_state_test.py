@@ -1,6 +1,9 @@
 # pylint: disable=all
 import os
+import pickle
 import sys
+
+import pytest
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
@@ -12,7 +15,7 @@ from triforce.zelda_enums import Direction
 def _initialize_gamestate():
     replay = ZeldaActionReplay("1_73s.state")
     info = assert_no_hit(replay, 'uuu')
-    gamestate : ZeldaGame = info['state']
+    gamestate : ZeldaGame = replay.state
     return gamestate
 
 
@@ -22,3 +25,12 @@ def test_locked_room():
     assert not gamestate.is_door_locked(Direction.S)
     assert not gamestate.is_door_locked(Direction.E)
     assert not gamestate.is_door_locked(Direction.W)
+
+def test_picklable_infos():
+    replay = ZeldaActionReplay("1_73s.state")
+    info = assert_no_hit(replay, 'uuu')
+    for key, value in info.items():
+        try:
+            pickle.dumps(value)
+        except Exception as e:
+            pytest.fail(f"Value for key '{key}' is not pickleable: {e}")

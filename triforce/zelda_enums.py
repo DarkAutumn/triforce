@@ -103,7 +103,7 @@ class ZeldaEnemyKind(Enum):
     Keese : int = 0x1b
     WallMaster : int = 0x27
     Stalfos : int = 0x2a
-    Item : int = 0x60
+    AquaMentus : int = 0x3d
 
 class ZeldaProjectileId(Enum):
     """Projectile codes for the game."""
@@ -170,7 +170,7 @@ class Direction(Enum):
             case _:
                 raise ValueError(f"Unhandled Direction: {self}")
 
-ID_MAP = {x.value: x for x in ZeldaEnemyKind}
+ENEMY_MAP = {x.value: x for x in ZeldaEnemyKind}
 ITEM_MAP = {x.value: x for x in ZeldaItemKind}
 
 class Coordinates:
@@ -236,6 +236,20 @@ class Coordinates:
     def numpy(self):
         """Returns the position as a numpy array."""
         return np.array([self.x, self.y], dtype=np.float32)
+
+    def __add__(self, other):
+        if isinstance(other, Coordinates):
+            return Coordinates(self.x + other.x, self.y + other.y)
+        if len(other) == 2:
+            return Coordinates(self.x + other[0], self.y + other[1])
+        raise TypeError("Can only add Coordinates or a tuple of length 2.")
+
+    def __sub__(self, other):
+        if isinstance(other, Coordinates):
+            return Coordinates(self.x - other.x, self.y - other.y)
+        if isinstance(other, tuple) and len(other) == 2:
+            return Coordinates(self.x - other[0], self.y - other[1])
+        raise TypeError("Can only subtract Coordinates or a tuple of length 2.")
 
 class Position(Coordinates):
     """A position in the game world."""
@@ -315,21 +329,35 @@ class MapLocation(Coordinates):
 
     def get_direction_of_movement(self, next_room):
         """Gets the direction of movement from curr -> dest."""
-        assert self.manhattan_distance(next_room) == 1
-
-        if self.x < next_room.x:
-            return Direction.E
-        if self.x > next_room.x:
-            return Direction.W
-        if self.y < next_room.y:
+        if self.in_cave and not next_room.in_cave:
             return Direction.S
-        if self.y > next_room.y:
+
+        if self.level == 0 and next_room.level != 0:
+            return Direction.S
+
+        if self.level != 0 and next_room.level == 0:
             return Direction.N
 
-        return Direction.UNINITIALIZED
+        assert self.manhattan_distance(next_room) in (0, 1)
+
+        result = Direction.UNINITIALIZED
+        if self.x < next_room.x:
+            result = Direction.E
+        elif self.x > next_room.x:
+            result = Direction.W
+        elif self.y < next_room.y:
+            result = Direction.S
+        elif self.y > next_room.y:
+            result = Direction.N
+
+        return result
 
     def manhattan_distance(self, other):
         """Calculates the Manhattan distance between two locations."""
+        if self.in_cave != other.in_cave:
+            assert self.level == other.level and self.x == other.x and self.y == other.y
+            return 1
+
         assert self.level == other.level and self.in_cave == other.in_cave
         return abs(self.x - other.x) + abs(self.y - other.y)
 

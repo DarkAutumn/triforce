@@ -1,7 +1,7 @@
 """Structured data for Zelda game state."""
 
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import gymnasium as gym
 
@@ -9,12 +9,15 @@ from .room import Room
 from .zelda_objects import Item, Projectile
 from .enemy import Enemy
 from .link import Link
-from .zelda_enums import ITEM_MAP, MapLocation, Position, SwordKind, ZeldaEnemyKind, Direction, SoundKind
+from .zelda_enums import ENEMY_MAP, ITEM_MAP, MapLocation, Position, SwordKind, TileIndex, ZeldaEnemyKind, \
+        Direction, SoundKind
 from .zelda_game_data import zelda_game_data
 
 MODE_GAME_OVER = 8
 MODE_CAVE = 11
 MODE_DYING = 17
+
+OBJ_ITEM_ID = 0x60
 
 class ObjectTables:
     """A class for managing Zelda in memory object tables."""
@@ -35,9 +38,6 @@ class ZeldaGame:
     _env : gym.Env
     _info : dict
     frames : int
-    level : int
-    location : int
-    in_cave : bool
     link : Link
     room : Room
     items : List[Item]
@@ -48,23 +48,26 @@ class ZeldaGame:
         ram = env.unwrapped.get_ram()
         tables = ObjectTables(ram)
 
-        # Using __dict__ to avoid the __setattr__ method.
-        self.__dict__['_env'] = env
+        # Prepare __setattr__ for the info dict
         self.__dict__['_info'] = info
-        self.__dict__['frames'] = frame_count
-        self.__dict__['level'] = info['level']
-        self.__dict__['location'] = info['location']
-        self.__dict__['in_cave'] = info['mode'] == MODE_CAVE
-        self.__dict__['room'] = Room.get_or_create(info['level'], info['location'], info['mode'] == MODE_CAVE, env)
 
-        self.__dict__['link'] = self._build_link_status(tables)
+        self._env = env
+        self.frames = frame_count
+        self._fresh_tiles = None
 
-        self.__dict__['items'] = []
-        self.__dict__['enemies'] = []
-        self.__dict__['projectiles'] = []
+        room = Room.get(self.full_location)
+        if room is None:
+            room = Room.create(self.full_location, self._get_fresh_tiles())
+        self.room = room
+
+        self.link = self._build_link_status(tables)
+
+        self.items = []
+        self.enemies = []
+        self.projectiles = []
 
         for (index, obj_id) in self._enumerate_active_ids(tables):
-            if obj_id == ZeldaEnemyKind.Item.value:
+            if obj_id == OBJ_ITEM_ID:
                 self.items.append(self._build_item(tables, index))
 
             elif self._is_id_enemy(obj_id):
@@ -74,6 +77,7 @@ class ZeldaGame:
                 self.projectiles.append(self._build_projectile(tables, index, obj_id))
 
         self._update_enemies(prev)
+
 
     def _update_enemies(self, prev : 'ZeldaGame'):
         if prev is None:
@@ -104,7 +108,7 @@ class ZeldaGame:
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name, value):
-        if name in zelda_game_data.memory:
+        if name in zelda_game_data.memory or name in self._info:
             if isinstance(value, Enum):
                 value = value.value
 
@@ -119,11 +123,8 @@ class ZeldaGame:
             self._env.unwrapped.data.set_value(name, value)
             self._info[name] = value
 
-        elif name in self.__dict__:
-            self.__dict__[name] = value
-
         else:
-            self._info[name] = value
+            self.__dict__[name] = value
 
     def get_enemy_by_index(self, index) -> Optional[Enemy]:
         """Returns the enemy with the given index."""
@@ -156,7 +157,7 @@ class ZeldaGame:
         return bool(self.sound_pulse_1 & sound)
 
     @property
-    def treasure_location(self) -> Optional[Tuple[int, int]]:
+    def treasure_location(self) -> Optional[Position]:
         """Returns the location of the treasure in the current room, or None if there isn't one."""
         if self.treasure_flag == 0:
             return Position(self.treasure_x, self.treasure_y)
@@ -164,7 +165,7 @@ class ZeldaGame:
         return None
 
     @property
-    def treasure_tile(self) -> Optional[Tuple[int, int]]:
+    def treasure_tile(self) -> Optional[TileIndex]:
         """Returns the tile coordinates of the treasure in the current room, or None if there isn't one."""
         location = self.treasure_location
         return location.tile_index if location is not None else None
@@ -174,35 +175,43 @@ class ZeldaGame:
         """Enemies which are both alive an active."""
         return [x for x in self.enemies if x.is_active and not x.is_dying]
 
-    @property
-    def aligned_enemies(self):
-        """Gets enemies that are aligned with the player."""
-        active_enemies = self.active_enemies
-        if not active_enemies:
-            return []
-
-        link_xs = (self.link.tile[0], self.link.tile[0] + 1)
-        link_ys = (self.link.tile[1], self.link.tile[1] + 1)
-
-        result = []
-        for enemy in active_enemies:
-            if not enemy.is_invulnerable:
-                if enemy.tile[0] in link_xs or enemy.tile[0] + 1 in link_xs:
-                    result.append(enemy)
-
-                if enemy.tile[1] in link_ys or enemy.tile[1] + 1 in link_ys:
-                    result.append(enemy)
-
-        return result
-
     def is_door_locked(self, direction):
         """Returns True if the door in the given direction is locked."""
-        return self.room.is_door_locked(direction, self._env)
+        return self.level != 0 and self.room.is_door_locked(direction, self._get_fresh_tiles())
+
+    def is_door_barred(self, direction):
+        """Returns True if the door in the given direction is barred."""
+        return self.level != 0 and self.room.is_door_barred(direction, self._get_fresh_tiles())
+
+    def _get_fresh_tiles(self):
+        if self._fresh_tiles is None:
+            map_offset, map_len = zelda_game_data.tables['tile_layout']
+            ram = self._env.unwrapped.get_ram()
+            tiles = ram[map_offset:map_offset+map_len]
+            tiles = tiles.reshape((32, 22)).T.swapaxes(0, 1)
+            self._fresh_tiles = tiles
+
+        return self._fresh_tiles
 
     @property
     def game_over(self):
         """Returns True if the game is over."""
         return self.mode in (MODE_DYING, MODE_GAME_OVER)
+
+    @property
+    def level(self):
+        """The current level of the game."""
+        return self._info['level']
+
+    @property
+    def location(self):
+        """The current location of the game."""
+        return self._info['location']
+
+    @property
+    def in_cave(self):
+        """Whether the game is in a cave."""
+        return self._info['mode'] == MODE_CAVE
 
     @property
     def full_location(self):
@@ -240,6 +249,7 @@ class ZeldaGame:
         spawn_state = tables.read("obj_spawn_state")[index]
         pos = self._read_position(tables, index)
         direction = self._read_direction(tables, index)
+        obj_id = ENEMY_MAP.get(obj_id, obj_id)
         enemy = Enemy(self, index, obj_id, pos, direction, health, stun_timer, spawn_state, status)
         return enemy
 

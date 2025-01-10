@@ -38,11 +38,11 @@ class CriticWrapper(gym.Wrapper):
         obs, rewards, terminated, truncated, info = self.env.step(act)
         reward_dict = {}
 
-        change = ZeldaStateChange(self.env, self._last['state'], info['state'], self._discounts)
+        change = self.env.state_change
         for c in self.critics:
             c.critique_gameplay(change, reward_dict)
 
-        end = [x.is_scenario_ended(info['state']) for x in self.end_conditions]
+        end = [x.is_scenario_ended(change) for x in self.end_conditions]
         terminated = terminated or any((x[0] for x in end))
         truncated = truncated or any((x[1] for x in end))
 
@@ -74,6 +74,9 @@ class ZeldaActionReplay:
         env.reset()
         self.actions_taken = ""
         self.env = env
+
+    def __getattr__(self, name):
+        return getattr(self.env, name)
 
     def __delattr__(self, __name: str) -> None:
         self.env.close()

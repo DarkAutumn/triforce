@@ -67,6 +67,15 @@ class Timeout(ZeldaEndCondition):
 
         return False, False, None
 
+class StartingSwordCondition(ZeldaEndCondition):
+    """End conditions for 'pick up the sword' scenario."""
+    def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:
+        state = state_change.current
+        if state.location != 0x77 and state.link.sword == SwordKind.NONE:
+            return True, False, "failure-no-sword"
+
+        return False, False, None
+
 class GainedTriforce(ZeldaEndCondition):
     """End the scenario if the agent gains a piece of triforce."""
     def is_scenario_ended(self, state_change : ZeldaStateChange) -> tuple[bool, bool, str]:

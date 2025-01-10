@@ -13,8 +13,9 @@ class ZeldaScenario(BaseModel):
     reward_overrides : Optional[Dict[str, Union[int, float, None]]] = {}
     end_conditions : List[str]
     start : List[str]
-    data : Optional[Dict[str, int]] = {}
-    fixed : Optional[Dict[str, int]] = {}
+    per_reset : Optional[Dict[str, int]] = {}
+    per_frame : Optional[Dict[str, int]] = {}
+    per_room : Optional[Dict[str, int | str]] = {}
 
 class ZeldaModelDefinition(BaseModel):
     """
@@ -59,7 +60,7 @@ class ZeldaModelDefinition(BaseModel):
             return [int(value, 16)]
 
         if isinstance(value, list):
-            return [int(x, 16) for x in value]
+            return [int(x, 16) if isinstance(x, str) else x for x in value]
 
         return value
 

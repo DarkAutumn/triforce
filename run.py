@@ -19,6 +19,7 @@ import tqdm
 from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
                      TRAINING_SCENARIOS
 from triforce.game_state_change import ZeldaStateChange
+from triforce.zelda_enums import Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
@@ -104,7 +105,7 @@ class DisplayWindow:
         self.game_width = game_w * self.scale
         self.game_height = game_h * self.scale
 
-        self.obs_width = 128
+        self.obs_width = 256
         self.obs_height = self.game_height
         self.obs_x = 0
         self.obs_y = 0
@@ -133,6 +134,10 @@ class DisplayWindow:
         self._available_models = {}
         self._loaded_models = {}
         self.model_path = model_path
+
+        self.move_widgets = {}
+        self.vector_widgets = []
+        self.objective_widgets = []
 
     def show(self, headless_recording=False):
         """Shows the game and the AI model."""
@@ -199,11 +204,11 @@ class DisplayWindow:
                     model_name = "keyboard input"
                     next_action = None
                 else:
-                    model_name, action = self._get_action_from_model(model_requested, info['state'], obs)
+                    model_name, action = self._get_action_from_model(model_requested, obs)
 
                 last_info = info
                 obs, _, terminated, truncated, info = env.step(action)
-                state_change : ZeldaStateChange = info['state_change']
+                state_change : ZeldaStateChange = env.state_change
 
                 if mode == 'n':
                     mode = 'p'
@@ -333,8 +338,8 @@ class DisplayWindow:
         env.close()
         pygame.quit()
 
-    def _get_action_from_model(self, model_requested, state, obs):
-        zelda_model = self._select_model(state)
+    def _get_action_from_model(self, model_requested, obs):
+        zelda_model = self._select_model()
         ai, loaded_name = self._select_available_model(zelda_model, model_requested)
         model_name = f"{zelda_model.name} ({loaded_name}) {ai.num_timesteps:,} timesteps"
 
@@ -356,8 +361,8 @@ class DisplayWindow:
         return None
 
 
-    def _select_model(self, state) -> ZeldaModelDefinition:
-        acceptable_models = self.orchestrator.find_acceptable_models(state)
+    def _select_model(self) -> ZeldaModelDefinition:
+        acceptable_models = self.orchestrator.find_acceptable_models()
         for model in acceptable_models:
             if (models_available := self._available_models.get(model.name)) is None:
                 models_available = model.find_available_models(self.model_path)
@@ -418,24 +423,53 @@ class DisplayWindow:
         x_pos = self.obs_x
         y_pos = self.obs_y
         y_pos = self._render_observation_view(surface, x_pos, y_pos, obs["image"])
-        y_pos = self._draw_arrow(surface, "Objective", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][0],
-                                radius=self.obs_width // 4, color=(255, 255, 255), width=3)
 
-        y_pos = self._draw_arrow(surface, "Enemy", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][1],
-                                radius=self.obs_width // 4, color=(255, 255, 255), width=3)
+        radius = self.obs_width // 4
+        if not self.vector_widgets:
+            pos = Coordinates(x_pos, y_pos)
+            labels = ["Enemy1", "Enemy 2", "Projectile", "Projectile 2", "Item 1", "Item 2"]
+            for label in labels:
+                self.vector_widgets.append(LabeledVector(pos, self.font, label, radius))
+                size = self.vector_widgets[-1].size
+                if len(self.vector_widgets) % 2 == 0:
+                    pos = pos + (-size[0], size[1])
+                else:
+                    pos = pos + (size[0], 0)
 
-        y_pos = self._draw_arrow(surface, "Aligned", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][4],
-                                radius=self.obs_width // 4, color=(255, 255, 255), width=3)
+        for i in range(obs["vectors"].shape[0]):
+            for j in range(obs["vectors"].shape[1]):
+                v = obs["vectors"][i, j]
+                widget = self.vector_widgets[i * obs["vectors"].shape[1] + j]
+                widget.vector = v
+                widget.draw(surface)
 
-        y_pos = self._draw_arrow(surface, "Projectile", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][2],
-                                radius=self.obs_width // 4, color=(255, 0, 0), width=3)
 
-        y_pos = self._draw_arrow(surface, "Item", (x_pos + self.obs_width // 4, y_pos), obs["vectors"][3],
-                                radius=self.obs_width // 4, color=(255, 255, 255), width=3)
+        if not self.move_widgets:
+            pos = Coordinates(0, pos.y)
+            self.move_widgets['move-objective'] = DirectionalCircle(pos, self.font, "Objective", radius)
+            pos = pos + (self.move_widgets['move-objective'].size[0], 0)
+            self.move_widgets['came-from'] = DirectionalCircle(pos, self.font, "Source", radius)
 
-        y_pos = self._write_key_val_aligned(surface, "Enemies", f"{obs['features'][0]:.1f}", x_pos, y_pos,
-                                           self.obs_width)
-        y_pos = self._write_key_val_aligned(surface, "Beams", f"{obs['features'][1]:.1f}", x_pos, y_pos, self.obs_width)
+        self.move_widgets['move-objective'].directions = self._get_directions_for_vectors(obs["information"][:6])
+        self.move_widgets['move-objective'].draw(surface)
+
+        self.move_widgets['came-from'].directions = self._get_directions_for_vectors(obs["information"][6:10])
+        self.move_widgets['came-from'].draw(surface)
+
+
+    def _get_directions_for_vectors(self, vectors):
+        directions = []
+        if vectors[0] > 0:
+            directions.append(Direction.N)
+        if vectors[1] > 0:
+            directions.append(Direction.S)
+        if vectors[2] > 0:
+            directions.append(Direction.E)
+        if vectors[3] > 0:
+            directions.append(Direction.W)
+
+        return directions
+
 
     def _update_rewards(self, env, reward_map, buttons, last_info, info):
         curr_rewards = {}
@@ -454,30 +488,6 @@ class DisplayWindow:
         else:
             on_press = DebugReward(env, self.scenario, last_info, info)
             buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, self.text_width, on_press))
-
-    def _draw_arrow(self, surface, label, start_pos, direction, radius=128, color=(255, 0, 0), width=5):
-        render_text(surface, self.font, label, (start_pos[0], start_pos[1]))
-        circle_start = (start_pos[0], start_pos[1] + 20)
-        centerpoint = (circle_start[0] + radius, circle_start[1] + radius)
-        end_pos = (centerpoint[0] + direction[0] * radius, centerpoint[1] + direction[1] * radius)
-
-        pygame.draw.circle(surface, (255, 255, 255), centerpoint, radius, 1)
-
-        if direction[0] != 0 or direction[1] != 0:
-            pygame.draw.line(surface, color, centerpoint, end_pos, width)
-
-            # Arrowhead
-            arrowhead_size = 10
-            angle = math.atan2(-direction[1], direction[0]) + math.pi
-
-            left = (end_pos[0] + arrowhead_size * math.cos(angle - math.pi / 6),
-                    end_pos[1] - arrowhead_size * math.sin(angle - math.pi / 6))
-            right = (end_pos[0] + arrowhead_size * math.cos(angle + math.pi / 6),
-                    end_pos[1] - arrowhead_size * math.sin(angle + math.pi / 6))
-
-            pygame.draw.polygon(surface, color, [end_pos, left, right])
-
-        return circle_start[1] + radius * 2
 
     def _render_observation_view(self, surface, x, y, img):
         render_text(surface, self.font, "Observation", (x, y))
@@ -614,6 +624,108 @@ class DisplayWindow:
                 # Draw the text
                 surface.blit(text_surface, text_rect)
 
+
+
+class LabeledCircle:
+    """A circle with a label."""
+    def __init__(self, position, font, label, radius=128, color=(255, 0, 0), width=5):
+        assert isinstance(position, Coordinates)
+        self.position = position
+        self.radius = int(radius)
+        self.color = color
+        self.width = width
+        self.font = font
+        self.label = label
+
+    @property
+    def size(self):
+        """Returns the size of the draw area."""
+        return self.radius * 2, self.radius * 2 + 20
+
+    @property
+    def centerpoint(self):
+        """Returns the centerpoint of the circle."""
+        circle_start = self.position + (0, 20)
+        centerpoint = circle_start + (self.radius, self.radius)
+        return centerpoint
+
+    def draw(self, surface):
+        """Draws the labeled circle on the surface."""
+        render_text(surface, self.font, self.label, self.position)
+        pygame.draw.circle(surface, (255, 255, 255), self.centerpoint, self.radius, 1)
+
+    def _draw_arrow(self, surface, centerpoint, vector, length):
+        length = np.clip(length, 0.05, 1)
+        arrow_end = np.array(centerpoint) + vector[:2] * self.radius * length
+        if vector[0] != 0 or vector[1] != 0:
+            pygame.draw.line(surface, self.color, centerpoint, arrow_end, self.width)
+
+            # Arrowhead
+            arrowhead_size = 10
+            angle = math.atan2(-vector[1], vector[0]) + math.pi
+
+            left = arrow_end + (arrowhead_size * math.cos(angle - math.pi / 6),
+                              -arrowhead_size * math.sin(angle - math.pi / 6))
+            right = arrow_end + (arrowhead_size * math.cos(angle + math.pi / 6),
+                               -arrowhead_size * math.sin(angle + math.pi / 6))
+
+            pygame.draw.polygon(surface, self.color, [arrow_end, left, right])
+
+class DirectionalCircle(LabeledCircle):
+    """A vector with a label."""
+    def __init__(self, position, font, label, radius=128, color=(255, 0, 0), width=5):
+        super().__init__(position, font, label, radius, color, width)
+        self._directions = []
+
+    @property
+    def directions(self):
+        """Returns the directions."""
+        return self._directions
+
+    @directions.setter
+    def directions(self, value):
+        self._directions = value
+
+    def draw(self, surface):
+        """Draws the labeled vector on the surface."""
+        super().draw(surface)
+
+        for direction in self.directions:
+            match direction:
+                case Direction.N:
+                    self._draw_arrow(surface, self.centerpoint, np.array([0, -1], dtype=np.float32), 1)
+                case Direction.S:
+                    self._draw_arrow(surface, self.centerpoint, np.array([0, 1], dtype=np.float32), 1)
+                case Direction.W:
+                    self._draw_arrow(surface, self.centerpoint, np.array([-1, 0], dtype=np.float32), 1)
+                case Direction.E:
+                    self._draw_arrow(surface, self.centerpoint, np.array([1, 0], dtype=np.float32), 1)
+
+
+        if self.directions:
+            pygame.draw.circle(surface, (0, 0, 0), self.centerpoint, 5)
+
+class LabeledVector(LabeledCircle):
+    """A vector with a label."""
+    def __init__(self, position, font, label, radius=128, color=(255, 0, 0), width=5):
+        super().__init__(position, font, label, radius, color, width)
+        self._vector = [0, 0, -1]
+
+    @property
+    def vector(self):
+        """Returns the vector."""
+        return self._vector
+
+    @vector.setter
+    def vector(self, value):
+        assert len(value) in (2, 3)
+        self._vector = value
+
+    def draw(self, surface):
+        """Draws the labeled vector on the surface."""
+        super().draw(surface)
+        dist = self._vector[2] if len(self._vector) == 3 else 1
+        self._draw_arrow(surface, self.centerpoint, self._vector, dist)
 
 class DebugReward:
     """An action to take when a reward button is clicked."""

@@ -1,6 +1,7 @@
 """The class that represents an enemy in the game state."""
 
 from dataclasses import dataclass
+from typing import Tuple
 from .zelda_enums import Direction, ZeldaEnemyKind
 from .zelda_objects import ZeldaObject
 
@@ -19,6 +20,13 @@ class Enemy(ZeldaObject):
         """Marks the enemy as invulnerable."""
         self.status |= ENEMY_INVULNERABLE
 
+    @property
+    def dimensions(self) -> Tuple[int, int]:
+        """The dimensions of the object."""
+        if self.id == ZeldaEnemyKind.AquaMentus:
+            return 3, 3
+
+        return 2, 2
     @property
     def is_dying(self) -> bool:
         """Returns True if the enemy has been dealt enough damage to die, but hasn't yet been removed
