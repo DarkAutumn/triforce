@@ -71,7 +71,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         # Move forward to the first frame where the agent can control Link
         _, _, _, info = self.cooldown_handler.skip(1)
-        obs, info, frames_skipped = self.cooldown_handler.skip_uncontrollable_states(info)
+        obs, info, frames_skipped = self.cooldown_handler.skip_uncontrollable_states(None, info)
         self._total_frames = frames_skipped + 1
 
         self._update_dictionary(None, info)
