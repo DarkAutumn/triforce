@@ -35,9 +35,6 @@ class ZeldaGame:
     _env : gym.Env
     _info : dict
     frames : int
-    level : int
-    location : int
-    in_cave : bool
     link : Link
     room : Room
     items : List[Item]
@@ -48,20 +45,23 @@ class ZeldaGame:
         ram = env.unwrapped.get_ram()
         tables = ObjectTables(ram)
 
-        # Using __dict__ to avoid the __setattr__ method.
-        self.__dict__['_env'] = env
+        # Prepare __setattr__ for the info dict
         self.__dict__['_info'] = info
-        self.__dict__['frames'] = frame_count
-        self.__dict__['level'] = info['level']
-        self.__dict__['location'] = info['location']
-        self.__dict__['in_cave'] = info['mode'] == MODE_CAVE
-        self.__dict__['room'] = Room.get_or_create(info['level'], info['location'], info['mode'] == MODE_CAVE, env)
 
-        self.__dict__['link'] = self._build_link_status(tables)
+        self._env = env
+        self._frames = frame_count
+        self._fresh_tiles = None
 
-        self.__dict__['items'] = []
-        self.__dict__['enemies'] = []
-        self.__dict__['projectiles'] = []
+        room = Room.get(self.full_location)
+        if room is None:
+            room = Room.create(self.full_location, self._get_fresh_tiles())
+        self.room = room
+
+        self.link = self._build_link_status(tables)
+
+        self.items = []
+        self.enemies = []
+        self.projectiles = []
 
         for (index, obj_id) in self._enumerate_active_ids(tables):
             if obj_id == ZeldaEnemyKind.Item.value:
@@ -74,6 +74,7 @@ class ZeldaGame:
                 self.projectiles.append(self._build_projectile(tables, index, obj_id))
 
         self._update_enemies(prev)
+
 
     def _update_enemies(self, prev : 'ZeldaGame'):
         if prev is None:
@@ -173,12 +174,41 @@ class ZeldaGame:
 
     def is_door_locked(self, direction):
         """Returns True if the door in the given direction is locked."""
-        return self.room.is_door_locked(direction, self._env)
+        return self.level != 0 and self.room.is_door_locked(direction, self._get_fresh_tiles())
+
+    def is_door_barred(self, direction):
+        """Returns True if the door in the given direction is barred."""
+        return self.level != 0 and self.room.is_door_barred(direction, self._get_fresh_tiles())
+
+    def _get_fresh_tiles(self):
+        if self._fresh_tiles is None:
+            map_offset, map_len = zelda_game_data.tables['tile_layout']
+            ram = self._env.unwrapped.get_ram()
+            tiles = ram[map_offset:map_offset+map_len]
+            tiles = tiles.reshape((32, 22)).T.swapaxes(0, 1)
+            self._fresh_tiles = tiles
+
+        return self._fresh_tiles
 
     @property
     def game_over(self):
         """Returns True if the game is over."""
         return self.mode in (MODE_DYING, MODE_GAME_OVER)
+
+    @property
+    def level(self):
+        """The current level of the game."""
+        return self._info['level']
+
+    @property
+    def location(self):
+        """The current location of the game."""
+        return self._info['location']
+
+    @property
+    def in_cave(self):
+        """Whether the game is in a cave."""
+        return self._info['mode'] == MODE_CAVE
 
     @property
     def full_location(self):
