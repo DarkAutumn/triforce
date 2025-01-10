@@ -173,11 +173,12 @@ class Objectives:
         if cave_tile is not None and (item := overworld_to_item.get(state.location, None)) is not None:
             if isinstance(item, int):
                 if not state.link.has_triforce(item):
-                    next_rooms = [MapLocation(state.level, state.location, True)]
+                    next_rooms = [MapLocation(item, dungeon_entrances[item], False)]
                     return Objective(ObjectiveKind.CAVE, [cave_tile], next_rooms)
 
             elif not state.link.has_item(item):
-                return Objective(ObjectiveKind.CAVE, [cave_tile])
+                next_rooms = [MapLocation(state.level, state.location, True)]
+                return Objective(ObjectiveKind.CAVE, [cave_tile], next_rooms)
 
         # Otherwise look for the next dungeon to go into.
         return self._get_route_to_dungeon_objective(state)
@@ -217,7 +218,7 @@ class Objectives:
         item = overworld_to_item.get(state.room.location, None)
         if state.link.has_item(item):
             target_room = MapLocation(state.level, state.room.location, False)
-            return Objective(ObjectiveKind.MOVE, [], set([target_room]))
+            return Objective(ObjectiveKind.MOVE, state.room.exits[Direction.S], set([target_room]))
 
         # Cave equipment doesn't follow normal treasure rules
         return Objective(ObjectiveKind.TREASURE, [CAVE_TREASURE_TILE])
