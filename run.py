@@ -185,6 +185,7 @@ class DisplayWindow:
                     self._print_end_info(state_change.state.info, terminated)
 
                 obs, _ = env.reset()
+                self.start_time = pygame.time.get_ticks()
                 state_change = None
                 self.total_rewards = 0.0
                 reward_map.clear()
