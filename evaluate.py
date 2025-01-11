@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 import pandas as pd
 from tqdm import tqdm
 from triforce import ZeldaModelDefinition, make_zelda_env, ZELDA_MODELS, ZeldaAI
+from triforce.rewards import Penalty, Reward, StepRewards
 
 # pylint: disable=global-statement,global-variable-undefined
 
@@ -48,20 +49,17 @@ def run_one_scenario(args, model_name, model_path):
                 episode_score = info['score']
 
             if 'rewards' in info:
-                for kind, rew in info['rewards'].items():
-                    rew_kind = kind.split('-', 1)[0]
-                    if rew_kind == 'reward':
-                        episode_rewards += abs(rew)
-                    elif rew_kind == 'penalty':
-                        episode_penalties -= abs(rew)
-                    else:
-                        raise ValueError(f"Unknown reward kind: {kind}")
+                rewards : StepRewards = info['rewards']
+                for outcome in rewards:
+                    if isinstance(outcome, Penalty):
+                        episode_penalties += outcome.value
+                    elif isinstance(outcome, Reward):
+                        episode_rewards += outcome.value
 
             if 'end' in info:
                 end = info['end']
                 success = end.startswith("success")
                 endings.append(end)
-
 
         episode_score = episode_score if success else None
         ep_result.append((ep, success, episode_score, episode_total_reward, episode_rewards, episode_penalties))
