@@ -62,7 +62,7 @@ class ScenarioWrapper(gym.Wrapper):
 
         if truncated or terminated:
             if hasattr(state, 'score'):
-                state.info['final_score'] = state.info['score']
+                state.info['final-score'] = state.info['score']
 
         return obs, rewards, terminated, truncated, state_change
 
