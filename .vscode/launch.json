@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Full Game (so far)",
+            "name": "Run - Full Game",
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
@@ -14,7 +14,16 @@
             "justMyCode": false
         },
         {
-            "name": "Training",
+            "name": "Run - Sword",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "run.py",
+            "args": ["overworld-sword", "--model-path", "training/"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Train - Full Game",
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
