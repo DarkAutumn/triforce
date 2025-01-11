@@ -270,6 +270,10 @@ class GameplayCritic(ZeldaCritic):
         prev = state_change.previous.full_location
         curr = state_change.state.full_location
 
+        # Don't let the agent walk offscreen then right back on to get a quick reward
+        if prev != curr and not self._correct_locations:
+            self._correct_locations.add((prev, curr))
+
         if prev != curr:
             health_change = state_change.previous.link.health - self._room_enter_health
             reward = (np.clip(health_change, -3.0, 3.0) + 3) / 6
