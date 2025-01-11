@@ -77,7 +77,9 @@ class GameplayCritic(ZeldaCritic):
         self.moved_to_safety_reward = REWARD_TINY
 
         # state tracking
-        self._visted_locations = set()
+        self._correct_locations = set()
+        self._seen_locations = set()
+        self._total_hits = 0
 
         # missed attack
         self.distance_threshold = 28
@@ -93,7 +95,9 @@ class GameplayCritic(ZeldaCritic):
 
     def clear(self):
         super().clear()
-        self._visted_locations.clear()
+        self._correct_locations.clear()
+        self._seen_locations.clear()
+        self._total_hits = 0
         self._room_enter_health = None
 
     def critique_gameplay(self, state_change : ZeldaStateChange, rewards : Dict[str, float]):
@@ -276,10 +280,10 @@ class GameplayCritic(ZeldaCritic):
             reward = np.clip(reward, REWARD_MINIMUM, REWARD_MAXIMUM)
 
             if curr in state_change.previous.objectives.next_rooms:
-                if (curr, prev) in self._visted_locations:
+                if (curr, prev) in self._correct_locations:
                     reward = REWARD_MINIMUM
                 else:
-                    self._visted_locations.add((curr, prev))
+                    self._correct_locations.add((curr, prev))
 
                 rewards['reward-new-location'] = reward
             else:
@@ -374,6 +378,14 @@ class GameplayCritic(ZeldaCritic):
             elif danger_diff < 0:
                 if len(prev.active_enemies) == len(curr.active_enemies):
                     rewards['reward-moved-to-safety'] = self.moved_to_safety_reward
+
+    def get_score(self, state_change : ZeldaStateChange):
+        """Override to set info['score']"""
+        self._seen_locations.add(state_change.state.full_location)
+        self._total_hits += state_change.hits
+
+        score = 0.5 * len(self._seen_locations) + 0.5 * len(self._correct_locations) + 0.1 * self._total_hits
+        return score
 
 class Dungeon1Critic(GameplayCritic):
     """Critic specifically for dungeon 1."""
