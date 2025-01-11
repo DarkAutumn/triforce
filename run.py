@@ -359,13 +359,18 @@ class DisplayWindow:
         else:
             return None
 
-        available = state.link.get_available_actions() & ActionKind.get_from_list(model.action_space)
+        model_actions = ActionKind.get_from_list(model.action_space)
+        if ActionKind.SWORD in model_actions and ActionKind.BEAMS not in model_actions:
+            model_actions.add(ActionKind.BEAMS)
+
+        link_actions = state.link.get_available_actions()
+        available = link_actions & model_actions
         sword_available = ActionKind.SWORD in available or ActionKind.BEAMS in available
         if keys[pygame.K_a]:
             if not sword_available:
                 return None
 
-            if ActionKind.BEAMS in available:
+            if ActionKind.BEAMS in model.action_space:
                 return (ActionKind.BEAMS, direction)
 
             return (ActionKind.SWORD, direction)
@@ -504,6 +509,7 @@ class DisplayWindow:
                     reward_map[outcome.name] = 0
 
                 reward_map[outcome.name] += outcome.value
+                curr_rewards[outcome.name] = outcome.value
 
         prev = buttons[0] if buttons else None
         action = f"{state_change.action.direction.name} {state_change.action.kind.name}"
