@@ -14,96 +14,6 @@
             "justMyCode": false
         },
         {
-            "name": "Dungeon 1",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["dungeon1"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Dungeon1 - entrance",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["dungeon1entrance"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Dungeon1 - beams",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["dungeon1beams"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Dungeon1 - NO beams",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["dungeon1nobeams"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Dungeon1 - Bombs",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["dungeon1bombs"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Dungeon1 - Boss",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["dungeon1boss"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Overworld - Get Sword",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["overworld-sword"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Overworld1 - NO Beams",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["overworld1nobeams"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Overworld1 - Beams",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["overworld1beams", "--model-path", "training/"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Overworld2 - Beams",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["overworld2beams"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
             "name": "Training",
             "type": "debugpy",
             "request": "launch",
@@ -113,29 +23,20 @@
             "justMyCode": false
         },
         {
-            "name": "Train Overworld",
+            "name": "Train - Sword Pickup",
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
-            "args": ["overworld1beams", "--iterations", "1000000", "--parallel", "1"],
+            "args": ["overworld-sword", "--iterations", "1000000", "--parallel", "1", "--output", "training-debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
         {
-            "name": "Evaluate Training",
+            "name": "Evaluate",
             "type": "debugpy",
             "request": "launch",
             "program": "evaluate.py",
             "args": ["training/", "--render", "--episodes", "10"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Evaluate Models",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "evaluate.py",
-            "args": ["models/", "--limit", "3", "--episodes", "5"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
