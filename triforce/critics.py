@@ -11,8 +11,6 @@ from triforce.rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD
 from .zelda_enums import Direction, SwordKind, ZeldaAnimationKind, AnimationState
 from .game_state_change import ZeldaStateChange
 
-
-
 HEALTH_LOST_PENALTY = Penalty("penalty-lost-health", -REWARD_LARGE)
 HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_LARGE)
@@ -71,25 +69,13 @@ EQUIPMENT_REWARD_MAP = _init_equipment_rewards()
 
 class ZeldaCritic:
     """Base class for Zelda gameplay critics."""
-    def __init__(self):
-        self.health_lost = 0
-
     def clear(self):
         """Called when the environment is reset to clear any saved state."""
-        self.health_lost = 0
 
     def critique_gameplay(self, state_change : ZeldaStateChange, rewards: Dict[str, float]):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
         raise NotImplementedError()
 
-    def get_score(self, state_change : ZeldaStateChange):
-        """Override to set info['score']"""
-
-        diff = state_change.state.link.health - state_change.previous.link.health
-        if diff < 0:
-            self.health_lost += diff
-
-        return self.health_lost
 
 MOVEMENT_SCALE_FACTOR = 9.0
 DISTANCE_THRESHOLD = 28
@@ -138,6 +124,8 @@ class GameplayCritic(ZeldaCritic):
         # If we lost health, remove all rewards since we want that to be the focus
         if state_change.health_lost > 0:
             rewards.zero_rewards()
+
+        self.set_score(state_change, rewards)
 
     # reward helpers, may be overridden
     def critique_equipment_pickup(self, state_change : ZeldaStateChange, rewards):
@@ -379,12 +367,14 @@ class GameplayCritic(ZeldaCritic):
                 if len(prev.active_enemies) == len(curr.active_enemies):
                     rewards.add(MOVED_TO_SAFETY_REWARD)
 
-    def get_score(self, state_change : ZeldaStateChange):
+    def set_score(self, state_change : ZeldaStateChange, rewards : StepRewards):
         """Override to set info['score']"""
         self._seen_locations.add(state_change.state.full_location)
+        seen_locations = len(self._seen_locations) - 1
+        correct_locations = len(self._correct_locations) - 1
         self._total_hits += state_change.hits
 
-        score = 0.5 * (len(self._seen_locations) - 1) + 0.5 * len(self._correct_locations) + 0.1 * self._total_hits
+        score = 0.5 * (seen_locations + correct_locations) + 0.1 * self._total_hits
         if state_change.previous.link.triforce_of_power < state_change.state.link.triforce_of_power:
             score += 100
 
@@ -392,7 +382,7 @@ class GameplayCritic(ZeldaCritic):
         if triforce_diff > 0:
             score += triforce_diff * 100
 
-        return score
+        rewards.score = score
 
 REWARD_ENTERED_CAVE = Reward("reward-entered-cave", REWARD_LARGE)
 REWARD_LEFT_CAVE = Reward("reward-left-cave", REWARD_LARGE)
@@ -433,7 +423,7 @@ class OverworldSwordCritic(GameplayCritic):
             else:
                 rewards.add(PENALTY_LEFT_SCENARIO)
 
-    def get_score(self, state_change : ZeldaStateChange):
+    def set_score(self, state_change : ZeldaStateChange, rewards : StepRewards):
         state = state_change.state
 
         score = 0
@@ -450,4 +440,4 @@ class OverworldSwordCritic(GameplayCritic):
             if state.location != 0x77:
                 score += 1
 
-        return score
+        rewards.score = score

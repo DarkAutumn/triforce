@@ -45,6 +45,8 @@ class StepRewards:
     """A single step's rewards."""
     def __init__(self):
         self.rewards = []
+        self.ending = None
+        self.score = None
 
     def __repr__(self):
         s = sorted(self.rewards, key=lambda x: x.value)

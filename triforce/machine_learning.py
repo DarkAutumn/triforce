@@ -162,16 +162,14 @@ class LogRewardCallback(BaseCallback):
                 for outcome in rewards:
                     self._rewards[outcome.name] = outcome.value + self._rewards.get(outcome.name, 0)
 
-            if 'end' in info:
-                ending = info['end']
-                self._endings.append(ending)
-                if ending.startswith('success'):
-                    self._success_rate.append(1)
-                else:
-                    self._success_rate.append(0)
+                if rewards.ending is not None:
+                    self._endings.append(rewards.ending)
+                    if rewards.ending.startswith('success'):
+                        self._success_rate.append(1)
+                    else:
+                        self._success_rate.append(0)
 
-            if 'final-score' in info:
-                self._evaluation.append(info['final-score'])
+                    self._evaluation.append(rewards.score)
 
             if log_frames and 'total_frames' in info:
                 self._frames_per_iteration.append(info['total_frames'])
