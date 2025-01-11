@@ -19,6 +19,7 @@ import tqdm
 from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
                      TRAINING_SCENARIOS
 from triforce.game_state_change import ZeldaStateChange
+from triforce.rewards import StepRewards
 from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
 from triforce.zelda_observation_wrapper import FrameCaptureWrapper
@@ -495,13 +496,14 @@ class DisplayWindow:
         curr_rewards = {}
         last_info = state_change.previous.info
         info = state_change.state.info
-        if 'rewards' in info:
-            for k, v in info['rewards'].items():
-                if k not in reward_map:
-                    reward_map[k] = 0
-                reward_map[k] += v
-                curr_rewards[k] = round(v, 2)
-                self.total_rewards += v
+        rewards : StepRewards = info.get('rewards', None)
+        if rewards is not None:
+            self.total_rewards += rewards.value
+            for outcome in rewards:
+                if outcome.name not in reward_map:
+                    reward_map[outcome.name] = 0
+
+                reward_map[outcome.name] += outcome.value
 
         prev = buttons[0] if buttons else None
         action = f"{state_change.action.direction.name} {state_change.action.kind.name}"

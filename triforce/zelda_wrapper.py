@@ -8,6 +8,7 @@ from random import randint
 from typing import Tuple
 import gymnasium as gym
 
+from .rewards import StepRewards
 from .models_and_scenarios import ZeldaScenario
 from .objectives import Objectives
 from .game_state_change import ZeldaStateChange
@@ -74,7 +75,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._total_frames += frames
 
         change = self._update_state(action, info)
-        return obs, 0, terminated, truncated, change
+        return obs, StepRewards(), terminated, truncated, change
 
     def _update_state(self, action, info):
         prev, state = self._create_and_set_state(info)

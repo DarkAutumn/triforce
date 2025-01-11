@@ -12,4 +12,4 @@ class GymTranslationWrapper(gym.Wrapper):
         obs, reward, terminated, truncated, change = super().step(action)
         state = change.state
         state.deactivate()
-        return obs, reward, terminated, truncated, state.info
+        return obs, reward.value, terminated, truncated, state.info

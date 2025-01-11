@@ -12,6 +12,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
+from .rewards import StepRewards
 from .models_and_scenarios import ZeldaModelDefinition
 from .zelda_env import make_zelda_env
 
@@ -156,9 +157,10 @@ class LogRewardCallback(BaseCallback):
     def _update_stats(self):
         log_frames = self.n_calls % 10 == 1
         for info in self.locals['infos']:
-            if 'rewards' in info:
-                for kind, rew in info['rewards'].items():
-                    self._rewards[kind] = rew + self._rewards.get(kind, 0)
+            rewards : StepRewards = info.get('rewards', None)
+            if rewards is not None:
+                for outcome in rewards:
+                    self._rewards[outcome.name] = outcome.value + self._rewards.get(outcome.name, 0)
 
             if 'end' in info:
                 ending = info['end']
