@@ -45,19 +45,16 @@ def run_one_scenario(args, model_name, model_path):
             obs, reward, terminated, truncated, info = env.step(action) # pylint: disable=unbalanced-tuple-unpacking
             episode_total_reward += reward
 
-            if 'score' in info:
-                episode_score = info['score']
-
             if 'rewards' in info:
                 rewards : StepRewards = info['rewards']
+                episode_score = rewards.score if rewards.score is not None else episode_score
                 for outcome in rewards:
                     if isinstance(outcome, Penalty):
                         episode_penalties += outcome.value
                     elif isinstance(outcome, Reward):
                         episode_rewards += outcome.value
 
-            if 'end' in info:
-                end = info['end']
+                end = rewards.ending
                 success = end.startswith("success")
                 endings.append(end)
 
