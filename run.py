@@ -16,9 +16,9 @@ import numpy as np
 import cv2
 import tqdm
 
-from triforce import ModelSelector, ZeldaScenario, ZeldaModelDefinition, simulate_critique, make_zelda_env, ZeldaAI, \
-                     TRAINING_SCENARIOS
+from triforce import ZeldaScenario, simulate_critique, make_zelda_env, TRAINING_SCENARIOS, ZeldaAI
 from triforce.game_state_change import ZeldaStateChange
+from triforce.models_and_scenarios import ZELDA_MODELS, ZeldaModelDefinition
 from triforce.rewards import StepRewards
 from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
@@ -92,9 +92,8 @@ class Recording:
 
 class DisplayWindow:
     """A window to display the game and the AI model."""
-    def __init__(self, scenario : ZeldaScenario, model_path : str):
+    def __init__(self, scenario : ZeldaScenario, model_path : str, model : str):
         self.scenario = scenario
-        self.orchestrator = ModelSelector()
 
         pygame.init()
 
@@ -132,9 +131,9 @@ class DisplayWindow:
         self._last_location = None
         self.start_time = None
 
-        self._available_models = {}
         self._loaded_models = {}
         self.model_path = model_path
+        self.model_definition : ZeldaModelDefinition = ZELDA_MODELS[model]
 
         self.move_widgets = {}
         self.vector_widgets = []
@@ -142,8 +141,7 @@ class DisplayWindow:
 
     def show(self, headless_recording=False):
         """Shows the game and the AI model."""
-        model = self._select_model()
-        env = make_zelda_env(self.scenario, model.action_space, render_mode='rgb_array', translation=False)
+        env = make_zelda_env(self.scenario, self.model_definition.action_space, render_mode='rgb_array', translation=False)
         rgb_deque = self._get_rgb_deque(env)
 
         clock = pygame.time.Clock()
@@ -154,7 +152,6 @@ class DisplayWindow:
         next_action = None
 
         model_requested = 0
-        model_name = None
 
         show_endings = False
         force_save = False
@@ -175,6 +172,7 @@ class DisplayWindow:
         truncated = False
 
         state_change : ZeldaStateChange = None
+        model_name = None
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
         mode = 'c'
@@ -207,7 +205,9 @@ class DisplayWindow:
                     model_name = "keyboard input"
                     next_action = None
                 else:
-                    model_name, action = self._get_action_from_model(model_requested, obs)
+                    model, model_name = self._select_model(model_requested)
+                    action = model.predict(obs, deterministic=False)
+                    model_name = f"{self.model_definition.name} ({model_name}) {model.num_timesteps:,} timesteps"
 
                 obs, _, terminated, truncated, state_change = env.step(action)
 
@@ -215,7 +215,7 @@ class DisplayWindow:
                     mode = 'p'
 
             # update rewards for display
-            self._update_rewards(env, reward_map, buttons, state_change)
+            self._update_rewards(env, action, reward_map, buttons, state_change)
 
             while True:
                 if rgb_deque:
@@ -305,7 +305,7 @@ class DisplayWindow:
 
                         elif event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
                             keys = pygame.key.get_pressed()
-                            next_action = self._get_action_from_keys(self._select_model(), state, keys)
+                            next_action = self._get_action_from_keys(state, keys)
                             mode = 'n'
 
                         elif event.key == pygame.K_s:
@@ -340,15 +340,7 @@ class DisplayWindow:
         env.close()
         pygame.quit()
 
-    def _get_action_from_model(self, model_requested, obs):
-        zelda_model = self._select_model()
-        ai, loaded_name = self._select_available_model(zelda_model, model_requested)
-        model_name = f"{zelda_model.name} ({loaded_name}) {ai.num_timesteps:,} timesteps"
-
-        action = ai.predict(obs, deterministic=False)
-        return model_name, action
-
-    def _get_action_from_keys(self, model : ZeldaModelDefinition, state : ZeldaGame, keys):
+    def _get_action_from_keys(self, state : ZeldaGame, keys):
         if keys[pygame.K_LEFT]:
             direction = Direction.W
         elif keys[pygame.K_RIGHT]:
@@ -360,7 +352,7 @@ class DisplayWindow:
         else:
             return None
 
-        model_actions = ActionKind.get_from_list(model.action_space)
+        model_actions = ActionKind.get_from_list(self.model_definition.action_space)
         if ActionKind.SWORD in model_actions and ActionKind.BEAMS not in model_actions:
             model_actions.add(ActionKind.BEAMS)
 
@@ -371,7 +363,7 @@ class DisplayWindow:
             if not sword_available:
                 return None
 
-            if ActionKind.BEAMS in model.action_space:
+            if ActionKind.BEAMS in self.model_definition.action_space:
                 return (ActionKind.BEAMS, direction)
 
             return (ActionKind.SWORD, direction)
@@ -385,26 +377,14 @@ class DisplayWindow:
 
         return (ActionKind.MOVE, direction)
 
-    def _select_model(self) -> ZeldaModelDefinition:
-        acceptable_models = self.orchestrator.find_acceptable_models()
-        for model in acceptable_models:
-            if (models_available := self._available_models.get(model.name)) is None:
-                models_available = model.find_available_models(self.model_path)
-                self._available_models[model.name] = models_available
-
-            if models_available:
-                return model
-
-        return None
-
-    def _select_available_model(self, model : ZeldaModelDefinition, index : int) -> ZeldaAI:
-        models_available = self._available_models[model.name]
+    def _select_model(self, index : int) -> ZeldaAI:
+        models_available = self.model_definition.find_available_models(self.model_path)
         names = sorted(models_available.keys(), key=lambda x: int(x) if isinstance(x, int) else -1)
 
         name = names[index % len(names)]
         path = models_available[name]
         if (result := self._loaded_models.get(path, None)) is None:
-            result = ZeldaAI(model)
+            result = ZeldaAI(self.model_definition)
             result.load(path)
             self._loaded_models[path] = result
 
@@ -498,7 +478,7 @@ class DisplayWindow:
         return directions
 
 
-    def _update_rewards(self, env, reward_map, buttons, state_change : ZeldaStateChange):
+    def _update_rewards(self, env, action, reward_map, buttons, state_change : ZeldaStateChange):
         curr_rewards = {}
         last_info = state_change.previous.info
         info = state_change.state.info
@@ -517,7 +497,7 @@ class DisplayWindow:
         if prev is not None and prev.rewards == curr_rewards and prev.action == action:
             prev.count += 1
         else:
-            on_press = DebugReward(env, self.scenario, last_info, info)
+            on_press = DebugReward(env, action, self.scenario, last_info, info)
             buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, self.text_width, on_press))
 
     def _render_observation_view(self, surface, x, y, img):
@@ -762,14 +742,15 @@ class LabeledVector(LabeledCircle):
 
 class DebugReward:
     """An action to take when a reward button is clicked."""
-    def __init__(self, env, scenario : ZeldaScenario, last_info, info):
+    def __init__(self, env, action, scenario : ZeldaScenario, last_info, info):
         self.env = env
         self.scenario = scenario
         self.last_info = last_info
         self.info = info
+        self.action = action
 
     def __call__(self):
-        result = simulate_critique(self.env, self.scenario, self.last_info, self.info)
+        result = simulate_critique(self.env, self.action, self.scenario, self.last_info, self.info)
         reward_dict, terminated, truncated, reason = result
         print(f"{reward_dict = }")
         print(f"{terminated = }")
@@ -840,15 +821,12 @@ def main():
     args = parse_args()
     model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                                          'models')
-    if args.scenario is None:
-        args.scenario = 'zelda'
-
     scenario = TRAINING_SCENARIOS.get(args.scenario, None)
     if not scenario:
         print(f'Unknown scenario {args.scenario}')
         return
 
-    display = DisplayWindow(scenario, model_path)
+    display = DisplayWindow(scenario, model_path, args.model)
     display.show(args.headless_recording)
 
 def parse_args():
@@ -864,7 +842,8 @@ def parse_args():
     parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames the model was trained with.")
     parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
 
-    parser.add_argument('scenario', nargs='?', help='Scenario name')
+    parser.add_argument('scenario', type=str, help='Scenario name')
+    parser.add_argument('model', type=str, help='Model name')
 
     try:
         args = parser.parse_args()

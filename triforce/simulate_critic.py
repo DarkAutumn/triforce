@@ -6,7 +6,7 @@ from .models_and_scenarios import ZeldaScenario
 from . import critics
 from . import end_conditions
 
-def simulate_critique(env, scenario : ZeldaScenario, old : Dict, new : Dict):
+def simulate_critique(env, action, scenario : ZeldaScenario, old : Dict, new : Dict):
     """Simulates the critic and end conditions for a scenario."""
 
     critic = getattr(critics, scenario.critic)()
@@ -15,7 +15,7 @@ def simulate_critique(env, scenario : ZeldaScenario, old : Dict, new : Dict):
     critic.clear()
     prev = ZeldaGame(None, env, old, 0)
     state = ZeldaGame(prev, env, new, 0)
-    change = ZeldaStateChange(env, prev, state, {}, 0)
+    change = ZeldaStateChange(env, prev, state, action, {}, 0)
     critic.critique_gameplay(change, rewards)
 
     terminated = False
