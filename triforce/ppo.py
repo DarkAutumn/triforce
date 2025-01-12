@@ -1,6 +1,5 @@
 from collections import Counter
 import time
-import multiprocessing
 from multiprocessing import Queue, Process
 import numpy as np
 import torch
@@ -13,8 +12,6 @@ from .rewards import StepRewards
 NORM_ADVANTAGES = True
 CLIP_VAL_LOSS = True
 LEARNING_RATE = 0.00025
-MIN_LR = LEARNING_RATE
-ANNEALING_FACTOR = 1    # none
 GAMMA = 0.99
 LAMBDA = 0.95
 CLIP_COEFF = 0.2
@@ -22,7 +19,6 @@ ENT_COEFF = 0.001 # lowered, original = 0.01
 VF_COEFF = 0.5
 MAX_GRAD_NORM = 0.5
 EPSILON = 1e-5
-
 
 class PPOSubprocess:
     """
