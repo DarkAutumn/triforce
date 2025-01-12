@@ -46,16 +46,8 @@ class ScenarioWrapper(gym.Wrapper):
         obs, rewards, terminated, truncated, state_change = self.env.step(action)
         state = state_change.state
 
-        reward_dict = {}
-
-        self._critic.critique_gameplay(state_change, reward_dict)
-        state.score = self._critic.get_score(state_change)
-
-        if reward_dict:
-            for value in reward_dict.values():
-                rewards += value
-
-        state.info['rewards'] = reward_dict
+        self._critic.critique_gameplay(state_change, rewards)
+        state.info['rewards'] = rewards
 
         end = (x.is_scenario_ended(state_change) for x in self._conditions)
         end = [x for x in end if x is not None]
@@ -65,12 +57,7 @@ class ScenarioWrapper(gym.Wrapper):
 
         if reason:
             # I guess we could have more than one reason, but I'm not going to cover that corner case
-            state.end = reason[0]
-
-        if truncated or terminated:
-            success = any(end.startswith("success") for end in reason)
-            if success and hasattr(state, 'score'):
-                state.final_score = state.score
+            rewards.ending = reason[0]
 
         return obs, rewards, terminated, truncated, state_change
 

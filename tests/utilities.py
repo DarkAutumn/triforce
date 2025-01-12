@@ -36,16 +36,13 @@ class CriticWrapper(gym.Wrapper):
 
     def step(self, act):
         obs, rewards, terminated, truncated, change = self.env.step(act)
-        reward_dict = {}
 
         for c in self.critics:
-            c.critique_gameplay(change, reward_dict)
+            c.critique_gameplay(change, rewards)
 
         end = [x.is_scenario_ended(change) for x in self.end_conditions]
         terminated = terminated or any((x[0] for x in end))
         truncated = truncated or any((x[1] for x in end))
-
-        change.state.rewards = reward_dict
 
         return obs, rewards, terminated, truncated, change
 

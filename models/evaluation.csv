@@ -1,5 +1,0 @@
-Model,Kind,Success%,Score,Total Reward,Rewards,Penalties,Episodes
-dungeon1beams,models/dungeon1beams.zip,93.1,-3.4,48.1,65.4,-17.2,1000
-dungeon1nobeams,models/dungeon1nobeams.zip,93.7,-11.0,37.0,54.0,-17.0,1000
-overworld1beams,models/overworld1beams.zip,99.7,-1.0,14.5,18.6,-4.2,1000
-overworld1nobeams,models/overworld1nobeams.zip,98.4,-2.5,7.9,12.2,-4.3,1000

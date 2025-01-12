@@ -3,10 +3,8 @@ The triforce library is a collection of tools for training and running AI models
 """
 
 import os
-import json
 import retro
 
-from .model_selector import ModelSelector
 from .zelda_env import make_zelda_env
 from .models_and_scenarios import ZeldaModelDefinition, ZeldaScenario, ZELDA_MODELS, TRAINING_SCENARIOS
 from .machine_learning import ZeldaAI
@@ -38,7 +36,6 @@ __all__ = [
     ZeldaAI.__name__,
     ZeldaModelDefinition.__name__,
     ZeldaScenario.__name__,
-    ModelSelector.__name__,
     simulate_critique.__name__,
     'ZELDA_MODELS',
     'TRAINING_SCENARIOS'

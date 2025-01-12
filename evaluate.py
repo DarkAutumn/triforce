@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 import pandas as pd
 from tqdm import tqdm
 from triforce import ZeldaModelDefinition, make_zelda_env, ZELDA_MODELS, ZeldaAI
+from triforce.rewards import Penalty, Reward, StepRewards
 
 # pylint: disable=global-statement,global-variable-undefined
 
@@ -22,6 +23,7 @@ def run_one_scenario(args, model_name, model_path):
     model = ZELDA_MODELS[model_name]
     ai = ZeldaAI(model, ent_coef=args.ent_coef, verbose=args.verbose)
     ai.load(model_path)
+    print(f"{model_name} {ai.num_timesteps:,} timesteps")
 
     ep_result = []
     endings = []
@@ -44,24 +46,18 @@ def run_one_scenario(args, model_name, model_path):
             obs, reward, terminated, truncated, info = env.step(action) # pylint: disable=unbalanced-tuple-unpacking
             episode_total_reward += reward
 
-            if 'score' in info:
-                episode_score = info['score']
-
             if 'rewards' in info:
-                for kind, rew in info['rewards'].items():
-                    rew_kind = kind.split('-', 1)[0]
-                    if rew_kind == 'reward':
-                        episode_rewards += abs(rew)
-                    elif rew_kind == 'penalty':
-                        episode_penalties -= abs(rew)
-                    else:
-                        raise ValueError(f"Unknown reward kind: {kind}")
+                rewards : StepRewards = info['rewards']
+                episode_score = rewards.score if rewards.score is not None else episode_score
+                for outcome in rewards:
+                    if isinstance(outcome, Penalty):
+                        episode_penalties += outcome.value
+                    elif isinstance(outcome, Reward):
+                        episode_rewards += outcome.value
 
-            if 'end' in info:
-                end = info['end']
-                success = end.startswith("success")
+                end = rewards.ending
+                success = end is not None and end.startswith("success")
                 endings.append(end)
-
 
         episode_score = episode_score if success else None
         ep_result.append((ep, success, episode_score, episode_total_reward, episode_rewards, episode_penalties))
