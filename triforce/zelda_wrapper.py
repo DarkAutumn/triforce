@@ -28,7 +28,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         self._total_frames = 0
         self._prev_state = None
         self._discounts = {}
-        self._objectives : Objectives = Objectives()
+        self._objectives : Objectives = None
 
         self.per_reset = []
         self.per_room = []
@@ -50,6 +50,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         # Per-reset state
         self._discounts.clear()
         self.cooldown_handler.reset()
+        self._objectives = Objectives()
         self._prev_state = None
 
         # Randomize the RNG if requested
