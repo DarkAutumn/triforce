@@ -368,6 +368,7 @@ class GameplayCritic(ZeldaCritic):
                     rewards.add(MOVED_TO_SAFETY_REWARD)
 
     def set_score(self, state_change : ZeldaStateChange, rewards : StepRewards):
+        """Sets the score based on how many rooms we have seen, enemies hit, and other factors."""
         self._seen_locations.add(state_change.state.full_location)
         seen_locations = len(self._seen_locations) - 1
         correct_locations = len(self._correct_locations) - 1

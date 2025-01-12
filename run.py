@@ -141,7 +141,8 @@ class DisplayWindow:
 
     def show(self, headless_recording=False):
         """Shows the game and the AI model."""
-        env = make_zelda_env(self.scenario, self.model_definition.action_space, render_mode='rgb_array', translation=False)
+        env = make_zelda_env(self.scenario, self.model_definition.action_space, render_mode='rgb_array',
+                             translation=False)
         rgb_deque = self._get_rgb_deque(env)
 
         clock = pygame.time.Clock()
@@ -341,6 +342,7 @@ class DisplayWindow:
         pygame.quit()
 
     def _get_action_from_keys(self, state : ZeldaGame, keys):
+        # pylint: disable=too-many-return-statements
         if keys[pygame.K_LEFT]:
             direction = Direction.W
         elif keys[pygame.K_RIGHT]:
