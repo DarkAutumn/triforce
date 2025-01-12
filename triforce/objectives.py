@@ -199,12 +199,14 @@ class Objectives:
 
         # level 2 is pretty easy, we'll allow going there first
         elif state.link.triforce_pieces == 0:
-            target = MapLocation(0, item_to_overworld[1], False)
-            dist = state.full_location.manhattan_distance(target)
-
             dungeon2 = MapLocation(0, item_to_overworld[2], False)
-            if dist > state.full_location.manhattan_distance(dungeon2):
-                target = dungeon2
+            dist = state.full_location.manhattan_distance(dungeon2)
+
+            dungeon1 = MapLocation(0, item_to_overworld[1], False)
+            if dist > state.full_location.manhattan_distance(dungeon1):
+                # a directional hint so we don't get stuck
+                target = MapLocation(0, 0x38, False) if state.full_location.value not in (0x38, 0x37) else dungeon1
+
         else:
             for i in range(1, 9):
                 if not state.link.has_triforce(i):
