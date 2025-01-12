@@ -419,6 +419,9 @@ class MapLocation(Coordinates):
             assert self.level == other.level and self.x == other.x and self.y == other.y
             return 1
 
+        if self.level != other.level:
+            return 1
+
         assert self.level == other.level and self.in_cave == other.in_cave
         return abs(self.x - other.x) + abs(self.y - other.y)
 
