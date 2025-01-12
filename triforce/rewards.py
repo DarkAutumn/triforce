@@ -27,6 +27,30 @@ class Outcome:
 
         return NotImplemented
 
+    def __lt__(self, other):
+        if isinstance(other, Outcome):
+            other = other.value
+
+        return self.value < other
+
+    def __le__(self, other):
+        if isinstance(other, Outcome):
+            other = other.value
+
+        return self.value <= other
+
+    def __gt__(self, other):
+        if isinstance(other, Outcome):
+            other = other.value
+
+        return self.value > other
+
+    def __ge__(self, other):
+        if isinstance(other, Outcome):
+            other = other.value
+
+        return self.value >= other
+
 @dataclass(frozen=True)
 class Reward(Outcome):
     """Represents a positive outcome (reward)."""
@@ -44,27 +68,33 @@ class Penalty(Outcome):
 class StepRewards:
     """A single step's rewards."""
     def __init__(self):
-        self.rewards = []
+        self._outcomes = {}
         self.ending = None
         self.score = None
 
     def __repr__(self):
-        s = sorted(self.rewards, key=lambda x: x.value)
+        s = sorted(self._outcomes.values(), key=lambda x: x.value)
         inside = ", ".join(f"{x.name}={x.value}" for x in s)
         return f"{self.value} := {inside}"
 
     def __iter__(self) -> Iterator[Outcome]:
         """Make StepRewards iterable by delegating to the rewards list."""
-        return iter(self.rewards)
+        return self._outcomes.values()
 
     def __len__(self):
         """Return the number of rewards."""
-        return len(self.rewards)
+        return len(self._outcomes)
+
+    def __contains__(self, key):
+        return key in self._outcomes
+
+    def __getitem__(self, key):
+        return self._outcomes[key]
 
     @property
     def value(self):
         """The total reward value."""
-        return np.clip(sum(self.rewards), -REWARD_MAXIMUM, REWARD_MAXIMUM)
+        return np.clip(sum(self._outcomes.values()), -REWARD_MAXIMUM, REWARD_MAXIMUM)
 
     def add(self, outcome: Outcome, scale=None):
         """Add an outcome to the rewards."""
@@ -72,8 +102,9 @@ class StepRewards:
             value = np.clip(outcome.value * scale, -REWARD_MAXIMUM, REWARD_MAXIMUM)
             outcome = Outcome(outcome.name, value)
 
-        self.rewards.append(outcome)
+        assert outcome.name not in self._outcomes, f"Duplicate outcome: {outcome.name}"
+        self._outcomes[outcome.name] = outcome
 
     def zero_rewards(self):
         """Zero out all rewards, but keep the entry so we know it was there."""
-        self.rewards = [Reward(x.name, 0) if isinstance(x, Reward) else x for x in self.rewards]
+        self._outcomes = {x: Reward(x, 0) if isinstance(x, Reward) else self._outcomes[x] for x in self._outcomes}

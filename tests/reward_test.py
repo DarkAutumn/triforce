@@ -16,14 +16,14 @@ def test_wall_collision():
     actions.run_steps('llllll')
 
     # step up to the block, we shouldn't get penalized here even though we don't fully move
-    _, _, _, _, state_change = actions.move('u')
-    assert 'penalty-wall-collision' not in state_change.state.rewards
+    _, rewards, _, _, state_change = actions.move('u')
+    assert 'penalty-wall-collision' not in rewards
 
     # now we are against a block, we should get penalized for moving up and not changing position
     actions.move('u')
-    _, _, _, _, state_change = actions.move('u')
-    assert 'penalty-wall-collision' in state_change.state.rewards
-    assert state_change.state.rewards['penalty-wall-collision'] < 0
+    _, rewards, _, _, state_change = actions.move('u')
+    assert 'penalty-wall-collision' in rewards
+    assert rewards['penalty-wall-collision'] < 0
 
 def test_close_distance():
     actions = ZeldaActionReplay("1_44w.state")
@@ -31,14 +31,14 @@ def test_close_distance():
     actions.reset()
 
     for i in range(2):
-        _, _, _, _, state_change = actions.move('r')
+        _, rewards, _, _, state_change = actions.move('r')
         state = state_change.state
-        assert 'reward-move-closer' in state.rewards
-        assert state.rewards['reward-move-closer'] > 0
+        assert 'reward-move-closer' in rewards
+        assert rewards['reward-move-closer'] > 0
 
-    _, _, _, _, state_change = actions.move('l')
+    _, rewards, _, _, state_change = actions.move('l')
     state = state_change.state
-    assert 'reward-move-closer' not in state.rewards
+    assert 'reward-move-closer' not in rewards
 
 
 def test_position():
