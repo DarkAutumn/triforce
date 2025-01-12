@@ -210,9 +210,8 @@ class PPO:
             returns = advantages + self.act_logp_ent_val_mask[idx, :, :, 3]
             return returns, advantages
 
-    def optimize(self, returns, advantages):
-        # flatten the batch
-
+    def optimize(self, returns, advantages, iterations):
+        # b_variable block
         b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
         b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
@@ -239,7 +238,7 @@ class PPO:
                     clipfracs += [((ratio - 1.0).abs() > CLIP_COEFF).float().mean().item()]
 
                 mb_advantages = b_advantages[mb_inds]
-                if args.norm_adv:
+                if NORM_ADVANTAGES:
                     mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
 
                 # Policy loss
@@ -263,10 +262,10 @@ class PPO:
                 entropy_loss = entropy.mean()
                 loss = pg_loss - ENT_COEFF * entropy_loss + v_loss * VF_COEFF
 
-                optimizer.zero_grad()
+                self.optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.network.parameters(), MAX_GRAD_NORM)
-                optimizer.step()
+                self.optimizer.step()
 
 
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
@@ -274,12 +273,12 @@ class PPO:
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
-        self.tensorboard.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
-        self.tensorboard.add_scalar("losses/value_loss", v_loss.item(), global_step)
-        self.tensorboard.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
-        self.tensorboard.add_scalar("losses/entropy", entropy_loss.item(), global_step)
-        self.tensorboard.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
-        self.tensorboard.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
-        self.tensorboard.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
-        self.tensorboard.add_scalar("losses/explained_variance", explained_var, global_step)
-        self.tensorboard.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+        self.tensorboard.add_scalar("charts/learning_rate", self.optimizer.param_groups[0]["lr"], iterations)
+        self.tensorboard.add_scalar("losses/value_loss", v_loss.item(), iterations)
+        self.tensorboard.add_scalar("losses/policy_loss", pg_loss.item(), iterations)
+        self.tensorboard.add_scalar("losses/entropy", entropy_loss.item(), iterations)
+        self.tensorboard.add_scalar("losses/old_approx_kl", old_approx_kl.item(), iterations)
+        self.tensorboard.add_scalar("losses/approx_kl", approx_kl.item(), iterations)
+        self.tensorboard.add_scalar("losses/clipfrac", np.mean(clipfracs), iterations)
+        self.tensorboard.add_scalar("losses/explained_variance", explained_var, iterations)
+        self.tensorboard.add_scalar("charts/SPS", int(iterations / (time.time() - self.start_time)), iterations)
