@@ -79,7 +79,7 @@ class StepRewards:
 
     def __iter__(self) -> Iterator[Outcome]:
         """Make StepRewards iterable by delegating to the rewards list."""
-        return self._outcomes.values()
+        return iter(self._outcomes.values())
 
     def __len__(self):
         """Return the number of rewards."""

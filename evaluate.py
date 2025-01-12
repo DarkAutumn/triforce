@@ -23,6 +23,7 @@ def run_one_scenario(args, model_name, model_path):
     model = ZELDA_MODELS[model_name]
     ai = ZeldaAI(model, ent_coef=args.ent_coef, verbose=args.verbose)
     ai.load(model_path)
+    print(f"{model_name} {ai.num_timesteps:,} timesteps")
 
     ep_result = []
     endings = []
@@ -55,7 +56,7 @@ def run_one_scenario(args, model_name, model_path):
                         episode_rewards += outcome.value
 
                 end = rewards.ending
-                success = end.startswith("success")
+                success = end is not None and end.startswith("success")
                 endings.append(end)
 
         episode_score = episode_score if success else None
