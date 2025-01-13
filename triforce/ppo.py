@@ -107,7 +107,6 @@ class PPO:
 
         self.total_steps = 0
         self.n_envs = 1
-        self.optimizer = torch.optim.Adam(self.network.parameters(), lr=self._learning_rate, eps=self._epsilon)
 
         self.reward_values = {}
         self.endings = {}
@@ -118,23 +117,23 @@ class PPO:
         if isinstance(network.observation_shape[0], tuple):
             for shape in network.observation_shape:
                 assert isinstance(shape, tuple)
-                obs_part = torch.empty(self.n_envs, self.memory_length + 1, *shape, dtype=torch.float32, device=device)
+                obs_part = torch.empty(self.n_envs, self.memory_length + 1, *shape, dtype=torch.float32, device="cpu")
                 observation.append(obs_part)
         else:
             obs_part = torch.empty(self.n_envs, self.memory_length + 1, *network.observation_shape,
-                                   dtype=torch.float32, device=device)
+                                   dtype=torch.float32, device="cpu")
             observation.append(obs_part)
 
         self.observation = tuple(observation)
 
-        self.dones = torch.empty(self.n_envs, self.memory_length + 1, dtype=torch.float32, device=device)
-        self.act_logp_ent_val = torch.empty(self.n_envs, self.memory_length, 4, device=device)
+        self.dones = torch.empty(self.n_envs, self.memory_length + 1, dtype=torch.float32, device="cpu")
+        self.act_logp_ent_val = torch.empty(self.n_envs, self.memory_length, 4, device="cpu")
         self.masks = torch.empty(self.n_envs, self.memory_length, self.network.action_size, dtype=torch.bool,
-                                 device=device)
+                                 device="cpu")
         self.rewards = torch.empty(self.n_envs, self.memory_length, dtype=torch.float32,
-                                   device=device)
+                                   device="cpu")
 
-        self.non_mask = torch.ones(self.network.action_size, dtype=torch.bool, device=device)
+        self.non_mask = torch.ones(self.network.action_size, dtype=torch.bool, device="cpu")
 
     def _get_and_remove(self, dictionary, key, default):
         if key in dictionary:
@@ -161,8 +160,8 @@ class PPO:
         """
         self.start_time = time.time()
 
-        batch_returns = torch.zeros(self.n_envs, self.memory_length, device=self.device)
-        batch_advantages = torch.zeros(self.n_envs, self.memory_length, device=self.device)
+        batch_returns = torch.zeros(self.n_envs, self.memory_length, device="cpu")
+        batch_advantages = torch.zeros(self.n_envs, self.memory_length, device="cpu")
 
         state = None
         env = create_env()
@@ -185,8 +184,8 @@ class PPO:
         # multi-process mode
         # 1) Spawn PPOSubprocess for each environment
 
-        batch_returns = torch.zeros(self.n_envs, self.memory_length, device=self.device)
-        batch_advantages = torch.zeros(self.n_envs, self.memory_length, device=self.device)
+        batch_returns = torch.zeros(self.n_envs, self.memory_length, device="cpu")
+        batch_advantages = torch.zeros(self.n_envs, self.memory_length, device="cpu")
 
         iteration = 0
 
@@ -271,9 +270,9 @@ class PPO:
                 self.dones[batch_idx, t] = done
 
                 # Unsqueeze obs and the action_mask, since get_action_and_value expects a batch
-                obs_batched = tuple(o.unsqueeze(0).to(self.device) for o in obs)
+                obs_batched = tuple(o.unsqueeze(0) for o in obs)
                 if action_mask is not None:
-                    action_mask = action_mask.unsqueeze(0).to(self.device)
+                    action_mask = action_mask.unsqueeze(0)
 
                 act_logp_ent_val = self.network.get_action_and_value(obs_batched, action_mask)
                 self.act_logp_ent_val[batch_idx, t] = torch.stack(act_logp_ent_val, dim=-1)
@@ -310,7 +309,7 @@ class PPO:
             self.dones[batch_idx, self.memory_length] = done
 
             # (g) Get value for the final state
-            obs_batched = tuple(o.unsqueeze(0).to(self.device) for o in obs)
+            obs_batched = tuple(o.unsqueeze(0) for o in obs)
             next_value = self.network.get_value(obs_batched).item()
 
         # Return carry-over state: current obs, done, and action_mask
@@ -370,7 +369,7 @@ class PPO:
 
     def _compute_returns(self, batch_idx, last_value):
         with torch.no_grad():
-            advantages = torch.zeros(self.memory_length, device=self.device)
+            advantages = torch.zeros(self.memory_length, device="cpu")
             last_gae = 0
             for t in reversed(range(self.memory_length)):
                 mask = 1.0 - self.dones[batch_idx, t]
@@ -399,29 +398,32 @@ class PPO:
 
 
         for i, obs_part in enumerate(b_obs):
-            b_obs[i] = obs_part.reshape(-1, *obs_part.shape[2:])
+            b_obs[i] = obs_part.reshape(-1, *obs_part.shape[2:]).to(self.device)
 
         b_obs = tuple(b_obs)
 
         # flatten actions, logprobs, values, masks
-        actions   = self.act_logp_ent_val[:, :, 0]
-        logprobs  = self.act_logp_ent_val[:, :, 1]
-        values    = self.act_logp_ent_val[:, :, 3]
+        actions   = self.act_logp_ent_val[:, :, 0].to(self.device)
+        logprobs  = self.act_logp_ent_val[:, :, 1].to(self.device)
+        values    = self.act_logp_ent_val[:, :, 3].to(self.device)
 
         b_actions  = actions.reshape(-1)   # [n_envs*memory_length]
         b_logprobs = logprobs.reshape(-1)  # [n_envs*memory_length]
         b_values   = values.reshape(-1)    # [n_envs*memory_length]
 
         masks     = self.masks
-        b_masks    = masks.reshape(-1, masks.shape[-1])     # [n_envs*memory_length]
+        b_masks    = masks.reshape(-1, masks.shape[-1]).to(self.device)     # [n_envs*memory_length]
 
         # flatten returns, advantages
-        b_advantages = advantages.reshape(-1)
-        b_returns    = returns.reshape(-1)
+        b_advantages = advantages.reshape(-1).to(self.device)
+        b_returns    = returns.reshape(-1).to(self.device)
 
         # standard PPO update
         batch_size = self.memory_length * self.n_envs
         minibatch_size = batch_size // self.minibatches
+
+        network = self.network.to(self.device)
+        optimizer = torch.optim.Adam(network.parameters(), lr=self._learning_rate, eps=self._epsilon)
 
         b_inds = np.arange(batch_size)
         clipfracs = []
@@ -446,7 +448,7 @@ class PPO:
 
                 mb_masks = b_masks[mb_inds, :]
 
-                _, newlogprob, entropy, newvalue = self.network.get_action_and_value(mb_obs, mb_masks, mb_actions)
+                _, newlogprob, entropy, newvalue = network.get_action_and_value(mb_obs, mb_masks, mb_actions)
 
                 logratio = newlogprob - mb_logprobs
                 ratio = logratio.exp()
@@ -480,10 +482,12 @@ class PPO:
                 entropy_loss = entropy.mean()
                 loss = pg_loss - self._ent_coeff * entropy_loss + self._vf_coeff * v_loss
 
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(self.network.parameters(), self._max_grad_norm)
-                self.optimizer.step()
+                nn.utils.clip_grad_norm_(network.parameters(), self._max_grad_norm)
+                optimizer.step()
+
+        self.network = network
 
         # After training, compute stats like explained variance
         y_pred = b_values.cpu().numpy()
