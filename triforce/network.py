@@ -23,7 +23,7 @@ class NatureCNN(nn.Module):
             nn.Flatten()
         )
         # Calculate the output size of the CNN for the linear layer
-        cnn_output_size = 64 * 9 * 16  # depends on your input size
+        cnn_output_size = 64 * 12 * 12 # 64 channels, 12x12 spatial size
         self.linear = nn.Sequential(
             _layer_init(nn.Linear(cnn_output_size, linear_output_size)),
             nn.ReLU()
@@ -79,12 +79,15 @@ class MlpExtractor(nn.Module):
         return policy_features, value_features
 
 
-class MultiInputActorCriticPolicy(nn.Module):
+class ZeldaNeuralNetwork(nn.Module):
     """Actor-critic policy with multiple inputs + action masking."""
-    def __init__(self, image_channels=1, vectors_size=(3, 2, 3), info_size=12, action_size=8):
+    def __init__(self, image_channels=1, viewport_size=128, vectors_size=(3, 2, 3), info_size=12, action_size=8):
         super().__init__()
-        self.action_size = action_size
         self.image_linear_size = 256
+        self.viewport_size = viewport_size
+        self.vectors_size = vectors_size
+        self.info_size = info_size
+        self.action_size = action_size
 
         combined_input_size = (
             self.image_linear_size +
@@ -123,7 +126,7 @@ class MultiInputActorCriticPolicy(nn.Module):
         value = self.value_net(value_features)
         return action_logits, value
 
-    def get_action_and_value(self, obs_tuple, actions=None, mask=None):
+    def get_action_and_value(self, obs_tuple, mask, actions=None, deterministic=False):
         """
         obs_tuple: (image, vectors, info)
         actions:   optional tensor of discrete actions (for log_prob, value_loss, etc.)
@@ -133,38 +136,33 @@ class MultiInputActorCriticPolicy(nn.Module):
         Returns:
             distribution, log_prob, entropy, value
         """
-        # Unpack the 3-part observation
         image, vectors, information = obs_tuple
+        logits, value = self.forward(image, vectors, information)
 
-        # 1) Forward pass for logits, value
-        logits, value = self.forward(image, vectors, information)  # shape of logits: [batch_size, action_size]
-
-        # 2) Apply mask if provided
+        # mask out invalid actions
         if mask is not None:
-            # mask.shape: [batch_size, action_size], dtype=bool
-            # We can forcibly set invalid actions' logits to a large negative number
-            # so that distribution probabilities go to zero.
-            logits = logits.clone()  # avoid modifying in-place
-            invalid_mask = ~mask      # True where the action is invalid
+            logits = logits.clone()
+            invalid_mask = ~mask
             logits[invalid_mask] = -1e9
 
-        # 3) Create a categorical distribution over the valid actions
-        dist_cat = dist.Categorical(logits=logits)
+        # distribution for entropy calculation
+        distribution = dist.Categorical(logits=logits)
+        entropy = distribution.entropy()
 
-        # 4) If actions is provided, compute log_prob and distribution entropy
-        if actions is not None:
-            # actions should have shape [batch_size], each entry in [0 .. action_size-1]
-            log_prob = dist_cat.log_prob(actions)
-            entropy = dist_cat.entropy()
-        else:
-            # For inference, you may not pass actions. Return None placeholders.
-            log_prob = None
-            entropy = dist_cat.entropy()  # you can still measure distribution entropy
+        # sample an action if not provided
+        if actions is None:
+            if deterministic:
+                actions = logits.argmax(dim=-1)
+            else:
+                actions = distribution.sample()
+
+        log_prob = distribution.log_prob(actions)
 
         # value has shape [batch_size, 1], flatten if needed
-        return dist_cat, log_prob, entropy, value.view(-1)
+        return actions, log_prob, entropy, value.view(-1)
 
-    def get_act_logp_ent_val_mask(self, obs_tuple, actions, mask):
-        """Same as get_action_and_value, but returns the mask as well."""
-        result = self.get_action_and_value(obs_tuple, actions, mask)
-        return result[0], result[1], result[2], result[3], mask
+    def get_value(self, obs_tuple):
+        """Get value estimate."""
+        image, vectors, information = obs_tuple
+        _, value = self.forward(image, vectors, information)
+        return value.view(-1)

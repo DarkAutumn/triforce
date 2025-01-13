@@ -81,7 +81,7 @@ class PPOSubprocess:
 
                 # Send results back
                 self.result_queue.put((infos, next_value, local_ppo.obs, local_ppo.dones,
-                                       local_ppo.act_logp_ent_val_mask, local_ppo.rewards))
+                                       local_ppo.act_logp_ent_val, local_ppo.masks, local_ppo.rewards))
 
             elif cmd == 'update_weights':
                 # data == new_state_dict
@@ -107,7 +107,7 @@ class PPOSubprocess:
             {
                 'iterations': iterations,
                 'progress': progress,
-                'weights': weights,  # optional
+                'weights': weights,
             }
         ))
 
@@ -159,9 +159,13 @@ class PPO:
         self.obs = obs_image, obs_vectors, obs_features
 
         self.dones = torch.empty(self.n_envs, self.memory_length + 1, dtype=torch.float32, device=device)
-        self.act_logp_ent_val_mask = torch.empty(self.n_envs, self.memory_length, 5, device=device)
+        self.act_logp_ent_val = torch.empty(self.n_envs, self.memory_length, 4, device=device)
+        self.masks = torch.empty(self.n_envs, self.memory_length, self.network.action_size, dtype=torch.bool,
+                                 device=device)
         self.rewards = torch.empty(self.n_envs, self.memory_length, dtype=torch.float32,
                                    device=device)
+
+        self.non_mask = torch.ones(self.network.action_size, dtype=torch.bool, device=device)
 
     def train(self, create_env, iterations, progress=None):
         """
@@ -237,13 +241,14 @@ class PPO:
             infos = []
             for i, w in enumerate(workers):
                 # block until worker i returns
-                infos, next_value, obs, dones, act_logp_ent_val_mask, rewards = w.get_result()
+                infos, next_value, obs, dones, act_logp_ent_val, masks, rewards = w.get_result()
                 self.obs[0][i] = obs[0]
                 self.obs[1][i] = obs[1]
                 self.obs[2][i] = obs[2]
                 self.dones[i] = dones
                 self.rewards[i] = rewards
-                self.act_logp_ent_val_mask[i] = act_logp_ent_val_mask
+                self.act_logp_ent_val[i] = act_logp_ent_val
+                self.masks[i] = masks
                 returns, advantages = self._compute_returns(i, next_value)
                 batch_returns[i] = returns
                 batch_advantages[i] = advantages
@@ -266,7 +271,7 @@ class PPO:
         for w in workers:
             w.close()
 
-    def build_one_batch(self, batch_index, env, progress, state=None):
+    def build_one_batch(self, batch_idx, env, progress, state=None):
         """Build a single batch of data from the environment."""
         # pylint: disable=too-many-locals
         if state is None or state[1] == 1.0:
@@ -283,21 +288,26 @@ class PPO:
             for t in range(self.memory_length):
                 # (a) Store the *current* obs in our buffers
                 for obs_idx, ob_tensor in enumerate(obs):
-                    self.obs[obs_idx][batch_index, t] = ob_tensor
+                    self.obs[obs_idx][batch_idx, t] = ob_tensor
 
-                self.dones[batch_index, t] = done
+                self.dones[batch_idx, t] = done
 
-                # (b) Get action logits/logp/entropy/value from policy
-                act_logp_ent_val_mask = self.network.get_act_logp_ent_val_mask(obs, action_mask)
-                self.act_logp_ent_val_mask[batch_index, t] = act_logp_ent_val_mask[0]
+                # Unsqueeze obs and the action_mask, since get_action_and_value expects a batch
+                obs_batched = tuple(o.unsqueeze(0).to(self.device) for o in obs)
+                if action_mask is not None:
+                    action_mask = action_mask.unsqueeze(0).to(self.device)
+
+                act_logp_ent_val = self.network.get_action_and_value(obs_batched, action_mask)
+                self.act_logp_ent_val[batch_idx, t] = torch.stack(act_logp_ent_val, dim=-1)
+                self.masks[batch_idx, t] = action_mask if action_mask is not None else self.non_mask
 
                 # (c) Extract the actual actions (assuming single env)
-                actions = act_logp_ent_val_mask[0, :, 0]
+                action = act_logp_ent_val[0].item()
 
                 # (d) Step environment
-                next_obs, reward, terminated, truncated, info, action_mask = env.step(actions)
+                next_obs, reward, terminated, truncated, info, action_mask = env.step(action)
                 infos.append(info)
-                self.rewards[batch_index, t] = reward
+                self.rewards[batch_idx, t] = reward
 
                 # (e) Check if environment finished
                 next_done = 1.0 if (terminated or truncated) else 0.0
@@ -317,18 +327,19 @@ class PPO:
             # 2) Store final obs/done for bootstrapping
             # ------------------------------------------
             for obs_idx, ob_tensor in enumerate(obs):
-                self.obs[obs_idx][batch_index, self.memory_length] = ob_tensor
-            self.dones[batch_index, self.memory_length] = done
+                self.obs[obs_idx][batch_idx, self.memory_length] = ob_tensor
+            self.dones[batch_idx, self.memory_length] = done
 
             # (g) Get value for the final state
-            next_value = self.network.get_value(obs, action_mask)
+            obs_batched = tuple(o.unsqueeze(0).to(self.device) for o in obs)
+            next_value = self.network.get_value(obs_batched).item()
 
         # Return carry-over state: current obs, done, and action_mask
         state = (obs, done, action_mask)
         return infos, next_value, state
 
     def _batch_update(self, infos):
-        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-branches, too-many-locals
         success_rate = []
         total_seconds = []
         steps = []
@@ -378,25 +389,25 @@ class PPO:
         for key in self.endings:
             self.endings[key] = 0
 
-    def _compute_returns(self, idx, last_value):
+    def _compute_returns(self, batch_idx, last_value):
         with torch.no_grad():
             advantages = torch.zeros(self.memory_length, device=self.device)
             last_gae = 0
             for t in reversed(range(self.memory_length)):
-                mask = 1.0 - self.dones[idx, t]
+                mask = 1.0 - self.dones[batch_idx, t]
 
                 if t + 1 < self.memory_length:
-                    next_value = self.act_logp_ent_val_mask[idx, t + 1, 3]
+                    next_value = self.act_logp_ent_val[batch_idx, t + 1, 3]
                 else:
                     next_value = last_value
 
-                reward = self.rewards[idx, t]
-                current_val = self.act_logp_ent_val_mask[idx, t, 3]  # index 3 is "value"
+                reward = self.rewards[batch_idx, t]
+                current_val = self.act_logp_ent_val[batch_idx, t, 3]
 
                 delta = reward + GAMMA * next_value * mask - current_val
                 advantages[t] = last_gae = delta + GAMMA * LAMBDA * mask * last_gae
 
-            returns = advantages + self.act_logp_ent_val_mask[idx, :, :, 3]
+            returns = advantages + self.act_logp_ent_val[batch_idx, :, 3]
             return returns, advantages
 
     def optimize(self, returns, advantages, iterations):
@@ -432,17 +443,17 @@ class PPO:
         # -----------------------------
         # 2) Flatten Actions, Logprobs, Values
         # -----------------------------
-        # self.act_logp_ent_val_mask has shape [n_envs, memory_length, 5].
+        # self.act_logp_ent_val_mask has shape [n_envs, memory_length, 4].
         # Let’s define each index carefully:
         #   0 -> action
         #   1 -> logp
         #   2 -> entropy
         #   3 -> value
-        #   4 -> mask
-        actions   = self.act_logp_ent_val_mask[:, :, 0]
-        logprobs  = self.act_logp_ent_val_mask[:, :, 1]
-        values    = self.act_logp_ent_val_mask[:, :, 3]
-        masks     = self.act_logp_ent_val_mask[:, :, 4]
+        actions   = self.act_logp_ent_val[:, :, 0]
+        logprobs  = self.act_logp_ent_val[:, :, 1]
+        values    = self.act_logp_ent_val[:, :, 3]
+
+        masks     = self.masks
 
         b_actions  = actions.reshape(-1)   # [n_envs*memory_length]
         b_logprobs = logprobs.reshape(-1)  # [n_envs*memory_length]
