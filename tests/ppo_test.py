@@ -1,10 +1,12 @@
 # pylint: disable=all
 import os
+import random
 import sys
 from unittest.mock import MagicMock
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
+import numpy as np
 import pytest
 import torch
 from torch import nn
@@ -34,9 +36,9 @@ class TestEnvironment:
     - Observations in [0.75, 1.0]: Reward 1.0 for action 2.
     - -1 reward for any other action.
     """
-    def __init__(self, network):
+    def __init__(self, observation_shape):
         self.step_count = 0
-        self.network = network
+        self.observation_shape = observation_shape
 
         # Predefined sequence of observations
         self.observation_ranges = [
@@ -62,7 +64,7 @@ class TestEnvironment:
         """Generates an observation based on the step index."""
         result = []
         obs_range = self.observation_ranges[step]
-        for shape in self.network.observation_shape:
+        for shape in self.observation_shape:
             if isinstance(shape, int):
                 shape = (shape, )
 
@@ -87,43 +89,36 @@ def test_ppo_training(device):
     Test PPO by training it on a deterministic environment and verifying it learns to
     take the correct actions.
     """
-    # Create the environment and the network
-    network = TestNetwork().to(device)
 
-    # Initialize PPO
-    ppo = PPO(network=network, device=device, log_dir=None)
+    # Fix seed so we don't have randomized tests
+    seed = 42
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
-    # Define a helper to convert observations to tensors on the appropriate device
-    def to_device(obs):
-        return tuple(o.to(device) for o in obs)
+
+    ppo = PPO(network=TestNetwork(), device=device, log_dir=None, n_envs=1)
 
     # Train PPO for enough iterations to allow learning
-    num_iterations = 100_000  # Adjust as needed based on your hyperparameters
-    progress_mock = MagicMock()  # Mock progress tracking
-    ppo.train(lambda: TestEnvironment(network), num_iterations, progress=progress_mock)
+    num_iterations = 25_000
+    progress_mock = MagicMock()
+    ppo.train(lambda: TestEnvironment(ppo.network.observation_shape), num_iterations, progress=progress_mock)
 
     assert progress_mock.update.call_count >= num_iterations, "PPO did not train for the expected number of iterations"
 
-    # Now test the trained model
-    # Reset the environment and initialize observations
-    env = TestEnvironment(network)
+    # See if the trained model takes the correct actions
+    env = TestEnvironment(ppo.network.observation_shape)
     obs, _ = env.reset()
-    obs = to_device(obs)
     actions_taken = []
 
     # Run through one full sequence of observations (3 steps)
     for step in range(3):
-        # Generate action logits and value using the trained policy
-        logits, value = network(*obs)
+        logits, value = ppo.network(*obs)
         action_probs = torch.softmax(logits, dim=-1)
         action = torch.argmax(action_probs).item()  # Select the most probable action
         actions_taken.append(action)
 
-        # Step the environment
         obs, _, _, _, _ = env.step(action)
-        obs = to_device(obs)
 
-    # Assertions to validate PPO's learned behavior
-    # Verify the actions taken match the expected optimal actions per step
-    expected_actions = [0, 1, 2]  # Optimal actions for each observation range
+    expected_actions = [0, 1, 2]
     assert actions_taken == expected_actions, f"Expected actions {expected_actions}, but got {actions_taken}"

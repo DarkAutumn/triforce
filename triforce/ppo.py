@@ -82,7 +82,7 @@ EPSILON = 1e-5
 
 class PPO:
     """PPO Implementation.  Cribbed from https://www.youtube.com/watch?v=MEt6rrxH8W4."""
-    def __init__(self, network : Network, device, log_dir, **kwargs):
+    def __init__(self, network : Network, device, log_dir, n_envs, **kwargs):
         self._norm_advantages = kwargs.get('norm_advantages', NORM_ADVANTAGES)
         self._clip_val_loss = kwargs.get('clip_val_loss', CLIP_VAL_LOSS)
         self._learning_rate = kwargs.get('learning_rate', LEARNING_RATE)
@@ -108,7 +108,7 @@ class PPO:
         self.tensorboard = SummaryWriter(log_dir) if log_dir else None
 
         self.total_steps = 0
-        self.n_envs = 1
+        self.n_envs = n_envs
 
         self.reward_values = {}
         self.endings = {}
@@ -130,12 +130,12 @@ class PPO:
 
         self.dones = torch.empty(self.n_envs, self.memory_length + 1, dtype=torch.float32, device="cpu")
         self.act_logp_ent_val = torch.empty(self.n_envs, self.memory_length, 4, device="cpu")
-        self.masks = torch.empty(self.n_envs, self.memory_length, self.network.action_size, dtype=torch.bool,
+        self.masks = torch.empty(self.n_envs, self.memory_length + 1, self.network.action_size, dtype=torch.bool,
                                  device="cpu")
         self.rewards = torch.empty(self.n_envs, self.memory_length, dtype=torch.float32,
                                    device="cpu")
 
-        self.non_mask = torch.ones(self.network.action_size, dtype=torch.bool, device="cpu")
+        self.ones_mask = torch.ones(self.network.action_size, dtype=torch.bool, device="cpu")
 
     def _get_and_remove(self, dictionary, key, default):
         if key in dictionary:
@@ -165,12 +165,11 @@ class PPO:
         batch_returns = torch.zeros(self.n_envs, self.memory_length, device="cpu")
         batch_advantages = torch.zeros(self.n_envs, self.memory_length, device="cpu")
 
-        state = None
         env = create_env()
 
         iteration = 0
         while iteration < iterations:
-            infos, next_value, state = self.build_one_batch(0, env, progress, state)
+            infos, next_value = self.build_one_batch(0, env, progress, iteration)
             returns, advantages = self._compute_returns(0, next_value)
             batch_returns[0] = returns
             batch_advantages[0] = advantages
@@ -183,21 +182,14 @@ class PPO:
 
     def _train_multiproc(self, create_env, iterations, progress):
         # pylint: disable=too-many-locals
-        # multi-process mode
-        # 1) Spawn PPOSubprocess for each environment
-
-        batch_returns = torch.zeros(self.n_envs, self.memory_length, device="cpu")
-        batch_advantages = torch.zeros(self.n_envs, self.memory_length, device="cpu")
 
         iteration = 0
 
         workers = []
         for i in range(self.n_envs):
-            # We'll create ppo_kwargs with the same network arch, device='cpu', etc.
-            # or if you want them on GPU for rollout, do device='cuda' if you have memory
             ppo_kwargs = {
-                "network": self.network,  # or a constructor
-                "device": "cpu",          # typically CPU for env stepping
+                "network": self.network,
+                "device": "cpu",
                 "log_dir": None,
             }
             worker = PPOSubprocess(
@@ -209,13 +201,12 @@ class PPO:
             workers.append(worker)
 
         while iteration < iterations:
-            # 2) Send 'build_batch' command to each worker
-            # optionally sync worker weights => self.state_dict()
-            # if you want them to use the main policy weights for rollout
+            # spin up workers
             for w in workers:
-                w.build_batch_async(iterations=iteration, progress=progress, weights=self.state_dict())
+                w.build_batch_async(progress=progress, weights=self.network.state_dict())
 
-            # 3) Collect results
+            batch_returns = torch.zeros(self.n_envs, self.memory_length, device="cpu")
+            batch_advantages = torch.zeros(self.n_envs, self.memory_length, device="cpu")
             infos = []
             for i, w in enumerate(workers):
                 # block until worker i returns
@@ -234,89 +225,75 @@ class PPO:
 
             iteration += self.n_envs * self.memory_length
 
-            # 4) update the aggregator / logs
             self._batch_update(infos)
-
-            # 5) do the global optimize
             self._optimize(batch_returns, batch_advantages, iteration)
 
-            # 6) Optionally push the updated weights to each worker if you want new policy rollout
-            # for w in workers:
-            #     w.update_weights_async(self.state_dict())
-            #     ack = w.get_result()
-
-        # 7) Cleanup
         for w in workers:
             w.close()
 
-    def build_one_batch(self, batch_idx, env, progress, state=None):
+    def build_one_batch(self, batch_idx, env, progress, iteration):
         """Build a single batch of data from the environment."""
         # pylint: disable=too-many-locals
-        if state is None or state[1] == 1.0:
-            # If we have no state or the previous state was done
+        if iteration == 0:
             obs, info = env.reset()
             action_mask = info.get('action_mask', None)
             done = 0.0
         else:
-            # Otherwise, we continue from the previous environment state
-            obs, done, action_mask = state
+            obs = [o[batch_idx, self.memory_length] for o in self.observation]
+            done = self.dones[batch_idx, self.memory_length]
+            action_mask = self.masks[batch_idx, self.memory_length]
 
         infos = []
 
         with torch.no_grad():
             for t in range(self.memory_length):
-                # (a) Store the *current* obs in our buffers
+                # Store current obs/done
+                self.dones[batch_idx, t] = done
                 for obs_idx, ob_tensor in enumerate(obs):
                     self.observation[obs_idx][batch_idx, t] = ob_tensor
-
-                self.dones[batch_idx, t] = done
 
                 # Unsqueeze obs and the action_mask, since get_action_and_value expects a batch
                 obs_batched = tuple(o.unsqueeze(0) for o in obs)
                 if action_mask is not None:
                     action_mask = action_mask.unsqueeze(0)
 
+                # Record the action, logp, entropy, and value
                 act_logp_ent_val = self.network.get_action_and_value(obs_batched, action_mask)
                 self.act_logp_ent_val[batch_idx, t] = torch.stack(act_logp_ent_val, dim=-1)
-                self.masks[batch_idx, t] = action_mask if action_mask is not None else self.non_mask
+                self.masks[batch_idx, t] = action_mask if action_mask is not None else self.ones_mask
 
-                # (c) Extract the actual actions (assuming single env)
+                # step environment
                 action = act_logp_ent_val[0].item()
-
-                # (d) Step environment
                 next_obs, reward, terminated, truncated, info = env.step(action)
+
                 action_mask = info.get('action_mask', None)
                 infos.append(info)
                 self.rewards[batch_idx, t] = reward
 
-                # (e) Check if environment finished
                 next_done = 1.0 if (terminated or truncated) else 0.0
                 if terminated or truncated:
                     next_obs, info = env.reset()
-                    action_mask = info.get('action_mask', None)
                     next_done = 0.0
 
-                # (f) Prepare for next iteration
                 obs = next_obs
                 done = next_done
 
                 if progress:
                     progress.update(1)
 
-            # ------------------------------------------
-            # 2) Store final obs/done for bootstrapping
-            # ------------------------------------------
+            # Store final obs/done/mask
             for obs_idx, ob_tensor in enumerate(obs):
                 self.observation[obs_idx][batch_idx, self.memory_length] = ob_tensor
-            self.dones[batch_idx, self.memory_length] = done
 
-            # (g) Get value for the final state
+            self.dones[batch_idx, self.memory_length] = done
+            self.masks[batch_idx, self.memory_length] = action_mask if action_mask is not None else self.ones_mask
+
+            # Get the value of the final observation
             obs_batched = tuple(o.unsqueeze(0) for o in obs)
             next_value = self.network.get_value(obs_batched).item()
 
         # Return carry-over state: current obs, done, and action_mask
-        state = (obs, done, action_mask)
-        return infos, next_value, state
+        return infos, next_value
 
     def _batch_update(self, infos):
         # pylint: disable=too-many-branches, too-many-locals
@@ -491,7 +468,7 @@ class PPO:
                 nn.utils.clip_grad_norm_(network.parameters(), self._max_grad_norm)
                 optimizer.step()
 
-        self.network = network
+        self.network = network.to("cpu")
         self.optimizer_state = optimizer.state_dict()
 
         # After training, compute stats like explained variance
@@ -501,7 +478,7 @@ class PPO:
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         if self.tensorboard:
-            self.tensorboard.add_scalar("charts/learning_rate", self.optimizer.param_groups[0]["lr"], iterations)
+            self.tensorboard.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], iterations)
             self.tensorboard.add_scalar("losses/value_loss", v_loss.item(), iterations)
             self.tensorboard.add_scalar("losses/policy_loss", pg_loss.item(), iterations)
             self.tensorboard.add_scalar("losses/entropy", entropy_loss.item(), iterations)
