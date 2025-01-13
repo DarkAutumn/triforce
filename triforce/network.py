@@ -88,6 +88,7 @@ class ZeldaNeuralNetwork(nn.Module):
         self.vectors_size = vectors_size
         self.info_size = info_size
         self.action_size = action_size
+        self.observation_shape = ((image_channels, viewport_size, viewport_size), vectors_size, (info_size,))
 
         combined_input_size = (
             self.image_linear_size +
