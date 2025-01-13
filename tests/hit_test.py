@@ -3,6 +3,8 @@
 import os
 import sys
 
+import pytest
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from triforce.action_space import ActionKind
@@ -86,11 +88,12 @@ def test_sword_injury():
 
     assert_no_hit(replay, 'u')
 
-def test_boomerang_bat_kill():
+@pytest.mark.parametrize("boomerang", [BoomerangKind.WOOD, BoomerangKind.MAGIC])
+def test_boomerang_bat_kill(boomerang):
     replay = ZeldaActionReplay("1_72e.state")
     state_change = assert_no_hit(replay, 'llllllllll')
 
-    _select_boomerang(state_change.state, False)
+    _select_boomerang(state_change.state, boomerang)
 
     _, _, terminated, truncated, state_change = replay.act(ActionKind.BOOMERANG, Direction.W)
     assert not terminated
@@ -121,16 +124,11 @@ def test_beam_injury():
 
 # Arrow Tests
 
-def test_arrow_pickup():
-    _test_arrow_item_pickup(False)
-
-def test_silver_arrow_pickup():
-    _test_arrow_item_pickup(True)
-
-def _test_arrow_item_pickup(silver):
+@pytest.mark.parametrize("arrows", [ArrowKind.WOOD, ArrowKind.SILVER])
+def test_arrow_item_pickup(arrows):
     replay, state_change = _line_up_item()
 
-    _select_arrows(state_change.state, silver)
+    _select_arrows(state_change.state, arrows)
 
     _, _, terminated, truncated, state_change = replay.act(ActionKind.ARROW, Direction.W)
     assert not terminated
@@ -138,40 +136,30 @@ def _test_arrow_item_pickup(silver):
 
     assert state_change.items_gained == [ZeldaItemKind.BlueRupee]
 
-def test_arrow_injury():
-    _test_arrow(False)
-
-def test_silver_arrow_injury():
-    _test_arrow(True)
-
-def _test_arrow(silver):
+@pytest.mark.parametrize("arrows", [ArrowKind.WOOD, ArrowKind.SILVER])
+def _test_arrow(arrows):
     replay = ZeldaActionReplay("1_44e.state")
 
     state_change = assert_no_hit(replay, 'll')
-    _select_arrows(state_change.state, silver)
+    _select_arrows(state_change.state, arrows)
 
     _, _, terminated, truncated, state_change = replay.act(ActionKind.ARROW, Direction.W)
     assert not terminated
     assert not truncated
 
     assert state_change.hits == 1
-    assert state_change.damage_dealt == 3 if silver else 2
+    assert state_change.damage_dealt == 3 if arrows == ArrowKind.SILVER else 2
     assert state_change.action.kind == ActionKind.ARROW
 
     assert_no_hit(replay, "lllllll")
 
 # Boomerang Tests
 
-def test_boomerang_item_pickup():
-    _test_boomerang(False)
-
-def test_magic_boomerang_item_pickup():
-    _test_boomerang(True)
-
-def _test_boomerang(magic):
+@pytest.mark.parametrize("boomerang", [BoomerangKind.WOOD, BoomerangKind.MAGIC])
+def test_boomerang(boomerang):
     replay, state_change = _line_up_item()
 
-    _select_boomerang(state_change.state, magic)
+    _select_boomerang(state_change.state, boomerang)
 
     _, _, terminated, truncated, state_change = replay.act(ActionKind.BOOMERANG, Direction.W)
     assert not terminated
@@ -185,7 +173,7 @@ def test_boomerang_stun():
     replay = ZeldaActionReplay("1_44e.state",)
 
     state_change = assert_no_hit(replay, 'll')
-    _select_boomerang(state_change.state, True)
+    _select_boomerang(state_change.state, BoomerangKind.MAGIC)
 
     _, _, terminated, truncated, state_change = replay.act(ActionKind.BOOMERANG, Direction.W)
     assert not terminated
@@ -248,9 +236,9 @@ def _select_sword(gamestate : ZeldaGame, beams=False):
         link.health = link.max_health - 0.5
         assert not link.has_beams
 
-def _select_boomerang(gamestate : ZeldaGame, magic):
+def _select_boomerang(gamestate : ZeldaGame, boomerang : BoomerangKind):
     link = gamestate.link
-    link.boomerang = BoomerangKind.MAGIC if magic else BoomerangKind.WOOD
+    link.boomerang = boomerang
     link.selected_equipment = SelectedEquipmentKind.BOOMERANG
 
 def _select_bombs(gamestate : ZeldaGame):
@@ -258,9 +246,9 @@ def _select_bombs(gamestate : ZeldaGame):
     link.bombs = 8
     link.selected_equipment = SelectedEquipmentKind.BOMBS
 
-def _select_arrows(gamestate : ZeldaGame, silver):
+def _select_arrows(gamestate : ZeldaGame, arrows):
     link = gamestate.link
-    link.arrows = ArrowKind.SILVER if silver else ArrowKind.WOOD
+    link.arrows = arrows
     link.bow = 1
     link.rupees = 100
     link.selected_equipment = SelectedEquipmentKind.ARROWS
