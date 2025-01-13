@@ -9,17 +9,6 @@ from torch.utils.tensorboard import SummaryWriter
 from .ppo_subprocess import PPOSubprocess
 from .rewards import StepRewards
 
-NORM_ADVANTAGES = True
-CLIP_VAL_LOSS = True
-LEARNING_RATE = 0.00025
-GAMMA = 0.99
-LAMBDA = 0.95
-CLIP_COEFF = 0.2
-ENT_COEFF = 0.001 # lowered, original = 0.01
-VF_COEFF = 0.5
-MAX_GRAD_NORM = 0.5
-EPSILON = 1e-5
-
 class Network(nn.Module):
     """The base class of neural networks used for PPO training."""
     base : nn.Module
@@ -53,7 +42,7 @@ class Network(nn.Module):
             invalid_mask = ~mask
             logits[invalid_mask] = -1e9
 
-        # distribution for entropy calculation
+            # distribution for entropy calculation
         distribution = dist.Categorical(logits=logits)
         entropy = distribution.entropy()
 
@@ -80,22 +69,45 @@ class Network(nn.Module):
         torch.nn.init.constant_(layer.bias, bias_const)
         return layer
 
+NORM_ADVANTAGES = True
+CLIP_VAL_LOSS = True
+LEARNING_RATE = 0.00025
+GAMMA = 0.99
+LAMBDA = 0.95
+CLIP_COEFF = 0.2
+ENT_COEFF = 0.001 # lowered, original = 0.01
+VS_COEFF = 0.5
+MAX_GRAD_NORM = 0.5
+EPSILON = 1e-5
+
 class PPO:
     """PPO Implementation.  Cribbed from https://www.youtube.com/watch?v=MEt6rrxH8W4."""
-    def __init__(self, network : Network, device, log_dir):
+    def __init__(self, network : Network, device, log_dir, **kwargs):
+        self._norm_advantages = kwargs.get('norm_advantages', NORM_ADVANTAGES)
+        self._clip_val_loss = kwargs.get('clip_val_loss', CLIP_VAL_LOSS)
+        self._learning_rate = kwargs.get('learning_rate', LEARNING_RATE)
+        self._gamma = kwargs.get('gamma', GAMMA)
+        self._lambda = kwargs.get('lambda', LAMBDA)
+        self._clip_coeff = kwargs.get('clip_coeff', CLIP_COEFF)
+        self._ent_coeff = kwargs.get('ent_coeff', ENT_COEFF)
+        self._vf_coeff = kwargs.get('vf_coeff', VS_COEFF)
+        self._max_grad_norm = kwargs.get('max_grad_norm', MAX_GRAD_NORM)
+        self._epsilon = kwargs.get('epsilon', EPSILON)
+
+        if kwargs:
+            raise ValueError(f"Unknown arguments: {kwargs}")
+
         self.network = network
         self.log_dir = log_dir
         self.device = device
         self.tensorboard = SummaryWriter(log_dir) if log_dir else None
 
-        self.memory_length = 4096
-        self.batch_size = 128
+        self.memory_length = 128
         self.minibatches = 4
-        self.minibatch_size = self.batch_size // self.minibatches
         self.num_epochs = 4
         self.total_steps = 0
         self.n_envs = 1
-        self.optimizer = torch.optim.Adam(self.network.parameters(), lr=LEARNING_RATE, eps=EPSILON)
+        self.optimizer = torch.optim.Adam(self.network.parameters(), lr=self._learning_rate, eps=self._epsilon)
 
         self.reward_values = {}
         self.endings = {}
@@ -124,55 +136,13 @@ class PPO:
 
         self.non_mask = torch.ones(self.network.action_size, dtype=torch.bool, device=device)
 
+    def _get_and_remove(self, dictionary, key, default):
+        if key in dictionary:
+            value = dictionary[key]
+            del dictionary[key]
+            return value
 
-    def get_batch(self, batch_index):
-        returns, advantages = self._compute_returns(batch_index, self.act_logp_ent_val[batch_index, -1, 3])
-        batch = []
-        for i in range(self.memory_length - 1):
-            obs = []
-            for obs_part in self.observation:
-                obs.append(obs_part[batch_index, i])
-
-            obs = tuple(obs)
-            action = self.act_logp_ent_val[batch_index, i, 0]
-            #logp = self.act_logp_ent_val[batch_index, i, 1]
-            #ent = self.act_logp_ent_val[batch_index, i, 2]
-            value = self.act_logp_ent_val[batch_index, i, 3]
-            mask = self.masks[batch_index, i]
-            reward = self.rewards[batch_index, i]
-            done = self.dones[batch_index, i]
-
-            batch.append([i, obs, action, mask, reward, done, value, returns[i], advantages[i]])
-
-        headers = ("Step", "Observation", "Action", "Mask", "Reward", "Done", "Value", "Return",
-                   "Advantage")
-        return headers, batch
-
-    def print_batch(self, headers, data):
-        # Determine column widths
-        col_widths = [
-            max(len(str(item)) for item in col) if col else 0
-            for col in data
-        ]
-
-        # Adjust widths to accommodate headers
-        if headers:
-            col_widths = [
-                max(len(header), width)
-                for header, width in zip(headers, col_widths)
-            ]
-
-        # Create format string for each row
-        row_format = " | ".join(f"{{:<{width}}}" for width in col_widths)
-
-        # Print headers (if provided)
-        if headers:
-            print(row_format.format(*headers))
-            print("-" * (sum(col_widths) + 3 * (len(col_widths) - 1)))
-
-        # Print rows
-        for row in data:
-            print(row_format.format(*row))
+        return default
 
     def train(self, create_env, iterations, progress=None):
         """
@@ -413,8 +383,8 @@ class PPO:
                 reward = self.rewards[batch_idx, t]
                 current_val = self.act_logp_ent_val[batch_idx, t, 3]
 
-                delta = reward + GAMMA * next_value * mask - current_val
-                advantages[t] = last_gae = delta + GAMMA * LAMBDA * mask * last_gae
+                delta = reward + self._gamma * next_value * mask - current_val
+                advantages[t] = last_gae = delta + self._gamma * self._lambda * mask * last_gae
 
             returns = advantages + self.act_logp_ent_val[batch_idx, :, 3]
             return returns, advantages
@@ -443,19 +413,22 @@ class PPO:
         b_values   = values.reshape(-1)    # [n_envs*memory_length]
 
         masks     = self.masks
-        b_masks    = masks.reshape(-1)     # [n_envs*memory_length]
+        b_masks    = masks.reshape(-1, masks.shape[-1])     # [n_envs*memory_length]
 
         # flatten returns, advantages
         b_advantages = advantages.reshape(-1)
         b_returns    = returns.reshape(-1)
 
         # standard PPO update
-        b_inds = np.arange(self.batch_size)
+        batch_size = self.memory_length * self.n_envs
+        minibatch_size = batch_size // self.minibatches
+
+        b_inds = np.arange(batch_size)
         clipfracs = []
         for _ in range(self.num_epochs):
             np.random.shuffle(b_inds)
-            for start in range(0, self.batch_size, self.minibatch_size):
-                end = start + self.minibatch_size
+            for start in range(0, batch_size, minibatch_size):
+                end = start + minibatch_size
                 mb_inds = b_inds[start:end]
 
                 # Slice each item for this mini-batch
@@ -467,12 +440,13 @@ class PPO:
 
                 mb_actions   = b_actions[mb_inds].long()
                 mb_logprobs  = b_logprobs[mb_inds]
-                mb_masks     = b_masks[mb_inds]
                 mb_values    = b_values[mb_inds]
                 mb_returns   = b_returns[mb_inds]
                 mb_adv       = b_advantages[mb_inds]
 
-                _, newlogprob, entropy, newvalue = self.network.get_action_and_value(mb_obs, mb_actions, mb_masks)
+                mb_masks = b_masks[mb_inds, :]
+
+                _, newlogprob, entropy, newvalue = self.network.get_action_and_value(mb_obs, mb_masks, mb_actions)
 
                 logratio = newlogprob - mb_logprobs
                 ratio = logratio.exp()
@@ -480,23 +454,23 @@ class PPO:
                 with torch.no_grad():
                     old_approx_kl = (-logratio).mean()
                     approx_kl = ((ratio - 1) - logratio).mean()
-                    clipfracs.append(((ratio - 1.0).abs() > CLIP_COEFF).float().mean().item())
+                    clipfracs.append(((ratio - 1.0).abs() > self._clip_coeff).float().mean().item())
 
                 # Normalize advantages
-                if NORM_ADVANTAGES:
+                if self._norm_advantages:
                     mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
                 # Policy loss
                 pg_loss1 = -mb_adv * ratio
-                pg_loss2 = -mb_adv * torch.clamp(ratio, 1 - CLIP_COEFF, 1 + CLIP_COEFF)
+                pg_loss2 = -mb_adv * torch.clamp(ratio, 1 - self._clip_coeff, 1 + self._clip_coeff)
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
                 # Value loss
                 newvalue = newvalue.view(-1)  # shape [minibatch_size]
-                if CLIP_VAL_LOSS:
+                if self._clip_val_loss:
                     v_loss_unclipped = (newvalue - mb_returns) ** 2
                     v_clipped = mb_values + torch.clamp(newvalue - mb_values,
-                                                        -CLIP_COEFF, CLIP_COEFF)
+                                                        -self._clip_coeff, self._clip_coeff)
                     v_loss_clipped = (v_clipped - mb_returns) ** 2
                     v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
                     v_loss = 0.5 * v_loss_max.mean()
@@ -504,11 +478,11 @@ class PPO:
                     v_loss = 0.5 * (newvalue - mb_returns).pow(2).mean()
 
                 entropy_loss = entropy.mean()
-                loss = pg_loss - ENT_COEFF * entropy_loss + VF_COEFF * v_loss
+                loss = pg_loss - self._ent_coeff * entropy_loss + self._vf_coeff * v_loss
 
                 self.optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(self.network.parameters(), MAX_GRAD_NORM)
+                nn.utils.clip_grad_norm_(self.network.parameters(), self._max_grad_norm)
                 self.optimizer.step()
 
         # After training, compute stats like explained variance
