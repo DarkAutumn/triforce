@@ -114,7 +114,7 @@ class PPO:
 
             iteration += self.n_envs * self.memory_length
             self._batch_update(infos)
-            self.optimize(batch_returns, batch_advantages, iteration)
+            self._optimize(batch_returns, batch_advantages, iteration)
 
         env.close()
 
@@ -175,7 +175,7 @@ class PPO:
             self._batch_update(infos)
 
             # 5) do the global optimize
-            self.optimize(batch_returns, batch_advantages, iteration)
+            self._optimize(batch_returns, batch_advantages, iteration)
 
             # 6) Optionally push the updated weights to each worker if you want new policy rollout
             # for w in workers:
@@ -325,15 +325,7 @@ class PPO:
             returns = advantages + self.act_logp_ent_val[batch_idx, :, 3]
             return returns, advantages
 
-    def optimize(self, returns, advantages, iterations):
-        """
-        returns, advantages: shape [n_envs, memory_length]
-        self.obs: a tuple of 3 tensors, each shape [n_envs, memory_length+1, ...],
-                but we only want the first memory_length steps for each rollout.
-        self.act_logp_ent_val_mask: shape [n_envs, memory_length, 5]
-            typically index 0=action, 1=logprob, 2=entropy, 3=value, 4=any other mask
-        """
-
+    def _optimize(self, returns, advantages, iterations):
         # pylint: disable=too-many-locals, too-many-statements
 
         # -----------------------------
