@@ -41,13 +41,13 @@ class TestEnvironment:
 
     def reset(self):
         self.step_count = 0
-        return self._generate_observation(self.step_count), {}, None
+        return self._generate_observation(self.step_count), {}
 
     def step(self, action):
         reward = self._calculate_reward(action)
         self.step_count = (self.step_count + 1) % len(self.observation_ranges)
         obs = self._generate_observation(self.step_count)
-        return obs, reward, True, False, {}, None
+        return obs, reward, self.step_count == 0, False, {}
 
     def close(self):
         pass
@@ -82,7 +82,7 @@ def get_actions_taken(network, device):
     # Now test the trained model
     # Reset the environment and initialize observations
     env = TestEnvironment(network)
-    obs, _, _ = env.reset()
+    obs, _ = env.reset()
     obs = to_device(obs, device)
     actions_taken = []
 
@@ -95,7 +95,7 @@ def get_actions_taken(network, device):
         actions_taken.append(action)
 
         # Step the environment
-        obs, _, _, _, _, _ = env.step(action)
+        obs, _, _, _, _ = env.step(action)
         obs = to_device(obs, device)
 
     return actions_taken
@@ -124,7 +124,7 @@ def test_ppo_training(device):
     # Now test the trained model
     # Reset the environment and initialize observations
     env = TestEnvironment(network)
-    obs, _, _ = env.reset()
+    obs, _ = env.reset()
     obs = to_device(obs, device)
     actions_taken = []
 
@@ -137,7 +137,7 @@ def test_ppo_training(device):
         actions_taken.append(action)
 
         # Step the environment
-        obs, _, _, _, _, _ = env.step(action)
+        obs, _, _, _, _ = env.step(action)
         obs = to_device(obs, device)
 
     # Assertions to validate PPO's learned behavior
@@ -182,5 +182,3 @@ if __name__ == "__main__":
 
     actions_taken = get_actions_taken(network, args.device)
     print(actions_taken)
-
-

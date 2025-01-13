@@ -283,7 +283,8 @@ class PPO:
         # pylint: disable=too-many-locals
         if state is None or state[1] == 1.0:
             # If we have no state or the previous state was done
-            obs, _, action_mask = env.reset()
+            obs, info = env.reset()
+            action_mask = info.get('action_mask', None)
             done = 0.0
         else:
             # Otherwise, we continue from the previous environment state
@@ -312,14 +313,16 @@ class PPO:
                 action = act_logp_ent_val[0].item()
 
                 # (d) Step environment
-                next_obs, reward, terminated, truncated, info, action_mask = env.step(action)
+                next_obs, reward, terminated, truncated, info = env.step(action)
+                action_mask = info.get('action_mask', None)
                 infos.append(info)
                 self.rewards[batch_idx, t] = reward
 
                 # (e) Check if environment finished
                 next_done = 1.0 if (terminated or truncated) else 0.0
                 if terminated or truncated:
-                    next_obs, _, action_mask = env.reset()
+                    next_obs, info = env.reset()
+                    action_mask = info.get('action_mask', None)
                     next_done = 0.0
 
                 # (f) Prepare for next iteration
