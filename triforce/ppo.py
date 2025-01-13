@@ -3,6 +3,7 @@ import time
 import numpy as np
 import torch
 from torch import nn
+import torch.distributions as dist
 from torch.utils.tensorboard import SummaryWriter
 
 from .ppo_subprocess import PPOSubprocess
@@ -20,23 +21,64 @@ MAX_GRAD_NORM = 0.5
 EPSILON = 1e-5
 
 class Network(nn.Module):
-    """The shape of a network used for training."""
-    def __init__(self, obs_shape, action_size):
+    """The base class of neural networks used for PPO training."""
+    base : nn.Module
+    action_net : nn.Module
+    value_net : nn.Module
+
+    def __init__(self, base_network : nn.Module, obs_shape, action_size):
         super().__init__()
         self.observation_shape = obs_shape
         self.action_size = action_size
+        self.tuple_obs = isinstance(obs_shape[0], tuple)
+
+        self.base = base_network
+        self.action_net = self._layer_init(nn.Linear(64, action_size), std=0.01)
+        self.value_net = self._layer_init(nn.Linear(64, 1), std=1.0)
 
     def forward(self, *inputs):
         """Forward pass."""
-        raise NotImplementedError
+        x = self.base(*inputs)
+        action = self.action_net(x)
+        value = self.value_net(x)
+        return action, value
 
-    def get_action_and_value(self, obs_tuple, mask, actions=None, deterministic=False):
+    def get_action_and_value(self, obs, mask, actions=None, deterministic=False):
         """Gets the action, logprob, entropy, and value."""
-        raise NotImplementedError
+        logits, value = self.forward(*obs if self.tuple_obs else obs)
 
-    def get_value(self, obs_tuple):
+        # mask out invalid actions
+        if mask is not None:
+            logits = logits.clone()
+            invalid_mask = ~mask
+            logits[invalid_mask] = -1e9
+
+        # distribution for entropy calculation
+        distribution = dist.Categorical(logits=logits)
+        entropy = distribution.entropy()
+
+        # sample an action if not provided
+        if actions is None:
+            if deterministic:
+                actions = logits.argmax(dim=-1)
+            else:
+                actions = distribution.sample()
+
+        log_prob = distribution.log_prob(actions)
+
+        # value has shape [batch_size, 1], flatten if needed
+        return actions, log_prob, entropy, value.view(-1)
+
+    def get_value(self, obs):
         """Get value estimate."""
-        raise NotImplementedError
+        _, value = self.forward(*obs if self.tuple_obs else obs)
+        return value.view(-1)
+
+    @staticmethod
+    def _layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+        torch.nn.init.orthogonal_(layer.weight, std)
+        torch.nn.init.constant_(layer.bias, bias_const)
+        return layer
 
 class PPO:
     """PPO Implementation.  Cribbed from https://www.youtube.com/watch?v=MEt6rrxH8W4."""
@@ -328,13 +370,7 @@ class PPO:
     def _optimize(self, returns, advantages, iterations):
         # pylint: disable=too-many-locals, too-many-statements
 
-        # -----------------------------
-        # 1) Flatten Observations
-        # -----------------------------
-        # Each obs component: shape [n_envs, memory_length, ...].
-        # We'll flatten along (n_envs * memory_length).
-
-        # obs_image: [n_envs, memory_length, 1, viewport_size, viewport_size]
+        # flatten observations
         b_obs = []
         for obs_part in self.observation:
             b_obs.append(obs_part[:, :self.memory_length])
@@ -345,41 +381,24 @@ class PPO:
 
         b_obs = tuple(b_obs)
 
-        # -----------------------------
-        # 2) Flatten Actions, Logprobs, Values
-        # -----------------------------
-        # self.act_logp_ent_val_mask has shape [n_envs, memory_length, 4].
-        # Let’s define each index carefully:
-        #   0 -> action
-        #   1 -> logp
-        #   2 -> entropy
-        #   3 -> value
+        # flatten actions, logprobs, values, masks
         actions   = self.act_logp_ent_val[:, :, 0]
         logprobs  = self.act_logp_ent_val[:, :, 1]
         values    = self.act_logp_ent_val[:, :, 3]
 
-        masks     = self.masks
-
         b_actions  = actions.reshape(-1)   # [n_envs*memory_length]
         b_logprobs = logprobs.reshape(-1)  # [n_envs*memory_length]
         b_values   = values.reshape(-1)    # [n_envs*memory_length]
+
+        masks     = self.masks
         b_masks    = masks.reshape(-1)     # [n_envs*memory_length]
 
-        # -----------------------------
-        # 3) Flatten advantages, returns
-        # -----------------------------
-        # returns, advantages: shape [n_envs, memory_length]
+        # flatten returns, advantages
         b_advantages = advantages.reshape(-1)
         b_returns    = returns.reshape(-1)
 
-        # (At this point, b_obs_xxx have shape [n_envs*memory_length, ...],
-        #  while b_actions, b_logprobs, b_values, b_returns, b_advantages
-        #  each have shape [n_envs*memory_length].)
-
-        # -----------------------------
-        # 4) Standard PPO update loop
-        # -----------------------------
-        b_inds = np.arange(self.batch_size)  # Typically batch_size = n_envs*memory_length
+        # standard PPO update
+        b_inds = np.arange(self.batch_size)
         clipfracs = []
         for _ in range(self.num_epochs):
             np.random.shuffle(b_inds)
@@ -388,14 +407,11 @@ class PPO:
                 mb_inds = b_inds[start:end]
 
                 # Slice each item for this mini-batch
-                if isinstance(self.network.observation_shape[0], tuple):
-                    mb_obs = []
-                    for obs_part in b_obs:
-                        mb_obs.append(obs_part[mb_inds])
+                mb_obs = []
+                for obs_part in b_obs:
+                    mb_obs.append(obs_part[mb_inds])
 
-                    mb_obs = tuple(mb_obs)
-                else:
-                    mb_obs = b_obs[mb_inds]
+                mb_obs = tuple(mb_obs)
 
                 mb_actions   = b_actions[mb_inds].long()
                 mb_logprobs  = b_logprobs[mb_inds]
@@ -406,7 +422,6 @@ class PPO:
 
                 _, newlogprob, entropy, newvalue = self.network.get_action_and_value(mb_obs, mb_actions, mb_masks)
 
-                # ratio etc.
                 logratio = newlogprob - mb_logprobs
                 ratio = logratio.exp()
 
@@ -415,7 +430,7 @@ class PPO:
                     approx_kl = ((ratio - 1) - logratio).mean()
                     clipfracs.append(((ratio - 1.0).abs() > CLIP_COEFF).float().mean().item())
 
-                # Normalize advantages if desired
+                # Normalize advantages
                 if NORM_ADVANTAGES:
                     mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
