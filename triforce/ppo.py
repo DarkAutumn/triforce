@@ -124,6 +124,56 @@ class PPO:
 
         self.non_mask = torch.ones(self.network.action_size, dtype=torch.bool, device=device)
 
+
+    def get_batch(self, batch_index):
+        returns, advantages = self._compute_returns(batch_index, self.act_logp_ent_val[batch_index, -1, 3])
+        batch = []
+        for i in range(self.memory_length - 1):
+            obs = []
+            for obs_part in self.observation:
+                obs.append(obs_part[batch_index, i])
+
+            obs = tuple(obs)
+            action = self.act_logp_ent_val[batch_index, i, 0]
+            #logp = self.act_logp_ent_val[batch_index, i, 1]
+            #ent = self.act_logp_ent_val[batch_index, i, 2]
+            value = self.act_logp_ent_val[batch_index, i, 3]
+            mask = self.masks[batch_index, i]
+            reward = self.rewards[batch_index, i]
+            done = self.dones[batch_index, i]
+
+            batch.append([i, obs, action, mask, reward, done, value, returns[i], advantages[i]])
+
+        headers = ("Step", "Observation", "Action", "Mask", "Reward", "Done", "Value", "Return",
+                   "Advantage")
+        return headers, batch
+
+    def print_batch(self, headers, data):
+        # Determine column widths
+        col_widths = [
+            max(len(str(item)) for item in col) if col else 0
+            for col in data
+        ]
+
+        # Adjust widths to accommodate headers
+        if headers:
+            col_widths = [
+                max(len(header), width)
+                for header, width in zip(headers, col_widths)
+            ]
+
+        # Create format string for each row
+        row_format = " | ".join(f"{{:<{width}}}" for width in col_widths)
+
+        # Print headers (if provided)
+        if headers:
+            print(row_format.format(*headers))
+            print("-" * (sum(col_widths) + 3 * (len(col_widths) - 1)))
+
+        # Print rows
+        for row in data:
+            print(row_format.format(*row))
+
     def train(self, create_env, iterations, progress=None):
         """
         create_env: a callable that returns a fresh environment
@@ -269,9 +319,8 @@ class PPO:
                 # (e) Check if environment finished
                 next_done = 1.0 if (terminated or truncated) else 0.0
                 if terminated or truncated:
-                    next_obs, _ = env.reset()
+                    next_obs, _, action_mask = env.reset()
                     next_done = 0.0
-                    action_mask = None
 
                 # (f) Prepare for next iteration
                 obs = next_obs
