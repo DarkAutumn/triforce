@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "PPO Test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "ppo_test.py",
+            "args": [],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Run - Full Game",
             "type": "debugpy",
             "request": "launch",

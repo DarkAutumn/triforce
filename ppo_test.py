@@ -5,6 +5,7 @@ from torch import nn, tensor
 import tqdm
 from triforce.ppo import PPO, Network
 import argparse
+import gymnasium as gym
 
 class TestNetwork(Network):
     def __init__(self):
@@ -20,7 +21,7 @@ class TestNetwork(Network):
 
         super().__init__(network, observation_shape, action_space)
 
-class TestEnvironment:
+class TestEnvironment(gym.Env):
     """
     A deterministic environment for testing PPO. Observations and rewards are based on fixed logic:
     - Observations in [0, 0.25]: Reward 1.0 for action 0.
@@ -29,6 +30,7 @@ class TestEnvironment:
     - -1 reward for any other action.
     """
     def __init__(self, network):
+        super().__init__()
         self.step_count = 0
         self.network = network
 
@@ -145,40 +147,53 @@ def test_ppo_training(device):
     expected_actions = [0, 1, 2]  # Optimal actions for each observation range
     assert actions_taken == expected_actions, f"Expected actions {expected_actions}, but got {actions_taken}"
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--device", default="cpu")
-    parser.add_argument("--iterations", default=100_000, type=int)
-    parser.add_argument("--dump", default=False, action="store_true")
-    args = parser.parse_args()
+def dump_last(ppo):
+    headers, data = ppo.get_batch(0)
+    obs_col = headers.index("Observation")
 
+    headers = list(headers)
+    headers[obs_col] = "Expected"
+    for row in data:
+        for i, col in enumerate(row):
+            if i == obs_col:
+                col = col[0]
+
+            if isinstance(col, torch.Tensor):
+                col = col.reshape(-1)[0].item()
+
+            if i == obs_col:
+                if col < 0.3:
+                    col = 0
+                elif col < 0.6:
+                    col = 1
+                else:
+                    col = 2
+
+            row[i] = col
+
+    ppo.print_batch(headers, data)
+
+def test_impl(get_actions_taken, train_network, dump_last, args):
     ppo, network = train_network(args.device, args.iterations)
 
     if args.dump:
-        headers, data = ppo.get_batch(0)
-        obs_col = headers.index("Observation")
-
-        headers = list(headers)
-        headers[obs_col] = "Expected"
-        for row in data:
-            for i, col in enumerate(row):
-                if i == obs_col:
-                    col = col[0]
-
-                if isinstance(col, torch.Tensor):
-                    col = col.reshape(-1)[0].item()
-
-                if i == obs_col:
-                    if col < 0.3:
-                        col = 0
-                    elif col < 0.6:
-                        col = 1
-                    else:
-                        col = 2
-
-                row[i] = col
-
-        ppo.print_batch(headers, data)
+        dump_last(ppo)
 
     actions_taken = get_actions_taken(network, args.device)
     print(actions_taken)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--iterations", default=10_000, type=int)
+    parser.add_argument("--dump", default=False, action="store_true")
+    args = parser.parse_args()
+
+    test_impl(get_actions_taken, train_network, dump_last, args)
+
+
+    #from ppo_baseline import go
+    #agent = TestNetwork().to(args.device)
+    #go(lambda a, b, c, d, e: TestEnvironment(agent), agent)
+    #actions_taken = get_actions_taken(agent, args.device)
+    #print(actions_taken)
