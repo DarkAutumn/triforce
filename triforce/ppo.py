@@ -100,6 +100,8 @@ class PPO:
         if kwargs:
             raise ValueError(f"Unknown arguments: {kwargs}")
 
+        self.optimizer_state = None
+
         self.network = network
         self.log_dir = log_dir
         self.device = device
@@ -424,6 +426,8 @@ class PPO:
 
         network = self.network.to(self.device)
         optimizer = torch.optim.Adam(network.parameters(), lr=self._learning_rate, eps=self._epsilon)
+        if self.optimizer_state is not None:
+            optimizer.load_state_dict(self.optimizer_state)
 
         b_inds = np.arange(batch_size)
         clipfracs = []
@@ -488,6 +492,7 @@ class PPO:
                 optimizer.step()
 
         self.network = network
+        self.optimizer_state = optimizer.state_dict()
 
         # After training, compute stats like explained variance
         y_pred = b_values.cpu().numpy()
