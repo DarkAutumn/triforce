@@ -93,6 +93,9 @@ class PPO:
         self._vf_coeff = kwargs.get('vf_coeff', VS_COEFF)
         self._max_grad_norm = kwargs.get('max_grad_norm', MAX_GRAD_NORM)
         self._epsilon = kwargs.get('epsilon', EPSILON)
+        self.memory_length = kwargs.get('memory_length', 128)
+        self.minibatches = kwargs.get('minibatches', 4)
+        self.num_epochs = kwargs.get('num_epochs', 4)
 
         if kwargs:
             raise ValueError(f"Unknown arguments: {kwargs}")
@@ -102,9 +105,6 @@ class PPO:
         self.device = device
         self.tensorboard = SummaryWriter(log_dir) if log_dir else None
 
-        self.memory_length = 128
-        self.minibatches = 4
-        self.num_epochs = 4
         self.total_steps = 0
         self.n_envs = 1
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=self._learning_rate, eps=self._epsilon)
