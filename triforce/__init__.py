@@ -7,7 +7,7 @@ import retro
 
 from .zelda_env import make_zelda_env
 from .models_and_scenarios import ZeldaModelDefinition, ZeldaScenario, ZELDA_MODELS, TRAINING_SCENARIOS
-from .machine_learning import ZeldaAI
+from .ml_stable_baselines import ZeldaAI
 from .simulate_critic import simulate_critique
 
 # add custom integrations to retro

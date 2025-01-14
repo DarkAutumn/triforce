@@ -60,38 +60,42 @@ class ZeldaGameWrapper(gym.Wrapper):
                 self.unwrapped.data.set_value(f'rng_{i}', randint(1, 255))
 
         # Move forward to the first frame where the agent can control Link
-        _, _, _, info = self.cooldown_handler.skip(1)
-        obs, info, frames_skipped = self.cooldown_handler.skip_uncontrollable_states(None, info)
-        self._total_frames = frames_skipped + 1
+        frames, terminated, truncated, info = self.cooldown_handler.gain_control_of_link()
+        assert not terminated and not truncated
+
+        # don't count these frames as part of the total since we weren't in control of Link
+        self._total_frames = 0
         self._steps = -1
 
-        state = self._update_state(None, info)
-        return obs, state
+        state = self._update_state(None, None, info)
+        return frames[-1] if frames else obs, state
 
     def step(self, action) -> Tuple[gym.spaces.Box, float, bool, bool, ZeldaStateChange]:
         # get link position for movement actions
         link_position = self._prev_state.link.position
 
         # Take action
-        obs, terminated, truncated, info, frames = self.cooldown_handler.act_and_wait(action, link_position)
-        self._total_frames += frames
+        frames, terminated, truncated, info = self.cooldown_handler.act_and_wait(action, link_position)
+        change = self._update_state(action, frames, info)
+        return frames[-1], StepRewards(), terminated, truncated, change
 
-        change = self._update_state(action, info)
-        return obs, StepRewards(), terminated, truncated, change
-
-    def _update_state(self, action, info):
+    def _update_state(self, action, frames, info):
         prev, state = self._create_and_set_state(info)
         health_changed = self._apply_modifications(prev, state)
 
         objectives = self._objectives.get_current_objectives(prev, state)
         state.objectives = objectives
         state.wavefront = state.room.calculate_wavefront_for_link(objectives.targets)
+
+        if frames:
+            self._total_frames += len(frames)
+
         state.total_frames = self._total_frames
         info['total_frames'] = self._total_frames
         info['steps'] = self._steps = self._steps + 1
 
         if prev:
-            return ZeldaStateChange(self, prev, state, action, self._discounts, health_changed)
+            return ZeldaStateChange(self, prev, state, action, frames, self._discounts, health_changed)
 
         return state
 

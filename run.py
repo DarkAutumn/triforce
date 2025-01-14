@@ -22,7 +22,6 @@ from triforce.models_and_scenarios import ZELDA_MODELS, ZeldaModelDefinition
 from triforce.rewards import StepRewards
 from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
-from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
 class Recording:
     """Used to track and save a recording of the game."""
@@ -143,7 +142,6 @@ class DisplayWindow:
         """Shows the game and the AI model."""
         env = make_zelda_env(self.scenario, self.model_definition.action_space, render_mode='rgb_array',
                              translation=False)
-        rgb_deque = self._get_rgb_deque(env)
 
         clock = pygame.time.Clock()
 
@@ -174,6 +172,8 @@ class DisplayWindow:
 
         state_change : ZeldaStateChange = None
         model_name = None
+
+        rgb_deque = deque()
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
         mode = 'c'
@@ -211,6 +211,8 @@ class DisplayWindow:
                     model_name = f"{self.model_definition.name} ({model_name}) {model.num_timesteps:,} timesteps"
 
                 obs, _, terminated, truncated, state_change = env.step(action)
+                for frame in state_change.frames:
+                    rgb_deque.append(frame)
 
                 if mode == 'n':
                     mode = 'p'
@@ -392,15 +394,6 @@ class DisplayWindow:
 
         return result, name
 
-    def _get_rgb_deque(self, env):
-        while env is not None:
-            if isinstance(env, FrameCaptureWrapper):
-                return env.rgb_deque
-
-            env = env.env
-
-        return None
-
     def _print_location_info(self, state):
         if self._last_location is not None:
             last_level, last_location = self._last_location
@@ -515,8 +508,10 @@ class DisplayWindow:
         return self._render_one_observation(surface, x, y, img)
 
     def _render_one_observation(self, surface, x, y, img):
-        if img.shape[2] == 1:
-            img = np.repeat(img, 3, axis=2)
+        img = img.squeeze(0).cpu().numpy()
+
+        if img.ndim == 2:
+            img = np.stack([img] * 3, axis=-1)
 
         observation_surface = pygame.surfarray.make_surface(np.swapaxes(img, 0, 1))
         observation_surface = pygame.transform.scale(observation_surface, (img.shape[1], img.shape[0]))
@@ -836,12 +831,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Triforce - An ML agent to play The Legned of Zelda (NES).")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
-    parser.add_argument("--color", action='store_true',
-                        help="Give the model a color version of the game (instead of grayscale).")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
-    parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames the model was trained with.")
     parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
 
     parser.add_argument('scenario', type=str, help='Scenario name')

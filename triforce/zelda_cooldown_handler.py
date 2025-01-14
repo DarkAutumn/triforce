@@ -53,44 +53,70 @@ class ZeldaCooldownHandler:
         """Resets the handler."""
         self.was_link_in_cave = False
 
-    def skip(self, frames):
-        """Skips a number of frames, returning the final state."""
-        return self.act_for(None, frames)
+    def gain_control_of_link(self):
+        """Skips frames until Link is in a state where the agent can control him."""
+        frames = []
+        terminated, truncated, info = self._act_for(None, 1, frames)
+        terminated, truncated, info = self._skip_uncontrollable_states(None, info, frames)
+        return frames, terminated, truncated, info
 
-    def act_for(self, act, frames):
+    def act_and_wait(self, action : ActionTaken, link_position):
+        """Performs the given action, then waits until Link is controllable again."""
+        frames = []
+        if action.kind == ActionKind.MOVE:
+            terminated, truncated, info, loc = self._act_movement(action, link_position, frames)
+        else:
+            terminated, truncated, info, loc = self._act_attack_or_item(action, frames)
+
+        # skip scrolling
+        if not terminated and not truncated:
+            terminated, truncated, info = self._skip_uncontrollable_states(loc, info, frames)
+
+        return frames, terminated, truncated, info
+
+    def _skip(self, frame_count, frame_capture):
+        """Skips a number of frames, returning the final state."""
+        return self._act_for(None, frame_count, frame_capture)
+
+    def _act_for(self, act, frame_count, frame_capture):
         """Skips a number of frames, returning the final state."""
         if act is None:
             act = self.none_action
+
         elif not isinstance(act, ActionTaken):
             raise ValueError(f'Unsupported action type: {type(act)}')
 
-        for _ in range(frames):
-            obs, _, terminated, truncated, info = self.env.step(act)
+        for _ in range(frame_count):
+            terminated, truncated, info = self._step_with_frame_capture(act, frame_capture)
 
-        return obs, terminated, truncated, info
+        return terminated, truncated, info
 
-    def skip_uncontrollable_states(self, start_location, info):
+    def _step_with_frame_capture(self, action : ActionTaken, frame_capture):
+        """Steps once and saves the frame into frames"""
+        obs, _, terminated, truncated, info = self.env.step(action)
+        frame_capture.append(obs)
+        return terminated, truncated, info
+
+    def _skip_uncontrollable_states(self, start_location, info, frame_capture):
         """Skips screen scrolling or other uncontrollable states.  The model should only get to see the game when it is
         in a state where the agent can control Link."""
-        frames_skipped = 0
         in_cave = is_in_cave(info)
         while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']) \
                 or self._is_level_transition(start_location, info) \
                 or (in_cave and not self.was_link_in_cave):
 
             if in_cave and not self.was_link_in_cave:
-                obs, terminated, truncated, info = self.act_for(None, CAVE_COOLDOWN)
-                frames_skipped += CAVE_COOLDOWN
+                terminated, truncated, info = self._act_for(None, CAVE_COOLDOWN, frame_capture)
                 self.was_link_in_cave = True
             else:
-                obs, _, terminated, truncated, info = self.env.step(self.none_action)
-                frames_skipped += 1
+                terminated, truncated, info = self._step_with_frame_capture(self.none_action, frame_capture)
 
             in_cave = is_in_cave(info)
             assert not terminated and not truncated
 
-        obs, _, _, info = self.act_for(None, 1)
-        return obs, info, frames_skipped
+        self.was_link_in_cave = in_cave
+        terminated, truncated, info = self._act_for(None, 1, frame_capture)
+        return terminated, truncated, info
 
     def _is_level_transition(self, loc, info):
         if loc is None:
@@ -101,23 +127,7 @@ class ZeldaCooldownHandler:
             return False
 
         return loc.level != loc2.level and loc.value == loc2.value
-
-    def act_and_wait(self, action : ActionTaken, link_position):
-        """Performs the given action, then waits until Link is controllable again."""
-        if action.kind == ActionKind.MOVE:
-            obs, terminated, truncated, info, total_frames, loc = self._act_movement(action, link_position)
-        else:
-            obs, terminated, truncated, info, total_frames, loc = self._act_attack_or_item(action)
-
-        # skip scrolling
-        obs, info, skipped = self.skip_uncontrollable_states(loc, info)
-        total_frames += skipped
-
-        return obs, terminated, truncated, info, total_frames
-
-
-    def _act_attack_or_item(self, action):
-        total_frames = 0
+    def _act_attack_or_item(self, action, frame_capture):
         if action.direction in (Direction.N, Direction.S, Direction.E, Direction.W):
             self._set_direction(action.direction)
         elif action.direction in (Direction.NW, Direction.NE):
@@ -125,28 +135,16 @@ class ZeldaCooldownHandler:
         elif action.direction in (Direction.SW, Direction.SE):
             self._set_direction(Direction.S)
 
-        cooldown = 0
-        if action.kind in (ActionKind.SWORD, ActionKind.BEAMS):
-            obs, _, terminated, truncated, info = self.env.step(action)
-            cooldown = ATTACK_COOLDOWN
-            loc = self._get_location(info)
+        terminated, truncated, info = self._step_with_frame_capture(action, frame_capture)
+        loc = self._get_location(info)
 
-        else:
-            obs, _, terminated, truncated, info = self.env.step(action)
-            cooldown = ITEM_COOLDOWN
-            loc = self._get_location(info)
+        cooldown = ATTACK_COOLDOWN if action.kind in (ActionKind.SWORD, ActionKind.BEAMS) else ITEM_COOLDOWN
+        terminated, truncated, info = self._act_for(None, cooldown, frame_capture)
+        return terminated, truncated, info, loc
 
-        total_frames += cooldown + 1
-        obs, terminated, truncated, info = self.act_for(None, cooldown)
-
-        return obs, terminated, truncated, info, total_frames, loc
-
-    def _act_movement(self, action : ActionTaken, start_pos):
-        total_frames = 0
-
+    def _act_movement(self, action : ActionTaken, start_pos, frame_capture):
         if start_pos is None:
-            obs, _, terminated, truncated, info = self.env.step(action)
-            total_frames += 1
+            terminated, truncated, info = self._step_with_frame_capture(action, frame_capture)
             start_pos = Position(info['link_x'], info['link_y'])
             loc = self._get_location(info)
         else:
@@ -157,10 +155,10 @@ class ZeldaCooldownHandler:
         stuck_count = 0
         prev_pos = start_pos
         for _ in range(MAX_MOVEMENT_FRAMES):
-            obs, _, terminated, truncated, info = self.env.step(action)
+            terminated, truncated, info = self._step_with_frame_capture(action, frame_capture)
             if loc is None:
                 loc = self._get_location(info)
-            total_frames += 1
+
             pos = Position(info['link_x'], info['link_y'])
             new_tile_index = pos.tile_index
             match action.direction:
@@ -169,16 +167,14 @@ class ZeldaCooldownHandler:
                         break
                 case Direction.S:
                     if old_tile_index.y != new_tile_index.y:
-                        obs, terminated, truncated, info = self.act_for(action, WS_ADJUSTMENT_FRAMES)
-                        total_frames += WS_ADJUSTMENT_FRAMES
+                        terminated, truncated, info = self._act_for(action, WS_ADJUSTMENT_FRAMES, frame_capture)
                         break
                 case Direction.E:
                     if old_tile_index.x != new_tile_index.x:
                         break
                 case Direction.W:
                     if old_tile_index.x != new_tile_index.x:
-                        obs, terminated, truncated, info = self.act_for(action, WS_ADJUSTMENT_FRAMES)
-                        total_frames += WS_ADJUSTMENT_FRAMES
+                        terminated, truncated, info = self._act_for(action, WS_ADJUSTMENT_FRAMES, frame_capture)
                         break
                 case _:
                     raise ValueError(f'Unsupported direction: {action.direction}')
@@ -189,7 +185,7 @@ class ZeldaCooldownHandler:
             if stuck_count > 1:
                 break
 
-        return obs, terminated, truncated, info, total_frames, loc
+        return terminated, truncated, info, loc
 
     def _get_location(self, info):
         return MapLocation(info['level'], info['location'], info['mode'] == MODE_CAVE)

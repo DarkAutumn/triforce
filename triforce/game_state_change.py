@@ -10,8 +10,9 @@ from .zelda_game import ZeldaGame
 
 class ZeldaStateChange:
     """Tracks the changes between two Zelda game states."""
-    def __init__(self, env, prev : ZeldaGame, curr : ZeldaGame, action, discounts, health_changed):
+    def __init__(self, env, prev : ZeldaGame, curr : ZeldaGame, action, frames, discounts, health_changed):
         self.action : ActionTaken = action
+        self.frames : List[np.ndarray] = frames
         self.previous : ZeldaGame = prev
         self.state : ZeldaGame = curr
         self.action_mask : Optional[np.ndarray] = None

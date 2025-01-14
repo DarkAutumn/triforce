@@ -44,8 +44,7 @@ class ZeldaAI:
         action, _ = self._model.predict(obs, deterministic=deterministic)
         return action
 
-    def train(self, output_path = None, iterations = None, parallel = None, *,
-              grayscale = True, framestack = 1, obs_kind = 'viewport'):
+    def train(self, output_path = None, iterations = None, parallel = None, *, obs_kind = 'viewport'):
         """
         Trains this model and saves the result to the output path.  The directory structure must be:
             output_path/{self.model_definition.name}/
@@ -61,8 +60,7 @@ class ZeldaAI:
         iterations = model.iterations if iterations is None else iterations
 
         def make_env():
-            return make_zelda_env(model.training_scenario, model.action_space, grayscale=grayscale,
-                                  framestack=framestack, obs_kind=obs_kind)
+            return make_zelda_env(model.training_scenario, model.action_space, obs_kind=obs_kind)
 
         if parallel is not None and parallel > 1:
             env = make_vec_env(make_env, n_envs=parallel, vec_env_cls=SubprocVecEnv)
