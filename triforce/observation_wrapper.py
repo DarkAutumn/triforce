@@ -115,75 +115,84 @@ class ObservationWrapper(gym.Wrapper):
 
         return Box(low=low, high=high, shape=(dim, height, width), dtype=dtype)
 
-    def _get_image_observation(self, state : ZeldaGame, frame):
-        frame = torch.tensor(frame)
+    def _get_image_observation(self, state: ZeldaGame, frame: np.ndarray) -> torch.Tensor:
+        """
+        Convert frame to the expected PyTorch format, possibly trim,
+        convert to grayscale, and extract a viewport around Link.
+        """
 
-        # normalize
         if self._normalize:
-            frame = frame / 255.0
+            frame = torch.as_tensor(frame, dtype=torch.float32) / 255.0
         else:
-            frame = frame.float()
+            frame = torch.as_tensor(frame, dtype=torch.float32)
 
-        # reorder the channels to match the expected input format
         frame = frame.permute(2, 0, 1)
 
-        # trim
         if self._trim:
             frame = frame[:, self._trim:, :]
 
-        # convert to grayscale
-        frame = torch.tensordot(frame, GRAYSCALE_WEIGHTS, dims=([0], [0]))
-        frame = frame.unsqueeze(0)
+        frame = (frame * GRAYSCALE_WEIGHTS.view(-1, 1, 1)).sum(dim=0, keepdim=True)
 
-        # extract viewport
         if self._viewport_size:
             x = state.link.position.x
-            y = state.link.position.y - self._trim
+            y = state.link.position.y - self._trim  # we already trimmed
             half_vp = self._viewport_size // 2
-            frame_width, frame_height = frame.shape[2], frame.shape[1]
 
-            pad_top = max(0, half_vp - y)
-            pad_bottom = max(0, y + half_vp - frame_height)
-            pad_left = max(0, half_vp - x)
-            pad_right = max(0, x + half_vp - frame_width)
+            # Current height and width (after trimming)
+            h, w = frame.shape[-2], frame.shape[-1]
 
-            if pad_top > 0 or pad_bottom > 0 or pad_left > 0 or pad_right > 0:
-                frame = F.pad(frame, (pad_left, pad_right, pad_top, pad_bottom), mode='replicate')
+            # Compute necessary padding
+            top_pad = max(0, half_vp - y)
+            bottom_pad = max(0, (y + half_vp) - h)
+            left_pad = max(0, half_vp - x)
+            right_pad = max(0, (x + half_vp) - w)
 
-            y += pad_top
-            x += pad_left
-            frame = frame[:, y - half_vp:y + half_vp, x - half_vp:x + half_vp]
+            # Pad using replicate if Link is near an edge
+            if top_pad > 0 or bottom_pad > 0 or left_pad > 0 or right_pad > 0:
+                frame = F.pad(frame, (left_pad, right_pad, top_pad, bottom_pad), mode='replicate')
 
+            # Adjust coordinates after padding
+            y += top_pad
+            x += left_pad
+
+            # Crop out the viewport
+            frame = frame[...,  # keep channel as-is
+                          y - half_vp : y + half_vp,
+                          x - half_vp : x + half_vp]
+
+        # 6) If not normalizing, clamp to [0, 255] and cast to byte
         if not self._normalize:
-            frame = frame.clamp(0, 255).byte()
+            frame = frame.clamp_(0, 255).byte()
 
-        # Check and reshape frame if necessary
-        if frame.shape[1] != self._viewport_size or frame.shape[2] != self._viewport_size:
-            frame = self.reshape(frame)
+        if frame.shape[-2] != self._viewport_size or frame.shape[-1] != self._viewport_size:
+            frame = self._reshape(frame)
 
         return frame
 
-    def _reshape(self, frame):
-        """Occasionally Link can be offscreen due to overscan which messes up our viewport.  This is a quick fix"""
-        try:
-            pad_height = self._viewport_size - frame.shape[1]
-            pad_width = self._viewport_size - frame.shape[2]
+    def _reshape(self, frame: torch.Tensor) -> torch.Tensor:
+        """
+        Occasionally Link can be offscreen due to overscan, which messes up
+        our viewport. This ensures the final shape is (1, _viewport_size, _viewport_size).
+        """
+        pad_h = self._viewport_size - frame.shape[-2]
+        pad_w = self._viewport_size - frame.shape[-1]
 
-            if pad_height > 0 or pad_width > 0:
-                frame = F.pad(
-                    frame,
-                    (0, 0,                                  # Channel padding
-                    max(0, pad_width), max(0, pad_width),   # Width padding
-                    max(0, pad_height), max(0, pad_height)), # Height padding
-                    mode='replicate'
-                )
+        if pad_h > 0 or pad_w > 0:
+            frame = F.pad(
+                frame,
+                (0, max(0, pad_w), 0, max(0, pad_h)),
+                mode='replicate'
+            )
 
-            return frame
+        if (frame.shape[-2] != self._viewport_size or
+            frame.shape[-1] != self._viewport_size):
+            frame = torch.zeros(
+                (1, self._viewport_size, self._viewport_size),
+                dtype=frame.dtype,
+                device=frame.device
+            )
 
-        except ValueError:
-            # If we fail for any reason, return a blank frame
-            return torch.zeros((1, self._viewport_size, self._viewport_size), dtype=frame.dtype, device=frame.device)
-
+        return frame
 
     def _get_vectors(self, state : ZeldaGame):
         vectors = np.zeros(shape=(OBJECT_KINDS, OBJECTS_PER_KIND, 3), dtype=np.float32)
