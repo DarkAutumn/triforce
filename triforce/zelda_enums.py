@@ -5,7 +5,8 @@ from numbers import Integral
 
 import numpy as np
 
-from .model_parameters import GAMEPLAY_START_Y
+# the y coordinate where the gameplay window starts (above this line is the HUD)
+GAMEPLAY_START_Y = 56
 
 class SoundKind(Enum):
     """Sound codes for the game."""

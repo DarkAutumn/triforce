@@ -12,17 +12,17 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .zelda_enums import Direction
+from .zelda_enums import GAMEPLAY_START_Y, Direction
 from .objectives import Objective, ObjectiveKind
 from .zelda_objects import ZeldaObject
 from .zelda_game import ZeldaGame
-from .model_parameters import VIEWPORT_PIXELS, GAMEPLAY_START_Y
 
 GRAYSCALE_WEIGHTS = torch.FloatTensor([0.2989, 0.5870, 0.1140])
 OBJECT_KINDS = 3
 OBJECTS_PER_KIND = 2
 BOOLEAN_FEATURES = 12
 DISTANCE_SCALE = 100.0
+VIEWPORT_PIXELS = 128
 
 # Image features are defined as a grayscale image of the game screen.
 # This can be trimmed to remove the HUD, or resized to be a viewport around Link.
