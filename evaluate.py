@@ -99,8 +99,7 @@ def run_one_scenario(args, model_name, model_path):
 def make_zelda_env_from_args(model : ZeldaModelDefinition, args):
     """Creates a ZeldaML instance."""
     render_mode = 'human' if args.render else None
-    return make_zelda_env(model.training_scenario, model.action_space, grayscale= not args.color,
-                          framestack=args.frame_stack, render_mode=render_mode, obs_kind=args.obs_kind)
+    return make_zelda_env(model.training_scenario, model.action_space, render_mode=render_mode, obs_kind=args.obs_kind)
 
 def get_model_path(args):
     """Gets the model path."""
@@ -208,14 +207,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description="evaluate - Evaluate Zelda ML models.")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
-    parser.add_argument("--color", action='store_true',
-                        help="Give the model a color version of the game (instead of grayscale).")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
     parser.add_argument("--episodes", type=int, default=100, help="Number of episodes to test.")
     parser.add_argument("--parallel", type=int, default=1, help="Use parallel environments to evaluate the models.")
     parser.add_argument("--render", action='store_true', help="Render the game while evaluating the models.")
-    parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack together.")
     parser.add_argument("--limit", type=int, default=-1,
                         help="Limit the number of models to evaluate.")
 
