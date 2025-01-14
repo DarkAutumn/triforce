@@ -100,7 +100,7 @@ class LogRewardCallback(BaseCallback):
 
         self.save_dir = save_dir
 
-        self._frames_per_iteration = []
+        self._frames_per_episode = []
         self._rewards = {}
         self._endings = []
         self._evaluation = []
@@ -112,9 +112,9 @@ class LogRewardCallback(BaseCallback):
         if self.n_calls > self.next_save:
             self.next_save += self.model.n_steps
 
-            if self._frames_per_iteration:
-                frame_mean = np.mean(self._frames_per_iteration)
-                self.logger.record('rollout/frames-per-iteration', frame_mean)
+            if self._frames_per_episode:
+                frame_mean = np.mean(self._frames_per_episode)
+                self.logger.record('rollout/seconds-per-episode', frame_mean / 60.1)
 
             rew_mean = np.mean(list(self._rewards.values()))
             for kind, rew in self._rewards.items():
@@ -147,7 +147,7 @@ class LogRewardCallback(BaseCallback):
                 self._save_best(score_mean, rew_mean, os.path.join(self.save_dir,
                                                                    f'model_{self.model.num_timesteps}.zip'))
 
-            self._frames_per_iteration.clear()
+            self._frames_per_episode.clear()
             self._rewards.clear()
             self._endings.clear()
             self._evaluation.clear()
@@ -171,8 +171,8 @@ class LogRewardCallback(BaseCallback):
 
                     self._evaluation.append(rewards.score)
 
-            if log_frames and 'total_frames' in info:
-                self._frames_per_iteration.append(info['total_frames'])
+                    if log_frames and 'total_frames' in info:
+                        self._frames_per_episode.append(info['total_frames'])
 
     def _save_best(self, score, reward, save_path):
         self.model.save(save_path)

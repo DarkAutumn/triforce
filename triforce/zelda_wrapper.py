@@ -26,6 +26,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         # per-reset state
         self._total_frames = 0
+        self._steps = 0
         self._prev_state = None
         self._discounts = {}
         self._objectives : Objectives = None
@@ -62,6 +63,7 @@ class ZeldaGameWrapper(gym.Wrapper):
         _, _, _, info = self.cooldown_handler.skip(1)
         obs, info, frames_skipped = self.cooldown_handler.skip_uncontrollable_states(None, info)
         self._total_frames = frames_skipped + 1
+        self._steps = -1
 
         state = self._update_state(None, info)
         return obs, state
@@ -85,6 +87,8 @@ class ZeldaGameWrapper(gym.Wrapper):
         state.objectives = objectives
         state.wavefront = state.room.calculate_wavefront_for_link(objectives.targets)
         state.total_frames = self._total_frames
+        info['total_frames'] = self._total_frames
+        info['steps'] = self._steps = self._steps + 1
 
         if prev:
             return ZeldaStateChange(self, prev, state, action, self._discounts, health_changed)
