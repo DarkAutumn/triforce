@@ -211,7 +211,8 @@ class DisplayWindow:
                     model_name = f"{self.model_definition.name} ({model_name}) {model.num_timesteps:,} timesteps"
 
                 obs, _, terminated, truncated, state_change = env.step(action)
-                deque.extend(state_change.frames)
+                for frame in state_change.frames:
+                    rgb_deque.append(frame)
 
                 if mode == 'n':
                     mode = 'p'
@@ -507,8 +508,10 @@ class DisplayWindow:
         return self._render_one_observation(surface, x, y, img)
 
     def _render_one_observation(self, surface, x, y, img):
-        if img.shape[2] == 1:
-            img = np.repeat(img, 3, axis=2)
+        img = img.squeeze(0).cpu().numpy()
+
+        if img.ndim == 2:
+            img = np.stack([img] * 3, axis=-1)
 
         observation_surface = pygame.surfarray.make_surface(np.swapaxes(img, 0, 1))
         observation_surface = pygame.transform.scale(observation_surface, (img.shape[1], img.shape[0]))
@@ -828,12 +831,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Triforce - An ML agent to play The Legned of Zelda (NES).")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
-    parser.add_argument("--color", action='store_true',
-                        help="Give the model a color version of the game (instead of grayscale).")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
-    parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames the model was trained with.")
     parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
 
     parser.add_argument('scenario', type=str, help='Scenario name')
