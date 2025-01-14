@@ -16,19 +16,15 @@ def main():
     models = args.models if args.models else ZELDA_MODELS.keys()
     for model_name in models:
         zelda_ml = ZeldaAI(ZELDA_MODELS[model_name], verbose=args.verbose, ent_coef=args.ent_coef)
-        zelda_ml.train(output_path, iterations, args.parallel, grayscale=not args.color, framestack=args.frame_stack,
-                       obs_kind=args.obs_kind)
+        zelda_ml.train(output_path, iterations, args.parallel, obs_kind=args.obs_kind)
 
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="train - Train Zelda ML models")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
-    parser.add_argument("--color", action='store_true',
-                        help="Give the model a color version of the game (instead of grayscale).")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
-    parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack together.")
 
     parser.add_argument('models', nargs='*', help='List of models to train')
     parser.add_argument("--output", type=str, help="Location to write to.")

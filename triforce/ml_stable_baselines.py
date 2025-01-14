@@ -44,8 +44,7 @@ class ZeldaAI:
         action, _ = self._model.predict(obs, deterministic=deterministic)
         return action
 
-    def train(self, output_path = None, iterations = None, parallel = None, *,
-              grayscale = True, framestack = 1, obs_kind = 'viewport'):
+    def train(self, output_path = None, iterations = None, parallel = None, *, obs_kind = 'viewport'):
         """
         Trains this model and saves the result to the output path.  The directory structure must be:
             output_path/{self.model_definition.name}/
