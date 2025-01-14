@@ -1,4 +1,6 @@
 from collections import Counter
+import math
+from multiprocessing import Queue
 import time
 import numpy as np
 import torch
@@ -100,6 +102,8 @@ class PPO:
         if kwargs:
             raise ValueError(f"Unknown arguments: {kwargs}")
 
+        self.kwargs = kwargs
+
         self.optimizer_state = None
 
         self.network = network
@@ -182,54 +186,89 @@ class PPO:
 
     def _train_multiproc(self, create_env, iterations, progress):
         # pylint: disable=too-many-locals
-
-        iteration = 0
+        kwargs = self.kwargs.copy()
+        kwargs['network'] = self.network
+        kwargs['device'] = "cpu"
+        kwargs['log_dir'] = None
+        kwargs['n_envs'] = 1
 
         workers = []
-        for i in range(self.n_envs):
-            ppo_kwargs = {
-                "network": self.network,
-                "device": "cpu",
-                "log_dir": None,
-            }
-            worker = PPOSubprocess(
-                idx=i,
-                create_env=create_env,
-                ppo_class=PPO,
-                ppo_kwargs=ppo_kwargs
-            )
+        result_queue = Queue()
+        for idx in range(self.n_envs):
+            worker = PPOSubprocess(idx, create_env, PPO, kwargs, result_queue)
             workers.append(worker)
 
-        while iteration < iterations:
-            # spin up workers
-            for w in workers:
-                w.build_batch_async(progress=progress, weights=self.network.state_dict())
+        steps = math.ceil(iterations / (self.n_envs * self.memory_length))
+        try:
+            for _ in range(steps):
+                weights = self.network.state_dict()
+                for worker in workers:
+                    worker.build_batch_async(weights, None)
 
-            batch_returns = torch.zeros(self.n_envs, self.memory_length, device="cpu")
-            batch_advantages = torch.zeros(self.n_envs, self.memory_length, device="cpu")
-            infos = []
-            for i, w in enumerate(workers):
-                # block until worker i returns
-                infos, next_value, obs, dones, act_logp_ent_val, masks, rewards = w.get_result()
-                for observation in obs:
-                    self.observation[0][i] = observation
+                infos = []
+                batch_returns = torch.zeros(self.n_envs, self.memory_length, device="cpu")
+                batch_advantages = torch.zeros(self.n_envs, self.memory_length, device="cpu")
 
-                self.dones[i] = dones
-                self.rewards[i] = rewards
-                self.act_logp_ent_val[i] = act_logp_ent_val
-                self.masks[i] = masks
-                returns, advantages = self._compute_returns(i, next_value)
-                batch_returns[i] = returns
-                batch_advantages[i] = advantages
-                infos.extend(infos)
+                recieved = []
+                for _ in range(self.n_envs):
+                    message = result_queue.get()
+                    match message['command']:
+                        case 'exit':
+                            print(f"Unexpected exit: {message['idx']}")
+                            raise EOFError()
 
-            iteration += self.n_envs * self.memory_length
+                        case 'error':
+                            print(f"Error in worker {message['idx']}:")
+                            error = message['error']
+                            print(error)
+                            print(message['traceback'])
+                            raise error
 
-            self._batch_update(infos)
-            self._optimize(batch_returns, batch_advantages, iteration)
+                        case 'build_batch':
+                            idx = message['idx']
+                            if idx in recieved:
+                                raise ValueError(f"Duplicate message for {idx}")
 
-        for w in workers:
-            w.close()
+                            recieved.append(idx)
+
+                            returns, advantages, info = self._process_batch(message)
+                            batch_returns[idx] = returns
+                            batch_advantages[idx] = advantages
+                            infos.extend(info)
+
+                            if progress is not None:
+                                progress.update(self.memory_length)
+
+                self._batch_update(infos)
+                self._optimize(batch_returns, batch_advantages, self.total_steps)
+
+        except EOFError:
+            pass
+
+        finally:
+            # Tell workers to shut down regardless
+            for worker in workers:
+                worker.close_async()
+
+        # only hit without exception
+        for worker in workers:
+            worker.join()
+
+    def _process_batch(self, message):
+        idx = message['idx']
+        infos = message['infos']
+        next_value = message['next_value']
+
+        for i, observation in enumerate(message['observation']):
+            self.observation[i][idx] = observation
+
+        self.dones[idx] = message['dones']
+        self.rewards[idx] = message['rewards']
+        self.act_logp_ent_val[idx] = message['act_logp_ent_val']
+        self.masks[idx] = message['masks']
+
+        returns, advantages = self._compute_returns(idx, next_value)
+        return returns, advantages, infos
 
     def build_one_batch(self, batch_idx, env, progress, iteration):
         """Build a single batch of data from the environment."""
@@ -386,12 +425,12 @@ class PPO:
         logprobs  = self.act_logp_ent_val[:, :, 1].to(self.device)
         values    = self.act_logp_ent_val[:, :, 3].to(self.device)
 
-        b_actions  = actions.reshape(-1)   # [n_envs*memory_length]
-        b_logprobs = logprobs.reshape(-1)  # [n_envs*memory_length]
-        b_values   = values.reshape(-1)    # [n_envs*memory_length]
+        b_actions  = actions.reshape(-1)
+        b_logprobs = logprobs.reshape(-1)
+        b_values   = values.reshape(-1)
 
         masks     = self.masks
-        b_masks    = masks.reshape(-1, masks.shape[-1]).to(self.device)     # [n_envs*memory_length]
+        b_masks    = masks.reshape(-1, masks.shape[-1]).to(self.device)
 
         # flatten returns, advantages
         b_advantages = advantages.reshape(-1).to(self.device)
@@ -449,7 +488,7 @@ class PPO:
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
                 # Value loss
-                newvalue = newvalue.view(-1)  # shape [minibatch_size]
+                newvalue = newvalue.view(-1)
                 if self._clip_val_loss:
                     v_loss_unclipped = (newvalue - mb_returns) ** 2
                     v_clipped = mb_values + torch.clamp(newvalue - mb_values,

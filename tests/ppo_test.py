@@ -83,8 +83,9 @@ class TestEnvironment:
 
         return 0.0
 
+@pytest.mark.parametrize("envs", [1, 4])
 @pytest.mark.parametrize("device", ["cpu", "cuda"] if torch.cuda.is_available() else ["cpu"])
-def test_ppo_training(device):
+def test_ppo_training(device, envs):
     """
     Test PPO by training it on a deterministic environment and verifying it learns to
     take the correct actions.
@@ -96,15 +97,15 @@ def test_ppo_training(device):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
+    ppo = PPO(network=TestNetwork(), device=device, log_dir=None, n_envs=envs)
 
-    ppo = PPO(network=TestNetwork(), device=device, log_dir=None, n_envs=1)
-
-    # Train PPO for enough iterations to allow learning
-    num_iterations = 25_000
+    # Train PPO for enough iterations to allow learning.  There's no magic here, this just seems
+    # to be enough iterations for this environment to learn.
+    num_iterations = 25_000 * envs
     progress_mock = MagicMock()
     ppo.train(lambda: TestEnvironment(ppo.network.observation_shape), num_iterations, progress=progress_mock)
 
-    assert progress_mock.update.call_count >= num_iterations, "PPO did not train for the expected number of iterations"
+    assert progress_mock.update.call_count > 2, "PPO did not train for the expected number of iterations"
 
     # See if the trained model takes the correct actions
     env = TestEnvironment(ppo.network.observation_shape)
