@@ -5,12 +5,11 @@ import retro
 from .gym_translation_wrapper import GymTranslationWrapper
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
-from .zelda_observation_wrapper import FrameCaptureWrapper, ZeldaObservationWrapper
-from .zelda_vector_features import ZeldaVectorFeatures
+from .observation_wrapper import ObservationWrapper
 from .scenario_wrapper import ScenarioWrapper
 from .models_and_scenarios import ZeldaScenario
 
-def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = True, framestack = 1,
+def make_zelda_env(scenario : ZeldaScenario, action_space : str, *,
                    obs_kind = 'viewport', render_mode = None, translation=True):
     """
     Creates a Zelda retro environment for the given scenario.
@@ -25,10 +24,6 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
     env = retro.make(game='Zelda-NES', state=scenario.start[0], inttype=retro.data.Integrations.CUSTOM_ONLY,
                      render_mode=render_mode)
 
-    # Capture the raw observation frames into a deque.
-    env = FrameCaptureWrapper(env, render_mode == 'rgb_array')
-    captured_frames = env.frames
-
     # Wrap the game to produce new info about game state and to hold the button down after the action is
     # taken to achieve the desired number of actions per second.
     env = ZeldaGameWrapper(env, scenario)
@@ -37,11 +32,7 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *, grayscale = 
     env = ZeldaActionSpace(env, action_space)
 
     # Frame stack and convert to grayscale if requested
-    env = ZeldaObservationWrapper(env, captured_frames, grayscale, kind=obs_kind, framestack=framestack)
-
-    # Extract features from the game for the model, like whether link has beams or has keys and expose
-    # these as observations.
-    env = ZeldaVectorFeatures(env)
+    env = ObservationWrapper(env, obs_kind, normalize=False)
 
     # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new
     # info state provded by ZeldaGameWrapper above.

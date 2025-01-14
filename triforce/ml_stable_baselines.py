@@ -61,8 +61,7 @@ class ZeldaAI:
         iterations = model.iterations if iterations is None else iterations
 
         def make_env():
-            return make_zelda_env(model.training_scenario, model.action_space, grayscale=grayscale,
-                                  framestack=framestack, obs_kind=obs_kind)
+            return make_zelda_env(model.training_scenario, model.action_space, obs_kind=obs_kind)
 
         if parallel is not None and parallel > 1:
             env = make_vec_env(make_env, n_envs=parallel, vec_env_cls=SubprocVecEnv)

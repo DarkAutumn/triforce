@@ -6,7 +6,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import retro
-from triforce.zelda_observation_wrapper import ZeldaObservationWrapper
+from triforce.observation_wrapper import ObservationWrapper
 import pickle
 
 def main():
@@ -16,7 +16,7 @@ def main():
     frames = [data['frame']]
 
     env = retro.make(game='Zelda-NES', state="0_77.state", inttype=retro.data.Integrations.CUSTOM_ONLY)
-    env = ZeldaObservationWrapper(env, frames, grayscale=True, kind='viewport', framestack=1)
+    env = ObservationWrapper(env, frames, grayscale=True, kind='viewport', normalize=False)
 
     env.trim_normalize_grayscale(data['info'], frames[0])
 

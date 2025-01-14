@@ -22,7 +22,6 @@ from triforce.models_and_scenarios import ZELDA_MODELS, ZeldaModelDefinition
 from triforce.rewards import StepRewards
 from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
-from triforce.zelda_observation_wrapper import FrameCaptureWrapper
 
 class Recording:
     """Used to track and save a recording of the game."""
@@ -143,7 +142,6 @@ class DisplayWindow:
         """Shows the game and the AI model."""
         env = make_zelda_env(self.scenario, self.model_definition.action_space, render_mode='rgb_array',
                              translation=False)
-        rgb_deque = self._get_rgb_deque(env)
 
         clock = pygame.time.Clock()
 
@@ -174,6 +172,8 @@ class DisplayWindow:
 
         state_change : ZeldaStateChange = None
         model_name = None
+
+        rgb_deque = deque()
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
         mode = 'c'
@@ -211,6 +211,7 @@ class DisplayWindow:
                     model_name = f"{self.model_definition.name} ({model_name}) {model.num_timesteps:,} timesteps"
 
                 obs, _, terminated, truncated, state_change = env.step(action)
+                deque.extend(state_change.frames)
 
                 if mode == 'n':
                     mode = 'p'
@@ -391,15 +392,6 @@ class DisplayWindow:
             self._loaded_models[path] = result
 
         return result, name
-
-    def _get_rgb_deque(self, env):
-        while env is not None:
-            if isinstance(env, FrameCaptureWrapper):
-                return env.rgb_deque
-
-            env = env.env
-
-        return None
 
     def _print_location_info(self, state):
         if self._last_location is not None:
