@@ -40,6 +40,7 @@ class Network(nn.Module):
 
         # mask out invalid actions
         if mask is not None:
+            assert mask.any(dim=-1).all(), "Mask must contain at least one valid action"
             logits = logits.clone()
             invalid_mask = ~mask
             logits[invalid_mask] = -1e9
@@ -273,7 +274,7 @@ class PPO:
     def build_one_batch(self, batch_idx, env, progress, iteration):
         """Build a single batch of data from the environment."""
         # pylint: disable=too-many-locals
-        if iteration == 0:
+        if iteration:
             obs, info = env.reset()
             action_mask = info.get('action_mask', None)
             done = 0.0
