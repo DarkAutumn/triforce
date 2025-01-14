@@ -32,7 +32,7 @@ class PPOSubprocess:
         env = create_env()
 
         # pylint: disable=broad-except
-        iteration = None
+        iteration = 0
         try:
             while True:
                 command = command_queue.get()
@@ -46,6 +46,7 @@ class PPOSubprocess:
                     case 'build_batch':
                         ppo.network.load_state_dict(command['weights'])
                         infos, next_value = ppo.build_one_batch(0, env, command.get('progress', None), iteration)
+                        iteration += 1
 
                         message = {
                             'idx' : idx,
