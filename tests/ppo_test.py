@@ -11,7 +11,7 @@ import pytest
 import torch
 from torch import nn
 
-from triforce.ppo import PPO, Network
+from triforce.ml_torch_ppo import PPO, Network
 
 class TestNetwork(Network):
     def __init__(self):
