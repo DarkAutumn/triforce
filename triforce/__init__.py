@@ -6,7 +6,7 @@ import os
 import retro
 
 from .zelda_env import make_zelda_env
-from .models_and_scenarios import ZeldaModelDefinition, ZeldaScenario, ZELDA_MODELS, TRAINING_SCENARIOS
+from .model_definition import ZeldaModelDefinition, ZeldaScenario, ZELDA_MODELS, TRAINING_SCENARIOS
 from .ml_stable_baselines import ZeldaAI
 from .simulate_critic import simulate_critique
 

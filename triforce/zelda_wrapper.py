@@ -9,7 +9,7 @@ from typing import Tuple
 import gymnasium as gym
 
 from .rewards import StepRewards
-from .models_and_scenarios import ZeldaScenario
+from .model_definition import ZeldaScenario
 from .objectives import Objectives
 from .game_state_change import ZeldaStateChange
 from .zelda_game import ZeldaGame

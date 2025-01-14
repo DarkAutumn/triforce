@@ -18,7 +18,7 @@ import tqdm
 
 from triforce import ZeldaScenario, simulate_critique, make_zelda_env, TRAINING_SCENARIOS, ZeldaAI
 from triforce.game_state_change import ZeldaStateChange
-from triforce.models_and_scenarios import ZELDA_MODELS, ZeldaModelDefinition
+from triforce.model_definition import ZELDA_MODELS, ZeldaModelDefinition
 from triforce.rewards import StepRewards
 from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame

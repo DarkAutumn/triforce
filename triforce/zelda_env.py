@@ -7,7 +7,7 @@ from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
 from .observation_wrapper import ObservationWrapper
 from .scenario_wrapper import ScenarioWrapper
-from .models_and_scenarios import ZeldaScenario
+from .model_definition import ZeldaScenario
 
 def make_zelda_env(scenario : ZeldaScenario, action_space : str, *,
                    obs_kind = 'viewport', render_mode = None, translation=True):

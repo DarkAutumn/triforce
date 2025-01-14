@@ -4,7 +4,7 @@ import gymnasium as gym
 import retro
 
 from .zelda_game_data import zelda_game_data
-from .models_and_scenarios import ZeldaScenario
+from .model_definition import ZeldaScenario
 from . import critics
 from . import end_conditions
 
