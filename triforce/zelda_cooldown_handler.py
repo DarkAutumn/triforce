@@ -114,6 +114,7 @@ class ZeldaCooldownHandler:
             in_cave = is_in_cave(info)
             assert not terminated and not truncated
 
+        self.was_link_in_cave = in_cave
         terminated, truncated, info = self._act_for(None, 1, frame_capture)
         return terminated, truncated, info
 
