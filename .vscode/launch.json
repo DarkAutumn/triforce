@@ -18,7 +18,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["overworld-sword", "--model-path", "training/"],
+            "args": ["overworld-sword", "overworld-sword", "--model-path", "training/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
