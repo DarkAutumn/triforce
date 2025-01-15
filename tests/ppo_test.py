@@ -129,8 +129,9 @@ def test_ppo_training(device, num_envs):
     expected_actions = [0, 1, 2]
     assert actions_taken == expected_actions, f"Expected actions {expected_actions}, but got {actions_taken}"
 
+@pytest.mark.parametrize("num_envs", [1, 4])
 @pytest.mark.parametrize("model_name", ["full-game", "overworld-sword"])
-def test_model_training(model_name):
+def test_model_training(model_name, num_envs):
     model_def : ZeldaModelDefinition = ZELDA_MODELS[model_name]
     scenario = model_def.training_scenario
 
@@ -139,7 +140,7 @@ def test_model_training(model_name):
 
     progress = MagicMock()
     ppo = PPO("cpu", log_dir=None)
-    network = ppo.train(SharedNatureAgent, create_env, 10, progress, 1)
+    network = ppo.train(SharedNatureAgent, create_env, ppo.target_steps * 2 + 1, progress, num_envs)
     assert progress.update.call_count, "PPO did not call update"
 
     env = create_env()
@@ -152,39 +153,3 @@ def test_model_training(model_name):
         action_probs = torch.softmax(logits, dim=-1)
         action = torch.argmax(action_probs).item()  # Select the most probable action
         obs, _, _, _, _ = env.step(action)
-
-def test_worker_process():
-    def create_env():
-        return TestEnvironment(8, 3)
-
-    env = create_env()
-    obs_space, action_space = env.observation_space, env.action_space
-    env.close()
-
-    result_queue = Queue()
-    kwargs = {
-            'gamma': GAMMA,
-            'lambda': LAMBDA,
-            'steps': 1024,
-            }
-
-    subprocess = SubprocessWorker(0, create_env, TestNetwork, result_queue, kwargs)
-
-    subprocess.run_main_loop_async(TestNetwork(obs_space, action_space).state_dict())
-    subprocess.close_async()
-    result = result_queue.get()
-
-    assert result is not None, "PPO did not return a result"
-    assert result['command'] == 'build_batch', "PPO did not return the expected command"
-    assert isinstance(result['result'], PPORolloutBuffer), "PPO did not return a PPORolloutBuffer"
-    assert isinstance(result['infos'], list), "PPO did not return a list of infos"
-    assert isinstance(result['infos'][0], dict), "PPO did not return a list of infos"
-
-    subprocess.join()
-
-
-
-
-
-
-

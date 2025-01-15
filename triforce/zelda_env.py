@@ -8,6 +8,7 @@ from .action_space import ZeldaActionSpace
 from .observation_wrapper import ObservationWrapper
 from .scenario_wrapper import ScenarioWrapper
 from .model_definition import ZeldaScenario
+from .rewards import EpisodeRewardTracker
 
 def make_zelda_env(scenario : ZeldaScenario, action_space : str, *,
                    obs_kind = 'viewport', render_mode = None, translation=True):
@@ -37,6 +38,9 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *,
     # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new
     # info state provded by ZeldaGameWrapper above.
     env = ScenarioWrapper(env, scenario)
+
+    # Calculate the total reward for the episode.
+    env = EpisodeRewardTracker(env)
 
     # Translate our object-oriented environment into a gym environment.
     if translation:
