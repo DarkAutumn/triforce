@@ -231,7 +231,13 @@ class RewardStats:
         self.total_steps = np.mean(total.total_steps) if total.total_steps else 0
         self.outcomes = {x: y.copy() for x, y in total.outcomes.items()}
         self.endings = total.endings.copy()
-        self.success_rate = self.endings.get('success', 0) / self.episodes if self.episodes else 0
+
+        if self.episodes and self.endings:
+            self.success_rate = sum(value for key, value in self.endings.items()
+                                    if key.startswith('success') / self.episodes)
+
+        else:
+            self.success_rate = 0
 
     def to_tensorboard(self, tensorboard, iterations):
         """Write the stats to TensorBoard."""
