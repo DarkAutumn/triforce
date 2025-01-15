@@ -516,8 +516,10 @@ class DisplayWindow:
         if img.ndim == 2:
             img = np.stack([img] * 3, axis=-1)
 
+        img = (img * 255).astype(np.uint8)
+
         observation_surface = pygame.surfarray.make_surface(np.swapaxes(img, 0, 1))
-        observation_surface = pygame.transform.scale(observation_surface, (img.shape[1], img.shape[0]))
+        observation_surface = pygame.transform.scale(observation_surface, (img.shape[1] * 2, img.shape[0] * 2))
         surface.blit(observation_surface, (x, y))
 
         y += img.shape[0]
