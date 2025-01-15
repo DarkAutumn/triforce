@@ -109,7 +109,7 @@ class PPO:
                 'steps': self.memory_length,
                 }
 
-        workers = [PPOSubprocess(idx, network, create_env, result_queue, kwargs) for idx in range(n_envs)]
+        workers = [PPOSubprocess(idx, create_env, network, result_queue, kwargs) for idx in range(n_envs)]
         try:
             steps = math.ceil(iterations / (n_envs * self.memory_length))
             for step in range(steps):
