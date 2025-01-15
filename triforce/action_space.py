@@ -7,6 +7,7 @@ from numbers import Integral
 from typing import List, Sequence
 import gymnasium as gym
 import numpy as np
+import torch
 
 from .link import Link
 from .zelda_game import ZeldaGame
@@ -192,6 +193,8 @@ class ZeldaActionSpace(gym.Wrapper):
         if isinstance(action, tuple):
             action = self._translate_action(*action)
         elif isinstance(action, np.ndarray):
+            action = action.item()
+        elif isinstance(action, torch.Tensor):
             action = action.item()
 
         if isinstance(action, Integral):
