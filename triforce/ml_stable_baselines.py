@@ -13,7 +13,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from .rewards import StepRewards
-from .models_and_scenarios import ZeldaModelDefinition
+from .model_definition import ZeldaModelDefinition
 from .zelda_env import make_zelda_env
 
 class ZeldaAI:

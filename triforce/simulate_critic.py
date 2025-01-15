@@ -2,7 +2,7 @@ from typing import Dict
 
 from .game_state_change import ZeldaStateChange
 from .zelda_game import ZeldaGame
-from .models_and_scenarios import ZeldaScenario
+from .model_definition import ZeldaScenario
 from . import critics
 from . import end_conditions
 
