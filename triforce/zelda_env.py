@@ -32,7 +32,7 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *,
     env = ZeldaActionSpace(env, action_space)
 
     # Frame stack and convert to grayscale if requested
-    env = ObservationWrapper(env, obs_kind, normalize=False)
+    env = ObservationWrapper(env, obs_kind, normalize=True)
 
     # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new
     # info state provded by ZeldaGameWrapper above.
