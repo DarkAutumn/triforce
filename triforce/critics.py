@@ -337,6 +337,8 @@ class GameplayCritic(ZeldaCritic):
 
             movement = curr_link.position.numpy - prev_link.position.numpy
             progress = np.dot(movement, dir_vect)
+            # TODO: investigate why this happens
+            progress = max(progress, 0)
             rewards.add(MOVE_CLOSER_REWARD, progress / MOVEMENT_SCALE_FACTOR)
 
     def critique_moving_into_danger(self, state_change : ZeldaStateChange, rewards):
