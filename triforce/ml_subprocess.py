@@ -52,6 +52,9 @@ class SubprocessWorker:
                             'result' : buffer,
                             })
 
+                    case _:
+                        raise ValueError(f"Unknown command: {command['command']}")
+
         except Exception as e:
             result_queue.put({
                 'idx' : idx,
@@ -59,6 +62,9 @@ class SubprocessWorker:
                 'error' : e,
                 'traceback' : traceback.format_exc()
                 })
+
+        finally:
+            env.close()
 
     def run_main_loop_async(self, weights):
         """Ask the worker to build a batch; returns immediately."""
