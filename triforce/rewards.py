@@ -76,11 +76,14 @@ class Reward(Outcome):
     """Represents a positive outcome (reward)."""
     def __post_init__(self):
         assert self.value >= 0
+        assert self.name.startswith("reward")
+
 @dataclass(frozen=True)
 class Penalty(Outcome):
     """Represents a negative outcome (penalty)."""
     def __post_init__(self):
         assert self.value <= 0
+        assert self.name.startswith("penalty")
 
 class StepRewards:
     """A single step's rewards."""
@@ -168,14 +171,17 @@ class TotalRewards:
         self.rewards = []
         self.scores = []
         self.total_steps = []
-        self.outcomes =  {x : 0 for x in TotalRewards._outcomes_seen}
+        self.outcomes = self._create_outcome_dict()
         self.endings = {x : 0 for x in TotalRewards._endings_seen}
         self.episodes = 0
 
-    def _get_empty_dict(self, already_seen : set):
+    def _create_outcome_dict(self):
         result = {}
-        for name in already_seen:
-            result[name] = 0
+        for key in TotalRewards._outcomes_seen:
+            if key.startswith("reward"):
+                result[key] = Reward(key, 0)
+            else:
+                result[key] = Penalty(key, 0)
 
         return result
 
@@ -210,8 +216,8 @@ class TotalRewards:
         self.rewards.clear()
         self.scores.clear()
         self.total_steps.clear()
-        self.outcomes = self._get_empty_dict(TotalRewards._outcomes_seen)
-        self.endings = self._get_empty_dict(TotalRewards._endings_seen)
+        self.outcomes = self._create_outcome_dict()
+        self.endings = {x : 0 for x in TotalRewards._endings_seen}
         self.episodes = 0
 
         return stats
