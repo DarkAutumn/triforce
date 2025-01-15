@@ -2,7 +2,7 @@ import traceback
 from multiprocessing import Process, Queue
 
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
-from .models import Network
+from .models import Network, create_network
 
 class SubprocessWorker:
     """Controls a worker process that runs PPO in a separate process."""
@@ -22,14 +22,10 @@ class SubprocessWorker:
                                                       self.command_queue, result_queue))
         self.process.start()
 
-    def run(self, idx, create_env, network, ppo_kwargs, command_queue, result_queue):
+    def run(self, idx, create_env, network : Network, ppo_kwargs, command_queue, result_queue):
         """The main loop of the worker process."""
         env = create_env()
-
-        if isinstance(network, type) and issubclass(network, Network):
-            network = network(env.observation_space, env.action_space)
-        elif not isinstance(network, Network):
-            raise ValueError("network must be a Network or a Network subclass")
+        network = create_network(network, env.observation_space, env.action_space)
 
         # pylint: disable=broad-except
         buffer = None

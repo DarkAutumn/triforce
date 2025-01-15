@@ -58,7 +58,7 @@ class PPORolloutBuffer:
     def ppo_main_loop(self, batch_index, network, env, progress):
         """Processes a single loop of training, filling one batch of variables."""
 
-        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         if not self.has_data:
             obs, info = env.reset()
             action_mask = info.get('action_mask', None)

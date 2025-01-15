@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from .ml_subprocess import SubprocessWorker
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
-from .models import Network
+from .models import Network, create_network
 from .rewards import StepRewards
 
 # default hyperparameters
@@ -71,11 +71,7 @@ class PPO:
         self.start_time = time.time()
 
         env = create_env()
-        if isinstance(network, type) and issubclass(network, Network):
-            network = network(env.observation_space, env.action_space)
-
-        elif not isinstance(network, Network):
-            raise ValueError("network must be a Network or a Network subclass")
+        network = create_network(network, env.observation_space, env.action_space)
 
         if n_envs == 1:
             return self._train_single(network, env, iterations, progress)

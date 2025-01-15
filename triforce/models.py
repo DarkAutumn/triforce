@@ -191,3 +191,12 @@ class SharedNatureAgent(Network):
         action_logits = self.action_net(policy_features)
         value = self.value_net(value_features)
         return action_logits, value
+
+def create_network(network, obs_space, action_space):
+    """Create a network from a class or instance."""
+    if isinstance(network, type) and issubclass(network, Network):
+        network = network(obs_space, action_space)
+    elif not isinstance(network, Network):
+        raise ValueError("network must be a Network or a Network subclass")
+
+    return network
