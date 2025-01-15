@@ -108,7 +108,7 @@ def test_ppo_training(device, num_envs):
     def create_env():
         return TestEnvironment(8, 3)
 
-    network = ppo.train(TestNetwork, create_env, num_iterations, progress_mock, num_envs)
+    network = ppo.train(TestNetwork, create_env, num_iterations, progress_mock, envs=num_envs)
 
     assert progress_mock.update.call_count > 2, "PPO did not train for the expected number of iterations"
 
@@ -140,7 +140,7 @@ def test_model_training(model_name, num_envs):
 
     progress = MagicMock()
     ppo = PPO("cpu", log_dir=None)
-    network = ppo.train(SharedNatureAgent, create_env, ppo.target_steps * 2 + 1, progress, num_envs)
+    network = ppo.train(SharedNatureAgent, create_env, ppo.target_steps * 2 + 1, progress, envs=num_envs)
     assert progress.update.call_count, "PPO did not call update"
 
     env = create_env()

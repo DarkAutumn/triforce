@@ -73,25 +73,19 @@ class PPO:
         self._logging = {}
         self.start_time = None
 
-    def _get_and_remove(self, dictionary, key, default):
-        if key in dictionary:
-            value = dictionary[key]
-            del dictionary[key]
-            return value
-
-        return default
-
-    def train(self, network, create_env, iterations, progress=None, n_envs=1):
+    def train(self, network, create_env, iterations, progress=None, **kwargs):
         """Train the network."""
         self.start_time = time.time()
 
         env = create_env()
         network = create_network(network, env.observation_space, env.action_space)
 
-        if n_envs == 1:
-            return self._train_single(network, env, iterations, progress)
+        envs = kwargs.get('envs', 1)
 
-        return self._train_multiproc(network, env, create_env, iterations, progress, n_envs)
+        if envs == 1:
+            return self._train_single(network, env, iterations, progress, **kwargs)
+
+        return self._train_multiproc(network, env, create_env, iterations, progress, **kwargs)
 
     def _train_single(self, network, env, iterations, progress, **kwargs):
         # tracking
@@ -125,8 +119,10 @@ class PPO:
         env.close()
         return network
 
-    def _train_multiproc(self, network, env, create_env, iterations, progress, n_envs, **kwargs):
+    def _train_multiproc(self, network, env, create_env, iterations, progress, **kwargs):
         # pylint: disable=too-many-locals
+        envs = kwargs['envs']
+
         # tracking
         save_path = kwargs.get('save_path', None)
         next_update = Threshold(LOG_RATE)
@@ -135,8 +131,8 @@ class PPO:
         reward_stats = None
 
         # ppo variables
-        memory_length = self.target_steps // n_envs
-        variables = PPORolloutBuffer(memory_length, n_envs, env.observation_space, env.action_space,
+        memory_length = self.target_steps // envs
+        variables = PPORolloutBuffer(memory_length, envs, env.observation_space, env.action_space,
                                      self._gamma, self._lambda)
         env.close()
 
@@ -147,12 +143,12 @@ class PPO:
                 'steps': variables.memory_length,
                 }
 
-        workers = [SubprocessWorker(idx, create_env, network, result_queue, kwargs) for idx in range(n_envs)]
+        workers = [SubprocessWorker(idx, create_env, network, result_queue, kwargs) for idx in range(envs)]
         try:
-            steps = math.ceil(iterations / (n_envs * memory_length))
+            steps = math.ceil(iterations / (envs * memory_length))
             for step in range(steps):
-                total_iterations = step * n_envs * memory_length
-                iterations_processed = n_envs * memory_length
+                total_iterations = step * envs * memory_length
+                iterations_processed = envs * memory_length
 
                 # Process the results from the workers
                 infos = self._subprocess_ppo(network, progress, variables, result_queue, workers)
@@ -164,10 +160,11 @@ class PPO:
                     reward_stats.to_tensorboard(self.tensorboard, total_iterations)
 
                 if save_path and next_save.add(iterations_processed) and reward_stats:
-                    network.save(f"{save_path}/network_{total_iterations}.pt", reward_stats)
+                    model_name = kwargs.get('model_name', 'network')
+                    network.save(f"{save_path}/{model_name}-{total_iterations:_}.pt", reward_stats)
 
                 # Update the network
-                self._optimize(network, variables, step * n_envs * memory_length)
+                self._optimize(network, variables, step * envs * memory_length)
                 network.steps_trained += iterations_processed
 
         except EOFError:
@@ -177,10 +174,6 @@ class PPO:
             # Tell workers to shut down regardless
             for worker in workers:
                 worker.close_async()
-
-        # only hit without exception
-        for worker in workers:
-            worker.join()
 
         return network
 
