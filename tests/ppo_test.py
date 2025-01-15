@@ -171,20 +171,13 @@ def test_worker_process():
     subprocess = SubprocessWorker(0, create_env, TestNetwork, result_queue, kwargs)
 
     subprocess.run_main_loop_async(TestNetwork(obs_space, action_space).state_dict())
-    subprocess.close_async()
     result = result_queue.get()
-
     assert result is not None, "PPO did not return a result"
     assert result['command'] == 'build_batch', "PPO did not return the expected command"
+
     assert isinstance(result['result'], PPORolloutBuffer), "PPO did not return a PPORolloutBuffer"
     assert isinstance(result['infos'], list), "PPO did not return a list of infos"
     assert isinstance(result['infos'][0], dict), "PPO did not return a list of infos"
 
+    subprocess.close_async()
     subprocess.join()
-
-
-
-
-
-
-
