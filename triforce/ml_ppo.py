@@ -26,7 +26,7 @@ TARGET_STEPS = 2048
 EPOCHS = 10
 MINIBATCHES = 4
 LOG_RATE = 20_000
-SAVE_INTERVAL = 50_000
+SAVE_INTERVAL = 40_000
 
 class Threshold:
     """A counter class to see if we've reached our intervals."""
@@ -109,9 +109,10 @@ class PPO:
             if next_update.add(buffer.memory_length):
                 reward_stats = rewards.get_stats_and_clear()
                 reward_stats.to_tensorboard(self.tensorboard, total_iterations)
+                network.stats = reward_stats
 
-            if save_path and next_save.add(buffer.memory_length) and reward_stats:
-                network.save(f"{save_path}/network_{total_iterations}.pt", reward_stats)
+            if save_path and next_save.add(buffer.memory_length):
+                network.save(f"{save_path}/network_{total_iterations}.pt")
 
             network = self._optimize(network, buffer, total_iterations)
             network.steps_trained += buffer.memory_length
@@ -158,10 +159,11 @@ class PPO:
                 if next_update.add(iterations_processed):
                     reward_stats = rewards.get_stats_and_clear()
                     reward_stats.to_tensorboard(self.tensorboard, total_iterations)
+                    network.stats = reward_stats
 
                 if save_path and next_save.add(iterations_processed) and reward_stats:
                     model_name = kwargs.get('model_name', 'network')
-                    network.save(f"{save_path}/{model_name}-{total_iterations:_}.pt", reward_stats)
+                    network.save(f"{save_path}/{model_name}-{total_iterations:_}.pt")
 
                 # Update the network
                 self._optimize(network, variables, step * envs * memory_length)

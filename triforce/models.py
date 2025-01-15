@@ -94,12 +94,12 @@ class Network(nn.Module):
         torch.nn.init.constant_(layer.bias, bias_const)
         return layer
 
-    def save(self, path, stats : Optional[RewardStats] = None):
+    def save(self, path):
         """Save the network to a file."""
         save_data = {
             "model_state_dict": self.state_dict(),
             "steps_trained": self.steps_trained,
-            "stats": pickle.dumps(stats) if stats else None,
+            "stats": pickle.dumps(self.stats) if self.stats else None,
             "obs_space": self.observation_space,
             "action_space": self.action_space,
         }
