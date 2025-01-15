@@ -195,7 +195,7 @@ class ObservationWrapper(gym.Wrapper):
         return frame
 
     def _get_vectors(self, state : ZeldaGame):
-        vectors = np.zeros(shape=(OBJECT_KINDS, OBJECTS_PER_KIND, 3), dtype=np.float32)
+        vectors = torch.zeros(OBJECT_KINDS, OBJECTS_PER_KIND, 3, dtype=torch.float32)
 
         items = state.items
         if state.treasure_location is not None:
@@ -206,38 +206,37 @@ class ObservationWrapper(gym.Wrapper):
             if kind:
                 vectors[i, :OBJECTS_PER_KIND, :] = self._get_object_vectors(kind, OBJECTS_PER_KIND)
 
-        return vectors
+        return vectors.clamp(-1, 1)
 
     def _get_object_vectors(self, objects : Sequence[ZeldaObject], count):
-        result = np.zeros((count, 3), dtype=np.float32)
+        result = torch.zeros((count, 3), dtype=torch.float32)
         result[:, 2] = -1
 
         # closest objects first
         objects = sorted(objects, key=lambda obj: obj.distance)
         for i, obj in enumerate(objects[:count]):
-            if np.isclose(obj.distance, 0, atol=1e-5):
-                result[i] = [0, 0, -1]
-
+            if obj.distance <= 1e-5:
+                result[i] = 0, 0, -1
             else:
-                dist = np.clip(obj.distance / DISTANCE_SCALE, 0, 1)
-                result[i] = [obj.vector[0], obj.vector[1], dist]
+                result[i, :2] = torch.from_numpy(obj.vector[:2])
+                result[i, 2] = obj.distance / DISTANCE_SCALE
 
         return result
 
     def _get_information(self, state : ZeldaGame):
         objectives = self._get_objectives_vector(state, state.objectives)
 
-        source_direction = np.zeros(4, dtype=np.float32)
+        source_direction = torch.zeros(4, dtype=torch.float32)
         self._assign_direction(source_direction, state.full_location.get_direction_of_movement(self._prev_loc))
 
-        features = np.zeros(2, dtype=np.float32)
+        features = torch.zeros(2, dtype=torch.float32)
         features[0] = 1.0 if state.active_enemies else 0.0
         features[1] = 1.0 if state.link.are_beams_available else 0.0
 
-        return np.concatenate([objectives, source_direction, features])
+        return torch.concatenate([objectives, source_direction, features])
 
     def _get_objectives_vector(self, state : ZeldaGame, objectives : Objective):
-        result = np.zeros(6, dtype=np.float32)
+        result = torch.zeros(6, dtype=torch.float32)
 
         match objectives.kind:
             case ObjectiveKind.MOVE:
