@@ -15,7 +15,7 @@ import torch
 from torch import nn
 from gymnasium.spaces import MultiBinary, Discrete
 
-from triforce.ml_ppo import GAMMA, LAMBDA, PPO, Network, PPOSubprocess
+from triforce.ml_ppo import GAMMA, LAMBDA, PPO, Network, SubprocessWorker
 from triforce.models import SharedNatureAgent
 from triforce.model_definition import ZELDA_MODELS, ZeldaModelDefinition
 from triforce.zelda_env import make_zelda_env
@@ -164,7 +164,7 @@ def test_worker_process():
             'steps': 1024,
             }
 
-    subprocess = PPOSubprocess(0, create_env, TestNetwork, result_queue, kwargs)
+    subprocess = SubprocessWorker(0, create_env, TestNetwork, result_queue, kwargs)
 
     subprocess.run_main_loop_async(TestNetwork(obs_space, action_space).state_dict())
     subprocess.close_async()

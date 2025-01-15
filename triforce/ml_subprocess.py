@@ -4,7 +4,7 @@ from multiprocessing import Process, Queue
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network
 
-class PPOSubprocess:
+class SubprocessWorker:
     """Controls a worker process that runs PPO in a separate process."""
     def __init__(self, idx, create_env, network, result_queue, ppo_kwargs):
         self.idx = idx

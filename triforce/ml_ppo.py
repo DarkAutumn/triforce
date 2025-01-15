@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
-from .ml_subprocess import PPOSubprocess
+from .ml_subprocess import SubprocessWorker
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network
 from .rewards import StepRewards
@@ -109,7 +109,7 @@ class PPO:
                 'steps': self.memory_length,
                 }
 
-        workers = [PPOSubprocess(idx, create_env, network, result_queue, kwargs) for idx in range(n_envs)]
+        workers = [SubprocessWorker(idx, create_env, network, result_queue, kwargs) for idx in range(n_envs)]
         try:
             steps = math.ceil(iterations / (n_envs * self.memory_length))
             for step in range(steps):
