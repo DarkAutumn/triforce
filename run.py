@@ -16,7 +16,7 @@ import numpy as np
 import cv2
 import tqdm
 
-from triforce import ZeldaScenario, simulate_critique, make_zelda_env, TRAINING_SCENARIOS, ZeldaAI
+from triforce import ZeldaScenario, simulate_critique, make_zelda_env, TRAINING_SCENARIOS, Network
 from triforce.game_state_change import ZeldaStateChange
 from triforce.model_definition import ZELDA_MODELS, ZeldaModelDefinition
 from triforce.rewards import StepRewards
@@ -206,9 +206,10 @@ class DisplayWindow:
                     model_name = "keyboard input"
                     next_action = None
                 else:
-                    model, model_name = self._select_model(model_requested)
-                    action = model.predict(obs, deterministic=False)
-                    model_name = f"{self.model_definition.name} ({model_name}) {model.num_timesteps:,} timesteps"
+                    model, model_name = self._select_model(env, model_requested)
+                    action = model.get_action(obs, deterministic=False)
+                    success_rate = model.stats.success_rate * 100 if model.stats else 0
+                    model_name = f"{self.model_definition.name} ({model.steps_trained:,} timesteps {success_rate:.1f}%)"
 
                 obs, _, terminated, truncated, state_change = env.step(action)
                 for frame in state_change.frames:
@@ -381,18 +382,20 @@ class DisplayWindow:
 
         return (ActionKind.MOVE, direction)
 
-    def _select_model(self, index : int) -> ZeldaAI:
+    def _select_model(self, env, index : int) -> Network:
         models_available = self.model_definition.find_available_models(self.model_path)
         names = sorted(models_available.keys(), key=lambda x: int(x) if isinstance(x, int) else -1)
+        names.append("untrained")
 
         name = names[index % len(names)]
-        path = models_available[name]
-        if (result := self._loaded_models.get(path, None)) is None:
-            result = ZeldaAI(self.model_definition)
-            result.load(path)
-            self._loaded_models[path] = result
+        path = models_available.get(name)
+        if (network := self._loaded_models.get(path, None)) is None:
+            network : Network = self.model_definition.neural_net(env.observation_space, env.action_space)
+            if name != "untrained":
+                network.load(path)
+            self._loaded_models[path] = network
 
-        return result, name
+        return network, name
 
     def _print_location_info(self, state):
         if self._last_location is not None:
@@ -439,7 +442,7 @@ class DisplayWindow:
             for j in range(obs["vectors"].shape[1]):
                 v = obs["vectors"][i, j]
                 widget = self.vector_widgets[i * obs["vectors"].shape[1] + j]
-                widget.vector = v
+                widget.vector = v.cpu().numpy()
                 widget.draw(surface)
 
 
