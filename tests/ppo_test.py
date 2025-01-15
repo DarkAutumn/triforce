@@ -95,7 +95,11 @@ def test_ppo_training(device, num_envs):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    ppo = PPO(device, log_dir=None)
+    kwargs = {}
+    if num_envs == 1:
+        kwargs['target_steps'] = 128
+
+    ppo = PPO(device, log_dir=None, **kwargs)
 
     # Train PPO for enough iterations to allow learning.  There's no magic here, this just seems
     # to be enough iterations for this environment to learn.

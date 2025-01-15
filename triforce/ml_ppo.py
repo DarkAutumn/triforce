@@ -23,10 +23,14 @@ ENT_COEFF = 0.001 # lowered, original = 0.01
 VS_COEFF = 0.5
 MAX_GRAD_NORM = 0.5
 EPSILON = 1e-5
+TARGET_STEPS = 2048
+EPOCHS = 10
+MINIBATCHES = 4
 
 class PPO:
     """PPO Implementation.  Adapted from from https://www.youtube.com/watch?v=MEt6rrxH8W4."""
     def __init__(self, device, log_dir, **kwargs):
+        self._target_steps = kwargs.get('target_steps', TARGET_STEPS)
         self._norm_advantages = kwargs.get('norm_advantages', NORM_ADVANTAGES)
         self._clip_val_loss = kwargs.get('clip_val_loss', CLIP_VAL_LOSS)
         self._learning_rate = kwargs.get('learning_rate', LEARNING_RATE)
@@ -37,12 +41,8 @@ class PPO:
         self._vf_coeff = kwargs.get('vf_coeff', VS_COEFF)
         self._max_grad_norm = kwargs.get('max_grad_norm', MAX_GRAD_NORM)
         self._epsilon = kwargs.get('epsilon', EPSILON)
-        self.memory_length = kwargs.get('memory_length', 128)
-        self.minibatches = kwargs.get('minibatches', 4)
-        self.num_epochs = kwargs.get('num_epochs', 4)
-
-        if kwargs:
-            raise ValueError(f"Unknown arguments: {kwargs}")
+        self.minibatches = kwargs.get('minibatches', MINIBATCHES)
+        self.num_epochs = kwargs.get('num_epochs', EPOCHS)
 
         self.kwargs = kwargs
 
@@ -78,15 +78,16 @@ class PPO:
 
         return self._train_multiproc(network, env, create_env, iterations, progress, n_envs)
 
-    def _train_single(self, network, env, iterations, progress, n_envs=1):
-        buffer = PPORolloutBuffer(self.memory_length, n_envs, env.observation_space, env.action_space,
+    def _train_single(self, network, env, iterations, progress):
+        memory_length = self._target_steps
+        buffer = PPORolloutBuffer(memory_length, 1, env.observation_space, env.action_space,
                                   self._gamma, self._lambda)
 
         iteration = 0
         while iteration < iterations:
             infos = buffer.ppo_main_loop(0, network, env, progress)
 
-            iteration += n_envs * self.memory_length
+            iteration += buffer.memory_length
             self._update_infos(infos, iteration)
             network = self._optimize(network, buffer, iteration)
 
@@ -94,7 +95,8 @@ class PPO:
         return network
 
     def _train_multiproc(self, network, env, create_env, iterations, progress, n_envs):
-        variables = PPORolloutBuffer(self.memory_length, n_envs, env.observation_space, env.action_space,
+        memory_length = self._target_steps // n_envs
+        variables = PPORolloutBuffer(memory_length, n_envs, env.observation_space, env.action_space,
                                      self._gamma, self._lambda)
         env.close()
 
@@ -102,16 +104,16 @@ class PPO:
         kwargs = {
                 'gamma': self._gamma,
                 'lambda': self._lambda,
-                'steps': self.memory_length,
+                'steps': variables.memory_length,
                 }
 
         workers = [SubprocessWorker(idx, create_env, network, result_queue, kwargs) for idx in range(n_envs)]
         try:
-            steps = math.ceil(iterations / (n_envs * self.memory_length))
+            steps = math.ceil(iterations / (n_envs * memory_length))
             for step in range(steps):
                 infos = self._subprocess_ppo(network, progress, variables, result_queue, workers)
-                self._update_infos(infos, step * n_envs * self.memory_length)
-                self._optimize(network, variables, step * n_envs * self.memory_length)
+                self._update_infos(infos, step * n_envs * memory_length)
+                self._optimize(network, variables, step * n_envs * memory_length)
 
         except EOFError:
             pass
@@ -154,11 +156,12 @@ class PPO:
                         raise ValueError(f"Duplicate message for {idx}")
 
                     recieved.append(idx)
-                    variables[idx] = message['result']
+                    result = message['result']
+                    variables[idx] = result
                     infos.extend(message['infos'])
 
                     if progress is not None:
-                        progress.update(self.memory_length)
+                        progress.update(result.memory_length)
         return infos
 
     def _update_infos(self, infos, iterations):
@@ -224,10 +227,10 @@ class PPO:
         if isinstance(variables.observation, dict):
             b_obs = {}
             for key, obs_part in variables.observation.items():
-                part = obs_part[:, :self.memory_length]
+                part = obs_part[:, :variables.memory_length]
                 b_obs[key] = part.reshape(-1, *obs_part.shape[2:]).to(self.device)
         else:
-            part = variables.observation[:, :self.memory_length]
+            part = variables.observation[:, :variables.memory_length]
             b_obs = part.reshape(-1, *part.shape[2:]).to(self.device)
 
         # flatten actions, logprobs, values, masks
@@ -247,7 +250,7 @@ class PPO:
         b_returns    = variables.returns.reshape(-1).to(self.device)
 
         # standard PPO update
-        batch_size = self.memory_length * variables.n_envs
+        batch_size = variables.memory_length * variables.n_envs
         minibatch_size = batch_size // self.minibatches
 
         network = network.to(self.device)
