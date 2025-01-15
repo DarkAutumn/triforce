@@ -100,10 +100,6 @@ class ZeldaGame:
                     if last is not None and (enemy.position != last.position or enemy.health < last.health):
                         enemy.mark_invulnerable()
 
-                case ZeldaEnemyKind.Zora:
-                    if self.link.sword in (SwordKind.NONE, SwordKind.WOOD):
-                        enemy.mark_invulnerable()
-
     def get(self, name, default):
         """Gets the property from the info dict with a default."""
         if hasattr(self, name):
