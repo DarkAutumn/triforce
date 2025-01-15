@@ -1,10 +1,14 @@
 from functools import reduce
 import operator
+import pickle
+from typing import Optional
 import torch
 from torch import nn
 import torch.distributions as dist
 import numpy as np
 from gymnasium.spaces import Dict
+
+from .rewards import RewardStats
 
 class Network(nn.Module):
     """The base class of neural networks used for PPO training."""
@@ -16,6 +20,8 @@ class Network(nn.Module):
         super().__init__()
         self.observation_space = obs_space
         self.action_space = action_space
+        self.steps_trained = 0
+        self.stats : Optional[RewardStats] = None
 
         self.base = base_network
         self.action_net = self.layer_init(nn.Linear(64, action_space.n), std=0.01)
@@ -87,6 +93,35 @@ class Network(nn.Module):
         torch.nn.init.orthogonal_(layer.weight, std)
         torch.nn.init.constant_(layer.bias, bias_const)
         return layer
+
+    def save(self, path, stats : Optional[RewardStats] = None):
+        """Save the network to a file."""
+        save_data = {
+            "model_state_dict": self.state_dict(),
+            "steps_trained": self.steps_trained,
+            "stats": pickle.dumps(stats) if stats else None,
+            "obs_space": self.observation_space,
+            "action_space": self.action_space,
+        }
+
+        torch.save(save_data, path)
+
+    def load(self, path) -> 'Network':
+        """Load the network from a file."""
+        save_data = torch.load(path)
+
+        self.load_state_dict(save_data["model_state_dict"])
+        self.steps_trained = save_data["steps_trained"]
+        stats_pickled = save_data.get("stats")
+        self.stats = pickle.loads(stats_pickled) if stats_pickled else None
+
+        if self.observation_space != save_data["obs_space"]:
+            raise ValueError("Mismatch in observation space!")
+
+        if self.action_space != save_data["action_space"]:
+            raise ValueError("Mismatch in action space!")
+
+        return self
 
 class NatureCNN(nn.Module):
     """Simple CNN."""
