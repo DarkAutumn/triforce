@@ -1,6 +1,8 @@
 from functools import reduce
+import inspect
 import operator
 import pickle
+import sys
 from typing import Optional
 import torch
 from torch import nn
@@ -87,6 +89,11 @@ class Network(nn.Module):
         _, value = self.forward(obs)
         return value.view(-1)
 
+    def get_action(self, obs, mask = None, deterministic = False):
+        """Get the action from the observation."""
+        action, _, _, _ = self.get_action_and_value(obs, mask, deterministic=deterministic)
+        return action
+
     @staticmethod
     def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
         """Initialize a linear layer."""
@@ -94,12 +101,12 @@ class Network(nn.Module):
         torch.nn.init.constant_(layer.bias, bias_const)
         return layer
 
-    def save(self, path, stats : Optional[RewardStats] = None):
+    def save(self, path):
         """Save the network to a file."""
         save_data = {
             "model_state_dict": self.state_dict(),
             "steps_trained": self.steps_trained,
-            "stats": pickle.dumps(stats) if stats else None,
+            "stats": pickle.dumps(self.stats) if self.stats else None,
             "obs_space": self.observation_space,
             "action_space": self.action_space,
         }
@@ -122,6 +129,13 @@ class Network(nn.Module):
             raise ValueError("Mismatch in action space!")
 
         return self
+
+    @staticmethod
+    def load_stats(path):
+        """Load the stats from a file."""
+        save_data = torch.load(path)
+        stats_pickled = save_data.get("stats")
+        return pickle.loads(stats_pickled) if stats_pickled else None
 
 class NatureCNN(nn.Module):
     """Simple CNN."""
@@ -235,3 +249,36 @@ def create_network(network, obs_space, action_space):
         raise ValueError("network must be a Network or a Network subclass")
 
     return network
+
+def _init_models():
+    # Get all classes defined in this module
+    result = {}
+    current_module = sys.modules[__name__]
+    for cls_name, cls_obj in inspect.getmembers(current_module, inspect.isclass):
+        # Check if the class subclasses 'Network' and matches the name
+        if issubclass(cls_obj, Network) and cls_obj is not Network:
+            result[cls_name] = cls_obj
+
+    return result
+
+
+NEURAL_NETWORK_DEFINITIONS = _init_models()
+
+def register_neural_network(name, model_class):
+    """Register a neural network definition."""
+    if not issubclass(model_class, Network):
+        raise ValueError("model_class must be a subclass of Network")
+
+    if name in NEURAL_NETWORK_DEFINITIONS:
+        raise ValueError(f"Model {name} already exists")
+
+    if model_class == Network:
+        raise ValueError("Cannot register the base Network")
+
+    NEURAL_NETWORK_DEFINITIONS[name] = model_class
+
+def get_neural_network(name):
+    """Get a model by name."""
+    return NEURAL_NETWORK_DEFINITIONS[name]
+
+__all__ = [Network.__name__, SharedNatureAgent.__name__, register_neural_network.__name__, get_neural_network.__name__]

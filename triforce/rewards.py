@@ -76,11 +76,14 @@ class Reward(Outcome):
     """Represents a positive outcome (reward)."""
     def __post_init__(self):
         assert self.value >= 0
+        assert self.name.startswith("reward")
+
 @dataclass(frozen=True)
 class Penalty(Outcome):
     """Represents a negative outcome (penalty)."""
     def __post_init__(self):
         assert self.value <= 0
+        assert self.name.startswith("penalty")
 
 class StepRewards:
     """A single step's rewards."""
@@ -168,14 +171,17 @@ class TotalRewards:
         self.rewards = []
         self.scores = []
         self.total_steps = []
-        self.outcomes =  {x : 0 for x in TotalRewards._outcomes_seen}
+        self.outcomes = self._create_outcome_dict()
         self.endings = {x : 0 for x in TotalRewards._endings_seen}
         self.episodes = 0
 
-    def _get_empty_dict(self, already_seen : set):
+    def _create_outcome_dict(self):
         result = {}
-        for name in already_seen:
-            result[name] = 0
+        for key in TotalRewards._outcomes_seen:
+            if key.startswith("reward"):
+                result[key] = Reward(key, 0)
+            else:
+                result[key] = Penalty(key, 0)
 
         return result
 
@@ -210,22 +216,32 @@ class TotalRewards:
         self.rewards.clear()
         self.scores.clear()
         self.total_steps.clear()
-        self.outcomes = self._get_empty_dict(TotalRewards._outcomes_seen)
-        self.endings = self._get_empty_dict(TotalRewards._endings_seen)
+        self.outcomes = self._create_outcome_dict()
+        self.endings = {x : 0 for x in TotalRewards._endings_seen}
         self.episodes = 0
 
         return stats
 
 class RewardStats:
     """Totalled rewards for a section of a training run."""
-    def __init__(self, total : TotalRewards):
+    def __init__(self, total : TotalRewards, evaluated = False):
+        self.evaluated = evaluated
         self.episodes = total.episodes
         self.rewards = np.mean(total.rewards) if total.rewards else 0
         self.scores = np.mean(total.scores) if total.scores else 0
         self.total_steps = np.mean(total.total_steps) if total.total_steps else 0
         self.outcomes = {x: y.copy() for x, y in total.outcomes.items()}
         self.endings = total.endings.copy()
-        self.success_rate = self.endings.get('success', 0) / self.episodes if self.episodes else 0
+
+    @property
+    def success_rate(self):
+        """Return the success rate."""
+        if not self.episodes:
+            return 0
+
+        successes = sum(value for key, value in self.endings.items() if key.startswith('success'))
+        return successes / self.episodes
+
 
     def to_tensorboard(self, tensorboard, iterations):
         """Write the stats to TensorBoard."""

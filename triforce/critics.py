@@ -90,6 +90,7 @@ class GameplayCritic(ZeldaCritic):
         self._total_hits = 0
         self._room_enter_health = None
         self._equipment_rewards = {}
+        self._score = 0.0
 
     def clear(self):
         super().clear()
@@ -97,6 +98,7 @@ class GameplayCritic(ZeldaCritic):
         self._seen_locations.clear()
         self._total_hits = 0
         self._room_enter_health = None
+        self._score = 0.0
 
     def critique_gameplay(self, state_change : ZeldaStateChange, rewards : StepRewards):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
@@ -337,6 +339,8 @@ class GameplayCritic(ZeldaCritic):
 
             movement = curr_link.position.numpy - prev_link.position.numpy
             progress = np.dot(movement, dir_vect)
+            # TODO: investigate why this happens
+            progress = max(progress, 0)
             rewards.add(MOVE_CLOSER_REWARD, progress / MOVEMENT_SCALE_FACTOR)
 
     def critique_moving_into_danger(self, state_change : ZeldaStateChange, rewards):
@@ -369,20 +373,32 @@ class GameplayCritic(ZeldaCritic):
 
     def set_score(self, state_change : ZeldaStateChange, rewards : StepRewards):
         """Sets the score based on how many rooms we have seen, enemies hit, and other factors."""
-        self._seen_locations.add(state_change.state.full_location)
-        seen_locations = len(self._seen_locations) - 1
-        correct_locations = len(self._correct_locations) - 1
-        self._total_hits += state_change.hits
 
-        score = 0.5 * (seen_locations + correct_locations) + 0.1 * self._total_hits
-        if state_change.previous.link.triforce_of_power < state_change.state.link.triforce_of_power:
-            score += 100
+        rooms = [(0, 0x67),
+                 (0, 0x68),
+                 (0, 0x58),
+                 (0, 0x48),
+                 (0, 0x38),
+                 (0, 0x37),
+                 (1, 0x73),
+                 (1, 0x74),
+                 (1, 0x72),
+                 (1, 0x63),
+                 (1, 0x53),
+                 (1, 0x52),
+                 (1, 0x42),
+                 (1, 0x43),
+                 (1, 0x44),
+                 (1, 0x45),
+                 (1, 0x35),
+                 (1, 0x36),]
 
-        triforce_diff = state_change.state.link.triforce_pieces - state_change.previous.link.triforce_pieces
-        if triforce_diff > 0:
-            score += triforce_diff * 100
+        level = state_change.state.level
+        location = state_change.state.location
+        if (level, location) in rooms:
+            self._score = max(self._score, rooms.index((level, location)) / len(rooms))
 
-        rewards.score = score
+        rewards.score = self._score
 
 REWARD_ENTERED_CAVE = Reward("reward-entered-cave", REWARD_LARGE)
 REWARD_LEFT_CAVE = Reward("reward-left-cave", REWARD_LARGE)
@@ -440,4 +456,4 @@ class OverworldSwordCritic(GameplayCritic):
             if state.location != 0x77:
                 score += 1
 
-        rewards.score = score
+        rewards.score = score / 5

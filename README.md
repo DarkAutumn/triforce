@@ -61,8 +61,6 @@ Models define what their action space is (for example, basic combat models do no
 
 Scenarios are used to train and evaluate models.  They define what critic, end conditions, and starting room(s) are used to train them.  They also allow us to change aspects of gameplay.  The `data` section can change RAM values of the game to do a variety of things.  The `fixed` section is like `data` but those values are reset every frame.  This is how we train the model which knows how to use sword beams.  No matter if that model takes damage, it is always set to full health.  For the no-beam model, we always set health lower than full so that it never has sword beams when training.
 
-[machine_learning.py](triforce/machine_learning.py) encompasses all neural network and reinforcement learning algorithms.  Currently, this project simply uses stable-baselines for its PPO implementation along with the default 'MultiInputPolicy'.  All interaction with the model goes through the ZeldaAI class to train it, predict actions, and load/save the model itself.  This allows you to easily swap out the underlying implementation without touching the rest of the project.
-
 ## Running and Debugging the Models
 
 I develop on Linux, but in the past this project has worked fine on an up-to-date WSL2 Ubuntu 22 instance on Windows (the pygame based GUI also works).  I do not test on Windows though, so your experience may vary if I've accidently broken something.

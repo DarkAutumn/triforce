@@ -1,9 +1,8 @@
 stable-retro
 numpy
 tensorflow
+torch
 gymnasium
-stable_baselines3
-stable-baselines3[extra]
 matplotlib
 pytest
 opencv-python
