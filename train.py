@@ -5,7 +5,13 @@
 
 import argparse
 import sys
-from triforce import ZELDA_MODELS, ZeldaAI
+import os
+
+from tqdm import tqdm
+from triforce import ZELDA_MODELS
+from triforce.ml_ppo import PPO
+from triforce.models import SharedNatureAgent
+from triforce.zelda_env import make_zelda_env
 
 def main():
     """Main entry point."""
@@ -15,8 +21,21 @@ def main():
 
     models = args.models if args.models else ZELDA_MODELS.keys()
     for model_name in models:
-        zelda_ml = ZeldaAI(ZELDA_MODELS[model_name], verbose=args.verbose, ent_coef=args.ent_coef)
-        zelda_ml.train(output_path, iterations, args.parallel, obs_kind=args.obs_kind)
+        path = f"{output_path}/{model_name}"
+        os.makedirs(path, exist_ok=True)
+
+        log_dir = f"{path}/logs" if args.output else model_name
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+
+        def create_env():
+            model_def = ZELDA_MODELS[model_name]
+            return make_zelda_env(model_def.training_scenario, model_def.action_space, obs_kind=args.obs_kind)
+
+        ppo = PPO("cpu", log_dir=log_dir)
+        model = ppo.train(SharedNatureAgent, create_env, iterations, tqdm(total=iterations), args.parallel)
+        model.save(f"{path}/model.pt")
+
 
 def parse_args():
     """Parse command line arguments."""
