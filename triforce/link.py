@@ -95,7 +95,7 @@ class Link(ZeldaObject):
         return self.__dict__['_heart_containers']
 
     # Calculated status
-    def get_available_actions(self):
+    def get_available_actions(self, beams_are_separated : bool):
         """Returns the actions that are available to the agent."""
         # pylint: disable=too-many-branches
         available = set()
@@ -103,10 +103,10 @@ class Link(ZeldaObject):
         # Always able to move in at least one direction
         available.add(ActionKind.MOVE)
 
-        if self.sword != SwordKind.NONE and not self.is_sword_frozen and not self.has_beams:
+        if self.sword != SwordKind.NONE and (not self.has_beams or not beams_are_separated):
             available.add(ActionKind.SWORD)
 
-        if self.has_beams:
+        if self.has_beams and beams_are_separated:
             available.add(ActionKind.BEAMS)
 
         if self.bombs:
@@ -161,7 +161,7 @@ class Link(ZeldaObject):
     @property
     def has_beams(self) -> bool:
         """Returns True if link is able to fire sword beams in general."""
-        return self.sword != SwordKind.NONE and self.is_health_full and not self.is_sword_frozen
+        return self.sword != SwordKind.NONE and self.is_health_full and not self.is_sword_screen_locked
 
     @property
     def are_beams_available(self) -> bool:
@@ -169,19 +169,38 @@ class Link(ZeldaObject):
         return self.get_animation_state(ZeldaAnimationKind.BEAMS) == AnimationState.INACTIVE and self.has_beams
 
     @property
-    def is_sword_frozen(self) -> bool:
+    def is_sword_screen_locked(self) -> bool:
         """Returns True when Link is at the edge of the screen.  During this time he cannot use his weapons or
         be harmed."""
         x, y = self.position
         if self.game.level == 0:
-            return x < 0x8 or x > 0xe8 or y <= 0x44 or y >= 0xd8
+            return x < 0x7 or x > 0xe8 or y < 0x45 or y > 0xd5
 
         return x <= 0x10 or x >= 0xd9 or y <= 0x53 or y >= 0xc5
 
-    @property
-    def is_invincible(self) -> bool:
-        """Returns True if link is invincible."""
-        return self.is_sword_frozen or self.clock
+    def get_sword_directions_allowed(self):
+        """Returns the directions that link can attack in."""
+        x, y = self.position
+        directions = []
+
+        if self.game.level == 0:
+            if 7 < x < 0xe8:
+                directions.append(Direction.E)
+                directions.append(Direction.W)
+
+            if 0x45 < y < 0xd5:
+                directions.append(Direction.S)
+                directions.append(Direction.N)
+        else:
+            if 0x10 < x < 0xd9:
+                directions.append(Direction.E)
+                directions.append(Direction.W)
+
+            if 0x53 < y < 0xc5:
+                directions.append(Direction.S)
+                directions.append(Direction.N)
+
+        return directions
 
     # Animation States
     def get_animation_state(self, animation_id: ZeldaAnimationKind) -> AnimationState:
