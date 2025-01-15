@@ -224,7 +224,8 @@ class TotalRewards:
 
 class RewardStats:
     """Totalled rewards for a section of a training run."""
-    def __init__(self, total : TotalRewards):
+    def __init__(self, total : TotalRewards, evaluated = False):
+        self.evaluated = evaluated
         self.episodes = total.episodes
         self.rewards = np.mean(total.rewards) if total.rewards else 0
         self.scores = np.mean(total.scores) if total.scores else 0

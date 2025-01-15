@@ -130,6 +130,13 @@ class Network(nn.Module):
 
         return self
 
+    @staticmethod
+    def load_stats(path):
+        """Load the stats from a file."""
+        save_data = torch.load(path)
+        stats_pickled = save_data.get("stats")
+        return pickle.loads(stats_pickled) if stats_pickled else None
+
 class NatureCNN(nn.Module):
     """Simple CNN."""
     def __init__(self, input_channels=1, linear_output_size=256):
