@@ -87,7 +87,7 @@ class PPO:
             infos = buffer.ppo_main_loop(0, network, env, progress)
 
             iteration += n_envs * self.memory_length
-            self._update_infos(infos)
+            self._update_infos(infos, iteration)
             network = self._optimize(network, buffer, iteration)
 
         env.close()
@@ -110,7 +110,7 @@ class PPO:
             steps = math.ceil(iterations / (n_envs * self.memory_length))
             for step in range(steps):
                 infos = self._subprocess_ppo(network, progress, variables, result_queue, workers)
-                self._update_infos(infos)
+                self._update_infos(infos, step * n_envs * self.memory_length)
                 self._optimize(network, variables, step * n_envs * self.memory_length)
 
         except EOFError:
@@ -161,7 +161,8 @@ class PPO:
                         progress.update(self.memory_length)
         return infos
 
-    def _update_infos(self, infos):
+    def _update_infos(self, infos, iterations):
+        curr = time.time()
         # pylint: disable=too-many-branches, too-many-locals
         if self.tensorboard is None:
             return
@@ -192,22 +193,22 @@ class PPO:
                         steps.append(info['steps'])
 
         if success_rate:
-            self.tensorboard.add_scalar('evaluation/success-rate', np.mean(success_rate))
+            self.tensorboard.add_scalar('evaluation/success-rate', np.mean(success_rate), iterations, curr)
         if evaluation:
-            self.tensorboard.add_scalar('evaluation/score', np.mean(evaluation))
+            self.tensorboard.add_scalar('evaluation/score', np.mean(evaluation), iterations, curr)
         if total_seconds:
-            self.tensorboard.add_scalar('rollout/seconds_per_episode', np.mean(total_seconds))
+            self.tensorboard.add_scalar('rollout/seconds_per_episode', np.mean(total_seconds), iterations, curr)
         if steps:
-            self.tensorboard.add_scalar('rollout/steps_per_episode', np.mean(steps))
+            self.tensorboard.add_scalar('rollout/steps_per_episode', np.mean(steps), iterations, curr)
 
         endings = Counter(endings)
         for ending, count in endings.items():
             self.endings[ending] = count + self.endings.get(ending, 0)
-            self.tensorboard.add_scalar('end/' + ending, count)
+            self.tensorboard.add_scalar('end/' + ending, count, iterations, curr)
 
         for name, rew in self.reward_values.items():
             parts = name.split('-', 1)
-            self.tensorboard.add_scalar(f"{parts[0]}/{parts[1]}", rew)
+            self.tensorboard.add_scalar(f"{parts[0]}/{parts[1]}", rew, iterations, curr)
 
         for key in self.reward_values:
             self.reward_values[key] = 0
