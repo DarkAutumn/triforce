@@ -232,12 +232,15 @@ class RewardStats:
         self.outcomes = {x: y.copy() for x, y in total.outcomes.items()}
         self.endings = total.endings.copy()
 
-        if self.episodes and self.endings:
-            self.success_rate = sum(value for key, value in self.endings.items()
-                                    if key.startswith('success') / self.episodes)
+    @property
+    def success_rate(self):
+        """Return the success rate."""
+        if not self.episodes:
+            return 0
 
-        else:
-            self.success_rate = 0
+        successes = sum(value for key, value in self.endings.items() if key.startswith('success'))
+        return successes / self.episodes
+
 
     def to_tensorboard(self, tensorboard, iterations):
         """Write the stats to TensorBoard."""
