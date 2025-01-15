@@ -1,6 +1,8 @@
 from functools import reduce
+import inspect
 import operator
 import pickle
+import sys
 from typing import Optional
 import torch
 from torch import nn
@@ -235,3 +237,36 @@ def create_network(network, obs_space, action_space):
         raise ValueError("network must be a Network or a Network subclass")
 
     return network
+
+def _init_models():
+    # Get all classes defined in this module
+    result = {}
+    current_module = sys.modules[__name__]
+    for cls_name, cls_obj in inspect.getmembers(current_module, inspect.isclass):
+        # Check if the class subclasses 'Network' and matches the name
+        if issubclass(cls_obj, Network) and cls_obj is not Network:
+            result[cls_name] = cls_obj
+
+    return result
+
+
+NEURAL_NETWORK_DEFINITIONS = _init_models()
+
+def register_neural_network(name, model_class):
+    """Register a neural network definition."""
+    if not issubclass(model_class, Network):
+        raise ValueError("model_class must be a subclass of Network")
+
+    if name in NEURAL_NETWORK_DEFINITIONS:
+        raise ValueError(f"Model {name} already exists")
+
+    if model_class == Network:
+        raise ValueError("Cannot register the base Network")
+
+    NEURAL_NETWORK_DEFINITIONS[name] = model_class
+
+def get_neural_network(name):
+    """Get a model by name."""
+    return NEURAL_NETWORK_DEFINITIONS[name]
+
+__all__ = [Network.__name__, SharedNatureAgent.__name__, register_neural_network.__name__, get_neural_network.__name__]

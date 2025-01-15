@@ -10,12 +10,11 @@ import os
 from tqdm import tqdm
 from triforce import ZELDA_MODELS
 from triforce.ml_ppo import PPO
-from triforce.models import SharedNatureAgent
 from triforce.zelda_env import make_zelda_env
 
 def _train_one(model_name, args):
+    model_def = ZELDA_MODELS[model_name]
     def create_env():
-        model_def = ZELDA_MODELS[model_name]
         return make_zelda_env(model_def.training_scenario, model_def.action_space, obs_kind=args.obs_kind)
 
     iterations = None if args.iterations <= 0 else args.iterations
@@ -28,7 +27,7 @@ def _train_one(model_name, args):
     os.makedirs(log_dir, exist_ok=True)
 
     ppo = PPO(args.device, log_dir, ent_coef=args.ent_coef)
-    model = ppo.train(SharedNatureAgent, create_env, iterations, tqdm(total=args.iterations),
+    model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(total=args.iterations),
                       envs = args.parallel, save_path=model_directory, model_name=save_name)
 
     model.save(f"{model_directory}/model.pt")

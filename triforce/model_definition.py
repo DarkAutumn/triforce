@@ -4,6 +4,7 @@ import json
 import os
 from typing import Dict, List, Optional, Union
 from pydantic import BaseModel, field_validator
+from .models import get_neural_network
 
 class ZeldaScenario(BaseModel):
     """A scenario in the game to train on.  This is a combination of critics and end conditions."""
@@ -23,6 +24,7 @@ class ZeldaModelDefinition(BaseModel):
     which are a trained version of this defined model.
     """
     name : str
+    neural_net : type
     action_space : List[str]
     priority : int
 
@@ -34,6 +36,13 @@ class ZeldaModelDefinition(BaseModel):
 
     training_scenario : ZeldaScenario
     iterations : int
+
+    @field_validator('neural_net', mode='before')
+    @classmethod
+    def neural_net_validator(cls, value):
+        """Gets the class from the name."""
+        return get_neural_network(value)
+
     @field_validator('training_scenario', mode='before')
     @classmethod
     def training_scenario_validator(cls, value):
@@ -74,8 +83,8 @@ class ZeldaModelDefinition(BaseModel):
         if not os.path.exists(path):
             raise FileNotFoundError(f"Path {path} does not exist")
 
-        # Check if model.zip exists
-        full_path = os.path.join(path, self.name + '.zip')
+        # Check if .pt
+        full_path = os.path.join(path, self.name + '.pt')
         if os.path.exists(full_path):
             available_models['default'] = full_path
 
@@ -84,12 +93,13 @@ class ZeldaModelDefinition(BaseModel):
             dir_name = os.path.join(path, self.name)
             if os.path.isdir(dir_name):
                 for filename in os.listdir(dir_name):
-                    if filename.endswith('.zip'):
-                        if filename.startswith('model_'):
-                            iterations = int(filename[6:-4])
+                    if filename.endswith('.pt'):
+                        i = filename.find('_')
+                        if i > 0:
+                            iterations = int(filename[i+1:-3])
                             available_models[iterations] = os.path.join(dir_name, filename)
                         else:
-                            available_models[filename[:-4]] = os.path.join(dir_name, filename)
+                            available_models[filename[:-3]] = os.path.join(dir_name, filename)
 
         return available_models
 

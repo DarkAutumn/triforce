@@ -9,6 +9,7 @@ from .zelda_env import make_zelda_env
 from .model_definition import ZeldaModelDefinition, ZeldaScenario, ZELDA_MODELS, TRAINING_SCENARIOS
 from .ml_stable_baselines import ZeldaAI
 from .simulate_critic import simulate_critique
+from .models import Network, get_neural_network, register_neural_network
 
 # add custom integrations to retro
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -37,6 +38,9 @@ __all__ = [
     ZeldaModelDefinition.__name__,
     ZeldaScenario.__name__,
     simulate_critique.__name__,
+    Network.__name__,
+    get_neural_network.__name__,
+    register_neural_network.__name__,
     'ZELDA_MODELS',
     'TRAINING_SCENARIOS'
     ]
