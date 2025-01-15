@@ -2,6 +2,7 @@
 
 import retro
 
+from .total_rewards import TotalRewardWrapper
 from .gym_translation_wrapper import GymTranslationWrapper
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
@@ -37,6 +38,9 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *,
     # Activate the scenario.  This is where rewards and end conditions are checked, using some of the new
     # info state provded by ZeldaGameWrapper above.
     env = ScenarioWrapper(env, scenario)
+
+    # Calculate the total reward for the episode.
+    env = TotalRewardWrapper(env)
 
     # Translate our object-oriented environment into a gym environment.
     if translation:

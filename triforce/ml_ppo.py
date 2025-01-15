@@ -26,6 +26,8 @@ EPSILON = 1e-5
 TARGET_STEPS = 2048
 EPOCHS = 10
 MINIBATCHES = 4
+LOG_RATE = 20_000
+SAVE_INTERVAL = 50_000
 
 class PPO:
     """PPO Implementation.  Adapted from from https://www.youtube.com/watch?v=MEt6rrxH8W4."""
@@ -54,8 +56,7 @@ class PPO:
 
         self.total_steps = 0
 
-        self.reward_values = {}
-        self.endings = {}
+        self._logging = {}
         self.start_time = None
 
     def _get_and_remove(self, dictionary, key, default):
@@ -170,55 +171,78 @@ class PPO:
         if self.tensorboard is None:
             return
 
-        success_rate = []
-        total_seconds = []
-        steps = []
-        evaluation = []
-        endings = []
+        reward_list = self._logging.setdefault('rewards', [])
+        total_seconds = self._logging.setdefault('total_seconds', [])
+        steps = self._logging.setdefault('steps', [])
+        scores = self._logging.setdefault('scores', [])
+        endings = self._logging.setdefault('endings', {})
+        reward_values = self._logging.setdefault('reward_values', {})
+        reward_counts = self._logging.setdefault('reward_counts', {})
 
         for info in infos:
             rewards : StepRewards = info.get('rewards', None)
-            if rewards is not None:
-                for outcome in rewards:
-                    self.reward_values[outcome.name] = outcome.value + self.reward_values.get(outcome.name, 0)
+            if rewards is not None and rewards.ending is not None:
+                self._logging['total'] = self._logging.get('total', 0) + 1
 
-                if rewards.ending is not None:
-                    endings.append(rewards.ending)
-                    if rewards.ending.startswith('success'):
-                        success_rate.append(1)
-                    else:
-                        success_rate.append(0)
+                if rewards.ending.startswith('success'):
+                    self._logging['success'] = self._logging.get('success', 0) + 1
 
-                    evaluation.append(rewards.score)
-                    if 'total_frames' in info:
-                        total_seconds.append(info['total_frames'] / 60.1)
-                    if 'steps' in info:
-                        steps.append(info['steps'])
+                scores.append(rewards.score)
+                if 'total_frames' in info:
+                    total_seconds.append(info['total_frames'] / 60.1)
+                if 'steps' in info:
+                    steps.append(info['steps'])
 
-        if success_rate:
-            self.tensorboard.add_scalar('evaluation/success-rate', np.mean(success_rate), iterations, curr)
-        if evaluation:
-            self.tensorboard.add_scalar('evaluation/score', np.mean(evaluation), iterations, curr)
+                reward_list.append(info['total_reward'])
+
+                endings[rewards.ending] = endings.get(rewards.ending, 0) + 1
+
+                for name, value in info['reward_values'].items():
+                    reward_values[name] = reward_values.get(name, 0) + value
+
+                for name, value in info['reward_counts'].items():
+                    reward_counts[name] = reward_counts.get(name, 0) + value
+
+        next_log = self._logging.get('next_log', LOG_RATE)
+        if iterations < next_log or not self._logging['total']:
+            return
+
+        self._logging['next_log'] = next_log + LOG_RATE
+        total = self._logging['total']
+        self.tensorboard.add_scalar('rollout/total-completed', total, iterations, curr)
+
+        success_total = self._logging.get('success', 0)
+        self.tensorboard.add_scalar('evaluation/success-rate', success_total / total, iterations, curr)
+
+        if reward_list:
+            self.tensorboard.add_scalar('evaluation/ep-reward-avg', np.mean(reward_list), iterations, curr)
+
+        if scores:
+            self.tensorboard.add_scalar('evaluation/score', np.mean(scores), iterations, curr)
+
         if total_seconds:
-            self.tensorboard.add_scalar('rollout/seconds_per_episode', np.mean(total_seconds), iterations, curr)
+            self.tensorboard.add_scalar('rollout/seconds-per-episode', np.mean(total_seconds), iterations, curr)
+
         if steps:
-            self.tensorboard.add_scalar('rollout/steps_per_episode', np.mean(steps), iterations, curr)
+            self.tensorboard.add_scalar('rollout/steps-per-episode', np.mean(steps), iterations, curr)
 
-        endings = Counter(endings)
-        for ending, count in endings.items():
-            self.endings[ending] = count + self.endings.get(ending, 0)
-            self.tensorboard.add_scalar('end/' + ending, count, iterations, curr)
+        endings_count = sum(endings.values())
+        for key, value in endings.items():
+            self.tensorboard.add_scalar(f'endings/{key}', value / endings_count, iterations, curr)
+            endings[key] = 0
 
-        for name, rew in self.reward_values.items():
-            parts = name.split('-', 1)
-            self.tensorboard.add_scalar(f"{parts[0]}/{parts[1]}", rew, iterations, curr)
+        for key, value in reward_values.items():
+            self.tensorboard.add_scalar(f'rewards/{key}', value / total, iterations, curr)
+            reward_values[key] = 0
 
-        for key in self.reward_values:
-            self.reward_values[key] = 0
+        for key, value in reward_counts.items():
+            self.tensorboard.add_scalar(f'reward-counts/{key}', value / total, iterations, curr)
+            reward_counts[key] = 0
 
-        for key in self.endings:
-            self.endings[key] = 0
-
+        self._logging.clear()
+        self._logging['endings'] = endings
+        self._logging['reward_values'] = reward_values
+        self._logging['reward_counts'] = reward_counts
 
     def _optimize(self, network : Network, variables : PPORolloutBuffer, iterations : int):
         # pylint: disable=too-many-locals, too-many-statements

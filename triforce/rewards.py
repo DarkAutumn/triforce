@@ -68,6 +68,7 @@ class Penalty(Outcome):
 class StepRewards:
     """A single step's rewards."""
     def __init__(self):
+        self._history = []
         self._outcomes = {}
         self.ending = None
         self.score = None
