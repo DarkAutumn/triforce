@@ -2,13 +2,13 @@
 
 import retro
 
-from .total_rewards import TotalRewardWrapper
 from .gym_translation_wrapper import GymTranslationWrapper
 from .zelda_wrapper import ZeldaGameWrapper
 from .action_space import ZeldaActionSpace
 from .observation_wrapper import ObservationWrapper
 from .scenario_wrapper import ScenarioWrapper
 from .model_definition import ZeldaScenario
+from .rewards import EpisodeRewardTracker
 
 def make_zelda_env(scenario : ZeldaScenario, action_space : str, *,
                    obs_kind = 'viewport', render_mode = None, translation=True):
@@ -40,7 +40,7 @@ def make_zelda_env(scenario : ZeldaScenario, action_space : str, *,
     env = ScenarioWrapper(env, scenario)
 
     # Calculate the total reward for the episode.
-    env = TotalRewardWrapper(env)
+    env = EpisodeRewardTracker(env)
 
     # Translate our object-oriented environment into a gym environment.
     if translation:

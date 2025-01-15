@@ -123,7 +123,7 @@ class GameplayCritic(ZeldaCritic):
 
         # If we lost health, remove all rewards since we want that to be the focus
         if state_change.health_lost > 0:
-            rewards.zero_rewards()
+            rewards.remove_rewards()
 
         self.set_score(state_change, rewards)
 

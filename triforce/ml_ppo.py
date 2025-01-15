@@ -1,4 +1,3 @@
-from collections import Counter
 import math
 from multiprocessing import Queue
 import time
@@ -10,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from .ml_subprocess import SubprocessWorker
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network, create_network
-from .rewards import StepRewards
+from .rewards import TotalRewards
 
 # default hyperparameters
 NORM_ADVANTAGES = True
@@ -28,6 +27,21 @@ EPOCHS = 10
 MINIBATCHES = 4
 LOG_RATE = 20_000
 SAVE_INTERVAL = 50_000
+
+class Threshold:
+    """A counter class to see if we've reached our intervals."""
+    def __init__(self, limit):
+        self.limit = limit
+        self.current = 0
+
+    def add(self, value):
+        """Add a value to the counter, returning True if we've reached the limit."""
+        self.current += value
+        if self.current > self.limit:
+            self.current = self.current - self.limit
+            return True
+
+        return False
 
 class PPO:
     """PPO Implementation.  Adapted from from https://www.youtube.com/watch?v=MEt6rrxH8W4."""
@@ -79,23 +93,48 @@ class PPO:
 
         return self._train_multiproc(network, env, create_env, iterations, progress, n_envs)
 
-    def _train_single(self, network, env, iterations, progress):
+    def _train_single(self, network, env, iterations, progress, **kwargs):
+        # tracking
+        save_path = kwargs.get('save_path', None)
+        next_update = Threshold(LOG_RATE)
+        next_save = Threshold(SAVE_INTERVAL)
+        rewards = TotalRewards()
+        reward_stats = None
+
         memory_length = self._target_steps
         buffer = PPORolloutBuffer(memory_length, 1, env.observation_space, env.action_space,
                                   self._gamma, self._lambda)
 
-        iteration = 0
-        while iteration < iterations:
+        total_iterations = 0
+        while total_iterations < iterations:
             infos = buffer.ppo_main_loop(0, network, env, progress)
 
-            iteration += buffer.memory_length
-            self._update_infos(infos, iteration)
-            network = self._optimize(network, buffer, iteration)
+            total_iterations += buffer.memory_length
+            self._process_infos(rewards, infos)
+
+            if next_update.add(buffer.memory_length):
+                reward_stats = rewards.get_stats_and_clear()
+                reward_stats.to_tensorboard(self.tensorboard, total_iterations)
+
+            if save_path and next_save.add(buffer.memory_length) and reward_stats:
+                network.save(f"{save_path}/network_{total_iterations}.pt", reward_stats)
+
+            network = self._optimize(network, buffer, total_iterations)
+            network.steps_trained += buffer.memory_length
 
         env.close()
         return network
 
-    def _train_multiproc(self, network, env, create_env, iterations, progress, n_envs):
+    def _train_multiproc(self, network, env, create_env, iterations, progress, n_envs, **kwargs):
+        # pylint: disable=too-many-locals
+        # tracking
+        save_path = kwargs.get('save_path', None)
+        next_update = Threshold(LOG_RATE)
+        next_save = Threshold(SAVE_INTERVAL)
+        rewards = TotalRewards()
+        reward_stats = None
+
+        # ppo variables
         memory_length = self._target_steps // n_envs
         variables = PPORolloutBuffer(memory_length, n_envs, env.observation_space, env.action_space,
                                      self._gamma, self._lambda)
@@ -112,9 +151,24 @@ class PPO:
         try:
             steps = math.ceil(iterations / (n_envs * memory_length))
             for step in range(steps):
+                total_iterations = step * n_envs * memory_length
+                iterations_processed = n_envs * memory_length
+
+                # Process the results from the workers
                 infos = self._subprocess_ppo(network, progress, variables, result_queue, workers)
-                self._update_infos(infos, step * n_envs * memory_length)
+                self._process_infos(rewards, infos)
+
+                # Update reward stats and save the network if requested, this should be done before optimization
+                if next_update.add(iterations_processed):
+                    reward_stats = rewards.get_stats_and_clear()
+                    reward_stats.to_tensorboard(self.tensorboard, total_iterations)
+
+                if save_path and next_save.add(iterations_processed) and reward_stats:
+                    network.save(f"{save_path}/network_{total_iterations}.pt", reward_stats)
+
+                # Update the network
                 self._optimize(network, variables, step * n_envs * memory_length)
+                network.steps_trained += iterations_processed
 
         except EOFError:
             pass
@@ -165,87 +219,13 @@ class PPO:
                         progress.update(result.memory_length)
         return infos
 
-    def _update_infos(self, infos, iterations):
-        curr = time.time()
-        # pylint: disable=too-many-branches, too-many-locals
-        if self.tensorboard is None:
-            return
-
-        reward_list = self._logging.setdefault('rewards', [])
-        total_seconds = self._logging.setdefault('total_seconds', [])
-        steps = self._logging.setdefault('steps', [])
-        scores = self._logging.setdefault('scores', [])
-        endings = self._logging.setdefault('endings', {})
-        reward_values = self._logging.setdefault('reward_values', {})
-        reward_counts = self._logging.setdefault('reward_counts', {})
-
+    def _process_infos(self, total_rewards : TotalRewards, infos):
         for info in infos:
-            rewards : StepRewards = info.get('rewards', None)
-            if rewards is not None and rewards.ending is not None:
-                self._logging['total'] = self._logging.get('total', 0) + 1
-
-                if rewards.ending.startswith('success'):
-                    self._logging['success'] = self._logging.get('success', 0) + 1
-
-                scores.append(rewards.score)
-                if 'total_frames' in info:
-                    total_seconds.append(info['total_frames'] / 60.1)
-                if 'steps' in info:
-                    steps.append(info['steps'])
-
-                reward_list.append(info['total_reward'])
-
-                endings[rewards.ending] = endings.get(rewards.ending, 0) + 1
-
-                for name, value in info['reward_values'].items():
-                    reward_values[name] = reward_values.get(name, 0) + value
-
-                for name, value in info['reward_counts'].items():
-                    reward_counts[name] = reward_counts.get(name, 0) + value
-
-        next_log = self._logging.get('next_log', LOG_RATE)
-        if iterations < next_log or not self._logging['total']:
-            return
-
-        self._logging['next_log'] = next_log + LOG_RATE
-        total = self._logging['total']
-        self.tensorboard.add_scalar('rollout/total-completed', total, iterations, curr)
-
-        success_total = self._logging.get('success', 0)
-        self.tensorboard.add_scalar('evaluation/success-rate', success_total / total, iterations, curr)
-
-        if reward_list:
-            self.tensorboard.add_scalar('evaluation/ep-reward-avg', np.mean(reward_list), iterations, curr)
-
-        if scores:
-            self.tensorboard.add_scalar('evaluation/score', np.mean(scores), iterations, curr)
-
-        if total_seconds:
-            self.tensorboard.add_scalar('rollout/seconds-per-episode', np.mean(total_seconds), iterations, curr)
-
-        if steps:
-            self.tensorboard.add_scalar('rollout/steps-per-episode', np.mean(steps), iterations, curr)
-
-        endings_count = sum(endings.values())
-        for key, value in endings.items():
-            self.tensorboard.add_scalar(f'endings/{key}', value / endings_count, iterations, curr)
-            endings[key] = 0
-
-        for key, value in reward_values.items():
-            self.tensorboard.add_scalar(f'rewards/{key}', value / total, iterations, curr)
-            reward_values[key] = 0
-
-        for key, value in reward_counts.items():
-            self.tensorboard.add_scalar(f'reward-counts/{key}', value / total, iterations, curr)
-            reward_counts[key] = 0
-
-        self._logging.clear()
-        self._logging['endings'] = endings
-        self._logging['reward_values'] = reward_values
-        self._logging['reward_counts'] = reward_counts
+            if (ep_rewards := info.get('episode_rewards', None)) is not None:
+                total_rewards.add_rewards(ep_rewards)
 
     def _optimize(self, network : Network, variables : PPORolloutBuffer, iterations : int):
-        # pylint: disable=too-many-locals, too-many-statements
+        # pylint: disable=too-many-locals, too-many-statements, too-many-branches
 
         # flatten observations
         if isinstance(variables.observation, dict):
