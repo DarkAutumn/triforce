@@ -46,7 +46,7 @@ class Threshold:
 class PPO:
     """PPO Implementation.  Adapted from from https://www.youtube.com/watch?v=MEt6rrxH8W4."""
     def __init__(self, device, log_dir, **kwargs):
-        self._target_steps = kwargs.get('target_steps', TARGET_STEPS)
+        self.target_steps = kwargs.get('target_steps', TARGET_STEPS)
         self._norm_advantages = kwargs.get('norm_advantages', NORM_ADVANTAGES)
         self._clip_val_loss = kwargs.get('clip_val_loss', CLIP_VAL_LOSS)
         self._learning_rate = kwargs.get('learning_rate', LEARNING_RATE)
@@ -101,7 +101,7 @@ class PPO:
         rewards = TotalRewards()
         reward_stats = None
 
-        memory_length = self._target_steps
+        memory_length = self.target_steps
         buffer = PPORolloutBuffer(memory_length, 1, env.observation_space, env.action_space,
                                   self._gamma, self._lambda)
 
@@ -135,7 +135,7 @@ class PPO:
         reward_stats = None
 
         # ppo variables
-        memory_length = self._target_steps // n_envs
+        memory_length = self.target_steps // n_envs
         variables = PPORolloutBuffer(memory_length, n_envs, env.observation_space, env.action_space,
                                      self._gamma, self._lambda)
         env.close()
@@ -222,7 +222,7 @@ class PPO:
     def _process_infos(self, total_rewards : TotalRewards, infos):
         for info in infos:
             if (ep_rewards := info.get('episode_rewards', None)) is not None:
-                total_rewards.add_rewards(ep_rewards)
+                total_rewards.add(ep_rewards)
 
     def _optimize(self, network : Network, variables : PPORolloutBuffer, iterations : int):
         # pylint: disable=too-many-locals, too-many-statements, too-many-branches
