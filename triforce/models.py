@@ -89,6 +89,11 @@ class Network(nn.Module):
         _, value = self.forward(obs)
         return value.view(-1)
 
+    def get_action(self, obs, mask = None, deterministic = False):
+        """Get the action from the observation."""
+        action, _, _, _ = self.get_action_and_value(obs, mask, deterministic=deterministic)
+        return action
+
     @staticmethod
     def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
         """Initialize a linear layer."""
