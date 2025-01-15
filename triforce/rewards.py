@@ -251,10 +251,10 @@ class RewardStats:
         curr = time.time()
 
         tensorboard.add_scalar('evaluation/success-rate', self.success_rate, iterations, curr)
+        tensorboard.add_scalar('evaluation/ep-reward-avg', self.rewards, iterations, curr)
         tensorboard.add_scalar('evaluation/score', self.scores, iterations, curr)
         tensorboard.add_scalar('rollout/steps-per-episode', self.total_steps, iterations, curr)
         tensorboard.add_scalar('rollout/seconds-per-episode', self.total_steps / 60.1, iterations, curr)
-        tensorboard.add_scalar('rollout/ep-reward-avg', self.rewards, iterations, curr)
 
         for reward in (o for o in self.outcomes.values() if isinstance(o, Reward)):
             tensorboard.add_scalar(f'rewards/{reward.name}', reward.value, iterations, curr)
