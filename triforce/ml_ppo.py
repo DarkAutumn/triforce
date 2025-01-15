@@ -163,7 +163,7 @@ class PPO:
 
                 if save_path and next_save.add(iterations_processed) and reward_stats:
                     model_name = kwargs.get('model_name', 'network')
-                    network.save(f"{save_path}/{model_name}-{total_iterations:_}.pt")
+                    network.save(f"{save_path}/{model_name}-{total_iterations}.pt")
 
                 # Update the network
                 self._optimize(network, variables, step * envs * memory_length)
