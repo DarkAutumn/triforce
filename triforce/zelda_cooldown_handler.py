@@ -127,6 +127,7 @@ class ZeldaCooldownHandler:
             return False
 
         return loc.level != loc2.level and loc.value == loc2.value
+
     def _act_attack_or_item(self, action, frame_capture):
         if action.direction in (Direction.N, Direction.S, Direction.E, Direction.W):
             self._set_direction(action.direction)
