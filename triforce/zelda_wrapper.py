@@ -130,9 +130,14 @@ class ZeldaGameWrapper(gym.Wrapper):
 
         return curr.link.health - health
 
-    def _set_value(self, obj, name, value):
+    def _set_value(self, state, name, value):
+        order = [state, state.link]
+        if hasattr(state.link, name):
+            order = [state.link, state]
+
+        obj = order.pop(0)
         if not hasattr(obj, name):
-            obj = obj.link
+            obj = order.pop(0)
 
         if isinstance(value, str):
             value = getattr(obj, value)
