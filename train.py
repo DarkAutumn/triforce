@@ -9,6 +9,7 @@ import os
 import faulthandler
 import traceback
 
+import torch
 from tqdm import tqdm
 from triforce import ZELDA_MODELS
 from triforce.ml_ppo import PPO
@@ -31,6 +32,8 @@ def _train_one(model_name, args):
     def create_env():
         return make_zelda_env(model_def.training_scenario, model_def.action_space, obs_kind=args.obs_kind)
 
+    device = args.device if args.device else  torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     iterations = None if args.iterations <= 0 else args.iterations
     output_path = args.output if args.output else 'training/'
     model_directory = f"{output_path}/{model_name}"
@@ -40,9 +43,9 @@ def _train_one(model_name, args):
 
     os.makedirs(log_dir, exist_ok=True)
 
-    ppo = PPO(args.device, log_dir, ent_coef=args.ent_coef)
+    ppo = PPO(device, log_dir, ent_coef=args.ent_coef)
     model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(total=args.iterations),
-                      envs = args.parallel, save_path=model_directory, model_name=save_name)
+                      envs = args.parallel, save_path=model_directory, model_name=save_name, load_from=args.load)
 
     model.save(f"{model_directory}/model.pt")
 
@@ -66,6 +69,7 @@ def parse_args():
     parser.add_argument("--output", type=str, help="Location to write to.")
     parser.add_argument("--iterations", type=int, default=-1, help="Override iteration count.")
     parser.add_argument("--parallel", type=int, default=1, help="Number of parallel environments to run.")
+    parser.add_argument("--load", type=str, help="Load a model to continue training.")
 
     try:
         args = parser.parse_args()
