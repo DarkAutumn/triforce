@@ -77,6 +77,7 @@ class RoomResultAggregator:
     """Aggregates room results."""
     def __init__(self):
         self.health_lost = {}
+        self.rooms_with_health_loss = set()
         self.result = {}
 
     def add(self, result : RoomResult):
@@ -94,10 +95,16 @@ class RoomResultAggregator:
             return
 
         curr = time.time()
-        for room, health_list in self.health_lost.items():
+        for room, health_list in list(self.health_lost.items()):
             value = sum(health_list) / len(health_list) if health_list else 0.0
-            tensorboard.add_scalar(f'room-health-loss/{room}', value, iterations, curr)
-            health_list.clear()
+            if value > 0:
+                self.rooms_with_health_loss.add(room)
+
+            if room in self.rooms_with_health_loss:
+                tensorboard.add_scalar(f'room-health-loss/{room}', value, iterations, curr)
+                health_list.clear()
+            else:
+                del self.health_lost[room]
 
         for room, result_list in self.result.items():
             value = sum(result_list) / len(result_list) if result_list else 0.0
