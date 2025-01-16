@@ -2,7 +2,6 @@
 from dataclasses import dataclass
 from functools import cached_property
 
-import torch
 from .zelda_enums import ActionKind, AnimationState, ArrowKind, BoomerangKind, CandleKind, Direction, PotionKind, \
     RingKind, SelectedEquipmentKind, SwordKind, TileIndex, ZeldaAnimationKind, SoundKind
 from .zelda_objects import ZeldaObject
@@ -302,7 +301,13 @@ class Link(ZeldaObject):
     @cached_property
     def triforce_pieces(self) -> int:
         """The number of triforce pieces link has (does not include Triforce of Power in level 9)."""
-        return torch.popcount(torch.tensor(self.game.triforce, dtype=torch.uint8)).item()
+        triforce = self.game.triforce
+        count = 0
+        while triforce:
+            count += triforce & 1
+            triforce >>= 1
+
+        return count
 
     @property
     def triforce_of_power(self) -> bool:
