@@ -400,3 +400,5 @@ FodyWeavers.xsd
 
 training/
 recording/
+
+crash_log.txt
