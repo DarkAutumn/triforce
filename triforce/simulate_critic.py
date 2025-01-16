@@ -2,11 +2,11 @@ from typing import Dict
 
 from .state_change_wrapper import StateChange
 from .zelda_game import ZeldaGame
-from .model_definition import ZeldaScenario
+from .model_definition import TrainingScenarioDefinition
 from . import critics
 from . import end_conditions
 
-def simulate_critique(env, action, scenario : ZeldaScenario, old : Dict, new : Dict):
+def simulate_critique(env, action, scenario : TrainingScenarioDefinition, old : Dict, new : Dict):
     """Simulates the critic and end conditions for a scenario."""
 
     critic = getattr(critics, scenario.critic)()

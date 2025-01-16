@@ -6,7 +6,7 @@ import os
 import retro
 
 from .zelda_env import make_zelda_env
-from .model_definition import ZeldaModelDefinition, ZeldaScenario, ZELDA_MODELS, TRAINING_SCENARIOS
+from .model_definition import ModelDefinition, TrainingScenarioDefinition, ZELDA_MODELS, TRAINING_SCENARIOS
 from .simulate_critic import simulate_critique
 from .models import Network, get_neural_network, register_neural_network
 
@@ -19,8 +19,8 @@ LOADED_MODELS = {}
 # define the model surface area
 __all__ = [
     make_zelda_env.__name__,
-    ZeldaModelDefinition.__name__,
-    ZeldaScenario.__name__,
+    ModelDefinition.__name__,
+    TrainingScenarioDefinition.__name__,
     simulate_critique.__name__,
     Network.__name__,
     get_neural_network.__name__,

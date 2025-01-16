@@ -12,7 +12,7 @@ from .rewards import StepRewards
 from .zelda_enums import Direction, MapLocation
 from .state_change_wrapper import StateChange
 from .zelda_game_data import zelda_game_data
-from .model_definition import ZeldaScenario
+from .model_definition import TrainingScenarioDefinition
 from . import critics
 from . import end_conditions
 
@@ -47,13 +47,12 @@ class RoundRobinSelector(RoomSelector):
         self._curr_room = (self._curr_room + 1) % len(self.rooms)
         return self.rooms[self._curr_room]
 
-
 class ProbabilisticSelector(RoomSelector):
     """Selects rooms based on probabilities."""
     def __init__(self, rooms):
         self._starting_room = rooms[0]
         self.round_robin = RoundRobinSelector(rooms)
-        self._memory : Deque[RoomResult] = deque(maxlen=2)
+        self._memory : Deque[RoomResult] = deque(maxlen=128)
         self._prev_health = None
         self._direction_from = None
         self._skip_room = False
@@ -173,7 +172,7 @@ class ProbabilisticSelector(RoomSelector):
 
 class ScenarioWrapper(gym.Wrapper):
     """Wraps the environment to call our critic and end conditions."""
-    def __init__(self, env, scenario : ZeldaScenario):
+    def __init__(self, env, scenario : TrainingScenarioDefinition):
         super().__init__(env)
 
         self._scenario = scenario
@@ -184,7 +183,14 @@ class ScenarioWrapper(gym.Wrapper):
 
         self._conditions = [getattr(end_conditions, ec)() for ec in scenario.end_conditions]
 
-        self.room_selector = ProbabilisticSelector(scenario.start)
+        match scenario.scenario_selector:
+            case 'round_robin':
+                self.room_selector = RoundRobinSelector(scenario.start)
+            case 'probabilistic':
+                self.room_selector = ProbabilisticSelector(scenario.start)
+            case _:
+                raise ValueError(f"Unknown scenario selector {scenario.scenario_selector}")
+
         self.game_data = zelda_game_data
         self._last = None
 

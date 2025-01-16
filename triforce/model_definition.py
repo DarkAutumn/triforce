@@ -6,10 +6,11 @@ from typing import Dict, List, Optional, Union
 from pydantic import BaseModel, field_validator
 from .models import get_neural_network
 
-class ZeldaScenario(BaseModel):
+class TrainingScenarioDefinition(BaseModel):
     """A scenario in the game to train on.  This is a combination of critics and end conditions."""
     name : str
     description : str
+    scenario_selector : Optional[str]
     critic : str
     reward_overrides : Optional[Dict[str, Union[int, float, None]]] = {}
     end_conditions : List[str]
@@ -18,7 +19,19 @@ class ZeldaScenario(BaseModel):
     per_frame : Optional[Dict[str, int]] = {}
     per_room : Optional[Dict[str, int | str]] = {}
 
-class ZeldaModelDefinition(BaseModel):
+    @field_validator('scenario_selector', mode='before')
+    @classmethod
+    def scenario_selector_validator(cls, value):
+        """Gets the scenario selector from the name."""
+        if value in ('round-robin', 'probabilistic'):
+            return value
+
+        if value == "none":
+            return 'round-robin'
+
+        raise ValueError(f"Unknown scenario selector {value}")
+
+class ModelDefinition(BaseModel):
     """
     Represents a defined AI model for The Legend of Zelda.  Each ZeldaAIModel will have a set of available models,
     which are a trained version of this defined model.
@@ -34,7 +47,7 @@ class ZeldaModelDefinition(BaseModel):
     requires_triforce : Optional[int] = None
     equipment_required : Optional[List[str]] = []
 
-    training_scenario : ZeldaScenario
+    training_scenario : TrainingScenarioDefinition
     iterations : int
 
     @field_validator('neural_net', mode='before')
@@ -73,7 +86,7 @@ class ZeldaModelDefinition(BaseModel):
 
         return value
 
-    def find_available_models(self, path) -> Dict[str, 'ZeldaModelDefinition']:
+    def find_available_models(self, path) -> Dict[str, 'ModelDefinition']:
         """Finds the available models for this model definition in the given path.  Returns a dictionary of name to
         path."""
         available_models = {}
@@ -112,7 +125,7 @@ def _load_training_scenarios(settings):
     """Loads the models and scenarios from triforce.json."""
     scenarios = {}
     for scenario in settings['scenarios']:
-        scenario = ZeldaScenario(**scenario)
+        scenario = TrainingScenarioDefinition(**scenario)
         scenarios[scenario.name] = scenario
 
     return scenarios
@@ -121,7 +134,7 @@ def _load_model_definitions(settings):
     """Loads the models and scenarios from triforce.json."""
     models = {}
     for model in settings['models']:
-        models[model['name']] = ZeldaModelDefinition(**model)
+        models[model['name']] = ModelDefinition(**model)
 
     return models
 
@@ -129,4 +142,4 @@ all_settings = _load_settings()
 TRAINING_SCENARIOS = _load_training_scenarios(all_settings)
 ZELDA_MODELS = _load_model_definitions(all_settings)
 
-__all__ = [ZeldaModelDefinition.__name__, ZeldaScenario.__name__, 'ZELDA_MODELS', 'TRAINING_SCENARIOS']
+__all__ = [ModelDefinition.__name__, TrainingScenarioDefinition.__name__, 'ZELDA_MODELS', 'TRAINING_SCENARIOS']

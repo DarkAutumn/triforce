@@ -16,9 +16,9 @@ import numpy as np
 import cv2
 import tqdm
 
-from triforce import ZeldaScenario, simulate_critique, make_zelda_env, TRAINING_SCENARIOS, Network
+from triforce import TrainingScenarioDefinition, simulate_critique, make_zelda_env, TRAINING_SCENARIOS, Network
 from triforce.state_change_wrapper import StateChange
-from triforce.model_definition import ZELDA_MODELS, ZeldaModelDefinition
+from triforce.model_definition import ZELDA_MODELS, ModelDefinition
 from triforce.rewards import StepRewards
 from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
@@ -91,7 +91,7 @@ class Recording:
 
 class DisplayWindow:
     """A window to display the game and the AI model."""
-    def __init__(self, scenario : ZeldaScenario, model_path : str, model : str):
+    def __init__(self, scenario : TrainingScenarioDefinition, model_path : str, model : str):
         self.scenario = scenario
 
         pygame.init()
@@ -132,7 +132,7 @@ class DisplayWindow:
 
         self._loaded_models = {}
         self.model_path = model_path
-        self.model_definition : ZeldaModelDefinition = ZELDA_MODELS[model]
+        self.model_definition : ModelDefinition = ZELDA_MODELS[model]
 
         self.move_widgets = {}
         self.vector_widgets = []
@@ -748,7 +748,7 @@ class LabeledVector(LabeledCircle):
 
 class DebugReward:
     """An action to take when a reward button is clicked."""
-    def __init__(self, env, action, scenario : ZeldaScenario, last_info, info):
+    def __init__(self, env, action, scenario : TrainingScenarioDefinition, last_info, info):
         self.env = env
         self.scenario = scenario
         self.last_info = last_info

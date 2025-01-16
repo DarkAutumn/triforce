@@ -5,7 +5,7 @@ import sys
 import os
 import argparse
 from tqdm import tqdm
-from triforce import ZeldaModelDefinition, make_zelda_env, ZELDA_MODELS, Network
+from triforce import ModelDefinition, make_zelda_env, ZELDA_MODELS, Network
 from triforce.rewards import TotalRewards, RewardStats
 
 # pylint: disable=global-statement,global-variable-undefined
@@ -52,7 +52,7 @@ def run_one_scenario(args, model_name, model_path, counter_or_callback):
     network.stats.evaluated = True
     network.save(model_path)
 
-def make_zelda_env_from_args(model : ZeldaModelDefinition, args):
+def make_zelda_env_from_args(model : ModelDefinition, args):
     """Creates a ZeldaML instance."""
     render_mode = 'human' if args.render else None
     return make_zelda_env(model.training_scenario, model.action_space, render_mode=render_mode, obs_kind=args.obs_kind)

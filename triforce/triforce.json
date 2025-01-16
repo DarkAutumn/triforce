@@ -30,6 +30,7 @@
         {
             "name": "zelda",
             "description": "Full Game (so far)",
+            "scenario_selector" : "none",
             "critic": "GameplayCritic",
             "end_conditions": ["GainedTriforce", "GameOver", "Timeout"],
             "start": ["0_77"]
@@ -37,6 +38,7 @@
         {
             "name": "full-game-training",
             "description": "The full game with training variables",
+            "scenario_selector" : "probabilistic",
             "critic": "GameplayCritic",
             "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
             "start": ["0_67s"],
@@ -52,6 +54,7 @@
         {
             "name": "overworld-sword",
             "description": "Start of the game to the sword",
+            "scenario_selector" : "none",
             "critic": "OverworldSwordCritic",
             "end_conditions": ["StartingRoomConditions", "Timeout"],
             "start": ["0_77"],

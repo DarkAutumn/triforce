@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import gymnasium as gym
 
-from .model_definition import ZeldaScenario
+from .model_definition import TrainingScenarioDefinition
 from .objectives import Objectives
 from .action_space import ActionTaken
 from .zelda_enums import AnimationState, ZeldaItemKind, ZeldaAnimationKind
@@ -215,7 +215,7 @@ class StateChange:
 
 class StateChangeWrapper(gym.Wrapper):
     """Keeps track of the state of the game."""
-    def __init__(self, env, scenario : ZeldaScenario):
+    def __init__(self, env, scenario : TrainingScenarioDefinition):
         super().__init__(env)
         self._discounts = {}
         self._objectives : Objectives = None

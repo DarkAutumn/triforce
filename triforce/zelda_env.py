@@ -8,10 +8,10 @@ from .frame_skip_wrapper import FrameSkipWrapper
 from .action_space import ZeldaActionSpace
 from .observation_wrapper import ObservationWrapper
 from .scenario_wrapper import ScenarioWrapper
-from .model_definition import ZeldaScenario
+from .model_definition import TrainingScenarioDefinition
 from .rewards import EpisodeRewardTracker
 
-def make_zelda_env(scenario : ZeldaScenario, action_space : str, *,
+def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, *,
                    obs_kind = 'viewport', render_mode = None, translation=True):
     """
     Creates a Zelda retro environment for the given scenario.

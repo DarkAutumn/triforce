@@ -17,7 +17,7 @@ from gymnasium.spaces import MultiBinary, Discrete
 
 from triforce.ml_ppo import GAMMA, LAMBDA, PPO, Network, SubprocessWorker
 from triforce.models import SharedNatureAgent
-from triforce.model_definition import ZELDA_MODELS, ZeldaModelDefinition
+from triforce.model_definition import ZELDA_MODELS, ModelDefinition
 from triforce.zelda_env import make_zelda_env
 
 class TestNetwork(Network):
@@ -132,7 +132,7 @@ def test_ppo_training(device, num_envs):
 @pytest.mark.parametrize("num_envs", [1])
 @pytest.mark.parametrize("model_name", ["full-game", "overworld-sword"])
 def test_model_training(model_name, num_envs):
-    model_def : ZeldaModelDefinition = ZELDA_MODELS[model_name]
+    model_def : ModelDefinition = ZELDA_MODELS[model_name]
     scenario = model_def.training_scenario
 
     def create_env():
