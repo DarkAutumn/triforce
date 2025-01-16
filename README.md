@@ -44,7 +44,7 @@ TODO: document these after changes.
 
 [ZeldaCritic](triforce/critics.py) classes define rewards.  Scenarios have exactly one critic associated with them, and that is used to reward the model for good gameplay and discourage it from bad gameplay.  This is implemented by giving the critics the game state prior to an action it took, the game state after that action, and it fills in a dictionary of rewards.  We use a reward dictionary (not just a number) so that we can debug rewards to figure out issues with training.
 
-Critics also define a **`score`** that is separate from rewards.  Where rewards are all about how well the model is *playing the game*, and are used to train the model, the `score` is used to determine how well the model is *completing the scenario*.  In particular, the score counts things like health lost and how far the model progressed through rooms.   We don't use score when training the model.  Instead, score is used during evaluation to make sure the model doesn't just get a high reward value but die in the first room or two.
+Critics also define a **`progress`** that is separate from rewards.  Where rewards are all about how well the model is *playing the game*, and are used to train the model, the `progress` is used to determine how well the model is *completing the scenario*.  In particular, the progress counts things like health lost and how far the model progressed through rooms.   We don't use progress when training the model.  Instead, progress is used during evaluation to make sure the model doesn't just get a high reward value but die in the first room or two.
 
 [ZeldaEndCondition](triforce/end_conditions.py) classes track when the scenario is won, lost, or should be truncated (if the AI gets stuck in one place, for example).  Scenarios have multiple end conditions.
 
@@ -100,7 +100,7 @@ By default, the new models will be placed in `training/`. Use `run.py --model-pa
 
 ### Evaluating Models
 
-Rewards teach the model how to play, but it's the scoring function that tries to figure out how well the model is doing in completing the scenario.  It doesn't matter how many enemies Link kills or movements in the "wrong" direction as long as he completes the scenario without dying.  The `evaluate.py` module will run a given scenario 100 times (by default) and calculate the percentage of runs that were completed successfully, as well as the average score and rewards.
+Rewards teach the model how to play, but it's the scoring function that tries to figure out how well the model is doing in completing the scenario.  It doesn't matter how many enemies Link kills or movements in the "wrong" direction as long as he completes the scenario without dying.  The `evaluate.py` module will run a given scenario 100 times (by default) and calculate the percentage of runs that were completed successfully, as well as the average progress and rewards.
 
 After completing a training run, you should use `evaluate.py` and compare it to `models/evaluation.csv`.  You can run this in parallel (but it's graphics card RAM intensive, so keep the number low), and the number of episodes to run.  For example, if you trained the dungeon1beams and dungeon1nobeams models and saved them to the default training/ folder:
 

@@ -89,7 +89,7 @@ class GameplayCritic(ZeldaCritic):
         self._total_hits = 0
         self._room_enter_health = None
         self._equipment_rewards = {}
-        self._score = 0.0
+        self._progress = 0.0
 
     def clear(self):
         super().clear()
@@ -97,7 +97,7 @@ class GameplayCritic(ZeldaCritic):
         self._seen_locations.clear()
         self._total_hits = 0
         self._room_enter_health = None
-        self._score = 0.0
+        self._progress = 0.0
 
     def critique_gameplay(self, state_change : StateChange, rewards : StepRewards):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
@@ -126,7 +126,7 @@ class GameplayCritic(ZeldaCritic):
         if state_change.health_lost > 0:
             rewards.remove_rewards()
 
-        self.set_score(state_change, rewards)
+        self.set_progress(state_change, rewards)
 
     # reward helpers, may be overridden
     def critique_equipment_pickup(self, state_change : StateChange, rewards):
@@ -294,7 +294,7 @@ class GameplayCritic(ZeldaCritic):
         if state_change.action.kind != ActionKind.MOVE:
             return
 
-        # Don't score movement if we moved to a new location or took damage.  The "movement" which occurs from
+        # Don't progress movement if we moved to a new location or took damage.  The "movement" which occurs from
         # damage should never be rewarded, and it will be penalized by the health loss critic.
         if state_change.action.kind != ActionKind.MOVE \
                 or state_change.health_lost \
@@ -362,34 +362,22 @@ class GameplayCritic(ZeldaCritic):
             if len(prev.active_enemies) == len(curr.active_enemies):
                 rewards.add(MOVED_TO_SAFETY_REWARD)
 
-    def set_score(self, state_change : StateChange, rewards : StepRewards):
-        """Sets the score based on how many rooms we have seen, enemies hit, and other factors."""
+    def set_progress(self, state_change : StateChange, rewards : StepRewards):
+        """Sets the progress based on how many rooms we have seen, enemies hit, and other factors."""
 
         rooms = [(0, 0x67),
                  (0, 0x68),
                  (0, 0x58),
                  (0, 0x48),
                  (0, 0x38),
-                 (0, 0x37),
-                 (1, 0x73),
-                 (1, 0x74),
-                 (1, 0x72),
-                 (1, 0x63),
-                 (1, 0x53),
-                 (1, 0x52),
-                 (1, 0x42),
-                 (1, 0x43),
-                 (1, 0x44),
-                 (1, 0x45),
-                 (1, 0x35),
-                 (1, 0x36),]
+                 (0, 0x37),]
 
         level = state_change.state.level
         location = state_change.state.location
         if (level, location) in rooms:
-            self._score = max(self._score, rooms.index((level, location)) / len(rooms))
+            self._progress = max(self._progress, rooms.index((level, location)) / len(rooms))
 
-        rewards.score = self._score
+        rewards.progress = self._progress
 
 REWARD_ENTERED_CAVE = Reward("reward-entered-cave", REWARD_LARGE)
 REWARD_LEFT_CAVE = Reward("reward-left-cave", REWARD_LARGE)
@@ -430,21 +418,21 @@ class OverworldSwordCritic(GameplayCritic):
             else:
                 rewards.add(PENALTY_LEFT_SCENARIO)
 
-    def set_score(self, state_change : StateChange, rewards : StepRewards):
+    def set_progress(self, state_change : StateChange, rewards : StepRewards):
         state = state_change.state
 
-        score = 0
+        progress = 0
         if state.in_cave:
-            score += 1
+            progress += 1
 
             if state.link.sword != SwordKind.NONE:
-                score += 1
+                progress += 1
 
         else:
             if state.link.sword != SwordKind.NONE:
-                score += 3
+                progress += 3
 
             if state.location != 0x77:
-                score += 1
+                progress += 1
 
-        rewards.score = score / 5
+        rewards.progress = progress / 5
