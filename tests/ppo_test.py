@@ -1,11 +1,11 @@
 # pylint: disable=all
-from multiprocessing import Queue, Value
+from multiprocessing import Value
 import os
 import random
 import sys
 from unittest.mock import MagicMock
 
-from triforce.ml_ppo_rollout_buffer import PPORolloutBuffer
+from triforce import TrainingScenarioDefinition
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
@@ -132,12 +132,12 @@ def test_ppo_training(device, num_envs):
 @pytest.mark.parametrize("num_envs", [1])
 @pytest.mark.parametrize("model_scenario", ["full-game initial-training", "overworld-sword overworld-sword"])
 def test_model_training(model_scenario, num_envs):
-    model_name, scenario = model_scenario.split(" ")
+    model_name, scenario_name = model_scenario.split(" ")
     model_def : ModelDefinition = ModelDefinition.get(model_name)
-    scenario = model_def.scenario
+    scenario_name = TrainingScenarioDefinition.get(scenario_name)
 
     def create_env():
-        return make_zelda_env(scenario, model_def.action_space)
+        return make_zelda_env(scenario_name, model_def.action_space)
 
     progress = MagicMock()
     ppo = PPO("cpu", log_dir=None)

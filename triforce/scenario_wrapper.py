@@ -26,8 +26,8 @@ class TrainingScenarioDefinition(BaseModel):
     reward_overrides : Optional[Dict[str, Union[int, float, None]]] = {}
     end_conditions : List[str]
     start : List[str]
-    per_reset : Optional[Dict[str, int]] = {}
-    per_frame : Optional[Dict[str, int]] = {}
+    per_reset : Optional[Dict[str, int | str]] = {}
+    per_frame : Optional[Dict[str, int | str]] = {}
     per_room : Optional[Dict[str, int | str]] = {}
 
     @field_validator('scenario_selector', mode='before')
@@ -282,7 +282,7 @@ class ScenarioWrapper(gym.Wrapper):
         self._conditions = [getattr(end_conditions, ec)() for ec in scenario.end_conditions]
 
         match scenario.scenario_selector:
-            case 'round_robin':
+            case 'round-robin':
                 self.room_selector = RoundRobinSelector(scenario.start)
             case 'probabilistic':
                 self.room_selector = ProbabilisticSelector(scenario.start)
