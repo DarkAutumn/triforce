@@ -1,7 +1,6 @@
 import math
 from multiprocessing import Queue
 import time
-import numpy as np
 import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
@@ -259,10 +258,10 @@ class PPO:
         if self.optimizer_state is not None:
             optimizer.load_state_dict(self.optimizer_state)
 
-        b_inds = np.arange(batch_size)
+        b_inds = torch.arange(batch_size)
         clipfracs = []
         for _ in range(self.num_epochs):
-            np.random.shuffle(b_inds)
+            b_inds = b_inds[torch.randperm(batch_size)]
             for start in range(0, batch_size, minibatch_size):
                 end = start + minibatch_size
                 mb_inds = b_inds[start:end]
@@ -326,10 +325,10 @@ class PPO:
         self.optimizer_state = optimizer.state_dict()
 
         # After training, compute stats like explained variance
-        y_pred = b_values.cpu().numpy()
-        y_true = b_returns.cpu().numpy()
-        var_y = np.var(y_true)
-        explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+        y_pred = b_values.cpu()
+        y_true = b_returns.cpu()
+        var_y = torch.var(y_true)
+        explained_var = float('nan') if var_y == 0 else 1 - torch.var(y_true - y_pred) / var_y
 
         if self.tensorboard:
             self.tensorboard.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], iterations)
@@ -338,7 +337,7 @@ class PPO:
             self.tensorboard.add_scalar("losses/entropy", entropy_loss.item(), iterations)
             self.tensorboard.add_scalar("losses/old_approx_kl", old_approx_kl.item(), iterations)
             self.tensorboard.add_scalar("losses/approx_kl", approx_kl.item(), iterations)
-            self.tensorboard.add_scalar("losses/clipfrac", np.mean(clipfracs), iterations)
+            self.tensorboard.add_scalar("losses/clipfrac", torch.mean(torch.tensor(clipfracs)).item(), iterations)
             self.tensorboard.add_scalar("losses/explained_variance", explained_var, iterations)
             if self.start_time is not None:
                 self.tensorboard.add_scalar("charts/SPS", int(iterations / (time.time() - self.start_time)), iterations)
