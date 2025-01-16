@@ -16,9 +16,9 @@ import numpy as np
 import cv2
 import tqdm
 
-from triforce import TrainingScenarioDefinition, simulate_critique, make_zelda_env, TRAINING_SCENARIOS, Network
+from triforce import TrainingScenarioDefinition, simulate_critique, make_zelda_env, \
+    Network, ModelDefinition
 from triforce.state_change_wrapper import StateChange
-from triforce.model_definition import ZELDA_MODELS, ModelDefinition
 from triforce.rewards import StepRewards
 from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
@@ -132,7 +132,7 @@ class DisplayWindow:
 
         self._loaded_models = {}
         self.model_path = model_path
-        self.model_definition : ModelDefinition = ZELDA_MODELS[model]
+        self.model_definition : ModelDefinition = ModelDefinition.get(model)
 
         self.move_widgets = {}
         self.vector_widgets = []
@@ -827,7 +827,7 @@ def main():
     args = parse_args()
     model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                                          'models')
-    scenario = TRAINING_SCENARIOS.get(args.scenario, None)
+    scenario = TrainingScenarioDefinition.get(args.scenario, None)
     if not scenario:
         print(f'Unknown scenario {args.scenario}')
         return

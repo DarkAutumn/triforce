@@ -6,9 +6,9 @@ import os
 import retro
 
 from .zelda_env import make_zelda_env
-from .model_definition import ModelDefinition, TrainingScenarioDefinition, ZELDA_MODELS, TRAINING_SCENARIOS
 from .simulate_critic import simulate_critique
-from .models import Network, get_neural_network, register_neural_network
+from .models import ModelDefinition, Network, get_neural_network, register_neural_network
+from .scenario_wrapper import TrainingScenarioDefinition
 
 # add custom integrations to retro
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -25,6 +25,4 @@ __all__ = [
     Network.__name__,
     get_neural_network.__name__,
     register_neural_network.__name__,
-    'ZELDA_MODELS',
-    'TRAINING_SCENARIOS'
     ]

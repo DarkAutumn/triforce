@@ -2,7 +2,7 @@ from typing import Dict
 
 from .state_change_wrapper import StateChange
 from .zelda_game import ZeldaGame
-from .model_definition import TrainingScenarioDefinition
+from .scenario_wrapper import TrainingScenarioDefinition
 from . import critics
 from . import end_conditions
 

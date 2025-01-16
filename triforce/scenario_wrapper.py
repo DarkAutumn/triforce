@@ -1,20 +1,68 @@
 """Wraps the environment to call our critic and end conditions."""
 
 from collections import deque
+import json
 import gzip
 import os
-from typing import Deque
+from typing import Deque, Dict, List, Optional, Union
+from pydantic import BaseModel, field_validator
 import gymnasium as gym
 import retro
 import torch
 
 from .rewards import StepRewards
 from .zelda_enums import Direction, MapLocation
-from .state_change_wrapper import StateChange
 from .zelda_game_data import zelda_game_data
-from .model_definition import TrainingScenarioDefinition
 from . import critics
 from . import end_conditions
+
+class TrainingScenarioDefinition(BaseModel):
+    """A scenario in the game to train on.  This is a combination of critics and end conditions."""
+    name : str
+    description : str
+    scenario_selector : Optional[str]
+    critic : str
+    reward_overrides : Optional[Dict[str, Union[int, float, None]]] = {}
+    end_conditions : List[str]
+    start : List[str]
+    per_reset : Optional[Dict[str, int]] = {}
+    per_frame : Optional[Dict[str, int]] = {}
+    per_room : Optional[Dict[str, int | str]] = {}
+
+    @field_validator('scenario_selector', mode='before')
+    @classmethod
+    def scenario_selector_validator(cls, value):
+        """Gets the scenario selector from the name."""
+        if value in ('round-robin', 'probabilistic'):
+            return value
+
+        if value == "none":
+            return 'round-robin'
+
+        raise ValueError(f"Unknown scenario selector {value}")
+
+    @staticmethod
+    def _load_scenarios():
+        """Loads the models and scenarios from triforce.json."""
+        scenarios = {}
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        with open(os.path.join(script_dir, 'triforce.json'), encoding='utf-8') as f:
+            for scenario in json.load(f)["scenarios"]:
+                scenario = TrainingScenarioDefinition(**scenario)
+                scenarios[scenario.name] = scenario
+
+        return scenarios
+
+    @staticmethod
+    def get(name, default=None):
+        """Loads the models and scenarios from triforce.json."""
+        scenarios = TrainingScenarioDefinition._load_scenarios()
+        return scenarios.get(name, default)
+
+    @staticmethod
+    def get_all():
+        """Loads the models and scenarios from triforce.json."""
+        return list(TrainingScenarioDefinition._load_scenarios().values())
 
 class RoomResult:
     """Tracks whether link took damage in a room."""
@@ -30,7 +78,7 @@ class RoomSelector:
         """Returns the next room."""
         raise NotImplementedError
 
-    def step(self, state_change : StateChange, ending : str):
+    def step(self, state_change, ending : str):
         """Updates the selector with the new state."""
 
     def reset(self):
@@ -64,7 +112,7 @@ class ProbabilisticSelector(RoomSelector):
         self._direction_from = None
         self._skip_room = False
 
-    def step(self, state_change : StateChange, ending : str):
+    def step(self, state_change, ending : str):
         """Updates the selector with the new state."""
         prev = state_change.previous
         state = state_change.state
@@ -235,7 +283,7 @@ class ScenarioWrapper(gym.Wrapper):
         self.room_selector.step(state_change, rewards.ending)
         return obs, rewards, terminated, truncated, state_change
 
-    def _try_save_state(self, state_change : StateChange):
+    def _try_save_state(self, state_change):
         state = state_change.state
         if not state.in_cave and state_change.changed_location:
             direction = state.full_location.get_direction_to(state_change.previous.full_location)

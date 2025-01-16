@@ -7,8 +7,7 @@ from .gym_translation_wrapper import GymTranslationWrapper
 from .frame_skip_wrapper import FrameSkipWrapper
 from .action_space import ZeldaActionSpace
 from .observation_wrapper import ObservationWrapper
-from .scenario_wrapper import ScenarioWrapper
-from .model_definition import TrainingScenarioDefinition
+from .scenario_wrapper import ScenarioWrapper, TrainingScenarioDefinition
 from .rewards import EpisodeRewardTracker
 
 def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, *,
