@@ -308,6 +308,9 @@ class DisplayWindow:
                         elif event.key == pygame.K_m:
                             model_requested += 1
 
+                        elif event.key == pygame.K_l:
+                            model_requested -= 1
+
                         elif event.key == pygame.K_u:
                             cap_fps = not cap_fps
 
