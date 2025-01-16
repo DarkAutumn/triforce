@@ -134,7 +134,7 @@ class ProbabilisticSelector(RoomSelector):
     def __init__(self, rooms):
         self._starting_room = rooms[0]
         self.round_robin = RoundRobinSelector(rooms)
-        self._memory : Deque[RoomResult] = deque(maxlen=8)
+        self._memory : Deque[RoomResult] = deque(maxlen=128)
         self._prev_health = None
         self._direction_from = None
         self._skip_room = False
