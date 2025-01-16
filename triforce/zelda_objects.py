@@ -59,7 +59,7 @@ class ZeldaObject:
     def distance(self) -> float:
         """The distance from link to the object."""
         value = np.linalg.norm(self.vector_from_link)
-        if np.isclose(value, 0, atol=1e-5):
+        if abs(value) < 1e-5:
             return 0
 
         return value
