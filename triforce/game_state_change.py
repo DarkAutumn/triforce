@@ -3,6 +3,7 @@
 from typing import Dict, List, Optional
 
 import numpy as np
+import torch
 
 from .action_space import ActionTaken
 from .zelda_enums import AnimationState, ZeldaItemKind, ZeldaAnimationKind
@@ -15,7 +16,7 @@ class ZeldaStateChange:
         self.frames : List[np.ndarray] = frames
         self.previous : ZeldaGame = prev
         self.state : ZeldaGame = curr
-        self.action_mask : Optional[np.ndarray] = None
+        self.action_mask : Optional[torch.Tensor] = None
         self.actions_available = None
 
         self.health_lost = (max(0, prev.link.health - curr.link.health + health_changed) \
