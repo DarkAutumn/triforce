@@ -11,7 +11,7 @@ import traceback
 
 import torch
 from tqdm import tqdm
-from triforce import ZELDA_MODELS
+from triforce import ModelDefinition
 from triforce.ml_ppo import PPO
 from triforce.zelda_env import make_zelda_env
 
@@ -28,7 +28,10 @@ def _dump_trace_with_locals(exc_type, exc_value, exc_traceback):
             f.write("\n")
 
 def _train_one(model_name, args):
-    model_def = ZELDA_MODELS[model_name]
+    model_def = ModelDefinition.get(model_name)
+    if model_def is None:
+        raise ValueError(f"Unknown model: {model_name}")
+
     def create_env():
         return make_zelda_env(model_def.training_scenario, model_def.action_space, obs_kind=args.obs_kind)
 
@@ -52,7 +55,12 @@ def _train_one(model_name, args):
 def main():
     """Main entry point."""
     args = parse_args()
-    models = args.models if args.models else ZELDA_MODELS.keys()
+
+    if args.hook_exceptions:
+        faulthandler.enable()
+        sys.excepthook = _dump_trace_with_locals
+
+    models = args.models if args.models else ModelDefinition.get_all_models()
     for model_name in models:
         _train_one(model_name, args)
 
@@ -70,6 +78,7 @@ def parse_args():
     parser.add_argument("--iterations", type=int, default=-1, help="Override iteration count.")
     parser.add_argument("--parallel", type=int, default=1, help="Number of parallel environments to run.")
     parser.add_argument("--load", type=str, help="Load a model to continue training.")
+    parser.add_argument("--hook-exceptions", action='store_true', help="Dump tracebacks on unhandled exceptions.")
 
     try:
         args = parser.parse_args()
@@ -82,6 +91,4 @@ def parse_args():
         sys.exit(1)
 
 if __name__ == '__main__':
-    faulthandler.enable()
-    sys.excepthook = _dump_trace_with_locals
     main()

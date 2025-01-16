@@ -5,7 +5,7 @@ import sys
 import os
 import argparse
 from tqdm import tqdm
-from triforce import ModelDefinition, make_zelda_env, ZELDA_MODELS, Network
+from triforce import ModelDefinition, make_zelda_env, Network
 from triforce.rewards import TotalRewards, RewardStats
 
 # pylint: disable=global-statement,global-variable-undefined
@@ -21,7 +21,7 @@ def _print_stat_row(model_name, filename, steps_trained, stats : RewardStats):
 def run_one_scenario(args, model_name, model_path, counter_or_callback):
     """Runs a single scenario."""
     # pylint: disable=redefined-outer-name,too-many-locals
-    model_def = ZELDA_MODELS[model_name]
+    model_def = ModelDefinition.get(model_name)
     env = make_zelda_env_from_args(model_def, args)
     network : Network = model_def.neural_net(env.observation_space, env.action_space)
     network.load(model_path)
@@ -79,7 +79,7 @@ def main():
     _print_stat_header()
     env = None
     for args, model_name, path, _ in all_scenarios:
-        model_def = ZELDA_MODELS[model_name]
+        model_def = ModelDefinition.get(model_name)
         if env is None:
             env = make_zelda_env_from_args(model_def, args)
 
@@ -94,13 +94,13 @@ def main():
 def create_scenarios(args):
     """Finds all scenarios to be executed.  Also returns the results of any previous evaluations."""
     model_path = get_model_path(args)
-    models = args.models if args.models else ZELDA_MODELS.keys()
+    models = args.models if args.models else ModelDefinition.get_all_models().keys()
 
     all_scenarios = []
     for model_name in models:
         if not args.models or model_name in args.models:
             process = True
-            available_models = ZELDA_MODELS[model_name].find_available_models(model_path)
+            available_models = ModelDefinition.get(model_name).find_available_models(model_path)
             models_to_evaluate = sorted([int(x) for x in available_models.keys() if isinstance(x, int)])
             models_to_evaluate += [x for x in available_models.keys() if not isinstance(x, int)]
             for key in models_to_evaluate:
