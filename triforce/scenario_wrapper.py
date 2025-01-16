@@ -4,6 +4,7 @@ from collections import deque
 import json
 import gzip
 import os
+import time
 from typing import Deque, Dict, List, Optional, Union
 from pydantic import BaseModel, field_validator
 import gymnasium as gym
@@ -66,11 +67,44 @@ class TrainingScenarioDefinition(BaseModel):
 
 class RoomResult:
     """Tracks whether link took damage in a room."""
-    def __init__(self, room, came_from, lost_health, success):
+    def __init__(self, room, came_from, health_lost, success):
         self.room : MapLocation = room
         self.came_from : Direction = came_from
-        self.lost_health = lost_health
+        self.health_lost = health_lost
         self.success = success
+
+class RoomResultAggregator:
+    """Aggregates room results."""
+    def __init__(self):
+        self.health_lost = {}
+        self.result = {}
+
+    def add(self, result : RoomResult):
+        """Adds a result."""
+        direction = result.came_from.name if result.came_from is not None else ''
+        room_name = f"{result.room.level}_{result.room.value:02x}{direction}"
+
+        self.health_lost.setdefault(room_name, []).append(result.health_lost)
+        self.result.setdefault(room_name, []).append(1 if result.success else 0)
+
+
+    def to_tensorboard(self, tensorboard, iterations):
+        """Write the stats to TensorBoard."""
+        if not tensorboard:
+            return
+
+        curr = time.time()
+        for room, health_list in self.health_lost.items():
+            value = sum(health_list) / len(health_list) if health_list else 0.0
+            tensorboard.add_scalar(f'room-health-loss/{room}', value, iterations, curr)
+            health_list.clear()
+
+        for room, result_list in self.result.items():
+            value = sum(result_list) / len(result_list) if result_list else 0.0
+            tensorboard.add_scalar(f'room-success-rate/{room}', value, iterations, curr)
+            result_list.clear()
+
+        tensorboard.flush()
 
 class RoomSelector:
     """Selects rooms."""
@@ -100,7 +134,7 @@ class ProbabilisticSelector(RoomSelector):
     def __init__(self, rooms):
         self._starting_room = rooms[0]
         self.round_robin = RoundRobinSelector(rooms)
-        self._memory : Deque[RoomResult] = deque(maxlen=128)
+        self._memory : Deque[RoomResult] = deque(maxlen=8)
         self._prev_health = None
         self._direction_from = None
         self._skip_room = False
@@ -120,19 +154,25 @@ class ProbabilisticSelector(RoomSelector):
         if self._prev_health is None:
             self._prev_health = prev.link.health
 
-        lost_health = state.link.health < self._prev_health
+        lost_health = state.link.health - self._prev_health
+
+        def get_level_location(full_location):
+            return full_location.level, full_location.value
+
         if ending is not None:
             if not self._skip_room:
                 success = ending.startswith('success')
                 result = RoomResult(state.full_location, self._direction_from, lost_health, success)
+                state_change.state.info['room_result'] = result
                 self._memory.append(result)
                 self._prev_health = None
                 self._direction_from = None
 
-        elif prev.full_location != state.full_location:
+        elif get_level_location(prev.full_location) != get_level_location(state.full_location):
             success = state.full_location in prev.objectives.next_rooms
             if not self._skip_room:
                 result = RoomResult(prev.full_location, self._direction_from, lost_health, success)
+                state_change.state.info['room_result'] = result
                 self._memory.append(result)
 
                 self._prev_health = state.link.health if success else None
@@ -184,7 +224,7 @@ class ProbabilisticSelector(RoomSelector):
 
         for i, result in enumerate(reversed(self._memory)):
             weight = (decay_factor ** i) * (2.0 if not result.success else 1.0)
-            if result.lost_health:
+            if result.health_lost:
                 weight *= 1.5
 
             loc_dir = result.room, result.came_from

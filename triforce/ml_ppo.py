@@ -5,6 +5,7 @@ import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
+from .scenario_wrapper import RoomResultAggregator
 from .ml_subprocess import SubprocessWorker
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network, create_network
@@ -89,12 +90,14 @@ class PPO:
         return self._train_multiproc(network, env, create_env, iterations, progress, **kwargs)
 
     def _train_single(self, network, env, iterations, progress, **kwargs):
+        # pylint: disable=too-many-locals
         # tracking
         save_path = kwargs.get('save_path', None)
         next_update = Threshold(LOG_RATE)
         next_save = Threshold(SAVE_INTERVAL)
         rewards = TotalRewards()
         reward_stats = None
+        rooms = RoomResultAggregator()
 
         memory_length = self.target_steps
         buffer = PPORolloutBuffer(memory_length, 1, env.observation_space, env.action_space,
@@ -105,11 +108,12 @@ class PPO:
             infos = buffer.ppo_main_loop(0, network, env, progress)
 
             total_iterations += buffer.memory_length
-            self._process_infos(rewards, infos)
+            self._process_infos(rewards, rooms, infos)
 
             if next_update.add(buffer.memory_length):
                 reward_stats = rewards.get_stats_and_clear()
                 reward_stats.to_tensorboard(self.tensorboard, total_iterations)
+                rooms.to_tensorboard(self.tensorboard, total_iterations)
                 network.stats = reward_stats
 
             if save_path and next_save.add(buffer.memory_length):
@@ -130,6 +134,7 @@ class PPO:
         next_update = Threshold(LOG_RATE)
         next_save = Threshold(SAVE_INTERVAL)
         rewards = TotalRewards()
+        rooms = RoomResultAggregator()
         reward_stats = None
 
         # ppo variables
@@ -154,7 +159,7 @@ class PPO:
 
                 # Process the results from the workers
                 infos = self._subprocess_ppo(network, progress, variables, result_queue, workers)
-                self._process_infos(rewards, infos)
+                self._process_infos(rewards, rooms, infos)
 
                 # Update reward stats and save the network if requested, this should be done before optimization
                 if next_update.add(iterations_processed):
@@ -215,10 +220,12 @@ class PPO:
                         progress.update(result.memory_length)
         return infos
 
-    def _process_infos(self, total_rewards : TotalRewards, infos):
+    def _process_infos(self, total_rewards : TotalRewards, rooms : RoomResultAggregator,  infos):
         for info in infos:
             if (ep_rewards := info.get('episode_rewards', None)) is not None:
                 total_rewards.add(ep_rewards)
+            if (room_result := info.get('room_result', None)) is not None:
+                rooms.add(room_result)
 
     def _optimize(self, network : Network, variables : PPORolloutBuffer, iterations : int):
         # pylint: disable=too-many-locals, too-many-statements, too-many-branches
