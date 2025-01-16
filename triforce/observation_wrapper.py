@@ -218,7 +218,7 @@ class ObservationWrapper(gym.Wrapper):
             if obj.distance <= 1e-5:
                 result[i] = torch.tensor([0, 0, -1], dtype=torch.float32)
             else:
-                result[i, :2] = torch.from_numpy(obj.vector[:2])
+                result[i, :2] = obj.vector[:2]
                 result[i, 2] = obj.distance / DISTANCE_SCALE
 
         return result

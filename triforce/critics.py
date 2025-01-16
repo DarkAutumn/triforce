@@ -2,13 +2,13 @@
 
 from enum import Enum
 from typing import Dict
-import numpy as np
+import torch
 
 from triforce.action_space import ActionKind
 from triforce.rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL, REWARD_TINY, \
     Penalty, Reward, StepRewards
 
-from .zelda_enums import Direction, SwordKind, ZeldaAnimationKind, AnimationState
+from .zelda_enums import SwordKind, ZeldaAnimationKind, AnimationState
 from .game_state_change import ZeldaStateChange
 
 HEALTH_LOST_PENALTY = Penalty("penalty-lost-health", -REWARD_LARGE)
@@ -227,12 +227,12 @@ class GameplayCritic(ZeldaCritic):
             if not curr.enemies:
                 rewards.add(ATTACK_NO_ENEMIES_PENALTY)
 
-            elif (active_enemies := curr.active_enemies):
-                enemy_vectors = [enemy.vector for enemy in active_enemies if abs(enemy.distance) > 0]
-                if enemy_vectors:
-                    link_vector = curr.link.direction.to_vector()
-                    dotproducts = np.sum(link_vector * enemy_vectors, axis=1)
-                    if not np.any(dotproducts > np.sqrt(2) / 2):
+            elif (active_enemies := [x for x in curr.active_enemies if x.distance > 0]):
+                enemy_vectors = torch.stack([x.vector for x in active_enemies])
+
+                if enemy_vectors is not None:
+                    dotproducts = torch.sum(curr.link.direction.vector * enemy_vectors, dim=1)
+                    if not torch.any(dotproducts > torch.sqrt(torch.tensor(2)) / 2):
                         rewards.add(ATTACK_MISS_PENALTY)
                     elif not prev.link.are_beams_available:
                         distance = active_enemies[0].distance
@@ -262,8 +262,9 @@ class GameplayCritic(ZeldaCritic):
 
         if prev != curr:
             health_change = state_change.previous.link.health - self._room_enter_health
-            reward = (np.clip(health_change, -3.0, 3.0) + 3) / 6
-            reward = np.clip(reward, REWARD_MINIMUM, REWARD_MAXIMUM)
+            # clamp the reward to [-1, 1]
+            reward = (max(min(health_change, 3.0), -3.0) + 3) / 6
+            reward = max(min(reward, REWARD_MAXIMUM), REWARD_MINIMUM)
 
             if curr in state_change.previous.objectives.next_rooms:
                 if (curr, prev) in self._correct_locations:
@@ -321,20 +322,8 @@ class GameplayCritic(ZeldaCritic):
         else:
             # We moved closer, but scale the reward by the pixels moved in case the agent finds a way to exploit
             # our reward system.
-            match curr_link.direction:
-                case Direction.N:
-                    dir_vect = np.array([0, -1], dtype=np.float32)
-                case Direction.S:
-                    dir_vect = np.array([0, 1], dtype=np.float32)
-                case Direction.E:
-                    dir_vect = np.array([1, 0], dtype=np.float32)
-                case Direction.W:
-                    dir_vect = np.array([-1, 0], dtype=np.float32)
-                case _:
-                    raise ValueError("Invalid direction")
-
-            movement = curr_link.position.numpy - prev_link.position.numpy
-            progress = np.dot(movement, dir_vect)
+            movement = curr_link.position.torch - prev_link.position.torch
+            progress = torch.dot(movement, curr_link.direction.vector).item()
             # TODO: investigate why this happens
             progress = max(progress, 0)
             rewards.add(MOVE_CLOSER_REWARD, progress / MOVEMENT_SCALE_FACTOR)
@@ -345,27 +334,33 @@ class GameplayCritic(ZeldaCritic):
         it is still wary of moving too close to an enemy."""
         prev, curr = state_change.previous, state_change.state
 
-        if not state_change.health_lost and not curr.link.is_blocking:
-            prev_active = [enemy.index for enemy in prev.active_enemies]
+        # Skip evaluation if health was lost or Link is blocking
+        if state_change.health_lost or curr.link.is_blocking:
+            return
 
-            prev_overlap = [tile
-                            for enemy in prev.active_enemies
-                            for tile in enemy.link_overlap_tiles
-                            if tile in prev.link.self_tiles]
+        prev_active_indices = {enemy.index for enemy in prev.active_enemies}
 
-            curr_overlap = [tile
-                            for enemy in curr.active_enemies
-                            if enemy.index in prev_active
-                            for tile in enemy.link_overlap_tiles
-                            if tile in curr.link.self_tiles]
+        prev_overlap = {
+            tile
+            for enemy in prev.active_enemies
+            for tile in enemy.link_overlap_tiles
+            if tile in prev.link.self_tiles
+        }
 
-            danger_diff = len(curr_overlap) - len(prev_overlap)
+        curr_overlap = {
+            tile
+            for enemy in curr.active_enemies
+            if enemy.index in prev_active_indices
+            for tile in enemy.link_overlap_tiles
+            if tile in curr.link.self_tiles
+        }
 
-            if danger_diff > 0:
-                rewards.add(DANGER_TILE_PENALTY)
-            elif danger_diff < 0:
-                if len(prev.active_enemies) == len(curr.active_enemies):
-                    rewards.add(MOVED_TO_SAFETY_REWARD)
+        danger_diff = len(curr_overlap) - len(prev_overlap)
+        if danger_diff > 0:
+            rewards.add(DANGER_TILE_PENALTY)
+        elif danger_diff < 0:
+            if len(prev.active_enemies) == len(curr.active_enemies):
+                rewards.add(MOVED_TO_SAFETY_REWARD)
 
     def set_score(self, state_change : ZeldaStateChange, rewards : StepRewards):
         """Sets the score based on how many rooms we have seen, enemies hit, and other factors."""

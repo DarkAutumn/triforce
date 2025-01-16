@@ -2,7 +2,6 @@ from dataclasses import dataclass
 import time
 from typing import Iterator
 import gymnasium as gym
-import numpy as np
 
 from .game_state_change import ZeldaStateChange
 
@@ -115,12 +114,12 @@ class StepRewards:
     @property
     def value(self):
         """The total reward value."""
-        return np.clip(sum(self._outcomes.values()), -REWARD_MAXIMUM, REWARD_MAXIMUM)
+        return max(min(sum(self._outcomes.values()), REWARD_MAXIMUM), -REWARD_MAXIMUM)
 
     def add(self, outcome: Outcome, scale=None):
         """Add an outcome to the rewards."""
         if scale is not None:
-            value = np.clip(outcome.value * scale, -REWARD_MAXIMUM, REWARD_MAXIMUM)
+            value = max(min(outcome.value * scale, REWARD_MAXIMUM), -REWARD_MAXIMUM)
             if isinstance(outcome, Reward):
                 outcome = Reward(outcome.name, value)
             elif isinstance(outcome, Penalty):
@@ -227,11 +226,17 @@ class RewardStats:
     def __init__(self, total : TotalRewards, evaluated = False):
         self.evaluated = evaluated
         self.episodes = total.episodes
-        self.reward_mean = np.mean(total.rewards) if total.rewards else 0
-        self.progress_mean = np.mean(total.scores) if total.scores else 0
-        self.total_steps = np.mean(total.total_steps) if total.total_steps else 0
+        self.reward_mean = self._mean(total.rewards)
+        self.progress_mean = self._mean(total.scores)
+        self.total_steps = self._mean(total.total_steps)
         self.outcomes = {x: y.copy() for x, y in total.outcomes.items()}
         self.endings = total.endings.copy()
+
+    def _mean(self, values):
+        if not values:
+            return 0
+
+        return sum(values) / len(values)
 
     @property
     def success_rate(self):

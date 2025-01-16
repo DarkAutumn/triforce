@@ -1,7 +1,7 @@
 
 from dataclasses import dataclass
+from functools import cached_property
 
-import numpy as np
 from .zelda_enums import ActionKind, AnimationState, ArrowKind, BoomerangKind, CandleKind, Direction, PotionKind, \
     RingKind, SelectedEquipmentKind, SwordKind, TileIndex, ZeldaAnimationKind, SoundKind
 from .zelda_objects import ZeldaObject
@@ -28,7 +28,7 @@ class Link(ZeldaObject):
     direction : Direction
     status : int
 
-    @property
+    @cached_property
     def link_overlap_tiles(self):
         """The tiles that the object overlaps with link's top-left tile."""
         x_dim, y_dim = self.dimensions
@@ -298,10 +298,16 @@ class Link(ZeldaObject):
         self.game.magic_shield = value
 
     # Dungeon items
-    @property
+    @cached_property
     def triforce_pieces(self) -> int:
         """The number of triforce pieces link has (does not include Triforce of Power in level 9)."""
-        return np.binary_repr(self.game.triforce).count('1')
+        triforce = self.game.triforce
+        count = 0
+        while triforce:
+            count += triforce & 1
+            triforce >>= 1
+
+        return count
 
     @property
     def triforce_of_power(self) -> bool:

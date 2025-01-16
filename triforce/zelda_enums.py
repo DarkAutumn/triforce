@@ -1,9 +1,9 @@
 """Various enumerations of equipment, item, and enemy types in the game."""
 
 from enum import Enum
-from numbers import Integral
+from functools import cached_property
 
-import numpy as np
+import torch
 
 # the y coordinate where the gameplay window starts (above this line is the HUD)
 GAMEPLAY_START_Y = 56
@@ -217,17 +217,18 @@ class Direction(Enum):
             case _:
                 return Direction.NONE
 
-    def to_vector(self):
+    @cached_property
+    def vector(self):
         """Returns the vector for the direction."""
         match self:
             case Direction.E:
-                return np.array([1, 0])
+                return torch.tensor([1, 0], dtype=torch.float32)
             case Direction.W:
-                return np.array([-1, 0])
+                return torch.tensor([-1, 0], dtype=torch.float32)
             case Direction.S:
-                return np.array([0, 1])
+                return torch.tensor([0, 1], dtype=torch.float32)
             case Direction.N:
-                return np.array([0, -1])
+                return torch.tensor([0, -1], dtype=torch.float32)
             case _:
                 raise ValueError(f"Unhandled Direction: {self}")
 
@@ -237,17 +238,8 @@ ITEM_MAP = {x.value: x for x in ZeldaItemKind}
 class Coordinates:
     """Base class of coordinates in the game world."""
     def __init__(self, x: int, y: int):
-        if isinstance(x, Integral):
-            x = int(x)
-
-        if isinstance(y, Integral):
-            y = int(y)
-
-        if not isinstance(x, int) or not isinstance(y, int):
-            raise TypeError("Both elements must be integers.")
-
-        self._x = x
-        self._y = y
+        self._x = int(x)
+        self._y = int(y)
 
     @property
     def x(self) -> int:
@@ -294,11 +286,6 @@ class Coordinates:
             return NotImplemented
         return (self.x, self.y) < (other.x, other.y)
 
-    @property
-    def numpy(self):
-        """Returns the position as a numpy array."""
-        return np.array([self.x, self.y], dtype=np.float32)
-
     def __add__(self, other):
         if isinstance(other, Coordinates):
             return Coordinates(self.x + other.x, self.y + other.y)
@@ -312,6 +299,11 @@ class Coordinates:
         if isinstance(other, tuple) and len(other) == 2:
             return Coordinates(self.x - other[0], self.y - other[1])
         raise TypeError("Can only subtract Coordinates or a tuple of length 2.")
+
+    @property
+    def torch(self):
+        """Converts the coordinates to a torch tensor."""
+        return torch.tensor([self.x, self.y], dtype=torch.float32)
 
 class Position(Coordinates):
     """A position in the game world."""

@@ -1,7 +1,7 @@
 # This file contains the Room class, which represents a single room in the game.""
 from collections import OrderedDict
 from typing import Sequence, Tuple
-import numpy as np
+import torch
 
 from .wavefront import Wavefront
 from .zelda_objects import ZeldaObject
@@ -34,8 +34,8 @@ def init_half_walkable_tiles():
             0xaf, 0xb9, 0xbb, 0xad, 0xb1, 0xdd, 0xde, 0xd9, 0xdb, 0xdf, 0xd1, 0xdc, 0xd0, 0xda
             ]
 
-WALKABLE_TILES = init_walkable_tiles()
-HALF_WALKABLE_TILES = init_half_walkable_tiles()
+WALKABLE_TILES = torch.tensor(init_walkable_tiles(), dtype=torch.uint8)
+HALF_WALKABLE_TILES = torch.tensor(init_half_walkable_tiles(), dtype=torch.uint8)
 BRICK_TILE = 0xf6
 
 class Room:
@@ -51,7 +51,7 @@ class Room:
         """Gets or creates a room."""
         # pylint: disable=too-many-locals
 
-        walkable_tiles = np.zeros(((tiles.shape[0] + 1, tiles.shape[1] + 1)), dtype=bool)
+        walkable_tiles = torch.zeros(((tiles.shape[0] + 1, tiles.shape[1] + 1)), dtype=bool)
         for x in range(-1, tiles.shape[0]):
             for y in range(-1, tiles.shape[1]):
                 # top left
@@ -101,10 +101,10 @@ class Room:
 
         return result
 
-    def __init__(self, location, tiles : np.ndarray, walkable : np.ndarray):
+    def __init__(self, location, tiles : torch.Tensor, walkable : torch.Tensor):
         self.full_location = location
-        self.tiles : np.ndarray = tiles
-        self.walkable : np.ndarray = walkable
+        self.tiles : torch.Tensor = tiles
+        self.walkable : torch.Tensor = walkable
         self.exits = self._get_exit_tiles()
         self.cave_tile = self._get_cave_coordinates()
         self._wf_lru = OrderedDict()
@@ -146,7 +146,7 @@ class Room:
     @property
     def is_loaded(self):
         """Returns True if the room is loaded."""
-        any_walkable = np.isin(self.tiles, WALKABLE_TILES).any()
+        any_walkable = torch.isin(self.tiles, WALKABLE_TILES).any()
         return any_walkable
 
     def _get_exit_tiles(self):
