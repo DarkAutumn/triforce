@@ -302,20 +302,11 @@ class ModelDefinition(BaseModel):
     requires_triforce : Optional[int] = None
     equipment_required : Optional[List[str]] = []
 
-    training_scenario : TrainingScenarioDefinition
-    iterations : int
-
     @field_validator('neural_net', mode='before')
     @classmethod
     def neural_net_validator(cls, value):
         """Gets the class from the name."""
         return get_neural_network(value)
-
-    @field_validator('training_scenario', mode='before')
-    @classmethod
-    def training_scenario_validator(cls, value):
-        """Gets the scenario from the name."""
-        return TrainingScenarioDefinition.get(value)
 
     @field_validator('levels', 'rooms', mode='before')
     @classmethod

@@ -9,7 +9,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["full-game-training", "full-game", "--model-path", "training/"],
+            "args": ["refinement", "full-game", "--model-path", "training/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -27,7 +27,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
-            "args": ["full-game", "--iterations", "1000000", "--parallel", "1", "--output", "training-debug/"],
+            "args": ["full-game", "initial-training", "--iterations", "10_000", "--output", "training-debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -36,7 +36,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
-            "args": ["overworld-sword", "--iterations", "1000000", "--parallel", "1", "--output", "training-debug/"],
+            "args": ["overworld-sword", "overworld-sword", "--iterations", "10_000", "--output", "training-debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

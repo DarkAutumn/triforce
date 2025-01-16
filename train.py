@@ -11,7 +11,7 @@ import traceback
 
 import torch
 from tqdm import tqdm
-from triforce import ModelDefinition
+from triforce import ModelDefinition, TrainingScenarioDefinition
 from triforce.ml_ppo import PPO
 from triforce.zelda_env import make_zelda_env
 
@@ -27,13 +27,23 @@ def _dump_trace_with_locals(exc_type, exc_value, exc_traceback):
                 f.write(f"  {typename} {var_name}: {var_value}\n")
             f.write("\n")
 
-def _train_one(model_name, args):
+def main():
+    """Main entry point."""
+    args = parse_args()
+
+    if args.hook_exceptions:
+        faulthandler.enable()
+        sys.excepthook = _dump_trace_with_locals
+
+    model_name = args.model
     model_def = ModelDefinition.get(model_name)
     if model_def is None:
         raise ValueError(f"Unknown model: {model_name}")
 
+    scenario_def = TrainingScenarioDefinition.get(args.scenario)
+
     def create_env():
-        return make_zelda_env(model_def.training_scenario, model_def.action_space, obs_kind=args.obs_kind)
+        return make_zelda_env(scenario_def, model_def.action_space, obs_kind=args.obs_kind)
 
     device = args.device if args.device else  torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -52,18 +62,6 @@ def _train_one(model_name, args):
 
     model.save(f"{model_directory}/model.pt")
 
-def main():
-    """Main entry point."""
-    args = parse_args()
-
-    if args.hook_exceptions:
-        faulthandler.enable()
-        sys.excepthook = _dump_trace_with_locals
-
-    models = args.models if args.models else ModelDefinition.get_all_models()
-    for model_name in models:
-        _train_one(model_name, args)
-
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="train - Train Zelda ML models")
@@ -71,9 +69,10 @@ def parse_args():
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
-    parser.add_argument("--device", choices=['cpu', 'cuda'], default='cpu', help="The device to use.")
+    parser.add_argument("--device", choices=['cpu', 'cuda'], default=None, help="The device to use.")
 
-    parser.add_argument('models', nargs='*', help='List of models to train')
+    parser.add_argument('model', type=str, help='The model to train.')
+    parser.add_argument('scenario', type=str, help='The scenario to train on.')
     parser.add_argument("--output", type=str, help="Location to write to.")
     parser.add_argument("--iterations", type=int, default=-1, help="Override iteration count.")
     parser.add_argument("--parallel", type=int, default=1, help="Number of parallel environments to run.")

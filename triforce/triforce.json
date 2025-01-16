@@ -10,7 +10,6 @@
             "rooms" : ["0x77"],
             "requires_enemies" : false,
 
-            "training_scenario" : "full-game-training",
             "iterations" : 1000000
         },
         {
@@ -22,23 +21,14 @@
             "rooms" : ["0x77"],
             "requires_enemies" : false,
 
-            "training_scenario" : "overworld-sword",
             "iterations" : 1000000
         }
     ],
     "scenarios": [
         {
-            "name": "zelda",
-            "description": "Full Game (so far)",
-            "scenario_selector" : "none",
-            "critic": "GameplayCritic",
-            "end_conditions": ["GainedTriforce", "GameOver", "Timeout"],
-            "start": ["0_77"]
-        },
-        {
-            "name": "full-game-training",
+            "name": "initial-training",
             "description": "The full game with training variables",
-            "scenario_selector" : "probabilistic",
+            "scenario_selector" : "round-robin",
             "critic": "GameplayCritic",
             "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
             "start": ["0_67s"],
@@ -48,6 +38,19 @@
             },
             "per_reset":
             {
+                "bombs" : 3
+            }
+        },
+        {
+            "name": "refinement",
+            "description": "The full game with training variables",
+            "scenario_selector" : "probabilistic",
+            "critic": "GameplayCritic",
+            "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
+            "start": ["0_67s"],
+            "per_reset":
+            {
+                "health" : "max_health",
                 "bombs" : 3
             }
         },
