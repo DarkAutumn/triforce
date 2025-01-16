@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Set, Tuple
 
-import numpy as np
+import torch
 
 from .zelda_enums import TileIndex, ZeldaEnemyKind, ZeldaItemKind, ZeldaProjectileId, Position
 
@@ -58,7 +58,7 @@ class ZeldaObject:
     @cached_property
     def distance(self) -> float:
         """The distance from link to the object."""
-        value = np.linalg.norm(self.vector_from_link)
+        value = torch.norm(self.vector_from_link)
         if abs(value) < 1e-5:
             return 0
 
@@ -69,14 +69,14 @@ class ZeldaObject:
         """The normalized direction vector from link to the object."""
         distance = self.distance
         if distance == 0:
-            return np.array([0, 0], dtype=np.float32)
+            return torch.tensor([0, 0], dtype=torch.float32)
 
         return self.vector_from_link / distance
 
     @cached_property
     def vector_from_link(self):
         """The (un-normalized) vector from link to the object."""
-        return self.position.numpy - self.game.link.position.numpy
+        return torch.tensor(self.position - self.game.link.position, dtype=torch.float32)
 
 @dataclass
 class Projectile(ZeldaObject):
