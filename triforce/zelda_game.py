@@ -1,5 +1,6 @@
 """Structured data for Zelda game state."""
 
+from functools import cached_property
 import pprint
 from enum import Enum
 from typing import List, Optional
@@ -10,8 +11,7 @@ from .room import Room
 from .zelda_objects import Item, Projectile
 from .enemy import Enemy
 from .link import Link
-from .zelda_enums import ENEMY_MAP, ITEM_MAP, MapLocation, Position, TileIndex, ZeldaEnemyKind, \
-        Direction, SoundKind
+from .zelda_enums import ENEMY_MAP, ITEM_MAP, MapLocation, Position, TileIndex, Direction, SoundKind
 from .zelda_game_data import zelda_game_data
 
 MODE_GAME_OVER = 8
@@ -41,45 +41,12 @@ class ZeldaGame:
     _env : gym.Env
     info : dict
     frames : int
-    link : Link
-    room : Room
-    items : List[Item]
-    enemies : List[Enemy]
-    projectiles : List[Projectile]
 
-    def __init__(self, prev : 'ZeldaGame', env, info, frame_count):
-        ram = env.unwrapped.get_ram()
-        tables = ObjectTables(ram)
-
-        # Prepare __setattr__ for the info dict
-        self.__dict__['info'] = info
-
+    def __init__(self, env, info, frame_count):
+        ZeldaGame.__active = frame_count
+        self.__dict__['info'] = info  # Used in __setattr__, so we have to set it this way
         self._env = env
         self.frames = frame_count
-        self._fresh_tiles = None
-
-        room = Room.get(self.full_location)
-        if room is None:
-            room = Room.create(self.full_location, self._get_fresh_tiles())
-        self.room = room
-
-        self.link = self._build_link_status(tables)
-
-        self.items = []
-        self.enemies = []
-        self.projectiles = []
-
-        for (index, obj_id) in self._enumerate_active_ids(tables):
-            if obj_id == OBJ_ITEM_ID:
-                self.items.append(self._build_item(tables, index))
-
-            elif self._is_id_enemy(obj_id):
-                self.enemies.append(self._build_enemy(tables, index, obj_id))
-
-            elif self._is_projectile(obj_id):
-                self.projectiles.append(self._build_projectile(tables, index, obj_id))
-
-        self._update_enemies(prev)
 
     def __str__(self):
         return f"Enemies: {[x.id for x in self.enemies]} ({len(self.active_enemies)} active)\n" \
@@ -88,27 +55,76 @@ class ZeldaGame:
                 f"Location: {self.full_location}\n" \
                 f"Info: {pprint.pformat(self.info, indent=4, width=80, sort_dicts=True)}\n"
 
+    @cached_property
+    def link(self):
+        """The current link."""
+        return self._build_link_status(self._tables)
 
+    @cached_property
+    def room(self):
+        """The current room."""
+        return Room.get(self.full_location) or Room.create(self.full_location, self.current_tiles)
 
-    def activate(self):
-        """Sets this state as active, allowing it to be modified."""
-        ZeldaGame.__active = self.frames
+    @cached_property
+    def items(self) -> List[Item]:
+        """Returns a list of items on the current screen."""
+        tables = self._tables
+        return [self._build_item(tables, index) for index in self._cached_ids[0]]
+
+    @cached_property
+    def enemies(self) -> List[Enemy]:
+        """Returns a list of enemies on the current screen."""
+        tables = self._tables
+        return [self._build_enemy(tables, index, obj_id) for index, obj_id in self._cached_ids[1]]
+
+    @cached_property
+    def projectiles(self) -> List[Projectile]:
+        """Returns a list of projectiles on the current screen."""
+        tables = self._tables
+        return [self._build_projectile(tables, index, obj_id) for index, obj_id in self._cached_ids[2]]
+
+    @cached_property
+    def _object_tables(self):
+        return ObjectTables(self.ram)
+
+    @cached_property
+    def ram(self):
+        """Returns the raw ram from the environment."""
+        assert self.is_active
+        return self._env.unwrapped.get_ram()
+
+    @cached_property
+    def _tables(self):
+        return ObjectTables(self.ram)
+
+    @cached_property
+    def _cached_ids(self):
+        item_ids = []
+        enemy_ids = []
+        projectile_ids = []
+
+        tables = self._tables
+        for (index, obj_id) in self._enumerate_active_ids(tables):
+            if obj_id == OBJ_ITEM_ID:
+                item_ids.append(index)
+
+            elif self._is_id_enemy(obj_id):
+                enemy_ids.append((index, obj_id))
+
+            elif self._is_projectile(obj_id):
+                projectile_ids.append((index, obj_id))
+
+        return item_ids, enemy_ids, projectile_ids
+
+    @property
+    def is_active(self):
+        """Returns True if this state is the active state."""
+        return ZeldaGame.__active == self.frames
 
     def deactivate(self):
         """Deactivates this state, preventing it from being modified."""
         if ZeldaGame.__active == self.frames:
             ZeldaGame.__active = None
-
-    def _update_enemies(self, prev : 'ZeldaGame'):
-        if prev is None:
-            return
-
-        for enemy in self.enemies:
-            match enemy.id:
-                case ZeldaEnemyKind.PeaHat:
-                    last = self.get_enemy_by_index(enemy.index)
-                    if last is not None and (enemy.position != last.position or enemy.health < last.health):
-                        enemy.mark_invulnerable()
 
     def get(self, name, default):
         """Gets the property from the info dict with a default."""
@@ -189,28 +205,26 @@ class ZeldaGame:
         location = self.treasure_location
         return location.tile_index if location is not None else None
 
-    @property
+    @cached_property
     def active_enemies(self):
         """Enemies which are both alive an active."""
         return [x for x in self.enemies if x.is_active and not x.is_dying]
 
     def is_door_locked(self, direction):
         """Returns True if the door in the given direction is locked."""
-        return self.level != 0 and self.room.is_door_locked(direction, self._get_fresh_tiles())
+        return self.level != 0 and self.room.is_door_locked(direction, self.current_tiles)
 
     def is_door_barred(self, direction):
         """Returns True if the door in the given direction is barred."""
-        return self.level != 0 and self.room.is_door_barred(direction, self._get_fresh_tiles())
+        return self.level != 0 and self.room.is_door_barred(direction, self.current_tiles)
 
-    def _get_fresh_tiles(self):
-        if self._fresh_tiles is None:
-            map_offset, map_len = zelda_game_data.tables['tile_layout']
-            ram = self._env.unwrapped.get_ram()
-            tiles = ram[map_offset:map_offset+map_len]
-            tiles = tiles.reshape((32, 22)).T.swapaxes(0, 1)
-            self._fresh_tiles = tiles
-
-        return self._fresh_tiles
+    @cached_property
+    def current_tiles(self):
+        """Returns the current, up to date tiles in the room."""
+        map_offset, map_len = zelda_game_data.tables['tile_layout']
+        tiles = self.ram[map_offset:map_offset+map_len]
+        tiles = tiles.reshape((32, 22)).T.swapaxes(0, 1)
+        return tiles
 
     @property
     def game_over(self):

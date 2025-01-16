@@ -1,5 +1,6 @@
 
 from dataclasses import dataclass
+from functools import cached_property
 
 import numpy as np
 from .zelda_enums import ActionKind, AnimationState, ArrowKind, BoomerangKind, CandleKind, Direction, PotionKind, \
@@ -28,7 +29,7 @@ class Link(ZeldaObject):
     direction : Direction
     status : int
 
-    @property
+    @cached_property
     def link_overlap_tiles(self):
         """The tiles that the object overlaps with link's top-left tile."""
         x_dim, y_dim = self.dimensions

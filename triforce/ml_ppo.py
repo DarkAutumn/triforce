@@ -79,6 +79,8 @@ class PPO:
 
         env = create_env()
         network = create_network(network, env.observation_space, env.action_space)
+        if (load_path := kwargs.get('load_path', None)) is not None:
+            network.load(load_path)
 
         envs = kwargs.get('envs', 1)
 

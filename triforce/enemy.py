@@ -16,10 +16,6 @@ class Enemy(ZeldaObject):
     spawn_state : int
     status : int
 
-    def mark_invulnerable(self):
-        """Marks the enemy as invulnerable."""
-        self.status |= ENEMY_INVULNERABLE
-
     @property
     def dimensions(self) -> Tuple[int, int]:
         """The dimensions of the object."""
@@ -58,8 +54,3 @@ class Enemy(ZeldaObject):
     def is_stunned(self) -> bool:
         """Returns True if the enemy is stunned."""
         return self.stun_timer > 0
-
-    @property
-    def is_invulnerable(self) -> bool:
-        """Returns True if the enemy is invulnerable and cannot take damage."""
-        return not self.is_active or self.status & ENEMY_INVULNERABLE == ENEMY_INVULNERABLE

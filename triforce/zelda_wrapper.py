@@ -101,9 +101,7 @@ class ZeldaGameWrapper(gym.Wrapper):
 
     def _create_and_set_state(self, info):
         prev = self._prev_state
-        state = ZeldaGame(prev, self, info, self._total_frames)
-        state.activate()
-
+        state = ZeldaGame(self, info, self._total_frames)
         self._prev_state = state
         return prev, state
 

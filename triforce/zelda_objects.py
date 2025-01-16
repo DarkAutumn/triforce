@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Tuple
+from functools import cached_property
+from typing import Set, Tuple
 
 import numpy as np
 
@@ -26,35 +27,36 @@ class ZeldaObject:
         """The dimensions of the object."""
         return 2, 2
 
-    @property
-    def tile(self):
+    @cached_property
+    def tile(self) -> TileIndex:
         """The x, y coordinates of the top-left tile in this object."""
         return self.position.tile_index
 
-    @property
-    def link_overlap_tiles(self):
+    @cached_property
+    def link_overlap_tiles(self) -> Set[TileIndex]:
         """The tiles that the object overlaps with link's top-left tile."""
-        result = []
+        result = set()
         x_dim, y_dim = self.dimensions
         for x in range(-1, x_dim):
             for y in range(-1, y_dim):
-                result.append(TileIndex(self.tile[0] + x, self.tile[1] + y))
+                result.add(TileIndex(self.tile[0] + x, self.tile[1] + y))
 
         return result
 
-    @property
-    def self_tiles(self):
+
+    @cached_property
+    def self_tiles(self) -> Set[TileIndex]:
         """The tiles that the object occupies."""
-        result = []
+        result = set()
         x_dim, y_dim = self.dimensions
         for x in range(x_dim):
             for y in range(y_dim):
-                result.append(TileIndex(self.tile[0] + x, self.tile[1] + y))
+                result.add(TileIndex(self.tile[0] + x, self.tile[1] + y))
 
         return result
 
-    @property
-    def distance(self):
+    @cached_property
+    def distance(self) -> float:
         """The distance from link to the object."""
         value = np.linalg.norm(self.vector_from_link)
         if np.isclose(value, 0, atol=1e-5):
@@ -62,7 +64,7 @@ class ZeldaObject:
 
         return value
 
-    @property
+    @cached_property
     def vector(self):
         """The normalized direction vector from link to the object."""
         distance = self.distance
@@ -71,15 +73,10 @@ class ZeldaObject:
 
         return self.vector_from_link / distance
 
-    @property
+    @cached_property
     def vector_from_link(self):
         """The (un-normalized) vector from link to the object."""
-        vector = self.__dict__.get('_vector', None)
-        if vector is None:
-            vector = self.position.numpy - self.game.link.position.numpy
-            self.__dict__['_vector']  = vector
-
-        return vector
+        return self.position.numpy - self.game.link.position.numpy
 
 @dataclass
 class Projectile(ZeldaObject):
