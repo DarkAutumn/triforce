@@ -227,8 +227,8 @@ class RewardStats:
     def __init__(self, total : TotalRewards, evaluated = False):
         self.evaluated = evaluated
         self.episodes = total.episodes
-        self.rewards = np.mean(total.rewards) if total.rewards else 0
-        self.scores = np.mean(total.scores) if total.scores else 0
+        self.reward_mean = np.mean(total.rewards) if total.rewards else 0
+        self.progress_mean = np.mean(total.scores) if total.scores else 0
         self.total_steps = np.mean(total.total_steps) if total.total_steps else 0
         self.outcomes = {x: y.copy() for x, y in total.outcomes.items()}
         self.endings = total.endings.copy()
@@ -251,8 +251,8 @@ class RewardStats:
         curr = time.time()
 
         tensorboard.add_scalar('evaluation/success-rate', self.success_rate, iterations, curr)
-        tensorboard.add_scalar('evaluation/ep-reward-avg', self.rewards, iterations, curr)
-        tensorboard.add_scalar('evaluation/score', self.scores, iterations, curr)
+        tensorboard.add_scalar('evaluation/ep-reward-avg', self.reward_mean, iterations, curr)
+        tensorboard.add_scalar('evaluation/progress', self.progress_mean, iterations, curr)
         tensorboard.add_scalar('rollout/steps-per-episode', self.total_steps, iterations, curr)
         tensorboard.add_scalar('rollout/seconds-per-episode', self.total_steps / 60.1, iterations, curr)
 
