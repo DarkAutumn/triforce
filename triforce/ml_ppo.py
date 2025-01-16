@@ -26,6 +26,7 @@ TARGET_STEPS = 2048
 EPOCHS = 10
 MINIBATCHES = 4
 LOG_RATE = 20_000
+ROOM_LOG_RATE = 50_000
 SAVE_INTERVAL = 40_000
 
 class Threshold:
@@ -94,6 +95,7 @@ class PPO:
         # tracking
         save_path = kwargs.get('save_path', None)
         next_update = Threshold(LOG_RATE)
+        next_room_log = Threshold(ROOM_LOG_RATE)
         next_save = Threshold(SAVE_INTERVAL)
         rewards = TotalRewards()
         reward_stats = None
@@ -113,8 +115,10 @@ class PPO:
             if next_update.add(buffer.memory_length):
                 reward_stats = rewards.get_stats_and_clear()
                 reward_stats.to_tensorboard(self.tensorboard, total_iterations)
-                rooms.to_tensorboard(self.tensorboard, total_iterations)
                 network.stats = reward_stats
+
+            if next_room_log.add(buffer.memory_length):
+                rooms.to_tensorboard(self.tensorboard, total_iterations)
 
             if save_path and next_save.add(buffer.memory_length):
                 network.save(f"{save_path}/network_{total_iterations}.pt")
@@ -132,6 +136,7 @@ class PPO:
         # tracking
         save_path = kwargs.get('save_path', None)
         next_update = Threshold(LOG_RATE)
+        next_room_log = Threshold(ROOM_LOG_RATE)
         next_save = Threshold(SAVE_INTERVAL)
         rewards = TotalRewards()
         rooms = RoomResultAggregator()
@@ -164,8 +169,11 @@ class PPO:
                 # Update reward stats and save the network if requested, this should be done before optimization
                 if next_update.add(iterations_processed):
                     reward_stats = rewards.get_stats_and_clear()
-                    reward_stats.to_tensorboard(self.tensorboard, total_iterations)
                     network.stats = reward_stats
+                    reward_stats.to_tensorboard(self.tensorboard, total_iterations)
+
+                if next_room_log.add(iterations_processed):
+                    rooms.to_tensorboard(self.tensorboard, total_iterations)
 
                 if save_path and next_save.add(iterations_processed) and reward_stats:
                     model_name = kwargs.get('model_name', 'network')
