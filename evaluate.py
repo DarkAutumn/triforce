@@ -28,12 +28,15 @@ def run_one_scenario(args, model_name, model_path, counter_or_callback):
 
     total = TotalRewards()
     for _ in range(args.episodes):
-        obs, _ = env.reset()
+        obs, info = env.reset()
 
         terminated = truncated = False
         while not terminated and not truncated:
-            action = network.get_action(obs)
+            action_mask = info.get('action_mask', None)
+            action_mask = action_mask.unsqueeze(0) if action_mask is not None else None
+            action = network.get_action(obs, action_mask)
             obs, _, terminated, truncated, info = env.step(action) # pylint: disable=unbalanced-tuple-unpacking
+            action_mask = info.get('action_mask', None)
 
         total.add(info['episode_rewards'])
         if isinstance(counter_or_callback, Synchronized):
