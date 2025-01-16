@@ -74,13 +74,15 @@ class ObservationWrapper(gym.Wrapper):
         })
 
     def reset(self, **kwargs):
-        obs, state = self.env.reset(**kwargs)
+        frames, state = self.env.reset(**kwargs)
+        obs = frames[-1]
         self._prev_loc = state.full_location
         obs = self._get_observation(state, obs)
         return obs, state
 
     def step(self, action):
-        obs, reward, terminated, truncated, state_change = self.env.step(action)
+        frames, reward, terminated, truncated, state_change = self.env.step(action)
+        obs = frames[-1]
 
         if state_change.previous.full_location != state_change.state.full_location:
             self._prev_loc = state_change.previous.full_location
@@ -227,7 +229,7 @@ class ObservationWrapper(gym.Wrapper):
         objectives = self._get_objectives_vector(state, state.objectives)
 
         source_direction = torch.zeros(4, dtype=torch.float32)
-        self._assign_direction(source_direction, state.full_location.get_direction_of_movement(self._prev_loc))
+        self._assign_direction(source_direction, state.full_location.get_direction_to(self._prev_loc))
 
         features = torch.zeros(2, dtype=torch.float32)
         features[0] = 1.0 if state.active_enemies else 0.0
@@ -241,7 +243,7 @@ class ObservationWrapper(gym.Wrapper):
         match objectives.kind:
             case ObjectiveKind.MOVE:
                 for next_room in objectives.next_rooms:
-                    direction = state.full_location.get_direction_of_movement(next_room)
+                    direction = state.full_location.get_direction_to(next_room)
                     self._assign_direction(result, direction)
 
             case ObjectiveKind.ITEM:

@@ -2,14 +2,16 @@
 import os
 import sys
 
+from triforce.rewards import StepRewards
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import gymnasium as gym
 import retro
 from triforce.zelda_enums import Direction
 from triforce.action_space import ActionKind, ActionTaken, ZeldaActionSpace
-from triforce.game_state_change import ZeldaStateChange
-from triforce.zelda_wrapper import ZeldaGameWrapper
+from triforce.state_change_wrapper import StateChange, StateChangeWrapper
+from triforce.frame_skip_wrapper import FrameSkipWrapper
 
 class CriticWrapper(gym.Wrapper):
     """Wraps the environment to actually call our critics and end conditions."""
@@ -35,7 +37,8 @@ class CriticWrapper(gym.Wrapper):
         return obs, state
 
     def step(self, act):
-        obs, rewards, terminated, truncated, change = self.env.step(act)
+        obs, _, terminated, truncated, change = self.env.step(act)
+        rewards = StepRewards()
 
         for c in self.critics:
             c.critique_gameplay(change, rewards)
@@ -50,7 +53,8 @@ class ZeldaActionReplay:
     def __init__(self, savestate, wrapper=None, render_mode=None):
         env = retro.make(game='Zelda-NES', state=savestate, inttype=retro.data.Integrations.CUSTOM_ONLY, render_mode=render_mode)
         self.data = env.data
-        env = ZeldaGameWrapper(env, deterministic=True)
+        env = FrameSkipWrapper(env, deterministic=True)
+        env = StateChangeWrapper(env, None)
         env = ZeldaActionSpace(env, 'all')
         self.action_space = env
         if wrapper:
@@ -71,7 +75,7 @@ class ZeldaActionReplay:
 
     def _set_prev(self, state):
         self.deactivate()
-        if isinstance(state, ZeldaStateChange):
+        if isinstance(state, StateChange):
             state = state.state
 
         self._prev = state
@@ -129,6 +133,6 @@ class ZeldaActionReplay:
         result = self.env.step(action)
         self.env.render()
 
-        state_change : ZeldaStateChange = result[-1]
+        state_change : StateChange = result[-1]
         self._set_prev(state_change)
         return result

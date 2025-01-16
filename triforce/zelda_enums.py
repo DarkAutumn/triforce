@@ -381,7 +381,7 @@ class MapLocation(Coordinates):
 
         return MapLocation.from_coordinates(self.level, x, y, self.in_cave)
 
-    def get_direction_of_movement(self, next_room):
+    def get_direction_to(self, next_room):
         """Gets the direction of movement from curr -> dest."""
         if self.in_cave and not next_room.in_cave:
             return Direction.S

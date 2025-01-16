@@ -1,17 +1,20 @@
 """This wrapper tracks the ongoing state of the game."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+import gymnasium as gym
 
+from .model_definition import ZeldaScenario
+from .objectives import Objectives
 from .action_space import ActionTaken
 from .zelda_enums import AnimationState, ZeldaItemKind, ZeldaAnimationKind
 from .zelda_game import ZeldaGame
 
-class ZeldaStateChange:
+class StateChange:
     """Tracks the changes between two Zelda game states."""
-    def __init__(self, env, prev : ZeldaGame, curr : ZeldaGame, action, frames, discounts, health_changed):
+    def __init__(self, env, prev : ZeldaGame, curr : ZeldaGame, action, frames, discounts, ignore_health):
         self.action : ActionTaken = action
         self.frames : List[np.ndarray] = frames
         self.previous : ZeldaGame = prev
@@ -19,19 +22,17 @@ class ZeldaStateChange:
         self.action_mask : Optional[torch.Tensor] = None
         self.actions_available = None
 
-        self.health_lost = (max(0, prev.link.health - curr.link.health + health_changed) \
+        self.health_lost = (max(0, prev.link.health - curr.link.health + ignore_health) \
                            if prev.link.max_health == curr.link.max_health \
-                           else max(0, prev.link.max_health - curr.link.max_health + health_changed))
+                           else max(0, prev.link.max_health - curr.link.max_health + ignore_health))
 
-        self.health_gained = (max(0, curr.link.health - prev.link.health - health_changed) \
+        self.health_gained = (max(0, curr.link.health - prev.link.health - ignore_health) \
                              if prev.link.max_health == curr.link.max_health \
-                             else max(0, curr.link.max_health - prev.link.max_health - health_changed))
+                             else max(0, curr.link.max_health - prev.link.max_health - ignore_health))
 
         self.enemies_hit : Dict[int, int] = {}
         self.enemies_stunned : List[int] = []
         self.items_gained : List[ZeldaItemKind] = []
-
-        self.changed_location = prev.full_location != curr.full_location
 
         if self.changed_location:
             discounts.clear()
@@ -60,7 +61,10 @@ class ZeldaStateChange:
                 f"Previous: {self.previous}\n" \
                 f"Current: {self.state}\n"
 
-
+    @property
+    def changed_location(self):
+        """Returns True if the location changed."""
+        return self.previous.full_location != self.state.full_location
 
     @property
     def damage_dealt(self):
@@ -168,6 +172,8 @@ class ZeldaStateChange:
               and curr.link.get_animation_state(equipment) != AnimationState.INACTIVE:
 
             data.set_value('hearts_and_containers', 0xff) # make sure we don't die
+
+            # Be sure to use unwrapped.step so we don't capture any state of this timeline digression
             _, _, terminated, truncated, info = unwrapped.step(action)
             if terminated or truncated:
                 break
@@ -206,3 +212,88 @@ class ZeldaStateChange:
 
         for n in all_names:
             data.set_value(n, 0)
+
+class StateChangeWrapper(gym.Wrapper):
+    """Keeps track of the state of the game."""
+    def __init__(self, env, scenario : ZeldaScenario):
+        super().__init__(env)
+        self._discounts = {}
+        self._objectives : Objectives = None
+        self._prev_state = None
+
+        self.per_reset = []
+        self.per_room = []
+        self.per_frame = []
+
+        if scenario is not None:
+            for key, value in scenario.per_reset.items():
+                self.per_reset.append((key, value))
+
+            for key, value in scenario.per_room.items():
+                self.per_room.append((key, value))
+
+            for key, value in scenario.per_frame.items():
+                self.per_frame.append((key, value))
+
+    def reset(self, **kwargs):
+        frames, info = self.env.reset(**kwargs)
+        self._discounts.clear()
+        self._objectives = Objectives()
+        self._prev_state = None
+
+        state = self._update_state(None, frames, info)
+        return frames, state
+
+    def step(self, action):
+        frames, rewards, terminated, truncated, info = self.env.step(action)
+        state = self._update_state(action, frames, info)
+        return frames, rewards, terminated, truncated, state
+
+    def _create_and_set_state(self, info) -> Tuple[ZeldaGame, ZeldaGame]:
+        prev = self._prev_state
+        state = ZeldaGame(self, info, info['total_frames'])
+        self._prev_state = state
+        return prev, state
+
+    def _update_state(self, action, frames, info):
+        prev, state = self._create_and_set_state(info)
+        health_change_ignore = self._apply_modifications(prev, state)
+
+        objectives = self._objectives.get_current_objectives(prev, state)
+        state.objectives = objectives
+        state.wavefront = state.room.calculate_wavefront_for_link(objectives.targets)
+
+        if prev:
+            return StateChange(self, prev, state, action, frames, self._discounts, health_change_ignore)
+
+        return state
+
+    def _apply_modifications(self, prev : ZeldaGame, curr : ZeldaGame) -> float:
+        health = curr.link.health
+
+        if prev is None:
+            for name, value in self.per_reset:
+                self._set_value(curr, name, value)
+
+        elif prev.full_location != curr.full_location:
+            for name, value in self.per_room:
+                self._set_value(curr, name, value)
+
+        for name, value in self.per_frame:
+            self._set_value(curr, name, value)
+
+        return curr.link.health - health
+
+    def _set_value(self, state, name, value):
+        order = [state, state.link]
+        if hasattr(state.link, name):
+            order = [state.link, state]
+
+        obj = order.pop(0)
+        if not hasattr(obj, name):
+            obj = order.pop(0)
+
+        if isinstance(value, str):
+            value = getattr(obj, value)
+
+        setattr(obj, name, value)

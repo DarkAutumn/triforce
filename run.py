@@ -17,7 +17,7 @@ import cv2
 import tqdm
 
 from triforce import ZeldaScenario, simulate_critique, make_zelda_env, TRAINING_SCENARIOS, Network
-from triforce.game_state_change import ZeldaStateChange
+from triforce.state_change_wrapper import StateChange
 from triforce.model_definition import ZELDA_MODELS, ZeldaModelDefinition
 from triforce.rewards import StepRewards
 from triforce.zelda_enums import ActionKind, Coordinates, Direction
@@ -170,7 +170,7 @@ class DisplayWindow:
         terminated = True
         truncated = False
 
-        state_change : ZeldaStateChange = None
+        state_change : StateChange = None
         model_name = None
 
         rgb_deque = deque()
@@ -480,7 +480,7 @@ class DisplayWindow:
         return directions
 
 
-    def _update_rewards(self, env, action, reward_map, buttons, state_change : ZeldaStateChange):
+    def _update_rewards(self, env, action, reward_map, buttons, state_change : StateChange):
         curr_rewards = {}
         last_info = state_change.previous.info
         info = state_change.state.info

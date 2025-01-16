@@ -159,7 +159,7 @@ class Objectives:
 
     def _paths_to_targets(self, state, paths):
         next_rooms = set(x[1] for x in paths if len(x) > 1)
-        directions = [state.full_location.get_direction_of_movement(x) for x in next_rooms]
+        directions = [state.full_location.get_direction_to(x) for x in next_rooms]
 
         targets = []
         for direction in directions:

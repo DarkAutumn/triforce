@@ -8,13 +8,13 @@ import pytest
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from triforce.action_space import ActionKind
-from triforce.game_state_change import ZeldaStateChange
+from triforce.state_change_wrapper import StateChange
 from triforce.zelda_enums import AnimationState, ArrowKind, Direction, SelectedEquipmentKind, SwordKind, BoomerangKind, ZeldaAnimationKind, ZeldaItemKind
 from triforce.zelda_game import ZeldaGame
-from triforce.zelda_cooldown_handler import ActionKind
+from triforce.frame_skip_wrapper import ActionKind
 from utilities import ZeldaActionReplay
 
-def assert_no_hit(env, command) -> ZeldaStateChange:
+def assert_no_hit(env, command) -> StateChange:
     for _, _, terminated, truncated, state_change in run(env, command):
         assert not terminated
         assert not truncated

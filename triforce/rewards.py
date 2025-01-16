@@ -3,8 +3,6 @@ import time
 from typing import Iterator
 import gymnasium as gym
 
-from .game_state_change import ZeldaStateChange
-
 REWARD_MINIMUM = 0.01
 REWARD_TINY = 0.05
 REWARD_SMALL = 0.25
@@ -291,7 +289,7 @@ class EpisodeRewardTracker(gym.Wrapper):
         self._update(rewards, state_change, terminated or truncated)
         return observation, rewards, terminated, truncated, state_change
 
-    def _update(self, rewards : StepRewards, state_change : ZeldaStateChange, done):
+    def _update(self, rewards : StepRewards, state_change, done):
         assert done == bool(rewards.ending), "Reward ending and done state do not match"
 
         info = state_change.state.info

@@ -3,10 +3,14 @@ Handles performing actions by stepping until control returns to Link.  This ensu
 called, the agent is in a state where it can control Link again.
 """
 
+from random import randint
+from typing import Tuple
+import gymnasium as gym
 import numpy as np
 
 from .action_space import ActionKind, ActionTaken
 from .zelda_enums import Direction, MapLocation, Position
+from .zelda_game import ZeldaGame
 
 # movement related constants
 WS_ADJUSTMENT_FRAMES = 4
@@ -48,23 +52,26 @@ class ZeldaCooldownHandler:
         self.env = env
         self.was_link_in_cave = False
         self.none_action = np.zeros(9, dtype=bool)
+        self._link_pos : Position = None
 
     def reset(self):
         """Resets the handler."""
         self.was_link_in_cave = False
+        self._link_pos = None
 
     def gain_control_of_link(self):
         """Skips frames until Link is in a state where the agent can control him."""
         frames = []
         terminated, truncated, info = self._act_for(None, 1, frames)
         terminated, truncated, info = self._skip_uncontrollable_states(None, info, frames)
+
         return frames, terminated, truncated, info
 
-    def act_and_wait(self, action : ActionTaken, link_position):
+    def act_and_wait(self, action : ActionTaken):
         """Performs the given action, then waits until Link is controllable again."""
         frames = []
         if action.kind == ActionKind.MOVE:
-            terminated, truncated, info, loc = self._act_movement(action, link_position, frames)
+            terminated, truncated, info, loc = self._act_movement(action, self._link_pos, frames)
         else:
             terminated, truncated, info, loc = self._act_attack_or_item(action, frames)
 
@@ -95,6 +102,7 @@ class ZeldaCooldownHandler:
         """Steps once and saves the frame into frames"""
         obs, _, terminated, truncated, info = self.env.step(action)
         frame_capture.append(obs)
+        self._link_pos = Position(info['link_x'], info['link_y'])
         return terminated, truncated, info
 
     def _skip_uncontrollable_states(self, start_location, info, frame_capture):
@@ -194,6 +202,54 @@ class ZeldaCooldownHandler:
     def _set_direction(self, direction : Direction):
         self.env.unwrapped.data.set_value('link_direction', direction.value)
 
+
+class FrameSkipWrapper(gym.Wrapper):
+    """Handles skipping frames so that the agent only sees frames where it can control Link.
+    Instead of a single frame, this wrapper returns a list containing an observation per frame."""
+    def __init__(self, env, deterministic=False):
+        super().__init__(env)
+
+        self.deterministic = deterministic
+
+        self.cooldown_handler = ZeldaCooldownHandler(env)
+
+        # per-reset state
+        self._total_frames = 0
+        self._steps = 0
+
+    def reset(self, **kwargs) -> Tuple[gym.spaces.Box, ZeldaGame]:
+        obs, info = self.env.reset(**kwargs)
+        self.cooldown_handler.reset()
+
+        # Randomize the RNG if requested
+        if not self.deterministic:
+            for i in range(12):
+                self.unwrapped.data.set_value(f'rng_{i}', randint(1, 255))
+
+        # Move forward to the first frame where the agent can control Link
+        frames, terminated, truncated, info = self.cooldown_handler.gain_control_of_link()
+        assert not terminated and not truncated
+
+        # don't count these frames as part of the total since we weren't in control of Link
+        self._total_frames = 0
+        self._steps = 0
+        if frames:
+            self._total_frames += len(frames)
+
+        info['total_frames'] = self._total_frames
+        info['steps'] = self._steps
+
+        return frames if frames else obs, info
+
+    def step(self, action):
+        frames, terminated, truncated, info = self.cooldown_handler.act_and_wait(action)
+        if frames:
+            self._total_frames += len(frames)
+
+        info['total_frames'] = self._total_frames
+        info['steps'] = self._steps = self._steps + 1
+        return frames, 0, terminated, truncated, info
+
 __all__ = [
-    ZeldaCooldownHandler.__name__,
+    FrameSkipWrapper.__name__,
 ]

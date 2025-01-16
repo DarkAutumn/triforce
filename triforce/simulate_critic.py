@@ -1,6 +1,6 @@
 from typing import Dict
 
-from .game_state_change import ZeldaStateChange
+from .state_change_wrapper import StateChange
 from .zelda_game import ZeldaGame
 from .model_definition import ZeldaScenario
 from . import critics
@@ -15,7 +15,7 @@ def simulate_critique(env, action, scenario : ZeldaScenario, old : Dict, new : D
     critic.clear()
     prev = ZeldaGame(env, old, 0)
     state = ZeldaGame(env, new, 0)
-    change = ZeldaStateChange(env, prev, state, action, [], {}, 0)
+    change = StateChange(env, prev, state, action, [], {}, 0)
     critic.critique_gameplay(change, rewards)
 
     terminated = False
