@@ -192,24 +192,27 @@ class ProbabilisticSelector(RoomSelector):
                 should_use_round_robin = True
                 break
 
-        if should_use_round_robin:
-            state = self.round_robin.next()
-            if 's' in state:
-                self._direction_from = Direction.S
-            elif 'n' in state:
-                self._direction_from = Direction.N
-            elif 'e' in state:
-                self._direction_from = Direction.E
-            elif 'w' in state:
-                self._direction_from = Direction.W
-            else:
-                self._direction_from = None
+        if not should_use_round_robin:
+            # Calculate probabilities with exponential decay
+            direction, location = self._select_probabilistically()
+            state = self.get_name_from_direction_location(direction, location)
+            full_path = os.path.join(os.path.dirname(__file__), 'custom_integrations', 'Zelda-NES', state)
+            if os.path.exists(full_path):
+                return state
 
-            return f"{state}.state"
+        state = self.round_robin.next()
+        if 's' in state:
+            self._direction_from = Direction.S
+        elif 'n' in state:
+            self._direction_from = Direction.N
+        elif 'e' in state:
+            self._direction_from = Direction.E
+        elif 'w' in state:
+            self._direction_from = Direction.W
+        else:
+            self._direction_from = None
 
-        # Calculate probabilities with exponential decay
-        direction, location = self._select_probabilistically()
-        return self.get_name_from_direction_location(direction, location)
+        return f"{state}.state"
 
     @staticmethod
     def get_name_from_direction_location(direction, location):
@@ -238,7 +241,7 @@ class ProbabilisticSelector(RoomSelector):
         locations = list(probabilities.keys())
         location, direction = locations[selected_index]
         self._direction_from = direction
-        return direction,location
+        return direction, location
 
     def _get_room_direction_from_name(self, state):
         state = os.path.splitext(state)[0]
