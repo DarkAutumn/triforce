@@ -101,7 +101,7 @@ class PPORolloutBuffer:
 
                 action_mask = info.get('action_mask', None)
                 infos.append(info)
-                self.rewards[batch_index, t] = reward
+                self.rewards[batch_index, t] = float(reward)
 
                 next_done = 1.0 if (terminated or truncated) else 0.0
                 if terminated or truncated:
