@@ -46,6 +46,21 @@ class ZeldaStateChange:
             # Find if this action will cause future damage
             self._detect_future_damage(env, prev, curr, discounts)
 
+    def __str__(self):
+        # return a multiline string with the most important information
+        return f"Action: {self.action}\n" \
+                f"ActionMask: {self.action_mask}" \
+                f"Health lost: {self.health_lost}\n" \
+                f"Health gained: {self.health_gained}\n" \
+                f"Enemies hit: {self.enemies_hit}\n" \
+                f"Enemies stunned: {self.enemies_stunned}\n" \
+                f"Items gained: {self.items_gained}\n" \
+                f"Changed location: {self.changed_location}\n" \
+                f"Previous: {self.previous}\n" \
+                f"Current: {self.state}\n"
+
+
+
     @property
     def damage_dealt(self):
         """The total damage dealt by link to enemies this turn."""

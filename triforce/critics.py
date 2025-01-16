@@ -14,7 +14,7 @@ from .game_state_change import ZeldaStateChange
 HEALTH_LOST_PENALTY = Penalty("penalty-lost-health", -REWARD_LARGE)
 HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_LARGE)
-WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_TINY)
+WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_SMALL)
 MOVE_CLOSER_REWARD = Reward("reward-move-closer", REWARD_TINY)
 MOVE_AWAY_PENALTY = Penalty("penalty-move-away", -REWARD_TINY - REWARD_MINIMUM)
 LATERAL_MOVE_PENALTY = Penalty("penalty-move-lateral", -REWARD_MINIMUM)
@@ -22,7 +22,6 @@ DANGER_TILE_PENALTY = Penalty("penalty-move-danger", -REWARD_MEDIUM)
 MOVED_TO_SAFETY_REWARD = Reward("reward-move-safety", REWARD_TINY)
 ATTACK_NO_ENEMIES_PENALTY = Penalty("penalty-attack-no-enemies", -MOVE_CLOSER_REWARD.value * 2)
 ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_TINY - REWARD_MINIMUM)
-ATTACK_OFFSCREEN_PENALTY = Penalty("penalty-attack-offscreen", ATTACK_MISS_PENALTY.value)
 
 DIDNT_FIRE_PENALTY = Penalty("penalty-didnt-fire", -REWARD_TINY)
 BLOCK_PROJECTILE_REWARD = Reward("reward-block-projectile", REWARD_LARGE)
@@ -227,9 +226,6 @@ class GameplayCritic(ZeldaCritic):
         elif state_change.action.kind in (ActionKind.SWORD, ActionKind.BEAMS):
             if not curr.enemies:
                 rewards.add(ATTACK_NO_ENEMIES_PENALTY)
-
-            elif curr.link.is_sword_frozen:
-                rewards.add(ATTACK_OFFSCREEN_PENALTY)
 
             elif (active_enemies := curr.active_enemies):
                 enemy_vectors = [enemy.vector for enemy in active_enemies if abs(enemy.distance) > 0]

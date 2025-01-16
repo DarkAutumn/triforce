@@ -1,5 +1,6 @@
 """Structured data for Zelda game state."""
 
+import pprint
 from enum import Enum
 from typing import List, Optional
 
@@ -9,7 +10,7 @@ from .room import Room
 from .zelda_objects import Item, Projectile
 from .enemy import Enemy
 from .link import Link
-from .zelda_enums import ENEMY_MAP, ITEM_MAP, MapLocation, Position, SwordKind, TileIndex, ZeldaEnemyKind, \
+from .zelda_enums import ENEMY_MAP, ITEM_MAP, MapLocation, Position, TileIndex, ZeldaEnemyKind, \
         Direction, SoundKind
 from .zelda_game_data import zelda_game_data
 
@@ -80,6 +81,15 @@ class ZeldaGame:
 
         self._update_enemies(prev)
 
+    def __str__(self):
+        return f"Enemies: {[x.id for x in self.enemies]} ({len(self.active_enemies)} active)\n" \
+                f"Items: {[x.id for x in self.items]}\n" \
+                f"Projectiles: {[x.id for x in self.projectiles]}\n" \
+                f"Location: {self.full_location}\n" \
+                f"Info: {pprint.pformat(self.info, indent=4, width=80, sort_dicts=True)}\n"
+
+
+
     def activate(self):
         """Sets this state as active, allowing it to be modified."""
         ZeldaGame.__active = self.frames
@@ -98,10 +108,6 @@ class ZeldaGame:
                 case ZeldaEnemyKind.PeaHat:
                     last = self.get_enemy_by_index(enemy.index)
                     if last is not None and (enemy.position != last.position or enemy.health < last.health):
-                        enemy.mark_invulnerable()
-
-                case ZeldaEnemyKind.Zora:
-                    if self.link.sword in (SwordKind.NONE, SwordKind.WOOD):
                         enemy.mark_invulnerable()
 
     def get(self, name, default):

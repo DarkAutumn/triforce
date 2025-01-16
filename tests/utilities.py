@@ -120,7 +120,7 @@ class ZeldaActionReplay:
         return self.act(ActionKind.MOVE, direction)
 
     def act(self, action : ActionKind, direction : Direction):
-        assert action in self._prev.link.get_available_actions()
+        assert action in self._prev.link.get_available_actions(True)
         return self.step((action, direction))
 
 

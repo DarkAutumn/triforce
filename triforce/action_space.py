@@ -80,7 +80,7 @@ class ZeldaActionSpace(gym.Wrapper):
         self.a = env.unwrapped.buttons.index('A')
         self.b = env.unwrapped.buttons.index('B')
 
-        self.move_mask = np.ones(4, dtype=bool)
+        self.move_mask = torch.ones(4, dtype=bool)
 
         self._setup_actions(self.actions_allowed)
 
@@ -186,7 +186,8 @@ class ZeldaActionSpace(gym.Wrapper):
 
     def reset(self, **kwargs):
         observation, state = self.env.reset(**kwargs)
-        self.move_mask = np.ones(4, dtype=bool)
+        self.move_mask = torch.ones(4, dtype=bool)
+        state.info['action_mask'] = self.get_action_mask(state)
         return observation, state
 
     def step(self, action):
@@ -204,77 +205,41 @@ class ZeldaActionSpace(gym.Wrapper):
 
         observation, reward, terminated, truncated, state_change = self.env.step(action)
         self._handle_wall_bump(state_change)
+        state_change.action_mask = self.get_action_mask(state_change.state)
+        state_change.state.info['action_mask'] = state_change.action_mask
 
         return observation, reward, terminated, truncated, state_change
 
     def _translate_action(self, action, direction):
         index = self.action_to_index[action]
-        match direction:
-            case Direction.N:
-                index += 0
-            case Direction.S:
-                index += 1
-            case Direction.W:
-                index += 2
-            case Direction.E:
-                index += 3
-            case Direction.NW:
-                assert action == ActionKind.BOOMERANG
-                index += 4
-            case Direction.NE:
-                assert action == ActionKind.BOOMERANG
-                index += 5
-            case Direction.SW:
-                assert action == ActionKind.BOOMERANG
-                index += 6
-            case Direction.SE:
-                assert action == ActionKind.BOOMERANG
-                index += 7
-
-            case _:
-                raise ValueError(f"Invalid direction {direction}.")
+        index += self._direction_to_index(direction)
+        if direction in (Direction.NW, Direction.NE, Direction.SW, Direction.SE):
+            assert action == ActionKind.BOOMERANG
 
         return index
 
     def _handle_wall_bump(self, state_change):
-        if self.prevent_wall_bumping and state_change.action == ActionKind.MOVE:
+        if self.prevent_wall_bumping and state_change.action.kind == ActionKind.MOVE:
             if state_change.previous.link.position == state_change.state.link.position:
-                match state_change.action.direction:
-                    case Direction.N:
-                        self.move_mask[0] = False
-
-                    case Direction.S:
-                        self.move_mask[1] = False
-
-                    case Direction.W:
-                        self.move_mask[2] = False
-
-                    case Direction.E:
-                        self.move_mask[3] = False
-
-                if np.any(self.move_mask):
+                self.move_mask[self._direction_to_index(state_change.action.direction)] = False
+                if torch.any(self.move_mask):
                     return
 
-        self.move_mask = np.ones(4, dtype=bool)
+        self.move_mask = torch.ones(4, dtype=bool)
 
     def get_action_mask(self, state : ZeldaGame):
         """Returns the actions that are available to the agent."""
 
-        actions_possible = self.actions_allowed & state.link.get_available_actions()
+        link = state.link
+        actions_possible = self.actions_allowed & link.get_available_actions(ActionKind.BEAMS in self.actions_allowed)
         assert actions_possible, "No actions available, we should have at least MOVE."
 
-        mask = np.zeros(self.total_actions, dtype=bool)
+        mask = torch.zeros(self.total_actions, dtype=bool)
         for action in actions_possible:
             index = self.action_to_index[action]
             match action:
                 case ActionKind.MOVE:
                     mask[index:index + 4] = self.move_mask
-
-                case ActionKind.SWORD:
-                    mask[index:index + 4] = True
-
-                case ActionKind.BEAMS:
-                    mask[index:index + 4] = True
 
                 case ActionKind.BOMBS:
                     mask[index:index + 4] = True
@@ -300,4 +265,34 @@ class ZeldaActionSpace(gym.Wrapper):
                 case ActionKind.FOOD:
                     mask[index] = True
 
+                case _:
+                    if action in (ActionKind.SWORD, ActionKind.BEAMS):
+                        if not state.active_enemies:
+                            mask[index:index + 4] = False
+                        else:
+                            for direction in link.get_sword_directions_allowed():
+                                mask[index + self._direction_to_index(direction)] = True
+
         return mask
+
+    def _direction_to_index(self, direction):
+        value = None
+        match direction:
+            case Direction.N:
+                value = 0
+            case Direction.S:
+                value = 1
+            case Direction.W:
+                value = 2
+            case Direction.E:
+                value = 3
+            case Direction.NW:
+                value = 4
+            case Direction.NE:
+                value = 5
+            case Direction.SW:
+                value = 6
+            case Direction.SE:
+                value = 7
+
+        return value

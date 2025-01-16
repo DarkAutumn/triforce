@@ -6,11 +6,25 @@
 import argparse
 import sys
 import os
+import faulthandler
+import traceback
 
 from tqdm import tqdm
 from triforce import ZELDA_MODELS
 from triforce.ml_ppo import PPO
 from triforce.zelda_env import make_zelda_env
+
+def _dump_trace_with_locals(exc_type, exc_value, exc_traceback):
+    with open("crash_log.txt", "w", encoding="utf8") as f:
+        f.write(f"Unhandled exception: {exc_type.__name__}: {exc_value}\n\n")
+
+        for frame, lineno in traceback.walk_tb(exc_traceback):
+            f.write(f"File: {frame.f_code.co_filename}, Line: {lineno}, Function: {frame.f_code.co_name}\n")
+            f.write("Locals:\n")
+            for var_name, var_value in frame.f_locals.items():
+                typename = type(var_value).__name__
+                f.write(f"  {typename} {var_name}: {var_value}\n")
+            f.write("\n")
 
 def _train_one(model_name, args):
     model_def = ZELDA_MODELS[model_name]
@@ -64,4 +78,6 @@ def parse_args():
         sys.exit(1)
 
 if __name__ == '__main__':
+    faulthandler.enable()
+    sys.excepthook = _dump_trace_with_locals
     main()
