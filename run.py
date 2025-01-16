@@ -183,7 +183,8 @@ class DisplayWindow:
                 if state_change is not None and 'end' in state_change.state.info:
                     self._print_end_info(state_change.state.info, terminated)
 
-                obs, _ = env.reset()
+                obs, state = env.reset()
+                action_mask = state.info['action_mask']
                 self.start_time = pygame.time.get_ticks()
                 state_change = None
                 self.total_rewards = 0.0
@@ -207,11 +208,14 @@ class DisplayWindow:
                     next_action = None
                 else:
                     model, model_name = self._select_model(env, model_requested)
-                    action = model.get_action(obs, deterministic=False)
+                    if action_mask is not None:
+                        action_mask = action_mask.unsqueeze(0)
+                    action = model.get_action(obs, action_mask, deterministic=False)
                     success_rate = model.stats.success_rate * 100 if model.stats else 0
                     model_name = f"{self.model_definition.name} ({model.steps_trained:,} timesteps {success_rate:.1f}%)"
 
                 obs, _, terminated, truncated, state_change = env.step(action)
+                action_mask = state_change.state.info['action_mask']
                 for frame in state_change.frames:
                     rgb_deque.append(frame)
 
@@ -358,10 +362,7 @@ class DisplayWindow:
             return None
 
         model_actions = ActionKind.get_from_list(self.model_definition.action_space)
-        if ActionKind.SWORD in model_actions and ActionKind.BEAMS not in model_actions:
-            model_actions.add(ActionKind.BEAMS)
-
-        link_actions = state.link.get_available_actions()
+        link_actions = state.link.get_available_actions(ActionKind.BEAMS in model_actions)
         available = link_actions & model_actions
         sword_available = ActionKind.SWORD in available or ActionKind.BEAMS in available
         if keys[pygame.K_a]:
