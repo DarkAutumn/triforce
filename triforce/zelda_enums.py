@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-import numpy as np
+import torch
 
 # the y coordinate where the gameplay window starts (above this line is the HUD)
 GAMEPLAY_START_Y = 56
@@ -220,13 +220,13 @@ class Direction(Enum):
         """Returns the vector for the direction."""
         match self:
             case Direction.E:
-                return np.array([1, 0])
+                return torch.tensor([1, 0], dtype=torch.float32)
             case Direction.W:
-                return np.array([-1, 0])
+                return torch.tensor([-1, 0], dtype=torch.float32)
             case Direction.S:
-                return np.array([0, 1])
+                return torch.tensor([0, 1], dtype=torch.float32)
             case Direction.N:
-                return np.array([0, -1])
+                return torch.tensor([0, -1], dtype=torch.float32)
             case _:
                 raise ValueError(f"Unhandled Direction: {self}")
 
@@ -283,11 +283,6 @@ class Coordinates:
         if not isinstance(other, Coordinates):
             return NotImplemented
         return (self.x, self.y) < (other.x, other.y)
-
-    @property
-    def numpy(self):
-        """Returns the position as a numpy array."""
-        return np.array([self.x, self.y], dtype=np.float32)
 
     def __add__(self, other):
         if isinstance(other, Coordinates):
