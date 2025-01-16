@@ -345,27 +345,33 @@ class GameplayCritic(ZeldaCritic):
         it is still wary of moving too close to an enemy."""
         prev, curr = state_change.previous, state_change.state
 
-        if not state_change.health_lost and not curr.link.is_blocking:
-            prev_active = [enemy.index for enemy in prev.active_enemies]
+        # Skip evaluation if health was lost or Link is blocking
+        if state_change.health_lost or curr.link.is_blocking:
+            return
 
-            prev_overlap = [tile
-                            for enemy in prev.active_enemies
-                            for tile in enemy.link_overlap_tiles
-                            if tile in prev.link.self_tiles]
+        prev_active_indices = {enemy.index for enemy in prev.active_enemies}
 
-            curr_overlap = [tile
-                            for enemy in curr.active_enemies
-                            if enemy.index in prev_active
-                            for tile in enemy.link_overlap_tiles
-                            if tile in curr.link.self_tiles]
+        prev_overlap = {
+            tile
+            for enemy in prev.active_enemies
+            for tile in enemy.link_overlap_tiles
+            if tile in prev.link.self_tiles
+        }
 
-            danger_diff = len(curr_overlap) - len(prev_overlap)
+        curr_overlap = {
+            tile
+            for enemy in curr.active_enemies
+            if enemy.index in prev_active_indices
+            for tile in enemy.link_overlap_tiles
+            if tile in curr.link.self_tiles
+        }
 
-            if danger_diff > 0:
-                rewards.add(DANGER_TILE_PENALTY)
-            elif danger_diff < 0:
-                if len(prev.active_enemies) == len(curr.active_enemies):
-                    rewards.add(MOVED_TO_SAFETY_REWARD)
+        danger_diff = len(curr_overlap) - len(prev_overlap)
+        if danger_diff > 0:
+            rewards.add(DANGER_TILE_PENALTY)
+        elif danger_diff < 0:
+            if len(prev.active_enemies) == len(curr.active_enemies):
+                rewards.add(MOVED_TO_SAFETY_REWARD)
 
     def set_score(self, state_change : ZeldaStateChange, rewards : StepRewards):
         """Sets the score based on how many rooms we have seen, enemies hit, and other factors."""
