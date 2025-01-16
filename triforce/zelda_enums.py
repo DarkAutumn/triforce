@@ -1,6 +1,7 @@
 """Various enumerations of equipment, item, and enemy types in the game."""
 
 from enum import Enum
+from functools import cached_property
 
 import torch
 
@@ -216,7 +217,8 @@ class Direction(Enum):
             case _:
                 return Direction.NONE
 
-    def to_vector(self):
+    @cached_property
+    def vector(self):
         """Returns the vector for the direction."""
         match self:
             case Direction.E:
@@ -297,6 +299,11 @@ class Coordinates:
         if isinstance(other, tuple) and len(other) == 2:
             return Coordinates(self.x - other[0], self.y - other[1])
         raise TypeError("Can only subtract Coordinates or a tuple of length 2.")
+
+    @property
+    def torch(self):
+        """Converts the coordinates to a torch tensor."""
+        return torch.tensor([self.x, self.y], dtype=torch.float32)
 
 class Position(Coordinates):
     """A position in the game world."""
