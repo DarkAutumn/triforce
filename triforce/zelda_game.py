@@ -6,6 +6,7 @@ from enum import Enum
 from typing import List, Optional
 
 import gymnasium as gym
+import torch
 
 from .room import Room
 from .zelda_objects import Item, Projectile
@@ -224,7 +225,7 @@ class ZeldaGame:
         map_offset, map_len = zelda_game_data.tables['tile_layout']
         tiles = self.ram[map_offset:map_offset+map_len]
         tiles = tiles.reshape((32, 22)).T.swapaxes(0, 1)
-        return tiles
+        return torch.from_numpy(tiles)
 
     @property
     def game_over(self):
