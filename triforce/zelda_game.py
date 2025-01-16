@@ -37,8 +37,9 @@ class ObjectTables:
 
 class ZeldaGame:
     """The current state of a zelda game."""
-    __active = None
+    # pylint: disable=too-many-public-methods
 
+    __active = None
     _env : gym.Env
     info : dict
     frames : int
