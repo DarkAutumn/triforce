@@ -84,11 +84,10 @@ class PPO:
             network.load(load_path)
 
         envs = kwargs.get('envs', 1)
+        if envs > 1:
+            raise NotImplementedError("Multiprocessing not yet implemented.")
 
-        if envs == 1:
-            return self._train_single(network, env, iterations, progress, **kwargs)
-
-        return self._train_multiproc(network, env, create_env, iterations, progress, **kwargs)
+        return self._train_single(network, env, iterations, progress, **kwargs)
 
     def _train_single(self, network, env, iterations, progress, **kwargs):
         # pylint: disable=too-many-locals
@@ -128,105 +127,6 @@ class PPO:
 
         env.close()
         return network
-
-    def _train_multiproc(self, network, env, create_env, iterations, progress, **kwargs):
-        # pylint: disable=too-many-locals
-        envs = kwargs['envs']
-
-        # tracking
-        save_path = kwargs.get('save_path', None)
-        next_update = Threshold(LOG_RATE)
-        next_room_log = Threshold(ROOM_LOG_RATE)
-        next_save = Threshold(SAVE_INTERVAL)
-        rewards = TotalRewards()
-        rooms = RoomResultAggregator()
-        reward_stats = None
-
-        # ppo variables
-        memory_length = self.target_steps // envs
-        variables = PPORolloutBuffer(memory_length, envs, env.observation_space, env.action_space,
-                                     self._gamma, self._lambda)
-        env.close()
-
-        result_queue = Queue()
-        kwargs = {
-                'gamma': self._gamma,
-                'lambda': self._lambda,
-                'steps': variables.memory_length,
-                }
-
-        workers = [SubprocessWorker(idx, create_env, network, result_queue, kwargs) for idx in range(envs)]
-        try:
-            steps = math.ceil(iterations / (envs * memory_length))
-            for step in range(steps):
-                total_iterations = step * envs * memory_length
-                iterations_processed = envs * memory_length
-
-                # Process the results from the workers
-                infos = self._subprocess_ppo(network, progress, variables, result_queue, workers)
-                self._process_infos(rewards, rooms, infos)
-
-                # Update reward stats and save the network if requested, this should be done before optimization
-                if next_update.add(iterations_processed):
-                    reward_stats = rewards.get_stats_and_clear()
-                    network.stats = reward_stats
-                    reward_stats.to_tensorboard(self.tensorboard, total_iterations)
-
-                if next_room_log.add(iterations_processed):
-                    rooms.to_tensorboard(self.tensorboard, total_iterations)
-
-                if save_path and next_save.add(iterations_processed) and reward_stats:
-                    model_name = kwargs.get('model_name', 'network')
-                    network.save(f"{save_path}/{model_name}-{total_iterations}.pt")
-
-                # Update the network
-                self._optimize(network, variables, step * envs * memory_length)
-                network.steps_trained += iterations_processed
-
-        except EOFError:
-            pass
-
-        finally:
-            # Tell workers to shut down regardless
-            for worker in workers:
-                worker.close_async()
-
-        return network
-
-    def _subprocess_ppo(self, network, progress, variables, result_queue, workers):
-        weights = network.state_dict()
-        for worker in workers:
-            worker.run_main_loop_async(weights)
-
-        infos = []
-        recieved = []
-        for _ in range(len(workers)):
-            message = result_queue.get()
-            match message['command']:
-                case 'exit':
-                    print(f"Unexpected exit: {message['idx']}")
-                    raise EOFError()
-
-                case 'error':
-                    print(f"Error in worker {message['idx']}:")
-                    error = message['error']
-                    print(error)
-                    print(message['traceback'])
-                    raise error
-
-                case 'build_batch':
-                    idx = message['idx']
-                    if idx in recieved:
-                        raise ValueError(f"Duplicate message for {idx}")
-
-                    recieved.append(idx)
-                    result = message['result']
-                    variables[idx] = result
-                    infos.extend(message['infos'])
-
-                    if progress is not None:
-                        progress.update(result.memory_length)
-        return infos
 
     def _process_infos(self, total_rewards : TotalRewards, rooms : RoomResultAggregator,  infos):
         for info in infos:
