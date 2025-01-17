@@ -1,0 +1,63 @@
+
+from collections import OrderedDict
+import math
+from triforce.models import ModelDefinition
+
+class ModelSelector:
+    """Selects a model from a list of available models."""
+    def __init__(self, env, model_path, model_definition : ModelDefinition):
+        self._model_path = model_path
+        self._model_definition = model_definition
+        self._loaded_models = OrderedDict()
+        for name, path in self._model_definition.find_available_models(self._model_path).items():
+            assert name is not None
+            network = self._model_definition.neural_net(env.observation_space, env.action_space)
+            network.load(path)
+            self._loaded_models[name] = (network, path)
+
+        network = self._model_definition.neural_net(env.observation_space, env.action_space)
+        self._loaded_models["untrained"] = (network, "untrained")
+
+        self._curr_index = self._find_best_model()
+        self._curr = self._loaded_models[self._curr_index]
+
+    @property
+    def model_name(self):
+        """The name of the current model."""
+        return self._curr_index
+
+    @property
+    def model_path(self):
+        """The path to the current model."""
+        return self._curr[1]
+
+    @property
+    def model(self):
+        """The current model."""
+        return self._curr[0]
+
+    def next(self):
+        """Selects the next model."""
+        keys = list(self._loaded_models.keys())
+        self._curr_index = keys[(keys.index(self._curr_index) + 1) % len(keys)]
+        self._curr = self._loaded_models[self._curr_index]
+
+    def previous(self):
+        """Selects the previous model."""
+        keys = list(self._loaded_models.keys())
+        self._curr_index = keys[(keys.index(self._curr_index) - 1) % len(keys)]
+        self._curr = self._loaded_models[self._curr_index]
+
+    def _find_best_model(self):
+        best_model = None
+        best_score = -math.inf
+        for name, (network, _) in self._loaded_models.items():
+            if network.stats is None:
+                continue
+
+            score = network.stats.success_rate + 0.001 * network.stats.progress_mean
+            if score > best_score:
+                best_score = score
+                best_model = name
+
+        return best_model
