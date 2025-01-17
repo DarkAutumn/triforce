@@ -15,7 +15,7 @@ import torch
 from torch import nn
 from gymnasium.spaces import MultiBinary, Discrete
 
-from triforce.ml_ppo import GAMMA, LAMBDA, PPO, Network, SubprocessWorker
+from triforce.ml_ppo import GAMMA, LAMBDA, PPO, Network
 from triforce.models import SharedNatureAgent
 from triforce import ModelDefinition
 from triforce.zelda_env import make_zelda_env
