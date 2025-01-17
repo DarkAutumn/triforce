@@ -834,8 +834,8 @@ def parse_args():
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
     parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
 
-    parser.add_argument('scenario', type=str, help='Scenario name')
     parser.add_argument('model', type=str, help='Model name')
+    parser.add_argument('scenario', type=str, help='Scenario name')
 
     try:
         args = parser.parse_args()
