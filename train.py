@@ -44,8 +44,10 @@ def main():
     if scenario_def is None:
         raise ValueError(f"Unknown scenario: {args.scenario}")
 
+    frame_stack = args.frame_stack if args.frame_stack > 0 else 1
+
     def create_env():
-        return make_zelda_env(scenario_def, model_def.action_space, obs_kind=args.obs_kind)
+        return make_zelda_env(scenario_def, model_def.action_space, obs_kind=args.obs_kind, frame_stack=frame_stack)
 
     device = args.device if args.device else  torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -80,6 +82,7 @@ def parse_args():
     parser.add_argument("--dynamic-lr", action='store_true', default=None, help="Use a dynamic learning rate.")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
+    parser.add_argument("--frame-stack", type=int, default=1, help="The number of frames to stack in the observation.")
     parser.add_argument("--device", choices=['cpu', 'cuda'], default=None, help="The device to use.")
 
     parser.add_argument('model', type=str, help='The model to train.')

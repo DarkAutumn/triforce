@@ -278,9 +278,9 @@ class ZeldaGame:
         return item
 
     def _build_enemy(self, tables, index, obj_id):
-        health = tables.read("obj_health")[index] >> 4
+        health = int(tables.read("obj_health")[index] >> 4)
         status = tables.read("obj_status")[index]
-        stun_timer = tables.read("obj_stun_timer")[index]
+        stun_timer = int(tables.read("obj_stun_timer")[index])
         spawn_state = tables.read("obj_spawn_state")[index]
         pos = self._read_position(tables, index)
         direction = self._read_direction(tables, index)
@@ -292,8 +292,8 @@ class ZeldaGame:
         return Projectile(self, index, obj_id, self._read_position(tables, index))
 
     def _read_position(self, tables, index):
-        x = tables.read('obj_pos_x')[index]
-        y = tables.read('obj_pos_y')[index]
+        x = int(tables.read('obj_pos_x')[index])
+        y = int(tables.read('obj_pos_y')[index])
         return Position(x, y)
 
     def _read_direction(self, tables, index):

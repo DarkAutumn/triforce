@@ -129,9 +129,9 @@ def test_ppo_training(device, num_envs):
     expected_actions = [0, 1, 2]
     assert actions_taken == expected_actions, f"Expected actions {expected_actions}, but got {actions_taken}"
 
-@pytest.mark.parametrize("num_envs", [1])
+@pytest.mark.parametrize("num_channels", [1, 3])
 @pytest.mark.parametrize("model_scenario", ["full-game start-overworld1", "overworld-sword overworld-sword"])
-def test_model_training(model_scenario, num_envs):
+def test_model_training(model_scenario, num_channels):
     model_name, scenario_name = model_scenario.split(" ")
     model_def : ModelDefinition = ModelDefinition.get(model_name)
     assert model_def is not None, f"Unknown model: {model_name}"
@@ -140,11 +140,11 @@ def test_model_training(model_scenario, num_envs):
     assert scenario_name is not None, f"Unknown scenario: {scenario_name}"
 
     def create_env():
-        return make_zelda_env(scenario_name, model_def.action_space)
+        return make_zelda_env(scenario_name, model_def.action_space, frame_stack=num_channels)
 
     progress = MagicMock()
     ppo = PPO("cpu", log_dir=None)
-    network = ppo.train(SharedNatureAgent, create_env, ppo.target_steps * 2 + 1, progress, envs=num_envs)
+    network = ppo.train(SharedNatureAgent, create_env, ppo.target_steps * 2 + 1, progress)
     assert progress.update.call_count, "PPO did not call update"
 
     env = create_env()
@@ -153,6 +153,7 @@ def test_model_training(model_scenario, num_envs):
 
     # Make sure we can successfully use the model
     for step in range(3):
+        assert obs["image"].shape[0] == num_channels, f"Expected {num_channels} channels, but got {obs.shape[0]}"
         logits, value = network(obs)
         action_probs = torch.softmax(logits, dim=-1)
         action = torch.argmax(action_probs).item()  # Select the most probable action
