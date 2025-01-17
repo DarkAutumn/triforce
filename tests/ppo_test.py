@@ -134,7 +134,10 @@ def test_ppo_training(device, num_envs):
 def test_model_training(model_scenario, num_envs):
     model_name, scenario_name = model_scenario.split(" ")
     model_def : ModelDefinition = ModelDefinition.get(model_name)
+    assert model_def is not None, f"Unknown model: {model_name}"
+
     scenario_name = TrainingScenarioDefinition.get(scenario_name)
+    assert scenario_name is not None, f"Unknown scenario: {scenario_name}"
 
     def create_env():
         return make_zelda_env(scenario_name, model_def.action_space)
