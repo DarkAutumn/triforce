@@ -58,7 +58,7 @@ def main():
 
     kwargs = {}
     if args.dynamic_lr is not None:
-        kwargs['dyanmic_lr'] = args.dynamic_lr
+        kwargs['dynamic_lr'] = args.dynamic_lr
 
     if args.load:
         kwargs['load_from'] = args.load
