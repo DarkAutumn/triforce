@@ -1,11 +1,11 @@
 # pylint: disable=all
-from multiprocessing import Queue, Value
+from multiprocessing import Value
 import os
 import random
 import sys
 from unittest.mock import MagicMock
 
-from triforce.ml_ppo_rollout_buffer import PPORolloutBuffer
+from triforce import TrainingScenarioDefinition
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
@@ -17,7 +17,7 @@ from gymnasium.spaces import MultiBinary, Discrete
 
 from triforce.ml_ppo import GAMMA, LAMBDA, PPO, Network, SubprocessWorker
 from triforce.models import SharedNatureAgent
-from triforce.model_definition import ZELDA_MODELS, ZeldaModelDefinition
+from triforce import ModelDefinition
 from triforce.zelda_env import make_zelda_env
 
 class TestNetwork(Network):
@@ -130,13 +130,14 @@ def test_ppo_training(device, num_envs):
     assert actions_taken == expected_actions, f"Expected actions {expected_actions}, but got {actions_taken}"
 
 @pytest.mark.parametrize("num_envs", [1])
-@pytest.mark.parametrize("model_name", ["full-game", "overworld-sword"])
-def test_model_training(model_name, num_envs):
-    model_def : ZeldaModelDefinition = ZELDA_MODELS[model_name]
-    scenario = model_def.training_scenario
+@pytest.mark.parametrize("model_scenario", ["full-game initial-training", "overworld-sword overworld-sword"])
+def test_model_training(model_scenario, num_envs):
+    model_name, scenario_name = model_scenario.split(" ")
+    model_def : ModelDefinition = ModelDefinition.get(model_name)
+    scenario_name = TrainingScenarioDefinition.get(scenario_name)
 
     def create_env():
-        return make_zelda_env(scenario, model_def.action_space)
+        return make_zelda_env(scenario_name, model_def.action_space)
 
     progress = MagicMock()
     ppo = PPO("cpu", log_dir=None)

@@ -35,12 +35,7 @@ The triforce project itself is divided into some key areas:
 [ZeldaActionSpace](triforce/action_space.py) sets the allowed action space.  Zelda doesn't allow you to press all buttons a the same time to do anything meaningful, so we reduce the action space down to specific actions which can be taken at the given moment in game.
 
 [ZeldaObservationWrapper](triforce/zelda_observation_wrapper.py) controls what the model "sees" in terms of the image.  It was clear from early on that the basic neural networks defined by stable-baselines3 could not interpret the entire view of the game.  It's too hard for it to find link on the screen and interpret enemies around him.  Instead we create a viewport around link, so the model always has link centered in its view.  We also convert to grayscale because (so far) it seems the model plays better with less color channels to interpret.
-
-[ZeldaVectorFeatures](triforce/zelda_vector_features.py) provides a few more observations to the model.  Since we don't give the model the view of the entire screen (or the hud, including link's health), it isn't able to "see" enemies, items, and objectives outside of that viewport.  Instead, we provide it with some limited data to help it know about things outside of its view.  This includes whether link has full health to shoot sword beams, vectors pointing to the nearest enemy, item, projectile, and the objective.  The goal is to give the model enough to play the game with a small viewport, but not enough to feel like it's 'cheating'.
-
-[zelda_game.py](triforce/zelda_game.py) does a lot of the nitty gritty of interpreting raw RAM state into something more usable.  This produces `ZeldaGameState`, which contains properties for `Link`, enemies on screen (`Enemy`), and projectiles (`Projectile`).
-
-[ZeldaGameWrapper](triforce/zelda_wrapper.py) is the base wrapper around the Zelda environment.  It produces `info['state']` and `info['gamestate']` which are used to interpret what is going on within the game.
+TODO: document these after changes.
 
 [Objectives](triforce/objectives.py) sets the current goal of the model.  The objective selector starts with some game knowledge required to make progress in the game (such as which rooms contain treasure if you kill all enemies, what the coordinates of each dungeon are on the world map).  This is similar to if you were playing the game with a game guide, as that's how I chose to build an AI to tackle this game.  It does not know what each room looks like or how rooms connect together, only the locations of items and dungeons.  From that basic information, it will slowly build up state over the course of a single run (which is wiped out on reset).  The class will select a goal which is an enum of what link should do {MoveNorth, MoveSouth, FightEnemies, CollectTreasure, etc} and a list of tiles that those objectives live on.  This is all local to the current screen that link is on.
 
@@ -49,7 +44,7 @@ The triforce project itself is divided into some key areas:
 
 [ZeldaCritic](triforce/critics.py) classes define rewards.  Scenarios have exactly one critic associated with them, and that is used to reward the model for good gameplay and discourage it from bad gameplay.  This is implemented by giving the critics the game state prior to an action it took, the game state after that action, and it fills in a dictionary of rewards.  We use a reward dictionary (not just a number) so that we can debug rewards to figure out issues with training.
 
-Critics also define a **`score`** that is separate from rewards.  Where rewards are all about how well the model is *playing the game*, and are used to train the model, the `score` is used to determine how well the model is *completing the scenario*.  In particular, the score counts things like health lost and how far the model progressed through rooms.   We don't use score when training the model.  Instead, score is used during evaluation to make sure the model doesn't just get a high reward value but die in the first room or two.
+Critics also define a **`progress`** that is separate from rewards.  Where rewards are all about how well the model is *playing the game*, and are used to train the model, the `progress` is used to determine how well the model is *completing the scenario*.  In particular, the progress counts things like health lost and how far the model progressed through rooms.   We don't use progress when training the model.  Instead, progress is used during evaluation to make sure the model doesn't just get a high reward value but die in the first room or two.
 
 [ZeldaEndCondition](triforce/end_conditions.py) classes track when the scenario is won, lost, or should be truncated (if the AI gets stuck in one place, for example).  Scenarios have multiple end conditions.
 
@@ -105,7 +100,7 @@ By default, the new models will be placed in `training/`. Use `run.py --model-pa
 
 ### Evaluating Models
 
-Rewards teach the model how to play, but it's the scoring function that tries to figure out how well the model is doing in completing the scenario.  It doesn't matter how many enemies Link kills or movements in the "wrong" direction as long as he completes the scenario without dying.  The `evaluate.py` module will run a given scenario 100 times (by default) and calculate the percentage of runs that were completed successfully, as well as the average score and rewards.
+Rewards teach the model how to play, but it's the scoring function that tries to figure out how well the model is doing in completing the scenario.  It doesn't matter how many enemies Link kills or movements in the "wrong" direction as long as he completes the scenario without dying.  The `evaluate.py` module will run a given scenario 100 times (by default) and calculate the percentage of runs that were completed successfully, as well as the average progress and rewards.
 
 After completing a training run, you should use `evaluate.py` and compare it to `models/evaluation.csv`.  You can run this in parallel (but it's graphics card RAM intensive, so keep the number low), and the number of episodes to run.  For example, if you trained the dungeon1beams and dungeon1nobeams models and saved them to the default training/ folder:
 

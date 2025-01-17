@@ -3,13 +3,17 @@ import inspect
 import operator
 import pickle
 import sys
-from typing import Optional
+import json
+import os
+from typing import List, Optional
+from pydantic import BaseModel, field_validator
 import torch
 from torch import nn
 import torch.distributions as dist
 import numpy as np
 from gymnasium.spaces import Dict
 
+from .scenario_wrapper import TrainingScenarioDefinition
 from .rewards import RewardStats
 
 class Network(nn.Module):
@@ -281,4 +285,102 @@ def get_neural_network(name):
     """Get a model by name."""
     return NEURAL_NETWORK_DEFINITIONS[name]
 
-__all__ = [Network.__name__, SharedNatureAgent.__name__, register_neural_network.__name__, get_neural_network.__name__]
+
+class ModelDefinition(BaseModel):
+    """
+    Represents a defined AI model for The Legend of Zelda.  Each ZeldaAIModel will have a set of available models,
+    which are a trained version of this defined model.
+    """
+    name : str
+    neural_net : type
+    action_space : List[str]
+    priority : int
+
+    levels : List[int]
+    rooms : Optional[List[int]] = None
+    requires_triforce : Optional[int] = None
+    equipment_required : Optional[List[str]] = []
+
+    @field_validator('neural_net', mode='before')
+    @classmethod
+    def neural_net_validator(cls, value):
+        """Gets the class from the name."""
+        return get_neural_network(value)
+
+    @field_validator('levels', 'rooms', mode='before')
+    @classmethod
+    def list_of_int_validator(cls, value):
+        """
+        Accepts a list of integers, a single integer, or a string representing a hexadecimal value and returns a list
+        of integers.
+
+        Args:
+            value: The room value to be validated.
+
+        Returns:
+            A list of integers.
+        """
+        if isinstance(value, int):
+            return [value]
+
+        if isinstance(value, str):
+            return [int(value, 16)]
+
+        if isinstance(value, list):
+            return [int(x, 16) if isinstance(x, str) else x for x in value]
+
+        return value
+
+    def find_available_models(self, path):
+        """Finds the available models for this model definition in the given path.  Returns a dictionary of name to
+        path."""
+        available_models = {}
+        if path is None:
+            return available_models
+
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Path {path} does not exist")
+
+        # Check if .pt
+        full_path = os.path.join(path, self.name + '.pt')
+        if os.path.exists(full_path):
+            available_models['default'] = full_path
+
+        # otherwise, it's a training directory of models
+        else:
+            dir_name = os.path.join(path, self.name)
+            if os.path.isdir(dir_name):
+                for filename in os.listdir(dir_name):
+                    if filename.endswith('.pt'):
+                        i = filename.find('_')
+                        if i > 0:
+                            iterations = int(filename[i+1:-3])
+                            available_models[iterations] = os.path.join(dir_name, filename)
+                        else:
+                            available_models[filename[:-3]] = os.path.join(dir_name, filename)
+
+        return available_models
+
+    @staticmethod
+    def get_all_models():
+        """Loads the models and scenarios from triforce.json."""
+        models = {}
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        with open(os.path.join(script_dir, 'triforce.json'), encoding='utf-8') as f:
+            for model in json.load(f)["models"]:
+                model = ModelDefinition(**model)
+                models[model.name] = model
+
+        return models
+
+    @staticmethod
+    def get(name, default=None):
+        """Get a model by name."""
+        return ModelDefinition.get_all_models().get(name, default)
+
+__all__ = [
+    Network.__name__,
+    SharedNatureAgent.__name__,
+    register_neural_network.__name__,
+    get_neural_network.__name__
+    ]

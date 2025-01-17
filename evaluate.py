@@ -5,7 +5,7 @@ import sys
 import os
 import argparse
 from tqdm import tqdm
-from triforce import ZeldaModelDefinition, make_zelda_env, ZELDA_MODELS, Network
+from triforce import ModelDefinition, make_zelda_env, Network, TrainingScenarioDefinition
 from triforce.rewards import TotalRewards, RewardStats
 
 # pylint: disable=global-statement,global-variable-undefined
@@ -21,7 +21,7 @@ def _print_stat_row(model_name, filename, steps_trained, stats : RewardStats):
 def run_one_scenario(args, model_name, model_path, counter_or_callback):
     """Runs a single scenario."""
     # pylint: disable=redefined-outer-name,too-many-locals
-    model_def = ZELDA_MODELS[model_name]
+    model_def = ModelDefinition.get(model_name)
     env = make_zelda_env_from_args(model_def, args)
     network : Network = model_def.neural_net(env.observation_space, env.action_space)
     network.load(model_path)
@@ -52,10 +52,10 @@ def run_one_scenario(args, model_name, model_path, counter_or_callback):
     network.stats.evaluated = True
     network.save(model_path)
 
-def make_zelda_env_from_args(model : ZeldaModelDefinition, args):
+def make_zelda_env_from_args(model : ModelDefinition, scenario_def, args):
     """Creates a ZeldaML instance."""
     render_mode = 'human' if args.render else None
-    return make_zelda_env(model.training_scenario, model.action_space, render_mode=render_mode, obs_kind=args.obs_kind)
+    return make_zelda_env(scenario_def, model.action_space, render_mode=render_mode, obs_kind=args.obs_kind)
 
 def get_model_path(args):
     """Gets the model path."""
@@ -79,9 +79,10 @@ def main():
     _print_stat_header()
     env = None
     for args, model_name, path, _ in all_scenarios:
-        model_def = ZELDA_MODELS[model_name]
+        model_def = ModelDefinition.get(model_name)
+        scenario_def = TrainingScenarioDefinition.get(args.scenario)
         if env is None:
-            env = make_zelda_env_from_args(model_def, args)
+            env = make_zelda_env_from_args(model_def, scenario_def, args)
 
         network = model_def.neural_net(env.observation_space, env.action_space)
         network.load(path)
@@ -94,23 +95,20 @@ def main():
 def create_scenarios(args):
     """Finds all scenarios to be executed.  Also returns the results of any previous evaluations."""
     model_path = get_model_path(args)
-    models = args.models if args.models else ZELDA_MODELS.keys()
+    model_name = args.model
 
-    all_scenarios = []
-    for model_name in models:
-        if not args.models or model_name in args.models:
-            process = True
-            available_models = ZELDA_MODELS[model_name].find_available_models(model_path)
-            models_to_evaluate = sorted([int(x) for x in available_models.keys() if isinstance(x, int)])
-            models_to_evaluate += [x for x in available_models.keys() if not isinstance(x, int)]
-            for key in models_to_evaluate:
-                path = available_models[key]
-                stats = Network.load_stats(path)
-                evaluated = stats.evaluated if stats and hasattr(stats, 'evaluated') else False
-                if not args.reprocess and evaluated and stats.episodes >= args.episodes:
-                    process = False
+    process = True
+    available_models = ModelDefinition.get(model_name).find_available_models(model_path)
+    models_to_evaluate = sorted([int(x) for x in available_models.keys() if isinstance(x, int)])
+    models_to_evaluate += [x for x in available_models.keys() if not isinstance(x, int)]
+    for key in models_to_evaluate:
+        path = available_models[key]
+        stats = Network.load_stats(path)
+        evaluated = stats.evaluated if stats and hasattr(stats, 'evaluated') else False
+        if not args.reprocess and evaluated and stats.episodes >= args.episodes:
+            process = False
 
-                all_scenarios.append((args, model_name, path, process))
+        all_scenarios.append((args, model_name, path, process))
 
     if args.limit > 0:
         all_scenarios = all_scenarios[-args.limit:]
@@ -130,8 +128,9 @@ def parse_args():
     parser.add_argument("--limit", type=int, default=-1,
                         help="Limit the number of models to evaluate.")
 
-    parser.add_argument('model_path', nargs=1, help='The director containing the models to evaluate')
-    parser.add_argument('models', nargs='*', help='The director containing the models to evaluate')
+    parser.add_argument('model_path', nargs=1, help='The directory containing the models to evaluate')
+    parser.add_argument('model', type=str, help='The model to evaluate.')
+    parser.add_argument('scenario', type=str, help='The scenario to evaluate.')
     parser.add_argument('--reprocess', action='store_true', help='Reprocess the models')
 
     try:

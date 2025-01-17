@@ -16,9 +16,9 @@ import numpy as np
 import cv2
 import tqdm
 
-from triforce import ZeldaScenario, simulate_critique, make_zelda_env, TRAINING_SCENARIOS, Network
-from triforce.game_state_change import ZeldaStateChange
-from triforce.model_definition import ZELDA_MODELS, ZeldaModelDefinition
+from triforce import TrainingScenarioDefinition, simulate_critique, make_zelda_env, \
+    Network, ModelDefinition
+from triforce.state_change_wrapper import StateChange
 from triforce.rewards import StepRewards
 from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
@@ -91,7 +91,7 @@ class Recording:
 
 class DisplayWindow:
     """A window to display the game and the AI model."""
-    def __init__(self, scenario : ZeldaScenario, model_path : str, model : str):
+    def __init__(self, scenario : TrainingScenarioDefinition, model_path : str, model : str):
         self.scenario = scenario
 
         pygame.init()
@@ -132,7 +132,7 @@ class DisplayWindow:
 
         self._loaded_models = {}
         self.model_path = model_path
-        self.model_definition : ZeldaModelDefinition = ZELDA_MODELS[model]
+        self.model_definition : ModelDefinition = ModelDefinition.get(model)
 
         self.move_widgets = {}
         self.vector_widgets = []
@@ -170,7 +170,7 @@ class DisplayWindow:
         terminated = True
         truncated = False
 
-        state_change : ZeldaStateChange = None
+        state_change : StateChange = None
         model_name = None
 
         rgb_deque = deque()
@@ -480,7 +480,7 @@ class DisplayWindow:
         return directions
 
 
-    def _update_rewards(self, env, action, reward_map, buttons, state_change : ZeldaStateChange):
+    def _update_rewards(self, env, action, reward_map, buttons, state_change : StateChange):
         curr_rewards = {}
         last_info = state_change.previous.info
         info = state_change.state.info
@@ -748,7 +748,7 @@ class LabeledVector(LabeledCircle):
 
 class DebugReward:
     """An action to take when a reward button is clicked."""
-    def __init__(self, env, action, scenario : ZeldaScenario, last_info, info):
+    def __init__(self, env, action, scenario : TrainingScenarioDefinition, last_info, info):
         self.env = env
         self.scenario = scenario
         self.last_info = last_info
@@ -827,7 +827,7 @@ def main():
     args = parse_args()
     model_path = args.model_path[0] if args.model_path else os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                                          'models')
-    scenario = TRAINING_SCENARIOS.get(args.scenario, None)
+    scenario = TrainingScenarioDefinition.get(args.scenario, None)
     if not scenario:
         print(f'Unknown scenario {args.scenario}')
         return

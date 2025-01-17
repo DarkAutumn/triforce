@@ -9,7 +9,7 @@ from triforce.rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD
     Penalty, Reward, StepRewards
 
 from .zelda_enums import SwordKind, ZeldaAnimationKind, AnimationState
-from .game_state_change import ZeldaStateChange
+from .state_change_wrapper import StateChange
 
 HEALTH_LOST_PENALTY = Penalty("penalty-lost-health", -REWARD_LARGE)
 HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
@@ -71,7 +71,7 @@ class ZeldaCritic:
     def clear(self):
         """Called when the environment is reset to clear any saved state."""
 
-    def critique_gameplay(self, state_change : ZeldaStateChange, rewards: Dict[str, float]):
+    def critique_gameplay(self, state_change : StateChange, rewards: Dict[str, float]):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
         raise NotImplementedError()
 
@@ -89,7 +89,7 @@ class GameplayCritic(ZeldaCritic):
         self._total_hits = 0
         self._room_enter_health = None
         self._equipment_rewards = {}
-        self._score = 0.0
+        self._progress = 0.0
 
     def clear(self):
         super().clear()
@@ -97,9 +97,9 @@ class GameplayCritic(ZeldaCritic):
         self._seen_locations.clear()
         self._total_hits = 0
         self._room_enter_health = None
-        self._score = 0.0
+        self._progress = 0.0
 
-    def critique_gameplay(self, state_change : ZeldaStateChange, rewards : StepRewards):
+    def critique_gameplay(self, state_change : StateChange, rewards : StepRewards):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
         # triforce
         self.critique_triforce(state_change, rewards)
@@ -126,10 +126,10 @@ class GameplayCritic(ZeldaCritic):
         if state_change.health_lost > 0:
             rewards.remove_rewards()
 
-        self.set_score(state_change, rewards)
+        self.set_progress(state_change, rewards)
 
     # reward helpers, may be overridden
-    def critique_equipment_pickup(self, state_change : ZeldaStateChange, rewards):
+    def critique_equipment_pickup(self, state_change : StateChange, rewards):
         """Critiques the pickup of equipment items."""
         self.__check_one_equipment(state_change, rewards, 'sword')
         self.__check_one_equipment(state_change, rewards, 'arrows')
@@ -152,7 +152,7 @@ class GameplayCritic(ZeldaCritic):
         self.__check_one_equipment(state_change, rewards, 'rupees')
         self.__check_one_equipment(state_change, rewards, 'keys')
 
-    def __check_one_equipment(self, state_change : ZeldaStateChange, rewards, item):
+    def __check_one_equipment(self, state_change : StateChange, rewards, item):
         prev, curr = self.__get_equipment_change(state_change, item)
         if prev < curr:
             rewards.add(EQUIPMENT_REWARD_MAP[item])
@@ -173,7 +173,7 @@ class GameplayCritic(ZeldaCritic):
 
         return prev, curr
 
-    def critique_used_key(self, state_change : ZeldaStateChange, rewards):
+    def critique_used_key(self, state_change : StateChange, rewards):
         """Critiques the pickup and usage of keys."""
         prev_link = state_change.previous.link
         curr_link = state_change.state.link
@@ -181,7 +181,7 @@ class GameplayCritic(ZeldaCritic):
         if prev_link.keys > curr_link.keys:
             rewards.add(USED_KEY_REWARD)
 
-    def critique_health_change(self, state_change : ZeldaStateChange, rewards):
+    def critique_health_change(self, state_change : StateChange, rewards):
         """Critiques the change in health."""
         prev_link, curr_link = state_change.previous.link, state_change.state.link
         if prev_link.max_health < curr_link.max_health:
@@ -193,7 +193,7 @@ class GameplayCritic(ZeldaCritic):
         elif state_change.health_lost:
             rewards.add(HEALTH_LOST_PENALTY)
 
-    def critique_triforce(self, state_change : ZeldaStateChange, rewards):
+    def critique_triforce(self, state_change : StateChange, rewards):
         """Critiques the acquisition of the triforce."""
         prev_link, curr_link = state_change.previous.link, state_change.state.link
         if prev_link.triforce_pieces < curr_link.triforce_pieces:
@@ -202,13 +202,13 @@ class GameplayCritic(ZeldaCritic):
         if not prev_link.triforce_of_power and curr_link.triforce_of_power:
             rewards.add(EQUIPMENT_REWARD_MAP['triforce'])
 
-    def critique_block(self, state_change : ZeldaStateChange, rewards):
+    def critique_block(self, state_change : StateChange, rewards):
         """Critiques blocking of projectiles."""
         prev_link, curr_link = state_change.previous.link, state_change.state.link
         if not prev_link.is_blocking and curr_link.is_blocking:
             rewards.add(BLOCK_PROJECTILE_REWARD)
 
-    def critique_attack(self, state_change : ZeldaStateChange, rewards):
+    def critique_attack(self, state_change : StateChange, rewards):
         """Critiques attacks made by the player."""
         # pylint: disable=too-many-branches
 
@@ -239,7 +239,7 @@ class GameplayCritic(ZeldaCritic):
                         if distance > DISTANCE_THRESHOLD:
                             rewards.add(ATTACK_MISS_PENALTY)
 
-    def critique_item_usage(self, state_change : ZeldaStateChange, rewards):
+    def critique_item_usage(self, state_change : StateChange, rewards):
         """Critiques the usage of items."""
         # Always penalize using a bomb, but offset it by the reward for hitting something
         if state_change.previous.link.bombs > state_change.state.link.bombs:
@@ -248,7 +248,7 @@ class GameplayCritic(ZeldaCritic):
         if state_change.action.kind == ActionKind.BOMBS:
             rewards.add(BOMB_HIT_REWARD, state_change.hits)
 
-    def critique_location_change(self, state_change : ZeldaStateChange, rewards):
+    def critique_location_change(self, state_change : StateChange, rewards):
         """Critiques the discovery of new locations."""
         if self._room_enter_health is None:
             self._room_enter_health = state_change.previous.link.health
@@ -278,7 +278,7 @@ class GameplayCritic(ZeldaCritic):
 
             self._room_enter_health = state_change.state.link.health
 
-    def critique_movement(self, state_change : ZeldaStateChange, rewards):
+    def critique_movement(self, state_change : StateChange, rewards):
         """
         Critiques movement on the current screen.  This is the most difficult method to get right.  Movement in Zelda
         is complicated and unintended consequences are common.
@@ -294,7 +294,7 @@ class GameplayCritic(ZeldaCritic):
         if state_change.action.kind != ActionKind.MOVE:
             return
 
-        # Don't score movement if we moved to a new location or took damage.  The "movement" which occurs from
+        # Don't progress movement if we moved to a new location or took damage.  The "movement" which occurs from
         # damage should never be rewarded, and it will be penalized by the health loss critic.
         if state_change.action.kind != ActionKind.MOVE \
                 or state_change.health_lost \
@@ -328,7 +328,7 @@ class GameplayCritic(ZeldaCritic):
             progress = max(progress, 0)
             rewards.add(MOVE_CLOSER_REWARD, progress / MOVEMENT_SCALE_FACTOR)
 
-    def critique_moving_into_danger(self, state_change : ZeldaStateChange, rewards):
+    def critique_moving_into_danger(self, state_change : StateChange, rewards):
         """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted
         independent of other movement rewards.  This ensures that even if the agent is moving in the right direction,
         it is still wary of moving too close to an enemy."""
@@ -362,34 +362,22 @@ class GameplayCritic(ZeldaCritic):
             if len(prev.active_enemies) == len(curr.active_enemies):
                 rewards.add(MOVED_TO_SAFETY_REWARD)
 
-    def set_score(self, state_change : ZeldaStateChange, rewards : StepRewards):
-        """Sets the score based on how many rooms we have seen, enemies hit, and other factors."""
+    def set_progress(self, state_change : StateChange, rewards : StepRewards):
+        """Sets the progress based on how many rooms we have seen, enemies hit, and other factors."""
 
         rooms = [(0, 0x67),
                  (0, 0x68),
                  (0, 0x58),
                  (0, 0x48),
                  (0, 0x38),
-                 (0, 0x37),
-                 (1, 0x73),
-                 (1, 0x74),
-                 (1, 0x72),
-                 (1, 0x63),
-                 (1, 0x53),
-                 (1, 0x52),
-                 (1, 0x42),
-                 (1, 0x43),
-                 (1, 0x44),
-                 (1, 0x45),
-                 (1, 0x35),
-                 (1, 0x36),]
+                 (0, 0x37),]
 
         level = state_change.state.level
         location = state_change.state.location
         if (level, location) in rooms:
-            self._score = max(self._score, rooms.index((level, location)) / len(rooms))
+            self._progress = max(self._progress, rooms.index((level, location)) / len(rooms))
 
-        rewards.score = self._score
+        rewards.progress = self._progress
 
 REWARD_ENTERED_CAVE = Reward("reward-entered-cave", REWARD_LARGE)
 REWARD_LEFT_CAVE = Reward("reward-left-cave", REWARD_LARGE)
@@ -407,7 +395,7 @@ class OverworldSwordCritic(GameplayCritic):
         self.cave_transition_penalty = -REWARD_MAXIMUM
         self.new_location_reward = REWARD_LARGE
 
-    def critique_location_change(self, state_change : ZeldaStateChange, rewards):
+    def critique_location_change(self, state_change : StateChange, rewards):
         # entered cave
         prev, curr = state_change.previous, state_change.state
 
@@ -430,21 +418,21 @@ class OverworldSwordCritic(GameplayCritic):
             else:
                 rewards.add(PENALTY_LEFT_SCENARIO)
 
-    def set_score(self, state_change : ZeldaStateChange, rewards : StepRewards):
+    def set_progress(self, state_change : StateChange, rewards : StepRewards):
         state = state_change.state
 
-        score = 0
+        progress = 0
         if state.in_cave:
-            score += 1
+            progress += 1
 
             if state.link.sword != SwordKind.NONE:
-                score += 1
+                progress += 1
 
         else:
             if state.link.sword != SwordKind.NONE:
-                score += 3
+                progress += 3
 
             if state.location != 0x77:
-                score += 1
+                progress += 1
 
-        rewards.score = score / 5
+        rewards.progress = progress / 5

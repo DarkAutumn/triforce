@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from hit_test import assert_no_hit
 from utilities import ZeldaActionReplay
 from triforce.zelda_game import ZeldaGame
-from triforce.zelda_enums import Direction
+from triforce.zelda_enums import Direction, MapLocation
 
 def _initialize_gamestate():
     replay = ZeldaActionReplay("1_73s.state")
@@ -34,3 +34,15 @@ def test_picklable_infos():
             pickle.dumps(value)
         except Exception as e:
             pytest.fail(f"Value for key '{key}' is not pickleable: {e}")
+
+def test_direction_to():
+    start_tile = MapLocation(0, 0x67, False)
+    south = MapLocation(0, 0x77, False)
+    north = MapLocation(0, 0x57, False)
+    east = MapLocation(0, 0x68, False)
+    west = MapLocation(0, 0x66, False)
+
+    assert start_tile.get_direction_to(south) == Direction.S
+    assert start_tile.get_direction_to(north) == Direction.N
+    assert start_tile.get_direction_to(east) == Direction.E
+    assert start_tile.get_direction_to(west) == Direction.W
