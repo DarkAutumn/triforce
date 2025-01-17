@@ -22,6 +22,7 @@ class TrainingScenarioDefinition(BaseModel):
     name : str
     description : str
     scenario_selector : Optional[str]
+    iterations : int
     critic : str
     reward_overrides : Optional[Dict[str, Union[int, float, None]]] = {}
     end_conditions : List[str]

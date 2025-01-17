@@ -27,7 +27,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
-            "args": ["full-game", "initial-training", "--iterations", "10_000", "--output", "training-debug/"],
+            "args": ["full-game", "initial-training", "--output", "training-debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

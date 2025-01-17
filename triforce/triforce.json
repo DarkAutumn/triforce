@@ -7,10 +7,7 @@
             "action_space" : ["MOVE", "SWORD"],
             "priority" : 0,
             "levels" : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-            "rooms" : ["0x77"],
-            "requires_enemies" : false,
-
-            "iterations" : 1000000
+            "rooms" : ["0x77"]
         },
         {
             "name" : "overworld-sword",
@@ -18,16 +15,14 @@
             "action_space" : ["MOVE"],
             "priority" : 2,
             "levels" : 0,
-            "rooms" : ["0x77"],
-            "requires_enemies" : false,
-
-            "iterations" : 1000000
+            "rooms" : ["0x77"]
         }
     ],
     "scenarios": [
         {
             "name": "initial-training",
             "description": "The full game with training variables",
+            "iterations" : 2000000,
             "scenario_selector" : "round-robin",
             "critic": "GameplayCritic",
             "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
@@ -44,6 +39,7 @@
         {
             "name": "refinement",
             "description": "The full game with training variables",
+            "iterations" : 8000000,
             "scenario_selector" : "probabilistic",
             "critic": "GameplayCritic",
             "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
@@ -57,6 +53,7 @@
         {
             "name": "overworld-sword",
             "description": "Start of the game to the sword",
+            "iterations" : 1000000,
             "scenario_selector" : "none",
             "critic": "OverworldSwordCritic",
             "end_conditions": ["StartingRoomConditions", "Timeout"],

@@ -47,7 +47,7 @@ def main():
 
     device = args.device if args.device else  torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    iterations = None if args.iterations <= 0 else args.iterations
+    iterations = args.iterations if args.iterations > 0 else scenario_def.iterations
     output_path = args.output if args.output else 'training/'
     model_directory = f"{output_path}/{model_name}"
     log_dir = f"{model_directory}/logs"
@@ -57,7 +57,7 @@ def main():
     os.makedirs(log_dir, exist_ok=True)
 
     ppo = PPO(device, log_dir, ent_coef=args.ent_coef)
-    model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(total=args.iterations),
+    model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(total=iterations),
                       envs = args.parallel, save_path=model_directory, model_name=save_name, load_from=args.load)
 
     model.save(f"{model_directory}/model.pt")
