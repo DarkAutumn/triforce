@@ -1,17 +1,18 @@
-import math
-from multiprocessing import Queue
 import time
 import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
 from .scenario_wrapper import RoomResultAggregator
-from .ml_subprocess import SubprocessWorker
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network, create_network
 from .rewards import TotalRewards
 
 # default hyperparameters
+LEARNING_RATE_MAX = 0.00025
+LEARNING_RATE_MED = 0.0001
+LEARNING_RATE_MIN = 0.000025
+
 NORM_ADVANTAGES = True
 CLIP_VAL_LOSS = True
 LEARNING_RATE = 0.00025
