@@ -41,6 +41,8 @@ def main():
         raise ValueError(f"Unknown model: {model_name}")
 
     scenario_def = TrainingScenarioDefinition.get(args.scenario)
+    if scenario_def is None:
+        raise ValueError(f"Unknown scenario: {args.scenario}")
 
     def create_env():
         return make_zelda_env(scenario_def, model_def.action_space, obs_kind=args.obs_kind)
