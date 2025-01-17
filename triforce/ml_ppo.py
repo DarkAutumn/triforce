@@ -6,16 +6,15 @@ from torch.utils.tensorboard import SummaryWriter
 from .scenario_wrapper import RoomResultAggregator
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network, create_network
-from .rewards import TotalRewards
+from .rewards import RewardStats, TotalRewards
 
 # default hyperparameters
 LEARNING_RATE_MAX = 0.00025
-LEARNING_RATE_MED = 0.0001
-LEARNING_RATE_MIN = 0.000025
-
+LEARNING_RATE_HIGH = 0.00015
+LEARNING_RATE_MEDIUM = 0.0001
+LEARNING_RATE_MINIMUM = 0.000025
 NORM_ADVANTAGES = True
 CLIP_VAL_LOSS = True
-LEARNING_RATE = 0.00025
 GAMMA = 0.99
 LAMBDA = 0.95
 CLIP_COEFF = 0.2
@@ -26,7 +25,7 @@ EPSILON = 1e-5
 TARGET_STEPS = 2048
 EPOCHS = 10
 MINIBATCHES = 4
-LOG_RATE = 20_000
+LOG_RATE = 4_000
 ROOM_LOG_RATE = 50_000
 SAVE_INTERVAL = 40_000
 
@@ -51,7 +50,6 @@ class PPO:
         self.target_steps = kwargs.get('target_steps', TARGET_STEPS)
         self._norm_advantages = kwargs.get('norm_advantages', NORM_ADVANTAGES)
         self._clip_val_loss = kwargs.get('clip_val_loss', CLIP_VAL_LOSS)
-        self._learning_rate = kwargs.get('learning_rate', LEARNING_RATE)
         self._gamma = kwargs.get('gamma', GAMMA)
         self._lambda = kwargs.get('lambda', LAMBDA)
         self._clip_coeff = kwargs.get('clip_coeff', CLIP_COEFF)
@@ -61,10 +59,9 @@ class PPO:
         self._epsilon = kwargs.get('epsilon', EPSILON)
         self.minibatches = kwargs.get('minibatches', MINIBATCHES)
         self.num_epochs = kwargs.get('num_epochs', EPOCHS)
+        self.optimizer = None
 
         self.kwargs = kwargs
-
-        self.optimizer_state = None
 
         self.log_dir = log_dir
         self.device = device
@@ -117,6 +114,8 @@ class PPO:
                 reward_stats.to_tensorboard(self.tensorboard, total_iterations)
                 network.stats = reward_stats
 
+                self._adjust_learning_rate(reward_stats)
+
             if next_room_log.add(buffer.memory_length):
                 rooms.to_tensorboard(self.tensorboard, total_iterations)
 
@@ -128,6 +127,27 @@ class PPO:
 
         env.close()
         return network
+
+    def _adjust_learning_rate(self, reward_stats : RewardStats):
+        success_rate = reward_stats.success_rate
+
+        # Example logic:
+        #  - if success_rate == 0 => high LR
+        #  - If success_rate < 0.2 => elevated LR
+        #  - If success_rate < 0.95 => moderate LR
+        #  - Else => very low LR
+        if success_rate < 0.01:
+            new_lr = LEARNING_RATE_MAX
+        elif success_rate < 0.2:
+            new_lr = LEARNING_RATE_HIGH
+        elif success_rate < 0.95:
+            new_lr = LEARNING_RATE_MEDIUM
+        else:
+            new_lr = LEARNING_RATE_MINIMUM
+
+        assert self.optimizer, "Attempted to adjust learning rate before optimizer was created."
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = new_lr
 
     def _process_infos(self, total_rewards : TotalRewards, rooms : RoomResultAggregator,  infos):
         for info in infos:
@@ -170,9 +190,10 @@ class PPO:
         minibatch_size = batch_size // self.minibatches
 
         network = network.to(self.device)
-        optimizer = torch.optim.Adam(network.parameters(), lr=self._learning_rate, eps=self._epsilon)
-        if self.optimizer_state is not None:
-            optimizer.load_state_dict(self.optimizer_state)
+        if self.optimizer is None:
+            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MEDIUM, eps=self._epsilon)
+
+        optimizer = self.optimizer
 
         b_inds = torch.arange(batch_size)
         clipfracs = []
@@ -238,7 +259,6 @@ class PPO:
                 optimizer.step()
 
         network = network.to("cpu")
-        self.optimizer_state = optimizer.state_dict()
 
         # After training, compute stats like explained variance
         y_pred = b_values.cpu()
