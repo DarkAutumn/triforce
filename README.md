@@ -4,6 +4,8 @@ This repo contains code to train neural networks to play The Legend of Zelda.  I
 
 ## Getting Started
 
+The main branch is pretty unstable/may not work correctly.  The [Original Design Branch](https://github.com/DarkAutumn/triforce/tree/original-design/) has a working copy.
+
 This repo does *not* include a copy of the Legend of Zelda rom.  You must find your own copy of the rom and place it (uncompressed) at `triforce/custom_integrations/Zelda-NES/rom.nes`.
 
 This project was built using Python 3.10 on Ubuntu.  You may also have to install `libgl1-mesa-glx` to use `run.py`.
@@ -12,32 +14,59 @@ This repo does include a set of pre-trained models.  Once the Zelda rom is in pl
 
 ![run.py output](./img/run.png)
 
+Here's a video of the agent [beating the first dungeon](https://www.youtube.com/watch?v=yERh3IJ54dU), which was trained with 5,000,000+ steps. At 38 seconds, it learned that it's invulnerable at the screen edge, it exploits that to avoid damage from a projectile. At 53 seconds it steps up to avoid damage, even though it takes a -0.06 penalty for moving the wrong way (taking damage would be a larger penalty.) At 55 seconds it walks towards the rock projectile to block it. And so on, lots of little things the model does is easy to miss if you don't know the game inside and out.
+
+As a TLDR, [here's an early version of my new (single) model](https://youtu.be/3AJXfBnmgVk). This doesn't make it quite as far, but if you watch closely it's combat is already *far* better, and is only trained on 320,000 steps (~6% less than the first model's training steps).
+
+This is pretty far along from my [very first model](https://www.youtube.com/watch?v=KXPMwehTOf0).
+
 ## Architecture
 
-This project uses stable-baselines3 for reinforcement learning (specifically PPO) and neural networks, stable-retro to provide NES emulation, and pygame to render the game when debugging rewards and models.
+My first pass through this project was basically "imagine playing Zelda with your older sibling telling you where to go and what to do". I give the model an objective vector which points to where I want it to go on the screen (as a bird flies, the agent still had to learn path finding to avoid damage and navigate around the map). This includes either point at the nearest enemy I want it to kill or a NSEW vector if it's supposed to move to the next room.
 
-Instead of one model that does everything, this project uses a series of models trained on specific tasks to play the game.  We still try to limit the overall number of models used to what we really need.
+Due a few limitations with stable-baselines (especially around action masking), I ended up training unique models for traversing the overworld vs the dungeon (since they have entirely different tilesets). I also trained a different model for when we have sword beams vs not. In the video above you can see what model is being used onscreen.
 
-The triforce project itself is divided into some key areas:
+In my current project I've removed this objective vector as it felt too much like cheating. Instead I give it a one-hot encoded objective (move north to the next room, pickup items, kill enemies, etc). So far it's working quite well without that crutch. The new project also does a much better job of combat even without multiple models to handle beams vs not.
 
-* Zelda Gymnasium Environments and Wrappers - Used to transform the Zelda game state into something a machine-learning model can understand.
-* Zelda Memory/Game Interpretation - Code to pull apart the game's RAM and interpret it.
-* Objective Selector - Selects what the model *should* be doing at any given time.
-* Critics and End Conditions - Used to reward the reinforcement learning algorithm based on the current objective.
-* Scenarios and Models - We define a set of models and a set of scenarios to train them.
+## Observation/Action Space
 
-### Gymnasium Environments and Wrappers
+**Image** - The standard neural network had a really tough time being fed the entire screen. No amount of training seemed to help. I solved this by creating a [viewport around Link](https://github.com/DarkAutumn/triforce/blob/dea241219ff17b386e368bc25adfbc171207888a/notebooks/torch_viewport.ipynb) that keeps him centered. This REALLY helped the model learn.
+
+I also had absolutely zero success with stacking frames to give Link a way to see enemy/projectile movement. The model simply never trained with stable-baselines when I implemented frame stacking and I never figured out why. I just added it to my current neural network and it seems to be working...
+
+Though my early experiments show that giving it 3 frames (skipping two in between, so frames curr, curr-3, curr-6) doesn't *really* give us that much better performance. It might if I took away some of the vectors. We'll see.
+
+**Vectors** - Since the model cannot see beyond its little viewport, I gave the model a vector to the closest item, enemy, and projectile onscreen. This made it so the model can shoot enemies across the room outside of its viewport. My new model gives it multiple enemies/items/projectiles and I plan to try to use an attention mechanism as part of the network to see if I can just feed it all of that data.
+
+**Information** - It also gets a couple of one-off datapoints like whether it currently has sword beams. The new model also gives it a "source" room (to help better understand dungeons where we have to backtrack), and a one-hot encoded objective.
+
+**Action Space**
+
+My original project just has a few actions, 4 for moving in the cardinal directions and 4 for attacking in each direction (I also added bombs but never spent any time training it). I had an idea to use masking to help speed up training. I.E. if link bumps into a wall, don't let him move in that direction again until he moves elsewhere, as the model would often spend an entire memory buffer running headlong straight into a wall before an update...better to do it once and get a huge negative penalty which is essentially the same result but faster.
+
+Unfortunately SB made it really annoying architecturally to pass that info down to the policy layer. I could have hacked it together, but eventually I just reimplemented PPO and my own neural network so I could properly mask actions in the new version. For example, when we start training a fresh model, it cannot attack when there aren't enemies on screen and I can disallow it from leaving certain areas.
+
+The new model actually understands splitting swinging the sword short range vs firing sword beams as two different actions, though I haven't yet had a chance to fully train with the split yet.
+
+**Frameskip/Cooldowns** - In the game I don't use a fixed frame skip for actions. Instead I use the internal ram state of game to know when Link is animation locked or not and only allow the agent to take actions when it's actually possible to give meaningful input to the game. This greatly sped up training. We also force movement to be between tiles on the game map. This means that when the agent decides to move it loses control for longer than a player would...a player can make more split second decisions. This made it easier to implement movement rewards though and might be something to clean up in the future.
+
+### The Guts of the Project
 
 [make_zelda_env](triforce/zelda_env.py) is a function which creates a Zelda retro environment with all the appropriate wrappers.  Most uses of stable-retro are confined to this one file/function (with some exceptions where it made sense).
 
+[FrameSkipWrapper](triforce/frame_skip_wrapper.py) ensures that the agent only acts when it's actually possible to affect the outcome of the game.  (I.E. not framelocked.)
+
+[ZeldaGame](triforce/zelda_game.py), [Link](triforce/link.py), [Enemy](triforce/enemy.py), etc all build an object model over the game so the rest of the code can interact with what arrows, sword, health link has, etc.
+
+[StateChangeWrapper](triforce/state_change_wrapper.py) keeps track of the change of state between one action and the next.  This also does some complicated work to ensure that when Link uses actions that will impact later (sword beams, bombs, etc) the frame he uses it on will get the rewards by running the simulation forward, then rewinding time,
+
+[ZeldaActionSpace](triforce/action_space.py) defines the actions that can be taken.  The project supports using all equipment but the current models are only trained on movement and sword until it the kinks are ironed out.
+
+[ObservationWrapper](triforce/observation_wrapper.py) converts from the full screen into an observation.  In this case, the last N frames (skipping some) are modified to be a viewport around Link so that the shared nature CNN works properly.  We also add some one-hot encoded objectives and some vectors to the nearest objects an enemies.
+
 [ScenarioWrapper](triforce/scenario_wrapper.py) keeps track of the scenario we are running or training on, and all of the critics and end conditions associated with it.
 
-[ZeldaActionSpace](triforce/action_space.py) sets the allowed action space.  Zelda doesn't allow you to press all buttons a the same time to do anything meaningful, so we reduce the action space down to specific actions which can be taken at the given moment in game.
-
-[ZeldaObservationWrapper](triforce/zelda_observation_wrapper.py) controls what the model "sees" in terms of the image.  It was clear from early on that the basic neural networks defined by stable-baselines3 could not interpret the entire view of the game.  It's too hard for it to find link on the screen and interpret enemies around him.  Instead we create a viewport around link, so the model always has link centered in its view.  We also convert to grayscale because (so far) it seems the model plays better with less color channels to interpret.
-TODO: document these after changes.
-
-[Objectives](triforce/objectives.py) sets the current goal of the model.  The objective selector starts with some game knowledge required to make progress in the game (such as which rooms contain treasure if you kill all enemies, what the coordinates of each dungeon are on the world map).  This is similar to if you were playing the game with a game guide, as that's how I chose to build an AI to tackle this game.  It does not know what each room looks like or how rooms connect together, only the locations of items and dungeons.  From that basic information, it will slowly build up state over the course of a single run (which is wiped out on reset).  The class will select a goal which is an enum of what link should do {MoveNorth, MoveSouth, FightEnemies, CollectTreasure, etc} and a list of tiles that those objectives live on.  This is all local to the current screen that link is on.
+[Objectives](triforce/objectives.py) sets the current goal of the model.  The overall idea of the project is that the model should roughly know where dungeons and items exist (like you have a game guide...few people beat zelda1 without one), but doesn't fully spoon feed the model what to do.  It's a work in progress.
 
 
 ### Critics and End Conditions
@@ -50,7 +79,7 @@ Critics also define a **`progress`** that is separate from rewards.  Where rewar
 
 ### Scenarios and Models
 
-[triforce.json](triforce/triforce.json) this *defines* models and the scenarios used to train and evaluate them (definitions are in [models_and_scenarios.py](triforce/models_and_scenarios.py)).
+[triforce.json](triforce/triforce.json) this *defines* models and the scenarios used to train and evaluate them.
 
 Models define what their action space is (for example, basic combat models do not use items like bombs, so the B button is entirely disabled for them.)  They define their training scenario and how many iterations should be used by default to train them.  Models also define a series of conditions and a priority for selecting them.  This project uses multiple models to play the game, so each model defines the equipment needed to use it (beams, bombs, etc) and the level that the model should be used (dungeon1, overworld, etc).  Lastly, it also defines a priority.  When multiple models match the criteria, priority determines which is picked.
 
