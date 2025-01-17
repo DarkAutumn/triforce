@@ -11,7 +11,8 @@ from .scenario_wrapper import ScenarioWrapper, TrainingScenarioDefinition
 from .rewards import EpisodeRewardTracker
 
 def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, *,
-                   obs_kind = 'viewport', render_mode = None, translation=True):
+                   obs_kind = 'viewport', render_mode = None, translation=True,
+                   frame_stack=1):
     """
     Creates a Zelda retro environment for the given scenario.
     Args:
@@ -37,7 +38,7 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, *,
     env = ZeldaActionSpace(env, action_space)
 
     # Converts our list of frames into a standard observation space.
-    env = ObservationWrapper(env, obs_kind, normalize=True)
+    env = ObservationWrapper(env, obs_kind, frame_stack, frame_skip=2, normalize=True)
 
     # Process the scenario. This is where we define the end conditions and rewards for the scenario.
     # Replaces the float reward with a StepRewards object.
