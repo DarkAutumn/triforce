@@ -56,9 +56,17 @@ def main():
 
     os.makedirs(log_dir, exist_ok=True)
 
+    kwargs = {}
+    if args.dynamic_lr is not None:
+        kwargs['dyanmic_lr'] = args.dynamic_lr
+
+    if args.load:
+        kwargs['load_from'] = args.load
+
+
     ppo = PPO(device, log_dir, ent_coef=args.ent_coef)
-    model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(total=iterations),
-                      envs = args.parallel, save_path=model_directory, model_name=save_name, load_from=args.load)
+    model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(total=iterations), save_path=model_directory,
+                      model_name=save_name, **kwargs)
 
     model.save(f"{model_directory}/model.pt")
 
@@ -67,6 +75,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="train - Train Zelda ML models")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
+    parser.add_argument("--dynamic-lr", action='store_true', default=None, help="Use a dynamic learning rate.")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
     parser.add_argument("--device", choices=['cpu', 'cuda'], default=None, help="The device to use.")

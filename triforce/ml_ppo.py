@@ -25,7 +25,7 @@ EPSILON = 1e-5
 TARGET_STEPS = 2048
 EPOCHS = 10
 MINIBATCHES = 4
-LOG_RATE = 4_000
+LOG_RATE = 20_000
 ROOM_LOG_RATE = 50_000
 SAVE_INTERVAL = 40_000
 
@@ -81,6 +81,11 @@ class PPO:
         if (load_path := kwargs.get('load_path', None)) is not None:
             network.load(load_path)
 
+        if kwargs.get('dynamic_lr', False):
+            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MEDIUM, eps=self._epsilon)
+        else:
+            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MAX, eps=self._epsilon)
+
         envs = kwargs.get('envs', 1)
         if envs > 1:
             raise NotImplementedError("Multiprocessing not yet implemented.")
@@ -114,7 +119,8 @@ class PPO:
                 reward_stats.to_tensorboard(self.tensorboard, total_iterations)
                 network.stats = reward_stats
 
-                self._adjust_learning_rate(reward_stats)
+                if kwargs.get('dynamic_lr', False):
+                    self._adjust_learning_rate(reward_stats)
 
             if next_room_log.add(buffer.memory_length):
                 rooms.to_tensorboard(self.tensorboard, total_iterations)
@@ -190,9 +196,6 @@ class PPO:
         minibatch_size = batch_size // self.minibatches
 
         network = network.to(self.device)
-        if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MEDIUM, eps=self._epsilon)
-
         optimizer = self.optimizer
 
         b_inds = torch.arange(batch_size)
