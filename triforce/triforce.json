@@ -20,12 +20,12 @@
     ],
     "scenarios": [
         {
-            "name": "initial-training",
+            "name": "start-overworld1",
             "description": "The full game with training variables",
             "iterations" : 2000000,
             "scenario_selector" : "round-robin",
             "critic": "GameplayCritic",
-            "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
+            "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
             "start": ["0_67s"],
             "per_room":
             {
