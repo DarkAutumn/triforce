@@ -212,7 +212,11 @@ class DisplayWindow:
                         action_mask = action_mask.unsqueeze(0)
                     action = model.get_action(obs, action_mask, deterministic=False)
                     success_rate = model.stats.success_rate * 100 if model.stats else 0
-                    model_name = f"{model_selector.model_path} ({model.steps_trained:,} timesteps {success_rate:.1f}%)"
+                    success_rate = f"success: {success_rate:.1f}%"
+                    progress = model.stats.progress_mean * 100 if model.stats else 0
+                    progress = f"progress: {progress:.1f}%"
+                    model_name = f"{model_selector.model_path} ({model.steps_trained:,} timesteps {success_rate}" \
+                                 f" {progress})"
 
                 obs, _, terminated, truncated, state_change = env.step(action)
                 action_mask = state_change.state.info['action_mask']
