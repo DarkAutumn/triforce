@@ -22,7 +22,8 @@ def run_one_scenario(args, model_name, model_path, counter_or_callback):
     """Runs a single scenario."""
     # pylint: disable=redefined-outer-name,too-many-locals
     model_def = ModelDefinition.get(model_name)
-    env = make_zelda_env_from_args(model_def, args)
+    scenario_def = TrainingScenarioDefinition.get(args.scenario)
+    env = make_zelda_env_from_args(model_def, scenario_def, args)
     network : Network = model_def.neural_net(env.observation_space, env.action_space)
     network.load(model_path)
 
@@ -96,6 +97,8 @@ def create_scenarios(args):
     """Finds all scenarios to be executed.  Also returns the results of any previous evaluations."""
     model_path = get_model_path(args)
     model_name = args.model
+
+    all_scenarios = []
 
     process = True
     available_models = ModelDefinition.get(model_name).find_available_models(model_path)
