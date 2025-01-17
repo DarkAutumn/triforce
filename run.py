@@ -16,12 +16,14 @@ import numpy as np
 import cv2
 import tqdm
 
-from triforce import TrainingScenarioDefinition, simulate_critique, make_zelda_env, \
-    Network, ModelDefinition
+from zui import ModelSelector
+
+from triforce import TrainingScenarioDefinition, simulate_critique, make_zelda_env, ModelDefinition
 from triforce.state_change_wrapper import StateChange
 from triforce.rewards import StepRewards
 from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
+
 
 class Recording:
     """Used to track and save a recording of the game."""
@@ -130,7 +132,6 @@ class DisplayWindow:
         self._last_location = None
         self.start_time = None
 
-        self._loaded_models = {}
         self.model_path = model_path
         self.model_definition : ModelDefinition = ModelDefinition.get(model)
 
@@ -143,14 +144,13 @@ class DisplayWindow:
         env = make_zelda_env(self.scenario, self.model_definition.action_space, render_mode='rgb_array',
                              translation=False)
 
+        model_selector = ModelSelector(env, self.model_path, self.model_definition)
         clock = pygame.time.Clock()
 
         endings = {}
         reward_map = {}
         buttons = deque(maxlen=100)
         next_action = None
-
-        model_requested = 0
 
         show_endings = False
         force_save = False
@@ -207,12 +207,16 @@ class DisplayWindow:
                     model_name = "keyboard input"
                     next_action = None
                 else:
-                    model, model_name = self._select_model(env, model_requested)
+                    model = model_selector.model
                     if action_mask is not None:
                         action_mask = action_mask.unsqueeze(0)
                     action = model.get_action(obs, action_mask, deterministic=False)
                     success_rate = model.stats.success_rate * 100 if model.stats else 0
-                    model_name = f"{self.model_definition.name} ({model.steps_trained:,} timesteps {success_rate:.1f}%)"
+                    success_rate = f"success: {success_rate:.1f}%"
+                    progress = model.stats.progress_mean * 100 if model.stats else 0
+                    progress = f"progress: {progress:.1f}%"
+                    model_name = f"{model_selector.model_path} ({model.steps_trained:,} timesteps {success_rate}" \
+                                 f" {progress})"
 
                 obs, _, terminated, truncated, state_change = env.step(action)
                 action_mask = state_change.state.info['action_mask']
@@ -306,10 +310,10 @@ class DisplayWindow:
                             show_endings = not show_endings
 
                         elif event.key == pygame.K_m:
-                            model_requested += 1
+                            model_selector.next()
 
                         elif event.key == pygame.K_l:
-                            model_requested -= 1
+                            model_selector.previous()
 
                         elif event.key == pygame.K_u:
                             cap_fps = not cap_fps
@@ -385,21 +389,6 @@ class DisplayWindow:
             return None
 
         return (ActionKind.MOVE, direction)
-
-    def _select_model(self, env, index : int) -> Network:
-        models_available = self.model_definition.find_available_models(self.model_path)
-        names = sorted(models_available.keys(), key=lambda x: int(x) if isinstance(x, int) else -1)
-        names.append("untrained")
-
-        name = names[index % len(names)]
-        path = models_available.get(name)
-        if (network := self._loaded_models.get(path, None)) is None:
-            network : Network = self.model_definition.neural_net(env.observation_space, env.action_space)
-            if name != "untrained":
-                network.load(path)
-            self._loaded_models[path] = network
-
-        return network, name
 
     def _print_location_info(self, state):
         if self._last_location is not None:
@@ -526,7 +515,7 @@ class DisplayWindow:
         observation_surface = pygame.transform.scale(observation_surface, (img.shape[1] * 2, img.shape[0] * 2))
         surface.blit(observation_surface, (x, y))
 
-        y += img.shape[0]
+        y += img.shape[0] * 2
         return y
 
     def _render_game_view(self, surface, rgb_array, pos, game_width, game_height):
@@ -845,8 +834,8 @@ def parse_args():
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
     parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
 
-    parser.add_argument('scenario', type=str, help='Scenario name')
     parser.add_argument('model', type=str, help='Model name')
+    parser.add_argument('scenario', type=str, help='Scenario name')
 
     try:
         args = parser.parse_args()

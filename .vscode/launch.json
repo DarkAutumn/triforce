@@ -9,7 +9,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["refinement", "full-game", "--model-path", "training/"],
+            "args": ["full-game", "start-overworld1", "--model-path", "training/debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -18,7 +18,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["overworld-sword", "overworld-sword", "--model-path", "training/"],
+            "args": ["overworld-sword", "overworld-sword", "--model-path", "training/debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -27,7 +27,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
-            "args": ["full-game", "initial-training", "--output", "training-debug/"],
+            "args": ["full-game", "start-overworld1", "--output", "training/debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -36,7 +36,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
-            "args": ["overworld-sword", "overworld-sword", "--iterations", "10_000", "--output", "training-debug/"],
+            "args": ["overworld-sword", "overworld-sword", "--output", "training/debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -45,7 +45,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "evaluate.py",
-            "args": ["training/", "--render", "--episodes", "10"],
+            "args": ["training/debug/", "--render", "--episodes", "10"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

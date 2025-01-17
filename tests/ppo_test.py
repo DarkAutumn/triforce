@@ -15,7 +15,7 @@ import torch
 from torch import nn
 from gymnasium.spaces import MultiBinary, Discrete
 
-from triforce.ml_ppo import GAMMA, LAMBDA, PPO, Network, SubprocessWorker
+from triforce.ml_ppo import GAMMA, LAMBDA, PPO, Network
 from triforce.models import SharedNatureAgent
 from triforce import ModelDefinition
 from triforce.zelda_env import make_zelda_env
@@ -130,11 +130,14 @@ def test_ppo_training(device, num_envs):
     assert actions_taken == expected_actions, f"Expected actions {expected_actions}, but got {actions_taken}"
 
 @pytest.mark.parametrize("num_envs", [1])
-@pytest.mark.parametrize("model_scenario", ["full-game initial-training", "overworld-sword overworld-sword"])
+@pytest.mark.parametrize("model_scenario", ["full-game start-overworld1", "overworld-sword overworld-sword"])
 def test_model_training(model_scenario, num_envs):
     model_name, scenario_name = model_scenario.split(" ")
     model_def : ModelDefinition = ModelDefinition.get(model_name)
+    assert model_def is not None, f"Unknown model: {model_name}"
+
     scenario_name = TrainingScenarioDefinition.get(scenario_name)
+    assert scenario_name is not None, f"Unknown scenario: {scenario_name}"
 
     def create_env():
         return make_zelda_env(scenario_name, model_def.action_space)

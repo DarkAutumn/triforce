@@ -1,20 +1,20 @@
-import math
-from multiprocessing import Queue
 import time
 import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
 from .scenario_wrapper import RoomResultAggregator
-from .ml_subprocess import SubprocessWorker
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network, create_network
-from .rewards import TotalRewards
+from .rewards import RewardStats, TotalRewards
 
 # default hyperparameters
+LEARNING_RATE_MAX = 0.00025
+LEARNING_RATE_HIGH = 0.00015
+LEARNING_RATE_MEDIUM = 0.0001
+LEARNING_RATE_MINIMUM = 0.000025
 NORM_ADVANTAGES = True
 CLIP_VAL_LOSS = True
-LEARNING_RATE = 0.00025
 GAMMA = 0.99
 LAMBDA = 0.95
 CLIP_COEFF = 0.2
@@ -50,7 +50,6 @@ class PPO:
         self.target_steps = kwargs.get('target_steps', TARGET_STEPS)
         self._norm_advantages = kwargs.get('norm_advantages', NORM_ADVANTAGES)
         self._clip_val_loss = kwargs.get('clip_val_loss', CLIP_VAL_LOSS)
-        self._learning_rate = kwargs.get('learning_rate', LEARNING_RATE)
         self._gamma = kwargs.get('gamma', GAMMA)
         self._lambda = kwargs.get('lambda', LAMBDA)
         self._clip_coeff = kwargs.get('clip_coeff', CLIP_COEFF)
@@ -60,10 +59,9 @@ class PPO:
         self._epsilon = kwargs.get('epsilon', EPSILON)
         self.minibatches = kwargs.get('minibatches', MINIBATCHES)
         self.num_epochs = kwargs.get('num_epochs', EPOCHS)
+        self.optimizer = None
 
         self.kwargs = kwargs
-
-        self.optimizer_state = None
 
         self.log_dir = log_dir
         self.device = device
@@ -83,12 +81,16 @@ class PPO:
         if (load_path := kwargs.get('load_path', None)) is not None:
             network.load(load_path)
 
+        if kwargs.get('dynamic_lr', False):
+            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MEDIUM, eps=self._epsilon)
+        else:
+            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MAX, eps=self._epsilon)
+
         envs = kwargs.get('envs', 1)
+        if envs > 1:
+            raise NotImplementedError("Multiprocessing not yet implemented.")
 
-        if envs == 1:
-            return self._train_single(network, env, iterations, progress, **kwargs)
-
-        return self._train_multiproc(network, env, create_env, iterations, progress, **kwargs)
+        return self._train_single(network, env, iterations, progress, **kwargs)
 
     def _train_single(self, network, env, iterations, progress, **kwargs):
         # pylint: disable=too-many-locals
@@ -117,6 +119,9 @@ class PPO:
                 reward_stats.to_tensorboard(self.tensorboard, total_iterations)
                 network.stats = reward_stats
 
+                if kwargs.get('dynamic_lr', False):
+                    self._adjust_learning_rate(reward_stats)
+
             if next_room_log.add(buffer.memory_length):
                 rooms.to_tensorboard(self.tensorboard, total_iterations)
 
@@ -129,104 +134,26 @@ class PPO:
         env.close()
         return network
 
-    def _train_multiproc(self, network, env, create_env, iterations, progress, **kwargs):
-        # pylint: disable=too-many-locals
-        envs = kwargs['envs']
+    def _adjust_learning_rate(self, reward_stats : RewardStats):
+        success_rate = reward_stats.success_rate
 
-        # tracking
-        save_path = kwargs.get('save_path', None)
-        next_update = Threshold(LOG_RATE)
-        next_room_log = Threshold(ROOM_LOG_RATE)
-        next_save = Threshold(SAVE_INTERVAL)
-        rewards = TotalRewards()
-        rooms = RoomResultAggregator()
-        reward_stats = None
+        # Example logic:
+        #  - if success_rate == 0 => high LR
+        #  - If success_rate < 0.2 => elevated LR
+        #  - If success_rate < 0.95 => moderate LR
+        #  - Else => very low LR
+        if success_rate < 0.01:
+            new_lr = LEARNING_RATE_MAX
+        elif success_rate < 0.2:
+            new_lr = LEARNING_RATE_HIGH
+        elif success_rate < 0.95:
+            new_lr = LEARNING_RATE_MEDIUM
+        else:
+            new_lr = LEARNING_RATE_MINIMUM
 
-        # ppo variables
-        memory_length = self.target_steps // envs
-        variables = PPORolloutBuffer(memory_length, envs, env.observation_space, env.action_space,
-                                     self._gamma, self._lambda)
-        env.close()
-
-        result_queue = Queue()
-        kwargs = {
-                'gamma': self._gamma,
-                'lambda': self._lambda,
-                'steps': variables.memory_length,
-                }
-
-        workers = [SubprocessWorker(idx, create_env, network, result_queue, kwargs) for idx in range(envs)]
-        try:
-            steps = math.ceil(iterations / (envs * memory_length))
-            for step in range(steps):
-                total_iterations = step * envs * memory_length
-                iterations_processed = envs * memory_length
-
-                # Process the results from the workers
-                infos = self._subprocess_ppo(network, progress, variables, result_queue, workers)
-                self._process_infos(rewards, rooms, infos)
-
-                # Update reward stats and save the network if requested, this should be done before optimization
-                if next_update.add(iterations_processed):
-                    reward_stats = rewards.get_stats_and_clear()
-                    network.stats = reward_stats
-                    reward_stats.to_tensorboard(self.tensorboard, total_iterations)
-
-                if next_room_log.add(iterations_processed):
-                    rooms.to_tensorboard(self.tensorboard, total_iterations)
-
-                if save_path and next_save.add(iterations_processed) and reward_stats:
-                    model_name = kwargs.get('model_name', 'network')
-                    network.save(f"{save_path}/{model_name}-{total_iterations}.pt")
-
-                # Update the network
-                self._optimize(network, variables, step * envs * memory_length)
-                network.steps_trained += iterations_processed
-
-        except EOFError:
-            pass
-
-        finally:
-            # Tell workers to shut down regardless
-            for worker in workers:
-                worker.close_async()
-
-        return network
-
-    def _subprocess_ppo(self, network, progress, variables, result_queue, workers):
-        weights = network.state_dict()
-        for worker in workers:
-            worker.run_main_loop_async(weights)
-
-        infos = []
-        recieved = []
-        for _ in range(len(workers)):
-            message = result_queue.get()
-            match message['command']:
-                case 'exit':
-                    print(f"Unexpected exit: {message['idx']}")
-                    raise EOFError()
-
-                case 'error':
-                    print(f"Error in worker {message['idx']}:")
-                    error = message['error']
-                    print(error)
-                    print(message['traceback'])
-                    raise error
-
-                case 'build_batch':
-                    idx = message['idx']
-                    if idx in recieved:
-                        raise ValueError(f"Duplicate message for {idx}")
-
-                    recieved.append(idx)
-                    result = message['result']
-                    variables[idx] = result
-                    infos.extend(message['infos'])
-
-                    if progress is not None:
-                        progress.update(result.memory_length)
-        return infos
+        assert self.optimizer, "Attempted to adjust learning rate before optimizer was created."
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = new_lr
 
     def _process_infos(self, total_rewards : TotalRewards, rooms : RoomResultAggregator,  infos):
         for info in infos:
@@ -269,9 +196,7 @@ class PPO:
         minibatch_size = batch_size // self.minibatches
 
         network = network.to(self.device)
-        optimizer = torch.optim.Adam(network.parameters(), lr=self._learning_rate, eps=self._epsilon)
-        if self.optimizer_state is not None:
-            optimizer.load_state_dict(self.optimizer_state)
+        optimizer = self.optimizer
 
         b_inds = torch.arange(batch_size)
         clipfracs = []
@@ -337,7 +262,6 @@ class PPO:
                 optimizer.step()
 
         network = network.to("cpu")
-        self.optimizer_state = optimizer.state_dict()
 
         # After training, compute stats like explained variance
         y_pred = b_values.cpu()

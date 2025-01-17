@@ -13,7 +13,6 @@ import torch.distributions as dist
 import numpy as np
 from gymnasium.spaces import Dict
 
-from .scenario_wrapper import TrainingScenarioDefinition
 from .rewards import RewardStats
 
 class Network(nn.Module):

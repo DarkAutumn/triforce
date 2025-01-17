@@ -108,7 +108,7 @@ class EnteredDungeon(ZeldaEndCondition):
 
 class LeftOverworld1Area(ZeldaEndCondition):
     """End the scenario if the agent leaves the allowable areas between the start room and dungeon 1."""
-    overworld_dungeon1_walk_rooms = set([0x77, 0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
+    overworld_dungeon1_walk_rooms = set([0x78, 0x67, 0x68, 0x58, 0x48, 0x38, 0x37])
 
     def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
         state = state_change.state
