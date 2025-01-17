@@ -153,7 +153,7 @@ def test_model_training(model_scenario, num_channels):
 
     # Make sure we can successfully use the model
     for step in range(3):
-        assert obs.shape[0] == num_channels, f"Expected {num_channels} channels, but got {obs.shape[0]}"
+        assert obs["image"].shape[0] == num_channels, f"Expected {num_channels} channels, but got {obs.shape[0]}"
         logits, value = network(obs)
         action_probs = torch.softmax(logits, dim=-1)
         action = torch.argmax(action_probs).item()  # Select the most probable action
