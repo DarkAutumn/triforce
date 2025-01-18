@@ -32,7 +32,7 @@ BEAM_ATTACK_REWARD = Reward("reward-beam-hit", REWARD_MEDIUM)
 PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
 USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
-PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_MEDIUM)
+PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_MAXIMUM)
 
 def _init_equipment_rewards():
     """Initializes the equipment rewards."""
