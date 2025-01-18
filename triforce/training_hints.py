@@ -1,6 +1,4 @@
 import gymnasium as gym
-
-from .objectives import ObjectiveKind
 from .zelda_enums import ActionKind, Direction
 from .zelda_game import ZeldaGame
 
@@ -35,6 +33,21 @@ class TrainingHintWrapper(gym.Wrapper):
                 self._check_room_direction(state, info, Direction.N)
             elif link.tile.y == 0x14:
                 self._check_room_direction(state, info, Direction.S)
+
+        if state.level != 0:
+            if link.tile.x <= 0x03 or link.tile.x >= 0x1c:
+                invalid = info.setdefault('invalid_actions', [])
+
+                for action in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS):
+                    invalid.append((action, Direction.N))
+                    invalid.append((action, Direction.S))
+
+            if link.tile.y <= 0x03 or link.tile.y >= 0x12:
+                invalid = info.setdefault('invalid_actions', [])
+
+                for action in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS):
+                    invalid.append((action, Direction.W))
+                    invalid.append((action, Direction.E))
 
     def _check_room_direction(self, state, info, direction):
         next_room = state.full_location.get_location_in_direction(direction)
