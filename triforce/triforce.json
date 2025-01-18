@@ -25,7 +25,7 @@
             "iterations" : 2000000,
             "scenario_selector" : "round-robin",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftRoute", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
+            "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
             "start": ["0_77"],
             "use_hints" : true,
             "per_room":
