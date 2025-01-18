@@ -10,6 +10,14 @@
             "rooms" : ["0x77"]
         },
         {
+            "name" : "dungeon1",
+            "neural_net" : "SharedNatureAgent",
+            "action_space" : ["MOVE", "SWORD"],
+            "priority" : 0,
+            "levels" : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "rooms" : ["0x77"]
+        },
+        {
             "name" : "overworld-sword",
             "neural_net" : "SharedNatureAgent",
             "action_space" : ["MOVE"],
@@ -25,17 +33,29 @@
             "iterations" : 2000000,
             "scenario_selector" : "round-robin",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftRoute", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
+            "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
             "start": ["0_77"],
             "use_hints" : true,
-            "per_room":
-            {
-                "health" : "max_health"
-            },
             "per_reset":
             {
                 "bombs" : 3,
                 "sword" : 1
+            }
+        },
+        {
+            "name": "start-dungeon1",
+            "description": "The dungeon 1.",
+            "iterations" : 2000000,
+            "scenario_selector" : "round-robin",
+            "critic": "GameplayCritic",
+            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout"],
+            "start": ["1_74w"],
+            "use_hints" : true,
+            "per_reset":
+            {
+                "bombs" : 3,
+                "max_health" : 2,
+                "health" : 3
             }
         },
         {

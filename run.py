@@ -61,6 +61,10 @@ class Recording:
         recording = self._get_recording()
         recording.write(result_frame)
 
+    def clear(self):
+        """Clears the buffer without writing it out."""
+        self.buffer.clear()
+
     def flush(self):
         """Writes the buffer to the recording."""
         if len(self.buffer) < 1000:
@@ -72,9 +76,10 @@ class Recording:
 
         self.buffer.clear()
 
-    def close(self):
+    def close(self, write):
         """Stops the recording."""
-        self.flush()
+        if write:
+            self.flush()
         if self.recording:
             self.recording.release()
             self.recording = None
@@ -93,10 +98,12 @@ class Recording:
 
 class DisplayWindow:
     """A window to display the game and the AI model."""
-    def __init__(self, scenario : TrainingScenarioDefinition, model_path : str, model : str):
+    def __init__(self, scenario : TrainingScenarioDefinition, model_path : str, model : str, frame_stack):
         self.scenario = scenario
 
         pygame.init()
+
+        self.frame_stack = frame_stack
 
         self.font = pygame.font.Font(None, 24)
 
@@ -142,7 +149,7 @@ class DisplayWindow:
     def show(self, headless_recording=False):
         """Shows the game and the AI model."""
         env = make_zelda_env(self.scenario, self.model_definition.action_space, render_mode='rgb_array',
-                             translation=False)
+                             translation=False, frame_stack=self.frame_stack)
 
         model_selector = ModelSelector(env, self.model_path, self.model_definition)
         clock = pygame.time.Clock()
@@ -169,6 +176,7 @@ class DisplayWindow:
 
         terminated = True
         truncated = False
+        manual_reset = False
 
         state_change : StateChange = None
         model_name = None
@@ -196,7 +204,10 @@ class DisplayWindow:
                             state_change is not None and not state_change.previous.info.get('triforce', 0):
                         recording.buffer.clear()
 
-                    recording.close()
+                    if manual_reset:
+                        recording.clear()
+                    recording.close(not manual_reset)
+                    manual_reset = False
 
                 force_save = False
 
@@ -292,6 +303,7 @@ class DisplayWindow:
 
                         if event.key == pygame.K_r:
                             terminated = truncated = True
+                            manual_reset = True
                             break
 
                         if event.key == pygame.K_p:
@@ -335,7 +347,7 @@ class DisplayWindow:
 
                             else:
                                 print("Live recording stopped")
-                                recording.close()
+                                recording.close(not manual_reset)
                                 recording = None
 
                         elif event.key == pygame.K_F10:
@@ -350,7 +362,7 @@ class DisplayWindow:
 
 
         if recording and recording.buffer_size <= 1:
-            recording.close()
+            recording.close(not manual_reset)
 
         env.close()
         pygame.quit()
@@ -417,7 +429,7 @@ class DisplayWindow:
     def _show_observation(self, surface, obs):
         x_pos = self.obs_x
         y_pos = self.obs_y
-        y_pos = self._render_observation_view(surface, x_pos, y_pos, obs["image"])
+        y_pos = self._render_observation_view(surface, x_pos, y_pos, obs["image"][-1])
 
         radius = self.obs_width // 4
         if not self.vector_widgets:
@@ -821,7 +833,7 @@ def main():
         print(f'Unknown scenario {args.scenario}')
         return
 
-    display = DisplayWindow(scenario, model_path, args.model)
+    display = DisplayWindow(scenario, model_path, args.model, args.frame_stack)
     display.show(args.headless_recording)
 
 def parse_args():
@@ -833,6 +845,7 @@ def parse_args():
                         help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
     parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
+    parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack.")
 
     parser.add_argument('model', type=str, help='Model name')
     parser.add_argument('scenario', type=str, help='Scenario name')

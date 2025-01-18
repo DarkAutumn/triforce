@@ -338,7 +338,7 @@ class ModelDefinition(BaseModel):
             return available_models
 
         if not os.path.exists(path):
-            raise FileNotFoundError(f"Path {path} does not exist")
+            return available_models
 
         # Check if .pt
         full_path = os.path.join(path, self.name + '.pt')
