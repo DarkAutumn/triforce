@@ -30,12 +30,12 @@
             "use_hints" : true,
             "per_room":
             {
-                "health" : "max_health",
-                "sword" : 1
+                "health" : "max_health"
             },
             "per_reset":
             {
-                "bombs" : 3
+                "bombs" : 3,
+                "sword" : 1
             }
         },
         {
