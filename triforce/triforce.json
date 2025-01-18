@@ -26,10 +26,12 @@
             "scenario_selector" : "round-robin",
             "critic": "GameplayCritic",
             "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
-            "start": ["0_67s"],
+            "start": ["0_77"],
+            "use_hints" : true,
             "per_room":
             {
-                "health" : "max_health"
+                "health" : "max_health",
+                "sword" : 1
             },
             "per_reset":
             {

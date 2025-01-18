@@ -365,18 +365,21 @@ class GameplayCritic(ZeldaCritic):
     def set_progress(self, state_change : StateChange, rewards : StepRewards):
         """Sets the progress based on how many rooms we have seen, enemies hit, and other factors."""
 
-        rooms = [(0, 0x67),
-                 (0, 0x68),
-                 (0, 0x58),
-                 (0, 0x48),
-                 (0, 0x38),
-                 (0, 0x37),]
+        rooms = {
+            (0, 0x77) : 0,
+            (0, 0x67) : 1,
+            (0, 0x78) : 1,
+            (0, 0x68) : 2,
+            (0, 0x58) : 3,
+            (0, 0x48) : 4,
+            (0, 0x38) : 5,
+            (0, 0x37) : 6,
+        }
 
         level = state_change.state.level
         location = state_change.state.location
-        if (level, location) in rooms:
-            self._progress = max(self._progress, rooms.index((level, location)) / len(rooms))
 
+        self._progress = rooms.get((level, location), 0)
         rewards.progress = self._progress
 
 REWARD_ENTERED_CAVE = Reward("reward-entered-cave", REWARD_LARGE)
