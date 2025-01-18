@@ -336,6 +336,15 @@ class MapLocation(Coordinates):
         self.in_cave = in_cave
 
     def __eq__(self, other) -> bool:
+        if isinstance(other, tuple):
+            match len(other):
+                case 2:
+                    return self.level == other[0] and self.value == other[1]
+                case 3:
+                    return self.level == other[0] and self.value == other[1] and self.in_cave == other[2]
+                case _:
+                    raise ValueError("Invalid tuple length.")
+
         return super().__eq__(other) and self.level == other.level and self.in_cave == other.in_cave
 
     def __hash__(self):

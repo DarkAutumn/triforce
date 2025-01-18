@@ -27,6 +27,7 @@ class TrainingScenarioDefinition(BaseModel):
     reward_overrides : Optional[Dict[str, Union[int, float, None]]] = {}
     end_conditions : List[str]
     start : List[str]
+    use_hints : Optional[bool] = False
     per_reset : Optional[Dict[str, int | str]] = {}
     per_frame : Optional[Dict[str, int | str]] = {}
     per_room : Optional[Dict[str, int | str]] = {}

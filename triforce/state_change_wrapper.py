@@ -274,6 +274,9 @@ class StateChangeWrapper(gym.Wrapper):
             for name, value in self.per_reset:
                 self._set_value(curr, name, value)
 
+            for name, value in self.per_room:
+                self._set_value(curr, name, value)
+
         elif prev.full_location != curr.full_location:
             for name, value in self.per_room:
                 self._set_value(curr, name, value)

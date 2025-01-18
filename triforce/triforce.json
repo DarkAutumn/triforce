@@ -25,15 +25,17 @@
             "iterations" : 2000000,
             "scenario_selector" : "round-robin",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
-            "start": ["0_67s"],
+            "end_conditions": ["LeftRoute", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
+            "start": ["0_77"],
+            "use_hints" : true,
             "per_room":
             {
                 "health" : "max_health"
             },
             "per_reset":
             {
-                "bombs" : 3
+                "bombs" : 3,
+                "sword" : 1
             }
         },
         {

@@ -2,6 +2,7 @@
 
 import retro
 
+from .training_hints import TrainingHintWrapper
 from .state_change_wrapper import StateChangeWrapper
 from .gym_translation_wrapper import GymTranslationWrapper
 from .frame_skip_wrapper import FrameSkipWrapper
@@ -10,9 +11,7 @@ from .observation_wrapper import ObservationWrapper
 from .scenario_wrapper import ScenarioWrapper, TrainingScenarioDefinition
 from .rewards import EpisodeRewardTracker
 
-def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, *,
-                   obs_kind = 'viewport', render_mode = None, translation=True,
-                   frame_stack=1):
+def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **kwargs):
     """
     Creates a Zelda retro environment for the given scenario.
     Args:
@@ -23,6 +22,11 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, *,
         obs_kind:     The kind of observation to use (viewport, gameplay).
         render_mode:  The render mode to use.
     """
+    render_mode = kwargs.get('render_mode', None)
+    translation = kwargs.get('translation', True)
+    frame_stack = kwargs.get('frame_stack', 1)
+    obs_kind = kwargs.get('obs_kind', 'viewport')
+
     env = retro.make(game='Zelda-NES', state=scenario.start[0], inttype=retro.data.Integrations.CUSTOM_ONLY,
                      render_mode=render_mode)
 
@@ -33,6 +37,10 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, *,
     # Instead of 'info', reset returns a ZeldaGame and step returns a StateChange.  The info dictionary
     # is still available at ZeldaGame.info and StateChange.current.info.
     env = StateChangeWrapper(env, scenario)
+
+    # Whether to use optional training hints.
+    if scenario.use_hints:
+        env = TrainingHintWrapper(env)
 
     # Reduces the action space to only the actions we want the model to take, and what is actually possible in game.
     env = ZeldaActionSpace(env, action_space)
