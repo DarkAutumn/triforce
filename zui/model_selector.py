@@ -19,7 +19,7 @@ class ModelSelector:
         self._loaded_models["untrained"] = (network, "untrained")
 
         self._curr_index = self._find_best_model()
-        self._curr = self._loaded_models[self._curr_index]
+        self._curr = self._loaded_models[self._curr_index if self._curr_index is not None else "untrained"]
 
     @property
     def model_name(self):
