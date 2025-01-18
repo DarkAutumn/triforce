@@ -54,7 +54,8 @@
             "per_reset":
             {
                 "bombs" : 3,
-                "max_health" : 3
+                "max_health" : 2,
+                "health" : 3
             }
         },
         {
