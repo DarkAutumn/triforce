@@ -224,9 +224,17 @@ class Objectives:
                         target_location = item_to_overworld[i]
                         break
         else:
-            # Find where the triforce is
-            target_item = ZeldaItemKind(ZeldaItemKind.Triforce1.value - state.level + 1)
-            target_location = item_to_dungeon[target_item]
+            # Directional hint to avoid dead end
+            if state.full_location == (1, 0x53, False):
+                target_location = MapLocation(1, 0x52, False)
+
+            elif state.full_location == (1, 0x52, False):
+                target_location = MapLocation(1, 0x42, False)
+
+            else:
+                # Find where the triforce is
+                target_item = ZeldaItemKind(ZeldaItemKind.Triforce1.value - state.level + 1)
+                target_location = item_to_dungeon[target_item]
 
         if self._last_route[:2] == (state.level, state.location):
             return self._last_route[2]
