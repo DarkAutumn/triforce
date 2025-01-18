@@ -374,6 +374,16 @@ class GameplayCritic(ZeldaCritic):
             (0, 0x48) : 4,
             (0, 0x38) : 5,
             (0, 0x37) : 6,
+            (1, 0x72) : 2,
+            (1, 0x63) : 3,
+            (1, 0x53) : 4, # here
+            (1, 0x52) : 5,
+            (1, 0x42) : 6,
+            (1, 0x43) : 7,
+            (1, 0x44) : 8,
+            (1, 0x45) : 9,
+            (1, 0x35) : 10,
+            (1, 0x36) : 11,
         }
 
         level = state_change.state.level
