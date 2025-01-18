@@ -1,3 +1,4 @@
+from typing import Optional
 import gymnasium as gym
 
 from .zelda_enums import ActionKind, Direction
@@ -9,21 +10,33 @@ class TrainingHintWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         """Resets the environment."""
         obs, state = self.env.reset(**kwargs)
-        self._disable_actions(None, state)
+        self._disable_actions(state)
         return obs, state
 
     def step(self, action, **kwargs):
         """Steps the environment."""
         obs, reward, terminated, truncated, state_change = self.env.step(action, **kwargs)
-        self._disable_actions(state_change.previous, state_change.state)
+        self._disable_actions(state_change.state)
         return obs, reward, terminated, truncated, state_change
 
-    def _disable_actions(self, prev : ZeldaGame, state : ZeldaGame):
+    def _disable_actions(self, state : ZeldaGame):
         info = state.info
-        if state.full_location == (0, 0x38) and state.link.tile.y < 0xa:
+        link = state.link
+
+        if state.full_location == (0, 0x38) and link.tile.y < 0xa:
             info.setdefault('invalid_actions', []).append((ActionKind.MOVE, Direction.N))
 
+        if not state.full_location.in_cave:
+            if link.tile.x == 0:
+                self._check_room_direction(state, info, Direction.W)
+            elif link.tile.x == 0x1e:
+                self._check_room_direction(state, info, Direction.E)
+            elif link.tile.y == 0:
+                self._check_room_direction(state, info, Direction.N)
+            elif link.tile.y == 0x14:
+                self._check_room_direction(state, info, Direction.S)
 
-        if prev is not None and prev.full_location != state.full_location:
-            direction = state.full_location.get_direction_to(prev.full_location)
+    def _check_room_direction(self, state, info, direction):
+        next_room = state.full_location.get_location_in_direction(direction)
+        if next_room not in state.objectives.next_rooms:
             info.setdefault('invalid_actions', []).append((ActionKind.MOVE, direction))
