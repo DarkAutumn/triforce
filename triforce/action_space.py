@@ -234,6 +234,10 @@ class ZeldaActionSpace(gym.Wrapper):
         actions_possible = self.actions_allowed & link.get_available_actions(ActionKind.BEAMS in self.actions_allowed)
         assert actions_possible, "No actions available, we should have at least MOVE."
 
+        invalid = {}
+        for action, direction in state.info.get('invalid_actions', []):
+            invalid.setdefault(action, []).append(direction)
+
         mask = torch.zeros(self.total_actions, dtype=bool)
         for action in actions_possible:
             index = self.action_to_index[action]
@@ -272,6 +276,10 @@ class ZeldaActionSpace(gym.Wrapper):
                         else:
                             for direction in link.get_sword_directions_allowed():
                                 mask[index + self._direction_to_index(direction)] = True
+
+            if action in invalid:
+                for direction in invalid[action]:
+                    mask[index + self._direction_to_index(direction)] = False
 
         return mask
 
