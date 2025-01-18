@@ -194,6 +194,9 @@ class Objectives:
         """Finds the route to the next objective on the game's map then returns what exit tiles the
         agent would need to take to get there and what next rooms that would lead to."""
         # pylint: disable=too-many-branches
+        if state.in_cave:
+            return state.room.exits[Direction.S], [MapLocation(state.level, state.location, False)]
+
         if state.level == 0:
             # Figure out which dungeon to go to
             if state.link.sword == SwordKind.NONE:
