@@ -167,7 +167,8 @@ class DisplayWindow:
             if event.type == pygame.QUIT:
                 self.mode = 'q'
                 break
-            elif event.type == pygame.KEYDOWN:
+
+            if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
                     self.mode = 'q'
                     break
