@@ -283,6 +283,7 @@ class ZeldaActionSpace(gym.Wrapper):
                                 mask[index + self._direction_to_index(direction)] = True
 
             if action in invalid:
+                index = self.action_to_index[action]
                 for direction in invalid[action]:
                     mask[index + self._direction_to_index(direction)] = False
 
