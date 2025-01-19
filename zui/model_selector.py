@@ -9,10 +9,17 @@ class ModelSelector:
         self._model_path = model_path
         self._model_definition = model_definition
         self._loaded_models = OrderedDict()
-        for name, path in self._model_definition.find_available_models(self._model_path).items():
-            assert name is not None
-            network = self._model_definition.neural_net(env.observation_space, env.action_space)
+
+        models = [(self._model_definition.neural_net(env.observation_space, env.action_space), name, path)
+                  for name, path in self._model_definition.find_available_models(self._model_path).items()]
+
+        for network, _, path in models:
             network.load(path)
+
+        models.sort(key=lambda x: x[0].steps_trained)
+
+        for network, name, path in models:
+            assert name is not None
             self._loaded_models[name] = (network, path)
 
         network = self._model_definition.neural_net(env.observation_space, env.action_space)
