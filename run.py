@@ -496,12 +496,6 @@ class DisplayWindow:
                 # Draw the text
                 surface.blit(text_surface, text_rect)
 
-
-
-
-
-
-
 def main():
     """Main function."""
     args = parse_args()
