@@ -265,6 +265,7 @@ class StateChangeWrapper(gym.Wrapper):
         if prev:
             return StateChange(self, prev, state, action, frames, self._discounts, health_change_ignore)
 
+        info['initial_frame'] = frames[-1]
         return state
 
     def _apply_modifications(self, prev : ZeldaGame, curr : ZeldaGame) -> float:

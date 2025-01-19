@@ -9,92 +9,17 @@
 import argparse
 import os
 import sys
-import math
 from collections import deque
 import pygame
 import numpy as np
-import cv2
-import tqdm
 
-from zui import ModelSelector
+from zui import * # pylint: disable=unused-wildcard-import, wildcard-import
 
-from triforce import TrainingScenarioDefinition, simulate_critique, make_zelda_env, ModelDefinition
-from triforce.state_change_wrapper import StateChange
+from triforce import TrainingScenarioDefinition,ModelDefinition
 from triforce.rewards import StepRewards
 from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
 
-
-class Recording:
-    """Used to track and save a recording of the game."""
-    # pylint: disable=no-member
-    def __init__(self, dimensions, buffer_size):
-        self.dimensions = dimensions
-        self.recording = None
-        self.buffer_size = buffer_size
-        self.buffer = []
-
-    def _get_recording(self):
-        if self.recording is None:
-            fourcc = cv2.VideoWriter_fourcc(*'XVID')
-            self.recording = cv2.VideoWriter(self.__get_filename(), fourcc, 60.1, self.dimensions)
-
-        return self.recording
-
-    def write(self, surface):
-        """Adds a frame to the recording."""
-        surface = surface.copy()
-
-        if self.buffer_size <= 1:
-            self._write_surface(surface.copy())
-
-        else:
-            self.buffer.append(surface)
-            if len(self.buffer) >= self.buffer_size:
-                self.flush()
-
-    def _write_surface(self, surface):
-        result_frame = pygame.surfarray.array3d(surface)
-        result_frame = result_frame.transpose([1, 0, 2])
-        result_frame = cv2.cvtColor(result_frame, cv2.COLOR_RGB2BGR)
-
-        recording = self._get_recording()
-        recording.write(result_frame)
-
-    def clear(self):
-        """Clears the buffer without writing it out."""
-        self.buffer.clear()
-
-    def flush(self):
-        """Writes the buffer to the recording."""
-        if len(self.buffer) < 1000:
-            for frame in self.buffer:
-                self._write_surface(frame)
-        else:
-            for frame in tqdm.tqdm(self.buffer):
-                self._write_surface(frame)
-
-        self.buffer.clear()
-
-    def close(self, write):
-        """Stops the recording."""
-        if write:
-            self.flush()
-        if self.recording:
-            self.recording.release()
-            self.recording = None
-
-    def __get_filename(self):
-        directory = os.path.join(os.getcwd(), "recording")
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-        i = 0
-        while True:
-            filename = os.path.join(directory, f"gameplay_{i:03d}.avi")
-            if not os.path.exists(filename):
-                return filename
-            i += 1
 
 class DisplayWindow:
     """A window to display the game and the AI model."""
@@ -146,128 +71,72 @@ class DisplayWindow:
         self.vector_widgets = []
         self.objective_widgets = []
 
+        self.mode = 'c'
+        self.restart_requested = True
+        self.cap_fps = True
+        self.next_action = None
+        self.overlay = 0
+
     def show(self, headless_recording=False):
         """Shows the game and the AI model."""
-        env = make_zelda_env(self.scenario, self.model_definition.action_space, render_mode='rgb_array',
-                             translation=False, frame_stack=self.frame_stack)
-
-        model_selector = ModelSelector(env, self.model_path, self.model_definition)
         clock = pygame.time.Clock()
 
         endings = {}
-        reward_map = {}
+        running_rewards = {}
         buttons = deque(maxlen=100)
-        next_action = None
 
         show_endings = False
-        force_save = False
         recording = None
-        cap_fps = True
-        overlay = 0
+        self.overlay = 0
 
-        if headless_recording:
-            recording = Recording(self.dimensions, 1)
-            force_save = True
-            cap_fps = False
-            surface = pygame.Surface(self.dimensions)
-            print("Headless recording started")
-        else:
-            surface = pygame.display.set_mode(self.dimensions)
-
-        terminated = True
-        truncated = False
-        manual_reset = False
-
-        state_change : StateChange = None
-        model_name = None
-
-        rgb_deque = deque()
+        surface = pygame.display.set_mode(self.dimensions)
+        env = EnvironmentWrapper(self.model_path, self.model_definition, self.scenario, self.frame_stack)
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
-        mode = 'c'
-        while mode != 'q':
-            if terminated or truncated:
-
-                if state_change is not None and 'end' in state_change.state.info:
-                    self._print_end_info(state_change.state.info, terminated)
-
-                obs, state = env.reset()
-                action_mask = state.info['action_mask']
-                self.start_time = pygame.time.get_ticks()
-                state_change = None
-                self.total_rewards = 0.0
-                reward_map.clear()
-
-                # we use buffer_size to check if we only want to record on a win
-                if recording:
-                    if not force_save and recording.buffer_size > 1 and \
-                            state_change is not None and not state_change.previous.info.get('triforce', 0):
-                        recording.buffer.clear()
-
-                    if manual_reset:
-                        recording.clear()
-                    recording.close(not manual_reset)
-                    manual_reset = False
-
-                force_save = False
-
-            # Perform a step in the environment
-            if mode in ('c', 'n'):
-                if next_action:
-                    action = next_action
-                    model_name = "keyboard input"
-                    next_action = None
+        frames = None
+        while self.mode != 'q':
+            if self.mode != 'p' and not frames:
+                if self.restart_requested:
+                    step : StepResult = env.restart()
+                    action_mask = step.action_mask
+                    self.restart_requested = False
                 else:
-                    model = model_selector.model
-                    if action_mask is not None:
-                        action_mask = action_mask.unsqueeze(0)
-                    action = model.get_action(obs, action_mask, deterministic=False)
-                    success_rate = model.stats.success_rate * 100 if model.stats else 0
-                    success_rate = f"success: {success_rate:.1f}%"
-                    progress = model.stats.progress_mean * 100 if model.stats else 0
-                    progress = f"progress: {progress:.1f}%"
-                    model_name = f"{model_selector.model_path} ({model.steps_trained:,} timesteps {success_rate}" \
-                                 f" {progress})"
+                    action_mask = step.action_mask
+                    step = env.step(self.next_action)
+                    self.next_action = None
+                    self.restart_requested = step.terminated or step.truncated
 
-                obs, _, terminated, truncated, state_change = env.step(action)
-                action_mask = state_change.state.info['action_mask']
-                for frame in state_change.frames:
-                    rgb_deque.append(frame)
+                if self.mode == 'n':
+                    self.mode = 'p'
 
-                if mode == 'n':
-                    mode = 'p'
+                # update rewards for display
+                self._update_rewards(step, action_mask, running_rewards, buttons)
 
-            # update rewards for display
-            self._update_rewards(env, action, reward_map, buttons, state_change)
+            frames = step.frames
+            if not frames:
+                self._check_input(env, step)
 
-            while True:
-                if rgb_deque:
-                    rgb_array = rgb_deque.popleft()
-                elif mode != 'p':
-                    break
-
+            while frames:
                 surface.fill((0, 0, 0))
-
-                self._show_observation(surface, obs)
+                self._show_observation(surface, step.observation)
 
                 # render the gameplay
-                self._render_game_view(surface, rgb_array, (self.game_x, self.game_y), self.game_width,
+                self._render_game_view(surface, frames.pop(0), (self.game_x, self.game_y), self.game_width,
                                        self.game_height)
 
-                state = state_change.state
-                if overlay:
-                    color = "black" if state.level == 0 and not state.in_cave else "white"
-                    self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), color, \
-                                                self.scale, state_change.state)
+                if self.overlay:
+                    color = "black" if step.state.level == 0 and not step.state.in_cave else "white"
+                    self._overlay_grid_and_text(surface, self.overlay, (self.game_x, self.game_y), color, \
+                                                self.scale, step.state)
 
-                render_text(surface, self.font, f"Model: {model_name}", (self.game_x, self.game_y))
-                render_text(surface, self.font, f"Location: {hex(state.location)}",
+                render_text(surface, self.font, f"Model: {step.model_description}", (self.game_x, self.game_y))
+                render_text(surface, self.font, f"Location: {hex(step.state.location)}",
                             (self.game_x + self.game_width - 120, self.game_y))
 
                 # render rewards graph and values
                 ending_render = endings if show_endings else None
-                self._draw_details(surface, reward_map, ending_render)
-                rendered_buttons = self._draw_reward_buttons(surface, buttons, (self.text_x, self.text_y),
+                self._draw_details(surface, running_rewards, ending_render)
+                self._draw_reward_buttons(surface, buttons, (self.text_x, self.text_y),
                                                             (self.text_width, self.text_height))
 
                 if recording:
@@ -278,96 +147,96 @@ class DisplayWindow:
                     pygame.display.flip()
 
                 else:
-                    self._print_location_info(state)
+                    self._print_location_info(step.state)
 
-                if cap_fps:
+                if self.cap_fps:
                     clock.tick(60.1)
 
-                # Check for Pygame events
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        mode = 'q'
-                        break
-
-                    if event.type == pygame.MOUSEBUTTONUP:
-                        if event.button == 1:
-                            for rendered_button in rendered_buttons:
-                                if rendered_button.is_position_within(event.pos):
-                                    rendered_button.button.on_click()
-                                    break
-
-                    elif event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_q:
-                            mode = 'q'
-                            break
-
-                        if event.key == pygame.K_r:
-                            terminated = truncated = True
-                            manual_reset = True
-                            break
-
-                        if event.key == pygame.K_p:
-                            mode = 'p'
-
-                        elif event.key == pygame.K_n:
-                            mode = 'n'
-
-                        elif event.key == pygame.K_c:
-                            mode = 'c'
-
-                        elif event.key == pygame.K_o:
-                            overlay = (overlay + 1) % 5
-
-                        elif event.key == pygame.K_e:
-                            show_endings = not show_endings
-
-                        elif event.key == pygame.K_m:
-                            model_selector.next()
-
-                        elif event.key == pygame.K_l:
-                            model_selector.previous()
-
-                        elif event.key == pygame.K_u:
-                            cap_fps = not cap_fps
-
-                        elif event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
-                            keys = pygame.key.get_pressed()
-                            next_action = self._get_action_from_keys(state, keys)
-                            mode = 'n'
-
-                        elif event.key == pygame.K_s:
-                            if not force_save:
-                                force_save = True
-                                print("Saving this video")
-
-                        elif event.key == pygame.K_F4:
-                            if recording is None:
-                                recording = Recording(self.dimensions, 0)
-                                print("Live recording started")
-
-                            else:
-                                print("Live recording stopped")
-                                recording.close(not manual_reset)
-                                recording = None
-
-                        elif event.key == pygame.K_F10:
-                            if recording is None:
-                                recording = Recording(self.dimensions, 1_000_000_000)
-                                print("Frame recording started")
-                            else:
-                                # don't close the recording here, we don't want to save the buffer if we didn't
-                                # win the scenario
-                                print("Frame recording stopped")
-                                recording = None
+                self._check_input(env, step)
 
 
         if recording and recording.buffer_size <= 1:
-            recording.close(not manual_reset)
+            recording.close(True)
 
         env.close()
         pygame.quit()
 
-    def _get_action_from_keys(self, state : ZeldaGame, keys):
+
+    def _check_input(self, env, step):
+        # Check for Pygame events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.mode = 'q'
+                break
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    self.mode = 'q'
+                    break
+
+                if event.key == pygame.K_r:
+                    self.restart_requested = True
+                    break
+
+                if event.key == pygame.K_p:
+                    self.mode = 'p'
+
+                elif event.key == pygame.K_n:
+                    self.mode = 'n'
+
+                elif event.key == pygame.K_c:
+                    self.mode = 'c'
+
+                elif event.key == pygame.K_o:
+                    self.overlay = (self.overlay + 1) % 5
+
+                elif event.key == pygame.K_e:
+                    show_endings = not show_endings
+
+                elif event.key == pygame.K_m:
+                    env.selector.next()
+
+                elif event.key == pygame.K_l:
+                    env.selector.previous()
+
+                elif event.key == pygame.K_u:
+                    self.cap_fps = not self.cap_fps
+
+                elif event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
+                    keys = pygame.key.get_pressed()
+                    self.next_action = self._get_action_from_keys(step.state.link, keys)
+                    if env.is_valid_action(self.next_action):
+                        self.mode = 'n'
+                    else:
+                        print(f"Invalid action: {self.next_action}")
+                        self.next_action = None
+
+                elif event.key == pygame.K_s:
+                    if not force_save:
+                        force_save = True
+                        print("Saving this video")
+
+                elif event.key == pygame.K_F4:
+                    if recording is None:
+                        recording = Recording(self.dimensions, 0)
+                        print("Live recording started")
+
+                    else:
+                        print("Live recording stopped")
+                        recording.close(True)
+
+                elif event.key == pygame.K_F10:
+                    if recording is None:
+                        recording = Recording(self.dimensions, 1_000_000_000)
+                        print("Frame recording started")
+                    else:
+                        # don't close the recording here, we don't want to save the buffer if we didn't
+                        # win the scenario
+                        print("Frame recording stopped")
+                        recording = None
+
+
+    def _get_action_from_keys(self, link, keys):
         # pylint: disable=too-many-return-statements
         if keys[pygame.K_LEFT]:
             direction = Direction.W
@@ -380,27 +249,12 @@ class DisplayWindow:
         else:
             return None
 
-        model_actions = ActionKind.get_from_list(self.model_definition.action_space)
-        link_actions = state.link.get_available_actions(ActionKind.BEAMS in model_actions)
-        available = link_actions & model_actions
-        sword_available = ActionKind.SWORD in available or ActionKind.BEAMS in available
         if keys[pygame.K_a]:
-            if not sword_available:
-                return None
+            beams_separated = ActionKind.BEAMS in self.model_definition.action_space
+            action = ActionKind.BEAMS if beams_separated and link.has_beams else ActionKind.SWORD
+            return action, direction
 
-            if ActionKind.BEAMS in self.model_definition.action_space:
-                return (ActionKind.BEAMS, direction)
-
-            return (ActionKind.SWORD, direction)
-
-        if keys[pygame.K_s]:
-            equipment = ActionKind.from_selected_equipment(state.link.selected_equipment)
-            if equipment.is_equipment and equipment in available:
-                return (equipment, direction)
-
-            return None
-
-        return (ActionKind.MOVE, direction)
+        return ActionKind.MOVE, direction
 
     def _print_location_info(self, state):
         if self._last_location is not None:
@@ -481,18 +335,21 @@ class DisplayWindow:
         return directions
 
 
-    def _update_rewards(self, env, action, reward_map, buttons, state_change : StateChange):
+    def _update_rewards(self, step : StepResult, prev_action_mask, running_rewards, buttons):
+        state_change = step.state_change
+        if not state_change:
+            return
+
         curr_rewards = {}
-        last_info = state_change.previous.info
         info = state_change.state.info
         rewards : StepRewards = info.get('rewards', None)
         if rewards is not None:
             self.total_rewards += rewards.value
             for outcome in rewards:
-                if outcome.name not in reward_map:
-                    reward_map[outcome.name] = 0
+                if outcome.name not in running_rewards:
+                    running_rewards[outcome.name] = 0
 
-                reward_map[outcome.name] += outcome.value
+                running_rewards[outcome.name] += outcome.value
                 curr_rewards[outcome.name] = outcome.value
 
         prev = buttons[0] if buttons else None
@@ -500,8 +357,8 @@ class DisplayWindow:
         if prev is not None and prev.rewards == curr_rewards and prev.action == action:
             prev.count += 1
         else:
-            on_press = DebugReward(env, action, self.scenario, last_info, info)
-            buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, self.text_width, on_press))
+            buttons.appendleft(RewardButton(self.font, 1, curr_rewards, action, prev_action_mask,
+                                            self.text_width))
 
     def _render_observation_view(self, surface, x, y, img):
         render_text(surface, self.font, "Observation", (x, y))
@@ -641,187 +498,6 @@ class DisplayWindow:
 
                 # Draw the text
                 surface.blit(text_surface, text_rect)
-
-
-
-class LabeledCircle:
-    """A circle with a label."""
-    def __init__(self, position, font, label, radius=128, color=(255, 0, 0), width=5):
-        assert isinstance(position, Coordinates)
-        self.position = position
-        self.radius = int(radius)
-        self.color = color
-        self.width = width
-        self.font = font
-        self.label = label
-
-    @property
-    def size(self):
-        """Returns the size of the draw area."""
-        return self.radius * 2, self.radius * 2 + 20
-
-    @property
-    def centerpoint(self):
-        """Returns the centerpoint of the circle."""
-        circle_start = self.position + (0, 20)
-        centerpoint = circle_start + (self.radius, self.radius)
-        return centerpoint
-
-    def draw(self, surface):
-        """Draws the labeled circle on the surface."""
-        render_text(surface, self.font, self.label, self.position)
-        pygame.draw.circle(surface, (255, 255, 255), self.centerpoint, self.radius, 1)
-
-    def _draw_arrow(self, surface, centerpoint, vector, length):
-        length = np.clip(length, 0.05, 1)
-        arrow_end = np.array(centerpoint) + vector[:2] * self.radius * length
-        if vector[0] != 0 or vector[1] != 0:
-            pygame.draw.line(surface, self.color, centerpoint, arrow_end, self.width)
-
-            # Arrowhead
-            arrowhead_size = 10
-            angle = math.atan2(-vector[1], vector[0]) + math.pi
-
-            left = arrow_end + (arrowhead_size * math.cos(angle - math.pi / 6),
-                              -arrowhead_size * math.sin(angle - math.pi / 6))
-            right = arrow_end + (arrowhead_size * math.cos(angle + math.pi / 6),
-                               -arrowhead_size * math.sin(angle + math.pi / 6))
-
-            pygame.draw.polygon(surface, self.color, [arrow_end, left, right])
-
-class DirectionalCircle(LabeledCircle):
-    """A vector with a label."""
-    def __init__(self, position, font, label, radius=128, color=(255, 0, 0), width=5):
-        super().__init__(position, font, label, radius, color, width)
-        self._directions = []
-
-    @property
-    def directions(self):
-        """Returns the directions."""
-        return self._directions
-
-    @directions.setter
-    def directions(self, value):
-        self._directions = value
-
-    def draw(self, surface):
-        """Draws the labeled vector on the surface."""
-        super().draw(surface)
-
-        for direction in self.directions:
-            match direction:
-                case Direction.N:
-                    self._draw_arrow(surface, self.centerpoint, np.array([0, -1], dtype=np.float32), 1)
-                case Direction.S:
-                    self._draw_arrow(surface, self.centerpoint, np.array([0, 1], dtype=np.float32), 1)
-                case Direction.W:
-                    self._draw_arrow(surface, self.centerpoint, np.array([-1, 0], dtype=np.float32), 1)
-                case Direction.E:
-                    self._draw_arrow(surface, self.centerpoint, np.array([1, 0], dtype=np.float32), 1)
-                case _:
-                    raise ValueError(f"Unsupported direction {direction}")
-
-
-        if self.directions:
-            pygame.draw.circle(surface, (0, 0, 0), self.centerpoint, 5)
-
-class LabeledVector(LabeledCircle):
-    """A vector with a label."""
-    def __init__(self, position, font, label, radius=128, color=(255, 0, 0), width=5):
-        super().__init__(position, font, label, radius, color, width)
-        self._vector = [0, 0, -1]
-
-    @property
-    def vector(self):
-        """Returns the vector."""
-        return self._vector
-
-    @vector.setter
-    def vector(self, value):
-        assert len(value) in (2, 3)
-        self._vector = value
-
-    def draw(self, surface):
-        """Draws the labeled vector on the surface."""
-        super().draw(surface)
-        dist = self._vector[2] if len(self._vector) == 3 else 1
-        self._draw_arrow(surface, self.centerpoint, self._vector, dist)
-
-class DebugReward:
-    """An action to take when a reward button is clicked."""
-    def __init__(self, env, action, scenario : TrainingScenarioDefinition, last_info, info):
-        self.env = env
-        self.scenario = scenario
-        self.last_info = last_info
-        self.info = info
-        self.action = action
-
-    def __call__(self):
-        result = simulate_critique(self.env, self.action, self.scenario, self.last_info, self.info)
-        reward_dict, terminated, truncated, reason = result
-        print(f"{reward_dict = }")
-        print(f"{terminated = }")
-        print(f"{truncated = }")
-        print(f"{reason = }")
-
-class RewardButton:
-    """A button to display a reward value."""
-    def __init__(self, font, count, rewards, action, width, on_click):
-        self.font = font
-        self.count = count
-        self.rewards = rewards
-        self.action = action
-        self.width = width
-        self.on_click = on_click
-
-    def draw_reward_button(self, surface, position) -> 'RenderedButton':
-        """Draws the button on the surface. Returns a RenderedButton."""
-        x = position[0] + 3
-        y = position[1] + 2
-
-        start_y = y
-        y = render_text(surface, self.font, self.action, (x, y))
-        if self.rewards:
-            for reason, value in self.rewards.items():
-                color = (255, 0, 0) if value < 0 else (0, 255, 255) if value > 0 else (255, 255, 255)
-                next_y = render_text(surface, self.font, reason, (x, y), color=color)
-                render_text(surface, self.font, f"{'+' if value > 0 else ''}{value:.2f}", (x + 200, y))
-                y = next_y
-
-        else:
-            text = "none"
-            color = (128, 128, 128)
-            y = render_text(surface, self.font, text, (x, y), color)
-
-        if self.count > 1:
-            count_text = f"x{self.count}"
-            count_text_width, _ = self.font.size(count_text)
-            render_text(surface, self.font, count_text, (x + 275 - count_text_width, start_y))
-
-        height = y - position[1]
-        pygame.draw.rect(surface, (255, 255, 255), (position[0], position[1], self.width, height), 1)
-
-        return RenderedButton(self, position, (self.width, height))
-
-class RenderedButton:
-    """A rendered button on screen, keeping track of its own dimensions."""
-    def __init__(self, button, position, dimensions):
-        self.button = button
-        self.position = position
-        self.dimensions = dimensions
-
-    def is_position_within(self, position):
-        """Returns True if the position is within the button."""
-        x, y = position
-        bx, by = self.position
-        bw, bh = self.dimensions
-        return bx <= x <= bx + bw and by <= y <= by + bh
-
-def render_text(surface, font, text, position, color=(255, 255, 255)):
-    """Render text on the surface and returns the new y position."""
-    text_surface = font.render(text, True, color)
-    surface.blit(text_surface, position)
-    return position[1] + text_surface.get_height()
 
 def main():
     """Main function."""
