@@ -109,4 +109,5 @@ class EnvironmentWrapper:
         self.selector = None
 
     def __del__(self):
-        self.close()
+        if self.env:
+            self.close()
