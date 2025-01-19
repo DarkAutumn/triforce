@@ -324,7 +324,7 @@ class GameplayCritic(ZeldaCritic):
             # our reward system.
             movement = curr_link.position.torch - prev_link.position.torch
             progress = torch.dot(movement, curr_link.direction.vector).item()
-            # TODO: investigate why this happens
+
             progress = max(progress, 0)
             rewards.add(MOVE_CLOSER_REWARD, progress / MOVEMENT_SCALE_FACTOR)
 
