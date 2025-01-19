@@ -94,9 +94,9 @@ class EnvironmentWrapper:
         success_rate = model.stats.success_rate * 100 if model.stats else 0
         success_rate = f"success: {success_rate:.1f}%"
 
-        progress = model.stats.progress_mean * 100 if model.stats else ""
+        progress = f" {model.stats.progress_mean:.2f}" if model.stats else ""
         model_name = f"{self.selector.model_path} ({model.steps_trained:,} " \
-                         f"timesteps {success_rate} {progress})"
+                         f"timesteps {success_rate}{progress})"
 
         return model_name
 
