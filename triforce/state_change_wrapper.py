@@ -264,6 +264,8 @@ class StateChangeWrapper(gym.Wrapper):
 
         if prev:
             return StateChange(self, prev, state, action, frames, self._discounts, health_change_ignore)
+        else:
+            info['initial_frame'] = frames[-1]
 
         return state
 

@@ -191,8 +191,18 @@ class ZeldaActionSpace(gym.Wrapper):
         return observation, state
 
     def step(self, action):
+        action = self._build_action_taken(action)
+
+        observation, reward, terminated, truncated, state_change = self.env.step(action)
+        self._handle_wall_bump(state_change)
+        state_change.action_mask = self.get_action_mask(state_change.state)
+        state_change.state.info['action_mask'] = state_change.action_mask
+
+        return observation, reward, terminated, truncated, state_change
+
+    def _build_action_taken(self, action):
         if isinstance(action, tuple):
-            action = self._translate_action(*action)
+            action = self._action_direction_to_index(*action)
         elif isinstance(action, np.ndarray):
             action = action.item()
         elif isinstance(action, torch.Tensor):
@@ -203,14 +213,9 @@ class ZeldaActionSpace(gym.Wrapper):
         elif not isinstance(action, ActionTaken):
             raise ValueError(f"Invalid action type {type(action)}.")
 
-        observation, reward, terminated, truncated, state_change = self.env.step(action)
-        self._handle_wall_bump(state_change)
-        state_change.action_mask = self.get_action_mask(state_change.state)
-        state_change.state.info['action_mask'] = state_change.action_mask
+        return action
 
-        return observation, reward, terminated, truncated, state_change
-
-    def _translate_action(self, action, direction):
+    def _action_direction_to_index(self, action, direction):
         index = self.action_to_index[action]
         index += self._direction_to_index(direction)
         if direction in (Direction.NW, Direction.NE, Direction.SW, Direction.SE):
@@ -282,6 +287,34 @@ class ZeldaActionSpace(gym.Wrapper):
                     mask[index + self._direction_to_index(direction)] = False
 
         return mask
+
+    def is_valid_action(self, action, action_mask):
+        """Returns True if the action is valid."""
+        action = self._build_action_taken(action)
+        return action_mask[action.id]
+
+    def get_allowed_actions(self, state, action_mask):
+        """Returns the allowed actions from the action mask."""
+        result = []
+
+        link : Link = state.link
+        actions_possible = self.actions_allowed & link.get_available_actions(ActionKind.BEAMS in self.actions_allowed)
+        for action in actions_possible:
+            index = self.action_to_index[action]
+            allowed_directions = []
+            for direction in [Direction.N, Direction.S, Direction.W, Direction.E]:
+                if action_mask[index + self._direction_to_index(direction)]:
+                    allowed_directions.append(direction)
+
+            if action == ActionKind.BOOMERANG:
+                for direction in [Direction.NW, Direction.NE, Direction.SW, Direction.SE]:
+                    if action_mask[index + self._direction_to_index(direction)]:
+                        allowed_directions.append(direction)
+
+            if allowed_directions:
+                result.append((action, allowed_directions))
+
+        return result
 
     def _direction_to_index(self, direction):
         value = None
