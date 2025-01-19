@@ -4,7 +4,7 @@
         {
             "name" : "full-game",
             "neural_net" : "SharedNatureAgent",
-            "action_space" : ["MOVE", "SWORD"],
+            "action_space" : ["MOVE", "SWORD", "BEAMS"],
             "priority" : 0,
             "levels" : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
             "rooms" : ["0x77"]
@@ -12,7 +12,7 @@
         {
             "name" : "dungeon1",
             "neural_net" : "SharedNatureAgent",
-            "action_space" : ["MOVE", "SWORD"],
+            "action_space" : ["MOVE", "SWORD", "BEAMS"],
             "priority" : 0,
             "levels" : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
             "rooms" : ["0x77"]
@@ -49,7 +49,7 @@
             "scenario_selector" : "round-robin",
             "critic": "GameplayCritic",
             "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout"],
-            "start": ["1_74w"],
+            "start": ["1_72e"],
             "use_hints" : true,
             "per_reset":
             {
