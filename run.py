@@ -103,6 +103,7 @@ class DisplayWindow:
                     action_mask = step.action_mask
                     step = env.step(self.next_action)
                     self.next_action = None
+                    self.restart_requested = step.terminated or step.truncated
 
                 if self.mode == 'n':
                     self.mode = 'p'
