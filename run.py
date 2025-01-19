@@ -75,6 +75,7 @@ class DisplayWindow:
         self.restart_requested = True
         self.cap_fps = True
         self.next_action = None
+        self.overlay = 0
 
     def show(self, headless_recording=False):
         """Shows the game and the AI model."""
@@ -86,7 +87,7 @@ class DisplayWindow:
 
         show_endings = False
         recording = None
-        overlay = 0
+        self.overlay = 0
 
         surface = pygame.display.set_mode(self.dimensions)
         env = EnvironmentWrapper(self.model_path, self.model_definition, self.scenario, self.frame_stack)
@@ -123,9 +124,9 @@ class DisplayWindow:
                 self._render_game_view(surface, frames.pop(0), (self.game_x, self.game_y), self.game_width,
                                        self.game_height)
 
-                if overlay:
+                if self.overlay:
                     color = "black" if step.state.level == 0 and not step.state.in_cave else "white"
-                    self._overlay_grid_and_text(surface, overlay, (self.game_x, self.game_y), color, \
+                    self._overlay_grid_and_text(surface, self.overlay, (self.game_x, self.game_y), color, \
                                                 self.scale, step.state)
 
                 render_text(surface, self.font, f"Model: {step.model_description}", (self.game_x, self.game_y))
@@ -187,7 +188,7 @@ class DisplayWindow:
                     self.mode = 'c'
 
                 elif event.key == pygame.K_o:
-                    overlay = (overlay + 1) % 5
+                    self.overlay = (self.overlay + 1) % 5
 
                 elif event.key == pygame.K_e:
                     show_endings = not show_endings
