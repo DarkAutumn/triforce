@@ -65,7 +65,7 @@ class ZeldaObject:
         return value
 
     @cached_property
-    def vector(self):
+    def vector(self) -> torch.Tensor:
         """The normalized direction vector from link to the object."""
         distance = self.distance
         if distance == 0:

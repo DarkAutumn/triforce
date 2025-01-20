@@ -49,7 +49,7 @@
             "scenario_selector" : "round-robin",
             "critic": "GameplayCritic",
             "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout"],
-            "start": ["1_72e"],
+            "start": ["1_72e", "1_74w", "1_63s"],
             "use_hints" : true,
             "per_reset":
             {
