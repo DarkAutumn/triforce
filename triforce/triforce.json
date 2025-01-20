@@ -52,7 +52,7 @@
             "critic": "GameplayCritic",
             "end_conditions": ["StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
             "start": ["0_77"],
-            "use_hints" : true,
+            "use_hints" : false,
             "per_reset":
             {
                 "bombs" : 3,
