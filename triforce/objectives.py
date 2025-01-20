@@ -393,7 +393,11 @@ class RoomWalk(ObjectiveSelector):
         if self._curr_room != state.full_location:
             self._curr_room = state.full_location
             room = self._get_room(state.full_location)
-            exits = [x for x in room.exits if isinstance(x, Direction) if state.is_door_open(x) and room.exits[x]]
+            if room:
+                exits = [x for x in room.exits if isinstance(x, Direction) if state.is_door_open(x) and room.exits[x]]
+            else:
+                exits = []
+
             came_from = state.full_location.get_direction_to(prev.full_location)
             if came_from in exits:
                 exits.remove(came_from)
