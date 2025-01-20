@@ -398,6 +398,8 @@ class RoomWalk(ObjectiveSelector):
             if came_from in exits:
                 exits.remove(came_from)
 
+            exits = self._get_reachable(exits, state)
+
             if not exits:
                 self._target_exits = [came_from]
                 self._battle = bool(state.enemies)
@@ -422,6 +424,34 @@ class RoomWalk(ObjectiveSelector):
                            for tile in sublist]
 
         return Objective(ObjectiveKind.MOVE, set(tile_objectives), self._next_rooms)
+
+    def _get_reachable(self, exits, state):
+        exit_tiles = {}
+        for direction in exits:
+            room = self._get_room(state.full_location)
+            for tile in room.exits[direction]:
+                exit_tiles[tile] = direction
+
+        walkable = state.room.walkable
+        result = set()
+        seen = set()
+        todo = [state.link.tile]
+        while todo:
+            tile = todo.pop()
+            if tile in seen:
+                continue
+            seen.add(tile)
+
+            if tile in exit_tiles:
+                result.add(exit_tiles[tile])
+
+            for x, y in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                next_tile = TileIndex(tile.x + x, tile.y + y)
+                if -1 <= next_tile.x < walkable.shape[0] - 1 and -1 <= next_tile.y < walkable.shape[1] - 1:
+                    if next_tile not in seen and walkable[next_tile.x, next_tile.y]:
+                        todo.append(next_tile)
+
+        return list(result)
 
 def _init_objectives():
     # Get all classes defined in this module
