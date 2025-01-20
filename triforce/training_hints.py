@@ -21,9 +21,11 @@ class TrainingHintWrapper(gym.Wrapper):
         info = state.info
         link = state.link
 
+        # Don't let link run past dungeon 1
         if state.full_location == (0, 0x38) and link.tile.y < 0xa:
             info.setdefault('invalid_actions', []).append((ActionKind.MOVE, Direction.N))
 
+        # Don't let link use the wrong exit
         if not state.full_location.in_cave:
             if link.tile.x == 0:
                 self._check_room_direction(state, info, Direction.W)
@@ -33,21 +35,6 @@ class TrainingHintWrapper(gym.Wrapper):
                 self._check_room_direction(state, info, Direction.N)
             elif link.tile.y == 0x14:
                 self._check_room_direction(state, info, Direction.S)
-
-        if state.level != 0:
-            if link.tile.x <= 0x03 or link.tile.x >= 0x1c:
-                invalid = info.setdefault('invalid_actions', [])
-
-                for action in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS):
-                    invalid.append((action, Direction.N))
-                    invalid.append((action, Direction.S))
-
-            if link.tile.y <= 0x03 or link.tile.y >= 0x12:
-                invalid = info.setdefault('invalid_actions', [])
-
-                for action in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS):
-                    invalid.append((action, Direction.W))
-                    invalid.append((action, Direction.E))
 
     def _check_room_direction(self, state, info, direction):
         next_room = state.full_location.get_location_in_direction(direction)

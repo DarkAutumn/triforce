@@ -243,6 +243,8 @@ class ZeldaActionSpace(gym.Wrapper):
         for action, direction in state.info.get('invalid_actions', []):
             invalid.setdefault(action, []).append(direction)
 
+        self._update_mask(state, invalid)
+
         mask = torch.zeros(self.total_actions, dtype=bool)
         for action in actions_possible:
             index = self.action_to_index[action]
@@ -276,7 +278,9 @@ class ZeldaActionSpace(gym.Wrapper):
 
                 case _:
                     if action in (ActionKind.SWORD, ActionKind.BEAMS):
-                        if not state.active_enemies:
+                        # If there are no enemies or items, we can't use the sword.
+                        # We allow items so we can pick up with a stab.
+                        if not state.active_enemies and not state.items:
                             mask[index:index + 4] = False
                         else:
                             for direction in link.get_sword_directions_allowed():
@@ -288,6 +292,20 @@ class ZeldaActionSpace(gym.Wrapper):
                     mask[index + self._direction_to_index(direction)] = False
 
         return mask
+
+    def _update_mask(self, state : ZeldaGame, invalid):
+        """Removes certain actions if we are at the edge of the screen which link cannot perform."""
+        link = state.link
+        if state.level != 0:
+            if link.tile.x <= 0x03 or link.tile.x >= 0x1c:
+                for action in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS):
+                    invalid.append((action, Direction.N))
+                    invalid.append((action, Direction.S))
+
+            if link.tile.y <= 0x03 or link.tile.y >= 0x12:
+                for action in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS):
+                    invalid.append((action, Direction.W))
+                    invalid.append((action, Direction.E))
 
     def is_valid_action(self, action, action_mask):
         """Returns True if the action is valid."""
