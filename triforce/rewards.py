@@ -88,7 +88,6 @@ class StepRewards:
         self._history = []
         self._outcomes = {}
         self.ending = None
-        self.progress = None
 
     def __repr__(self):
         s = sorted(self._outcomes.values(), key=lambda x: x.value)
@@ -136,7 +135,6 @@ class EpisodeRewards:
     """A running total of rewards for the current episode."""
     def __init__(self):
         self.rewards = 0
-        self.progress = 0
         self.outcomes = {}
         self.frames = 0
         self.steps = 0
@@ -148,7 +146,6 @@ class EpisodeRewards:
 
         self.frames = frames
         self.steps = steps
-        self.progress = rewards.progress
         self.rewards += rewards.value
         for outcome in rewards:
             if outcome.name not in self.outcomes:
@@ -166,7 +163,6 @@ class TotalRewards:
 
     def __init__(self):
         self.rewards = []
-        self.progress = []
         self.total_steps = []
         self.outcomes = self._create_outcome_dict()
         self.endings = {x : 0 for x in TotalRewards._endings_seen}
@@ -187,7 +183,6 @@ class TotalRewards:
         assert rewards.ending, "Cannot add rewards for an episode that has not ended"
 
         self.rewards.append(rewards.rewards)
-        self.progress.append(rewards.progress)
         self.total_steps.append(rewards.steps)
         self.episodes += 1
 
@@ -211,7 +206,6 @@ class TotalRewards:
         """Clears this object, returning the stats up to that point."""
         stats = self.stats
         self.rewards.clear()
-        self.progress.clear()
         self.total_steps.clear()
         self.outcomes = self._create_outcome_dict()
         self.endings = {x : 0 for x in TotalRewards._endings_seen}
@@ -225,7 +219,6 @@ class RewardStats:
         self.evaluated = evaluated
         self.episodes = total.episodes
         self.reward_mean = self._mean(total.rewards)
-        self.progress_mean = self._mean(total.progress)
         self.total_steps = self._mean(total.total_steps)
         self.outcomes = {x: y.copy() for x, y in total.outcomes.items()}
         self.endings = total.endings.copy()
@@ -255,7 +248,6 @@ class RewardStats:
 
         tensorboard.add_scalar('evaluation/success-rate', self.success_rate, iterations, curr)
         tensorboard.add_scalar('evaluation/ep-reward-avg', self.reward_mean, iterations, curr)
-        tensorboard.add_scalar('evaluation/progress', self.progress_mean, iterations, curr)
         tensorboard.add_scalar('rollout/steps-per-episode', self.total_steps, iterations, curr)
         tensorboard.add_scalar('rollout/seconds-per-episode', self.total_steps / 60.1, iterations, curr)
 

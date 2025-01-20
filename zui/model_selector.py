@@ -62,7 +62,7 @@ class ModelSelector:
             if network.stats is None:
                 continue
 
-            score = network.stats.success_rate + 0.001 * network.stats.progress_mean
+            score = network.stats.success_rate
             if score > best_score:
                 best_score = score
                 best_model = name

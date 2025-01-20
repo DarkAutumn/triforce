@@ -126,8 +126,6 @@ class GameplayCritic(ZeldaCritic):
         if state_change.health_lost > 0:
             rewards.remove_rewards()
 
-        self.set_progress(state_change, rewards)
-
     # reward helpers, may be overridden
     def critique_equipment_pickup(self, state_change : StateChange, rewards):
         """Critiques the pickup of equipment items."""
@@ -362,36 +360,6 @@ class GameplayCritic(ZeldaCritic):
             if len(prev.active_enemies) == len(curr.active_enemies):
                 rewards.add(MOVED_TO_SAFETY_REWARD)
 
-    def set_progress(self, state_change : StateChange, rewards : StepRewards):
-        """Sets the progress based on how many rooms we have seen, enemies hit, and other factors."""
-
-        rooms = {
-            (0, 0x77) : 0,
-            (0, 0x67) : 1,
-            (0, 0x78) : 1,
-            (0, 0x68) : 2,
-            (0, 0x58) : 3,
-            (0, 0x48) : 4,
-            (0, 0x38) : 5,
-            (0, 0x37) : 6,
-            (1, 0x72) : 2,
-            (1, 0x63) : 3,
-            (1, 0x53) : 4, # here
-            (1, 0x52) : 5,
-            (1, 0x42) : 6,
-            (1, 0x43) : 7,
-            (1, 0x44) : 8,
-            (1, 0x45) : 9,
-            (1, 0x35) : 10,
-            (1, 0x36) : 11,
-        }
-
-        level = state_change.state.level
-        location = state_change.state.location
-
-        self._progress = rooms.get((level, location), 0)
-        rewards.progress = self._progress
-
 REWARD_ENTERED_CAVE = Reward("reward-entered-cave", REWARD_LARGE)
 REWARD_LEFT_CAVE = Reward("reward-left-cave", REWARD_LARGE)
 REWARD_NEW_LOCATION = Reward("reward-new-location", REWARD_LARGE)
@@ -430,22 +398,3 @@ class OverworldSwordCritic(GameplayCritic):
                 rewards.add(REWARD_NEW_LOCATION)
             else:
                 rewards.add(PENALTY_LEFT_SCENARIO)
-
-    def set_progress(self, state_change : StateChange, rewards : StepRewards):
-        state = state_change.state
-
-        progress = 0
-        if state.in_cave:
-            progress += 1
-
-            if state.link.sword != SwordKind.NONE:
-                progress += 1
-
-        else:
-            if state.link.sword != SwordKind.NONE:
-                progress += 3
-
-            if state.location != 0x77:
-                progress += 1
-
-        rewards.progress = progress / 5
