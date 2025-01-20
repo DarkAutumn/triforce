@@ -5,20 +5,29 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run - Full Game",
+            "name": "Run - overworld",
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["full-game", "start-overworld1", "--model-path", "training/debug/"],
+            "args": ["full-game", "start-overworld1", "--model-path", "training/debug/", "--frame-stack", "3"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
         {
-            "name": "Run - Sword",
+            "name": "Run - dungeon1",
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["overworld-sword", "overworld-sword", "--model-path", "training/debug/"],
+            "args": ["dungeon1", "start-dungeon1", "--model-path", "training/debug/", "--frame-stack", "3"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Run - sword",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "run.py",
+            "args": ["overworld-sword", "overworld-sword", "--model-path", "training/debug/", "--frame-stack", "3"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
