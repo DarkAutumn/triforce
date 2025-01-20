@@ -414,7 +414,9 @@ class RoomWalk(ObjectiveSelector):
 
             self._next_rooms = set(state.full_location.get_location_in_direction(x) for x in self._target_exits)
 
-        self._battle &= any(x for x in state.enemies if x.id not in (ZeldaEnemyKind.Zora, ZeldaEnemyKind.PeaHat))
+        self._battle &= any(x
+                            for x in state.enemies
+                            if x.id not in (ZeldaEnemyKind.Zora, ZeldaEnemyKind.PeaHat) and not x.is_dying)
         if self._battle:
             # No exits if the objective is to fight and enemies exist
             return Objective(ObjectiveKind.FIGHT, set(self._get_enemy_tile_objectives(state)), set())
