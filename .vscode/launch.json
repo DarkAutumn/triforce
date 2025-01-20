@@ -9,7 +9,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["overworld", "start-overworld1", "--model-path", "training/frame3-highlr/", "--frame-stack", "3"],
+            "args": ["overworld", "start-overworld1", "--model-path", "training/debug/", "--frame-stack", "3"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
