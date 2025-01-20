@@ -2,11 +2,12 @@ from enum import Enum
 
 import heapq
 import inspect
+import random
 import sys
 from typing import Dict, Optional, Sequence, Set
 
 from .zelda_game import ZeldaGame
-from .zelda_enums import BoomerangKind, Direction, MapLocation, SwordKind, TileIndex, ZeldaItemKind
+from .zelda_enums import BoomerangKind, Direction, MapLocation, SwordKind, TileIndex, ZeldaEnemyKind, ZeldaItemKind
 
 LOCKED_DISTANCE = 4
 
@@ -104,6 +105,14 @@ class ObjectiveSelector:
         else:
             self._rooms[state.full_location].referesh_state(state)
 
+    def _get_room(self, location):
+        return self._rooms.get(location, None)
+
+    def _get_enemy_tile_objectives(self, state):
+        if state.active_enemies:
+            return [tile for enemy in state.active_enemies for tile in enemy.link_overlap_tiles]
+
+        return [tile for enemy in state.enemies for tile in enemy.link_overlap_tiles]
 
     def _get_route_with_astar(self, level, start, end, key_count):
         # pylint: disable=too-many-locals, too-many-branches
@@ -287,14 +296,10 @@ class GameCompletion(ObjectiveSelector):
             # If we know there's treasure in the room not spawned, kill enemies.
             if room_memory.item is not None and state.enemies:
                 kind = ObjectiveKind.FIGHT
-                if state.active_enemies:
-                    tile_objectives.extend(tile
-                                            for enemy in state.active_enemies
-                                            for tile in enemy.link_overlap_tiles)
-                elif state.enemies:
-                    tile_objectives.extend(tile
-                                            for enemy in state.enemies
-                                            for tile in enemy.link_overlap_tiles)
+                tiles = self._get_enemy_tile_objectives(state)
+                tile_objectives.extend(tiles)
+                if tiles:
+                    tile_objectives.extend(tiles)
                 else:
                     room_memory.item = None
 
@@ -368,6 +373,55 @@ class GameCompletion(ObjectiveSelector):
 
         return targets, next_rooms
 
+BATTLE_CHANCE = 0.05
+DUAL_EXIT_CHANCE = 0.05
+
+class RoomWalk(ObjectiveSelector):
+    """An objective selector that attempts to walk through rooms and battle enemies."""
+    def __init__(self):
+        super().__init__()
+        self._curr_room = None
+        self._target_exits = None
+        self._next_rooms = None
+        self._battle = False
+
+    def get_current_objectives(self, prev : Optional[ZeldaGame], state : ZeldaGame) -> Objective:
+        self._update_exits(state)
+        if prev is None:
+            prev = state
+
+        if self._curr_room != state.full_location:
+            self._curr_room = state.full_location
+            room = self._get_room(state.full_location)
+            exits = [x for x in room.exits if isinstance(x, Direction) if state.is_door_open(x) and room.exits[x]]
+            came_from = state.full_location.get_direction_to(prev.full_location)
+            if came_from in exits:
+                exits.remove(came_from)
+
+            if not exits:
+                self._target_exits = [came_from]
+                self._battle = True
+            else:
+                if len(exits) == 1:
+                    self._target_exits = [exits[0]]
+                else:
+                    count = 2 if random.random() < DUAL_EXIT_CHANCE else 1
+                    self._target_exits = random.sample(exits, k=count)
+
+                self._battle = random.random() < BATTLE_CHANCE
+
+            self._next_rooms = set(state.full_location.get_location_in_direction(x) for x in self._target_exits)
+
+        self._battle &= any(x for x in state.enemies if x.id not in (ZeldaEnemyKind.Zora, ZeldaEnemyKind.PeaHat))
+        if self._battle:
+            # No exits if the objective is to fight and enemies exist
+            return Objective(ObjectiveKind.FIGHT, set(self._get_enemy_tile_objectives(state)), set())
+
+        tile_objectives = [tile
+                           for sublist in (state.room.exits[direction] for direction in self._target_exits)
+                           for tile in sublist]
+
+        return Objective(ObjectiveKind.MOVE, set(tile_objectives), self._next_rooms)
 
 def _init_objectives():
     # Get all classes defined in this module

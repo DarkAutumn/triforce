@@ -44,6 +44,22 @@
             }
         },
         {
+            "name": "overworld-room-walk",
+            "description": "The full game with training variables",
+            "iterations" : 2000000,
+            "scenario_selector" : "probabilistic",
+            "objective" : "RoomWalk",
+            "critic": "GameplayCritic",
+            "end_conditions": ["StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
+            "start": ["0_77"],
+            "use_hints" : true,
+            "per_reset":
+            {
+                "bombs" : 3,
+                "sword" : 1
+            }
+        },
+        {
             "name": "start-dungeon1",
             "description": "The dungeon 1.",
             "iterations" : 2000000,
