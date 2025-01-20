@@ -9,7 +9,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["full-game", "start-overworld1", "--model-path", "training/debug/", "--frame-stack", "3"],
+            "args": ["overworld", "start-overworld1", "--model-path", "training/frame3-highlr/", "--frame-stack", "3"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -18,7 +18,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["full-game", "overworld-room-walk", "--model-path", "training/debug/", "--frame-stack", "3"],
+            "args": ["overworld", "overworld-room-walk", "--model-path", "training/debug/", "--frame-stack", "3"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -41,11 +41,20 @@
             "justMyCode": false
         },
         {
-            "name": "Train - Full Game",
+            "name": "Train - Overworld - Dungeon 1",
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
-            "args": ["full-game", "start-overworld1", "--output", "training/debug/"],
+            "args": ["overworld", "start-overworld1", "--output", "training/debug/"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Train - Overworld Room Walk",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "train.py",
+            "args": ["overworld", "overworld-room-walk", "--output", "training/debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

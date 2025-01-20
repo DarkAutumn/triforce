@@ -2,7 +2,7 @@
     "models" :
     [
         {
-            "name" : "full-game",
+            "name" : "overworld",
             "neural_net" : "SharedNatureAgent",
             "action_space" : ["MOVE", "SWORD", "BEAMS"],
             "priority" : 0,
@@ -46,12 +46,12 @@
         {
             "name": "overworld-room-walk",
             "description": "The full game with training variables",
-            "iterations" : 2000000,
+            "iterations" : 5000000,
             "scenario_selector" : "probabilistic",
             "objective" : "RoomWalk",
             "critic": "GameplayCritic",
-            "end_conditions": ["StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
-            "start": ["0_77"],
+            "end_conditions": ["StartingSwordCondition", "EnteredDungeon", "GameOver", "NextRoomTimeout"],
+            "start": [0],
             "use_hints" : false,
             "per_reset":
             {

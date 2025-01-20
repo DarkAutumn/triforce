@@ -28,7 +28,7 @@ class TrainingScenarioDefinition(BaseModel):
     critic : str
     reward_overrides : Optional[Dict[str, Union[int, float, None]]] = {}
     end_conditions : List[str]
-    start : List[str]
+    start : List[str | int]
     use_hints : Optional[bool] = False
     per_reset : Optional[Dict[str, int | str]] = {}
     per_frame : Optional[Dict[str, int | str]] = {}
@@ -43,6 +43,22 @@ class TrainingScenarioDefinition(BaseModel):
             raise ValueError(f"Unknown objective selector {value}")
 
         return objectives
+
+    @field_validator('start', mode='before')
+    @classmethod
+    def start_validator(cls, value):
+        """Gets the start location from the name."""
+        result = []
+        for entry in value:
+            if isinstance(entry, str):
+                result.append(entry)
+            else:
+                for file in os.listdir(os.path.join(os.path.dirname(__file__), 'custom_integrations', 'Zelda-NES')):
+                    if file.startswith(f"{entry}_"):
+                        # without ext
+                        result.append(os.path.splitext(file)[0])
+
+        return result
 
     @field_validator('scenario_selector', mode='before')
     @classmethod
