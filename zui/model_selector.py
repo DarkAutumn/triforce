@@ -56,7 +56,7 @@ class ModelSelector:
         self._curr = self._loaded_models[self._curr_index]
 
     def _find_best_model(self):
-        best_model = None
+        best_model = "untrained"
         best_score = -math.inf
         for name, (network, _) in self._loaded_models.items():
             if network.stats is None:

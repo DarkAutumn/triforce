@@ -2,6 +2,7 @@
 import os
 import sys
 
+from triforce.objectives import GameCompletion
 from triforce.rewards import StepRewards
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
@@ -49,12 +50,19 @@ class CriticWrapper(gym.Wrapper):
 
         return obs, rewards, terminated, truncated, change
 
+class TestScenario:
+    def __init__(self):
+        self.objective = GameCompletion
+        self.per_reset = {}
+        self.per_room = {}
+        self.per_frame = {}
+
 class ZeldaActionReplay:
     def __init__(self, savestate, wrapper=None, render_mode=None):
         env = retro.make(game='Zelda-NES', state=savestate, inttype=retro.data.Integrations.CUSTOM_ONLY, render_mode=render_mode)
         self.data = env.data
         env = FrameSkipWrapper(env, deterministic=True)
-        env = StateChangeWrapper(env, None)
+        env = StateChangeWrapper(env, TestScenario())
         env = ZeldaActionSpace(env, 'all')
         self.action_space = env
         if wrapper:

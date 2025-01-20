@@ -220,6 +220,10 @@ class ZeldaGame:
         """Returns True if the door in the given direction is barred."""
         return self.level != 0 and self.room.is_door_barred(direction, self.current_tiles)
 
+    def is_door_open(self, direction):
+        """Returns True if the door in the given direction is open."""
+        return not self.is_door_locked(direction) and not self.is_door_barred(direction)
+
     @cached_property
     def current_tiles(self):
         """Returns the current, up to date tiles in the room."""

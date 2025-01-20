@@ -2,7 +2,7 @@
     "models" :
     [
         {
-            "name" : "full-game",
+            "name" : "overworld",
             "neural_net" : "SharedNatureAgent",
             "action_space" : ["MOVE", "SWORD", "BEAMS"],
             "priority" : 0,
@@ -32,6 +32,7 @@
             "description": "The full game with training variables",
             "iterations" : 2000000,
             "scenario_selector" : "round-robin",
+            "objective" : "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
             "start": ["0_77"],
@@ -43,10 +44,27 @@
             }
         },
         {
+            "name": "overworld-room-walk",
+            "description": "The full game with training variables",
+            "iterations" : 5000000,
+            "scenario_selector" : "probabilistic",
+            "objective" : "RoomWalk",
+            "critic": "GameplayCritic",
+            "end_conditions": ["StartingSwordCondition", "EnteredDungeon", "GameOver", "NextRoomTimeout"],
+            "start": [0],
+            "use_hints" : false,
+            "per_reset":
+            {
+                "bombs" : 3,
+                "sword" : 1
+            }
+        },
+        {
             "name": "start-dungeon1",
             "description": "The dungeon 1.",
             "iterations" : 2000000,
             "scenario_selector" : "round-robin",
+            "objective" : "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout"],
             "start": ["1_72e", "1_74w", "1_63s"],
@@ -63,6 +81,7 @@
             "description": "The full game with training variables",
             "iterations" : 8000000,
             "scenario_selector" : "probabilistic",
+            "objective" : "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
             "start": ["0_67s"],
@@ -77,6 +96,7 @@
             "description": "Start of the game to the sword",
             "iterations" : 1000000,
             "scenario_selector" : "none",
+            "objective" : "GameCompletion",
             "critic": "OverworldSwordCritic",
             "end_conditions": ["StartingRoomConditions", "Timeout"],
             "start": ["0_77"],

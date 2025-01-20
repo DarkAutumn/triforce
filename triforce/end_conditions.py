@@ -1,6 +1,6 @@
 """All end conditions for training."""
 
-from .objectives import ObjectiveKind, Objectives
+from .objectives import ObjectiveKind, ObjectiveSelector
 from .state_change_wrapper import StateChange
 from .zelda_enums import SwordKind
 
@@ -65,6 +65,48 @@ class Timeout(ZeldaEndCondition):
 
             if self.__last_discovery > self.no_discovery_timeout:
                 return False, True, "failure-no-discovery"
+
+        return False, False, None
+
+
+class NextRoomTimeout(ZeldaEndCondition):
+    """End the scenario if the agent is in the same screen position, or fails to discover a new room."""
+    def __init__(self):
+        super().__init__()
+        self.__position_duration = 0
+        self.__last_discovery = 0
+
+        # the number of timesteps the agent can be in the same position before we truncate
+        self.position_timeout = 50
+        self.no_discovery_timeout = 1200
+
+    def clear(self):
+        self.__position_duration = 0
+        self.__last_discovery = 0
+
+    def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
+        # Check if link is stuck in one position on the screen
+        prev, curr = state_change.previous, state_change.state
+
+        if self.position_timeout:
+            if prev.link.position == curr.link.position and not state_change.hits:
+                if self.__position_duration >= self.position_timeout:
+                    return False, True, "failure-stuck"
+
+                self.__position_duration += 1
+            else:
+                self.__position_duration = 0
+
+        # Check if link never found a new room
+        if self.no_discovery_timeout:
+            if prev.location != curr.location and curr.full_location in prev.objectives.next_rooms:
+                self.__last_discovery = 0
+
+            else:
+                self.__last_discovery += 1
+
+            if self.__last_discovery > self.no_discovery_timeout:
+                return False, True, "failure-no-next-room"
 
         return False, False, None
 
@@ -161,7 +203,7 @@ class LeftRoute(ZeldaEndCondition):
         prev = state_change.previous
         state = state_change.state
         if prev.full_location != state.full_location:
-            objectives : Objectives = state_change.previous.objectives
+            objectives : ObjectiveSelector = state_change.previous.objectives
             if objectives.kind == ObjectiveKind.MOVE and state.full_location not in objectives.next_rooms:
                 return True, False, "failure-left-route"
 
