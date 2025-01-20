@@ -400,7 +400,7 @@ class RoomWalk(ObjectiveSelector):
 
             if not exits:
                 self._target_exits = [came_from]
-                self._battle = True
+                self._battle = bool(state.enemies)
             else:
                 if len(exits) == 1:
                     self._target_exits = [exits[0]]
