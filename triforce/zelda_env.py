@@ -1,5 +1,6 @@
 # A wrapper to create a Zelda environment.
 
+import random
 import retro
 
 from .training_hints import TrainingHintWrapper
@@ -27,7 +28,8 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **
     frame_stack = kwargs.get('frame_stack', 1)
     obs_kind = kwargs.get('obs_kind', 'viewport')
 
-    env = retro.make(game='Zelda-NES', state=scenario.start[0], inttype=retro.data.Integrations.CUSTOM_ONLY,
+    state = random.choice(scenario.start)
+    env = retro.make(game='Zelda-NES', state=state, inttype=retro.data.Integrations.CUSTOM_ONLY,
                      render_mode=render_mode)
 
     # Skip frames where Link is not controllable.  Returns all frames skipped as its observation.
