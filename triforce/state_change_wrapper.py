@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import gymnasium as gym
 
-from .objectives import Objectives
+from .objectives import ObjectiveSelector
 from .action_space import ActionTaken
 from .zelda_enums import AnimationState, ZeldaItemKind, ZeldaAnimationKind
 from .zelda_game import ZeldaGame
@@ -217,7 +217,8 @@ class StateChangeWrapper(gym.Wrapper):
     def __init__(self, env, scenario):
         super().__init__(env)
         self._discounts = {}
-        self._objectives : Objectives = None
+        self._objective_type = scenario.objective
+        self._objectives : ObjectiveSelector = None
         self._prev_state = None
 
         self.per_reset = []
@@ -237,7 +238,7 @@ class StateChangeWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         frames, info = self.env.reset(**kwargs)
         self._discounts.clear()
-        self._objectives = Objectives()
+        self._objectives = self._objective_type()
         self._prev_state = None
 
         state = self._update_state(None, frames, info)

@@ -1,6 +1,6 @@
 """All end conditions for training."""
 
-from .objectives import ObjectiveKind, Objectives
+from .objectives import ObjectiveKind, ObjectiveSelector
 from .state_change_wrapper import StateChange
 from .zelda_enums import SwordKind
 
@@ -161,7 +161,7 @@ class LeftRoute(ZeldaEndCondition):
         prev = state_change.previous
         state = state_change.state
         if prev.full_location != state.full_location:
-            objectives : Objectives = state_change.previous.objectives
+            objectives : ObjectiveSelector = state_change.previous.objectives
             if objectives.kind == ObjectiveKind.MOVE and state.full_location not in objectives.next_rooms:
                 return True, False, "failure-left-route"
 

@@ -1,6 +1,8 @@
 from enum import Enum
 
 import heapq
+import inspect
+import sys
 from typing import Dict, Optional, Sequence, Set
 
 from .zelda_game import ZeldaGame
@@ -81,11 +83,15 @@ class RoomMemory:
         for direction in (x for x in self.exits if isinstance(x, Direction) and self.exits[x]):
             yield direction, self.full_location.get_location_in_direction(direction)
 
-class Objectives:
+class ObjectiveSelector:
     """Determines the current objectives for the agent."""
     def __init__(self):
         self._rooms : Dict[RoomMemory] = {}
         self._last_route = 0, 0, []
+
+    def get_current_objectives(self, prev : Optional[ZeldaGame], state : ZeldaGame) -> Objective:
+        """Get the current objectives for the agent."""
+        raise NotImplementedError()
 
     def _update_exits(self, state: ZeldaGame):
         if state.in_cave:
@@ -97,6 +103,110 @@ class Objectives:
             self._rooms[state.full_location] = room
         else:
             self._rooms[state.full_location].referesh_state(state)
+
+
+    def _get_route_with_astar(self, level, start, end, key_count):
+        # pylint: disable=too-many-locals, too-many-branches
+        # Special case: if start == end, return immediately
+        if not isinstance(start, MapLocation):
+            start = MapLocation(level, start, False)
+        if not isinstance(end, MapLocation):
+            end = MapLocation(level, end, False)
+
+        if start == end:
+            return [[start]]
+
+        # Priority queue holds (f, g, room), where
+        #   g = cost_so_far to reach `room`
+        #   f = g + heuristic(room, end)
+        open_list = []
+        start_h = start.manhattan_distance(end)
+        heapq.heappush(open_list, (start_h, 0, start))
+
+        # cost_so_far[node] = minimal cost to get to that node
+        cost_so_far = {start: 0}
+
+        # parents[node] = list of immediate predecessors on equally minimal-cost paths
+        parents = {start: []}
+
+        best_cost_to_end = None  # once found, store the minimal cost to reach `end`
+
+        while open_list:
+            _, g, current_room = heapq.heappop(open_list)
+
+            # If we've reached the end
+            if current_room == end:
+                # If it's the first time we reach `end`, record that cost
+                if best_cost_to_end is None:
+                    best_cost_to_end = g
+                # If this path cost is strictly greater than the best found, we can stop
+                elif g > best_cost_to_end:
+                    break
+                # If this path cost equals best_cost_to_end, we just keep going
+                # because we might find other expansions that tie on cost.
+
+            # If we already know a best cost and our current cost g
+            # is beyond that, no need to expand further.
+            if best_cost_to_end is not None and g > best_cost_to_end:
+                continue
+
+            # Explore neighbors
+            for next_room, locked in self._enumerate_attached_rooms(current_room, key_count):
+                move_cost = LOCKED_DISTANCE if locked else 1
+                new_cost = g + move_cost
+
+                # If we already know the best cost to end AND new_cost can't beat it, skip
+                if best_cost_to_end is not None and new_cost > best_cost_to_end:
+                    continue
+
+                if next_room not in cost_so_far or new_cost < cost_so_far[next_room]:
+                    # We found a strictly better path to `next_room`
+                    cost_so_far[next_room] = new_cost
+                    parents[next_room] = [current_room]
+                    new_f = new_cost + next_room.manhattan_distance(end)
+                    heapq.heappush(open_list, (new_f, new_cost, next_room))
+
+                elif new_cost == cost_so_far[next_room]:
+                    # We found an equally good path, so store an additional parent
+                    parents[next_room].append(current_room)
+
+        # If we never reached `end`, return empty
+        if best_cost_to_end is None:
+            return []
+
+        # Reconstruct all shortest paths from `start` to `end`.
+        # We'll do a simple DFS/backtrack that accumulates all paths.
+        def backtrack_paths(node):
+            if node == start:
+                return [[start]]
+            all_paths = []
+            for p in parents[node]:
+                for partial_path in backtrack_paths(p):
+                    all_paths.append(partial_path + [node])
+            return all_paths
+
+        return backtrack_paths(end)
+
+    def _enumerate_attached_rooms(self, location, key_count):
+        # if we have memory of the room, use that
+        if (room_memory := self._rooms.get(location, None)) is not None:
+            for direction, next_room in room_memory.enumerate_adjacent_rooms():
+                locked = direction in room_memory.locked
+                if locked and not key_count:
+                    continue
+
+                if direction in room_memory.barred:
+                    continue
+
+                yield next_room, locked
+
+        # otherwise we'll just assume every room is connected
+        else:
+            for next_room in location.enumerate_possible_neighbors():
+                yield next_room, False
+
+class GameCompletion(ObjectiveSelector):
+    """A set of Objects that point the agent to game completion."""
 
     def get_current_objectives(self, prev : Optional[ZeldaGame], state : ZeldaGame) -> Objective:
         """Get the current objectives for the agent."""
@@ -258,102 +368,26 @@ class Objectives:
 
         return targets, next_rooms
 
-    def _enumerate_attached_rooms(self, location, key_count):
-        # if we have memory of the room, use that
-        if (room_memory := self._rooms.get(location, None)) is not None:
-            for direction, next_room in room_memory.enumerate_adjacent_rooms():
-                locked = direction in room_memory.locked
-                if locked and not key_count:
-                    continue
 
-                if direction in room_memory.barred:
-                    continue
+def _init_objectives():
+    # Get all classes defined in this module
+    result = {}
+    current_module = sys.modules[__name__]
+    for cls_name, cls_obj in inspect.getmembers(current_module, inspect.isclass):
+        if issubclass(cls_obj, ObjectiveSelector) and cls_obj is not ObjectiveSelector:
+            result[cls_name] = cls_obj
 
-                yield next_room, locked
+    return result
 
-        # otherwise we'll just assume every room is connected
-        else:
-            for next_room in location.enumerate_possible_neighbors():
-                yield next_room, False
+OBJECTIVES = _init_objectives()
 
-    def _get_route_with_astar(self, level, start, end, key_count):
-        # pylint: disable=too-many-locals, too-many-branches
-        # Special case: if start == end, return immediately
-        if not isinstance(start, MapLocation):
-            start = MapLocation(level, start, False)
-        if not isinstance(end, MapLocation):
-            end = MapLocation(level, end, False)
+def get_objective_selector(name):
+    """Get the objective by name."""
+    return OBJECTIVES[name]
 
-        if start == end:
-            return [[start]]
-
-        # Priority queue holds (f, g, room), where
-        #   g = cost_so_far to reach `room`
-        #   f = g + heuristic(room, end)
-        open_list = []
-        start_h = start.manhattan_distance(end)
-        heapq.heappush(open_list, (start_h, 0, start))
-
-        # cost_so_far[node] = minimal cost to get to that node
-        cost_so_far = {start: 0}
-
-        # parents[node] = list of immediate predecessors on equally minimal-cost paths
-        parents = {start: []}
-
-        best_cost_to_end = None  # once found, store the minimal cost to reach `end`
-
-        while open_list:
-            _, g, current_room = heapq.heappop(open_list)
-
-            # If we've reached the end
-            if current_room == end:
-                # If it's the first time we reach `end`, record that cost
-                if best_cost_to_end is None:
-                    best_cost_to_end = g
-                # If this path cost is strictly greater than the best found, we can stop
-                elif g > best_cost_to_end:
-                    break
-                # If this path cost equals best_cost_to_end, we just keep going
-                # because we might find other expansions that tie on cost.
-
-            # If we already know a best cost and our current cost g
-            # is beyond that, no need to expand further.
-            if best_cost_to_end is not None and g > best_cost_to_end:
-                continue
-
-            # Explore neighbors
-            for next_room, locked in self._enumerate_attached_rooms(current_room, key_count):
-                move_cost = LOCKED_DISTANCE if locked else 1
-                new_cost = g + move_cost
-
-                # If we already know the best cost to end AND new_cost can't beat it, skip
-                if best_cost_to_end is not None and new_cost > best_cost_to_end:
-                    continue
-
-                if next_room not in cost_so_far or new_cost < cost_so_far[next_room]:
-                    # We found a strictly better path to `next_room`
-                    cost_so_far[next_room] = new_cost
-                    parents[next_room] = [current_room]
-                    new_f = new_cost + next_room.manhattan_distance(end)
-                    heapq.heappush(open_list, (new_f, new_cost, next_room))
-
-                elif new_cost == cost_so_far[next_room]:
-                    # We found an equally good path, so store an additional parent
-                    parents[next_room].append(current_room)
-
-        # If we never reached `end`, return empty
-        if best_cost_to_end is None:
-            return []
-
-        # Reconstruct all shortest paths from `start` to `end`.
-        # We'll do a simple DFS/backtrack that accumulates all paths.
-        def backtrack_paths(node):
-            if node == start:
-                return [[start]]
-            all_paths = []
-            for p in parents[node]:
-                for partial_path in backtrack_paths(p):
-                    all_paths.append(partial_path + [node])
-            return all_paths
-
-        return backtrack_paths(end)
+__all__ = [
+    Objective.__name__,
+    GameCompletion.__name__,
+    ObjectiveKind.__name__,
+    get_objective_selector.__name__,
+]

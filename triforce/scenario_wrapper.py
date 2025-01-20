@@ -11,6 +11,7 @@ import gymnasium as gym
 import retro
 import torch
 
+from .objectives import get_objective_selector
 from .rewards import StepRewards
 from .zelda_enums import Direction, MapLocation
 from .zelda_game_data import zelda_game_data
@@ -22,6 +23,7 @@ class TrainingScenarioDefinition(BaseModel):
     name : str
     description : str
     scenario_selector : Optional[str]
+    objective : type
     iterations : int
     critic : str
     reward_overrides : Optional[Dict[str, Union[int, float, None]]] = {}
@@ -31,6 +33,16 @@ class TrainingScenarioDefinition(BaseModel):
     per_reset : Optional[Dict[str, int | str]] = {}
     per_frame : Optional[Dict[str, int | str]] = {}
     per_room : Optional[Dict[str, int | str]] = {}
+
+    @field_validator('objective', mode='before')
+    @classmethod
+    def objective_validator(cls, value):
+        """Gets the ObjectiveSelector from name."""
+        objectives = get_objective_selector(value)
+        if objectives is None:
+            raise ValueError(f"Unknown objective selector {value}")
+
+        return objectives
 
     @field_validator('scenario_selector', mode='before')
     @classmethod
