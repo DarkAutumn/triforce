@@ -299,13 +299,13 @@ class ZeldaActionSpace(gym.Wrapper):
         if state.level != 0:
             if link.tile.x <= 0x03 or link.tile.x >= 0x1c:
                 for action in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS):
-                    invalid.append((action, Direction.N))
-                    invalid.append((action, Direction.S))
+                    invalid.setdefault(action, []).append(Direction.N)
+                    invalid.setdefault(action, []).append(Direction.S)
 
             if link.tile.y <= 0x03 or link.tile.y >= 0x12:
                 for action in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS):
-                    invalid.append((action, Direction.W))
-                    invalid.append((action, Direction.E))
+                    invalid.setdefault(action, []).append(Direction.W)
+                    invalid.setdefault(action, []).append(Direction.E)
 
     def is_valid_action(self, action, action_mask):
         """Returns True if the action is valid."""
