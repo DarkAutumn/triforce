@@ -35,6 +35,14 @@
             "objective" : "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
+            "metrics" : [
+                "success-rate",
+                "overworld-progress",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
             "start": ["0_77"],
             "use_hints" : true,
             "per_reset":
@@ -51,6 +59,7 @@
             "objective" : "RoomWalk",
             "critic": "GameplayCritic",
             "end_conditions": ["StartingSwordCondition", "EnteredDungeon", "GameOver", "NextRoomTimeout"],
+            "metrics" : ["room-result", "room-health", "ending", "reward-average", "reward-details"],
             "start": [0],
             "use_hints" : false,
             "per_reset":
@@ -67,6 +76,14 @@
             "objective" : "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout"],
+            "metrics" : [
+                "success-rate",
+                "overworld-progress",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
             "start": ["1_72e", "1_74w", "1_63s"],
             "use_hints" : true,
             "per_reset":
@@ -84,6 +101,14 @@
             "objective" : "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
+            "metrics" : [
+                "success-rate",
+                "overworld-progress",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
             "start": ["0_67s"],
             "per_reset":
             {
@@ -99,6 +124,7 @@
             "objective" : "GameCompletion",
             "critic": "OverworldSwordCritic",
             "end_conditions": ["StartingRoomConditions", "Timeout"],
+            "metrics" : ["success-rate", "ending", "reward-average", "reward-details"],
             "start": ["0_77"],
             "per_reset":
             {

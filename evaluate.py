@@ -11,12 +11,12 @@ from triforce.rewards import TotalRewards, RewardStats
 # pylint: disable=global-statement,global-variable-undefined
 
 def _print_stat_header():
-    print(f"{'Model':<20} {'Filename':<25} {'Steps':>9} {'Total Reward':>13} {'Progress':>10} {'Duration':>9} "
+    print(f"{'Model':<20} {'Filename':<25} {'Steps':>9} {'Total Reward':>13} {'Duration':>9} "
           f"{'Success Rate':>12}")
 
 def _print_stat_row(model_name, filename, steps_trained, stats : RewardStats):
     print(f"{model_name:<20} {filename:<25} {steps_trained:9,} {stats.reward_mean:13.1f} "
-          f"{stats.progress_mean * 100:10.1f} {int(stats.total_steps / 60.1):9} {stats.success_rate * 100:11.1f}%")
+          f"{int(stats.total_steps / 60.1):9} {stats.success_rate * 100:11.1f}%")
 
 def run_one_scenario(args, model_name, model_path, counter_or_callback):
     """Runs a single scenario."""

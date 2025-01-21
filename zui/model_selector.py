@@ -59,11 +59,11 @@ class ModelSelector:
         best_model = "untrained"
         best_score = -math.inf
         for name, (network, _) in self._loaded_models.items():
-            if network.stats is None:
+            if not network.metrics:
                 continue
 
-            score = network.stats.success_rate + 0.001 * network.stats.progress_mean
-            if score > best_score:
+            score = network.metrics.get("success-rate", None)
+            if score is not None and score > best_score:
                 best_score = score
                 best_model = name
 

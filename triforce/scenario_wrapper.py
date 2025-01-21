@@ -4,17 +4,16 @@ from collections import deque
 import json
 import gzip
 import os
-import time
-from typing import Deque, Dict, List, Optional, Union
+from typing import Deque, Dict, List, Optional
 from pydantic import BaseModel, field_validator
 import gymnasium as gym
 import retro
 import torch
 
+from .metrics import MetricTracker
 from .objectives import get_objective_selector
 from .rewards import StepRewards
 from .zelda_enums import Direction, MapLocation
-from .zelda_game_data import zelda_game_data
 from . import critics
 from . import end_conditions
 
@@ -26,7 +25,7 @@ class TrainingScenarioDefinition(BaseModel):
     objective : type
     iterations : int
     critic : str
-    reward_overrides : Optional[Dict[str, Union[int, float, None]]] = {}
+    metrics : List[str]
     end_conditions : List[str]
     start : List[str | int]
     use_hints : Optional[bool] = False
@@ -102,46 +101,6 @@ class RoomResult:
         self.came_from : Direction = came_from
         self.health_lost = health_lost
         self.success = success
-
-class RoomResultAggregator:
-    """Aggregates room results."""
-    def __init__(self):
-        self.health_lost = {}
-        self.rooms_with_health_loss = set()
-        self.result = {}
-
-    def add(self, result : RoomResult):
-        """Adds a result."""
-        direction = result.came_from.name if result.came_from is not None else ''
-        room_name = f"{result.room.level}_{result.room.value:02x}{direction}"
-
-        self.health_lost.setdefault(room_name, []).append(result.health_lost)
-        self.result.setdefault(room_name, []).append(1 if result.success else 0)
-
-
-    def to_tensorboard(self, tensorboard, iterations):
-        """Write the stats to TensorBoard."""
-        if not tensorboard:
-            return
-
-        curr = time.time()
-        for room, health_list in list(self.health_lost.items()):
-            value = sum(health_list) / len(health_list) if health_list else 0.0
-            if value > 0:
-                self.rooms_with_health_loss.add(room)
-
-            if room in self.rooms_with_health_loss:
-                tensorboard.add_scalar(f'room-health-loss/{room}', value, iterations, curr)
-                health_list.clear()
-            else:
-                del self.health_lost[room]
-
-        for room, result_list in self.result.items():
-            value = sum(result_list) / len(result_list) if result_list else 0.0
-            tensorboard.add_scalar(f'room-success-rate/{room}', value, iterations, curr)
-            result_list.clear()
-
-        tensorboard.flush()
 
 class RoomSelector:
     """Selects rooms."""
@@ -302,15 +261,11 @@ class ScenarioWrapper(gym.Wrapper):
     """Wraps the environment to call our critic and end conditions."""
     def __init__(self, env, scenario : TrainingScenarioDefinition):
         super().__init__(env)
-
+        self._last_save_state = None
         self._scenario = scenario
         self._critic = getattr(critics, scenario.critic)()
-        for k, v in scenario.reward_overrides.items():
-            assert hasattr(self._critic, k)
-            setattr(self._critic, k, v)
-
         self._conditions = [getattr(end_conditions, ec)() for ec in scenario.end_conditions]
-
+        self._metrics : MetricTracker = MetricTracker(scenario.metrics)
         match scenario.scenario_selector:
             case 'round-robin':
                 self.room_selector = RoundRobinSelector(scenario.start)
@@ -319,48 +274,55 @@ class ScenarioWrapper(gym.Wrapper):
             case _:
                 raise ValueError(f"Unknown scenario selector {scenario.scenario_selector}")
 
-        self.game_data = zelda_game_data
-        self._last = None
+    def __del__(self):
+        MetricTracker.close()
 
     def reset(self, **kwargs):
         self.room_selector.reset()
 
         save_state = self.room_selector.next()
-        if save_state != self._last:
-            self._last = save_state
+        if save_state != self._last_save_state:
+            self._last_save_state = save_state
             self.unwrapped.load_state(save_state, retro.data.Integrations.CUSTOM_ONLY)
 
         obs, state = super().reset(**kwargs)
-
         self._critic.clear()
         for ec in self._conditions:
             ec.clear()
 
+        self._metrics.begin_scenario(state)
         return obs, state
 
     def step(self, action):
+        # Step the environment
         obs, _, terminated, truncated, state_change = self.env.step(action)
         rewards = StepRewards()
 
+        # Drop a save state if we don't have one of the current location
         if state_change.changed_location:
             self._try_save_state(state_change)
 
-        state = state_change.state
-
+        # Critique gameplay
         self._critic.critique_gameplay(state_change, rewards)
-        state.info['rewards'] = rewards
 
-        end = (x.is_scenario_ended(state_change) for x in self._conditions)
-        end = [x for x in end if x is not None]
-        terminated = terminated or any((x[0] for x in end))
-        truncated = truncated or any((x[1] for x in end))
-        reason = [x[2] for x in end if x[2]]
+        # Check if the scenario has ended
+        end_reason = None
+        for ec in self._conditions:
+            ec_result = ec.is_scenario_ended(state_change)
+            if ec_result is not None:
+                terminated, truncated, end_reason = ec_result
+                if terminated or truncated:
+                    rewards.ending = end_reason
+                    break
 
-        if reason:
-            # I guess we could have more than one reason, but I'm not going to cover that corner case
-            rewards.ending = reason[0]
+        # Update metrics
+        self._metrics.step(state_change, rewards)
+        if terminated or truncated:
+            self._metrics.end_scenario(terminated, truncated, rewards.ending)
 
+        # Step the room selector
         self.room_selector.step(state_change, rewards.ending)
+
         return obs, rewards, terminated, truncated, state_change
 
     def _try_save_state(self, state_change):

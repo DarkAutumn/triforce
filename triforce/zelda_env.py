@@ -10,7 +10,6 @@ from .frame_skip_wrapper import FrameSkipWrapper
 from .action_space import ZeldaActionSpace
 from .observation_wrapper import ObservationWrapper
 from .scenario_wrapper import ScenarioWrapper, TrainingScenarioDefinition
-from .rewards import EpisodeRewardTracker
 
 def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **kwargs):
     """
@@ -53,9 +52,6 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **
     # Process the scenario. This is where we define the end conditions and rewards for the scenario.
     # Replaces the float reward with a StepRewards object.
     env = ScenarioWrapper(env, scenario)
-
-    # Calculate the total reward for the episode.
-    env = EpisodeRewardTracker(env)
 
     # Translates our state/state_change objects back into the info dictionary, and our StepRewards back into
     # a float.
