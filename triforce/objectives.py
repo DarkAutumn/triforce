@@ -7,7 +7,7 @@ import sys
 from typing import Dict, Optional, Sequence, Set
 
 from .zelda_game import ZeldaGame
-from .zelda_enums import BoomerangKind, Direction, MapLocation, SwordKind, TileIndex, ZeldaEnemyKind, ZeldaItemKind
+from .zelda_enums import BoomerangKind, Direction, MapLocation, SwordKind, TileIndex, ZeldaItemKind
 
 LOCKED_DISTANCE = 4
 
