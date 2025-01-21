@@ -85,7 +85,7 @@ class DisplayWindow:
         running_rewards = {}
         buttons = deque(maxlen=100)
 
-        show_endings = False
+        show_endings = True
         recording = None
         self.overlay = 0
 
@@ -111,6 +111,8 @@ class DisplayWindow:
 
                 # update rewards for display
                 self._update_rewards(step, action_mask, running_rewards, buttons)
+                if step.terminated or step.truncated:
+                    endings[step.rewards.ending] = endings.get(step.rewards.ending, 0) + 1
 
             frames = step.frames
             if not frames:
