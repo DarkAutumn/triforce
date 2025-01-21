@@ -121,12 +121,12 @@ class RoomResultMetric(EnumMetric):
 
     def step(self, state_change : StateChange, rewards : StepRewards):
         if state_change.state.game_over:
-            self.add(RoomResult.DIED.value)
+            self.add(RoomResult.DIED)
         elif state_change.previous.full_location != state_change.state.full_location:
-            if state_change.full_location in state_change.state.objectives.next_rooms:
-                self.add(RoomResult.CORRECT_EXIT.value)
+            if state_change.state.full_location in state_change.state.objectives.next_rooms:
+                self.add(RoomResult.CORRECT_EXIT)
             else:
-                self.add(RoomResult.INCORRECT_EXIT.value)
+                self.add(RoomResult.INCORRECT_EXIT)
 
 class RoomHealthChangeMetric(Metric):
     """Tracks the change in health in a room."""
