@@ -341,8 +341,7 @@ class DisplayWindow:
             return
 
         curr_rewards = {}
-        info = state_change.state.info
-        rewards : StepRewards = info.get('rewards', None)
+        rewards : StepRewards = step.rewards
         if rewards is not None:
             self.total_rewards += rewards.value
             for outcome in rewards:

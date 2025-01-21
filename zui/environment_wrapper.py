@@ -91,13 +91,18 @@ class EnvironmentWrapper:
 
     def _get_model_details(self):
         model = self.selector.model
-        success_rate = model.stats.success_rate * 100 if model.stats else 0
-        success_rate = f"success: {success_rate:.1f}%"
+        metrics = model.metrics
 
-        model_name = f"{self.selector.model_path} ({model.steps_trained:,} " \
-                         f"timesteps {success_rate})"
+        progress = metrics.get("success-rate", None)
+        if progress is None or progress < 0.01:
+            progress = metrics.get("overworld-progress", None) or metrics.get("dungeon1-progress", None)
 
-        return model_name
+            if progress:
+                progress = f"progress: {progress:.1f}"
+        else:
+            progress = f"success: {progress * 100:.1f}%"
+
+        return f"{self.selector.model_path} ({model.steps_trained:,} timesteps {progress})"
 
     def close(self):
         """Closes the model."""

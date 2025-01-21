@@ -3,10 +3,9 @@ import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
-from .scenario_wrapper import RoomResultAggregator
+from .metrics import MetricTracker
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network, create_network
-from .rewards import RewardStats, TotalRewards
 
 # default hyperparameters
 LEARNING_RATE_MAX = 0.00025
@@ -25,9 +24,8 @@ EPSILON = 1e-5
 TARGET_STEPS = 2048
 EPOCHS = 10
 MINIBATCHES = 4
-LOG_RATE = 20_000
-ROOM_LOG_RATE = 50_000
-SAVE_INTERVAL = 40_000
+LOG_RATE = 25_000
+SAVE_INTERVAL = 25_000
 
 class Threshold:
     """A counter class to see if we've reached our intervals."""
@@ -77,65 +75,67 @@ class PPO:
         self.start_time = time.time()
 
         env = create_env()
-        network = create_network(network, env.observation_space, env.action_space)
-        if (load_path := kwargs.get('load_path', None)) is not None:
-            network.load(load_path)
+        try:
+            network = create_network(network, env.observation_space, env.action_space)
+            if (load_path := kwargs.get('load_path', None)) is not None:
+                network.load(load_path)
 
-        if kwargs.get('dynamic_lr', False):
-            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MEDIUM, eps=self._epsilon)
-        else:
-            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MAX, eps=self._epsilon)
+            if kwargs.get('dynamic_lr', False):
+                self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MEDIUM, eps=self._epsilon)
+            else:
+                self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MAX, eps=self._epsilon)
 
-        envs = kwargs.get('envs', 1)
-        if envs > 1:
-            raise NotImplementedError("Multiprocessing not yet implemented.")
+            envs = kwargs.get('envs', 1)
+            if envs > 1:
+                raise NotImplementedError("Multiprocessing not yet implemented.")
 
-        return self._train_single(network, env, iterations, progress, **kwargs)
+            return self._train_single(network, env, iterations, progress, **kwargs)
+        finally:
+            env.close()
 
     def _train_single(self, network, env, iterations, progress, **kwargs):
-        # pylint: disable=too-many-locals
-        # tracking
-        save_path = kwargs.get('save_path', None)
-        next_update = Threshold(LOG_RATE)
-        next_room_log = Threshold(ROOM_LOG_RATE)
-        next_save = Threshold(SAVE_INTERVAL)
-        rewards = TotalRewards()
-        reward_stats = None
-        rooms = RoomResultAggregator()
-
-        memory_length = self.target_steps
-        buffer = PPORolloutBuffer(memory_length, 1, env.observation_space, env.action_space,
+        buffer = PPORolloutBuffer(self.target_steps, 1, env.observation_space, env.action_space,
                                   self._gamma, self._lambda)
 
+        save_path = kwargs.get('save_path', None)
+        next_tensorboard = Threshold(LOG_RATE)
+        next_model_save = Threshold(SAVE_INTERVAL)
         total_iterations = 0
+
         while total_iterations < iterations:
-            infos = buffer.ppo_main_loop(0, network, env, progress)
-
+            # Collect training data
+            buffer.ppo_main_loop(0, network, env, progress)
             total_iterations += buffer.memory_length
-            self._process_infos(rewards, rooms, infos)
 
-            if next_update.add(buffer.memory_length):
-                reward_stats = rewards.get_stats_and_clear()
-                reward_stats.to_tensorboard(self.tensorboard, total_iterations)
-                network.stats = reward_stats
+            # Save metrics
+            if next_tensorboard.add(buffer.memory_length):
+                network.metrics = MetricTracker.get_instance().get_metrics_and_clear()
+                if network.metrics:
+                    self._write_metrics(network.metrics, total_iterations)
+                    if kwargs.get('dynamic_lr', False):
+                        self._adjust_learning_rate(network.metrics)
 
-                if kwargs.get('dynamic_lr', False):
-                    self._adjust_learning_rate(reward_stats)
+            # Save model, hopefully log rate and save interval are multiples of each other
+            if save_path and next_model_save.add(buffer.memory_length):
+                network.save(f"{save_path}/network_{network.steps_trained}.pt")
 
-            if next_room_log.add(buffer.memory_length):
-                rooms.to_tensorboard(self.tensorboard, total_iterations)
-
-            if save_path and next_save.add(buffer.memory_length):
-                network.save(f"{save_path}/network_{total_iterations}.pt")
-
+            # Optimize the network
             network = self._optimize(network, buffer, total_iterations)
             network.steps_trained += buffer.memory_length
 
-        env.close()
         return network
 
-    def _adjust_learning_rate(self, reward_stats : RewardStats):
-        success_rate = reward_stats.success_rate
+    def _write_metrics(self, metrics, total_iterations):
+        timestamp = time.time()
+        for name, value in metrics.items():
+            if '/' not in name:
+                name = f"metrics/{name}"
+
+            self.tensorboard.add_scalar(name, value, total_iterations, timestamp)
+
+    def _adjust_learning_rate(self, metrics):
+        success_rate = metrics.get("success-rate", None)
+        assert success_rate is not None, "Attempted to adjust learning rate without success rate."
 
         # Example logic:
         #  - if success_rate == 0 => high LR
@@ -154,13 +154,6 @@ class PPO:
         assert self.optimizer, "Attempted to adjust learning rate before optimizer was created."
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = new_lr
-
-    def _process_infos(self, total_rewards : TotalRewards, rooms : RoomResultAggregator,  infos):
-        for info in infos:
-            if (ep_rewards := info.get('episode_rewards', None)) is not None:
-                total_rewards.add(ep_rewards)
-            if (room_result := info.get('room_result', None)) is not None:
-                rooms.add(room_result)
 
     def _optimize(self, network : Network, variables : PPORolloutBuffer, iterations : int):
         # pylint: disable=too-many-locals, too-many-statements, too-many-branches
