@@ -369,10 +369,15 @@ class MetricTracker:
 
         return result
 
-    def get_metrics_and_clear(self):
+    @staticmethod
+    def get_metrics_and_clear():
         """Enumerates the values of the metrics and clears them."""
-        result = self.get_metrics()
-        for metric in self.metrics:
+        instance = MetricTracker._instance
+        if instance is None:
+            return {}
+
+        result = instance.get_metrics()
+        for metric in instance.metrics:
             metric.clear()
 
         return result

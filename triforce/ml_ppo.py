@@ -109,7 +109,7 @@ class PPO:
 
             # Save metrics
             if next_tensorboard.add(buffer.memory_length):
-                network.metrics = MetricTracker.get_instance().get_metrics_and_clear()
+                network.metrics = MetricTracker.get_metrics_and_clear()
                 if network.metrics:
                     self._write_metrics(network.metrics, total_iterations)
                     if kwargs.get('dynamic_lr', False):
