@@ -18,7 +18,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["overworld", "overworld-room-walk", "--model-path", "training/debug/", "--frame-stack", "3"],
+            "args": ["overworld", "initial-room-walk", "--model-path", "training/debug/", "--frame-stack", "3"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -54,7 +54,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
-            "args": ["overworld", "overworld-room-walk", "--output", "training/debug/"],
+            "args": ["overworld", "initial-room-walk", "--output", "training/debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

@@ -52,20 +52,72 @@
             }
         },
         {
+            "name": "initial-room-walk",
+            "description": "A scoped down room walk",
+            "iterations" : 2000000,
+            "scenario_selector" : "probabilistic",
+            "objective" : "RoomWalk",
+            "critic": "GameplayCritic",
+            "end_conditions": ["LeftInitialRoomWalk", "NextRoomTimeout"],
+            "metrics" : ["room-result", "room-health", "ending", "reward-average", "reward-details"],
+            "start": [
+                "0_58e",
+                "0_58s",
+                "0_58n",
+                "0_58w",
+                "0_68e",
+                "0_68s",
+                "0_68w",
+                "0_68n"
+            ],
+            "use_hints" : false,
+            "per_reset":
+            {
+                "bombs" : 3,
+                "sword" : 1,
+                "health" : "max_health"
+            }
+        },
+        {
             "name": "overworld-room-walk",
-            "description": "The full game with training variables",
+            "description": "A training scenario to teach the model how to traverse the map and follow directions",
             "iterations" : 5000000,
             "scenario_selector" : "probabilistic",
             "objective" : "RoomWalk",
             "critic": "GameplayCritic",
             "end_conditions": ["StartingSwordCondition", "EnteredDungeon", "GameOver", "NextRoomTimeout"],
             "metrics" : ["room-result", "room-health", "ending", "reward-average", "reward-details"],
-            "start": [0],
+            "start": [
+                "0_58e",
+                "0_58s",
+                "0_58n",
+                "0_58w",
+                "0_68e",
+                "0_68s",
+                "0_68w",
+                "0_68n",
+                "0_5bn",
+                "0_5bs",
+                "0_5bw",
+                "0_5be",
+                "0_6be",
+                "0_6bs",
+                "0_6bn",
+                "0_6bw",
+                "0_59e",
+                "0_59s",
+                "0_59w",
+                "0_59n",
+                "0_2dn",
+                "0_2de",
+                "0_2dw"
+            ],
             "use_hints" : false,
             "per_reset":
             {
                 "bombs" : 3,
-                "sword" : 1
+                "sword" : 1,
+                "health" : "max_health"
             }
         },
         {
