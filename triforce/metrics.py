@@ -123,7 +123,7 @@ class RoomResultMetric(EnumMetric):
         if state_change.state.game_over:
             self.add(RoomResult.DIED)
         elif state_change.previous.full_location != state_change.state.full_location:
-            if state_change.state.full_location in state_change.state.objectives.next_rooms:
+            if state_change.state.full_location in state_change.previous.objectives.next_rooms:
                 self.add(RoomResult.CORRECT_EXIT)
             else:
                 self.add(RoomResult.INCORRECT_EXIT)
@@ -162,7 +162,16 @@ class RoomHealthChangeMetric(Metric):
         yield from self.lost.enumerate_values()
         yield from self.gained.enumerate_values()
 
-class RewardMetric(AveragedMetric):
+class SuccessMetric(AveragedMetric):
+    """Tracks the success rate of the agent."""
+    def __init__(self):
+        super().__init__("success-rate")
+        self._success = None
+
+    def end_scenario(self, terminated, truncated, reason):
+        self.add(1 if reason.startswith("success") else 0)
+
+class RewardAverageMetric(AveragedMetric):
     """Tracks the reward of the agent."""
     def __init__(self):
         super().__init__("rewards")
@@ -176,27 +185,6 @@ class RewardMetric(AveragedMetric):
 
     def end_scenario(self, terminated, truncated, reason):
         self.add(self._total)
-
-class SuccessMetric(AveragedMetric):
-    """Tracks the success rate of the agent."""
-    def __init__(self):
-        super().__init__("success-rate")
-        self._success = None
-
-    def end_scenario(self, terminated, truncated, reason):
-        self.add(1 if reason.startswith("success") else 0)
-
-class RewardAverageMetric(AveragedMetric):
-    """Tracks the average reward of the agent."""
-    def __init__(self):
-        super().__init__("ep-reward-avg")
-        self._running_total = 0
-
-    def step(self, state_change : StateChange, rewards : StepRewards):
-        self._running_total += rewards.value
-
-    def end_scenario(self, terminated, truncated, reason):
-        self.add(self._running_total)
 
 class RewardDetailsMetric(Metric):
     """Tracks the details of the reward."""
@@ -255,7 +243,7 @@ class RewardDetailsMetric(Metric):
                 yield f"{dictionary_name}-count/{name}", 0
             else:
                 yield f"{dictionary_name}/{name}", sum(x.total for x in count_total_list) / len(count_total_list)
-                yield f"{dictionary_name}-count/{name}", sum(x.count for x in count_total_list)
+                yield f"{dictionary_name}-count/{name}", sum(x.count for x in count_total_list) / len(count_total_list)
 
     def _add_to_dict(self, dictionary, key, value, count = 1):
         if key not in dictionary:
@@ -318,7 +306,6 @@ METRICS = {
 
     "room-result" : RoomResultMetric,
     "room-health" : RoomHealthChangeMetric,
-    "rewards" : RewardMetric,
     "success-rate" : SuccessMetric,
     "reward-average" : RewardAverageMetric,
     "reward-details" : RewardDetailsMetric,
