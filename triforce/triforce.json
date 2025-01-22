@@ -36,7 +36,8 @@
                 {
                     "scenario" : "start-overworld1",
                     "exit_criteria" : "success-rate",
-                    "threshold" : 0.85
+                    "threshold" : 0.95,
+                    "iterations" : 40000000
                 }
             ]
         }
