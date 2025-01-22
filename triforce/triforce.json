@@ -17,6 +17,30 @@
             "action_space" : ["MOVE"]
         }
     ],
+    "training-circuits" :
+    [
+        {
+            "name" : "overworld-circuit",
+            "description" : "Train the overworld model by first teaching it to walk rooms, then to make it to dungeon1, then to grab the sword, then all together.",
+            "scenarios" : [
+                {
+                    "scenario" : "overworld-sword",
+                    "exit_criteria" : "success-rate",
+                    "threshold" : 0.80
+                },
+                {
+                    "scenario" : "small-room-walk",
+                    "exit_criteria" : "room-result/correct-exit",
+                    "threshold" : 0.90
+                },
+                {
+                    "scenario" : "start-overworld1",
+                    "exit_criteria" : "success-rate",
+                    "threshold" : 0.85
+                }
+            ]
+        }
+    ],
     "scenarios": [
         {
             "name": "start-overworld1",
@@ -35,15 +59,10 @@
                 "reward-details"
             ],
             "start": ["0_77"],
-            "use_hints" : true,
-            "per_reset":
-            {
-                "bombs" : 3,
-                "sword" : 1
-            }
+            "use_hints" : true
         },
         {
-            "name": "initial-room-walk",
+            "name": "small-room-walk",
             "description": "A scoped down room walk",
             "iterations" : 2000000,
             "scenario_selector" : "probabilistic",
@@ -70,7 +89,7 @@
             }
         },
         {
-            "name": "overworld-room-walk",
+            "name": "large-room-walk",
             "description": "A training scenario to teach the model how to traverse the map and follow directions",
             "iterations" : 2000000,
             "scenario_selector" : "probabilistic",

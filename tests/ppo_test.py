@@ -99,7 +99,7 @@ def test_ppo_training(device, num_envs):
     if num_envs == 1:
         kwargs['target_steps'] = 128
 
-    ppo = PPO(device, log_dir=None, **kwargs)
+    ppo = PPO(log_dir=None, device=device, **kwargs)
 
     # Train PPO for enough iterations to allow learning.  There's no magic here, this just seems
     # to be enough iterations for this environment to learn.
@@ -143,7 +143,7 @@ def test_model_training(model_scenario, num_channels):
         return make_zelda_env(scenario_name, model_def.action_space, frame_stack=num_channels)
 
     progress = MagicMock()
-    ppo = PPO("cpu", log_dir=None)
+    ppo = PPO(log_dir=None, device="cpu")
     network = ppo.train(SharedNatureAgent, create_env, ppo.target_steps * 2 + 1, progress)
     assert progress.update.call_count, "PPO did not call update"
 

@@ -9,10 +9,11 @@ import os
 import faulthandler
 import traceback
 
-import torch
 from tqdm import tqdm
 from triforce import ModelDefinition, TrainingScenarioDefinition
 from triforce.ml_ppo import PPO
+from triforce.models import Network
+from triforce.scenario_wrapper import TrainingCircuitDefinition, TrainingCircuitEntry
 from triforce.zelda_env import make_zelda_env
 
 def _dump_trace_with_locals(exc_type, exc_value, exc_traceback):
@@ -27,6 +28,48 @@ def _dump_trace_with_locals(exc_type, exc_value, exc_traceback):
                 f.write(f"  {typename} {var_name}: {var_value}\n")
             f.write("\n")
 
+
+def _get_kwargs_from_args(args, model_def):
+    kwargs = {}
+    if args.dynamic_lr is not None:
+        kwargs['dynamic_lr'] = args.dynamic_lr
+
+    if args.load is not None:
+        obs, act = Network.load_spaces(args.load)
+        network = model_def.neural_net(obs, act)
+        network.load(args.load)
+        kwargs['model'] = network
+
+    if args.frame_stack is not None:
+        kwargs['frame_stack'] = args.frame_stack
+
+    if args.render_mode:
+        kwargs['render_mode'] = args.render_mode
+
+    if args.ent_coef is not None:
+        kwargs['ent_coeff'] = args.ent_coef
+
+    if args.device is not None:
+        kwargs['device'] = args.device
+
+    circuit_def = TrainingCircuitDefinition.get(args.scenario)
+    if circuit_def is None:
+        circuit = [TrainingCircuitEntry(scenario=args.scenario)]
+    else:
+        circuit = circuit_def.scenarios
+
+    return kwargs, circuit
+
+def train_once(ppo : PPO, scenario_def, model_def, model_directory, iterations, **kwargs):
+    """Trains a model with the given scenario"""
+    def create_env():
+        return make_zelda_env(scenario_def, model_def.action_space, **kwargs)
+
+    model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(), save_path=model_directory, **kwargs)
+    model_name = model_def.name.replace(' ', '_')
+    model.save(f"{model_directory}/{model_name}-{scenario_def.name}.pt")
+    return model
+
 def main():
     """Main entry point."""
     args = parse_args()
@@ -40,53 +83,53 @@ def main():
     if model_def is None:
         raise ValueError(f"Unknown model: {model_name}")
 
-    scenario_def = TrainingScenarioDefinition.get(args.scenario)
-    if scenario_def is None:
-        raise ValueError(f"Unknown scenario: {args.scenario}")
+    model_directory = os.path.join(args.output if args.output else 'training/', model_name)
+    log_dir = os.path.join(model_directory, "logs")
 
-    frame_stack = args.frame_stack if args.frame_stack > 0 else 1
-
-    def create_env():
-        return make_zelda_env(scenario_def, model_def.action_space, obs_kind=args.obs_kind, frame_stack=frame_stack)
-
-    device = args.device if args.device else  torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    iterations = args.iterations if args.iterations > 0 else scenario_def.iterations
-    output_path = args.output if args.output else 'training/'
-    model_directory = f"{output_path}/{model_name}"
-    log_dir = f"{model_directory}/logs"
-    save_name = model_name.replace(' ', '-')
     os.makedirs(model_directory, exist_ok=True)
-
     os.makedirs(log_dir, exist_ok=True)
 
-    kwargs = {}
-    if args.dynamic_lr is not None:
-        kwargs['dynamic_lr'] = args.dynamic_lr
+    kwargs, circuit = _get_kwargs_from_args(args, model_def)
+    ppo = PPO(log_dir, **kwargs)
 
-    if args.load:
-        kwargs['load'] = args.load
+    for scenario_entry in circuit:
+        scenario_def = TrainingScenarioDefinition.get(scenario_entry.scenario)
+        if scenario_def is None:
+            raise ValueError(f"Unknown scenario: {scenario_entry.scenario}")
 
+        if args.iterations is not None:
+            iterations = args.iterations
+        elif scenario_entry.iterations is not None:
+            iterations = scenario_entry.iterations
+        else:
+            iterations = scenario_def.iterations
 
-    ppo = PPO(device, log_dir, ent_coef=args.ent_coef)
-    model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(total=iterations), save_path=model_directory,
-                      model_name=save_name, **kwargs)
+        if scenario_entry.exit_criteria:
+            assert scenario_entry.threshold is not None, "Threshold must be set if exit criteria is set"
+            kwargs['exit_criteria'] = scenario_entry.exit_criteria
+            kwargs['exit_threshold'] = scenario_entry.threshold
 
-    model.save(f"{model_directory}/model.pt")
+        elif 'exit_criteria' in kwargs:
+            del kwargs['exit_criteria']
+            del kwargs['exit_threshold']
+
+        model = train_once(ppo, scenario_def, model_def, model_directory, iterations, **kwargs)
+        kwargs['model'] = model
 
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="train - Train Zelda ML models")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
-    parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
+    parser.add_argument("--ent-coef", type=float, default=None, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--dynamic-lr", action='store_true', default=None, help="Use a dynamic learning rate.")
     parser.add_argument("--frame-stack", type=int, default=None, help="The number of frames to stack.")
     parser.add_argument("--device", choices=['cpu', 'cuda'], default=None, help="The device to use.")
+    parser.add_argument("--render-mode", type=str, default=None, help="The render mode to use.")
 
     parser.add_argument('model', type=str, help='The model to train.')
     parser.add_argument('scenario', type=str, help='The scenario to train on.')
     parser.add_argument("--output", type=str, help="Location to write to.")
-    parser.add_argument("--iterations", type=int, default=-1, help="Override iteration count.")
+    parser.add_argument("--iterations", type=int, default=None, help="Override iteration count.")
     parser.add_argument("--parallel", type=int, default=1, help="Number of parallel environments to run.")
     parser.add_argument("--load", type=str, help="Load a model to continue training.")
     parser.add_argument("--hook-exceptions", action='store_true', help="Dump tracebacks on unhandled exceptions.")
