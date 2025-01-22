@@ -113,8 +113,12 @@ def main():
             del kwargs['exit_criteria']
             del kwargs['exit_threshold']
 
+
+        kwargs['model_name'] = model_def.name + '-' + scenario_def.name
         model = train_once(ppo, scenario_def, model_def, model_directory, iterations, **kwargs)
         kwargs['model'] = model
+
+    model.save(f"{model_directory}/{model_name}.pt")
 
 def parse_args():
     """Parse command line arguments."""

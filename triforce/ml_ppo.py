@@ -123,7 +123,8 @@ class PPO:
 
             # Save model, hopefully log rate and save interval are multiples of each other
             if save_path and next_model_save.add(buffer.memory_length):
-                network.save(f"{save_path}/network_{network.steps_trained}.pt")
+                model_name = kwargs.get('model_name', "network").replace(' ', '_')
+                network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
 
             # Optimize the network
             network.steps_trained += buffer.memory_length
