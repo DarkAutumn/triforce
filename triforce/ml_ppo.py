@@ -126,8 +126,8 @@ class PPO:
                 network.save(f"{save_path}/network_{network.steps_trained}.pt")
 
             # Optimize the network
-            network = self._optimize(network, buffer, total_iterations)
             network.steps_trained += buffer.memory_length
+            network = self._optimize(network, buffer, network.steps_trained)
 
         return network
 
