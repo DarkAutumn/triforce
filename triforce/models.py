@@ -24,6 +24,7 @@ class Network(nn.Module):
         self.observation_space = obs_space
         self.action_space = action_space
         self.steps_trained = 0
+        self.episodes_evaluated = 0
         self.metrics : Dict[str, float] = {}
 
         self.base = base_network
@@ -107,6 +108,7 @@ class Network(nn.Module):
         save_data = {
             "model_state_dict": self.state_dict(),
             "steps_trained": self.steps_trained,
+            "episodes_evaluated" : self.episodes_evaluated,
             "metrics": pickle.dumps(self.metrics) if self.metrics else None,
             "obs_space": self.observation_space,
             "action_space": self.action_space,
@@ -120,6 +122,7 @@ class Network(nn.Module):
 
         self.load_state_dict(save_data["model_state_dict"])
         self.steps_trained = save_data["steps_trained"]
+        self.episodes_evaluated = save_data.get("episodes_evaluated", 0)
         metrics_pickled = save_data.get("metrics")
         self.metrics = pickle.loads(metrics_pickled) if metrics_pickled else {}
 
@@ -136,7 +139,15 @@ class Network(nn.Module):
         """Load the metrics from a file."""
         save_data = torch.load(path)
         metrics_pickled = save_data.get("metrics")
-        return pickle.loads(metrics_pickled) if metrics_pickled else {}
+        metrics = pickle.loads(metrics_pickled) if metrics_pickled else {}
+        episodes_evaluated = save_data.get("episodes_evaluated", 0)
+        return metrics, episodes_evaluated
+
+    @staticmethod
+    def load_spaces(path):
+        """Load the observation and action spaces from a file."""
+        save_data = torch.load(path)
+        return save_data["obs_space"], save_data["action_space"]
 
 class NatureCNN(nn.Module):
     """Simple CNN."""

@@ -4,59 +4,56 @@ from multiprocessing.sharedctypes import Synchronized
 import sys
 import os
 import argparse
+from typing import Dict
 from tqdm import tqdm
-from triforce import ModelDefinition, make_zelda_env, Network, TrainingScenarioDefinition
-from triforce.rewards import TotalRewards, RewardStats
+from triforce import ModelDefinition, make_zelda_env, Network, TrainingScenarioDefinition,  MetricTracker
 
-# pylint: disable=global-statement,global-variable-undefined
+def _print_stat_header(metrics : Dict[str, float]):
+    header_result = f"{'Filename':<32} {'Steps':>9} "
 
-def _print_stat_header():
-    print(f"{'Model':<20} {'Filename':<25} {'Steps':>9} {'Total Reward':>13} {'Duration':>9} "
-          f"{'Success Rate':>12}")
+    metric_columns = []
+    for key in metrics.items():
+        if len(header_result) > 100:
+            break
 
-def _print_stat_row(model_name, filename, steps_trained, stats : RewardStats):
-    print(f"{model_name:<20} {filename:<25} {steps_trained:9,} {stats.reward_mean:13.1f} "
-          f"{int(stats.total_steps / 60.1):9} {stats.success_rate * 100:11.1f}%")
+        metric_columns.append(key)
+        header_result += f"{key[-9:]:>9} "
 
-def run_one_scenario(args, model_name, model_path, counter_or_callback):
+    print(header_result)
+    return metric_columns
+
+def _print_stat_row(filename, steps_trained, metrics : Dict[str, float], metric_columns):
+    result = f"{filename:<32} {steps_trained:>9,} "
+    for key in metric_columns:
+        result += f"{metrics[key]:>9.2f} "
+
+    print(result)
+
+
+def evaluate_one_model(make_env, network, episodes, counter_or_callback) -> MetricTracker:
     """Runs a single scenario."""
     # pylint: disable=redefined-outer-name,too-many-locals
-    model_def = ModelDefinition.get(model_name)
-    scenario_def = TrainingScenarioDefinition.get(args.scenario)
-    env = make_zelda_env_from_args(model_def, scenario_def, args)
-    network : Network = model_def.neural_net(env.observation_space, env.action_space)
-    network.load(model_path)
+    env = make_env()
+    try:
+        for _ in range(episodes):
+            obs, info = env.reset()
 
-    total = TotalRewards()
-    for _ in range(args.episodes):
-        obs, info = env.reset()
+            terminated = truncated = False
+            while not terminated and not truncated:
+                action_mask = info.get('action_mask', None)
+                action_mask = action_mask.unsqueeze(0) if action_mask is not None else None
+                action = network.get_action(obs, action_mask)
+                obs, _, terminated, truncated, info = env.step(action)
 
-        terminated = truncated = False
-        while not terminated and not truncated:
-            action_mask = info.get('action_mask', None)
-            action_mask = action_mask.unsqueeze(0) if action_mask is not None else None
-            action = network.get_action(obs, action_mask)
-            obs, _, terminated, truncated, info = env.step(action) # pylint: disable=unbalanced-tuple-unpacking
-            action_mask = info.get('action_mask', None)
+            if isinstance(counter_or_callback, Synchronized):
+                with counter_or_callback.get_lock():
+                    counter_or_callback.value += 1
+            else:
+                counter_or_callback()
 
-        total.add(info['episode_rewards'])
-        if isinstance(counter_or_callback, Synchronized):
-            with counter_or_callback.get_lock():
-                counter_or_callback.value += 1
-        else:
-            counter_or_callback()
-
-    env.close()
-
-    stats = total.stats
-    network.stats = stats
-    network.stats.evaluated = True
-    network.save(model_path)
-
-def make_zelda_env_from_args(model : ModelDefinition, scenario_def, args):
-    """Creates a ZeldaML instance."""
-    render_mode = 'human' if args.render else None
-    return make_zelda_env(scenario_def, model.action_space, render_mode=render_mode, obs_kind=args.obs_kind)
+        return MetricTracker.get_metrics_and_clear()
+    finally:
+        env.close()
 
 def get_model_path(args):
     """Gets the model path."""
@@ -66,6 +63,18 @@ def get_model_path(args):
 def main():
     """Main entry point."""
     args = parse_args()
+    scenario_def = TrainingScenarioDefinition.get(args.scenario)
+    def make_env():
+        """Creates the environment."""
+        model_def = ModelDefinition.get(args.model)
+        render_mode = 'human' if args.render else None
+        return make_zelda_env(scenario_def, model_def.action_space, render_mode=render_mode,
+                              frame_stack=args.frame_stack)
+
+
+    observation_space, action_space = None, None
+
+    networks = []
 
     all_scenarios = create_scenarios(args)
     total_episodes = sum(args.episodes for x in all_scenarios if x[-1])
@@ -73,25 +82,24 @@ def main():
         def update_progress():
             progress.update(1)
 
-        for args, model_name, path, process in all_scenarios:
+        for model_name, path, process in all_scenarios:
+            if observation_space is None:
+                observation_space, action_space = Network.load_spaces(path)
+
+            model_def = ModelDefinition.get(model_name)
+            network : Network = model_def.neural_net(observation_space, action_space)
+            network.load(path)
+            networks.append((network, path))
             if process:
-                run_one_scenario(args, model_name, path, update_progress)
+                if metrics := evaluate_one_model(make_env, network, args.episodes, update_progress):
+                    network.metrics = metrics
+                    network.episodes_evaluated = args.episodes
+                    network.save(path)
 
-    _print_stat_header()
-    env = None
-    for args, model_name, path, _ in all_scenarios:
-        model_def = ModelDefinition.get(model_name)
-        scenario_def = TrainingScenarioDefinition.get(args.scenario)
-        if env is None:
-            env = make_zelda_env_from_args(model_def, scenario_def, args)
-
-        network = model_def.neural_net(env.observation_space, env.action_space)
-        network.load(path)
-        filename = os.path.basename(path)
-        _print_stat_row(model_name, filename, network.steps_trained, network.stats)
-
-    if env:
-        env.close()
+    if networks:
+        columns = _print_stat_header(network.metrics)
+        for network, path in networks:
+            _print_stat_row(os.path.basename(path), network.steps_trained, network.stats, columns)
 
 def create_scenarios(args):
     """Finds all scenarios to be executed.  Also returns the results of any previous evaluations."""
@@ -106,12 +114,9 @@ def create_scenarios(args):
     models_to_evaluate += [x for x in available_models.keys() if not isinstance(x, int)]
     for key in models_to_evaluate:
         path = available_models[key]
-        stats = Network.load_stats(path)
-        evaluated = stats.evaluated if stats and hasattr(stats, 'evaluated') else False
-        if not args.reprocess and evaluated and stats.episodes >= args.episodes:
-            process = False
-
-        all_scenarios.append((args, model_name, path, process))
+        _, episodes_evaluated = Network.load_metrics(path)
+        process = args.reprocess or episodes_evaluated < args.episodes
+        all_scenarios.append((model_name, path, process))
 
     if args.limit > 0:
         all_scenarios = all_scenarios[-args.limit:]
@@ -123,8 +128,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="evaluate - Evaluate Zelda ML models.")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
-    parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
-                        help="The kind of observation to use.")
+    parser.add_argument("--frame-stack", type=int, default=3, help="Number of frames to stack in the observation.")
     parser.add_argument("--episodes", type=int, default=100, help="Number of episodes to test.")
     parser.add_argument("--parallel", type=int, default=1, help="Use parallel environments to evaluate the models.")
     parser.add_argument("--render", action='store_true', help="Render the game while evaluating the models.")
