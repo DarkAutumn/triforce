@@ -77,7 +77,7 @@ class PPO:
         env = create_env()
         try:
             network = create_network(network, env.observation_space, env.action_space)
-            if (load_path := kwargs.get('load_path', None)) is not None:
+            if (load_path := kwargs.get('load', None)) is not None:
                 network.load(load_path)
 
             if kwargs.get('dynamic_lr', False):
