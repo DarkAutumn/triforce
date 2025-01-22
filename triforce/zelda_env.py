@@ -24,7 +24,7 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **
     """
     render_mode = kwargs.get('render_mode', None)
     translation = kwargs.get('translation', True)
-    frame_stack = kwargs.get('frame_stack', 1)
+    frame_stack = kwargs.get('frame_stack', 3)
     obs_kind = kwargs.get('obs_kind', 'viewport')
 
     state = random.choice(scenario.start)

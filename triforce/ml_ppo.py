@@ -1,3 +1,4 @@
+import math
 import time
 import torch
 from torch import nn
@@ -44,7 +45,8 @@ class Threshold:
 
 class PPO:
     """PPO Implementation.  Adapted from from https://www.youtube.com/watch?v=MEt6rrxH8W4."""
-    def __init__(self, device, log_dir, **kwargs):
+    def __init__(self, log_dir, **kwargs):
+        self.device = kwargs.get('device', torch.device("cuda" if torch.cuda.is_available() else "cpu"))
         self.target_steps = kwargs.get('target_steps', TARGET_STEPS)
         self._norm_advantages = kwargs.get('norm_advantages', NORM_ADVANTAGES)
         self._clip_val_loss = kwargs.get('clip_val_loss', CLIP_VAL_LOSS)
@@ -62,7 +64,6 @@ class PPO:
         self.kwargs = kwargs
 
         self.log_dir = log_dir
-        self.device = device
         self.tensorboard = SummaryWriter(log_dir) if log_dir else None
 
         self.total_steps = 0
@@ -76,9 +77,7 @@ class PPO:
 
         env = create_env()
         try:
-            network = create_network(network, env.observation_space, env.action_space)
-            if (load_path := kwargs.get('load', None)) is not None:
-                network.load(load_path)
+            network = kwargs.get('model', None) or create_network(network, env.observation_space, env.action_space)
 
             if kwargs.get('dynamic_lr', False):
                 self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MEDIUM, eps=self._epsilon)
@@ -98,8 +97,11 @@ class PPO:
                                   self._gamma, self._lambda)
 
         save_path = kwargs.get('save_path', None)
+        exit_criteria = kwargs.get('exit_criteria', None)
+        exit_threshold = kwargs.get('exit_threshold', None)
         next_tensorboard = Threshold(LOG_RATE)
         next_model_save = Threshold(SAVE_INTERVAL)
+        progress.total = math.ceil(iterations / buffer.memory_length) * buffer.memory_length
         total_iterations = 0
 
         while total_iterations < iterations:
@@ -112,18 +114,26 @@ class PPO:
                 network.metrics = MetricTracker.get_metrics_and_clear()
                 if network.metrics:
                     self._write_metrics(network.metrics, network.steps_trained)
+
+                    if exit_criteria and self._hit_exit_criteria(network.metrics, exit_criteria, exit_threshold):
+                        break
+
                     if kwargs.get('dynamic_lr', False):
                         self._adjust_learning_rate(network.metrics)
 
             # Save model, hopefully log rate and save interval are multiples of each other
             if save_path and next_model_save.add(buffer.memory_length):
-                network.save(f"{save_path}/network_{network.steps_trained}.pt")
+                model_name = kwargs.get('model_name', "network").replace(' ', '_')
+                network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
 
             # Optimize the network
-            network = self._optimize(network, buffer, total_iterations)
             network.steps_trained += buffer.memory_length
+            network = self._optimize(network, buffer, network.steps_trained)
 
         return network
+
+    def _hit_exit_criteria(self, metrics, exit_criteria, exit_threshold):
+        return metrics.get(exit_criteria, 0) >= exit_threshold
 
     def _write_metrics(self, metrics, total_iterations):
         timestamp = time.time()
@@ -132,6 +142,9 @@ class PPO:
                 name = f"metrics/{name}"
 
             self.tensorboard.add_scalar(name, value, total_iterations, timestamp)
+
+        if metrics:
+            self.tensorboard.flush()
 
     def _adjust_learning_rate(self, metrics):
         success_rate = metrics.get("success-rate", None)

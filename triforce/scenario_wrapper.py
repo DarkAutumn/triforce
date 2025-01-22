@@ -94,6 +94,42 @@ class TrainingScenarioDefinition(BaseModel):
         """Loads the models and scenarios from triforce.json."""
         return list(TrainingScenarioDefinition._load_scenarios().values())
 
+class TrainingCircuitEntry(BaseModel):
+    """An entry in a training circuit."""
+    scenario : str
+    iterations : Optional[int] = None
+    exit_criteria : Optional[str] = None
+    threshold : Optional[float] = None
+
+class TrainingCircuitDefinition(BaseModel):
+    """A training circuit."""
+    name : str
+    description : str
+    scenarios : List[TrainingCircuitEntry]
+
+    @staticmethod
+    def _load_circuits():
+        """Loads the models and scenarios from triforce.json."""
+        circuits = {}
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        with open(os.path.join(script_dir, 'triforce.json'), encoding='utf-8') as f:
+            for circuit in json.load(f)["training-circuits"]:
+                circuit = TrainingCircuitDefinition(**circuit)
+                circuits[circuit.name] = circuit
+
+        return circuits
+
+    @staticmethod
+    def get(name, default=None):
+        """Loads the models and scenarios from triforce.json."""
+        circuits = TrainingCircuitDefinition._load_circuits()
+        return circuits.get(name, default)
+
+    @staticmethod
+    def get_all():
+        """Loads the models and scenarios from triforce.json."""
+        return list(TrainingCircuitDefinition._load_circuits().values())
+
 class RoomResult:
     """Tracks whether link took damage in a room."""
     def __init__(self, room, came_from, health_lost, success):
