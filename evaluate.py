@@ -62,6 +62,7 @@ def get_model_path(args):
 
 def main():
     """Main entry point."""
+    # pylint: disable=too-many-locals
     args = parse_args()
     scenario_def = TrainingScenarioDefinition.get(args.scenario)
     def make_env():
