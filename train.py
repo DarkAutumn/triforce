@@ -80,9 +80,7 @@ def parse_args():
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--dynamic-lr", action='store_true', default=None, help="Use a dynamic learning rate.")
-    parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
-                        help="The kind of observation to use.")
-    parser.add_argument("--frame-stack", type=int, default=3, help="The number of frames to stack in the observation.")
+    parser.add_argument("--frame-stack", type=int, default=None, help="The number of frames to stack.")
     parser.add_argument("--device", choices=['cpu', 'cuda'], default=None, help="The device to use.")
 
     parser.add_argument('model', type=str, help='The model to train.')
