@@ -1,7 +1,6 @@
 
 from collections import Counter
 from enum import Enum
-import time
 from typing import Any, Iterable, Tuple
 
 from .rewards import Reward, StepRewards
@@ -16,14 +15,6 @@ class Metric:
     def enumerate_values(self) -> Iterable[Tuple[str, Any]]:
         """Returns the values of the metric."""
         raise NotImplementedError
-
-    def to_tensorboard(self, writer, step):
-        """Writes the metric to tensorboard."""
-        for key, value in self.enumerate_values():
-            if '/' not in key:
-                key = f"metrics/{key}"
-
-            writer.add_scalar(key, value, step)
 
     def begin_scenario(self, state):
         """Called when a new scenario begins."""
@@ -368,11 +359,3 @@ class MetricTracker:
             metric.clear()
 
         return result
-
-    def to_tensorboard(self, writer, step, timestamp = None):
-        """Writes the metrics to tensorboard."""
-        if timestamp is None:
-            timestamp = time.time()
-
-        for metric in self.metrics:
-            metric.to_tensorboard(writer, step, timestamp)
