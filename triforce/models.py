@@ -5,7 +5,7 @@ import pickle
 import sys
 import json
 import os
-from typing import List, Optional
+from typing import List
 from pydantic import BaseModel, field_validator
 import torch
 from torch import nn
