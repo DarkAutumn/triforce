@@ -72,7 +72,7 @@
         {
             "name": "overworld-room-walk",
             "description": "A training scenario to teach the model how to traverse the map and follow directions",
-            "iterations" : 5000000,
+            "iterations" : 2000000,
             "scenario_selector" : "probabilistic",
             "objective" : "RoomWalk",
             "critic": "GameplayCritic",
