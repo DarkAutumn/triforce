@@ -217,7 +217,7 @@ class StateChangeWrapper(gym.Wrapper):
     def __init__(self, env, scenario):
         super().__init__(env)
         self._discounts = {}
-        self._objective_type = scenario.objective
+        self._objective_type = scenario.objective if scenario else None
         self._objectives : ObjectiveSelector = None
         self._prev_state = None
 
@@ -238,8 +238,9 @@ class StateChangeWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         frames, info = self.env.reset(**kwargs)
         self._discounts.clear()
-        self._objectives = self._objective_type()
         self._prev_state = None
+        if self._objective_type:
+            self._objectives = self._objective_type()
 
         state = self._update_state(None, frames, info)
         return frames, state
@@ -259,9 +260,10 @@ class StateChangeWrapper(gym.Wrapper):
         prev, state = self._create_and_set_state(info)
         health_change_ignore = self._apply_modifications(prev, state)
 
-        objectives = self._objectives.get_current_objectives(prev, state)
-        state.objectives = objectives
-        state.wavefront = state.room.calculate_wavefront_for_link(objectives.targets)
+        if self._objectives:
+            objectives = self._objectives.get_current_objectives(prev, state)
+            state.objectives = objectives
+            state.wavefront = state.room.calculate_wavefront_for_link(objectives.targets)
 
         if prev:
             return StateChange(self, prev, state, action, frames, self._discounts, health_change_ignore)

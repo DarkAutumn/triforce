@@ -68,7 +68,6 @@ class Timeout(ZeldaEndCondition):
 
         return False, False, None
 
-
 class NextRoomTimeout(ZeldaEndCondition):
     """End the scenario if the agent is in the same screen position, or fails to discover a new room."""
     def __init__(self):
@@ -206,5 +205,23 @@ class LeftRoute(ZeldaEndCondition):
             objectives : ObjectiveSelector = state_change.previous.objectives
             if objectives.kind == ObjectiveKind.MOVE and state.full_location not in objectives.next_rooms:
                 return True, False, "failure-left-route"
+
+        return False, False, None
+
+class LeftInitialRoomWalk(ZeldaEndCondition):
+    """End condition for leaving the initial room walk scenario."""
+
+    def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
+        prev = state_change.previous
+        state = state_change.state
+
+        if state.game_over:
+            return True, False, "failure-terminated-death"
+
+        if prev.full_location != state.full_location:
+            if state.full_location in prev.objectives.next_rooms:
+                return True, False, "success-exit"
+
+            return True, False, "failure-wrong-exit"
 
         return False, False, None

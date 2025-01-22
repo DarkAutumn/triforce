@@ -9,6 +9,7 @@ from .zelda_env import make_zelda_env
 from .simulate_critic import simulate_critique
 from .models import ModelDefinition, Network, get_neural_network, register_neural_network
 from .scenario_wrapper import TrainingScenarioDefinition
+from .metrics import MetricTracker
 
 # add custom integrations to retro
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -25,4 +26,5 @@ __all__ = [
     Network.__name__,
     get_neural_network.__name__,
     register_neural_network.__name__,
+    MetricTracker.__name__,
     ]

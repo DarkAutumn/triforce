@@ -1,7 +1,6 @@
 
 from collections import Counter
 from enum import Enum
-import time
 from typing import Any, Iterable, Tuple
 
 from .rewards import Reward, StepRewards
@@ -16,14 +15,6 @@ class Metric:
     def enumerate_values(self) -> Iterable[Tuple[str, Any]]:
         """Returns the values of the metric."""
         raise NotImplementedError
-
-    def to_tensorboard(self, writer, step):
-        """Writes the metric to tensorboard."""
-        for key, value in self.enumerate_values():
-            if '/' not in key:
-                key = f"metrics/{key}"
-
-            writer.add_scalar(key, value, step)
 
     def begin_scenario(self, state):
         """Called when a new scenario begins."""
@@ -121,12 +112,12 @@ class RoomResultMetric(EnumMetric):
 
     def step(self, state_change : StateChange, rewards : StepRewards):
         if state_change.state.game_over:
-            self.add(RoomResult.DIED.value)
+            self.add(RoomResult.DIED)
         elif state_change.previous.full_location != state_change.state.full_location:
-            if state_change.full_location in state_change.state.objectives.next_rooms:
-                self.add(RoomResult.CORRECT_EXIT.value)
+            if state_change.state.full_location in state_change.previous.objectives.next_rooms:
+                self.add(RoomResult.CORRECT_EXIT)
             else:
-                self.add(RoomResult.INCORRECT_EXIT.value)
+                self.add(RoomResult.INCORRECT_EXIT)
 
 class RoomHealthChangeMetric(Metric):
     """Tracks the change in health in a room."""
@@ -162,7 +153,16 @@ class RoomHealthChangeMetric(Metric):
         yield from self.lost.enumerate_values()
         yield from self.gained.enumerate_values()
 
-class RewardMetric(AveragedMetric):
+class SuccessMetric(AveragedMetric):
+    """Tracks the success rate of the agent."""
+    def __init__(self):
+        super().__init__("success-rate")
+        self._success = None
+
+    def end_scenario(self, terminated, truncated, reason):
+        self.add(1 if reason.startswith("success") else 0)
+
+class RewardAverageMetric(AveragedMetric):
     """Tracks the reward of the agent."""
     def __init__(self):
         super().__init__("rewards")
@@ -176,27 +176,6 @@ class RewardMetric(AveragedMetric):
 
     def end_scenario(self, terminated, truncated, reason):
         self.add(self._total)
-
-class SuccessMetric(AveragedMetric):
-    """Tracks the success rate of the agent."""
-    def __init__(self):
-        super().__init__("success-rate")
-        self._success = None
-
-    def end_scenario(self, terminated, truncated, reason):
-        self.add(1 if reason.startswith("success") else 0)
-
-class RewardAverageMetric(AveragedMetric):
-    """Tracks the average reward of the agent."""
-    def __init__(self):
-        super().__init__("ep-reward-avg")
-        self._running_total = 0
-
-    def step(self, state_change : StateChange, rewards : StepRewards):
-        self._running_total += rewards.value
-
-    def end_scenario(self, terminated, truncated, reason):
-        self.add(self._running_total)
 
 class RewardDetailsMetric(Metric):
     """Tracks the details of the reward."""
@@ -255,7 +234,7 @@ class RewardDetailsMetric(Metric):
                 yield f"{dictionary_name}-count/{name}", 0
             else:
                 yield f"{dictionary_name}/{name}", sum(x.total for x in count_total_list) / len(count_total_list)
-                yield f"{dictionary_name}-count/{name}", sum(x.count for x in count_total_list)
+                yield f"{dictionary_name}-count/{name}", sum(x.count for x in count_total_list) / len(count_total_list)
 
     def _add_to_dict(self, dictionary, key, value, count = 1):
         if key not in dictionary:
@@ -318,7 +297,6 @@ METRICS = {
 
     "room-result" : RoomResultMetric,
     "room-health" : RoomHealthChangeMetric,
-    "rewards" : RewardMetric,
     "success-rate" : SuccessMetric,
     "reward-average" : RewardAverageMetric,
     "reward-details" : RewardDetailsMetric,
@@ -381,11 +359,3 @@ class MetricTracker:
             metric.clear()
 
         return result
-
-    def to_tensorboard(self, writer, step, timestamp = None):
-        """Writes the metrics to tensorboard."""
-        if timestamp is None:
-            timestamp = time.time()
-
-        for metric in self.metrics:
-            metric.to_tensorboard(writer, step, timestamp)

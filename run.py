@@ -85,7 +85,7 @@ class DisplayWindow:
         running_rewards = {}
         buttons = deque(maxlen=100)
 
-        show_endings = False
+        show_endings = True
         recording = None
         self.overlay = 0
 
@@ -111,6 +111,8 @@ class DisplayWindow:
 
                 # update rewards for display
                 self._update_rewards(step, action_mask, running_rewards, buttons)
+                if step.terminated or step.truncated:
+                    endings[step.rewards.ending] = endings.get(step.rewards.ending, 0) + 1
 
             frames = step.frames
             if not frames:
@@ -520,7 +522,7 @@ def parse_args():
                         help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
     parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
-    parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack.")
+    parser.add_argument("--frame-stack", type=int, default=3, help="Number of frames to stack.")
 
     parser.add_argument('model', type=str, help='Model name')
     parser.add_argument('scenario', type=str, help='Scenario name')

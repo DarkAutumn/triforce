@@ -65,7 +65,7 @@ def main():
         kwargs['dynamic_lr'] = args.dynamic_lr
 
     if args.load:
-        kwargs['load_from'] = args.load
+        kwargs['load'] = args.load
 
 
     ppo = PPO(device, log_dir, ent_coef=args.ent_coef)
@@ -82,7 +82,7 @@ def parse_args():
     parser.add_argument("--dynamic-lr", action='store_true', default=None, help="Use a dynamic learning rate.")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
-    parser.add_argument("--frame-stack", type=int, default=1, help="The number of frames to stack in the observation.")
+    parser.add_argument("--frame-stack", type=int, default=3, help="The number of frames to stack in the observation.")
     parser.add_argument("--device", choices=['cpu', 'cuda'], default=None, help="The device to use.")
 
     parser.add_argument('model', type=str, help='The model to train.')
