@@ -69,7 +69,7 @@
             "objective" : "RoomWalk",
             "critic": "GameplayCritic",
             "end_conditions": ["LeftInitialRoomWalk", "NextRoomTimeout"],
-            "metrics" : ["room-result", "room-health", "ending", "reward-average", "reward-details"],
+            "metrics" : ["success-rate", "room-result", "room-health", "ending", "reward-average", "reward-details"],
             "start": [
                 "0_58e",
                 "0_58s",
