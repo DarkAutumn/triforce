@@ -291,42 +291,12 @@ class ModelDefinition(BaseModel):
     name : str
     neural_net : type
     action_space : List[str]
-    priority : int
-
-    levels : List[int]
-    rooms : Optional[List[int]] = None
-    requires_triforce : Optional[int] = None
-    equipment_required : Optional[List[str]] = []
 
     @field_validator('neural_net', mode='before')
     @classmethod
     def neural_net_validator(cls, value):
         """Gets the class from the name."""
         return get_neural_network(value)
-
-    @field_validator('levels', 'rooms', mode='before')
-    @classmethod
-    def list_of_int_validator(cls, value):
-        """
-        Accepts a list of integers, a single integer, or a string representing a hexadecimal value and returns a list
-        of integers.
-
-        Args:
-            value: The room value to be validated.
-
-        Returns:
-            A list of integers.
-        """
-        if isinstance(value, int):
-            return [value]
-
-        if isinstance(value, str):
-            return [int(value, 16)]
-
-        if isinstance(value, list):
-            return [int(x, 16) if isinstance(x, str) else x for x in value]
-
-        return value
 
     def find_available_models(self, path):
         """Finds the available models for this model definition in the given path.  Returns a dictionary of name to

@@ -4,26 +4,17 @@
         {
             "name" : "overworld",
             "neural_net" : "SharedNatureAgent",
-            "action_space" : ["MOVE", "SWORD", "BEAMS"],
-            "priority" : 0,
-            "levels" : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-            "rooms" : ["0x77"]
+            "action_space" : ["MOVE", "SWORD", "BEAMS"]
         },
         {
             "name" : "dungeon1",
             "neural_net" : "SharedNatureAgent",
-            "action_space" : ["MOVE", "SWORD", "BEAMS"],
-            "priority" : 0,
-            "levels" : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-            "rooms" : ["0x77"]
+            "action_space" : ["MOVE", "SWORD", "BEAMS"]
         },
         {
             "name" : "overworld-sword",
             "neural_net" : "SharedNatureAgent",
-            "action_space" : ["MOVE"],
-            "priority" : 2,
-            "levels" : 0,
-            "rooms" : ["0x77"]
+            "action_space" : ["MOVE"]
         }
     ],
     "scenarios": [
