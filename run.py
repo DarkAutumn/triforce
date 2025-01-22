@@ -522,7 +522,7 @@ def parse_args():
                         help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
     parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
-    parser.add_argument("--frame-stack", type=int, default=1, help="Number of frames to stack.")
+    parser.add_argument("--frame-stack", type=int, default=3, help="Number of frames to stack.")
 
     parser.add_argument('model', type=str, help='Model name')
     parser.add_argument('scenario', type=str, help='Scenario name')
