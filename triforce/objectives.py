@@ -403,6 +403,12 @@ class RoomWalk(ObjectiveSelector):
 
             room = state.room
 
+            # Check if this room has a treasure
+            room_memory = self._get_room(state.full_location)
+            if room_memory.item is not None:
+                self._sequence.append(Objective(ObjectiveKind.FIGHT, set(), set()))
+                self._sequence.append(Objective(ObjectiveKind.TREASURE, set(), set()))
+
             # Check if this room has a cave.
             if cave := room.cave_tile:
                 cave_location = MapLocation(state.level, state.location, True)
@@ -436,7 +442,23 @@ class RoomWalk(ObjectiveSelector):
 
             self._sequence.append(Objective(ObjectiveKind.MOVE, set(tile_objectives), next_rooms))
 
-        return self._sequence[0]
+        while True:
+            objective = self._sequence[0]
+            if objective.kind == ObjectiveKind.FIGHT:
+                if state.enemies:
+                    objective.targets = self._get_enemy_tile_objectives(state)
+                else:
+                    self._sequence.pop(0)
+                    continue
+
+            elif objective.kind == ObjectiveKind.TREASURE:
+                if state.treasure_tile is None:
+                    self._sequence.pop(0)
+                    continue
+
+                objective.targets = [state.treasure_tile]
+
+            return objective
 
     def _came_from(self, prev, state):
         came_from = state.full_location.get_direction_to(prev.full_location)
