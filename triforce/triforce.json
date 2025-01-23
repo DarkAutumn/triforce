@@ -7,7 +7,7 @@
             "action_space" : ["MOVE", "SWORD", "BEAMS"]
         },
         {
-            "name" : "dungeon1",
+            "name" : "dungeon",
             "neural_net" : "SharedNatureAgent",
             "action_space" : ["MOVE", "SWORD", "BEAMS"]
         },
@@ -29,7 +29,7 @@
                     "threshold" : 0.80
                 },
                 {
-                    "scenario" : "small-room-walk",
+                    "scenario" : "overworld-room-walk",
                     "exit_criteria" : "room-result/correct-exit",
                     "threshold" : 0.90
                 },
@@ -59,28 +59,38 @@
                 "reward-average",
                 "reward-details"
             ],
-            "start": ["0_77"],
+            "start": ["0_77c"],
             "use_hints" : true
         },
         {
-            "name": "small-room-walk",
-            "description": "A scoped down room walk",
+            "name": "start-overworld1",
+            "description": "The full game with training variables",
             "iterations" : 2000000,
-            "scenario_selector" : "probabilistic",
-            "objective" : "RoomWalk",
+            "scenario_selector" : "round-robin",
+            "objective" : "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftInitialRoomWalk", "NextRoomTimeout"],
-            "metrics" : ["success-rate", "room-result", "room-health", "ending", "reward-average", "reward-details"],
-            "start": [
-                "0_58e",
-                "0_58s",
-                "0_58n",
-                "0_58w",
-                "0_68e",
-                "0_68s",
-                "0_68w",
-                "0_68n"
+            "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
+            "metrics" : [
+                "success-rate",
+                "overworld-progress",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
             ],
+            "start": ["0_77c"],
+            "use_hints" : true
+        },
+        {
+            "name": "overworld-skip-opening",
+            "description": "A scoped down room walk",
+            "iterations" : 5000000,
+            "scenario_selector" : "round-robin",
+            "objective" : "GameCompletion",
+            "critic": "GameplayCritic",
+            "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
+            "metrics" : ["success-rate", "room-result", "room-health", "ending", "reward-average", "reward-details"],
+            "start": [ "0_67s" ],
             "use_hints" : false,
             "per_reset":
             {
@@ -90,7 +100,46 @@
             }
         },
         {
-            "name": "large-room-walk",
+            "name": "dungeon1-room-walk",
+            "description": "Dungeon 1 room walk.",
+            "iterations" : 5000000,
+            "scenario_selector" : "probabilistic",
+            "objective" : "RoomWalk",
+            "critic": "GameplayCritic",
+            "end_conditions": ["RoomWalkCondition", "GainedTriforce"],
+            "metrics" : [
+                "success-rate",
+                "room-result",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
+            "start": [
+                "1_23",
+                "1_33",
+                "1_42",
+                "1_43",
+                "1_44",
+                "1_35",
+                "1_36",
+                "1_72",
+                "1_74",
+                "1_63",
+                "1_52",
+                "1_53"
+            ],
+            "use_hints" : false,
+            "per_reset":
+            {
+                "bombs" : 3,
+                "max_health" : 2,
+                "health" : 3,
+                "keys" : 4
+            }
+        },
+        {
+            "name": "overworld-room-walk-large",
             "description": "A training scenario to teach the model how to traverse the map and follow directions",
             "iterations" : 2000000,
             "scenario_selector" : "probabilistic",
@@ -133,7 +182,7 @@
         },
         {
             "name": "start-dungeon1",
-            "description": "The dungeon 1.",
+            "description": "Dungeon 1.",
             "iterations" : 2000000,
             "scenario_selector" : "round-robin",
             "objective" : "GameCompletion",
@@ -148,7 +197,32 @@
                 "reward-details"
             ],
             "start": ["1_72e", "1_74w", "1_63s"],
-            "use_hints" : true,
+            "use_hints" : false,
+            "per_reset":
+            {
+                "bombs" : 3,
+                "max_health" : 2,
+                "health" : 3
+            }
+        },
+        {
+            "name": "dungeon1-skip-opening",
+            "description": "Dungeon 1.",
+            "iterations" : 5000000,
+            "scenario_selector" : "round-robin",
+            "objective" : "GameCompletion",
+            "critic": "GameplayCritic",
+            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout"],
+            "metrics" : [
+                "success-rate",
+                "overworld-progress",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
+            "start": ["1_63s"],
+            "use_hints" : false,
             "per_reset":
             {
                 "bombs" : 3,
@@ -188,7 +262,7 @@
             "critic": "OverworldSwordCritic",
             "end_conditions": ["StartingRoomConditions", "Timeout"],
             "metrics" : ["success-rate", "ending", "reward-average", "reward-details"],
-            "start": ["0_77"],
+            "start": ["0_77c"],
             "per_reset":
             {
                 "hearts_and_containers" : 34,
