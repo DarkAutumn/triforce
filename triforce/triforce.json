@@ -89,7 +89,7 @@
             "objective" : "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
-            "metrics" : ["success-rate", "room-result", "room-health", "ending", "reward-average", "reward-details"],
+            "metrics" : ["room-result", "success-rate", "room-health", "ending", "reward-average", "reward-details"],
             "start": [ "0_67s" ],
             "use_hints" : false,
             "per_reset":
@@ -214,8 +214,9 @@
             "critic": "GameplayCritic",
             "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout"],
             "metrics" : [
+                "room-result",
                 "success-rate",
-                "overworld-progress",
+                "dungeon1-progress",
                 "room-health",
                 "ending",
                 "reward-average",
