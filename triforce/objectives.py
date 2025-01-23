@@ -390,57 +390,7 @@ class RoomWalk(ObjectiveSelector):
             prev = state
 
         if self._curr_room != state.full_location:
-            self._curr_room = state.full_location
-
-            # have we already set the objectives?
-            if self._sequence and state.full_location in self._sequence[0].next_rooms:
-                self._sequence.pop(0)
-
-                if self._sequence:
-                    return self._sequence[0]
-            else:
-                self._sequence.clear()
-
-            room = state.room
-
-            # Check if this room has a treasure
-            room_memory = self._get_room(state.full_location)
-            if room_memory.item is not None:
-                self._sequence.append(Objective(ObjectiveKind.FIGHT, set(), set()))
-                self._sequence.append(Objective(ObjectiveKind.TREASURE, set(), set()))
-
-            # Check if this room has a cave.
-            if cave := room.cave_tile:
-                cave_location = MapLocation(state.level, state.location, True)
-                self._sequence.append(Objective(ObjectiveKind.CAVE, [cave], [cave_location]))
-
-                cave_south_exit = [TileIndex(x, 0x15) for x in range(0xe, 0x12)]
-                self._sequence.append(Objective(ObjectiveKind.MOVE, cave_south_exit, [state.full_location]))
-
-            exits = [x for x in room.exits if isinstance(x, Direction) if state.is_door_open(x) and room.exits[x]]
-            came_from = self._came_from(prev, state)
-            if came_from in exits:
-                exits.remove(came_from)
-
-            exits = self._get_reachable(exits, state)
-
-            if len(exits) == 0:
-                exits.append(came_from)
-
-            if len(exits) == 1:
-                self._target_exits = [exits[0]]
-
-            else:
-                count = 2 if random.random() < DUAL_EXIT_CHANCE else 1
-                self._target_exits = random.sample(exits, k=count)
-
-            next_rooms = set(state.full_location.get_location_in_direction(x) for x in self._target_exits)
-
-            tile_objectives = [tile
-                            for sublist in (state.room.exits[direction] for direction in self._target_exits)
-                            for tile in sublist]
-
-            self._sequence.append(Objective(ObjectiveKind.MOVE, set(tile_objectives), next_rooms))
+            self._handle_room_change(prev, state)
 
         while True:
             objective = self._sequence[0]
@@ -459,6 +409,60 @@ class RoomWalk(ObjectiveSelector):
                 objective.targets = [state.treasure_tile]
 
             return objective
+
+    def _handle_room_change(self, prev, state):
+        self._curr_room = state.full_location
+
+        # have we already set the objectives?
+        if self._sequence and state.full_location in self._sequence[0].next_rooms:
+            self._sequence.pop(0)
+
+            if self._sequence:
+                return
+        else:
+            self._sequence.clear()
+
+        room = state.room
+
+        # Check if this room has a treasure
+        room_memory = self._get_room(state.full_location)
+        if room_memory.item is not None:
+            self._sequence.append(Objective(ObjectiveKind.FIGHT, set(), set()))
+            self._sequence.append(Objective(ObjectiveKind.TREASURE, set(), set()))
+
+        # Check if this room has a cave.
+        if cave := room.cave_tile:
+            cave_location = MapLocation(state.level, state.location, True)
+            self._sequence.append(Objective(ObjectiveKind.CAVE, [cave], [cave_location]))
+
+            cave_south_exit = [TileIndex(x, 0x15) for x in range(0xe, 0x12)]
+            self._sequence.append(Objective(ObjectiveKind.MOVE, cave_south_exit, [state.full_location]))
+
+        exits = [x for x in room.exits if isinstance(x, Direction) if state.is_door_open(x) and room.exits[x]]
+        came_from = self._came_from(prev, state)
+        if came_from in exits:
+            exits.remove(came_from)
+
+        exits = self._get_reachable(exits, state)
+
+        if len(exits) == 0:
+            exits.append(came_from)
+
+        if len(exits) == 1:
+            self._target_exits = [exits[0]]
+
+        else:
+            count = 2 if random.random() < DUAL_EXIT_CHANCE else 1
+            self._target_exits = random.sample(exits, k=count)
+
+        next_rooms = set(state.full_location.get_location_in_direction(x) for x in self._target_exits)
+
+        tile_objectives = [tile
+                        for sublist in (state.room.exits[direction] for direction in self._target_exits)
+                        for tile in sublist]
+
+        self._sequence.append(Objective(ObjectiveKind.MOVE, set(tile_objectives), next_rooms))
+
 
     def _came_from(self, prev, state):
         came_from = state.full_location.get_direction_to(prev.full_location)
