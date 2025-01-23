@@ -220,7 +220,7 @@ class MlpExtractor(nn.Module):
         value_features = self.value_net(combined_features)
         return policy_features, value_features
 
-class SharedNatureAgent(Network):
+class SharedNatureAgentOriginal(Network):
     """Actor-critic policy with multiple inputs + action masking."""
     def __init__(self, obs_space : Dict, action_space):
         channels, height, width = obs_space["image"].shape
@@ -253,6 +253,205 @@ class SharedNatureAgent(Network):
         value = self.value_net(value_features)
         return action_logits, value
 
+
+class CombinedExtractor2(nn.Module):
+    """
+    Processes:
+      - Image via CNN (NatureCNN)
+      - Enemy features (4 x 6 floats)
+      - Enemy IDs (4 discrete IDs) -> Embedding
+      - Item features (2 x 4 floats)
+      - Projectile features (2 x 5 floats)
+      - Binary 'information'
+    Then concatenates them into a single feature vector.
+    """
+
+    def __init__(
+        self,
+        image_channels: int,
+        image_linear_size: int,
+        enemy_feature_dim: int = 6,  # e.g. presence, closeness, vector, direction
+        enemy_count: int = 4,
+        num_enemy_types: int = 49,   # 0..48
+        embedding_dim: int = 8,      # size of learned enemy embedding
+        item_feature_dim: int = 4,
+        item_count: int = 2,
+        projectile_feature_dim: int = 5,
+        projectile_count: int = 2,
+        info_size: int = 8,          # number of binary features, example
+    ):
+        super().__init__()
+
+        # 1) CNN for the image
+        self.image_extractor = NatureCNN(input_channels=image_channels, linear_output_size=image_linear_size)
+
+        # 2) Embedding for enemy IDs (0 == no enemy)
+        self.enemy_embedding = nn.Embedding(num_enemy_types, embedding_dim)
+
+        # Optionally, you could define small MLPs for continuous features here, e.g.:
+        # self.enemy_feat_mlp = nn.Sequential(
+        #     nn.Linear(enemy_feature_dim * enemy_count, 32),
+        #     nn.ReLU(),
+        #     nn.Linear(32, 16),
+        #     nn.ReLU()
+        # )
+        # For simplicity, we'll just flatten them directly in this example.
+
+        self.item_count = item_count
+        self.enemy_count = enemy_count
+        self.projectile_count = projectile_count
+        self.enemy_feature_dim = enemy_feature_dim
+        self.item_feature_dim = item_feature_dim
+        self.projectile_feature_dim = projectile_feature_dim
+        self.embedding_dim = embedding_dim
+        self.image_linear_size = image_linear_size
+        self.info_size = info_size
+
+        # Compute the final output dimension after concatenation
+        # If we just flatten everything:
+        #   image -> image_linear_size
+        #   enemy_features -> enemy_count * enemy_feature_dim
+        #   enemy_ids -> enemy_count * embedding_dim
+        #   item_features -> item_count * item_feature_dim
+        #   projectile_features -> projectile_count * projectile_feature_dim
+        #   information -> info_size
+        self.output_dim = (image_linear_size
+                           + (enemy_count * enemy_feature_dim)
+                           + (enemy_count * embedding_dim)
+                           + (item_count * item_feature_dim)
+                           + (projectile_count * projectile_feature_dim)
+                           + info_size)
+
+    def forward(self,
+                image: torch.Tensor,
+                enemy_features: torch.Tensor,
+                enemy_ids: torch.Tensor,
+                item_features: torch.Tensor,
+                projectile_features: torch.Tensor,
+                information: torch.Tensor) -> torch.Tensor:
+        """
+        image:               (batch, C, H, W)
+        enemy_features:      (batch, 4, 6)
+        enemy_ids:           (batch, 4)   -> each int in [0..48]
+        item_features:       (batch, 2, 4)
+        projectile_features: (batch, 2, 5)
+        information:         (batch, BOOLEAN_FEATURES)
+        """
+
+        # 1) Extract image features
+        img_out = self.image_extractor(image)  # shape (batch, image_linear_size)
+
+        # 2) Flatten continuous features
+        bsz = image.shape[0]
+        enemy_feat_flat = enemy_features.view(bsz, -1)          # (batch, 4*6)
+        item_feat_flat = item_features.view(bsz, -1)            # (batch, 2*4)
+        proj_feat_flat = projectile_features.view(bsz, -1)      # (batch, 2*5)
+
+        # 3) Embed enemy IDs -> (batch, 4, embedding_dim), then flatten
+        enemy_ids_embed = self.enemy_embedding(enemy_ids.long())  # (batch, 4, embedding_dim)
+        enemy_ids_embed_flat = enemy_ids_embed.view(bsz, -1)      # (batch, 4*embedding_dim)
+
+        # 4) Convert info to float if it's MultiBinary
+        info_float = information.float()  # shape (batch, info_size)
+
+        # 5) Concatenate everything
+        combined = torch.cat([
+            img_out,
+            enemy_feat_flat,
+            enemy_ids_embed_flat,
+            item_feat_flat,
+            proj_feat_flat,
+            info_float
+        ], dim=1)
+
+        return combined
+
+
+class SharedNatureAgent(Network):
+    """
+    Actor-critic policy with multiple inputs + action masking,
+    updated to use separate observations:
+      - image
+      - enemy_features (4x6)
+      - enemy_id (4)
+      - item_features (2x4)
+      - projectile_features (2x5)
+      - information (binary)
+    """
+    def __init__(self, obs_space: Dict, action_space):
+        # Unpack image shape
+        channels, height, width = obs_space["image"].shape
+
+        # We'll use a simple linear_output_size from CNN.
+        # For NatureCNN, it's common to do a smaller "head" MLP dimension.
+        # For demonstration, let's do (height + width) as in your example.
+        image_linear_size = height + width
+
+        # For each sub-observation space:
+        enemy_count = 4
+        enemy_feature_dim = 6
+        num_enemy_types = 49   # 0..48
+        embedding_dim = 8      # tweak as needed
+
+        item_count = 2
+        item_feature_dim = 4
+
+        projectile_count = 2
+        projectile_feature_dim = 5
+
+        # Suppose "information" has shape (BOOLEAN_FEATURES,)
+        info_size = obs_space["information"].n  # if it's MultiBinary(BOOLEAN_FEATURES)
+
+        # Create the combined extractor that merges all these:
+        base = CombinedExtractor2(
+            image_channels=channels,
+            image_linear_size=image_linear_size,
+            enemy_feature_dim=enemy_feature_dim,
+            enemy_count=enemy_count,
+            num_enemy_types=num_enemy_types,
+            embedding_dim=embedding_dim,
+            item_feature_dim=item_feature_dim,
+            item_count=item_count,
+            projectile_feature_dim=projectile_feature_dim,
+            projectile_count=projectile_count,
+            info_size=info_size,
+        )
+
+        super().__init__(base, obs_space, action_space)
+
+        # base.output_dim is the dimension of the "combined" vector from CombinedExtractor2
+        self.mlp_extractor = MlpExtractor(input_size=base.output_dim)
+
+        # Final policy/value
+        self.action_net = self.layer_init(nn.Linear(64, action_space.n), std=0.01)
+        self.value_net = self.layer_init(nn.Linear(64, 1), std=1.0)
+
+    def forward(self, obs):
+        # 1) Expand dims if needed (single obs)
+        obs = self._unsqueeze(obs)
+
+        # 2) Pass through your "base" combined extractor
+        #    Make sure to match the keys in your observation dict
+        combined_features = self.base(
+            image=obs["image"],
+            enemy_features=obs["enemy_features"],
+            enemy_ids=obs["enemy_id"],
+            item_features=obs["item_features"],
+            projectile_features=obs["projectile_features"],
+            information=obs["information"]
+        )
+
+        # 3) Split into policy/value features
+        policy_features, value_features = self.mlp_extractor(combined_features)
+
+        # 4) Get final action logits and value
+        action_logits = self.action_net(policy_features)
+        value = self.value_net(value_features)
+        return action_logits, value
+
+
+
+
 def create_network(network, obs_space, action_space):
     """Create a network from a class or instance."""
     if isinstance(network, type) and issubclass(network, Network):
@@ -272,7 +471,6 @@ def _init_models():
             result[cls_name] = cls_obj
 
     return result
-
 
 NEURAL_NETWORK_DEFINITIONS = _init_models()
 

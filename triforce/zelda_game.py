@@ -69,21 +69,27 @@ class ZeldaGame:
 
     @cached_property
     def items(self) -> List[Item]:
-        """Returns a list of items on the current screen."""
+        """Returns a list of items on the current screen, sorted by distance."""
         tables = self._tables
-        return [self._build_item(tables, index) for index in self._cached_ids[0]]
+        result = [self._build_item(tables, index) for index in self._cached_ids[0]]
+        result.sort(key=lambda x: x.distance)
+        return result
 
     @cached_property
     def enemies(self) -> List[Enemy]:
-        """Returns a list of enemies on the current screen."""
+        """Returns a list of enemies on the current screen, sorted by distance."""
         tables = self._tables
-        return [self._build_enemy(tables, index, obj_id) for index, obj_id in self._cached_ids[1]]
+        result = [self._build_enemy(tables, index, obj_id) for index, obj_id in self._cached_ids[1]]
+        result.sort(key=lambda x: x.distance)
+        return result
 
     @cached_property
     def projectiles(self) -> List[Projectile]:
-        """Returns a list of projectiles on the current screen."""
+        """Returns a list of projectiles on the current screen, sorted by distance."""
         tables = self._tables
-        return [self._build_projectile(tables, index, obj_id) for index, obj_id in self._cached_ids[2]]
+        result = [self._build_projectile(tables, index, obj_id) for index, obj_id in self._cached_ids[2]]
+        result.sort(key=lambda x: x.distance)
+        return result
 
     @cached_property
     def _object_tables(self):

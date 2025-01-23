@@ -81,6 +81,10 @@ class ZeldaObject:
 @dataclass
 class Projectile(ZeldaObject):
     """Structured data for a projectile."""
+    @property
+    def blockable(self) -> bool:
+        """Returns True if the projectile can be blocked by a shield."""
+        return False # todo
 
 @dataclass
 class Item(ZeldaObject):

@@ -221,6 +221,8 @@ class Direction(Enum):
     def vector(self):
         """Returns the vector for the direction."""
         match self:
+            case Direction.NONE:
+                return torch.tensor([0, 0], dtype=torch.float32)
             case Direction.E:
                 return torch.tensor([1, 0], dtype=torch.float32)
             case Direction.W:
