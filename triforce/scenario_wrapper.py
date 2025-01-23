@@ -47,15 +47,16 @@ class TrainingScenarioDefinition(BaseModel):
     @classmethod
     def start_validator(cls, value):
         """Gets the start location from the name."""
+        all_saves = os.listdir(os.path.join(os.path.dirname(__file__), 'custom_integrations', 'Zelda-NES'))
+        all_saves = [x for x in all_saves if x.endswith('.state')]
+        all_saves = [os.path.splitext(x)[0] for x in all_saves]
+
         result = []
         for entry in value:
             if isinstance(entry, str):
-                result.append(entry)
+                result.extend(x for x in all_saves if x.startswith(entry))
             else:
-                for file in os.listdir(os.path.join(os.path.dirname(__file__), 'custom_integrations', 'Zelda-NES')):
-                    if file.startswith(f"{entry}_"):
-                        # without ext
-                        result.append(os.path.splitext(file)[0])
+                result.extend(x for x in all_saves if x.startswith(f"{entry}_"))
 
         return result
 
