@@ -208,8 +208,15 @@ class LeftRoute(ZeldaEndCondition):
 
         return False, False, None
 
-class LeftInitialRoomWalk(ZeldaEndCondition):
+class RoomWalkCondition(ZeldaEndCondition):
     """End condition for leaving the initial room walk scenario."""
+    def __init__(self):
+        super().__init__()
+        self.same_room_timout = 750
+        self._current_timeout = 0
+
+    def clear(self):
+        self._current_timeout = 0
 
     def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
         prev = state_change.previous
@@ -223,5 +230,9 @@ class LeftInitialRoomWalk(ZeldaEndCondition):
                 return True, False, "success-exit"
 
             return True, False, "failure-wrong-exit"
+
+        self._current_timeout += 1
+        if self._current_timeout >= self.same_room_timout:
+            return True, False, "failure-stuck"
 
         return False, False, None
