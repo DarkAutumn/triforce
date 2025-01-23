@@ -31,8 +31,8 @@ def _dump_trace_with_locals(exc_type, exc_value, exc_traceback):
 
 def _get_kwargs_from_args(args, model_def):
     kwargs = {}
-    if args.dynamic_lr is not None:
-        kwargs['dynamic_lr'] = args.dynamic_lr
+    if not args.high_lr:
+        kwargs['dynamic_lr'] = True
 
     if args.load is not None:
         obs, act = Network.load_spaces(args.load)
@@ -125,7 +125,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="train - Train Zelda ML models")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=None, help="Entropy coefficient for the PPO algorithm.")
-    parser.add_argument("--dynamic-lr", action='store_true', default=None, help="Use a dynamic learning rate.")
+    parser.add_argument("--high-lr", action='store_true', default=None, help="Use a fixed high learning rate.")
     parser.add_argument("--frame-stack", type=int, default=None, help="The number of frames to stack.")
     parser.add_argument("--device", choices=['cpu', 'cuda'], default=None, help="The device to use.")
     parser.add_argument("--render-mode", type=str, default=None, help="The render mode to use.")
