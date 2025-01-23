@@ -66,6 +66,8 @@ class DisplayWindow:
 
         self.model_path = model_path
         self.model_definition : ModelDefinition = ModelDefinition.get(model)
+        if not self.model_definition:
+            raise ValueError(f"Unknown model {model}")
 
         self.move_widgets = {}
         self.vector_widgets = []
