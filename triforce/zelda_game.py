@@ -12,7 +12,7 @@ from .room import Room
 from .zelda_objects import Item, Projectile
 from .enemy import Enemy
 from .link import Link
-from .zelda_enums import ENEMY_MAP, ITEM_MAP, MapLocation, Position, TileIndex, Direction, SoundKind
+from .zelda_enums import ENEMY_MAP, ITEM_MAP, MapLocation, Position, Direction, SoundKind
 from .zelda_game_data import zelda_game_data
 
 MODE_GAME_OVER = 8
