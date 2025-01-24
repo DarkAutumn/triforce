@@ -244,3 +244,12 @@ class NowhereToGoCondition(ZeldaEndCondition):
             return True, False, "failure-nowhere-to-go"
 
         return False, False, None
+
+class LeftPlayArea(ZeldaEndCondition):
+    def is_scenario_ended(self, state_change):
+        location = state_change.state.full_location
+        if location.level != 1 or location.value == 0x73:
+            return True, False, "failure-left-play-area"
+
+        return False, False, None
+    

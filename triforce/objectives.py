@@ -29,7 +29,9 @@ dungeon_to_item = {
     0x44: BoomerangKind.WOOD,
     0x45: ZeldaItemKind.Key,
     0x35: ZeldaItemKind.HeartContainer,
-    0x36: ZeldaItemKind.Triforce1
+    0x36: ZeldaItemKind.Triforce1,
+    0x43 : ZeldaItemKind.Map,
+    0x54 : ZeldaItemKind.Compass,
 }
 
 item_to_overworld = {v: k for k, v in overworld_to_item.items()}
@@ -283,8 +285,10 @@ class GameCompletion(ObjectiveSelector):
         kind = ObjectiveKind.NONE
         tile_objectives = []
         if state.treasure:
-            kind = ObjectiveKind.TREASURE
-            tile_objectives.append(state.treasure.tile)
+            # don't force link to get the map/compass
+            if dungeon_to_item.get(state.location, None) not in (ZeldaItemKind.Map, ZeldaItemKind.Compass):
+                kind = ObjectiveKind.TREASURE
+                tile_objectives.append(state.treasure.tile)
 
         # If we collect the treasure, mark it as taken
         else:

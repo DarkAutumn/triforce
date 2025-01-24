@@ -176,6 +176,8 @@ class ZeldaItemKind(Enum):
     Triforce7 : int = -107
     Triforce8 : int = -108
     TriforceOfPower = -109
+    Map : int = -4
+    Compass : int = -3
     HeartContainer : int = -2
     Key : int = -1
     Bombs : int = 0x00
