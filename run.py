@@ -55,6 +55,14 @@ class DisplayWindow:
         self.text_height = self.game_height + self.details_height
         self.text_width = 300
 
+        self.action_x = self.text_x - self.obs_width
+        self.action_y = 20
+        self.action_height = 100
+        self.action_width = self.action_height * 4
+        
+        self._move_circle = DirectionalCircle(Coordinates(self.action_x, self.action_y), self.font, "Move", self.action_height / 2, center_circle=False, scale_range=(0.15, 1))
+        self._attack_circle = DirectionalCircle(Coordinates(self.action_x + self.action_height, self.action_y), self.font, "Attack", self.action_height / 2, center_circle=False, scale_range=(0.15, 1))
+
         self.probs_x = self.text_x
         self.probs_y = 0
         self.probs_height = 0
@@ -146,8 +154,7 @@ class DisplayWindow:
         self._show_observation(surface, step.observation)
 
         # render the gameplay
-        self._render_game_view(surface, frame, (self.game_x, self.game_y), self.game_width,
-                                self.game_height)
+        self._render_game_view(surface, frame, (self.game_x, self.game_y), self.game_width, self.game_height)
 
         if self.overlay:
             color = "black" if step.state.level == 0 and not step.state.in_cave else "white"
@@ -161,6 +168,7 @@ class DisplayWindow:
         # render rewards graph and values
         self._draw_details(surface)
         probs = env.selector.get_probabilities(step.observation, step.action_mask.unsqueeze(0))
+        self._show_action(surface, probs)
         self._draw_probabilities(surface, probs)
         self._draw_reward_buttons(surface)
         self._draw_location_info(step.state)
@@ -287,6 +295,34 @@ class DisplayWindow:
         result = f"Episode {term} with {self.total_rewards:.2f} rewards"
         result += f", ending: {info.get('end', '???')} in {total_time:.2f} seconds"
         print(result)
+
+    def _show_action(self, surface, probs):
+        if self._move_circle is None:
+            pos = Coordinates(self.action_x, self.action_y)
+            self._move_circle = DirectionalCircle(pos, self.font, "Move", 25)
+            self._attack_circle = DirectionalCircle(pos + (0, 50), self.font, "Attack", 25)
+
+        self._move_circle.directions.clear()
+        self._attack_circle.directions.clear()
+
+        for action, l in probs.items():
+            if action == 'value':
+                continue
+
+            for direction, prob in l:
+                if prob < 0.01:
+                    continue
+
+                if action == ActionKind.MOVE:
+                    self._move_circle.directions.append((direction, prob))
+                else:
+                    self._attack_circle.directions.append((direction, prob))
+
+        # clear background
+        pygame.draw.rect(surface, (0, 0, 0), (self.action_x, self.action_y, self.action_width, self.action_height))
+
+        self._move_circle.draw(surface)
+        self._attack_circle.draw(surface)
 
     def _show_observation(self, surface, obs):
         x_pos = self.obs_x
