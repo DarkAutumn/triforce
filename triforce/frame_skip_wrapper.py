@@ -53,6 +53,7 @@ class ZeldaCooldownHandler:
         self.was_link_in_cave = False
         self.none_action = np.zeros(9, dtype=bool)
         self._link_pos : Position = None
+        self._sword_count = 0
 
     def reset(self):
         """Resets the handler."""
@@ -101,6 +102,13 @@ class ZeldaCooldownHandler:
     def _step_with_frame_capture(self, action : ActionTaken, frame_capture):
         """Steps once and saves the frame into frames"""
         obs, _, terminated, truncated, info = self.env.step(action)
+        if info['beam_animation'] == 17:
+            self._sword_count += 1
+            if self._sword_count >= 11:
+                info['beam_animation'] = 0
+        elif self._sword_count:
+            self._sword_count = 0
+            
         frame_capture.append(obs)
         self._link_pos = Position(info['link_x'], info['link_y'])
         return terminated, truncated, info

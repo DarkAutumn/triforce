@@ -161,7 +161,7 @@ class Link(ZeldaObject):
     @property
     def has_beams(self) -> bool:
         """Returns True if link is able to fire sword beams in general."""
-        return self.sword != SwordKind.NONE and self.is_health_full and not self.is_sword_screen_locked
+        return self.sword != SwordKind.NONE and self.is_health_full and not self.is_sword_screen_locked and self.get_animation_state(ZeldaAnimationKind.BEAMS) == AnimationState.INACTIVE
 
     @property
     def are_beams_available(self) -> bool:
