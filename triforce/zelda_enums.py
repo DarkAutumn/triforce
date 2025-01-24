@@ -403,17 +403,18 @@ class MapLocation(Coordinates):
         if self.level != 0 and next_room.level == 0:
             return Direction.N
 
-        assert self.manhattan_distance(next_room) in (0, 1)
+        dist = self.manhattan_distance(next_room)
 
         result = Direction.NONE
-        if self.x < next_room.x:
-            result = Direction.E
-        elif self.x > next_room.x:
-            result = Direction.W
-        elif self.y < next_room.y:
-            result = Direction.S
-        elif self.y > next_room.y:
-            result = Direction.N
+        if dist == 1:
+            if self.x < next_room.x:
+                result = Direction.E
+            elif self.x > next_room.x:
+                result = Direction.W
+            elif self.y < next_room.y:
+                result = Direction.S
+            elif self.y > next_room.y:
+                result = Direction.N
 
         return result
 
