@@ -1,6 +1,4 @@
-from functools import reduce
 import inspect
-import operator
 import pickle
 import sys
 import json
@@ -50,6 +48,7 @@ class Network(nn.Module):
     def _unsqueeze(self, obs):
         """Unsqueeze the observation."""
         if isinstance(obs, dict):
+            obs = obs.copy()
             for key in obs:
                 if obs[key].shape == self.observation_space[key].shape:
                     obs[key] = obs[key].unsqueeze(0)
@@ -179,24 +178,6 @@ class NatureCNN(nn.Module):
         linear_out = self.linear(cnn_out)
         return linear_out
 
-class CombinedExtractor(nn.Module):
-    """Combine image, vectors, and information."""
-    def __init__(self, image_channels=1, image_linear_size=256, vectors_size=18, info_size=12):
-        super().__init__()
-        self.image_extractor = NatureCNN(input_channels=image_channels, linear_output_size=image_linear_size)
-        self.flatten_info = nn.Flatten()
-        self.flatten_vectors = nn.Flatten()
-        self.vectors_size = vectors_size
-        self.info_size = info_size
-
-    def forward(self, image, vectors, information):
-        """Forward pass."""
-        image_features = self.image_extractor(image)
-        vectors_features = self.flatten_vectors(vectors)
-        info_features = self.flatten_info(information)
-        combined_features = torch.cat([image_features, vectors_features, info_features], dim=1)
-        return combined_features
-
 class MlpExtractor(nn.Module):
     """MLP for policy and value."""
     def __init__(self, input_size, policy_hidden_size=64, value_hidden_size=64):
@@ -220,41 +201,7 @@ class MlpExtractor(nn.Module):
         value_features = self.value_net(combined_features)
         return policy_features, value_features
 
-class SharedNatureAgentOriginal(Network):
-    """Actor-critic policy with multiple inputs + action masking."""
-    def __init__(self, obs_space : Dict, action_space):
-        channels, height, width = obs_space["image"].shape
-        image_linear_size = height + width
-
-        vector_size = reduce(operator.mul, obs_space["vectors"].shape)
-        info_size = reduce(operator.mul, obs_space["information"].shape)
-
-        combined_input_size = image_linear_size + vector_size + info_size
-
-        base = CombinedExtractor(
-            image_channels=channels,
-            image_linear_size=image_linear_size,
-            vectors_size=vector_size,
-            info_size=info_size
-        )
-
-        super().__init__(base, obs_space, action_space)
-
-        self.mlp_extractor = MlpExtractor(input_size=combined_input_size)
-        self.action_net = Network.layer_init(nn.Linear(64, action_space.n), std=0.01)
-        self.value_net = Network.layer_init(nn.Linear(64, 1), std=1.0)
-
-    def forward(self, obs):
-        obs = self._unsqueeze(obs)
-        combined_features = self.base(obs['image'], obs['vectors'], obs['information'])
-        policy_features, value_features = self.mlp_extractor(combined_features)
-
-        action_logits = self.action_net(policy_features)
-        value = self.value_net(value_features)
-        return action_logits, value
-
-
-class CombinedExtractor2(nn.Module):
+class CombinedExtractor(nn.Module):
     """
     Processes:
       - Image via CNN (NatureCNN)
@@ -411,7 +358,7 @@ class SharedNatureAgent(Network):
         info_size = obs_space["information"].n  # if it's MultiBinary(BOOLEAN_FEATURES)
 
         # Create the combined extractor that merges all these:
-        base = CombinedExtractor2(
+        base = CombinedExtractor(
             image_channels=channels,
             image_linear_size=image_linear_size,
             enemy_feature_dim=enemy_feature_dim,
@@ -427,7 +374,7 @@ class SharedNatureAgent(Network):
 
         super().__init__(base, obs_space, action_space)
 
-        # base.output_dim is the dimension of the "combined" vector from CombinedExtractor2
+        # base.output_dim is the dimension of the "combined" vector from CombinedExtractor
         self.mlp_extractor = MlpExtractor(input_size=base.output_dim)
 
         # Final policy/value
