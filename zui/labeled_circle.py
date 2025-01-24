@@ -52,9 +52,11 @@ class LabeledCircle:
 
 class DirectionalCircle(LabeledCircle):
     """A vector with a label."""
-    def __init__(self, position, font, label, radius=128, color=(255, 0, 0), width=5):
+    def __init__(self, position, font, label, radius=128, color=(255, 0, 0), width=5, center_circle=True, scale_range=(0, 1)):
         super().__init__(position, font, label, radius, color, width)
         self._directions = []
+        self._center_circle = center_circle
+        self._scale_range = scale_range
 
     @property
     def directions(self):
@@ -70,20 +72,28 @@ class DirectionalCircle(LabeledCircle):
         super().draw(surface)
 
         for direction in self.directions:
+            if isinstance(direction, Direction):
+                scale = 1
+            else:
+                direction, scale = direction
+
+            scale = self._scale_range[0] + scale * (self._scale_range[1] - self._scale_range[0])
+            scale = np.clip(scale, 0, 1)
+
             match direction:
                 case Direction.N:
-                    self._draw_arrow(surface, self.centerpoint, np.array([0, -1], dtype=np.float32), 1)
+                    self._draw_arrow(surface, self.centerpoint, np.array([0, -1], dtype=np.float32), scale)
                 case Direction.S:
-                    self._draw_arrow(surface, self.centerpoint, np.array([0, 1], dtype=np.float32), 1)
+                    self._draw_arrow(surface, self.centerpoint, np.array([0, 1], dtype=np.float32), scale)
                 case Direction.W:
-                    self._draw_arrow(surface, self.centerpoint, np.array([-1, 0], dtype=np.float32), 1)
+                    self._draw_arrow(surface, self.centerpoint, np.array([-1, 0], dtype=np.float32), scale)
                 case Direction.E:
-                    self._draw_arrow(surface, self.centerpoint, np.array([1, 0], dtype=np.float32), 1)
+                    self._draw_arrow(surface, self.centerpoint, np.array([1, 0], dtype=np.float32), scale)
                 case _:
                     raise ValueError(f"Unsupported direction {direction}")
 
 
-        if self.directions:
+        if self.directions and self._center_circle:
             pygame.draw.circle(surface, (0, 0, 0), self.centerpoint, 5)
 
 class LabeledVector(LabeledCircle):
