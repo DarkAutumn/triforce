@@ -9,9 +9,8 @@ from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network, create_network
 
 # default hyperparameters
-LEARNING_RATE_MAX =     0.00025
-LEARNING_RATE_HIGH =    0.00015
-LEARNING_RATE_MEDIUM =  0.0001
+LEARNING_RATE =         0.0001
+LEARNING_RATE_LOW =     0.00005
 LEARNING_RATE_MINIMUM = 0.000025
 NORM_ADVANTAGES = True
 CLIP_VAL_LOSS = True
@@ -78,7 +77,7 @@ class PPO:
         env = create_env()
         try:
             network = kwargs.get('model', None) or create_network(network, env.observation_space, env.action_space)
-            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE_MEDIUM, eps=self._epsilon)
+            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=self._epsilon)
 
             envs = kwargs.get('envs', 1)
             if envs > 1:
@@ -152,12 +151,10 @@ class PPO:
         #  - If success_rate < 0.2 => elevated LR
         #  - If success_rate < 0.95 => moderate LR
         #  - Else => very low LR
-        if success_rate < 0.01:
-            new_lr = LEARNING_RATE_MAX
-        elif success_rate < 0.2:
-            new_lr = LEARNING_RATE_HIGH
-        elif success_rate < 0.9:
-            new_lr = LEARNING_RATE_MEDIUM
+        if success_rate < 0.90:
+            new_lr = LEARNING_RATE
+        elif success_rate < 0.95:
+            new_lr = LEARNING_RATE_LOW
         else:
             new_lr = LEARNING_RATE_MINIMUM
 
