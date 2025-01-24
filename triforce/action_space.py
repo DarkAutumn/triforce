@@ -90,7 +90,7 @@ class ZeldaActionSpace(gym.Wrapper):
 
         if not self.action_to_index:
             raise ValueError("Must select at least one kind of action.")
-
+        
     def _setup_actions(self, actions_allowed):
         for action in actions_allowed:
             if action in self.action_to_index:
@@ -237,7 +237,7 @@ class ZeldaActionSpace(gym.Wrapper):
         """Returns the actions that are available to the agent."""
 
         link = state.link
-        actions_possible = self.actions_allowed & link.get_available_actions(ActionKind.BEAMS in self.actions_allowed)
+        actions_possible = set(self.actions_allowed) & link.get_available_actions(ActionKind.BEAMS in self.actions_allowed)
         assert actions_possible, "No actions available, we should have at least MOVE."
 
         invalid = {}

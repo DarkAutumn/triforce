@@ -100,7 +100,8 @@ class ActionKind(Enum):
                 if isinstance(action, str):
                     actions_allowed[i] = ActionKind(action)
 
-        return set(actions_allowed)
+        assert len(actions_allowed) == len(set(actions_allowed)), "Duplicate actions in list."
+        return actions_allowed
 
     @staticmethod
     def from_selected_equipment(selected_equipment):
