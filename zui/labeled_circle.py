@@ -91,6 +91,7 @@ class LabeledVector(LabeledCircle):
     def __init__(self, position, font, label, radius=128, color=(255, 0, 0), width=5):
         super().__init__(position, font, label, radius, color, width)
         self._vector = [0, 0, -1]
+        self._scale = 1
 
     @property
     def vector(self):
@@ -99,11 +100,20 @@ class LabeledVector(LabeledCircle):
 
     @vector.setter
     def vector(self, value):
-        assert len(value) in (2, 3)
+        assert len(value) == 2
         self._vector = value
+
+    @property
+    def scale(self):
+        """Returns the scale of the vector."""
+        return self._scale
+
+    @scale.setter
+    def scale(self, value):
+        assert 0 <= value <= 1
+        self._scale = value
 
     def draw(self, surface):
         """Draws the labeled vector on the surface."""
         super().draw(surface)
-        dist = self._vector[2] if len(self._vector) == 3 else 1
-        self._draw_arrow(surface, self.centerpoint, self._vector, dist)
+        self._draw_arrow(surface, self.centerpoint, self._vector, self._scale)

@@ -47,8 +47,8 @@ class DisplayWindow:
         self.game_y = 0
 
         self.details_height = 150
-        self.details_width = self.game_width + self.obs_width
-        self.details_x = 0
+        self.details_width = self.game_width
+        self.details_x = self.obs_width
         self.details_y = self.game_height
 
         self.text_x = self.obs_width + self.game_width
@@ -70,7 +70,7 @@ class DisplayWindow:
             raise ValueError(f"Unknown model {model}")
 
         self.move_widgets = {}
-        self.vector_widgets = []
+        self.vector_widgets = {}
         self.objective_widgets = []
 
         self.mode = 'c'
@@ -292,22 +292,27 @@ class DisplayWindow:
         radius = self.obs_width // 4
         if not self.vector_widgets:
             pos = Coordinates(x_pos, y_pos)
-            labels = ["Enemy1", "Enemy 2", "Projectile", "Projectile 2", "Item 1", "Item 2"]
+            labels = ["Enemy 1", "Enemy 2", "Enemy 3", "Enemy 4", "Projectile 1", "Projectile 2", "Item 1", "Item 2"]
             for label in labels:
-                self.vector_widgets.append(LabeledVector(pos, self.font, label, radius))
-                size = self.vector_widgets[-1].size
+                widget = LabeledVector(pos, self.font, label, radius)
+                self.vector_widgets[label] = widget
+                size = widget.size
                 if len(self.vector_widgets) % 2 == 0:
                     pos = pos + (-size[0], size[1])
                 else:
                     pos = pos + (size[0], 0)
 
-        for i in range(obs["vectors"].shape[0]):
-            for j in range(obs["vectors"].shape[1]):
-                v = obs["vectors"][i, j]
-                widget = self.vector_widgets[i * obs["vectors"].shape[1] + j]
-                widget.vector = v.cpu().numpy()
-                widget.draw(surface)
+        self._update_vector_widget("Enemy 1", "enemy_features", 0, obs)
+        self._update_vector_widget("Enemy 2", "enemy_features", 1, obs)
+        self._update_vector_widget("Enemy 3", "enemy_features", 2, obs)
+        self._update_vector_widget("Enemy 4", "enemy_features", 3, obs)
+        self._update_vector_widget("Projectile 1", "projectile_features", 0, obs)
+        self._update_vector_widget("Projectile 2", "projectile_features", 1, obs)
+        self._update_vector_widget("Item 1", "item_features", 0, obs)
+        self._update_vector_widget("Item 2", "item_features", 1, obs)
 
+        for widget in self.vector_widgets.values():
+            widget.draw(surface)
 
         if not self.move_widgets:
             pos = Coordinates(0, pos.y)
@@ -323,7 +328,10 @@ class DisplayWindow:
 
         return Coordinates(0, y_pos)
 
-
+    def _update_vector_widget(self, widget_name, observation_name, index, obs):
+        widget = self.vector_widgets[widget_name]
+        widget.vector = obs[observation_name][index, 2:4].cpu().numpy()
+        widget.scale = 1 - obs[observation_name][index, 1].cpu().numpy()
 
     def _get_directions_for_vectors(self, vectors):
         directions = []
@@ -337,7 +345,6 @@ class DisplayWindow:
             directions.append(Direction.W)
 
         return directions
-
 
     def _update_rewards(self, step : StepResult, prev_action_mask, running_rewards, buttons):
         state_change = step.state_change
