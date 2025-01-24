@@ -82,6 +82,9 @@ class DisplayWindow:
         self.cap_fps = True
         self.next_action = None
         self.overlay = 0
+        self.buttons = deque(maxlen=100)
+        self.endings = {}
+        self.running_rewards = {}
 
     @property
     def text_y(self):
@@ -92,11 +95,6 @@ class DisplayWindow:
         """Shows the game and the AI model."""
         clock = pygame.time.Clock()
 
-        endings = {}
-        running_rewards = {}
-        buttons = deque(maxlen=100)
-
-        show_endings = True
         recording = None
         self.overlay = 0
 
@@ -121,59 +119,55 @@ class DisplayWindow:
                     self.mode = 'p'
 
                 # update rewards for display
-                self._update_rewards(step, action_mask, running_rewards, buttons)
+                self._update_rewards(step, action_mask)
                 if step.terminated or step.truncated:
-                    endings[step.rewards.ending] = endings.get(step.rewards.ending, 0) + 1
+                    self.endings[step.rewards.ending] = self.endings.get(step.rewards.ending, 0) + 1
 
-            frames = step.frames
-            if not frames:
-                self._check_input(env, step)
+            if step.frames:
+                frame = step.frames.pop(0)
+            
+            surface = self._render(surface, step, frame, env)
+            if recording:
+                recording.write(surface)
 
-            while frames:
-                surface.fill((0, 0, 0))
-                self._show_observation(surface, step.observation)
+            if self.cap_fps:
+                clock.tick(60.1)
 
-                # render the gameplay
-                self._render_game_view(surface, frames.pop(0), (self.game_x, self.game_y), self.game_width,
-                                       self.game_height)
-
-                if self.overlay:
-                    color = "black" if step.state.level == 0 and not step.state.in_cave else "white"
-                    self._overlay_grid_and_text(surface, self.overlay, (self.game_x, self.game_y), color, \
-                                                self.scale, step.state)
-
-                render_text(surface, self.font, f"Model: {step.model_description}", (self.game_x, self.game_y))
-                render_text(surface, self.font, f"Location: {hex(step.state.location)}",
-                            (self.game_x + self.game_width - 120, self.game_y))
-
-                # render rewards graph and values
-                ending_render = endings if show_endings else None
-                self._draw_details(surface, running_rewards, ending_render)
-                self._draw_probabilities(surface, env.selector, step)
-                self._draw_reward_buttons(surface, buttons, (self.text_x, self.text_y),
-                                                            (self.text_width, self.text_height))
-
-                if recording:
-                    recording.write(surface)
-
-                # Display the scaled frame
-                if not headless_recording:
-                    pygame.display.flip()
-
-                else:
-                    self._print_location_info(step.state)
-
-                if self.cap_fps:
-                    clock.tick(60.1)
-
-                self._check_input(env, step)
-
+            self._check_input(env, step)
 
         if recording and recording.buffer_size <= 1:
             recording.close(True)
 
         env.close()
         pygame.quit()
+
+    def _render(self, surface, step, frame, env):
+        surface.fill((0, 0, 0))
+        self._show_observation(surface, step.observation)
+
+        # render the gameplay
+        self._render_game_view(surface, frame, (self.game_x, self.game_y), self.game_width,
+                                self.game_height)
+
+        if self.overlay:
+            color = "black" if step.state.level == 0 and not step.state.in_cave else "white"
+            self._overlay_grid_and_text(surface, self.overlay, (self.game_x, self.game_y), color, \
+                                        self.scale, step.state)
+
+        render_text(surface, self.font, f"Model: {env.model_details}", (self.game_x, self.game_y))
+        render_text(surface, self.font, f"Location: {hex(step.state.location)}",
+                    (self.game_x + self.game_width - 120, self.game_y))
+
+        # render rewards graph and values
+        self._draw_details(surface)
+        probs = env.selector.get_probabilities(step.observation, step.action_mask.unsqueeze(0))
+        self._draw_probabilities(surface, probs)
+        self._draw_reward_buttons(surface)
+        self._draw_location_info(step.state)
+
+        pygame.display.flip()
+
+        return surface
 
 
     def _check_input(self, env, step):
@@ -270,7 +264,7 @@ class DisplayWindow:
 
         return ActionKind.MOVE, direction
 
-    def _print_location_info(self, state):
+    def _draw_location_info(self, state):
         if self._last_location is not None:
             last_level, last_location = self._last_location
             if last_level != state.level:
@@ -356,7 +350,7 @@ class DisplayWindow:
 
         return directions
 
-    def _update_rewards(self, step : StepResult, prev_action_mask, running_rewards, buttons):
+    def _update_rewards(self, step : StepResult, prev_action_mask):
         state_change = step.state_change
         if not state_change:
             return
@@ -366,12 +360,13 @@ class DisplayWindow:
         if rewards is not None:
             self.total_rewards += rewards.value
             for outcome in rewards:
-                if outcome.name not in running_rewards:
-                    running_rewards[outcome.name] = 0
+                if outcome.name not in self.running_rewards:
+                    self.running_rewards[outcome.name] = 0
 
-                running_rewards[outcome.name] += outcome.value
+                self.running_rewards[outcome.name] += outcome.value
                 curr_rewards[outcome.name] = outcome.value
 
+        buttons = self.buttons
         prev = buttons[0] if buttons else None
         action = f"{state_change.action.direction.name} {state_change.action.kind.name}"
         if prev is not None and prev.rewards == curr_rewards and prev.action == action:
@@ -418,7 +413,7 @@ class DisplayWindow:
         render_text(surface, self.font, value, (x + total_width - value_width, y), color)
         return new_y
 
-    def _draw_details(self, surface, rewards, endings):
+    def _draw_details(self, surface):
         col = 0
         row = 1
         col_width = self.details_width // 3 - 3
@@ -428,7 +423,7 @@ class DisplayWindow:
                                         self.details_y, col_width)
         row_height = y - self.details_y
         row_max = self.details_height // row_height
-        items = list(rewards.items())
+        items = list(self.running_rewards.items())
         items.sort(key=lambda x: x[1], reverse=True)
         for k, v in items:
             color = (255, 0, 0) if v < 0 else (0, 255, 255) if v > 0 else (255, 255, 255)
@@ -436,12 +431,12 @@ class DisplayWindow:
                                         self.details_y + row * row_height, col_width, color)
             row, col = self.__increment(row, col, row_max)
 
-        if endings:
+        if self.endings:
             row, col = self.__increment(row, col, row_max)
-            self._write_key_val_aligned(surface, "Episodes:", f"{sum(endings.values())}", x + col * col_width,
+            self._write_key_val_aligned(surface, "Episodes:", f"{sum(self.endings.values())}", x + col * col_width,
                                         self.details_y + row * row_height, col_width)
 
-            items = list(endings.items())
+            items = list(self.endings.items())
             items.sort(key=lambda x: x[1], reverse=True)
             for k, v in items:
                 row, col = self.__increment(row, col, row_max)
@@ -455,9 +450,7 @@ class DisplayWindow:
             col += 1
         return row, col
 
-    def _draw_probabilities(self, surface, selector : ModelSelector, step : StepResult):
-        probs = selector.get_probabilities(step.observation, step.action_mask.unsqueeze(0))
-
+    def _draw_probabilities(self, surface, probs):
         y = self.probs_y
         for action, l in probs.items():
             if action == 'value':
@@ -474,16 +467,15 @@ class DisplayWindow:
 
         self.probs_height = max(y, self.probs_height)
 
-    def _draw_reward_buttons(self, surface, buttons : deque, position, dimensions):
+    def _draw_reward_buttons(self, surface):
         result = []
-
-        x, y = position
-        height = dimensions[1]
+        buttons = self.buttons
 
         i = 0
-        while i < len(buttons) and y < position[1] + height:
+        y = self.text_y
+        while i < len(buttons) and y < self.text_y + self.text_height:
             button = buttons[i]
-            rendered_button = button.draw_reward_button(surface, (x, y))
+            rendered_button = button.draw_reward_button(surface, (self.text_x, y))
             result.append(rendered_button)
             y += rendered_button.dimensions[1] + 1
             i += 1

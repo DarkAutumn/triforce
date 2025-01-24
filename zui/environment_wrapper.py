@@ -8,7 +8,7 @@ from .model_selector import ModelSelector
 class StepResult:
     """A result from a step in the environment."""
     def __init__(self, observation, frames, state, state_change, terminated, truncated, rewards, action_mask,
-                 action_mask_desc, model_desc):
+                 action_mask_desc):
         self.observation = observation
         self.frames = frames
         self.state = state or state_change.state
@@ -18,7 +18,6 @@ class StepResult:
         self.rewards = rewards
         self.action_mask = action_mask
         self.action_mask_desc = action_mask_desc
-        self.model_description = model_desc
 
     @property
     def compelted(self):
@@ -62,16 +61,13 @@ class EnvironmentWrapper:
         self._action_mask = state.info['action_mask']
         allowed_actions = self.action_space.get_allowed_actions(state, self._action_mask)
 
-        return StepResult(obs, frames, state, None, False, False, StepRewards(), self._action_mask, allowed_actions, "")
+        return StepResult(obs, frames, state, None, False, False, StepRewards(), self._action_mask, allowed_actions)
 
     def step(self, action):
         """Steps the model."""
         if action is None:
             action_mask = self._action_mask if len(self._action_mask.shape) > 1 else self._action_mask.unsqueeze(0)
             action = self.selector.model.get_action(self._observation, action_mask)
-            model_name = self._get_model_details()
-        else:
-            model_name = "Keyboard Input"
 
         if not self.action_space.is_valid_action(action, self._action_mask):
             raise ValueError(f"Invalid action {action} for action mask {self._action_mask}")
@@ -85,13 +81,15 @@ class EnvironmentWrapper:
         allowed_actions = self.action_space.get_allowed_actions(state_change.state, self._action_mask)
 
         return StepResult(obs, frames, None, state_change, terminated, truncated, rewards, self._action_mask,
-                          allowed_actions, model_name)
+                          allowed_actions)
 
     def is_valid_action(self, action):
         """Returns True if the action is valid."""
         return self.action_space.is_valid_action(action, self._action_mask)
 
-    def _get_model_details(self):
+    @property
+    def model_details(self):
+        """Returns the string details of the model."""
         model = self.selector.model
         metrics = model.metrics
 
