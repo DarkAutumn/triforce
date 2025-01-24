@@ -236,3 +236,11 @@ class RoomWalkCondition(ZeldaEndCondition):
             return True, False, "failure-stuck"
 
         return False, False, None
+
+class NowhereToGoCondition(ZeldaEndCondition):
+    def is_scenario_ended(self, state_change):
+        objectives = state_change.state.objectives
+        if objectives.kind == ObjectiveKind.MOVE and not objectives.next_rooms:
+            return True, False, "failure-nowhere-to-go"
+
+        return False, False, None
