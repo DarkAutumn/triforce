@@ -25,7 +25,7 @@ TARGET_STEPS = 2048
 EPOCHS = 10
 MINIBATCHES = 4
 LOG_RATE = 25_000
-SAVE_INTERVAL = 25_000
+SAVE_INTERVAL = 50_000
 
 class Threshold:
     """A counter class to see if we've reached our intervals."""
