@@ -207,11 +207,14 @@ class ZeldaGame:
 
         return None
 
-    @property
-    def treasure_tile(self) -> Optional[TileIndex]:
+    @cached_property
+    def treasure(self) -> Optional[Item]:
         """Returns the tile coordinates of the treasure in the current room, or None if there isn't one."""
         location = self.treasure_location
-        return location.tile_index if location is not None else None
+        if location is None:
+            return None
+
+        return Item(self, -1, -1, location, 255)
 
     @cached_property
     def active_enemies(self):

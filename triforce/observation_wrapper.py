@@ -292,7 +292,11 @@ class ObservationWrapper(gym.Wrapper):
         #   1: closeness (0 if far away, 1 if right on top of link)
         #   2-3: vector
         vectors = torch.zeros(ITEM_COUNT, ITEM_FEATURES, dtype=torch.float32)
-        for i, item in enumerate(state.items):
+        items = state.items
+        if state.treasure is not None:
+            items = [state.treasure, *items]
+
+        for i, item in enumerate(items):
             if i >= ITEM_COUNT:
                 break
             vectors[i, 0] = 1
