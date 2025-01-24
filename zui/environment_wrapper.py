@@ -8,7 +8,7 @@ from .model_selector import ModelSelector
 class StepResult:
     """A result from a step in the environment."""
     def __init__(self, observation, frames, state, state_change, terminated, truncated, rewards, action_mask,
-                 model_desc):
+                 action_mask_desc, model_desc):
         self.observation = observation
         self.frames = frames
         self.state = state or state_change.state
@@ -17,6 +17,7 @@ class StepResult:
         self.truncated = truncated
         self.rewards = rewards
         self.action_mask = action_mask
+        self.action_mask_desc = action_mask_desc
         self.model_description = model_desc
 
     @property
@@ -59,9 +60,9 @@ class EnvironmentWrapper:
         frames = [state.info['initial_frame']]
 
         self._action_mask = state.info['action_mask']
-        action_mask = self.action_space.get_allowed_actions(state, self._action_mask)
+        allowed_actions = self.action_space.get_allowed_actions(state, self._action_mask)
 
-        return StepResult(obs, frames, state, None, False, False, StepRewards(), action_mask, "")
+        return StepResult(obs, frames, state, None, False, False, StepRewards(), self._action_mask, allowed_actions, "")
 
     def step(self, action):
         """Steps the model."""
@@ -81,9 +82,10 @@ class EnvironmentWrapper:
         frames = state_change.frames
 
         self._action_mask = state_change.state.info['action_mask']
-        action_mask = self.action_space.get_allowed_actions(state_change.state, self._action_mask)
+        allowed_actions = self.action_space.get_allowed_actions(state_change.state, self._action_mask)
 
-        return StepResult(obs, frames, None, state_change, terminated, truncated, rewards, action_mask, model_name)
+        return StepResult(obs, frames, None, state_change, terminated, truncated, rewards, self._action_mask,
+                          allowed_actions, model_name)
 
     def is_valid_action(self, action):
         """Returns True if the action is valid."""

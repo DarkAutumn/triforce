@@ -52,9 +52,13 @@ class DisplayWindow:
         self.details_y = self.game_height
 
         self.text_x = self.obs_width + self.game_width
-        self.text_y = 0
         self.text_height = self.game_height + self.details_height
         self.text_width = 300
+
+        self.probs_x = self.text_x
+        self.probs_y = 0
+        self.probs_height = 0
+        self.probs_width = self.text_width
 
         self.total_width = self.obs_width + self.game_width + self.text_width
         self.total_height = max(self.game_height + self.details_height, self.text_height)
@@ -79,6 +83,11 @@ class DisplayWindow:
         self.next_action = None
         self.overlay = 0
 
+    @property
+    def text_y(self):
+        """Returns the y position for the text."""
+        return self.probs_height
+
     def show(self, headless_recording=False):
         """Shows the game and the AI model."""
         clock = pygame.time.Clock()
@@ -100,10 +109,10 @@ class DisplayWindow:
             if self.mode != 'p' and not frames:
                 if self.restart_requested:
                     step : StepResult = env.restart()
-                    action_mask = step.action_mask
+                    action_mask = step.action_mask_desc
                     self.restart_requested = False
                 else:
-                    action_mask = step.action_mask
+                    action_mask = step.action_mask_desc
                     step = env.step(self.next_action)
                     self.next_action = None
                     self.restart_requested = step.terminated or step.truncated
@@ -140,6 +149,7 @@ class DisplayWindow:
                 # render rewards graph and values
                 ending_render = endings if show_endings else None
                 self._draw_details(surface, running_rewards, ending_render)
+                self._draw_probabilities(surface, env.selector, step)
                 self._draw_reward_buttons(surface, buttons, (self.text_x, self.text_y),
                                                             (self.text_width, self.text_height))
 
@@ -444,6 +454,25 @@ class DisplayWindow:
             row = 0
             col += 1
         return row, col
+
+    def _draw_probabilities(self, surface, selector : ModelSelector, step : StepResult):
+        probs = selector.get_probabilities(step.observation, step.action_mask.unsqueeze(0))
+
+        y = self.probs_y
+        for action, l in probs.items():
+            if action == 'value':
+                render_text(surface, self.font, f"Value: {l.item():.2f}", (self.probs_x, y))
+                y += 20
+                continue
+
+            text = f"{action.name}: "
+            for direction, prob in l:
+                text += f"{direction.name}: {prob:.2f} "
+
+            render_text(surface, self.font, text, (self.probs_x, y))
+            y += 20
+
+        self.probs_height = max(y, self.probs_height)
 
     def _draw_reward_buttons(self, surface, buttons : deque, position, dimensions):
         result = []
