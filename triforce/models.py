@@ -272,8 +272,8 @@ class CombinedExtractor2(nn.Module):
         image_linear_size: int,
         enemy_feature_dim: int = 6,  # e.g. presence, closeness, vector, direction
         enemy_count: int = 4,
-        num_enemy_types: int = 49,   # 0..48
-        embedding_dim: int = 8,      # size of learned enemy embedding
+        num_enemy_types: int = 150,   # 0..149
+        embedding_dim: int = 4,      # size of learned enemy embedding
         item_feature_dim: int = 4,
         item_count: int = 2,
         projectile_feature_dim: int = 5,
@@ -281,6 +281,7 @@ class CombinedExtractor2(nn.Module):
         info_size: int = 8,          # number of binary features, example
     ):
         super().__init__()
+        self.enemy_id_max = num_enemy_types - 1
 
         # 1) CNN for the image
         self.image_extractor = NatureCNN(input_channels=image_channels, linear_output_size=image_linear_size)
@@ -337,6 +338,13 @@ class CombinedExtractor2(nn.Module):
         projectile_features: (batch, 2, 5)
         information:         (batch, BOOLEAN_FEATURES)
         """
+        max_id = enemy_ids.max().item()
+        min_id = enemy_ids.min().item()
+        if max_id >= self.enemy_id_max or min_id < 0:
+            raise ValueError(
+                f"enemy_ids out of range! min={min_id}, max={max_id}, "
+                f"expected in [0, {self.enemy_id_max}]."
+            )
 
         # 1) Extract image features
         img_out = self.image_extractor(image)  # shape (batch, image_linear_size)
@@ -390,7 +398,7 @@ class SharedNatureAgent(Network):
         # For each sub-observation space:
         enemy_count = 4
         enemy_feature_dim = 6
-        num_enemy_types = 49   # 0..48
+        num_enemy_types = 150   # 0..149
         embedding_dim = 8      # tweak as needed
 
         item_count = 2
