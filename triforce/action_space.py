@@ -191,7 +191,7 @@ class ZeldaActionSpace(gym.Wrapper):
         return observation, state
 
     def step(self, action):
-        action = self._build_action_taken(action)
+        action = self.get_action_taken(action)
 
         observation, reward, terminated, truncated, state_change = self.env.step(action)
         self._handle_wall_bump(state_change)
@@ -200,7 +200,8 @@ class ZeldaActionSpace(gym.Wrapper):
 
         return observation, reward, terminated, truncated, state_change
 
-    def _build_action_taken(self, action):
+    def get_action_taken(self, action) -> ActionTaken:
+        """Returns the action taken by the agent based on the index."""
         if isinstance(action, tuple):
             action = self._action_direction_to_index(*action)
         elif isinstance(action, np.ndarray):
@@ -309,7 +310,7 @@ class ZeldaActionSpace(gym.Wrapper):
 
     def is_valid_action(self, action, action_mask):
         """Returns True if the action is valid."""
-        action = self._build_action_taken(action)
+        action = self.get_action_taken(action)
         return action_mask[action.id]
 
     def get_allowed_actions(self, state, action_mask):
