@@ -318,7 +318,7 @@ class ZeldaActionSpace(gym.Wrapper):
         result = []
 
         link : Link = state.link
-        actions_possible = self.actions_allowed & link.get_available_actions(ActionKind.BEAMS in self.actions_allowed)
+        actions_possible = set(self.actions_allowed) & link.get_available_actions(ActionKind.BEAMS in self.actions_allowed)
         for action in actions_possible:
             index = self.action_to_index[action]
             allowed_directions = []
