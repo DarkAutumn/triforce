@@ -171,7 +171,7 @@ class DisplayWindow:
         self._show_action(surface, probs)
         self._draw_probabilities(surface, probs)
         self._draw_reward_buttons(surface)
-        self._draw_location_info(step.state)
+        #self._draw_location_info(step.state)
 
         pygame.display.flip()
 
@@ -494,9 +494,17 @@ class DisplayWindow:
                 y += 20
                 continue
 
-            text = f"{action.name}: "
+            text = f"{action.name:>5}: "
             for direction, prob in l:
-                text += f"{direction.name}: {prob:.2f} "
+                prob = round(prob*100)
+                if prob == 0:
+                    continue
+                if prob == 100:
+                    prob = 99
+                if prob > 0:
+                    prob = f"{prob:>2}%"
+                    
+                text += f"{direction.name}: {prob} "
 
             render_text(surface, self.font, text, (self.probs_x, y))
             y += 20
