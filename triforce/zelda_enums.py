@@ -164,6 +164,9 @@ class ZeldaEnemyKind(Enum):
 
 class ZeldaProjectileId(Enum):
     """Projectile codes for the game."""
+    OtorokRock : int = 83
+    ZoraFireball : int = 85
+    Boomerang : int = 92
 
 class ZeldaItemKind(Enum):
     """Item codes for the game."""
@@ -239,6 +242,7 @@ class Direction(Enum):
 
 ENEMY_MAP = {x.value: x for x in ZeldaEnemyKind}
 ITEM_MAP = {x.value: x for x in ZeldaItemKind}
+PROJECTILE_MAP = {x.value: x for x in ZeldaProjectileId}
 
 class Coordinates:
     """Base class of coordinates in the game world."""

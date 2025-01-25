@@ -12,7 +12,7 @@ from .room import Room
 from .zelda_objects import Item, Projectile
 from .enemy import Enemy
 from .link import Link
-from .zelda_enums import ENEMY_MAP, ITEM_MAP, MapLocation, Position, Direction, SoundKind
+from .zelda_enums import ENEMY_MAP, ITEM_MAP, PROJECTILE_MAP, MapLocation, Position, Direction, SoundKind
 from .zelda_game_data import zelda_game_data
 
 MODE_GAME_OVER = 8
@@ -302,6 +302,7 @@ class ZeldaGame:
         return enemy
 
     def _build_projectile(self, tables, index, obj_id):
+        obj_id = PROJECTILE_MAP.get(obj_id, obj_id)
         return Projectile(self, index, obj_id, self._read_position(tables, index))
 
     def _read_position(self, tables, index):
