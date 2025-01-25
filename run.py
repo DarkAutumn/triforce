@@ -59,7 +59,7 @@ class DisplayWindow:
         self.action_y = 20
         self.action_height = 100
         self.action_width = self.action_height * 4
-        
+
         self._move_circle = DirectionalCircle(Coordinates(self.action_x, self.action_y), self.font, "Move", self.action_height / 2, center_circle=False, scale_range=(0.15, 1))
         self._attack_circle = DirectionalCircle(Coordinates(self.action_x + self.action_height, self.action_y), self.font, "Attack", self.action_height / 2, center_circle=False, scale_range=(0.15, 1))
 
@@ -99,7 +99,7 @@ class DisplayWindow:
         """Returns the y position for the text."""
         return self.probs_height
 
-    def show(self, headless_recording=False):
+    def show(self):
         """Shows the game and the AI model."""
         clock = pygame.time.Clock()
 
@@ -110,7 +110,8 @@ class DisplayWindow:
         env = EnvironmentWrapper(self.model_path, self.model_definition, self.scenario, self.frame_stack)
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
-        frames = None
+        frame = None
+        frames = []
         while self.mode != 'q':
             if self.mode != 'p' and not frames:
                 if self.restart_requested:
@@ -123,6 +124,8 @@ class DisplayWindow:
                     self.next_action = None
                     self.restart_requested = step.terminated or step.truncated
 
+                frames = step.frames
+
                 if self.mode == 'n':
                     self.mode = 'p'
 
@@ -131,9 +134,9 @@ class DisplayWindow:
                 if step.terminated or step.truncated:
                     self.endings[step.rewards.ending] = self.endings.get(step.rewards.ending, 0) + 1
 
-            if step.frames:
-                frame = step.frames.pop(0)
-            
+            if frames:
+                frame = frames.pop(0)
+
             surface = self._render(surface, step, frame, env)
             if recording:
                 recording.write(surface)
@@ -503,7 +506,7 @@ class DisplayWindow:
                     prob = 99
                 if prob > 0:
                     prob = f"{prob:>2}%"
-                    
+
                 text += f"{direction.name}: {prob} "
 
             render_text(surface, self.font, text, (self.probs_x, y))
@@ -585,7 +588,7 @@ def main():
         return
 
     display = DisplayWindow(scenario, model_path, args.model, args.frame_stack)
-    display.show(args.headless_recording)
+    display.show()
 
 def parse_args():
     """Parse command line arguments."""
@@ -595,7 +598,6 @@ def parse_args():
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
-    parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
     parser.add_argument("--frame-stack", type=int, default=3, help="Number of frames to stack.")
 
     parser.add_argument('model', type=str, help='Model name')
