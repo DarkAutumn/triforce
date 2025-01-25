@@ -40,6 +40,25 @@
                     "iterations" : 40000000
                 }
             ]
+        },
+        {
+            "name" : "dungeon1-circuit",
+            "description" : "Train the dungeon model by first teaching it to walk rooms, then to make it to dungeon1, then to grab the sword, then all together.",
+            "scenarios" : [
+                {
+                    "scenario" : "dungeon1-skip-opening",
+                    "exit_criteria" : "rewards",
+                    "threshold" : 0.0,
+                    "iterations" : 2000000
+                },
+                {
+                    "scenario" : "dungeon1-side-room-opening"
+                },
+                {
+                    "scenario" : "dungeon1",
+                    "iterations" : 20000000
+                }
+            ]
         }
     ],
     "scenarios": [
@@ -181,7 +200,32 @@
             }
         },
         {
-            "name": "start-dungeon1",
+            "name": "dungeon1-side-room-opening",
+            "description": "Dungeon 1.",
+            "iterations" : 2000000,
+            "scenario_selector" : "probabilistic",
+            "objective" : "GameCompletion",
+            "critic": "GameplayCritic",
+            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout"],
+            "metrics" : [
+                "success-rate",
+                "overworld-progress",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
+            "start": ["1_72e", "1_74w", "1_63s"],
+            "use_hints" : false,
+            "per_reset":
+            {
+                "bombs" : 3,
+                "max_health" : 2,
+                "health" : 3
+            }
+        },
+        {
+            "name": "dungeon1",
             "description": "Dungeon 1.",
             "iterations" : 2000000,
             "scenario_selector" : "round-robin",
@@ -196,7 +240,7 @@
                 "reward-average",
                 "reward-details"
             ],
-            "start": ["1_72e", "1_74w", "1_63s"],
+            "start": ["1_73s"],
             "use_hints" : false,
             "per_reset":
             {
@@ -228,7 +272,8 @@
             {
                 "bombs" : 3,
                 "max_health" : 2,
-                "health" : 3
+                "health" : 3,
+                "keys" : 3
             }
         },
         {
