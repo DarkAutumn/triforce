@@ -36,7 +36,7 @@
                 {
                     "scenario" : "overworld-skip-opening",
                     "exit_criteria" : "success-rate",
-                    "threshold" : 0.90,
+                    "threshold" : 0.90
                 },
                 {
                     "scenario" : "start-overworld1",
