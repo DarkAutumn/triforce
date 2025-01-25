@@ -30,15 +30,18 @@ class Timeout(ZeldaEndCondition):
         super().__init__()
         self.__position_duration = 0
         self.__last_discovery = 0
+        self.__last_correct_room = 0
         self.__seen = set()
 
         # the number of timesteps the agent can be in the same position before we truncate
         self.position_timeout = 50
         self.no_discovery_timeout = 1200
+        self.no_next_room_timeout = 300
 
     def clear(self):
         self.__position_duration = 0
         self.__last_discovery = 0
+        self.__last_correct_room = 0
         self.__seen.clear()
 
     def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
@@ -56,15 +59,22 @@ class Timeout(ZeldaEndCondition):
 
         # Check if link never found a new room
         if self.no_discovery_timeout:
-            if prev.location != curr.location and curr.location not in self.__seen:
-                self.__seen.add(curr.location)
-                self.__last_discovery = 0
-
-            else:
+            if prev.full_location == curr.full_location:
                 self.__last_discovery += 1
+                self.__last_correct_room += 1
+            else:
+                if curr.full_location not in self.__seen:
+                    self.__seen.add(curr.location)
+                    self.__last_discovery = 0
+
+                if curr.full_location in prev.objectives.next_rooms:
+                    self.__last_correct_room = 0
 
             if self.__last_discovery > self.no_discovery_timeout:
                 return False, True, "failure-no-discovery"
+            
+            if self.__last_correct_room > self.no_next_room_timeout:
+                return False, True, "failure-no-next-room"
 
         return False, False, None
 
