@@ -59,6 +59,7 @@ class ZeldaCooldownHandler:
         """Resets the handler."""
         self.was_link_in_cave = False
         self._link_pos = None
+        self._sword_count = 0
 
     def gain_control_of_link(self):
         """Skips frames until Link is in a state where the agent can control him."""
@@ -102,15 +103,16 @@ class ZeldaCooldownHandler:
     def _step_with_frame_capture(self, action : ActionTaken, frame_capture):
         """Steps once and saves the frame into frames"""
         obs, _, terminated, truncated, info = self.env.step(action)
+        frame_capture.append(obs)
+            
+        self._link_pos = Position(info['link_x'], info['link_y'])
         if info['beam_animation'] == 17:
             self._sword_count += 1
             if self._sword_count >= 11:
                 info['beam_animation'] = 0
         elif self._sword_count:
             self._sword_count = 0
-            
-        frame_capture.append(obs)
-        self._link_pos = Position(info['link_x'], info['link_y'])
+
         return terminated, truncated, info
 
     def _skip_uncontrollable_states(self, start_location, info, frame_capture):
@@ -169,6 +171,8 @@ class ZeldaCooldownHandler:
 
         old_tile_index = start_pos.tile_index
 
+        # Stuck max == 8 is the minimum to wait to ensure a key opens a locked door
+        stuck_max = 8
         stuck_count = 0
         prev_pos = start_pos
         for _ in range(MAX_MOVEMENT_FRAMES):
@@ -199,7 +203,7 @@ class ZeldaCooldownHandler:
             if prev_pos == pos:
                 stuck_count += 1
 
-            if stuck_count > 1:
+            if stuck_count >= stuck_max:
                 break
 
         return terminated, truncated, info, loc
