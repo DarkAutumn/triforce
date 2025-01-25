@@ -104,7 +104,7 @@ class ZeldaCooldownHandler:
         """Steps once and saves the frame into frames"""
         obs, _, terminated, truncated, info = self.env.step(action)
         frame_capture.append(obs)
-            
+
         self._link_pos = Position(info['link_x'], info['link_y'])
         if info['beam_animation'] == 17:
             self._sword_count += 1

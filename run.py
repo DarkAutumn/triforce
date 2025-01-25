@@ -60,8 +60,11 @@ class DisplayWindow:
         self.action_height = 100
         self.action_width = self.action_height * 4
 
-        self._move_circle = DirectionalCircle(Coordinates(self.action_x, self.action_y), self.font, "Move", self.action_height / 2, center_circle=False, scale_range=(0.15, 1))
-        self._attack_circle = DirectionalCircle(Coordinates(self.action_x + self.action_height, self.action_y), self.font, "Attack", self.action_height / 2, center_circle=False, scale_range=(0.15, 1))
+        self._move_circle = DirectionalCircle(Coordinates(self.action_x, self.action_y), self.font, "Move",
+                                              self.action_height / 2, center_circle=False, scale_range=(0.15, 1))
+        self._attack_circle = DirectionalCircle(Coordinates(self.action_x + self.action_height, self.action_y),
+                                                self.font, "Attack", self.action_height / 2, center_circle=False,
+                                                scale_range=(0.15, 1))
 
         self.probs_x = self.text_x
         self.probs_y = 0

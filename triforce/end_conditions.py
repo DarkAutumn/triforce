@@ -72,7 +72,7 @@ class Timeout(ZeldaEndCondition):
 
             if self.__last_discovery > self.no_discovery_timeout:
                 return False, True, "failure-no-discovery"
-            
+
             if self.__last_correct_room > self.no_next_room_timeout:
                 return False, True, "failure-no-next-room"
 
@@ -248,6 +248,8 @@ class RoomWalkCondition(ZeldaEndCondition):
         return False, False, None
 
 class NowhereToGoCondition(ZeldaEndCondition):
+    """End condition for when the objective selector said we have to move to a room but we have nowhere
+    to go.  This is often because locked or barred doors are in the way."""
     def is_scenario_ended(self, state_change):
         objectives = state_change.state.objectives
         if objectives.kind == ObjectiveKind.MOVE and not objectives.next_rooms:
@@ -256,10 +258,10 @@ class NowhereToGoCondition(ZeldaEndCondition):
         return False, False, None
 
 class LeftPlayArea(ZeldaEndCondition):
+    """End condition for leaving the initial room walk scenario."""
     def is_scenario_ended(self, state_change):
         location = state_change.state.full_location
         if location.level != 1 or location.value == 0x73:
             return True, False, "failure-left-play-area"
 
         return False, False, None
-    

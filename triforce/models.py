@@ -202,17 +202,8 @@ class MlpExtractor(nn.Module):
         return policy_features, value_features
 
 class CombinedExtractor(nn.Module):
-    """
-    Processes:
-      - Image via CNN (NatureCNN)
-      - Enemy features (4 x 6 floats)
-      - Enemy IDs (4 discrete IDs) -> Embedding
-      - Item features (2 x 4 floats)
-      - Projectile features (2 x 5 floats)
-      - Binary 'information'
-    Then concatenates them into a single feature vector.
-    """
-
+    """Combined extractor for CNN and other inputs"""
+    # pylint: disable=too-many-arguments
     def __init__(
         self,
         image_channels: int,
@@ -230,20 +221,11 @@ class CombinedExtractor(nn.Module):
         super().__init__()
         self.enemy_id_max = num_enemy_types - 1
 
-        # 1) CNN for the image
+        # CNN for the image
         self.image_extractor = NatureCNN(input_channels=image_channels, linear_output_size=image_linear_size)
 
-        # 2) Embedding for enemy IDs (0 == no enemy)
+        # Embedding for enemy IDs (0 == no enemy)
         self.enemy_embedding = nn.Embedding(num_enemy_types, embedding_dim)
-
-        # Optionally, you could define small MLPs for continuous features here, e.g.:
-        # self.enemy_feat_mlp = nn.Sequential(
-        #     nn.Linear(enemy_feature_dim * enemy_count, 32),
-        #     nn.ReLU(),
-        #     nn.Linear(32, 16),
-        #     nn.ReLU()
-        # )
-        # For simplicity, we'll just flatten them directly in this example.
 
         self.item_count = item_count
         self.enemy_count = enemy_count
@@ -270,46 +252,24 @@ class CombinedExtractor(nn.Module):
                            + (projectile_count * projectile_feature_dim)
                            + info_size)
 
-    def forward(self,
-                image: torch.Tensor,
-                enemy_features: torch.Tensor,
-                enemy_ids: torch.Tensor,
-                item_features: torch.Tensor,
-                projectile_features: torch.Tensor,
+    def forward(self, image: torch.Tensor, enemy_features: torch.Tensor, enemy_ids: torch.Tensor,
+                item_features: torch.Tensor, projectile_features: torch.Tensor,
                 information: torch.Tensor) -> torch.Tensor:
-        """
-        image:               (batch, C, H, W)
-        enemy_features:      (batch, 4, 6)
-        enemy_ids:           (batch, 4)   -> each int in [0..48]
-        item_features:       (batch, 2, 4)
-        projectile_features: (batch, 2, 5)
-        information:         (batch, BOOLEAN_FEATURES)
-        """
-        max_id = enemy_ids.max().item()
-        min_id = enemy_ids.min().item()
-        if max_id >= self.enemy_id_max or min_id < 0:
-            raise ValueError(
-                f"enemy_ids out of range! min={min_id}, max={max_id}, "
-                f"expected in [0, {self.enemy_id_max}]."
-            )
+        """Forward pass."""
+        # pylint: disable=too-many-locals
 
-        # 1) Extract image features
         img_out = self.image_extractor(image)  # shape (batch, image_linear_size)
 
-        # 2) Flatten continuous features
         bsz = image.shape[0]
         enemy_feat_flat = enemy_features.view(bsz, -1)          # (batch, 4*6)
         item_feat_flat = item_features.view(bsz, -1)            # (batch, 2*4)
         proj_feat_flat = projectile_features.view(bsz, -1)      # (batch, 2*5)
 
-        # 3) Embed enemy IDs -> (batch, 4, embedding_dim), then flatten
         enemy_ids_embed = self.enemy_embedding(enemy_ids.long())  # (batch, 4, embedding_dim)
         enemy_ids_embed_flat = enemy_ids_embed.view(bsz, -1)      # (batch, 4*embedding_dim)
 
-        # 4) Convert info to float if it's MultiBinary
         info_float = information.float()  # shape (batch, info_size)
 
-        # 5) Concatenate everything
         combined = torch.cat([
             img_out,
             enemy_feat_flat,
@@ -321,25 +281,13 @@ class CombinedExtractor(nn.Module):
 
         return combined
 
-
 class SharedNatureAgent(Network):
-    """
-    Actor-critic policy with multiple inputs + action masking,
-    updated to use separate observations:
-      - image
-      - enemy_features (4x6)
-      - enemy_id (4)
-      - item_features (2x4)
-      - projectile_features (2x5)
-      - information (binary)
-    """
+    """Actor-critic policy with multiple inputs, action masking, and shared CNN."""
     def __init__(self, obs_space: Dict, action_space):
-        # Unpack image shape
+        # pylint: disable=too-many-locals
         channels, height, width = obs_space["image"].shape
 
         # We'll use a simple linear_output_size from CNN.
-        # For NatureCNN, it's common to do a smaller "head" MLP dimension.
-        # For demonstration, let's do (height + width) as in your example.
         image_linear_size = height + width
 
         # For each sub-observation space:
@@ -382,11 +330,8 @@ class SharedNatureAgent(Network):
         self.value_net = self.layer_init(nn.Linear(64, 1), std=1.0)
 
     def forward(self, obs):
-        # 1) Expand dims if needed (single obs)
         obs = self._unsqueeze(obs)
 
-        # 2) Pass through your "base" combined extractor
-        #    Make sure to match the keys in your observation dict
         combined_features = self.base(
             image=obs["image"],
             enemy_features=obs["enemy_features"],
@@ -396,16 +341,11 @@ class SharedNatureAgent(Network):
             information=obs["information"]
         )
 
-        # 3) Split into policy/value features
         policy_features, value_features = self.mlp_extractor(combined_features)
 
-        # 4) Get final action logits and value
         action_logits = self.action_net(policy_features)
         value = self.value_net(value_features)
         return action_logits, value
-
-
-
 
 def create_network(network, obs_space, action_space):
     """Create a network from a class or instance."""
@@ -445,7 +385,6 @@ def register_neural_network(name, model_class):
 def get_neural_network(name):
     """Get a model by name."""
     return NEURAL_NETWORK_DEFINITIONS[name]
-
 
 class ModelDefinition(BaseModel):
     """
