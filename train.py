@@ -113,8 +113,8 @@ def main():
             del kwargs['exit_criteria']
             del kwargs['exit_threshold']
 
-
         kwargs['model_name'] = model_def.name + '-' + scenario_def.name
+        print(f"Training {model_def.name} on {scenario_def.name} for up to {iterations:,} iterations")
         model = train_once(ppo, scenario_def, model_def, model_directory, iterations, **kwargs)
         kwargs['model'] = model
 
