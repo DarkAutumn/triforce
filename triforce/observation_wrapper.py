@@ -5,27 +5,34 @@ convert the image to grayscale.  We also stack multiple frames together to give 
 of motion over time.
 """
 
-from typing import List, Sequence
+from enum import Enum
+from typing import List
 import gymnasium as gym
-from gymnasium.spaces import Box, Dict
+from gymnasium.spaces import Box, Dict, Discrete
 import numpy as np
 import torch
 import torch.nn.functional as F
 
 from .zelda_enums import GAMEPLAY_START_Y, Direction
 from .objectives import Objective, ObjectiveKind
-from .zelda_objects import ZeldaObject
 from .zelda_game import ZeldaGame
 
 GRAYSCALE_WEIGHTS = torch.FloatTensor([0.2989, 0.5870, 0.1140])
-OBJECT_KINDS = 3
-OBJECTS_PER_KIND = 2
 BOOLEAN_FEATURES = 12
 DISTANCE_SCALE = 100.0
 VIEWPORT_PIXELS = 128
 
+ENEMY_COUNT = 4
+ENEMY_FEATURES = 6
+NUM_ENEMY_TYPES = 49
+ITEM_COUNT = 2
+ITEM_FEATURES = 4
+PROJECTILE_COUNT = 2
+PROJECTILE_FEATURES = 5
+
 # Image features are defined as a grayscale image of the game screen.
 # This can be trimmed to remove the HUD, or resized to be a viewport around Link.
+
 
 # Object features are defined as a normalized vector (x, y) and a distance scaled to [0, 1]:
 #   0: closest enemy tile
@@ -71,9 +78,14 @@ class ObservationWrapper(gym.Wrapper):
 
         self.observation_space = Dict({
             "image": self._get_box_observation_space(),
-            "vectors" : Box(low=-1.0, high=1.0, shape=(OBJECT_KINDS, OBJECTS_PER_KIND, 3), dtype=np.float32),
+            "enemy_features": Box(low=-1.0, high=1.0, shape=(4, ENEMY_FEATURES), dtype=np.float32),
+            "enemy_id": Discrete(ENEMY_COUNT),
+            "item_features": Box(low=-1.0, high=1.0, shape=(2, ITEM_FEATURES), dtype=np.float32),
+            "projectile_features": Box(low=-1.0, high=1.0, shape=(2, PROJECTILE_FEATURES), dtype=np.float32),
             "information" : gym.spaces.MultiBinary(BOOLEAN_FEATURES)
         })
+
+        self._id_cache = {}
 
     def reset(self, **kwargs):
         frames, state = self.env.reset(**kwargs)
@@ -93,7 +105,10 @@ class ObservationWrapper(gym.Wrapper):
         tensor = self._get_stacked_frames(frames, self.frame_stack, self.frame_skip)
         return {
             "image" : self._get_image_observation(state, tensor),
-            "vectors" : self._get_vectors(state),
+            "enemy_features" : self._get_enemy_features(state),
+            "enemy_id" : self._get_enemy_ids(state),
+            "item_features" : self._get_item_features(state),
+            "projectile_features" : self._get_projectile_features(state),
             "information" : self._get_information(state)
             }
 
@@ -235,34 +250,86 @@ class ObservationWrapper(gym.Wrapper):
 
         return frame
 
-    def _get_vectors(self, state : ZeldaGame):
-        vectors = torch.zeros(OBJECT_KINDS, OBJECTS_PER_KIND, 3, dtype=torch.float32)
-
-        items = state.items
-        if state.treasure_location is not None:
-            items = items + [ZeldaObject(state, -1, None, state.treasure_location)]
-
-        kinds = [state.active_enemies, state.projectiles, items]
-        for i, kind in enumerate(kinds):
-            if kind:
-                vectors[i, :OBJECTS_PER_KIND, :] = self._get_object_vectors(kind, OBJECTS_PER_KIND)
+    def _get_enemy_features(self, state: ZeldaGame) -> torch.Tensor:
+        # Enemy features:
+        #   0: presence (0 or 1 if there is an enemy in this slot)
+        #   1: closeness (0 if far away, 1 if right on top of link)
+        #   2-3: vector
+        #   4-5: direction
+        vectors = torch.zeros(ENEMY_COUNT, ENEMY_FEATURES, dtype=torch.float32)
+        enemies = state.active_enemies or state.enemies
+        if enemies:
+            for i, enemy in enumerate(enemies):
+                if i >= ENEMY_COUNT:
+                    break
+                vectors[i, 0] = 1
+                vectors[i, 1] = self._distance_to_proximity(enemy.distance, DISTANCE_SCALE)
+                vectors[i, 2:4] = enemy.vector
+                vectors[1, 4:6] = enemy.direction.vector
 
         return vectors.clamp(-1, 1)
 
-    def _get_object_vectors(self, objects : Sequence[ZeldaObject], count):
-        result = torch.zeros((count, 3), dtype=torch.float32)
-        result[:, 2] = -1
+    def _get_enemy_ids(self, state: ZeldaGame) -> torch.Tensor:
+        ids = torch.zeros(ENEMY_COUNT, dtype=torch.float32)
+        enemies = state.active_enemies or state.enemies
+        for i, enemy in enumerate(enemies):
+            if i >= ENEMY_COUNT:
+                break
 
-        # closest objects first
-        objects = sorted(objects, key=lambda obj: obj.distance)
-        for i, obj in enumerate(objects[:count]):
-            if obj.distance <= 1e-5:
-                result[i] = torch.tensor([0, 0, -1], dtype=torch.float32)
-            else:
-                result[i, :2] = obj.vector[:2]
-                result[i, 2] = obj.distance / DISTANCE_SCALE
+            if (e_id := self._id_cache.get(enemy.id, None)) is None:
+                e_id = enemy.id
+                if isinstance(e_id, Enum):
+                    e_id = e_id.value
+                self._id_cache[enemy.id] = int(e_id)
 
-        return result
+            ids[i] = e_id
+
+        return ids
+
+    def _get_item_features(self, state: ZeldaGame) -> torch.Tensor:
+        # Item features:
+        #   0: presence (0 or 1 if there is an item in this slot)
+        #   1: closeness (0 if far away, 1 if right on top of link)
+        #   2-3: vector
+        vectors = torch.zeros(ITEM_COUNT, ITEM_FEATURES, dtype=torch.float32)
+        items = state.items
+        if state.treasure is not None:
+            items = [state.treasure, *items]
+
+        for i, item in enumerate(items):
+            if i >= ITEM_COUNT:
+                break
+            vectors[i, 0] = 1
+            vectors[i, 1] = self._distance_to_proximity(item.distance, DISTANCE_SCALE)
+            vectors[i, 2:4] = item.vector
+
+        return vectors.clamp(-1, 1)
+
+    def _get_projectile_features(self, state: ZeldaGame) -> torch.Tensor:
+        # Projectile features:
+        #   0: presence (0 or 1 if there is a projectile in this slot)
+        #   1: closeness (0 if far away, 1 if right on top of link)
+        #   2-3: vector
+        #   4: blockable
+        vectors = torch.zeros(PROJECTILE_COUNT, PROJECTILE_FEATURES, dtype=torch.float32)
+        for i, proj in enumerate(state.projectiles):
+            if i >= PROJECTILE_COUNT:
+                break
+            vectors[i, 0] = 1
+            vectors[i, 1] = self._distance_to_proximity(proj.distance, DISTANCE_SCALE)
+            vectors[i, 2:4] = proj.vector
+            vectors[i, 4] = 1 if proj.blockable else -1
+
+        return vectors.clamp(-1, 1)
+
+    def _distance_to_proximity(self, distance: float, scale: float, min_closeness: float = 0.1) -> float:
+        if distance <= 5:
+            return 1.0
+        if distance >= scale:
+            return min_closeness
+
+        closeness = 1.0 - ((distance - 5) / (scale - 5))
+        return max(min_closeness, min_closeness + closeness * (1 - min_closeness))
 
     def _get_information(self, state : ZeldaGame):
         objectives = self._get_objectives_vector(state, state.objectives)

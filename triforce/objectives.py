@@ -29,7 +29,9 @@ dungeon_to_item = {
     0x44: BoomerangKind.WOOD,
     0x45: ZeldaItemKind.Key,
     0x35: ZeldaItemKind.HeartContainer,
-    0x36: ZeldaItemKind.Triforce1
+    0x36: ZeldaItemKind.Triforce1,
+    0x43 : ZeldaItemKind.Map,
+    0x54 : ZeldaItemKind.Compass,
 }
 
 item_to_overworld = {v: k for k, v in overworld_to_item.items()}
@@ -282,15 +284,16 @@ class GameCompletion(ObjectiveSelector):
         # If treasure is already dropped, get it
         kind = ObjectiveKind.NONE
         tile_objectives = []
-        treasure_tile = state.treasure_tile
-        if treasure_tile is not None:
-            kind = ObjectiveKind.TREASURE
-            tile_objectives.append(treasure_tile)
+        if state.treasure:
+            # don't force link to get the map/compass
+            if dungeon_to_item.get(state.location, None) not in (ZeldaItemKind.Map, ZeldaItemKind.Compass):
+                kind = ObjectiveKind.TREASURE
+                tile_objectives.append(state.treasure.tile)
 
         # If we collect the treasure, mark it as taken
         else:
             room_memory : RoomMemory = self._rooms.get(state.full_location, None)
-            if room_memory.item and prev and prev.treasure_tile is not None:
+            if room_memory.item and prev and prev.treasure is not None:
                 room_memory.item = None
 
             # If we know there's treasure in the room not spawned, kill enemies.
@@ -402,11 +405,11 @@ class RoomWalk(ObjectiveSelector):
                     continue
 
             elif objective.kind == ObjectiveKind.TREASURE:
-                if state.treasure_tile is None:
+                if state.treasure is None:
                     self._sequence.pop(0)
                     continue
 
-                objective.targets = [state.treasure_tile]
+                objective.targets = [state.treasure.tile]
 
             return objective
 

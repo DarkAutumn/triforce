@@ -12,7 +12,7 @@ from .room import Room
 from .zelda_objects import Item, Projectile
 from .enemy import Enemy
 from .link import Link
-from .zelda_enums import ENEMY_MAP, ITEM_MAP, MapLocation, Position, TileIndex, Direction, SoundKind
+from .zelda_enums import ENEMY_MAP, ITEM_MAP, PROJECTILE_MAP, MapLocation, Position, Direction, SoundKind
 from .zelda_game_data import zelda_game_data
 
 MODE_GAME_OVER = 8
@@ -69,21 +69,27 @@ class ZeldaGame:
 
     @cached_property
     def items(self) -> List[Item]:
-        """Returns a list of items on the current screen."""
+        """Returns a list of items on the current screen, sorted by distance."""
         tables = self._tables
-        return [self._build_item(tables, index) for index in self._cached_ids[0]]
+        result = [self._build_item(tables, index) for index in self._cached_ids[0]]
+        result.sort(key=lambda x: x.distance)
+        return result
 
     @cached_property
     def enemies(self) -> List[Enemy]:
-        """Returns a list of enemies on the current screen."""
+        """Returns a list of enemies on the current screen, sorted by distance."""
         tables = self._tables
-        return [self._build_enemy(tables, index, obj_id) for index, obj_id in self._cached_ids[1]]
+        result = [self._build_enemy(tables, index, obj_id) for index, obj_id in self._cached_ids[1]]
+        result.sort(key=lambda x: x.distance)
+        return result
 
     @cached_property
     def projectiles(self) -> List[Projectile]:
-        """Returns a list of projectiles on the current screen."""
+        """Returns a list of projectiles on the current screen, sorted by distance."""
         tables = self._tables
-        return [self._build_projectile(tables, index, obj_id) for index, obj_id in self._cached_ids[2]]
+        result = [self._build_projectile(tables, index, obj_id) for index, obj_id in self._cached_ids[2]]
+        result.sort(key=lambda x: x.distance)
+        return result
 
     @cached_property
     def _object_tables(self):
@@ -201,11 +207,14 @@ class ZeldaGame:
 
         return None
 
-    @property
-    def treasure_tile(self) -> Optional[TileIndex]:
+    @cached_property
+    def treasure(self) -> Optional[Item]:
         """Returns the tile coordinates of the treasure in the current room, or None if there isn't one."""
         location = self.treasure_location
-        return location.tile_index if location is not None else None
+        if location is None:
+            return None
+
+        return Item(self, -1, -1, location, 255)
 
     @cached_property
     def active_enemies(self):
@@ -293,6 +302,7 @@ class ZeldaGame:
         return enemy
 
     def _build_projectile(self, tables, index, obj_id):
+        obj_id = PROJECTILE_MAP.get(obj_id, obj_id)
         return Projectile(self, index, obj_id, self._read_position(tables, index))
 
     def _read_position(self, tables, index):

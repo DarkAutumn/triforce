@@ -47,14 +47,29 @@ class DisplayWindow:
         self.game_y = 0
 
         self.details_height = 150
-        self.details_width = self.game_width + self.obs_width
-        self.details_x = 0
+        self.details_width = self.game_width
+        self.details_x = self.obs_width
         self.details_y = self.game_height
 
         self.text_x = self.obs_width + self.game_width
-        self.text_y = 0
         self.text_height = self.game_height + self.details_height
         self.text_width = 300
+
+        self.action_x = self.text_x - self.obs_width
+        self.action_y = 20
+        self.action_height = 100
+        self.action_width = self.action_height * 4
+
+        self._move_circle = DirectionalCircle(Coordinates(self.action_x, self.action_y), self.font, "Move",
+                                              self.action_height / 2, center_circle=False, scale_range=(0.15, 1))
+        self._attack_circle = DirectionalCircle(Coordinates(self.action_x + self.action_height, self.action_y),
+                                                self.font, "Attack", self.action_height / 2, center_circle=False,
+                                                scale_range=(0.15, 1))
+
+        self.probs_x = self.text_x
+        self.probs_y = 0
+        self.probs_height = 0
+        self.probs_width = self.text_width
 
         self.total_width = self.obs_width + self.game_width + self.text_width
         self.total_height = max(self.game_height + self.details_height, self.text_height)
@@ -70,7 +85,7 @@ class DisplayWindow:
             raise ValueError(f"Unknown model {model}")
 
         self.move_widgets = {}
-        self.vector_widgets = []
+        self.vector_widgets = {}
         self.objective_widgets = []
 
         self.mode = 'c'
@@ -78,16 +93,19 @@ class DisplayWindow:
         self.cap_fps = True
         self.next_action = None
         self.overlay = 0
+        self.buttons = deque(maxlen=100)
+        self.endings = {}
+        self.running_rewards = {}
 
-    def show(self, headless_recording=False):
+    @property
+    def text_y(self):
+        """Returns the y position for the text."""
+        return self.probs_height
+
+    def show(self):
         """Shows the game and the AI model."""
         clock = pygame.time.Clock()
 
-        endings = {}
-        running_rewards = {}
-        buttons = deque(maxlen=100)
-
-        show_endings = True
         recording = None
         self.overlay = 0
 
@@ -95,75 +113,75 @@ class DisplayWindow:
         env = EnvironmentWrapper(self.model_path, self.model_definition, self.scenario, self.frame_stack)
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
-        frames = None
+        frame = None
+        frames = []
         while self.mode != 'q':
             if self.mode != 'p' and not frames:
                 if self.restart_requested:
                     step : StepResult = env.restart()
-                    action_mask = step.action_mask
+                    action_mask = step.action_mask_desc
                     self.restart_requested = False
                 else:
-                    action_mask = step.action_mask
+                    action_mask = step.action_mask_desc
                     step = env.step(self.next_action)
                     self.next_action = None
                     self.restart_requested = step.terminated or step.truncated
+
+                frames = step.frames
 
                 if self.mode == 'n':
                     self.mode = 'p'
 
                 # update rewards for display
-                self._update_rewards(step, action_mask, running_rewards, buttons)
+                self._update_rewards(step, action_mask)
                 if step.terminated or step.truncated:
-                    endings[step.rewards.ending] = endings.get(step.rewards.ending, 0) + 1
+                    self.endings[step.rewards.ending] = self.endings.get(step.rewards.ending, 0) + 1
 
-            frames = step.frames
-            if not frames:
-                self._check_input(env, step)
+            if frames:
+                frame = frames.pop(0)
 
-            while frames:
-                surface.fill((0, 0, 0))
-                self._show_observation(surface, step.observation)
+            surface = self._render(surface, step, frame, env)
+            if recording:
+                recording.write(surface)
 
-                # render the gameplay
-                self._render_game_view(surface, frames.pop(0), (self.game_x, self.game_y), self.game_width,
-                                       self.game_height)
+            if self.cap_fps:
+                clock.tick(60.1)
 
-                if self.overlay:
-                    color = "black" if step.state.level == 0 and not step.state.in_cave else "white"
-                    self._overlay_grid_and_text(surface, self.overlay, (self.game_x, self.game_y), color, \
-                                                self.scale, step.state)
-
-                render_text(surface, self.font, f"Model: {step.model_description}", (self.game_x, self.game_y))
-                render_text(surface, self.font, f"Location: {hex(step.state.location)}",
-                            (self.game_x + self.game_width - 120, self.game_y))
-
-                # render rewards graph and values
-                ending_render = endings if show_endings else None
-                self._draw_details(surface, running_rewards, ending_render)
-                self._draw_reward_buttons(surface, buttons, (self.text_x, self.text_y),
-                                                            (self.text_width, self.text_height))
-
-                if recording:
-                    recording.write(surface)
-
-                # Display the scaled frame
-                if not headless_recording:
-                    pygame.display.flip()
-
-                else:
-                    self._print_location_info(step.state)
-
-                if self.cap_fps:
-                    clock.tick(60.1)
-
-                self._check_input(env, step)
-
+            self._check_input(env, step)
 
         if recording and recording.buffer_size <= 1:
             recording.close(True)
 
         env.close()
         pygame.quit()
+
+    def _render(self, surface, step, frame, env):
+        surface.fill((0, 0, 0))
+        self._show_observation(surface, step.observation)
+
+        # render the gameplay
+        self._render_game_view(surface, frame, (self.game_x, self.game_y), self.game_width, self.game_height)
+
+        if self.overlay:
+            color = "black" if step.state.level == 0 and not step.state.in_cave else "white"
+            self._overlay_grid_and_text(surface, self.overlay, (self.game_x, self.game_y), color, \
+                                        self.scale, step.state)
+
+        render_text(surface, self.font, f"Model: {env.model_details}", (self.game_x, self.game_y))
+        render_text(surface, self.font, f"Location: {hex(step.state.location)}",
+                    (self.game_x + self.game_width - 120, self.game_y))
+
+        # render rewards graph and values
+        self._draw_details(surface)
+        probs = env.selector.get_probabilities(step.observation, step.action_mask.unsqueeze(0))
+        self._show_action(surface, probs)
+        self._draw_probabilities(surface, probs)
+        self._draw_reward_buttons(surface)
+        #self._draw_location_info(step.state)
+
+        pygame.display.flip()
+
+        return surface
 
 
     def _check_input(self, env, step):
@@ -260,7 +278,7 @@ class DisplayWindow:
 
         return ActionKind.MOVE, direction
 
-    def _print_location_info(self, state):
+    def _draw_location_info(self, state):
         if self._last_location is not None:
             last_level, last_location = self._last_location
             if last_level != state.level:
@@ -284,6 +302,34 @@ class DisplayWindow:
         result += f", ending: {info.get('end', '???')} in {total_time:.2f} seconds"
         print(result)
 
+    def _show_action(self, surface, probs):
+        if self._move_circle is None:
+            pos = Coordinates(self.action_x, self.action_y)
+            self._move_circle = DirectionalCircle(pos, self.font, "Move", 25)
+            self._attack_circle = DirectionalCircle(pos + (0, 50), self.font, "Attack", 25)
+
+        self._move_circle.directions.clear()
+        self._attack_circle.directions.clear()
+
+        for action, l in probs.items():
+            if action == 'value':
+                continue
+
+            for direction, prob in l:
+                if prob < 0.01:
+                    continue
+
+                if action == ActionKind.MOVE:
+                    self._move_circle.directions.append((direction, prob))
+                else:
+                    self._attack_circle.directions.append((direction, prob))
+
+        # clear background
+        pygame.draw.rect(surface, (0, 0, 0), (self.action_x, self.action_y, self.action_width, self.action_height))
+
+        self._move_circle.draw(surface)
+        self._attack_circle.draw(surface)
+
     def _show_observation(self, surface, obs):
         x_pos = self.obs_x
         y_pos = self.obs_y
@@ -292,22 +338,27 @@ class DisplayWindow:
         radius = self.obs_width // 4
         if not self.vector_widgets:
             pos = Coordinates(x_pos, y_pos)
-            labels = ["Enemy1", "Enemy 2", "Projectile", "Projectile 2", "Item 1", "Item 2"]
+            labels = ["Enemy 1", "Enemy 2", "Enemy 3", "Enemy 4", "Projectile 1", "Projectile 2", "Item 1", "Item 2"]
             for label in labels:
-                self.vector_widgets.append(LabeledVector(pos, self.font, label, radius))
-                size = self.vector_widgets[-1].size
+                widget = LabeledVector(pos, self.font, label, radius)
+                self.vector_widgets[label] = widget
+                size = widget.size
                 if len(self.vector_widgets) % 2 == 0:
                     pos = pos + (-size[0], size[1])
                 else:
                     pos = pos + (size[0], 0)
 
-        for i in range(obs["vectors"].shape[0]):
-            for j in range(obs["vectors"].shape[1]):
-                v = obs["vectors"][i, j]
-                widget = self.vector_widgets[i * obs["vectors"].shape[1] + j]
-                widget.vector = v.cpu().numpy()
-                widget.draw(surface)
+        self._update_vector_widget("Enemy 1", "enemy_features", 0, obs)
+        self._update_vector_widget("Enemy 2", "enemy_features", 1, obs)
+        self._update_vector_widget("Enemy 3", "enemy_features", 2, obs)
+        self._update_vector_widget("Enemy 4", "enemy_features", 3, obs)
+        self._update_vector_widget("Projectile 1", "projectile_features", 0, obs)
+        self._update_vector_widget("Projectile 2", "projectile_features", 1, obs)
+        self._update_vector_widget("Item 1", "item_features", 0, obs)
+        self._update_vector_widget("Item 2", "item_features", 1, obs)
 
+        for widget in self.vector_widgets.values():
+            widget.draw(surface)
 
         if not self.move_widgets:
             pos = Coordinates(0, pos.y)
@@ -323,7 +374,10 @@ class DisplayWindow:
 
         return Coordinates(0, y_pos)
 
-
+    def _update_vector_widget(self, widget_name, observation_name, index, obs):
+        widget = self.vector_widgets[widget_name]
+        widget.vector = obs[observation_name][index, 2:4].cpu().numpy()
+        widget.scale = 1 - obs[observation_name][index, 1].cpu().numpy()
 
     def _get_directions_for_vectors(self, vectors):
         directions = []
@@ -338,8 +392,7 @@ class DisplayWindow:
 
         return directions
 
-
-    def _update_rewards(self, step : StepResult, prev_action_mask, running_rewards, buttons):
+    def _update_rewards(self, step : StepResult, prev_action_mask):
         state_change = step.state_change
         if not state_change:
             return
@@ -349,12 +402,13 @@ class DisplayWindow:
         if rewards is not None:
             self.total_rewards += rewards.value
             for outcome in rewards:
-                if outcome.name not in running_rewards:
-                    running_rewards[outcome.name] = 0
+                if outcome.name not in self.running_rewards:
+                    self.running_rewards[outcome.name] = 0
 
-                running_rewards[outcome.name] += outcome.value
+                self.running_rewards[outcome.name] += outcome.value
                 curr_rewards[outcome.name] = outcome.value
 
+        buttons = self.buttons
         prev = buttons[0] if buttons else None
         action = f"{state_change.action.direction.name} {state_change.action.kind.name}"
         if prev is not None and prev.rewards == curr_rewards and prev.action == action:
@@ -401,7 +455,7 @@ class DisplayWindow:
         render_text(surface, self.font, value, (x + total_width - value_width, y), color)
         return new_y
 
-    def _draw_details(self, surface, rewards, endings):
+    def _draw_details(self, surface):
         col = 0
         row = 1
         col_width = self.details_width // 3 - 3
@@ -411,7 +465,7 @@ class DisplayWindow:
                                         self.details_y, col_width)
         row_height = y - self.details_y
         row_max = self.details_height // row_height
-        items = list(rewards.items())
+        items = list(self.running_rewards.items())
         items.sort(key=lambda x: x[1], reverse=True)
         for k, v in items:
             color = (255, 0, 0) if v < 0 else (0, 255, 255) if v > 0 else (255, 255, 255)
@@ -419,12 +473,12 @@ class DisplayWindow:
                                         self.details_y + row * row_height, col_width, color)
             row, col = self.__increment(row, col, row_max)
 
-        if endings:
+        if self.endings:
             row, col = self.__increment(row, col, row_max)
-            self._write_key_val_aligned(surface, "Episodes:", f"{sum(endings.values())}", x + col * col_width,
+            self._write_key_val_aligned(surface, "Episodes:", f"{sum(self.endings.values())}", x + col * col_width,
                                         self.details_y + row * row_height, col_width)
 
-            items = list(endings.items())
+            items = list(self.endings.items())
             items.sort(key=lambda x: x[1], reverse=True)
             for k, v in items:
                 row, col = self.__increment(row, col, row_max)
@@ -438,16 +492,40 @@ class DisplayWindow:
             col += 1
         return row, col
 
-    def _draw_reward_buttons(self, surface, buttons : deque, position, dimensions):
-        result = []
+    def _draw_probabilities(self, surface, probs):
+        y = self.probs_y
+        for action, l in probs.items():
+            if action == 'value':
+                render_text(surface, self.font, f"Value: {l.item():.2f}", (self.probs_x, y))
+                y += 20
+                continue
 
-        x, y = position
-        height = dimensions[1]
+            text = f"{action.name:>5}: "
+            for direction, prob in l:
+                prob = round(prob*100)
+                if prob == 0:
+                    continue
+                if prob == 100:
+                    prob = 99
+                if prob > 0:
+                    prob = f"{prob:>2}%"
+
+                text += f"{direction.name}: {prob} "
+
+            render_text(surface, self.font, text, (self.probs_x, y))
+            y += 20
+
+        self.probs_height = max(y, self.probs_height)
+
+    def _draw_reward_buttons(self, surface):
+        result = []
+        buttons = self.buttons
 
         i = 0
-        while i < len(buttons) and y < position[1] + height:
+        y = self.text_y
+        while i < len(buttons) and y < self.text_y + self.text_height:
             button = buttons[i]
-            rendered_button = button.draw_reward_button(surface, (x, y))
+            rendered_button = button.draw_reward_button(surface, (self.text_x, y))
             result.append(rendered_button)
             y += rendered_button.dimensions[1] + 1
             i += 1
@@ -513,7 +591,7 @@ def main():
         return
 
     display = DisplayWindow(scenario, model_path, args.model, args.frame_stack)
-    display.show(args.headless_recording)
+    display.show()
 
 def parse_args():
     """Parse command line arguments."""
@@ -523,7 +601,6 @@ def parse_args():
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
     parser.add_argument("--model-path", nargs=1, help="Location to read models from.")
-    parser.add_argument("--headless-recording", action='store_true', help="Record the game without displaying it.")
     parser.add_argument("--frame-stack", type=int, default=3, help="Number of frames to stack.")
 
     parser.add_argument('model', type=str, help='Model name')

@@ -8,19 +8,20 @@ from typing import Dict
 from tqdm import tqdm
 from triforce import ModelDefinition, make_zelda_env, Network, TrainingScenarioDefinition,  MetricTracker
 
-def _print_stat_header(metrics : Dict[str, float]):
+def _print_stat_header(metrics: Dict[str, float]):
     header_result = f"{'Filename':<32} {'Steps':>9} "
-
     metric_columns = []
-    for key in metrics.items():
+
+    for metric_name in metrics.keys():
         if len(header_result) > 100:
             break
 
-        metric_columns.append(key)
-        header_result += f"{key[-9:]:>9} "
+        metric_columns.append(metric_name)
+        header_result += f"{metric_name[-9:]:>9} "
 
     print(header_result)
     return metric_columns
+
 
 def _print_stat_row(filename, steps_trained, metrics : Dict[str, float], metric_columns):
     result = f"{filename:<32} {steps_trained:>9,} "
@@ -78,6 +79,7 @@ def main():
     networks = []
 
     all_scenarios = create_scenarios(args)
+    all_scenarios.reverse()
     total_episodes = sum(args.episodes for x in all_scenarios if x[-1])
     with tqdm(total=total_episodes) as progress:
         def update_progress():

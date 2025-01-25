@@ -100,7 +100,8 @@ class ActionKind(Enum):
                 if isinstance(action, str):
                     actions_allowed[i] = ActionKind(action)
 
-        return set(actions_allowed)
+        assert len(actions_allowed) == len(set(actions_allowed)), "Duplicate actions in list."
+        return actions_allowed
 
     @staticmethod
     def from_selected_equipment(selected_equipment):
@@ -163,6 +164,10 @@ class ZeldaEnemyKind(Enum):
 
 class ZeldaProjectileId(Enum):
     """Projectile codes for the game."""
+    # pylint: disable=invalid-name
+    OtorokRock : int = 83
+    ZoraFireball : int = 85
+    Boomerang : int = 92
 
 class ZeldaItemKind(Enum):
     """Item codes for the game."""
@@ -176,6 +181,8 @@ class ZeldaItemKind(Enum):
     Triforce7 : int = -107
     Triforce8 : int = -108
     TriforceOfPower = -109
+    Map : int = -4
+    Compass : int = -3
     HeartContainer : int = -2
     Key : int = -1
     Bombs : int = 0x00
@@ -221,6 +228,8 @@ class Direction(Enum):
     def vector(self):
         """Returns the vector for the direction."""
         match self:
+            case Direction.NONE:
+                return torch.tensor([0, 0], dtype=torch.float32)
             case Direction.E:
                 return torch.tensor([1, 0], dtype=torch.float32)
             case Direction.W:
@@ -234,6 +243,7 @@ class Direction(Enum):
 
 ENEMY_MAP = {x.value: x for x in ZeldaEnemyKind}
 ITEM_MAP = {x.value: x for x in ZeldaItemKind}
+PROJECTILE_MAP = {x.value: x for x in ZeldaProjectileId}
 
 class Coordinates:
     """Base class of coordinates in the game world."""
@@ -401,17 +411,18 @@ class MapLocation(Coordinates):
         if self.level != 0 and next_room.level == 0:
             return Direction.N
 
-        assert self.manhattan_distance(next_room) in (0, 1)
+        dist = self.manhattan_distance(next_room)
 
         result = Direction.NONE
-        if self.x < next_room.x:
-            result = Direction.E
-        elif self.x > next_room.x:
-            result = Direction.W
-        elif self.y < next_room.y:
-            result = Direction.S
-        elif self.y > next_room.y:
-            result = Direction.N
+        if dist == 1:
+            if self.x < next_room.x:
+                result = Direction.E
+            elif self.x > next_room.x:
+                result = Direction.W
+            elif self.y < next_room.y:
+                result = Direction.S
+            elif self.y > next_room.y:
+                result = Direction.N
 
         return result
 

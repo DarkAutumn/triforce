@@ -43,7 +43,6 @@ class ZeldaObject:
 
         return result
 
-
     @cached_property
     def self_tiles(self) -> Set[TileIndex]:
         """The tiles that the object occupies."""
@@ -81,6 +80,10 @@ class ZeldaObject:
 @dataclass
 class Projectile(ZeldaObject):
     """Structured data for a projectile."""
+    @property
+    def blockable(self) -> bool:
+        """Returns True if the projectile can be blocked by a shield."""
+        return self.id in (ZeldaProjectileId.OtorokRock, ZeldaProjectileId.Boomerang)
 
 @dataclass
 class Item(ZeldaObject):

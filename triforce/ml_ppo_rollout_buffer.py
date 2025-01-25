@@ -1,5 +1,5 @@
 import torch
-from gymnasium.spaces import Box, MultiBinary, Dict
+from gymnasium.spaces import Box, MultiBinary, Dict, Discrete
 
 
 class PPORolloutBuffer:
@@ -52,6 +52,9 @@ class PPORolloutBuffer:
 
         if isinstance(space, Box):
             return torch.empty(self.n_envs, self.memory_length + 1, *space.shape, dtype=torch.float32, device="cpu")
+
+        if isinstance(space, Discrete):
+            return torch.empty(self.n_envs, self.memory_length + 1, space.n, dtype=torch.float32, device="cpu")
 
         raise ValueError(f"Unsupported observation space: {space}")
 
