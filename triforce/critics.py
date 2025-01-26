@@ -34,9 +34,9 @@ USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
 PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_MAXIMUM)
 PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -REWARD_MAXIMUM)
-FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_MINIMUM)
-MOVED_OFF_OF_WALLMASTER_REWARD = Reward("reward-moved-off-wallmaster", REWARD_SMALL)
-MOVED_ONTO_WALLMASTER_PENALTY = Penalty("penalty-moved-onto-wallmaster", -REWARD_SMALL + REWARD_MINIMUM)
+FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_TINY)
+MOVED_OFF_OF_WALLMASTER_REWARD = Reward("reward-moved-off-wallmaster", REWARD_TINY - REWARD_MINIMUM)
+MOVED_ONTO_WALLMASTER_PENALTY = Penalty("penalty-moved-onto-wallmaster", -REWARD_TINY)
 
 def _init_equipment_rewards():
     """Initializes the equipment rewards."""
@@ -216,7 +216,7 @@ class GameplayCritic(ZeldaCritic):
 
         # Did we get wallmastered?
         if prev.full_location != curr.full_location:
-            if prev.manhattan_distance(curr) > 1:
+            if prev.full_location.manhattan_distance(curr.full_location) > 1:
                 rewards.add(PENALTY_WALL_MASTER)
 
         # Are we on a tile which could be wallmastered?  If so, push away from it.
