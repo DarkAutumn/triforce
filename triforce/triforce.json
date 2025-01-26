@@ -34,12 +34,12 @@
                     "threshold" : 0.80
                 },
                 {
-                    "scenario" : "overworld-skip-opening",
+                    "scenario" : "overworld-skip-sword",
                     "exit_criteria" : "success-rate",
                     "threshold" : 0.90
                 },
                 {
-                    "scenario" : "start-overworld1",
+                    "scenario" : "overworld",
                     "exit_criteria" : "success-rate",
                     "threshold" : 0.98,
                     "iterations" : 40000000
@@ -68,7 +68,7 @@
     ],
     "scenarios": [
         {
-            "name": "start-overworld1",
+            "name": "overworld",
             "description": "The full game with training variables",
             "iterations" : 2000000,
             "scenario_selector" : "round-robin",
@@ -87,7 +87,23 @@
             "use_hints" : true
         },
         {
-            "name": "overworld-skip-opening",
+            "name": "overworld-sword",
+            "description": "Start of the game to the sword",
+            "iterations" : 1000000,
+            "scenario_selector" : "none",
+            "objective" : "GameCompletion",
+            "critic": "OverworldSwordCritic",
+            "end_conditions": ["StartingRoomConditions", "Timeout"],
+            "metrics" : ["success-rate", "ending", "reward-average", "reward-details"],
+            "start": ["0_77c"],
+            "per_reset":
+            {
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
+            }
+        },
+        {
+            "name": "overworld-skip-sword",
             "description": "A scoped down room walk",
             "iterations" : 2500000,
             "scenario_selector" : "round-robin",
@@ -97,6 +113,34 @@
             "metrics" : ["success-rate", "room-result", "room-health", "ending", "reward-average", "reward-details"],
             "start": [ "0_67s" ],
             "use_hints" : true,
+            "per_reset":
+            {
+                "bombs" : 3,
+                "sword" : 1,
+                "health" : "max_health"
+            }
+        },
+        {
+            "name": "overworld-room-walk",
+            "description": "A training scenario to teach the model how to traverse the map and follow directions",
+            "iterations" : 2000000,
+            "scenario_selector" : "probabilistic",
+            "objective" : "RoomWalk",
+            "critic": "GameplayCritic",
+            "end_conditions": ["RoomWalkCondition"],
+            "metrics" : [
+                "success-rate",
+                "room-result",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
+            "start": [
+                "0_58",
+                "0_68"
+            ],
+            "use_hints" : false,
             "per_reset":
             {
                 "bombs" : 3,
@@ -141,34 +185,6 @@
                 "max_health" : 2,
                 "health" : 3,
                 "keys" : 4
-            }
-        },
-        {
-            "name": "overworld-room-walk",
-            "description": "A training scenario to teach the model how to traverse the map and follow directions",
-            "iterations" : 2000000,
-            "scenario_selector" : "probabilistic",
-            "objective" : "RoomWalk",
-            "critic": "GameplayCritic",
-            "end_conditions": ["RoomWalkCondition"],
-            "metrics" : [
-                "success-rate",
-                "room-result",
-                "room-health",
-                "ending",
-                "reward-average",
-                "reward-details"
-            ],
-            "start": [
-                "0_58",
-                "0_68"
-            ],
-            "use_hints" : false,
-            "per_reset":
-            {
-                "bombs" : 3,
-                "sword" : 1,
-                "health" : "max_health"
             }
         },
         {
@@ -240,45 +256,6 @@
                 "max_health" : 2,
                 "health" : 3,
                 "keys" : 3
-            }
-        },
-        {
-            "name": "refinement",
-            "description": "The full game with training variables",
-            "iterations" : 8000000,
-            "scenario_selector" : "probabilistic",
-            "objective" : "GameCompletion",
-            "critic": "GameplayCritic",
-            "end_conditions": ["StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
-            "metrics" : [
-                "success-rate",
-                "overworld-progress",
-                "room-health",
-                "ending",
-                "reward-average",
-                "reward-details"
-            ],
-            "start": ["0_67s"],
-            "per_reset":
-            {
-                "health" : "max_health",
-                "bombs" : 3
-            }
-        },
-        {
-            "name": "overworld-sword",
-            "description": "Start of the game to the sword",
-            "iterations" : 1000000,
-            "scenario_selector" : "none",
-            "objective" : "GameCompletion",
-            "critic": "OverworldSwordCritic",
-            "end_conditions": ["StartingRoomConditions", "Timeout"],
-            "metrics" : ["success-rate", "ending", "reward-average", "reward-details"],
-            "start": ["0_77c"],
-            "per_reset":
-            {
-                "hearts_and_containers" : 34,
-                "partial_hearts" : 254
             }
         }
     ]
