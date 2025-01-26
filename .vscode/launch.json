@@ -9,16 +9,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["overworld", "start-overworld1", "--model-path", "training/debug/", "--frame-stack", "3"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
-            "name": "Run - overworld room walk",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["overworld", "initial-room-walk", "--model-path", "training/debug/", "--frame-stack", "3"],
+            "args": ["overworld", "overworld", "--model-path", "training/debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -27,7 +18,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["dungeon1", "start-dungeon1", "--model-path", "training/debug/", "--frame-stack", "3"],
+            "args": ["dungeon", "dungeon1", "--model-path", "training/debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -36,7 +27,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["overworld-sword", "overworld-sword", "--model-path", "training/debug/", "--frame-stack", "3"],
+            "args": ["overworld-sword", "overworld-sword", "--model-path", "training/debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
