@@ -65,7 +65,7 @@ def train_once(ppo : PPO, scenario_def, model_def, model_directory, iterations, 
     def create_env():
         return make_zelda_env(scenario_def, model_def.action_space, **kwargs)
 
-    model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(), save_path=model_directory, **kwargs)
+    model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(ncols=100), save_path=model_directory, **kwargs)
     model_name = model_def.name.replace(' ', '_')
     model.save(f"{model_directory}/{model_name}-{scenario_def.name}.pt")
     return model
@@ -114,7 +114,8 @@ def main():
             del kwargs['exit_threshold']
 
         kwargs['model_name'] = model_def.name + '-' + scenario_def.name
-        print(f"Training {model_def.name} on {scenario_def.name} for up to {iterations:,} iterations")
+        criteria = f" or {scenario_entry.exit_criteria} >= {scenario_entry.threshold}" if scenario_entry.exit_criteria else ""
+        print(f"Training {model_def.name} on {scenario_def.name} for up to {iterations:,} iterations{criteria}.")
         model = train_once(ppo, scenario_def, model_def, model_directory, iterations, **kwargs)
         kwargs['model'] = model
 
