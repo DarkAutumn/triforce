@@ -23,7 +23,7 @@ class Network(nn.Module):
         self.action_space = action_space
         self.steps_trained = 0
         self.episodes_evaluated = 0
-        self.metrics : Dict[str, float] = {}
+        self.metrics : dict[str, float] = {}
 
         self.base = base_network
         self.action_net = self.layer_init(nn.Linear(64, action_space.n), std=0.01)
@@ -69,7 +69,6 @@ class Network(nn.Module):
             invalid_mask = ~mask
             logits[invalid_mask] = -1e9
 
-            # distribution for entropy calculation
         distribution = dist.Categorical(logits=logits)
         entropy = distribution.entropy()
 
@@ -149,8 +148,8 @@ class Network(nn.Module):
         return save_data["obs_space"], save_data["action_space"]
 
 class NatureCNN(nn.Module):
-    """Simple CNN."""
-    def __init__(self, input_channels=1, linear_output_size=256):
+    """Simple CNN that adjusts to input size dynamically."""
+    def __init__(self, input_channels=1, input_height=128, input_width=128, linear_output_size=256):
         super().__init__()
         self.cnn = nn.Sequential(
             Network.layer_init(nn.Conv2d(input_channels, 32, kernel_size=8, stride=4)),
@@ -162,7 +161,8 @@ class NatureCNN(nn.Module):
             nn.Flatten()
         )
 
-        dummy_input = torch.zeros(1, input_channels, 128, 128)  # Example input shape
+        # Use dynamic input size for figuring out output shape
+        dummy_input = torch.zeros(1, input_channels, input_height, input_width)
         with torch.no_grad():
             cnn_out = self.cnn(dummy_input)
         cnn_output_size = cnn_out.shape[1]
@@ -207,22 +207,29 @@ class CombinedExtractor(nn.Module):
     def __init__(
         self,
         image_channels: int,
-        image_linear_size: int,
-        enemy_feature_dim: int = 6,  # e.g. presence, closeness, vector, direction
+        input_height: int,
+        input_width: int,
+        enemy_feature_dim: int = 6,
         enemy_count: int = 4,
-        num_enemy_types: int = 150,   # 0..149
-        embedding_dim: int = 4,      # size of learned enemy embedding
+        num_enemy_types: int = 150,
+        embedding_dim: int = 4,
         item_feature_dim: int = 4,
         item_count: int = 2,
         projectile_feature_dim: int = 5,
         projectile_count: int = 2,
-        info_size: int = 8,          # number of binary features, example
+        info_size: int = 8,
+        image_linear_size: int = 256,
     ):
         super().__init__()
         self.enemy_id_max = num_enemy_types - 1
 
         # CNN for the image
-        self.image_extractor = NatureCNN(input_channels=image_channels, linear_output_size=image_linear_size)
+        self.image_extractor = NatureCNN(
+            input_channels=image_channels,
+            input_height=input_height,
+            input_width=input_width,
+            linear_output_size=image_linear_size
+        )
 
         # Embedding for enemy IDs (0 == no enemy)
         self.enemy_embedding = nn.Embedding(num_enemy_types, embedding_dim)
@@ -237,38 +244,33 @@ class CombinedExtractor(nn.Module):
         self.image_linear_size = image_linear_size
         self.info_size = info_size
 
-        # Compute the final output dimension after concatenation
-        # If we just flatten everything:
-        #   image -> image_linear_size
-        #   enemy_features -> enemy_count * enemy_feature_dim
-        #   enemy_ids -> enemy_count * embedding_dim
-        #   item_features -> item_count * item_feature_dim
-        #   projectile_features -> projectile_count * projectile_feature_dim
-        #   information -> info_size
-        self.output_dim = (image_linear_size
-                           + (enemy_count * enemy_feature_dim)
-                           + (enemy_count * embedding_dim)
-                           + (item_count * item_feature_dim)
-                           + (projectile_count * projectile_feature_dim)
-                           + info_size)
+        # final output dimension after concatenation
+        self.output_dim = (
+            image_linear_size
+            + (enemy_count * enemy_feature_dim)
+            + (enemy_count * embedding_dim)
+            + (item_count * item_feature_dim)
+            + (projectile_count * projectile_feature_dim)
+            + info_size
+        )
 
     def forward(self, image: torch.Tensor, enemy_features: torch.Tensor, enemy_ids: torch.Tensor,
                 item_features: torch.Tensor, projectile_features: torch.Tensor,
                 information: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
-        # pylint: disable=too-many-locals
-
-        img_out = self.image_extractor(image)  # shape (batch, image_linear_size)
-
         bsz = image.shape[0]
-        enemy_feat_flat = enemy_features.view(bsz, -1)          # (batch, 4*6)
-        item_feat_flat = item_features.view(bsz, -1)            # (batch, 2*4)
-        proj_feat_flat = projectile_features.view(bsz, -1)      # (batch, 2*5)
+        # CNN on image
+        img_out = self.image_extractor(image)
 
-        enemy_ids_embed = self.enemy_embedding(enemy_ids.long())  # (batch, 4, embedding_dim)
-        enemy_ids_embed_flat = enemy_ids_embed.view(bsz, -1)      # (batch, 4*embedding_dim)
+        enemy_feat_flat = enemy_features.view(bsz, -1)
+        item_feat_flat = item_features.view(bsz, -1)
+        proj_feat_flat = projectile_features.view(bsz, -1)
 
-        info_float = information.float()  # shape (batch, info_size)
+        # embedding
+        enemy_ids_embed = self.enemy_embedding(enemy_ids.long())
+        enemy_ids_embed_flat = enemy_ids_embed.view(bsz, -1)
+
+        info_float = information.float()
 
         combined = torch.cat([
             img_out,
@@ -284,48 +286,36 @@ class CombinedExtractor(nn.Module):
 class SharedNatureAgent(Network):
     """Actor-critic policy with multiple inputs, action masking, and shared CNN."""
     def __init__(self, obs_space: Dict, action_space):
-        # pylint: disable=too-many-locals
         channels, height, width = obs_space["image"].shape
 
-        # We'll use a simple linear_output_size from CNN.
-        image_linear_size = height + width
+        # We'll do a straightforward approach: let the user define a 'linear_output_size'.
+        # We'll keep 'image_linear_size' for the final MLP size.
+        image_linear_size = 256  # or some fixed size, ignoring (height+width) approach
 
-        # For each sub-observation space:
-        enemy_count = 4
-        enemy_feature_dim = 6
-        num_enemy_types = 150   # 0..149
-        embedding_dim = 8      # tweak as needed
-
-        item_count = 2
-        item_feature_dim = 4
-
-        projectile_count = 2
-        projectile_feature_dim = 5
-
-        # Suppose "information" has shape (BOOLEAN_FEATURES,)
-        info_size = obs_space["information"].n  # if it's MultiBinary(BOOLEAN_FEATURES)
-
-        # Create the combined extractor that merges all these:
-        base = CombinedExtractor(
-            image_channels=channels,
-            image_linear_size=image_linear_size,
-            enemy_feature_dim=enemy_feature_dim,
-            enemy_count=enemy_count,
-            num_enemy_types=num_enemy_types,
-            embedding_dim=embedding_dim,
-            item_feature_dim=item_feature_dim,
-            item_count=item_count,
-            projectile_feature_dim=projectile_feature_dim,
-            projectile_count=projectile_count,
-            info_size=info_size,
+        super().__init__(
+            base_network=CombinedExtractor(
+                image_channels=channels,
+                input_height=height,
+                input_width=width,
+                enemy_feature_dim=obs_space["enemy_features"].shape[1],
+                enemy_count=obs_space["enemy_features"].shape[0],
+                num_enemy_types=150,
+                embedding_dim=4,
+                item_feature_dim=obs_space["item_features"].shape[1],
+                item_count=obs_space["item_features"].shape[0],
+                projectile_feature_dim=obs_space["projectile_features"].shape[1],
+                projectile_count=obs_space["projectile_features"].shape[0],
+                info_size=obs_space["information"].n,
+                image_linear_size=image_linear_size
+            ),
+            obs_space=obs_space,
+            action_space=action_space
         )
 
-        super().__init__(base, obs_space, action_space)
+        # Now we create an MLP for policy/value.
+        self.mlp_extractor = MlpExtractor(input_size=self.base.output_dim)
 
-        # base.output_dim is the dimension of the "combined" vector from CombinedExtractor
-        self.mlp_extractor = MlpExtractor(input_size=base.output_dim)
-
-        # Final policy/value
+        # Overwrite action_net and value_net to match the new dimension (64 is from MlpExtractor default).
         self.action_net = self.layer_init(nn.Linear(64, action_space.n), std=0.01)
         self.value_net = self.layer_init(nn.Linear(64, 1), std=1.0)
 
@@ -361,7 +351,6 @@ def _init_models():
     result = {}
     current_module = sys.modules[__name__]
     for cls_name, cls_obj in inspect.getmembers(current_module, inspect.isclass):
-        # Check if the class subclasses 'Network' and matches the name
         if issubclass(cls_obj, Network) and cls_obj is not Network:
             result[cls_name] = cls_obj
 
