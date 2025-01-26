@@ -265,3 +265,11 @@ class LeftPlayArea(ZeldaEndCondition):
             return True, False, "failure-left-play-area"
 
         return False, False, None
+
+class Dungeon1DidntGetKey(ZeldaEndCondition):
+    """End condition for leaving the initial room walk scenario."""
+    def is_scenario_ended(self, state_change):
+        if state_change.state.location == 0x63 and state_change.state.link.keys == 0:
+            return True, False, "failure-no-key"
+
+        return False, False, None
