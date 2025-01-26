@@ -57,6 +57,11 @@
                     "iterations" : 2000000
                 },
                 {
+                    "scenario" : "dungeon1-entry-room",
+                    "exit_criteria" : "room-result/correct-exit",
+                    "threshold" : 0.90
+                },
+                {
                     "scenario" : "dungeon1-side-room-opening"
                 },
                 {
@@ -188,6 +193,34 @@
             }
         },
         {
+            "name": "dungeon1-entry-room",
+            "description": "Dungeon 1 entry room.",
+            "iterations" : 1000000,
+            "scenario_selector" : "round-robin",
+            "objective" : "RoomWalk",
+            "critic": "GameplayCritic",
+            "end_conditions": ["RoomWalkCondition", "LeftDungeon"],
+            "metrics" : [
+                "success-rate",
+                "room-result",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
+            "start": [
+                "1_73"
+            ],
+            "use_hints" : false,
+            "per_reset":
+            {
+                "bombs" : 3,
+                "max_health" : 2,
+                "health" : 3,
+                "keys" : 4
+            }
+        },
+        {
             "name": "dungeon1-side-room-opening",
             "description": "Dungeon 1.",
             "iterations" : 2000000,
@@ -203,7 +236,7 @@
                 "reward-average",
                 "reward-details"
             ],
-            "start": ["1_72e", "1_74w", "1_63s"],
+            "start": ["1_72e", "1_74w", "1_63s", "1_44w"],
             "use_hints" : false,
             "per_reset":
             {
