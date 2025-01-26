@@ -203,7 +203,7 @@
             "scenario_selector" : "round-robin",
             "objective" : "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout"],
+            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout", "Dungeon1DidntGetKey"],
             "metrics" : [
                 "success-rate",
                 "overworld-progress",
@@ -213,13 +213,7 @@
                 "reward-details"
             ],
             "start": ["1_73s"],
-            "use_hints" : false,
-            "per_reset":
-            {
-                "bombs" : 3,
-                "max_health" : 2,
-                "health" : 3
-            }
+            "use_hints" : false
         },
         {
             "name": "dungeon1-skip-opening",
