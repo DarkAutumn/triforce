@@ -82,7 +82,7 @@ class Projectile(ZeldaObject):
     """Structured data for a projectile."""
     def __eq__(self, value):
         return self.id == value or super().__eq__(value)
-    
+
     @property
     def blockable(self) -> bool:
         """Returns True if the projectile can be blocked by a shield."""

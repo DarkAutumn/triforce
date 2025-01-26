@@ -258,6 +258,7 @@ class CombinedExtractor(nn.Module):
                 item_features: torch.Tensor, projectile_features: torch.Tensor,
                 information: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
+        # pylint: disable=too-many-locals
         bsz = image.shape[0]
         # CNN on image
         img_out = self.image_extractor(image)

@@ -226,15 +226,15 @@ class GameplayCritic(ZeldaCritic):
 
             elif not self._is_wallmaster_tile(prev.link.tile):
                 rewards.add(MOVED_ONTO_WALLMASTER_PENALTY)
-        
+
         elif self._is_wallmaster_tile(prev.link.tile):
             # If we moved off the wallmaster tile, reward the agent
             if state_change.action.kind == ActionKind.MOVE:
                 rewards.add(MOVED_OFF_OF_WALLMASTER_REWARD)
 
-    def _is_wallmaster_tile(self, tile): 
+    def _is_wallmaster_tile(self, tile):
         return tile.x in (0x4, 0x1a) or tile.y in (0x4, 0x10)
-            
+
 
     def critique_block(self, state_change : StateChange, rewards):
         """Critiques blocking of projectiles."""
