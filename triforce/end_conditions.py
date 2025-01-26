@@ -2,7 +2,7 @@
 
 from .objectives import ObjectiveKind, ObjectiveSelector
 from .state_change_wrapper import StateChange
-from .zelda_enums import SwordKind
+from .zelda_enums import SwordKind, ZeldaEnemyKind
 
 class ZeldaEndCondition:
     """
@@ -143,6 +143,10 @@ class LeftDungeon(ZeldaEndCondition):
     def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
         if state_change.state.level == 0:
             return True, False, "failure-left-dungeon"
+        
+        if any(x.id == ZeldaEnemyKind.WallMaster for x in state_change.previous.enemies) \
+                and state_change.previous.full_location.manhattan_distance(state_change.state.full_location) > 1:
+            return True, False, "failure-wallmastered"
 
         return False, False, None
 
