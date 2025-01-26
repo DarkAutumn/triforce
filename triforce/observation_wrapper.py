@@ -219,7 +219,7 @@ class ObservationWrapper(gym.Wrapper):
             frames = frames.clamp_(0, 255).byte()
 
         # Ensure all frames have the expected viewport size
-        if frames.shape[-2] != self._viewport_size or frames.shape[-1] != self._viewport_size:
+        if self._viewport_size and (frames.shape[-2] != self._viewport_size or frames.shape[-1] != self._viewport_size):
             frames = self._reshape(frames)
 
         return frames
@@ -243,7 +243,7 @@ class ObservationWrapper(gym.Wrapper):
         if (frame.shape[-2] != self._viewport_size or
             frame.shape[-1] != self._viewport_size):
             frame = torch.zeros(
-                (1, self._viewport_size, self._viewport_size),
+                (frame.shape[0], self._viewport_size, self._viewport_size),
                 dtype=frame.dtype,
                 device=frame.device
             )
