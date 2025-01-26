@@ -8,7 +8,7 @@ from triforce.action_space import ActionKind
 from triforce.rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL, REWARD_TINY, \
     Penalty, Reward, StepRewards
 
-from .zelda_enums import SwordKind, ZeldaAnimationKind, AnimationState
+from .zelda_enums import SwordKind, ZeldaAnimationKind, AnimationState, ZeldaEnemyKind
 from .state_change_wrapper import StateChange
 
 HEALTH_LOST_PENALTY = Penalty("penalty-lost-health", -REWARD_LARGE)
@@ -33,6 +33,7 @@ PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
 USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
 PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_MAXIMUM)
+PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -REWARD_MAXIMUM)
 
 def _init_equipment_rewards():
     """Initializes the equipment rewards."""
@@ -253,6 +254,10 @@ class GameplayCritic(ZeldaCritic):
 
         prev = state_change.previous.full_location
         curr = state_change.state.full_location
+
+        if prev != curr and any(x.id == ZeldaEnemyKind.WallMaster for x in state_change.previous.enemies):
+            if prev.manhattan_distance(curr) > 1:
+                rewards.add(PENALTY_WALL_MASTER)
 
         # Don't let the agent walk offscreen then right back on to get a quick reward
         if prev != curr and not self._correct_locations:

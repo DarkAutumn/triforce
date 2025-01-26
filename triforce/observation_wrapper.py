@@ -18,7 +18,7 @@ from .objectives import Objective, ObjectiveKind
 from .zelda_game import ZeldaGame
 
 GRAYSCALE_WEIGHTS = torch.FloatTensor([0.2989, 0.5870, 0.1140])
-BOOLEAN_FEATURES = 12
+BOOLEAN_FEATURES = 14
 DISTANCE_SCALE = 100.0
 VIEWPORT_PIXELS = 128
 
@@ -337,9 +337,11 @@ class ObservationWrapper(gym.Wrapper):
         source_direction = torch.zeros(4, dtype=torch.float32)
         self._assign_direction(source_direction, state.full_location.get_direction_to(self._prev_loc))
 
-        features = torch.zeros(2, dtype=torch.float32)
+        features = torch.zeros(4, dtype=torch.float32)
         features[0] = 1.0 if state.active_enemies else 0.0
         features[1] = 1.0 if state.link.are_beams_available else 0.0
+        features[2] = 1.0 if state.link.heart_halves <= 2 else 0.0
+        features[3] = 1.0 if state.link.is_health_full else 0.0
 
         return torch.concatenate([objectives, source_direction, features])
 

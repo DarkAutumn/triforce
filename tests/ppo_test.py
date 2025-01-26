@@ -130,7 +130,7 @@ def test_ppo_training(device, num_envs):
     assert actions_taken == expected_actions, f"Expected actions {expected_actions}, but got {actions_taken}"
 
 @pytest.mark.parametrize("num_channels", [1, 3])
-@pytest.mark.parametrize("model_scenario", ["overworld start-overworld1", "overworld-sword overworld-sword"])
+@pytest.mark.parametrize("model_scenario", ["overworld overworld-skip-sword", "overworld-sword overworld-sword"])
 def test_model_training(model_scenario, num_channels):
     model_name, scenario_name = model_scenario.split(" ")
     model_def : ModelDefinition = ModelDefinition.get(model_name)
