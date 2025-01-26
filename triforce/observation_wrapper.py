@@ -265,7 +265,7 @@ class ObservationWrapper(gym.Wrapper):
                 vectors[i, 0] = 1
                 vectors[i, 1] = self._distance_to_proximity(enemy.distance, DISTANCE_SCALE)
                 vectors[i, 2:4] = enemy.vector
-                vectors[1, 4:6] = enemy.direction.vector
+                vectors[i, 4:6] = enemy.direction.vector
 
         return vectors.clamp(-1, 1)
 
