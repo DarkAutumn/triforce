@@ -203,7 +203,7 @@ class MlpExtractor(nn.Module):
 
 class CombinedExtractor(nn.Module):
     """Combined extractor for CNN and other inputs"""
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments, too-many-arguments
     def __init__(
         self,
         image_channels: int,
