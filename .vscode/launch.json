@@ -9,7 +9,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["overworld", "overworld", "--model-path", "training/debug/"],
+            "args": ["overworld", "game-start"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -18,7 +18,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["dungeon", "dungeon1", "--model-path", "training/debug/"],
+            "args": ["dungeon", "dungeon1"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -27,7 +27,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
-            "args": ["overworld-sword", "overworld-sword", "--model-path", "training/debug/"],
+            "args": ["overworld-sword", "overworld-sword"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -36,7 +36,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "train.py",
-            "args": ["overworld", "start-overworld1", "--output", "training/debug/"],
+            "args": ["overworld", "game-start", "--output", "training/debug/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

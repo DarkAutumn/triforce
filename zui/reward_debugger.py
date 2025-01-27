@@ -9,6 +9,7 @@
 from collections import deque
 import pygame
 import numpy as np
+import torch
 
 from triforce import TrainingScenarioDefinition,ModelDefinition
 from triforce.rewards import StepRewards
@@ -16,7 +17,7 @@ from triforce.zelda_enums import ActionKind, Coordinates, Direction
 from triforce.zelda_game import ZeldaGame
 
 from .environment_wrapper import EnvironmentWrapper, StepResult
-from .helpers import render_text
+from .helpers import draw_text
 from .labeled_circle import DirectionalCircle, LabeledVector
 from .recording import Recording
 from .reward_button import RewardButton
@@ -98,6 +99,9 @@ class RewardDebugger:
         self.endings = {}
         self.running_rewards = {}
 
+        self.recording = None
+        self.force_save = False
+
     @property
     def text_y(self):
         """Returns the y position for the text."""
@@ -107,13 +111,14 @@ class RewardDebugger:
         """Shows the game and the AI model."""
         clock = pygame.time.Clock()
 
-        recording = None
         self.overlay = 0
 
         surface = pygame.display.set_mode(self.dimensions)
         env = EnvironmentWrapper(self.model_path, self.model_definition, self.scenario, self.frame_stack)
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
+        frame_is_fresh = False
+        restarted = False
         frame = None
         frames = []
         while self.mode != 'q':
@@ -122,6 +127,7 @@ class RewardDebugger:
                     step : StepResult = env.restart()
                     action_mask = step.action_mask_desc
                     self.restart_requested = False
+                    restarted = True
                 else:
                     action_mask = step.action_mask_desc
                     step = env.step(self.next_action)
@@ -140,50 +146,69 @@ class RewardDebugger:
 
             if frames:
                 frame = frames.pop(0)
+                frame_is_fresh = True
 
-            surface = self._render(surface, step, frame, env)
-            if recording:
-                recording.write(surface)
+            # render the surface
+            probs = env.selector.get_probabilities(step.observation, step.action_mask.unsqueeze(0))
+            self._render_to_surface(surface, step, frame, env.model_details, probs)
+
+            # draw the surface to screen
+            pygame.display.flip()
+            self._check_input(env, step)
+
+            # handle recording
+            if self.recording:
+                ending = step.rewards.ending or ""
+                if ending or restarted:
+                    if self.recording.is_buffered:
+                        if self.force_save or ending.startswith("success"):
+                            self.recording.close(True)
+                        else:
+                            self.recording.close(False)
+                    else:
+                        self.recording.close(True)
+
+                    self.force_save = False
+
+                if frame_is_fresh:
+                    frame_is_fresh = False
+                    self.recording.write(surface)
+
+                restarted = False
 
             if self.cap_fps:
                 clock.tick(60.1)
 
-            self._check_input(env, step)
 
-        if recording and recording.buffer_size <= 1:
-            recording.close(True)
+        if self.recording:
+            self.recording.close(False)
 
         env.close()
         pygame.quit()
 
-    def _render(self, surface, step, frame, env):
+    def _render_to_surface(self, surface, step : StepResult, frame : torch.Tensor, model_details, probs):
         surface.fill((0, 0, 0))
         self._show_observation(surface, step.observation)
 
         # render the gameplay
-        self._render_game_view(surface, frame, (self.game_x, self.game_y), self.game_width, self.game_height)
+        self._draw_game_view(surface, frame, (self.game_x, self.game_y), self.game_width, self.game_height)
 
         if self.overlay:
             color = "black" if step.state.level == 0 and not step.state.in_cave else "white"
             self._overlay_grid_and_text(surface, self.overlay, (self.game_x, self.game_y), color, \
                                         self.scale, step.state)
 
-        render_text(surface, self.font, f"Model: {env.model_details}", (self.game_x, self.game_y))
-        render_text(surface, self.font, f"Location: {hex(step.state.location)}",
+        draw_text(surface, self.font, f"Model: {model_details}", (self.game_x, self.game_y))
+        draw_text(surface, self.font, f"Location: {hex(step.state.location)}",
                     (self.game_x + self.game_width - 120, self.game_y))
 
         # render rewards graph and values
         self._draw_details(surface)
-        probs = env.selector.get_probabilities(step.observation, step.action_mask.unsqueeze(0))
-        self._show_action(surface, probs)
+        if probs:
+            self._show_action(surface, probs)
         self._draw_probabilities(surface, probs)
         self._draw_reward_buttons(surface)
         #self._draw_location_info(step.state)
-
-        pygame.display.flip()
-
-        return surface
-
 
     def _check_input(self, env, step):
         # Check for Pygame events
@@ -235,28 +260,29 @@ class RewardDebugger:
                         self.next_action = None
 
                 elif event.key == pygame.K_s:
-                    if not force_save:
-                        force_save = True
+                    if self.recording and self.recording.is_buffered and not self.force_save:
+                        self.force_save = True
                         print("Saving this video")
 
                 elif event.key == pygame.K_F4:
-                    if recording is None:
-                        recording = Recording(self.dimensions, 0)
+                    if self.recording is None:
+                        self.recording = Recording(self.dimensions, 0)
                         print("Live recording started")
 
                     else:
                         print("Live recording stopped")
-                        recording.close(True)
+                        self.recording.close(True)
+                        self.recording = None
 
                 elif event.key == pygame.K_F10:
-                    if recording is None:
-                        recording = Recording(self.dimensions, 1_000_000_000)
+                    if self.recording is None:
+                        self.recording = Recording(self.dimensions, 1_000_000_000)
                         print("Frame recording started")
                     else:
                         # don't close the recording here, we don't want to save the buffer if we didn't
                         # win the scenario
                         print("Frame recording stopped")
-                        recording = None
+                        self.recording = None
 
 
     def _get_action_from_keys(self, link, keys):
@@ -419,7 +445,7 @@ class RewardDebugger:
                                             self.text_width))
 
     def _render_observation_view(self, surface, x, y, img):
-        render_text(surface, self.font, "Observation", (x, y))
+        draw_text(surface, self.font, "Observation", (x, y))
         y += 20
 
         if len(img.shape) == 4:
@@ -445,15 +471,15 @@ class RewardDebugger:
         y += img.shape[0] * 2
         return y
 
-    def _render_game_view(self, surface, rgb_array, pos, game_width, game_height):
+    def _draw_game_view(self, surface, rgb_array, pos, game_width, game_height):
         frame = pygame.surfarray.make_surface(np.swapaxes(rgb_array, 0, 1))
         scaled_frame = pygame.transform.scale(frame, (game_width, game_height))
         surface.blit(scaled_frame, pos)
 
     def _write_key_val_aligned(self, surface, text, value, x, y, total_width, color=(255, 255, 255)):
-        new_y = render_text(surface, self.font, text, (x, y), color)
+        new_y = draw_text(surface, self.font, text, (x, y), color)
         value_width, _ = self.font.size(value)
-        render_text(surface, self.font, value, (x + total_width - value_width, y), color)
+        draw_text(surface, self.font, value, (x + total_width - value_width, y), color)
         return new_y
 
     def _draw_details(self, surface):
@@ -497,7 +523,7 @@ class RewardDebugger:
         y = self.probs_y
         for action, l in probs.items():
             if action == 'value':
-                render_text(surface, self.font, f"Value: {l.item():.2f}", (self.probs_x, y))
+                draw_text(surface, self.font, f"Value: {l.item():.2f}", (self.probs_x, y))
                 y += 20
                 continue
 
@@ -513,7 +539,7 @@ class RewardDebugger:
 
                 text += f"{direction.name}: {prob} "
 
-            render_text(surface, self.font, text, (self.probs_x, y))
+            draw_text(surface, self.font, text, (self.probs_x, y))
             y += 20
 
         self.probs_height = max(y, self.probs_height)

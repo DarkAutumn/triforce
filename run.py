@@ -23,6 +23,22 @@ def main():
         print(f'Unknown scenario {args.scenario}')
         return
 
+    print("Controls:")
+    print("    ARROWS  - move link up, down, left, right.")
+    print("    a+ARROW - attack in a direction (hold a, press arrow).")
+    print("    q       - quit")
+    print("    r       - restart")
+    print("    n       - step one action")
+    print("    c       - continue actions")
+    print("    p       - pause actions (c or n to resume)")
+    print("    m/l     - next/previous model (if multiple are available)")
+    print("    o       - render overlays (tiles, coordinates, movable, wavefront.")
+    print("    u       - uncap fps (make the game run faster)")
+    print("    F4      - record video to recording/")
+    print("    F4      - stop recording")
+    print("    F10     - record to ram, save on win (do not use without 200gb+ ram)")
+    print("    s       - save video in F10 mode regardless of win")
+
     display = RewardDebugger(scenario, model_path, args.model, args.frame_stack)
     display.show()
 
@@ -33,7 +49,7 @@ def parse_args():
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
-    parser.add_argument("--model-path", nargs=str, help="Location to read models from.")
+    parser.add_argument("--model-path", type=str, help="Location to read models from.")
     parser.add_argument("--frame-stack", type=int, default=3, help="Number of frames to stack.")
 
     parser.add_argument('model', type=str, help='Model name')

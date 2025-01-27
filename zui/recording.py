@@ -12,6 +12,11 @@ class Recording:
         self.buffer_size = buffer_size
         self.buffer = []
 
+    @property
+    def is_buffered(self):
+        """Returns True if the recording is buffered."""
+        return self.buffer_size > 1
+
     def _get_recording(self):
         if self.recording is None:
             fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -24,7 +29,7 @@ class Recording:
         surface = surface.copy()
 
         if self.buffer_size <= 1:
-            self._write_surface(surface.copy())
+            self._write_surface(surface)
 
         else:
             self.buffer.append(surface)
@@ -45,7 +50,7 @@ class Recording:
 
     def flush(self):
         """Writes the buffer to the recording."""
-        if len(self.buffer) < 1000:
+        if len(self.buffer) < 100:
             for frame in self.buffer:
                 self._write_surface(frame)
         else:
