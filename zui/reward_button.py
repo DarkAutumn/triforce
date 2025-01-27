@@ -1,6 +1,6 @@
 
 import pygame
-from .helpers import render_text
+from .helpers import draw_text
 
 class RewardButton:
     """A button to display a reward value."""
@@ -19,28 +19,28 @@ class RewardButton:
         y = position[1] + 2
 
         start_y = y
-        y = render_text(surface, self.font, self.action, (x, y))
+        y = draw_text(surface, self.font, self.action, (x, y))
 
         actions_allowed = ""
         for action, directions in self.action_mask:
             actions_allowed += action.name + ": " + "".join(x.name for x in directions) + ' '
-        y = render_text(surface, self.font, "Allowed: " + actions_allowed, (x, y))
+        y = draw_text(surface, self.font, "Allowed: " + actions_allowed, (x, y))
         if self.rewards:
             for reason, value in self.rewards.items():
                 color = (255, 0, 0) if value < 0 else (0, 255, 255) if value > 0 else (255, 255, 255)
-                next_y = render_text(surface, self.font, reason, (x, y), color=color)
-                render_text(surface, self.font, f"{'+' if value > 0 else ''}{value:.2f}", (x + 200, y))
+                next_y = draw_text(surface, self.font, reason, (x, y), color=color)
+                draw_text(surface, self.font, f"{'+' if value > 0 else ''}{value:.2f}", (x + 200, y))
                 y = next_y
 
         else:
             text = "none"
             color = (128, 128, 128)
-            y = render_text(surface, self.font, text, (x, y), color)
+            y = draw_text(surface, self.font, text, (x, y), color)
 
         if self.count > 1:
             count_text = f"x{self.count}"
             count_text_width, _ = self.font.size(count_text)
-            render_text(surface, self.font, count_text, (x + 275 - count_text_width, start_y))
+            draw_text(surface, self.font, count_text, (x + 275 - count_text_width, start_y))
 
         height = y - position[1]
         pygame.draw.rect(surface, (255, 255, 255), (position[0], position[1], self.width, height), 1)

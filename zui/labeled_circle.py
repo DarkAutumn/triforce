@@ -3,7 +3,7 @@ import numpy as np
 import pygame
 
 from triforce.zelda_enums import Coordinates, Direction
-from .helpers import render_text
+from .helpers import draw_text
 
 class LabeledCircle:
     """A circle with a label."""
@@ -30,7 +30,7 @@ class LabeledCircle:
 
     def draw(self, surface):
         """Draws the labeled circle on the surface."""
-        render_text(surface, self.font, self.label, self.position)
+        draw_text(surface, self.font, self.label, self.position)
         pygame.draw.circle(surface, (255, 255, 255), self.centerpoint, self.radius, 1)
 
     def _draw_arrow(self, surface, centerpoint, vector, length):
