@@ -118,6 +118,8 @@ class ZeldaCooldownHandler:
     def _skip_uncontrollable_states(self, start_location, info, frame_capture):
         """Skips screen scrolling or other uncontrollable states.  The model should only get to see the game when it is
         in a state where the agent can control Link."""
+
+        # These states are transient in the game and will not cause an infinite loop.
         in_cave = is_in_cave(info)
         while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']) \
                 or self._is_level_transition(start_location, info) \
