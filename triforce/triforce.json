@@ -39,7 +39,7 @@
                     "threshold" : 0.90
                 },
                 {
-                    "scenario" : "overworld",
+                    "scenario" : "game-start",
                     "exit_criteria" : "success-rate",
                     "threshold" : 0.98,
                     "iterations" : 40000000
@@ -73,7 +73,7 @@
     ],
     "scenarios": [
         {
-            "name": "overworld",
+            "name": "game-start",
             "description": "The full game with training variables",
             "iterations" : 2000000,
             "scenario_selector" : "round-robin",
