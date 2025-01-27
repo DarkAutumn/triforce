@@ -23,6 +23,22 @@ def main():
         print(f'Unknown scenario {args.scenario}')
         return
 
+    print("Controls:")
+    print("    ARROWS  - move link up, down, left, right.")
+    print("    a+ARROW - attack in a direction (hold a, press arrow).")
+    print("    q       - quit")
+    print("    r       - restart")
+    print("    n       - step one action")
+    print("    c       - continue actions")
+    print("    p       - pause actions (c or n to resume)")
+    print("    m/l     - next/previous model (if multiple are available)")
+    print("    o       - render overlays (tiles, coordinates, movable, wavefront.")
+    print("    u       - uncap fps (make the game run faster)")
+    print("    F4      - record video to recording/")
+    print("    F4      - stop recording")
+    print("    F10     - record to ram, save on win (do not use without 200gb+ ram)")
+    print("    s       - save video in F10 mode regardless of win")
+
     display = RewardDebugger(scenario, model_path, args.model, args.frame_stack)
     display.show()
 
