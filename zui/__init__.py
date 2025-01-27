@@ -5,6 +5,7 @@ from .debug_reward import DebugReward
 from .reward_button import RewardButton
 from .recording import Recording
 from .environment_wrapper import EnvironmentWrapper, StepResult
+from .reward_debugger import RewardDebugger
 
 __all__ = [
     ModelSelector.__name__,
@@ -17,4 +18,5 @@ __all__ = [
     Recording.__name__,
     EnvironmentWrapper.__name__,
     StepResult.__name__,
+    RewardDebugger.__name__,
 ]
