@@ -7,10 +7,6 @@ from hit_test import assert_no_hit
 from utilities import ZeldaActionReplay
 from triforce.zelda_game import ZeldaGame
 
-import pytest
-
-# We'll add new tests for partial hearts.
-
 def _initialize_gamestate() -> ZeldaGame:
     replay = ZeldaActionReplay("1_44e.state")
     state_change = assert_no_hit(replay, 'lll')
