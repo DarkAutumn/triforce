@@ -115,7 +115,7 @@ def main():
 
         kwargs['model_name'] = model_def.name + '-' + scenario_def.name
         if scenario_entry.exit_criteria:
-            criteria = f" and {scenario_entry.exit_criteria} >= {scenario_entry.threshold}"
+            criteria = f" or {scenario_entry.exit_criteria} >= {scenario_entry.threshold}"
         else:
             criteria = ""
 
