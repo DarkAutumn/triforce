@@ -34,6 +34,9 @@ USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
 PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_MAXIMUM)
 PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -REWARD_MAXIMUM)
+FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_TINY)
+MOVED_OFF_OF_WALLMASTER_REWARD = Reward("reward-moved-off-wallmaster", REWARD_TINY - REWARD_MINIMUM)
+MOVED_ONTO_WALLMASTER_PENALTY = Penalty("penalty-moved-onto-wallmaster", -REWARD_TINY)
 
 def _init_equipment_rewards():
     """Initializes the equipment rewards."""
@@ -123,6 +126,9 @@ class GameplayCritic(ZeldaCritic):
 
         self.critique_health_change(state_change, rewards)
 
+        # Special cases
+        self.critique_wallmaster(state_change, rewards)
+
         # If we lost health, remove all rewards since we want that to be the focus
         if state_change.health_lost > 0:
             rewards.remove_rewards()
@@ -201,6 +207,35 @@ class GameplayCritic(ZeldaCritic):
         if not prev_link.triforce_of_power and curr_link.triforce_of_power:
             rewards.add(EQUIPMENT_REWARD_MAP['triforce'])
 
+    def critique_wallmaster(self, state_change : StateChange, rewards):
+        """Special handling for rooms with a wallmaster."""
+        prev, curr = state_change.previous, state_change.state
+
+        if ZeldaEnemyKind.WallMaster not in curr.enemies:
+            return
+
+        # Did we get wallmastered?
+        if prev.full_location != curr.full_location:
+            if prev.full_location.manhattan_distance(curr.full_location) > 1:
+                rewards.add(PENALTY_WALL_MASTER)
+
+        # Are we on a tile which could be wallmastered?  If so, push away from it.
+        elif self._is_wallmaster_tile(curr.link.tile):
+            if state_change.action.kind != ActionKind.MOVE:
+                rewards.add(FIGHTING_WALLMASTER_PENALTY)
+
+            elif not self._is_wallmaster_tile(prev.link.tile):
+                rewards.add(MOVED_ONTO_WALLMASTER_PENALTY)
+
+        elif self._is_wallmaster_tile(prev.link.tile):
+            # If we moved off the wallmaster tile, reward the agent
+            if state_change.action.kind == ActionKind.MOVE:
+                rewards.add(MOVED_OFF_OF_WALLMASTER_REWARD)
+
+    def _is_wallmaster_tile(self, tile):
+        return tile.x in (0x4, 0x1a) or tile.y in (0x4, 0x10)
+
+
     def critique_block(self, state_change : StateChange, rewards):
         """Critiques blocking of projectiles."""
         prev_link, curr_link = state_change.previous.link, state_change.state.link
@@ -254,10 +289,6 @@ class GameplayCritic(ZeldaCritic):
 
         prev = state_change.previous.full_location
         curr = state_change.state.full_location
-
-        if prev != curr and any(x.id == ZeldaEnemyKind.WallMaster for x in state_change.previous.enemies):
-            if prev.manhattan_distance(curr) > 1:
-                rewards.add(PENALTY_WALL_MASTER)
 
         # Don't let the agent walk offscreen then right back on to get a quick reward
         if prev != curr and not self._correct_locations:

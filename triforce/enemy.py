@@ -16,6 +16,9 @@ class Enemy(ZeldaObject):
     spawn_state : int
     status : int
 
+    def __eq__(self, value):
+        return self.id == value or super().__eq__(value)
+
     @property
     def dimensions(self) -> Tuple[int, int]:
         """The dimensions of the object."""
