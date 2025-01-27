@@ -99,6 +99,9 @@ class RewardDebugger:
         self.endings = {}
         self.running_rewards = {}
 
+        self.recording = None
+        self.force_save = False
+
     @property
     def text_y(self):
         """Returns the y position for the text."""
@@ -108,13 +111,14 @@ class RewardDebugger:
         """Shows the game and the AI model."""
         clock = pygame.time.Clock()
 
-        recording = None
         self.overlay = 0
 
         surface = pygame.display.set_mode(self.dimensions)
         env = EnvironmentWrapper(self.model_path, self.model_definition, self.scenario, self.frame_stack)
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
+        frame_is_fresh = False
+        restarted = False
         frame = None
         frames = []
         while self.mode != 'q':
@@ -123,6 +127,7 @@ class RewardDebugger:
                     step : StepResult = env.restart()
                     action_mask = step.action_mask_desc
                     self.restart_requested = False
+                    restarted = True
                 else:
                     action_mask = step.action_mask_desc
                     step = env.step(self.next_action)
@@ -141,6 +146,7 @@ class RewardDebugger:
 
             if frames:
                 frame = frames.pop(0)
+                frame_is_fresh = True
 
             # render the surface
             probs = env.selector.get_probabilities(step.observation, step.action_mask.unsqueeze(0))
@@ -148,16 +154,34 @@ class RewardDebugger:
 
             # draw the surface to screen
             pygame.display.flip()
-            if recording:
-                recording.write(surface)
+            self._check_input(env, step)
+
+            # handle recording
+            if self.recording:
+                ending = step.rewards.ending or ""
+                if ending or restarted:
+                    if self.recording.is_buffered:
+                        if self.force_save or ending.startswith("success"):
+                            self.recording.close(True)
+                        else:
+                            self.recording.close(False)
+                    else:
+                        self.recording.close(True)
+
+                    self.force_save = False
+
+                if frame_is_fresh:
+                    frame_is_fresh = False
+                    self.recording.write(surface)
+
+                restarted = False
 
             if self.cap_fps:
                 clock.tick(60.1)
 
-            self._check_input(env, step)
 
-        if recording and recording.buffer_size <= 1:
-            recording.close(True)
+        if self.recording:
+            self.recording.close(False)
 
         env.close()
         pygame.quit()
@@ -236,28 +260,29 @@ class RewardDebugger:
                         self.next_action = None
 
                 elif event.key == pygame.K_s:
-                    if not force_save:
-                        force_save = True
+                    if self.recording and self.recording.is_buffered and not self.force_save:
+                        self.force_save = True
                         print("Saving this video")
 
                 elif event.key == pygame.K_F4:
-                    if recording is None:
-                        recording = Recording(self.dimensions, 0)
+                    if self.recording is None:
+                        self.recording = Recording(self.dimensions, 0)
                         print("Live recording started")
 
                     else:
                         print("Live recording stopped")
-                        recording.close(True)
+                        self.recording.close(True)
+                        self.recording = None
 
                 elif event.key == pygame.K_F10:
-                    if recording is None:
-                        recording = Recording(self.dimensions, 1_000_000_000)
+                    if self.recording is None:
+                        self.recording = Recording(self.dimensions, 1_000_000_000)
                         print("Frame recording started")
                     else:
                         # don't close the recording here, we don't want to save the buffer if we didn't
                         # win the scenario
                         print("Frame recording stopped")
-                        recording = None
+                        self.recording = None
 
 
     def _get_action_from_keys(self, link, keys):
