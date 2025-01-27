@@ -49,7 +49,7 @@ def parse_args():
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--obs-kind", choices=['gameplay', 'viewport', 'full'], default='viewport',
                         help="The kind of observation to use.")
-    parser.add_argument("--model-path", nargs=str, help="Location to read models from.")
+    parser.add_argument("--model-path", type=str, help="Location to read models from.")
     parser.add_argument("--frame-stack", type=int, default=3, help="Number of frames to stack.")
 
     parser.add_argument('model', type=str, help='Model name')
