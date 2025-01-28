@@ -345,12 +345,15 @@ class GameCompletion(ObjectiveSelector):
                         target_location = item_to_overworld[i]
                         break
         else:
-            # Directional hint to avoid dead end
+            # Directional hints to avoid dead ends
             if state.full_location == (1, 0x53, False):
                 target_location = MapLocation(1, 0x52, False)
 
             elif state.full_location == (1, 0x52, False):
                 target_location = MapLocation(1, 0x42, False)
+
+            elif state.full_location == (1, 0x43, False) and state.link.keys:
+                return state.room.exits[Direction.E], [MapLocation(1, 0x44, False)]
 
             else:
                 # Find where the triforce is
