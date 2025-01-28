@@ -40,9 +40,7 @@
                 },
                 {
                     "scenario" : "game-start",
-                    "exit_criteria" : "success-rate",
-                    "threshold" : 0.98,
-                    "iterations" : 40000000
+                    "iterations" : 7500000
                 }
             ]
         },
