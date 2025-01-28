@@ -97,3 +97,15 @@ def test_set_health_memory_consistency():
     # => 0x33 => 51 decimal
     assert hc == 0x33, f"Expected 0x33, got {hc:02x}"
     assert partial == 0, f"Expected partial=0, got {partial:02x}"
+
+def test_all_health_ranges():
+    state = _initialize_gamestate()
+    for i in range(0, 16):
+        state.link.health = i
+        assert abs(state.link.health - i) < 1e-9
+
+        state.link.health = i + 0.5
+        assert abs(state.link.health - i - 0.5) < 1e-9
+
+    state.link.health = 16
+    assert abs(state.link.health - 16) < 1e-9
