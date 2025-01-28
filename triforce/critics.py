@@ -37,6 +37,9 @@ PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -REWARD_MAXIMUM)
 FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_TINY)
 MOVED_OFF_OF_WALLMASTER_REWARD = Reward("reward-moved-off-wallmaster", REWARD_TINY - REWARD_MINIMUM)
 MOVED_ONTO_WALLMASTER_PENALTY = Penalty("penalty-moved-onto-wallmaster", -REWARD_TINY)
+PENALTY_OFF_WAVEFRONT = Penalty("penalty-off-wavefront", -REWARD_TINY - REWARD_MINIMUM)
+
+TILE_TIMEOUT = 8
 
 def _init_equipment_rewards():
     """Initializes the equipment rewards."""
@@ -327,7 +330,7 @@ class GameplayCritic(ZeldaCritic):
         count += 1
         self._tile_count[tile] = count
 
-        if count > 3:
+        if count >= TILE_TIMEOUT:
             rewards.add(Penalty("penalty-stuck-tile", -REWARD_MINIMUM * count))
 
     def critique_movement(self, state_change : StateChange, rewards):
@@ -363,22 +366,22 @@ class GameplayCritic(ZeldaCritic):
         self.critique_moving_into_danger(state_change, rewards)
 
         # Did we move to a place we didn't think Link could get to?
-        old_wavefront = prev.wavefront[prev_link.tile]
-        new_wavefront = curr.wavefront[curr_link.tile]
-        if old_wavefront < new_wavefront:
+        old_wavefront = prev.wavefront.get(prev_link.tile)
+        new_wavefront = curr.wavefront.get(curr_link.tile)
+        if new_wavefront is None:
+            rewards.add(PENALTY_OFF_WAVEFRONT)
+
+        elif old_wavefront is None:
+            pass # no reward or penalty for moving back to wavefront tile
+
+        elif old_wavefront < new_wavefront:
             rewards.add(MOVE_AWAY_PENALTY)
 
         elif old_wavefront == new_wavefront:
             rewards.add(LATERAL_MOVE_PENALTY)
 
         else:
-            # We moved closer, but scale the reward by the pixels moved in case the agent finds a way to exploit
-            # our reward system.
-            movement = curr_link.position.torch - prev_link.position.torch
-            progress = torch.dot(movement, curr_link.direction.vector).item()
-
-            progress = max(progress, 0)
-            rewards.add(MOVE_CLOSER_REWARD, progress / MOVEMENT_SCALE_FACTOR)
+            rewards.add(MOVE_CLOSER_REWARD)
 
     def critique_moving_into_danger(self, state_change : StateChange, rewards):
         """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted

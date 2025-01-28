@@ -34,20 +34,6 @@ class Wavefront:
                 wavefront[neighbor] = dist + 1
                 heapq.heappush(todo, (dist + 1, neighbor))
 
-        # fill in the remaineder of the room
-        for tile, dist in wavefront.items():
-            heapq.heappush(todo, (-dist, tile))
-
-        while todo:
-            dist, tile = heapq.heappop(todo)
-            dist = -dist
-            for neighbor in self._get_neighbors(room, tile):
-                if neighbor in wavefront:
-                    continue
-
-                wavefront[neighbor] = dist + 1
-                heapq.heappush(todo, (-dist - 1, neighbor))
-
         self._wavefront = wavefront
         self._targets = targets
 
