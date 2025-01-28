@@ -94,6 +94,7 @@ class GameplayCritic(ZeldaCritic):
         self._room_enter_health = None
         self._equipment_rewards = {}
         self._progress = 0.0
+        self._tile_count = {}
 
     def clear(self):
         super().clear()
@@ -102,6 +103,7 @@ class GameplayCritic(ZeldaCritic):
         self._total_hits = 0
         self._room_enter_health = None
         self._progress = 0.0
+        self._tile_count.clear()
 
     def critique_gameplay(self, state_change : StateChange, rewards : StepRewards):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
@@ -123,6 +125,7 @@ class GameplayCritic(ZeldaCritic):
 
             # Blocking projectiles only happens when not using an item
             self.critique_block(state_change, rewards)
+            self.critique_tile_position(state_change, rewards)
 
         self.critique_health_change(state_change, rewards)
 
@@ -311,6 +314,21 @@ class GameplayCritic(ZeldaCritic):
                 rewards.add(PENALTY_WRONG_LOCATION)
 
             self._room_enter_health = state_change.state.link.health
+
+    def critique_tile_position(self, state_change : StateChange, rewards):
+        """Critiques landing on the same tile over and over."""
+        prev, curr = state_change.previous, state_change.state
+        if prev.full_location != curr.full_location or state_change.hits or state_change.items_gained:
+            self._tile_count.clear()
+            return
+
+        tile = curr.link.tile
+        count = self._tile_count.get(tile, 0)
+        count += 1
+        self._tile_count[tile] = count
+
+        if count > 3:
+            rewards.add(Penalty("penalty-stuck-tile", -REWARD_MINIMUM * count))
 
     def critique_movement(self, state_change : StateChange, rewards):
         """
