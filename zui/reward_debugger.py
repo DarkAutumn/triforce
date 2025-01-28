@@ -117,17 +117,19 @@ class RewardDebugger:
         env = EnvironmentWrapper(self.model_path, self.model_definition, self.scenario, self.frame_stack)
 
         # modes: c - continue, n - next, r - reset, p - pause, q - quit
-        frame_is_fresh = False
-        restarted = False
         frame = None
+        step = None
         frames = []
         while self.mode != 'q':
             if self.mode != 'p' and not frames:
                 if self.restart_requested:
+                    if self.recording:
+                        self._save_recording((step and step.rewards.ending) or "")
+
                     step : StepResult = env.restart()
                     action_mask = step.action_mask_desc
                     self.restart_requested = False
-                    restarted = True
+
                 else:
                     action_mask = step.action_mask_desc
                     step = env.step(self.next_action)
@@ -144,37 +146,22 @@ class RewardDebugger:
                 if step.terminated or step.truncated:
                     self.endings[step.rewards.ending] = self.endings.get(step.rewards.ending, 0) + 1
 
-            if frames:
-                frame = frames.pop(0)
-                frame_is_fresh = True
 
-            # render the surface
             probs = env.selector.get_probabilities(step.observation, step.action_mask.unsqueeze(0))
-            self._render_to_surface(surface, step, frame, env.model_details, probs)
+            if frames:
+                # if we have frames, render them and save them
+                frame = frames.pop(0)
+                self._render_to_surface(surface, step, frame, env.model_details, probs)
+                if self.recording:
+                    self.recording.write(surface)
+
+            else:
+                # just render the frame in case we change models/probabilities
+                self._render_to_surface(surface, step, frame, env.model_details, probs)
 
             # draw the surface to screen
             pygame.display.flip()
             self._check_input(env, step)
-
-            # handle recording
-            if self.recording:
-                ending = step.rewards.ending or ""
-                if ending or restarted:
-                    if self.recording.is_buffered:
-                        if self.force_save or ending.startswith("success"):
-                            self.recording.close(True)
-                        else:
-                            self.recording.close(False)
-                    else:
-                        self.recording.close(True)
-
-                    self.force_save = False
-
-                if frame_is_fresh:
-                    frame_is_fresh = False
-                    self.recording.write(surface)
-
-                restarted = False
 
             if self.cap_fps:
                 clock.tick(60.1)
@@ -185,6 +172,20 @@ class RewardDebugger:
 
         env.close()
         pygame.quit()
+
+    def _save_recording(self, ending):
+        if ending or self.force_save:
+            if self.recording.is_buffered:
+                if self.force_save or ending.startswith("success"):
+                    self.recording.close(True)
+                else:
+                    self.recording.close(False)
+            else:
+                self.recording.close(True)
+        else:
+            self.recording.clear()
+
+        self.force_save = False
 
     def _render_to_surface(self, surface, step : StepResult, frame : torch.Tensor, model_details, probs):
         surface.fill((0, 0, 0))
