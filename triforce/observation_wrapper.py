@@ -340,7 +340,7 @@ class ObservationWrapper(gym.Wrapper):
         features = torch.zeros(4, dtype=torch.float32)
         features[0] = 1.0 if state.active_enemies else 0.0
         features[1] = 1.0 if state.link.are_beams_available else 0.0
-        features[2] = 1.0 if state.link.heart_halves <= 2 else 0.0
+        features[2] = 1.0 if state.link.health <= 1 else 0.0
         features[3] = 1.0 if state.link.is_health_full else 0.0
 
         return torch.concatenate([objectives, source_direction, features])

@@ -60,7 +60,7 @@ class ZeldaGame:
     @cached_property
     def link(self):
         """The current link."""
-        return self._build_link_status(self._tables)
+        return self._build_link_status(self._object_tables_cached)
 
     @cached_property
     def room(self):
@@ -70,7 +70,7 @@ class ZeldaGame:
     @cached_property
     def items(self) -> List[Item]:
         """Returns a list of items on the current screen, sorted by distance."""
-        tables = self._tables
+        tables = self._object_tables_cached
         result = [self._build_item(tables, index) for index in self._cached_ids[0]]
         result.sort(key=lambda x: x.distance)
         return result
@@ -78,7 +78,7 @@ class ZeldaGame:
     @cached_property
     def enemies(self) -> List[Enemy]:
         """Returns a list of enemies on the current screen, sorted by distance."""
-        tables = self._tables
+        tables = self._object_tables_cached
         result = [self._build_enemy(tables, index, obj_id) for index, obj_id in self._cached_ids[1]]
         result.sort(key=lambda x: x.distance)
         return result
@@ -86,7 +86,7 @@ class ZeldaGame:
     @cached_property
     def projectiles(self) -> List[Projectile]:
         """Returns a list of projectiles on the current screen, sorted by distance."""
-        tables = self._tables
+        tables = self._object_tables_cached
         result = [self._build_projectile(tables, index, obj_id) for index, obj_id in self._cached_ids[2]]
         result.sort(key=lambda x: x.distance)
         return result
@@ -102,7 +102,7 @@ class ZeldaGame:
         return self._env.unwrapped.get_ram()
 
     @cached_property
-    def _tables(self):
+    def _object_tables_cached(self):
         return ObjectTables(self.ram)
 
     @cached_property
@@ -111,7 +111,7 @@ class ZeldaGame:
         enemy_ids = []
         projectile_ids = []
 
-        tables = self._tables
+        tables = self._object_tables_cached
         for (index, obj_id) in self._enumerate_active_ids(tables):
             if obj_id == OBJ_ITEM_ID:
                 item_ids.append(index)

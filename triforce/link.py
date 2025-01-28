@@ -36,63 +36,102 @@ class Link(ZeldaObject):
             for y in range(0, y_dim):
                 yield TileIndex(self.tile[0] + y, self.tile[1] + x)
 
-    # Health
+    # -------------------- Health / Hearts Handling --------------------
+    # See addresses:
+    #   066F hearts_and_containers => Low nibble = how many hearts are fully filled, High nibble = (# containers - 1)
+    #   0670 partial_hearts        => 0 = none, 0x01..0x7F = half a heart, 0x80..0xFF = full heart
+
     @property
-    def max_health(self):
-        """The maximum health link can have."""
-        return self._get_heart_containers()
+    def max_health(self) -> int:
+        """How many total hearts Link can have, as an integer."""
+        hearts_and_containers = self.game.hearts_and_containers
+        containers_minus_one = (hearts_and_containers >> 4) & 0x0F
+        # E.g., if top nibble is 3 => means 4 total containers
+        return containers_minus_one + 1
 
     @max_health.setter
     def max_health(self, value: int) -> None:
-        """Set the maximum health for link."""
-        self._heart_containers = value
-        curr = self.game.hearts_and_containers
-        self.game.hearts_and_containers = (curr & 0x0F) | (self._heart_containers << 4)
+        """Set the number of heart containers Link has.  Value is clamped [1..16]."""
+        # clamp to a reasonable range
+        value = max(1, min(value, 16))
+
+        hearts_and_containers = self.game.hearts_and_containers
+        # keep the lower nibble (# of filled hearts)
+        hearts_filled = hearts_and_containers & 0x0F
+        # store new containers - 1 into the top nibble
+        containers_minus_one = (value - 1) & 0x0F
+        new_val = (containers_minus_one << 4) | (hearts_filled & 0x0F)
+        self.game.hearts_and_containers = new_val
+        # partial hearts are stored at 0670 and remain unchanged
 
     @property
-    def health(self):
-        """The current health link has."""
-        return self.heart_halves * 0.5
+    def health(self) -> float:
+        """Returns Link's current health in hearts, e.g. 2.5 means 2.5 hearts."""
+        hearts_and_containers = self.game.hearts_and_containers
+        hearts_filled = hearts_and_containers & 0x0F
+        containers_minus_one = (hearts_and_containers >> 4) & 0x0F
+        containers = containers_minus_one + 1
+
+        partial_val = self.game.partial_hearts
+        # interpret partial val
+        if partial_val >= 0x80:
+            partial = 1.0
+        elif partial_val > 0:
+            partial = 0.5
+        else:
+            partial = 0.0
+
+        # clamp if hearts_filled is beyond containers
+        if hearts_filled > containers:
+            hearts_filled = containers
+            partial = 0.0
+        # if hearts_filled == containers, no partial heart is allowed
+        if hearts_filled == containers:
+            partial = 0.0
+
+        return min(hearts_filled + partial, float(containers))
 
     @health.setter
     def health(self, value: float) -> None:
-        """Set the current health for link."""
-        self.heart_halves = int(value * 2)
+        """Sets Link's current health, as a float.  Will clamp to [0..max_health]."""
+        max_h = self.max_health
+        value = max(0, min(value, max_h))
 
-    @property
-    def heart_halves(self):
-        """The number of half hearts link has."""
-        full = self._get_full_hearts() * 2
-        partial_hearts = self.game.partial_hearts
-        if partial_hearts > 0xf0:
-            return full
+        hearts_filled = int(value)
+        remainder = value - hearts_filled
+        # Decide partial hearts
+        if value >= 15.99:
+            # 16 hearts is a special case, we have 15 hearts fully filled and partial is 0xFF
+            partial_val = 0xFF
+            hearts_filled = 15
 
-        partial_count = 1 if partial_hearts > 0 else 0
-        return full - 2 + partial_count
-
-    @heart_halves.setter
-    def heart_halves(self, value: int) -> None:
-        """Set the number of half hearts link has."""
-        full_hearts = value // 2
-        if full_hearts * 2 == value:
-            partial_hearts = 0xfe
+        elif hearts_filled >= max_h:
+            # means we're at max, so partial is 0
+            partial_val = 0
+            hearts_filled = max_h  # fully fill
         else:
-            full_hearts += 1
-            partial_hearts = 1 if value % 2 else 0
+            if remainder >= 0.99:
+                # 'Round up' the hearts_filled
+                hearts_filled += 1
+                # If that doesn't exceed max, it's now effectively "3 hearts fully" so partial becomes 0:
+                partial_val = 0
+            elif remainder >= 0.49:
+                partial_val = 0x7F   # half heart
+            else:
+                partial_val = 0      # no partial
 
-        self.game.partial_hearts = partial_hearts
-        self.game.hearts_and_containers = (full_hearts - 1) | (self.game.hearts_and_containers & 0xf0)
+        # store in hearts_and_containers
+        hearts_and_containers = self.game.hearts_and_containers
+        containers_minus_one = (hearts_and_containers >> 4) & 0x0F
+        containers = containers_minus_one + 1
+        # clamp hearts_filled if it exceeds containers
+        if hearts_filled > containers:
+            hearts_filled = containers
+            partial_val = 0
 
-    def _get_full_hearts(self):
-        """Returns the number of full hearts link has."""
-        return (self.game.hearts_and_containers & 0x0F) + 1
-
-    def _get_heart_containers(self):
-        """Returns the number of heart containers link has."""
-        if '_heart_containers' not in self.__dict__:
-            self.__dict__['_heart_containers'] = (self.game.hearts_and_containers >> 4) + 1
-
-        return self.__dict__['_heart_containers']
+        new_val = (containers_minus_one << 4) | (hearts_filled & 0x0F)
+        self.game.hearts_and_containers = new_val
+        self.game.partial_hearts = partial_val
 
     # Calculated status
     def get_available_actions(self, beams_are_separated : bool):
@@ -135,7 +174,6 @@ class Link(ZeldaObject):
 
         return available
 
-
     def has_item(self, item : SwordKind | BoomerangKind | ArrowKind):
         """Return whether Link has the given piece of equipment."""
         if isinstance(item, SwordKind):
@@ -156,7 +194,7 @@ class Link(ZeldaObject):
     @property
     def is_health_full(self) -> bool:
         """Is link's health full."""
-        return self.heart_halves == self.max_health * 2
+        return abs(self.health - self.max_health) < 1e-9
 
     @property
     def has_beams(self) -> bool:
