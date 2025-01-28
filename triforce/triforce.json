@@ -227,7 +227,7 @@
             "scenario_selector" : "probabilistic",
             "objective" : "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout"],
+            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout", "NowhereToGoCondition"],
             "metrics" : [
                 "success-rate",
                 "overworld-progress",
@@ -248,11 +248,11 @@
         {
             "name": "dungeon1",
             "description": "Dungeon 1.",
-            "iterations" : 2000000,
+            "iterations" : 10000000,
             "scenario_selector" : "round-robin",
             "objective" : "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout", "Dungeon1DidntGetKey"],
+            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout", "Dungeon1DidntGetKey", "NowhereToGoCondition"],
             "metrics" : [
                 "success-rate",
                 "overworld-progress",
