@@ -100,7 +100,12 @@ class Link(ZeldaObject):
         hearts_filled = int(value)
         remainder = value - hearts_filled
         # Decide partial hearts
-        if hearts_filled >= max_h:
+        if value >= 15.99:
+            # 16 hearts is a special case, we have 15 hearts fully filled and partial is 0xFF
+            partial_val = 0xFF
+            hearts_filled = 15
+
+        elif hearts_filled >= max_h:
             # means we're at max, so partial is 0
             partial_val = 0
             hearts_filled = max_h  # fully fill
