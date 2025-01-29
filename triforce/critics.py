@@ -229,8 +229,7 @@ class GameplayCritic(ZeldaCritic):
         elif self._is_wallmaster_tile(curr.link.tile):
             if state_change.action.kind != ActionKind.MOVE:
                 rewards.add(FIGHTING_WALLMASTER_PENALTY)
-
-            elif not self._is_wallmaster_tile(prev.link.tile):
+            else:
                 rewards.add(MOVED_ONTO_WALLMASTER_PENALTY)
 
         elif self._is_wallmaster_tile(prev.link.tile):
