@@ -355,6 +355,9 @@ class GameCompletion(ObjectiveSelector):
             elif state.full_location == (1, 0x43, False) and state.link.keys:
                 return state.room.exits[Direction.E], [MapLocation(1, 0x44, False)]
 
+            elif state.full_location == (1, 0x45, False) and state.link.keys:
+                return state.room.exits[Direction.N], [MapLocation(1, 0x35, False)]
+
             else:
                 # Find where the triforce is
                 target_item = ZeldaItemKind(ZeldaItemKind.Triforce1.value - state.level + 1)
