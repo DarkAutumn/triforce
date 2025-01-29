@@ -68,6 +68,11 @@
                     "threshold" : 0.85
                 },
                 {
+                    "scenario" : "dungeon1-entry-room",
+                    "exit_criteria" : "room-result/correct-exit",
+                    "threshold" : 0.90
+                },
+                {
                     "scenario" : "dungeon1",
                     "iterations" : 20000000
                 }
