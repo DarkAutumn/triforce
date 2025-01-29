@@ -366,6 +366,8 @@ class GameCompletion(ObjectiveSelector):
         paths = self._get_route_with_astar(state.level, state.location, target_location, state.link.keys)
         exit_targets, next_rooms = self._get_targets_rooms_from_paths(state, paths)
 
+        self._last_route = state.level, state.location, (exit_targets, next_rooms)
+
         return exit_targets, next_rooms
 
 
