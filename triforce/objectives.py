@@ -238,7 +238,7 @@ class GameCompletion(ObjectiveSelector):
 
         # Get the route on the game's overall map of where we need to go.  If we need to fight or
         # collect treasure, do not add the next room to the list of rooms to go to.
-        if kind not in (ObjectiveKind.FIGHT, ObjectiveKind.TREASURE):
+        if kind not in (ObjectiveKind.FIGHT, ObjectiveKind.TREASURE, ObjectiveKind.CAVE):
             exit_tiles, rooms = self._get_map_objective(state)
             tile_objectives.extend(exit_tiles)
             next_rooms.extend(rooms)
