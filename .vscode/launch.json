@@ -23,15 +23,6 @@
             "justMyCode": false
         },
         {
-            "name": "Run - sword",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "run.py",
-            "args": ["overworld-sword", "overworld-sword"],
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
             "name": "Train - Overworld - Dungeon 1",
             "type": "debugpy",
             "request": "launch",
