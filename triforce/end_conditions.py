@@ -164,6 +164,14 @@ class LeftDungeon(ZeldaEndCondition):
 
         return False, False, None
 
+class LeftWallmasterRoom(ZeldaEndCondition):
+    """End the scenario if the agent leaves the wallmaster room in the wrong direction."""
+    def is_scenario_ended(self, state_change):
+        if state_change.state.location == 0x44:
+            return True, False, "failure-left-wallmaster-room"
+
+        return False, False, None
+
 class EnteredDungeon(ZeldaEndCondition):
     """End the scenario if the agent enters the dungeon."""
     def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:

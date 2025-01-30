@@ -279,7 +279,7 @@
             "scenario_selector" : "round-robin",
             "objective" : "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout"],
+            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout", "LeftWallmasterRoom"],
             "metrics" : [
                 "success-rate",
                 "overworld-progress",
