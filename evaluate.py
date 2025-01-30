@@ -30,7 +30,6 @@ def _print_stat_row(filename, steps_trained, metrics : Dict[str, float], metric_
 
     print(result)
 
-
 def evaluate_one_model(make_env, network, episodes, counter_or_callback) -> MetricTracker:
     """Runs a single scenario."""
     # pylint: disable=redefined-outer-name,too-many-locals
@@ -73,7 +72,6 @@ def main():
         return make_zelda_env(scenario_def, model_def.action_space, render_mode=render_mode,
                               frame_stack=args.frame_stack)
 
-
     observation_space, action_space = None, None
 
     networks = []
@@ -102,7 +100,7 @@ def main():
     if networks:
         columns = _print_stat_header(network.metrics)
         for network, path in networks:
-            _print_stat_row(os.path.basename(path), network.steps_trained, network.stats, columns)
+            _print_stat_row(os.path.basename(path), network.steps_trained, network.metrics, columns)
 
 def create_scenarios(args):
     """Finds all scenarios to be executed.  Also returns the results of any previous evaluations."""
@@ -135,8 +133,7 @@ def parse_args():
     parser.add_argument("--episodes", type=int, default=100, help="Number of episodes to test.")
     parser.add_argument("--parallel", type=int, default=1, help="Use parallel environments to evaluate the models.")
     parser.add_argument("--render", action='store_true', help="Render the game while evaluating the models.")
-    parser.add_argument("--limit", type=int, default=-1,
-                        help="Limit the number of models to evaluate.")
+    parser.add_argument("--limit", type=int, default=-1, help="Limit the number of models to evaluate.")
 
     parser.add_argument('model_path', nargs=1, help='The directory containing the models to evaluate')
     parser.add_argument('model', type=str, help='The model to evaluate.')
