@@ -40,9 +40,7 @@
                 },
                 {
                     "scenario" : "game-start",
-                    "exit_criteria" : "success-rate",
-                    "threshold" : 0.98,
-                    "iterations" : 40000000
+                    "iterations" : 7500000
                 }
             ]
         },
@@ -63,6 +61,16 @@
                 },
                 {
                     "scenario" : "dungeon1-side-room-opening"
+                },
+                {
+                    "scenario" : "dungeon1-wallmaster",
+                    "exit_criteria" : "success-rate",
+                    "threshold" : 0.85
+                },
+                {
+                    "scenario" : "dungeon1-entry-room",
+                    "exit_criteria" : "room-result/correct-exit",
+                    "threshold" : 0.90
                 },
                 {
                     "scenario" : "dungeon1",
@@ -262,6 +270,30 @@
                 "reward-details"
             ],
             "start": ["1_73s"],
+            "use_hints" : false
+        },
+        {
+            "name": "dungeon1-wallmaster",
+            "description": "Dungeon 1.",
+            "iterations" : 2000000,
+            "scenario_selector" : "round-robin",
+            "objective" : "GameCompletion",
+            "critic": "GameplayCritic",
+            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout", "LeftWallmasterRoom"],
+            "metrics" : [
+                "success-rate",
+                "overworld-progress",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
+            "per_reset":
+            {
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
+            },
+            "start": ["1_45w"],
             "use_hints" : false
         },
         {

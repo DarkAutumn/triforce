@@ -276,7 +276,7 @@ class ZeldaGame:
         return [(i, object_ids[i]) for i in range(1, 0xc) if object_ids[i] != 0]
 
     def _is_id_enemy(self, obj_id):
-        return 1 <= obj_id <= 0x48
+        return 1 <= obj_id <= 0x48 and obj_id != 0x40
 
     def _is_projectile(self, obj_id):
         return obj_id > 0x48 and obj_id != 0x60 and obj_id != 0x63 and obj_id != 0x64 and obj_id != 0x68 \

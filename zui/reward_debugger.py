@@ -77,7 +77,6 @@ class RewardDebugger:
         self.total_height = max(self.game_height + self.details_height, self.text_height)
         self.dimensions = (self.total_width, self.total_height)
 
-        self.total_rewards = 0.0
         self._last_location = None
         self.start_time = None
 
@@ -97,6 +96,7 @@ class RewardDebugger:
         self.overlay = 0
         self.buttons = deque(maxlen=100)
         self.endings = {}
+        self.total_rewards = 0.0
         self.running_rewards = {}
 
         self.recording = None
@@ -129,6 +129,8 @@ class RewardDebugger:
                     step : StepResult = env.restart()
                     action_mask = step.action_mask_desc
                     self.restart_requested = False
+                    self.total_rewards = 0.0
+                    self.running_rewards.clear()
 
                 else:
                     action_mask = step.action_mask_desc

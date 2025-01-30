@@ -32,6 +32,7 @@ class Timeout(ZeldaEndCondition):
         self.__last_discovery = 0
         self.__last_correct_room = 0
         self.__seen = set()
+        self.__tile_timeout = {}
 
         # the number of timesteps the agent can be in the same position before we truncate
         self.position_timeout = 50
@@ -43,8 +44,11 @@ class Timeout(ZeldaEndCondition):
         self.__last_discovery = 0
         self.__last_correct_room = 0
         self.__seen.clear()
+        self.__tile_timeout.clear()
 
     def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
+        # pylint: disable=too-many-branches
+
         # Check if link is stuck in one position on the screen
         prev, curr = state_change.previous, state_change.state
 
@@ -75,6 +79,16 @@ class Timeout(ZeldaEndCondition):
 
             if self.__last_correct_room > self.no_next_room_timeout:
                 return False, True, "failure-no-next-room"
+
+
+        if prev.full_location != curr.full_location or state_change.hits:
+            self.__tile_timeout.clear()
+        else:
+            count = self.__tile_timeout.get(curr.link.tile, 0) + 1
+            self.__tile_timeout[curr.link.tile] = count
+
+            if count > 30:
+                return False, True, "failure-stuck"
 
         return False, False, None
 
@@ -147,6 +161,14 @@ class LeftDungeon(ZeldaEndCondition):
         if any(x.id == ZeldaEnemyKind.WallMaster for x in state_change.previous.enemies) \
                 and state_change.previous.full_location.manhattan_distance(state_change.state.full_location) > 1:
             return True, False, "failure-wallmastered"
+
+        return False, False, None
+
+class LeftWallmasterRoom(ZeldaEndCondition):
+    """End the scenario if the agent leaves the wallmaster room in the wrong direction."""
+    def is_scenario_ended(self, state_change):
+        if state_change.state.location == 0x44:
+            return True, False, "failure-left-wallmaster-room"
 
         return False, False, None
 

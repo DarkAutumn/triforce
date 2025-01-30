@@ -4,32 +4,32 @@ from multiprocessing.sharedctypes import Synchronized
 import sys
 import os
 import argparse
+import shutil
 from typing import Dict
 from tqdm import tqdm
 from triforce import ModelDefinition, make_zelda_env, Network, TrainingScenarioDefinition,  MetricTracker
 
 def _print_stat_header(metrics: Dict[str, float]):
+    terminal_width = shutil.get_terminal_size((80, 20)).columns
     header_result = f"{'Filename':<32} {'Steps':>9} "
     metric_columns = []
 
     for metric_name in metrics.keys():
-        if len(header_result) > 100:
+        if len(header_result) + 12 > terminal_width:
             break
 
         metric_columns.append(metric_name)
-        header_result += f"{metric_name[-9:]:>9} "
+        header_result += f"{metric_name[-12:]:>12} "
 
     print(header_result)
     return metric_columns
 
-
-def _print_stat_row(filename, steps_trained, metrics : Dict[str, float], metric_columns):
+def _print_stat_row(filename, steps_trained, metrics: Dict[str, float], metric_columns):
     result = f"{filename:<32} {steps_trained:>9,} "
     for key in metric_columns:
-        result += f"{metrics[key]:>9.2f} "
+        result += f"{metrics[key]:>12.2f} "
 
     print(result)
-
 
 def evaluate_one_model(make_env, network, episodes, counter_or_callback) -> MetricTracker:
     """Runs a single scenario."""
@@ -73,7 +73,6 @@ def main():
         return make_zelda_env(scenario_def, model_def.action_space, render_mode=render_mode,
                               frame_stack=args.frame_stack)
 
-
     observation_space, action_space = None, None
 
     networks = []
@@ -102,7 +101,7 @@ def main():
     if networks:
         columns = _print_stat_header(network.metrics)
         for network, path in networks:
-            _print_stat_row(os.path.basename(path), network.steps_trained, network.stats, columns)
+            _print_stat_row(os.path.basename(path), network.steps_trained, network.metrics, columns)
 
 def create_scenarios(args):
     """Finds all scenarios to be executed.  Also returns the results of any previous evaluations."""
@@ -135,8 +134,7 @@ def parse_args():
     parser.add_argument("--episodes", type=int, default=100, help="Number of episodes to test.")
     parser.add_argument("--parallel", type=int, default=1, help="Use parallel environments to evaluate the models.")
     parser.add_argument("--render", action='store_true', help="Render the game while evaluating the models.")
-    parser.add_argument("--limit", type=int, default=-1,
-                        help="Limit the number of models to evaluate.")
+    parser.add_argument("--limit", type=int, default=-1, help="Limit the number of models to evaluate.")
 
     parser.add_argument('model_path', nargs=1, help='The directory containing the models to evaluate')
     parser.add_argument('model', type=str, help='The model to evaluate.')

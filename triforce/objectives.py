@@ -238,7 +238,7 @@ class GameCompletion(ObjectiveSelector):
 
         # Get the route on the game's overall map of where we need to go.  If we need to fight or
         # collect treasure, do not add the next room to the list of rooms to go to.
-        if kind not in (ObjectiveKind.FIGHT, ObjectiveKind.TREASURE):
+        if kind not in (ObjectiveKind.FIGHT, ObjectiveKind.TREASURE, ObjectiveKind.CAVE):
             exit_tiles, rooms = self._get_map_objective(state)
             tile_objectives.extend(exit_tiles)
             next_rooms.extend(rooms)
@@ -355,6 +355,9 @@ class GameCompletion(ObjectiveSelector):
             elif state.full_location == (1, 0x43, False) and state.link.keys:
                 return state.room.exits[Direction.E], [MapLocation(1, 0x44, False)]
 
+            elif state.full_location == (1, 0x45, False) and state.link.keys:
+                return state.room.exits[Direction.N], [MapLocation(1, 0x35, False)]
+
             else:
                 # Find where the triforce is
                 target_item = ZeldaItemKind(ZeldaItemKind.Triforce1.value - state.level + 1)
@@ -365,6 +368,8 @@ class GameCompletion(ObjectiveSelector):
 
         paths = self._get_route_with_astar(state.level, state.location, target_location, state.link.keys)
         exit_targets, next_rooms = self._get_targets_rooms_from_paths(state, paths)
+
+        self._last_route = state.level, state.location, (exit_targets, next_rooms)
 
         return exit_targets, next_rooms
 
