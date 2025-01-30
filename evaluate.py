@@ -4,29 +4,30 @@ from multiprocessing.sharedctypes import Synchronized
 import sys
 import os
 import argparse
+import shutil
 from typing import Dict
 from tqdm import tqdm
 from triforce import ModelDefinition, make_zelda_env, Network, TrainingScenarioDefinition,  MetricTracker
 
 def _print_stat_header(metrics: Dict[str, float]):
+    terminal_width = shutil.get_terminal_size((80, 20)).columns
     header_result = f"{'Filename':<32} {'Steps':>9} "
     metric_columns = []
 
     for metric_name in metrics.keys():
-        if len(header_result) > 100:
+        if len(header_result) + 12 > terminal_width:
             break
 
         metric_columns.append(metric_name)
-        header_result += f"{metric_name[-9:]:>9} "
+        header_result += f"{metric_name[-12:]:>12} "
 
     print(header_result)
     return metric_columns
 
-
-def _print_stat_row(filename, steps_trained, metrics : Dict[str, float], metric_columns):
+def _print_stat_row(filename, steps_trained, metrics: Dict[str, float], metric_columns):
     result = f"{filename:<32} {steps_trained:>9,} "
     for key in metric_columns:
-        result += f"{metrics[key]:>9.2f} "
+        result += f"{metrics[key]:>12.2f} "
 
     print(result)
 
