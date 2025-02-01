@@ -118,7 +118,7 @@ class GameplayCritic(ZeldaCritic):
         self.critique_item_usage(state_change, rewards)
 
         # items
-        self.critique_used_key(state_change, rewards)
+        #self.critique_used_key(state_change, rewards)
         self.critique_equipment_pickup(state_change, rewards)
 
         # movement
