@@ -29,6 +29,7 @@ MODE_UNDERGROUND = 9
 MODE_UNDERGROUND_TRANSITION = 10
 MODE_CAVE = 11
 MODE_CAVE_TRANSITION = 16
+MODE_HOLDING_TRIFORCE = 18
 
 STUN_FLAG = 0x40
 
@@ -40,7 +41,7 @@ def is_in_cave(state):
 def is_mode_scrolling(state):
     """Returns True if the game is in a scrolling mode, and therefore we cannot take actions."""
     return state in (MODE_SCROLL_COMPLETE, MODE_SCROLL, MODE_SCROLL_START, MODE_UNDERGROUND_TRANSITION, \
-                     MODE_CAVE_TRANSITION, MODE_REVEAL, MODE_DUNGEON_TRANSITION)
+                     MODE_CAVE_TRANSITION, MODE_REVEAL, MODE_DUNGEON_TRANSITION, MODE_HOLDING_TRIFORCE)
 
 def is_link_stunned(status_ac):
     """Returns True if link is stunned.  This is used to determine if link can take actions."""
