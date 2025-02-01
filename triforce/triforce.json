@@ -318,8 +318,8 @@
             "per_reset":
             {
                 "bombs" : 3,
-                "max_health" : 2,
-                "health" : 3,
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254,
                 "keys" : 3
             }
         }
