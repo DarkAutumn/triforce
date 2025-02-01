@@ -167,6 +167,7 @@ class ZeldaProjectileId(Enum):
     # pylint: disable=invalid-name
     OtorokRock : int = 83
     ZoraFireball : int = 85
+    Arrow : int = 91
     Boomerang : int = 92
 
 class ZeldaItemKind(Enum):

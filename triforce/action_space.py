@@ -311,6 +311,9 @@ class ZeldaActionSpace(gym.Wrapper):
 
     def is_valid_action(self, action, action_mask):
         """Returns True if the action is valid."""
+        if action is None:
+            return False
+
         action = self.get_action_taken(action)
         return action_mask[action.id]
 
