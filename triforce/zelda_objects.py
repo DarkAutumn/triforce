@@ -86,7 +86,7 @@ class Projectile(ZeldaObject):
     @property
     def blockable(self) -> bool:
         """Returns True if the projectile can be blocked by a shield."""
-        return self.id in (ZeldaProjectileId.OtorokRock, ZeldaProjectileId.Boomerang)
+        return self.id in (ZeldaProjectileId.OtorokRock, ZeldaProjectileId.Boomerang, ZeldaProjectileId.Arrow)
 
 @dataclass
 class Item(ZeldaObject):
