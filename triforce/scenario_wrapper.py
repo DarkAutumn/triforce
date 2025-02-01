@@ -250,7 +250,7 @@ class ProbabilisticSelector(RoomSelector):
     @staticmethod
     def get_name_from_direction_location(direction, location):
         """Returns the name of the state file."""
-        d = direction.name[0].lower() if direction is not None else ''
+        d = direction.name[0].lower() if direction not in (None, Direction.NONE) else 'c'
         return f"{location.level}_{location.value:02x}{d}.state"
 
     def _select_probabilistically(self):
