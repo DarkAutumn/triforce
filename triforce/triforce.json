@@ -97,7 +97,46 @@
                 "reward-details"
             ],
             "start": ["0_77c"],
-            "use_hints" : true
+            "use_hints" : false
+        },
+        {
+            "name": "dungeon1-dungeon2",
+            "description": "",
+            "iterations" : 2000000,
+            "scenario_selector" : "round-robin",
+            "objective" : "GameCompletion",
+            "critic": "GameplayCritic",
+            "end_conditions": ["LeftOverworld2Area", "EnteredDungeon", "GameOver", "Timeout"],
+            "metrics" : [
+                "success-rate",
+                "overworld-progress",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
+            "start": ["0_37c"],
+            "use_hints" : false
+        },
+        {
+            "name": "no-end-conditions",
+            "description": "The full game with training variables",
+            "iterations" : 2000000,
+            "scenario_selector" : "round-robin",
+            "objective" : "GameCompletion",
+            "critic": "GameplayCritic",
+            "end_conditions": ["GameOver"],
+            "metrics" : [
+                "reward-average",
+                "reward-details"
+            ],
+            "per_reset":
+            {
+                "hearts_and_containers" : 51,
+                "partial_hearts" : 254
+            },
+            "start": ["0_37c"],
+            "use_hints" : false
         },
         {
             "name": "overworld-sword",

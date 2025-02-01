@@ -179,10 +179,10 @@ class EnteredDungeon(ZeldaEndCondition):
         if state.level == 0:
             return False, False, None
 
-        if state.level == state.link.triforce_pieces + 1:
-            return True, False, "success-entered-dungeon"
+        if state.link.has_triforce(state.level):
+            return True, False, "failure-reentered-dungeon"
 
-        return False, True, "truncated-entered-dungeon"
+        return True, False, "success-entered-dungeon"
 
 class LeftOverworld1Area(ZeldaEndCondition):
     """End the scenario if the agent leaves the allowable areas between the start room and dungeon 1."""
@@ -192,6 +192,19 @@ class LeftOverworld1Area(ZeldaEndCondition):
         state = state_change.state
         if state.level == 0 and state.location not in self.overworld_dungeon1_walk_rooms:
             return True, False, "failure-left-play-area"
+
+        return False, False, None
+
+class LeftOverworld2Area(ZeldaEndCondition):
+    """End the scenario if the agent leaves the allowable areas between the start room and dungeon 1."""
+    def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
+        state = state_change.state
+        if state.level == 0 and state.location != 0x37:
+            if state.full_location.y < 2 or state.full_location.y > 6:
+                return True, False, "failure-left-play-area"
+
+            if state.full_location.x < 8 or state.full_location.x > 13:
+                return True, False, "failure-left-play-area"
 
         return False, False, None
 
