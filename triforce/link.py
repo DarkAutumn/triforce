@@ -189,7 +189,7 @@ class Link(ZeldaObject):
 
     def has_triforce(self, level):
         """Returns whether link has the triforce for the given level."""
-        return self.game.triforce & (1 << level)
+        return self.game.triforce & (1 << (level - 1))
 
     @property
     def is_health_full(self) -> bool:
