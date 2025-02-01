@@ -14,11 +14,11 @@ LOCKED_DISTANCE = 4
 overworld_to_item = {
     0x77 : SwordKind.WOOD,
     0x37 : 1,
-    0x22 : 2,
+    0x3c : 2,
     0x23 : SwordKind.WHITE,
 }
 
-dungeon_entrances = { 1: 0x73 }
+dungeon_entrances = { 1: 0x73, 2 : 0x7d }
 
 dungeon_to_item = {
     0x72 : ZeldaItemKind.Key,
@@ -32,6 +32,8 @@ dungeon_to_item = {
     0x36: ZeldaItemKind.Triforce1,
     0x43 : ZeldaItemKind.Map,
     0x54 : ZeldaItemKind.Compass,
+
+    0x00 : ZeldaItemKind.Triforce2,
 }
 
 item_to_overworld = {v: k for k, v in overworld_to_item.items()}
