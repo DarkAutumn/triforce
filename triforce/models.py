@@ -184,19 +184,19 @@ class MlpExtractor(nn.Module):
         super().__init__()
         self.policy_net = nn.Sequential(
             Network.layer_init(nn.Linear(input_size, policy_hidden_size)),
-            nn.Tanh(),
+            nn.ReLU(),
             Network.layer_init(nn.Linear(policy_hidden_size, policy_hidden_size)),
-            nn.Tanh(),
+            nn.ReLU(),
             Network.layer_init(nn.Linear(policy_hidden_size, policy_hidden_size)),
             nn.Tanh(),
         )
         self.value_net = nn.Sequential(
             Network.layer_init(nn.Linear(input_size, value_hidden_size)),
-            nn.Tanh(),
+            nn.ReLU(),
             Network.layer_init(nn.Linear(value_hidden_size, value_hidden_size)),
-            nn.Tanh(),
+            nn.ReLU(),
             Network.layer_init(nn.Linear(value_hidden_size, value_hidden_size)),
-            nn.Tanh(),
+            nn.ReLU(),
         )
 
     def forward(self, combined_features):
