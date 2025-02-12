@@ -13,7 +13,7 @@ from .state_change_wrapper import StateChange
 
 HEALTH_LOST_PENALTY = Penalty("penalty-lost-health", -REWARD_LARGE)
 HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
-USED_KEY_REWARD = Reward("reward-used-key", REWARD_LARGE)
+USED_KEY_REWARD = Reward("reward-used-key", REWARD_SMALL)
 WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_SMALL)
 MOVE_CLOSER_REWARD = Reward("reward-move-closer", REWARD_TINY)
 MOVE_AWAY_PENALTY = Penalty("penalty-move-away", -REWARD_TINY - REWARD_MINIMUM)
@@ -24,11 +24,11 @@ ATTACK_NO_ENEMIES_PENALTY = Penalty("penalty-attack-no-enemies", -MOVE_CLOSER_RE
 ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_TINY - REWARD_MINIMUM)
 
 DIDNT_FIRE_PENALTY = Penalty("penalty-didnt-fire", -REWARD_TINY)
-BLOCK_PROJECTILE_REWARD = Reward("reward-block-projectile", REWARD_LARGE)
+BLOCK_PROJECTILE_REWARD = Reward("reward-block-projectile", REWARD_MEDIUM)
 FIRED_CORRECTLY_REWARD = Reward("reward-fired-correctly", REWARD_TINY)
-INJURE_KILL_REWARD = Reward("reward-hit", REWARD_MEDIUM)
+INJURE_KILL_REWARD = Reward("reward-hit", REWARD_SMALL)
 INJURE_KILL_MOVEMENT_ROOM_REWARD = Reward("reward-incidental-hit", REWARD_SMALL)
-BEAM_ATTACK_REWARD = Reward("reward-beam-hit", REWARD_MEDIUM)
+BEAM_ATTACK_REWARD = Reward("reward-beam-hit", REWARD_SMALL)
 PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
 USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
@@ -92,9 +92,7 @@ class GameplayCritic(ZeldaCritic):
         super().__init__()
 
         self._correct_locations = set()
-        self._seen_locations = set()
         self._total_hits = 0
-        self._room_enter_health = None
         self._equipment_rewards = {}
         self._progress = 0.0
         self._tile_count = {}
@@ -102,9 +100,7 @@ class GameplayCritic(ZeldaCritic):
     def clear(self):
         super().clear()
         self._correct_locations.clear()
-        self._seen_locations.clear()
         self._total_hits = 0
-        self._room_enter_health = None
         self._progress = 0.0
         self._tile_count.clear()
 
@@ -289,9 +285,6 @@ class GameplayCritic(ZeldaCritic):
 
     def critique_location_change(self, state_change : StateChange, rewards):
         """Critiques the discovery of new locations."""
-        if self._room_enter_health is None:
-            self._room_enter_health = state_change.previous.link.health
-
         prev = state_change.previous.full_location
         curr = state_change.state.full_location
 
@@ -300,22 +293,14 @@ class GameplayCritic(ZeldaCritic):
             self._correct_locations.add((prev, curr))
 
         if prev != curr:
-            health_change = state_change.previous.link.health - self._room_enter_health
-            # clamp the reward to [-1, 1]
-            reward = (max(min(health_change, 3.0), -3.0) + 3) / 6
-            reward = max(min(reward, REWARD_MAXIMUM), REWARD_MINIMUM)
-
-            if curr in state_change.previous.objectives.next_rooms:
-                if (curr, prev) in self._correct_locations:
-                    reward = REWARD_MINIMUM
-                else:
-                    self._correct_locations.add((curr, prev))
-
-                rewards.add(Reward("reward-new-location", reward))
+            if curr in self._correct_locations:
+                rewards.add(REWARD_REVIST_LOCATION)
+            elif curr in state_change.previous.objectives.next_rooms:
+                rewards.add(REWARD_NEW_LOCATION)
+                self._correct_locations.add(curr)
             else:
                 rewards.add(PENALTY_WRONG_LOCATION)
 
-            self._room_enter_health = state_change.state.link.health
 
     def critique_tile_position(self, state_change : StateChange, rewards):
         """Critiques landing on the same tile over and over."""
@@ -419,6 +404,7 @@ class GameplayCritic(ZeldaCritic):
 REWARD_ENTERED_CAVE = Reward("reward-entered-cave", REWARD_LARGE)
 REWARD_LEFT_CAVE = Reward("reward-left-cave", REWARD_LARGE)
 REWARD_NEW_LOCATION = Reward("reward-new-location", REWARD_LARGE)
+REWARD_REVIST_LOCATION = Reward("reward-revisit-location", REWARD_TINY)
 PENALTY_REENTERED_CAVE = Penalty("penalty-reentered-cave", -REWARD_MAXIMUM)
 PENALTY_LEFT_CAVE_EARLY = Penalty("penalty-left-cave-early", -REWARD_MAXIMUM)
 PENALTY_LEFT_SCENARIO = Penalty("penalty-left-scenario", -REWARD_LARGE)
