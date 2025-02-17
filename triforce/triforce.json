@@ -60,7 +60,9 @@
                     "threshold" : 0.90
                 },
                 {
-                    "scenario" : "dungeon1-side-room-opening"
+                    "scenario" : "dungeon1-side-room-opening",
+                    "exit_criteria" : "success-rate",
+                    "threshold" : 0.85
                 },
                 {
                     "scenario" : "dungeon1-wallmaster",
