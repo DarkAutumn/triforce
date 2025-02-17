@@ -61,6 +61,12 @@ class StateChange:
                 f"Current: {self.state}\n"
 
     @property
+    def gained_triforce(self):
+        """Returns True if the player gained a triforce piece."""
+        return self.previous.link.triforce_pieces < self.state.link.triforce_pieces or \
+               not self.previous.link.triforce_of_power and self.state.link.triforce_of_power
+
+    @property
     def changed_location(self):
         """Returns True if the location changed."""
         return self.previous.full_location != self.state.full_location

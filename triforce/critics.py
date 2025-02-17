@@ -195,18 +195,16 @@ class GameplayCritic(ZeldaCritic):
             rewards.add(EQUIPMENT_REWARD_MAP['heart-container'])
 
         elif state_change.health_gained:
-            rewards.add(HEALTH_GAINED_REWARD)
+            # Don't reward for refilling health after triforce pickup
+            if not state_change.gained_triforce:
+                rewards.add(HEALTH_GAINED_REWARD)
 
         elif state_change.health_lost:
             rewards.add(HEALTH_LOST_PENALTY)
 
     def critique_triforce(self, state_change : StateChange, rewards):
         """Critiques the acquisition of the triforce."""
-        prev_link, curr_link = state_change.previous.link, state_change.state.link
-        if prev_link.triforce_pieces < curr_link.triforce_pieces:
-            rewards.add(EQUIPMENT_REWARD_MAP['triforce'])
-
-        if not prev_link.triforce_of_power and curr_link.triforce_of_power:
+        if state_change.gained_triforce:
             rewards.add(EQUIPMENT_REWARD_MAP['triforce'])
 
     def critique_wallmaster(self, state_change : StateChange, rewards):
@@ -288,16 +286,21 @@ class GameplayCritic(ZeldaCritic):
         prev = state_change.previous.full_location
         curr = state_change.state.full_location
 
+        # Don't reward/penalize for changing location on triforce pickup
+        if state_change.gained_triforce:
+            return
+
         # Don't let the agent walk offscreen then right back on to get a quick reward
         if prev != curr and not self._correct_locations:
             self._correct_locations.add((prev, curr))
 
         if prev != curr:
-            if curr in self._correct_locations:
-                rewards.add(REWARD_REVIST_LOCATION)
-            elif curr in state_change.previous.objectives.next_rooms:
-                rewards.add(REWARD_NEW_LOCATION)
-                self._correct_locations.add(curr)
+            if curr in state_change.previous.objectives.next_rooms:
+                if curr in self._correct_locations:
+                    rewards.add(REWARD_REVIST_LOCATION)
+                else:
+                    rewards.add(REWARD_NEW_LOCATION)
+                    self._correct_locations.add(curr)
             else:
                 rewards.add(PENALTY_WRONG_LOCATION)
 
