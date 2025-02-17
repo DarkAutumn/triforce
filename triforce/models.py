@@ -116,7 +116,7 @@ class Network(nn.Module):
 
     def load(self, path) -> 'Network':
         """Load the network from a file."""
-        save_data = torch.load(path)
+        save_data = torch.load(path, weights_only=False)
 
         self.load_state_dict(save_data["model_state_dict"])
         self.steps_trained = save_data["steps_trained"]

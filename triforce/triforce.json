@@ -60,7 +60,9 @@
                     "threshold" : 0.90
                 },
                 {
-                    "scenario" : "dungeon1-side-room-opening"
+                    "scenario" : "dungeon1-side-room-opening",
+                    "exit_criteria" : "success-rate",
+                    "threshold" : 0.85
                 },
                 {
                     "scenario" : "dungeon1-wallmaster",
@@ -97,7 +99,7 @@
                 "reward-details"
             ],
             "start": ["0_77c"],
-            "use_hints" : false
+            "use_hints" : true
         },
         {
             "name": "dungeon1-dungeon2",
@@ -169,7 +171,8 @@
             {
                 "bombs" : 3,
                 "sword" : 1,
-                "health" : "max_health"
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
             }
         },
         {
@@ -197,7 +200,8 @@
             {
                 "bombs" : 3,
                 "sword" : 1,
-                "health" : "max_health"
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
             }
         },
         {
@@ -234,8 +238,8 @@
             "per_reset":
             {
                 "bombs" : 3,
-                "max_health" : 2,
-                "health" : 3,
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254,
                 "keys" : 4
             }
         },
@@ -262,8 +266,8 @@
             "per_reset":
             {
                 "bombs" : 3,
-                "max_health" : 2,
-                "health" : 3,
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254,
                 "keys" : 4
             }
         },
@@ -288,8 +292,8 @@
             "per_reset":
             {
                 "bombs" : 3,
-                "max_health" : 2,
-                "health" : 3
+                "hearts_and_containers" : 34,
+                "partial_hearts" : 254
             }
         },
         {
