@@ -33,7 +33,7 @@ class TrainingHintWrapper(gym.Wrapper):
                 self._check_room_direction(state, info, Direction.E)
             elif link.tile.y == 0:
                 self._check_room_direction(state, info, Direction.N)
-            elif link.tile.y == 0x14:
+            elif link.tile.y >= 0x14:
                 self._check_room_direction(state, info, Direction.S)
 
     def _check_room_direction(self, state, info, direction):
