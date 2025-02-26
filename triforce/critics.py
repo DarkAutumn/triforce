@@ -7,8 +7,9 @@ import torch
 from triforce.action_space import ActionKind
 from triforce.rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL, REWARD_TINY, \
     Penalty, Reward, StepRewards
+from triforce.zelda_game import ZeldaGame
 
-from .zelda_enums import SwordKind, ZeldaAnimationKind, AnimationState, ZeldaEnemyKind
+from .zelda_enums import Direction, SwordKind, ZeldaAnimationKind, AnimationState, ZeldaEnemyKind
 from .state_change_wrapper import StateChange
 
 HEALTH_LOST_PENALTY = Penalty("penalty-lost-health", -REWARD_LARGE)
@@ -245,6 +246,13 @@ class GameplayCritic(ZeldaCritic):
         """Critiques attacks made by the player."""
         # pylint: disable=too-many-branches
 
+        for e_index in state_change.enemies_hit:
+            enemy = state_change.state.get_enemy_by_index(e_index)
+
+            # no penalty or rewards for hitting wallmasters up close
+            if enemy.id == ZeldaEnemyKind.WallMaster and enemy.distance < 30:
+                return
+
         prev, curr = state_change.previous, state_change.state
         if state_change.hits and prev.link.are_beams_available \
                              and curr.link.get_animation_state(ZeldaAnimationKind.BEAMS) != AnimationState.INACTIVE:
@@ -271,6 +279,8 @@ class GameplayCritic(ZeldaCritic):
                         distance = active_enemies[0].distance
                         if distance > DISTANCE_THRESHOLD:
                             rewards.add(ATTACK_MISS_PENALTY)
+            else:
+                rewards.add(ATTACK_MISS_PENALTY)
 
     def critique_item_usage(self, state_change : StateChange, rewards):
         """Critiques the usage of items."""
@@ -345,8 +355,7 @@ class GameplayCritic(ZeldaCritic):
             return
 
         # Did link run into a wall?
-        if prev_link.position == curr_link.position:
-            rewards.add(WALL_COLLISION_PENALTY)
+        if self._did_link_run_into_wall(prev, curr, rewards):
             return
 
         # Did link get too close to an enemy?
@@ -369,6 +378,23 @@ class GameplayCritic(ZeldaCritic):
 
         else:
             rewards.add(MOVE_CLOSER_REWARD)
+
+
+    def _did_link_run_into_wall(self, prev : ZeldaGame, curr : ZeldaGame, rewards):
+        if prev.link.position != curr.link.position:
+            return False
+
+        door_entry = {(0xf, 0x4) : Direction.N,
+                      (0xf, 0x10) : Direction.S,
+                      (0x4, 0xa) : Direction.W,
+                      (0x1a, 0xa) : Direction.E}
+
+        if (direction := door_entry.get((curr.link.tile.x, curr.link.tile.y))) is not None:
+            if prev.is_door_locked(direction):
+                return True
+
+        rewards.add(WALL_COLLISION_PENALTY)
+        return True
 
     def critique_moving_into_danger(self, state_change : StateChange, rewards):
         """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted
