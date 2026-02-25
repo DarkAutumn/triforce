@@ -9,13 +9,38 @@
 3. `git checkout -b <descriptive-branch-name>` — **always** branch from main, never commit to main
 4. Work through areas below. For each area:
    - Investigate assembly vs Python
+   - **Annotate the assembly** in `zelda-asm/` with comments as you discover insights (see below)
    - Add/update tests as appropriate
    - Fix bugs found
    - Run `pytest tests/ -v --ignore=tests/ppo_test.py` — no regressions, no new failures
    - Run `pylint triforce/ evaluate.py run.py train.py` — clean
-5. Commit after each area or logical group of changes.
+5. Commit after each area or logical group of changes (triforce and zelda-asm separately).
 6. Push branch, open PR to merge to main. **Never push directly to main.**
 7. After merge, update specs/docs with anything learned (see End-of-Area Checklist below).
+
+## Assembly Annotation Rules
+
+The `zelda-asm/` directory is a separate git repo (`DarkAutumn/zelda1-disassembly`). Origin
+points to the user's fork — there is no upstream to track (it never changes).
+
+**When you discover something about the assembly, annotate it in the source file.** Add
+comments that explain what the code does in the context of the Triforce project:
+- What Python code corresponds to this assembly routine
+- What RAM addresses are read/written and what they mean
+- Timing information (how many frames a state lasts, when transitions happen)
+- Edge cases or surprising behavior that matters for the AI agent
+- Use `; TRIFORCE:` prefix for annotations to distinguish from original comments
+
+Example:
+```asm
+; TRIFORCE: This is the beam health check. Python: Link._is_health_full_for_beams
+; TRIFORCE: filled == containers_minus_one AND partial >= $80
+LDA HeartValues
+AND #$0F
+```
+
+Commit assembly annotations to the `zelda-asm` repo on a branch, push, and merge via PR
+(same workflow as triforce). The zelda-asm repo uses `master` as its default branch.
 
 **Not done until**: `pytest` passes fully (baseline + new tests) and `pylint` is clean.
 
@@ -363,22 +388,29 @@ they affect the actual game state model used for training.
 - [ ] Resolve Octorok/OctorokFast duplicate (both 0x07)
 - [ ] Tests: test_object_model.py (T2.10)
 
-## Area 12: Frame Skip & Animation Tracking (HIGH)
+## Area 12: Frame Skip & Animation Tracking ✅ (partial — BUG-2 and WS_ADJUSTMENT deferred)
 
-The frame skip code (`frame_skip_wrapper.py`) uses hardcoded cooldowns (`ATTACK_COOLDOWN=15`,
-`ITEM_COOLDOWN=10`) instead of checking animation states. This is fragile — the correct
-approach is to check when Link's sword/item animation has actually finished and he's
-controllable again. This area verifies the cooldown values AND investigates whether we should
-replace them with animation-state-based checks.
+Replaced hardcoded `ATTACK_COOLDOWN=15` and `ITEM_COOLDOWN=10` with animation-state polling.
+The NES blocks new actions until `link_status==0` AND `sword_animation==0`.
 
-- [ ] Measure sword cooldown vs ATTACK_COOLDOWN=15 (trace ObjState[SLOT_SWORD] lifecycle)
-- [ ] Measure item cooldowns vs ITEM_COOLDOWN=10
-- [ ] Investigate south/west movement asymmetry (WS_ADJUSTMENT_FRAMES=4)
-- [ ] Verify sword animation state tracking is correct (states 1→5→0)
-- [ ] Determine if ObjState[SLOT_SWORD]==0 is the right "done" signal for sword cooldown
-- [ ] Evaluate replacing hardcoded cooldowns with animation-state polling
-- [ ] **Fix BUG-2**: 11-frame beam hack fires mid-spread (depends on Area 8 look-ahead)
-- [ ] Tests: test_frame_skip.py (T6.1-T6.5)
+- [x] Measure sword cooldown: 15 frames (states 1→2→3→4→5→0). ATTACK_COOLDOWN=15 was correct.
+- [x] Measure item cooldowns: 12 frames (link_status 0x11→0x31→0x00). ITEM_COOLDOWN=10 was 2 frames early.
+- [x] Verify sword animation state tracking: states 1(4f)→2(8f)→3(1f)→4(1f)→5(1f)→0
+- [x] Determine controllability signal: `link_status==0 AND sword_animation==0`
+- [x] Replace hardcoded cooldowns with animation-state polling in `_act_attack_or_item`
+- [x] Verify new code fires on first possible frame (sword, bomb, boomerang all confirmed)
+- [x] Tests: test_frame_skip.py (10 tests)
+- [ ] Investigate south/west movement asymmetry (WS_ADJUSTMENT_FRAMES=4) — deferred
+- [ ] **Fix BUG-2**: 11-frame beam hack fires mid-spread (depends on Area 8 look-ahead) — deferred
+
+**Findings**:
+- `link_status` (ObjState[0]): 0x11 during animation, 0x31 near end, 0x00 when controllable
+- Sword melee uses slot 0x0D (not 0x0B). States 1-5, timer in ObjAnimCounter.
+- State 2 lasts 8 frames, all others 1 frame. State 3 triggers beam check (MakeSwordShot).
+- Items (bomb, boomerang): link_status lock lasts 12 frames. No sword_state involvement.
+- STUN_FLAG (0x40) in is_link_stunned does NOT detect animation lock (0x11 & 0x40 = 0).
+- Old ITEM_COOLDOWN=10 was 2 frames short — compensated by accident via extra frame in
+  _skip_uncontrollable_states. New polling removes this fragile dependency.
 
 ## Area 13: Sound Bitmask Register (Low)
 
@@ -403,7 +435,7 @@ replace them with animation-state-based checks.
 | 9. Direction encoding | Low | ⬜ |
 | 10. Tile layout | Low | ⬜ |
 | 11. Enemy kind IDs | Medium | ⬜ |
-| 12. Frame skip & animation | **HIGH** | ⬜ |
+| 12. Frame skip & animation | **HIGH** | ✅* |
 | 13. Sound bitmasks | Low | ⬜ |
 
 Legend: ⬜ Not started · 🔄 In progress · ✅ Done · ❌ Blocked
