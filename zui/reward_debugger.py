@@ -6,6 +6,8 @@
 # pylint: disable=too-few-public-methods,too-many-locals,too-many-branches,too-many-statements
 # pylint: disable=too-many-nested-blocks,duplicate-code
 
+import os
+import time
 from collections import deque
 import pygame
 import numpy as np
@@ -189,6 +191,25 @@ class RewardDebugger:
 
         self.force_save = False
 
+    def _save_emulator_state(self, env, step):
+        """Save emulator state to a .state file (F1 hotkey)."""
+        import gzip
+
+        # Unwrap to the retro environment
+        raw_env = env.env
+        while hasattr(raw_env, 'env'):
+            raw_env = raw_env.env
+
+        state_bytes = raw_env.em.get_state()
+        state = step.state
+        filename = f"debug_{state.level}_{state.location:02x}_{int(time.time())}.state"
+        save_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                'triforce', 'custom_integrations', 'Zelda-NES')
+        filepath = os.path.join(save_dir, filename)
+        with gzip.open(filepath, 'wb') as f:
+            f.write(state_bytes)
+        print(f"Saved state: {filename}")
+
     def _render_to_surface(self, surface, step : StepResult, frame : torch.Tensor, model_details, probs):
         surface.fill((0, 0, 0))
         self._show_observation(surface, step.observation)
@@ -286,6 +307,9 @@ class RewardDebugger:
                         # win the scenario
                         print("Frame recording stopped")
                         self.recording = None
+
+                elif event.key == pygame.K_F1:
+                    self._save_emulator_state(env, step)
 
 
     def _get_action_from_keys(self, link, keys):

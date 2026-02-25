@@ -101,14 +101,14 @@ TREASURE_Y      = 0x097
 TREASURE_FLAG   = 0x0BF
 
 # NES buttons (indices into MultiBinary(9) action array)
-BTN_B           = 0   # B button - sword
+BTN_B           = 0   # B button - use selected item
 BTN_SELECT      = 2
 BTN_START       = 3
 BTN_UP          = 4
 BTN_DOWN        = 5
 BTN_LEFT        = 6
 BTN_RIGHT       = 7
-BTN_A           = 8   # A button - use selected item
+BTN_A           = 8   # A button - sword
 
 # Object table slot count (slots 0-11, 12 entries)
 OBJ_SLOT_COUNT  = 0x0C

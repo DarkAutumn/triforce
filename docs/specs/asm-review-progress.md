@@ -4,16 +4,18 @@
 
 ## Workflow
 
-1. `git checkout main && git pull`
+1. `git checkout main && git pull origin main` — ensure local main matches origin
 2. Run `pytest tests/ -v --ignore=tests/ppo_test.py` — record baseline. All existing tests must pass. Skip `ppo_test.py` (slow, unrelated).
-3. `git checkout -b asm-review` (branch only if making changes)
+3. `git checkout -b <descriptive-branch-name>` — **always** branch from main, never commit to main
 4. Work through areas below. For each area:
    - Investigate assembly vs Python
    - Add/update tests as appropriate
    - Fix bugs found
-   - Run `pytest` — no regressions, no new failures
+   - Run `pytest tests/ -v --ignore=tests/ppo_test.py` — no regressions, no new failures
    - Run `pylint triforce/ evaluate.py run.py train.py` — clean
 5. Commit after each area or logical group of changes.
+6. Push branch, open PR to merge to main. **Never push directly to main.**
+7. After merge, update specs/docs with anything learned (see End-of-Area Checklist below).
 
 **Not done until**: `pytest` passes fully (baseline + new tests) and `pylint` is clean.
 
@@ -25,11 +27,11 @@ branch has uncommitted changes, commit or stash them first.
 We can't see the game screen, but we can read every RAM byte. The ROM is the oracle — we
 test by observing the NES's RAM reaction to inputs:
 
-- **Boundary tests**: Set link_x/link_y, press B, check if `ObjState[SLOT_SWORD]` changed
+- **Boundary tests**: Set link_x/link_y, press A, check if `ObjState[SLOT_SWORD]` changed
   from 0. Changed → sword fired. Unchanged → screen-locked. Binary RAM check, no screen needed.
 - **State machine tests**: Fire a weapon, read `ObjState[slot]` every frame via `RAMWatcher`.
   The trace gives the exact lifecycle and timing.
-- **has_beams test**: Set health RAM to the edge case, press B, check if `ObjState[SLOT_BEAM]`
+- **has_beams test**: Set health RAM to the edge case, press A, check if `ObjState[SLOT_BEAM]`
   changes. The NES tells us whether it actually fires.
 - **Object model tests**: Load a savestate with known enemies, compare raw RAM bytes against
   what the Python classes report. Discrepancy = bug.
@@ -93,6 +95,29 @@ would typically move west toward the room interior.
 - Read API is `data.lookup_value(name)`, write is `data.set_value(name, value)`
 - `ZeldaGame` has an `__active` class variable — only the most recent instance can read RAM.
   Tests using `ZeldaFixture.game_state()` must not hold stale references.
+- **Only one emulator instance per process** — must `close()` before creating another.
+- **NES A button (retro index 8) fires sword**. B button (retro index 0) uses selected item.
+  `action_space.py` correctly maps `ActionKind.SWORD` to `self.a`.
+- **State files must be gzip compressed** for retro to load them. The F1 hotkey in zui saves
+  gzipped states.
+- Most savestates start at room edges where Link is screen-locked and cannot fire weapons.
+  For weapon testing, use `debug_` prefixed states or move Link inward first.
+
+## Requesting Developer Help
+
+When automated investigation hits a wall (e.g., need a savestate with specific conditions like
+full health + specific equipment + enemies nearby, or Link in a position that's hard to reach
+programmatically), **ask the developer to create a savestate** using the F1 hotkey in the zui
+debugger. Specify exactly what's needed:
+- Room and level (e.g., "overworld room $67")
+- Link's position (center, near enemies, etc.)
+- Health state (full health for beams, partial for no-beams)
+- Equipment (sword type, items in inventory)
+- Enemies present and their state
+- Any other RAM conditions
+
+The developer can navigate to the right spot in-game and press F1 to drop a state file.
+This is faster and more reliable than trying to manipulate RAM to create the right conditions.
 
 ## End-of-Area Checklist
 
@@ -101,6 +126,44 @@ After completing each area, update these docs with anything learned:
 - New environment quirks or API gotchas → add to Environment Notes above
 - Test plan changes → update `test-plan.md`
 - Architecture insights → update `asm-review.md` if the area description was wrong/incomplete
+
+**MANDATORY: Every bug found must either be fixed in the same commit or tracked as a todo
+below with a clear description, the affected file(s), and line numbers. No exceptions.
+"Non-blocking" is not an excuse to skip tracking. If it's deferred, it must have a todo.**
+
+## Bug Fix Backlog
+
+Bugs found during review that need production code fixes. These are **not** test-only issues —
+they affect the actual game state model used for training.
+
+### BUG-1: `has_beams` health check disagrees with NES (Area 2)
+- **File**: `triforce/link.py` lines 195-205
+- **Problem**: `is_health_full` uses float comparison (`health == max_health`). NES assembly
+  checks `filled == containers_minus_one AND partial >= 0x80`. When `filled == containers`
+  with `partial = 0`, Python says full health → has_beams=True, but NES says no beams.
+- **Fix**: Replace `is_health_full` check in `has_beams` with exact integer check on
+  `hearts_and_containers` nibbles and `partial_hearts` byte.
+- **Impact**: Training scenarios that override health via `per_reset`/`per_frame` could
+  trigger this. The model may incorrectly predict beam availability.
+- **Status**: Todo `fix-has-beams-health`
+
+### BUG-2: 11-frame beam hack fires mid-spread (Area 2)
+- **File**: `triforce/frame_skip_wrapper.py` lines 110-115
+- **Problem**: Resets `beam_animation` in info dict after 11 consecutive frames at state 17.
+  But the assembly's spread phase naturally lasts 22 frames. Hack triggers every single time,
+  causing Python to report beam as inactive 11 frames early.
+- **Root cause**: Hack was added because beams get "stuck" at 17. Likely caused by look-ahead
+  simulation (Area 8) corrupting beam state.
+- **Fix**: Investigate look-ahead first (Area 8 dependency), then either remove the hack
+  (if root cause is fixed) or change threshold to >22.
+- **Status**: Todo `fix-11-frame-hack` (blocked on `look-ahead-sim`)
+
+### BUG-3: data.json obj_health_b/c off by 1 (Area 1)
+- **File**: `triforce/zelda_game_data.txt` or data.json
+- **Problem**: `obj_health_b` ($491) and `obj_health_c` ($492) are off by 1 from ObjHP table.
+  Game code uses table reads (correct), but individual address mappings are wrong.
+- **Impact**: Low — nothing currently reads these individual entries.
+- **Status**: Todo `fix-obj-health-bc-offset`
 
 ---
 
@@ -122,18 +185,48 @@ After completing each area, update these docs with anything learned:
 - [x] Verify sound_pulse_1/$605 vs Tune0
 - [x] Verify weapon slot ObjState addresses ($B9-$BE)
 - [x] Tests: test_ram_mapping.py (41 tests)
-- **Finding**: data.json `obj_health_b` ($491) and `obj_health_c` ($492) are off by 1 from ObjHP table. Game code uses table read (correct), not individual addresses. Non-blocking.
+- **Finding**: data.json `obj_health_b` ($491) and `obj_health_c` ($492) are off by 1 from ObjHP table. Game code uses table read (correct), not individual addresses. Tracked as BUG-3 / todo `fix-obj-health-bc-offset`.
 
-## Area 2: Beam/Sword Shot State Machine (HIGH)
+## Area 2: Beam/Sword Shot State Machine (HIGH) ✅
 
-- [ ] Trace ObjState[$0E] lifecycle: $00→$10→$11→$00
-- [ ] Verify ANIMATION_BEAMS_ACTIVE=16, ANIMATION_BEAMS_HIT=17
-- [ ] Measure spread duration (expected ~10 frames)
-- [ ] Trace magic rod shot: $80→$81 vs beam $10→$11
-- [ ] Reproduce beam stuck-at-17 bug
-- [ ] Determine if look-ahead causes stuck-at-17
-- [ ] Validate 11-frame hack in frame_skip_wrapper.py
-- [ ] Tests: test_weapons.py (T3.1-T3.3, T3.8-T3.9)
+- [x] Trace ObjState[$0E] lifecycle: $00→$10→$11→$00 — confirmed
+- [x] Verify ANIMATION_BEAMS_ACTIVE=16 ($10), ANIMATION_BEAMS_HIT=17 ($11) — correct
+- [x] Measure spread duration — **22 frames** (not ~10 as originally estimated). ObjDir decrements from $FE to $E8.
+- [x] Verify sword melee state sequence: 1→2→3→4→5→0 (state 2 = 8 frames, states 3/4/5 = 1 frame each)
+- [x] Verify MakeSwordShot fires at sword state 3 (Z_07.asm line 4543)
+- [x] Verify health check: filled == containers-1 AND partial >= $80 (Z_07.asm lines 4632-4648)
+- [x] Validate 11-frame hack in frame_skip_wrapper.py — **hack is wrong**: it fires at 11 frames but natural spread is 22 frames. Only modifies info dict, not NES RAM, so NES is unaffected but Python thinks beam inactive 11 frames early.
+- [x] Tests: test_weapons.py (17 tests covering lifecycle, timing, health edge cases)
+- [ ] Trace magic rod shot: $80→$81 vs beam $10→$11 (deferred — no rod savestate available)
+- [ ] Reproduce beam stuck-at-17 bug (deferred to Area 8 — likely caused by look-ahead simulation)
+- [ ] Determine if look-ahead causes stuck-at-17 (deferred to Area 8)
+
+### Area 2 Findings
+
+1. **BUG: `is_health_full` disagrees with NES for beams** — When RAM has `filled == containers`
+   (not `containers-1`) with partial=0, Python's float-based `is_health_full` returns True
+   (health=3.0, max=3), but the NES assembly says no beams. This edge case can occur via
+   `per_reset`/`per_frame` RAM overrides used in training scenarios. Fix should make `has_beams`
+   use the assembly's exact check: `filled == containers_minus_one AND partial >= 0x80`.
+
+2. **11-frame hack is incorrect** — `frame_skip_wrapper.py` resets `beam_animation` in the info
+   dict after 11 consecutive frames at state 17. But the assembly's spread phase naturally lasts
+   22 frames. The hack was added to work around beams "stuck" at 17, which is likely caused by
+   the look-ahead simulation (Area 8). The hack masks the real bug.
+
+3. **Sword state 1 lasts 4 frames** — Assembly timer for state 1 appears to be 1 frame, but
+   observed behavior is 4 frames. Likely due to ObjAnimCounter initialization. Non-blocking
+   for beam logic since the beam fires at state 3 regardless.
+
+4. **BTN_A is sword, not BTN_B** — Fixed comment in `asm_addresses.py`. The NES A button (retro
+   index 8) fires sword. B button (retro index 0) uses the selected item. `action_space.py`
+   correctly maps `ActionKind.SWORD` to `self.a`.
+
+5. **Beam active duration is variable** — Observed 25 frames in test, but this depends on distance
+   to wall/edge. The spread duration (22 frames) is always fixed.
+
+6. **`debug_0_67_1772056964.state`** — Critical savestate for beam testing: overworld room $67,
+   Link centered, full health, sword equipped. Created via F1 hotkey in zui debugger.
 
 ## Area 3: Sword Screen Lock Boundaries (HIGH)
 
@@ -227,7 +320,7 @@ After completing each area, update these docs with anything learned:
 | Area | Risk | Status |
 |------|------|--------|
 | 1. Address mapping | Medium | ✅ |
-| 2. Beam state machine | **HIGH** | ⬜ |
+| 2. Beam state machine | **HIGH** | ✅ |
 | 3. Screen lock bounds | **HIGH** | ⬜ |
 | 4. Enemy health encoding | Medium | ⬜ |
 | 5. Enemy dying/active | Medium | ⬜ |
