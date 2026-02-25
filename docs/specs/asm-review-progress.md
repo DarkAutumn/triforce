@@ -36,6 +36,56 @@ test by observing the NES's RAM reaction to inputs:
 - **Look-ahead tests**: Snapshot all 10KB of RAM, run the look-ahead code, snapshot again.
   Byte-for-byte diff reveals any state corruption.
 
+## Interactive Debugging
+
+You can write ad-hoc Python scripts to load any savestate and interactively explore the
+NES. Use `ZeldaFixture` from `tests/conftest.py` to load a state, poke RAM values, send
+button inputs, and observe how the NES responds frame-by-frame. This is the primary way
+to build understanding of game mechanics before writing formal tests.
+
+Example workflow:
+```python
+from tests.conftest import ZeldaFixture
+from tests.asm_addresses import *
+
+emu = ZeldaFixture("1_44e.state")       # Load dungeon room
+print(f"Link at ({emu.get('link_x')}, {emu.get('link_y')})")
+print(f"Link direction: {emu.ram[OBJ_DIR]}")
+
+# Send button presses and watch what happens
+import numpy as np
+buttons = np.zeros(9, dtype=np.int8)
+buttons[BTN_B] = 1                      # Press B (sword)
+emu.step(buttons)
+print(f"Sword state: {emu.ram[SWORD_STATE]}")
+
+# Step multiple frames, watch a value evolve
+for i in range(20):
+    emu.step()
+    print(f"Frame {i}: beam={emu.ram[BEAM_STATE]}, sword={emu.ram[SWORD_STATE]}")
+
+emu.close()
+```
+
+Use this to prototype and discover behavior, then codify findings as pytest tests.
+
+### Savestate Naming Convention
+
+Savestates follow the pattern `{level}_{room_hex}{suffix}.state`:
+- **level**: 0 = overworld, 1 = dungeon 1, etc.
+- **room_hex**: hex room ID (e.g., `44`, `72`)
+- **suffix**: Link's starting position in the room
+  - `n` = north side (entered from the south, can move north)
+  - `s` = south side
+  - `e` = east side
+  - `w` = west side
+  - `c` = center of room
+  - `t` = game start (`start.state`)
+
+Example: `1_44e.state` = dungeon 1, room $44, Link on the east side (entered from east).
+This tells you which direction Link can move — `e` means Link is on the east edge and
+would typically move west toward the room interior.
+
 ## Environment Notes
 
 - Python 3.12 venv at `.venv` (stable-retro requires <3.13, system Python is 3.14)
@@ -43,6 +93,14 @@ test by observing the NES's RAM reaction to inputs:
 - Read API is `data.lookup_value(name)`, write is `data.set_value(name, value)`
 - `ZeldaGame` has an `__active` class variable — only the most recent instance can read RAM.
   Tests using `ZeldaFixture.game_state()` must not hold stale references.
+
+## End-of-Area Checklist
+
+After completing each area, update these docs with anything learned:
+- New findings or corrections → add to the relevant area's notes in this file
+- New environment quirks or API gotchas → add to Environment Notes above
+- Test plan changes → update `test-plan.md`
+- Architecture insights → update `asm-review.md` if the area description was wrong/incomplete
 
 ---
 
