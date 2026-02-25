@@ -15,9 +15,8 @@ from .zelda_game import ZeldaGame
 # movement related constants
 WS_ADJUSTMENT_FRAMES = 4
 MAX_MOVEMENT_FRAMES = 16
-ATTACK_COOLDOWN = 15
-ITEM_COOLDOWN = 10
 CAVE_COOLDOWN = 60
+MAX_ANIMATION_WAIT = 60
 
 MODE_DUNGEON_TRANSITION = 2
 MODE_REVEAL = 3
@@ -160,8 +159,15 @@ class ZeldaCooldownHandler:
         terminated, truncated, info = self._step_with_frame_capture(action, frame_capture)
         loc = self._get_location(info)
 
-        cooldown = ATTACK_COOLDOWN if action.kind in (ActionKind.SWORD, ActionKind.BEAMS) else ITEM_COOLDOWN
-        terminated, truncated, info = self._act_for(None, cooldown, frame_capture)
+        # Poll until Link's animation is complete instead of using hardcoded cooldowns.
+        # The NES won't accept new inputs until link_status == 0 (animation done) and
+        # sword_animation == 0 (sword melee slot idle).  This covers both sword (A) and
+        # item (B) actions — items don't touch the sword slot, so it's already 0.
+        for _ in range(MAX_ANIMATION_WAIT):
+            terminated, truncated, info = self._step_with_frame_capture(self.none_action, frame_capture)
+            if info['link_status'] == 0 and info['sword_animation'] == 0:
+                break
+
         return terminated, truncated, info, loc
 
     def _act_movement(self, action : ActionTaken, start_pos, frame_capture):
