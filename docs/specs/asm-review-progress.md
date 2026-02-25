@@ -27,8 +27,9 @@ branch has uncommitted changes, commit or stash them first.
 We can't see the game screen, but we can read every RAM byte. The ROM is the oracle — we
 test by observing the NES's RAM reaction to inputs:
 
-- **Boundary tests**: Set link_x/link_y, press A, check if `ObjState[SLOT_SWORD]` changed
-  from 0. Changed → sword fired. Unchanged → screen-locked. Binary RAM check, no screen needed.
+- **Boundary tests**: Walk Link toward each edge using controller inputs, check if `ObjState[SLOT_SWORD]`
+  changes after pressing A. Changed → sword fired. Unchanged → screen-locked. Binary RAM check.
+  **Do NOT modify RAM to set Link's position** — use inputs to reach positions naturally.
 - **State machine tests**: Fire a weapon, read `ObjState[slot]` every frame via `RAMWatcher`.
   The trace gives the exact lifecycle and timing.
 - **has_beams test**: Set health RAM to the edge case, press A, check if `ObjState[SLOT_BEAM]`
@@ -228,15 +229,45 @@ they affect the actual game state model used for training.
 6. **`debug_0_67_1772056964.state`** — Critical savestate for beam testing: overworld room $67,
    Link centered, full health, sword equipped. Created via F1 hotkey in zui debugger.
 
-## Area 3: Sword Screen Lock Boundaries (HIGH)
+## Area 3: Sword Screen Lock Boundaries (HIGH) ✅
 
-- [ ] Trace MaskInputInBorder in Z_05.asm
-- [ ] Identify which BorderBounds set controls A-button masking
-- [ ] Compare assembly inner bounds ($BE,$54,$D1,$1F) vs Python OW/UW values
-- [ ] Test actual NES behavior at boundary coordinates
-- [ ] Fix is_sword_screen_locked if wrong
-- [ ] Fix get_sword_directions_allowed to match
-- [ ] Tests: test_boundaries.py (T4.1-T4.5)
+- [x] Trace MaskInputInBorder in Z_05.asm
+- [x] Identify which BorderBounds set controls A-button masking
+- [x] Compare assembly outer bounds vs Python OW/UW values
+- [x] Test actual NES behavior at boundary coordinates
+- [x] Fix is_sword_screen_locked UW bounds (were wrong)
+- [x] Fix get_sword_directions_allowed OW and UW bounds (were wrong)
+- [x] Tests: test_boundaries.py (9 tests: 5 empirical NES + 4 Python model)
+
+### Area 3 Findings
+
+1. **Assembly structure**: `BorderBounds` (Z_05.asm:2728) has 3 sets of 4 bytes (down, up, right,
+   left): OW outer ($D6,$45,$E9,$07), UW outer ($C6,$55,$D9,$17), Inner ($BE,$54,$D1,$1F).
+   `Link_FilterInput` calls `MaskInputInBorder` twice: first with inner bounds + mask $80
+   (keeps A button, blocks everything else), then with outer bounds + mask $00 (blocks all).
+
+2. **Inner bounds do NOT block sword** — The inner check uses AND $80 which KEEPS bit 7 (A button)
+   and clears everything else. Only the OUTER bounds (mask $00) clear the A button and block sword.
+
+3. **BUG FIXED: UW boundaries were wrong in Python**:
+   - `is_sword_screen_locked`: left was `x <= 0x10` (should be `x < 0x17`), up was `y <= 0x53`
+     (should be `y < 0x55`), down was `y >= 0xC5` (should be `y >= 0xC6`). Right was correct.
+   - `get_sword_directions_allowed`: Same UW value errors. OW values were also off by 1 on each
+     side (e.g., `7 < x < 0xe8` should be `0x06 < x < 0xe9`).
+   - **Impact**: At X=$11-$16 in UW, Python said sword available but NES blocked it. At Y=$C5
+     in UW, Python said locked but NES allowed it. Wrong action masking during training.
+
+4. **Sword lock is direction-dependent in NES** — The assembly only checks boundaries on the axis
+   of Link's facing direction. At X=$D9 facing North, sword fires (only E/W are blocked). Python's
+   `is_sword_screen_locked` is conservative (blocks all directions at any boundary). This is a
+   known approximation, not a bug — documented in docstring.
+
+5. **OW bounds are correct** — Python OW outer bounds exactly match assembly: left=$07, right=$E9,
+   up=$45, down=$D6. Verified empirically for east boundary.
+
+6. **Corrected boundary values**:
+   - OW outer: left=$07, right=$E9, up=$45, down=$D6 (unchanged)
+   - UW outer: left=$17, right=$D9, up=$55, down=$C6 (fixed left/up/down)
 
 ## Area 4: Enemy Health Encoding (Medium)
 

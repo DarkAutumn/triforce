@@ -212,32 +212,37 @@ class Link(ZeldaObject):
     @property
     def is_sword_screen_locked(self) -> bool:
         """Returns True when Link is at the edge of the screen.  During this time he cannot use his weapons or
-        be harmed."""
+        be harmed.  Note: The NES check is direction-dependent (only the facing axis is checked), but this
+        property conservatively returns True if ANY axis boundary is crossed."""
         x, y = self.position
         if self.game.level == 0:
-            return x < 0x7 or x > 0xe8 or y < 0x45 or y > 0xd5
+            return x < 0x07 or x > 0xe8 or y < 0x45 or y > 0xd5
 
-        return x <= 0x10 or x >= 0xd9 or y <= 0x53 or y >= 0xc5
+        # UW outer bounds from BorderBounds table: left=$17, right=$D9, up=$55, down=$C6
+        return x < 0x17 or x >= 0xd9 or y < 0x55 or y >= 0xc6
 
     def get_sword_directions_allowed(self):
-        """Returns the directions that link can attack in."""
+        """Returns the directions that link can attack in.  E/W require X to be within horizontal outer bounds,
+        N/S require Y to be within vertical outer bounds."""
         x, y = self.position
         directions = []
 
         if self.game.level == 0:
-            if 7 < x < 0xe8:
+            # OW outer bounds: left=$07, right=$E9, up=$45, down=$D6
+            if 0x06 < x < 0xe9:
                 directions.append(Direction.E)
                 directions.append(Direction.W)
 
-            if 0x45 < y < 0xd5:
+            if 0x44 < y < 0xd6:
                 directions.append(Direction.S)
                 directions.append(Direction.N)
         else:
-            if 0x10 < x < 0xd9:
+            # UW outer bounds: left=$17, right=$D9, up=$55, down=$C6
+            if 0x16 < x < 0xd9:
                 directions.append(Direction.E)
                 directions.append(Direction.W)
 
-            if 0x53 < y < 0xc5:
+            if 0x54 < y < 0xc6:
                 directions.append(Direction.S)
                 directions.append(Direction.N)
 
