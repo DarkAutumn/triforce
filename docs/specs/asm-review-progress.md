@@ -127,6 +127,44 @@ After completing each area, update these docs with anything learned:
 - Test plan changes → update `test-plan.md`
 - Architecture insights → update `asm-review.md` if the area description was wrong/incomplete
 
+**MANDATORY: Every bug found must either be fixed in the same commit or tracked as a todo
+below with a clear description, the affected file(s), and line numbers. No exceptions.
+"Non-blocking" is not an excuse to skip tracking. If it's deferred, it must have a todo.**
+
+## Bug Fix Backlog
+
+Bugs found during review that need production code fixes. These are **not** test-only issues —
+they affect the actual game state model used for training.
+
+### BUG-1: `has_beams` health check disagrees with NES (Area 2)
+- **File**: `triforce/link.py` lines 195-205
+- **Problem**: `is_health_full` uses float comparison (`health == max_health`). NES assembly
+  checks `filled == containers_minus_one AND partial >= 0x80`. When `filled == containers`
+  with `partial = 0`, Python says full health → has_beams=True, but NES says no beams.
+- **Fix**: Replace `is_health_full` check in `has_beams` with exact integer check on
+  `hearts_and_containers` nibbles and `partial_hearts` byte.
+- **Impact**: Training scenarios that override health via `per_reset`/`per_frame` could
+  trigger this. The model may incorrectly predict beam availability.
+- **Status**: Todo `fix-has-beams-health`
+
+### BUG-2: 11-frame beam hack fires mid-spread (Area 2)
+- **File**: `triforce/frame_skip_wrapper.py` lines 110-115
+- **Problem**: Resets `beam_animation` in info dict after 11 consecutive frames at state 17.
+  But the assembly's spread phase naturally lasts 22 frames. Hack triggers every single time,
+  causing Python to report beam as inactive 11 frames early.
+- **Root cause**: Hack was added because beams get "stuck" at 17. Likely caused by look-ahead
+  simulation (Area 8) corrupting beam state.
+- **Fix**: Investigate look-ahead first (Area 8 dependency), then either remove the hack
+  (if root cause is fixed) or change threshold to >22.
+- **Status**: Todo `fix-11-frame-hack` (blocked on `look-ahead-sim`)
+
+### BUG-3: data.json obj_health_b/c off by 1 (Area 1)
+- **File**: `triforce/zelda_game_data.txt` or data.json
+- **Problem**: `obj_health_b` ($491) and `obj_health_c` ($492) are off by 1 from ObjHP table.
+  Game code uses table reads (correct), but individual address mappings are wrong.
+- **Impact**: Low — nothing currently reads these individual entries.
+- **Status**: Todo `fix-obj-health-bc-offset`
+
 ---
 
 ## Test Infrastructure
@@ -147,7 +185,7 @@ After completing each area, update these docs with anything learned:
 - [x] Verify sound_pulse_1/$605 vs Tune0
 - [x] Verify weapon slot ObjState addresses ($B9-$BE)
 - [x] Tests: test_ram_mapping.py (41 tests)
-- **Finding**: data.json `obj_health_b` ($491) and `obj_health_c` ($492) are off by 1 from ObjHP table. Game code uses table read (correct), not individual addresses. Non-blocking.
+- **Finding**: data.json `obj_health_b` ($491) and `obj_health_c` ($492) are off by 1 from ObjHP table. Game code uses table read (correct), not individual addresses. Tracked as BUG-3 / todo `fix-obj-health-bc-offset`.
 
 ## Area 2: Beam/Sword Shot State Machine (HIGH) ✅
 
