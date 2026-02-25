@@ -193,6 +193,8 @@ class RewardDebugger:
 
     def _save_emulator_state(self, env, step):
         """Save emulator state to a .state file (F1 hotkey)."""
+        import gzip
+
         # Unwrap to the retro environment
         raw_env = env.env
         while hasattr(raw_env, 'env'):
@@ -204,7 +206,7 @@ class RewardDebugger:
         save_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                 'triforce', 'custom_integrations', 'Zelda-NES')
         filepath = os.path.join(save_dir, filename)
-        with open(filepath, 'wb') as f:
+        with gzip.open(filepath, 'wb') as f:
             f.write(state_bytes)
         print(f"Saved state: {filename}")
 
