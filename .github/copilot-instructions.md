@@ -18,18 +18,24 @@ The game ROM is not included and must be placed at `triforce/custom_integrations
 ```bash
 source .venv/bin/activate
 
-# Run all tests (PPO tests take ~2 min each)
-pytest tests/ -v
+# Run tests (standard — excludes slow PPO training tests)
+pytest tests/ -v --ignore=tests/ppo_test.py
 
 # Run a single test
 pytest tests/reward_test.py::test_wall_collision
 
-# Run tests excluding slow PPO training tests
-pytest tests/ -v --ignore=tests/ppo_test.py
+# Run ALL tests including slow PPO tests (~2 min each)
+pytest tests/ -v
 
 # Lint (required for PRs)
 pylint triforce/ evaluate.py run.py train.py
 ```
+
+## Git Workflow
+
+- **Never commit directly to main.** Always create a feature branch from `origin/main`.
+- Branch, commit, push, open PR. Merge via PR only.
+- Before starting work: `git checkout main && git pull origin main && git checkout -b <branch-name>`
 
 ## Architecture
 

@@ -37,7 +37,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        pytest
+        pytest --ignore=tests/ppo_test.py
 
     - name: Lint with pylint
       run: |

@@ -4,16 +4,18 @@
 
 ## Workflow
 
-1. `git checkout main && git pull`
+1. `git checkout main && git pull origin main` — ensure local main matches origin
 2. Run `pytest tests/ -v --ignore=tests/ppo_test.py` — record baseline. All existing tests must pass. Skip `ppo_test.py` (slow, unrelated).
-3. `git checkout -b asm-review` (branch only if making changes)
+3. `git checkout -b <descriptive-branch-name>` — **always** branch from main, never commit to main
 4. Work through areas below. For each area:
    - Investigate assembly vs Python
    - Add/update tests as appropriate
    - Fix bugs found
-   - Run `pytest` — no regressions, no new failures
+   - Run `pytest tests/ -v --ignore=tests/ppo_test.py` — no regressions, no new failures
    - Run `pylint triforce/ evaluate.py run.py train.py` — clean
 5. Commit after each area or logical group of changes.
+6. Push branch, open PR to merge to main. **Never push directly to main.**
+7. After merge, update specs/docs with anything learned (see End-of-Area Checklist below).
 
 **Not done until**: `pytest` passes fully (baseline + new tests) and `pylint` is clean.
 
