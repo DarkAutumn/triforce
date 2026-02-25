@@ -54,16 +54,17 @@ test by observing the NES's RAM reaction to inputs:
 - [x] `conftest.py` — shared pytest fixtures
 - [x] Baseline existing tests still pass (22/22)
 
-## Area 1: Memory Address Mapping (Medium)
+## Area 1: Memory Address Mapping (Medium) ✅
 
-- [ ] Cross-ref zelda_game_data.txt [memory] vs Variables.inc
-- [ ] Cross-ref zelda_game_data.txt [tables] vs Variables.inc
-- [ ] Verify room_kills/$34F vs ObjType overlap
-- [ ] Verify item_timer/$3A8 vs ObjPosFrac union
-- [ ] Verify triforce_of_power/$672 vs LastBossDefeated semantics
-- [ ] Verify sound_pulse_1/$605 vs Tune0
-- [ ] Verify weapon slot ObjState addresses ($B9-$BE)
-- [ ] Tests: test_ram_mapping.py
+- [x] Cross-ref zelda_game_data.txt [memory] vs Variables.inc
+- [x] Cross-ref zelda_game_data.txt [tables] vs Variables.inc
+- [x] Verify room_kills/$34F vs ObjType overlap
+- [x] Verify item_timer/$3A8 vs ObjPosFrac union
+- [x] Verify triforce_of_power/$672 vs LastBossDefeated semantics
+- [x] Verify sound_pulse_1/$605 vs Tune0
+- [x] Verify weapon slot ObjState addresses ($B9-$BE)
+- [x] Tests: test_ram_mapping.py (41 tests)
+- **Finding**: data.json `obj_health_b` ($491) and `obj_health_c` ($492) are off by 1 from ObjHP table. Game code uses table read (correct), not individual addresses. Non-blocking.
 
 ## Area 2: Beam/Sword Shot State Machine (HIGH)
 
@@ -167,7 +168,7 @@ test by observing the NES's RAM reaction to inputs:
 
 | Area | Risk | Status |
 |------|------|--------|
-| 1. Address mapping | Medium | ⬜ |
+| 1. Address mapping | Medium | ✅ |
 | 2. Beam state machine | **HIGH** | ⬜ |
 | 3. Screen lock bounds | **HIGH** | ⬜ |
 | 4. Enemy health encoding | Medium | ⬜ |
