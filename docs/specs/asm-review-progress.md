@@ -103,6 +103,27 @@ would typically move west toward the room interior.
   gzipped states.
 - Most savestates start at room edges where Link is screen-locked and cannot fire weapons.
   For weapon testing, use `debug_` prefixed states or move Link inward first.
+- **Tests must never pop up UI.** Always pass `render_mode=None` (or omit, since None is the
+  default) when calling `retro.make()` in tests. CI runs headless; any attempt to open a
+  window will fail.
+
+## RAM Editing Rules
+
+**Safe to edit via `data.set_value()`:**
+- Inventory values: rupees, bombs, arrows, keys, subweapon availability
+- Health values: hearts, partial hearts, containers (for beam/health tests)
+- Equipment flags: sword type, items, rings
+- RNG seeds
+
+**NOT safe to edit:**
+- **Link position** (`link_x`, `link_y`) — the game engine's internal state machine doesn't
+  update properly. Use controller inputs (BTN_UP/DOWN/LEFT/RIGHT) to move Link naturally.
+- **Link/enemy/object states** (ObjState, ObjMetastate, etc.) — the game may not re-read
+  these at the frame boundary where tests observe them. Results are unreliable.
+- **General rule:** If the NES code reads a value once per frame at a specific point in its
+  update loop, writing it between frames may or may not take effect depending on timing.
+  Inventory/flags are safe because they're read on demand. Position/state are unsafe because
+  the engine has already committed to a state for this frame.
 
 ## Requesting Developer Help
 
@@ -137,16 +158,18 @@ below with a clear description, the affected file(s), and line numbers. No excep
 Bugs found during review that need production code fixes. These are **not** test-only issues —
 they affect the actual game state model used for training.
 
-### BUG-1: `has_beams` health check disagrees with NES (Area 2)
-- **File**: `triforce/link.py` lines 195-205
+### BUG-1: `has_beams` health check disagrees with NES (Area 2) — ✅ FIXED
+- **File**: `triforce/link.py`
 - **Problem**: `is_health_full` uses float comparison (`health == max_health`). NES assembly
   checks `filled == containers_minus_one AND partial >= 0x80`. When `filled == containers`
   with `partial = 0`, Python says full health → has_beams=True, but NES says no beams.
-- **Fix**: Replace `is_health_full` check in `has_beams` with exact integer check on
-  `hearts_and_containers` nibbles and `partial_hearts` byte.
-- **Impact**: Training scenarios that override health via `per_reset`/`per_frame` could
-  trigger this. The model may incorrectly predict beam availability.
-- **Status**: Todo `fix-has-beams-health`
+- **Fix applied**:
+  1. Added `_is_health_full_for_beams` property — exact NES integer check on nibbles + partial byte.
+  2. Changed `has_beams` to use `_is_health_full_for_beams` instead of `is_health_full`.
+  3. Fixed `health.setter` to produce NES-standard encoding for full health: `filled = c-1, partial = $FF`
+     (was incorrectly producing `filled = containers, partial = 0`).
+- **Verified**: 7 edge cases tested empirically on NES + Python, all match.
+- **Tests**: `tests/test_health.py` (26 tests)
 
 ### BUG-2: 11-frame beam hack fires mid-spread (Area 2)
 - **File**: `triforce/frame_skip_wrapper.py` lines 110-115
@@ -294,13 +317,22 @@ they affect the actual game state model used for training.
 - [ ] Verify $48 boundary between enemies and projectiles
 - [ ] Tests: test_object_model.py (T2.3-T2.4)
 
-## Area 7: Link Health System (Medium)
+## Area 7: Link Health System ✅
 
-- [ ] Verify hearts_and_containers nibble encoding
-- [ ] Verify partial_hearts thresholds (0, 1-$7F, $80-$FF)
-- [ ] Test 16-heart special case
-- [ ] Verify health setter round-trip for all values
-- [ ] Tests: test_health.py (T1.1-T1.2, T1.6)
+- [x] Verify hearts_and_containers nibble encoding
+- [x] Verify partial_hearts thresholds (0, 1-$7F, $80-$FF)
+- [x] Test 16-heart special case
+- [x] Verify health setter round-trip for all values
+- [x] **Fix BUG-1**: `has_beams` health check uses assembly's exact integer check
+- [x] **Fix health setter**: produces NES-standard encoding (`filled=c-1, partial=$FF`) for full health
+- [x] Verify `is_health_full` agrees with NES for all edge cases
+- [x] Tests: test_health.py (26 tests)
+
+**Findings**:
+- NES beam check (Z_07.asm:4632-4648): `containers_minus_one == hearts_filled AND partial >= $80`
+- Python's `is_health_full` float comparison was wrong for beams; added `_is_health_full_for_beams`
+- Health setter was also producing incorrect encoding for full health (filled=containers instead of c-1)
+- 16-heart case (0xFF) works correctly as a natural consequence of the general logic
 
 ## Area 8: Look-Ahead Simulation (HIGH)
 
@@ -331,11 +363,21 @@ they affect the actual game state model used for training.
 - [ ] Resolve Octorok/OctorokFast duplicate (both 0x07)
 - [ ] Tests: test_object_model.py (T2.10)
 
-## Area 12: Frame Skip Cooldowns (Medium)
+## Area 12: Frame Skip & Animation Tracking (HIGH)
 
-- [ ] Measure sword cooldown vs ATTACK_COOLDOWN=15
+The frame skip code (`frame_skip_wrapper.py`) uses hardcoded cooldowns (`ATTACK_COOLDOWN=15`,
+`ITEM_COOLDOWN=10`) instead of checking animation states. This is fragile — the correct
+approach is to check when Link's sword/item animation has actually finished and he's
+controllable again. This area verifies the cooldown values AND investigates whether we should
+replace them with animation-state-based checks.
+
+- [ ] Measure sword cooldown vs ATTACK_COOLDOWN=15 (trace ObjState[SLOT_SWORD] lifecycle)
 - [ ] Measure item cooldowns vs ITEM_COOLDOWN=10
 - [ ] Investigate south/west movement asymmetry (WS_ADJUSTMENT_FRAMES=4)
+- [ ] Verify sword animation state tracking is correct (states 1→5→0)
+- [ ] Determine if ObjState[SLOT_SWORD]==0 is the right "done" signal for sword cooldown
+- [ ] Evaluate replacing hardcoded cooldowns with animation-state polling
+- [ ] **Fix BUG-2**: 11-frame beam hack fires mid-spread (depends on Area 8 look-ahead)
 - [ ] Tests: test_frame_skip.py (T6.1-T6.5)
 
 ## Area 13: Sound Bitmask Register (Low)
@@ -352,16 +394,16 @@ they affect the actual game state model used for training.
 |------|------|--------|
 | 1. Address mapping | Medium | ✅ |
 | 2. Beam state machine | **HIGH** | ✅ |
-| 3. Screen lock bounds | **HIGH** | ⬜ |
+| 3. Screen lock bounds | **HIGH** | ✅ |
 | 4. Enemy health encoding | Medium | ⬜ |
 | 5. Enemy dying/active | Medium | ⬜ |
 | 6. Object ID classification | Medium | ⬜ |
-| 7. Health system | Medium | ⬜ |
+| 7. Health system | Medium | ✅ |
 | 8. Look-ahead simulation | **HIGH** | ⬜ |
 | 9. Direction encoding | Low | ⬜ |
 | 10. Tile layout | Low | ⬜ |
 | 11. Enemy kind IDs | Medium | ⬜ |
-| 12. Frame skip cooldowns | Medium | ⬜ |
+| 12. Frame skip & animation | **HIGH** | ⬜ |
 | 13. Sound bitmasks | Low | ⬜ |
 
 Legend: ⬜ Not started · 🔄 In progress · ✅ Done · ❌ Blocked
