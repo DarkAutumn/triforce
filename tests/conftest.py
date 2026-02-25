@@ -32,7 +32,8 @@ class ZeldaFixture:
         self.env = retro.make(
             game='Zelda-NES',
             state=savestate,
-            inttype=retro.data.Integrations.CUSTOM_ONLY
+            inttype=retro.data.Integrations.CUSTOM_ONLY,
+            render_mode=None
         )
         self._info = None
         self._frame_count = 0

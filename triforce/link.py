@@ -99,26 +99,21 @@ class Link(ZeldaObject):
 
         hearts_filled = int(value)
         remainder = value - hearts_filled
-        # Decide partial hearts
-        if value >= 15.99:
-            # 16 hearts is a special case, we have 15 hearts fully filled and partial is 0xFF
-            partial_val = 0xFF
-            hearts_filled = 15
 
-        elif hearts_filled >= max_h:
-            # means we're at max, so partial is 0
-            partial_val = 0
-            hearts_filled = max_h  # fully fill
+        # Round up near-integer values (e.g. 2.99 → 3)
+        if remainder >= 0.99:
+            hearts_filled += 1
+            remainder = 0.0
+
+        if hearts_filled >= max_h:
+            # Full health: NES encodes as filled == containers_minus_one with partial $FF.
+            # This is required for beams to fire (Z_07.asm:4632-4648).
+            hearts_filled = max_h - 1
+            partial_val = 0xFF
+        elif remainder >= 0.49:
+            partial_val = 0x7F   # half heart
         else:
-            if remainder >= 0.99:
-                # 'Round up' the hearts_filled
-                hearts_filled += 1
-                # If that doesn't exceed max, it's now effectively "3 hearts fully" so partial becomes 0:
-                partial_val = 0
-            elif remainder >= 0.49:
-                partial_val = 0x7F   # half heart
-            else:
-                partial_val = 0      # no partial
+            partial_val = 0      # no partial
 
         # store in hearts_and_containers
         hearts_and_containers = self.game.hearts_and_containers
@@ -197,9 +192,21 @@ class Link(ZeldaObject):
         return abs(self.health - self.max_health) < 1e-9
 
     @property
+    def _is_health_full_for_beams(self) -> bool:
+        """Check health using the exact NES assembly logic for beams (Z_07.asm:4632-4648).
+
+        The NES checks: containers_minus_one == hearts_filled AND partial >= $80.
+        This differs from is_health_full when hearts_filled == containers (e.g. RAM
+        override sets filled to 3 with 3 containers and partial=0)."""
+        hc = self.game.hearts_and_containers
+        containers_minus_one = (hc >> 4) & 0x0F
+        hearts_filled = hc & 0x0F
+        return containers_minus_one == hearts_filled and self.game.partial_hearts >= 0x80
+
+    @property
     def has_beams(self) -> bool:
         """Returns True if link is able to fire sword beams in general."""
-        if self.sword == SwordKind.NONE or not self.is_health_full or self.is_sword_screen_locked:
+        if self.sword == SwordKind.NONE or not self._is_health_full_for_beams or self.is_sword_screen_locked:
             return False
 
         return self.get_animation_state(ZeldaAnimationKind.BEAMS) == AnimationState.INACTIVE
