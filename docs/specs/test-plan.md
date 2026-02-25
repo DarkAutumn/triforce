@@ -49,13 +49,14 @@ A test utility class that wraps `retro.make()` directly, **without** the FrameSk
 StateChangeWrapper. This gives tests:
 
 - **Single-frame stepping**: `fixture.step()` advances exactly one NES frame
-- **Raw RAM access**: `fixture.ram[address]` reads any byte; `fixture.ram[address] = value` writes
+- **Raw RAM access**: `fixture.ram[address]` reads any byte (10240-byte array, not just 2KB)
 - **Named variable access**: `fixture.get(name)` / `fixture.set(name, value)` via data.json
-- **Object table reading**: `fixture.read_table(name)` returns the full table array
+  (note: read API is `data.lookup_value`, write is `data.set_value`)
+- **Object table reading**: `fixture.object_tables()` returns an `ObjectTables` from current RAM
 - **Game state construction**: `fixture.game_state()` builds a `ZeldaGame` from current RAM
+  (caution: `ZeldaGame` uses a class-level `__active` guard — only the latest instance can read RAM)
 - **Savestate management**: `fixture.save()` / `fixture.restore()` for mid-test checkpoints
-- **Button press helpers**: `fixture.press(buttons)` to build the 9-bit action array
-- **NES address constants**: Constants for key addresses from Variables.inc for direct RAM checks
+- **Button press helpers**: `fixture.step(buttons=[BTN_B])` to press buttons for one frame
 
 ```python
 class ZeldaFixture:

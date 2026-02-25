@@ -17,15 +17,42 @@
 
 **Not done until**: `pytest` passes fully (baseline + new tests) and `pylint` is clean.
 
+**IMPORTANT**: Do not start work on a new area unless all prior changes are committed. If the
+branch has uncommitted changes, commit or stash them first.
+
+## Testing Approach
+
+We can't see the game screen, but we can read every RAM byte. The ROM is the oracle — we
+test by observing the NES's RAM reaction to inputs:
+
+- **Boundary tests**: Set link_x/link_y, press B, check if `ObjState[SLOT_SWORD]` changed
+  from 0. Changed → sword fired. Unchanged → screen-locked. Binary RAM check, no screen needed.
+- **State machine tests**: Fire a weapon, read `ObjState[slot]` every frame via `RAMWatcher`.
+  The trace gives the exact lifecycle and timing.
+- **has_beams test**: Set health RAM to the edge case, press B, check if `ObjState[SLOT_BEAM]`
+  changes. The NES tells us whether it actually fires.
+- **Object model tests**: Load a savestate with known enemies, compare raw RAM bytes against
+  what the Python classes report. Discrepancy = bug.
+- **Look-ahead tests**: Snapshot all 10KB of RAM, run the look-ahead code, snapshot again.
+  Byte-for-byte diff reveals any state corruption.
+
+## Environment Notes
+
+- Python 3.12 venv at `.venv` (stable-retro requires <3.13, system Python is 3.14)
+- RAM is 10240 bytes (not 2KB — retro maps a larger NES address space)
+- Read API is `data.lookup_value(name)`, write is `data.set_value(name, value)`
+- `ZeldaGame` has an `__active` class variable — only the most recent instance can read RAM.
+  Tests using `ZeldaFixture.game_state()` must not hold stale references.
+
 ---
 
 ## Test Infrastructure
 
-- [ ] `ZeldaFixture` — raw emulator wrapper, single-frame step, direct RAM r/w
-- [ ] `AssemblyAddresses` — constants from Variables.inc
-- [ ] `RAMWatcher` — track RAM changes across frames
-- [ ] `conftest.py` — shared pytest fixtures
-- [ ] Baseline existing tests still pass
+- [x] `ZeldaFixture` — raw emulator wrapper, single-frame step, direct RAM r/w
+- [x] `AssemblyAddresses` — constants from Variables.inc
+- [x] `RAMWatcher` — track RAM changes across frames
+- [x] `conftest.py` — shared pytest fixtures
+- [x] Baseline existing tests still pass (22/22)
 
 ## Area 1: Memory Address Mapping (Medium)
 
