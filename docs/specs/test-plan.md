@@ -177,7 +177,7 @@ def dungeon_emu(request):
 
 ```python
 # NES button mapping for retro's MultiBinary(9) action space
-BTN_B      = 0  # B button (sword)
+BTN_B      = 0  # B button (use selected item)
 BTN_Y      = 1  # (unused on NES)
 BTN_SELECT = 2
 BTN_START  = 3
@@ -185,7 +185,7 @@ BTN_UP     = 4
 BTN_DOWN   = 5
 BTN_LEFT   = 6
 BTN_RIGHT  = 7
-BTN_A      = 8  # A button (use item)
+BTN_A      = 8  # A button (sword)
 ```
 
 ---
@@ -343,41 +343,36 @@ For max_health in [1, 3, 8, 16]:
     - Read raw RAM and verify the bytes are consistent
 ```
 
-#### T1.3: has_beams — assembly-accurate health check
+#### T1.3: has_beams — assembly-accurate health check ✅ VERIFIED
 
-This is the critical test for the `has_beams` discrepancy identified in asm-review.md Area 2.
+**All cases confirmed via NES testing in Area 2.** The assembly check is:
+`filled == containers_minus_one AND partial >= 0x80`.
 
 ```
-# Case 1: Normal full health (both agree)
-Set hearts_and_containers = 0x23 (3 containers, filled=3... wait, that's wrong)
-Actually: containers_minus_one=2 means 3 containers, filled=3 means 3 full hearts
-Hmm, but assembly checks filled == containers_minus_one.
-
-Let's be precise:
-  hearts_and_containers = 0x23 → containers_minus_one=2, filled=3
-  Assembly check: filled(3) == containers_minus_one(2)? NO → no beams
-  Python check: max_health=3, health=3.0+partial → depends on partial
-
-Actually the correct full health state for 3 containers is:
+# Case 1: Normal full health (both agree) ✅
   hearts_and_containers = 0x22 → containers_minus_one=2, filled=2
   partial_hearts = 0xFF
-  Assembly: filled(2) == containers_minus_one(2) AND partial(0xFF) >= 0x80 → YES beams
-  Python: health = 2 + 1.0 = 3.0, max_health = 3 → full → YES beams
+  NES: beams fire. Python: has_beams=True. AGREE.
 
-# Case 2: Edge case (Python says full, assembly says no)
+# Case 2: Edge case — filled==containers (CONFIRMED BUG) ✅
   hearts_and_containers = 0x23 → containers_minus_one=2, filled=3
   partial_hearts = 0x00
-  Assembly: filled(3) == containers_minus_one(2)? NO → no beams
-  Python: health = min(3 + 0, 3) = 3.0, max_health = 3 → full → YES beams (BUG!)
+  NES: no beams. Python: has_beams=True (health=3.0, max=3 → is_health_full=True). BUG.
+  Also tested with partial=0x80: still no beams in NES.
 
-# Case 3: Half heart short
-  hearts_and_containers = 0x22 → containers_minus_one=2, filled=2
-  partial_hearts = 0x7F
-  Assembly: filled(2) == containers_minus_one(2) AND partial(0x7F) >= 0x80? NO → no beams
-  Python: health = 2 + 0.5 = 2.5, max_health = 3 → not full → no beams (agree)
+# Case 3: Half heart short (both agree) ✅
+  hearts_and_containers = 0x22, partial_hearts = 0x7F
+  NES: no beams. Python: has_beams=False (health=2.5). AGREE.
 
-Test: Set up each case, fire sword, verify whether beam actually fires in the emulator.
-Compare against link.has_beams.
+# Case 4: Below containers (both agree) ✅
+  hearts_and_containers = 0x21, partial_hearts = 0xFF
+  NES: no beams. Python: has_beams=False. AGREE.
+
+# Case 5: Threshold exact (both agree) ✅
+  hearts_and_containers = 0x22, partial_hearts = 0x80
+  NES: beams fire. Python: has_beams=True. AGREE.
+
+Tests implemented in tests/test_weapons.py::TestBeamHealthCheck (6 tests).
 ```
 
 #### T1.4: has_beams — screen lock interaction
@@ -548,29 +543,25 @@ after firing each weapon. Verify the state machine matches the assembly document
 
 ### Specific Tests
 
-#### T3.1: Sword shot lifecycle — full trace
+#### T3.1: Sword shot lifecycle — full trace ✅ VERIFIED
 
 ```
-Load dungeon savestate with enemies in beam range:
-  - Set full health, wood sword
-  - Set RNG to fixed seed
-  - Fire sword (press B button facing enemy direction)
-  - Watch ram[OBJ_STATE + SLOT_BEAM] (= ram[0xBA]) every frame
-  - Expected trace:
-    Frame 0: 0x00 (inactive)
-    Frame N: 0x10 (flying) — beam appears
-    Frame M: 0x11 (spreading) — beam hit something or reached max range
-    Frame M+~10: 0x00 (inactive) — spread finished
-  - Record exact frame counts for flying and spreading durations
+Tested with debug_0_67_1772056964.state (overworld room $67, full health, sword):
+  - Press A button (retro index 8) to fire sword
+  - Beam lifecycle: 0x00 → 0x10 (active, ~25 frames until hitting wall) → 0x11 (spread, exactly 22 frames) → 0x00
+  - Sword melee lifecycle: 0x01 (4f) → 0x02 (8f) → 0x03 (1f) → 0x04 (1f) → 0x05 (1f) → 0x00
+  - MakeSwordShot fires at sword state 3
+  - ObjDir[BEAM] during spread: $FE→$E8 (decrement per frame, 22 frames)
+  Tests: test_weapons.py::TestBeamLifecycle, TestSwordMelee (8 tests)
 ```
 
-#### T3.2: Sword shot spread duration
+#### T3.2: Sword shot spread duration ✅ VERIFIED
 
 ```
-Same setup as T3.1:
-  - Count exact frames where ObjState[$0E] == 0x11
-  - Verify it matches assembly prediction (~10 frames from ObjDir countdown $FE→$F4)
-  - This validates the 11-frame hack in frame_skip_wrapper.py
+Spread phase (state 0x11) lasts exactly 22 frames:
+  - ObjDir starts at $FE, decrements each frame, exits at $E8
+  - The 11-frame hack in frame_skip_wrapper.py triggers mid-spread (incorrect)
+  Tests: test_weapons.py::TestBeamLifecycle::test_beam_spread_duration_22_frames
 ```
 
 #### T3.3: Magic rod shot lifecycle
@@ -588,7 +579,7 @@ Give Link the magic rod:
 ```
 Load savestate, give Link a sword (not full health, no beams):
   - Press B, watch ObjState[$0D] (= ram[0xB9]) every frame
-  - Expected: States 1→2→3→4→5→6→0 (from assembly)
+  - Expected: States 1→2→3→4→5→0 (verified: state 2 = 8 frames, others 1 frame each except state 1 = 4 frames)
   - Count frames in each state
   - Verify total matches ATTACK_COOLDOWN constant (15 frames)
 ```

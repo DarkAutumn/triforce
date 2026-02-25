@@ -106,84 +106,55 @@ From `Z_07.asm`, the sword shot lifecycle:
 $00       → Inactive (no shot)
 $10 (16)  → Sword shot is flying (MakeSwordShot sets this)
 $11 (17)  → Sword shot is spreading/dissipating (SetShotSpreadingState: INC ObjState,X)
-            The spread lasts ~10 frames (ObjDir counts down from $FE to $F4), then → $00
+            The spread lasts 22 frames (ObjDir counts down from $FE to $E8), then → $00
 $80 (128) → Magic shot (rod) is flying
 $81 (129) → Magic shot spreading/fire
 ```
 
+### Sword melee state machine (slot $0D = `ObjState[$0D]` = `sword_animation`)
+
+```
+$00 → $01 (init, 4 frames) → $02 (extended, 8 frames) → $03 (1 frame, MakeSwordShot here)
+  → $04 (1 frame) → $05 (1 frame) → $00
+Total melee duration: ~15 frames
+```
+
+MakeSwordShot (Z_07.asm:4616) is called when sword state reaches exactly 3.
+
+### Health check for beams (Z_07.asm:4632-4648)
+
+The assembly does **not** compute a float. It checks:
+1. `HeartValues & 0x0F` (filled hearts) == `HeartValues >> 4` (containers minus one)
+2. `HeartPartial >= 0x80`
+
+Both conditions must be true to fire beams. This means:
+- **Normal full health**: filled=2, containers_minus_one=2, partial=0xFF → beams fire ✅
+- **Edge case**: filled=3, containers_minus_one=2, partial=0x00 → Python says full (3.0/3),
+  NES says no (filled != containers_minus_one) → **BUG in Python**
+- **Threshold**: partial=0x80 is the minimum, partial=0x7F is not enough
+
 ### Python interpretation (`link.py`)
 
 ```python
-ANIMATION_BEAMS_ACTIVE = 16   # $10 — matches
-ANIMATION_BEAMS_HIT = 17      # $11 — matches (spreading state)
+ANIMATION_BEAMS_ACTIVE = 16   # $10 — VERIFIED CORRECT
+ANIMATION_BEAMS_HIT = 17      # $11 — VERIFIED CORRECT (spreading state)
 ```
 
-`get_animation_state(ZeldaAnimationKind.BEAMS)`:
-- Returns `ACTIVE` if beam_animation == 16
-- Returns `HIT` if beam_animation == 17
-- Returns `INACTIVE` otherwise
+### Known bugs found
 
-### Known bug: Beam animation stuck at 17
+1. **`has_beams` / `is_health_full` mismatch**: Python uses float comparison
+   `abs(health - max_health) < 1e-9` which returns True when `filled == containers`
+   (a state the NES treats differently). The fix should use the assembly's exact integer check.
 
-In `frame_skip_wrapper.py` (lines 110-115), there's a workaround:
+2. **11-frame hack in frame_skip_wrapper.py**: Forces `beam_animation` to 0 in the info dict
+   after 11 consecutive frames at state 17. But the assembly's natural spread is 22 frames.
+   The hack triggers mid-spread every time, causing Python to think the beam is inactive
+   11 frames early. This masks a likely bug in the look-ahead simulation (Area 8).
 
-```python
-if info['beam_animation'] == 17:
-    self._sword_count += 1
-    if self._sword_count >= 11:
-        info['beam_animation'] = 0
-```
+### Deferred items
 
-This force-resets beam_animation to 0 after 11 consecutive frames at value 17. The
-assembly's `SpreadShot` routine should naturally reset to 0 after ~10 frames of spread.
-
-**Questions to investigate:**
-1. Does the save/restore in `_predict_future_effects` corrupt the ObjState[$0E]? The
-   method saves emulator state, runs the simulation forward, then restores. But it also
-   calls `_disable_others` which sets other animation slots to 0 via `data.set_value`.
-   If the emulator state restore doesn't undo `set_value` changes, this could leave
-   stale values.
-2. Is there a race condition where the beam state transitions from 16→17 during the
-   look-ahead simulation, and the state restore doesn't properly reset it?
-3. The SpreadShot routine in the assembly uses `ObjDir[$0E]` as a decrementing counter.
-   If the look-ahead simulation modifies this and the restore is incomplete, the spread
-   might never finish.
-
-### `has_beams` check
-
-Python (`link.py:200-205`):
-```python
-@property
-def has_beams(self) -> bool:
-    if self.sword == SwordKind.NONE or not self.is_health_full or self.is_sword_screen_locked:
-        return False
-    return self.get_animation_state(ZeldaAnimationKind.BEAMS) == AnimationState.INACTIVE
-```
-
-Assembly (`MakeSwordShot` in `Z_07.asm:4616-4656`):
-```asm
-; Check: filled hearts == containers - 1
-LDA HeartValues
-AND #$0F          ; filled_hearts (low nibble)
-STA $00
-LDA HeartValues   ; (reloaded via PLA after PHA)
-LSR x4            ; containers_minus_one (high nibble)
-CMP $00           ; filled_hearts == containers_minus_one?
-BNE Exit          ; No → no beams
-
-; Check: partial_hearts >= $80
-LDA HeartPartial
-CMP #$80
-BCC Exit          ; < $80 → no beams
-```
-
-**Potential discrepancy**: The assembly checks `filled_hearts == containers_minus_one`
-AND `partial >= $80`. The Python checks `is_health_full` which computes a float and
-compares to `max_health`. In the normal full-health state the game stores
-`filled = containers-1, partial = 0xFF`, so both agree. But if RAM were in the state
-`filled = containers, partial = 0` (which Python treats as full health), the assembly
-would say **no beams** while Python says **has beams**. Verify whether this state can
-actually occur during gameplay or only via `per_reset`/`per_frame` RAM overrides.
+- Magic rod shot ($80→$81) — no savestate with rod available, deferred
+- Beam stuck-at-17 reproduction — likely caused by look-ahead, deferred to Area 8
 
 ---
 
@@ -474,8 +445,8 @@ MAX_MOVEMENT_FRAMES = 16
 These control how many frames the agent waits after attacking or using an item.
 Verify against the assembly's weapon state machine durations:
 
-- Sword: States 1→2→3→4→5→6 (deactivate). State 2 lasts 8 frames, others last 1.
-  Total = 5 + 8 = 13 frames. Python uses 15 — slightly conservative, verify if correct.
+- Sword: States 1→2→3→4→5→0 (deactivate). State 1 lasts 4 frames, state 2 lasts 8 frames,
+  states 3-5 last 1 frame each. Total = ~15 frames. Python uses ATTACK_COOLDOWN=15.
 - Items: Various durations depending on type. 10 frames may be too few for some items.
 
 ### Movement tile snapping
