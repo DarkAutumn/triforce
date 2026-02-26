@@ -1,1 +1,2 @@
 2026-02-26 19:20 — ✅ — investigated 01-reward-philosophy, wrote spec and 2 repro scripts (philosophy_reward_catalog.py, philosophy_signal_interference.py)
+2026-02-26 19:45 — ✅ — investigated 02-movement-actions, wrote spec and 2 repro scripts (movement_frame_analysis.py, movement_action_abstraction.py)
