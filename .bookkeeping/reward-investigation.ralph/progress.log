@@ -1,3 +1,4 @@
 2026-02-26 19:20 — ✅ — investigated 01-reward-philosophy, wrote spec and 2 repro scripts (philosophy_reward_catalog.py, philosophy_signal_interference.py)
 2026-02-26 19:45 — ✅ — investigated 02-movement-actions, wrote spec and 2 repro scripts (movement_frame_analysis.py, movement_action_abstraction.py)
 2026-02-26 20:34 — ✅ — investigated 03-movement-rewards, wrote spec and 3 repro scripts (movement_reward_math.py, movement_danger_zone.py, movement_wavefront_analysis.py)
+2026-02-26 19:42 — ✅ — investigated 04-wavefront-alternatives, wrote spec and 2 repro scripts (wavefront_bfs_vs_dijkstra.py, wavefront_objective_analysis.py)
