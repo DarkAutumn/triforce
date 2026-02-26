@@ -5,3 +5,4 @@
 2026-02-26 19:51 — ✅ — investigated 05-combat-rewards, wrote spec and 2 repro scripts (combat_reward_math.py, combat_hit_detection.py)
 2026-02-26 19:58 — ✅ — investigated 06-exploration-rewards, wrote spec and 2 repro scripts (exploration_reward_math.py, exploration_objective_analysis.py)
 2026-02-26 20:05 — ✅ — investigated equipment rewards: flat reward map, tiered values, key usage, remove_rewards interaction. Wrote spec and 1 repro script.
+2026-02-26 20:12 — ✅ — investigated 08-health-rewards: flat penalty ignores damage magnitude, remove_rewards strips combat success, health gain unscaled. Wrote spec and 1 repro script (health_reward_analysis.py).
