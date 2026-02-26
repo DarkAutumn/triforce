@@ -145,7 +145,13 @@ class ZeldaAnimationKind(Enum):
     BAIT = 8
 
 class ZeldaEnemyKind(Enum):
-    """Enemy type IDs from ObjectTypeToHpPairs / UpdateObject_JumpTable (Z_07.asm:5279, 5344)."""
+    """Enemy type IDs from UpdateObject_JumpTable (Z_07.asm:5321).
+
+    These are ObjType values for enemies in slots 1-11. Range is $01-$48,
+    excluding non-combat objects ($1F/$20=boulders, $29=unused, $2E=whirlwind,
+    $2F=fairy, $35-$37=NPCs, $3F/$40=fires).
+    Trap ($49) is classified as a projectile/hazard, not an enemy.
+    """
     # pylint: disable=invalid-name
     BlueLynel : int = 0x01
     RedLynel : int = 0x02
@@ -181,6 +187,8 @@ class ZeldaEnemyKind(Enum):
     FlyingGhini : int = 0x22
     BlueWizzrobe : int = 0x23
     RedWizzrobe : int = 0x24
+    PatraChild1 : int = 0x25
+    PatraChild2 : int = 0x26
     Wallmaster : int = 0x27
     Rope : int = 0x28
     Stalfos : int = 0x2A
@@ -189,15 +197,24 @@ class ZeldaEnemyKind(Enum):
     RedBubble : int = 0x2D
     Gibdo : int = 0x30
     Dodongo : int = 0x31
-    Gohma : int = 0x33
-    Lamnola : int = 0x3A
+    Dodongo2 : int = 0x32
+    BlueGohma : int = 0x33
+    RedGohma : int = 0x34
+    Digdogger2 : int = 0x38
+    Digdogger3 : int = 0x39
+    BlueLamnola : int = 0x3A
+    RedLamnola : int = 0x3B
     Manhandla : int = 0x3C
     Aquamentus : int = 0x3D
     Ganon : int = 0x3E
     Moldorm : int = 0x41
     Gleeok : int = 0x42
+    Gleeok2 : int = 0x43
+    Gleeok3 : int = 0x44
+    Gleeok4 : int = 0x45
+    GleeokHead : int = 0x46
     Patra : int = 0x47
-    Trap : int = 0x49
+    Patra2 : int = 0x48
 
 class ZeldaProjectileId(Enum):
     """Projectile codes for the game."""
