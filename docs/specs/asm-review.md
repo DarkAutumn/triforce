@@ -1,8 +1,9 @@
-# Assembly Verification Review Plan
+# Assembly Verification and Fix Plan
 
 This document catalogs every piece of the Python game state model (ZeldaGame, Link, Enemy, etc.)
 that reads or interprets NES RAM, and maps it to the assembly source in `zelda-asm/src/` for
-correctness verification. It also covers the look-ahead simulation in `_handle_future_effects`.
+correctness verification. When discrepancies are found, the Python code is fixed to match the
+assembly's behavior. It also covers the look-ahead simulation in `_handle_future_effects`.
 
 ## Key Reference Files
 
@@ -107,9 +108,15 @@ $00       → Inactive (no shot)
 $10 (16)  → Sword shot is flying (MakeSwordShot sets this)
 $11 (17)  → Sword shot is spreading/dissipating (SetShotSpreadingState: INC ObjState,X)
             The spread lasts 22 frames (ObjDir counts down from $FE to $E8), then → $00
-$80 (128) → Magic shot (rod) is flying
-$81 (129) → Magic shot spreading/fire
+$80 (128) → Magic rod shot is flying
+            On wall hit → $00 (deactivated). No spreading state.
+            With book of magic: fire spawns in bomb/fire slot ($10) at state $22.
 ```
+
+**VERIFIED**: $81 never occurs for the rod shot. The ASL in HandleShotBlocked sets carry
+for magic shots (bit 7 set), branching to a different path than sword shots. The magic
+path checks InvBook ($661) and calls WieldCandle to spawn fire in a separate slot, then
+deactivates the beam slot. Only sword shots ($10) enter the spreading state ($11).
 
 ### Sword melee state machine (slot $0D = `ObjState[$0D]` = `sword_animation`)
 
@@ -153,7 +160,10 @@ ANIMATION_BEAMS_HIT = 17      # $11 — VERIFIED CORRECT (spreading state)
 
 ### Deferred items
 
-- Magic rod shot ($80→$81) — no savestate with rod available, deferred
+- ~~Magic rod shot ($80→$81) — no savestate with rod available, deferred~~ **RESOLVED**: Rod shot
+  goes $80→$00, never enters $81. Verified by setting `magic_rod=1` + `selected_item=8` via RAM.
+  With `book=1` (InvBook), fire spawns in bomb slot ($10) at state $22 on wall hit. Code fixed
+  in `link.py` (added MAGIC animation kind) and `state_change_wrapper.py` (added look-ahead).
 - Beam stuck-at-17 reproduction — likely caused by look-ahead, deferred to Area 8
 
 ---
