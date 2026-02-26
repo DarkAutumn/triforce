@@ -5,7 +5,7 @@ Deep investigation of the entire Triforce reward system. Produce detailed specs 
 and recommendations for each area. Output goes to `docs/specs/reward-system/`.
 
 ## Status
-STATUS: IN_PROGRESS
+STATUS: COMPLETE
 
 ## Tasks
 - [x] 01-reward-philosophy: Investigate reward philosophy — dense vs sparse vs PBRS vs hybrid. Research RL literature for game-playing agents. Analyze current reward distribution and signal quality. Write `docs/specs/reward-system/reward-philosophy.md`.
@@ -19,7 +19,7 @@ STATUS: IN_PROGRESS
 - [x] 09-special-cases: Investigate special case rewards — wallmaster handling, blocking, stuck detection, cave attack prevention. Analyze each special case for necessity and correctness. Write `docs/specs/reward-system/special-cases.md`.
 - [x] 10-reward-scaling: Investigate reward scaling and composition — clamping behavior, magnitude scale gaps, reward normalization, multi-head possibilities. Analyze real reward distributions, measure clamping frequency, research PPO reward practices. Write `docs/specs/reward-system/reward-scaling.md`.
 - [x] 11-observation-space: Investigate observation space for movement decisions — missing features, wavefront visibility, local tile map, enemy type encoding. Analyze what the model sees vs what it needs, research observation design in game RL. Write `docs/specs/reward-system/observation-space.md`.
-- [ ] Final review: Read all 11 specs end-to-end. Check for cross-topic consistency, verify code references, identify gaps. Add new tasks if issues found.
+- [x] Final review: Read all 11 specs end-to-end. Check for cross-topic consistency, verify code references, identify gaps. Add new tasks if issues found.
 
 ## Notes
 - Input topic files are in docs/todo/ (00-overview.md through 11-observation-space.md)

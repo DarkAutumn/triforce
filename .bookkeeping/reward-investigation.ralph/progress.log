@@ -9,3 +9,4 @@
 2026-02-26 20:19 — ✅ — investigated special cases (wallmaster zones, blocking, stuck tile, cave attack), wrote spec and 1 repro script, found critique_attack wallmaster return bug
 2026-02-26 20:26 — ✅ — investigated 10-reward-scaling: magnitude scale gaps, clamping frequency (13.2%), no reward normalization in PPO, GAE advantage compression, remove_rewards interaction. Wrote spec and 2 repro scripts.
 2026-02-26 20:34 — ✅ — investigated observation space, wrote spec and 2 repro scripts (observation_space_analysis.py, observation_network_analysis.py)
+2026-02-26 20:42 — ✅ — final review: verified all 11 specs for code reference accuracy, cross-topic consistency, and gaps. Wrote consolidated review with 20 priority recommendations, 4 bugs, and 5 dead code items.
