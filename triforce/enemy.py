@@ -29,10 +29,12 @@ class Enemy(ZeldaObject):
     @property
     def is_dying(self) -> bool:
         """Returns True if the enemy has been dealt enough damage to die, but hasn't yet been removed
-        from the game state."""
+        from the game state.
 
-        # This is through trial and error.  The dying state of enemies seems to start and 16 and increase
-        # by one frame until they are removed.  I'm not sure if it ends with 19 or not.
+        Death sparkle sequence: metastate $10(1f) -> $11(6f) -> $12(6f) -> $13(6f) -> $14.
+        At $14, the object becomes a dropped item (type=$60) in the same frame, so $14 is
+        never directly observed.  Observable range: $10-$13 (16-19).
+        """
         return 16 <= self.spawn_state <= 19
 
     @property
@@ -42,15 +44,20 @@ class Enemy(ZeldaObject):
         wall.  An enemy not active cannot take or deal damage to link by touching him."""
         status = self.status & 0xff
 
-        # status == 3 means the lever/zora is up
-        if self.id in (ZeldaEnemyKind.RedLeever, ZeldaEnemyKind.BlueLeever, ZeldaEnemyKind.Zora):
-            return status & 0xff == 3
+        # Leevers are only targetable when fully surfaced (state 3).
+        if self.id in (ZeldaEnemyKind.RedLeever, ZeldaEnemyKind.BlueLeever):
+            return status == 3
 
-        # status == 1 means the wallmaster is active
+        # Zora is targetable in states 2, 3, and 4 (partially/fully surfaced).
+        # Assembly: UpdateBurrower checks collisions for Zora at states 2, 3, 4.
+        if self.id == ZeldaEnemyKind.Zora:
+            return 2 <= status <= 4
+
+        # WallMaster state 1 means on-screen and moving.
         if self.id == ZeldaEnemyKind.Wallmaster:
             return status == 1
 
-        # spawn_state of 0 means the object is active
+        # Default: spawn_state of 0 means the object is fully active.
         return not self.spawn_state
 
     @property

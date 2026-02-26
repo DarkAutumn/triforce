@@ -366,22 +366,56 @@ they affect the actual game state model used for training.
 - Keese/Gel have 0 HP from table — die in one hit, death tracked via ObjMetastate not ObjHP
 - Rope overrides table HP ($10→$40) in quest 2 (InitRope, Z_04.asm:4537)
 
-## Area 5: Enemy is_dying / is_active (Medium)
+## Area 5: Enemy is_dying / is_active (Medium) ✅
 
-- [ ] Trace death cloud metastate sequence in assembly
-- [ ] Verify is_dying range 16-19 (or correct it)
-- [ ] Verify Lever/Zora is_active: ObjState==3 means surfaced
-- [ ] Verify WallMaster is_active: ObjState==1
-- [ ] Verify default: spawn_state==0 means active
-- [ ] Tests: test_object_model.py (T2.5-T2.8)
+- [x] Trace death cloud metastate sequence in assembly — $10(1f)→$11(6f)→$12(6f)→$13(6f)→$14 (item drop)
+- [x] Verify is_dying range 16-19 ($10-$13) — correct, matches assembly UpdateMetaObject
+- [x] Verify Zora is_active: states 2, 3, AND 4 — **BUG FIXED**: was only checking state 3
+- [x] Verify Leever is_active: state 3 only — correct (non-Zora path in UpdateBurrower)
+- [x] Verify WallMaster is_active: state 1 — correct
+- [x] Verify default: spawn_state==0 means active — correct
+- [x] Tests: test_enemy_model.py (TestDeathMetastate, TestZoraIsActive, TestLeeverIsActive, TestWallmasterIsActive)
 
-## Area 6: Object ID Classification (Medium)
+### Area 5 Findings
 
-- [ ] Identify ObjType $40 (excluded from enemies)
-- [ ] Verify enemy range 1-$48
-- [ ] Identify excluded projectile IDs ($63,$64,$68,$6A)
-- [ ] Verify $48 boundary between enemies and projectiles
-- [ ] Tests: test_object_model.py (T2.3-T2.4)
+1. **Death sparkle metastate**: UpdateMetaObject (Z_01.asm) handles sequence $10→$11→$12→$13→$14.
+   States $10-$13 last 6 frames each (via ObjTimer). $14 converts to item (type=$60, metastate reset).
+   Python's `is_dying` range of 16-19 ($10-$13) is correct — $14 is never observable as the object
+   type changes immediately.
+
+2. **BUG FIXED: Zora is_active** — Assembly `UpdateBurrower` (Z_04.asm) checks collisions for Zora
+   at states 2, 3, AND 4. Python only returned True for state 3. Fixed to check states 2-4.
+   State 3 is when Zora fires its projectile, but states 2 (rising) and 4 (sinking) are also
+   vulnerable to player attacks.
+
+3. **Zora state cycle**: 0→1→2→3→4→5→0. State 0 = hidden, 1 = choosing position, 2 = surfacing,
+   3 = fully surfaced (fires projectile), 4 = sinking, 5 = delay before restart.
+
+4. **Leever collisions**: Same UpdateBurrower routine but non-Zora path only checks state 3
+   (fully surfaced). Confirmed correct in Python.
+
+## Area 6: Object ID Classification (Medium) ✅
+
+- [x] Identify ObjType $40 (StandingFire) — correctly excluded from enemies
+- [x] Verify enemy range 1-$48 — correct, matches UpdateObject jump table
+- [x] Identify $3F (GuardFire) — within range but not a real enemy, unlikely in enemy slots
+- [x] Verify $48 boundary between enemies and projectiles — $49 (Trap) is first non-enemy
+- [x] Verify Trap classified as projectile, not enemy — correct for training
+- [x] Tests: test_enemy_model.py (TestObjectClassification)
+
+### Area 6 Findings
+
+1. **UpdateObject jump table**: $01-$48 are enemy update routines. $40=UpdateStandingFire is in
+   the range but correctly excluded from `_is_id_enemy` (it's a hazard, not a targetable enemy).
+
+2. **GuardFire ($3F)**: Within enemy range but unlikely to appear in enemy slots (it's spawned
+   by guards as a projectile-like hazard). Not worth special-casing.
+
+3. **Objects $49+**: Classified as "projectiles" in Python. Includes Trap ($49), UW persons,
+   docks, rocks, etc. Functionally adequate for training — these are all non-targetable objects.
+
+4. **$60 (item)**: Correctly excluded from projectiles. Items are dropped by dead enemies and
+   handled separately.
 
 ## Area 7: Link Health System ✅
 
@@ -448,11 +482,28 @@ they affect the actual game state model used for training.
 - [ ] Verify reshape (32,22).T.swapaxes(0,1) gives correct x,y indexing
 - [ ] Tests: test_object_model.py (T7.1-T7.2)
 
-## Area 11: ZeldaEnemyKind IDs (Medium)
+## Area 11: ZeldaEnemyKind IDs (Medium) ✅
 
-- [ ] Cross-ref enum values against assembly enemy type tables
-- [ ] Resolve Octorok/OctorokFast duplicate (both 0x07)
-- [ ] Tests: test_object_model.py (T2.10)
+- [x] Cross-ref enum values against assembly enemy type tables — added 12 missing IDs
+- [x] Removed Trap from enum (it's $49, outside enemy range)
+- [x] Renamed Gohma→BlueGohma, Lamnola→BlueLamnola for consistency with color variants
+- [x] Added: PatraChild1/2, Dodongo2, RedGohma, Digdogger2/3, RedLamnola, Gleeok2/3/4, GleeokHead, Patra2
+- [x] Resolve Octorok/OctorokFast duplicate (both 0x07) — not a duplicate, OctorokFast is $0A
+- [x] Tests: test_enemy_model.py (TestEnemyKindEnum)
+
+### Area 11 Findings
+
+1. **12 missing enemy IDs** added to `ZeldaEnemyKind` by cross-referencing the full UpdateObject
+   jump table in assembly. These are higher-level variants and sub-enemies (e.g., PatraChild
+   orbiting enemies, multi-headed Gleeok variants).
+
+2. **Trap removed** — Trap is at $49, which is OUTSIDE the enemy range ($01-$48). It's correctly
+   classified as a projectile/hazard, not an enemy. Removing it from the enum prevents incorrect
+   enemy identification.
+
+3. **Naming consistency** — Gohma was only the blue variant ($30). Added RedGohma ($32).
+   Lamnola was only the blue variant ($3B). Added RedLamnola ($3C). Renamed originals to
+   BlueGohma/BlueLamnola for clarity.
 
 ## Area 12: Frame Skip & Animation Tracking ✅ (partial — BUG-2 and WS_ADJUSTMENT deferred)
 
@@ -494,13 +545,13 @@ The NES blocks new actions until `link_status==0` AND `sword_animation==0`.
 | 2. Beam state machine | **HIGH** | ✅ |
 | 3. Screen lock bounds | **HIGH** | ✅ |
 | 4. Enemy health encoding | Medium | ✅ |
-| 5. Enemy dying/active | Medium | ⬜ |
-| 6. Object ID classification | Medium | ⬜ |
+| 5. Enemy dying/active | Medium | ✅ |
+| 6. Object ID classification | Medium | ✅ |
 | 7. Health system | Medium | ✅ |
 | 8. Look-ahead simulation | **HIGH** | ✅ |
 | 9. Direction encoding | Low | ⬜ |
 | 10. Tile layout | Low | ⬜ |
-| 11. Enemy kind IDs | Medium | ⬜ |
+| 11. Enemy kind IDs | Medium | ✅ |
 | 12. Frame skip & animation | **HIGH** | ✅* |
 | 13. Sound bitmasks | Low | ⬜ |
 
