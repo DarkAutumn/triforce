@@ -301,20 +301,20 @@ class TestBeamConstants:
         assert ANIMATION_BEAMS_HIT == 0x11
 
 
-# --- T3.9: 11-frame hack documentation ---
+# --- T3.9: Beam spread duration ---
 
-class TestElevenFrameHack:
-    """Document the 11-frame hack in frame_skip_wrapper.py.
+class TestBeamSpreadDuration:
+    """Verify beam spread phase lasts 22 frames.
 
-    The hack resets beam_animation in the info dict after 11 consecutive frames
-    at state 17 (HIT). But the NES spread phase naturally lasts 22 frames.
-    This means Python thinks the beam is inactive 11 frames early.
-    The hack only affects the info dict, not actual NES RAM.
+    The beam spread phase (state $11) naturally lasts 22 frames as the ObjDir
+    counter decrements from $FE to $E8. A previous 11-frame hack incorrectly
+    reset beam_animation in the info dict mid-spread. That hack has been removed
+    since the beam deactivates naturally.
     """
 
-    def test_spread_outlasts_hack_threshold(self, beam_emu):
-        """The natural spread (22 frames) exceeds the 11-frame hack threshold.
-        This documents that the hack will always trigger during normal beam spread."""
+    def test_spread_duration_exceeds_sword_cooldown(self, beam_emu):
+        """The natural spread (22 frames) exceeds sword cooldown (~15 frames).
+        This means beams can still be spreading when the agent regains control."""
         _fire_beam(beam_emu)
 
         # Wait for spread
@@ -328,5 +328,5 @@ class TestElevenFrameHack:
             spread_frames += 1
             beam_emu.step()
 
-        assert spread_frames > 11, \
-            f"Spread is {spread_frames} frames, must exceed 11-frame hack threshold"
+        assert spread_frames > 15, \
+            f"Spread is {spread_frames} frames, must exceed sword cooldown (~15)"

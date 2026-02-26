@@ -53,13 +53,11 @@ class ZeldaCooldownHandler:
         self.was_link_in_cave = False
         self.none_action = np.zeros(9, dtype=bool)
         self._link_pos : Position = None
-        self._sword_count = 0
 
     def reset(self):
         """Resets the handler."""
         self.was_link_in_cave = False
         self._link_pos = None
-        self._sword_count = 0
 
     def gain_control_of_link(self):
         """Skips frames until Link is in a state where the agent can control him."""
@@ -106,12 +104,6 @@ class ZeldaCooldownHandler:
         frame_capture.append(obs)
 
         self._link_pos = Position(info['link_x'], info['link_y'])
-        if info['beam_animation'] == 17:
-            self._sword_count += 1
-            if self._sword_count >= 11:
-                info['beam_animation'] = 0
-        elif self._sword_count:
-            self._sword_count = 0
 
         return terminated, truncated, info
 
