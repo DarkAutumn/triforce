@@ -73,6 +73,11 @@ The PPO implementation (`ml_ppo.py`) and neural network (`models.py`) are custom
 - **Pylint**: Enforced via `.pylintrc` — max line length 120, max 8 args. Tests and scripts are excluded from linting. Disabled checks: `R0902` (too-many-instance-attributes), `C0114` (missing-module-docstring), `R0903` (too-few-public-methods).
 - **Test infrastructure**: Tests use `ZeldaActionReplay` (from `tests/utilities.py`) which replays actions from NES save states (`.state` files) to create deterministic test scenarios. `CriticWrapper` lets tests intercept and assert on individual reward values.
 - **Savestate catalog**: `docs/savestates.yml` lists every `.state` file with its level, room coordinates, Link's equipment, health, inventory, and dungeon items. Consult this catalog to find savestates matching specific criteria (e.g., "dungeon 1 room with wood sword" or "overworld state with full health").
+- **Assembly verification**: `docs/specs/` contains the ongoing verification plan (`asm-review.md`), progress tracking (`asm-review-progress.md`), and test plan (`test-plan.md`). When investigating NES game mechanics, consult and update these docs. Bugs found must be tracked in `asm-review-progress.md` with a BUG-N entry.
+- **NES weapon slots**: Weapon animations map to fixed RAM slots: `sword_animation` ($0B9), `beam_animation` ($0BA), `bait_or_boomerang_animation` ($0BB), `bomb_or_flame_animation` ($0BC), `bomb_or_flame_animation2` ($0BD), `arrow_magic_animation` ($0BE). Use `data.set_value()` / `data.lookup_value()` to read/write.
+- **Magic rod lifecycle**: Rod shot uses beam slot ($80 flying → $00). With book, fire ($22) spawns in bomb_or_flame slot on hit. MAGIC look-ahead covers both phases.
+- **NES emulator**: Only one emulator instance per process — must `close()` before creating another. `em.set_state()` fully restores all 10KB of RAM. NES A button (retro index 8) = sword, B button (retro index 0) = selected item.
+- **RAM editing safety**: Safe to edit inventory, health, equipment, RNG via `data.set_value()`. NOT safe to edit Link position or object states (timing-dependent). Use controller inputs to move Link.
 - **Contributing**: PRs that modify critics must include `evaluate.py` output on a newly trained model. Run pylint and clean up warnings before submitting.
 
 ## Entry Points
