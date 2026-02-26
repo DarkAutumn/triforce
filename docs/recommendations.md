@@ -199,3 +199,138 @@ pair of linear layers is allocated, orthogonally initialized, and discarded.
 
 Refactor `Network.__init__` to accept optional action/value heads, or defer their
 creation to subclasses. Low priority.
+
+---
+
+## 9. Rethink Evaluation: Measure Game Progress, Not Rewards
+
+### Current State
+
+`evaluate.py` runs N episodes of a single scenario, collects `MetricTracker` results,
+and prints a table of all metrics (success-rate, rewards, room-result breakdowns, etc.).
+The results are stored back into the `.pt` model file.
+
+**Problems with the current approach:**
+
+1. **Evaluation is scenario-scoped, not game-scoped.** You evaluate "dungeon1" or
+   "game-start" in isolation. There's no evaluation that runs the full game pipeline
+   (overworld → find sword → reach dungeon → clear dungeon → get triforce) end to end.
+
+2. **Success-rate is binary and scenario-dependent.** For `game-start`, success =
+   "entered dungeon". For `dungeon1`, success = "gained triforce". These tell you
+   pass/fail but not *how close* a failure was. An agent that dies in room 1 scores
+   the same as one that dies at the boss.
+
+3. **Room progress is averaged but not well-surfaced.** `RoomProgressMetric` maps rooms
+   to integer progress values (0–7 for overworld, 0–11 for dungeon1), but this is just
+   one number in a sea of metrics. It's the most important signal and should be the
+   primary evaluation output.
+
+4. **Reward averages are misleading for evaluation.** High average rewards can mean the
+   agent learned to exploit reward shaping (e.g., loop for movement rewards) without
+   actually making game progress.
+
+5. **No post-training evaluation baked into the circuit.** When a training circuit
+   completes, there's no automatic evaluation pass. You have to manually run
+   `evaluate.py` separately.
+
+### What We Actually Care About
+
+- **Primary metric**: How far through the game does the agent get?
+  - For overworld: Which room in the path to the dungeon did it reach?
+  - For dungeon: Which room in the dungeon path did it reach?
+  - For full game: Did it get the sword? Enter the dungeon? Get the triforce?
+
+- **Secondary metric**: Consistency. Not just average progress, but the distribution.
+  An agent that reaches the boss 30% of the time and dies in room 1 the other 70% is
+  very different from one that consistently reaches room 6.
+
+### Proposed Evaluation Design
+
+#### 1. Progress as the primary metric
+
+Define a single ordered **milestone list** per circuit, spanning all scenarios:
+
+```
+Overworld milestones:
+  0: Start (room 0x77)
+  1: Left start area (0x67 or 0x78)
+  2: Reached 0x68
+  3: Reached 0x58
+  4: Reached 0x48
+  5: Reached 0x38
+  6: Reached sword cave area (0x37)
+  7: Entered dungeon (level 1)
+
+Dungeon milestones:
+  0: Entry room (0x73)
+  1: First side rooms (0x72 or 0x74)
+  ...
+  10: Boss room (0x35)
+  11: Triforce room (0x36)
+
+Full game milestone = overworld milestone + dungeon milestone
+```
+
+This already exists as `RoomProgressMetric` room maps — just needs to be promoted
+to the primary output.
+
+#### 2. Report distribution, not just average
+
+For N evaluation episodes, report:
+
+- **Median progress** — more robust than mean to outlier runs
+- **Success rate** — % of episodes reaching the final milestone
+- **Percentile breakdown** — 25th / 50th / 75th / 90th percentile of progress
+- **Histogram** — how many episodes reached each milestone
+
+Example output:
+```
+Evaluation: 100 episodes of full-game
+  Success rate:    12%  (reached triforce)
+  Median progress: 9/18 (dungeon room 2)
+  P25: 5  P50: 9  P75: 14  P90: 17
+  Milestone histogram:
+    0-start:      2   ██
+    1-left-start: 5   █████
+    2-0x68:       8   ████████
+    ...
+    18-triforce: 12   ████████████
+```
+
+#### 3. Automatic evaluation at end of training circuits
+
+When a training circuit completes in `train.py`, automatically run an evaluation
+pass (e.g., 50–100 episodes) and print the progress report. This should use
+deterministic action selection (`deterministic=True`) for reproducibility.
+
+#### 4. Exit criteria based on progress
+
+Training circuits currently exit on `success-rate` or `room-result/correct-exit`.
+Consider adding progress-percentile-based exit criteria:
+
+- `"exit_criteria": "median-progress", "threshold": 14` — keep training until the
+  median run reaches milestone 14
+- `"exit_criteria": "p25-progress", "threshold": 7` — keep training until even the
+  25th percentile reaches milestone 7
+
+This is more informative than binary success-rate for long multi-room scenarios
+where success may be rare but progress is steady.
+
+#### 5. Full-game evaluation scenario
+
+Add a scenario that chains overworld + dungeon with a unified milestone list.
+The agent starts at game start and plays until triforce or death/timeout, with
+milestones spanning both phases. This is the "real" evaluation — individual
+scenario evaluations are just diagnostics.
+
+### Implementation Notes
+
+- The rollout buffer's single-env constraint doesn't apply to evaluation — evaluation
+  doesn't need gradients. Run episodes in parallel with `multiprocessing` (each worker
+  gets its own emulator process). The `--parallel` flag in `evaluate.py` already exists
+  but isn't wired up.
+- Store evaluation results as a JSON sidecar file (not inside the `.pt` file) so they
+  can be compared across runs without loading model weights.
+- Consider a `--compare` mode that loads two model checkpoints and prints side-by-side
+  progress distributions.
