@@ -18,14 +18,14 @@ The game ROM is not included and must be placed at `triforce/custom_integrations
 ```bash
 source .venv/bin/activate
 
-# Run tests (standard — excludes slow PPO training tests)
-pytest tests/ -v --ignore=tests/ppo_test.py
+# Run tests (standard — excludes slow PPO training tests via pyproject.toml)
+pytest tests/ -v
 
 # Run a single test
 pytest tests/reward_test.py::test_wall_collision
 
 # Run ALL tests including slow PPO tests (~2 min each)
-pytest tests/ -v
+pytest tests/ -v -m ""
 
 # Lint (required for PRs)
 pylint triforce/ evaluate.py run.py train.py
@@ -72,6 +72,7 @@ The PPO implementation (`ml_ppo.py`) and neural network (`models.py`) are custom
 - **Reward naming**: All rewards/penalties are module-level constants using `Reward("reward-name", value)` or `Penalty("penalty-name", value)`. Names are kebab-case prefixed with `reward-` or `penalty-`.
 - **Pylint**: Enforced via `.pylintrc` — max line length 120, max 8 args. Tests and scripts are excluded from linting. Disabled checks: `R0902` (too-many-instance-attributes), `C0114` (missing-module-docstring), `R0903` (too-few-public-methods).
 - **Test infrastructure**: Tests use `ZeldaActionReplay` (from `tests/utilities.py`) which replays actions from NES save states (`.state` files) to create deterministic test scenarios. `CriticWrapper` lets tests intercept and assert on individual reward values.
+- **Savestate catalog**: `docs/savestates.yml` lists every `.state` file with its level, room coordinates, Link's equipment, health, inventory, and dungeon items. Consult this catalog to find savestates matching specific criteria (e.g., "dungeon 1 room with wood sword" or "overworld state with full health").
 - **Contributing**: PRs that modify critics must include `evaluate.py` output on a newly trained model. Run pylint and clean up warnings before submitting.
 
 ## Entry Points

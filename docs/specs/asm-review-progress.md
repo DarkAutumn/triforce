@@ -5,14 +5,14 @@
 ## Workflow
 
 1. `git checkout main && git pull origin main` — ensure local main matches origin
-2. Run `pytest tests/ -v --ignore=tests/ppo_test.py` — record baseline. All existing tests must pass. Skip `ppo_test.py` (slow, unrelated).
+2. Run `pytest tests/ -v` — record baseline. All existing tests must pass. Slow PPO tests excluded by default via `pyproject.toml`.
 3. `git checkout -b <descriptive-branch-name>` — **always** branch from main, never commit to main
 4. Work through areas below. For each area:
    - Investigate assembly vs Python
    - **Annotate the assembly** in `zelda-asm/` with comments as you discover insights (see below)
    - Add/update tests as appropriate
    - **Fix bugs found** — the goal is to fix discrepancies, not just document them
-   - Run `pytest tests/ -v --ignore=tests/ppo_test.py` — no regressions, no new failures
+   - Run `pytest tests/ -v` — no regressions, no new failures
    - Run `pylint triforce/ evaluate.py run.py train.py` — clean
 5. Commit after each area or logical group of changes (triforce and zelda-asm separately).
 6. Push branch, open PR to merge to main. **Never push directly to main.**

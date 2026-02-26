@@ -39,7 +39,7 @@ jobs:
       env:
         SDL_VIDEODRIVER: dummy
       run: |
-        pytest --ignore=tests/ppo_test.py
+        pytest
 
     - name: Lint with pylint
       run: |
