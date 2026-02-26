@@ -8,7 +8,7 @@ The main branch is pretty unstable/may not work correctly.  The [Original Design
 
 This repo does *not* include a copy of the Legend of Zelda rom.  You must find your own copy of the rom and place it (uncompressed) at `triforce/custom_integrations/Zelda-NES/rom.nes`.
 
-This project was built using Python 3.10 on Ubuntu.  You may also have to install `libgl1-mesa-glx` to use `run.py`.
+This project requires Python 3.12 (stable-retro does not support 3.13+).  On Ubuntu you may also need `libgl1-mesa-glx` for `run.py`.
 
 This repo does include a set of pre-trained models.  Once the Zelda rom is in place, simply run `./run.py` to see the model play the game up through the end of the first dungeon.  (It does not usually win.)
 
@@ -89,7 +89,11 @@ Scenarios are used to train and evaluate models.  They define what critic, end c
 
 I develop on Linux, but in the past this project has worked fine on an up-to-date WSL2 Ubuntu 22 instance on Windows (the pygame based GUI also works).  I do not test on Windows though, so your experience may vary if I've accidently broken something.
 
-Be sure to install dependencies with `pip install -r requirements.txt`.
+Be sure to install dependencies:
+
+    uv venv --python 3.12
+    source .venv/bin/activate
+    uv pip install -r requirements.txt
 
 Be sure to place The Legend of Zelda rom at `triforce/custom_integrations/Zelda-NES/rom.nes`.
 
