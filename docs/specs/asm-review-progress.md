@@ -196,16 +196,17 @@ they affect the actual game state model used for training.
 - **Verified**: 7 edge cases tested empirically on NES + Python, all match.
 - **Tests**: `tests/test_health.py` (26 tests)
 
-### BUG-2: 11-frame beam hack fires mid-spread (Area 2)
-- **File**: `triforce/frame_skip_wrapper.py` lines 110-115
+### BUG-2: 11-frame beam hack fires mid-spread (Area 2) — ✅ FIXED
+- **File**: `triforce/frame_skip_wrapper.py` lines 109-115 (removed)
 - **Problem**: Resets `beam_animation` in info dict after 11 consecutive frames at state 17.
-  But the assembly's spread phase naturally lasts 22 frames. Hack triggers every single time,
+  But the assembly's spread phase naturally lasts 22 frames. Hack triggered every single time,
   causing Python to report beam as inactive 11 frames early.
-- **Root cause**: Hack was added because beams get "stuck" at 17. Likely caused by look-ahead
-  simulation (Area 8) corrupting beam state.
-- **Fix**: Investigate look-ahead first (Area 8 dependency), then either remove the hack
-  (if root cause is fixed) or change threshold to >22.
-- **Status**: Todo `fix-11-frame-hack` (blocked on `look-ahead-sim`)
+- **Root cause**: Beam is NOT stuck. Spread (22 frames) outlasts sword cooldown (~15 frames).
+  The `_sword_count` counter accumulated across action boundaries. The hack masked normal
+  behavior and caused: false `has_beams=True`, missed look-ahead triggers, corrupted
+  INACTIVE→ACTIVE transition detection.
+- **Fix**: Removed the hack entirely. Also removed `_sword_count` field from `ZeldaCooldownHandler`.
+- **Tests**: test_look_ahead.py (8 tests), test_weapons.py (updated)
 
 ### BUG-3: data.json obj_health_b/c off by 1 (Area 1) — ✅ FIXED
 - **File**: `triforce/zelda_game_data.txt` or data.json
@@ -399,16 +400,41 @@ they affect the actual game state model used for training.
 - Health setter was also producing incorrect encoding for full health (filled=containers instead of c-1)
 - 16-heart case (0xFF) works correctly as a natural consequence of the general logic
 
-## Area 8: Look-Ahead Simulation (HIGH)
+## Area 8: Look-Ahead Simulation (HIGH) ✅
 
-- [ ] Test em.set_state() fully restores RAM after data.set_value changes
-- [ ] Verify _disable_others doesn't persist after restore
-- [ ] Verify health override (0xFF) doesn't persist
-- [ ] Test multi-weapon look-ahead isolation
+- [x] Test em.set_state() fully restores RAM after data.set_value changes — **confirmed, byte-for-byte identical**
+- [x] Verify _disable_others doesn't persist after restore — **confirmed**
+- [x] Verify health override (0xFF) doesn't persist — **confirmed**
+- [x] Test multi-weapon look-ahead isolation — **confirmed, beam state preserved after bomb look-ahead**
+- [x] Investigate beam stuck-at-17 root cause — **beam is NOT stuck, spread naturally lasts 22 frames**
+- [x] **Fix BUG-2**: Removed 11-frame hack from frame_skip_wrapper.py (see findings below)
+- [x] Tests: test_look_ahead.py (8 tests)
 - [ ] Test damage attribution with discounts
 - [ ] Test room transition clears discounts
 - [ ] Verify trigger condition (INACTIVE→ACTIVE only)
-- [ ] Tests: test_look_ahead.py (T5.1-T5.9)
+
+### Area 8 Findings
+
+1. **em.set_state() is complete** — After saving state, modifying weapon slots + health via
+   data.set_value, stepping 10 frames, and restoring, the full 10KB RAM is byte-for-byte
+   identical. No state leaks. The look-ahead's save/restore mechanism is sound.
+
+2. **BUG-2 root cause: not a bug** — Beams were never "stuck" at state 17. The beam spread
+   phase naturally lasts 22 frames, which exceeds the sword cooldown (~15 frames). When the
+   agent fires rapidly, the beam from attack N is still spreading when the sword cooldown
+   from attack N+1 finishes. The `_sword_count` counter in `_step_with_frame_capture` accumulated
+   across action boundaries, reaching 11 and triggering the hack mid-spread every time.
+
+3. **11-frame hack was harmful** — The hack modified `info['beam_animation']` to 0, which:
+   - Made `get_animation_state(BEAMS)` return INACTIVE while beams were still active
+   - Made `has_beams` return True (beams available) when the beam slot was occupied
+   - Corrupted the INACTIVE→ACTIVE transition detection in look-ahead
+   - Could cause the look-ahead to miss beam damage attribution
+   **Fix**: Removed the hack entirely. Beam spread deactivates naturally after 22 frames.
+
+4. **ZeldaGame.__active guard is safe** — The look-ahead creates new ZeldaGame instances in a
+   loop, which changes `__active`. But the `start` reference's enemies/health data is accessed
+   via `cached_property` which was already evaluated before the loop. No stale-reference bugs.
 
 ## Area 9: Direction Encoding (Low)
 
@@ -471,7 +497,7 @@ The NES blocks new actions until `link_status==0` AND `sword_animation==0`.
 | 5. Enemy dying/active | Medium | ⬜ |
 | 6. Object ID classification | Medium | ⬜ |
 | 7. Health system | Medium | ✅ |
-| 8. Look-ahead simulation | **HIGH** | ⬜ |
+| 8. Look-ahead simulation | **HIGH** | ✅ |
 | 9. Direction encoding | Low | ⬜ |
 | 10. Tile layout | Low | ⬜ |
 | 11. Enemy kind IDs | Medium | ⬜ |
