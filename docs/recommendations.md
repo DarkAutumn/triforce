@@ -51,8 +51,37 @@ trajectory.
 ### Recommendation
 
 Implement the `n_envs > 1` path (currently `NotImplementedError` at line 84). Even 4
-parallel envs would significantly reduce sample correlation. Note: the NES emulator
-constraint (one per process) means parallel envs would require subprocess-based workers.
+parallel envs would significantly reduce sample correlation.
+
+### Current State of Parallelization
+
+The **rollout buffer is already dimensioned for `n_envs`** — tensors are
+`(n_envs, memory_length, ...)`, the `__setitem__` method collects single-env results,
+and the optimizer scales `batch_size = memory_length * n_envs`. The `--parallel` CLI arg
+exists in `train.py` but is never wired up. The scaffolding is there.
+
+### What's Blocking
+
+1. **`NotImplementedError` in `ml_ppo.py:84`** — the explicit gate. Easy to remove.
+
+2. **`ZeldaGame.__active` singleton** — the real blocker. Every frame read asserts it's
+   the "active" game instance (`zelda_game.py`). Two envs running simultaneously would
+   conflict. Needs to be removed or made per-instance.
+
+3. **`MetricTracker` singleton** — `assert _instance is None` in `__init__`. Only one
+   can exist. Would need per-env tracking with aggregation.
+
+4. **NES emulator: one per process** — `stable-retro` can only have one emulator instance
+   per process. Parallel envs require `AsyncVectorEnv` with subprocess workers (not
+   `SyncVectorEnv`, since you can't have two emulators in one process).
+
+### Implementation Path
+
+1. Refactor `ZeldaGame.__active` to per-instance tracking.
+2. Make `MetricTracker` per-env or thread-safe.
+3. Use `gymnasium.vector.AsyncVectorEnv` (subprocess-based) to work around the
+   one-emulator-per-process constraint.
+4. Remove the `NotImplementedError` gate and wire up `--parallel`.
 
 ---
 
