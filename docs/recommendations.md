@@ -301,8 +301,11 @@ Evaluation: 100 episodes of full-game
 #### 3. Automatic evaluation at end of training circuits
 
 When a training circuit completes in `train.py`, automatically run an evaluation
-pass (e.g., 50–100 episodes) and print the progress report. This should use
-deterministic action selection (`deterministic=True`) for reproducibility.
+pass (e.g., 50–100 episodes) and print the progress report. Use stochastic
+action selection (the default) — Zelda's NES RNG has limited entropy, so
+deterministic actions from the same start state would produce nearly identical
+runs. Stochastic sampling provides the variance needed to measure consistency
+(e.g., "reaches the boss 30% vs 80% of the time").
 
 #### 4. Exit criteria based on progress
 
