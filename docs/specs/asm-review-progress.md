@@ -64,6 +64,12 @@ test by observing the NES's RAM reaction to inputs:
 - **Look-ahead tests**: Snapshot all 10KB of RAM, run the look-ahead code, snapshot again.
   Byte-for-byte diff reveals any state corruption.
 
+## Savestate Catalog
+
+`docs/savestates.yml` catalogs every `.state` file with level, room coordinates, Link's
+equipment, health, inventory, and dungeon items. Consult it to find the right savestate
+for a test (e.g., a dungeon-1 room, a state with wood sword, a state with full health).
+
 ## Interactive Debugging
 
 You can write ad-hoc Python scripts to load any savestate and interactively explore the
@@ -436,17 +442,43 @@ they affect the actual game state model used for training.
    loop, which changes `__active`. But the `start` reference's enemies/health data is accessed
    via `cached_property` which was already evaluated before the loop. No stale-reference bugs.
 
-## Area 9: Direction Encoding (Low)
+## Area 9: Direction Encoding (Low) ✅
 
-- [ ] Confirm E=1, W=2, S=4, N=8 matches assembly
-- [ ] Verify no object stores composite directions
-- [ ] Tests: test_object_model.py (T2.9)
+- [x] Confirm E=1, W=2, S=4, N=8 matches assembly — verified empirically on NES
+- [x] Verify no object stores composite directions — diagonal input resolves to single cardinal
+- [x] Verify from_ram_value handles all cases correctly
+- [x] Tests: test_direction_tiles_sound.py (TestDirectionEncoding, 7 tests)
 
-## Area 10: Tile Layout (Low)
+### Area 9 Findings
 
-- [ ] Verify $D30 maps to PlayAreaTiles (retro remapping)
-- [ ] Verify reshape (32,22).T.swapaxes(0,1) gives correct x,y indexing
-- [ ] Tests: test_object_model.py (T7.1-T7.2)
+1. **Direction values match NES exactly**: E=1, W=2, S=4, N=8. Verified by sending directional
+   input and reading ObjDir[0] from RAM.
+
+2. **No composite directions in ObjDir**: When diagonal buttons are pressed simultaneously, the
+   NES resolves to a single cardinal direction (vertical axis wins). ObjDir only ever contains
+   0, 1, 2, 4, or 8. `from_ram_value` correctly returns NONE for any other value.
+
+3. **Python diagonal directions (NE=9, etc.)**: These are only used in the action space for
+   diagonal movement input — they're never stored in NES RAM. The action system correctly
+   maps them to combined button presses.
+
+## Area 10: Tile Layout (Low) ✅
+
+- [x] Verify $D30 maps to PlayAreaTiles (retro remapping from $6530) — confirmed
+- [x] Verify reshape gives correct x,y indexing — tiles[x,y] where x=column, y=row
+- [x] **Fix**: Removed no-op `.T.swapaxes(0,1)` from `current_tiles` reshape
+- [x] Tests: test_direction_tiles_sound.py (TestTileLayout, 4 tests)
+
+### Area 10 Findings
+
+1. **Column-major storage**: NES stores PlayAreaTiles column-major — 32 columns of 22 rows.
+   `reshape(32, 22)` gives `tiles[x, y]` indexing directly. The previous code had
+   `.T.swapaxes(0, 1)` which transposes then un-transposes — a complete no-op on 2D arrays.
+   Removed.
+
+2. **Door positions verified**: `tiles[0xf, 2]` = north door center, `tiles[2, 0xa]` = west
+   door center, `tiles[0x1d, 0xa]` = east door center, `tiles[0xf, 0x13]` = south door center.
+   All consistent with column-major indexing.
 
 ## Area 11: ZeldaEnemyKind IDs (Medium)
 
@@ -478,11 +510,23 @@ The NES blocks new actions until `link_status==0` AND `sword_animation==0`.
 - Old ITEM_COOLDOWN=10 was 2 frames short — compensated by accident via extra frame in
   _skip_uncontrollable_states. New polling removes this fragile dependency.
 
-## Area 13: Sound Bitmask Register (Low)
+## Area 13: Sound Bitmask Register (Low) ✅
 
-- [ ] Verify $605 is correct register for sound bitmasks
-- [ ] Verify each SoundKind value against assembly
-- [ ] Tests: test_object_model.py (T8.1-T8.2)
+- [x] Verify $605 is correct register for sound bitmasks — confirmed (Tune0)
+- [x] Verify each SoundKind value against assembly — all 7 values match
+- [x] Verify is_sound_playing bitmask logic — correct
+- [x] Tests: test_direction_tiles_sound.py (TestSoundBitmask, 5 tests)
+
+### Area 13 Findings
+
+1. **Register confirmed**: `sound_pulse_1` reads from $605 (Tune0 / Pulse 1 Incidental Music Type).
+   All 7 SoundKind bitmask values match the assembly documentation exactly.
+
+2. **Bit $80 unknown**: Assembly docs note bit $80 as "?" for $605. Python's SoundKind doesn't
+   include it. Not a problem — if it's used, it's for a sound we don't need to detect.
+
+3. **Trigger vs type**: $604 is the trigger register (write here to request a sound), $605 is
+   the type register (reflects what's playing). Python correctly reads $605.
 
 ---
 
@@ -498,10 +542,10 @@ The NES blocks new actions until `link_status==0` AND `sword_animation==0`.
 | 6. Object ID classification | Medium | ⬜ |
 | 7. Health system | Medium | ✅ |
 | 8. Look-ahead simulation | **HIGH** | ✅ |
-| 9. Direction encoding | Low | ⬜ |
-| 10. Tile layout | Low | ⬜ |
+| 9. Direction encoding | Low | ✅ |
+| 10. Tile layout | Low | ✅ |
 | 11. Enemy kind IDs | Medium | ⬜ |
 | 12. Frame skip & animation | **HIGH** | ✅* |
-| 13. Sound bitmasks | Low | ⬜ |
+| 13. Sound bitmasks | Low | ✅ |
 
 Legend: ⬜ Not started · 🔄 In progress · ✅ Done · ❌ Blocked

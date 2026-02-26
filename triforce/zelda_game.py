@@ -238,7 +238,7 @@ class ZeldaGame:
         """Returns the current, up to date tiles in the room."""
         map_offset, map_len = zelda_game_data.tables['tile_layout']
         tiles = self.ram[map_offset:map_offset+map_len]
-        tiles = tiles.reshape((32, 22)).T.swapaxes(0, 1)
+        tiles = tiles.reshape((32, 22))  # NES stores column-major: tiles[x, y]
         return torch.from_numpy(tiles)
 
     @property
