@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#!/usr/bin/env python3
 """Evaluates the result of trainined models."""
 from multiprocessing.sharedctypes import Synchronized
 import sys

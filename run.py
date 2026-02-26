@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#!/usr/bin/env python3
 """Run the ZeldaML agent to play The Legend of Zelda (NES)."""
 
 # While we want to keep this file relatively clean, it's fine to have a bit of a large render function.
