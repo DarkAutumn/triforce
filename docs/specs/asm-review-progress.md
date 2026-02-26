@@ -283,8 +283,8 @@ they affect the actual game state model used for training.
 - [x] Validate 11-frame hack in frame_skip_wrapper.py — **hack is wrong**: it fires at 11 frames but natural spread is 22 frames. Only modifies info dict, not NES RAM, so NES is unaffected but Python thinks beam inactive 11 frames early.
 - [x] Tests: test_weapons.py (17 tests covering lifecycle, timing, health edge cases)
 - [x] Trace magic rod shot: $80→$00 (no $81 state). With book, fire spawns in bomb slot $10.
-- [ ] Reproduce beam stuck-at-17 bug (deferred to Area 8 — likely caused by look-ahead simulation)
-- [ ] Determine if look-ahead causes stuck-at-17 (deferred to Area 8)
+- [x] Reproduce beam stuck-at-17 bug — **resolved**: beam is NOT stuck, spread is 22 frames (see Area 8)
+- [x] Determine if look-ahead causes stuck-at-17 — **resolved**: 11-frame hack was the cause, removed
 
 ### Area 2 Findings
 
@@ -471,9 +471,9 @@ they affect the actual game state model used for training.
 - [x] Investigate beam stuck-at-17 root cause — **beam is NOT stuck, spread naturally lasts 22 frames**
 - [x] **Fix BUG-2**: Removed 11-frame hack from frame_skip_wrapper.py (see findings below)
 - [x] Tests: test_look_ahead.py (8 tests)
-- [ ] Test damage attribution with discounts
-- [ ] Test room transition clears discounts
-- [ ] Verify trigger condition (INACTIVE→ACTIVE only)
+- [x] Test damage attribution with discounts — rewritten as FutureCreditLedger with 17 unit tests
+- [x] Test room transition clears discounts — tested via FutureCreditLedger.clear()
+- [x] Verify trigger condition (INACTIVE→ACTIVE only) — confirmed in _handle_future_effects
 
 ### Area 8 Findings
 
@@ -572,7 +572,7 @@ The NES blocks new actions until `link_status==0` AND `sword_animation==0`.
 - [x] Verify new code fires on first possible frame (sword, bomb, boomerang all confirmed)
 - [x] Tests: test_frame_skip.py (10 tests)
 - [ ] Investigate south/west movement asymmetry (WS_ADJUSTMENT_FRAMES=4) — deferred
-- [ ] **Fix BUG-2**: 11-frame beam hack fires mid-spread (depends on Area 8 look-ahead) — deferred
+- [x] **Fix BUG-2**: 11-frame beam hack removed (resolved in Area 8)
 
 **Findings**:
 - `link_status` (ObjState[0]): 0x11 during animation, 0x31 near end, 0x00 when controllable
@@ -618,7 +618,7 @@ The NES blocks new actions until `link_status==0` AND `sword_animation==0`.
 | 9. Direction encoding | Low | ✅ |
 | 10. Tile layout | Low | ✅ |
 | 11. Enemy kind IDs | Medium | ✅ |
-| 12. Frame skip & animation | **HIGH** | ✅* |
+| 12. Frame skip & animation | **HIGH** | ✅ |
 | 13. Sound bitmasks | Low | ✅ |
 
 Legend: ⬜ Not started · 🔄 In progress · ✅ Done · ❌ Blocked
