@@ -1,0 +1,4201 @@
+# Zelda NES Savestate Catalog
+# Auto-generated inventory of all savestates in triforce/custom_integrations/Zelda-NES/
+# Use this to find savestates matching specific criteria (level, equipment, room, etc.)
+#
+# Naming convention: {level}_{room_hex}{entry_direction}.state
+#   level: 0=overworld, 1-9=dungeons
+#   room_hex: 2-digit hex (high nibble=row, low nibble=column)
+#   entry_direction: n/s/e/w=direction Link entered from, c=center
+#   Example: 1_45n.state = dungeon 1, room 0x45 (row 4, col 5), entered from north
+#
+savestates:
+  0_0cs.state:
+    level: overworld
+    room: '0x0c'
+    room_col: 12
+    room_row: 0
+    entry_direction: south
+    mode: 5
+    link:
+      position: [80, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 10
+      keys: 0
+      selected_item: bombs
+  0_0ds.state:
+    level: overworld
+    room: '0x0d'
+    room_col: 13
+    room_row: 0
+    entry_direction: south
+    mode: 5
+    link:
+      position: [208, 221]
+      direction: north
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_0dw.state:
+    level: overworld
+    room: '0x0d'
+    room_col: 13
+    room_row: 0
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 141]
+      direction: east
+      health: 1.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 11
+      keys: 0
+      selected_item: bombs
+  0_0en.state:
+    level: overworld
+    room: '0x0e'
+    room_col: 14
+    room_row: 0
+    entry_direction: north
+    mode: 5
+    link:
+      position: [80, 125]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 7
+      keys: 0
+      selected_item: bombs
+  0_0es.state:
+    level: overworld
+    room: '0x0e'
+    room_col: 14
+    room_row: 0
+    entry_direction: south
+    mode: 5
+    link:
+      position: [80, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 7
+      keys: 0
+      selected_item: bombs
+  0_17s.state:
+    level: overworld
+    room: '0x17'
+    room_col: 7
+    room_row: 1
+    entry_direction: south
+    mode: 5
+    link:
+      position: [144, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_18w.state:
+    level: overworld
+    room: '0x18'
+    room_col: 8
+    room_row: 1
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 149]
+      direction: east
+      health: 2.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_19e.state:
+    level: overworld
+    room: '0x19'
+    room_col: 9
+    room_row: 1
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 149]
+      direction: west
+      health: 1.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 10
+      keys: 0
+      selected_item: bombs
+  0_19w.state:
+    level: overworld
+    room: '0x19'
+    room_col: 9
+    room_row: 1
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 133]
+      direction: east
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_1ae.state:
+    level: overworld
+    room: '0x1a'
+    room_col: 10
+    room_row: 1
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 133]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 10
+      keys: 0
+      selected_item: bombs
+  0_1aw.state:
+    level: overworld
+    room: '0x1a'
+    room_col: 10
+    room_row: 1
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 157]
+      direction: east
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_1be.state:
+    level: overworld
+    room: '0x1b'
+    room_col: 11
+    room_row: 1
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 141]
+      direction: west
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_1ce.state:
+    level: overworld
+    room: '0x1c'
+    room_col: 12
+    room_row: 1
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 117]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_1cn.state:
+    level: overworld
+    room: '0x1c'
+    room_col: 12
+    room_row: 1
+    entry_direction: north
+    mode: 5
+    link:
+      position: [48, 109]
+      direction: south
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_1cs.state:
+    level: overworld
+    room: '0x1c'
+    room_col: 12
+    room_row: 1
+    entry_direction: south
+    mode: 5
+    link:
+      position: [48, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 10
+      keys: 0
+      selected_item: bombs
+  0_1de.state:
+    level: overworld
+    room: '0x1d'
+    room_col: 13
+    room_row: 1
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 133]
+      direction: west
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_1ds.state:
+    level: overworld
+    room: '0x1d'
+    room_col: 13
+    room_row: 1
+    entry_direction: south
+    mode: 5
+    link:
+      position: [128, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_1dw.state:
+    level: overworld
+    room: '0x1d'
+    room_col: 13
+    room_row: 1
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 117]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_1ee.state:
+    level: overworld
+    room: '0x1e'
+    room_col: 14
+    room_row: 1
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 125]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 5
+      keys: 0
+      selected_item: bombs
+  0_1en.state:
+    level: overworld
+    room: '0x1e'
+    room_col: 14
+    room_row: 1
+    entry_direction: north
+    mode: 5
+    link:
+      position: [80, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 7
+      keys: 0
+      selected_item: bombs
+  0_1ew.state:
+    level: overworld
+    room: '0x1e'
+    room_col: 14
+    room_row: 1
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 125]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_1fw.state:
+    level: overworld
+    room: '0x1f'
+    room_col: 15
+    room_row: 1
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 117]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_27e.state:
+    level: overworld
+    room: '0x27'
+    room_col: 7
+    room_row: 2
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 109]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_27n.state:
+    level: overworld
+    room: '0x27'
+    room_col: 7
+    room_row: 2
+    entry_direction: north
+    mode: 5
+    link:
+      position: [136, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_28e.state:
+    level: overworld
+    room: '0x28'
+    room_col: 8
+    room_row: 2
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 173]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_28s.state:
+    level: overworld
+    room: '0x28'
+    room_col: 8
+    room_row: 2
+    entry_direction: south
+    mode: 5
+    link:
+      position: [128, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_28w.state:
+    level: overworld
+    room: '0x28'
+    room_col: 8
+    room_row: 2
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 101]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_29e.state:
+    level: overworld
+    room: '0x29'
+    room_col: 9
+    room_row: 2
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 141]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_29w.state:
+    level: overworld
+    room: '0x29'
+    room_col: 9
+    room_row: 2
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 117]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_2ae.state:
+    level: overworld
+    room: '0x2a'
+    room_col: 10
+    room_row: 2
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 165]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 7
+      keys: 0
+      selected_item: bombs
+  0_2as.state:
+    level: overworld
+    room: '0x2a'
+    room_col: 10
+    room_row: 2
+    entry_direction: south
+    mode: 5
+    link:
+      position: [192, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 7
+      keys: 0
+      selected_item: bombs
+  0_2aw.state:
+    level: overworld
+    room: '0x2a'
+    room_col: 10
+    room_row: 2
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 125]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_2be.state:
+    level: overworld
+    room: '0x2b'
+    room_col: 11
+    room_row: 2
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 157]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 17
+      keys: 0
+      selected_item: bombs
+  0_2bs.state:
+    level: overworld
+    room: '0x2b'
+    room_col: 11
+    room_row: 2
+    entry_direction: south
+    mode: 5
+    link:
+      position: [24, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_2bw.state:
+    level: overworld
+    room: '0x2b'
+    room_col: 11
+    room_row: 2
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 125]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_2ce.state:
+    level: overworld
+    room: '0x2c'
+    room_col: 12
+    room_row: 2
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 173]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 5
+      keys: 0
+      selected_item: bombs
+  0_2cn.state:
+    level: overworld
+    room: '0x2c'
+    room_col: 12
+    room_row: 2
+    entry_direction: north
+    mode: 5
+    link:
+      position: [48, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 10
+      keys: 0
+      selected_item: bombs
+  0_2cw.state:
+    level: overworld
+    room: '0x2c'
+    room_col: 12
+    room_row: 2
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 117]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_2de.state:
+    level: overworld
+    room: '0x2d'
+    room_col: 13
+    room_row: 2
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 173]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 2
+      keys: 0
+      selected_item: bombs
+  0_2dn.state:
+    level: overworld
+    room: '0x2d'
+    room_col: 13
+    room_row: 2
+    entry_direction: north
+    mode: 5
+    link:
+      position: [128, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 5
+      keys: 0
+      selected_item: bombs
+  0_2ds.state:
+    level: overworld
+    room: '0x2d'
+    room_col: 13
+    room_row: 2
+    entry_direction: south
+    mode: 5
+    link:
+      position: [128, 221]
+      direction: north
+      health: 1.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 3
+      keys: 0
+      selected_item: bombs
+  0_2dw.state:
+    level: overworld
+    room: '0x2d'
+    room_col: 13
+    room_row: 2
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 165]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_2es.state:
+    level: overworld
+    room: '0x2e'
+    room_col: 14
+    room_row: 2
+    entry_direction: south
+    mode: 5
+    link:
+      position: [72, 221]
+      direction: north
+      health: 2.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 2
+      keys: 0
+      selected_item: bombs
+  0_2ew.state:
+    level: overworld
+    room: '0x2e'
+    room_col: 14
+    room_row: 2
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 181]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 7
+      bomb_max: 8
+    inventory:
+      rupees: 2
+      keys: 0
+      selected_item: bombs
+  0_37c.state:
+    level: overworld
+    room: '0x37'
+    room_col: 7
+    room_row: 3
+    entry_direction: center
+    mode: 4
+    link:
+      position: [112, 126]
+      direction: south
+      health: 4.0
+      max_health: 4
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+    dungeon_items:
+      triforce_pieces: 1
+      triforce_levels: [1]
+  0_37e.state:
+    level: overworld
+    room: '0x37'
+    room_col: 7
+    room_row: 3
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 141]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 2
+      keys: 0
+      selected_item: bombs
+  0_37s.state:
+    level: overworld
+    room: '0x37'
+    room_col: 7
+    room_row: 3
+    entry_direction: south
+    mode: 5
+    link:
+      position: [112, 125]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 5
+      keys: 0
+      selected_item: bombs
+  0_38n.state:
+    level: overworld
+    room: '0x38'
+    room_col: 8
+    room_row: 3
+    entry_direction: north
+    mode: 5
+    link:
+      position: [120, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_38s.state:
+    level: overworld
+    room: '0x38'
+    room_col: 8
+    room_row: 3
+    entry_direction: south
+    mode: 5
+    link:
+      position: [120, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_38w.state:
+    level: overworld
+    room: '0x38'
+    room_col: 8
+    room_row: 3
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 141]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 2
+      keys: 0
+      selected_item: bombs
+  0_39s.state:
+    level: overworld
+    room: '0x39'
+    room_col: 9
+    room_row: 3
+    entry_direction: south
+    mode: 5
+    link:
+      position: [128, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_3ae.state:
+    level: overworld
+    room: '0x3a'
+    room_col: 10
+    room_row: 3
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 149]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_3an.state:
+    level: overworld
+    room: '0x3a'
+    room_col: 10
+    room_row: 3
+    entry_direction: north
+    mode: 5
+    link:
+      position: [200, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 7
+      keys: 0
+      selected_item: bombs
+  0_3as.state:
+    level: overworld
+    room: '0x3a'
+    room_col: 10
+    room_row: 3
+    entry_direction: south
+    mode: 5
+    link:
+      position: [128, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 12
+      keys: 0
+      selected_item: bombs
+  0_3bn.state:
+    level: overworld
+    room: '0x3b'
+    room_col: 11
+    room_row: 3
+    entry_direction: north
+    mode: 5
+    link:
+      position: [40, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_3bs.state:
+    level: overworld
+    room: '0x3b'
+    room_col: 11
+    room_row: 3
+    entry_direction: south
+    mode: 5
+    link:
+      position: [208, 221]
+      direction: north
+      health: 1.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 7
+      keys: 0
+      selected_item: bombs
+  0_3bw.state:
+    level: overworld
+    room: '0x3b'
+    room_col: 11
+    room_row: 3
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 125]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_3dn.state:
+    level: overworld
+    room: '0x3d'
+    room_col: 13
+    room_row: 3
+    entry_direction: north
+    mode: 5
+    link:
+      position: [112, 61]
+      direction: south
+      health: 1.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 3
+      keys: 0
+      selected_item: bombs
+  0_3ds.state:
+    level: overworld
+    room: '0x3d'
+    room_col: 13
+    room_row: 3
+    entry_direction: south
+    mode: 5
+    link:
+      position: [112, 221]
+      direction: north
+      health: 1.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 3
+      keys: 0
+      selected_item: bombs
+  0_3ee.state:
+    level: overworld
+    room: '0x3e'
+    room_col: 14
+    room_row: 3
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 181]
+      direction: west
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 2
+      keys: 0
+      selected_item: bombs
+  0_3en.state:
+    level: overworld
+    room: '0x3e'
+    room_col: 14
+    room_row: 3
+    entry_direction: north
+    mode: 5
+    link:
+      position: [88, 61]
+      direction: south
+      health: 1.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 2
+      keys: 0
+      selected_item: bombs
+  0_3fw.state:
+    level: overworld
+    room: '0x3f'
+    room_col: 15
+    room_row: 3
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 165]
+      direction: east
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 2
+      keys: 0
+      selected_item: bombs
+  0_46e.state:
+    level: overworld
+    room: '0x46'
+    room_col: 6
+    room_row: 4
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 133]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_46s.state:
+    level: overworld
+    room: '0x46'
+    room_col: 6
+    room_row: 4
+    entry_direction: south
+    mode: 5
+    link:
+      position: [128, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_47e.state:
+    level: overworld
+    room: '0x47'
+    room_col: 7
+    room_row: 4
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 149]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_47w.state:
+    level: overworld
+    room: '0x47'
+    room_col: 7
+    room_row: 4
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 141]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 2
+      keys: 0
+      selected_item: bombs
+  0_48n.state:
+    level: overworld
+    room: '0x48'
+    room_col: 8
+    room_row: 4
+    entry_direction: north
+    mode: 5
+    link:
+      position: [120, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_48s.state:
+    level: overworld
+    room: '0x48'
+    room_col: 8
+    room_row: 4
+    entry_direction: south
+    mode: 5
+    link:
+      position: [112, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 2
+      keys: 0
+      selected_item: bombs
+  0_48w.state:
+    level: overworld
+    room: '0x48'
+    room_col: 8
+    room_row: 4
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 149]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_49e.state:
+    level: overworld
+    room: '0x49'
+    room_col: 9
+    room_row: 4
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 125]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_49n.state:
+    level: overworld
+    room: '0x49'
+    room_col: 9
+    room_row: 4
+    entry_direction: north
+    mode: 5
+    link:
+      position: [128, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_49s.state:
+    level: overworld
+    room: '0x49'
+    room_col: 9
+    room_row: 4
+    entry_direction: south
+    mode: 5
+    link:
+      position: [120, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_4ae.state:
+    level: overworld
+    room: '0x4a'
+    room_col: 10
+    room_row: 4
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 157]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 12
+      keys: 0
+      selected_item: bombs
+  0_4an.state:
+    level: overworld
+    room: '0x4a'
+    room_col: 10
+    room_row: 4
+    entry_direction: north
+    mode: 5
+    link:
+      position: [128, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 12
+      keys: 0
+      selected_item: bombs
+  0_4aw.state:
+    level: overworld
+    room: '0x4a'
+    room_col: 10
+    room_row: 4
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 125]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_4bn.state:
+    level: overworld
+    room: '0x4b'
+    room_col: 11
+    room_row: 4
+    entry_direction: north
+    mode: 5
+    link:
+      position: [192, 61]
+      direction: south
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_4bs.state:
+    level: overworld
+    room: '0x4b'
+    room_col: 11
+    room_row: 4
+    entry_direction: south
+    mode: 5
+    link:
+      position: [56, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_4bw.state:
+    level: overworld
+    room: '0x4b'
+    room_col: 11
+    room_row: 4
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 157]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 12
+      keys: 0
+      selected_item: bombs
+  0_4ce.state:
+    level: overworld
+    room: '0x4c'
+    room_col: 12
+    room_row: 4
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 149]
+      direction: west
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_4de.state:
+    level: overworld
+    room: '0x4d'
+    room_col: 13
+    room_row: 4
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 141]
+      direction: west
+      health: 1.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_4dn.state:
+    level: overworld
+    room: '0x4d'
+    room_col: 13
+    room_row: 4
+    entry_direction: north
+    mode: 5
+    link:
+      position: [224, 61]
+      direction: south
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_4dw.state:
+    level: overworld
+    room: '0x4d'
+    room_col: 13
+    room_row: 4
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 149]
+      direction: east
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_4ew.state:
+    level: overworld
+    room: '0x4e'
+    room_col: 14
+    room_row: 4
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 157]
+      direction: east
+      health: 2.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_55e.state:
+    level: overworld
+    room: '0x55'
+    room_col: 5
+    room_row: 5
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 133]
+      direction: west
+      health: 1.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_55s.state:
+    level: overworld
+    room: '0x55'
+    room_col: 5
+    room_row: 5
+    entry_direction: south
+    mode: 5
+    link:
+      position: [208, 221]
+      direction: north
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_56e.state:
+    level: overworld
+    room: '0x56'
+    room_col: 6
+    room_row: 5
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 93]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_56n.state:
+    level: overworld
+    room: '0x56'
+    room_col: 6
+    room_row: 5
+    entry_direction: north
+    mode: 5
+    link:
+      position: [128, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_56w.state:
+    level: overworld
+    room: '0x56'
+    room_col: 6
+    room_row: 5
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 133]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_57e.state:
+    level: overworld
+    room: '0x57'
+    room_col: 7
+    room_row: 5
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 149]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_57w.state:
+    level: overworld
+    room: '0x57'
+    room_col: 7
+    room_row: 5
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 85]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_58e.state:
+    level: overworld
+    room: '0x58'
+    room_col: 8
+    room_row: 5
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 125]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_58n.state:
+    level: overworld
+    room: '0x58'
+    room_col: 8
+    room_row: 5
+    entry_direction: north
+    mode: 5
+    link:
+      position: [112, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 2
+      keys: 0
+      selected_item: bombs
+  0_58s.state:
+    level: overworld
+    room: '0x58'
+    room_col: 8
+    room_row: 5
+    entry_direction: south
+    mode: 5
+    link:
+      position: [192, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_58w.state:
+    level: overworld
+    room: '0x58'
+    room_col: 8
+    room_row: 5
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 149]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_59e.state:
+    level: overworld
+    room: '0x59'
+    room_col: 9
+    room_row: 5
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 117]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_59n.state:
+    level: overworld
+    room: '0x59'
+    room_col: 9
+    room_row: 5
+    entry_direction: north
+    mode: 5
+    link:
+      position: [128, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_59s.state:
+    level: overworld
+    room: '0x59'
+    room_col: 9
+    room_row: 5
+    entry_direction: south
+    mode: 5
+    link:
+      position: [120, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 3
+      keys: 0
+      selected_item: bombs
+  0_59w.state:
+    level: overworld
+    room: '0x59'
+    room_col: 9
+    room_row: 5
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 141]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_5ae.state:
+    level: overworld
+    room: '0x5a'
+    room_col: 10
+    room_row: 5
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 133]
+      direction: west
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_5as.state:
+    level: overworld
+    room: '0x5a'
+    room_col: 10
+    room_row: 5
+    entry_direction: south
+    mode: 5
+    link:
+      position: [224, 221]
+      direction: north
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_5aw.state:
+    level: overworld
+    room: '0x5a'
+    room_col: 10
+    room_row: 5
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 117]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_5be.state:
+    level: overworld
+    room: '0x5b'
+    room_col: 11
+    room_row: 5
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 85]
+      direction: west
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_5bn.state:
+    level: overworld
+    room: '0x5b'
+    room_col: 11
+    room_row: 5
+    entry_direction: north
+    mode: 5
+    link:
+      position: [64, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_5bs.state:
+    level: overworld
+    room: '0x5b'
+    room_col: 11
+    room_row: 5
+    entry_direction: south
+    mode: 5
+    link:
+      position: [192, 221]
+      direction: north
+      health: 2.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_5bw.state:
+    level: overworld
+    room: '0x5b'
+    room_col: 11
+    room_row: 5
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 93]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_5cs.state:
+    level: overworld
+    room: '0x5c'
+    room_col: 12
+    room_row: 5
+    entry_direction: south
+    mode: 5
+    link:
+      position: [64, 221]
+      direction: north
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 7
+      keys: 0
+      selected_item: bombs
+  0_5cw.state:
+    level: overworld
+    room: '0x5c'
+    room_col: 12
+    room_row: 5
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 93]
+      direction: east
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_5dw.state:
+    level: overworld
+    room: '0x5d'
+    room_col: 13
+    room_row: 5
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 157]
+      direction: east
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_5fs.state:
+    level: overworld
+    room: '0x5f'
+    room_col: 15
+    room_row: 5
+    entry_direction: south
+    mode: 5
+    link:
+      position: [128, 221]
+      direction: north
+      health: 1.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_64e.state:
+    level: overworld
+    room: '0x64'
+    room_col: 4
+    room_row: 6
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 141]
+      direction: west
+      health: 1.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_65e.state:
+    level: overworld
+    room: '0x65'
+    room_col: 5
+    room_row: 6
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 149]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_65n.state:
+    level: overworld
+    room: '0x65'
+    room_col: 5
+    room_row: 6
+    entry_direction: north
+    mode: 5
+    link:
+      position: [208, 61]
+      direction: south
+      health: 1.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_66e.state:
+    level: overworld
+    room: '0x66'
+    room_col: 6
+    room_row: 6
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 141]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_66n.state:
+    level: overworld
+    room: '0x66'
+    room_col: 6
+    room_row: 6
+    entry_direction: north
+    mode: 5
+    link:
+      position: [112, 77]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_66s.state:
+    level: overworld
+    room: '0x66'
+    room_col: 6
+    room_row: 6
+    entry_direction: south
+    mode: 5
+    link:
+      position: [200, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_66w.state:
+    level: overworld
+    room: '0x66'
+    room_col: 6
+    room_row: 6
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 165]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_67e.state:
+    level: overworld
+    room: '0x67'
+    room_col: 7
+    room_row: 6
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 117]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_67s.state:
+    level: overworld
+    room: '0x67'
+    room_col: 7
+    room_row: 6
+    entry_direction: south
+    mode: 7
+    link:
+      position: [128, 205]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 0
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: boomerang
+  0_67w.state:
+    level: overworld
+    room: '0x67'
+    room_col: 7
+    room_row: 6
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 133]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_68e.state:
+    level: overworld
+    room: '0x68'
+    room_col: 8
+    room_row: 6
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 141]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_68n.state:
+    level: overworld
+    room: '0x68'
+    room_col: 8
+    room_row: 6
+    entry_direction: north
+    mode: 5
+    link:
+      position: [192, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_68s.state:
+    level: overworld
+    room: '0x68'
+    room_col: 8
+    room_row: 6
+    entry_direction: south
+    mode: 5
+    link:
+      position: [128, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_68w.state:
+    level: overworld
+    room: '0x68'
+    room_col: 8
+    room_row: 6
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 125]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_69e.state:
+    level: overworld
+    room: '0x69'
+    room_col: 9
+    room_row: 6
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 141]
+      direction: west
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_69n.state:
+    level: overworld
+    room: '0x69'
+    room_col: 9
+    room_row: 6
+    entry_direction: north
+    mode: 5
+    link:
+      position: [128, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 3
+      keys: 0
+      selected_item: bombs
+  0_69w.state:
+    level: overworld
+    room: '0x69'
+    room_col: 9
+    room_row: 6
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 125]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_6ae.state:
+    level: overworld
+    room: '0x6a'
+    room_col: 10
+    room_row: 6
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 85]
+      direction: west
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_6an.state:
+    level: overworld
+    room: '0x6a'
+    room_col: 10
+    room_row: 6
+    entry_direction: north
+    mode: 5
+    link:
+      position: [224, 61]
+      direction: south
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_6aw.state:
+    level: overworld
+    room: '0x6a'
+    room_col: 10
+    room_row: 6
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 165]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_6be.state:
+    level: overworld
+    room: '0x6b'
+    room_col: 11
+    room_row: 6
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 149]
+      direction: west
+      health: 1.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_6bn.state:
+    level: overworld
+    room: '0x6b'
+    room_col: 11
+    room_row: 6
+    entry_direction: north
+    mode: 5
+    link:
+      position: [56, 61]
+      direction: south
+      health: 1.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_6bs.state:
+    level: overworld
+    room: '0x6b'
+    room_col: 11
+    room_row: 6
+    entry_direction: south
+    mode: 5
+    link:
+      position: [192, 221]
+      direction: north
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_6bw.state:
+    level: overworld
+    room: '0x6b'
+    room_col: 11
+    room_row: 6
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 85]
+      direction: east
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_6cn.state:
+    level: overworld
+    room: '0x6c'
+    room_col: 12
+    room_row: 6
+    entry_direction: north
+    mode: 5
+    link:
+      position: [64, 61]
+      direction: south
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 7
+      keys: 0
+      selected_item: bombs
+  0_6cw.state:
+    level: overworld
+    room: '0x6c'
+    room_col: 12
+    room_row: 6
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 149]
+      direction: east
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_6fn.state:
+    level: overworld
+    room: '0x6f'
+    room_col: 15
+    room_row: 6
+    entry_direction: north
+    mode: 5
+    link:
+      position: [120, 61]
+      direction: south
+      health: 1.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_6fs.state:
+    level: overworld
+    room: '0x6f'
+    room_col: 15
+    room_row: 6
+    entry_direction: south
+    mode: 5
+    link:
+      position: [120, 221]
+      direction: north
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_75e.state:
+    level: overworld
+    room: '0x75'
+    room_col: 5
+    room_row: 7
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 117]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_76e.state:
+    level: overworld
+    room: '0x76'
+    room_col: 6
+    room_row: 7
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 133]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_76n.state:
+    level: overworld
+    room: '0x76'
+    room_col: 6
+    room_row: 7
+    entry_direction: north
+    mode: 5
+    link:
+      position: [208, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_76w.state:
+    level: overworld
+    room: '0x76'
+    room_col: 6
+    room_row: 7
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 109]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_77c.state:
+    level: overworld
+    room: '0x77'
+    room_col: 7
+    room_row: 7
+    entry_direction: center
+    mode: 5
+    link:
+      position: [120, 141]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: none
+      boomerang: none
+      bombs: 0
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: boomerang
+  0_77e.state:
+    level: overworld
+    room: '0x77'
+    room_col: 7
+    room_row: 7
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 133]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_77n.state:
+    level: overworld
+    room: '0x77'
+    room_col: 7
+    room_row: 7
+    entry_direction: north
+    mode: 5
+    link:
+      position: [128, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_77w.state:
+    level: overworld
+    room: '0x77'
+    room_col: 7
+    room_row: 7
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 141]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_78e.state:
+    level: overworld
+    room: '0x78'
+    room_col: 8
+    room_row: 7
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 141]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_78n.state:
+    level: overworld
+    room: '0x78'
+    room_col: 8
+    room_row: 7
+    entry_direction: north
+    mode: 5
+    link:
+      position: [128, 61]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  0_78w.state:
+    level: overworld
+    room: '0x78'
+    room_col: 8
+    room_row: 7
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 141]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 0
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: boomerang
+  0_79e.state:
+    level: overworld
+    room: '0x79'
+    room_col: 9
+    room_row: 7
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 141]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_79w.state:
+    level: overworld
+    room: '0x79'
+    room_col: 9
+    room_row: 7
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 141]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_7ae.state:
+    level: overworld
+    room: '0x7a'
+    room_col: 10
+    room_row: 7
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 133]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_7aw.state:
+    level: overworld
+    room: '0x7a'
+    room_col: 10
+    room_row: 7
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 133]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_7be.state:
+    level: overworld
+    room: '0x7b'
+    room_col: 11
+    room_row: 7
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 101]
+      direction: west
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_7bn.state:
+    level: overworld
+    room: '0x7b'
+    room_col: 11
+    room_row: 7
+    entry_direction: north
+    mode: 5
+    link:
+      position: [176, 61]
+      direction: south
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_7bw.state:
+    level: overworld
+    room: '0x7b'
+    room_col: 11
+    room_row: 7
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 141]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  0_7ce.state:
+    level: overworld
+    room: '0x7c'
+    room_col: 12
+    room_row: 7
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 133]
+      direction: west
+      health: 1.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_7cw.state:
+    level: overworld
+    room: '0x7c'
+    room_col: 12
+    room_row: 7
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 93]
+      direction: east
+      health: 1.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_7de.state:
+    level: overworld
+    room: '0x7d'
+    room_col: 13
+    room_row: 7
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 109]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_7dw.state:
+    level: overworld
+    room: '0x7d'
+    room_col: 13
+    room_row: 7
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 109]
+      direction: east
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_7ee.state:
+    level: overworld
+    room: '0x7e'
+    room_col: 14
+    room_row: 7
+    entry_direction: east
+    mode: 5
+    link:
+      position: [240, 133]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_7ew.state:
+    level: overworld
+    room: '0x7e'
+    room_col: 14
+    room_row: 7
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 93]
+      direction: east
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_7fn.state:
+    level: overworld
+    room: '0x7f'
+    room_col: 15
+    room_row: 7
+    entry_direction: north
+    mode: 5
+    link:
+      position: [80, 61]
+      direction: south
+      health: 1.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  0_7fw.state:
+    level: overworld
+    room: '0x7f'
+    room_col: 15
+    room_row: 7
+    entry_direction: west
+    mode: 5
+    link:
+      position: [0, 133]
+      direction: east
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  1_23s.state:
+    level: dungeon-1
+    room: '0x23'
+    room_col: 3
+    room_row: 2
+    entry_direction: south
+    mode: 5
+    link:
+      position: [120, 205]
+      direction: north
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_33n.state:
+    level: dungeon-1
+    room: '0x33'
+    room_col: 3
+    room_row: 3
+    entry_direction: north
+    mode: 5
+    link:
+      position: [120, 77]
+      direction: south
+      health: 2.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+    dungeon_items:
+      map: true
+  1_33s.state:
+    level: dungeon-1
+    room: '0x33'
+    room_col: 3
+    room_row: 3
+    entry_direction: south
+    mode: 5
+    link:
+      position: [120, 205]
+      direction: north
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_35e.state:
+    level: dungeon-1
+    room: '0x35'
+    room_col: 5
+    room_row: 3
+    entry_direction: east
+    mode: 5
+    link:
+      position: [208, 141]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 4
+      selected_item: bombs
+  1_35s.state:
+    level: dungeon-1
+    room: '0x35'
+    room_col: 5
+    room_row: 3
+    entry_direction: south
+    mode: 5
+    link:
+      position: [120, 205]
+      direction: north
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_36w.state:
+    level: dungeon-1
+    room: '0x36'
+    room_col: 6
+    room_row: 3
+    entry_direction: west
+    mode: 5
+    link:
+      position: [16, 141]
+      direction: east
+      health: 13.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  1_37n.state:
+    level: dungeon-1
+    room: '0x37'
+    room_col: 7
+    room_row: 3
+    entry_direction: north
+    mode: 16
+    link:
+      position: [112, 125]
+      direction: north
+      health: 0.5
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 1
+      keys: 0
+      selected_item: bombs
+  1_41e.state:
+    level: dungeon-1
+    room: '0x41'
+    room_col: 1
+    room_row: 4
+    entry_direction: east
+    mode: 5
+    link:
+      position: [224, 141]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_42e.state:
+    level: dungeon-1
+    room: '0x42'
+    room_col: 2
+    room_row: 4
+    entry_direction: east
+    mode: 5
+    link:
+      position: [224, 141]
+      direction: west
+      health: 2.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+    dungeon_items:
+      map: true
+  1_42s.state:
+    level: dungeon-1
+    room: '0x42'
+    room_col: 2
+    room_row: 4
+    entry_direction: south
+    mode: 5
+    link:
+      position: [120, 205]
+      direction: north
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_42w.state:
+    level: dungeon-1
+    room: '0x42'
+    room_col: 2
+    room_row: 4
+    entry_direction: west
+    mode: 5
+    link:
+      position: [32, 141]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_43e.state:
+    level: dungeon-1
+    room: '0x43'
+    room_col: 3
+    room_row: 4
+    entry_direction: east
+    mode: 5
+    link:
+      position: [224, 141]
+      direction: west
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_43n.state:
+    level: dungeon-1
+    room: '0x43'
+    room_col: 3
+    room_row: 4
+    entry_direction: north
+    mode: 5
+    link:
+      position: [120, 77]
+      direction: south
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_43w.state:
+    level: dungeon-1
+    room: '0x43'
+    room_col: 3
+    room_row: 4
+    entry_direction: west
+    mode: 5
+    link:
+      position: [16, 141]
+      direction: east
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_44e.state:
+    level: dungeon-1
+    room: '0x44'
+    room_col: 4
+    room_row: 4
+    entry_direction: east
+    mode: 5
+    link:
+      position: [224, 141]
+      direction: west
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_44w.state:
+    level: dungeon-1
+    room: '0x44'
+    room_col: 4
+    room_row: 4
+    entry_direction: west
+    mode: 5
+    link:
+      position: [16, 141]
+      direction: east
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_45n.state:
+    level: dungeon-1
+    room: '0x45'
+    room_col: 5
+    room_row: 4
+    entry_direction: north
+    mode: 5
+    link:
+      position: [120, 77]
+      direction: south
+      health: 4.0
+      max_health: 4
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+    dungeon_items:
+      map: true
+  1_45w.state:
+    level: dungeon-1
+    room: '0x45'
+    room_col: 5
+    room_row: 4
+    entry_direction: west
+    mode: 5
+    link:
+      position: [16, 141]
+      direction: east
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_52e.state:
+    level: dungeon-1
+    room: '0x52'
+    room_col: 2
+    room_row: 5
+    entry_direction: east
+    mode: 5
+    link:
+      position: [208, 141]
+      direction: west
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 1
+      selected_item: bombs
+  1_52n.state:
+    level: dungeon-1
+    room: '0x52'
+    room_col: 2
+    room_row: 5
+    entry_direction: north
+    mode: 5
+    link:
+      position: [120, 77]
+      direction: south
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 6
+      keys: 0
+      selected_item: bombs
+  1_53e.state:
+    level: dungeon-1
+    room: '0x53'
+    room_col: 3
+    room_row: 5
+    entry_direction: east
+    mode: 5
+    link:
+      position: [224, 141]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 7
+      keys: 2
+      selected_item: bombs
+    dungeon_items:
+      compass: true
+  1_53s.state:
+    level: dungeon-1
+    room: '0x53'
+    room_col: 3
+    room_row: 5
+    entry_direction: south
+    mode: 5
+    link:
+      position: [120, 205]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 5
+      keys: 1
+      selected_item: bombs
+  1_53w.state:
+    level: dungeon-1
+    room: '0x53'
+    room_col: 3
+    room_row: 5
+    entry_direction: west
+    mode: 5
+    link:
+      position: [16, 141]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 4
+      selected_item: bombs
+  1_54w.state:
+    level: dungeon-1
+    room: '0x54'
+    room_col: 4
+    room_row: 5
+    entry_direction: west
+    mode: 5
+    link:
+      position: [16, 141]
+      direction: east
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_63n.state:
+    level: dungeon-1
+    room: '0x63'
+    room_col: 3
+    room_row: 6
+    entry_direction: north
+    mode: 5
+    link:
+      position: [120, 77]
+      direction: south
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_63s.state:
+    level: dungeon-1
+    room: '0x63'
+    room_col: 3
+    room_row: 6
+    entry_direction: south
+    mode: 5
+    link:
+      position: [120, 205]
+      direction: north
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_72e.state:
+    level: dungeon-1
+    room: '0x72'
+    room_col: 2
+    room_row: 7
+    entry_direction: east
+    mode: 7
+    link:
+      position: [84, 141]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 0
+      bomb_max: 8
+    inventory:
+      rupees: 5
+      keys: 0
+      selected_item: boomerang
+  1_73e.state:
+    level: dungeon-1
+    room: '0x73'
+    room_col: 3
+    room_row: 7
+    entry_direction: east
+    mode: 4
+    link:
+      position: [240, 141]
+      direction: west
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 0
+      bomb_max: 8
+    inventory:
+      rupees: 5
+      keys: 2
+      selected_item: boomerang
+  1_73n.state:
+    level: dungeon-1
+    room: '0x73'
+    room_col: 3
+    room_row: 7
+    entry_direction: north
+    mode: 5
+    link:
+      position: [120, 205]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 3
+      bomb_max: 8
+    inventory:
+      rupees: 9
+      keys: 0
+      selected_item: bombs
+  1_73s.state:
+    level: dungeon-1
+    room: '0x73'
+    room_col: 3
+    room_row: 7
+    entry_direction: south
+    mode: 3
+    link:
+      position: [120, 221]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 0
+      bomb_max: 8
+    inventory:
+      rupees: 5
+      keys: 0
+      selected_item: boomerang
+  1_73w.state:
+    level: dungeon-1
+    room: '0x73'
+    room_col: 3
+    room_row: 7
+    entry_direction: west
+    mode: 7
+    link:
+      position: [20, 141]
+      direction: east
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 0
+      bomb_max: 8
+    inventory:
+      rupees: 5
+      keys: 1
+      selected_item: boomerang
+  1_74w.state:
+    level: dungeon-1
+    room: '0x74'
+    room_col: 4
+    room_row: 7
+    entry_direction: west
+    mode: 5
+    link:
+      position: [16, 141]
+      direction: east
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_83e.state:
+    level: dungeon-1
+    room: '0x53'
+    room_col: 3
+    room_row: 5
+    entry_direction: east
+    mode: 5
+    link:
+      position: [224, 141]
+      direction: west
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  1_83s.state:
+    level: dungeon-1
+    room: '0x53'
+    room_col: 3
+    room_row: 5
+    entry_direction: south
+    mode: 5
+    link:
+      position: [120, 205]
+      direction: north
+      health: 15.0
+      max_health: 16
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 4
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: bombs
+  debug_0_67_1772056964.state:
+    level: overworld
+    room: '0x67'
+    room_col: 7
+    room_row: 6
+    entry_direction: debug
+    mode: 5
+    link:
+      position: [160, 151]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: wood
+      boomerang: none
+      bombs: 0
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: boomerang
+  start.state:
+    level: overworld
+    room: '0x77'
+    room_col: 7
+    room_row: 7
+    entry_direction: start
+    mode: 5
+    link:
+      position: [120, 141]
+      direction: north
+      health: 3.0
+      max_health: 3
+    equipment:
+      sword: none
+      boomerang: none
+      bombs: 0
+      bomb_max: 8
+    inventory:
+      rupees: 0
+      keys: 0
+      selected_item: boomerang

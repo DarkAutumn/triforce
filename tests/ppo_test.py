@@ -81,6 +81,7 @@ class TestEnvironment:
 
         return 0.0
 # TODO: Figure out why 4 environments hangs
+@pytest.mark.slow
 @pytest.mark.parametrize("num_envs", [1])
 @pytest.mark.parametrize("device", ["cpu", "cuda"] if torch.cuda.is_available() else ["cpu"])
 def test_ppo_training(device, num_envs):
@@ -129,6 +130,7 @@ def test_ppo_training(device, num_envs):
     expected_actions = [0, 1, 2]
     assert actions_taken == expected_actions, f"Expected actions {expected_actions}, but got {actions_taken}"
 
+@pytest.mark.slow
 @pytest.mark.parametrize("num_channels", [1, 3])
 @pytest.mark.parametrize("model_scenario", ["overworld overworld-skip-sword", "overworld-sword overworld-sword"])
 def test_model_training(model_scenario, num_channels):
