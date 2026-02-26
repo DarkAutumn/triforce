@@ -106,13 +106,12 @@ class PPORolloutBuffer:
                 infos.append(info)
                 self.rewards[batch_index, t] = float(reward)
 
-                next_done = 1.0 if (terminated or truncated) else 0.0
+                done = 1.0 if (terminated or truncated) else 0.0
                 if terminated or truncated:
                     next_obs, info = env.reset()
-                    next_done = 0.0
+                    action_mask = info.get('action_mask', None)
 
                 obs = next_obs
-                done = next_done
 
                 if progress:
                     progress.update(1)
@@ -144,7 +143,7 @@ class PPORolloutBuffer:
             advantages = torch.zeros(self.memory_length, device="cpu")
             last_gae = 0
             for t in reversed(range(self.memory_length)):
-                mask = 1.0 - self.dones[batch_idx, t]
+                mask = 1.0 - self.dones[batch_idx, t + 1]
 
                 if t + 1 < self.memory_length:
                     next_value = self.act_logp_ent_val[batch_idx, t + 1, 3]
