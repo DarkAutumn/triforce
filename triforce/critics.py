@@ -248,6 +248,8 @@ class GameplayCritic(ZeldaCritic):
 
         for e_index in state_change.enemies_hit:
             enemy = state_change.state.get_enemy_by_index(e_index)
+            if enemy is None:
+                continue
 
             # no penalty or rewards for hitting wallmasters up close
             if enemy.id == ZeldaEnemyKind.Wallmaster and enemy.distance < 30:
