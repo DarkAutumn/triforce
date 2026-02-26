@@ -145,22 +145,59 @@ class ZeldaAnimationKind(Enum):
     BAIT = 8
 
 class ZeldaEnemyKind(Enum):
-    """Enemy codes for the game."""
+    """Enemy type IDs from ObjectTypeToHpPairs / UpdateObject_JumpTable (Z_07.asm:5279, 5344)."""
     # pylint: disable=invalid-name
+    BlueLynel : int = 0x01
+    RedLynel : int = 0x02
     BlueMoblin : int = 0x03
     RedMoblin : int = 0x04
-    Goriya : int = 0x06
-    Octorok : int = 0x07
-    OctorokFast : int = 0x7
-    OctorokBlue : int = 0x8
-    BlueLever : int = 0xf
-    RedLever : int = 0x10
+    BlueGoriya : int = 0x05
+    RedGoriya : int = 0x06
+    BlueOctorok : int = 0x07
+    RedOctorok : int = 0x08
+    BlueSlowOctorok : int = 0x09
+    RedSlowOctorok : int = 0x0A
+    BlueDarknut : int = 0x0B
+    RedDarknut : int = 0x0C
+    BlueTektite : int = 0x0D
+    RedTektite : int = 0x0E
+    BlueLeever : int = 0x0F
+    RedLeever : int = 0x10
     Zora : int = 0x11
-    PeaHat : int = 0x1a
-    Keese : int = 0x1b
-    WallMaster : int = 0x27
-    Stalfos : int = 0x2a
-    AquaMentus : int = 0x3d
+    Vire : int = 0x12
+    Zol : int = 0x13
+    GreenGel : int = 0x14
+    BlueGel : int = 0x15
+    PolsVoice : int = 0x16
+    LikeLike : int = 0x17
+    Digdogger : int = 0x18
+    DigdoggerChild : int = 0x19
+    Peahat : int = 0x1A
+    BlueKeese : int = 0x1B
+    RedKeese : int = 0x1C
+    BlackKeese : int = 0x1D
+    Armos : int = 0x1E
+    Ghini : int = 0x21
+    FlyingGhini : int = 0x22
+    BlueWizzrobe : int = 0x23
+    RedWizzrobe : int = 0x24
+    Wallmaster : int = 0x27
+    Rope : int = 0x28
+    Stalfos : int = 0x2A
+    Bubble : int = 0x2B
+    BlueBubble : int = 0x2C
+    RedBubble : int = 0x2D
+    Gibdo : int = 0x30
+    Dodongo : int = 0x31
+    Gohma : int = 0x33
+    Lamnola : int = 0x3A
+    Manhandla : int = 0x3C
+    Aquamentus : int = 0x3D
+    Ganon : int = 0x3E
+    Moldorm : int = 0x41
+    Gleeok : int = 0x42
+    Patra : int = 0x47
+    Trap : int = 0x49
 
 class ZeldaProjectileId(Enum):
     """Projectile codes for the game."""

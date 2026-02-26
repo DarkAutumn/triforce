@@ -297,11 +297,11 @@
             "type": "=u1"
         },
         "obj_health_b": {
-            "address": 1169,
+            "address": 1168,
             "type": "=u1"
         },
         "obj_health_c": {
-            "address": 1170,
+            "address": 1169,
             "type": "=u1"
         }
     }

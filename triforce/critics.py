@@ -212,7 +212,7 @@ class GameplayCritic(ZeldaCritic):
         """Special handling for rooms with a wallmaster."""
         prev, curr = state_change.previous, state_change.state
 
-        if ZeldaEnemyKind.WallMaster not in curr.enemies:
+        if ZeldaEnemyKind.Wallmaster not in curr.enemies:
             return
 
         # Did we get wallmastered?
@@ -250,7 +250,7 @@ class GameplayCritic(ZeldaCritic):
             enemy = state_change.state.get_enemy_by_index(e_index)
 
             # no penalty or rewards for hitting wallmasters up close
-            if enemy.id == ZeldaEnemyKind.WallMaster and enemy.distance < 30:
+            if enemy.id == ZeldaEnemyKind.Wallmaster and enemy.distance < 30:
                 return
 
         prev, curr = state_change.previous, state_change.state
