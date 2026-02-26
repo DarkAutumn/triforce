@@ -157,7 +157,7 @@ class LeftDungeon(ZeldaEndCondition):
             if not state_change.gained_triforce:
                 return True, False, "failure-left-dungeon"
 
-        if any(x.id == ZeldaEnemyKind.WallMaster for x in state_change.previous.enemies) \
+        if any(x.id == ZeldaEnemyKind.Wallmaster for x in state_change.previous.enemies) \
                 and state_change.previous.full_location.manhattan_distance(state_change.state.full_location) > 1:
             return True, False, "failure-wallmastered"
 

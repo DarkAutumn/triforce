@@ -317,13 +317,29 @@ they affect the actual game state model used for training.
    - OW outer: left=$07, right=$E9, up=$45, down=$D6 (unchanged)
    - UW outer: left=$17, right=$D9, up=$55, down=$C6 (fixed left/up/down)
 
-## Area 4: Enemy Health Encoding (Medium)
+## Area 4: Enemy Health Encoding ✅
 
-- [ ] Verify ObjHP high nibble is health via >> 4
-- [ ] Determine low nibble purpose
-- [ ] Trace damage subtraction in Z_01.asm
-- [ ] Verify initial HP assignment for several enemy types
-- [ ] Tests: test_object_model.py (T2.1-T2.2)
+- [x] Verify ObjHP high nibble is health via >> 4
+- [x] Determine low nibble purpose (always 0 — HP and damage both multiples of $10)
+- [x] Trace damage subtraction in Z_01.asm (DealDamage:5973)
+- [x] Verify initial HP assignment for several enemy types
+- [x] Decode ObjectTypeToHpPairs packed table (Z_07.asm:5279)
+- [x] Trace ExtractHitPointValue nibble extraction (Z_04.asm:11002)
+- [x] Identify 0-HP enemies: Gel(0x14,0x15), Keese(0x1B-0x1D)
+- [x] Verify "health > 0 else 1" hack in state_change_wrapper is correct
+- [x] Fix BUG-3: data.json obj_health_b/c off-by-1
+- [x] Update ZeldaEnemyKind enum with complete enemy type table
+- [x] Fix references: AquaMentus→Aquamentus, WallMaster→Wallmaster, etc.
+- [x] Tests: test_enemy_health.py (23 tests)
+- [x] Assembly annotations: ObjectTypeToHpPairs, ExtractHitPointValue, SwordDamagePoints, DealDamage
+
+**Findings:**
+- ObjHP stores HP as multiples of $10 (high nibble = HP count, low nibble always 0)
+- ObjectTypeToHpPairs packs 2 enemies per byte; ExtractHitPointValue extracts correct nibble
+- All damage values are multiples of $10: Wood sword=$10, White=$20, Magic=$40, Bomb=$40, Fire=$10
+- Python's `>> 4` extraction is fully correct
+- Keese/Gel have 0 HP from table — die in one hit, death tracked via ObjMetastate not ObjHP
+- Rope overrides table HP ($10→$40) in quest 2 (InitRope, Z_04.asm:4537)
 
 ## Area 5: Enemy is_dying / is_active (Medium)
 

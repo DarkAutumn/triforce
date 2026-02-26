@@ -22,7 +22,7 @@ class Enemy(ZeldaObject):
     @property
     def dimensions(self) -> Tuple[int, int]:
         """The dimensions of the object."""
-        if self.id == ZeldaEnemyKind.AquaMentus:
+        if self.id == ZeldaEnemyKind.Aquamentus:
             return 3, 3
 
         return 2, 2
@@ -43,11 +43,11 @@ class Enemy(ZeldaObject):
         status = self.status & 0xff
 
         # status == 3 means the lever/zora is up
-        if self.id in (ZeldaEnemyKind.RedLever, ZeldaEnemyKind.BlueLever, ZeldaEnemyKind.Zora):
+        if self.id in (ZeldaEnemyKind.RedLeever, ZeldaEnemyKind.BlueLeever, ZeldaEnemyKind.Zora):
             return status & 0xff == 3
 
         # status == 1 means the wallmaster is active
-        if self.id == ZeldaEnemyKind.WallMaster:
+        if self.id == ZeldaEnemyKind.Wallmaster:
             return status == 1
 
         # spawn_state of 0 means the object is active

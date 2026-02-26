@@ -233,17 +233,14 @@ class TestEnemyHealthAddresses:
         with open(data_path) as f:
             data = json.load(f)
 
-        # obj_health_b: data.json says $491, but ObjHP + 0x0B = $490
+        # obj_health_b/c should match ObjHP + slot offset
         addr_b = data['info']['obj_health_b']['address']
         addr_c = data['info']['obj_health_c']['address']
         expected_b = OBJ_HP + 0x0B  # $490
         expected_c = OBJ_HP + 0x0C  # $491
 
-        # Document the known discrepancy
-        assert addr_b == 0x491, f"obj_health_b expected at $491 in data.json, got ${addr_b:03X}"
-        assert addr_c == 0x492, f"obj_health_c expected at $492 in data.json, got ${addr_c:03X}"
-        assert addr_b != expected_b, \
-            "obj_health_b in data.json ($491) differs from ObjHP+$0B ($490) — known offset issue"
+        assert addr_b == expected_b, f"obj_health_b expected at ${expected_b:03X}, got ${addr_b:03X}"
+        assert addr_c == expected_c, f"obj_health_c expected at ${expected_c:03X}, got ${addr_c:03X}"
 
 
 # --- Cross-check: all memory entries have a matching asm_addresses constant ---
