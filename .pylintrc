@@ -10,4 +10,8 @@ max-args=8
 max-positional-arguments=8
 
 [MESSAGES CONTROL]
-disable=R0902,C0114,R0903
+disable=R0902,C0114,R0903,R0912,R0914
+
+[TYPECHECK]
+# stable-retro's 'retro.data' is a C extension that pylint can't introspect
+generated-members=retro.data.*
