@@ -11,8 +11,12 @@ ANIMATION_BEAMS_HIT = 17
 
 # Magic rod shot uses the same beam slot ($0E) but with high bit set.
 # Rod shot: $80 (flying) → $00 (deactivated). No spreading state.
-# With book of magic, fire spawns in bomb/fire slot on wall hit.
+# With book of magic, fire spawns in bomb/fire slot on wall hit ($22).
 ANIMATION_MAGIC_ROD_ACTIVE = 0x80
+
+# Rod+book fire and candle fire use the bomb/flame slot ($10/$11).
+# Fire state is $22 for ~79 frames, then deactivates.
+ANIMATION_FLAME_ACTIVE = 0x22
 
 ANIMATION_BOMBS_ACTIVE = 18
 ANIMATION_BOMBS_EXPLODED = (19, 20)
@@ -279,6 +283,19 @@ class Link(ZeldaObject):
             case ZeldaAnimationKind.MAGIC:
                 beam_val = self.game.beam_animation
                 if beam_val == ANIMATION_MAGIC_ROD_ACTIVE:
+                    state = AnimationState.ACTIVE
+                # Rod+book: fire spawns in bomb/flame slot when rod shot hits wall.
+                # Continue reporting ACTIVE through the fire phase so look-ahead
+                # captures fire damage.
+                elif self.game.bomb_or_flame_animation == ANIMATION_FLAME_ACTIVE:
+                    state = AnimationState.ACTIVE
+
+            case ZeldaAnimationKind.FLAME_1:
+                if self.game.bomb_or_flame_animation == ANIMATION_FLAME_ACTIVE:
+                    state = AnimationState.ACTIVE
+
+            case ZeldaAnimationKind.FLAME_2:
+                if self.game.bomb_or_flame_animation2 == ANIMATION_FLAME_ACTIVE:
                     state = AnimationState.ACTIVE
 
             case ZeldaAnimationKind.BOMB_1:

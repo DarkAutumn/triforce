@@ -150,6 +150,8 @@ class StateChange:
         self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.MAGIC, discounts)
         self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.BOMB_1, discounts)
         self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.BOMB_2, discounts)
+        self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.FLAME_1, discounts)
+        self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.FLAME_2, discounts)
         self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.ARROW, discounts)
         self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.BOOMERANG, discounts)
 
@@ -206,10 +208,16 @@ class StateChange:
             case ZeldaAnimationKind.BEAMS:
                 all_names.remove('beam_animation')
             case ZeldaAnimationKind.MAGIC:
+                # Keep beam slot for rod shot. bomb_or_flame is zeroed to clear
+                # stale objects — NES will write fire ($22) when rod shot hits.
                 all_names.remove('beam_animation')
             case ZeldaAnimationKind.BOMB_1:
                 all_names.remove('bomb_or_flame_animation')
             case ZeldaAnimationKind.BOMB_2:
+                all_names.remove('bomb_or_flame_animation2')
+            case ZeldaAnimationKind.FLAME_1:
+                all_names.remove('bomb_or_flame_animation')
+            case ZeldaAnimationKind.FLAME_2:
                 all_names.remove('bomb_or_flame_animation2')
             case ZeldaAnimationKind.ARROW:
                 all_names.remove('arrow_magic_animation')

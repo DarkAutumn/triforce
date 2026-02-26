@@ -120,6 +120,51 @@ class TestMagicRodShot:
 
         assert fire_spawned, "Rod + book should spawn fire in bomb/fire slot"
 
+    def test_magic_animation_active_during_fire(self, emu):
+        """MAGIC animation should remain ACTIVE through both rod shot and fire phases."""
+        from triforce.zelda_enums import ZeldaAnimationKind, AnimationState
+
+        emu.set('magic_rod', 1)
+        emu.set('selected_item', 8)
+        emu.set('book', 1)
+
+        for _ in range(10):
+            emu.step([BTN_LEFT])
+        emu.step()
+
+        emu.step([BTN_B])
+
+        # Track rod shot and fire phases
+        saw_rod_active = False
+        saw_fire_active = False
+        magic_went_inactive_early = False
+
+        for i in range(200):
+            emu.step()
+            gs = emu.game_state()
+            state = gs.link.get_animation_state(ZeldaAnimationKind.MAGIC)
+            beam = emu.ram[0xBA]  # beam_animation
+            flame = emu.ram[0xBC]  # bomb_or_flame_animation
+
+            if beam == 0x80:
+                saw_rod_active = True
+                if state != AnimationState.ACTIVE:
+                    magic_went_inactive_early = True
+
+            if flame == 0x22:
+                saw_fire_active = True
+                if state != AnimationState.ACTIVE:
+                    magic_went_inactive_early = True
+
+            # Stop when both are done
+            if saw_rod_active and saw_fire_active and beam == 0 and flame == 0:
+                break
+
+        assert saw_rod_active, "Should see rod shot phase"
+        assert saw_fire_active, "Should see fire phase"
+        assert not magic_went_inactive_early, \
+            "MAGIC should stay ACTIVE through both rod shot and fire phases"
+
     def test_rod_deals_damage(self):
         """Rod shot should reduce enemy HP on hit."""
         emu = ZeldaFixture("1_44e.state")

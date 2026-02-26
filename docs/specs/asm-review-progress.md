@@ -235,6 +235,21 @@ they affect the actual game state model used for training.
   With book of magic, fire spawns in bomb/fire slot ($10) at state $22 on wall hit.
 - **Tests**: All 148 existing tests pass.
 
+### BUG-5: Rod+book fire invisible to look-ahead (Area 8) — ✅ FIXED
+- **Files**: `triforce/link.py`, `triforce/state_change_wrapper.py`
+- **Problem**: When rod+book fires, the rod shot ($80) in beam slot hits a wall and deactivates
+  ($00), spawning fire ($22) in `bomb_or_flame_animation`. The MAGIC look-ahead exited when
+  beam went INACTIVE, never simulating the ~79 frames of fire. Fire damage was never predicted
+  or attributed to the rod action.
+- **Fix applied**:
+  1. Added `ANIMATION_FLAME_ACTIVE = 0x22` constant.
+  2. Modified MAGIC's `get_animation_state` to also return ACTIVE when `bomb_or_flame_animation == $22`.
+     This keeps the look-ahead running through the entire rod+fire lifecycle.
+  3. Added FLAME_1/FLAME_2 cases to `get_animation_state` for independent candle fire detection.
+  4. Added FLAME_1/FLAME_2 to `_detect_future_damage` and `_disable_others`.
+- **Verified**: Look-ahead now runs through 49 frames of rod shot + 79 frames of fire = 128 active frames.
+- **Tests**: test_look_ahead.py (9 tests)
+
 ---
 
 ## Test Infrastructure
@@ -304,9 +319,16 @@ they affect the actual game state model used for training.
    `InvBook` ($661) set, fire spawns in bomb/fire slot ($10) at state $22 via `WieldCandle`.
    Rod melee animation uses slot $12 (arrow/rod slot), states $31→$32→$33→$34→$35→$00.
    **BUG-4 FIXED**: `get_animation_state` and look-ahead now handle MAGIC rod shots.
+   **BUG-5 FIXED**: Rod+book fire damage now captured in look-ahead (see below).
 
 8. **Rod can be tested via RAM** — Setting `magic_rod=1`, `selected_item=8`, and optionally
    `book=1` via data API is sufficient to test rod mechanics. No savestate with rod needed.
+
+9. **Rod+book fire look-ahead** — With book, fire spawns in `bomb_or_flame_animation` ($0BC)
+   at state $22 when the rod shot ($80) hits a wall. Fire lasts ~79 frames. The MAGIC animation
+   kind now returns ACTIVE for both rod shot ($80 in beam slot) and fire ($22 in flame slot),
+   so the look-ahead runs through the entire rod+fire lifecycle. Also added FLAME_1/FLAME_2
+   animation kinds for independent candle fire detection.
 
 ## Area 3: Sword Screen Lock Boundaries (HIGH) ✅
 
