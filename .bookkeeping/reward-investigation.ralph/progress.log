@@ -8,3 +8,4 @@
 2026-02-26 20:12 — ✅ — investigated 08-health-rewards: flat penalty ignores damage magnitude, remove_rewards strips combat success, health gain unscaled. Wrote spec and 1 repro script (health_reward_analysis.py).
 2026-02-26 20:19 — ✅ — investigated special cases (wallmaster zones, blocking, stuck tile, cave attack), wrote spec and 1 repro script, found critique_attack wallmaster return bug
 2026-02-26 20:26 — ✅ — investigated 10-reward-scaling: magnitude scale gaps, clamping frequency (13.2%), no reward normalization in PPO, GAE advantage compression, remove_rewards interaction. Wrote spec and 2 repro scripts.
+2026-02-26 20:34 — ✅ — investigated observation space, wrote spec and 2 repro scripts (observation_space_analysis.py, observation_network_analysis.py)
