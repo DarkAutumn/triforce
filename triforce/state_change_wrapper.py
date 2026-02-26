@@ -147,6 +147,7 @@ class StateChange:
         # check if beams, bombs, arrows, etc are active and if they will hit in the future,
         # as we need to count them as rewards/results of this action so the model trains properly
         self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.BEAMS, discounts)
+        self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.MAGIC, discounts)
         self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.BOMB_1, discounts)
         self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.BOMB_2, discounts)
         self._handle_future_effects(env, prev, curr, ZeldaAnimationKind.ARROW, discounts)
@@ -203,6 +204,8 @@ class StateChange:
 
         match equipment:
             case ZeldaAnimationKind.BEAMS:
+                all_names.remove('beam_animation')
+            case ZeldaAnimationKind.MAGIC:
                 all_names.remove('beam_animation')
             case ZeldaAnimationKind.BOMB_1:
                 all_names.remove('bomb_or_flame_animation')

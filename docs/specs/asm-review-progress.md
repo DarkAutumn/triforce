@@ -1,4 +1,4 @@
-# Assembly Review Progress
+# Assembly Verification and Fix Progress
 
 **Specs**: Read [asm-review.md](asm-review.md) for review areas and [test-plan.md](test-plan.md) for test strategy.
 
@@ -11,7 +11,7 @@
    - Investigate assembly vs Python
    - **Annotate the assembly** in `zelda-asm/` with comments as you discover insights (see below)
    - Add/update tests as appropriate
-   - Fix bugs found
+   - **Fix bugs found** — the goal is to fix discrepancies, not just document them
    - Run `pytest tests/ -v --ignore=tests/ppo_test.py` — no regressions, no new failures
    - Run `pylint triforce/ evaluate.py run.py train.py` — clean
 5. Commit after each area or logical group of changes (triforce and zelda-asm separately).
@@ -207,12 +207,26 @@ they affect the actual game state model used for training.
   (if root cause is fixed) or change threshold to >22.
 - **Status**: Todo `fix-11-frame-hack` (blocked on `look-ahead-sim`)
 
-### BUG-3: data.json obj_health_b/c off by 1 (Area 1)
+### BUG-3: data.json obj_health_b/c off by 1 (Area 1) — ✅ FIXED
 - **File**: `triforce/zelda_game_data.txt` or data.json
 - **Problem**: `obj_health_b` ($491) and `obj_health_c` ($492) are off by 1 from ObjHP table.
   Game code uses table reads (correct), but individual address mappings are wrong.
 - **Impact**: Low — nothing currently reads these individual entries.
 - **Status**: Todo `fix-obj-health-bc-offset`
+
+### BUG-4: Magic rod shot invisible to animation system (Area 2) — ✅ FIXED
+- **Files**: `triforce/link.py`, `triforce/state_change_wrapper.py`
+- **Problem**: `get_animation_state(BEAMS)` only checked for sword beam states ($10/$11).
+  Magic rod shot ($80) was completely ignored — the look-ahead simulation never triggered
+  for rod shots, so rod damage was never predicted or rewarded during training.
+- **Fix applied**:
+  1. Added `ANIMATION_MAGIC_ROD_ACTIVE = 0x80` constant.
+  2. Added `ZeldaAnimationKind.MAGIC` case to `get_animation_state` — returns ACTIVE for $80.
+  3. Added MAGIC to `_detect_future_damage` look-ahead chain.
+  4. Added MAGIC to `_disable_others` (shares beam_animation slot with BEAMS).
+- **Verified**: Rod shot lifecycle confirmed via NES: $80 (flying) → $00 (deactivated).
+  With book of magic, fire spawns in bomb/fire slot ($10) at state $22 on wall hit.
+- **Tests**: All 148 existing tests pass.
 
 ---
 
@@ -246,7 +260,7 @@ they affect the actual game state model used for training.
 - [x] Verify health check: filled == containers-1 AND partial >= $80 (Z_07.asm lines 4632-4648)
 - [x] Validate 11-frame hack in frame_skip_wrapper.py — **hack is wrong**: it fires at 11 frames but natural spread is 22 frames. Only modifies info dict, not NES RAM, so NES is unaffected but Python thinks beam inactive 11 frames early.
 - [x] Tests: test_weapons.py (17 tests covering lifecycle, timing, health edge cases)
-- [ ] Trace magic rod shot: $80→$81 vs beam $10→$11 (deferred — no rod savestate available)
+- [x] Trace magic rod shot: $80→$00 (no $81 state). With book, fire spawns in bomb slot $10.
 - [ ] Reproduce beam stuck-at-17 bug (deferred to Area 8 — likely caused by look-ahead simulation)
 - [ ] Determine if look-ahead causes stuck-at-17 (deferred to Area 8)
 
@@ -276,6 +290,16 @@ they affect the actual game state model used for training.
 
 6. **`debug_0_67_1772056964.state`** — Critical savestate for beam testing: overworld room $67,
    Link centered, full health, sword equipped. Created via F1 hotkey in zui debugger.
+
+7. **Magic rod shot lifecycle** — Rod shot uses same beam slot ($0E) but with high bit set:
+   $80 (flying) → $00 (deactivated on wall/enemy hit). State $81 never occurs — the assembly's
+   `HandleShotBlocked` uses ASL to detect magic shots and branches to a different path. With
+   `InvBook` ($661) set, fire spawns in bomb/fire slot ($10) at state $22 via `WieldCandle`.
+   Rod melee animation uses slot $12 (arrow/rod slot), states $31→$32→$33→$34→$35→$00.
+   **BUG-4 FIXED**: `get_animation_state` and look-ahead now handle MAGIC rod shots.
+
+8. **Rod can be tested via RAM** — Setting `magic_rod=1`, `selected_item=8`, and optionally
+   `book=1` via data API is sufficient to test rod mechanics. No savestate with rod needed.
 
 ## Area 3: Sword Screen Lock Boundaries (HIGH) ✅
 
@@ -443,7 +467,7 @@ The NES blocks new actions until `link_status==0` AND `sword_animation==0`.
 | 1. Address mapping | Medium | ✅ |
 | 2. Beam state machine | **HIGH** | ✅ |
 | 3. Screen lock bounds | **HIGH** | ✅ |
-| 4. Enemy health encoding | Medium | ⬜ |
+| 4. Enemy health encoding | Medium | ✅ |
 | 5. Enemy dying/active | Medium | ⬜ |
 | 6. Object ID classification | Medium | ⬜ |
 | 7. Health system | Medium | ✅ |
