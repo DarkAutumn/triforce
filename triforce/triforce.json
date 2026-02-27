@@ -92,7 +92,7 @@
             "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
             "metrics" : [
                 "success-rate",
-                "overworld-progress",
+                "game-progress",
                 "room-health",
                 "ending",
                 "reward-average",
