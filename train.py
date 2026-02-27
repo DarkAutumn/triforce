@@ -51,6 +51,9 @@ def _get_kwargs_from_args(args, model_def):
     if args.device is not None:
         kwargs['device'] = args.device
 
+    if args.parallel > 1:
+        kwargs['envs'] = args.parallel
+
     circuit_def = TrainingCircuitDefinition.get(args.scenario)
     if circuit_def is None:
         circuit = [TrainingCircuitEntry(scenario=args.scenario)]
@@ -66,6 +69,11 @@ def train_once(ppo : PPO, scenario_def, model_def, save_path, iterations, **kwar
 
     steps_before = kwargs.get('model', None)
     steps_before = steps_before.steps_trained if steps_before else 0
+
+    # Pass env-creation info for multi-env subprocess spawning
+    kwargs['scenario_def'] = scenario_def
+    kwargs['action_space_name'] = model_def.action_space
+
     model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(ncols=100), save_path=save_path, **kwargs)
     model_name = model_def.name.replace(' ', '_')
     model.save(f"{save_path}/{model_name}-{scenario_def.name}.pt")
@@ -175,7 +183,7 @@ def parse_args():
     parser.add_argument('scenario', type=str, help='The scenario to train on.')
     parser.add_argument("--output", type=str, help="Location to write to.")
     parser.add_argument("--iterations", type=int, default=None, help="Override iteration count.")
-    parser.add_argument("--parallel", type=int, default=1, help="Number of parallel environments to run.")
+    parser.add_argument("--parallel", type=int, default=6, help="Number of parallel environments to run.")
     parser.add_argument("--load", type=str, help="Load a model to continue training.")
     parser.add_argument("--evaluate", type=int, default=None, metavar="N",
                         help="Run N evaluation episodes after training and print a progress report.")
