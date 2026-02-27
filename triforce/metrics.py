@@ -320,6 +320,34 @@ METRICS = {
             (1, 0x36) : 11,
         }),
 
+    # Unified progress through the entire game.  Milestones are immutable and
+    # independent of scenario — reaching dungeon 1 boss is always milestone 16
+    # regardless of which scenario is being evaluated.
+    "game-progress" : lambda: RoomProgressMetric({
+            # Overworld: sword cave -> dungeon 1 entrance
+            (0, 0x77) : 0,     # start / sword cave
+            (0, 0x67) : 1,     # south of sword cave
+            (0, 0x78) : 1,     # east of sword cave
+            (0, 0x68) : 2,
+            (0, 0x58) : 3,
+            (0, 0x48) : 4,
+            (0, 0x38) : 5,
+            (0, 0x37) : 6,     # dungeon 1 entrance screen
+            # Dungeon 1
+            (1, 0x73) : 7,     # entry room
+            (1, 0x72) : 8,     # west from entry
+            (1, 0x74) : 8,     # east from entry
+            (1, 0x63) : 9,
+            (1, 0x53) : 10,
+            (1, 0x52) : 11,
+            (1, 0x42) : 12,
+            (1, 0x43) : 13,
+            (1, 0x44) : 14,
+            (1, 0x45) : 15,
+            (1, 0x35) : 16,    # boss room
+            (1, 0x36) : 17,    # triforce room
+        }),
+
     "room-result" : RoomResultMetric,
     "room-health" : RoomHealthChangeMetric,
     "success-rate" : SuccessMetric,
