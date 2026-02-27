@@ -33,7 +33,8 @@ pylint triforce/ evaluate.py run.py train.py
 
 ## Git Workflow
 
-- **Never commit directly to main.** Always create a feature branch from `origin/main`.
+- **Never commit or push directly to main.** Always create a feature branch from `origin/main`.
+- **Never force push to main.** Only force push to feature branches when needed (e.g., after rebase).
 - Branch, commit, push, open PR. Merge via PR only.
 - Before starting work: `git checkout main && git pull origin main && git checkout -b <branch-name>`
 
