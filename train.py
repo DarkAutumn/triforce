@@ -10,11 +10,10 @@ import faulthandler
 import traceback
 
 from tqdm import tqdm
-from triforce import ModelDefinition, TrainingScenarioDefinition
+from triforce import ModelDefinition, TrainingScenarioDefinition, make_zelda_env
 from triforce.ml_ppo import PPO
 from triforce.models import Network
 from triforce.scenario_wrapper import TrainingCircuitDefinition, TrainingCircuitEntry
-from triforce.zelda_env import make_zelda_env
 
 def _dump_trace_with_locals(exc_type, exc_value, exc_traceback):
     with open("crash_log.txt", "w", encoding="utf8") as f:
@@ -125,6 +124,29 @@ def main():
 
     model.save(f"{model_directory}/{model_name}.pt")
 
+    if args.evaluate:
+        _run_post_training_eval(model, model_def, scenario_def, args.evaluate, **kwargs)
+
+
+def _run_post_training_eval(model, model_def, scenario_def, episodes, **kwargs):
+    """Runs evaluation episodes after training and prints a progress report."""
+    # pylint: disable=import-outside-toplevel
+    from evaluate import evaluate_one_model, print_progress_report
+
+    print(f"\nRunning {episodes} evaluation episodes...")
+
+    def create_eval_env():
+        return make_zelda_env(scenario_def, model_def.action_space, **kwargs)
+
+    with tqdm(total=episodes) as progress:
+        def update():
+            progress.update(1)
+        _, progress_values, max_progress = evaluate_one_model(
+            create_eval_env, model, episodes, update)
+
+    if progress_values is not None:
+        print_progress_report(progress_values, max_progress, episodes, scenario_def.name)
+
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="train - Train Zelda ML models")
@@ -141,6 +163,8 @@ def parse_args():
     parser.add_argument("--iterations", type=int, default=None, help="Override iteration count.")
     parser.add_argument("--parallel", type=int, default=1, help="Number of parallel environments to run.")
     parser.add_argument("--load", type=str, help="Load a model to continue training.")
+    parser.add_argument("--evaluate", type=int, default=None, metavar="N",
+                        help="Run N evaluation episodes after training and print a progress report.")
     parser.add_argument("--hook-exceptions", action='store_true', help="Dump tracebacks on unhandled exceptions.")
 
     try:

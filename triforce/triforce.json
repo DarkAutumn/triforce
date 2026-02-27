@@ -83,6 +83,25 @@
     ],
     "scenarios": [
         {
+            "name": "full-game",
+            "description": "Full game from start through dungeon 1 triforce",
+            "iterations" : 2000000,
+            "scenario_selector" : "round-robin",
+            "objective" : "GameCompletion",
+            "critic": "GameplayCritic",
+            "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
+            "metrics" : [
+                "success-rate",
+                "overworld-progress",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
+            "start": ["0_77c"],
+            "use_hints" : true
+        },
+        {
             "name": "game-start",
             "description": "The full game with training variables",
             "iterations" : 2000000,

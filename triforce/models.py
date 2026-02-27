@@ -135,7 +135,7 @@ class Network(nn.Module):
     @staticmethod
     def load_metrics(path):
         """Load the metrics from a file."""
-        save_data = torch.load(path)
+        save_data = torch.load(path, weights_only=False)
         metrics_pickled = save_data.get("metrics")
         metrics = pickle.loads(metrics_pickled) if metrics_pickled else {}
         episodes_evaluated = save_data.get("episodes_evaluated", 0)
@@ -144,7 +144,7 @@ class Network(nn.Module):
     @staticmethod
     def load_spaces(path):
         """Load the observation and action spaces from a file."""
-        save_data = torch.load(path)
+        save_data = torch.load(path, weights_only=False)
         return save_data["obs_space"], save_data["action_space"]
 
 class NatureCNN(nn.Module):
