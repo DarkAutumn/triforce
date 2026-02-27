@@ -136,50 +136,32 @@ class GameplayCritic(ZeldaCritic):
         if state_change.health_lost > 0:
             rewards.remove_rewards()
 
+    # Pre-computed list of equipment attribute names for batch checking
+    _EQUIPMENT_ATTRS = ('sword', 'arrows', 'bow', 'candle', 'whistle', 'food', 'potion',
+                        'magic_rod', 'raft', 'book', 'ring', 'ladder', 'magic_key',
+                        'power_bracelet', 'letter', 'boomerang', 'compass', 'map', 'rupees', 'keys')
+
     # reward helpers, may be overridden
     def critique_equipment_pickup(self, state_change : StateChange, rewards):
         """Critiques the pickup of equipment items."""
-        self.__check_one_equipment(state_change, rewards, 'sword')
-        self.__check_one_equipment(state_change, rewards, 'arrows')
-        self.__check_one_equipment(state_change, rewards, 'bow')
-        self.__check_one_equipment(state_change, rewards, 'candle')
-        self.__check_one_equipment(state_change, rewards, 'whistle')
-        self.__check_one_equipment(state_change, rewards, 'food')
-        self.__check_one_equipment(state_change, rewards, 'potion')
-        self.__check_one_equipment(state_change, rewards, 'magic_rod')
-        self.__check_one_equipment(state_change, rewards, 'raft')
-        self.__check_one_equipment(state_change, rewards, 'book')
-        self.__check_one_equipment(state_change, rewards, 'ring')
-        self.__check_one_equipment(state_change, rewards, 'ladder')
-        self.__check_one_equipment(state_change, rewards, 'magic_key')
-        self.__check_one_equipment(state_change, rewards, 'power_bracelet')
-        self.__check_one_equipment(state_change, rewards, 'letter')
-        self.__check_one_equipment(state_change, rewards, 'boomerang')
-        self.__check_one_equipment(state_change, rewards, 'compass')
-        self.__check_one_equipment(state_change, rewards, 'map')
-        self.__check_one_equipment(state_change, rewards, 'rupees')
-        self.__check_one_equipment(state_change, rewards, 'keys')
+        prev_link = state_change.previous.link
+        curr_link = state_change.state.link
+        for item in self._EQUIPMENT_ATTRS:
+            prev = getattr(prev_link, item)
+            curr = getattr(curr_link, item)
 
-    def __check_one_equipment(self, state_change : StateChange, rewards, item):
-        prev, curr = self.__get_equipment_change(state_change, item)
-        if prev < curr:
-            rewards.add(EQUIPMENT_REWARD_MAP[item])
+            if isinstance(prev, Enum):
+                prev = prev.value
+            elif isinstance(prev, bool):
+                prev = int(prev)
 
-    def __get_equipment_change(self, state_change, item):
-        prev = getattr(state_change.previous.link, item)
-        curr = getattr(state_change.state.link, item)
+            if isinstance(curr, Enum):
+                curr = curr.value
+            elif isinstance(curr, bool):
+                curr = int(curr)
 
-        if isinstance(prev, Enum):
-            prev = prev.value
-        elif isinstance(prev, bool):
-            prev = int(prev)
-
-        if isinstance(curr, Enum):
-            curr = curr.value
-        elif isinstance(curr, bool):
-            curr = int(curr)
-
-        return prev, curr
+            if prev < curr:
+                rewards.add(EQUIPMENT_REWARD_MAP[item])
 
     def critique_used_key(self, state_change : StateChange, rewards):
         """Critiques the pickup and usage of keys."""

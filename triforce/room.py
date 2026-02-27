@@ -35,6 +35,7 @@ def init_half_walkable_tiles():
             ]
 
 WALKABLE_TILES = torch.tensor(init_walkable_tiles(), dtype=torch.uint8)
+WALKABLE_TILES_SET = frozenset(init_walkable_tiles())
 HALF_WALKABLE_TILES = torch.tensor(init_half_walkable_tiles(), dtype=torch.uint8)
 BRICK_TILE = 0xf6
 
@@ -105,6 +106,7 @@ class Room:
         self.full_location = location
         self.tiles : torch.Tensor = tiles
         self.walkable : torch.Tensor = walkable
+        self._is_loaded = bool(any(int(t) in WALKABLE_TILES_SET for t in tiles.flatten()))
         self.exits = self._get_exit_tiles()
         self.cave_tile = self._get_cave_coordinates()
         self._wf_lru = OrderedDict()
@@ -146,8 +148,7 @@ class Room:
     @property
     def is_loaded(self):
         """Returns True if the room is loaded."""
-        any_walkable = torch.isin(self.tiles, WALKABLE_TILES).any()
-        return any_walkable
+        return self._is_loaded
 
     def _get_exit_tiles(self):
         # pylint: disable=too-many-branches

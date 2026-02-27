@@ -261,7 +261,7 @@ class ZeldaGame:
         """Whether the game is in a cave."""
         return self.info['mode'] == MODE_CAVE
 
-    @property
+    @cached_property
     def full_location(self):
         """The full location of the room."""
         return MapLocation(self.level, self.location, self.in_cave)
