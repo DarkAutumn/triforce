@@ -200,6 +200,7 @@ pair of linear layers is allocated, orthogonally initialized, and discarded.
 Refactor `Network.__init__` to accept optional action/value heads, or defer their
 creation to subclasses. Low priority.
 
+
 ---
 
 ## 9. Rethink Evaluation: Measure Game Progress, Not Rewards
