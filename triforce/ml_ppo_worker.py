@@ -35,6 +35,11 @@ class SimpleEnvFactory:
 
 def _worker_loop(conn, create_env_fn, network_class, target_steps, gamma, lam):
     """Main loop for a rollout worker subprocess."""
+    # Each worker only does single-sample inference — restrict PyTorch to 1 thread
+    # to avoid massive thread contention across N worker processes.
+    import torch  # pylint: disable=import-outside-toplevel
+    torch.set_num_threads(1)
+
     env = create_env_fn()
     try:
         buffer = PPORolloutBuffer(target_steps, 1, env.observation_space, env.action_space, gamma, lam)
