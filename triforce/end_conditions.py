@@ -68,7 +68,7 @@ class Timeout(ZeldaEndCondition):
                 self.__last_correct_room += 1
             else:
                 if curr.full_location not in self.__seen:
-                    self.__seen.add(curr.location)
+                    self.__seen.add(curr.full_location)
                     self.__last_discovery = 0
 
                 if curr.full_location in prev.objectives.next_rooms:

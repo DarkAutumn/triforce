@@ -10,6 +10,7 @@ Pillow
 pygame
 opencv-python
 pandas
+scipy
 tqdm
 pyarrow
 pylint

@@ -8,6 +8,7 @@ import argparse
 import json
 import shutil
 from typing import Dict, List
+from scipy.stats import mannwhitneyu
 from tqdm import tqdm
 from triforce import ModelDefinition, make_zelda_env, Network, TrainingScenarioDefinition,  MetricTracker
 
@@ -101,6 +102,92 @@ def print_progress_report(progress_values : List[int], max_progress : int,
         print(f"    {milestone:>3}: {count:>4}  {bar_str}")
     print(f"{'='*60}\n")
 
+def _percentile(sorted_vals, pct):
+    """Returns the value at the given percentile from a sorted list."""
+    return sorted_vals[max(0, ceil(len(sorted_vals) * pct) - 1)]
+
+
+def compare_models(path_a, path_b):
+    """Compares two evaluation results and prints a human-readable statistical comparison."""
+    # pylint: disable=too-many-locals,too-many-statements
+    with open(path_a, 'r', encoding='utf-8') as f:
+        data_a = json.load(f)
+    with open(path_b, 'r', encoding='utf-8') as f:
+        data_b = json.load(f)
+
+    name_a = os.path.basename(path_a).rsplit('.eval.json', 1)[0] or path_a
+    name_b = os.path.basename(path_b).rsplit('.eval.json', 1)[0] or path_b
+
+    vals_a = data_a['progress_values']
+    vals_b = data_b['progress_values']
+    max_a = data_a['max_progress']
+    max_b = data_b['max_progress']
+    sorted_a = sorted(vals_a)
+    sorted_b = sorted(vals_b)
+
+    # Summary stats
+    mean_a, mean_b = sum(vals_a) / len(vals_a), sum(vals_b) / len(vals_b)
+    median_a, median_b = sorted_a[len(sorted_a) // 2], sorted_b[len(sorted_b) // 2]
+    success_a = sum(1 for v in vals_a if v >= max_a)
+    success_b = sum(1 for v in vals_b if v >= max_b)
+
+    # Mann-Whitney U test (two-sided)
+    stat, p_value = mannwhitneyu(vals_a, vals_b, alternative='two-sided')
+
+    # Stochastic dominance: P(A > B) from the U statistic
+    n_a, n_b = len(vals_a), len(vals_b)
+    prob_a_wins = stat / (n_a * n_b)
+
+    # Determine winner
+    if p_value < 0.05:
+        winner = name_a if mean_a > mean_b else name_b
+        verdict = f"{winner} is significantly better (p={p_value:.4f})"
+    else:
+        verdict = f"No significant difference (p={p_value:.4f})"
+
+    # Print report
+    col_w = max(len(name_a), len(name_b), 10)
+    print(f"\n{'='*70}")
+    print("  Model Comparison")
+    print(f"{'='*70}")
+    print(f"  {'':>{col_w}}   {'A: ' + name_a:>20}   {'B: ' + name_b:>20}")
+    print(f"  {'Episodes':>{col_w}}   {len(vals_a):>20}   {len(vals_b):>20}")
+    print(f"  {'Mean':>{col_w}}   {mean_a:>20.2f}   {mean_b:>20.2f}")
+    print(f"  {'Median':>{col_w}}   {median_a:>20}   {median_b:>20}")
+    print(f"  {'P25':>{col_w}}   {_percentile(sorted_a, 0.25):>20}   {_percentile(sorted_b, 0.25):>20}")
+    print(f"  {'P75':>{col_w}}   {_percentile(sorted_a, 0.75):>20}   {_percentile(sorted_b, 0.75):>20}")
+    print(f"  {'P90':>{col_w}}   {_percentile(sorted_a, 0.90):>20}   {_percentile(sorted_b, 0.90):>20}")
+    print(f"  {'Success':>{col_w}}   "
+          f"{success_a:>3}/{len(vals_a)} ({100*success_a/len(vals_a):.0f}%)          "
+          f"{success_b:>3}/{len(vals_b)} ({100*success_b/len(vals_b):.0f}%)")
+    print()
+
+    # Side-by-side histogram
+    max_progress = max(max_a, max_b)
+    counts_a = Counter(vals_a)
+    counts_b = Counter(vals_b)
+    max_count = max(max(counts_a.values(), default=1), max(counts_b.values(), default=1))  # pylint: disable=nested-min-max
+    bar_w = 15
+
+    print("  Milestone histogram (A | B):")
+    for milestone in range(max_progress + 1):
+        ca = counts_a.get(milestone, 0)
+        cb = counts_b.get(milestone, 0)
+        bar_a = '█' * round(ca / max_count * bar_w) if max_count > 0 else ''
+        bar_b = '█' * round(cb / max_count * bar_w) if max_count > 0 else ''
+        print(f"    {milestone:>3}: {ca:>4} {bar_a:<{bar_w}} | {cb:>4} {bar_b:<{bar_w}}")
+    print()
+
+    # Statistical tests
+    print("  Statistical Analysis:")
+    print(f"    Mann-Whitney U statistic: {stat:.1f}")
+    print(f"    p-value: {p_value:.6f}" + ("  (significant)" if p_value < 0.05 else "  (not significant)"))
+    print(f"    P(A > B): {100*prob_a_wins:.1f}%   P(B > A): {100*(1-prob_a_wins):.1f}%")
+    print()
+    print(f"  Verdict: {verdict}")
+    print(f"{'='*70}\n")
+
+
 def _print_stat_header(metrics: Dict[str, float]):
     terminal_width = shutil.get_terminal_size((80, 20)).columns
     header_result = f"{'Filename':<32} {'Steps':>9} "
@@ -154,13 +241,21 @@ def evaluate_one_model(make_env, network, episodes, progress_callback):
 
 def get_model_path(args):
     """Gets the model path."""
-    return args.model_path[0] if args.model_path else \
+    return args.model_path if args.model_path else \
                     os.path.join(os.path.dirname(os.path.realpath(__file__)), 'models')
 
 def main():
     """Main entry point."""
     # pylint: disable=too-many-locals
     args = parse_args()
+
+    if args.compare:
+        compare_models(args.compare[0], args.compare[1])
+        return
+
+    if not args.model_path or not args.model or not args.scenario:
+        print("Error: model_path, model, and scenario are required when not using --compare.")
+        sys.exit(1)
 
     all_scenarios = create_scenarios(args)
     to_process = [(name, path) for name, path, process in all_scenarios if process]
@@ -281,12 +376,14 @@ def parse_args():
     parser.add_argument("--render", action='store_true', help="Render the game while evaluating the models.")
     parser.add_argument("--limit", type=int, default=-1, help="Limit the number of models to evaluate.")
 
-    parser.add_argument('model_path', nargs=1, help='The directory containing the models to evaluate')
-    parser.add_argument('model', type=str, help='The model to evaluate.')
-    parser.add_argument('scenario', type=str, help='The scenario to evaluate.')
+    parser.add_argument('model_path', nargs='?', default=None, help='The directory containing the models to evaluate')
+    parser.add_argument('model', type=str, nargs='?', default=None, help='The model to evaluate.')
+    parser.add_argument('scenario', type=str, nargs='?', default=None, help='The scenario to evaluate.')
     parser.add_argument('--reprocess', action='store_true', help='Reprocess the models')
     parser.add_argument('--steps', type=int, nargs='+', default=None,
                         help='Only evaluate models with these step counts')
+    parser.add_argument('--compare', type=str, nargs=2, metavar='EVAL_JSON',
+                        help='Compare two .eval.json files instead of running evaluation')
 
     try:
         args = parser.parse_args()

@@ -60,7 +60,7 @@
             "request": "launch",
             "python": "${workspaceFolder}/.venv/bin/python",
             "program": "evaluate.py",
-            "args": ["training/debug/", "--render", "--episodes", "10"],
+            "args": ["training/", "overworld", "full-game", "--episodes", "50", "--steps", "249856", "1048576", "1798144", "2549760", "3348480"],
             "console": "integratedTerminal",
             "justMyCode": false
         },
