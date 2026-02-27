@@ -179,7 +179,6 @@ def main():
     networks = []
 
     all_scenarios = create_scenarios(args)
-    all_scenarios.reverse()
     total_episodes = sum(args.episodes for x in all_scenarios if x[-1])
     last_progress = None
     last_max_progress = 0
@@ -232,7 +231,9 @@ def main():
             _print_stat_row(os.path.basename(path), network.steps_trained, network.metrics, columns)
 
 def create_scenarios(args):
-    """Finds all scenarios to be executed.  Also returns the results of any previous evaluations."""
+    """Finds all scenarios to be executed.  Also returns the results of any previous evaluations.
+    Step-count models are processed in descending order (most trained first).
+    Non-step-count models are processed last."""
     model_path = get_model_path(args)
     model_name = args.model
 
@@ -240,16 +241,20 @@ def create_scenarios(args):
 
     process = True
     available_models = ModelDefinition.get(model_name).find_available_models(model_path)
-    models_to_evaluate = sorted([int(x) for x in available_models.keys() if isinstance(x, int)])
-    models_to_evaluate += [x for x in available_models.keys() if not isinstance(x, int)]
-    for key in models_to_evaluate:
+
+    # Step-count models in descending order (most steps first)
+    step_count_keys = sorted([int(x) for x in available_models.keys() if isinstance(x, int)], reverse=True)
+    # Non-step-count models last, any order
+    other_keys = [x for x in available_models.keys() if not isinstance(x, int)]
+
+    for key in list(step_count_keys) + other_keys:
         path = available_models[key]
         _, episodes_evaluated = Network.load_metrics(path)
         process = args.reprocess or episodes_evaluated < args.episodes
         all_scenarios.append((model_name, path, process))
 
     if args.limit > 0:
-        all_scenarios = all_scenarios[-args.limit:]
+        all_scenarios = all_scenarios[:args.limit]
 
     return all_scenarios
 
