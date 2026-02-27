@@ -166,19 +166,26 @@ class PPO:
             exit_threshold = kwargs.get('exit_threshold', None)
             next_tensorboard = Threshold(LOG_RATE)
             next_model_save = Threshold(SAVE_INTERVAL)
-            steps_per_rollout = buffer.memory_length * n_envs
-            progress.total = math.ceil(iterations / steps_per_rollout) * steps_per_rollout
+
+            # Count iterations per-env (memory_length), not total across all envs.
+            # This gives the same number of optimization steps as single-env mode.
+            steps_per_iteration = buffer.memory_length
+            progress.total = math.ceil(iterations / steps_per_iteration) * steps_per_iteration
             total_iterations = 0
+            accumulated_metrics = []
 
             while total_iterations < iterations:
                 # Send current weights to workers and collect rollouts
                 pool.update_weights(network)
-                pool.collect_rollouts(buffer, progress)
-                total_iterations += steps_per_rollout
+                _, worker_metrics = pool.collect_rollouts(buffer, progress)
+                total_iterations += steps_per_iteration
+                if worker_metrics:
+                    accumulated_metrics.append(worker_metrics)
 
-                # Save metrics (MetricTracker runs in subprocesses, not available here)
-                if next_tensorboard.add(steps_per_rollout):
-                    network.metrics = MetricTracker.get_metrics_and_clear()
+                # Log aggregated metrics from worker subprocesses
+                if next_tensorboard.add(steps_per_iteration):
+                    network.metrics = self._average_metric_dicts(accumulated_metrics)
+                    accumulated_metrics.clear()
                     if network.metrics:
                         self._write_metrics(network.metrics, network.steps_trained)
 
@@ -190,12 +197,12 @@ class PPO:
                             self._adjust_learning_rate(network.metrics)
 
                 # Save model
-                if save_path and next_model_save.add(steps_per_rollout):
+                if save_path and next_model_save.add(steps_per_iteration):
                     model_name = kwargs.get('model_name', "network").replace(' ', '_')
                     network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
 
                 # Optimize the network
-                network.steps_trained += steps_per_rollout
+                network.steps_trained += steps_per_iteration
                 network = self._optimize(network, buffer, network.steps_trained)
 
             return network
@@ -204,6 +211,19 @@ class PPO:
 
     def _hit_exit_criteria(self, metrics, exit_criteria, exit_threshold):
         return metrics.get(exit_criteria, 0) >= exit_threshold
+
+    @staticmethod
+    def _average_metric_dicts(dicts):
+        """Average a list of metric dicts into one."""
+        if not dicts:
+            return {}
+        combined = {}
+        for d in dicts:
+            for key, value in d.items():
+                if key not in combined:
+                    combined[key] = []
+                combined[key].append(value)
+        return {key: sum(values) / len(values) for key, values in combined.items()}
 
     def _write_metrics(self, metrics, total_iterations):
         timestamp = time.time()
