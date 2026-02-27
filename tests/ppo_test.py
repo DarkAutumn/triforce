@@ -104,7 +104,7 @@ def test_ppo_training(device, num_envs):
 
     # Train PPO for enough iterations to allow learning.  There's no magic here, this just seems
     # to be enough iterations for this environment to learn.
-    num_iterations = 25_000 * num_envs
+    num_iterations = 75_000 * num_envs
     progress_mock = MagicMock()
     def create_env():
         return TestEnvironment(8, 3)
@@ -125,6 +125,48 @@ def test_ppo_training(device, num_envs):
         action = torch.argmax(action_probs).item()  # Select the most probable action
         actions_taken.append(action)
 
+        obs, _, _, _, _ = env.step(action)
+
+    expected_actions = [0, 1, 2]
+    assert actions_taken == expected_actions, f"Expected actions {expected_actions}, but got {actions_taken}"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("num_envs", [2])
+@pytest.mark.parametrize("device", ["cpu", "cuda"] if torch.cuda.is_available() else ["cpu"])
+def test_ppo_multi_env(device, num_envs):
+    """Test multi-env PPO training with subprocess workers."""
+    from triforce._test_helpers import SimpleTestNetwork, SimpleTestEnvironment
+    from triforce.ml_ppo_worker import SimpleEnvFactory
+
+    seed = 42
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    ppo = PPO(log_dir=None, device=device, target_steps=128)
+
+    num_iterations = 75_000 * num_envs
+    progress_mock = MagicMock()
+    def create_env():
+        return SimpleTestEnvironment(8, 3)
+
+    env_factory = SimpleEnvFactory(SimpleTestEnvironment, 8, 3)
+    network = ppo.train(SimpleTestNetwork, create_env, num_iterations, progress_mock,
+                        envs=num_envs, env_factory=env_factory, network_class=SimpleTestNetwork)
+
+    assert progress_mock.update.call_count > 2, "PPO did not train for the expected number of iterations"
+
+    # See if the trained model takes the correct actions
+    env = create_env()
+    obs, _ = env.reset()
+    actions_taken = []
+
+    for step in range(3):
+        logits, value = network(obs)
+        action_probs = torch.softmax(logits, dim=-1)
+        action = torch.argmax(action_probs).item()
+        actions_taken.append(action)
         obs, _, _, _, _ = env.step(action)
 
     expected_actions = [0, 1, 2]

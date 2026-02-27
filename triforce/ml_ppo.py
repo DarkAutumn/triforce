@@ -76,21 +76,24 @@ class PPO:
         """Train the network."""
         self.start_time = time.time()
 
+        n_envs = kwargs.get('envs', 1)
+
         env = create_env()
+        network = kwargs.get('model', None) or create_network(network, env.observation_space, env.action_space)
+        if self.optimizer is None:
+            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=self._epsilon)
+        else:
+            # Reattach optimizer to new parameter references while preserving momentum/variance
+            for param_group, new_params in zip(self.optimizer.param_groups,
+                                                [list(network.parameters())]):
+                param_group['params'] = new_params
+
+        if n_envs > 1:
+            # Multi-env mode: close the initial env (workers create their own) and train
+            env.close()
+            return self._train_multi(network, n_envs, iterations, progress, **kwargs)
+
         try:
-            network = kwargs.get('model', None) or create_network(network, env.observation_space, env.action_space)
-            if self.optimizer is None:
-                self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=self._epsilon)
-            else:
-                # Reattach optimizer to new parameter references while preserving momentum/variance
-                for param_group, new_params in zip(self.optimizer.param_groups,
-                                                    [list(network.parameters())]):
-                    param_group['params'] = new_params
-
-            envs = kwargs.get('envs', 1)
-            if envs > 1:
-                raise NotImplementedError("Multiprocessing not yet implemented.")
-
             return self._train_single(network, env, iterations, progress, **kwargs)
         finally:
             env.close()
@@ -134,6 +137,70 @@ class PPO:
             network = self._optimize(network, buffer, network.steps_trained)
 
         return network
+
+    def _train_multi(self, network, n_envs, iterations, progress, **kwargs):
+        """Train with multiple environments in separate subprocesses."""
+        # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
+        from .ml_ppo_worker import RolloutWorkerPool, EnvFactory  # pylint: disable=import-outside-toplevel
+
+        obs_space = network.observation_space
+        act_space = network.action_space
+        buffer = PPORolloutBuffer(self.target_steps, n_envs, obs_space, act_space,
+                                  self._gamma, self._lambda)
+
+        # Use pre-built env_factory if provided, otherwise build from kwargs
+        env_factory = kwargs.get('env_factory')
+        if env_factory is None:
+            scenario_def = kwargs.get('scenario_def')
+            action_space_name = kwargs.get('action_space_name')
+            env_kwargs = {k: v for k, v in kwargs.items()
+                          if k in ('render_mode', 'translation', 'frame_stack', 'obs_kind')}
+            env_factory = EnvFactory(scenario_def, action_space_name, **env_kwargs)
+
+        network_class = kwargs.get('network_class', type(network))
+        pool = RolloutWorkerPool(n_envs, env_factory, network_class, self.target_steps,
+                                 self._gamma, self._lambda)
+        try:
+            save_path = kwargs.get('save_path', None)
+            exit_criteria = kwargs.get('exit_criteria', None)
+            exit_threshold = kwargs.get('exit_threshold', None)
+            next_tensorboard = Threshold(LOG_RATE)
+            next_model_save = Threshold(SAVE_INTERVAL)
+            steps_per_rollout = buffer.memory_length * n_envs
+            progress.total = math.ceil(iterations / steps_per_rollout) * steps_per_rollout
+            total_iterations = 0
+
+            while total_iterations < iterations:
+                # Send current weights to workers and collect rollouts
+                pool.update_weights(network)
+                pool.collect_rollouts(buffer, progress)
+                total_iterations += steps_per_rollout
+
+                # Save metrics (MetricTracker runs in subprocesses, not available here)
+                if next_tensorboard.add(steps_per_rollout):
+                    network.metrics = MetricTracker.get_metrics_and_clear()
+                    if network.metrics:
+                        self._write_metrics(network.metrics, network.steps_trained)
+
+                        if exit_criteria and self._hit_exit_criteria(network.metrics, exit_criteria,
+                                                                     exit_threshold):
+                            break
+
+                        if kwargs.get('dynamic_lr', False):
+                            self._adjust_learning_rate(network.metrics)
+
+                # Save model
+                if save_path and next_model_save.add(steps_per_rollout):
+                    model_name = kwargs.get('model_name', "network").replace(' ', '_')
+                    network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
+
+                # Optimize the network
+                network.steps_trained += steps_per_rollout
+                network = self._optimize(network, buffer, network.steps_trained)
+
+            return network
+        finally:
+            pool.close()
 
     def _hit_exit_criteria(self, metrics, exit_criteria, exit_threshold):
         return metrics.get(exit_criteria, 0) >= exit_threshold
