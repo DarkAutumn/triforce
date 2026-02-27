@@ -2,11 +2,13 @@
 """Evaluates the result of trainined models."""
 from collections import Counter
 from math import ceil
+import multiprocessing as mp
 from multiprocessing.sharedctypes import Synchronized
 import sys
 import os
 import argparse
 import json
+import time
 import shutil
 from typing import Dict, List
 from tqdm import tqdm
@@ -125,7 +127,7 @@ def _print_stat_row(filename, steps_trained, metrics: Dict[str, float], metric_c
     print(result)
 
 def evaluate_one_model(make_env, network, episodes, counter_or_callback):
-    """Runs a single scenario.  Returns (metrics_dict, progress_metric_or_none)."""
+    """Runs a single scenario.  Returns (metrics_dict, progress_values, max_progress)."""
     # pylint: disable=redefined-outer-name,too-many-locals
     env = make_env()
     try:
@@ -157,6 +159,22 @@ def evaluate_one_model(make_env, network, episodes, counter_or_callback):
     finally:
         env.close()
 
+
+def _worker_evaluate_model(model_path, model_name, scenario_name, episodes, counter,
+                           frame_stack=3):
+    """Subprocess worker: evaluates one model for all episodes, returns results."""
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    scenario_def = TrainingScenarioDefinition.get(scenario_name)
+    model_def = ModelDefinition.get(model_name)
+    obs_space, act_space = Network.load_spaces(model_path)
+    network = model_def.neural_net(obs_space, act_space)
+    network.load(model_path)
+
+    def make_env():
+        return make_zelda_env(scenario_def, model_def.action_space, frame_stack=frame_stack)
+
+    return evaluate_one_model(make_env, network, episodes, counter)
+
 def get_model_path(args):
     """Gets the model path."""
     return args.model_path[0] if args.model_path else \
@@ -166,69 +184,134 @@ def main():
     """Main entry point."""
     # pylint: disable=too-many-locals
     args = parse_args()
+
+    all_scenarios = create_scenarios(args)
+    to_process = [(name, path) for name, path, process in all_scenarios if process]
+    total_episodes = len(to_process) * args.episodes
+
+    if not to_process:
+        print("No models to evaluate.")
+        return
+
+    counter = mp.Value('i', 0)
+
+    if args.parallel > 1:
+        _run_parallel(args, to_process, total_episodes, counter)
+    else:
+        _run_sequential(args, to_process, total_episodes, counter)
+
+    # Print progress report for the last evaluated model (from the first/best model)
+    if to_process:
+        json_path = to_process[0][1].rsplit('.', 1)[0] + '.eval.json'
+        if os.path.exists(json_path):
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            print_progress_report(data['progress_values'], data['max_progress'],
+                                  data['episodes'], args.scenario)
+
+
+def _save_results(path, metrics, progress_values, max_progress, episodes, scenario, model_name):
+    """Saves evaluation results: updates model .pt, writes .eval.json and .eval.md."""
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    if metrics:
+        obs_space, act_space = Network.load_spaces(path)
+        model_def = ModelDefinition.get(model_name)
+        network = model_def.neural_net(obs_space, act_space)
+        network.load(path)
+        network.metrics = metrics
+        network.episodes_evaluated = episodes
+        network.save(path)
+
+    if progress_values is not None:
+        json_path = path.rsplit('.', 1)[0] + '.eval.json'
+        eval_data = {
+            'episodes': episodes,
+            'scenario': scenario,
+            'progress_values': progress_values,
+            'max_progress': max_progress,
+            'metrics': metrics,
+        }
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(eval_data, f, indent=2)
+        convert_eval_json_to_md(json_path)
+
+
+def _run_sequential(args, to_process, total_episodes, _counter):
+    """Evaluate models one at a time."""
     scenario_def = TrainingScenarioDefinition.get(args.scenario)
+
     def make_env():
-        """Creates the environment."""
         model_def = ModelDefinition.get(args.model)
         render_mode = 'human' if args.render else None
         return make_zelda_env(scenario_def, model_def.action_space, render_mode=render_mode,
                               frame_stack=args.frame_stack)
 
     observation_space, action_space = None, None
-
-    networks = []
-
-    all_scenarios = create_scenarios(args)
-    total_episodes = sum(args.episodes for x in all_scenarios if x[-1])
-    last_progress = None
-    last_max_progress = 0
     with tqdm(total=total_episodes) as progress:
         def update_progress():
             progress.update(1)
 
-        for model_name, path, process in all_scenarios:
+        for model_name, path in to_process:
             if observation_space is None:
                 observation_space, action_space = Network.load_spaces(path)
 
             model_def = ModelDefinition.get(model_name)
-            network : Network = model_def.neural_net(observation_space, action_space)
+            network = model_def.neural_net(observation_space, action_space)
             network.load(path)
-            networks.append((network, path))
-            if process:
-                result = evaluate_one_model(make_env, network, args.episodes, update_progress)
-                metrics, progress_values, max_progress = result
-                if metrics:
-                    network.metrics = metrics
-                    network.episodes_evaluated = args.episodes
-                    network.save(path)
 
-                if progress_values is not None:
-                    last_progress = progress_values
-                    last_max_progress = max_progress
+            metrics, progress_values, max_progress = evaluate_one_model(
+                make_env, network, args.episodes, update_progress)
+            _save_results(path, metrics, progress_values, max_progress,
+                          args.episodes, args.scenario, model_name)
 
-                    # Save progress data as JSON sidecar
-                    json_path = path.rsplit('.', 1)[0] + '.eval.json'
-                    eval_data = {
-                        'episodes': args.episodes,
-                        'scenario': args.scenario,
-                        'progress_values': progress_values,
-                        'max_progress': max_progress,
-                        'metrics': metrics,
-                    }
-                    with open(json_path, 'w', encoding='utf-8') as f:
-                        json.dump(eval_data, f, indent=2)
 
-                    convert_eval_json_to_md(json_path)
+def _run_parallel(args, to_process, total_episodes, counter):
+    """Evaluate models in parallel using a process pool."""
+    # pylint: disable=consider-using-with
+    with tqdm(total=total_episodes) as progress:
+        last_count = 0
 
-    # Print progress report for the last evaluated model
-    if last_progress is not None:
-        print_progress_report(last_progress, last_max_progress, args.episodes, args.scenario)
+        def _on_result(result_and_info):
+            metrics, progress_values, max_progress, path, model_name = result_and_info
+            _save_results(path, metrics, progress_values, max_progress,
+                          args.episodes, args.scenario, model_name)
 
-    # Print the detailed metrics table
-    if networks and args.verbose > 0:
-        columns = _print_stat_header(network.metrics)
-        for network, path in networks:
-            _print_stat_row(os.path.basename(path), network.steps_trained, network.metrics, columns)
+        pool = mp.Pool(processes=args.parallel)
+        async_results = []
+        for model_name, path in to_process:
+            res = pool.apply_async(
+                _worker_parallel,
+                args=(path, model_name, args.scenario, args.episodes, counter, args.frame_stack))
+            async_results.append(res)
+
+        pool.close()
+
+        # Poll the shared counter to update progress bar
+        while not all(r.ready() for r in async_results):
+            time.sleep(0.5)
+            current = counter.value
+            if current > last_count:
+                progress.update(current - last_count)
+                last_count = current
+
+        # Final update
+        current = counter.value
+        if current > last_count:
+            progress.update(current - last_count)
+
+        pool.join()
+
+        # Collect and save results
+        for res in async_results:
+            result = res.get()
+            _on_result(result)
+
+
+def _worker_parallel(model_path, model_name, scenario_name, episodes, counter, frame_stack):
+    """Subprocess entry point: evaluate one model, return results with metadata."""
+    metrics, progress_values, max_progress = _worker_evaluate_model(
+        model_path, model_name, scenario_name, episodes, counter, frame_stack)
+    return metrics, progress_values, max_progress, model_path, model_name
 
 def create_scenarios(args):
     """Finds all scenarios to be executed.  Also returns the results of any previous evaluations.
