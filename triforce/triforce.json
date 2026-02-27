@@ -1,82 +1,104 @@
 {
-    "models" :
-    [
+    "models": [
         {
-            "name" : "overworld",
-            "neural_net" : "SharedNatureAgent",
-            "action_space" : ["MOVE", "SWORD", "BEAMS"]
+            "name": "overworld",
+            "neural_net": "SharedNatureAgent",
+            "action_space": [
+                "MOVE",
+                "SWORD",
+                "BEAMS"
+            ]
         },
         {
-            "name" : "dungeon",
-            "neural_net" : "SharedNatureAgent",
-            "action_space" : ["MOVE", "SWORD", "BEAMS"]
+            "name": "dungeon",
+            "neural_net": "SharedNatureAgent",
+            "action_space": [
+                "MOVE",
+                "SWORD",
+                "BEAMS"
+            ]
         },
         {
-            "name" : "overworld-sword",
-            "neural_net" : "SharedNatureAgent",
-            "action_space" : ["MOVE"]
+            "name": "overworld-sword",
+            "neural_net": "SharedNatureAgent",
+            "action_space": [
+                "MOVE"
+            ]
         }
     ],
-    "training-circuits" :
-    [
+    "training-circuits": [
         {
-            "name" : "overworld-circuit",
-            "description" : "Train the overworld model by first teaching it to walk rooms, then to make it to dungeon1, then to grab the sword, then all together.",
-            "scenarios" : [
+            "name": "overworld-circuit",
+            "description": "Train the overworld model through curriculum: room navigation, sword pickup, overworld traversal, dungeon 1, then full game.",
+            "scenarios": [
                 {
-                    "scenario" : "overworld-room-walk",
-                    "exit_criteria" : "room-result/correct-exit",
-                    "threshold" : 0.90
+                    "scenario": "overworld-room-walk",
+                    "exit_criteria": "room-result/correct-exit",
+                    "threshold": 0.9,
+                    "iterations": 250000
                 },
                 {
-                    "scenario" : "overworld-sword",
-                    "exit_criteria" : "success-rate",
-                    "threshold" : 0.80
+                    "scenario": "overworld-sword",
+                    "exit_criteria": "success-rate",
+                    "threshold": 0.8,
+                    "iterations": 250000
                 },
                 {
-                    "scenario" : "overworld-skip-sword",
-                    "exit_criteria" : "success-rate",
-                    "threshold" : 0.90
+                    "scenario": "overworld-skip-sword",
+                    "exit_criteria": "success-rate",
+                    "threshold": 0.9,
+                    "iterations": 500000
                 },
                 {
-                    "scenario" : "game-start",
-                    "iterations" : 7500000
+                    "scenario": "game-start",
+                    "exit_criteria": "success-rate",
+                    "threshold": 0.9,
+                    "iterations": 500000
+                },
+                {
+                    "scenario": "dungeon1",
+                    "exit_criteria": "success-rate",
+                    "threshold": 0.02,
+                    "iterations": 500000
+                },
+                {
+                    "scenario": "full-game"
                 }
             ]
         },
         {
-            "name" : "dungeon1-circuit",
-            "description" : "Train the dungeon model by first teaching it to walk rooms, then to make it to dungeon1, then to grab the sword, then all together.",
-            "scenarios" : [
+            "name": "dungeon1-circuit",
+            "description": "Train the dungeon model by first teaching it to walk rooms, then to make it to dungeon1, then to grab the sword, then all together.",
+            "scenarios": [
                 {
-                    "scenario" : "dungeon1-skip-opening",
-                    "exit_criteria" : "rewards",
-                    "threshold" : 0.0,
-                    "iterations" : 2000000
+                    "scenario": "dungeon1-skip-opening",
+                    "exit_criteria": "rewards",
+                    "threshold": 0.0,
+                    "iterations": 2000000
                 },
                 {
-                    "scenario" : "dungeon1-entry-room",
-                    "exit_criteria" : "room-result/correct-exit",
-                    "threshold" : 0.90
+                    "scenario": "dungeon1-entry-room",
+                    "exit_criteria": "room-result/correct-exit",
+                    "threshold": 0.9
                 },
                 {
-                    "scenario" : "dungeon1-side-room-opening",
-                    "exit_criteria" : "success-rate",
-                    "threshold" : 0.85
+                    "scenario": "dungeon1-side-room-opening",
+                    "exit_criteria": "success-rate",
+                    "threshold": 0.85
                 },
                 {
-                    "scenario" : "dungeon1-wallmaster",
-                    "exit_criteria" : "success-rate",
-                    "threshold" : 0.85
+                    "scenario": "dungeon1-wallmaster",
+                    "exit_criteria": "success-rate",
+                    "threshold": 0.85
                 },
                 {
-                    "scenario" : "dungeon1-entry-room",
-                    "exit_criteria" : "room-result/correct-exit",
-                    "threshold" : 0.90
+                    "scenario": "dungeon1-entry-room",
+                    "exit_criteria": "room-result/correct-exit",
+                    "threshold": 0.9
                 },
                 {
-                    "scenario" : "dungeon1",
-                    "iterations" : 20000000
+                    "scenario": "dungeon1",
+                    "iterations": 20000000
                 }
             ]
         }
@@ -85,12 +107,18 @@
         {
             "name": "full-game",
             "description": "Full game from start through dungeon 1 triforce",
-            "iterations" : 2000000,
-            "scenario_selector" : "round-robin",
-            "objective" : "GameCompletion",
+            "iterations": 2000000,
+            "scenario_selector": "round-robin",
+            "objective": "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "GainedTriforce", "GameOver", "Timeout"],
-            "metrics" : [
+            "end_conditions": [
+                "LeftOverworld1Area",
+                "StartingSwordCondition",
+                "GainedTriforce",
+                "GameOver",
+                "Timeout"
+            ],
+            "metrics": [
                 "success-rate",
                 "game-progress",
                 "room-health",
@@ -98,18 +126,26 @@
                 "reward-average",
                 "reward-details"
             ],
-            "start": ["0_77c"],
-            "use_hints" : true
+            "start": [
+                "0_77c"
+            ],
+            "use_hints": true
         },
         {
             "name": "game-start",
             "description": "The full game with training variables",
-            "iterations" : 2000000,
-            "scenario_selector" : "round-robin",
-            "objective" : "GameCompletion",
+            "iterations": 2000000,
+            "scenario_selector": "round-robin",
+            "objective": "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftOverworld1Area", "StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
-            "metrics" : [
+            "end_conditions": [
+                "LeftOverworld1Area",
+                "StartingSwordCondition",
+                "EnteredDungeon",
+                "GameOver",
+                "Timeout"
+            ],
+            "metrics": [
                 "success-rate",
                 "overworld-progress",
                 "room-health",
@@ -117,18 +153,25 @@
                 "reward-average",
                 "reward-details"
             ],
-            "start": ["0_77c"],
-            "use_hints" : true
+            "start": [
+                "0_77c"
+            ],
+            "use_hints": true
         },
         {
             "name": "dungeon1-dungeon2",
             "description": "",
-            "iterations" : 2000000,
-            "scenario_selector" : "round-robin",
-            "objective" : "GameCompletion",
+            "iterations": 2000000,
+            "scenario_selector": "round-robin",
+            "objective": "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftOverworld2Area", "EnteredDungeon", "GameOver", "Timeout"],
-            "metrics" : [
+            "end_conditions": [
+                "LeftOverworld2Area",
+                "EnteredDungeon",
+                "GameOver",
+                "Timeout"
+            ],
+            "metrics": [
                 "success-rate",
                 "overworld-progress",
                 "room-health",
@@ -136,73 +179,102 @@
                 "reward-average",
                 "reward-details"
             ],
-            "start": ["0_37c"],
-            "use_hints" : false
+            "start": [
+                "0_37c"
+            ],
+            "use_hints": false
         },
         {
             "name": "no-end-conditions",
             "description": "The full game with training variables",
-            "iterations" : 2000000,
-            "scenario_selector" : "round-robin",
-            "objective" : "GameCompletion",
+            "iterations": 2000000,
+            "scenario_selector": "round-robin",
+            "objective": "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["GameOver"],
-            "metrics" : [
+            "end_conditions": [
+                "GameOver"
+            ],
+            "metrics": [
                 "reward-average",
                 "reward-details"
             ],
-            "per_reset":
-            {
-                "hearts_and_containers" : 51,
-                "partial_hearts" : 254
+            "per_reset": {
+                "hearts_and_containers": 51,
+                "partial_hearts": 254
             },
-            "start": ["0_37c"],
-            "use_hints" : false
+            "start": [
+                "0_37c"
+            ],
+            "use_hints": false
         },
         {
             "name": "overworld-sword",
             "description": "Start of the game to the sword",
-            "iterations" : 1000000,
-            "scenario_selector" : "none",
-            "objective" : "GameCompletion",
+            "iterations": 1000000,
+            "scenario_selector": "none",
+            "objective": "GameCompletion",
             "critic": "OverworldSwordCritic",
-            "end_conditions": ["StartingRoomConditions", "Timeout"],
-            "metrics" : ["success-rate", "ending", "reward-average", "reward-details"],
-            "start": ["0_77c"],
-            "per_reset":
-            {
-                "hearts_and_containers" : 34,
-                "partial_hearts" : 254
+            "end_conditions": [
+                "StartingRoomConditions",
+                "Timeout"
+            ],
+            "metrics": [
+                "success-rate",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
+            "start": [
+                "0_77c"
+            ],
+            "per_reset": {
+                "hearts_and_containers": 34,
+                "partial_hearts": 254
             }
         },
         {
             "name": "overworld-skip-sword",
             "description": "A scoped down room walk",
-            "iterations" : 2500000,
-            "scenario_selector" : "round-robin",
-            "objective" : "GameCompletion",
+            "iterations": 2500000,
+            "scenario_selector": "round-robin",
+            "objective": "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["StartingSwordCondition", "EnteredDungeon", "GameOver", "Timeout"],
-            "metrics" : ["success-rate", "room-result", "room-health", "ending", "reward-average", "reward-details"],
-            "start": [ "0_67s" ],
-            "use_hints" : true,
-            "per_reset":
-            {
-                "bombs" : 3,
-                "sword" : 1,
-                "hearts_and_containers" : 34,
-                "partial_hearts" : 254
+            "end_conditions": [
+                "StartingSwordCondition",
+                "EnteredDungeon",
+                "GameOver",
+                "Timeout"
+            ],
+            "metrics": [
+                "success-rate",
+                "room-result",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
+            "start": [
+                "0_67s"
+            ],
+            "use_hints": true,
+            "per_reset": {
+                "bombs": 3,
+                "sword": 1,
+                "hearts_and_containers": 34,
+                "partial_hearts": 254
             }
         },
         {
             "name": "overworld-room-walk",
             "description": "A training scenario to teach the model how to traverse the map and follow directions",
-            "iterations" : 2000000,
-            "scenario_selector" : "probabilistic",
-            "objective" : "RoomWalk",
+            "iterations": 2000000,
+            "scenario_selector": "probabilistic",
+            "objective": "RoomWalk",
             "critic": "GameplayCritic",
-            "end_conditions": ["RoomWalkCondition"],
-            "metrics" : [
+            "end_conditions": [
+                "RoomWalkCondition"
+            ],
+            "metrics": [
                 "success-rate",
                 "room-result",
                 "room-health",
@@ -214,24 +286,26 @@
                 "0_58",
                 "0_68"
             ],
-            "use_hints" : false,
-            "per_reset":
-            {
-                "bombs" : 3,
-                "sword" : 1,
-                "hearts_and_containers" : 34,
-                "partial_hearts" : 254
+            "use_hints": false,
+            "per_reset": {
+                "bombs": 3,
+                "sword": 1,
+                "hearts_and_containers": 34,
+                "partial_hearts": 254
             }
         },
         {
             "name": "dungeon1-room-walk",
             "description": "Dungeon 1 room walk.",
-            "iterations" : 5000000,
-            "scenario_selector" : "probabilistic",
-            "objective" : "RoomWalk",
+            "iterations": 5000000,
+            "scenario_selector": "probabilistic",
+            "objective": "RoomWalk",
             "critic": "GameplayCritic",
-            "end_conditions": ["RoomWalkCondition", "GainedTriforce"],
-            "metrics" : [
+            "end_conditions": [
+                "RoomWalkCondition",
+                "GainedTriforce"
+            ],
+            "metrics": [
                 "success-rate",
                 "room-result",
                 "room-health",
@@ -253,24 +327,26 @@
                 "1_52",
                 "1_53"
             ],
-            "use_hints" : false,
-            "per_reset":
-            {
-                "bombs" : 3,
-                "hearts_and_containers" : 34,
-                "partial_hearts" : 254,
-                "keys" : 4
+            "use_hints": false,
+            "per_reset": {
+                "bombs": 3,
+                "hearts_and_containers": 34,
+                "partial_hearts": 254,
+                "keys": 4
             }
         },
         {
             "name": "dungeon1-entry-room",
             "description": "Dungeon 1 entry room.",
-            "iterations" : 1000000,
-            "scenario_selector" : "round-robin",
-            "objective" : "RoomWalk",
+            "iterations": 1000000,
+            "scenario_selector": "round-robin",
+            "objective": "RoomWalk",
             "critic": "GameplayCritic",
-            "end_conditions": ["RoomWalkCondition", "LeftDungeon"],
-            "metrics" : [
+            "end_conditions": [
+                "RoomWalkCondition",
+                "LeftDungeon"
+            ],
+            "metrics": [
                 "success-rate",
                 "room-result",
                 "room-health",
@@ -281,24 +357,29 @@
             "start": [
                 "1_73"
             ],
-            "use_hints" : false,
-            "per_reset":
-            {
-                "bombs" : 3,
-                "hearts_and_containers" : 34,
-                "partial_hearts" : 254,
-                "keys" : 4
+            "use_hints": false,
+            "per_reset": {
+                "bombs": 3,
+                "hearts_and_containers": 34,
+                "partial_hearts": 254,
+                "keys": 4
             }
         },
         {
             "name": "dungeon1-side-room-opening",
             "description": "Dungeon 1.",
-            "iterations" : 2000000,
-            "scenario_selector" : "probabilistic",
-            "objective" : "GameCompletion",
+            "iterations": 2000000,
+            "scenario_selector": "probabilistic",
+            "objective": "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout", "NowhereToGoCondition"],
-            "metrics" : [
+            "end_conditions": [
+                "LeftDungeon",
+                "GainedTriforce",
+                "GameOver",
+                "Timeout",
+                "NowhereToGoCondition"
+            ],
+            "metrics": [
                 "success-rate",
                 "overworld-progress",
                 "room-health",
@@ -306,24 +387,35 @@
                 "reward-average",
                 "reward-details"
             ],
-            "start": ["1_72e", "1_74w", "1_63s", "1_44w"],
-            "use_hints" : false,
-            "per_reset":
-            {
-                "bombs" : 3,
-                "hearts_and_containers" : 34,
-                "partial_hearts" : 254
+            "start": [
+                "1_72e",
+                "1_74w",
+                "1_63s",
+                "1_44w"
+            ],
+            "use_hints": false,
+            "per_reset": {
+                "bombs": 3,
+                "hearts_and_containers": 34,
+                "partial_hearts": 254
             }
         },
         {
             "name": "dungeon1",
             "description": "Dungeon 1.",
-            "iterations" : 10000000,
-            "scenario_selector" : "round-robin",
-            "objective" : "GameCompletion",
+            "iterations": 10000000,
+            "scenario_selector": "round-robin",
+            "objective": "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout", "Dungeon1DidntGetKey", "NowhereToGoCondition"],
-            "metrics" : [
+            "end_conditions": [
+                "LeftDungeon",
+                "GainedTriforce",
+                "GameOver",
+                "Timeout",
+                "Dungeon1DidntGetKey",
+                "NowhereToGoCondition"
+            ],
+            "metrics": [
                 "success-rate",
                 "overworld-progress",
                 "room-health",
@@ -331,18 +423,26 @@
                 "reward-average",
                 "reward-details"
             ],
-            "start": ["1_73s"],
-            "use_hints" : false
+            "start": [
+                "1_73s"
+            ],
+            "use_hints": false
         },
         {
             "name": "dungeon1-wallmaster",
             "description": "Dungeon 1.",
-            "iterations" : 2000000,
-            "scenario_selector" : "round-robin",
-            "objective" : "GameCompletion",
+            "iterations": 2000000,
+            "scenario_selector": "round-robin",
+            "objective": "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout", "LeftWallmasterRoom"],
-            "metrics" : [
+            "end_conditions": [
+                "LeftDungeon",
+                "GainedTriforce",
+                "GameOver",
+                "Timeout",
+                "LeftWallmasterRoom"
+            ],
+            "metrics": [
                 "success-rate",
                 "overworld-progress",
                 "room-health",
@@ -350,23 +450,31 @@
                 "reward-average",
                 "reward-details"
             ],
-            "per_reset":
-            {
-                "hearts_and_containers" : 34,
-                "partial_hearts" : 254
+            "per_reset": {
+                "hearts_and_containers": 34,
+                "partial_hearts": 254
             },
-            "start": ["1_45w"],
-            "use_hints" : false
+            "start": [
+                "1_45w"
+            ],
+            "use_hints": false
         },
         {
             "name": "dungeon1-skip-opening",
             "description": "Dungeon 1.",
-            "iterations" : 5000000,
-            "scenario_selector" : "round-robin",
-            "objective" : "GameCompletion",
+            "iterations": 5000000,
+            "scenario_selector": "round-robin",
+            "objective": "GameCompletion",
             "critic": "GameplayCritic",
-            "end_conditions": ["LeftDungeon", "GainedTriforce", "GameOver", "Timeout", "NowhereToGoCondition", "LeftPlayArea"],
-            "metrics" : [
+            "end_conditions": [
+                "LeftDungeon",
+                "GainedTriforce",
+                "GameOver",
+                "Timeout",
+                "NowhereToGoCondition",
+                "LeftPlayArea"
+            ],
+            "metrics": [
                 "room-result",
                 "success-rate",
                 "dungeon1-progress",
@@ -375,14 +483,15 @@
                 "reward-average",
                 "reward-details"
             ],
-            "start": ["1_63s"],
-            "use_hints" : true,
-            "per_reset":
-            {
-                "bombs" : 3,
-                "hearts_and_containers" : 34,
-                "partial_hearts" : 254,
-                "keys" : 3
+            "start": [
+                "1_63s"
+            ],
+            "use_hints": true,
+            "per_reset": {
+                "bombs": 3,
+                "hearts_and_containers": 34,
+                "partial_hearts": 254,
+                "keys": 3
             }
         }
     ]

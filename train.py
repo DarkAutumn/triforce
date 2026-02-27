@@ -60,14 +60,16 @@ def _get_kwargs_from_args(args, model_def):
     return kwargs, circuit
 
 def train_once(ppo : PPO, scenario_def, model_def, save_path, iterations, **kwargs):
-    """Trains a model with the given scenario"""
+    """Trains a model with the given scenario.  Returns (model, iterations_used)."""
     def create_env():
         return make_zelda_env(scenario_def, model_def.action_space, **kwargs)
 
+    steps_before = kwargs.get('model', None)
+    steps_before = steps_before.steps_trained if steps_before else 0
     model = ppo.train(model_def.neural_net, create_env, iterations, tqdm(ncols=100), save_path=save_path, **kwargs)
     model_name = model_def.name.replace(' ', '_')
     model.save(f"{save_path}/{model_name}-{scenario_def.name}.pt")
-    return model
+    return model, model.steps_trained - steps_before
 
 def main():
     """Main entry point."""
@@ -91,17 +93,28 @@ def main():
     kwargs, circuit = _get_kwargs_from_args(args, model_def)
     ppo = PPO(log_dir, **kwargs)
 
+    total_budget = args.iterations
+    iterations_spent = 0
+
     for scenario_entry in circuit:
         scenario_def = TrainingScenarioDefinition.get(scenario_entry.scenario)
         if scenario_def is None:
             raise ValueError(f"Unknown scenario: {scenario_entry.scenario}")
 
-        if args.iterations is not None:
-            iterations = args.iterations
-        elif scenario_entry.iterations is not None:
+        if scenario_entry.iterations is not None:
             iterations = scenario_entry.iterations
+        elif total_budget is not None:
+            iterations = total_budget - iterations_spent
         else:
             iterations = scenario_def.iterations
+
+        # Cap to remaining budget if a total budget was specified
+        if total_budget is not None:
+            iterations = min(iterations, total_budget - iterations_spent)
+
+        if iterations <= 0:
+            print(f"Skipping {scenario_def.name}: no iteration budget remaining.")
+            break
 
         if scenario_entry.exit_criteria:
             assert scenario_entry.threshold is not None, "Threshold must be set if exit criteria is set"
@@ -119,8 +132,9 @@ def main():
             criteria = ""
 
         print(f"Training {model_def.name} on {scenario_def.name} for up to {iterations:,} iterations{criteria}.")
-        model = train_once(ppo, scenario_def, model_def, model_directory, iterations, **kwargs)
+        model, used = train_once(ppo, scenario_def, model_def, model_directory, iterations, **kwargs)
         kwargs['model'] = model
+        iterations_spent += used
 
     model.save(f"{model_directory}/{model_name}.pt")
 
