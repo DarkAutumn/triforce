@@ -13,6 +13,59 @@ from tqdm import tqdm
 from triforce import ModelDefinition, make_zelda_env, Network, TrainingScenarioDefinition,  MetricTracker
 
 
+def write_progress_markdown(md_path, progress_values, max_progress, episodes, scenario_name, model_name=None):
+    """Writes a progress report as a markdown file."""
+    if not progress_values:
+        return
+
+    sorted_vals = sorted(progress_values)
+    n = len(sorted_vals)
+    success_count = sum(1 for v in sorted_vals if v >= max_progress)
+    counts = Counter(sorted_vals)
+    max_count = max(counts.values()) if counts else 1
+
+    with open(md_path, 'w', encoding='utf-8') as f:
+        title = f"Evaluation: {scenario_name}"
+        if model_name:
+            title += f" ({model_name})"
+        f.write(f"# {title}\n\n")
+        f.write(f"- **Episodes**: {episodes}\n")
+        f.write(f"- **Success rate**: {success_count}/{n} ({100*success_count/n:.0f}%)"
+                f" (reached milestone {max_progress})\n")
+        f.write(f"- **Median progress**: {sorted_vals[n//2]}/{max_progress}\n")
+        f.write(f"- **P25**: {sorted_vals[max(0, ceil(n*0.25)-1)]}  "
+                f"**P50**: {sorted_vals[n//2]}  "
+                f"**P75**: {sorted_vals[max(0, ceil(n*0.75)-1)]}  "
+                f"**P90**: {sorted_vals[max(0, ceil(n*0.90)-1)]}\n\n")
+
+        f.write("## Milestone Histogram\n\n")
+        f.write("| Milestone | Count | Distribution |\n")
+        f.write("|----------:|------:|:-------------|\n")
+        for milestone in range(max_progress + 1):
+            count = counts.get(milestone, 0)
+            bar_len = round(count / max_count * 20) if max_count > 0 else 0
+            bar_str = '█' * bar_len
+            f.write(f"| {milestone} | {count} | {bar_str} |\n")
+
+
+def convert_eval_json_to_md(json_path):
+    """Converts a .eval.json file to a .eval.md file alongside it."""
+    with open(json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    md_path = json_path.rsplit('.json', 1)[0] + '.md'
+    model_name = os.path.basename(json_path).rsplit('.eval.json', 1)[0]
+    write_progress_markdown(
+        md_path,
+        data['progress_values'],
+        data['max_progress'],
+        data['episodes'],
+        data['scenario'],
+        model_name=model_name,
+    )
+    return md_path
+
+
 def print_progress_report(progress_values : List[int], max_progress : int,
                           episodes : int, scenario_name : str):
     """Prints a progress-focused evaluation report with percentiles and histogram."""
@@ -165,6 +218,8 @@ def main():
                     }
                     with open(json_path, 'w', encoding='utf-8') as f:
                         json.dump(eval_data, f, indent=2)
+
+                    convert_eval_json_to_md(json_path)
 
     # Print progress report for the last evaluated model
     if last_progress is not None:
