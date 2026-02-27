@@ -35,53 +35,49 @@ rollout—significantly more than standard implementations.
 
 ---
 
-## 2. Single Environment Limits Sample Diversity
+## 2. ~~Single Environment Limits Sample Diversity~~ ✅ Implemented
 
-PPO typically uses 8–16 parallel environments so each rollout buffer contains fragments
-from many independent trajectories. With 1 env, all 2048 steps come from one correlated
-trajectory.
+**Status: Implemented.** Multi-process parallel training is available via `--parallel N`
+(default 4). Each worker runs in its own subprocess with an independent NES emulator,
+collecting rollouts in parallel. The main process merges buffers and runs PPO optimization.
 
-### Impact
+Use `--parallel 1` to run single-threaded in the main process (useful for debugging).
 
-- Advantage normalization within a minibatch (line 237 of `ml_ppo.py`) normalizes over
-  highly correlated samples, reducing its effectiveness.
-- The agent can get stuck repeating similar states within a buffer.
-- Especially problematic for Zelda where the agent may spend entire buffers in one room.
+### Choosing the Number of Workers
 
-### Recommendation
+More workers = more data per PPO update (effective batch size = `target_steps × N`).
+This is a tradeoff between wall-clock speed, sample diversity, and learning efficiency:
 
-Implement the `n_envs > 1` path (currently `NotImplementedError` at line 84). Even 4
-parallel envs would significantly reduce sample correlation.
+| Workers | Effective Batch | Notes |
+|---------|----------------|-------|
+| 1       | 2048           | Single-process, best for debugging. High variance gradients. |
+| 2–4     | 4K–8K          | Good starting point. Noticeable wall-clock speedup. |
+| **4–8** | **8K–16K**     | **Recommended sweet spot.** Good variance reduction, each PPO update sees diverse trajectories from multiple independent game runs. |
+| 8–12    | 16K–24K        | Diminishing returns. Larger batches can slow convergence (measured in total env steps) because PPO's clipping becomes less effective per sample. |
+| 12+     | 24K+           | Likely counterproductive. Hyperthreads don't give full speedup for CPU-heavy NES emulation, and batch sizes this large can hurt PPO learning. |
 
-### Current State of Parallelization
+**Rule of thumb**: Use roughly half your physical CPU cores (leaving headroom for the
+main process PPO optimization and OS overhead). On a 10-core system, 4–6 workers is a
+good default. On a 16-core system, 6–8.
 
-The **rollout buffer is already dimensioned for `n_envs`** — tensors are
-`(n_envs, memory_length, ...)`, the `__setitem__` method collects single-env results,
-and the optimizer scales `batch_size = memory_length * n_envs`. The `--parallel` CLI arg
-exists in `train.py` but is never wired up. The scaffolding is there.
+If you increase workers significantly, consider whether `target_steps` should decrease
+proportionally to keep the effective batch size constant. For example, 8 workers with
+`target_steps=1024` gives the same 8192 effective batch as 4 workers with
+`target_steps=2048`, but with more diverse (shorter) trajectory fragments.
 
-### What's Blocking
+### Architecture
 
-1. **`NotImplementedError` in `ml_ppo.py:84`** — the explicit gate. Easy to remove.
-
-2. **`ZeldaGame.__active` singleton** — the real blocker. Every frame read asserts it's
-   the "active" game instance (`zelda_game.py`). Two envs running simultaneously would
-   conflict. Needs to be removed or made per-instance.
-
-3. **`MetricTracker` singleton** — `assert _instance is None` in `__init__`. Only one
-   can exist. Would need per-env tracking with aggregation.
-
-4. **NES emulator: one per process** — `stable-retro` can only have one emulator instance
-   per process. Parallel envs require `AsyncVectorEnv` with subprocess workers (not
-   `SyncVectorEnv`, since you can't have two emulators in one process).
-
-### Implementation Path
-
-1. Refactor `ZeldaGame.__active` to per-instance tracking.
-2. Make `MetricTracker` per-env or thread-safe.
-3. Use `gymnasium.vector.AsyncVectorEnv` (subprocess-based) to work around the
-   one-emulator-per-process constraint.
-4. Remove the `NotImplementedError` gate and wire up `--parallel`.
+- `RolloutWorkerPool` (`ml_ppo_worker.py`) spawns N subprocesses using Python's `spawn`
+  multiprocessing context.
+- Each worker creates its own NES emulator (one per process constraint satisfied).
+- Workers receive weight updates via `Pipe`, collect `target_steps` frames, and send
+  buffer tensors back to the main process.
+- `ZeldaGame.__active` and `MetricTracker` singletons work naturally since each
+  subprocess has its own memory space.
+- **Note**: `MetricTracker` data from workers is not aggregated back to the main
+  process. Exit criteria and tensorboard logging use main-process metrics only, which
+  means they won't reflect worker-side episode statistics in multi-env mode. This is a
+  known limitation.
 
 ---
 

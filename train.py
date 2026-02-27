@@ -183,7 +183,7 @@ def parse_args():
     parser.add_argument('scenario', type=str, help='The scenario to train on.')
     parser.add_argument("--output", type=str, help="Location to write to.")
     parser.add_argument("--iterations", type=int, default=None, help="Override iteration count.")
-    parser.add_argument("--parallel", type=int, default=4, help="Number of parallel environments to run.")
+    parser.add_argument("--parallel", type=int, default=6, help="Number of parallel environments to run.")
     parser.add_argument("--load", type=str, help="Load a model to continue training.")
     parser.add_argument("--evaluate", type=int, default=None, metavar="N",
                         help="Run N evaluation episodes after training and print a progress report.")
