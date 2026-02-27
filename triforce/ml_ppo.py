@@ -259,7 +259,7 @@ class PPO:
         b_logprobs = logprobs.reshape(-1)
         b_values   = values.reshape(-1)
 
-        masks     = variables.masks
+        masks     = variables.masks[:, :variables.memory_length]
         b_masks    = masks.reshape(-1, masks.shape[-1]).to(self.device)
 
         # flatten returns, advantages
