@@ -2,13 +2,10 @@
 """Evaluates the result of trainined models."""
 from collections import Counter
 from math import ceil
-import multiprocessing as mp
-from multiprocessing.sharedctypes import Synchronized
 import sys
 import os
 import argparse
 import json
-import time
 import shutil
 from typing import Dict, List
 from tqdm import tqdm
@@ -126,7 +123,7 @@ def _print_stat_row(filename, steps_trained, metrics: Dict[str, float], metric_c
 
     print(result)
 
-def evaluate_one_model(make_env, network, episodes, counter_or_callback):
+def evaluate_one_model(make_env, network, episodes, progress_callback):
     """Runs a single scenario.  Returns (metrics_dict, progress_values, max_progress)."""
     # pylint: disable=redefined-outer-name,too-many-locals
     env = make_env()
@@ -141,11 +138,7 @@ def evaluate_one_model(make_env, network, episodes, counter_or_callback):
                 action = network.get_action(obs, action_mask)
                 obs, _, terminated, truncated, info = env.step(action)
 
-            if isinstance(counter_or_callback, Synchronized):
-                with counter_or_callback.get_lock():
-                    counter_or_callback.value += 1
-            else:
-                counter_or_callback()
+            progress_callback()
 
         tracker = MetricTracker.get_instance()
         progress_metric = tracker.get_progress_metric() if tracker else None
@@ -158,22 +151,6 @@ def evaluate_one_model(make_env, network, episodes, counter_or_callback):
         return metrics, progress_values, max_progress
     finally:
         env.close()
-
-
-def _worker_evaluate_model(model_path, model_name, scenario_name, episodes, counter,
-                           frame_stack=3):
-    """Subprocess worker: evaluates one model for all episodes, returns results."""
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
-    scenario_def = TrainingScenarioDefinition.get(scenario_name)
-    model_def = ModelDefinition.get(model_name)
-    obs_space, act_space = Network.load_spaces(model_path)
-    network = model_def.neural_net(obs_space, act_space)
-    network.load(model_path)
-
-    def make_env():
-        return make_zelda_env(scenario_def, model_def.action_space, frame_stack=frame_stack)
-
-    return evaluate_one_model(make_env, network, episodes, counter)
 
 def get_model_path(args):
     """Gets the model path."""
@@ -193,12 +170,7 @@ def main():
         print("No models to evaluate.")
         return
 
-    counter = mp.Value('i', 0)
-
-    if args.parallel > 1:
-        _run_parallel(args, to_process, total_episodes, counter)
-    else:
-        _run_sequential(args, to_process, total_episodes, counter)
+    _run_sequential(args, to_process, total_episodes)
 
     # Print progress report for the last evaluated model (from the first/best model)
     if to_process:
@@ -236,7 +208,7 @@ def _save_results(path, metrics, progress_values, max_progress, episodes, scenar
         convert_eval_json_to_md(json_path)
 
 
-def _run_sequential(args, to_process, total_episodes, _counter):
+def _run_sequential(args, to_process, total_episodes):
     """Evaluate models one at a time."""
     scenario_def = TrainingScenarioDefinition.get(args.scenario)
 
@@ -265,60 +237,6 @@ def _run_sequential(args, to_process, total_episodes, _counter):
                           args.episodes, args.scenario, model_name)
 
 
-_shared_counter = None  # pylint: disable=invalid-name
-
-def _pool_initializer(counter):
-    """Initializer for pool workers — stores the shared counter as a global."""
-    global _shared_counter  # pylint: disable=global-statement
-    _shared_counter = counter
-
-
-def _run_parallel(args, to_process, total_episodes, counter):
-    """Evaluate models in parallel using a process pool."""
-    # pylint: disable=consider-using-with
-    with tqdm(total=total_episodes) as progress:
-        last_count = 0
-
-        pool = mp.Pool(processes=args.parallel,
-                       initializer=_pool_initializer, initargs=(counter,))
-        async_results = []
-        for model_name, path in to_process:
-            res = pool.apply_async(
-                _worker_parallel,
-                args=(path, model_name, args.scenario, args.episodes, args.frame_stack))
-            async_results.append(res)
-
-        pool.close()
-
-        # Poll the shared counter to update progress bar
-        while not all(r.ready() for r in async_results):
-            time.sleep(0.5)
-            current = counter.value
-            if current > last_count:
-                progress.update(current - last_count)
-                last_count = current
-
-        # Final update
-        current = counter.value
-        if current > last_count:
-            progress.update(current - last_count)
-
-        pool.join()
-
-        # Collect and save results
-        for res in async_results:
-            result = res.get()
-            metrics, progress_values, max_progress, path, model_name = result
-            _save_results(path, metrics, progress_values, max_progress,
-                          args.episodes, args.scenario, model_name)
-
-
-def _worker_parallel(model_path, model_name, scenario_name, episodes, frame_stack):
-    """Subprocess entry point: evaluate one model, return results with metadata."""
-    metrics, progress_values, max_progress = _worker_evaluate_model(
-        model_path, model_name, scenario_name, episodes, _shared_counter, frame_stack)
-    return metrics, progress_values, max_progress, model_path, model_name
-
 def create_scenarios(args):
     """Finds all scenarios to be executed.  Also returns the results of any previous evaluations.
     Step-count models are processed in descending order (most trained first).
@@ -335,6 +253,12 @@ def create_scenarios(args):
     step_count_keys = sorted([int(x) for x in available_models.keys() if isinstance(x, int)], reverse=True)
     # Non-step-count models last, any order
     other_keys = [x for x in available_models.keys() if not isinstance(x, int)]
+
+    # Filter to specific step counts if requested
+    if args.steps:
+        step_set = set(args.steps)
+        step_count_keys = [k for k in step_count_keys if k in step_set]
+        other_keys = []  # skip non-step-count models when filtering by steps
 
     for key in list(step_count_keys) + other_keys:
         path = available_models[key]
@@ -354,7 +278,6 @@ def parse_args():
     parser.add_argument("--ent-coef", type=float, default=0.001, help="Entropy coefficient for the PPO algorithm.")
     parser.add_argument("--frame-stack", type=int, default=3, help="Number of frames to stack in the observation.")
     parser.add_argument("--episodes", type=int, default=100, help="Number of episodes to test.")
-    parser.add_argument("--parallel", type=int, default=1, help="Use parallel environments to evaluate the models.")
     parser.add_argument("--render", action='store_true', help="Render the game while evaluating the models.")
     parser.add_argument("--limit", type=int, default=-1, help="Limit the number of models to evaluate.")
 
@@ -362,6 +285,8 @@ def parse_args():
     parser.add_argument('model', type=str, help='The model to evaluate.')
     parser.add_argument('scenario', type=str, help='The scenario to evaluate.')
     parser.add_argument('--reprocess', action='store_true', help='Reprocess the models')
+    parser.add_argument('--steps', type=int, nargs='+', default=None,
+                        help='Only evaluate models with these step counts')
 
     try:
         args = parser.parse_args()
