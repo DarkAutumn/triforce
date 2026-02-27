@@ -265,23 +265,27 @@ def _run_sequential(args, to_process, total_episodes, _counter):
                           args.episodes, args.scenario, model_name)
 
 
+_shared_counter = None  # pylint: disable=invalid-name
+
+def _pool_initializer(counter):
+    """Initializer for pool workers — stores the shared counter as a global."""
+    global _shared_counter  # pylint: disable=global-statement
+    _shared_counter = counter
+
+
 def _run_parallel(args, to_process, total_episodes, counter):
     """Evaluate models in parallel using a process pool."""
     # pylint: disable=consider-using-with
     with tqdm(total=total_episodes) as progress:
         last_count = 0
 
-        def _on_result(result_and_info):
-            metrics, progress_values, max_progress, path, model_name = result_and_info
-            _save_results(path, metrics, progress_values, max_progress,
-                          args.episodes, args.scenario, model_name)
-
-        pool = mp.Pool(processes=args.parallel)
+        pool = mp.Pool(processes=args.parallel,
+                       initializer=_pool_initializer, initargs=(counter,))
         async_results = []
         for model_name, path in to_process:
             res = pool.apply_async(
                 _worker_parallel,
-                args=(path, model_name, args.scenario, args.episodes, counter, args.frame_stack))
+                args=(path, model_name, args.scenario, args.episodes, args.frame_stack))
             async_results.append(res)
 
         pool.close()
@@ -304,13 +308,15 @@ def _run_parallel(args, to_process, total_episodes, counter):
         # Collect and save results
         for res in async_results:
             result = res.get()
-            _on_result(result)
+            metrics, progress_values, max_progress, path, model_name = result
+            _save_results(path, metrics, progress_values, max_progress,
+                          args.episodes, args.scenario, model_name)
 
 
-def _worker_parallel(model_path, model_name, scenario_name, episodes, counter, frame_stack):
+def _worker_parallel(model_path, model_name, scenario_name, episodes, frame_stack):
     """Subprocess entry point: evaluate one model, return results with metadata."""
     metrics, progress_values, max_progress = _worker_evaluate_model(
-        model_path, model_name, scenario_name, episodes, counter, frame_stack)
+        model_path, model_name, scenario_name, episodes, _shared_counter, frame_stack)
     return metrics, progress_values, max_progress, model_path, model_name
 
 def create_scenarios(args):
