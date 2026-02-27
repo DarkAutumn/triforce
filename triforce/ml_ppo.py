@@ -13,7 +13,7 @@ LEARNING_RATE =         0.0001
 LEARNING_RATE_LOW =     0.00005
 LEARNING_RATE_MINIMUM = 0.000025
 NORM_ADVANTAGES = True
-CLIP_VAL_LOSS = True
+CLIP_VAL_LOSS = False
 GAMMA = 0.99
 LAMBDA = 0.95
 CLIP_COEFF = 0.2
@@ -22,10 +22,11 @@ VS_COEFF = 0.5
 MAX_GRAD_NORM = 0.5
 EPSILON = 1e-5
 TARGET_STEPS = 2048
-EPOCHS = 10
+EPOCHS = 4
 MINIBATCHES = 4
 LOG_RATE = 25_000
 SAVE_INTERVAL = 50_000
+TARGET_KL = 0.02
 
 class Threshold:
     """A counter class to see if we've reached our intervals."""
@@ -58,6 +59,7 @@ class PPO:
         self._epsilon = kwargs.get('epsilon', EPSILON)
         self.minibatches = kwargs.get('minibatches', MINIBATCHES)
         self.num_epochs = kwargs.get('num_epochs', EPOCHS)
+        self._target_kl = kwargs.get('target_kl', TARGET_KL)
         self.optimizer = None
 
         self.kwargs = kwargs
@@ -77,7 +79,13 @@ class PPO:
         env = create_env()
         try:
             network = kwargs.get('model', None) or create_network(network, env.observation_space, env.action_space)
-            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=self._epsilon)
+            if self.optimizer is None:
+                self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=self._epsilon)
+            else:
+                # Reattach optimizer to new parameter references while preserving momentum/variance
+                for param_group, new_params in zip(self.optimizer.param_groups,
+                                                    [list(network.parameters())]):
+                    param_group['params'] = new_params
 
             envs = kwargs.get('envs', 1)
             if envs > 1:
@@ -200,7 +208,11 @@ class PPO:
 
         b_inds = torch.arange(batch_size)
         clipfracs = []
+        kl_exceeded = False
         for _ in range(self.num_epochs):
+            if kl_exceeded:
+                break
+
             b_inds = b_inds[torch.randperm(batch_size)]
             for start in range(0, batch_size, minibatch_size):
                 end = start + minibatch_size
@@ -260,6 +272,10 @@ class PPO:
                 loss.backward()
                 nn.utils.clip_grad_norm_(network.parameters(), self._max_grad_norm)
                 optimizer.step()
+
+                if self._target_kl is not None and approx_kl > self._target_kl:
+                    kl_exceeded = True
+                    break
 
         network = network.to("cpu")
 
