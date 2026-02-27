@@ -14,3 +14,4 @@ tqdm
 pyarrow
 pylint
 pydantic
+setuptools<81
