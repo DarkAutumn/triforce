@@ -14,10 +14,12 @@ import torch
 import torch.nn.functional as F
 
 from .zelda_enums import GAMEPLAY_START_Y, Direction
-from .objectives import Objective, ObjectiveKind
+from .objectives import ObjectiveKind
 from .zelda_game import ZeldaGame
 
 GRAYSCALE_WEIGHTS = torch.FloatTensor([0.2989, 0.5870, 0.1140])
+_GRAYSCALE_WEIGHTS_4D = GRAYSCALE_WEIGHTS.view(1, -1, 1, 1)
+_GRAYSCALE_NORM_WEIGHTS_4D = _GRAYSCALE_WEIGHTS_4D / 255.0
 BOOLEAN_FEATURES = 14
 DISTANCE_SCALE = 100.0
 VIEWPORT_PIXELS = 128
@@ -145,27 +147,13 @@ class ObservationWrapper(gym.Wrapper):
         Returns:
             torch.Tensor: Stacked frames as a tensor with shape (count, C, H, W).
         """
-        stacked_frames = []
+        last = len(frames) - 1
+        indices = [max(0, last - i * skip) for i in range(count)]
+        indices.reverse()
 
-        for i in range(count):
-            frame_index = len(frames) - 1 - i * skip
-            if frame_index >= 0:
-                stacked_frames.append(frames[frame_index])
-            else:
-                # Not enough frames, duplicate the first frame
-                stacked_frames.append(frames[0])
-
-        # Reverse the order to maintain chronological order: oldest to newest
-        stacked_frames.reverse()
-
-        # Convert frames to tensors and permute axes (C, H, W)
-        stacked_tensors = [
-            torch.as_tensor(frame, dtype=torch.float32).permute(2, 0, 1)
-            for frame in stacked_frames
-        ]
-
-        # Stack along the first dimension (stack size)
-        return torch.stack(stacked_tensors, dim=0)
+        # Stack as numpy (contiguous), then zero-copy to torch, permute, and convert to float32
+        stacked = np.stack([frames[i] for i in indices], axis=0)
+        return torch.from_numpy(stacked).permute(0, 3, 1, 2).contiguous().float()
 
     def _get_image_observation(self, state: ZeldaGame, frames: torch.Tensor) -> torch.Tensor:
         """
@@ -179,14 +167,14 @@ class ObservationWrapper(gym.Wrapper):
         Returns:
             torch.Tensor: Processed batch of frames with shape (N, 1, viewport_size, viewport_size).
         """
-        if self._normalize:
-            frames = frames / 255.0
-
         if self._trim:
             frames = frames[:, :, self._trim:, :]
 
-        # Convert to grayscale using the weights
-        frames = (frames * GRAYSCALE_WEIGHTS.view(1, -1, 1, 1)).sum(dim=1, keepdim=False)
+        if self._normalize:
+            # Combine normalization and grayscale in one multiply+sum
+            frames = (frames * _GRAYSCALE_NORM_WEIGHTS_4D).sum(dim=1, keepdim=False)
+        else:
+            frames = (frames * _GRAYSCALE_WEIGHTS_4D).sum(dim=1, keepdim=False)
 
         if self._viewport_size:
             x = state.link.position.x
@@ -332,38 +320,56 @@ class ObservationWrapper(gym.Wrapper):
         return max(min_closeness, min_closeness + closeness * (1 - min_closeness))
 
     def _get_information(self, state : ZeldaGame):
-        objectives = self._get_objectives_vector(state, state.objectives)
+        result = torch.zeros(BOOLEAN_FEATURES, dtype=torch.float32)
 
-        source_direction = torch.zeros(4, dtype=torch.float32)
-        self._assign_direction(source_direction, state.full_location.get_direction_to(self._prev_loc))
-
-        features = torch.zeros(4, dtype=torch.float32)
-        features[0] = 1.0 if state.active_enemies else 0.0
-        features[1] = 1.0 if state.link.are_beams_available else 0.0
-        features[2] = 1.0 if state.link.health <= 1 else 0.0
-        features[3] = 1.0 if state.link.is_health_full else 0.0
-
-        return torch.concatenate([objectives, source_direction, features])
-
-    def _get_objectives_vector(self, state : ZeldaGame, objectives : Objective):
-        result = torch.zeros(6, dtype=torch.float32)
-
+        # Objectives (indices 0-5)
+        objectives = state.objectives
         match objectives.kind:
             case ObjectiveKind.MOVE:
                 for next_room in objectives.next_rooms:
                     direction = state.full_location.get_direction_to(next_room)
                     self._assign_direction(result, direction)
-
-            case ObjectiveKind.ITEM:
+            case ObjectiveKind.ITEM | ObjectiveKind.TREASURE:
                 result[4] = 1.0
-
-            case ObjectiveKind.TREASURE:
-                result[4] = 1.0
-
             case ObjectiveKind.FIGHT:
                 result[5] = 1.0
 
+        # Source direction (indices 6-9)
+        full_loc = state.full_location
+        direction = full_loc.get_direction_to(self._prev_loc)
+        self._assign_direction_offset(result, 6, direction)
+
+        # Features (indices 10-13)
+        result[10] = 1.0 if state.active_enemies else 0.0
+        result[11] = 1.0 if state.link.are_beams_available else 0.0
+        result[12] = 1.0 if state.link.health <= 1 else 0.0
+        result[13] = 1.0 if state.link.is_health_full else 0.0
+
         return result
+
+    def _assign_direction_offset(self, result, offset, direction):
+        """Assign direction flags at a specific offset in the result tensor."""
+        match direction:
+            case Direction.N:
+                result[offset] = 1.0
+            case Direction.S:
+                result[offset + 1] = 1.0
+            case Direction.E:
+                result[offset + 2] = 1.0
+            case Direction.W:
+                result[offset + 3] = 1.0
+            case Direction.NW:
+                result[offset] = 1.0
+                result[offset + 3] = 1.0
+            case Direction.NE:
+                result[offset] = 1.0
+                result[offset + 2] = 1.0
+            case Direction.SW:
+                result[offset + 1] = 1.0
+                result[offset + 3] = 1.0
+            case Direction.SE:
+                result[offset + 1] = 1.0
+                result[offset + 2] = 1.0
 
     def _assign_direction(self, result, direction):
         match direction:

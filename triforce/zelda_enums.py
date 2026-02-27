@@ -392,13 +392,15 @@ class TileIndex(Coordinates):
 
 class MapLocation(Coordinates):
     """A location on the map of the game world."""
+    __slots__ = ('level', 'value', 'in_cave', '_hash')
+
     def __init__(self, level : int, location : int, in_cave : bool):
         super().__init__(location & 0x0F, (location & 0xF0) >> 4)
 
-        assert 0 <= level <= 9
         self.level = level
         self.value = location
         self.in_cave = in_cave
+        self._hash = hash((self._x, self._y, level, in_cave))
 
     def __eq__(self, other) -> bool:
         if isinstance(other, tuple):
@@ -413,7 +415,7 @@ class MapLocation(Coordinates):
         return super().__eq__(other) and self.level == other.level and self.in_cave == other.in_cave
 
     def __hash__(self):
-        return hash((self.x, self.y, self.level, self.in_cave))
+        return self._hash
 
     @property
     def tile_index(self) -> 'TileIndex':
