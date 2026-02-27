@@ -1,13 +1,53 @@
 #!/usr/bin/env python3
 """Evaluates the result of trainined models."""
+from collections import Counter
+from math import ceil
 from multiprocessing.sharedctypes import Synchronized
 import sys
 import os
 import argparse
+import json
 import shutil
-from typing import Dict
+from typing import Dict, List
 from tqdm import tqdm
 from triforce import ModelDefinition, make_zelda_env, Network, TrainingScenarioDefinition,  MetricTracker
+
+
+def print_progress_report(progress_values : List[int], max_progress : int,
+                          episodes : int, scenario_name : str):
+    """Prints a progress-focused evaluation report with percentiles and histogram."""
+    if not progress_values:
+        print("No progress data collected.")
+        return
+
+    sorted_vals = sorted(progress_values)
+    n = len(sorted_vals)
+    success_count = sum(1 for v in sorted_vals if v >= max_progress)
+
+    print(f"\n{'='*60}")
+    print(f"  Evaluation: {episodes} episodes of {scenario_name}")
+    print(f"{'='*60}")
+    print(f"  Success rate: {success_count}/{n} ({100*success_count/n:.0f}%)"
+          f"  (reached milestone {max_progress})")
+    print(f"  Median progress: {sorted_vals[n//2]}/{max_progress}")
+    print(f"  P25: {sorted_vals[max(0, ceil(n*0.25)-1)]:>3}  "
+          f"P50: {sorted_vals[n//2]:>3}  "
+          f"P75: {sorted_vals[max(0, ceil(n*0.75)-1)]:>3}  "
+          f"P90: {sorted_vals[max(0, ceil(n*0.90)-1)]:>3}")
+    print()
+
+    # Histogram
+    counts = Counter(sorted_vals)
+    max_count = max(counts.values()) if counts else 1
+    bar_width = 30
+
+    print("  Milestone histogram:")
+    for milestone in range(max_progress + 1):
+        count = counts.get(milestone, 0)
+        bar_len = round(count / max_count * bar_width) if max_count > 0 else 0
+        bar_str = '█' * bar_len
+        print(f"    {milestone:>3}: {count:>4}  {bar_str}")
+    print(f"{'='*60}\n")
 
 def _print_stat_header(metrics: Dict[str, float]):
     terminal_width = shutil.get_terminal_size((80, 20)).columns
@@ -31,8 +71,8 @@ def _print_stat_row(filename, steps_trained, metrics: Dict[str, float], metric_c
 
     print(result)
 
-def evaluate_one_model(make_env, network, episodes, counter_or_callback) -> MetricTracker:
-    """Runs a single scenario."""
+def evaluate_one_model(make_env, network, episodes, counter_or_callback):
+    """Runs a single scenario.  Returns (metrics_dict, progress_metric_or_none)."""
     # pylint: disable=redefined-outer-name,too-many-locals
     env = make_env()
     try:
@@ -52,7 +92,15 @@ def evaluate_one_model(make_env, network, episodes, counter_or_callback) -> Metr
             else:
                 counter_or_callback()
 
-        return MetricTracker.get_metrics_and_clear()
+        tracker = MetricTracker.get_instance()
+        progress_metric = tracker.get_progress_metric() if tracker else None
+
+        # Copy progress data before clearing
+        progress_values = list(progress_metric.episode_values) if progress_metric else None
+        max_progress = progress_metric.max_progress if progress_metric else 0
+
+        metrics = MetricTracker.get_metrics_and_clear()
+        return metrics, progress_values, max_progress
     finally:
         env.close()
 
@@ -80,6 +128,8 @@ def main():
     all_scenarios = create_scenarios(args)
     all_scenarios.reverse()
     total_episodes = sum(args.episodes for x in all_scenarios if x[-1])
+    last_progress = None
+    last_max_progress = 0
     with tqdm(total=total_episodes) as progress:
         def update_progress():
             progress.update(1)
@@ -93,12 +143,35 @@ def main():
             network.load(path)
             networks.append((network, path))
             if process:
-                if metrics := evaluate_one_model(make_env, network, args.episodes, update_progress):
+                result = evaluate_one_model(make_env, network, args.episodes, update_progress)
+                metrics, progress_values, max_progress = result
+                if metrics:
                     network.metrics = metrics
                     network.episodes_evaluated = args.episodes
                     network.save(path)
 
-    if networks:
+                if progress_values is not None:
+                    last_progress = progress_values
+                    last_max_progress = max_progress
+
+                    # Save progress data as JSON sidecar
+                    json_path = path.rsplit('.', 1)[0] + '.eval.json'
+                    eval_data = {
+                        'episodes': args.episodes,
+                        'scenario': args.scenario,
+                        'progress_values': progress_values,
+                        'max_progress': max_progress,
+                        'metrics': metrics,
+                    }
+                    with open(json_path, 'w', encoding='utf-8') as f:
+                        json.dump(eval_data, f, indent=2)
+
+    # Print progress report for the last evaluated model
+    if last_progress is not None:
+        print_progress_report(last_progress, last_max_progress, args.episodes, args.scenario)
+
+    # Print the detailed metrics table
+    if networks and args.verbose > 0:
         columns = _print_stat_header(network.metrics)
         for network, path in networks:
             _print_stat_row(os.path.basename(path), network.steps_trained, network.metrics, columns)

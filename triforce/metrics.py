@@ -1,6 +1,7 @@
 
 from collections import Counter
 from enum import Enum
+from math import ceil
 from typing import Any, Iterable, Tuple
 
 from .rewards import Reward, StepRewards
@@ -81,19 +82,43 @@ class RoomProgressMetric(AveragedMetric):
         super().__init__("room-progress")
         self._current = None
         self._room_map = room_map
+        self._max_progress = max(room_map.values()) if room_map else 0
+
+    @property
+    def max_progress(self):
+        """The maximum progress value in the room map."""
+        return self._max_progress
+
+    @property
+    def episode_values(self):
+        """Per-episode progress values."""
+        return self.values
 
     def begin_scenario(self, state):
-        self._current = None
+        self._current = 0
 
     def step(self, state_change : StateChange, rewards : StepRewards):
         state = state_change.state
         value = self._room_map.get((state.level, state.location), None)
-        if value is not None:
+        if value is not None and value > self._current:
             self._current = value
 
     def end_scenario(self, terminated, truncated, reason):
-        if self._current is not None:
-            self.add(self._current)
+        self.add(self._current)
+
+    def enumerate_values(self):
+        yield from super().enumerate_values()
+        if not self.values:
+            return
+
+        sorted_vals = sorted(self.values)
+        n = len(sorted_vals)
+        yield "progress/median", sorted_vals[n // 2]
+        yield "progress/p25", sorted_vals[max(0, ceil(n * 0.25) - 1)]
+        yield "progress/p75", sorted_vals[max(0, ceil(n * 0.75) - 1)]
+        yield "progress/p90", sorted_vals[max(0, ceil(n * 0.90) - 1)]
+        yield "progress/max", sorted_vals[-1]
+        yield "progress/success", sum(1 for v in self.values if v >= self._max_progress) / n
 
 class RoomResult(Enum):
     """The result of a room."""
@@ -337,6 +362,13 @@ class MetricTracker:
         """Ends a scenario."""
         for metric in self.metrics:
             metric.end_scenario(terminated, truncated, reason)
+
+    def get_progress_metric(self):
+        """Returns the RoomProgressMetric instance, if any."""
+        for metric in self.metrics:
+            if isinstance(metric, RoomProgressMetric):
+                return metric
+        return None
 
     def get_metrics(self):
         """Enumerates the values of the metrics."""
