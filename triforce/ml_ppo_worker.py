@@ -56,11 +56,12 @@ def _worker_loop(env_index, shared_buffer, shared_weights, network_class,
             network.eval()
 
             # Collect rollout directly into shared buffer slice
-            shared_buffer.ppo_main_loop(env_index, network, env, None)
+            _, timing = shared_buffer.ppo_main_loop(env_index, network, env, None,
+                                                     collect_timing=True)
 
-            # Send metrics via pipe (small data, pickle is fine)
+            # Send metrics and timing via pipe (small data, pickle is fine)
             metrics = MetricTracker.get_metrics_and_clear()
-            metrics_conn.send(metrics)
+            metrics_conn.send((metrics, timing))
 
             # Signal rollout complete
             rollouts_barrier.wait()
@@ -82,6 +83,33 @@ def _aggregate_metrics(metrics_list):
             combined[key].append(value)
 
     return {key: sum(values) / len(values) for key, values in combined.items()}
+
+
+def _log_worker_timing(timing_list):
+    """Logs per-worker timing breakdown."""
+    import sys  # pylint: disable=import-outside-toplevel
+    n = len(timing_list)
+    totals = [t.get('total', 0) for t in timing_list]
+    fastest, slowest = min(totals), max(totals)
+
+    # Average across workers
+    keys = ['env_step', 'inference', 'buffer_write', 'returns', 'total']
+    avgs = {}
+    for k in keys:
+        vals = [t.get(k, 0) for t in timing_list]
+        avgs[k] = sum(vals) / len(vals)
+
+    accounted = avgs.get('env_step', 0) + avgs.get('inference', 0) + avgs.get('buffer_write', 0) + avgs.get('returns', 0)
+    other = avgs['total'] - accounted
+
+    print(f"\n  Workers ({n}): fastest={fastest:.1f}s slowest={slowest:.1f}s gap={slowest-fastest:.1f}s",
+          file=sys.stderr)
+    print(f"  Avg breakdown: env_step={avgs.get('env_step',0):.1f}s "
+          f"inference={avgs.get('inference',0):.1f}s "
+          f"buf_write={avgs.get('buffer_write',0):.1f}s "
+          f"returns={avgs.get('returns',0):.2f}s "
+          f"other={other:.1f}s "
+          f"total={avgs['total']:.1f}s", file=sys.stderr)
 
 
 class RolloutWorkerPool:
@@ -128,12 +156,18 @@ class RolloutWorkerPool:
         # Wait for all workers to complete their rollouts
         self._rollouts_barrier.wait()
 
-        # Collect metrics from pipes (small data)
+        # Collect metrics and timing from pipes (small data)
         all_metrics = []
+        all_timing = []
         for conn in self.metric_conns:
-            metrics = conn.recv()
+            metrics, timing = conn.recv()
             if metrics:
                 all_metrics.append(metrics)
+            if timing:
+                all_timing.append(timing)
+
+        if all_timing:
+            _log_worker_timing(all_timing)
 
         if progress:
             progress.update(target_buffer.memory_length)
