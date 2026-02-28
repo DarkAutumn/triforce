@@ -112,7 +112,7 @@ class PPO:
 
         while total_iterations < iterations:
             # Collect training data
-            buffer.ppo_main_loop(0, network, env, progress)  # timing unused in single-env
+            buffer.ppo_main_loop(0, network, env, progress)
             total_iterations += buffer.memory_length
 
             # Save metrics
