@@ -2,6 +2,7 @@
 
 import multiprocessing as mp
 
+from .metrics import MetricTracker
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
 
 # Commands sent from main process to worker
@@ -57,9 +58,12 @@ def _worker_loop(conn, create_env_fn, network_class, target_steps, gamma, lam):
                 buffer.ppo_main_loop(0, network, env, None)
                 steps = buffer.memory_length
 
+                # Collect metrics from this worker's MetricTracker
+                metrics = MetricTracker.get_metrics_and_clear()
+
                 # Send buffer data back as serializable tensors
                 buf_data = _extract_buffer_data(buffer)
-                conn.send(('rollout', (buf_data, steps)))
+                conn.send(('rollout', (buf_data, steps, metrics)))
 
             elif cmd == CMD_CLOSE:
                 conn.send(('closed', None))
@@ -105,6 +109,21 @@ def _apply_buffer_data(target_buffer, env_index, buf_data):
     target_buffer.has_data = True
 
 
+def _aggregate_metrics(metrics_list):
+    """Averages metric dicts from multiple workers."""
+    if not metrics_list:
+        return {}
+
+    combined = {}
+    for metrics in metrics_list:
+        for key, value in metrics.items():
+            if key not in combined:
+                combined[key] = []
+            combined[key].append(value)
+
+    return {key: sum(values) / len(values) for key, values in combined.items()}
+
+
 class RolloutWorkerPool:
     """Manages a pool of subprocess workers for parallel rollout collection."""
     def __init__(self, n_workers, create_env_fn, network_class, target_steps, gamma, lam):
@@ -143,18 +162,22 @@ class RolloutWorkerPool:
             conn.send((CMD_COLLECT, None))
 
         # Collect results
-        total_steps = 0
+        all_metrics = []
         for i, conn in enumerate(self.conns):
             msg, data = conn.recv()
             assert msg == 'rollout'
-            buf_data, steps = data
+            buf_data, _, metrics = data
             _apply_buffer_data(target_buffer, i, buf_data)
-            total_steps += steps
+            if metrics:
+                all_metrics.append(metrics)
 
+        # Update progress by per-env steps (memory_length), matching iteration counting
         if progress:
-            progress.update(total_steps)
+            progress.update(target_buffer.memory_length)
 
-        return total_steps
+        # Aggregate metrics from all workers
+        aggregated = _aggregate_metrics(all_metrics)
+        return target_buffer.memory_length, aggregated
 
     def close(self):
         """Shuts down all workers."""
