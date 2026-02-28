@@ -36,7 +36,7 @@ def _worker_loop(env_index, shared_buffer, shared_weights, network_class,
         sync: tuple of (weights_barrier, rollouts_barrier, close_flag, metrics_conn)
     """
     import torch  # pylint: disable=import-outside-toplevel
-    torch.set_num_threads(1)
+    torch.set_num_threads(2)
 
     weights_barrier, rollouts_barrier, close_flag, metrics_conn = sync
 
@@ -99,7 +99,8 @@ def _log_worker_timing(timing_list):
         vals = [t.get(k, 0) for t in timing_list]
         avgs[k] = sum(vals) / len(vals)
 
-    accounted = avgs.get('env_step', 0) + avgs.get('inference', 0) + avgs.get('buffer_write', 0) + avgs.get('returns', 0)
+    accounted = (avgs.get('env_step', 0) + avgs.get('inference', 0)
+                + avgs.get('buffer_write', 0) + avgs.get('returns', 0))
     other = avgs['total'] - accounted
 
     print(f"\n  Workers ({n}): fastest={fastest:.1f}s slowest={slowest:.1f}s gap={slowest-fastest:.1f}s",

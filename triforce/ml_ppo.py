@@ -170,6 +170,7 @@ class PPO:
             # Count iterations per-env (memory_length), not total across all envs.
             # This gives the same number of optimization steps as single-env mode.
             steps_per_iteration = buffer.memory_length
+            env_steps_per_iteration = buffer.memory_length * n_envs
             progress.total = math.ceil(iterations / steps_per_iteration) * steps_per_iteration
             total_iterations = 0
             accumulated_metrics = []
@@ -202,7 +203,7 @@ class PPO:
                     network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
 
                 # Optimize the network
-                network.steps_trained += steps_per_iteration
+                network.steps_trained += env_steps_per_iteration
                 network = self._optimize(network, buffer, network.steps_trained)
 
             return network
