@@ -1,14 +1,8 @@
-"""Subprocess worker for parallel PPO rollout collection."""
+"""Subprocess worker for parallel PPO rollout collection using shared memory."""
 
-import multiprocessing as mp
+import torch.multiprocessing as mp
 
 from .metrics import MetricTracker
-from .ml_ppo_rollout_buffer import PPORolloutBuffer
-
-# Commands sent from main process to worker
-CMD_COLLECT = 'collect'
-CMD_UPDATE_WEIGHTS = 'update_weights'
-CMD_CLOSE = 'close'
 
 
 class EnvFactory:
@@ -34,79 +28,45 @@ class SimpleEnvFactory:
         return self.env_class(*self.args, **self.kwargs)
 
 
-def _worker_loop(conn, create_env_fn, network_class, target_steps, gamma, lam):
-    """Main loop for a rollout worker subprocess."""
-    # Each worker only does single-sample inference — restrict PyTorch to 1 thread
-    # to avoid massive thread contention across N worker processes.
+def _worker_loop(env_index, shared_buffer, shared_weights, network_class,
+                 create_env_fn, sync):
+    """Main loop for a rollout worker subprocess using shared memory.
+
+    Args:
+        sync: tuple of (weights_barrier, rollouts_barrier, close_flag, metrics_conn)
+    """
     import torch  # pylint: disable=import-outside-toplevel
     torch.set_num_threads(1)
 
+    weights_barrier, rollouts_barrier, close_flag, metrics_conn = sync
+
     env = create_env_fn()
     try:
-        buffer = PPORolloutBuffer(target_steps, 1, env.observation_space, env.action_space, gamma, lam)
         network = network_class(env.observation_space, env.action_space)
 
         while True:
-            cmd, data = conn.recv()
+            # Wait for main to update shared weights
+            weights_barrier.wait()
 
-            if cmd == CMD_UPDATE_WEIGHTS:
-                network.load_state_dict(data)
-                network.eval()
-                conn.send(('ready', None))
-
-            elif cmd == CMD_COLLECT:
-                buffer.ppo_main_loop(0, network, env, None)
-                steps = buffer.memory_length
-
-                # Collect metrics from this worker's MetricTracker
-                metrics = MetricTracker.get_metrics_and_clear()
-
-                # Send buffer data back as serializable tensors
-                buf_data = _extract_buffer_data(buffer)
-                conn.send(('rollout', (buf_data, steps, metrics)))
-
-            elif cmd == CMD_CLOSE:
-                conn.send(('closed', None))
+            if close_flag.value:
                 break
+
+            # Load weights from shared memory (memcpy, not pickle)
+            network.load_state_dict(shared_weights)
+            network.eval()
+
+            # Collect rollout directly into shared buffer slice
+            shared_buffer.ppo_main_loop(env_index, network, env, None)
+
+            # Send metrics via pipe (small data, pickle is fine)
+            metrics = MetricTracker.get_metrics_and_clear()
+            metrics_conn.send(metrics)
+
+            # Signal rollout complete
+            rollouts_barrier.wait()
     finally:
         env.close()
-        conn.close()
-
-
-def _extract_buffer_data(buffer):
-    """Extracts tensor data from a single-env buffer for transfer to main process."""
-    data = {
-        'dones': buffer.dones.clone(),
-        'act_logp_ent_val': buffer.act_logp_ent_val.clone(),
-        'rewards': buffer.rewards.clone(),
-        'masks': buffer.masks.clone(),
-        'returns': buffer.returns.clone(),
-        'advantages': buffer.advantages.clone(),
-        'has_data': buffer.has_data,
-    }
-    if isinstance(buffer.observation, dict):
-        data['observation'] = {k: v.clone() for k, v in buffer.observation.items()}
-    else:
-        data['observation'] = buffer.observation.clone()
-    return data
-
-
-def _apply_buffer_data(target_buffer, env_index, buf_data):
-    """Applies received buffer data into the target multi-env buffer at env_index."""
-    target_buffer.dones[env_index] = buf_data['dones'][0]
-    target_buffer.act_logp_ent_val[env_index] = buf_data['act_logp_ent_val'][0]
-    target_buffer.rewards[env_index] = buf_data['rewards'][0]
-    target_buffer.masks[env_index] = buf_data['masks'][0]
-    target_buffer.returns[env_index] = buf_data['returns'][0]
-    target_buffer.advantages[env_index] = buf_data['advantages'][0]
-
-    if isinstance(target_buffer.observation, dict):
-        for key in target_buffer.observation:
-            target_buffer.observation[key][env_index] = buf_data['observation'][key][0]
-    else:
-        target_buffer.observation[env_index] = buf_data['observation'][0]
-
-    target_buffer.has_data = True
+        metrics_conn.close()
 
 
 def _aggregate_metrics(metrics_list):
@@ -125,72 +85,74 @@ def _aggregate_metrics(metrics_list):
 
 
 class RolloutWorkerPool:
-    """Manages a pool of subprocess workers for parallel rollout collection."""
-    def __init__(self, n_workers, create_env_fn, network_class, target_steps, gamma, lam):
+    """Manages subprocess workers for parallel rollout collection via shared memory."""
+    def __init__(self, n_workers, shared_buffer, network, create_env_fn, network_class):
         self.n_workers = n_workers
         self.workers = []
-        self.conns = []
+        self.metric_conns = []
 
         ctx = mp.get_context('spawn')
-        for _ in range(n_workers):
+        self._weights_barrier = ctx.Barrier(n_workers + 1)
+        self._rollouts_barrier = ctx.Barrier(n_workers + 1)
+        self._close_flag = ctx.Value('b', False)
+
+        # Create shared weight tensors (memcpy instead of pickle for updates)
+        self._shared_weights = {k: v.cpu().clone().share_memory_()
+                                for k, v in network.state_dict().items()}
+
+        for i in range(n_workers):
             parent_conn, child_conn = ctx.Pipe()
             process = ctx.Process(
                 target=_worker_loop,
-                args=(child_conn, create_env_fn, network_class, target_steps, gamma, lam),
+                args=(i, shared_buffer, self._shared_weights, network_class,
+                      create_env_fn,
+                      (self._weights_barrier, self._rollouts_barrier,
+                       self._close_flag, child_conn)),
                 daemon=True
             )
             process.start()
             child_conn.close()
-            self.conns.append(parent_conn)
+            self.metric_conns.append(parent_conn)
             self.workers.append(process)
 
     def update_weights(self, network):
-        """Sends updated network weights to all workers."""
-        state_dict = {k: v.cpu() for k, v in network.state_dict().items()}
+        """Copies network weights to shared memory and signals workers to start."""
+        for k, v in network.state_dict().items():
+            self._shared_weights[k].copy_(v.cpu())
 
-        for conn in self.conns:
-            conn.send((CMD_UPDATE_WEIGHTS, state_dict))
-
-        for conn in self.conns:
-            msg, _ = conn.recv()
-            assert msg == 'ready'
+        # Release all workers past the weights barrier
+        self._weights_barrier.wait()
 
     def collect_rollouts(self, target_buffer, progress=None):
-        """Collects rollouts from all workers into the target multi-env buffer."""
-        # Dispatch collection to all workers
-        for conn in self.conns:
-            conn.send((CMD_COLLECT, None))
+        """Waits for all workers to finish writing into the shared buffer."""
+        # Wait for all workers to complete their rollouts
+        self._rollouts_barrier.wait()
 
-        # Collect results
+        # Collect metrics from pipes (small data)
         all_metrics = []
-        for i, conn in enumerate(self.conns):
-            msg, data = conn.recv()
-            assert msg == 'rollout'
-            buf_data, _, metrics = data
-            _apply_buffer_data(target_buffer, i, buf_data)
+        for conn in self.metric_conns:
+            metrics = conn.recv()
             if metrics:
                 all_metrics.append(metrics)
 
-        # Update progress by per-env steps (memory_length), matching iteration counting
         if progress:
             progress.update(target_buffer.memory_length)
 
-        # Aggregate metrics from all workers
         aggregated = _aggregate_metrics(all_metrics)
         return target_buffer.memory_length, aggregated
 
     def close(self):
         """Shuts down all workers."""
-        for conn in self.conns:
-            try:
-                conn.send((CMD_CLOSE, None))
-            except BrokenPipeError:
-                pass
+        self._close_flag.value = True
+        try:
+            self._weights_barrier.wait(timeout=5)
+        except mp.context.TimeoutError:
+            pass
 
-        for conn in self.conns:
+        for conn in self.metric_conns:
             try:
-                conn.recv()
-            except (BrokenPipeError, EOFError):
+                conn.close()
+            except (BrokenPipeError, OSError):
                 pass
 
         for worker in self.workers:
@@ -198,5 +160,5 @@ class RolloutWorkerPool:
             if worker.is_alive():
                 worker.terminate()
 
-        self.conns.clear()
+        self.metric_conns.clear()
         self.workers.clear()

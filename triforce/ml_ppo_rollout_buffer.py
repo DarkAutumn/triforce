@@ -28,7 +28,7 @@ class PPORolloutBuffer:
         self.returns = torch.empty(n_envs, memory_length, dtype=torch.float32, device="cpu")
         self.advantages = torch.empty(n_envs, memory_length, dtype=torch.float32, device="cpu")
 
-        self.has_data = False
+        self.has_data = [False] * n_envs
 
     def __setitem__(self, idx, other):
         """Assigns the result of a single environment to idx."""
@@ -45,6 +45,24 @@ class PPORolloutBuffer:
         self.masks[idx] = other.masks[0]
         self.returns[idx] = other.returns[0]
         self.advantages[idx] = other.advantages[0]
+        self.has_data[idx] = True
+
+    def share_memory_(self):
+        """Move all tensors to shared memory for cross-process access."""
+        if isinstance(self.observation, dict):
+            for key in self.observation:
+                self.observation[key].share_memory_()
+        else:
+            self.observation.share_memory_()
+
+        self.dones.share_memory_()
+        self.act_logp_ent_val.share_memory_()
+        self.rewards.share_memory_()
+        self.masks.share_memory_()
+        self.ones_mask.share_memory_()
+        self.returns.share_memory_()
+        self.advantages.share_memory_()
+        return self
 
     def _get_observation_part(self, space):
         if isinstance(space, MultiBinary):
@@ -62,7 +80,7 @@ class PPORolloutBuffer:
         """Processes a single loop of training, filling one batch of variables."""
 
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements
-        if not self.has_data:
+        if not self.has_data[batch_index]:
             obs, info = env.reset()
             action_mask = info.get('action_mask', None)
             done = 0.0
@@ -134,7 +152,7 @@ class PPORolloutBuffer:
             returns, advantages = self._compute_returns_advantages(batch_index, last_value)
             self.returns[batch_index] = returns
             self.advantages[batch_index] = advantages
-            self.has_data = True
+            self.has_data[batch_index] = True
 
         return infos
 

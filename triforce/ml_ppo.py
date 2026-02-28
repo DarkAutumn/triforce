@@ -147,6 +147,7 @@ class PPO:
         act_space = network.action_space
         buffer = PPORolloutBuffer(self.target_steps, n_envs, obs_space, act_space,
                                   self._gamma, self._lambda)
+        buffer.share_memory_()
 
         # Use pre-built env_factory if provided, otherwise build from kwargs
         env_factory = kwargs.get('env_factory')
@@ -158,8 +159,7 @@ class PPO:
             env_factory = EnvFactory(scenario_def, action_space_name, **env_kwargs)
 
         network_class = kwargs.get('network_class', type(network))
-        pool = RolloutWorkerPool(n_envs, env_factory, network_class, self.target_steps,
-                                 self._gamma, self._lambda)
+        pool = RolloutWorkerPool(n_envs, buffer, network, env_factory, network_class)
         try:
             save_path = kwargs.get('save_path', None)
             exit_criteria = kwargs.get('exit_criteria', None)
