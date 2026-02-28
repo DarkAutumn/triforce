@@ -145,7 +145,8 @@ class PPO:
 
         obs_space = network.observation_space
         act_space = network.action_space
-        buffer = PPORolloutBuffer(self.target_steps, n_envs, obs_space, act_space,
+        steps_per_env = self.target_steps // n_envs
+        buffer = PPORolloutBuffer(steps_per_env, n_envs, obs_space, act_space,
                                   self._gamma, self._lambda)
         buffer.share_memory_()
 
@@ -167,11 +168,10 @@ class PPO:
             next_tensorboard = Threshold(LOG_RATE)
             next_model_save = Threshold(SAVE_INTERVAL)
 
-            # Count iterations per-env (memory_length), not total across all envs.
-            # This gives the same number of optimization steps as single-env mode.
-            steps_per_iteration = buffer.memory_length
+            # Each collection gathers target_steps total env steps (split across workers).
+            # Count total env steps for iteration tracking, matching single-env behavior.
             env_steps_per_iteration = buffer.memory_length * n_envs
-            progress.total = math.ceil(iterations / steps_per_iteration) * steps_per_iteration
+            progress.total = math.ceil(iterations / env_steps_per_iteration) * env_steps_per_iteration
             total_iterations = 0
             accumulated_metrics = []
 
@@ -179,12 +179,12 @@ class PPO:
                 # Send current weights to workers and collect rollouts
                 pool.update_weights(network)
                 _, worker_metrics = pool.collect_rollouts(buffer, progress)
-                total_iterations += steps_per_iteration
+                total_iterations += env_steps_per_iteration
                 if worker_metrics:
                     accumulated_metrics.append(worker_metrics)
 
                 # Log aggregated metrics from worker subprocesses
-                if next_tensorboard.add(steps_per_iteration):
+                if next_tensorboard.add(env_steps_per_iteration):
                     network.metrics = self._average_metric_dicts(accumulated_metrics)
                     accumulated_metrics.clear()
                     if network.metrics:
@@ -198,7 +198,7 @@ class PPO:
                             self._adjust_learning_rate(network.metrics)
 
                 # Save model
-                if save_path and next_model_save.add(steps_per_iteration):
+                if save_path and next_model_save.add(env_steps_per_iteration):
                     model_name = kwargs.get('model_name', "network").replace(' ', '_')
                     network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
 
