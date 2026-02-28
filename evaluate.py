@@ -66,6 +66,62 @@ def convert_eval_json_to_md(json_path):
     return md_path
 
 
+def print_learning_curve(eval_dir, scenario_name=None):
+    """Prints a learning curve table from all .eval.json files in a directory, showing progress over training steps."""
+    # Collect all eval.json files with step counts
+    entries = []
+    for filename in os.listdir(eval_dir):
+        if not filename.endswith('.eval.json'):
+            continue
+
+        # Extract step count from filename pattern: name_STEPS.eval.json
+        base = filename.rsplit('.eval.json', 1)[0]
+        parts = base.rsplit('_', 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            steps = int(parts[1])
+        else:
+            continue  # skip non-checkpoint files (e.g. final model)
+
+        filepath = os.path.join(eval_dir, filename)
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        progress = sorted(data['progress_values'])
+        n = len(progress)
+        max_prog = data['max_progress']
+        success = sum(1 for v in progress if v >= max_prog)
+
+        entries.append({
+            'steps': steps,
+            'median': progress[n // 2],
+            'p75': progress[max(0, ceil(n * 0.75) - 1)],
+            'p90': progress[max(0, ceil(n * 0.90) - 1)],
+            'max': progress[-1],
+            'success': f"{success}/{n}",
+            'mean': sum(progress) / n,
+            'max_progress': max_prog,
+        })
+
+    if not entries:
+        print("No checkpoint evaluation data found.")
+        return
+
+    entries.sort(key=lambda e: e['steps'])
+    max_prog = entries[0]['max_progress']
+
+    title = f"Learning Curve: {scenario_name}" if scenario_name else "Learning Curve"
+    print(f"\n{'='*72}")
+    print(f"  {title}  (max milestone: {max_prog})")
+    print(f"{'='*72}")
+    print(f"  {'Steps':>10}  {'Mean':>6}  {'Median':>6}  {'P75':>5}  {'P90':>5}  {'Max':>5}  {'Success':>9}")
+    print(f"  {'-'*10}  {'-'*6}  {'-'*6}  {'-'*5}  {'-'*5}  {'-'*5}  {'-'*9}")
+
+    for e in entries:
+        print(f"  {e['steps']:>10,}  {e['mean']:>6.2f}  {e['median']:>6}  {e['p75']:>5}  "
+              f"{e['p90']:>5}  {e['max']:>5}  {e['success']:>9}")
+    print(f"{'='*72}\n")
+
+
 def print_progress_report(progress_values : List[int], max_progress : int,
                           episodes : int, scenario_name : str):
     """Prints a progress-focused evaluation report with percentiles and histogram."""
@@ -253,6 +309,10 @@ def main():
         compare_models(args.compare[0], args.compare[1])
         return
 
+    if args.summary:
+        _print_summary(args)
+        return
+
     if not args.model_path or not args.model or not args.scenario:
         print("Error: model_path, model, and scenario are required when not using --compare.")
         sys.exit(1)
@@ -267,7 +327,12 @@ def main():
 
     _run_sequential(args, to_process, total_episodes)
 
-    # Print progress report for the last evaluated model (from the first/best model)
+    # Print learning curve across all checkpoints
+    model_dir = os.path.join(get_model_path(args), args.model)
+    if os.path.isdir(model_dir):
+        print_learning_curve(model_dir, args.scenario)
+
+    # Print progress report for the best-trained model (first = most steps)
     if to_process:
         json_path = to_process[0][1].rsplit('.', 1)[0] + '.eval.json'
         if os.path.exists(json_path):
@@ -275,6 +340,16 @@ def main():
                 data = json.load(f)
             print_progress_report(data['progress_values'], data['max_progress'],
                                   data['episodes'], args.scenario)
+
+
+def _print_summary(args):
+    """Prints the learning curve from existing .eval.json files without running evaluation."""
+    model_path = get_model_path(args)
+    model_dir = os.path.join(model_path, args.model) if args.model else model_path
+    if not os.path.isdir(model_dir):
+        print(f"Error: directory not found: {model_dir}")
+        sys.exit(1)
+    print_learning_curve(model_dir, args.scenario)
 
 
 def _save_results(path, metrics, progress_values, max_progress, episodes, scenario, model_name):
@@ -384,6 +459,8 @@ def parse_args():
                         help='Only evaluate models with these step counts')
     parser.add_argument('--compare', type=str, nargs=2, metavar='EVAL_JSON',
                         help='Compare two .eval.json files instead of running evaluation')
+    parser.add_argument('--summary', action='store_true',
+                        help='Print the learning curve from existing .eval.json files without re-running')
 
     try:
         args = parser.parse_args()
