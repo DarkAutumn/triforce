@@ -143,6 +143,13 @@ class PPORolloutBuffer:
 
                 done = 1.0 if (terminated or truncated) else 0.0
                 if terminated or truncated:
+                    if truncated and not terminated:
+                        # Bootstrap: the episode was cut short, not finished.  Add the
+                        # discounted value of the final state so GAE doesn't treat
+                        # truncation as zero future return.
+                        bootstrap = network.get_value(next_obs).item()
+                        self.rewards[batch_index, t] += self._gamma * bootstrap
+
                     next_obs, info = env.reset()
                     action_mask = info.get('action_mask', None)
 
