@@ -28,7 +28,7 @@ class PPORolloutBuffer:
         self.returns = torch.empty(n_envs, memory_length, dtype=torch.float32, device="cpu")
         self.advantages = torch.empty(n_envs, memory_length, dtype=torch.float32, device="cpu")
 
-        self.has_data = False
+        self.has_data = [False] * n_envs
 
     def __setitem__(self, idx, other):
         """Assigns the result of a single environment to idx."""
@@ -45,6 +45,24 @@ class PPORolloutBuffer:
         self.masks[idx] = other.masks[0]
         self.returns[idx] = other.returns[0]
         self.advantages[idx] = other.advantages[0]
+        self.has_data[idx] = True
+
+    def share_memory_(self):
+        """Move all tensors to shared memory for cross-process access."""
+        if isinstance(self.observation, dict):
+            for key in self.observation:
+                self.observation[key].share_memory_()
+        else:
+            self.observation.share_memory_()
+
+        self.dones.share_memory_()
+        self.act_logp_ent_val.share_memory_()
+        self.rewards.share_memory_()
+        self.masks.share_memory_()
+        self.ones_mask.share_memory_()
+        self.returns.share_memory_()
+        self.advantages.share_memory_()
+        return self
 
     def _get_observation_part(self, space):
         if isinstance(space, MultiBinary):
@@ -58,11 +76,14 @@ class PPORolloutBuffer:
 
         raise ValueError(f"Unsupported observation space: {space}")
 
-    def ppo_main_loop(self, batch_index, network, env, progress):
+    def ppo_main_loop(self, batch_index, network, env, progress, collect_timing=False):
         """Processes a single loop of training, filling one batch of variables."""
 
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements
-        if not self.has_data:
+        import time  # pylint: disable=import-outside-toplevel
+        timing = {'env_step': 0.0, 'inference': 0.0, 'buffer_write': 0.0} if collect_timing else None
+
+        if not self.has_data[batch_index]:
             obs, info = env.reset()
             action_mask = info.get('action_mask', None)
             done = 0.0
@@ -76,6 +97,7 @@ class PPORolloutBuffer:
             action_mask = self.masks[batch_index, self.memory_length]
 
         infos = []
+        t0_total = time.perf_counter() if timing is not None else 0
 
         with torch.no_grad():
             for t in range(self.memory_length):
@@ -94,13 +116,26 @@ class PPORolloutBuffer:
                     action_mask = action_mask.unsqueeze(0)
 
                 # Record the action, logp, entropy, and value
+                if timing is not None:
+                    t0 = time.perf_counter()
                 act_logp_ent_val = network.get_action_and_value(obs, action_mask)
+                if timing is not None:
+                    timing['inference'] += time.perf_counter() - t0
+
+                if timing is not None:
+                    t0 = time.perf_counter()
                 self.act_logp_ent_val[batch_index, t] = torch.stack(act_logp_ent_val, dim=-1)
                 self.masks[batch_index, t] = action_mask if action_mask is not None else self.ones_mask
+                if timing is not None:
+                    timing['buffer_write'] += time.perf_counter() - t0
 
                 # step environment
                 action = act_logp_ent_val[0].item()
+                if timing is not None:
+                    t0 = time.perf_counter()
                 next_obs, reward, terminated, truncated, info = env.step(action)
+                if timing is not None:
+                    timing['env_step'] += time.perf_counter() - t0
 
                 action_mask = info.get('action_mask', None)
                 infos.append(info)
@@ -130,13 +165,18 @@ class PPORolloutBuffer:
                 self.masks[batch_index, self.memory_length] = self.ones_mask
 
             # Get the value of the final observation and calculate returns/advantages
+            if timing is not None:
+                t0 = time.perf_counter()
             last_value = network.get_value(obs).item()
             returns, advantages = self._compute_returns_advantages(batch_index, last_value)
             self.returns[batch_index] = returns
             self.advantages[batch_index] = advantages
-            self.has_data = True
+            self.has_data[batch_index] = True
+            if timing is not None:
+                timing['returns'] = time.perf_counter() - t0
+                timing['total'] = time.perf_counter() - t0_total
 
-        return infos
+        return infos, timing
 
     def _compute_returns_advantages(self, batch_idx, last_value):
         with torch.no_grad():

@@ -112,7 +112,7 @@ class PPO:
 
         while total_iterations < iterations:
             # Collect training data
-            buffer.ppo_main_loop(0, network, env, progress)
+            buffer.ppo_main_loop(0, network, env, progress)  # timing unused in single-env
             total_iterations += buffer.memory_length
 
             # Save metrics
@@ -145,8 +145,10 @@ class PPO:
 
         obs_space = network.observation_space
         act_space = network.action_space
-        buffer = PPORolloutBuffer(self.target_steps, n_envs, obs_space, act_space,
+        steps_per_env = self.target_steps // n_envs
+        buffer = PPORolloutBuffer(steps_per_env, n_envs, obs_space, act_space,
                                   self._gamma, self._lambda)
+        buffer.share_memory_()
 
         # Use pre-built env_factory if provided, otherwise build from kwargs
         env_factory = kwargs.get('env_factory')
@@ -158,8 +160,7 @@ class PPO:
             env_factory = EnvFactory(scenario_def, action_space_name, **env_kwargs)
 
         network_class = kwargs.get('network_class', type(network))
-        pool = RolloutWorkerPool(n_envs, env_factory, network_class, self.target_steps,
-                                 self._gamma, self._lambda)
+        pool = RolloutWorkerPool(n_envs, buffer, network, env_factory, network_class)
         try:
             save_path = kwargs.get('save_path', None)
             exit_criteria = kwargs.get('exit_criteria', None)
@@ -167,10 +168,10 @@ class PPO:
             next_tensorboard = Threshold(LOG_RATE)
             next_model_save = Threshold(SAVE_INTERVAL)
 
-            # Count iterations per-env (memory_length), not total across all envs.
-            # This gives the same number of optimization steps as single-env mode.
-            steps_per_iteration = buffer.memory_length
-            progress.total = math.ceil(iterations / steps_per_iteration) * steps_per_iteration
+            # Each collection gathers target_steps total env steps (split across workers).
+            # Count total env steps for iteration tracking, matching single-env behavior.
+            env_steps_per_iteration = buffer.memory_length * n_envs
+            progress.total = math.ceil(iterations / env_steps_per_iteration) * env_steps_per_iteration
             total_iterations = 0
             accumulated_metrics = []
 
@@ -178,12 +179,12 @@ class PPO:
                 # Send current weights to workers and collect rollouts
                 pool.update_weights(network)
                 _, worker_metrics = pool.collect_rollouts(buffer, progress)
-                total_iterations += steps_per_iteration
+                total_iterations += env_steps_per_iteration
                 if worker_metrics:
                     accumulated_metrics.append(worker_metrics)
 
                 # Log aggregated metrics from worker subprocesses
-                if next_tensorboard.add(steps_per_iteration):
+                if next_tensorboard.add(env_steps_per_iteration):
                     network.metrics = self._average_metric_dicts(accumulated_metrics)
                     accumulated_metrics.clear()
                     if network.metrics:
@@ -197,12 +198,12 @@ class PPO:
                             self._adjust_learning_rate(network.metrics)
 
                 # Save model
-                if save_path and next_model_save.add(steps_per_iteration):
+                if save_path and next_model_save.add(env_steps_per_iteration):
                     model_name = kwargs.get('model_name', "network").replace(' ', '_')
                     network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
 
                 # Optimize the network
-                network.steps_trained += steps_per_iteration
+                network.steps_trained += env_steps_per_iteration
                 network = self._optimize(network, buffer, network.steps_trained)
 
             return network

@@ -37,6 +37,7 @@ class SimpleTestEnvironment:
         ]
 
     def reset(self):
+        """Reset the environment to initial state."""
         self.step_count = 0
         return self._generate_observation(self.step_count), {}
 
