@@ -340,8 +340,11 @@ class GameCompletion(ObjectiveSelector):
                         target_location = MapLocation(0, 0x38, False)
                     else:
                         target_location = dungeon1
+                else:
+                    target_location = dungeon2
 
             else:
+                target_location = item_to_overworld[1]
                 for i in range(1, 9):
                     if not state.link.has_triforce(i):
                         target_location = item_to_overworld[i]
