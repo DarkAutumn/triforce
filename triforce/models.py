@@ -16,6 +16,7 @@ class Network(nn.Module):
     base : nn.Module
     action_net : nn.Module
     value_net : nn.Module
+    is_multihead = False
 
     def __init__(self, base_network : nn.Module, obs_space, action_space):
         super().__init__()
@@ -295,6 +296,8 @@ class MultiHeadAgent(Network):
     where K = number of action types. The two heads share the same CNN + MLP backbone
     but output independent logits. Joint log-prob: log π(a|s) = log π_type + log π_dir.
     """
+    is_multihead = True
+
     # pylint: disable=super-init-not-called
     def __init__(self, obs_space: Dict, action_space):
         channels, height, width = obs_space["image"].shape

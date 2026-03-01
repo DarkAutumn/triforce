@@ -31,7 +31,8 @@ class EnvironmentWrapper:
         self.model_def : ModelDefinition = model_def
 
         self.env = env = make_zelda_env(self.scenario_def, model_def.action_space, render_mode='rgb_array',
-                             translation=False, frame_stack=frame_stack)
+                             translation=False, frame_stack=frame_stack,
+                             multihead=getattr(model_def.neural_net, 'is_multihead', False))
 
         self.selector = ModelSelector(self.env, model_path, model_def)
 

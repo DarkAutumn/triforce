@@ -310,8 +310,9 @@ def _run_sequential(args, to_process, total_episodes):
     def make_env():
         model_def = ModelDefinition.get(args.model)
         render_mode = 'human' if args.render else None
+        multihead = getattr(model_def.neural_net, 'is_multihead', False)
         return make_zelda_env(scenario_def, model_def.action_space, render_mode=render_mode,
-                              frame_stack=args.frame_stack)
+                              frame_stack=args.frame_stack, multihead=multihead)
 
     observation_space, action_space = None, None
     with tqdm(total=total_episodes) as progress:

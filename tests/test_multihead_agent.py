@@ -332,3 +332,16 @@ class TestMultiHeadRegistered:
 
     def test_is_network_subclass(self):
         assert issubclass(MultiHeadAgent, Network)
+
+
+class TestIsMultiheadFlag:
+    """Verify is_multihead class attribute on Network and MultiHeadAgent."""
+
+    def test_network_is_not_multihead(self):
+        assert Network.is_multihead is False
+
+    def test_shared_nature_agent_is_not_multihead(self):
+        assert SharedNatureAgent.is_multihead is False
+
+    def test_multihead_agent_is_multihead(self):
+        assert MultiHeadAgent.is_multihead is True

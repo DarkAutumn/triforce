@@ -158,7 +158,7 @@ class PPO:
             scenario_def = kwargs.get('scenario_def')
             action_space_name = kwargs.get('action_space_name')
             env_kwargs = {k: v for k, v in kwargs.items()
-                          if k in ('render_mode', 'translation', 'frame_stack', 'obs_kind')}
+                          if k in ('render_mode', 'translation', 'frame_stack', 'obs_kind', 'multihead')}
             env_factory = EnvFactory(scenario_def, action_space_name, **env_kwargs)
 
         network_class = kwargs.get('network_class', type(network))
