@@ -8,7 +8,6 @@ import argparse
 import json
 import shutil
 from typing import Dict, List
-from scipy.stats import mannwhitneyu
 from tqdm import tqdm
 from triforce import ModelDefinition, make_zelda_env, Network, TrainingScenarioDefinition,  MetricTracker
 
@@ -110,6 +109,7 @@ def _percentile(sorted_vals, pct):
 def compare_models(path_a, path_b):
     """Compares two evaluation results and prints a human-readable statistical comparison."""
     # pylint: disable=too-many-locals,too-many-statements
+    from scipy.stats import mannwhitneyu  # pylint: disable=import-outside-toplevel
     with open(path_a, 'r', encoding='utf-8') as f:
         data_a = json.load(f)
     with open(path_b, 'r', encoding='utf-8') as f:
