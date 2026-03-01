@@ -288,6 +288,137 @@ class CombinedExtractor(nn.Module):
 
         return combined
 
+class MultiHeadAgent(Network):
+    """Two-head action decomposition: action_type (K) + direction (4).
+
+    Instead of a flat Discrete(N) action space, this agent uses MultiDiscrete([K, 4])
+    where K = number of action types. The two heads share the same CNN + MLP backbone
+    but output independent logits. Joint log-prob: log π(a|s) = log π_type + log π_dir.
+    """
+    # pylint: disable=super-init-not-called
+    def __init__(self, obs_space: Dict, action_space):
+        channels, height, width = obs_space["image"].shape
+        image_linear_size = 256
+
+        base_network = CombinedExtractor(
+            image_channels=channels,
+            input_height=height,
+            input_width=width,
+            enemy_feature_dim=obs_space["enemy_features"].shape[1],
+            enemy_count=obs_space["enemy_features"].shape[0],
+            num_enemy_types=150,
+            embedding_dim=4,
+            item_feature_dim=obs_space["item_features"].shape[1],
+            item_count=obs_space["item_features"].shape[0],
+            projectile_feature_dim=obs_space["projectile_features"].shape[1],
+            projectile_count=obs_space["projectile_features"].shape[0],
+            info_size=obs_space["information"].n,
+            image_linear_size=image_linear_size
+        )
+
+        # Bypass Network.__init__ because MultiDiscrete has no .n attribute.
+        # Manually set all attributes that Network.__init__ would create.
+        # pylint: disable=non-parent-init-called
+        nn.Module.__init__(self)
+        self.observation_space = obs_space
+        self.action_space = action_space
+        self.steps_trained = 0
+        self.episodes_evaluated = 0
+        self.metrics = {}
+
+        self.base = base_network
+        self.mlp_extractor = MlpExtractor(input_size=self.base.output_dim)
+
+        # Two action heads: action_type (K) and direction (4)
+        num_action_types = int(action_space.nvec[0])
+        self.action_type_net = self.layer_init(nn.Linear(64, num_action_types), std=0.01)
+        self.direction_net = self.layer_init(nn.Linear(64, 4), std=0.01)
+
+        # Single shared value head
+        self.value_net = self.layer_init(nn.Linear(64, 1), std=1.0)
+
+        # Placeholder so Network.base class annotation is satisfied
+        self.action_net = nn.Identity()
+
+    def forward(self, obs):
+        """Returns (action_type_logits, direction_logits, value)."""
+        obs = self._unsqueeze(obs)
+
+        combined_features = self.base(
+            image=obs["image"],
+            enemy_features=obs["enemy_features"],
+            enemy_ids=obs["enemy_id"],
+            item_features=obs["item_features"],
+            projectile_features=obs["projectile_features"],
+            information=obs["information"]
+        )
+
+        policy_features, value_features = self.mlp_extractor(combined_features)
+
+        action_type_logits = self.action_type_net(policy_features)
+        direction_logits = self.direction_net(policy_features)
+        value = self.value_net(value_features)
+        return action_type_logits, direction_logits, value
+
+    def get_action_and_value(self, obs, mask, actions=None, deterministic=False):
+        """Gets action, joint log-prob, summed entropy, and value.
+
+        Args:
+            obs: Dict observation.
+            mask: Concatenated [batch, K+4] mask — first K for action type, last 4 for direction.
+            actions: Optional [batch, 2] tensor of (action_type, direction) indices.
+            deterministic: If True, use argmax instead of sampling.
+
+        Returns:
+            (actions [batch, 2], log_prob [batch], entropy [batch], value [batch])
+        """
+        action_type_logits, direction_logits, value = self.forward(obs)
+        num_action_types = int(self.action_space.nvec[0])
+
+        # Per-head masking from concatenated mask
+        if mask is not None:
+            action_type_mask = mask[..., :num_action_types]
+            direction_mask = mask[..., num_action_types:]
+            assert action_type_mask.any(dim=-1).all(), "Action type mask must have at least one valid action"
+            assert direction_mask.any(dim=-1).all(), "Direction mask must have at least one valid direction"
+
+            action_type_logits = action_type_logits.clone()
+            action_type_logits[~action_type_mask] = -1e9
+
+            direction_logits = direction_logits.clone()
+            direction_logits[~direction_mask] = -1e9
+
+        type_dist = dist.Categorical(logits=action_type_logits)
+        dir_dist = dist.Categorical(logits=direction_logits)
+
+        if actions is None:
+            if deterministic:
+                type_action = action_type_logits.argmax(dim=-1)
+                dir_action = direction_logits.argmax(dim=-1)
+            else:
+                type_action = type_dist.sample()
+                dir_action = dir_dist.sample()
+            actions = torch.stack([type_action, dir_action], dim=-1)
+
+        # Joint log-prob: log π(a|s) = log π_type(a_type|s) + log π_dir(a_dir|s)
+        log_prob = type_dist.log_prob(actions[..., 0]) + dir_dist.log_prob(actions[..., 1])
+
+        # Entropy: sum of per-head entropies
+        entropy = type_dist.entropy() + dir_dist.entropy()
+
+        return actions, log_prob, entropy, value.view(-1)
+
+    def get_value(self, obs):
+        """Get value estimate."""
+        _, _, value = self.forward(obs)
+        return value.view(-1)
+
+    def get_action(self, obs, mask=None, deterministic=False):
+        """Get the action from the observation."""
+        action, _, _, _ = self.get_action_and_value(obs, mask, deterministic=deterministic)
+        return action
+
+
 class SharedNatureAgent(Network):
     """Actor-critic policy with multiple inputs, action masking, and shared CNN."""
     def __init__(self, obs_space: Dict, action_space):
@@ -444,6 +575,7 @@ class ModelDefinition(BaseModel):
 
 __all__ = [
     Network.__name__,
+    MultiHeadAgent.__name__,
     SharedNatureAgent.__name__,
     register_neural_network.__name__,
     get_neural_network.__name__

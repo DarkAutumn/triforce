@@ -132,16 +132,11 @@
         {
             "name": "skip-sword-to-triforce",
             "description": "Overworld through dungeon 1 triforce, skipping the sword cave",
-            "iterations": 5000000,
+            "iterations": 2000000,
             "scenario_selector": "round-robin",
             "objective": "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": [
-<<<<<<< Updated upstream
-                "LeftOverworld1Area",
-                "LeftDungeon",
-=======
->>>>>>> Stashed changes
                 "GainedTriforce",
                 "GameOver",
                 "Timeout"
