@@ -1,7 +1,7 @@
 {
     "models": [
         {
-            "name": "overworld",
+            "name": "sword-and-beams",
             "neural_net": "SharedNatureAgent",
             "action_space": [
                 "MOVE",
@@ -112,8 +112,6 @@
             "objective": "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": [
-                "LeftOverworld1Area",
-                "StartingSwordCondition",
                 "GainedTriforce",
                 "GameOver",
                 "Timeout"
@@ -139,8 +137,11 @@
             "objective": "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": [
+<<<<<<< Updated upstream
                 "LeftOverworld1Area",
                 "LeftDungeon",
+=======
+>>>>>>> Stashed changes
                 "GainedTriforce",
                 "GameOver",
                 "Timeout"
