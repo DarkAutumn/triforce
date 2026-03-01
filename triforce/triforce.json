@@ -132,6 +132,39 @@
             "use_hints": true
         },
         {
+            "name": "skip-sword-to-triforce",
+            "description": "Overworld through dungeon 1 triforce, skipping the sword cave",
+            "iterations": 5000000,
+            "scenario_selector": "round-robin",
+            "objective": "GameCompletion",
+            "critic": "GameplayCritic",
+            "end_conditions": [
+                "LeftOverworld1Area",
+                "LeftDungeon",
+                "GainedTriforce",
+                "GameOver",
+                "Timeout"
+            ],
+            "metrics": [
+                "success-rate",
+                "game-progress",
+                "room-health",
+                "ending",
+                "reward-average",
+                "reward-details"
+            ],
+            "start": [
+                "0_67s"
+            ],
+            "use_hints": true,
+            "per_reset": {
+                "bombs": 3,
+                "sword": 1,
+                "hearts_and_containers": 34,
+                "partial_hearts": 254
+            }
+        },
+        {
             "name": "game-start",
             "description": "The full game with training variables",
             "iterations": 2000000,
