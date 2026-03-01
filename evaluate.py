@@ -223,6 +223,7 @@ def evaluate_one_model(make_env, network, episodes, progress_callback):
                 action_mask = info.get('action_mask', None)
                 action_mask = action_mask.unsqueeze(0) if action_mask is not None else None
                 action = network.get_action(obs, action_mask)
+                action = action.squeeze(0)  # remove batch dim: [1, 2] -> [2] or [1] -> scalar
                 obs, _, terminated, truncated, info = env.step(action)
 
             progress_callback()
