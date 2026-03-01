@@ -19,6 +19,15 @@
             ]
         },
         {
+            "name": "sword-and-beams-multihead",
+            "neural_net": "MultiHeadAgent",
+            "action_space": [
+                "MOVE",
+                "SWORD",
+                "BEAMS"
+            ]
+        },
+        {
             "name": "overworld-sword",
             "neural_net": "SharedNatureAgent",
             "action_space": [
