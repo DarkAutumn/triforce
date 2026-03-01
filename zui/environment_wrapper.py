@@ -69,6 +69,7 @@ class EnvironmentWrapper:
         if action is None:
             action_mask = self._action_mask if len(self._action_mask.shape) > 1 else self._action_mask.unsqueeze(0)
             action = self.selector.model.get_action(self._observation, action_mask)
+            action = action.squeeze(0)  # remove batch dim: [1, 2] -> [2] or [1] -> scalar
 
         if not self.action_space.is_valid_action(action, self._action_mask):
             raise ValueError(f"Invalid action {action} for action mask {self._action_mask}")
