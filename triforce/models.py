@@ -418,6 +418,31 @@ class MultiHeadAgent(Network):
         action, _, _, _ = self.get_action_and_value(obs, mask, deterministic=deterministic)
         return action
 
+    def get_entropy_details(self, obs, mask):
+        """Returns per-head entropy means for Tensorboard logging.
+
+        Used by PPO._optimize to log action_type and direction entropy separately,
+        enabling diagnosis of per-head entropy collapse.
+        """
+        action_type_logits, direction_logits, _ = self.forward(obs)
+        num_action_types = int(self.action_space.nvec[0])
+
+        if mask is not None:
+            action_type_mask = mask[..., :num_action_types]
+            direction_mask = mask[..., num_action_types:]
+            action_type_logits = action_type_logits.clone()
+            action_type_logits[~action_type_mask] = -1e9
+            direction_logits = direction_logits.clone()
+            direction_logits[~direction_mask] = -1e9
+
+        type_dist = dist.Categorical(logits=action_type_logits)
+        dir_dist = dist.Categorical(logits=direction_logits)
+
+        return {
+            "entropy/action_type": type_dist.entropy().mean().item(),
+            "entropy/direction": dir_dist.entropy().mean().item(),
+        }
+
 
 class SharedNatureAgent(Network):
     """Actor-critic policy with multiple inputs, action masking, and shared CNN."""

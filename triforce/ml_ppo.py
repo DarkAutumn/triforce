@@ -378,6 +378,15 @@ class PPO:
         var_y = torch.var(y_true)
         explained_var = float('nan') if var_y == 0 else 1 - torch.var(y_true - y_pred) / var_y
 
+        # Compute per-head entropy for MultiHeadAgent tensorboard logging
+        per_head_entropy = {}
+        if hasattr(network, 'get_entropy_details'):
+            with torch.no_grad():
+                # Use last minibatch obs/masks (still on device) — move to CPU for network
+                detail_obs = {k: v.cpu() for k, v in mb_obs.items()} if isinstance(mb_obs, dict) else mb_obs.cpu()
+                detail_masks = mb_masks.cpu()
+                per_head_entropy = network.get_entropy_details(detail_obs, detail_masks)
+
         if self.tensorboard:
             self.tensorboard.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], iterations)
             self.tensorboard.add_scalar("losses/value_loss", v_loss.item(), iterations)
@@ -389,6 +398,11 @@ class PPO:
             self.tensorboard.add_scalar("losses/explained_variance", explained_var, iterations)
             if self.start_time is not None:
                 steps_this_run = iterations - self._steps_at_start
-                self.tensorboard.add_scalar("charts/SPS", int(steps_this_run / (time.time() - self.start_time)), iterations)
+                sps = int(steps_this_run / (time.time() - self.start_time))
+                self.tensorboard.add_scalar("charts/SPS", sps, iterations)
+
+            # Per-head entropy for MultiHeadAgent
+            for name, value in per_head_entropy.items():
+                self.tensorboard.add_scalar(f"losses/{name}", value, iterations)
 
         return network
