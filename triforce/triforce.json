@@ -37,6 +37,24 @@
     ],
     "training-circuits": [
         {
+            "name": "main-circuit",
+            "description": "Train the overworld model through curriculum: room navigation, sword pickup, overworld traversal, dungeon 1, then full game.",
+            "scenarios": [
+                {
+                    "scenario": "overworld-room-walk",
+                    "exit_criteria": "room-result/correct-exit",
+                    "threshold": 0.9,
+                    "iterations": 250000
+                },
+                {
+                    "scenario": "overworld-skip-sword",
+                    "exit_criteria": "success-rate",
+                    "threshold": 0.9,
+                    "iterations": 1250000
+                }
+            ]
+        },
+        {
             "name": "overworld-circuit",
             "description": "Train the overworld model through curriculum: room navigation, sword pickup, overworld traversal, dungeon 1, then full game.",
             "scenarios": [
