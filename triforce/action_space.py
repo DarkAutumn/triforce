@@ -6,6 +6,7 @@
 from numbers import Integral
 from typing import List, Sequence
 import gymnasium as gym
+from gymnasium.spaces import MultiDiscrete
 import numpy as np
 import torch
 
@@ -58,11 +59,18 @@ class ActionTaken:
         return len(self.multi_binary)
 
 class ZeldaActionSpace(gym.Wrapper):
-    """A wrapper that shrinks the action space down to what's actually used in the game."""
-    def __init__(self, env, actions_allowed : Sequence[ActionKind | str], prevent_wall_bumping : bool = True):
+    """A wrapper that shrinks the action space down to what's actually used in the game.
+
+    When multihead=True, exposes a MultiDiscrete([K, 4]) action space for the two-head
+    action decomposition (action type + direction). Masks become [K+4] concatenated format.
+    """
+    # pylint: disable=too-many-instance-attributes
+    def __init__(self, env, actions_allowed : Sequence[ActionKind | str],
+                 prevent_wall_bumping : bool = True, multihead : bool = False):
         super().__init__(env)
 
         self.actions_allowed = ActionKind.get_from_list(actions_allowed)
+        self.multihead = multihead
 
         self.prevent_wall_bumping = prevent_wall_bumping
         self.button_count = env.action_space.n
@@ -86,7 +94,12 @@ class ZeldaActionSpace(gym.Wrapper):
 
         assert isinstance(env.action_space, gym.spaces.MultiBinary)
         self.total_actions = len(self.index_to_button_names)
-        self.action_space = gym.spaces.Discrete(self.total_actions)
+        self.num_action_types = len(self.actions_allowed)
+
+        if multihead:
+            self.action_space = MultiDiscrete([self.num_action_types, 4])
+        else:
+            self.action_space = gym.spaces.Discrete(self.total_actions)
 
         if not self.action_to_index:
             raise ValueError("Must select at least one kind of action.")
@@ -201,13 +214,25 @@ class ZeldaActionSpace(gym.Wrapper):
         return observation, reward, terminated, truncated, state_change
 
     def get_action_taken(self, action) -> ActionTaken:
-        """Returns the action taken by the agent based on the index."""
+        """Returns the action taken by the agent based on the index.
+
+        Accepts: flat int, (ActionKind, Direction) tuple, numpy/torch scalar,
+        or 2-element numpy/torch array [type_idx, dir_idx] for multihead.
+        """
         if isinstance(action, tuple):
             action = self._action_direction_to_index(*action)
         elif isinstance(action, np.ndarray):
-            action = action.item()
+            if action.shape == (2,):
+                # Multihead: [action_type_idx, direction_idx]
+                action = self.multihead_to_flat(int(action[0]), int(action[1]))
+            else:
+                action = action.item()
         elif isinstance(action, torch.Tensor):
-            action = action.item()
+            if action.shape == (2,):
+                # Multihead: [action_type_idx, direction_idx]
+                action = self.multihead_to_flat(int(action[0].item()), int(action[1].item()))
+            else:
+                action = action.item()
 
         if isinstance(action, Integral):
             action = ActionTaken(self, action)
@@ -215,6 +240,30 @@ class ZeldaActionSpace(gym.Wrapper):
             raise ValueError(f"Invalid action type {type(action)}.")
 
         return action
+
+    def multihead_to_flat(self, type_idx, dir_idx):
+        """Convert multihead (action_type_index, direction_index) to flat action index."""
+        action_kind = self.actions_allowed[type_idx]
+        return self.action_to_index[action_kind] + dir_idx
+
+    def flat_mask_to_multihead(self, flat_mask):
+        """Decompose a flat action mask [N] into multihead format [K+4].
+
+        Returns a concatenated tensor where the first K entries are the action type
+        mask (True if ANY direction is valid for that type) and the last 4 entries
+        are the direction mask (always True per spec — wall penalty handles bad moves).
+        """
+        k = self.num_action_types
+        multihead_mask = torch.zeros(k + 4, dtype=torch.bool)
+
+        # Action type mask: type is available if any of its 4 directions are valid
+        for i, action_kind in enumerate(self.actions_allowed):
+            base = self.action_to_index[action_kind]
+            multihead_mask[i] = flat_mask[base:base + 4].any()
+
+        # Direction mask: always all True (spec: direction head is unconstrained)
+        multihead_mask[k:] = True
+        return multihead_mask
 
     def _action_direction_to_index(self, action, direction):
         index = self.action_to_index[action]
@@ -234,7 +283,18 @@ class ZeldaActionSpace(gym.Wrapper):
         self.move_mask = torch.ones(4, dtype=bool)
 
     def get_action_mask(self, state : ZeldaGame):
-        """Returns the actions that are available to the agent."""
+        """Returns the actions that are available to the agent.
+
+        When multihead=True, returns [K+4] concatenated mask (action type + direction).
+        When multihead=False, returns flat [N] mask (one entry per flat action index).
+        """
+        flat_mask = self._get_flat_action_mask(state)
+        if self.multihead:
+            return self.flat_mask_to_multihead(flat_mask)
+        return flat_mask
+
+    def _get_flat_action_mask(self, state : ZeldaGame):
+        """Computes the flat action mask [N] for the current state."""
 
         link = state.link
         actions_possible = set(self.actions_allowed)
@@ -310,15 +370,30 @@ class ZeldaActionSpace(gym.Wrapper):
                     invalid.setdefault(action, []).append(Direction.E)
 
     def is_valid_action(self, action, action_mask):
-        """Returns True if the action is valid."""
+        """Returns True if the action is valid.
+
+        Handles both flat [N] and multihead [K+4] mask formats.
+        """
         if action is None:
             return False
 
         action = self.get_action_taken(action)
+        if len(action_mask) != self.total_actions:
+            # Multihead mask: check action type and direction independently
+            type_idx = self.actions_allowed.index(action.kind)
+            dir_idx = self._direction_to_index(action.direction)
+            return bool(action_mask[type_idx]) and bool(action_mask[self.num_action_types + dir_idx])
         return action_mask[action.id]
 
     def get_allowed_actions(self, state, action_mask):
-        """Returns the allowed actions from the action mask."""
+        """Returns the allowed actions from the action mask.
+
+        Handles both flat [N] and multihead [K+4] mask formats.
+        """
+        # For multihead mask, convert to flat for consistent processing
+        if len(action_mask) != self.total_actions:
+            action_mask = self._get_flat_action_mask(state)
+
         result = []
 
         link : Link = state.link

@@ -1,9 +1,13 @@
 import torch
-from gymnasium.spaces import Box, MultiBinary, Dict, Discrete
+from gymnasium.spaces import Box, MultiBinary, Dict, Discrete, MultiDiscrete
 
 
 class PPORolloutBuffer:
-    """Training variables for PPO."""
+    """Training variables for PPO.
+
+    Supports both Discrete and MultiDiscrete action spaces. Actions are stored
+    separately from log-probs/entropy/values to handle variable action dimensions.
+    """
     def __init__(self, memory_length, n_envs, observation_space, action_space, gamma, lam):
         self.observation_space = observation_space
         self.action_space = action_space
@@ -11,6 +15,14 @@ class PPORolloutBuffer:
         self.n_envs = n_envs
         self._gamma = gamma
         self._lambda = lam
+
+        # Determine action dimensionality and mask size for Discrete vs MultiDiscrete
+        if isinstance(action_space, MultiDiscrete):
+            self.action_dim = len(action_space.nvec)
+            mask_size = int(sum(action_space.nvec))
+        else:
+            self.action_dim = 1
+            mask_size = action_space.n
 
         if isinstance(observation_space, Dict):
             obs = {}
@@ -21,10 +33,16 @@ class PPORolloutBuffer:
             self.observation = self._get_observation_part(observation_space)
 
         self.dones = torch.empty(n_envs, memory_length + 1, dtype=torch.float32, device="cpu")
-        self.act_logp_ent_val = torch.empty(n_envs, memory_length, 4, device="cpu")
+
+        # Actions stored separately: [n_envs, memory_length, action_dim]
+        # Discrete: action_dim=1, MultiDiscrete: action_dim=len(nvec) (typically 2)
+        self.actions = torch.empty(n_envs, memory_length, self.action_dim, device="cpu")
+        # Log-prob, entropy, value: [n_envs, memory_length, 3]
+        self.logp_ent_val = torch.empty(n_envs, memory_length, 3, device="cpu")
+
         self.rewards = torch.empty(n_envs, memory_length, dtype=torch.float32, device="cpu")
-        self.masks = torch.empty(n_envs, memory_length + 1, action_space.n, dtype=torch.bool, device="cpu")
-        self.ones_mask = torch.ones(action_space.n, dtype=torch.bool, device="cpu")
+        self.masks = torch.empty(n_envs, memory_length + 1, mask_size, dtype=torch.bool, device="cpu")
+        self.ones_mask = torch.ones(mask_size, dtype=torch.bool, device="cpu")
         self.returns = torch.empty(n_envs, memory_length, dtype=torch.float32, device="cpu")
         self.advantages = torch.empty(n_envs, memory_length, dtype=torch.float32, device="cpu")
 
@@ -40,7 +58,8 @@ class PPORolloutBuffer:
             self.observation[idx] = other.observation[0]
 
         self.dones[idx] = other.dones[0]
-        self.act_logp_ent_val[idx] = other.act_logp_ent_val[0]
+        self.actions[idx] = other.actions[0]
+        self.logp_ent_val[idx] = other.logp_ent_val[0]
         self.rewards[idx] = other.rewards[0]
         self.masks[idx] = other.masks[0]
         self.returns[idx] = other.returns[0]
@@ -56,7 +75,8 @@ class PPORolloutBuffer:
             self.observation.share_memory_()
 
         self.dones.share_memory_()
-        self.act_logp_ent_val.share_memory_()
+        self.actions.share_memory_()
+        self.logp_ent_val.share_memory_()
         self.rewards.share_memory_()
         self.masks.share_memory_()
         self.ones_mask.share_memory_()
@@ -113,14 +133,26 @@ class PPORolloutBuffer:
                     action_mask = action_mask.unsqueeze(0)
 
                 # Record the action, logp, entropy, and value
-                act_logp_ent_val = network.get_action_and_value(obs, action_mask)
+                action, logp, ent, val = network.get_action_and_value(obs, action_mask)
 
-                self.act_logp_ent_val[batch_index, t] = torch.stack(act_logp_ent_val, dim=-1)
+                # Store action: scalar for Discrete, [action_dim] for MultiDiscrete
+                if self.action_dim == 1:
+                    self.actions[batch_index, t, 0] = action.item()
+                else:
+                    self.actions[batch_index, t] = action.squeeze(0)
+
+                self.logp_ent_val[batch_index, t, 0] = logp.squeeze()
+                self.logp_ent_val[batch_index, t, 1] = ent.squeeze()
+                self.logp_ent_val[batch_index, t, 2] = val.squeeze()
+
                 self.masks[batch_index, t] = action_mask if action_mask is not None else self.ones_mask
 
                 # step environment
-                action = act_logp_ent_val[0].item()
-                next_obs, reward, terminated, truncated, info = env.step(action)
+                if self.action_dim == 1:
+                    step_action = action.item()
+                else:
+                    step_action = action.squeeze(0)
+                next_obs, reward, terminated, truncated, info = env.step(step_action)
 
                 action_mask = info.get('action_mask', None)
                 infos.append(info)
@@ -166,15 +198,15 @@ class PPORolloutBuffer:
                 mask = 1.0 - self.dones[batch_idx, t + 1]
 
                 if t + 1 < self.memory_length:
-                    next_value = self.act_logp_ent_val[batch_idx, t + 1, 3]
+                    next_value = self.logp_ent_val[batch_idx, t + 1, 2]
                 else:
                     next_value = last_value
 
                 reward = self.rewards[batch_idx, t]
-                current_val = self.act_logp_ent_val[batch_idx, t, 3]
+                current_val = self.logp_ent_val[batch_idx, t, 2]
 
                 delta = reward + self._gamma * next_value * mask - current_val
                 advantages[t] = last_gae = delta + self._gamma * self._lambda * mask * last_gae
 
-            returns = advantages + self.act_logp_ent_val[batch_idx, :, 3]
+            returns = advantages + self.logp_ent_val[batch_idx, :, 2]
             return returns, advantages

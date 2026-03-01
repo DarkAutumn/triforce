@@ -31,7 +31,8 @@ class EnvironmentWrapper:
         self.model_def : ModelDefinition = model_def
 
         self.env = env = make_zelda_env(self.scenario_def, model_def.action_space, render_mode='rgb_array',
-                             translation=False, frame_stack=frame_stack)
+                             translation=False, frame_stack=frame_stack,
+                             multihead=getattr(model_def.neural_net, 'is_multihead', False))
 
         self.selector = ModelSelector(self.env, model_path, model_def)
 
@@ -68,6 +69,7 @@ class EnvironmentWrapper:
         if action is None:
             action_mask = self._action_mask if len(self._action_mask.shape) > 1 else self._action_mask.unsqueeze(0)
             action = self.selector.model.get_action(self._observation, action_mask)
+            action = action.squeeze(0)  # remove batch dim: [1, 2] -> [2] or [1] -> scalar
 
         if not self.action_space.is_valid_action(action, self._action_mask):
             raise ValueError(f"Invalid action {action} for action mask {self._action_mask}")

@@ -158,7 +158,7 @@ class PPO:
             scenario_def = kwargs.get('scenario_def')
             action_space_name = kwargs.get('action_space_name')
             env_kwargs = {k: v for k, v in kwargs.items()
-                          if k in ('render_mode', 'translation', 'frame_stack', 'obs_kind')}
+                          if k in ('render_mode', 'translation', 'frame_stack', 'obs_kind', 'multihead')}
             env_factory = EnvFactory(scenario_def, action_space_name, **env_kwargs)
 
         network_class = kwargs.get('network_class', type(network))
@@ -273,12 +273,15 @@ class PPO:
             part = variables.observation[:, :variables.memory_length]
             b_obs = part.reshape(-1, *part.shape[2:]).to(self.device)
 
-        # flatten actions, logprobs, values, masks
-        actions   = variables.act_logp_ent_val[:, :, 0].to(self.device)
-        logprobs  = variables.act_logp_ent_val[:, :, 1].to(self.device)
-        values    = variables.act_logp_ent_val[:, :, 3].to(self.device)
+        # flatten actions, logprobs, values, masks — supports both Discrete and MultiDiscrete
+        actions   = variables.actions.to(self.device)
+        logprobs  = variables.logp_ent_val[:, :, 0].to(self.device)
+        values    = variables.logp_ent_val[:, :, 2].to(self.device)
 
-        b_actions  = actions.reshape(-1)
+        if variables.action_dim == 1:
+            b_actions = actions.reshape(-1)
+        else:
+            b_actions = actions.reshape(-1, variables.action_dim)
         b_logprobs = logprobs.reshape(-1)
         b_values   = values.reshape(-1)
 
@@ -375,6 +378,15 @@ class PPO:
         var_y = torch.var(y_true)
         explained_var = float('nan') if var_y == 0 else 1 - torch.var(y_true - y_pred) / var_y
 
+        # Compute per-head entropy for MultiHeadAgent tensorboard logging
+        per_head_entropy = {}
+        if hasattr(network, 'get_entropy_details'):
+            with torch.no_grad():
+                # Use last minibatch obs/masks (still on device) — move to CPU for network
+                detail_obs = {k: v.cpu() for k, v in mb_obs.items()} if isinstance(mb_obs, dict) else mb_obs.cpu()
+                detail_masks = mb_masks.cpu()
+                per_head_entropy = network.get_entropy_details(detail_obs, detail_masks)
+
         if self.tensorboard:
             self.tensorboard.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], iterations)
             self.tensorboard.add_scalar("losses/value_loss", v_loss.item(), iterations)
@@ -386,6 +398,11 @@ class PPO:
             self.tensorboard.add_scalar("losses/explained_variance", explained_var, iterations)
             if self.start_time is not None:
                 steps_this_run = iterations - self._steps_at_start
-                self.tensorboard.add_scalar("charts/SPS", int(steps_this_run / (time.time() - self.start_time)), iterations)
+                sps = int(steps_this_run / (time.time() - self.start_time))
+                self.tensorboard.add_scalar("charts/SPS", sps, iterations)
+
+            # Per-head entropy for MultiHeadAgent
+            for name, value in per_head_entropy.items():
+                self.tensorboard.add_scalar(f"losses/{name}", value, iterations)
 
         return network

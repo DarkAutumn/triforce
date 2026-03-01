@@ -44,7 +44,8 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **
         env = TrainingHintWrapper(env)
 
     # Reduces the action space to only the actions we want the model to take, and what is actually possible in game.
-    env = ZeldaActionSpace(env, action_space)
+    multihead = kwargs.get('multihead', False)
+    env = ZeldaActionSpace(env, action_space, multihead=multihead)
 
     # Converts our list of frames into a standard observation space.
     env = ObservationWrapper(env, obs_kind, frame_stack, frame_skip=2, normalize=True)

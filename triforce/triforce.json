@@ -1,7 +1,7 @@
 {
     "models": [
         {
-            "name": "overworld",
+            "name": "sword-and-beams",
             "neural_net": "SharedNatureAgent",
             "action_space": [
                 "MOVE",
@@ -19,6 +19,15 @@
             ]
         },
         {
+            "name": "sword-and-beams-multihead",
+            "neural_net": "MultiHeadAgent",
+            "action_space": [
+                "MOVE",
+                "SWORD",
+                "BEAMS"
+            ]
+        },
+        {
             "name": "overworld-sword",
             "neural_net": "SharedNatureAgent",
             "action_space": [
@@ -27,6 +36,33 @@
         }
     ],
     "training-circuits": [
+        {
+            "name": "main-circuit",
+            "description": "Train the overworld model through curriculum: room navigation, sword pickup, overworld traversal, dungeon 1, then full game.",
+            "scenarios": [
+                {
+                    "scenario": "overworld-room-walk",
+                    "exit_criteria": "room-result/correct-exit",
+                    "threshold": 0.9,
+                    "iterations": 250000
+                },
+                {
+                    "scenario": "overworld-skip-sword",
+                    "exit_criteria": "success-rate",
+                    "threshold": 0.9,
+                    "iterations": 1250000
+                },
+                {
+                    "scenario": "dungeon1",
+                    "exit_criteria": "success-rate",
+                    "threshold": 0.02,
+                    "iterations": 500000
+                },
+                {
+                    "scenario": "skip-sword-to-triforce"
+                }
+            ]
+        },
         {
             "name": "overworld-circuit",
             "description": "Train the overworld model through curriculum: room navigation, sword pickup, overworld traversal, dungeon 1, then full game.",
@@ -112,8 +148,6 @@
             "objective": "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": [
-                "LeftOverworld1Area",
-                "StartingSwordCondition",
                 "GainedTriforce",
                 "GameOver",
                 "Timeout"
@@ -134,13 +168,11 @@
         {
             "name": "skip-sword-to-triforce",
             "description": "Overworld through dungeon 1 triforce, skipping the sword cave",
-            "iterations": 5000000,
+            "iterations": 2000000,
             "scenario_selector": "round-robin",
             "objective": "GameCompletion",
             "critic": "GameplayCritic",
             "end_conditions": [
-                "LeftOverworld1Area",
-                "LeftDungeon",
                 "GainedTriforce",
                 "GameOver",
                 "Timeout"
@@ -283,6 +315,7 @@
                 "room-result",
                 "room-health",
                 "ending",
+                "game-progress",
                 "reward-average",
                 "reward-details"
             ],
@@ -451,6 +484,7 @@
             "metrics": [
                 "success-rate",
                 "overworld-progress",
+                "game-progress",
                 "room-health",
                 "ending",
                 "reward-average",

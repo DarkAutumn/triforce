@@ -80,6 +80,9 @@ class ModelSelector:
 
     def get_probabilities(self, obs, mask):
         """Returns the probability of every action for the model."""
+        if self.model.is_multihead:
+            return self._get_multihead_probabilities(obs, mask)
+
         logits, value = self.model.forward(obs)
 
         if mask is not None:
@@ -96,5 +99,35 @@ class ModelSelector:
         for i, prob in enumerate(probabilities.squeeze()):
             taken = self.action_space.get_action_taken(i)
             result.setdefault(taken.kind, []).append((taken.direction, prob.item()))
+
+        return result
+
+    def _get_multihead_probabilities(self, obs, mask):
+        """Returns probabilities for a MultiHeadAgent by combining the two heads."""
+        action_type_logits, direction_logits, value = self.model.forward(obs)
+        num_action_types = int(self.model.action_space.nvec[0])
+
+        if mask is not None:
+            multihead_mask = self.action_space.flat_mask_to_multihead(mask.squeeze(0))
+            type_mask = multihead_mask[:num_action_types].unsqueeze(0)
+            dir_mask = multihead_mask[num_action_types:].unsqueeze(0)
+
+            action_type_logits = action_type_logits.clone()
+            action_type_logits[~type_mask] = -1e9
+            direction_logits = direction_logits.clone()
+            direction_logits[~dir_mask] = -1e9
+
+        type_probs = torch.nn.functional.softmax(action_type_logits, dim=-1).squeeze(0)
+        dir_probs = torch.nn.functional.softmax(direction_logits, dim=-1).squeeze(0)
+
+        result = OrderedDict()
+        result['value'] = value
+
+        for type_idx in range(num_action_types):
+            for dir_idx in range(4):
+                flat_idx = self.action_space.multihead_to_flat(type_idx, dir_idx)
+                taken = self.action_space.get_action_taken(flat_idx)
+                joint_prob = (type_probs[type_idx] * dir_probs[dir_idx]).item()
+                result.setdefault(taken.kind, []).append((taken.direction, joint_prob))
 
         return result

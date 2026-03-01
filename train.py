@@ -64,6 +64,9 @@ def _get_kwargs_from_args(args, model_def):
 
 def train_once(ppo : PPO, scenario_def, model_def, save_path, iterations, **kwargs):
     """Trains a model with the given scenario.  Returns (model, iterations_used)."""
+    # Pass multihead flag so the env creates a MultiDiscrete action space for MultiHeadAgent
+    kwargs['multihead'] = getattr(model_def.neural_net, 'is_multihead', False)
+
     def create_env():
         return make_zelda_env(scenario_def, model_def.action_space, **kwargs)
 
