@@ -273,12 +273,15 @@ class PPO:
             part = variables.observation[:, :variables.memory_length]
             b_obs = part.reshape(-1, *part.shape[2:]).to(self.device)
 
-        # flatten actions, logprobs, values, masks
-        actions   = variables.act_logp_ent_val[:, :, 0].to(self.device)
-        logprobs  = variables.act_logp_ent_val[:, :, 1].to(self.device)
-        values    = variables.act_logp_ent_val[:, :, 3].to(self.device)
+        # flatten actions, logprobs, values, masks — supports both Discrete and MultiDiscrete
+        actions   = variables.actions.to(self.device)
+        logprobs  = variables.logp_ent_val[:, :, 0].to(self.device)
+        values    = variables.logp_ent_val[:, :, 2].to(self.device)
 
-        b_actions  = actions.reshape(-1)
+        if variables.action_dim == 1:
+            b_actions = actions.reshape(-1)
+        else:
+            b_actions = actions.reshape(-1, variables.action_dim)
         b_logprobs = logprobs.reshape(-1)
         b_values   = values.reshape(-1)
 
