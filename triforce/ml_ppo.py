@@ -71,6 +71,7 @@ class PPO:
 
         self._logging = {}
         self.start_time = None
+        self._steps_at_start = 0
 
     def train(self, network, create_env, iterations, progress=None, **kwargs):
         """Train the network."""
@@ -80,6 +81,7 @@ class PPO:
 
         env = create_env()
         network = kwargs.get('model', None) or create_network(network, env.observation_space, env.action_space)
+        self._steps_at_start = network.steps_trained
         if self.optimizer is None:
             self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=self._epsilon)
         else:
@@ -383,6 +385,7 @@ class PPO:
             self.tensorboard.add_scalar("losses/clipfrac", torch.mean(torch.tensor(clipfracs)).item(), iterations)
             self.tensorboard.add_scalar("losses/explained_variance", explained_var, iterations)
             if self.start_time is not None:
-                self.tensorboard.add_scalar("charts/SPS", int(iterations / (time.time() - self.start_time)), iterations)
+                steps_this_run = iterations - self._steps_at_start
+                self.tensorboard.add_scalar("charts/SPS", int(steps_this_run / (time.time() - self.start_time)), iterations)
 
         return network
