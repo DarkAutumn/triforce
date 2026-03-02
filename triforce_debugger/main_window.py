@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from triforce import ModelDefinition
+from triforce.zelda_enums import ActionKind, Direction
 from triforce_debugger.action_table import ActionTable
 from triforce_debugger.environment_bridge import EnvironmentBridge
 from triforce_debugger.game_timer import GameTimer
@@ -84,6 +85,7 @@ class MainWindow(QMainWindow):
         self._model_dir: str | None = None
         self._selected_model_path: str | None = None
         self._last_state_dict = None
+        self._last_zelda_state = None
 
         self._build_menus()
         self._build_layout()
@@ -241,6 +243,8 @@ class MainWindow(QMainWindow):
         self.scenario_selector.scenario_changed.connect(self._on_scenario_changed)
         self.model_def_combo.currentTextChanged.connect(  # pylint: disable=no-member
             self._on_model_def_changed)
+        self.manual_move_requested.connect(self._on_manual_move)
+        self.manual_attack_requested.connect(self._on_manual_attack)
 
     # ── Time-travel ──────────────────────────────────────────
 
@@ -354,6 +358,7 @@ class MainWindow(QMainWindow):
         self.rewards_tab.clear()
         self.state_tab.clear()
         self._last_state_dict = None
+        self._last_zelda_state = None
 
         step_result = self._bridge.restart()
         self._show_step_result(step_result, initial=True)
@@ -392,6 +397,7 @@ class MainWindow(QMainWindow):
 
         # Extract state dict for the state tab
         state = step_result.state
+        self._last_zelda_state = state
         state_dict = extract_state_dict(state) if state else None
 
         # Get probabilities from the model
@@ -543,3 +549,50 @@ class MainWindow(QMainWindow):
             return
 
         super().keyReleaseEvent(event)
+
+    # ── Manual input handlers ─────────────────────────────────
+
+    _DIR_STR_TO_ENUM = {
+        'N': Direction.N,
+        'S': Direction.S,
+        'E': Direction.E,
+        'W': Direction.W,
+    }
+
+    def _on_manual_move(self, direction_str):
+        """Handle manual move request (arrow key press)."""
+        direction = self._DIR_STR_TO_ENUM.get(direction_str)
+        if direction is not None:
+            self._do_manual_step((ActionKind.MOVE, direction))
+
+    def _on_manual_attack(self, direction_str):
+        """Handle manual attack request (A+arrow key press)."""
+        direction = self._DIR_STR_TO_ENUM.get(direction_str)
+        if direction is None:
+            return
+
+        action_kind = ActionKind.SWORD
+        if self._bridge and ActionKind.BEAMS in self._bridge.action_space.actions_allowed:  # pylint: disable=no-member
+            if self._last_zelda_state and self._last_zelda_state.link.has_beams:
+                action_kind = ActionKind.BEAMS
+
+        self._do_manual_step((action_kind, direction))
+
+    def _do_manual_step(self, action_tuple):
+        """Execute a single environment step with a manual action."""
+        if not self._bridge or self._viewing_historical:
+            return
+
+        if not self._bridge.is_valid_action(action_tuple):
+            log.info("Invalid manual action: %s", action_tuple)
+            return
+
+        self.game_timer.pause()
+        try:
+            step_result = self._bridge.step(action=action_tuple)
+            self._show_step_result(step_result)
+
+            if step_result.completed:
+                self._do_restart()
+        except Exception:  # pylint: disable=broad-except
+            log.error("Manual step error:\n%s", traceback.format_exc())
