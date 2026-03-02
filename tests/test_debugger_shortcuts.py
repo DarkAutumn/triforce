@@ -70,12 +70,10 @@ def test_shortcut_keys_unchanged():
 
 
 def _send_key(window, key, event_type=QKeyEvent.Type.KeyPress, auto_repeat=False):
-    """Send a synthetic key event to the window."""
+    """Send a synthetic key event through the application event filter."""
+    app = QApplication.instance()
     event = QKeyEvent(event_type, key, Qt.KeyboardModifier.NoModifier, "", auto_repeat)
-    if event_type == QKeyEvent.Type.KeyPress:
-        window.keyPressEvent(event)
-    else:
-        window.keyReleaseEvent(event)
+    app.sendEvent(window, event)
 
 
 def test_arrow_up_emits_move_north():

@@ -5,7 +5,6 @@ import os
 import traceback
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -91,6 +90,10 @@ class MainWindow(QMainWindow):
         self._build_layout()
         self._wire_run_menu()
         self._wire_integration()
+
+        # Install global event filter so arrow/A keys work regardless of focus
+        from PySide6.QtWidgets import QApplication  # pylint: disable=import-outside-toplevel
+        QApplication.instance().installEventFilter(self)
 
     # ── Menu Bar ──────────────────────────────────────────────
 
@@ -514,7 +517,7 @@ class MainWindow(QMainWindow):
         if directory:
             self.model_browser.scan_directory(directory)
 
-    # ── Arrow / A+arrow keyboard handling ─────────────────────
+    # ── Global event filter for arrow / A+arrow keys ────────
 
     # Map Qt arrow keys to direction strings
     _ARROW_TO_DIR = {
@@ -524,31 +527,30 @@ class MainWindow(QMainWindow):
         Qt.Key.Key_Right: 'E',
     }
 
-    def keyPressEvent(self, event: QKeyEvent):  # pylint: disable=invalid-name
-        """Handle arrow keys (move) and A+arrow (attack)."""
-        key = event.key()
+    def eventFilter(self, obj, event):  # pylint: disable=invalid-name
+        """Intercept ALL key events application-wide for game controls."""
+        from PySide6.QtCore import QEvent  # pylint: disable=import-outside-toplevel
 
-        if key == Qt.Key.Key_A:
-            self._a_key_held = True
-            return
+        if event.type() == QEvent.Type.KeyPress:
+            key = event.key()
+            if key == Qt.Key.Key_A:
+                self._a_key_held = True
+                return True
 
-        direction = self._ARROW_TO_DIR.get(key)
-        if direction is not None and not event.isAutoRepeat():
-            if self._a_key_held:
-                self.manual_attack_requested.emit(direction)
-            else:
-                self.manual_move_requested.emit(direction)
-            return
+            direction = self._ARROW_TO_DIR.get(key)
+            if direction is not None and not event.isAutoRepeat():
+                if self._a_key_held:
+                    self.manual_attack_requested.emit(direction)
+                else:
+                    self.manual_move_requested.emit(direction)
+                return True
 
-        super().keyPressEvent(event)
+        elif event.type() == QEvent.Type.KeyRelease:
+            if event.key() == Qt.Key.Key_A and not event.isAutoRepeat():
+                self._a_key_held = False
+                return True
 
-    def keyReleaseEvent(self, event: QKeyEvent):  # pylint: disable=invalid-name
-        """Track release of 'A' key modifier."""
-        if event.key() == Qt.Key.Key_A and not event.isAutoRepeat():
-            self._a_key_held = False
-            return
-
-        super().keyReleaseEvent(event)
+        return super().eventFilter(obj, event)
 
     # ── Manual input handlers ─────────────────────────────────
 
