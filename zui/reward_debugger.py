@@ -426,6 +426,19 @@ class RewardDebugger:
         self.move_widgets['came-from'].directions = self._get_directions_for_vectors(obs["information"][6:10])
         self.move_widgets['came-from'].draw(surface)
 
+        # Boolean feature indicators (indices 10-13)
+        info = obs["information"]
+        indicator_y = self.move_widgets['came-from'].position.y + self.move_widgets['came-from'].size[1] + 4
+        indicators = [
+            ("Enemies", info[10].item() > 0),
+            ("Beams", info[11].item() > 0),
+            ("Low HP", info[12].item() > 0),
+            ("Full HP", info[13].item() > 0),
+        ]
+        for label, active in indicators:
+            color = (0, 255, 0) if active else (80, 80, 80)
+            indicator_y = draw_text(surface, self.font, label, (x_pos, indicator_y), color)
+
         return Coordinates(0, y_pos)
 
     def _update_vector_widget(self, widget_name, observation_name, index, obs):
