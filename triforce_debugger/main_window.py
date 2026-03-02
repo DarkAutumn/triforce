@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QMenuBar,
 )
 
+from triforce_debugger.game_timer import GameTimer
+
 
 class MainWindow(QMainWindow):
     """Main debugger window with the fixed panel layout."""
@@ -35,8 +37,12 @@ class MainWindow(QMainWindow):
         self.action_table_placeholder = None
         self.main_splitter = None
 
+        # Game loop timer
+        self.game_timer = GameTimer(self)
+
         self._build_menus()
         self._build_layout()
+        self._wire_run_menu()
 
     # ── Menu Bar ──────────────────────────────────────────────
 
@@ -139,6 +145,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.action_table_placeholder, stretch=2)
 
         return panel
+
+    # ── Run menu wiring ──────────────────────────────────────
+
+    def _wire_run_menu(self):
+        """Connect Run menu actions and View > Uncap FPS to the game timer."""
+        self.action_continue.triggered.connect(self.game_timer.resume)
+        self.action_pause.triggered.connect(self.game_timer.pause)
+        self.action_step.triggered.connect(self.game_timer.single_step)
+        self.action_uncap_fps.toggled.connect(self.game_timer.set_uncapped)
 
 
 def _placeholder(label_text: str) -> QLabel:
