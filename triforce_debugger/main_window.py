@@ -16,11 +16,8 @@ from PySide6.QtWidgets import (
     QToolBar,
     QMenuBar,
     QFileDialog,
-    QComboBox,
-    QLabel,
 )
 
-from triforce import ModelDefinition
 from triforce.zelda_enums import ActionKind, Direction
 from triforce_debugger.action_table import ActionTable
 from triforce_debugger.environment_bridge import EnvironmentBridge
@@ -66,7 +63,6 @@ class MainWindow(QMainWindow):
         self.scenario_selector = None
         self.action_table = None
         self.main_splitter = None
-        self.model_def_combo = None
 
         # Track 'A' key for attack modifier
         self._a_key_held = False
@@ -220,30 +216,12 @@ class MainWindow(QMainWindow):
         self.right_tabs.setObjectName("right_tabs")
 
         # ── Models tab ────────────────────────────────────────
-        models_widget = QWidget()
-        models_layout = QVBoxLayout(models_widget)
-        models_layout.setContentsMargins(0, 0, 0, 0)
-
         self.model_browser = ModelBrowser()
-
-        # Model definition selector
-        model_def_layout = QVBoxLayout()
-        model_def_layout.setContentsMargins(4, 4, 4, 4)
-        model_def_label = QLabel("Model Definition:")
-        self.model_def_combo = QComboBox()
-        self.model_def_combo.setObjectName("model_def_combo")
-        for name in ModelDefinition.get_all_models():
-            self.model_def_combo.addItem(name)
-        model_def_layout.addWidget(model_def_label)
-        model_def_layout.addWidget(self.model_def_combo)
-
-        models_layout.addWidget(self.model_browser, stretch=3)
-        models_layout.addLayout(model_def_layout)
 
         # ── Probabilities tab ─────────────────────────────────
         self.action_table = ActionTable()
 
-        self.right_tabs.addTab(models_widget, "Models")
+        self.right_tabs.addTab(self.model_browser, "Models")
         self.right_tabs.addTab(self.action_table, "Probabilities")
 
         layout.addWidget(self.right_tabs)
@@ -277,8 +255,6 @@ class MainWindow(QMainWindow):
         self.game_timer.frame_ready.connect(self._on_frame_ready)
         self.model_browser.model_selected.connect(self._on_model_file_selected)
         self.scenario_selector.scenario_changed.connect(self._on_scenario_changed)
-        self.model_def_combo.currentTextChanged.connect(  # pylint: disable=no-member
-            self._on_model_def_changed)
         self.manual_move_requested.connect(self._on_manual_move)
         self.manual_attack_requested.connect(self._on_manual_attack)
 
@@ -345,18 +321,10 @@ class MainWindow(QMainWindow):
 
     # ── Environment integration ───────────────────────────────
 
-    def _get_model_def(self) -> ModelDefinition | None:
-        """Get the currently selected ModelDefinition."""
-        name = self.model_def_combo.currentText()
-        if not name:
-            return None
-        return ModelDefinition.get(name)
-
     def _create_bridge(self):
         """Create the environment bridge from current selections."""
-        model_def = self._get_model_def()
         scenario_def = self.scenario_selector.current_scenario
-        if model_def is None or scenario_def is None or self._model_dir is None:
+        if scenario_def is None or self._model_dir is None:
             return
 
         # Tear down existing bridge
@@ -364,7 +332,7 @@ class MainWindow(QMainWindow):
 
         try:
             self._bridge = EnvironmentBridge(
-                self._model_dir, model_def, scenario_def, self._frame_stack)
+                self._model_dir, scenario_def, self._frame_stack)
 
             # Select the specific .pt file if one was chosen
             if self._selected_model_path:
@@ -524,7 +492,7 @@ class MainWindow(QMainWindow):
             if self._bridge.selector.select_by_path(pt_path):
                 self.model_browser.set_loaded_model(pt_path)
                 self.evaluation_tab.set_model(
-                    pt_path, self.model_def_combo.currentText(),
+                    pt_path, None,
                     self.scenario_selector.current_scenario_name)
                 self.setWindowTitle(f"Triforce Debugger — {self._bridge.model_details}")
                 self.right_tabs.setCurrentIndex(1)  # switch to Probabilities
@@ -534,17 +502,12 @@ class MainWindow(QMainWindow):
         self._model_dir = model_dir
         self._create_bridge()
         self.evaluation_tab.set_model(
-            pt_path, self.model_def_combo.currentText(),
+            pt_path, None,
             self.scenario_selector.current_scenario_name)
         self.right_tabs.setCurrentIndex(1)  # switch to Probabilities
 
     def _on_scenario_changed(self, _name: str):
         """Handle scenario change — recreate the bridge if active."""
-        if self._bridge:
-            self._create_bridge()
-
-    def _on_model_def_changed(self, _name: str):
-        """Handle model definition change — recreate the bridge if active."""
         if self._bridge:
             self._create_bridge()
 

@@ -29,7 +29,7 @@ from typing import List, Dict, Optional, Tuple
 import torch
 import gymnasium as gym
 
-from triforce import ModelDefinition, Network, TrainingScenarioDefinition, make_zelda_env
+from triforce import ActionSpaceDefinition, ModelKindDefinition, Network, TrainingScenarioDefinition, make_zelda_env
 
 # ---------------------------------------------------------------------------
 # Game progress milestone labels (from metrics.py game-progress map)
@@ -117,17 +117,21 @@ class DiagnosticWrapper(gym.Wrapper):
 def run_diagnostic(model_name, scenario_name, model_path, episodes, output_path=None):
     """Run diagnostic episodes and produce a report."""
     scenario_def = TrainingScenarioDefinition.get(scenario_name)
-    model_def = ModelDefinition.get(model_name)
-    multihead = getattr(model_def.neural_net, 'is_multihead', False)
+
+    # Load model metadata from the .pt file
+    metadata = Network.load_metadata(model_path)
+    model_kind = ModelKindDefinition.get(metadata["model_kind"] or model_name)
+    action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "basic")
+    multihead = getattr(model_kind.network_class, 'is_multihead', False)
 
     # Create env WITHOUT GymTranslationWrapper, use our DiagnosticWrapper instead
-    env = make_zelda_env(scenario_def, model_def.action_space,
+    env = make_zelda_env(scenario_def, action_space_def.actions,
                          render_mode=None, multihead=multihead, translation=False)
     env = DiagnosticWrapper(env)
 
     # Load model
     obs_space, act_space = Network.load_spaces(model_path)
-    network = model_def.neural_net(obs_space, act_space)
+    network = model_kind.network_class(obs_space, act_space)
     network.load(model_path)
     network.eval()
 

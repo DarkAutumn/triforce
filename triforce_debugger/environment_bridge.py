@@ -7,11 +7,13 @@ All other debugger modules interact through this bridge.
 
 from collections import OrderedDict
 import math
+import os
 
 import torch
 
-from triforce import TrainingScenarioDefinition, ModelDefinition
+from triforce import TrainingScenarioDefinition, ActionSpaceDefinition, ModelKindDefinition
 from triforce.action_space import ZeldaActionSpace
+from triforce.models import Network
 from triforce.rewards import StepRewards
 from triforce.zelda_env import make_zelda_env
 
@@ -39,34 +41,72 @@ class StepResult:
 
 class ModelSelector:
     """Discovers, loads, and switches between trained models."""
-    def __init__(self, env, model_path, model_definition: ModelDefinition):
+    def __init__(self, env, model_path):
         self._model_path = model_path
-        self._model_definition = model_definition
         self._loaded_models = OrderedDict()
         self.action_space: ZeldaActionSpace = env
         while not isinstance(self.action_space, ZeldaActionSpace):
             self.action_space = self.action_space.env
 
-        models = [(self._model_definition.neural_net(env.observation_space, env.action_space), name, path)
-                  for name, path in self._model_definition.find_available_models(self._model_path).items()]
+        # Discover and load all .pt files from the path
+        models = []
+        pt_files = self._find_pt_files(model_path)
+        for pt_path in pt_files:
+            try:
+                metadata = Network.load_metadata(pt_path)
+                model_kind_name = metadata.get("model_kind")
+                action_space_name = metadata.get("action_space_name")
+                if not model_kind_name or not action_space_name:
+                    continue
 
-        for network, _, path in models:
-            network.load(path)
+                model_kind = ModelKindDefinition.get(model_kind_name)
+                network = model_kind.network_class(
+                    env.observation_space, env.action_space,
+                    model_kind=model_kind_name,
+                    action_space_name=action_space_name)
+                network.load(pt_path)
+                label = os.path.basename(pt_path)[:-3]  # filename without .pt
+                models.append((network, label, pt_path))
+            except Exception:  # pylint: disable=broad-exception-caught
+                continue
 
         models.sort(key=lambda x: x[0].steps_trained)
 
         name = None
         for network, name, path in models:
-            assert name is not None
             self._loaded_models[name] = (network, path)
 
-        network = self._model_definition.neural_net(env.observation_space, env.action_space)
-        self._loaded_models["untrained"] = (network, "untrained")
+        # Add an untrained model using the first discovered model's class, or default
+        if models:
+            first_net = models[0][0]
+            untrained = first_net.__class__(
+                env.observation_space, env.action_space,
+                model_kind=first_net.model_kind,
+                action_space_name=first_net.action_space_name)
+        else:
+            mk = ModelKindDefinition.get_default()
+            asd = ActionSpaceDefinition.get_default()
+            untrained = mk.network_class(
+                env.observation_space, env.action_space,
+                model_kind=mk.name, action_space_name=asd.name)
+
+        self._loaded_models["untrained"] = (untrained, "untrained")
 
         best = self._find_best_model()
         self._loaded_models["best"] = (self._loaded_models[best][0], "best")
         self._curr_index = name if name is not None else "untrained"
         self._curr = self._loaded_models[self._curr_index]
+
+    @staticmethod
+    def _find_pt_files(path):
+        """Find all .pt files in a path (file or directory, non-recursive)."""
+        if path is None:
+            return []
+        if os.path.isfile(path) and path.endswith('.pt'):
+            return [path]
+        if os.path.isdir(path):
+            return [os.path.join(path, f) for f in sorted(os.listdir(path)) if f.endswith('.pt')]
+        return []
 
     @property
     def model_name(self):
@@ -188,15 +228,26 @@ class EnvironmentBridge:
     Handles environment creation, stepping, restarting, and model management.
     This class is Qt-independent and can be used in headless tests.
     """
-    def __init__(self, model_path, model_def, scenario_def, frame_stack):
+    def __init__(self, model_path, scenario_def, frame_stack,
+                 action_space_name=None, model_kind_name=None):
         self.scenario_def: TrainingScenarioDefinition = scenario_def
-        self.model_def: ModelDefinition = model_def
 
-        self.env = env = make_zelda_env(self.scenario_def, model_def.action_space, render_mode='rgb_array',
+        # Resolve action space and model kind from args or defaults
+        if action_space_name:
+            asd = ActionSpaceDefinition.get(action_space_name)
+        else:
+            asd = ActionSpaceDefinition.get_default()
+        if model_kind_name:
+            mk = ModelKindDefinition.get(model_kind_name)
+        else:
+            mk = ModelKindDefinition.get_default()
+
+        multihead = getattr(mk.network_class, 'is_multihead', False)
+        self.env = env = make_zelda_env(self.scenario_def, asd.actions, render_mode='rgb_array',
                                         translation=False, frame_stack=frame_stack,
-                                        multihead=getattr(model_def.neural_net, 'is_multihead', False))
+                                        multihead=multihead)
 
-        self.selector = ModelSelector(self.env, model_path, model_def)
+        self.selector = ModelSelector(self.env, model_path)
 
         action_space = None
         while env:

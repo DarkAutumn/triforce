@@ -89,7 +89,7 @@ def _make_mock_network(steps=0, metrics=None):
 
 
 def _make_selector(model_paths=None):
-    """Create a ModelSelector with mocks, bypassing isinstance checks.
+    """Create a ModelSelector with mocks, bypassing isinstance checks and file scanning.
 
     Args:
         model_paths: dict of name->path for available models (default: empty).
@@ -106,13 +106,22 @@ def _make_selector(model_paths=None):
     mock_env.env = mock_action_space
     mock_action_space.env = None
 
-    model_def = MagicMock()
-    model_def.find_available_models.return_value = model_paths or {}
-
     net = _make_mock_network()
-    model_def.neural_net.return_value = net
 
-    selector = ModelSelector(mock_env, "dummy_path", model_def)
+    # Mock out file scanning and model loading so no real files are needed
+    with patch.object(ModelSelector, '_find_pt_files', return_value=[]), \
+         patch('triforce_debugger.environment_bridge.ModelKindDefinition') as mock_mkd, \
+         patch('triforce_debugger.environment_bridge.ActionSpaceDefinition') as mock_asd:
+        mock_mk = MagicMock()
+        mock_mk.network_class.return_value = net
+        mock_mk.name = "shared-nature"
+        mock_mkd.get_default.return_value = mock_mk
+        mock_asd_inst = MagicMock()
+        mock_asd_inst.name = "basic"
+        mock_asd.get_default.return_value = mock_asd_inst
+
+        selector = ModelSelector(mock_env, "dummy_path")
+
     return selector, net
 
 
@@ -165,7 +174,9 @@ class TestEnvironmentBridge:
 
     @patch('triforce_debugger.environment_bridge.make_zelda_env')
     @patch('triforce_debugger.environment_bridge.ModelSelector')
-    def test_instantiation(self, mock_selector_cls, mock_make_env):
+    @patch('triforce_debugger.environment_bridge.ModelKindDefinition')
+    @patch('triforce_debugger.environment_bridge.ActionSpaceDefinition')
+    def test_instantiation(self, mock_asd_cls, mock_mkd_cls, mock_selector_cls, mock_make_env):
         """EnvironmentBridge can be instantiated with mocks."""
         from triforce.action_space import ZeldaActionSpace as RealZAS
         mock_action_space = MagicMock(spec=RealZAS)
@@ -175,25 +186,28 @@ class TestEnvironmentBridge:
         mock_action_space.env = None
         mock_make_env.return_value = mock_env
 
-        model_def = MagicMock()
-        model_def.action_space = "move_attack"
-        model_def.neural_net = MagicMock()
-        model_def.neural_net.is_multihead = False
+        mock_mk = MagicMock()
+        mock_mk.network_class.is_multihead = False
+        mock_mkd_cls.get_default.return_value = mock_mk
+        mock_asd = MagicMock()
+        mock_asd.actions = ["MOVE", "SWORD", "BEAMS"]
+        mock_asd_cls.get_default.return_value = mock_asd
 
         scenario_def = MagicMock()
 
-        bridge = EnvironmentBridge("path", model_def, scenario_def, frame_stack=4)
+        bridge = EnvironmentBridge("path", scenario_def, frame_stack=4)
 
         assert bridge.env is mock_env
         assert bridge.action_space is mock_action_space
         assert bridge.scenario_def is scenario_def
-        assert bridge.model_def is model_def
         mock_make_env.assert_called_once()
         mock_selector_cls.assert_called_once()
 
     @patch('triforce_debugger.environment_bridge.make_zelda_env')
     @patch('triforce_debugger.environment_bridge.ModelSelector')
-    def test_restart(self, mock_selector_cls, mock_make_env):
+    @patch('triforce_debugger.environment_bridge.ModelKindDefinition')
+    @patch('triforce_debugger.environment_bridge.ActionSpaceDefinition')
+    def test_restart(self, mock_asd_cls, mock_mkd_cls, mock_selector_cls, mock_make_env):
         """EnvironmentBridge.restart() resets the env and returns a StepResult."""
         from triforce.action_space import ZeldaActionSpace as RealZAS
         mock_action_space = MagicMock(spec=RealZAS)
@@ -203,10 +217,12 @@ class TestEnvironmentBridge:
         mock_action_space.env = None
         mock_make_env.return_value = mock_env
 
-        model_def = MagicMock()
-        model_def.action_space = "move_attack"
-        model_def.neural_net = MagicMock()
-        model_def.neural_net.is_multihead = False
+        mock_mk = MagicMock()
+        mock_mk.network_class.is_multihead = False
+        mock_mkd_cls.get_default.return_value = mock_mk
+        mock_asd = MagicMock()
+        mock_asd.actions = ["MOVE", "SWORD", "BEAMS"]
+        mock_asd_cls.get_default.return_value = mock_asd
 
         # Setup reset return value
         mock_state = MagicMock()
@@ -217,7 +233,7 @@ class TestEnvironmentBridge:
         mock_env.reset.return_value = ({"image": torch.zeros(1)}, mock_state)
         mock_action_space.get_allowed_actions.return_value = []
 
-        bridge = EnvironmentBridge("path", model_def, MagicMock(), frame_stack=4)
+        bridge = EnvironmentBridge("path", MagicMock(), frame_stack=4)
         result = bridge.restart()
 
         assert isinstance(result, StepResult)
@@ -228,7 +244,9 @@ class TestEnvironmentBridge:
 
     @patch('triforce_debugger.environment_bridge.make_zelda_env')
     @patch('triforce_debugger.environment_bridge.ModelSelector')
-    def test_step_with_model_action(self, mock_selector_cls, mock_make_env):
+    @patch('triforce_debugger.environment_bridge.ModelKindDefinition')
+    @patch('triforce_debugger.environment_bridge.ActionSpaceDefinition')
+    def test_step_with_model_action(self, mock_asd_cls, mock_mkd_cls, mock_selector_cls, mock_make_env):
         """EnvironmentBridge.step() uses model when no action given."""
         from triforce.action_space import ZeldaActionSpace as RealZAS
         mock_action_space = MagicMock(spec=RealZAS)
@@ -238,12 +256,14 @@ class TestEnvironmentBridge:
         mock_action_space.env = None
         mock_make_env.return_value = mock_env
 
-        model_def = MagicMock()
-        model_def.action_space = "move_attack"
-        model_def.neural_net = MagicMock()
-        model_def.neural_net.is_multihead = False
+        mock_mk = MagicMock()
+        mock_mk.network_class.is_multihead = False
+        mock_mkd_cls.get_default.return_value = mock_mk
+        mock_asd = MagicMock()
+        mock_asd.actions = ["MOVE", "SWORD", "BEAMS"]
+        mock_asd_cls.get_default.return_value = mock_asd
 
-        bridge = EnvironmentBridge("path", model_def, MagicMock(), frame_stack=4)
+        bridge = EnvironmentBridge("path", MagicMock(), frame_stack=4)
 
         # Setup state for stepping
         bridge._observation = {"image": torch.zeros(1)}
@@ -270,7 +290,9 @@ class TestEnvironmentBridge:
 
     @patch('triforce_debugger.environment_bridge.make_zelda_env')
     @patch('triforce_debugger.environment_bridge.ModelSelector')
-    def test_close(self, mock_selector_cls, mock_make_env):
+    @patch('triforce_debugger.environment_bridge.ModelKindDefinition')
+    @patch('triforce_debugger.environment_bridge.ActionSpaceDefinition')
+    def test_close(self, mock_asd_cls, mock_mkd_cls, mock_selector_cls, mock_make_env):
         """EnvironmentBridge.close() releases resources."""
         from triforce.action_space import ZeldaActionSpace as RealZAS
         mock_action_space = MagicMock(spec=RealZAS)
@@ -280,12 +302,14 @@ class TestEnvironmentBridge:
         mock_action_space.env = None
         mock_make_env.return_value = mock_env
 
-        model_def = MagicMock()
-        model_def.action_space = "move_attack"
-        model_def.neural_net = MagicMock()
-        model_def.neural_net.is_multihead = False
+        mock_mk = MagicMock()
+        mock_mk.network_class.is_multihead = False
+        mock_mkd_cls.get_default.return_value = mock_mk
+        mock_asd = MagicMock()
+        mock_asd.actions = ["MOVE", "SWORD", "BEAMS"]
+        mock_asd_cls.get_default.return_value = mock_asd
 
-        bridge = EnvironmentBridge("path", model_def, MagicMock(), frame_stack=4)
+        bridge = EnvironmentBridge("path", MagicMock(), frame_stack=4)
         bridge.close()
 
         assert bridge.env is None
@@ -296,7 +320,9 @@ class TestEnvironmentBridge:
 
     @patch('triforce_debugger.environment_bridge.make_zelda_env')
     @patch('triforce_debugger.environment_bridge.ModelSelector')
-    def test_no_action_space_raises(self, mock_selector_cls, mock_make_env):
+    @patch('triforce_debugger.environment_bridge.ModelKindDefinition')
+    @patch('triforce_debugger.environment_bridge.ActionSpaceDefinition')
+    def test_no_action_space_raises(self, mock_asd_cls, mock_mkd_cls, mock_selector_cls, mock_make_env):
         """EnvironmentBridge raises if no ZeldaActionSpace found."""
         mock_env = MagicMock()
         mock_env.env = None  # No ZeldaActionSpace in the chain
@@ -304,20 +330,24 @@ class TestEnvironmentBridge:
         mock_env.__class__ = type('FakeEnv', (), {})
         mock_make_env.return_value = mock_env
 
-        model_def = MagicMock()
-        model_def.action_space = "move_attack"
-        model_def.neural_net = MagicMock()
-        model_def.neural_net.is_multihead = False
+        mock_mk = MagicMock()
+        mock_mk.network_class.is_multihead = False
+        mock_mkd_cls.get_default.return_value = mock_mk
+        mock_asd = MagicMock()
+        mock_asd.actions = ["MOVE", "SWORD", "BEAMS"]
+        mock_asd_cls.get_default.return_value = mock_asd
 
         try:
-            EnvironmentBridge("path", model_def, MagicMock(), frame_stack=4)
+            EnvironmentBridge("path", MagicMock(), frame_stack=4)
             assert False, "Should have raised ValueError"
         except (ValueError, AttributeError):
             pass  # Either is acceptable — ValueError is the intended one
 
     @patch('triforce_debugger.environment_bridge.make_zelda_env')
     @patch('triforce_debugger.environment_bridge.ModelSelector')
-    def test_get_probabilities_delegates(self, mock_selector_cls, mock_make_env):
+    @patch('triforce_debugger.environment_bridge.ModelKindDefinition')
+    @patch('triforce_debugger.environment_bridge.ActionSpaceDefinition')
+    def test_get_probabilities_delegates(self, mock_asd_cls, mock_mkd_cls, mock_selector_cls, mock_make_env):
         """EnvironmentBridge.get_probabilities() delegates to selector."""
         from triforce.action_space import ZeldaActionSpace as RealZAS
         mock_action_space = MagicMock(spec=RealZAS)
@@ -327,12 +357,14 @@ class TestEnvironmentBridge:
         mock_action_space.env = None
         mock_make_env.return_value = mock_env
 
-        model_def = MagicMock()
-        model_def.action_space = "move_attack"
-        model_def.neural_net = MagicMock()
-        model_def.neural_net.is_multihead = False
+        mock_mk = MagicMock()
+        mock_mk.network_class.is_multihead = False
+        mock_mkd_cls.get_default.return_value = mock_mk
+        mock_asd = MagicMock()
+        mock_asd.actions = ["MOVE", "SWORD", "BEAMS"]
+        mock_asd_cls.get_default.return_value = mock_asd
 
-        bridge = EnvironmentBridge("path", model_def, MagicMock(), frame_stack=4)
+        bridge = EnvironmentBridge("path", MagicMock(), frame_stack=4)
         bridge._observation = {"image": torch.zeros(1)}
         bridge._action_mask = torch.ones(12)
 

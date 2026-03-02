@@ -4,7 +4,6 @@ import sys
 import json
 import os
 from typing import List
-from pydantic import BaseModel, field_validator
 import torch
 from torch import nn
 import torch.distributions as dist
@@ -18,10 +17,13 @@ class Network(nn.Module):
     value_net : nn.Module
     is_multihead = False
 
-    def __init__(self, base_network : nn.Module, obs_space, action_space):
+    def __init__(self, base_network : nn.Module, obs_space, action_space,
+                 model_kind=None, action_space_name=None):
         super().__init__()
         self.observation_space = obs_space
         self.action_space = action_space
+        self.model_kind = model_kind
+        self.action_space_name = action_space_name
         self.steps_trained = 0
         self.episodes_evaluated = 0
         self.metrics : dict[str, float] = {}
@@ -111,6 +113,8 @@ class Network(nn.Module):
             "metrics": pickle.dumps(self.metrics) if self.metrics else None,
             "obs_space": self.observation_space,
             "action_space": self.action_space,
+            "model_kind": self.model_kind,
+            "action_space_name": self.action_space_name,
         }
 
         torch.save(save_data, path)
@@ -122,6 +126,8 @@ class Network(nn.Module):
         self.load_state_dict(save_data["model_state_dict"])
         self.steps_trained = save_data["steps_trained"]
         self.episodes_evaluated = save_data.get("episodes_evaluated", 0)
+        self.model_kind = save_data.get("model_kind")
+        self.action_space_name = save_data.get("action_space_name")
         metrics_pickled = save_data.get("metrics")
         self.metrics = pickle.loads(metrics_pickled) if metrics_pickled else {}
 
@@ -147,6 +153,18 @@ class Network(nn.Module):
         """Load the observation and action spaces from a file."""
         save_data = torch.load(path, weights_only=False)
         return save_data["obs_space"], save_data["action_space"]
+
+    @staticmethod
+    def load_metadata(path):
+        """Load model_kind and action_space_name from a saved .pt file."""
+        save_data = torch.load(path, weights_only=False)
+        return {
+            "model_kind": save_data.get("model_kind"),
+            "action_space_name": save_data.get("action_space_name"),
+            "steps_trained": save_data.get("steps_trained", 0),
+            "obs_space": save_data.get("obs_space"),
+            "action_space": save_data.get("action_space"),
+        }
 
 class NatureCNN(nn.Module):
     """Simple CNN that adjusts to input size dynamically."""
@@ -299,7 +317,7 @@ class MultiHeadAgent(Network):
     is_multihead = True
 
     # pylint: disable=super-init-not-called
-    def __init__(self, obs_space: Dict, action_space):
+    def __init__(self, obs_space: Dict, action_space, model_kind=None, action_space_name=None):
         channels, height, width = obs_space["image"].shape
         image_linear_size = 256
 
@@ -325,6 +343,8 @@ class MultiHeadAgent(Network):
         nn.Module.__init__(self)
         self.observation_space = obs_space
         self.action_space = action_space
+        self.model_kind = model_kind
+        self.action_space_name = action_space_name
         self.steps_trained = 0
         self.episodes_evaluated = 0
         self.metrics = {}
@@ -449,7 +469,7 @@ class MultiHeadAgent(Network):
 
 class SharedNatureAgent(Network):
     """Actor-critic policy with multiple inputs, action masking, and shared CNN."""
-    def __init__(self, obs_space: Dict, action_space):
+    def __init__(self, obs_space: Dict, action_space, model_kind=None, action_space_name=None):
         channels, height, width = obs_space["image"].shape
 
         # We'll do a straightforward approach: let the user define a 'linear_output_size'.
@@ -473,7 +493,9 @@ class SharedNatureAgent(Network):
                 image_linear_size=image_linear_size
             ),
             obs_space=obs_space,
-            action_space=action_space
+            action_space=action_space,
+            model_kind=model_kind,
+            action_space_name=action_space_name
         )
 
         # Now we create an MLP for policy/value.
@@ -501,10 +523,10 @@ class SharedNatureAgent(Network):
         value = self.value_net(value_features)
         return action_logits, value
 
-def create_network(network, obs_space, action_space):
+def create_network(network, obs_space, action_space, model_kind=None, action_space_name=None):
     """Create a network from a class or instance."""
     if isinstance(network, type) and issubclass(network, Network):
-        network = network(obs_space, action_space)
+        network = network(obs_space, action_space, model_kind=model_kind, action_space_name=action_space_name)
     elif not isinstance(network, Network):
         raise ValueError("network must be a Network or a Network subclass")
 
@@ -539,72 +561,87 @@ def get_neural_network(name):
     """Get a model by name."""
     return NEURAL_NETWORK_DEFINITIONS[name]
 
-class ModelDefinition(BaseModel):
-    """
-    Represents a defined AI model for The Legend of Zelda.  Each ZeldaAIModel will have a set of available models,
-    which are a trained version of this defined model.
-    """
-    name : str
-    neural_net : type
-    action_space : List[str]
+def _load_triforce_json():
+    """Load and return the parsed triforce.json."""
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    with open(os.path.join(script_dir, 'triforce.json'), encoding='utf-8') as f:
+        return json.load(f)
 
-    @field_validator('neural_net', mode='before')
-    @classmethod
-    def neural_net_validator(cls, value):
-        """Gets the class from the name."""
-        return get_neural_network(value)
 
-    def find_available_models(self, path):
-        """Finds the available models for this model definition in the given path.  Returns a dictionary of name to
-        path."""
-        available_models = {}
-        if path is None:
-            return available_models
-
-        if not os.path.exists(path):
-            return available_models
-
-        # Check if .pt
-        full_path = os.path.join(path, self.name + '.pt')
-        if os.path.exists(full_path):
-            available_models['default'] = full_path
-
-        # otherwise, it's a training directory of models
-        else:
-            dir_name = os.path.join(path, self.name)
-            if os.path.isdir(dir_name):
-                for filename in os.listdir(dir_name):
-                    if filename.endswith('.pt'):
-                        i = filename.find('_')
-                        if i > 0:
-                            iterations = int(filename[i+1:-3])
-                            available_models[iterations] = os.path.join(dir_name, filename)
-                        else:
-                            available_models[filename[:-3]] = os.path.join(dir_name, filename)
-
-        return available_models
+class ActionSpaceDefinition:
+    """A named action space from triforce.json."""
+    def __init__(self, name: str, actions: List[str], default: bool = False):
+        self.name = name
+        self.actions = actions
+        self.default = default
 
     @staticmethod
-    def get_all_models():
-        """Loads the models and scenarios from triforce.json."""
-        models = {}
-        script_dir = os.path.dirname(os.path.realpath(__file__))
-        with open(os.path.join(script_dir, 'triforce.json'), encoding='utf-8') as f:
-            for model in json.load(f)["models"]:
-                model = ModelDefinition(**model)
-                models[model.name] = model
-
-        return models
+    def get_all():
+        """Load all action space definitions from triforce.json."""
+        result = {}
+        data = _load_triforce_json()
+        for name, entry in data["action-spaces"].items():
+            result[name] = ActionSpaceDefinition(
+                name=name,
+                actions=entry["actions"],
+                default=entry.get("default", False),
+            )
+        return result
 
     @staticmethod
-    def get(name, default=None):
-        """Get a model by name."""
-        return ModelDefinition.get_all_models().get(name, default)
+    def get(name):
+        """Get an action space by name."""
+        return ActionSpaceDefinition.get_all()[name]
+
+    @staticmethod
+    def get_default():
+        """Get the default action space."""
+        for asd in ActionSpaceDefinition.get_all().values():
+            if asd.default:
+                return asd
+        raise ValueError("No default action space defined in triforce.json")
+
+
+class ModelKindDefinition:
+    """A named model kind from triforce.json mapping to a Network subclass."""
+    def __init__(self, name: str, network_class: type, default: bool = False):
+        self.name = name
+        self.network_class = network_class
+        self.default = default
+
+    @staticmethod
+    def get_all():
+        """Load all model kind definitions from triforce.json."""
+        result = {}
+        data = _load_triforce_json()
+        for name, entry in data["model-kinds"].items():
+            result[name] = ModelKindDefinition(
+                name=name,
+                network_class=get_neural_network(entry["class"]),
+                default=entry.get("default", False),
+            )
+        return result
+
+    @staticmethod
+    def get(name):
+        """Get a model kind by name."""
+        return ModelKindDefinition.get_all()[name]
+
+    @staticmethod
+    def get_default():
+        """Get the default model kind."""
+        for mkd in ModelKindDefinition.get_all().values():
+            if mkd.default:
+                return mkd
+        raise ValueError("No default model kind defined in triforce.json")
+
 
 __all__ = [
     Network.__name__,
     MultiHeadAgent.__name__,
     SharedNatureAgent.__name__,
     register_neural_network.__name__,
-    get_neural_network.__name__
+    get_neural_network.__name__,
+    ActionSpaceDefinition.__name__,
+    ModelKindDefinition.__name__,
     ]
