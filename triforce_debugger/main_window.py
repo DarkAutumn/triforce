@@ -2,9 +2,10 @@
 
 import logging
 import os
+import time
 import traceback
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -85,6 +86,14 @@ class MainWindow(QMainWindow):
         self._selected_model_path: str | None = None
         self._last_state_dict = None
         self._last_zelda_state = None
+
+        # FPS counter
+        self._fps_frame_count = 0
+        self._fps_last_time = time.monotonic()
+        self._fps_value = 0.0
+        self._fps_timer = QTimer(self)
+        self._fps_timer.timeout.connect(self._update_fps_display)
+        self._fps_timer.start(500)  # update display twice per second
 
         self._build_menus()
         self._build_layout()
@@ -242,7 +251,9 @@ class MainWindow(QMainWindow):
 
     def _wire_integration(self):
         """Connect all integration signals for end-to-end operation."""
-        self.game_timer.step_requested.connect(self._on_step)
+        self.game_timer.step_requested.connect(self._do_env_step)
+        self.game_timer.step_completed.connect(self._on_step_completed)
+        self.game_timer.frame_ready.connect(self._on_frame_ready)
         self.model_browser.model_selected.connect(self._on_model_file_selected)
         self.scenario_selector.scenario_changed.connect(self._on_scenario_changed)
         self.model_def_combo.currentTextChanged.connect(  # pylint: disable=no-member
@@ -376,27 +387,52 @@ class MainWindow(QMainWindow):
         self.game_timer.pause()
         self._do_restart()
 
-    def _on_step(self):
-        """Handle a single environment step from the game timer."""
+    def _on_frame_ready(self, frame):
+        """Render a single NES frame (called once per ~16ms when capped)."""
+        self._fps_frame_count += 1
+        if frame is not None:
+            self.game_view.set_frame(frame)
+
+    def _on_step_completed(self, step_result):
+        """Handle a completed step result — update panels."""
+        self._show_step_result(step_result)
+        if step_result.completed:
+            self._do_restart()
+
+    def _do_env_step(self):
+        """Perform one environment step and enqueue the frames."""
         if not self._bridge or self._viewing_historical:
             return
 
         try:
             step_result = self._bridge.step()
-            self._show_step_result(step_result)
-
-            if step_result.completed:
-                # Record ending then auto-restart
-                self._do_restart()
+            frames = step_result.frames if step_result.frames else []
+            self.game_timer.enqueue_step(frames, step_result)
         except Exception:  # pylint: disable=broad-except
             log.error("Step error:\n%s", traceback.format_exc())
             self.game_timer.pause()
 
+    def _update_fps_display(self):
+        """Update the FPS counter in the status bar."""
+        now = time.monotonic()
+        elapsed = now - self._fps_last_time
+        if elapsed > 0:
+            self._fps_value = self._fps_frame_count / elapsed
+        self._fps_frame_count = 0
+        self._fps_last_time = now
+
+        mode = "uncapped" if self.game_timer.is_uncapped else "60fps cap"
+        state = "running" if self.game_timer.is_running else "paused"
+        buf = self.game_timer.buffer_depth
+        self.statusBar().showMessage(
+            f"FPS: {self._fps_value:.1f}  |  {mode}  |  {state}  |  buf: {buf}"
+        )
+
     def _show_step_result(self, step_result, initial=False):
-        """Update all panels from a StepResult."""
+        """Update all panels from a StepResult (called at step boundaries)."""
         self._step_count += 1
 
-        # Get last frame
+        # Get last frame for step history snapshot
         frame = step_result.frames[-1] if step_result.frames else None
 
         # Extract state dict for the state tab
@@ -411,9 +447,7 @@ class MainWindow(QMainWindow):
         except Exception:  # pylint: disable=broad-except
             pass
 
-        # Update game view
-        if frame is not None:
-            self.game_view.set_frame(frame)
+        # Update game state overlays (frame itself set by _on_frame_ready)
         if state:
             self.game_view.set_game_state(state)
 

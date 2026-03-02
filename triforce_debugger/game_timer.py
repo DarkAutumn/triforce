@@ -1,39 +1,58 @@
 """QTimer-based game loop for the Triforce Debugger.
 
-Provides capped (60fps) and uncapped modes, pause/resume/single-step control.
-Emits signals so the main window can update panels after each step.
+Architecture:
+  A single render timer drives everything.  On each tick it pops one NES frame
+  from a small buffer and emits ``frame_ready``.  When the buffer is empty it
+  calls back to the main window to perform an env step, which refills the
+  buffer with that step's frames.  Then it schedules the next tick.
+
+  - **Capped mode (60 fps):** render timer fires every 16ms.  One NES frame
+    per tick → smooth real-time playback with no jitter.
+  - **Uncapped mode:** render timer fires at 0ms.  Drains the buffer as fast
+    as the event loop allows, stepping whenever it runs dry.
+
+This keeps the buffer tiny (at most one step's worth of frames) so the user
+can pause at any time and immediately take manual control.
+
+Signals:
+  frame_ready(object)        — a single NES frame (numpy array) to render.
+  step_completed(object)     — a StepResult, emitted at step boundaries.
+  state_changed(bool)        — True when running, False when paused.
 """
 
+from collections import deque
 from PySide6.QtCore import QObject, QTimer, Signal
 
 
 class GameTimer(QObject):
-    """Drives the environment step loop via QTimer.
+    """Drives the environment step loop and frame rendering."""
 
-    Modes:
-        - PAUSED: timer stopped, no automatic stepping.
-        - RUNNING_CAPPED: timer fires every 16ms (~60fps).
-        - RUNNING_UNCAPPED: timer fires every 0ms (as fast as Qt event loop).
-
-    Signals:
-        step_requested: Emitted each time the timer fires and a step should occur.
-        state_changed: Emitted when the timer mode changes (paused/resumed).
-    """
-
-    CAPPED_INTERVAL_MS = 16   # ~60 fps
+    MS_PER_NES_FRAME = 16     # ~60 fps  (1000/60 ≈ 16.67, truncated)
     UNCAPPED_INTERVAL_MS = 0  # as fast as possible
 
-    # Emitted each time the timer fires to request one env step.
+    # Emitted for every NES frame that should be drawn.
+    frame_ready = Signal(object)
+
+    # Emitted at step boundaries with the full StepResult.
+    step_completed = Signal(object)
+
+    # Emitted when the timer needs the main window to perform an env step.
+    # The main window should call ``enqueue_step()`` with the result.
     step_requested = Signal()
 
-    # Emitted when running/paused state changes. Bool is True when running.
+    # Emitted when running/paused state changes.  Bool is True when running.
     state_changed = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self._on_tick)  # pylint: disable=no-member
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._tick)
+
+        # Frame buffer: each entry is (frame, step_result_or_None).
+        # step_result is non-None only on the *last* frame of a step.
+        self._buffer: deque[tuple] = deque()
 
         self._running = False
         self._uncapped = True  # default to uncapped (fast as possible)
@@ -51,9 +70,9 @@ class GameTimer(QObject):
         return self._uncapped
 
     @property
-    def interval(self) -> int:
-        """Current timer interval in milliseconds."""
-        return self._timer.interval()
+    def buffer_depth(self) -> int:
+        """Number of frames waiting in the render buffer."""
+        return len(self._buffer)
 
     # ── Control methods ───────────────────────────────────────
 
@@ -62,7 +81,7 @@ class GameTimer(QObject):
         if self._running:
             return
         self._running = True
-        self._timer.start(self._current_interval())
+        self._schedule_next()
         self.state_changed.emit(True)
 
     def pause(self):
@@ -71,6 +90,7 @@ class GameTimer(QObject):
             return
         self._running = False
         self._timer.stop()
+        self._buffer.clear()
         self.state_changed.emit(False)
 
     def single_step(self):
@@ -79,28 +99,76 @@ class GameTimer(QObject):
         if was_running:
             self._running = False
             self._timer.stop()
+            self._buffer.clear()
             self.state_changed.emit(False)
+        # Ask the main window for one step — it will call enqueue_step(),
+        # and we emit all those frames immediately.
         self.step_requested.emit()
+        self._flush_buffer()
 
     def set_uncapped(self, uncapped: bool):
-        """Switch between capped (16ms) and uncapped (0ms) modes."""
+        """Switch between capped and uncapped modes."""
         self._uncapped = uncapped
         if self._running:
-            # Restart the timer so the new interval takes effect immediately
             self._timer.stop()
-            self._timer.start(self._current_interval())
+            self._schedule_next()
+
+    def enqueue_step(self, frames, step_result):
+        """Called by the main window after performing an env step.
+
+        *frames* is the list of NES frames from the step.
+        *step_result* is the full StepResult.
+        """
+        if not frames:
+            return
+        # Tag only the last frame with the step result.
+        for i, f in enumerate(frames):
+            sr = step_result if i == len(frames) - 1 else None
+            self._buffer.append((f, sr))
 
     def stop(self):
         """Fully stop the timer (for shutdown)."""
         self._running = False
         self._timer.stop()
+        self._buffer.clear()
 
     # ── Internal ──────────────────────────────────────────────
 
-    def _current_interval(self) -> int:
-        """Return the interval based on the current mode."""
-        return self.UNCAPPED_INTERVAL_MS if self._uncapped else self.CAPPED_INTERVAL_MS
+    def _schedule_next(self):
+        """Schedule the next render tick."""
+        interval = self.UNCAPPED_INTERVAL_MS if self._uncapped else self.MS_PER_NES_FRAME
+        self._timer.start(interval)
 
-    def _on_tick(self):
-        """Timer callback — emit step_requested."""
-        self.step_requested.emit()
+    def _tick(self):
+        """Render-timer callback.
+
+        1. If the buffer is empty, request a step (which refills it).
+        2. Pop one frame and emit it.
+        3. If it's a step boundary, emit step_completed.
+        4. Schedule the next tick.
+        """
+        if not self._running:
+            return
+
+        # Refill if empty — step synchronously via signal.
+        if not self._buffer:
+            self.step_requested.emit()
+
+        # Pop and render one frame.
+        if self._buffer:
+            frame, step_result = self._buffer.popleft()
+            self.frame_ready.emit(frame)
+            if step_result is not None:
+                self.step_completed.emit(step_result)
+
+        # Keep going.
+        if self._running:
+            self._schedule_next()
+
+    def _flush_buffer(self):
+        """Emit all buffered frames immediately (used for single_step)."""
+        while self._buffer:
+            frame, step_result = self._buffer.popleft()
+            self.frame_ready.emit(frame)
+            if step_result is not None:
+                self.step_completed.emit(step_result)
