@@ -8,3 +8,4 @@
 2026-03-02 02:40 — ✅ — QT-08: Model browser tree view with directory scanning, step count parsing, bold highlighting, and 26 tests
 2026-03-02 02:45 — ✅ — QT-09: Wire File menu (Open Directory + Exit) and --path argument to model browser
 2026-03-02 02:47 — ✅ — QT-10: Observation panel with image, vectors, directional circles, and boolean indicators
+2026-03-02 02:55 — ✅ — QT-11: Action probability table with masking, value display, and tests

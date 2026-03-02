@@ -43,7 +43,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 ## Phase 4: Step History & Time-Travel
 
-- [ ] **QT-12**: Step history ring buffer. Implement `step_history.py` — `StepHistory` class backed by `collections.deque(maxlen=50_000)`. Each entry: step_number, action, reward, observation, state, action_mask, action_probabilities, terminated, truncated, game frame. Methods: append, clear, get_by_index, length. Test: add/clear/retrieve, capacity limits, oldest items evicted.
+- [x] **QT-12**: Step history ring buffer. Implement `step_history.py` — `StepHistory` class backed by `collections.deque(maxlen=50_000)`. Each entry: step_number, action, reward, observation, state, action_mask, action_probabilities, terminated, truncated, game frame. Methods: append, clear, get_by_index, length. Test: add/clear/retrieve, capacity limits, oldest items evicted.
 
 - [ ] **QT-13**: Step history list widget. Add QAbstractListModel wrapping StepHistory. Virtual scrolling — only visible rows rendered. Each row shows: step number, action (e.g., "MOVE N"), total reward (colored green/red/grey). Expandable rows showing individual reward/penalty breakdown. Most recent at top. Auto-scrolls to latest unless user has scrolled up (sticky scroll). Test: model returns correct data for row indices, row count matches buffer.
 
