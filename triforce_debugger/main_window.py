@@ -94,7 +94,7 @@ class MainWindow(QMainWindow):
         self._fps_last_time = time.monotonic()
         self._fps_value = 0.0
         self._fps_timer = QTimer(self)
-        self._fps_timer.timeout.connect(self._update_fps_display)
+        self._fps_timer.timeout.connect(self._update_fps_display)  # pylint: disable=no-member
         self._fps_timer.start(500)  # update display twice per second
 
         self._build_menus()

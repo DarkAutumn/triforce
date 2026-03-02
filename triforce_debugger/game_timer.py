@@ -48,7 +48,7 @@ class GameTimer(QObject):
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self._tick)
+        self._timer.timeout.connect(self._tick)  # pylint: disable=no-member
 
         # Frame buffer: each entry is (frame, step_result_or_None).
         # step_result is non-None only on the *last* frame of a step.

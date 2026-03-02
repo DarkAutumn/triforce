@@ -111,23 +111,11 @@ class VectorCircleWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Label at top
-        font = painter.font()
-        font.setPointSize(7)
-        painter.setFont(font)
-        painter.setPen(QColor(0, 0, 0))
-        painter.drawText(QRectF(0, 0, self.width(), 14),
-                         Qt.AlignmentFlag.AlignCenter, self._label)
-
-        # Circle
-        cx = self.width() / 2
-        cy = 14 + self.RADIUS + 2
-        painter.setPen(QPen(QColor(0, 0, 0), 1))
-        painter.drawEllipse(QPointF(cx, cy), self.RADIUS, self.RADIUS)
+        center = _paint_labeled_circle(painter, self.width(), self.RADIUS, self._label)
 
         # Arrow
         if self._scale > 0.01 and (self._vector[0] != 0 or self._vector[1] != 0):
-            _draw_arrow(painter, QPointF(cx, cy), self._vector, self._scale,
+            _draw_arrow(painter, center, self._vector, self._scale,
                         self.RADIUS, self.ARROW_COLOR, self.ARROWHEAD_SIZE)
 
         painter.end()
@@ -169,20 +157,7 @@ class DirectionalCircleWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Label at top
-        font = painter.font()
-        font.setPointSize(7)
-        painter.setFont(font)
-        painter.setPen(QColor(0, 0, 0))
-        painter.drawText(QRectF(0, 0, self.width(), 14),
-                         Qt.AlignmentFlag.AlignCenter, self._label)
-
-        # Circle
-        cx = self.width() / 2
-        cy = 14 + self.RADIUS + 2
-        center = QPointF(cx, cy)
-        painter.setPen(QPen(QColor(0, 0, 0), 1))
-        painter.drawEllipse(center, self.RADIUS, self.RADIUS)
+        center = _paint_labeled_circle(painter, self.width(), self.RADIUS, self._label)
 
         direction_vectors = {
             Direction.N: np.array([0.0, -1.0]),
@@ -235,6 +210,30 @@ class BooleanIndicator(QLabel):
     def _update_style(self):
         color = self.ACTIVE_COLOR if self._active else self.INACTIVE_COLOR
         self.setStyleSheet(f"color: {color};")
+
+
+# ── Shared circle painting ────────────────────────────────────
+
+def _paint_labeled_circle(painter: QPainter, width: int, radius: float,
+                          label: str, bold: bool = False) -> QPointF:
+    """Draw a labeled circle and return its center point.
+
+    Used by VectorCircleWidget, DirectionalCircleWidget, and ProbabilityArrowWidget.
+    """
+    font = painter.font()
+    font.setPointSize(7)
+    font.setBold(bold)
+    painter.setFont(font)
+    painter.setPen(QColor(0, 0, 0))
+    painter.drawText(QRectF(0, 0, width, 14),
+                     Qt.AlignmentFlag.AlignCenter, label)
+
+    cx = width / 2
+    cy = 14 + radius + 2
+    center = QPointF(cx, cy)
+    painter.setPen(QPen(QColor(0, 0, 0), 1))
+    painter.drawEllipse(center, radius, radius)
+    return center
 
 
 # ── Shared arrow drawing ─────────────────────────────────────

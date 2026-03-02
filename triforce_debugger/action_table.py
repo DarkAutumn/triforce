@@ -8,7 +8,7 @@ import math
 
 import numpy as np
 import torch
-from PySide6.QtCore import Qt, QRectF, QPointF
+from PySide6.QtCore import Qt, QPointF
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (
     QWidget,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from triforce.zelda_enums import ActionKind, Direction
+from triforce_debugger.observation_panel import _paint_labeled_circle
 
 
 MASKED_TEXT = "[masked]"
@@ -69,21 +70,8 @@ class ProbabilityArrowWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Label
-        font = painter.font()
-        font.setPointSize(7)
-        font.setBold(True)
-        painter.setFont(font)
-        painter.setPen(QColor(0, 0, 0))
-        painter.drawText(QRectF(0, 0, self.width(), 14),
-                         Qt.AlignmentFlag.AlignCenter, self._kind.value)
-
-        # Circle
-        cx = self.width() / 2
-        cy = 14 + self.RADIUS + 2
-        center = QPointF(cx, cy)
-        painter.setPen(QPen(QColor(0, 0, 0), 1))
-        painter.drawEllipse(center, self.RADIUS, self.RADIUS)
+        center = _paint_labeled_circle(painter, self.width(), self.RADIUS,
+                                       self._kind.value, bold=True)
 
         # Arrows
         for direction, (prob, masked) in self._probs.items():
@@ -93,8 +81,8 @@ class ProbabilityArrowWidget(QWidget):
             if vec is None:
                 continue
             scale = float(np.clip(prob, 0.05, 1.0))
-            end_x = cx + vec[0] * self.RADIUS * scale
-            end_y = cy + vec[1] * self.RADIUS * scale
+            end_x = center.x() + vec[0] * self.RADIUS * scale
+            end_y = center.y() + vec[1] * self.RADIUS * scale
             end = QPointF(end_x, end_y)
 
             painter.setPen(QPen(self._color, 2))
