@@ -1,32 +1,52 @@
-"""Tests for MH-05: triforce.json multihead model definition and scenario wiring.
+"""Tests for triforce.json config: action spaces, model kinds, and scenario wiring.
 
 Verifies:
-- sword-and-beams-multihead model loads from triforce.json
-- Model uses MultiHeadAgent neural net and correct action space
+- Action space definitions load correctly from triforce.json
+- Model kind definitions load correctly and map to the right classes
+- Defaults are set correctly
 - skip-sword-to-triforce scenario has exactly [GainedTriforce, GameOver, Timeout] end conditions
 """
 
-from triforce.models import ModelDefinition, MultiHeadAgent
+from triforce.models import ActionSpaceDefinition, ModelKindDefinition, MultiHeadAgent, SharedNatureAgent
 from triforce.scenario_wrapper import TrainingScenarioDefinition
 
 
-class TestMultiheadModelDefinition:
-    """Verify sword-and-beams-multihead model is correctly defined in triforce.json."""
+class TestActionSpaceDefinitions:
+    """Verify action-spaces section of triforce.json."""
 
-    def test_model_exists(self):
-        """sword-and-beams-multihead should load from triforce.json."""
-        model_def = ModelDefinition.get("sword-and-beams-multihead")
-        assert model_def is not None, "sword-and-beams-multihead not found in triforce.json"
+    def test_basic_action_space(self):
+        """basic action space should have MOVE, SWORD, BEAMS."""
+        asd = ActionSpaceDefinition.get("basic")
+        assert asd.actions == ["MOVE", "SWORD", "BEAMS"]
 
-    def test_model_uses_multihead_agent(self):
-        """Model should use MultiHeadAgent as its neural network."""
-        model_def = ModelDefinition.get("sword-and-beams-multihead")
-        assert model_def.neural_net is MultiHeadAgent
+    def test_basic_is_default(self):
+        """basic should be the default action space."""
+        asd = ActionSpaceDefinition.get_default()
+        assert asd.name == "basic"
 
-    def test_model_action_space(self):
-        """Model should have MOVE, SWORD, BEAMS action space."""
-        model_def = ModelDefinition.get("sword-and-beams-multihead")
-        assert model_def.action_space == ["MOVE", "SWORD", "BEAMS"]
+    def test_move_only_action_space(self):
+        """move-only action space should have just MOVE."""
+        asd = ActionSpaceDefinition.get("move-only")
+        assert asd.actions == ["MOVE"]
+
+
+class TestModelKindDefinitions:
+    """Verify model-kinds section of triforce.json."""
+
+    def test_shared_nature_kind(self):
+        """shared-nature should map to SharedNatureAgent."""
+        mkd = ModelKindDefinition.get("shared-nature")
+        assert mkd.network_class is SharedNatureAgent
+
+    def test_multihead_kind(self):
+        """multihead should map to MultiHeadAgent."""
+        mkd = ModelKindDefinition.get("multihead")
+        assert mkd.network_class is MultiHeadAgent
+
+    def test_shared_nature_is_default(self):
+        """shared-nature should be the default model kind."""
+        mkd = ModelKindDefinition.get_default()
+        assert mkd.name == "shared-nature"
 
 
 class TestSkipSwordToTriforceScenario:

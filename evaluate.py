@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluates the result of trainined models."""
+"""Evaluates the result of trained models."""
 from collections import Counter
 from math import ceil
 import sys
@@ -9,7 +9,8 @@ import json
 import shutil
 from typing import Dict, List
 from tqdm import tqdm
-from triforce import ModelDefinition, make_zelda_env, Network, TrainingScenarioDefinition,  MetricTracker
+from triforce import ActionSpaceDefinition, ModelKindDefinition, make_zelda_env, Network, \
+    TrainingScenarioDefinition, MetricTracker
 
 
 def write_progress_markdown(md_path, progress_values, max_progress, episodes, scenario_name, model_name=None):
@@ -240,10 +241,56 @@ def evaluate_one_model(make_env, network, episodes, progress_callback):
     finally:
         env.close()
 
-def get_model_path(args):
-    """Gets the model path."""
-    return args.model_path if args.model_path else \
-                    os.path.join(os.path.dirname(os.path.realpath(__file__)), 'models')
+def _load_network_from_path(path):
+    """Load a network from a .pt file using its embedded metadata."""
+    metadata = Network.load_metadata(path)
+    model_kind_name = metadata["model_kind"]
+    action_space_name = metadata["action_space_name"]
+    if not model_kind_name or not action_space_name:
+        raise ValueError(f"Model file {path} is missing model_kind or action_space_name metadata.")
+
+    model_kind = ModelKindDefinition.get(model_kind_name)
+    obs_space = metadata["obs_space"]
+    action_space = metadata["action_space"]
+    network = model_kind.network_class(obs_space, action_space,
+                                       model_kind=model_kind_name,
+                                       action_space_name=action_space_name)
+    network.load(path)
+    return network, model_kind, action_space_name
+
+
+def _discover_models(path):
+    """Discover .pt model files from a path (file or directory).
+    Returns list of (label, path) sorted by steps_trained descending."""
+    if os.path.isfile(path) and path.endswith('.pt'):
+        return [("model", path)]
+
+    if not os.path.isdir(path):
+        return []
+
+    models = []
+    for filename in os.listdir(path):
+        if filename.endswith('.pt'):
+            full = os.path.join(path, filename)
+            try:
+                meta = Network.load_metadata(full)
+                steps = meta.get("steps_trained", 0)
+                models.append((steps, filename[:-3], full))
+            except Exception:  # pylint: disable=broad-exception-caught
+                continue
+
+    models.sort(key=lambda x: x[0], reverse=True)
+    return [(label, p) for _, label, p in models]
+
+
+def _make_env_from_network(network, scenario_def, render_mode=None, frame_stack=3):
+    """Create an env using metadata from a loaded network."""
+    action_space_name = network.action_space_name
+    action_space_def = ActionSpaceDefinition.get(action_space_name)
+    multihead = getattr(network, 'is_multihead', False)
+    return make_zelda_env(scenario_def, action_space_def.actions,
+                          render_mode=render_mode, frame_stack=frame_stack,
+                          multihead=multihead)
 
 def main():
     """Main entry point."""
@@ -254,21 +301,40 @@ def main():
         compare_models(args.compare[0], args.compare[1])
         return
 
-    if not args.model_path or not args.model or not args.scenario:
-        print("Error: model_path, model, and scenario are required when not using --compare.")
+    if not args.model_path or not args.scenario:
+        print("Error: model_path and scenario are required when not using --compare.")
         sys.exit(1)
 
-    all_scenarios = create_scenarios(args)
-    to_process = [(name, path) for name, path, process in all_scenarios if process]
+    to_process = _discover_models(args.model_path)
+
+    # Filter to specific step counts if requested
+    if args.steps:
+        step_set = set(args.steps)
+        to_process = [(label, p) for label, p in to_process
+                      if Network.load_metadata(p).get("steps_trained", 0) in step_set]
+
+    # Filter already evaluated unless reprocess
+    if not args.reprocess:
+        filtered = []
+        for label, path in to_process:
+            _, episodes_evaluated = Network.load_metrics(path)
+            if episodes_evaluated < args.episodes:
+                filtered.append((label, path))
+        to_process = filtered
+
+    if args.limit > 0:
+        to_process = to_process[:args.limit]
+
     total_episodes = len(to_process) * args.episodes
 
     if not to_process:
         print("No models to evaluate.")
         return
 
-    _run_sequential(args, to_process, total_episodes)
+    scenario_def = TrainingScenarioDefinition.get(args.scenario)
+    _run_sequential(args, scenario_def, to_process, total_episodes)
 
-    # Print progress report for the last evaluated model (from the first/best model)
+    # Print progress report for the first/best model
     if to_process:
         json_path = to_process[0][1].rsplit('.', 1)[0] + '.eval.json'
         if os.path.exists(json_path):
@@ -278,14 +344,11 @@ def main():
                                   data['episodes'], args.scenario)
 
 
-def _save_results(path, metrics, progress_values, max_progress, episodes, scenario, model_name):
+def _save_results(path, metrics, progress_values, max_progress, episodes, scenario):
     """Saves evaluation results: updates model .pt, writes .eval.json and .eval.md."""
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     if metrics:
-        obs_space, act_space = Network.load_spaces(path)
-        model_def = ModelDefinition.get(model_name)
-        network = model_def.neural_net(obs_space, act_space)
-        network.load(path)
+        network, _, _ = _load_network_from_path(path)
         network.metrics = metrics
         network.episodes_evaluated = episodes
         network.save(path)
@@ -304,69 +367,29 @@ def _save_results(path, metrics, progress_values, max_progress, episodes, scenar
         convert_eval_json_to_md(json_path)
 
 
-def _run_sequential(args, to_process, total_episodes):
+def _run_sequential(args, scenario_def, to_process, total_episodes):
     """Evaluate models one at a time."""
-    scenario_def = TrainingScenarioDefinition.get(args.scenario)
-
-    def make_env():
-        model_def = ModelDefinition.get(args.model)
-        render_mode = 'human' if args.render else None
-        multihead = getattr(model_def.neural_net, 'is_multihead', False)
-        return make_zelda_env(scenario_def, model_def.action_space, render_mode=render_mode,
-                              frame_stack=args.frame_stack, multihead=multihead)
-
-    observation_space, action_space = None, None
+    first_network = None
     with tqdm(total=total_episodes) as progress:
         def update_progress():
             progress.update(1)
 
-        for model_name, path in to_process:
-            if observation_space is None:
-                observation_space, action_space = Network.load_spaces(path)
+        for _, path in to_process:
+            network, _, _ = _load_network_from_path(path)
+            if first_network is None:
+                first_network = network
 
-            model_def = ModelDefinition.get(model_name)
-            network = model_def.neural_net(observation_space, action_space)
-            network.load(path)
+            def make_env(net=network):
+                render_mode = 'human' if args.render else None
+                return _make_env_from_network(net, scenario_def,
+                                              render_mode=render_mode,
+                                              frame_stack=args.frame_stack)
 
             metrics, progress_values, max_progress = evaluate_one_model(
                 make_env, network, args.episodes, update_progress)
             _save_results(path, metrics, progress_values, max_progress,
-                          args.episodes, args.scenario, model_name)
+                          args.episodes, args.scenario)
 
-
-def create_scenarios(args):
-    """Finds all scenarios to be executed.  Also returns the results of any previous evaluations.
-    Step-count models are processed in descending order (most trained first).
-    Non-step-count models are processed last."""
-    model_path = get_model_path(args)
-    model_name = args.model
-
-    all_scenarios = []
-
-    process = True
-    available_models = ModelDefinition.get(model_name).find_available_models(model_path)
-
-    # Step-count models in descending order (most steps first)
-    step_count_keys = sorted([int(x) for x in available_models.keys() if isinstance(x, int)], reverse=True)
-    # Non-step-count models last, any order
-    other_keys = [x for x in available_models.keys() if not isinstance(x, int)]
-
-    # Filter to specific step counts if requested
-    if args.steps:
-        step_set = set(args.steps)
-        step_count_keys = [k for k in step_count_keys if k in step_set]
-        other_keys = []  # skip non-step-count models when filtering by steps
-
-    for key in list(step_count_keys) + other_keys:
-        path = available_models[key]
-        _, episodes_evaluated = Network.load_metrics(path)
-        process = args.reprocess or episodes_evaluated < args.episodes
-        all_scenarios.append((model_name, path, process))
-
-    if args.limit > 0:
-        all_scenarios = all_scenarios[:args.limit]
-
-    return all_scenarios
 
 def parse_args():
     """Parse command line arguments."""
@@ -378,9 +401,10 @@ def parse_args():
     parser.add_argument("--render", action='store_true', help="Render the game while evaluating the models.")
     parser.add_argument("--limit", type=int, default=-1, help="Limit the number of models to evaluate.")
 
-    parser.add_argument('model_path', nargs='?', default=None, help='The directory containing the models to evaluate')
-    parser.add_argument('model', type=str, nargs='?', default=None, help='The model to evaluate.')
-    parser.add_argument('scenario', type=str, nargs='?', default=None, help='The scenario to evaluate.')
+    parser.add_argument('model_path', nargs='?', default=None,
+                        help='Path to a .pt model file or directory of .pt files.')
+    parser.add_argument('scenario', type=str, nargs='?', default=None,
+                        help='The scenario to evaluate on.')
     parser.add_argument('--reprocess', action='store_true', help='Reprocess the models')
     parser.add_argument('--steps', type=int, nargs='+', default=None,
                         help='Only evaluate models with these step counts')

@@ -1,40 +1,22 @@
 {
-    "models": [
-        {
-            "name": "sword-and-beams",
-            "neural_net": "SharedNatureAgent",
-            "action_space": [
-                "MOVE",
-                "SWORD",
-                "BEAMS"
-            ]
+    "action-spaces": {
+        "basic": {
+            "default": true,
+            "actions": ["MOVE", "SWORD", "BEAMS"]
         },
-        {
-            "name": "dungeon",
-            "neural_net": "SharedNatureAgent",
-            "action_space": [
-                "MOVE",
-                "SWORD",
-                "BEAMS"
-            ]
-        },
-        {
-            "name": "sword-and-beams-multihead",
-            "neural_net": "MultiHeadAgent",
-            "action_space": [
-                "MOVE",
-                "SWORD",
-                "BEAMS"
-            ]
-        },
-        {
-            "name": "overworld-sword",
-            "neural_net": "SharedNatureAgent",
-            "action_space": [
-                "MOVE"
-            ]
+        "move-only": {
+            "actions": ["MOVE"]
         }
-    ],
+    },
+    "model-kinds": {
+        "shared-nature": {
+            "default": true,
+            "class": "SharedNatureAgent"
+        },
+        "multihead": {
+            "class": "MultiHeadAgent"
+        }
+    },
     "training-circuits": [
         {
             "name": "main-circuit",
@@ -51,15 +33,6 @@
                     "exit_criteria": "success-rate",
                     "threshold": 0.9,
                     "iterations": 1250000
-                },
-                {
-                    "scenario": "dungeon1",
-                    "exit_criteria": "success-rate",
-                    "threshold": 0.02,
-                    "iterations": 500000
-                },
-                {
-                    "scenario": "skip-sword-to-triforce"
                 }
             ]
         },

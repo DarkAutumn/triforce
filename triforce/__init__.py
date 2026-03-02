@@ -7,7 +7,7 @@ import retro
 
 from .zelda_env import make_zelda_env
 from .simulate_critic import simulate_critique
-from .models import ModelDefinition, Network, get_neural_network, register_neural_network
+from .models import ActionSpaceDefinition, ModelKindDefinition, Network, get_neural_network, register_neural_network
 from .scenario_wrapper import TrainingScenarioDefinition
 from .metrics import MetricTracker
 
@@ -20,7 +20,8 @@ LOADED_MODELS = {}
 # define the model surface area
 __all__ = [
     make_zelda_env.__name__,
-    ModelDefinition.__name__,
+    ActionSpaceDefinition.__name__,
+    ModelKindDefinition.__name__,
     TrainingScenarioDefinition.__name__,
     simulate_critique.__name__,
     Network.__name__,

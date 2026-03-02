@@ -80,7 +80,10 @@ class PPO:
         n_envs = kwargs.get('envs', 1)
 
         env = create_env()
-        network = kwargs.get('model', None) or create_network(network, env.observation_space, env.action_space)
+        network = kwargs.get('model', None) or create_network(
+            network, env.observation_space, env.action_space,
+            model_kind=kwargs.get('model_kind'),
+            action_space_name=kwargs.get('action_space_name_str'))
         self._steps_at_start = network.steps_trained
         if self.optimizer is None:
             self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=self._epsilon)

@@ -17,7 +17,7 @@ from gymnasium.spaces import MultiBinary, Discrete
 
 from triforce.ml_ppo import GAMMA, LAMBDA, PPO, Network
 from triforce.models import SharedNatureAgent
-from triforce import ModelDefinition
+from triforce import ActionSpaceDefinition
 from triforce.zelda_env import make_zelda_env
 
 class TestNetwork(Network):
@@ -174,17 +174,16 @@ def test_ppo_multi_env(device, num_envs):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("num_channels", [1, 3])
-@pytest.mark.parametrize("model_scenario", ["overworld overworld-skip-sword", "overworld-sword overworld-sword"])
-def test_model_training(model_scenario, num_channels):
-    model_name, scenario_name = model_scenario.split(" ")
-    model_def : ModelDefinition = ModelDefinition.get(model_name)
-    assert model_def is not None, f"Unknown model: {model_name}"
+@pytest.mark.parametrize("action_scenario", ["basic overworld-skip-sword", "move-only overworld-sword"])
+def test_model_training(action_scenario, num_channels):
+    action_space_name, scenario_name = action_scenario.split(" ")
+    action_space_def = ActionSpaceDefinition.get(action_space_name)
 
-    scenario_name = TrainingScenarioDefinition.get(scenario_name)
-    assert scenario_name is not None, f"Unknown scenario: {scenario_name}"
+    scenario_def = TrainingScenarioDefinition.get(scenario_name)
+    assert scenario_def is not None, f"Unknown scenario: {scenario_name}"
 
     def create_env():
-        return make_zelda_env(scenario_name, model_def.action_space, frame_stack=num_channels)
+        return make_zelda_env(scenario_def, action_space_def.actions, frame_stack=num_channels)
 
     progress = MagicMock()
     ppo = PPO(log_dir=None, device="cpu")
