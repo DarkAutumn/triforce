@@ -115,14 +115,14 @@ class VectorCircleWidget(QWidget):
         font = painter.font()
         font.setPointSize(7)
         painter.setFont(font)
-        painter.setPen(QColor(200, 200, 200))
+        painter.setPen(QColor(0, 0, 0))
         painter.drawText(QRectF(0, 0, self.width(), 14),
                          Qt.AlignmentFlag.AlignCenter, self._label)
 
         # Circle
         cx = self.width() / 2
         cy = 14 + self.RADIUS + 2
-        painter.setPen(QPen(QColor(255, 255, 255), 1))
+        painter.setPen(QPen(QColor(0, 0, 0), 1))
         painter.drawEllipse(QPointF(cx, cy), self.RADIUS, self.RADIUS)
 
         # Arrow
@@ -173,7 +173,7 @@ class DirectionalCircleWidget(QWidget):
         font = painter.font()
         font.setPointSize(7)
         painter.setFont(font)
-        painter.setPen(QColor(200, 200, 200))
+        painter.setPen(QColor(0, 0, 0))
         painter.drawText(QRectF(0, 0, self.width(), 14),
                          Qt.AlignmentFlag.AlignCenter, self._label)
 
@@ -181,7 +181,7 @@ class DirectionalCircleWidget(QWidget):
         cx = self.width() / 2
         cy = 14 + self.RADIUS + 2
         center = QPointF(cx, cy)
-        painter.setPen(QPen(QColor(255, 255, 255), 1))
+        painter.setPen(QPen(QColor(0, 0, 0), 1))
         painter.drawEllipse(center, self.RADIUS, self.RADIUS)
 
         direction_vectors = {
@@ -209,10 +209,10 @@ class DirectionalCircleWidget(QWidget):
 # ── Boolean indicator ─────────────────────────────────────────
 
 class BooleanIndicator(QLabel):
-    """A text label colored green (active) or grey (inactive)."""
+    """A text label colored dark blue (active) or white (inactive)."""
 
-    ACTIVE_COLOR = "rgb(0, 255, 0)"
-    INACTIVE_COLOR = "rgb(80, 80, 80)"
+    ACTIVE_COLOR = "rgb(0, 0, 160)"
+    INACTIVE_COLOR = "rgb(255, 255, 255)"
 
     def __init__(self, text: str, parent=None):
         super().__init__(text, parent)
