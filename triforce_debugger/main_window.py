@@ -447,7 +447,9 @@ class MainWindow(QMainWindow):
         except Exception:  # pylint: disable=broad-except
             pass
 
-        # Update game state overlays (frame itself set by _on_frame_ready)
+        # Update game view (frame + overlays)
+        if frame is not None:
+            self.game_view.set_frame(frame)
         if state:
             self.game_view.set_game_state(state)
 
