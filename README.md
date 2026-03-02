@@ -8,11 +8,11 @@ The main branch is pretty unstable/may not work correctly.  The [Original Design
 
 This repo does *not* include a copy of the Legend of Zelda rom.  You must find your own copy of the rom and place it (uncompressed) at `triforce/custom_integrations/Zelda-NES/rom.nes`.
 
-This project requires Python 3.12 (stable-retro does not support 3.13+).  On Ubuntu you may also need `libgl1-mesa-glx` for `run.py`.
+This project requires Python 3.12 (stable-retro does not support 3.13+).
 
-This repo does include a set of pre-trained models.  Once the Zelda rom is in place, simply run `./run.py` to see the model play the game up through the end of the first dungeon.  (It does not usually win.)
+This repo does include a set of pre-trained models.  Once the Zelda rom is in place, simply run `python debug.py` to launch the Qt debugger and watch the model play the game up through the end of the first dungeon.  (It does not usually win.)
 
-![run.py output](./img/run.png)
+![debugger output](./img/run.png)
 
 Here's a video of the agent [beating the first dungeon](https://www.youtube.com/watch?v=yERh3IJ54dU), which was trained with 5,000,000+ steps. At 38 seconds, it learned that it's invulnerable at the screen edge, it exploits that to avoid damage from a projectile. At 53 seconds it steps up to avoid damage, even though it takes a -0.06 penalty for moving the wrong way (taking damage would be a larger penalty.) At 55 seconds it walks towards the rock projectile to block it. And so on, lots of little things the model does is easy to miss if you don't know the game inside and out.
 
@@ -99,25 +99,22 @@ Be sure to place The Legend of Zelda rom at `triforce/custom_integrations/Zelda-
 
 ### Running and Debugging Scenarios
 
-This repo includes a set of pre-trained models.  To run the full game simply use `run.py`.  By default it will run the full game, but you can specify a scenario with the first argument (e.g. `run.py dungeon1beams`).  You can specify the `--model-path` to be a location other than the checked in models, which is helpful to do after training (e.g. `run.py --model-path training/`).
+This repo includes a set of pre-trained models.  To launch the debugger, use `debug.py`.  By default it scans the current directory for `.pt` model files.  Use `--path` to point at a different directory (e.g. a training output folder).
 
-    ./run.py
-    ./run.py overworld1beams
-    ./run.py overworld1nobeams --model-path training/
+    python debug.py
+    python debug.py --path training/
 
-Keybindings for `run.py`:
+The debugger provides a Qt GUI with model/scenario selection, time-travel step inspection, observation visualization, reward breakdowns, and game state tree views.  Select a model and scenario from the in-app dropdowns, then press F5 to run.
 
-* **u** - Uncap frame rate to make the game (hopefully) run faster.
-* **q** - Quit.
-* **p** - Pause.
-* **c** - Continue (unpause).
-* **n** - Run the next step.
-* **o** - Show tile/pathfinding overlay
-* **m** - Change between models.  Useful when pointing at a training directory.
-* **F4** - Enable recording.  Recording files are dropped to recording/
-* **F10** - Enable in-memory recording, only saving the recording if the scenario is successfully completed.  **DANGER**: This can eat 100gb+ of RAM.  I use this to capture videos of successful runs, but should not be used unless your machine has a massive amount of RAM.
+Keybindings:
 
-As the program runs, per-step rewards are displayed on the right hand side.  Clicking on those individual rewards will cause the program to re-run the ZeldaCritic responsible for generating that reward and will print the values to the console.  This is used to debug rewards.  When you see a reward that doesn't make sense, use VS Code (or your favorite editor/debugger) to set a breakpoint on the function and click the reward in the UI to debug through it.
+* **F5** - Continue (auto-play)
+* **Shift+F5** - Pause
+* **F10** - Step one action
+* **Ctrl+Shift+F5** - Restart episode
+* **Arrow keys** - Manual move (N/S/E/W)
+* **A + Arrow** - Manual attack in direction
+* **Ctrl+Q** - Quit
 
 ### Training Models
 
@@ -129,7 +126,7 @@ Training the model can be accomplished using `train.py`.  By default it will tra
     ./train.py overworld1beams overworld1nobeams --iterations 7500000 --parallel 8
     ./train.py overworld1beams overworld1nobeams --iterations 7500000 --parallel 8 --output ~/new_models/
 
-By default, the new models will be placed in `training/`. Use `run.py --model-path training/` to test the new models.
+By default, the new models will be placed in `training/`. Use `python debug.py --path training/` to test the new models.
 
 ### Evaluating Models
 

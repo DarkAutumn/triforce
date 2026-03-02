@@ -20,3 +20,5 @@
 2026-03-02 03:52 — ✅ — QT-20: Uncap FPS toggle already implemented; added interval-change test via menu toggle
 2026-03-02 03:53 — ✅ — QT-21: End-to-end integration — model def selector, bridge lifecycle, step loop, restart, model switching, state tab wiring
 2026-03-02 04:10 — ✅ — QT-22: Wire manual input (arrows + A+arrow) to environment bridge with SWORD/BEAMS auto-selection
+2026-03-02 04:12 — ✅ — QT-23: Pylint cleanup verified clean (10/10), all 641 tests pass
+2026-03-02 04:15 — ✅ — QT-24: Delete old GUI (run.py and zui/), update all references

@@ -28,7 +28,7 @@ pytest tests/reward_test.py::test_wall_collision
 pytest tests/ -v -m ""
 
 # Lint (required for PRs)
-pylint triforce/ evaluate.py run.py train.py
+pylint triforce/ triforce_debugger/ debug.py evaluate.py train.py
 ```
 
 ## Git Workflow
@@ -66,7 +66,7 @@ The PPO implementation (`ml_ppo.py`) and neural network (`models.py`) are custom
 
 ### UI and Debugging
 
-`zui/` contains a pygame-based debugger (`RewardDebugger`) that renders the game with per-step reward details. Clicking individual rewards in the UI re-runs the responsible critic for interactive debugging.
+`triforce_debugger/` contains the PySide6 Qt debugger GUI. Entry point is `debug.py`.
 
 ## Key Conventions
 
@@ -83,6 +83,6 @@ The PPO implementation (`ml_ppo.py`) and neural network (`models.py`) are custom
 
 ## Entry Points
 
-- **`run.py <model> <scenario>`** — Run a trained model with the pygame debugger
+- **`debug.py [--path DIR]`** — Launch the Qt debugger GUI
 - **`train.py <model> <scenario>`** — Train a model (outputs to `training/` by default)
 - **`evaluate.py <model_path> <model> <scenario>`** — Evaluate model performance over multiple episodes

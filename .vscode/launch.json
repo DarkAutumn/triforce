@@ -5,22 +5,22 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run - overworld",
+            "name": "Debugger",
             "type": "debugpy",
             "request": "launch",
             "python": "${workspaceFolder}/.venv/bin/python",
-            "program": "run.py",
-            "args": ["overworld", "game-start"],
+            "program": "debug.py",
+            "args": [],
             "console": "integratedTerminal",
             "justMyCode": false
         },
         {
-            "name": "Run - dungeon1",
+            "name": "Debugger - training",
             "type": "debugpy",
             "request": "launch",
             "python": "${workspaceFolder}/.venv/bin/python",
-            "program": "run.py",
-            "args": ["dungeon", "dungeon1"],
+            "program": "debug.py",
+            "args": ["--path", "training/"],
             "console": "integratedTerminal",
             "justMyCode": false
         },

@@ -43,4 +43,4 @@ jobs:
 
     - name: Lint with pylint
       run: |
-        pylint triforce/ evaluate.py run.py train.py
+        pylint triforce/ triforce_debugger/ debug.py evaluate.py train.py

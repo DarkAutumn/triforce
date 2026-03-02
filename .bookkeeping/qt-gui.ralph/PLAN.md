@@ -6,7 +6,7 @@ provides time-travel step inspection, model browsing, evaluation management, and
 visibility. See `.bookkeeping/qt-gui.ralph/specs/SPEC.md` for the full specification.
 
 ## Status
-STATUS: IN_PROGRESS
+STATUS: COMPLETE
 
 ## Run Naming Convention
 N/A — this is a GUI rewrite, no training runs.
@@ -73,7 +73,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 - [x] **QT-23**: Pylint cleanup. Run `pylint triforce_debugger/ debug.py` and fix all issues. Ensure the full test suite passes. Final commit.
 
-- [ ] **QT-24**: Delete old GUI. Remove `run.py` and `zui/` directory. Update any imports or references. Verify nothing depends on the old code (grep for `from zui` and `import zui`). Test suite still passes.
+- [x] **QT-24**: Delete old GUI. Remove `run.py` and `zui/` directory. Update any imports or references. Verify nothing depends on the old code (grep for `from zui` and `import zui`). Test suite still passes.
 
 ---
 
