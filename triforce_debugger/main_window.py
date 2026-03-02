@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 from triforce_debugger.action_table import ActionTable
 from triforce_debugger.game_timer import GameTimer
-from triforce_debugger.game_view import GameView
+from triforce_debugger.game_view import GameView, OverlayFlags
 from triforce_debugger.model_browser import ModelBrowser
 from triforce_debugger.observation_panel import ObservationPanel
 from triforce_debugger.evaluation_tab import EvaluationTab
@@ -184,11 +184,21 @@ class MainWindow(QMainWindow):
     # ── Run menu wiring ──────────────────────────────────────
 
     def _wire_run_menu(self):
-        """Connect Run menu actions and View > Uncap FPS to the game timer."""
+        """Connect Run menu actions, View > Uncap FPS, and overlay toggles."""
         self.action_continue.triggered.connect(self._on_continue)
         self.action_pause.triggered.connect(self.game_timer.pause)
         self.action_step.triggered.connect(self.game_timer.single_step)
         self.action_uncap_fps.toggled.connect(self.game_timer.set_uncapped)
+
+        # Overlay toggles
+        self.action_overlay_wavefront.toggled.connect(
+            lambda on: self.game_view.set_overlay(OverlayFlags.WAVEFRONT, on))
+        self.action_overlay_tile_ids.toggled.connect(
+            lambda on: self.game_view.set_overlay(OverlayFlags.TILE_IDS, on))
+        self.action_overlay_walkability.toggled.connect(
+            lambda on: self.game_view.set_overlay(OverlayFlags.WALKABILITY, on))
+        self.action_overlay_coordinates.toggled.connect(
+            lambda on: self.game_view.set_overlay(OverlayFlags.COORDINATES, on))
 
     # ── Time-travel ──────────────────────────────────────────
 

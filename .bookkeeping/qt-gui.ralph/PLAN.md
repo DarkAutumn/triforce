@@ -61,7 +61,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 ## Phase 6: Overlays & View Menu
 
-- [ ] **QT-19**: Game view overlays. Add overlay rendering to `game_view.py`: wavefront distance, tile IDs, walkability, tile coordinates. Each is a toggle checkbox in the View menu. Multiple overlays can be active simultaneously. Port overlay logic from `zui/reward_debugger.py`'s `_overlay_grid_and_text()`. Test: overlay toggle state management.
+- [x] **QT-19**: Game view overlays. Add overlay rendering to `game_view.py`: wavefront distance, tile IDs, walkability, tile coordinates. Each is a toggle checkbox in the View menu. Multiple overlays can be active simultaneously. Port overlay logic from `zui/reward_debugger.py`'s `_overlay_grid_and_text()`. Test: overlay toggle state management.
 
 - [ ] **QT-20**: View menu — Uncap FPS. Add "Uncap FPS" toggle to View menu. When checked, game timer switches to 0ms interval. When unchecked, back to 16ms. Test: timer interval changes on toggle.
 
