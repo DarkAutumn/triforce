@@ -26,7 +26,6 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 
-import torch
 import gymnasium as gym
 
 from triforce import ActionSpaceDefinition, ModelKindDefinition, Network, TrainingScenarioDefinition, make_zelda_env
