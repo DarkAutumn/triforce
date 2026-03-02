@@ -53,7 +53,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 - [x] **QT-15**: Rewards tab. Implement `rewards_tab.py` — QTableWidget showing running rewards (NAME, COUNT, TOTAL VALUE columns), episode total, endings dict. When viewing a historical step, shows that step's individual reward breakdown. Cleared on reset. Test: populate with mock StepRewards, verify aggregation math.
 
-- [ ] **QT-16**: State tab. Implement `state_tab.py` — QTreeWidget displaying the full ZeldaGame state as an expandable tree. Nodes for: link, enemies[], items[], projectiles[], room, objectives. Each leaf shows field name + value. Test: build tree from a mock state dict, verify node structure.
+- [x] **QT-16**: State tab. Implement `state_tab.py` — QTreeWidget displaying the full ZeldaGame state as an expandable tree. Nodes for: link, enemies[], items[], projectiles[], room, objectives. Each leaf shows field name + value. Test: build tree from a mock state dict, verify node structure.
 
 - [ ] **QT-17**: State diff engine. Implement `state_differ.py` — compares two ZeldaGame states, returns set of changed field paths. Wire to state_tab: changed values colored **blue** (persistent until next change), flash **yellow/green briefly (~300ms)** on the moment of change using QTimer. When viewing historical steps, diff against the previous step. Test: diff two mock states, verify changed paths detected.
 

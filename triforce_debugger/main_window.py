@@ -21,6 +21,7 @@ from triforce_debugger.model_browser import ModelBrowser
 from triforce_debugger.observation_panel import ObservationPanel
 from triforce_debugger.rewards_tab import RewardsTab
 from triforce_debugger.scenario_selector import ScenarioSelector
+from triforce_debugger.state_tab import StateTab
 from triforce_debugger.step_history import StepHistoryWidget, StepEntry
 
 
@@ -46,7 +47,7 @@ class MainWindow(QMainWindow):
         self.step_history = None
         self.detail_tabs = None
         self.rewards_tab = None
-        self.state_tab_placeholder = None
+        self.state_tab = None
         self.evaluation_tab_placeholder = None
         self.model_browser = None
         self.scenario_selector = None
@@ -142,10 +143,10 @@ class MainWindow(QMainWindow):
         self.detail_tabs = QTabWidget()
         self.detail_tabs.setObjectName("detail_tabs")
         self.rewards_tab = RewardsTab()
-        self.state_tab_placeholder = _placeholder("State")
+        self.state_tab = StateTab()
         self.evaluation_tab_placeholder = _placeholder("Evaluation")
         self.detail_tabs.addTab(self.rewards_tab, "Rewards")
-        self.detail_tabs.addTab(self.state_tab_placeholder, "State")
+        self.detail_tabs.addTab(self.state_tab, "State")
         self.detail_tabs.addTab(self.evaluation_tab_placeholder, "Evaluation")
 
         bottom_layout.addWidget(self.step_history, stretch=1)
