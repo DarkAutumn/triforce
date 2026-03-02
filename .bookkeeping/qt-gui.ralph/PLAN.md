@@ -29,7 +29,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 ## Phase 2: Model & Scenario Selection
 
-- [ ] **QT-07**: Scenario selector. Implement `scenario_selector.py` — QComboBox populated from `triforce.json` scenarios. Changing scenario resets the environment (unless already on that scenario). Wire to the right panel. Test: combobox populated with correct scenario names from triforce.json.
+- [x] **QT-07**: Scenario selector. Implement `scenario_selector.py` — QComboBox populated from `triforce.json` scenarios. Changing scenario resets the environment (unless already on that scenario). Wire to the right panel. Test: combobox populated with correct scenario names from triforce.json.
 
 - [ ] **QT-08**: Model browser tree view. Implement `model_browser.py` — QTreeView with QStandardItemModel. Recursively scans a directory for `.pt` files. Folders are expandable nodes, `.pt` files are leaves showing parsed step count (e.g., "1,501,764 steps"). Double-click loads the model. Currently loaded model is bolded. Test: build tree from a mock directory structure, verify node hierarchy and step count parsing.
 

@@ -58,7 +58,8 @@ def test_right_panel_sub_widgets():
     """Right panel contains model browser, scenario selector, action table placeholders."""
     window = _make_window()
     assert isinstance(window.model_browser_placeholder, QLabel)
-    assert isinstance(window.scenario_selector_placeholder, QLabel)
+    from triforce_debugger.scenario_selector import ScenarioSelector  # pylint: disable=import-outside-toplevel
+    assert isinstance(window.scenario_selector, ScenarioSelector)
     assert isinstance(window.action_table_placeholder, QLabel)
     window.close()
 

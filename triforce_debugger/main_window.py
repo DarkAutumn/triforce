@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from triforce_debugger.game_timer import GameTimer
+from triforce_debugger.scenario_selector import ScenarioSelector
 
 
 class MainWindow(QMainWindow):
@@ -38,7 +39,7 @@ class MainWindow(QMainWindow):
         self.state_tab_placeholder = None
         self.evaluation_tab_placeholder = None
         self.model_browser_placeholder = None
-        self.scenario_selector_placeholder = None
+        self.scenario_selector = None
         self.action_table_placeholder = None
         self.main_splitter = None
 
@@ -152,11 +153,11 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
 
         self.model_browser_placeholder = _placeholder("Model Browser")
-        self.scenario_selector_placeholder = _placeholder("Scenario Selector")
+        self.scenario_selector = ScenarioSelector()
         self.action_table_placeholder = _placeholder("Action Probabilities")
 
         layout.addWidget(self.model_browser_placeholder, stretch=3)
-        layout.addWidget(self.scenario_selector_placeholder, stretch=0)
+        layout.addWidget(self.scenario_selector, stretch=0)
         layout.addWidget(self.action_table_placeholder, stretch=2)
 
         return panel
