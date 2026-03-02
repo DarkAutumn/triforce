@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QVBoxLayout,
     QSplitter,
-    QLabel,
     QTabWidget,
     QMenuBar,
     QFileDialog,
@@ -19,6 +18,7 @@ from triforce_debugger.game_timer import GameTimer
 from triforce_debugger.game_view import GameView
 from triforce_debugger.model_browser import ModelBrowser
 from triforce_debugger.observation_panel import ObservationPanel
+from triforce_debugger.evaluation_tab import EvaluationTab
 from triforce_debugger.rewards_tab import RewardsTab
 from triforce_debugger.scenario_selector import ScenarioSelector
 from triforce_debugger.state_tab import StateTab
@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
         self.detail_tabs = None
         self.rewards_tab = None
         self.state_tab = None
-        self.evaluation_tab_placeholder = None
+        self.evaluation_tab = None
         self.model_browser = None
         self.scenario_selector = None
         self.action_table = None
@@ -144,10 +144,10 @@ class MainWindow(QMainWindow):
         self.detail_tabs.setObjectName("detail_tabs")
         self.rewards_tab = RewardsTab()
         self.state_tab = StateTab()
-        self.evaluation_tab_placeholder = _placeholder("Evaluation")
+        self.evaluation_tab = EvaluationTab()
         self.detail_tabs.addTab(self.rewards_tab, "Rewards")
         self.detail_tabs.addTab(self.state_tab, "State")
-        self.detail_tabs.addTab(self.evaluation_tab_placeholder, "Evaluation")
+        self.detail_tabs.addTab(self.evaluation_tab, "Evaluation")
 
         bottom_layout.addWidget(self.step_history, stretch=1)
         bottom_layout.addWidget(self.detail_tabs, stretch=2)
@@ -295,13 +295,3 @@ class MainWindow(QMainWindow):
             return
 
         super().keyReleaseEvent(event)
-
-
-def _placeholder(label_text: str) -> QLabel:
-    """Create a placeholder label widget for panels not yet implemented."""
-    label = QLabel(label_text)
-    label.setObjectName(label_text.lower().replace(" ", "_"))
-    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    label.setStyleSheet("border: 1px dashed grey; color: grey;")
-    label.setMinimumSize(50, 50)
-    return label

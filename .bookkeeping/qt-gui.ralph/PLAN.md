@@ -57,7 +57,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 - [x] **QT-17**: State diff engine. Implement `state_differ.py` — compares two ZeldaGame states, returns set of changed field paths. Wire to state_tab: changed values colored **blue** (persistent until next change), flash **yellow/green briefly (~300ms)** on the moment of change using QTimer. When viewing historical steps, diff against the previous step. Test: diff two mock states, verify changed paths detected.
 
-- [ ] **QT-18**: Evaluation tab. Implement `evaluation_tab.py` — if `.eval.json` exists for the selected model, show a data grid with: episodes, success rate, percentiles (p25/p50/p75/p90/max), milestone histogram. If no eval exists, show "Run Evaluation" button with episode count spinner. Clicking runs `evaluate.py` in a QProcess (non-blocking), shows progress, auto-populates on completion. Test: parse a mock `.eval.json`, verify grid content.
+- [x] **QT-18**: Evaluation tab. Implement `evaluation_tab.py` — if `.eval.json` exists for the selected model, show a data grid with: episodes, success rate, percentiles (p25/p50/p75/p90/max), milestone histogram. If no eval exists, show "Run Evaluation" button with episode count spinner. Clicking runs `evaluate.py` in a QProcess (non-blocking), shows progress, auto-populates on completion. Test: parse a mock `.eval.json`, verify grid content.
 
 ## Phase 6: Overlays & View Menu
 
