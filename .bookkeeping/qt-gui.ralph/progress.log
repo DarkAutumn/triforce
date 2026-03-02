@@ -16,3 +16,4 @@
 2026-03-02 03:30 — ✅ — QT-16: State tab with extract_state_dict and QTreeWidget, 22 tests pass
 2026-03-02 03:35 — ✅ — QT-17: State diff engine with blue/yellow highlighting wired to state tab
 2026-03-02 03:40 — ✅ — QT-18: Evaluation tab with .eval.json parsing, results grid, histogram, and QProcess runner
+2026-03-02 03:44 — ✅ — QT-19: Game view overlays (wavefront, tile IDs, walkability, coordinates) with OverlayFlags enum and View menu wiring

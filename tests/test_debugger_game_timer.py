@@ -263,3 +263,21 @@ def test_uncap_fps_toggle_changes_mode():
     window.action_uncap_fps.setChecked(False)
     assert not window.game_timer.is_uncapped
     window.close()
+
+
+def test_uncap_fps_toggle_changes_interval_while_running():
+    """View > Uncap FPS changes timer interval from 16ms to 0ms while running."""
+    _app = get_app()
+    from triforce_debugger.main_window import MainWindow  # pylint: disable=import-outside-toplevel
+    window = MainWindow()
+    window.game_timer.resume()
+    assert window.game_timer.interval == 16
+
+    window.action_uncap_fps.setChecked(True)
+    assert window.game_timer.interval == 0
+
+    window.action_uncap_fps.setChecked(False)
+    assert window.game_timer.interval == 16
+
+    window.game_timer.stop()
+    window.close()
