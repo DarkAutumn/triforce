@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
 )
 
+from triforce_debugger.action_table import ActionTable
 from triforce_debugger.game_timer import GameTimer
 from triforce_debugger.model_browser import ModelBrowser
 from triforce_debugger.scenario_selector import ScenarioSelector
@@ -42,7 +43,7 @@ class MainWindow(QMainWindow):
         self.evaluation_tab_placeholder = None
         self.model_browser = None
         self.scenario_selector = None
-        self.action_table_placeholder = None
+        self.action_table = None
         self.main_splitter = None
 
         # Track 'A' key for attack modifier
@@ -158,11 +159,11 @@ class MainWindow(QMainWindow):
 
         self.model_browser = ModelBrowser()
         self.scenario_selector = ScenarioSelector()
-        self.action_table_placeholder = _placeholder("Action Probabilities")
+        self.action_table = ActionTable()
 
         layout.addWidget(self.model_browser, stretch=3)
         layout.addWidget(self.scenario_selector, stretch=0)
-        layout.addWidget(self.action_table_placeholder, stretch=2)
+        layout.addWidget(self.action_table, stretch=2)
 
         return panel
 

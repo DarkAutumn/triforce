@@ -7,3 +7,4 @@
 2026-03-02 02:25 — ✅ — QT-07: Scenario selector dropdown from triforce.json with 8 tests
 2026-03-02 02:40 — ✅ — QT-08: Model browser tree view with directory scanning, step count parsing, bold highlighting, and 26 tests
 2026-03-02 02:45 — ✅ — QT-09: Wire File menu (Open Directory + Exit) and --path argument to model browser
+2026-03-02 02:47 — ✅ — QT-10: Observation panel with image, vectors, directional circles, and boolean indicators
