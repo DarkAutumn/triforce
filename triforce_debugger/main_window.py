@@ -55,6 +55,7 @@ class MainWindow(QMainWindow):
         self.obs_panel = None
         self.game_view = None
         self.right_panel = None
+        self.right_tabs = None
         self.step_history = None
         self.detail_tabs = None
         self.rewards_tab = None
@@ -200,11 +201,19 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.main_splitter)
 
     def _build_right_panel(self) -> QWidget:
-        """Build the right panel: model browser, model def, scenario, action probs."""
+        """Build the right panel: tabbed Models / Probabilities."""
         panel = QWidget()
         panel.setObjectName("right_panel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
+
+        self.right_tabs = QTabWidget()
+        self.right_tabs.setObjectName("right_tabs")
+
+        # ── Models tab ────────────────────────────────────────
+        models_widget = QWidget()
+        models_layout = QVBoxLayout(models_widget)
+        models_layout.setContentsMargins(0, 0, 0, 0)
 
         self.model_browser = ModelBrowser()
 
@@ -220,12 +229,18 @@ class MainWindow(QMainWindow):
         model_def_layout.addWidget(self.model_def_combo)
 
         self.scenario_selector = ScenarioSelector()
+
+        models_layout.addWidget(self.model_browser, stretch=3)
+        models_layout.addLayout(model_def_layout)
+        models_layout.addWidget(self.scenario_selector, stretch=0)
+
+        # ── Probabilities tab ─────────────────────────────────
         self.action_table = ActionTable()
 
-        layout.addWidget(self.model_browser, stretch=3)
-        layout.addLayout(model_def_layout)
-        layout.addWidget(self.scenario_selector, stretch=0)
-        layout.addWidget(self.action_table, stretch=2)
+        self.right_tabs.addTab(models_widget, "Models")
+        self.right_tabs.addTab(self.action_table, "Probabilities")
+
+        layout.addWidget(self.right_tabs)
 
         return panel
 
@@ -506,6 +521,7 @@ class MainWindow(QMainWindow):
                     pt_path, self.model_def_combo.currentText(),
                     self.scenario_selector.current_scenario_name)
                 self.setWindowTitle(f"Triforce Debugger — {self._bridge.model_details}")
+                self.right_tabs.setCurrentIndex(1)  # switch to Probabilities
                 return
 
         # Otherwise, recreate the bridge
@@ -514,6 +530,7 @@ class MainWindow(QMainWindow):
         self.evaluation_tab.set_model(
             pt_path, self.model_def_combo.currentText(),
             self.scenario_selector.current_scenario_name)
+        self.right_tabs.setCurrentIndex(1)  # switch to Probabilities
 
     def _on_scenario_changed(self, _name: str):
         """Handle scenario change — recreate the bridge if active."""
