@@ -467,7 +467,7 @@ class MainWindow(QMainWindow):
         try:
             probs = self._bridge.get_probabilities()
         except Exception:  # pylint: disable=broad-except
-            pass
+            log.warning("Failed to get probabilities:\n%s", traceback.format_exc())
 
         # Update game view (frame + overlays)
         if frame is not None:
