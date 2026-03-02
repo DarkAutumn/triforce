@@ -1,2 +1,3 @@
 2026-03-02 01:55 — ✅ — QT-01: Project scaffolding — triforce_debugger package, debug.py entry point, PySide6 dep, pylint config
 2026-03-02 01:57 — ✅ — QT-02: Extract environment bridge (StepResult, ModelSelector, EnvironmentBridge) with 15 tests
+2026-03-02 02:10 — ✅ — QT-03: Main window layout with splitter, placeholder panels, and menu bar skeleton

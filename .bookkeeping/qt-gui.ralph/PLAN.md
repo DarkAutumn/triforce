@@ -19,7 +19,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 - [x] **QT-02**: Extract environment bridge. Copy `zui/environment_wrapper.py` logic into `triforce_debugger/environment_bridge.py`. Remove all pygame dependencies. Keep: `StepResult`, `EnvironmentWrapper` (step/restart/model loading). This is the Qt-independent core that the new GUI and tests both use. Test: instantiation and basic method signatures (mock the env if retro is unavailable headless).
 
-- [ ] **QT-03**: Main window layout. Implement `main_window.py` with the fixed layout from the spec: top section (obs panel placeholder, game view placeholder, right panel placeholder) and bottom section (step history placeholder, tabbed detail panel placeholder). Use QSplitter for the top/bottom split with bottom ≥50% height. Add the menu bar skeleton (File, View, Run menus with placeholder actions). Test: headless — window has correct widget hierarchy, splitter exists, menus exist.
+- [x] **QT-03**: Main window layout. Implement `main_window.py` with the fixed layout from the spec: top section (obs panel placeholder, game view placeholder, right panel placeholder) and bottom section (step history placeholder, tabbed detail panel placeholder). Use QSplitter for the top/bottom split with bottom ≥50% height. Add the menu bar skeleton (File, View, Run menus with placeholder actions). Test: headless — window has correct widget hierarchy, splitter exists, menus exist.
 
 - [ ] **QT-04**: Game view widget. Implement `game_view.py` — a QWidget that receives an RGB numpy array (NES frame) and renders it scaled to fit the widget. Use QPainter + QImage for rendering. No overlays yet, just the base frame display. Test: feed a known numpy array, verify QImage is created with correct dimensions.
 

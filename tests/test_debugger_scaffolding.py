@@ -21,16 +21,16 @@ def test_debugger_package_imports():
 
 def test_debug_module_imports():
     """debug.py module is importable and has expected symbols."""
-    from debug import DebuggerWindow, main, parse_args  # pylint: disable=import-outside-toplevel,unused-import
+    from debug import main, parse_args  # pylint: disable=import-outside-toplevel,unused-import
     assert callable(main)
     assert callable(parse_args)
 
 
 def test_debugger_window_creation():
-    """DebuggerWindow can be instantiated headlessly."""
+    """MainWindow can be instantiated headlessly via debug.py import."""
     _app = get_app()
-    from debug import DebuggerWindow  # pylint: disable=import-outside-toplevel
-    window = DebuggerWindow()
+    from triforce_debugger.main_window import MainWindow  # pylint: disable=import-outside-toplevel
+    window = MainWindow()
     assert isinstance(window, QMainWindow)
     assert window.windowTitle() == "Triforce Debugger"
     assert window.width() >= 1280

@@ -4,16 +4,9 @@
 import sys
 import argparse
 
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtWidgets import QApplication
 
-
-class DebuggerWindow(QMainWindow):
-    """Main debugger window."""
-
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Triforce Debugger")
-        self.resize(1280, 900)
+from triforce_debugger.main_window import MainWindow
 
 
 def parse_args():
@@ -30,7 +23,7 @@ def main():
     _ = args  # Will be used when model browser is wired up
 
     app = QApplication(sys.argv)
-    window = DebuggerWindow()
+    window = MainWindow()
     window.show()
     sys.exit(app.exec())
 
