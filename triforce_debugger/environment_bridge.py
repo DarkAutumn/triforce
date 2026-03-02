@@ -133,6 +133,8 @@ class ModelSelector:
         logits, value = self.model.forward(obs)
 
         if mask is not None:
+            if mask.dim() < logits.dim():
+                mask = mask.unsqueeze(0)
             assert mask.any(dim=-1).all(), "Mask must contain at least one valid action"
             logits = logits.clone()
             invalid_mask = ~mask
