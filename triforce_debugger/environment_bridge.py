@@ -39,6 +39,17 @@ class StepResult:
         return self.terminated or self.truncated
 
 
+def _find_pt_files(path):
+    """Find all .pt files in a path (file or directory, non-recursive)."""
+    if path is None:
+        return []
+    if os.path.isfile(path) and path.endswith('.pt'):
+        return [path]
+    if os.path.isdir(path):
+        return [os.path.join(path, f) for f in sorted(os.listdir(path)) if f.endswith('.pt')]
+    return []
+
+
 class ModelSelector:
     """Discovers, loads, and switches between trained models."""
     def __init__(self, env, model_path):
@@ -50,7 +61,7 @@ class ModelSelector:
 
         # Discover and load all .pt files from the path
         models = []
-        pt_files = self._find_pt_files(model_path)
+        pt_files = _find_pt_files(model_path)
         for pt_path in pt_files:
             try:
                 metadata = Network.load_metadata(pt_path)
@@ -96,17 +107,6 @@ class ModelSelector:
         self._loaded_models["best"] = (self._loaded_models[best][0], "best")
         self._curr_index = name if name is not None else "untrained"
         self._curr = self._loaded_models[self._curr_index]
-
-    @staticmethod
-    def _find_pt_files(path):
-        """Find all .pt files in a path (file or directory, non-recursive)."""
-        if path is None:
-            return []
-        if os.path.isfile(path) and path.endswith('.pt'):
-            return [path]
-        if os.path.isdir(path):
-            return [os.path.join(path, f) for f in sorted(os.listdir(path)) if f.endswith('.pt')]
-        return []
 
     @property
     def model_name(self):
@@ -232,15 +232,18 @@ class EnvironmentBridge:
                  action_space_name=None, model_kind_name=None):
         self.scenario_def: TrainingScenarioDefinition = scenario_def
 
-        # Resolve action space and model kind from args or defaults
-        if action_space_name:
-            asd = ActionSpaceDefinition.get(action_space_name)
-        else:
-            asd = ActionSpaceDefinition.get_default()
-        if model_kind_name:
-            mk = ModelKindDefinition.get(model_kind_name)
-        else:
-            mk = ModelKindDefinition.get_default()
+        # Peek at .pt files to determine model kind and action space from metadata
+        if not model_kind_name or not action_space_name:
+            detected = self._detect_from_models(model_path)
+            if not model_kind_name and detected.get("model_kind"):
+                model_kind_name = detected["model_kind"]
+            if not action_space_name and detected.get("action_space_name"):
+                action_space_name = detected["action_space_name"]
+
+        asd = ActionSpaceDefinition.get(action_space_name) if action_space_name \
+            else ActionSpaceDefinition.get_default()
+        mk = ModelKindDefinition.get(model_kind_name) if model_kind_name \
+            else ModelKindDefinition.get_default()
 
         multihead = getattr(mk.network_class, 'is_multihead', False)
         self.env = env = make_zelda_env(self.scenario_def, asd.actions, render_mode='rgb_array',
@@ -263,6 +266,21 @@ class EnvironmentBridge:
         self.action_space: ZeldaActionSpace = action_space
         self._observation = None
         self._action_mask = None
+
+    @staticmethod
+    def _detect_from_models(model_path):
+        """Peek at .pt files to detect model_kind and action_space_name."""
+        pt_files = _find_pt_files(model_path)
+        for pt_path in pt_files:
+            try:
+                meta = Network.load_metadata(pt_path)
+                mk = meta.get("model_kind")
+                asn = meta.get("action_space_name")
+                if mk and asn:
+                    return {"model_kind": mk, "action_space_name": asn}
+            except Exception:  # pylint: disable=broad-exception-caught
+                continue
+        return {}
 
     def restart(self):
         """Restarts the environment episode."""

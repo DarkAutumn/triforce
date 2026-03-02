@@ -33,15 +33,6 @@
                     "exit_criteria": "success-rate",
                     "threshold": 0.9,
                     "iterations": 1250000
-                },
-                {
-                    "scenario": "dungeon1",
-                    "exit_criteria": "success-rate",
-                    "threshold": 0.02,
-                    "iterations": 500000
-                },
-                {
-                    "scenario": "skip-sword-to-triforce"
                 }
             ]
         },

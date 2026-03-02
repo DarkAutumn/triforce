@@ -109,7 +109,7 @@ def _make_selector(model_paths=None):
     net = _make_mock_network()
 
     # Mock out file scanning and model loading so no real files are needed
-    with patch.object(ModelSelector, '_find_pt_files', return_value=[]), \
+    with patch('triforce_debugger.environment_bridge._find_pt_files', return_value=[]), \
          patch('triforce_debugger.environment_bridge.ModelKindDefinition') as mock_mkd, \
          patch('triforce_debugger.environment_bridge.ActionSpaceDefinition') as mock_asd:
         mock_mk = MagicMock()
