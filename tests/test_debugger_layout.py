@@ -37,6 +37,9 @@ def test_main_splitter_exists():
 def test_splitter_bottom_ge_half():
     """Bottom section should get ≥50% of the initial splitter sizes."""
     window = _make_window()
+    # Use a tall window so real widget minimum sizes don't dominate the split
+    window.resize(1280, 1600)
+    window.show()
     sizes = window.main_splitter.sizes()
     assert sizes[1] >= sizes[0], f"Bottom ({sizes[1]}) should be >= top ({sizes[0]})"
     window.close()
@@ -48,9 +51,11 @@ def test_splitter_bottom_ge_half():
 def test_top_section_has_three_panels():
     """Top section contains obs panel, game view, and right panel."""
     window = _make_window()
-    assert isinstance(window.obs_panel_placeholder, QLabel)
-    assert isinstance(window.game_view_placeholder, QLabel)
-    assert window.right_panel_placeholder.objectName() == "right_panel"
+    from triforce_debugger.observation_panel import ObservationPanel  # pylint: disable=import-outside-toplevel
+    from triforce_debugger.game_view import GameView  # pylint: disable=import-outside-toplevel
+    assert isinstance(window.obs_panel, ObservationPanel)
+    assert isinstance(window.game_view, GameView)
+    assert window.right_panel.objectName() == "right_panel"
     window.close()
 
 
@@ -70,9 +75,10 @@ def test_right_panel_sub_widgets():
 
 
 def test_bottom_section_has_step_history_and_tabs():
-    """Bottom section has step history placeholder and tabbed detail panel."""
+    """Bottom section has step history widget and tabbed detail panel."""
     window = _make_window()
-    assert isinstance(window.step_history_placeholder, QLabel)
+    from triforce_debugger.step_history import StepHistoryWidget  # pylint: disable=import-outside-toplevel
+    assert isinstance(window.step_history, StepHistoryWidget)
     assert isinstance(window.detail_tabs, QTabWidget)
     window.close()
 

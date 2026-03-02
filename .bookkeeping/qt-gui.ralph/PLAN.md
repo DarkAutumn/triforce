@@ -47,7 +47,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 - [x] **QT-13**: Step history list widget. Add QAbstractListModel wrapping StepHistory. Virtual scrolling — only visible rows rendered. Each row shows: step number, action (e.g., "MOVE N"), total reward (colored green/red/grey). Expandable rows showing individual reward/penalty breakdown. Most recent at top. Auto-scrolls to latest unless user has scrolled up (sticky scroll). Test: model returns correct data for row indices, row count matches buffer.
 
-- [ ] **QT-14**: Time-travel on step selection. Clicking a step in the history list updates ALL panels to show that step's data: game view (frame), observation panel, rewards tab, state tab, action probabilities. The game loop pauses when viewing a historical step. Press F5 to resume live (jumps back to current step). Test: selecting a step emits correct signals, panels receive the right data.
+- [x] **QT-14**: Time-travel on step selection. Clicking a step in the history list updates ALL panels to show that step's data: game view (frame), observation panel, rewards tab, state tab, action probabilities. The game loop pauses when viewing a historical step. Press F5 to resume live (jumps back to current step). Test: selecting a step emits correct signals, panels receive the right data.
 
 ## Phase 5: Detail Tabs
 

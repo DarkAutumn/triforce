@@ -40,6 +40,7 @@ class StepEntry:
     terminated: bool
     truncated: bool
     frame: Any                # RGB numpy array (last game frame)
+    action_mask_desc: Any = None  # list of (ActionKind, [Direction]) for masking display
 
 
 # ── Ring buffer ───────────────────────────────────────────────────────

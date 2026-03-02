@@ -16,8 +16,11 @@ from PySide6.QtWidgets import (
 
 from triforce_debugger.action_table import ActionTable
 from triforce_debugger.game_timer import GameTimer
+from triforce_debugger.game_view import GameView
 from triforce_debugger.model_browser import ModelBrowser
+from triforce_debugger.observation_panel import ObservationPanel
 from triforce_debugger.scenario_selector import ScenarioSelector
+from triforce_debugger.step_history import StepHistoryWidget, StepEntry
 
 
 class MainWindow(QMainWindow):
@@ -27,16 +30,19 @@ class MainWindow(QMainWindow):
     manual_move_requested = Signal(str)
     manual_attack_requested = Signal(str)
 
+    # Emitted when a step is selected for viewing (StepEntry), or None for live mode
+    step_viewed = Signal(object)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Triforce Debugger")
         self.resize(1280, 900)
 
-        # Placeholders set in _build_layout / _build_right_panel
-        self.obs_panel_placeholder = None
-        self.game_view_placeholder = None
-        self.right_panel_placeholder = None
-        self.step_history_placeholder = None
+        # Panels set in _build_layout / _build_right_panel
+        self.obs_panel = None
+        self.game_view = None
+        self.right_panel = None
+        self.step_history = None
         self.detail_tabs = None
         self.rewards_tab_placeholder = None
         self.state_tab_placeholder = None
@@ -48,6 +54,12 @@ class MainWindow(QMainWindow):
 
         # Track 'A' key for attack modifier
         self._a_key_held = False
+
+        # Time-travel state
+        self._viewing_historical = False
+
+        # Deferred splitter sizing (applied once in showEvent)
+        self._initial_split_set = False
 
         # Game loop timer
         self.game_timer = GameTimer(self)
@@ -112,20 +124,20 @@ class MainWindow(QMainWindow):
         top_layout = QHBoxLayout(top_widget)
         top_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.obs_panel_placeholder = _placeholder("Observation Panel")
-        self.game_view_placeholder = _placeholder("Game View")
-        self.right_panel_placeholder = self._build_right_panel()
+        self.obs_panel = ObservationPanel()
+        self.game_view = GameView()
+        self.right_panel = self._build_right_panel()
 
-        top_layout.addWidget(self.obs_panel_placeholder, stretch=1)
-        top_layout.addWidget(self.game_view_placeholder, stretch=3)
-        top_layout.addWidget(self.right_panel_placeholder, stretch=2)
+        top_layout.addWidget(self.obs_panel, stretch=1)
+        top_layout.addWidget(self.game_view, stretch=3)
+        top_layout.addWidget(self.right_panel, stretch=2)
 
         # Bottom section: step history | tabbed detail panel
         bottom_widget = QWidget()
         bottom_layout = QHBoxLayout(bottom_widget)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.step_history_placeholder = _placeholder("Step History")
+        self.step_history = StepHistoryWidget()
         self.detail_tabs = QTabWidget()
         self.detail_tabs.setObjectName("detail_tabs")
         self.rewards_tab_placeholder = _placeholder("Rewards")
@@ -135,8 +147,11 @@ class MainWindow(QMainWindow):
         self.detail_tabs.addTab(self.state_tab_placeholder, "State")
         self.detail_tabs.addTab(self.evaluation_tab_placeholder, "Evaluation")
 
-        bottom_layout.addWidget(self.step_history_placeholder, stretch=1)
+        bottom_layout.addWidget(self.step_history, stretch=1)
         bottom_layout.addWidget(self.detail_tabs, stretch=2)
+
+        # Wire time-travel: step selection → update panels
+        self.step_history.step_selected.connect(self._on_step_selected)
 
         # Vertical splitter: top | bottom (bottom ≥50%)
         self.main_splitter = QSplitter(Qt.Orientation.Vertical)
@@ -144,10 +159,7 @@ class MainWindow(QMainWindow):
         self.main_splitter.addWidget(top_widget)
         self.main_splitter.addWidget(bottom_widget)
 
-        # Set initial sizes so bottom gets ≥50% of window height
-        total = self.height()
-        self.main_splitter.setSizes([total * 45 // 100, total * 55 // 100])
-
+        # Set initial sizes so bottom gets ≥50% of window height (deferred to showEvent)
         self.setCentralWidget(self.main_splitter)
 
     def _build_right_panel(self) -> QWidget:
@@ -171,10 +183,62 @@ class MainWindow(QMainWindow):
 
     def _wire_run_menu(self):
         """Connect Run menu actions and View > Uncap FPS to the game timer."""
-        self.action_continue.triggered.connect(self.game_timer.resume)
+        self.action_continue.triggered.connect(self._on_continue)
         self.action_pause.triggered.connect(self.game_timer.pause)
         self.action_step.triggered.connect(self.game_timer.single_step)
         self.action_uncap_fps.toggled.connect(self.game_timer.set_uncapped)
+
+    # ── Time-travel ──────────────────────────────────────────
+
+    @property
+    def is_viewing_historical(self) -> bool:
+        """True when showing a historical step rather than live data."""
+        return self._viewing_historical
+
+    def show_step(self, entry: StepEntry):
+        """Update game view, observation panel, and action table from a step entry."""
+        self._update_panels(entry)
+        self.step_viewed.emit(entry)
+
+    def _update_panels(self, entry: StepEntry):
+        """Update visual panels without emitting step_viewed."""
+        if entry.frame is not None:
+            self.game_view.set_frame(entry.frame)
+        if entry.observation is not None:
+            self.obs_panel.update_observation(entry.observation)
+        self.action_table.update_probabilities(
+            entry.action_probabilities,
+            entry.action_mask_desc
+        )
+
+    def _on_step_selected(self, buf_index):
+        """Handle step selection in history list (time-travel)."""
+        try:
+            entry = self.step_history.history[buf_index]
+        except IndexError:
+            return
+        self._viewing_historical = True
+        self.game_timer.pause()
+        self.show_step(entry)
+
+    def _on_continue(self):
+        """Resume live play, exiting historical mode if active."""
+        if self._viewing_historical:
+            self._viewing_historical = False
+            latest = self.step_history.history.newest
+            if latest is not None:
+                self._update_panels(latest)
+            self.step_viewed.emit(None)
+        self.game_timer.resume()
+
+    def showEvent(self, event):  # pylint: disable=invalid-name
+        """Apply the initial splitter split once the window has its real geometry."""
+        super().showEvent(event)
+        if not self._initial_split_set:
+            self._initial_split_set = True
+            total = self.main_splitter.height()
+            if total > 0:
+                self.main_splitter.setSizes([total * 45 // 100, total * 55 // 100])
 
     # ── File menu actions ─────────────────────────────────────
 
