@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QTabWidget,
     QMenuBar,
+    QFileDialog,
 )
 
 from triforce_debugger.game_timer import GameTimer
@@ -63,6 +64,8 @@ class MainWindow(QMainWindow):
         self.file_menu = menu_bar.addMenu("&File")
         self.action_open_dir = self.file_menu.addAction("Open Directory...")
         self.action_open_dir.setShortcut("Ctrl+O")
+        self.file_menu.addSeparator()
+        self.action_open_dir.triggered.connect(self.open_directory)
         self.file_menu.addSeparator()
         self.action_exit = self.file_menu.addAction("Exit")
         self.action_exit.setShortcut("Ctrl+Q")
@@ -171,6 +174,21 @@ class MainWindow(QMainWindow):
         self.action_pause.triggered.connect(self.game_timer.pause)
         self.action_step.triggered.connect(self.game_timer.single_step)
         self.action_uncap_fps.toggled.connect(self.game_timer.set_uncapped)
+
+    # ── File menu actions ─────────────────────────────────────
+
+    def set_model_path(self, path: str):
+        """Set the initial model directory and scan for .pt files."""
+        self.model_browser.scan_directory(path)
+
+    def open_directory(self):
+        """Open a file dialog to choose a model directory and rescan."""
+        start_dir = self.model_browser.root_path or ""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Open Model Directory", start_dir
+        )
+        if directory:
+            self.model_browser.scan_directory(directory)
 
     # ── Arrow / A+arrow keyboard handling ─────────────────────
 

@@ -2,6 +2,7 @@
 """Entry point for the Triforce Debugger Qt GUI."""
 
 import sys
+import os
 import argparse
 
 from PySide6.QtWidgets import QApplication
@@ -20,10 +21,10 @@ def parse_args():
 def main():
     """Launch the debugger application."""
     args = parse_args()
-    _ = args  # Will be used when model browser is wired up
 
     app = QApplication(sys.argv)
     window = MainWindow()
+    window.set_model_path(os.path.abspath(args.path))
     window.show()
     sys.exit(app.exec())
 
