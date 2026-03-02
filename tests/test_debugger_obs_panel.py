@@ -192,35 +192,35 @@ def test_directional_circle_paints():
 
 
 def test_boolean_indicator_default_inactive():
-    """BooleanIndicator starts inactive (grey)."""
+    """BooleanIndicator starts inactive (white)."""
     from triforce_debugger.observation_panel import BooleanIndicator  # pylint: disable=import-outside-toplevel
     _app = get_app()
     ind = BooleanIndicator("Enemies")
     assert not ind.active
-    assert "80, 80, 80" in ind.styleSheet()
+    assert "255, 255, 255" in ind.styleSheet()
     ind.close()
 
 
 def test_boolean_indicator_set_active():
-    """Setting active changes color to green."""
+    """Setting active changes color to dark blue."""
     from triforce_debugger.observation_panel import BooleanIndicator  # pylint: disable=import-outside-toplevel
     _app = get_app()
     ind = BooleanIndicator("Beams")
     ind.set_active(True)
     assert ind.active
-    assert "0, 255, 0" in ind.styleSheet()
+    assert "0, 0, 160" in ind.styleSheet()
     ind.close()
 
 
 def test_boolean_indicator_set_inactive():
-    """Toggling back to inactive restores grey."""
+    """Toggling back to inactive restores white."""
     from triforce_debugger.observation_panel import BooleanIndicator  # pylint: disable=import-outside-toplevel
     _app = get_app()
     ind = BooleanIndicator("Low HP")
     ind.set_active(True)
     ind.set_active(False)
     assert not ind.active
-    assert "80, 80, 80" in ind.styleSheet()
+    assert "255, 255, 255" in ind.styleSheet()
     ind.close()
 
 
