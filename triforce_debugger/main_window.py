@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QSplitter,
     QTabWidget,
+    QToolBar,
     QMenuBar,
     QFileDialog,
     QComboBox,
@@ -157,6 +158,15 @@ class MainWindow(QMainWindow):
     # ── Layout ────────────────────────────────────────────────
 
     def _build_layout(self):
+        # Toolbar with scenario selector
+        self.scenario_selector = ScenarioSelector()
+        toolbar = QToolBar("Main")
+        toolbar.setObjectName("main_toolbar")
+        toolbar.setMovable(False)
+        toolbar.addWidget(QLabel("  Scenario: "))
+        toolbar.addWidget(self.scenario_selector)
+        self.addToolBar(toolbar)
+
         # Top section: obs panel | game view | right panel
         top_widget = QWidget()
         top_layout = QHBoxLayout(top_widget)
@@ -228,11 +238,8 @@ class MainWindow(QMainWindow):
         model_def_layout.addWidget(model_def_label)
         model_def_layout.addWidget(self.model_def_combo)
 
-        self.scenario_selector = ScenarioSelector()
-
         models_layout.addWidget(self.model_browser, stretch=3)
         models_layout.addLayout(model_def_layout)
-        models_layout.addWidget(self.scenario_selector, stretch=0)
 
         # ── Probabilities tab ─────────────────────────────────
         self.action_table = ActionTable()
