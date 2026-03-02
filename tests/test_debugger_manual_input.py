@@ -30,12 +30,10 @@ def _make_window():
 
 
 def _send_key(window, key, event_type=QKeyEvent.Type.KeyPress, auto_repeat=False):
-    """Send a synthetic key event to the window."""
+    """Send a synthetic key event via the application (goes through the global event filter)."""
     event = QKeyEvent(event_type, key, Qt.KeyboardModifier.NoModifier, "", auto_repeat)
-    if event_type == QKeyEvent.Type.KeyPress:
-        window.keyPressEvent(event)
-    else:
-        window.keyReleaseEvent(event)
+    app = get_app()
+    app.sendEvent(window, event)
 
 
 # ── Direction mapping ────────────────────────────────────────
