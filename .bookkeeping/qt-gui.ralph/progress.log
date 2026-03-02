@@ -19,3 +19,4 @@
 2026-03-02 03:44 — ✅ — QT-19: Game view overlays (wavefront, tile IDs, walkability, coordinates) with OverlayFlags enum and View menu wiring
 2026-03-02 03:52 — ✅ — QT-20: Uncap FPS toggle already implemented; added interval-change test via menu toggle
 2026-03-02 03:53 — ✅ — QT-21: End-to-end integration — model def selector, bridge lifecycle, step loop, restart, model switching, state tab wiring
+2026-03-02 04:10 — ✅ — QT-22: Wire manual input (arrows + A+arrow) to environment bridge with SWORD/BEAMS auto-selection

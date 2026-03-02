@@ -71,7 +71,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 - [x] **QT-22**: Manual input (arrows + attack). Wire arrow key presses to override the model's action for one step (manual move). A+arrow for attack. Should work identically to the old pygame controls. Test: verify correct ActionTaken produced for each key combo.
 
-- [ ] **QT-23**: Pylint cleanup. Run `pylint triforce_debugger/ debug.py` and fix all issues. Ensure the full test suite passes. Final commit.
+- [x] **QT-23**: Pylint cleanup. Run `pylint triforce_debugger/ debug.py` and fix all issues. Ensure the full test suite passes. Final commit.
 
 - [ ] **QT-24**: Delete old GUI. Remove `run.py` and `zui/` directory. Update any imports or references. Verify nothing depends on the old code (grep for `from zui` and `import zui`). Test suite still passes.
 
