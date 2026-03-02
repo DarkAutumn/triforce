@@ -12,7 +12,8 @@ from collections import OrderedDict
 from enum import Enum
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -22,6 +23,8 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QAbstractItemView,
 )
+
+from triforce_debugger.state_differ import diff_state_dicts
 
 
 # ── State extraction ─────────────────────────────────────────────────
@@ -207,10 +210,19 @@ def extract_state_dict(state) -> OrderedDict:
     return d
 
 
+# ── Diff-highlighting colours ─────────────────────────────────────────
+
+CHANGED_BLUE = QBrush(QColor(60, 120, 220))   # Persistent: value changed
+FLASH_YELLOW = QBrush(QColor(200, 180, 50))    # Momentary: just changed
+DEFAULT_FG = QBrush()                           # Reset to default
+
+
 # ── Widget ────────────────────────────────────────────────────────────
 
 class StateTab(QWidget):
     """State detail tab showing the full game state as an expandable tree."""
+
+    FLASH_DURATION_MS = 300
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -238,30 +250,44 @@ class StateTab(QWidget):
 
         layout.addWidget(self._tree, stretch=1)
 
-        # Current state dict for external access (testing, diff engine)
+        # Current and previous state dicts for diff computation
         self._current_state: OrderedDict | None = None
+        self._previous_state: OrderedDict | None = None
+
+        # Paths that are currently "changed" (colored blue)
+        self._changed_paths: set = set()
+
+        # Paths currently flashing (yellow) — cleared after timer
+        self._flash_paths: set = set()
+        self._flash_timer = QTimer(self)
+        self._flash_timer.setSingleShot(True)
+        self._flash_timer.timeout.connect(self._clear_flash)  # pylint: disable=no-member
 
     # ── Public API ────────────────────────────────────────────
 
     def update_state(self, state) -> None:
         """Update the tree with a live ZeldaGame state.
 
-        Extracts the state into a dict, then rebuilds the tree.
+        Extracts the state into a dict, then rebuilds the tree with diff
+        highlighting against the previous state.
         """
         state_dict = extract_state_dict(state)
-        self._set_state_dict(state_dict)
+        self._set_state_dict(state_dict, diff_against=self._current_state)
 
     def update_state_dict(self, state_dict: OrderedDict) -> None:
         """Update the tree from a pre-extracted state dict."""
-        self._set_state_dict(state_dict)
+        self._set_state_dict(state_dict, diff_against=self._current_state)
 
-    def show_step_state(self, state_dict: OrderedDict, step_number: int = 0) -> None:
+    def show_step_state(self, state_dict: OrderedDict,
+                        step_number: int = 0,
+                        prev_state_dict: OrderedDict | None = None) -> None:
         """Switch to showing a historical step's state.
 
         *state_dict* should be the pre-extracted dict for that step.
+        *prev_state_dict* is the state from the step before, for diff highlighting.
         """
         self._header.setText(f"Step #{step_number} State")
-        self._set_state_dict(state_dict)
+        self._set_state_dict(state_dict, diff_against=prev_state_dict)
 
     def show_live(self) -> None:
         """Switch header back to live mode label."""
@@ -271,6 +297,9 @@ class StateTab(QWidget):
         """Clear the tree and reset state."""
         self._tree.clear()
         self._current_state = None
+        self._previous_state = None
+        self._changed_paths.clear()
+        self._flash_paths.clear()
         self._header.setText("Game State")
 
     @property
@@ -278,15 +307,38 @@ class StateTab(QWidget):
         """The currently displayed state dict (for testing)."""
         return self._current_state
 
+    @property
+    def changed_paths(self) -> set:
+        """Paths currently highlighted as changed (for testing)."""
+        return set(self._changed_paths)
+
+    @property
+    def flash_paths(self) -> set:
+        """Paths currently flashing yellow (for testing)."""
+        return set(self._flash_paths)
+
     # ── Internals ─────────────────────────────────────────────
 
-    def _set_state_dict(self, state_dict: OrderedDict) -> None:
+    def _set_state_dict(self, state_dict: OrderedDict,
+                        diff_against: OrderedDict | None = None) -> None:
         """Rebuild the tree from a state dict, preserving expansion state."""
         expanded = self._save_expanded()
+        self._previous_state = diff_against
         self._current_state = state_dict
+
+        # Compute diff; accumulate changed paths (blue persists until next change)
+        new_changes = diff_state_dicts(diff_against, state_dict)
+        self._flash_paths = new_changes - self._changed_paths
+        self._changed_paths = self._changed_paths | new_changes
+
         self._tree.clear()
         self._populate_tree(self._tree.invisibleRootItem(), state_dict)
+        self._apply_diff_colors(self._tree.invisibleRootItem())
         self._restore_expanded(expanded)
+
+        # Start flash timer if there are newly changed paths
+        if self._flash_paths:
+            self._flash_timer.start(self.FLASH_DURATION_MS)
 
     def _populate_tree(self, parent, data, prefix: str = "") -> None:
         """Recursively add items to the tree from a dict or list."""
@@ -341,3 +393,28 @@ class StateTab(QWidget):
             if path in expanded:
                 child.setExpanded(True)
             self._expand_items(child, expanded)
+
+    def _apply_diff_colors(self, parent) -> None:
+        """Apply blue/yellow foreground colours to changed leaf items."""
+        for i in range(parent.childCount()):
+            child = parent.child(i)
+            path = child.data(0, Qt.ItemDataRole.UserRole)
+            if path in self._flash_paths:
+                child.setForeground(1, FLASH_YELLOW)
+            elif path in self._changed_paths:
+                child.setForeground(1, CHANGED_BLUE)
+            self._apply_diff_colors(child)
+
+    def _clear_flash(self) -> None:
+        """Timer callback: convert flash-yellow items to persistent blue."""
+        self._recolor_flash(self._tree.invisibleRootItem())
+        self._flash_paths.clear()
+
+    def _recolor_flash(self, parent) -> None:
+        """Walk the tree and recolor flash paths to blue."""
+        for i in range(parent.childCount()):
+            child = parent.child(i)
+            path = child.data(0, Qt.ItemDataRole.UserRole)
+            if path in self._flash_paths:
+                child.setForeground(1, CHANGED_BLUE)
+            self._recolor_flash(child)
