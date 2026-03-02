@@ -11,3 +11,4 @@
 2026-03-02 02:55 — ✅ — QT-11: Action probability table with masking, value display, and tests
 2026-03-02 02:59 — ✅ — QT-12: Step history ring buffer with StepEntry dataclass, 13 tests pass
 2026-03-02 03:02 — ✅ — QT-13: Step history list widget with QAbstractItemModel, expandable reward rows, sticky scroll, and 35 tests
+2026-03-02 03:15 — ✅ — QT-14: Time-travel on step selection with panel updates and F5 resume

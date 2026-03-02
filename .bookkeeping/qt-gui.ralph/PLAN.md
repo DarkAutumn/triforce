@@ -51,7 +51,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 ## Phase 5: Detail Tabs
 
-- [ ] **QT-15**: Rewards tab. Implement `rewards_tab.py` — QTableWidget showing running rewards (NAME, COUNT, TOTAL VALUE columns), episode total, endings dict. When viewing a historical step, shows that step's individual reward breakdown. Cleared on reset. Test: populate with mock StepRewards, verify aggregation math.
+- [x] **QT-15**: Rewards tab. Implement `rewards_tab.py` — QTableWidget showing running rewards (NAME, COUNT, TOTAL VALUE columns), episode total, endings dict. When viewing a historical step, shows that step's individual reward breakdown. Cleared on reset. Test: populate with mock StepRewards, verify aggregation math.
 
 - [ ] **QT-16**: State tab. Implement `state_tab.py` — QTreeWidget displaying the full ZeldaGame state as an expandable tree. Nodes for: link, enemies[], items[], projectiles[], room, objectives. Each leaf shows field name + value. Test: build tree from a mock state dict, verify node structure.
 

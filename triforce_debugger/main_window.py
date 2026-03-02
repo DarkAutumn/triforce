@@ -19,6 +19,7 @@ from triforce_debugger.game_timer import GameTimer
 from triforce_debugger.game_view import GameView
 from triforce_debugger.model_browser import ModelBrowser
 from triforce_debugger.observation_panel import ObservationPanel
+from triforce_debugger.rewards_tab import RewardsTab
 from triforce_debugger.scenario_selector import ScenarioSelector
 from triforce_debugger.step_history import StepHistoryWidget, StepEntry
 
@@ -44,7 +45,7 @@ class MainWindow(QMainWindow):
         self.right_panel = None
         self.step_history = None
         self.detail_tabs = None
-        self.rewards_tab_placeholder = None
+        self.rewards_tab = None
         self.state_tab_placeholder = None
         self.evaluation_tab_placeholder = None
         self.model_browser = None
@@ -140,10 +141,10 @@ class MainWindow(QMainWindow):
         self.step_history = StepHistoryWidget()
         self.detail_tabs = QTabWidget()
         self.detail_tabs.setObjectName("detail_tabs")
-        self.rewards_tab_placeholder = _placeholder("Rewards")
+        self.rewards_tab = RewardsTab()
         self.state_tab_placeholder = _placeholder("State")
         self.evaluation_tab_placeholder = _placeholder("Evaluation")
-        self.detail_tabs.addTab(self.rewards_tab_placeholder, "Rewards")
+        self.detail_tabs.addTab(self.rewards_tab, "Rewards")
         self.detail_tabs.addTab(self.state_tab_placeholder, "State")
         self.detail_tabs.addTab(self.evaluation_tab_placeholder, "Evaluation")
 
@@ -210,6 +211,8 @@ class MainWindow(QMainWindow):
             entry.action_probabilities,
             entry.action_mask_desc
         )
+        if self._viewing_historical and entry.reward is not None:
+            self.rewards_tab.show_step_rewards(entry.reward, entry.step_number)
 
     def _on_step_selected(self, buf_index):
         """Handle step selection in history list (time-travel)."""
@@ -228,6 +231,7 @@ class MainWindow(QMainWindow):
             latest = self.step_history.history.newest
             if latest is not None:
                 self._update_panels(latest)
+            self.rewards_tab.show_running()
             self.step_viewed.emit(None)
         self.game_timer.resume()
 
