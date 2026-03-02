@@ -25,7 +25,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 - [x] **QT-05**: Game timer and step loop. Implement `game_timer.py` — QTimer-based game loop. Capped mode (16ms/60fps) and uncapped mode (0ms). Wire it to `environment_bridge`: each tick calls `step()`, updates the game view. Add pause/resume/single-step methods. Wire to Run menu: Continue (F5), Pause (Shift+F5), Step (F10), Restart (Ctrl+Shift+F5). Test: timer fires, mode switching works.
 
-- [ ] **QT-06**: Global keyboard shortcuts. Register application-level shortcuts (Qt.ApplicationShortcut) for F5, Shift+F5, F10, Ctrl+Shift+F5, arrow keys, A+arrow. Verify they fire regardless of which widget has focus. Test: headless shortcut signal emission.
+- [x] **QT-06**: Global keyboard shortcuts. Register application-level shortcuts (Qt.ApplicationShortcut) for F5, Shift+F5, F10, Ctrl+Shift+F5, arrow keys, A+arrow. Verify they fire regardless of which widget has focus. Test: headless shortcut signal emission.
 
 ## Phase 2: Model & Scenario Selection
 

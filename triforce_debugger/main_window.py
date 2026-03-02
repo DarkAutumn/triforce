@@ -1,6 +1,7 @@
 """Main window layout for the Triforce Debugger."""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -17,6 +18,10 @@ from triforce_debugger.game_timer import GameTimer
 
 class MainWindow(QMainWindow):
     """Main debugger window with the fixed panel layout."""
+
+    # Manual input signals: direction is 'N', 'S', 'E', or 'W'
+    manual_move_requested = Signal(str)
+    manual_attack_requested = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -36,6 +41,9 @@ class MainWindow(QMainWindow):
         self.scenario_selector_placeholder = None
         self.action_table_placeholder = None
         self.main_splitter = None
+
+        # Track 'A' key for attack modifier
+        self._a_key_held = False
 
         # Game loop timer
         self.game_timer = GameTimer(self)
@@ -72,16 +80,23 @@ class MainWindow(QMainWindow):
         self.action_uncap_fps = self.view_menu.addAction("Uncap FPS")
         self.action_uncap_fps.setCheckable(True)
 
-        # Run menu
+        # Run menu — all shortcuts are ApplicationShortcut so they fire
+        # regardless of which widget has focus.
+        app_ctx = Qt.ShortcutContext.ApplicationShortcut
+
         self.run_menu = menu_bar.addMenu("&Run")
         self.action_continue = self.run_menu.addAction("Continue")
         self.action_continue.setShortcut("F5")
+        self.action_continue.setShortcutContext(app_ctx)
         self.action_pause = self.run_menu.addAction("Pause")
         self.action_pause.setShortcut("Shift+F5")
+        self.action_pause.setShortcutContext(app_ctx)
         self.action_step = self.run_menu.addAction("Step")
         self.action_step.setShortcut("F10")
+        self.action_step.setShortcutContext(app_ctx)
         self.action_restart = self.run_menu.addAction("Restart")
         self.action_restart.setShortcut("Ctrl+Shift+F5")
+        self.action_restart.setShortcutContext(app_ctx)
 
     # ── Layout ────────────────────────────────────────────────
 
@@ -154,6 +169,42 @@ class MainWindow(QMainWindow):
         self.action_pause.triggered.connect(self.game_timer.pause)
         self.action_step.triggered.connect(self.game_timer.single_step)
         self.action_uncap_fps.toggled.connect(self.game_timer.set_uncapped)
+
+    # ── Arrow / A+arrow keyboard handling ─────────────────────
+
+    # Map Qt arrow keys to direction strings
+    _ARROW_TO_DIR = {
+        Qt.Key.Key_Up: 'N',
+        Qt.Key.Key_Down: 'S',
+        Qt.Key.Key_Left: 'W',
+        Qt.Key.Key_Right: 'E',
+    }
+
+    def keyPressEvent(self, event: QKeyEvent):  # pylint: disable=invalid-name
+        """Handle arrow keys (move) and A+arrow (attack)."""
+        key = event.key()
+
+        if key == Qt.Key.Key_A:
+            self._a_key_held = True
+            return
+
+        direction = self._ARROW_TO_DIR.get(key)
+        if direction is not None and not event.isAutoRepeat():
+            if self._a_key_held:
+                self.manual_attack_requested.emit(direction)
+            else:
+                self.manual_move_requested.emit(direction)
+            return
+
+        super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event: QKeyEvent):  # pylint: disable=invalid-name
+        """Track release of 'A' key modifier."""
+        if event.key() == Qt.Key.Key_A and not event.isAutoRepeat():
+            self._a_key_held = False
+            return
+
+        super().keyReleaseEvent(event)
 
 
 def _placeholder(label_text: str) -> QLabel:
