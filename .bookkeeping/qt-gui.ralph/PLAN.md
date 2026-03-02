@@ -37,7 +37,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 ## Phase 3: Observation & Probabilities
 
-- [ ] **QT-10**: Observation panel. Implement `observation_panel.py` — displays the network input image (84×84 grayscale, scaled up), vector observations (enemy/projectile/item arrows as compact directional indicators), boolean indicators (Enemies, Beams, Low HP, Full HP — green/grey), and directional circles (Objective, Source). Port the rendering logic from `zui/reward_debugger.py`'s `_show_observation()` to Qt (QPainter). Test: headless widget creation, correct sub-widget count.
+- [x] **QT-10**: Observation panel. Implement `observation_panel.py` — displays the network input image (84×84 grayscale, scaled up), vector observations (enemy/projectile/item arrows as compact directional indicators), boolean indicators (Enemies, Beams, Low HP, Full HP — green/grey), and directional circles (Objective, Source). Port the rendering logic from `zui/reward_debugger.py`'s `_show_observation()` to Qt (QPainter). Test: headless widget creation, correct sub-widget count.
 
 - [ ] **QT-11**: Action probability table. Implement `action_table.py` — QTableWidget with columns ACTION, DIRECTION, PROBABILITY. Percentages as "45.2%", masked actions as "[masked]" in grey. Also display the Value estimate. Updated each step from `model_selector.get_probabilities()`. Port from `zui/model_selector.py`. Test: populate table with mock probability data, verify cell content formatting.
 
