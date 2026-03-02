@@ -154,6 +154,45 @@ def test_enqueue_step_empty_frames():
     assert timer.buffer_depth == 0
 
 
+# ── play_frames (manual step playback) ──────────────────────
+
+
+def test_play_frames_uncapped_flushes_immediately():
+    """play_frames in uncapped mode emits all frames immediately."""
+    timer = _make_timer()
+    assert timer.is_uncapped
+    frames_seen = []
+    results_seen = []
+    timer.frame_ready.connect(frames_seen.append)
+    timer.step_completed.connect(results_seen.append)
+    timer.play_frames(["f1", "f2", "f3"], "result")
+    assert frames_seen == ["f1", "f2", "f3"]
+    assert results_seen == ["result"]
+    assert timer.buffer_depth == 0
+
+
+def test_play_frames_capped_uses_drain():
+    """play_frames in capped mode starts a drain (buffer not flushed instantly)."""
+    timer = _make_timer()
+    timer.set_uncapped(False)
+    timer.play_frames(["f1", "f2", "f3"], "result")
+    # Frames are buffered, not flushed yet.
+    assert timer.buffer_depth == 3
+
+    # Process one tick — should pop one frame.
+    import time
+    app = get_app()
+    frames_seen = []
+    timer.frame_ready.connect(frames_seen.append)
+    for _ in range(100):
+        time.sleep(0.005)
+        app.processEvents()
+        if frames_seen:
+            break
+    timer.stop()
+    assert len(frames_seen) >= 1
+
+
 # ── State changed signal ─────────────────────────────────────
 
 

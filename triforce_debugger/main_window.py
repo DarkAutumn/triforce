@@ -629,9 +629,7 @@ class MainWindow(QMainWindow):
         self.game_timer.pause()
         try:
             step_result = self._bridge.step(action=action_tuple)
-            self._show_step_result(step_result)
-
-            if step_result.completed:
-                self._do_restart()
+            frames = step_result.frames if step_result.frames else []
+            self.game_timer.play_frames(frames, step_result)
         except Exception:  # pylint: disable=broad-except
             log.error("Manual step error:\n%s", traceback.format_exc())

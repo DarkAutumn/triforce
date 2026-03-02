@@ -55,6 +55,7 @@ class GameTimer(QObject):
         self._buffer: deque[tuple] = deque()
 
         self._running = False
+        self._draining = False  # True when playing back a manual step's frames
         self._uncapped = True  # default to uncapped (fast as possible)
 
     # ── Properties ────────────────────────────────────────────
@@ -80,6 +81,7 @@ class GameTimer(QObject):
         """Start or resume automatic stepping."""
         if self._running:
             return
+        self._draining = False
         self._running = True
         self._schedule_next()
         self.state_changed.emit(True)
@@ -89,6 +91,7 @@ class GameTimer(QObject):
         if not self._running:
             return
         self._running = False
+        self._draining = False
         self._timer.stop()
         self._buffer.clear()
         self.state_changed.emit(False)
@@ -126,9 +129,25 @@ class GameTimer(QObject):
             sr = step_result if i == len(frames) - 1 else None
             self._buffer.append((f, sr))
 
+    def play_frames(self, frames, step_result):
+        """Enqueue frames from a manual/one-off step and play them back.
+
+        In uncapped mode the frames are flushed immediately.
+        In capped mode the render timer drains them at 16ms per frame.
+        """
+        self.enqueue_step(frames, step_result)
+        if self._uncapped:
+            self._flush_buffer()
+        else:
+            # Start a drain cycle — render timer pops frames but doesn't
+            # request new env steps.
+            self._draining = True
+            self._timer.start(self.MS_PER_NES_FRAME)
+
     def stop(self):
         """Fully stop the timer (for shutdown)."""
         self._running = False
+        self._draining = False
         self._timer.stop()
         self._buffer.clear()
 
@@ -142,11 +161,27 @@ class GameTimer(QObject):
     def _tick(self):
         """Render-timer callback.
 
-        1. If the buffer is empty, request a step (which refills it).
-        2. Pop one frame and emit it.
-        3. If it's a step boundary, emit step_completed.
-        4. Schedule the next tick.
+        Normal (running) mode:
+          1. If the buffer is empty, request a step (which refills it).
+          2. Pop one frame and emit it.
+          3. If it's a step boundary, emit step_completed.
+          4. Schedule the next tick.
+
+        Draining mode (manual step playback):
+          Pop one frame per tick.  When empty, stop — don't request new steps.
         """
+        if self._draining:
+            if self._buffer:
+                frame, step_result = self._buffer.popleft()
+                self.frame_ready.emit(frame)
+                if step_result is not None:
+                    self.step_completed.emit(step_result)
+            if self._buffer:
+                self._timer.start(self.MS_PER_NES_FRAME)
+            else:
+                self._draining = False
+            return
+
         if not self._running:
             return
 
