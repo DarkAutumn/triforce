@@ -25,10 +25,10 @@ def _make_timer():
 
 
 def test_initial_state_paused():
-    """GameTimer starts paused."""
+    """GameTimer starts paused and uncapped."""
     timer = _make_timer()
     assert not timer.is_running
-    assert not timer.is_uncapped
+    assert timer.is_uncapped
 
 
 def test_default_interval():
@@ -46,7 +46,7 @@ def test_resume_starts_timer():
     timer = _make_timer()
     timer.resume()
     assert timer.is_running
-    assert timer.interval == 16
+    assert timer.interval == 0  # default is uncapped
     timer.stop()
 
 
@@ -105,24 +105,24 @@ def test_single_step_pauses_running_timer():
 def test_set_uncapped():
     """Setting uncapped mode updates the property."""
     timer = _make_timer()
+    assert timer.is_uncapped  # default is uncapped
+    timer.set_uncapped(False)
     assert not timer.is_uncapped
     timer.set_uncapped(True)
     assert timer.is_uncapped
-    timer.set_uncapped(False)
-    assert not timer.is_uncapped
 
 
 def test_uncapped_changes_interval_when_running():
     """Changing uncapped mode while running adjusts the interval immediately."""
     timer = _make_timer()
     timer.resume()
+    assert timer.interval == 0  # default uncapped
+
+    timer.set_uncapped(False)
     assert timer.interval == 16
 
     timer.set_uncapped(True)
     assert timer.interval == 0
-
-    timer.set_uncapped(False)
-    assert timer.interval == 16
     timer.stop()
 
 
@@ -257,27 +257,27 @@ def test_uncap_fps_toggle_changes_mode():
     _app = get_app()
     from triforce_debugger.main_window import MainWindow  # pylint: disable=import-outside-toplevel
     window = MainWindow()
+    assert window.game_timer.is_uncapped  # default checked
+    window.action_uncap_fps.setChecked(False)
     assert not window.game_timer.is_uncapped
     window.action_uncap_fps.setChecked(True)
     assert window.game_timer.is_uncapped
-    window.action_uncap_fps.setChecked(False)
-    assert not window.game_timer.is_uncapped
     window.close()
 
 
 def test_uncap_fps_toggle_changes_interval_while_running():
-    """View > Uncap FPS changes timer interval from 16ms to 0ms while running."""
+    """View > Uncap FPS changes timer interval while running."""
     _app = get_app()
     from triforce_debugger.main_window import MainWindow  # pylint: disable=import-outside-toplevel
     window = MainWindow()
     window.game_timer.resume()
+    assert window.game_timer.interval == 0  # default uncapped
+
+    window.action_uncap_fps.setChecked(False)
     assert window.game_timer.interval == 16
 
     window.action_uncap_fps.setChecked(True)
     assert window.game_timer.interval == 0
-
-    window.action_uncap_fps.setChecked(False)
-    assert window.game_timer.interval == 16
 
     window.game_timer.stop()
     window.close()

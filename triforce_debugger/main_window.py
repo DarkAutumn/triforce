@@ -124,6 +124,7 @@ class MainWindow(QMainWindow):
         self.view_menu.addSeparator()
         self.action_uncap_fps = self.view_menu.addAction("Uncap FPS")
         self.action_uncap_fps.setCheckable(True)
+        self.action_uncap_fps.setChecked(True)  # default to uncapped
 
         # Run menu — all shortcuts are ApplicationShortcut so they fire
         # regardless of which widget has focus.

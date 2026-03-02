@@ -36,7 +36,7 @@ class GameTimer(QObject):
         self._timer.timeout.connect(self._on_tick)  # pylint: disable=no-member
 
         self._running = False
-        self._uncapped = False
+        self._uncapped = True  # default to uncapped (fast as possible)
 
     # ── Properties ────────────────────────────────────────────
 
@@ -86,7 +86,9 @@ class GameTimer(QObject):
         """Switch between capped (16ms) and uncapped (0ms) modes."""
         self._uncapped = uncapped
         if self._running:
-            self._timer.setInterval(self._current_interval())
+            # Restart the timer so the new interval takes effect immediately
+            self._timer.stop()
+            self._timer.start(self._current_interval())
 
     def stop(self):
         """Fully stop the timer (for shutdown)."""
