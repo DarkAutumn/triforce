@@ -1,6 +1,6 @@
 [MASTER]
 ignore=tests/,scripts/
-extension-pkg-whitelist=pygame,cv2
+extension-pkg-whitelist=pygame,cv2,PySide6
 
 [FORMAT]
 max-line-length = 120
