@@ -67,7 +67,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 ## Phase 7: Integration & Polish
 
-- [ ] **QT-21**: End-to-end integration. Wire everything together: launch `debug.py`, scan for models, select a model + scenario, press F5, watch the game run with all panels updating live. Step through with F10, click history for time-travel, switch models mid-run. Fix any wiring issues. No automated test — manual verification.
+- [x] **QT-21**: End-to-end integration. Wire everything together: launch `debug.py`, scan for models, select a model + scenario, press F5, watch the game run with all panels updating live. Step through with F10, click history for time-travel, switch models mid-run. Fix any wiring issues. No automated test — manual verification.
 
 - [ ] **QT-22**: Manual input (arrows + attack). Wire arrow key presses to override the model's action for one step (manual move). A+arrow for attack. Should work identically to the old pygame controls. Test: verify correct ActionTaken produced for each key combo.
 

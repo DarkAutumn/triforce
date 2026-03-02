@@ -1,5 +1,9 @@
 """Main window layout for the Triforce Debugger."""
 
+import logging
+import os
+import traceback
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
@@ -11,9 +15,13 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QMenuBar,
     QFileDialog,
+    QComboBox,
+    QLabel,
 )
 
+from triforce import ModelDefinition
 from triforce_debugger.action_table import ActionTable
+from triforce_debugger.environment_bridge import EnvironmentBridge
 from triforce_debugger.game_timer import GameTimer
 from triforce_debugger.game_view import GameView, OverlayFlags
 from triforce_debugger.model_browser import ModelBrowser
@@ -21,8 +29,10 @@ from triforce_debugger.observation_panel import ObservationPanel
 from triforce_debugger.evaluation_tab import EvaluationTab
 from triforce_debugger.rewards_tab import RewardsTab
 from triforce_debugger.scenario_selector import ScenarioSelector
-from triforce_debugger.state_tab import StateTab
+from triforce_debugger.state_tab import StateTab, extract_state_dict
 from triforce_debugger.step_history import StepHistoryWidget, StepEntry
+
+log = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -53,6 +63,7 @@ class MainWindow(QMainWindow):
         self.scenario_selector = None
         self.action_table = None
         self.main_splitter = None
+        self.model_def_combo = None
 
         # Track 'A' key for attack modifier
         self._a_key_held = False
@@ -66,9 +77,18 @@ class MainWindow(QMainWindow):
         # Game loop timer
         self.game_timer = GameTimer(self)
 
+        # Environment bridge and step tracking
+        self._bridge: EnvironmentBridge | None = None
+        self._step_count = 0
+        self._frame_stack = 3
+        self._model_dir: str | None = None
+        self._selected_model_path: str | None = None
+        self._last_state_dict = None
+
         self._build_menus()
         self._build_layout()
         self._wire_run_menu()
+        self._wire_integration()
 
     # ── Menu Bar ──────────────────────────────────────────────
 
@@ -165,17 +185,30 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.main_splitter)
 
     def _build_right_panel(self) -> QWidget:
-        """Build the right panel: model browser, scenario selector, action probs."""
+        """Build the right panel: model browser, model def, scenario, action probs."""
         panel = QWidget()
         panel.setObjectName("right_panel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
 
         self.model_browser = ModelBrowser()
+
+        # Model definition selector
+        model_def_layout = QVBoxLayout()
+        model_def_layout.setContentsMargins(4, 4, 4, 4)
+        model_def_label = QLabel("Model Definition:")
+        self.model_def_combo = QComboBox()
+        self.model_def_combo.setObjectName("model_def_combo")
+        for name in ModelDefinition.get_all_models():
+            self.model_def_combo.addItem(name)
+        model_def_layout.addWidget(model_def_label)
+        model_def_layout.addWidget(self.model_def_combo)
+
         self.scenario_selector = ScenarioSelector()
         self.action_table = ActionTable()
 
         layout.addWidget(self.model_browser, stretch=3)
+        layout.addLayout(model_def_layout)
         layout.addWidget(self.scenario_selector, stretch=0)
         layout.addWidget(self.action_table, stretch=2)
 
@@ -188,6 +221,7 @@ class MainWindow(QMainWindow):
         self.action_continue.triggered.connect(self._on_continue)
         self.action_pause.triggered.connect(self.game_timer.pause)
         self.action_step.triggered.connect(self.game_timer.single_step)
+        self.action_restart.triggered.connect(self._on_restart)
         self.action_uncap_fps.toggled.connect(self.game_timer.set_uncapped)
 
         # Overlay toggles
@@ -199,6 +233,14 @@ class MainWindow(QMainWindow):
             lambda on: self.game_view.set_overlay(OverlayFlags.WALKABILITY, on))
         self.action_overlay_coordinates.toggled.connect(
             lambda on: self.game_view.set_overlay(OverlayFlags.COORDINATES, on))
+
+    def _wire_integration(self):
+        """Connect all integration signals for end-to-end operation."""
+        self.game_timer.step_requested.connect(self._on_step)
+        self.model_browser.model_selected.connect(self._on_model_file_selected)
+        self.scenario_selector.scenario_changed.connect(self._on_scenario_changed)
+        self.model_def_combo.currentTextChanged.connect(  # pylint: disable=no-member
+            self._on_model_def_changed)
 
     # ── Time-travel ──────────────────────────────────────────
 
@@ -224,6 +266,20 @@ class MainWindow(QMainWindow):
         )
         if self._viewing_historical and entry.reward is not None:
             self.rewards_tab.show_step_rewards(entry.reward, entry.step_number)
+        # Update state tab during time-travel
+        if self._viewing_historical and entry.state is not None:
+            prev_dict = self._get_prev_state_dict(entry)
+            self.state_tab.show_step_state(entry.state, entry.step_number, prev_dict)
+
+    def _get_prev_state_dict(self, entry: StepEntry):
+        """Find the state dict of the step before *entry* for diff highlighting."""
+        history = self.step_history.history
+        if len(history) < 2:
+            return None
+        for i, step in enumerate(history):
+            if step.step_number == entry.step_number and i > 0:
+                return history[i - 1].state
+        return None
 
     def _on_step_selected(self, buf_index):
         """Handle step selection in history list (time-travel)."""
@@ -243,8 +299,185 @@ class MainWindow(QMainWindow):
             if latest is not None:
                 self._update_panels(latest)
             self.rewards_tab.show_running()
+            self.state_tab.show_live()
             self.step_viewed.emit(None)
         self.game_timer.resume()
+
+    # ── Environment integration ───────────────────────────────
+
+    def _get_model_def(self) -> ModelDefinition | None:
+        """Get the currently selected ModelDefinition."""
+        name = self.model_def_combo.currentText()
+        if not name:
+            return None
+        return ModelDefinition.get(name)
+
+    def _create_bridge(self):
+        """Create the environment bridge from current selections."""
+        model_def = self._get_model_def()
+        scenario_def = self.scenario_selector.current_scenario
+        if model_def is None or scenario_def is None or self._model_dir is None:
+            return
+
+        # Tear down existing bridge
+        self._destroy_bridge()
+
+        try:
+            self._bridge = EnvironmentBridge(
+                self._model_dir, model_def, scenario_def, self._frame_stack)
+
+            # Select the specific .pt file if one was chosen
+            if self._selected_model_path:
+                self._bridge.selector.select_by_path(self._selected_model_path)
+
+            self.model_browser.set_loaded_model(self._bridge.selector.model_path)
+            self._do_restart()
+            self.setWindowTitle(f"Triforce Debugger — {self._bridge.model_details}")
+        except Exception:  # pylint: disable=broad-except
+            log.error("Failed to create bridge:\n%s", traceback.format_exc())
+            self._bridge = None
+
+    def _destroy_bridge(self):
+        """Tear down the current bridge if it exists."""
+        self.game_timer.stop()
+        if self._bridge:
+            self._bridge.close()
+            self._bridge = None
+
+    def _do_restart(self):
+        """Restart the episode and update all panels with initial state."""
+        if not self._bridge:
+            return
+
+        self._step_count = 0
+        self.step_history.clear_history()
+        self.rewards_tab.clear()
+        self.state_tab.clear()
+        self._last_state_dict = None
+
+        step_result = self._bridge.restart()
+        self._show_step_result(step_result, initial=True)
+
+    def _on_restart(self):
+        """Handle restart action (Ctrl+Shift+F5)."""
+        if self._viewing_historical:
+            self._viewing_historical = False
+            self.rewards_tab.show_running()
+            self.state_tab.show_live()
+        self.game_timer.pause()
+        self._do_restart()
+
+    def _on_step(self):
+        """Handle a single environment step from the game timer."""
+        if not self._bridge or self._viewing_historical:
+            return
+
+        try:
+            step_result = self._bridge.step()
+            self._show_step_result(step_result)
+
+            if step_result.completed:
+                # Record ending then auto-restart
+                self._do_restart()
+        except Exception:  # pylint: disable=broad-except
+            log.error("Step error:\n%s", traceback.format_exc())
+            self.game_timer.pause()
+
+    def _show_step_result(self, step_result, initial=False):
+        """Update all panels from a StepResult."""
+        self._step_count += 1
+
+        # Get last frame
+        frame = step_result.frames[-1] if step_result.frames else None
+
+        # Extract state dict for the state tab
+        state = step_result.state
+        state_dict = extract_state_dict(state) if state else None
+
+        # Get probabilities from the model
+        probs = None
+        try:
+            probs = self._bridge.get_probabilities()
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+        # Update game view
+        if frame is not None:
+            self.game_view.set_frame(frame)
+        if state:
+            self.game_view.set_game_state(state)
+
+        # Update observation panel
+        if step_result.observation is not None:
+            self.obs_panel.update_observation(step_result.observation)
+
+        # Update action table
+        self.action_table.update_probabilities(probs, step_result.action_mask_desc)
+
+        # Update rewards tab (running totals)
+        if not initial:
+            self.rewards_tab.add_step_rewards(step_result.rewards)
+
+        # Update state tab
+        if state_dict:
+            self.state_tab.update_state_dict(state_dict)
+        self._last_state_dict = state_dict
+
+        # Determine action for step history
+        action = None
+        if step_result.state_change and hasattr(step_result.state_change, 'action'):
+            action = step_result.state_change.action
+
+        # Append to step history
+        entry = StepEntry(
+            step_number=self._step_count,
+            action=action,
+            reward=step_result.rewards,
+            observation=step_result.observation,
+            state=state_dict,
+            action_mask=step_result.action_mask,
+            action_probabilities=probs,
+            terminated=step_result.terminated,
+            truncated=step_result.truncated,
+            frame=frame,
+            action_mask_desc=step_result.action_mask_desc,
+        )
+        self.step_history.append_step(entry)
+
+        # Update window title with model info
+        self.setWindowTitle(f"Triforce Debugger — {self._bridge.model_details}")
+
+    def _on_model_file_selected(self, pt_path: str):
+        """Handle model file selection from the browser."""
+        self._selected_model_path = pt_path
+        model_dir = os.path.dirname(pt_path)
+
+        # If bridge exists with same config, just switch the model
+        if self._bridge and model_dir == self._model_dir:
+            if self._bridge.selector.select_by_path(pt_path):
+                self.model_browser.set_loaded_model(pt_path)
+                self.evaluation_tab.set_model(
+                    pt_path, self.model_def_combo.currentText(),
+                    self.scenario_selector.current_scenario_name)
+                self.setWindowTitle(f"Triforce Debugger — {self._bridge.model_details}")
+                return
+
+        # Otherwise, recreate the bridge
+        self._model_dir = model_dir
+        self._create_bridge()
+        self.evaluation_tab.set_model(
+            pt_path, self.model_def_combo.currentText(),
+            self.scenario_selector.current_scenario_name)
+
+    def _on_scenario_changed(self, _name: str):
+        """Handle scenario change — recreate the bridge if active."""
+        if self._bridge:
+            self._create_bridge()
+
+    def _on_model_def_changed(self, _name: str):
+        """Handle model definition change — recreate the bridge if active."""
+        if self._bridge:
+            self._create_bridge()
 
     def showEvent(self, event):  # pylint: disable=invalid-name
         """Apply the initial splitter split once the window has its real geometry."""
@@ -254,6 +487,11 @@ class MainWindow(QMainWindow):
             total = self.main_splitter.height()
             if total > 0:
                 self.main_splitter.setSizes([total * 45 // 100, total * 55 // 100])
+
+    def closeEvent(self, event):  # pylint: disable=invalid-name
+        """Clean up the environment bridge on close."""
+        self._destroy_bridge()
+        super().closeEvent(event)
 
     # ── File menu actions ─────────────────────────────────────
 

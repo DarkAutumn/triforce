@@ -102,6 +102,15 @@ class ModelSelector:
         self._curr_index = keys[(keys.index(self._curr_index) - 1) % len(keys)]
         self._curr = self._loaded_models[self._curr_index]
 
+    def select_by_path(self, path):
+        """Select a model by its file path.  Returns True if found."""
+        for name, (network, model_path) in self._loaded_models.items():
+            if model_path == path:
+                self._curr_index = name
+                self._curr = (network, model_path)
+                return True
+        return False
+
     def _find_best_model(self):
         best_model = "untrained"
         best_score = -math.inf
