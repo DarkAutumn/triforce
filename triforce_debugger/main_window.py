@@ -163,7 +163,6 @@ class MainWindow(QMainWindow):
         toolbar = QToolBar("Main")
         toolbar.setObjectName("main_toolbar")
         toolbar.setMovable(False)
-        toolbar.addWidget(QLabel("  Scenario: "))
         toolbar.addWidget(self.scenario_selector)
         self.addToolBar(toolbar)
 
