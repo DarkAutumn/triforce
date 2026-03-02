@@ -21,7 +21,7 @@ N/A — this is a GUI rewrite, no training runs.
 
 - [x] **QT-03**: Main window layout. Implement `main_window.py` with the fixed layout from the spec: top section (obs panel placeholder, game view placeholder, right panel placeholder) and bottom section (step history placeholder, tabbed detail panel placeholder). Use QSplitter for the top/bottom split with bottom ≥50% height. Add the menu bar skeleton (File, View, Run menus with placeholder actions). Test: headless — window has correct widget hierarchy, splitter exists, menus exist.
 
-- [ ] **QT-04**: Game view widget. Implement `game_view.py` — a QWidget that receives an RGB numpy array (NES frame) and renders it scaled to fit the widget. Use QPainter + QImage for rendering. No overlays yet, just the base frame display. Test: feed a known numpy array, verify QImage is created with correct dimensions.
+- [x] **QT-04**: Game view widget. Implement `game_view.py` — a QWidget that receives an RGB numpy array (NES frame) and renders it scaled to fit the widget. Use QPainter + QImage for rendering. No overlays yet, just the base frame display. Test: feed a known numpy array, verify QImage is created with correct dimensions.
 
 - [ ] **QT-05**: Game timer and step loop. Implement `game_timer.py` — QTimer-based game loop. Capped mode (16ms/60fps) and uncapped mode (0ms). Wire it to `environment_bridge`: each tick calls `step()`, updates the game view. Add pause/resume/single-step methods. Wire to Run menu: Continue (F5), Pause (Shift+F5), Step (F10), Restart (Ctrl+Shift+F5). Test: timer fires, mode switching works.
 
