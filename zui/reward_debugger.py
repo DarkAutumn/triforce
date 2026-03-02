@@ -389,7 +389,7 @@ class RewardDebugger:
         y_pos = self.obs_y
         y_pos = self._render_observation_view(surface, x_pos, y_pos, obs["image"][-1])
 
-        radius = self.obs_width // 4
+        radius = self.obs_width // 6
         if not self.vector_widgets:
             pos = Coordinates(x_pos, y_pos)
             labels = ["Enemy 1", "Enemy 2", "Enemy 3", "Enemy 4", "Projectile 1", "Projectile 2", "Item 1", "Item 2"]
