@@ -16,20 +16,20 @@ HEALTH_LOST_PENALTY = Penalty("penalty-lost-health", -REWARD_LARGE)
 HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_SMALL)
 WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_SMALL)
-MOVE_CLOSER_REWARD = Reward("reward-move-closer", REWARD_TINY)
-MOVE_AWAY_PENALTY = Penalty("penalty-move-away", -REWARD_TINY - REWARD_MINIMUM)
-LATERAL_MOVE_PENALTY = Penalty("penalty-move-lateral", -REWARD_MINIMUM)
+PBRS_SCALE = 20.0
+TILE_REVISIT_THRESHOLD = 8
+
+# Combat rewards decay after this many events per room to prevent farming respawning enemies.
+COMBAT_DECAY_THRESHOLD = 8
+COMBAT_DECAY_RATE = 0.5
 DANGER_TILE_PENALTY = Penalty("penalty-move-danger", -REWARD_MEDIUM)
 MOVED_TO_SAFETY_REWARD = Reward("reward-move-safety", REWARD_TINY)
-ATTACK_NO_ENEMIES_PENALTY = Penalty("penalty-attack-no-enemies", -MOVE_CLOSER_REWARD.value * 2)
+ATTACK_NO_ENEMIES_PENALTY = Penalty("penalty-attack-no-enemies", -0.10)
 ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_TINY - REWARD_MINIMUM)
 
 DIDNT_FIRE_PENALTY = Penalty("penalty-didnt-fire", -REWARD_TINY)
-BLOCK_PROJECTILE_REWARD = Reward("reward-block-projectile", REWARD_MEDIUM)
 FIRED_CORRECTLY_REWARD = Reward("reward-fired-correctly", REWARD_TINY)
-INJURE_KILL_REWARD = Reward("reward-hit", REWARD_SMALL)
 INJURE_KILL_MOVEMENT_ROOM_REWARD = Reward("reward-incidental-hit", REWARD_SMALL)
-BEAM_ATTACK_REWARD = Reward("reward-beam-hit", REWARD_SMALL)
 PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
 USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
@@ -38,9 +38,6 @@ PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -REWARD_MAXIMUM)
 FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_TINY)
 MOVED_OFF_OF_WALLMASTER_REWARD = Reward("reward-moved-off-wallmaster", REWARD_TINY - REWARD_MINIMUM)
 MOVED_ONTO_WALLMASTER_PENALTY = Penalty("penalty-moved-onto-wallmaster", -REWARD_TINY)
-PENALTY_OFF_WAVEFRONT = Penalty("penalty-off-wavefront", -REWARD_TINY - REWARD_MINIMUM)
-
-TILE_TIMEOUT = 8
 
 def _init_equipment_rewards():
     """Initializes the equipment rewards."""
@@ -84,7 +81,6 @@ class ZeldaCritic:
         raise NotImplementedError()
 
 
-MOVEMENT_SCALE_FACTOR = 9.0
 DISTANCE_THRESHOLD = 28
 
 class GameplayCritic(ZeldaCritic):
@@ -96,14 +92,30 @@ class GameplayCritic(ZeldaCritic):
         self._total_hits = 0
         self._equipment_rewards = {}
         self._progress = 0.0
-        self._tile_count = {}
+        self._room_combat_counts = {}  # full_location -> combat event count
+        self._tile_count = {}  # tile -> visit count (for stalling detection)
 
     def clear(self):
         super().clear()
         self._correct_locations.clear()
         self._total_hits = 0
         self._progress = 0.0
+        self._room_combat_counts.clear()
         self._tile_count.clear()
+
+    def _get_combat_decay(self, full_location):
+        """Returns a decay multiplier for combat rewards in this room.
+
+        After COMBAT_DECAY_THRESHOLD events, each additional event is scaled by
+        COMBAT_DECAY_RATE^(excess). This prevents farming respawning enemies
+        (e.g. Zoras) for infinite hit/block rewards.
+        """
+        count = self._room_combat_counts.get(full_location, 0)
+        self._room_combat_counts[full_location] = count + 1
+        excess = count - COMBAT_DECAY_THRESHOLD
+        if excess <= 0:
+            return 1.0
+        return COMBAT_DECAY_RATE ** excess
 
     def critique_gameplay(self, state_change : StateChange, rewards : StepRewards):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
@@ -125,7 +137,6 @@ class GameplayCritic(ZeldaCritic):
 
             # Blocking projectiles only happens when not using an item
             self.critique_block(state_change, rewards)
-            self.critique_tile_position(state_change, rewards)
 
         self.critique_health_change(state_change, rewards)
 
@@ -222,7 +233,8 @@ class GameplayCritic(ZeldaCritic):
         """Critiques blocking of projectiles."""
         prev_link, curr_link = state_change.previous.link, state_change.state.link
         if not prev_link.is_blocking and curr_link.is_blocking:
-            rewards.add(BLOCK_PROJECTILE_REWARD)
+            decay = self._get_combat_decay(state_change.state.full_location)
+            rewards.add(Reward("reward-block-projectile", REWARD_MEDIUM * decay))
 
     def critique_attack(self, state_change : StateChange, rewards):
         """Critiques attacks made by the player."""
@@ -240,11 +252,13 @@ class GameplayCritic(ZeldaCritic):
         prev, curr = state_change.previous, state_change.state
         if state_change.hits and prev.link.are_beams_available \
                              and curr.link.get_animation_state(ZeldaAnimationKind.BEAMS) != AnimationState.INACTIVE:
-            rewards.add(BEAM_ATTACK_REWARD)
+            decay = self._get_combat_decay(curr.full_location)
+            rewards.add(Reward("reward-beam-hit", REWARD_SMALL * decay))
 
         elif state_change.hits:
             if not curr.in_cave:
-                rewards.add(INJURE_KILL_REWARD)
+                decay = self._get_combat_decay(curr.full_location)
+                rewards.add(Reward("reward-hit", REWARD_SMALL * decay))
             else:
                 rewards.add(PENALTY_CAVE_ATTACK)
 
@@ -298,44 +312,23 @@ class GameplayCritic(ZeldaCritic):
             else:
                 rewards.add(PENALTY_WRONG_LOCATION)
 
-
-    def critique_tile_position(self, state_change : StateChange, rewards):
-        """Critiques landing on the same tile over and over."""
-        prev, curr = state_change.previous, state_change.state
-        if prev.full_location != curr.full_location or state_change.hits or state_change.items_gained:
-            self._tile_count.clear()
-            return
-
-        tile = curr.link.tile
-        count = self._tile_count.get(tile, 0)
-        count += 1
-        self._tile_count[tile] = count
-
-        if count >= TILE_TIMEOUT:
-            rewards.add(Penalty("penalty-stuck-tile", -REWARD_MINIMUM * count))
-
     def critique_movement(self, state_change : StateChange, rewards):
-        """
-        Critiques movement on the current screen.  This is the most difficult method to get right.  Movement in Zelda
-        is complicated and unintended consequences are common.
-        """
-        # pylint: disable=too-many-branches, too-many-locals
+        """Critiques movement using Potential-Based Reward Shaping (PBRS).
 
+        F(s, s') = Φ(s') − Φ(s) where Φ(s) = −wavefront_distance(s) / PBRS_SCALE.
+        Uses γ=1 so round trips cancel exactly — no oscillation exploits.
+        """
         prev = state_change.previous
         curr = state_change.state
 
-        prev_link = prev.link
-        curr_link = curr.link
-
-        if state_change.action.kind != ActionKind.MOVE:
+        # Don't evaluate movement rewards if we took damage or changed rooms.
+        if state_change.health_lost or prev.full_location != curr.full_location:
+            self._tile_count.clear()
             return
 
-        # Don't progress movement if we moved to a new location or took damage.  The "movement" which occurs from
-        # damage should never be rewarded, and it will be penalized by the health loss critic.
-        if state_change.action.kind != ActionKind.MOVE \
-                or state_change.health_lost \
-                or prev.full_location != curr.full_location:
-
+        # Reset tile counts on combat hits or item gains (don't penalize combat engagement)
+        if state_change.hits or state_change.items_gained:
+            self._tile_count.clear()
             return
 
         # Did link run into a wall?
@@ -345,23 +338,31 @@ class GameplayCritic(ZeldaCritic):
         # Did link get too close to an enemy?
         self.critique_moving_into_danger(state_change, rewards)
 
-        # Did we move to a place we didn't think Link could get to?
-        old_wavefront = prev.wavefront.get(prev_link.tile)
-        new_wavefront = curr.wavefront.get(curr_link.tile)
-        if new_wavefront is None:
-            rewards.add(PENALTY_OFF_WAVEFRONT)
+        # Tile revisit penalty: escalates when the model stalls on the same tiles.
+        # PBRS provides direction, this provides urgency to keep exploring new tiles.
+        tile = curr.link.tile
+        count = self._tile_count.get(tile, 0) + 1
+        self._tile_count[tile] = count
+        if count >= TILE_REVISIT_THRESHOLD:
+            rewards.add(Penalty("penalty-revisit", -REWARD_MINIMUM * count))
 
-        elif old_wavefront is None:
-            pass # no reward or penalty for moving back to wavefront tile
+        # PBRS: F(s,s') = Φ(s') - Φ(s), Φ(s) = -distance / scale
+        # Uses γ=1 so round trips cancel exactly (no oscillation exploit).
+        # Both distances measured against prev.pbrs_wavefront — a wavefront computed
+        # without items, so it's stationary within a room (items appearing/disappearing
+        # from enemy drops don't shift the potential function).
+        wf = prev.pbrs_wavefront
+        old_dist = wf.get(prev.link.tile)
+        new_dist = wf.get(curr.link.tile)
+        if old_dist is None or new_dist is None:
+            return
 
-        elif old_wavefront < new_wavefront:
-            rewards.add(MOVE_AWAY_PENALTY)
+        shaped = (old_dist - new_dist) / PBRS_SCALE
 
-        elif old_wavefront == new_wavefront:
-            rewards.add(LATERAL_MOVE_PENALTY)
-
-        else:
-            rewards.add(MOVE_CLOSER_REWARD)
+        if shaped > 0:
+            rewards.add(Reward("reward-pbrs-movement", shaped))
+        elif shaped < 0:
+            rewards.add(Penalty("penalty-pbrs-movement", shaped))
 
 
     def _did_link_run_into_wall(self, prev : ZeldaGame, curr : ZeldaGame, rewards):

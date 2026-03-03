@@ -62,13 +62,13 @@ class TestAddStepRewards:
     def test_single_step(self):
         tab = RewardsTab()
         rewards = _StepRewards([
-            _Outcome("reward-move-closer", 0.25),
+            _Outcome("reward-pbrs-movement", 0.25),
             _Outcome("penalty-health", -0.50),
         ])
         tab.add_step_rewards(rewards)
 
         assert tab.running_totals == {
-            "reward-move-closer": [1, 0.25],
+            "reward-pbrs-movement": [1, 0.25],
             "penalty-health": [1, -0.50],
         }
         assert tab.episode_total == pytest.approx(-0.25)
@@ -77,18 +77,18 @@ class TestAddStepRewards:
     def test_accumulation_across_steps(self):
         tab = RewardsTab()
         r1 = _StepRewards([
-            _Outcome("reward-move-closer", 0.25),
+            _Outcome("reward-pbrs-movement", 0.25),
             _Outcome("penalty-health", -0.10),
         ])
         r2 = _StepRewards([
-            _Outcome("reward-move-closer", 0.25, count=1),
+            _Outcome("reward-pbrs-movement", 0.25, count=1),
             _Outcome("reward-hit-enemy", 0.50),
         ])
         tab.add_step_rewards(r1)
         tab.add_step_rewards(r2)
 
         totals = tab.running_totals
-        assert totals["reward-move-closer"] == [2, pytest.approx(0.50)]
+        assert totals["reward-pbrs-movement"] == [2, pytest.approx(0.50)]
         assert totals["penalty-health"] == [1, pytest.approx(-0.10)]
         assert totals["reward-hit-enemy"] == [1, pytest.approx(0.50)]
         assert tab.episode_total == pytest.approx(0.90)

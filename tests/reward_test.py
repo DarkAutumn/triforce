@@ -30,15 +30,14 @@ def test_close_distance():
     actions.env = CriticWrapper(actions.env, critics=[GameplayCritic()])
     actions.reset()
 
-    for i in range(2):
+    for _ in range(2):
         _, rewards, _, _, state_change = actions.move('r')
-        state = state_change.state
-        assert 'reward-move-closer' in rewards
-        assert rewards['reward-move-closer'] > 0
+        assert 'reward-pbrs-movement' in rewards
+        assert rewards['reward-pbrs-movement'] > 0
 
     _, rewards, _, _, state_change = actions.move('l')
-    state = state_change.state
-    assert 'reward-move-closer' not in rewards
+    assert 'penalty-pbrs-movement' in rewards
+    assert rewards['penalty-pbrs-movement'] < 0
 
 
 def test_position():
