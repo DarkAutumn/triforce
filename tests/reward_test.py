@@ -26,24 +26,18 @@ def test_wall_collision():
     assert rewards['penalty-wall-collision'] < 0
 
 def test_close_distance():
-    # Uses a MOVE-objective state (exit on left) so PBRS is active.
-    # PBRS is only applied during MOVE/CAVE objectives (stationary targets).
-    actions = ZeldaActionReplay("0_68e.state")
+    actions = ZeldaActionReplay("1_44w.state")
     actions.env = CriticWrapper(actions.env, critics=[GameplayCritic()])
     actions.reset()
 
-    # Move right (away from left-side exit) — should get PBRS penalty
-    for _ in range(3):
-        actions.move('r')
+    for _ in range(2):
+        _, rewards, _, _, state_change = actions.move('r')
+        assert 'reward-pbrs-movement' in rewards
+        assert rewards['reward-pbrs-movement'] > 0
 
-    _, rewards, _, _, state_change = actions.move('r')
+    _, rewards, _, _, state_change = actions.move('l')
     assert 'penalty-pbrs-movement' in rewards
     assert rewards['penalty-pbrs-movement'] < 0
-
-    # Move left (toward exit) — should get PBRS reward
-    _, rewards, _, _, state_change = actions.move('l')
-    assert 'reward-pbrs-movement' in rewards
-    assert rewards['reward-pbrs-movement'] > 0
 
 
 def test_position():

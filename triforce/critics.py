@@ -5,7 +5,6 @@ from typing import Dict
 import torch
 
 from triforce.action_space import ActionKind
-from triforce.objectives import ObjectiveKind
 from triforce.rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL, REWARD_TINY, \
     Penalty, Reward, StepRewards
 from triforce.zelda_game import ZeldaGame
@@ -312,12 +311,8 @@ class GameplayCritic(ZeldaCritic):
 
         # PBRS: F(s,s') = Φ(s') - Φ(s), Φ(s) = -distance / scale
         # Uses γ=1 so round trips cancel exactly (no oscillation exploit).
-        # Only applied during MOVE/CAVE objectives where targets (exits) are stationary.
-        # During FIGHT, enemy movement makes the wavefront non-stationary, leaking reward.
-        objective_kind = curr.objectives.kind if curr.objectives else ObjectiveKind.NONE
-        if objective_kind not in (ObjectiveKind.MOVE, ObjectiveKind.CAVE):
-            return
-
+        # Both distances measured against the CURRENT wavefront to ensure a stationary
+        # potential function within each step.
         wf = curr.wavefront
         old_dist = wf.get(prev.link.tile)
         new_dist = wf.get(curr.link.tile)
