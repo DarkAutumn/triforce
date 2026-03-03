@@ -311,14 +311,10 @@ class GameplayCritic(ZeldaCritic):
 
         # PBRS: F(s,s') = Φ(s') - Φ(s), Φ(s) = -distance / scale
         # Uses γ=1 so round trips cancel exactly (no oscillation exploit).
-        # Uses a stable wavefront from exit_targets only (no items/enemies) to ensure
-        # the potential function is stationary — items appearing/disappearing would shift
-        # the wavefront and leak free reward.
-        exit_targets = prev.objectives.exit_targets if prev.objectives else None
-        if not exit_targets:
-            return
-
-        wf = prev.room.calculate_wavefront_for_link(exit_targets)
+        # Both distances measured against prev.wavefront — the world as the model saw it
+        # when it chose its action. This correctly attributes reward to the model's decision
+        # rather than blaming/crediting it for enemy movement that happened after.
+        wf = prev.wavefront
         old_dist = wf.get(prev.link.tile)
         new_dist = wf.get(curr.link.tile)
         if old_dist is None or new_dist is None:
