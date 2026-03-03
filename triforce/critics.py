@@ -17,7 +17,7 @@ HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_SMALL)
 WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_SMALL)
 PBRS_SCALE = 20.0
-STEP_TIME_PENALTY = Penalty("penalty-time", -REWARD_MINIMUM)
+TILE_REVISIT_THRESHOLD = 8
 
 # Combat rewards decay after this many events per room to prevent farming respawning enemies.
 COMBAT_DECAY_THRESHOLD = 8
@@ -93,6 +93,7 @@ class GameplayCritic(ZeldaCritic):
         self._equipment_rewards = {}
         self._progress = 0.0
         self._room_combat_counts = {}  # full_location -> combat event count
+        self._tile_count = {}  # tile -> visit count (for stalling detection)
 
     def clear(self):
         super().clear()
@@ -100,6 +101,7 @@ class GameplayCritic(ZeldaCritic):
         self._total_hits = 0
         self._progress = 0.0
         self._room_combat_counts.clear()
+        self._tile_count.clear()
 
     def _get_combat_decay(self, full_location):
         """Returns a decay multiplier for combat rewards in this room.
@@ -321,6 +323,12 @@ class GameplayCritic(ZeldaCritic):
 
         # Don't evaluate movement rewards if we took damage or changed rooms.
         if state_change.health_lost or prev.full_location != curr.full_location:
+            self._tile_count.clear()
+            return
+
+        # Reset tile counts on combat hits or item gains (don't penalize combat engagement)
+        if state_change.hits or state_change.items_gained:
+            self._tile_count.clear()
             return
 
         # Did link run into a wall?
@@ -329,6 +337,14 @@ class GameplayCritic(ZeldaCritic):
 
         # Did link get too close to an enemy?
         self.critique_moving_into_danger(state_change, rewards)
+
+        # Tile revisit penalty: escalates when the model stalls on the same tiles.
+        # PBRS provides direction, this provides urgency to keep exploring new tiles.
+        tile = curr.link.tile
+        count = self._tile_count.get(tile, 0) + 1
+        self._tile_count[tile] = count
+        if count >= TILE_REVISIT_THRESHOLD:
+            rewards.add(Penalty("penalty-revisit", -REWARD_MINIMUM * count))
 
         # PBRS: F(s,s') = Φ(s') - Φ(s), Φ(s) = -distance / scale
         # Uses γ=1 so round trips cancel exactly (no oscillation exploit).
@@ -347,11 +363,6 @@ class GameplayCritic(ZeldaCritic):
             rewards.add(Reward("reward-pbrs-movement", shaped))
         elif shaped < 0:
             rewards.add(Penalty("penalty-pbrs-movement", shaped))
-
-        # Per-step time penalty: PBRS provides direction but not urgency.
-        # This small constant penalty makes dawdling costly so the agent
-        # pushes forward rather than farming combat rewards in one room.
-        rewards.add(STEP_TIME_PENALTY)
 
 
     def _did_link_run_into_wall(self, prev : ZeldaGame, curr : ZeldaGame, rewards):
