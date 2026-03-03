@@ -16,7 +16,6 @@ HEALTH_LOST_PENALTY = Penalty("penalty-lost-health", -REWARD_LARGE)
 HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_SMALL)
 WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_SMALL)
-PBRS_GAMMA = 0.99
 PBRS_SCALE = 20.0
 DANGER_TILE_PENALTY = Penalty("penalty-move-danger", -REWARD_MEDIUM)
 MOVED_TO_SAFETY_REWARD = Reward("reward-move-safety", REWARD_TINY)
@@ -293,8 +292,8 @@ class GameplayCritic(ZeldaCritic):
     def critique_movement(self, state_change : StateChange, rewards):
         """Critiques movement using Potential-Based Reward Shaping (PBRS).
 
-        F(s, s') = γ × Φ(s') − Φ(s) where Φ(s) = −wavefront_distance(s) / PBRS_SCALE.
-        Round trips net ≈ 0, eliminating oscillation exploits by construction.
+        F(s, s') = Φ(s') − Φ(s) where Φ(s) = −wavefront_distance(s) / PBRS_SCALE.
+        Uses γ=1 so round trips cancel exactly — no oscillation exploits.
         """
         prev = state_change.previous
         curr = state_change.state
@@ -310,10 +309,18 @@ class GameplayCritic(ZeldaCritic):
         # Did link get too close to an enemy?
         self.critique_moving_into_danger(state_change, rewards)
 
-        # PBRS: Φ(s) = -distance / scale, F = γ×Φ(s') - Φ(s)
-        old_dist = prev.wavefront[prev.link.tile]
-        new_dist = curr.wavefront[curr.link.tile]
-        shaped = (old_dist - PBRS_GAMMA * new_dist) / PBRS_SCALE
+        # PBRS: F(s,s') = Φ(s') - Φ(s), Φ(s) = -distance / scale
+        # Uses γ=1 so round trips cancel exactly (no oscillation exploit).
+        # Both distances measured against the CURRENT wavefront to ensure a stationary
+        # potential function — enemy movement shifts targets and recalculates the wavefront
+        # each step, so using prev.wavefront vs curr.wavefront would leak free reward.
+        wf = curr.wavefront
+        old_dist = wf.get(prev.link.tile)
+        new_dist = wf.get(curr.link.tile)
+        if old_dist is None or new_dist is None:
+            return
+
+        shaped = (old_dist - new_dist) / PBRS_SCALE
 
         if shaped > 0:
             rewards.add(Reward("reward-pbrs-movement", shaped))
