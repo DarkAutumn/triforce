@@ -51,10 +51,12 @@ class ObjectiveKind(Enum):
 
 class Objective:
     """The current objective for the agent."""
-    def __init__(self, kind : ObjectiveKind, targets : Set[TileIndex], next_rooms : Set[int]):
+    def __init__(self, kind : ObjectiveKind, targets : Set[TileIndex], next_rooms : Set[int],
+                 pbrs_targets : Set[TileIndex] = None):
         self.kind : ObjectiveKind = kind
         self.next_rooms : Sequence[MapLocation] = next_rooms if next_rooms is not None else set()
         self.targets : Sequence[TileIndex] = targets
+        self.pbrs_targets : Sequence[TileIndex] = pbrs_targets if pbrs_targets is not None else targets
 
 CAVE_TREASURE_TILE = TileIndex(0x0f, 0x0b)
 
@@ -233,6 +235,9 @@ class GameCompletion(ObjectiveSelector):
         if kind == ObjectiveKind.NONE:
             kind = ObjectiveKind.MOVE
 
+        # Save non-item targets for PBRS (stationary wavefront, no item-based drift)
+        pbrs_targets = set(tile_objectives)
+
         # add all items to the target tiles so wavefront lets us walk to them
         for item in state.items:
             for tile in item.link_overlap_tiles:
@@ -244,8 +249,9 @@ class GameCompletion(ObjectiveSelector):
             exit_tiles, rooms = self._get_map_objective(state)
             tile_objectives.extend(exit_tiles)
             next_rooms.extend(rooms)
+            pbrs_targets.update(exit_tiles)
 
-        objective = Objective(kind, set(tile_objectives), set(next_rooms))
+        objective = Objective(kind, set(tile_objectives), set(next_rooms), pbrs_targets)
         return objective
 
     def _get_overworld_room_objective(self, state : ZeldaGame):

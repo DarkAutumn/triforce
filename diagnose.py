@@ -409,6 +409,10 @@ class PbrsStepRecord:
     room_changed: bool
     wall_hit: bool
     other_rewards: str      # non-PBRS rewards this step
+    num_items: int = 0      # items on screen this step
+    num_enemies: int = 0    # enemies on screen this step
+    item_tiles: tuple = ()  # item positions as tuple of (x,y)
+    enemy_ids: tuple = ()   # enemy type IDs this step
 
 
 def run_pbrs_diagnostic(model_name, scenario_name, model_path, episodes, tail, output_path):
@@ -498,6 +502,38 @@ def run_pbrs_diagnostic(model_name, scenario_name, model_path, episodes, tail, o
         obj_counts = Counter(s.objective for s in last_room_steps)
         w(f"\n  Objectives: {dict(obj_counts)}")
 
+        # Item/enemy summary for stuck room
+        item_counts = [s.num_items for s in last_room_steps]
+        enemy_counts = [s.num_enemies for s in last_room_steps]
+        all_item_tiles = set()
+        for s in last_room_steps:
+            all_item_tiles.update(s.item_tiles)
+        max_items = max(item_counts) if item_counts else 0
+        max_enemies = max(enemy_counts) if enemy_counts else 0
+        steps_with_items = sum(1 for c in item_counts if c > 0)
+        # Enemy type breakdown
+        all_enemy_ids = Counter()
+        for s in last_room_steps:
+            all_enemy_ids.update(s.enemy_ids)
+        unique_enemy_types = sorted(set(eid for s in last_room_steps for eid in s.enemy_ids))
+        w(f"  Enemies: max={max_enemies}  Types: {unique_enemy_types}")
+        w(f"  Items: max={max_items}, "
+          f"present in {steps_with_items}/{len(last_room_steps)} steps")
+        if all_item_tiles:
+            w(f"  Item locations seen: {sorted(all_item_tiles)}")
+
+        # Non-PBRS reward totals in stuck room
+        stuck_reward_totals = Counter()
+        for s in last_room_steps:
+            if s.other_rewards:
+                for part in s.other_rewards.split(", "):
+                    name, val = part.rsplit("=", 1)
+                    stuck_reward_totals[name] += float(val)
+        if stuck_reward_totals:
+            w(f"  Non-PBRS rewards in stuck room:")
+            for name, total in stuck_reward_totals.most_common():
+                w(f"    {name}: {total:+.3f}")
+
         # Print the trailing steps
         show_steps = last_room_steps[-tail:]
         start_idx = len(last_room_steps) - len(show_steps)
@@ -519,6 +555,11 @@ def run_pbrs_diagnostic(model_name, scenario_name, model_path, episodes, tail, o
                 flags.append("ROOM")
             if s.old_dist is None or s.new_dist is None:
                 flags.append("OFF-WF")
+            # Flag item changes
+            prev_step = show_steps[i-1] if i > 0 else (last_room_steps[start_idx-1]
+                                                         if start_idx > 0 else None)
+            if prev_step and s.num_items != prev_step.num_items:
+                flags.append(f"ITM:{prev_step.num_items}→{s.num_items}")
             flag_str = ",".join(flags) if flags else ""
 
             old_d = str(s.old_dist) if s.old_dist is not None else "None"
@@ -624,6 +665,12 @@ def _run_pbrs_episode(env, network, ep_idx):
                 other_parts.append(f"{outcome.name}={outcome.value:+.2f}")
         other_str = ", ".join(other_parts) if other_parts else ""
 
+        # Track items and enemies
+        items = curr.items if hasattr(curr, 'items') else []
+        enemies = curr.enemies if hasattr(curr, 'enemies') else []
+        item_tiles = tuple((i.tile[0], i.tile[1]) for i in items)
+        enemy_ids = tuple(e.id.name if hasattr(e.id, 'name') else str(e.id) for e in enemies)
+
         record = PbrsStepRecord(
             step=step_num,
             room=curr.location,
@@ -639,6 +686,10 @@ def _run_pbrs_episode(env, network, ep_idx):
             room_changed=room_changed,
             wall_hit=wall_hit,
             other_rewards=other_str,
+            num_items=len(items),
+            num_enemies=len(enemies),
+            item_tiles=item_tiles,
+            enemy_ids=enemy_ids,
         )
         all_steps.append(record)
         current_room_steps.append(record)

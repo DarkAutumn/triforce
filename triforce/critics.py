@@ -311,10 +311,10 @@ class GameplayCritic(ZeldaCritic):
 
         # PBRS: F(s,s') = Φ(s') - Φ(s), Φ(s) = -distance / scale
         # Uses γ=1 so round trips cancel exactly (no oscillation exploit).
-        # Both distances measured against prev.wavefront — the world as the model saw it
-        # when it chose its action. This correctly attributes reward to the model's decision
-        # rather than blaming/crediting it for enemy movement that happened after.
-        wf = prev.wavefront
+        # Both distances measured against prev.pbrs_wavefront — a wavefront computed
+        # without items, so it's stationary within a room (items appearing/disappearing
+        # from enemy drops don't shift the potential function).
+        wf = prev.pbrs_wavefront
         old_dist = wf.get(prev.link.tile)
         new_dist = wf.get(curr.link.tile)
         if old_dist is None or new_dist is None:

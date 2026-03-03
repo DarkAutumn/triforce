@@ -370,6 +370,7 @@ class StateChangeWrapper(gym.Wrapper):
             objectives = self._objectives.get_current_objectives(prev, state)
             state.objectives = objectives
             state.wavefront = state.room.calculate_wavefront_for_link(objectives.targets)
+            state.pbrs_wavefront = state.room.calculate_wavefront_for_link(objectives.pbrs_targets)
 
         if prev:
             return StateChange(self, prev, state, action, frames, self._ledger, health_change_ignore)
