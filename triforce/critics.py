@@ -2,7 +2,6 @@
 
 from enum import Enum
 from typing import Dict
-import torch
 
 from triforce.action_space import ActionKind
 from triforce.rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL, REWARD_TINY, \
@@ -25,7 +24,6 @@ COMBAT_DECAY_RATE = 0.5
 DANGER_TILE_PENALTY = Penalty("penalty-move-danger", -REWARD_MEDIUM)
 MOVED_TO_SAFETY_REWARD = Reward("reward-move-safety", REWARD_TINY)
 ATTACK_NO_ENEMIES_PENALTY = Penalty("penalty-attack-no-enemies", -0.10)
-ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_TINY - REWARD_MINIMUM)
 
 DIDNT_FIRE_PENALTY = Penalty("penalty-didnt-fire", -REWARD_TINY)
 FIRED_CORRECTLY_REWARD = Reward("reward-fired-correctly", REWARD_TINY)
@@ -33,7 +31,7 @@ INJURE_KILL_MOVEMENT_ROOM_REWARD = Reward("reward-incidental-hit", REWARD_SMALL)
 PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
 USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
-PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_MAXIMUM)
+PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_MEDIUM)
 PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -REWARD_MAXIMUM)
 FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_TINY)
 MOVED_OFF_OF_WALLMASTER_REWARD = Reward("reward-moved-off-wallmaster", REWARD_TINY - REWARD_MINIMUM)
@@ -81,7 +79,6 @@ class ZeldaCritic:
         raise NotImplementedError()
 
 
-DISTANCE_THRESHOLD = 28
 
 class GameplayCritic(ZeldaCritic):
     """Base class for Zelda gameplay critics."""
@@ -238,7 +235,6 @@ class GameplayCritic(ZeldaCritic):
 
     def critique_attack(self, state_change : StateChange, rewards):
         """Critiques attacks made by the player."""
-        # pylint: disable=too-many-branches
 
         for e_index in state_change.enemies_hit:
             enemy = state_change.state.get_enemy_by_index(e_index)
@@ -265,20 +261,6 @@ class GameplayCritic(ZeldaCritic):
         elif state_change.action.kind in (ActionKind.SWORD, ActionKind.BEAMS):
             if not curr.enemies:
                 rewards.add(ATTACK_NO_ENEMIES_PENALTY)
-
-            elif (active_enemies := [x for x in curr.active_enemies if x.distance > 0]):
-                enemy_vectors = torch.stack([x.vector for x in active_enemies])
-
-                if enemy_vectors is not None:
-                    dotproducts = torch.sum(curr.link.direction.vector * enemy_vectors, dim=1)
-                    if not torch.any(dotproducts > torch.sqrt(torch.tensor(2)) / 2):
-                        rewards.add(ATTACK_MISS_PENALTY)
-                    elif not prev.link.are_beams_available:
-                        distance = active_enemies[0].distance
-                        if distance > DISTANCE_THRESHOLD:
-                            rewards.add(ATTACK_MISS_PENALTY)
-            else:
-                rewards.add(ATTACK_MISS_PENALTY)
 
     def critique_item_usage(self, state_change : StateChange, rewards):
         """Critiques the usage of items."""
@@ -417,7 +399,7 @@ class GameplayCritic(ZeldaCritic):
 
 REWARD_ENTERED_CAVE = Reward("reward-entered-cave", REWARD_LARGE)
 REWARD_LEFT_CAVE = Reward("reward-left-cave", REWARD_LARGE)
-REWARD_NEW_LOCATION = Reward("reward-new-location", REWARD_LARGE)
+REWARD_NEW_LOCATION = Reward("reward-new-location", REWARD_MAXIMUM)
 REWARD_REVIST_LOCATION = Reward("reward-revisit-location", REWARD_TINY)
 PENALTY_REENTERED_CAVE = Penalty("penalty-reentered-cave", -REWARD_MAXIMUM)
 PENALTY_LEFT_CAVE_EARLY = Penalty("penalty-left-cave-early", -REWARD_MAXIMUM)
