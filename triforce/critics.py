@@ -16,7 +16,7 @@ HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_SMALL)
 WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_SMALL)
 PBRS_SCALE = 20.0
-TILE_REVISIT_THRESHOLD = 8
+TILE_REVISIT_THRESHOLD = 4
 
 # Combat rewards decay after this many events per room to prevent farming respawning enemies.
 COMBAT_DECAY_THRESHOLD = 8
