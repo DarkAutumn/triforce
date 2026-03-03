@@ -17,17 +17,18 @@ HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_SMALL)
 WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_SMALL)
 PBRS_SCALE = 20.0
+
+# Combat rewards decay after this many events per room to prevent farming respawning enemies.
+COMBAT_DECAY_THRESHOLD = 8
+COMBAT_DECAY_RATE = 0.5
 DANGER_TILE_PENALTY = Penalty("penalty-move-danger", -REWARD_MEDIUM)
 MOVED_TO_SAFETY_REWARD = Reward("reward-move-safety", REWARD_TINY)
 ATTACK_NO_ENEMIES_PENALTY = Penalty("penalty-attack-no-enemies", -0.10)
 ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_TINY - REWARD_MINIMUM)
 
 DIDNT_FIRE_PENALTY = Penalty("penalty-didnt-fire", -REWARD_TINY)
-BLOCK_PROJECTILE_REWARD = Reward("reward-block-projectile", REWARD_MEDIUM)
 FIRED_CORRECTLY_REWARD = Reward("reward-fired-correctly", REWARD_TINY)
-INJURE_KILL_REWARD = Reward("reward-hit", REWARD_SMALL)
 INJURE_KILL_MOVEMENT_ROOM_REWARD = Reward("reward-incidental-hit", REWARD_SMALL)
-BEAM_ATTACK_REWARD = Reward("reward-beam-hit", REWARD_SMALL)
 PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
 USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
@@ -90,12 +91,28 @@ class GameplayCritic(ZeldaCritic):
         self._total_hits = 0
         self._equipment_rewards = {}
         self._progress = 0.0
+        self._room_combat_counts = {}  # full_location -> combat event count
 
     def clear(self):
         super().clear()
         self._correct_locations.clear()
         self._total_hits = 0
         self._progress = 0.0
+        self._room_combat_counts.clear()
+
+    def _get_combat_decay(self, full_location):
+        """Returns a decay multiplier for combat rewards in this room.
+
+        After COMBAT_DECAY_THRESHOLD events, each additional event is scaled by
+        COMBAT_DECAY_RATE^(excess). This prevents farming respawning enemies
+        (e.g. Zoras) for infinite hit/block rewards.
+        """
+        count = self._room_combat_counts.get(full_location, 0)
+        self._room_combat_counts[full_location] = count + 1
+        excess = count - COMBAT_DECAY_THRESHOLD
+        if excess <= 0:
+            return 1.0
+        return COMBAT_DECAY_RATE ** excess
 
     def critique_gameplay(self, state_change : StateChange, rewards : StepRewards):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
@@ -213,7 +230,8 @@ class GameplayCritic(ZeldaCritic):
         """Critiques blocking of projectiles."""
         prev_link, curr_link = state_change.previous.link, state_change.state.link
         if not prev_link.is_blocking and curr_link.is_blocking:
-            rewards.add(BLOCK_PROJECTILE_REWARD)
+            decay = self._get_combat_decay(state_change.state.full_location)
+            rewards.add(Reward("reward-block-projectile", REWARD_MEDIUM * decay))
 
     def critique_attack(self, state_change : StateChange, rewards):
         """Critiques attacks made by the player."""
@@ -231,11 +249,13 @@ class GameplayCritic(ZeldaCritic):
         prev, curr = state_change.previous, state_change.state
         if state_change.hits and prev.link.are_beams_available \
                              and curr.link.get_animation_state(ZeldaAnimationKind.BEAMS) != AnimationState.INACTIVE:
-            rewards.add(BEAM_ATTACK_REWARD)
+            decay = self._get_combat_decay(curr.full_location)
+            rewards.add(Reward("reward-beam-hit", REWARD_SMALL * decay))
 
         elif state_change.hits:
             if not curr.in_cave:
-                rewards.add(INJURE_KILL_REWARD)
+                decay = self._get_combat_decay(curr.full_location)
+                rewards.add(Reward("reward-hit", REWARD_SMALL * decay))
             else:
                 rewards.add(PENALTY_CAVE_ATTACK)
 
