@@ -24,6 +24,7 @@ COMBAT_DECAY_RATE = 0.5
 DANGER_TILE_PENALTY = Penalty("penalty-move-danger", -REWARD_MEDIUM)
 MOVED_TO_SAFETY_REWARD = Reward("reward-move-safety", REWARD_TINY)
 ATTACK_NO_ENEMIES_PENALTY = Penalty("penalty-attack-no-enemies", -0.10)
+ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_MINIMUM)
 
 DIDNT_FIRE_PENALTY = Penalty("penalty-didnt-fire", -REWARD_TINY)
 FIRED_CORRECTLY_REWARD = Reward("reward-fired-correctly", REWARD_TINY)
@@ -261,6 +262,8 @@ class GameplayCritic(ZeldaCritic):
         elif state_change.action.kind in (ActionKind.SWORD, ActionKind.BEAMS):
             if not curr.enemies:
                 rewards.add(ATTACK_NO_ENEMIES_PENALTY)
+            else:
+                rewards.add(ATTACK_MISS_PENALTY)
 
     def critique_item_usage(self, state_change : StateChange, rewards):
         """Critiques the usage of items."""
