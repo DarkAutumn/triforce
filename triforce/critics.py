@@ -17,6 +17,7 @@ HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_SMALL)
 WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_SMALL)
 PBRS_SCALE = 20.0
+STEP_TIME_PENALTY = Penalty("penalty-time", -REWARD_MINIMUM)
 
 # Combat rewards decay after this many events per room to prevent farming respawning enemies.
 COMBAT_DECAY_THRESHOLD = 8
@@ -346,6 +347,11 @@ class GameplayCritic(ZeldaCritic):
             rewards.add(Reward("reward-pbrs-movement", shaped))
         elif shaped < 0:
             rewards.add(Penalty("penalty-pbrs-movement", shaped))
+
+        # Per-step time penalty: PBRS provides direction but not urgency.
+        # This small constant penalty makes dawdling costly so the agent
+        # pushes forward rather than farming combat rewards in one room.
+        rewards.add(STEP_TIME_PENALTY)
 
 
     def _did_link_run_into_wall(self, prev : ZeldaGame, curr : ZeldaGame, rewards):
