@@ -296,10 +296,10 @@ class NowhereToGoCondition(ZeldaEndCondition):
         return False, False, None
 
 class LeftPlayArea(ZeldaEndCondition):
-    """End condition for leaving the initial room walk scenario."""
+    """End condition for leaving dungeon 1."""
     def is_scenario_ended(self, state_change):
         location = state_change.state.full_location
-        if location.level != 1 or location.value == 0x73:
+        if location.level != 1:
             return True, False, "failure-left-play-area"
 
         return False, False, None
