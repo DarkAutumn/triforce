@@ -30,7 +30,6 @@ import gymnasium as gym
 
 from triforce import ActionSpaceDefinition, ModelKindDefinition, Network, TrainingScenarioDefinition, make_zelda_env
 from triforce.critics import PBRS_SCALE
-from triforce.objectives import ObjectiveKind
 
 # ---------------------------------------------------------------------------
 # Game progress milestone labels (from metrics.py game-progress map)
@@ -641,7 +640,7 @@ def _run_pbrs_episode(env, network, ep_idx):
         new_dist = None
         shaped = 0.0
         if not health_lost and not room_changed and not wall_hit:
-            wf = prev.wavefront
+            wf = prev.pbrs_wavefront if hasattr(prev, 'pbrs_wavefront') else prev.wavefront
             if wf is not None:
                 old_dist = wf.get(tile_prev)
                 new_dist = wf.get(tile_curr)
