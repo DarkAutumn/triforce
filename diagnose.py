@@ -29,6 +29,8 @@ from typing import List, Dict, Optional, Tuple
 import gymnasium as gym
 
 from triforce import ActionSpaceDefinition, ModelKindDefinition, Network, TrainingScenarioDefinition, make_zelda_env
+from triforce.critics import PBRS_SCALE
+from triforce.objectives import ObjectiveKind
 
 # ---------------------------------------------------------------------------
 # Game progress milestone labels (from metrics.py game-progress map)
@@ -386,6 +388,286 @@ def generate_report(records, model_name, scenario_name, model_path, episodes):
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# --infinite-pbrs mode: step-by-step PBRS diagnostic
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PbrsStepRecord:
+    """Per-step PBRS calculation details."""
+    step: int
+    room: int
+    tile_prev: tuple
+    tile_curr: tuple
+    objective: str
+    wf_used: str            # "prev" or "curr" (which wavefront was used)
+    old_dist: Optional[int]
+    new_dist: Optional[int]
+    shaped: float           # the PBRS value this step
+    cumulative: float       # running total PBRS in this room
+    health_lost: bool
+    room_changed: bool
+    wall_hit: bool
+    other_rewards: str      # non-PBRS rewards this step
+
+
+def run_pbrs_diagnostic(model_name, scenario_name, model_path, episodes, tail, output_path):
+    """Run episodes looking for stuck/timeout endings, then print step-by-step PBRS detail."""
+    scenario_def = TrainingScenarioDefinition.get(scenario_name)
+    metadata = Network.load_metadata(model_path)
+    model_kind = ModelKindDefinition.get(metadata["model_kind"] or model_name)
+    action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "basic")
+    multihead = getattr(model_kind.network_class, 'is_multihead', False)
+
+    env = make_zelda_env(scenario_def, action_space_def.actions,
+                         render_mode=None, multihead=multihead, translation=False)
+    env = DiagnosticWrapper(env)
+
+    obs_space, act_space = Network.load_spaces(model_path)
+    network = model_kind.network_class(obs_space, act_space)
+    network.load(model_path)
+    network.eval()
+
+    lines = []
+    w = lines.append
+    w("=" * 90)
+    w(f"PBRS DIAGNOSTIC: {model_name}")
+    w(f"Model: {model_path}")
+    w(f"Scenario: {scenario_name}")
+    w("=" * 90)
+
+    found_stuck = 0
+    for ep_idx in range(episodes):
+        result = _run_pbrs_episode(env, network, ep_idx)
+        ep_steps, ending, all_steps, room_segments = result
+
+        is_stuck = ending and "stuck" in ending or "no-next-room" in ending
+        print(f"  Episode {ep_idx+1}/{episodes}: steps={ep_steps}, ending={ending}, "
+              f"stuck={'YES' if is_stuck else 'no'}")
+
+        if not is_stuck:
+            continue
+
+        found_stuck += 1
+        w("")
+        w(f"## EPISODE {ep_idx+1} — ended: {ending} ({ep_steps} steps)")
+
+        # Find the stuck room (last room in the segment list with most steps)
+        if not room_segments:
+            continue
+
+        last_room_id, last_room_steps = room_segments[-1]
+        w(f"  Stuck room: 0x{last_room_id:02x}  ({len(last_room_steps)} steps in final visit)")
+
+        # Room-level summary
+        room_pbrs_total = sum(s.shaped for s in last_room_steps)
+        room_pbrs_pos = sum(s.shaped for s in last_room_steps if s.shaped > 0)
+        room_pbrs_neg = sum(s.shaped for s in last_room_steps if s.shaped < 0)
+        skipped = sum(1 for s in last_room_steps if s.old_dist is None or s.new_dist is None)
+        wall_hits = sum(1 for s in last_room_steps if s.wall_hit)
+        health_lost_count = sum(1 for s in last_room_steps if s.health_lost)
+
+        w(f"  PBRS net: {room_pbrs_total:+.3f}  (pos: {room_pbrs_pos:+.3f}, "
+          f"neg: {room_pbrs_neg:+.3f})")
+        w(f"  Steps skipped (off-wavefront): {skipped}/{len(last_room_steps)}  "
+          f"Wall hits: {wall_hits}  Health lost: {health_lost_count}")
+
+        # Show unique wavefront distances seen from the stuck room
+        dist_set = set()
+        for s in last_room_steps:
+            if s.old_dist is not None:
+                dist_set.add((s.tile_prev, s.old_dist))
+            if s.new_dist is not None:
+                dist_set.add((s.tile_curr, s.new_dist))
+        if dist_set:
+            # Group by tile, check if any tile has multiple distances (non-stationarity)
+            tile_dists = defaultdict(set)
+            for tile, dist in dist_set:
+                tile_dists[tile].add(dist)
+            non_stationary = {t: ds for t, ds in tile_dists.items() if len(ds) > 1}
+            if non_stationary:
+                w(f"\n  ⚠ NON-STATIONARY WAVEFRONT: {len(non_stationary)} tiles have "
+                  f"varying distances!")
+                for tile, ds in sorted(non_stationary.items(),
+                                       key=lambda x: max(x[1]) - min(x[1]), reverse=True)[:10]:
+                    w(f"    Tile {tile}: distances = {sorted(ds)}")
+            else:
+                w(f"  ✓ Wavefront appears stationary ({len(tile_dists)} unique tiles)")
+
+        # Objective breakdown
+        obj_counts = Counter(s.objective for s in last_room_steps)
+        w(f"\n  Objectives: {dict(obj_counts)}")
+
+        # Print the trailing steps
+        show_steps = last_room_steps[-tail:]
+        start_idx = len(last_room_steps) - len(show_steps)
+        w(f"\n  Last {len(show_steps)} steps (of {len(last_room_steps)} in room):")
+        w(f"  {'Step':>5s}  {'Tile':>10s} {'→':>1s} {'Tile':>10s}  "
+          f"{'ObjKind':>7s}  {'OldD':>5s} {'NewD':>5s}  "
+          f"{'PBRS':>7s}  {'Cumul':>7s}  {'Flags':>12s}  Other Rewards")
+        w(f"  {'─'*5}  {'─'*10} {'─':>1s} {'─'*10}  "
+          f"{'─'*7}  {'─'*5} {'─'*5}  "
+          f"{'─'*7}  {'─'*7}  {'─'*12}  {'─'*30}")
+
+        for i, s in enumerate(show_steps):
+            flags = []
+            if s.health_lost:
+                flags.append("DMG")
+            if s.wall_hit:
+                flags.append("WALL")
+            if s.room_changed:
+                flags.append("ROOM")
+            if s.old_dist is None or s.new_dist is None:
+                flags.append("OFF-WF")
+            flag_str = ",".join(flags) if flags else ""
+
+            old_d = str(s.old_dist) if s.old_dist is not None else "None"
+            new_d = str(s.new_dist) if s.new_dist is not None else "None"
+
+            w(f"  {start_idx+i:5d}  {str(s.tile_prev):>10s} → {str(s.tile_curr):>10s}  "
+              f"{s.objective:>7s}  {old_d:>5s} {new_d:>5s}  "
+              f"{s.shaped:+7.3f}  {s.cumulative:+7.3f}  {flag_str:>12s}  {s.other_rewards}")
+
+        w("")
+
+        # Only show first 3 stuck episodes to keep output manageable
+        if found_stuck >= 3:
+            w(f"(Showing first 3 stuck episodes, {episodes - ep_idx - 1} episodes remaining)")
+            break
+
+    env.close()
+
+    if found_stuck == 0:
+        w("\n  No stuck/timeout episodes found. Model did not get stuck in any episode.")
+
+    w("")
+    w("=" * 90)
+    w("END OF PBRS DIAGNOSTIC")
+    w("=" * 90)
+
+    report = "\n".join(lines)
+    if output_path:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(report)
+        print(f"\nReport written to: {output_path}")
+    else:
+        print(report)
+
+
+def _run_pbrs_episode(env, network, ep_idx):
+    """Run one episode, capturing per-step PBRS detail. Returns (steps, ending, all_steps, room_segments)."""
+    obs, info = env.reset()
+    state = env.last_reset_state
+
+    all_steps = []
+    # room_segments: list of (room_id, [PbrsStepRecord...]) for each contiguous visit
+    room_segments = []
+    current_room_id = state.location
+    current_room_steps = []
+    room_cumulative = 0.0
+    step_num = 0
+    ending = None
+
+    terminated = truncated = False
+    while not terminated and not truncated:
+        action_mask = info.get('action_mask', None)
+        if action_mask is not None:
+            action_mask = action_mask.unsqueeze(0) if action_mask.dim() == 1 else action_mask
+
+        action = network.get_action(obs, action_mask)
+        action = action.squeeze(0)
+        obs, reward_value, terminated, truncated, info = env.step(action)
+
+        sc = env.last_state_change
+        rewards = env.last_rewards
+        prev = sc.previous
+        curr = sc.state
+
+        # Detect room change
+        room_changed = prev.full_location != curr.full_location
+
+        # Recompute PBRS calculation to capture internals
+        health_lost = sc.health_lost
+        wall_hit = prev.link.position == curr.link.position
+        tile_prev = prev.link.tile
+        tile_curr = curr.link.tile
+
+        # Objective
+        obj_kind = curr.objectives.kind.name if curr.objectives else "NONE"
+
+        # PBRS calculation (mirrors critics.py logic)
+        old_dist = None
+        new_dist = None
+        shaped = 0.0
+        if not health_lost and not room_changed and not wall_hit:
+            wf = prev.wavefront
+            if wf is not None:
+                old_dist = wf.get(tile_prev)
+                new_dist = wf.get(tile_curr)
+                if old_dist is not None and new_dist is not None:
+                    shaped = (old_dist - new_dist) / PBRS_SCALE
+
+        # Track room segments
+        if room_changed:
+            if current_room_steps:
+                room_segments.append((current_room_id, current_room_steps))
+            current_room_id = curr.location
+            current_room_steps = []
+            room_cumulative = 0.0
+
+        room_cumulative += shaped
+
+        # Collect non-PBRS rewards
+        other_parts = []
+        for outcome in rewards:
+            if 'pbrs' not in outcome.name:
+                other_parts.append(f"{outcome.name}={outcome.value:+.2f}")
+        other_str = ", ".join(other_parts) if other_parts else ""
+
+        record = PbrsStepRecord(
+            step=step_num,
+            room=curr.location,
+            tile_prev=(tile_prev[0], tile_prev[1]) if tile_prev else None,
+            tile_curr=(tile_curr[0], tile_curr[1]) if tile_curr else None,
+            objective=obj_kind,
+            wf_used="prev",
+            old_dist=old_dist,
+            new_dist=new_dist,
+            shaped=shaped,
+            cumulative=room_cumulative,
+            health_lost=health_lost > 0 if health_lost else False,
+            room_changed=room_changed,
+            wall_hit=wall_hit,
+            other_rewards=other_str,
+        )
+        all_steps.append(record)
+        current_room_steps.append(record)
+        step_num += 1
+
+        if rewards.ending is not None:
+            ending = str(rewards.ending)
+
+    # Final segment
+    if current_room_steps:
+        room_segments.append((current_room_id, current_room_steps))
+
+    return step_num, ending, all_steps, room_segments
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Diagnostic tool for trained triforce models")
+    parser.add_argument("--model", required=True, help="Model name from triforce.json")
+    parser.add_argument("--scenario", required=True, help="Scenario name from triforce.json")
+    parser.add_argument("--model-path", required=True,
+                        help="Path to .pt model file (supports glob patterns)")
+    parser.add_argument("--episodes", type=int, default=20, help="Number of episodes to run")
+    parser.add_argument("--output", "-o", default=None, help="Output file path (default: stdout)")
+    parser.add_argument("--infinite-pbrs", action="store_true",
+                        help="Run PBRS diagnostic: play until stuck/timeout, print step-by-step "
+                             "PBRS calculation for the stuck room")
+    parser.add_argument("--tail", type=int, default=50,
+                        help="Number of trailing steps to show in --infinite-pbrs mode (default: 50)")
+    return parser.parse_args()
+
+
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Diagnostic tool for trained triforce models")
@@ -395,6 +677,11 @@ def parse_args():
                         help="Path to .pt model file (supports glob patterns)")
     parser.add_argument("--episodes", type=int, default=20, help="Number of episodes to run")
     parser.add_argument("--output", "-o", default=None, help="Output file path (default: stdout)")
+    parser.add_argument("--infinite-pbrs", action="store_true",
+                        help="Run PBRS diagnostic: play until stuck/timeout, print step-by-step "
+                             "PBRS calculation for the stuck room")
+    parser.add_argument("--tail", type=int, default=50,
+                        help="Number of trailing steps to show in --infinite-pbrs mode (default: 50)")
     return parser.parse_args()
 
 
@@ -428,7 +715,12 @@ def main():
     """Entry point."""
     args = parse_args()
     model_path = resolve_model_path(args.model_path)
-    run_diagnostic(args.model, args.scenario, model_path, args.episodes, args.output)
+
+    if args.infinite_pbrs:
+        run_pbrs_diagnostic(args.model, args.scenario, model_path,
+                            args.episodes, args.tail, args.output)
+    else:
+        run_diagnostic(args.model, args.scenario, model_path, args.episodes, args.output)
 
 
 if __name__ == "__main__":
