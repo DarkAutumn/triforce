@@ -595,13 +595,14 @@ def _run_pbrs_episode(env, network, ep_idx):
         # Objective
         obj_kind = curr.objectives.kind.name if curr.objectives else "NONE"
 
-        # PBRS calculation (mirrors critics.py logic)
+        # PBRS calculation (mirrors critics.py logic — uses exit-only wavefront)
         old_dist = None
         new_dist = None
         shaped = 0.0
         if not health_lost and not room_changed and not wall_hit:
-            wf = prev.wavefront
-            if wf is not None:
+            exit_targets = prev.objectives.exit_targets if prev.objectives else None
+            if exit_targets:
+                wf = prev.room.calculate_wavefront_for_link(exit_targets)
                 old_dist = wf.get(tile_prev)
                 new_dist = wf.get(tile_curr)
                 if old_dist is not None and new_dist is not None:

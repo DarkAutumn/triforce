@@ -51,10 +51,12 @@ class ObjectiveKind(Enum):
 
 class Objective:
     """The current objective for the agent."""
-    def __init__(self, kind : ObjectiveKind, targets : Set[TileIndex], next_rooms : Set[int]):
+    def __init__(self, kind : ObjectiveKind, targets : Set[TileIndex], next_rooms : Set[int],
+                 exit_targets : Set[TileIndex] = None):
         self.kind : ObjectiveKind = kind
         self.next_rooms : Sequence[MapLocation] = next_rooms if next_rooms is not None else set()
         self.targets : Sequence[TileIndex] = targets
+        self.exit_targets : Sequence[TileIndex] = exit_targets if exit_targets is not None else targets
 
 CAVE_TREASURE_TILE = TileIndex(0x0f, 0x0b)
 
@@ -240,12 +242,15 @@ class GameCompletion(ObjectiveSelector):
 
         # Get the route on the game's overall map of where we need to go.  If we need to fight or
         # collect treasure, do not add the next room to the list of rooms to go to.
+        exit_only_targets = set()
         if kind not in (ObjectiveKind.FIGHT, ObjectiveKind.TREASURE, ObjectiveKind.CAVE):
             exit_tiles, rooms = self._get_map_objective(state)
             tile_objectives.extend(exit_tiles)
             next_rooms.extend(rooms)
+            exit_only_targets = set(exit_tiles)
 
-        objective = Objective(kind, set(tile_objectives), set(next_rooms))
+        objective = Objective(kind, set(tile_objectives), set(next_rooms),
+                              exit_targets=exit_only_targets or None)
         return objective
 
     def _get_overworld_room_objective(self, state : ZeldaGame):
