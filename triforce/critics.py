@@ -16,8 +16,10 @@ HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_SMALL)
 WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_SMALL)
 PBRS_SCALE = 20.0
-ROOM_STEP_GRACE = 150        # steps in a room before stalling penalty kicks in
-ROOM_STEP_PENALTY_SCALE = 50 # steps over grace to reach -0.01 per step
+ROOM_STEP_GRACE = 150          # steps in a room before stalling penalty kicks in
+ROOM_STEP_PENALTY_MIN = 0.01   # initial per-step penalty after grace
+ROOM_STEP_PENALTY_MAX = 0.02   # maximum per-step penalty
+ROOM_STEP_RAMP = 1850          # steps over grace to reach max penalty
 
 # Combat rewards decay after this many events per room to prevent farming respawning enemies.
 COMBAT_DECAY_THRESHOLD = 8
@@ -320,13 +322,14 @@ class GameplayCritic(ZeldaCritic):
         # Did link get too close to an enemy?
         self.critique_moving_into_danger(state_change, rewards)
 
-        # Room stalling penalty: escalates after ROOM_STEP_GRACE steps in the same room.
+        # Room stalling penalty: flat -0.01 per step after grace, ramping to -0.02.
         # Resets on room change, enemy kills, or item pickups.
         # PBRS provides direction, this provides urgency to leave the room.
         self._room_steps += 1
         if self._room_steps > ROOM_STEP_GRACE:
             excess = self._room_steps - ROOM_STEP_GRACE
-            penalty = -REWARD_MINIMUM * excess / ROOM_STEP_PENALTY_SCALE
+            t = min(excess / ROOM_STEP_RAMP, 1.0)
+            penalty = -(ROOM_STEP_PENALTY_MIN + t * (ROOM_STEP_PENALTY_MAX - ROOM_STEP_PENALTY_MIN))
             rewards.add(Penalty("penalty-room-stalling", penalty))
 
         # PBRS: F(s,s') = Φ(s') - Φ(s), Φ(s) = -distance / scale
