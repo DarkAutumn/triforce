@@ -86,6 +86,7 @@ class StepRewards:
         self._history = []
         self._outcomes = {}
         self.ending = None
+        self.terminal_penalty = 0.0  # unclamped penalty applied at episode end
 
     def __repr__(self):
         s = sorted(self._outcomes.values(), key=lambda x: x.value)
@@ -109,7 +110,8 @@ class StepRewards:
     @property
     def value(self):
         """The total reward value."""
-        return max(min(sum(self._outcomes.values()), REWARD_MAXIMUM), -REWARD_MAXIMUM)
+        clamped = max(min(sum(self._outcomes.values()), REWARD_MAXIMUM), -REWARD_MAXIMUM)
+        return clamped + self.terminal_penalty
 
     def add(self, outcome: Outcome, scale=None):
         """Add an outcome to the rewards."""
