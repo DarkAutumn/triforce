@@ -352,12 +352,6 @@ class ScenarioWrapper(gym.Wrapper):
                     rewards.ending = end_reason
                     break
 
-        # Truncation (timeout) gets a terminal penalty so the model learns that
-        # stalling is bad even if it accumulated positive rewards during the episode.
-        # Bypasses per-step reward clamping so GAE propagates a strong negative signal.
-        if truncated:
-            rewards.terminal_penalty = -5.0
-
         # Update metrics
         self._metrics.step(state_change, rewards)
         if terminated or truncated:
