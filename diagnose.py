@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run python3
 """Headless diagnostic tool for analyzing trained model behavior.
 
 Runs N episodes and produces a detailed text report showing:
