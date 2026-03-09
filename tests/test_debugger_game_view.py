@@ -36,25 +36,25 @@ def test_initial_state_no_frame():
 def test_set_frame_creates_qimage():
     """Setting a frame creates a QImage with correct dimensions."""
     view = _make_game_view()
-    frame = np.zeros((240, 256, 3), dtype=np.uint8)
+    frame = np.zeros((224, 240, 3), dtype=np.uint8)
     view.set_frame(frame)
     assert view.frame_image is not None
     assert isinstance(view.frame_image, QImage)
-    assert view.frame_image.width() == 256
-    assert view.frame_image.height() == 240
+    assert view.frame_image.width() == 240
+    assert view.frame_image.height() == 224
     view.close()
 
 
 def test_set_frame_preserves_pixel_data():
     """Pixel data survives the numpy-to-QImage conversion."""
     view = _make_game_view()
-    frame = np.zeros((240, 256, 3), dtype=np.uint8)
+    frame = np.zeros((224, 240, 3), dtype=np.uint8)
     # Set a known pixel: red at (0, 0)
     frame[0, 0] = [255, 0, 0]
     # Set a known pixel: green at (100, 50)
     frame[100, 50] = [0, 255, 0]
-    # Set a known pixel: blue at (239, 255)
-    frame[239, 255] = [0, 0, 255]
+    # Set a known pixel: blue at (223, 239)
+    frame[223, 239] = [0, 0, 255]
 
     view.set_frame(frame)
     img = view.frame_image
@@ -66,7 +66,7 @@ def test_set_frame_preserves_pixel_data():
     r, g, b, _ = img.pixelColor(50, 100).getRgb()
     assert (r, g, b) == (0, 255, 0), f"Expected green, got ({r}, {g}, {b})"
 
-    r, g, b, _ = img.pixelColor(255, 239).getRgb()
+    r, g, b, _ = img.pixelColor(239, 223).getRgb()
     assert (r, g, b) == (0, 0, 255), f"Expected blue, got ({r}, {g}, {b})"
     view.close()
 
@@ -84,7 +84,7 @@ def test_set_frame_non_nes_dimensions():
 def test_set_frame_none_clears():
     """Setting frame to None clears the current image."""
     view = _make_game_view()
-    frame = np.zeros((240, 256, 3), dtype=np.uint8)
+    frame = np.zeros((224, 240, 3), dtype=np.uint8)
     view.set_frame(frame)
     assert view.frame_image is not None
 
@@ -100,7 +100,7 @@ def test_scaled_rect_fits_in_widget():
     """Scaled rect should fit within the widget bounds."""
     view = _make_game_view()
     view.resize(960, 896)
-    frame = np.zeros((240, 256, 3), dtype=np.uint8)
+    frame = np.zeros((224, 240, 3), dtype=np.uint8)
     view.set_frame(frame)
 
     rect = view._scaled_rect()  # pylint: disable=protected-access
@@ -115,11 +115,11 @@ def test_scaled_rect_preserves_aspect_ratio():
     """Scaled rect should preserve the NES aspect ratio."""
     view = _make_game_view()
     view.resize(800, 600)
-    frame = np.zeros((240, 256, 3), dtype=np.uint8)
+    frame = np.zeros((224, 240, 3), dtype=np.uint8)
     view.set_frame(frame)
 
     rect = view._scaled_rect()  # pylint: disable=protected-access
-    original_ratio = 256 / 240
+    original_ratio = 240 / 224
     scaled_ratio = rect.width() / rect.height()
     assert abs(original_ratio - scaled_ratio) < 0.02, \
         f"Aspect ratio mismatch: {original_ratio:.3f} vs {scaled_ratio:.3f}"
@@ -149,7 +149,7 @@ def test_paint_without_crash():
     view.repaint()
 
     # Paint with a frame
-    frame = np.zeros((240, 256, 3), dtype=np.uint8)
+    frame = np.zeros((224, 240, 3), dtype=np.uint8)
     view.set_frame(frame)
     view.repaint()
 
@@ -159,8 +159,8 @@ def test_paint_without_crash():
 def test_minimum_size():
     """GameView has a minimum size of 256x240 (NES native)."""
     view = _make_game_view()
-    assert view.minimumWidth() == 256
-    assert view.minimumHeight() == 240
+    assert view.minimumWidth() == 240
+    assert view.minimumHeight() == 224
     view.close()
 
 
@@ -317,7 +317,7 @@ def test_paint_with_overlays_no_crash():
 
     view = _make_game_view()
     view.resize(800, 600)
-    frame = np.zeros((240, 256, 3), dtype=np.uint8)
+    frame = np.zeros((224, 240, 3), dtype=np.uint8)
     view.set_frame(frame)
 
     state = MagicMock()
@@ -350,7 +350,7 @@ def test_paint_overlays_without_state_no_crash():
 
     view = _make_game_view()
     view.resize(400, 300)
-    frame = np.zeros((240, 256, 3), dtype=np.uint8)
+    frame = np.zeros((224, 240, 3), dtype=np.uint8)
     view.set_frame(frame)
     view.set_overlay(OverlayFlags.WAVEFRONT, True)
     view.show()
