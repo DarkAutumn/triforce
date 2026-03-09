@@ -44,14 +44,16 @@ def _safe_get(obj: Any, attr: str, default: Any = "N/A") -> Any:
         return default
 
 
-def _extract_position(pos) -> OrderedDict:
-    """Extract (x, y) from a Position named-tuple or similar."""
-    return OrderedDict([("x", int(pos[0])), ("y", int(pos[1]))])
+def _extract_position(pos) -> str:
+    """Format a Position named-tuple as '(x, y)'."""
+    return f"({int(pos[0])}, {int(pos[1])})"
 
 
 def _extract_link(link) -> OrderedDict:
     """Extract Link state into a flat ordered dict."""
     d = OrderedDict()
+    tile = _safe_get(link, "tile", None)
+    d["tile"] = f"({tile.x}, {tile.y})" if tile is not None else "N/A"
     d["position"] = _extract_position(link.position)
     d["direction"] = _enum_str(link.direction)
     d["status"] = int(link.status)
@@ -101,6 +103,8 @@ def _extract_enemy(enemy) -> OrderedDict:
     d = OrderedDict()
     d["id"] = _enum_str(enemy.id)
     d["index"] = int(enemy.index)
+    tile = _safe_get(enemy, "tile", None)
+    d["tile"] = f"({tile.x}, {tile.y})" if tile is not None else "N/A"
     d["position"] = _extract_position(enemy.position)
     d["direction"] = _enum_str(enemy.direction)
     d["health"] = int(enemy.health)

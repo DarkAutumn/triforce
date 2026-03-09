@@ -126,8 +126,6 @@ class MainWindow(QMainWindow):
         self.action_overlay_tile_ids.setCheckable(True)
         self.action_overlay_walkability = self.view_menu.addAction("Overlay: Walkability")
         self.action_overlay_walkability.setCheckable(True)
-        self.action_overlay_coordinates = self.view_menu.addAction("Overlay: Coordinates")
-        self.action_overlay_coordinates.setCheckable(True)
         self.view_menu.addSeparator()
         self.action_uncap_fps = self.view_menu.addAction("Uncap FPS")
         self.action_uncap_fps.setCheckable(True)
@@ -245,8 +243,6 @@ class MainWindow(QMainWindow):
             lambda on: self.game_view.set_overlay(OverlayFlags.TILE_IDS, on))
         self.action_overlay_walkability.toggled.connect(
             lambda on: self.game_view.set_overlay(OverlayFlags.WALKABILITY, on))
-        self.action_overlay_coordinates.toggled.connect(
-            lambda on: self.game_view.set_overlay(OverlayFlags.COORDINATES, on))
 
     def _wire_integration(self):
         """Connect all integration signals for end-to-end operation."""

@@ -3,9 +3,9 @@
 from enum import Flag, auto
 
 import numpy as np
-from PySide6.QtCore import Qt, QRect, QRectF
+from PySide6.QtCore import Qt, QRect, QRectF, QPoint
 from PySide6.QtGui import QImage, QPainter, QColor, QFont, QPen
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget, QToolTip
 
 
 class OverlayFlags(Flag):
@@ -14,7 +14,6 @@ class OverlayFlags(Flag):
     WAVEFRONT = auto()
     TILE_IDS = auto()
     WALKABILITY = auto()
-    COORDINATES = auto()
 
 
 # NES tile grid constants (after emulator overscan clipping)
@@ -35,6 +34,7 @@ class GameView(QWidget):
         super().__init__(parent)
         self.setObjectName("game_view")
         self.setMinimumSize(240, 224)
+        self.setMouseTracking(True)
         self._frame_image: QImage | None = None
         self._overlays: OverlayFlags = OverlayFlags.NONE
         self._game_state = None  # ZeldaGame, set each step for overlay data
@@ -184,10 +184,73 @@ class GameView(QWidget):
                 if tile_x < walkable.shape[0] and tile_y < walkable.shape[1]:
                     return "X" if walkable[tile_x, tile_y] else ""
 
-        if OverlayFlags.COORDINATES in self._overlays:
-            return f"{tile_x:02X}\n{tile_y:02X}"
-
         return ""
+
+    # ── Mouse hover tooltip ────────────────────────────────────
+
+    def mouseMoveEvent(self, event):  # pylint: disable=invalid-name
+        """Show tile info tooltip when hovering over the gameplay area."""
+        tile = self._widget_pos_to_tile(event.pos())
+        if tile is None:
+            QToolTip.hideText()
+            return
+
+        tile_x, tile_y = tile
+        state = self._game_state
+        if state is None:
+            QToolTip.hideText()
+            return
+
+        room = getattr(state, 'room', None)
+        if room is None:
+            QToolTip.hideText()
+            return
+
+        lines = [f"Tile: ({tile_x}, {tile_y})"]
+
+        tiles = room.tiles
+        if tile_x < tiles.shape[0] and tile_y < tiles.shape[1]:
+            lines.append(f"Tile ID: {int(tiles[tile_x, tile_y]):02X}")
+
+        wf = getattr(state, 'wavefront', None)
+        if wf is not None:
+            val = wf.get((tile_x, tile_y), None)
+            lines.append(f"Wavefront: {val if val is not None else 'N/A'}")
+
+        walkable = room.walkable
+        if tile_x < walkable.shape[0] and tile_y < walkable.shape[1]:
+            lines.append("Walkable" if walkable[tile_x, tile_y] else "Not Walkable")
+
+        QToolTip.showText(event.globalPosition().toPoint(), "\n".join(lines), self)
+
+    def _widget_pos_to_tile(self, pos: QPoint):
+        """Convert a widget pixel position to (tile_x, tile_y), or None if outside gameplay."""
+        if self._frame_image is None:
+            return None
+
+        target_rect = self._scaled_rect()
+        if not target_rect.contains(pos):
+            return None
+
+        # Map widget pixel to NES pixel
+        nes_x = (pos.x() - target_rect.x()) / target_rect.width() * self.NES_WIDTH
+        nes_y = (pos.y() - target_rect.y()) / target_rect.height() * self.NES_HEIGHT
+
+        # Must be below the HUD
+        if nes_y < _NES_HUD_PX:
+            return None
+
+        col = int(nes_x / _NES_TILE_PX)
+        row = int((nes_y - _NES_HUD_PX) / _NES_TILE_PX)
+
+        # Column 0 is clipped off-screen; visible pixel 0 is tile column 1
+        tile_x = col + 1
+        tile_y = row
+
+        if tile_x < 1 or tile_x > 30 or tile_y < 0 or tile_y >= _VISIBLE_ROWS:
+            return None
+
+        return tile_x, tile_y
 
     # ── Geometry helpers ───────────────────────────────────────
 
