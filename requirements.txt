@@ -2,6 +2,7 @@ stable-retro
 numpy
 tensorflow
 torch
+tensorboard
 gymnasium
 matplotlib
 pytest
