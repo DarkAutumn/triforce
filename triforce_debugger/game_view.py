@@ -17,24 +17,24 @@ class OverlayFlags(Flag):
     COORDINATES = auto()
 
 
-# NES tile grid constants
-_GRID_WIDTH = 32
-_GRID_HEIGHT = 22
-_NES_TILE_PX = 8          # one tile = 8 NES pixels
-_NES_TOP_HUD_PX = 56      # HUD height above the tile area
+# NES tile grid constants (after emulator overscan clipping)
+_VISIBLE_COLS = 30         # tile columns 1..30 (column 0 and 31 are clipped)
+_VISIBLE_ROWS = 22
+_NES_TILE_PX = 8           # one tile = 8 NES pixels
+_NES_HUD_PX = 48 + 8       # HUD height + 1 tile offset in the 224px clipped frame
 
 
 class GameView(QWidget):
     """Widget that displays an RGB numpy array (NES frame) scaled to fit."""
 
     # NES native resolution
-    NES_WIDTH = 256
-    NES_HEIGHT = 240
+    NES_WIDTH = 240
+    NES_HEIGHT = 224
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("game_view")
-        self.setMinimumSize(256, 240)
+        self.setMinimumSize(240, 224)
         self._frame_image: QImage | None = None
         self._overlays: OverlayFlags = OverlayFlags.NONE
         self._game_state = None  # ZeldaGame, set each step for overlay data
@@ -111,47 +111,53 @@ class GameView(QWidget):
         painter.end()
 
     def _paint_overlays(self, painter: QPainter, target_rect: QRect):
-        """Draw active overlays over the game frame."""
+        """Draw active overlays into a transparent image and composite it over the frame."""
         state = self._game_state
 
-        # Compute per-pixel scale from NES coords to widget coords
+        overlay = QImage(target_rect.size(), QImage.Format.Format_ARGB32_Premultiplied)
+        overlay.fill(QColor(0, 0, 0, 0))
+
+        op = QPainter(overlay)
+        op.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+
         scale_x = target_rect.width() / self.NES_WIDTH
         scale_y = target_rect.height() / self.NES_HEIGHT
 
         tile_w = _NES_TILE_PX * scale_x
         tile_h = _NES_TILE_PX * scale_y
 
-        # The tile grid starts 1 tile left of the frame origin and _NES_TOP_HUD_PX below it
-        origin_x = target_rect.x() - tile_w
-        origin_y = target_rect.y() + _NES_TOP_HUD_PX * scale_y
+        origin_x = 0.0
+        origin_y = _NES_HUD_PX * scale_y
 
-        # Choose text color: white for dungeons/caves, black for overworld
-        is_dark = state.level != 0 or getattr(state, 'in_cave', False)
-        text_color = QColor(255, 255, 255) if is_dark else QColor(0, 0, 0)
-        grid_color = QColor(0, 0, 0, 120) if not is_dark else QColor(255, 255, 255, 120)
+        grid_color = QColor(255, 255, 255, 60)
+        bg_color = QColor(0, 0, 0, 160)
+        text_color = QColor(255, 255, 255)
 
-        font_size = max(6, int(min(tile_w, tile_h) * 0.5))
+        font_size = max(6, int(min(tile_w, tile_h) * 0.45))
         font = QFont("monospace", font_size)
         font.setStyleHint(QFont.StyleHint.Monospace)
-        painter.setFont(font)
+        op.setFont(font)
 
         grid_pen = QPen(grid_color, 1)
 
-        for tile_x in range(_GRID_WIDTH):
-            for tile_y in range(_GRID_HEIGHT):
-                rx = origin_x + tile_x * tile_w
+        for col in range(_VISIBLE_COLS):
+            tile_x = col + 1  # tile data index (skip clipped column 0)
+            for tile_y in range(_VISIBLE_ROWS):
+                rx = origin_x + col * tile_w
                 ry = origin_y + tile_y * tile_h
                 cell = QRectF(rx, ry, tile_w, tile_h)
 
-                # Grid lines
-                painter.setPen(grid_pen)
-                painter.drawRect(cell)
+                op.setPen(grid_pen)
+                op.drawRect(cell)
 
-                # Collect text from the highest-priority active overlay
                 text = self._overlay_text(state, tile_x, tile_y)
                 if text:
-                    painter.setPen(text_color)
-                    painter.drawText(cell, Qt.AlignmentFlag.AlignCenter, text)
+                    op.fillRect(cell, bg_color)
+                    op.setPen(text_color)
+                    op.drawText(cell, Qt.AlignmentFlag.AlignCenter, text)
+
+        op.end()
+        painter.drawImage(target_rect, overlay)
 
     def _overlay_text(self, state, tile_x: int, tile_y: int) -> str:
         """Return overlay text for one tile cell based on active flags.

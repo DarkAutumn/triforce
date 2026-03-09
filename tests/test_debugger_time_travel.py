@@ -29,7 +29,7 @@ def _make_entry(step_number, frame=None, observation=None,
                 action_probs=None, action_mask_desc=None):
     """Build a StepEntry with sensible defaults."""
     if frame is None:
-        frame = np.zeros((240, 256, 3), dtype=np.uint8)
+        frame = np.zeros((224, 240, 3), dtype=np.uint8)
     return StepEntry(
         step_number=step_number,
         action="MOVE_N",
@@ -49,7 +49,7 @@ def _make_window_with_steps(count=5):
     """Create a MainWindow with steps in the history."""
     window = MainWindow()
     for i in range(count):
-        frame = np.full((240, 256, 3), i * 50, dtype=np.uint8)
+        frame = np.full((224, 240, 3), i * 50, dtype=np.uint8)
         entry = _make_entry(i, frame=frame)
         window.step_history.append_step(entry)
     return window
