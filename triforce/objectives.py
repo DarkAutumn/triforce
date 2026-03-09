@@ -11,6 +11,13 @@ from .zelda_enums import BoomerangKind, Direction, MapLocation, SwordKind, TileI
 
 LOCKED_DISTANCE = 4
 
+_DIRECTION_DELTAS = [
+    (Direction.E, (1, 0)),
+    (Direction.W, (-1, 0)),
+    (Direction.S, (0, 1)),
+    (Direction.N, (0, -1)),
+]
+
 overworld_to_item = {
     0x77 : SwordKind.WOOD,
     0x37 : 1,
@@ -513,7 +520,7 @@ class RoomWalk(ObjectiveSelector):
             for tile in room.exits[direction]:
                 exit_tiles[tile] = direction
 
-        walkable = state.room.walkable
+        room = state.room
         result = set()
         seen = set()
         todo = [state.link.tile]
@@ -526,11 +533,10 @@ class RoomWalk(ObjectiveSelector):
             if tile in exit_tiles:
                 result.add(exit_tiles[tile])
 
-            for x, y in ((0, 1), (0, -1), (1, 0), (-1, 0)):
-                next_tile = TileIndex(tile.x + x, tile.y + y)
-                if -1 <= next_tile.x < walkable.shape[0] - 1 and -1 <= next_tile.y < walkable.shape[1] - 1:
-                    if next_tile not in seen and walkable[next_tile.x, next_tile.y]:
-                        todo.append(next_tile)
+            for direction, (dx, dy) in _DIRECTION_DELTAS:
+                next_tile = TileIndex(tile.x + dx, tile.y + dy)
+                if next_tile not in seen and room.can_move(tile.x, tile.y, direction):
+                    todo.append(next_tile)
 
         return list(result)
 

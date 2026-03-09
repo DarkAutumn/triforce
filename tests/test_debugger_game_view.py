@@ -264,15 +264,12 @@ def test_overlay_text_walkability():
     """_overlay_text returns 'X' for walkable tiles when WALKABILITY overlay is active."""
     from triforce_debugger.game_view import OverlayFlags  # pylint: disable=import-outside-toplevel
     from unittest.mock import MagicMock  # pylint: disable=import-outside-toplevel
-    import torch  # pylint: disable=import-outside-toplevel
 
     view = _make_game_view()
     view.set_overlay(OverlayFlags.WALKABILITY, True)
 
     state = MagicMock()
-    walkable = torch.zeros(33, 23, dtype=torch.bool)
-    walkable[5, 10] = True
-    state.room.walkable = walkable
+    state.room.is_tile_walkable = MagicMock(side_effect=lambda tc, tr: (tc, tr) == (5, 10))
 
     assert view._overlay_text(state, 5, 10) == "X"  # pylint: disable=protected-access
     assert view._overlay_text(state, 0, 0) == ""  # pylint: disable=protected-access
@@ -313,7 +310,7 @@ def test_paint_with_overlays_no_crash():
     state.in_cave = False
     state.wavefront.get.return_value = 5
     state.room.tiles = torch.zeros(32, 22, dtype=torch.uint8)
-    state.room.walkable = torch.ones(33, 23, dtype=torch.bool)
+    state.room.is_tile_walkable = MagicMock(return_value=True)
 
     view.set_game_state(state)
     view.set_overlay(OverlayFlags.WAVEFRONT, True)
