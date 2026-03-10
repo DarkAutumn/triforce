@@ -1,5 +1,6 @@
 """Main window layout for the Triforce Debugger."""
 
+import gzip
 import logging
 import os
 import time
@@ -111,8 +112,11 @@ class MainWindow(QMainWindow):
         self.file_menu = menu_bar.addMenu("&File")
         self.action_open_dir = self.file_menu.addAction("Open Directory...")
         self.action_open_dir.setShortcut("Ctrl+O")
-        self.file_menu.addSeparator()
         self.action_open_dir.triggered.connect(self.open_directory)
+        self.file_menu.addSeparator()
+        self.action_save_state = self.file_menu.addAction("Save State...")
+        self.action_save_state.setShortcut("Ctrl+S")
+        self.action_save_state.triggered.connect(self._save_state)
         self.file_menu.addSeparator()
         self.action_exit = self.file_menu.addAction("Exit")
         self.action_exit.setShortcut("Ctrl+Q")
@@ -535,6 +539,40 @@ class MainWindow(QMainWindow):
         )
         if directory:
             self.model_browser.scan_directory(directory)
+
+    def _save_state(self):
+        """Save the current emulator state to a gzip-compressed .state file."""
+        if not self._bridge:
+            return
+
+        # Default to the custom_integrations directory where savestates live
+        default_dir = os.path.join(os.path.dirname(__file__), os.pardir,
+                                   'triforce', 'custom_integrations', 'Zelda-NES')
+        default_dir = os.path.normpath(default_dir)
+
+        # Build a suggested filename from the current game state
+        suggested = ""
+        if self._last_zelda_state:
+            state = self._last_zelda_state
+            suggested = f"debug_{state.level}_{state.location:02x}.state"
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Emulator State",
+            os.path.join(default_dir, suggested),
+            "State Files (*.state)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            state_bytes = self._bridge.env.unwrapped.em.get_state()
+            with gzip.open(file_path, 'wb') as f:
+                f.write(state_bytes)
+            logging.info("Saved state to %s", file_path)
+        except Exception:  # pylint: disable=broad-except
+            logging.error("Failed to save state:\n%s", traceback.format_exc())
 
     # ── Global event filter for arrow / A+arrow keys ────────
 
