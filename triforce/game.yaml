@@ -1,0 +1,1202 @@
+rooms:
+- level: 0
+  location: '0x0c'
+  exits:
+    E:
+      level: 0
+      location: '0x0d'
+    S:
+      level: 0
+      location: '0x1c'
+  enemies:
+    RedTektite: 6
+  treasure: null
+- level: 0
+  location: '0x0d'
+  exits:
+    S:
+      level: 0
+      location: '0x1d'
+    W:
+      level: 0
+      location: '0x0c'
+  enemies:
+    RedTektite: 6
+  treasure: null
+- level: 0
+  location: '0x0e'
+  exits:
+    S:
+      level: 0
+      location: '0x1e'
+  enemies: null
+  treasure: null
+- level: 0
+  location: '0x17'
+  exits:
+    N:
+      level: 0
+      location: '0x07'
+    E:
+      level: 0
+      location: '0x18'
+    S:
+      level: 0
+      location: '0x27'
+    W:
+      level: 0
+      location: '0x16'
+  enemies:
+    Unknown_31: 1
+    Unknown_32: 2
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x18'
+  exits:
+    E:
+      level: 0
+      location: '0x19'
+    W:
+      level: 0
+      location: '0x17'
+  enemies:
+    Unknown_31: 1
+    Unknown_32: 3
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x19'
+  exits:
+    E:
+      level: 0
+      location: '0x1a'
+    W:
+      level: 0
+      location: '0x18'
+  enemies:
+    Unknown_31: 1
+    Unknown_32: 3
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x1a'
+  exits:
+    N:
+      level: 0
+      location: '0x0a'
+    E:
+      level: 0
+      location: '0x1b'
+    W:
+      level: 0
+      location: '0x19'
+  enemies:
+    RedTektite: 6
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x1b'
+  exits:
+    N:
+      level: 0
+      location: '0x0b'
+    E:
+      level: 0
+      location: '0x1c'
+    S:
+      level: 0
+      location: '0x2b'
+    W:
+      level: 0
+      location: '0x1a'
+  enemies: null
+  treasure: null
+- level: 0
+  location: '0x1c'
+  exits:
+    N:
+      level: 0
+      location: '0x0c'
+    E:
+      level: 0
+      location: '0x1d'
+    S:
+      level: 0
+      location: '0x2c'
+    W:
+      level: 0
+      location: '0x1b'
+  enemies: null
+  treasure: null
+- level: 0
+  location: '0x1d'
+  exits:
+    N:
+      level: 0
+      location: '0x0d'
+    E:
+      level: 0
+      location: '0x1e'
+    S:
+      level: 0
+      location: '0x2d'
+    W:
+      level: 0
+      location: '0x1c'
+  enemies:
+    Peahat: 6
+  treasure: null
+- level: 0
+  location: '0x1e'
+  exits:
+    N:
+      level: 0
+      location: '0x0e'
+    E:
+      level: 0
+      location: '0x1f'
+    W:
+      level: 0
+      location: '0x1d'
+  enemies:
+    RedTektite: 6
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x1f'
+  exits:
+    W:
+      level: 0
+      location: '0x1e'
+  enemies:
+    Peahat: 6
+  treasure: null
+- level: 0
+  location: '0x27'
+  exits:
+    N:
+      level: 0
+      location: '0x17'
+    E:
+      level: 0
+      location: '0x28'
+    W:
+      level: 0
+      location: '0x26'
+  enemies:
+    Peahat: 6
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x28'
+  exits:
+    E:
+      level: 0
+      location: '0x29'
+    S:
+      level: 0
+      location: '0x38'
+    W:
+      level: 0
+      location: '0x27'
+  enemies:
+    Peahat: 6
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x29'
+  exits:
+    E:
+      level: 0
+      location: '0x2a'
+    W:
+      level: 0
+      location: '0x28'
+  enemies:
+    RedLeever: 4
+  treasure: null
+- level: 0
+  location: '0x2a'
+  exits:
+    E:
+      level: 0
+      location: '0x2b'
+    S:
+      level: 0
+      location: '0x3a'
+    W:
+      level: 0
+      location: '0x29'
+  enemies:
+    BlueLeever: 6
+  treasure: null
+- level: 0
+  location: '0x2b'
+  exits:
+    E:
+      level: 0
+      location: '0x2c'
+    S:
+      level: 0
+      location: '0x3b'
+    W:
+      level: 0
+      location: '0x2a'
+  enemies:
+    BlueLeever: 2
+    Peahat: 3
+    RedLeever: 1
+  treasure: null
+- level: 0
+  location: '0x2c'
+  exits:
+    N:
+      level: 0
+      location: '0x1c'
+    E:
+      level: 0
+      location: '0x2d'
+    W:
+      level: 0
+      location: '0x2b'
+  enemies:
+    RedTektite: 4
+  treasure: null
+- level: 0
+  location: '0x2d'
+  exits:
+    N:
+      level: 0
+      location: '0x1d'
+    E:
+      level: 0
+      location: '0x2e'
+    S:
+      level: 0
+      location: '0x3d'
+    W:
+      level: 0
+      location: '0x2c'
+  enemies:
+    BlueSlowOctorok: 2
+    RedOctorok: 3
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x2e'
+  exits:
+    S:
+      level: 0
+      location: '0x3e'
+    W:
+      level: 0
+      location: '0x2d'
+  enemies:
+    BlueSlowOctorok: 4
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x37'
+  exits:
+    E:
+      level: 0
+      location: '0x38'
+    cave:
+      level: 1
+      location: '0x73'
+  enemies:
+    RedOctorok: 1
+  treasure: null
+- level: 0
+  location: '0x38'
+  exits:
+    N:
+      level: 0
+      location: '0x28'
+    S:
+      level: 0
+      location: '0x48'
+    W:
+      level: 0
+      location: '0x37'
+  enemies:
+    Zora: 1
+    BlueSlowOctorok: 1
+    RedOctorok: 5
+  treasure: null
+- level: 0
+  location: '0x39'
+  exits:
+    S:
+      level: 0
+      location: '0x49'
+  enemies:
+    Unknown_47: 1
+  treasure: null
+- level: 0
+  location: '0x3a'
+  exits:
+    N:
+      level: 0
+      location: '0x2a'
+    E:
+      level: 0
+      location: '0x3b'
+    S:
+      level: 0
+      location: '0x4a'
+  enemies:
+    BlueLeever: 2
+    Peahat: 3
+    RedLeever: 1
+  treasure: null
+- level: 0
+  location: '0x3b'
+  exits:
+    N:
+      level: 0
+      location: '0x2b'
+    S:
+      level: 0
+      location: '0x4b'
+    W:
+      level: 0
+      location: '0x3a'
+  enemies:
+    BlueLeever: 4
+  treasure: null
+- level: 0
+  location: '0x3d'
+  exits:
+    N:
+      level: 0
+      location: '0x2d'
+    S:
+      level: 0
+      location: '0x4d'
+  enemies:
+    BlueMoblin: 4
+  treasure: null
+- level: 0
+  location: '0x3e'
+  exits:
+    N:
+      level: 0
+      location: '0x2e'
+    E:
+      level: 0
+      location: '0x3f'
+  enemies:
+    BlueSlowOctorok: 2
+    RedOctorok: 3
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x3f'
+  exits:
+    S:
+      level: 0
+      location: '0x4f'
+    W:
+      level: 0
+      location: '0x3e'
+  enemies:
+    BlueSlowOctorok: 1
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x46'
+  exits:
+    E:
+      level: 0
+      location: '0x47'
+    S:
+      level: 0
+      location: '0x56'
+  enemies:
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x47'
+  exits:
+    E:
+      level: 0
+      location: '0x48'
+    W:
+      level: 0
+      location: '0x46'
+  enemies:
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x48'
+  exits:
+    N:
+      level: 0
+      location: '0x38'
+    S:
+      level: 0
+      location: '0x58'
+    W:
+      level: 0
+      location: '0x47'
+  enemies:
+    Zora: 1
+    RedLeever: 4
+  treasure: null
+- level: 0
+  location: '0x49'
+  exits:
+    N:
+      level: 0
+      location: '0x39'
+    E:
+      level: 0
+      location: '0x4a'
+    S:
+      level: 0
+      location: '0x59'
+  enemies:
+    BlueSlowOctorok: 1
+    RedOctorok: 5
+  treasure: null
+- level: 0
+  location: '0x4a'
+  exits:
+    N:
+      level: 0
+      location: '0x3a'
+    E:
+      level: 0
+      location: '0x4b'
+    W:
+      level: 0
+      location: '0x49'
+  enemies:
+    BlueTektite: 6
+  treasure: null
+- level: 0
+  location: '0x4b'
+  exits:
+    N:
+      level: 0
+      location: '0x3b'
+    S:
+      level: 0
+      location: '0x5b'
+    W:
+      level: 0
+      location: '0x4a'
+  enemies:
+    RedMoblin: 6
+  treasure: null
+- level: 0
+  location: '0x4c'
+  exits:
+    N:
+      level: 0
+      location: '0x3c'
+    E:
+      level: 0
+      location: '0x4d'
+  enemies:
+    BlueSlowOctorok: 2
+    RedOctorok: 3
+  treasure: null
+- level: 0
+  location: '0x4d'
+  exits:
+    N:
+      level: 0
+      location: '0x3d'
+    E:
+      level: 0
+      location: '0x4e'
+    S:
+      level: 0
+      location: '0x5d'
+    W:
+      level: 0
+      location: '0x4c'
+  enemies:
+    BlueMoblin: 4
+  treasure: null
+- level: 0
+  location: '0x4e'
+  exits:
+    W:
+      level: 0
+      location: '0x4d'
+  enemies:
+    BlueMoblin: 4
+  treasure: null
+- level: 0
+  location: '0x55'
+  exits:
+    E:
+      level: 0
+      location: '0x56'
+    S:
+      level: 0
+      location: '0x65'
+    W:
+      level: 0
+      location: '0x54'
+  enemies:
+    BlueOctorok: 1
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x56'
+  exits:
+    N:
+      level: 0
+      location: '0x46'
+    E:
+      level: 0
+      location: '0x57'
+    W:
+      level: 0
+      location: '0x55'
+  enemies:
+    BlueOctorok: 4
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x57'
+  exits:
+    E:
+      level: 0
+      location: '0x58'
+    W:
+      level: 0
+      location: '0x56'
+  enemies:
+    BlueOctorok: 2
+    RedOctorok: 2
+  treasure: null
+- level: 0
+  location: '0x58'
+  exits:
+    N:
+      level: 0
+      location: '0x48'
+    E:
+      level: 0
+      location: '0x59'
+    S:
+      level: 0
+      location: '0x68'
+    W:
+      level: 0
+      location: '0x57'
+  enemies:
+    BlueOctorok: 2
+    RedOctorok: 2
+  treasure: null
+- level: 0
+  location: '0x59'
+  exits:
+    N:
+      level: 0
+      location: '0x49'
+    E:
+      level: 0
+      location: '0x5a'
+    S:
+      level: 0
+      location: '0x69'
+    W:
+      level: 0
+      location: '0x58'
+  enemies:
+    Peahat: 4
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x5a'
+  exits:
+    E:
+      level: 0
+      location: '0x5b'
+    S:
+      level: 0
+      location: '0x6a'
+    W:
+      level: 0
+      location: '0x59'
+  enemies:
+    BlueOctorok: 4
+    Zora: 1
+  treasure: key
+- level: 0
+  location: '0x5b'
+  exits:
+    N:
+      level: 0
+      location: '0x4b'
+    E:
+      level: 0
+      location: '0x5c'
+    S:
+      level: 0
+      location: '0x6b'
+    W:
+      level: 0
+      location: '0x5a'
+  enemies:
+    BlueMoblin: 2
+    RedMoblin: 2
+  treasure: null
+- level: 0
+  location: '0x5c'
+  exits:
+    E:
+      level: 0
+      location: '0x5d'
+    S:
+      level: 0
+      location: '0x6c'
+    W:
+      level: 0
+      location: '0x5b'
+  enemies:
+    BlueMoblin: 4
+  treasure: null
+- level: 0
+  location: '0x5d'
+  exits:
+    N:
+      level: 0
+      location: '0x4d'
+    E:
+      level: 0
+      location: '0x5e'
+    S:
+      level: 0
+      location: '0x6d'
+    W:
+      level: 0
+      location: '0x5c'
+  enemies:
+    BlueMoblin: 4
+  treasure: null
+- level: 0
+  location: '0x5f'
+  exits:
+    N:
+      level: 0
+      location: '0x4f'
+    S:
+      level: 0
+      location: '0x6f'
+  enemies:
+    BlueSlowOctorok: 2
+    RedOctorok: 3
+    Zora: 1
+  treasure: heart-container
+- level: 0
+  location: '0x64'
+  exits:
+    N:
+      level: 0
+      location: '0x54'
+    E:
+      level: 0
+      location: '0x65'
+    W:
+      level: 0
+      location: '0x63'
+  enemies:
+    BlueSlowOctorok: 2
+    RedOctorok: 3
+  treasure: null
+- level: 0
+  location: '0x65'
+  exits:
+    N:
+      level: 0
+      location: '0x55'
+    E:
+      level: 0
+      location: '0x66'
+    S:
+      level: 0
+      location: '0x75'
+    W:
+      level: 0
+      location: '0x64'
+  enemies:
+    BlueOctorok: 2
+    RedOctorok: 2
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x66'
+  exits:
+    E:
+      level: 0
+      location: '0x67'
+    S:
+      level: 0
+      location: '0x76'
+    W:
+      level: 0
+      location: '0x65'
+  enemies:
+    RedOctorok: 2
+    BlueOctorok: 2
+  treasure: null
+- level: 0
+  location: '0x67'
+  exits:
+    E:
+      level: 0
+      location: '0x68'
+    S:
+      level: 0
+      location: '0x77'
+    W:
+      level: 0
+      location: '0x66'
+  enemies:
+    BlueOctorok: 4
+  treasure: null
+- level: 0
+  location: '0x68'
+  exits:
+    N:
+      level: 0
+      location: '0x58'
+    E:
+      level: 0
+      location: '0x69'
+    S:
+      level: 0
+      location: '0x78'
+    W:
+      level: 0
+      location: '0x67'
+  enemies:
+    BlueOctorok: 4
+  treasure: null
+- level: 0
+  location: '0x69'
+  exits:
+    N:
+      level: 0
+      location: '0x59'
+    E:
+      level: 0
+      location: '0x6a'
+    W:
+      level: 0
+      location: '0x68'
+  enemies:
+    BlueOctorok: 4
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x6a'
+  exits:
+    N:
+      level: 0
+      location: '0x5a'
+    E:
+      level: 0
+      location: '0x6b'
+    W:
+      level: 0
+      location: '0x69'
+  enemies:
+    BlueOctorok: 2
+    RedOctorok: 2
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x6b'
+  exits:
+    N:
+      level: 0
+      location: '0x5b'
+    E:
+      level: 0
+      location: '0x6c'
+    S:
+      level: 0
+      location: '0x7b'
+    W:
+      level: 0
+      location: '0x6a'
+  enemies:
+    BlueMoblin: 1
+    RedMoblin: 3
+    RedSlowOctorok: 2
+  treasure: null
+- level: 0
+  location: '0x6c'
+  exits:
+    N:
+      level: 0
+      location: '0x5c'
+    E:
+      level: 0
+      location: '0x6d'
+    W:
+      level: 0
+      location: '0x6b'
+  enemies:
+    RedMoblin: 4
+  treasure: null
+- level: 0
+  location: '0x6f'
+  exits:
+    N:
+      level: 0
+      location: '0x5f'
+    S:
+      level: 0
+      location: '0x7f'
+    W:
+      level: 0
+      location: '0x6e'
+  enemies:
+    BlueSlowOctorok: 1
+    RedOctorok: 4
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x75'
+  exits:
+    N:
+      level: 0
+      location: '0x65'
+    E:
+      level: 0
+      location: '0x76'
+  enemies:
+    BlueLeever: 2
+    Peahat: 3
+    RedLeever: 1
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x76'
+  exits:
+    N:
+      level: 0
+      location: '0x66'
+    E:
+      level: 0
+      location: '0x77'
+    W:
+      level: 0
+      location: '0x75'
+  enemies:
+    RedTektite: 4
+  treasure: null
+- level: 0
+  location: '0x77'
+  exits:
+    N:
+      level: 0
+      location: '0x67'
+    E:
+      level: 0
+      location: '0x78'
+    W:
+      level: 0
+      location: '0x76'
+  enemies: null
+  treasure: null
+- level: 0
+  location: '0x78'
+  exits:
+    N:
+      level: 0
+      location: '0x68'
+    E:
+      level: 0
+      location: '0x79'
+    W:
+      level: 0
+      location: '0x77'
+  enemies:
+    BlueOctorok: 4
+  treasure: null
+- level: 0
+  location: '0x79'
+  exits:
+    E:
+      level: 0
+      location: '0x7a'
+    W:
+      level: 0
+      location: '0x78'
+  enemies:
+    BlueTektite: 5
+  treasure: null
+- level: 0
+  location: '0x7a'
+  exits:
+    E:
+      level: 0
+      location: '0x7b'
+    W:
+      level: 0
+      location: '0x79'
+  enemies:
+    BlueTektite: 4
+  treasure: null
+- level: 0
+  location: '0x7b'
+  exits:
+    N:
+      level: 0
+      location: '0x6b'
+    E:
+      level: 0
+      location: '0x7c'
+    W:
+      level: 0
+      location: '0x7a'
+  enemies:
+    RedLeever: 6
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x7c'
+  exits:
+    E:
+      level: 0
+      location: '0x7d'
+    W:
+      level: 0
+      location: '0x7b'
+  enemies:
+    RedLeever: 6
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x7d'
+  exits:
+    E:
+      level: 0
+      location: '0x7e'
+    W:
+      level: 0
+      location: '0x7c'
+  enemies:
+    BlueSlowOctorok: 4
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x7e'
+  exits:
+    E:
+      level: 0
+      location: '0x7f'
+    W:
+      level: 0
+      location: '0x7d'
+  enemies:
+    RedOctorok: 4
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x7f'
+  exits:
+    N:
+      level: 0
+      location: '0x6f'
+    W:
+      level: 0
+      location: '0x7e'
+  enemies:
+    BlueSlowOctorok: 1
+    Zora: 1
+  treasure: null
+- level: 1
+  location: '0x23'
+  exits:
+    S:
+      level: 1
+      location: '0x33'
+  enemies:
+    RedGoriya: 3
+  treasure: key
+- level: 1
+  location: '0x33'
+  exits:
+    N:
+      level: 1
+      location: '0x23'
+    S:
+      level: 1
+      location: '0x43'
+  enemies:
+    Stalfos: 3
+  treasure: key
+- level: 1
+  location: '0x35'
+  exits:
+    E:
+      level: 1
+      location: '0x36'
+    S:
+      level: 1
+      location: '0x45'
+  enemies:
+    Aquamentus: 1
+  treasure: heart-container
+- level: 1
+  location: '0x36'
+  exits:
+    W:
+      level: 1
+      location: '0x35'
+  enemies: null
+  treasure: triforce
+- level: 1
+  location: '0x41'
+  exits:
+    E:
+      level: 1
+      location: '0x42'
+  enemies: null
+  treasure: null
+- level: 1
+  location: '0x42'
+  exits:
+    E:
+      level: 1
+      location: '0x43'
+    S:
+      level: 1
+      location: '0x52'
+  enemies:
+    BlueGel: 3
+  treasure: null
+- level: 1
+  location: '0x43'
+  exits:
+    N:
+      level: 1
+      location: '0x33'
+    E:
+      level: 1
+      location: '0x44'
+    W:
+      level: 1
+      location: '0x42'
+  enemies:
+    BlueGel: 5
+  treasure: map
+- level: 1
+  location: '0x44'
+  exits:
+    E:
+      level: 1
+      location: '0x45'
+    W:
+      level: 1
+      location: '0x43'
+  enemies:
+    RedGoriya: 3
+  treasure: boomerang
+- level: 1
+  location: '0x45'
+  exits:
+    N:
+      level: 1
+      location: '0x35'
+      locked: true
+    W:
+      level: 1
+      location: '0x44'
+  enemies:
+    Wallmaster: 8
+  treasure: key
+- level: 1
+  location: '0x52'
+  exits:
+    N:
+      level: 1
+      location: '0x42'
+      locked: true
+  enemies:
+    BlueKeese: 6
+  treasure: null
+- level: 1
+  location: '0x53'
+  exits:
+    E:
+      level: 1
+      location: '0x54'
+    S:
+      level: 1
+      location: '0x63'
+    W:
+      level: 1
+      location: '0x52'
+  enemies:
+    Stalfos: 5
+  treasure: null
+- level: 1
+  location: '0x54'
+  exits:
+    W:
+      level: 1
+      location: '0x53'
+  enemies:
+    BlueKeese: 8
+  treasure: compass
+- level: 1
+  location: '0x63'
+  exits:
+    N:
+      level: 1
+      location: '0x53'
+    S:
+      level: 1
+      location: '0x73'
+  enemies:
+    Stalfos: 3
+  treasure: null
+- level: 1
+  location: '0x72'
+  exits:
+    E:
+      level: 1
+      location: '0x73'
+  enemies:
+    BlueKeese: 3
+  treasure: null
+- level: 1
+  location: '0x73'
+  exits:
+    N:
+      level: 1
+      location: '0x63'
+      locked: true
+    E:
+      level: 1
+      location: '0x74'
+    S:
+      level: 1
+      location: '0x83'
+    W:
+      level: 1
+      location: '0x72'
+  enemies: null
+  treasure: null
+- level: 1
+  location: '0x74'
+  exits:
+    W:
+      level: 1
+      location: '0x73'
+  enemies:
+    Stalfos: 5
+  treasure: key
