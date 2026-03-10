@@ -4,7 +4,7 @@ import heapq
 import inspect
 import random
 import sys
-from typing import Dict, List, Optional, Sequence, Set
+from typing import Dict, Optional, Sequence, Set
 
 from .game_map import GameMap
 from .zelda_game import ZeldaGame
@@ -431,7 +431,7 @@ class _GameMapObjective(ObjectiveSelector):
         """Return the MapLocation to route toward. Subclasses override."""
         raise NotImplementedError()
 
-    def _should_collect_treasure(self, state: ZeldaGame) -> bool:
+    def _should_collect_treasure(self, state: ZeldaGame) -> bool:  # pylint: disable=unused-argument
         """Whether to fight/collect treasure in the current room. Subclasses override."""
         return False
 

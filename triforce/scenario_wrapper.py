@@ -302,7 +302,13 @@ class ScenarioWrapper(gym.Wrapper):
         self._last_save_state = None
         self._scenario = scenario
         self._critic = getattr(critics, scenario.critic)()
-        self._conditions = [getattr(end_conditions, ec)() for ec in scenario.end_conditions]
+        self._conditions = []
+        for ec in scenario.end_conditions:
+            ec_class = getattr(end_conditions, ec)
+            try:
+                self._conditions.append(ec_class(**scenario.objective_params))
+            except TypeError:
+                self._conditions.append(ec_class())
         self._metrics : MetricTracker = MetricTracker(scenario.metrics)
         match scenario.scenario_selector:
             case 'round-robin':

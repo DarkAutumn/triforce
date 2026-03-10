@@ -184,10 +184,13 @@ scenarios:
   description: Start of the game to the sword
   iterations: 1000000
   scenario_selector: none
-  objective: GameCompletion
+  objective: TreasureObjective
+  objective_params:
+    treasure: wood-sword
   critic: OverworldSwordCritic
   end_conditions:
   - StartingRoomConditions
+  - CollectedTreasure
   - Timeout
   metrics:
   - success-rate
@@ -342,11 +345,14 @@ scenarios:
   description: Dungeon 1.
   iterations: 10000000
   scenario_selector: round-robin
-  objective: GameCompletion
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
   critic: GameplayCritic
   end_conditions:
   - LeftDungeon
   - GainedTriforce
+  - CollectedTreasure
   - GameOver
   - Timeout
   - Dungeon1DidntGetKey
