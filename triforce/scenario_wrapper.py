@@ -28,6 +28,7 @@ class TrainingScenarioDefinition(BaseModel):
     metrics : List[str]
     end_conditions : List[str]
     start : List[str | int]
+    objective_params : Optional[Dict[str, object]] = {}
     use_hints : Optional[bool] = False
     per_reset : Optional[Dict[str, int | str]] = {}
     per_frame : Optional[Dict[str, int | str]] = {}

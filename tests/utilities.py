@@ -53,6 +53,7 @@ class CriticWrapper(gym.Wrapper):
 class TestScenario:
     def __init__(self):
         self.objective = GameCompletion
+        self.objective_params = {}
         self.per_reset = {}
         self.per_room = {}
         self.per_frame = {}

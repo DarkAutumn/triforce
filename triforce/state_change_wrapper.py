@@ -324,6 +324,7 @@ class StateChangeWrapper(gym.Wrapper):
         super().__init__(env)
         self._ledger = FutureCreditLedger()
         self._objective_type = scenario.objective if scenario else None
+        self._objective_params = scenario.objective_params if scenario else {}
         self._objectives : ObjectiveSelector = None
         self._prev_state = None
 
@@ -346,7 +347,7 @@ class StateChangeWrapper(gym.Wrapper):
         self._ledger.clear()
         self._prev_state = None
         if self._objective_type:
-            self._objectives = self._objective_type()
+            self._objectives = self._objective_type(**self._objective_params)
 
         state = self._update_state(None, frames, info)
         return frames, state

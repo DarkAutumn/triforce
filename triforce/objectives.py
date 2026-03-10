@@ -4,8 +4,9 @@ import heapq
 import inspect
 import random
 import sys
-from typing import Dict, Optional, Sequence, Set
+from typing import Dict, List, Optional, Sequence, Set
 
+from .game_map import GameMap
 from .zelda_game import ZeldaGame
 from .zelda_enums import BoomerangKind, Direction, MapLocation, SwordKind, TileIndex, ZeldaItemKind
 
@@ -69,7 +70,7 @@ CAVE_TREASURE_TILE = TileIndex(0x0f, 0x0b)
 
 class RoomMemory:
     """What the agent learns over the course of the playthrough."""
-    def __init__(self, state : ZeldaGame):
+    def __init__(self, state : ZeldaGame, game_map=None):
         self.level = state.level
         self.full_location = state.full_location
         self.exits = state.room.exits.copy()
@@ -79,8 +80,12 @@ class RoomMemory:
         self.locked = None
         self.barred = None
 
-        item_map = overworld_to_item if self.level == 0 else dungeon_to_item
-        self.item = item_map.get(state.location, None)
+        if game_map is not None:
+            map_room = game_map.get(state.full_location)
+            self.item = map_room.treasure if map_room else None
+        else:
+            item_map = overworld_to_item if self.level == 0 else dungeon_to_item
+            self.item = item_map.get(state.location, None)
         self.referesh_state(state)
 
 
@@ -107,13 +112,17 @@ class ObjectiveSelector:
         """Get the current objectives for the agent."""
         raise NotImplementedError()
 
+    def _get_game_map(self) -> Optional[GameMap]:
+        """Override to provide a GameMap for room memory item lookup."""
+        return None
+
     def _update_exits(self, state: ZeldaGame):
         if state.in_cave:
             return
 
         assert state.room.is_loaded
         if state.full_location not in self._rooms:
-            room = RoomMemory(state)
+            room = RoomMemory(state, game_map=self._get_game_map())
             self._rooms[state.full_location] = room
         else:
             self._rooms[state.full_location].referesh_state(state)
@@ -402,6 +411,213 @@ class GameCompletion(ObjectiveSelector):
 
         return targets, next_rooms
 
+
+class _GameMapObjective(ObjectiveSelector):
+    """Base class for objectives that use GameMap for routing."""
+
+    _game_map = None
+
+    def __init__(self):
+        super().__init__()
+        if _GameMapObjective._game_map is None:
+            _GameMapObjective._game_map = GameMap.load()
+        self._last_route_key = None
+        self._last_route_result = None
+
+    def _get_game_map(self):
+        return self._game_map
+
+    def _get_target(self, state: ZeldaGame) -> Optional[MapLocation]:
+        """Return the MapLocation to route toward. Subclasses override."""
+        raise NotImplementedError()
+
+    def _should_collect_treasure(self, state: ZeldaGame) -> bool:
+        """Whether to fight/collect treasure in the current room. Subclasses override."""
+        return False
+
+    def get_current_objectives(self, prev: Optional[ZeldaGame], state: ZeldaGame) -> Objective:
+        self._update_exits(state)
+
+        kind, tile_objectives, next_rooms = self._get_room_objective(prev, state)
+
+        if kind == ObjectiveKind.NONE:
+            kind = ObjectiveKind.MOVE
+
+        pbrs_targets = set(tile_objectives)
+
+        # Add dropped items to targets so wavefront lets link collect them
+        for item in state.items:
+            for tile in item.link_overlap_tiles:
+                tile_objectives.append(tile)
+
+        # Route to destination unless fighting/collecting/entering cave
+        if kind not in (ObjectiveKind.FIGHT, ObjectiveKind.TREASURE, ObjectiveKind.CAVE):
+            exit_tiles, rooms = self._get_map_objective(state)
+            tile_objectives.extend(exit_tiles)
+            next_rooms.extend(rooms)
+            pbrs_targets.update(exit_tiles)
+
+        return Objective(kind, set(tile_objectives), set(next_rooms), pbrs_targets)
+
+    def _get_room_objective(self, prev, state):
+        """Get in-room objectives: cave entry, dungeon fight/treasure."""
+        tile_objectives = []
+        next_rooms = []
+
+        if state.in_cave:
+            return self._get_cave_objective(state)
+
+        if state.level > 0:
+            return self._get_dungeon_room_objective(prev, state)
+
+        # Overworld: check for cave entrance leading to our target
+        cave_tile = state.room.cave_tile
+        if cave_tile is not None:
+            target = self._get_target(state)
+            if target is not None:
+                # Enter cave if target is inside this cave or is a dungeon entrance here
+                cave_location = MapLocation(state.level, state.location, True)
+                game_room = self._game_map.get(state.full_location)
+                cave_exit = game_room.exits.get('cave') if game_room else None
+                if cave_exit:
+                    cave_dest = cave_exit.destination
+                    # Enter if the cave IS the target, or is on the path to the target
+                    if cave_dest == target or (cave_dest.level != state.level):
+                        # Dungeon entrance: cave leads to different level
+                        if cave_dest.level != state.level:
+                            next_rooms.append(cave_dest)
+                        else:
+                            next_rooms.append(cave_location)
+                        tile_objectives.append(cave_tile)
+                        return ObjectiveKind.CAVE, tile_objectives, next_rooms
+
+        return ObjectiveKind.NONE, tile_objectives, next_rooms
+
+    def _get_cave_objective(self, state):
+        """Handle in-cave: collect treasure or leave."""
+        tile_objectives = []
+        next_rooms = []
+
+        if self._should_collect_treasure(state):
+            if state.treasure:
+                tile_objectives.extend(state.treasure.link_overlap_tiles)
+                return ObjectiveKind.TREASURE, tile_objectives, next_rooms
+
+            tile_objectives.append(CAVE_TREASURE_TILE)
+            return ObjectiveKind.TREASURE, tile_objectives, next_rooms
+
+        # Leave the cave
+        tile_objectives.extend(state.room.exits[Direction.S])
+        next_rooms.append(MapLocation(state.level, state.location, False))
+        return ObjectiveKind.MOVE, tile_objectives, next_rooms
+
+    def _get_dungeon_room_objective(self, prev, state):
+        """Handle dungeon room: fight enemies / collect treasure."""
+        kind = ObjectiveKind.NONE
+        tile_objectives = []
+
+        if not self._should_collect_treasure(state):
+            return kind, tile_objectives, []
+
+        if state.treasure:
+            room_memory = self._rooms.get(state.full_location, None)
+            treasure = room_memory.item if room_memory else None
+            if treasure not in ("map", "compass"):
+                kind = ObjectiveKind.TREASURE
+                tile_objectives.extend(state.treasure.link_overlap_tiles)
+        else:
+            room_memory = self._rooms.get(state.full_location, None)
+            if room_memory and room_memory.item and prev and prev.treasure is not None:
+                room_memory.item = None
+
+            if room_memory and room_memory.item is not None and state.enemies:
+                kind = ObjectiveKind.FIGHT
+                tiles = self._get_enemy_tile_objectives(state)
+                tile_objectives.extend(tiles)
+                if not tiles:
+                    room_memory.item = None
+
+        return kind, tile_objectives, []
+
+    def _get_map_objective(self, state):
+        """Route toward target using GameMap."""
+        if state.in_cave:
+            return state.room.exits[Direction.S], [MapLocation(state.level, state.location, False)]
+
+        target = self._get_target(state)
+        if target is None or state.full_location == target:
+            return [], []
+
+        # Cache to avoid re-routing every frame in the same room
+        route_key = (state.full_location, target, state.link.keys)
+        if route_key == self._last_route_key:
+            return self._last_route_result
+
+        next_rooms = self._game_map.find_next_rooms(state.full_location, target, state.link.keys)
+        if not next_rooms:
+            self._last_route_key = route_key
+            self._last_route_result = ([], set())
+            return [], set()
+
+        directions = [state.full_location.get_direction_to(r) for r in next_rooms]
+        targets = []
+        for d in directions:
+            if d != Direction.NONE and d in state.room.exits:
+                targets.extend(state.room.exits[d])
+
+        self._last_route_key = route_key
+        self._last_route_result = (targets, next_rooms)
+        return targets, next_rooms
+
+
+class ReachLocation(_GameMapObjective):
+    """Routes the agent to a specific map location."""
+    def __init__(self, level=0, location=0, in_cave=False):
+        super().__init__()
+        loc = int(location, 16) if isinstance(location, str) else location
+        self._target = MapLocation(level, loc, in_cave)
+
+    def _get_target(self, state):
+        return self._target
+
+    def _should_collect_treasure(self, state):
+        # Collect treasure if we're in the target room
+        return state.full_location == self._target
+
+
+class TreasureObjective(_GameMapObjective):
+    """Routes the agent to collect a specific treasure."""
+    def __init__(self, treasure="triforce"):
+        super().__init__()
+        self._treasure = treasure
+        rooms = self._game_map.find_rooms_with_treasure(treasure)
+        self._target_rooms = [r.location for r in rooms]
+
+    def _get_target(self, state):
+        if not self._target_rooms:
+            return None
+
+        # If we're already in one of the target rooms, stay
+        for target in self._target_rooms:
+            if state.full_location == target:
+                return target
+
+        # Find closest target room
+        best = None
+        best_cost = float('inf')
+        for target in self._target_rooms:
+            route = self._game_map.find_route(state.full_location, target, state.link.keys)
+            if route and len(route) < best_cost:
+                best_cost = len(route)
+                best = target
+
+        return best
+
+    def _should_collect_treasure(self, state):
+        # Only fight/collect in rooms that have our target treasure
+        return state.full_location in self._target_rooms
+
+
 DUAL_EXIT_CHANCE = 0.05
 
 class RoomWalk(ObjectiveSelector):
@@ -546,7 +762,8 @@ def _init_objectives():
     result = {}
     current_module = sys.modules[__name__]
     for cls_name, cls_obj in inspect.getmembers(current_module, inspect.isclass):
-        if issubclass(cls_obj, ObjectiveSelector) and cls_obj is not ObjectiveSelector:
+        if issubclass(cls_obj, ObjectiveSelector) and cls_obj is not ObjectiveSelector \
+                and not cls_name.startswith('_'):
             result[cls_name] = cls_obj
 
     return result
@@ -560,6 +777,8 @@ def get_objective_selector(name):
 __all__ = [
     Objective.__name__,
     GameCompletion.__name__,
+    ReachLocation.__name__,
+    TreasureObjective.__name__,
     ObjectiveKind.__name__,
     get_objective_selector.__name__,
 ]

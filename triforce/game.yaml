@@ -917,7 +917,10 @@ rooms:
 - level: 0
   location: '0x77'
   in_cave: true
-  exits: null
+  exits:
+    S:
+      level: 0
+      location: '0x77'
   enemies: null
   treasure: wood-sword
 - level: 0
