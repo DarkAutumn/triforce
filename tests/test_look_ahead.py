@@ -243,7 +243,7 @@ class TestBeamSpreadNotStuck:
 @pytest.fixture
 def emu():
     """Overworld room with full health, centered Link."""
-    fixture = ZeldaFixture("debug_0_67_1772056964.state")
+    fixture = ZeldaFixture("test_ow_full_health.state")
     yield fixture
     fixture.close()
 
@@ -251,7 +251,7 @@ def emu():
 @pytest.fixture
 def beam_emu():
     """Fixture with beams already active (state $10)."""
-    fixture = ZeldaFixture("debug_0_67_1772056964.state")
+    fixture = ZeldaFixture("test_ow_full_health.state")
     for _ in range(5):
         fixture.step()
 

@@ -57,7 +57,7 @@ class TestHealthEncoding:
 
     def test_high_nibble_is_containers_minus_one(self):
         """High nibble of HeartValues = number of containers - 1."""
-        emu = ZeldaFixture("debug_0_67_1772056964.state")
+        emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(emu)
 
         game = emu.game_state()
@@ -68,7 +68,7 @@ class TestHealthEncoding:
 
     def test_low_nibble_is_hearts_filled(self):
         """Low nibble of HeartValues = number of fully filled hearts."""
-        emu = ZeldaFixture("debug_0_67_1772056964.state")
+        emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(emu)
 
         hc = emu.ram[0x66F]
@@ -90,7 +90,7 @@ class TestHealthEncoding:
     ])
     def test_nibble_extraction(self, hc_val, expected_max, expected_filled):
         """Verify Python correctly extracts max_health and filled hearts."""
-        emu = ZeldaFixture("debug_0_67_1772056964.state")
+        emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(emu)
 
         emu.set('hearts_and_containers', hc_val)
@@ -110,7 +110,7 @@ class TestBeamHealthCheck:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        self.emu = ZeldaFixture("debug_0_67_1772056964.state")
+        self.emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(self.emu)
         self.cm1 = 2  # containers_minus_one for this state
         yield
@@ -182,7 +182,7 @@ class TestIsHealthFull:
     """Verify is_health_full as a general 'at max health' check."""
 
     def test_full_health_is_full(self):
-        emu = ZeldaFixture("debug_0_67_1772056964.state")
+        emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(emu)
         game = emu.game_state()
         assert game.link.is_health_full is True
@@ -190,7 +190,7 @@ class TestIsHealthFull:
 
     def test_missing_partial_not_full(self):
         """c-1 == filled but partial=$7F → not full."""
-        emu = ZeldaFixture("debug_0_67_1772056964.state")
+        emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(emu)
         _set_health_and_step(emu, 0x22, 0x7F)
         game = emu.game_state()
@@ -199,7 +199,7 @@ class TestIsHealthFull:
 
     def test_missing_heart_not_full(self):
         """filled < c-1 → not full regardless of partial."""
-        emu = ZeldaFixture("debug_0_67_1772056964.state")
+        emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(emu)
         _set_health_and_step(emu, 0x21, 0xFF)
         game = emu.game_state()
@@ -216,7 +216,7 @@ class TestHealthRoundTrip:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        self.emu = ZeldaFixture("debug_0_67_1772056964.state")
+        self.emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(self.emu)
         yield
         self.emu.close()
