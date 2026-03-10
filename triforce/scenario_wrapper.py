@@ -1,7 +1,6 @@
 """Wraps the environment to call our critic and end conditions."""
 
 from collections import deque
-import json
 import gzip
 import os
 from typing import Deque, Dict, List, Optional
@@ -9,6 +8,7 @@ from pydantic import BaseModel, field_validator
 import gymnasium as gym
 import stable_retro as retro
 import torch
+import yaml
 
 from .metrics import MetricTracker
 from .objectives import get_objective_selector
@@ -74,11 +74,11 @@ class TrainingScenarioDefinition(BaseModel):
 
     @staticmethod
     def _load_scenarios():
-        """Loads the models and scenarios from triforce.json."""
+        """Loads the scenarios from triforce.yaml."""
         scenarios = {}
         script_dir = os.path.dirname(os.path.realpath(__file__))
-        with open(os.path.join(script_dir, 'triforce.json'), encoding='utf-8') as f:
-            for scenario in json.load(f)["scenarios"]:
+        with open(os.path.join(script_dir, 'triforce.yaml'), encoding='utf-8') as f:
+            for scenario in yaml.safe_load(f)["scenarios"]:
                 scenario = TrainingScenarioDefinition(**scenario)
                 scenarios[scenario.name] = scenario
 
@@ -86,13 +86,13 @@ class TrainingScenarioDefinition(BaseModel):
 
     @staticmethod
     def get(name, default=None):
-        """Loads the models and scenarios from triforce.json."""
+        """Loads a scenario by name from triforce.yaml."""
         scenarios = TrainingScenarioDefinition._load_scenarios()
         return scenarios.get(name, default)
 
     @staticmethod
     def get_all():
-        """Loads the models and scenarios from triforce.json."""
+        """Loads all scenarios from triforce.yaml."""
         return list(TrainingScenarioDefinition._load_scenarios().values())
 
 class TrainingCircuitEntry(BaseModel):
@@ -110,11 +110,11 @@ class TrainingCircuitDefinition(BaseModel):
 
     @staticmethod
     def _load_circuits():
-        """Loads the models and scenarios from triforce.json."""
+        """Loads the training circuits from triforce.yaml."""
         circuits = {}
         script_dir = os.path.dirname(os.path.realpath(__file__))
-        with open(os.path.join(script_dir, 'triforce.json'), encoding='utf-8') as f:
-            for circuit in json.load(f)["training-circuits"]:
+        with open(os.path.join(script_dir, 'triforce.yaml'), encoding='utf-8') as f:
+            for circuit in yaml.safe_load(f)["training-circuits"]:
                 circuit = TrainingCircuitDefinition(**circuit)
                 circuits[circuit.name] = circuit
 
@@ -122,13 +122,13 @@ class TrainingCircuitDefinition(BaseModel):
 
     @staticmethod
     def get(name, default=None):
-        """Loads the models and scenarios from triforce.json."""
+        """Loads a training circuit by name from triforce.yaml."""
         circuits = TrainingCircuitDefinition._load_circuits()
         return circuits.get(name, default)
 
     @staticmethod
     def get_all():
-        """Loads the models and scenarios from triforce.json."""
+        """Loads all training circuits from triforce.yaml."""
         return list(TrainingCircuitDefinition._load_circuits().values())
 
 class RoomResult:

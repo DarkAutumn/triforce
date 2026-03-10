@@ -704,8 +704,8 @@ def _run_pbrs_episode(env, network, ep_idx):
     return step_num, ending, all_steps, room_segments
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Diagnostic tool for trained triforce models")
-    parser.add_argument("--model", required=True, help="Model name from triforce.json")
-    parser.add_argument("--scenario", required=True, help="Scenario name from triforce.json")
+    parser.add_argument("--model", required=True, help="Model name from triforce.yaml")
+    parser.add_argument("--scenario", required=True, help="Scenario name from triforce.yaml")
     parser.add_argument("--model-path", required=True,
                         help="Path to .pt model file (supports glob patterns)")
     parser.add_argument("--episodes", type=int, default=20, help="Number of episodes to run")
@@ -721,8 +721,8 @@ def _run_pbrs_episode(env, network, ep_idx):
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Diagnostic tool for trained triforce models")
-    parser.add_argument("--model", required=True, help="Model name from triforce.json")
-    parser.add_argument("--scenario", required=True, help="Scenario name from triforce.json")
+    parser.add_argument("--model", required=True, help="Model name from triforce.yaml")
+    parser.add_argument("--scenario", required=True, help="Scenario name from triforce.yaml")
     parser.add_argument("--model-path", required=True,
                         help="Path to .pt model file (supports glob patterns)")
     parser.add_argument("--episodes", type=int, default=20, help="Number of episodes to run")

@@ -228,9 +228,9 @@ def parse_args():
 
     parser.add_argument('scenario', type=str, help='The scenario or circuit to train on.')
     parser.add_argument('action_space', type=str, nargs='?', default=None,
-                        help='Action space name (default: from triforce.json).')
+                        help='Action space name (default: from triforce.yaml).')
     parser.add_argument('model_kind', type=str, nargs='?', default=None,
-                        help='Model kind name (default: from triforce.json).')
+                        help='Model kind name (default: from triforce.yaml).')
     parser.add_argument("--output", type=str, help="Location to write to.")
     parser.add_argument("--iterations", type=int, default=None, help="Override iteration count.")
     parser.add_argument("--parallel", type=int, default=6, help="Number of parallel environments to run.")

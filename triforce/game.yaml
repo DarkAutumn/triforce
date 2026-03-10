@@ -908,8 +908,18 @@ rooms:
     W:
       level: 0
       location: '0x76'
+    cave:
+      level: 0
+      location: '0x77'
+      in_cave: true
   enemies: null
   treasure: null
+- level: 0
+  location: '0x77'
+  in_cave: true
+  exits: null
+  enemies: null
+  treasure: wood-sword
 - level: 0
   location: '0x78'
   exits:
@@ -1142,7 +1152,7 @@ rooms:
       location: '0x52'
   enemies:
     Stalfos: 5
-  treasure: null
+  treasure: key
 - level: 1
   location: '0x54'
   exits:
@@ -1172,7 +1182,7 @@ rooms:
       location: '0x73'
   enemies:
     BlueKeese: 3
-  treasure: null
+  treasure: key
 - level: 1
   location: '0x73'
   exits:

@@ -1,7 +1,7 @@
-"""Tests for triforce.json config: action spaces, model kinds, and scenario wiring.
+"""Tests for triforce.yaml config: action spaces, model kinds, and scenario wiring.
 
 Verifies:
-- Action space definitions load correctly from triforce.json
+- Action space definitions load correctly from triforce.yaml
 - Model kind definitions load correctly and map to the right classes
 - Defaults are set correctly
 - skip-sword-to-triforce scenario has exactly [GainedTriforce, GameOver, Timeout] end conditions
@@ -12,7 +12,7 @@ from triforce.scenario_wrapper import TrainingScenarioDefinition
 
 
 class TestActionSpaceDefinitions:
-    """Verify action-spaces section of triforce.json."""
+    """Verify action-spaces section of triforce.yaml."""
 
     def test_basic_action_space(self):
         """basic action space should have MOVE, SWORD, BEAMS."""
@@ -31,7 +31,7 @@ class TestActionSpaceDefinitions:
 
 
 class TestModelKindDefinitions:
-    """Verify model-kinds section of triforce.json."""
+    """Verify model-kinds section of triforce.yaml."""
 
     def test_shared_nature_kind(self):
         """shared-nature should map to SharedNatureAgent."""
@@ -55,7 +55,7 @@ class TestSkipSwordToTriforceScenario:
     def test_scenario_exists(self):
         """skip-sword-to-triforce scenario should exist."""
         scenario = TrainingScenarioDefinition.get("skip-sword-to-triforce")
-        assert scenario is not None, "skip-sword-to-triforce not found in triforce.json"
+        assert scenario is not None, "skip-sword-to-triforce not found in triforce.yaml"
 
     def test_end_conditions_exact(self):
         """End conditions must be exactly [GainedTriforce, GameOver, Timeout].

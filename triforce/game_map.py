@@ -5,12 +5,13 @@ to room exits, enemies, and treasure for pathfinding and objectives.
 """
 
 import os
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 import yaml
 
-from .zelda_enums import Direction, MapLocation
+from .zelda_enums import MapLocation
 
 
 @dataclass
@@ -61,7 +62,6 @@ class GameMap:
         if start == end:
             return [start]
 
-        from collections import deque
         queue = deque([(start, [start])])
         visited = {start}
 
@@ -102,7 +102,8 @@ class GameMap:
 
             exits = {}
             for dir_str, dest in (entry.get('exits') or {}).items():
-                dest_loc = MapLocation(dest['level'], int(dest['location'], 16), False)
+                dest_cave = dest.get('in_cave', False)
+                dest_loc = MapLocation(dest['level'], int(dest['location'], 16), dest_cave)
                 locked = dest.get('locked', False)
                 exits[dir_str] = RoomExit(direction=dir_str, destination=dest_loc, locked=locked)
 
