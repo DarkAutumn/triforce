@@ -70,7 +70,8 @@ class GameMap:
 
     def find_route(self, start: MapLocation, end: MapLocation,
                    keys: int = 0,
-                   collected_keys: Optional[Set[MapLocation]] = None) -> Optional[List[MapLocation]]:
+                   collected_keys: Optional[Set[MapLocation]] = None,
+                   opened_doors: Optional[Set[tuple]] = None) -> Optional[List[MapLocation]]:
         """Dijkstra shortest path considering locked doors and key collection.
 
         Locked doors cost LOCKED_COST and consume a key. Rooms with 'key' treasure
@@ -78,20 +79,22 @@ class GameMap:
 
         Args:
             collected_keys: Key rooms already collected this episode (won't grant keys again).
+            opened_doors: Set of (MapLocation, direction_str) for doors already opened at runtime.
 
         Returns the path including both endpoints, or None if no path exists.
         """
         if start == end:
             return [start]
 
-        paths = self._find_all_routes(start, end, keys, collected_keys)
+        paths = self._find_all_routes(start, end, keys, collected_keys, opened_doors)
         if not paths:
             return None
         return paths[0]
 
     def find_next_rooms(self, start: MapLocation, end: MapLocation,
                         keys: int = 0,
-                        collected_keys: Optional[Set[MapLocation]] = None) -> Set[MapLocation]:
+                        collected_keys: Optional[Set[MapLocation]] = None,
+                        opened_doors: Optional[Set[tuple]] = None) -> Set[MapLocation]:
         """Find all equally-optimal next rooms from start toward end.
 
         Returns the set of rooms that are valid first moves on any shortest path.
@@ -99,11 +102,12 @@ class GameMap:
 
         Args:
             collected_keys: Key rooms already collected this episode (won't grant keys again).
+            opened_doors: Set of (MapLocation, direction_str) for doors already opened at runtime.
         """
         if start == end:
             return set()
 
-        paths = self._find_all_routes(start, end, keys, collected_keys)
+        paths = self._find_all_routes(start, end, keys, collected_keys, opened_doors)
         if not paths:
             return set()
 
@@ -111,14 +115,17 @@ class GameMap:
 
     def _find_all_routes(self, start: MapLocation, end: MapLocation,
                          keys: int,
-                         collected_keys: Optional[Set[MapLocation]] = None) -> List[List[MapLocation]]:
+                         collected_keys: Optional[Set[MapLocation]] = None,
+                         opened_doors: Optional[Set[tuple]] = None) -> List[List[MapLocation]]:
         """Dijkstra over (room, keys_held) state space. Returns all shortest paths.
 
         Key rooms grant +1 key on first visit (tracked via bitmask to prevent
         double-counting). Locked doors cost LOCKED_COST and consume a key.
+        Doors in opened_doors are treated as free (already opened at runtime).
 
         Args:
             collected_keys: Key rooms already collected (pre-set in the bitmask).
+            opened_doors: Doors already opened at runtime (treated as free passages).
         """
         # Assign each key room a bit index for tracking collection
         key_room_list = sorted(
@@ -144,6 +151,9 @@ class GameMap:
         heap = [(0, counter, start, keys, initial_mask)]
         best_cost_to_end = None
 
+        # Build set of opened doors for O(1) lookup
+        opened = opened_doors or set()
+
         while heap:
             cost, _, current, cur_keys, collected = heapq.heappop(heap)
 
@@ -165,7 +175,9 @@ class GameMap:
             for exit_info in room.exits.values():
                 neighbor = exit_info.destination
 
-                if exit_info.locked:
+                # A locked door that has been opened at runtime is free
+                door_opened = (current, exit_info.direction) in opened
+                if exit_info.locked and not door_opened:
                     if cur_keys <= 0:
                         continue
                     move_cost = LOCKED_COST

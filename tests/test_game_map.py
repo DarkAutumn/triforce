@@ -231,3 +231,30 @@ class TestKeyAwareRouting:
         assert route is not None
         assert route[0] == loc_72
         assert route[-1] == triforce
+
+    def test_opened_door_treated_as_free(self):
+        """A door opened at runtime should be free (no key cost)."""
+        game_map = _load()
+        start = MapLocation(1, 0x73, False)
+        triforce = MapLocation(1, 0x36, False)
+        collected = {MapLocation(1, 0x72, False)}
+
+        # With 0 keys and no opened doors: can't go north, routes east to get key
+        next_no_opened = game_map.find_next_rooms(start, triforce, keys=0, collected_keys=collected)
+        assert MapLocation(1, 0x74, False) in next_no_opened
+
+        # With 0 keys but north door opened: can go north for free
+        opened = {(start, 'N')}
+        next_opened = game_map.find_next_rooms(
+            start, triforce, keys=0, collected_keys=collected, opened_doors=opened)
+        assert MapLocation(1, 0x63, False) in next_opened
+
+    def test_opened_door_no_key_consumed(self):
+        """Opening a door at runtime shouldn't consume a key in routing."""
+        game_map = _load()
+        start = MapLocation(1, 0x73, False)
+        loc_63 = MapLocation(1, 0x63, False)
+        # With 1 key and door opened: route north, keep the key
+        opened = {(start, 'N')}
+        path = game_map.find_route(start, loc_63, keys=1, opened_doors=opened)
+        assert path == [start, loc_63]  # Direct path, no detour

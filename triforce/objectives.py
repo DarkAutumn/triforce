@@ -424,9 +424,34 @@ class _GameMapObjective(ObjectiveSelector):
         self._last_route_key = None
         self._last_route_result = None
         self._collected_key_rooms: Set[MapLocation] = set()
+        self._opened_doors: Set[tuple] = set()  # (MapLocation, direction_str) for doors opened at runtime
 
     def _get_game_map(self):
         return self._game_map
+
+    _DIR_STR_TO_ENUM = {'N': Direction.N, 'S': Direction.S, 'E': Direction.E, 'W': Direction.W}
+
+    def _update_opened_doors(self, state):
+        """Detect doors that have been opened at runtime.
+
+        Compares the static GameMap (which always marks doors as locked) against the
+        actual tile state. When a door marked locked in the map is open in-game, it
+        gets tracked so the Dijkstra treats it as free on future route calculations.
+        """
+        if state.level == 0:
+            return
+
+        map_room = self._game_map.get(state.full_location)
+        if map_room is None:
+            return
+
+        for exit_info in map_room.exits.values():
+            if exit_info.locked:
+                door_key = (state.full_location, exit_info.direction)
+                if door_key not in self._opened_doors:
+                    direction = self._DIR_STR_TO_ENUM.get(exit_info.direction)
+                    if direction and not state.is_door_locked(direction):
+                        self._opened_doors.add(door_key)
 
     def _get_target(self, state: ZeldaGame) -> Optional[MapLocation]:
         """Return the MapLocation to route toward. Subclasses override."""
@@ -439,6 +464,7 @@ class _GameMapObjective(ObjectiveSelector):
 
     def get_current_objectives(self, prev: Optional[ZeldaGame], state: ZeldaGame) -> Objective:
         self._update_exits(state)
+        self._update_opened_doors(state)
 
         kind, tile_objectives, next_rooms = self._get_room_objective(prev, state)
 
@@ -555,13 +581,15 @@ class _GameMapObjective(ObjectiveSelector):
 
         # Cache to avoid re-routing every frame in the same room
         collected_frozen = frozenset(self._collected_key_rooms)
-        route_key = (state.full_location, target, state.link.keys, collected_frozen)
+        opened_frozen = frozenset(self._opened_doors)
+        route_key = (state.full_location, target, state.link.keys, collected_frozen, opened_frozen)
         if route_key == self._last_route_key:
             return self._last_route_result
 
         next_rooms = self._game_map.find_next_rooms(
             state.full_location, target, state.link.keys,
-            collected_keys=self._collected_key_rooms
+            collected_keys=self._collected_key_rooms,
+            opened_doors=self._opened_doors
         )
         if not next_rooms:
             self._last_route_key = route_key
