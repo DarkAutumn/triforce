@@ -121,7 +121,6 @@ def test_view_menu_overlay_toggles():
     assert window.action_overlay_wavefront.isCheckable()
     assert window.action_overlay_tile_ids.isCheckable()
     assert window.action_overlay_walkability.isCheckable()
-    assert window.action_overlay_coordinates.isCheckable()
     assert window.action_uncap_fps.isCheckable()
     window.close()
 

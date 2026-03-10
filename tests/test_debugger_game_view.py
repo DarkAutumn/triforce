@@ -208,12 +208,11 @@ def test_multiple_overlays_simultaneously():
 
     view.set_overlay(OverlayFlags.WAVEFRONT, True)
     view.set_overlay(OverlayFlags.WALKABILITY, True)
-    view.set_overlay(OverlayFlags.COORDINATES, True)
+    view.set_overlay(OverlayFlags.TILE_IDS, True)
 
     assert OverlayFlags.WAVEFRONT in view.overlays
     assert OverlayFlags.WALKABILITY in view.overlays
-    assert OverlayFlags.COORDINATES in view.overlays
-    assert OverlayFlags.TILE_IDS not in view.overlays
+    assert OverlayFlags.TILE_IDS in view.overlays
 
     view.close()
 
@@ -280,17 +279,6 @@ def test_overlay_text_walkability():
     view.close()
 
 
-def test_overlay_text_coordinates():
-    """_overlay_text returns hex coordinates when COORDINATES overlay is active."""
-    from triforce_debugger.game_view import OverlayFlags  # pylint: disable=import-outside-toplevel
-    view = _make_game_view()
-    view.set_overlay(OverlayFlags.COORDINATES, True)
-
-    # Any state will do since coordinates don't use state data
-    assert view._overlay_text(None, 0x1F, 0x15) == "1F\n15"  # pylint: disable=protected-access
-    view.close()
-
-
 def test_overlay_priority_wavefront_over_tiles():
     """When both wavefront and tile IDs are active, wavefront takes priority."""
     from triforce_debugger.game_view import OverlayFlags  # pylint: disable=import-outside-toplevel
@@ -336,9 +324,6 @@ def test_paint_with_overlays_no_crash():
     view.repaint()
 
     view.set_overlay(OverlayFlags.WALKABILITY, True)
-    view.repaint()
-
-    view.set_overlay(OverlayFlags.COORDINATES, True)
     view.repaint()
 
     view.close()

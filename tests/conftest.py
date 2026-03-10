@@ -15,7 +15,7 @@ import pytest
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import triforce  # noqa: E402 - registers custom integrations
-import retro      # noqa: E402
+import stable_retro as retro      # noqa: E402
 
 from triforce.zelda_game import ZeldaGame, ObjectTables
 from tests.asm_addresses import *

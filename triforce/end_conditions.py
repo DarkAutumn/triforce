@@ -25,70 +25,35 @@ class GameOver(ZeldaEndCondition):
         return False, False, None
 
 class Timeout(ZeldaEndCondition):
-    """End the scenario if the agent is in the same screen position, or fails to discover a new room."""
+    """End the scenario if the agent is stuck in the same screen position or fails to make progress."""
     def __init__(self):
         super().__init__()
         self.__position_duration = 0
-        self.__last_discovery = 0
-        self.__last_correct_room = 0
-        self.__seen = set()
-        self.__tile_timeout = {}
-
-        # the number of timesteps the agent can be in the same position before we truncate
+        self.__last_progress = 0
         self.position_timeout = 50
-        self.no_discovery_timeout = 1200
-        self.no_next_room_timeout = 300
+        self.no_progress_timeout = 2000
 
     def clear(self):
         self.__position_duration = 0
-        self.__last_discovery = 0
-        self.__last_correct_room = 0
-        self.__seen.clear()
-        self.__tile_timeout.clear()
+        self.__last_progress = 0
 
     def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
-        # pylint: disable=too-many-branches
-
-        # Check if link is stuck in one position on the screen
         prev, curr = state_change.previous, state_change.state
 
-        if self.position_timeout:
-            if prev.link.position == curr.link.position and not state_change.hits:
-                if self.__position_duration >= self.position_timeout:
-                    return False, True, "failure-stuck"
-
-                self.__position_duration += 1
-            else:
-                self.__position_duration = 0
-
-        # Check if link never found a new room
-        if self.no_discovery_timeout:
-            if prev.full_location == curr.full_location:
-                self.__last_discovery += 1
-                self.__last_correct_room += 1
-            else:
-                if curr.full_location not in self.__seen:
-                    self.__seen.add(curr.full_location)
-                    self.__last_discovery = 0
-
-                if curr.full_location in prev.objectives.next_rooms:
-                    self.__last_correct_room = 0
-
-            if self.__last_discovery > self.no_discovery_timeout:
-                return False, True, "failure-no-discovery"
-
-            if self.__last_correct_room > self.no_next_room_timeout:
-                return False, True, "failure-no-next-room"
-
-
-        if prev.full_location != curr.full_location or state_change.hits:
-            self.__tile_timeout.clear()
-        else:
-            count = self.__tile_timeout.get(curr.link.tile, 0) + 1
-            self.__tile_timeout[curr.link.tile] = count
-
-            if count > 30:
+        if prev.link.position == curr.link.position and not state_change.hits:
+            if self.__position_duration >= self.position_timeout:
                 return False, True, "failure-stuck"
+            self.__position_duration += 1
+        else:
+            self.__position_duration = 0
+
+        if prev.full_location == curr.full_location:
+            self.__last_progress += 1
+        elif curr.full_location in prev.objectives.next_rooms:
+            self.__last_progress = 0
+
+        if self.__last_progress > self.no_progress_timeout:
+            return False, True, "failure-no-progress"
 
         return False, False, None
 
@@ -296,10 +261,10 @@ class NowhereToGoCondition(ZeldaEndCondition):
         return False, False, None
 
 class LeftPlayArea(ZeldaEndCondition):
-    """End condition for leaving the initial room walk scenario."""
+    """End condition for leaving dungeon 1."""
     def is_scenario_ended(self, state_change):
         location = state_change.state.full_location
-        if location.level != 1 or location.value == 0x73:
+        if location.level != 1:
             return True, False, "failure-left-play-area"
 
         return False, False, None

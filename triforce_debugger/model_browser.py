@@ -131,6 +131,10 @@ class ModelBrowser(QWidget):
             if folder_item.rowCount() > 0:
                 parent_item.appendRow(folder_item)
 
+        # Sort .pt files: no-step-count first, then highest step count to lowest
+        pt_files.sort(key=lambda x: (0, 0) if parse_step_count(x[0]) is None
+                       else (1, -parse_step_count(x[0])))
+
         for name, full in pt_files:
             steps = parse_step_count(name)
             if steps is not None:

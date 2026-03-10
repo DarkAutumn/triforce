@@ -24,6 +24,14 @@ class _MockPosition:
         self._x = x
         self._y = y
 
+    @property
+    def x(self):
+        return self._x
+
+    @property
+    def y(self):
+        return self._y
+
     def __getitem__(self, idx):
         return (self._x, self._y)[idx]
 
@@ -39,6 +47,7 @@ class _MockDirection:
 
 class _MockLink:
     def __init__(self):
+        self.tile = _MockPosition(15, 10)
         self.position = _MockPosition(120, 80)
         self.direction = _MockDirection("N")
         self.status = 0
@@ -177,14 +186,13 @@ class TestExtractStateDict:
     def test_link_section(self):
         d = _build_sample_dict()
         link = d["link"]
+        assert link["tile"] == "(15, 10)"
+        assert link["position"] == "(120, 80)"
         assert link["health"] == 3.0
         assert link["max_health"] == 3
         assert link["rupees"] == 42
         assert link["bombs"] == 3
         assert link["keys"] == 1
-        assert isinstance(link["position"], OrderedDict)
-        assert link["position"]["x"] == 120
-        assert link["position"]["y"] == 80
 
     def test_enemies_section(self):
         d = _build_sample_dict()
@@ -292,12 +300,14 @@ class TestStateTabUpdateDict:
         d = _build_sample_dict()
         tab.update_state_dict(d)
         link_node = tab._tree.topLevelItem(1)
-        # First child of link is "position" (an OrderedDict node)
-        pos_node = link_node.child(0)
+        # First child of link is "tile" (a string leaf)
+        tile_node = link_node.child(0)
+        assert tile_node.text(0) == "tile"
+        assert tile_node.text(1) == "(15, 10)"
+        # Second child is "position" (also a string leaf now)
+        pos_node = link_node.child(1)
         assert pos_node.text(0) == "position"
-        assert pos_node.childCount() == 2
-        assert pos_node.child(0).text(1) == "120"
-        assert pos_node.child(1).text(1) == "80"
+        assert pos_node.text(1) == "(120, 80)"
 
 
 class TestStateTabShowStep:

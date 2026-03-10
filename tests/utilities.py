@@ -8,7 +8,7 @@ from triforce.rewards import StepRewards
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import gymnasium as gym
-import retro
+import stable_retro as retro
 from triforce.zelda_enums import Direction
 from triforce.action_space import ActionKind, ActionTaken, ZeldaActionSpace
 from triforce.state_change_wrapper import StateChange, StateChangeWrapper

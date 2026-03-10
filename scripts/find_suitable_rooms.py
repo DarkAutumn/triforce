@@ -1,7 +1,7 @@
 # pylint: disable=all
 import os
 import sys
-import retro
+import stable_retro as retro
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from triforce.zelda_enums import Direction

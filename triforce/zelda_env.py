@@ -1,7 +1,7 @@
 # A wrapper to create a Zelda environment.
 
 import random
-import retro
+import stable_retro as retro
 
 from .training_hints import TrainingHintWrapper
 from .state_change_wrapper import StateChangeWrapper

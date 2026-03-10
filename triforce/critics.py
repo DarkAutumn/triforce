@@ -2,7 +2,6 @@
 
 from enum import Enum
 from typing import Dict
-import torch
 
 from triforce.action_space import ActionKind
 from triforce.rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL, REWARD_TINY, \
@@ -17,15 +16,17 @@ HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_SMALL)
 WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_SMALL)
 PBRS_SCALE = 20.0
-TILE_REVISIT_THRESHOLD = 8
+ROOM_STEP_GRACE = 150          # steps in a room before stalling penalty kicks in
+ROOM_STEP_PENALTY_MIN = 0.01   # initial per-step penalty after grace
+ROOM_STEP_PENALTY_MAX = 0.02   # maximum per-step penalty
+ROOM_STEP_RAMP = 1850          # steps over grace to reach max penalty
 
 # Combat rewards decay after this many events per room to prevent farming respawning enemies.
 COMBAT_DECAY_THRESHOLD = 8
 COMBAT_DECAY_RATE = 0.5
 DANGER_TILE_PENALTY = Penalty("penalty-move-danger", -REWARD_MEDIUM)
 MOVED_TO_SAFETY_REWARD = Reward("reward-move-safety", REWARD_TINY)
-ATTACK_NO_ENEMIES_PENALTY = Penalty("penalty-attack-no-enemies", -0.10)
-ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_TINY - REWARD_MINIMUM)
+ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_MINIMUM)
 
 DIDNT_FIRE_PENALTY = Penalty("penalty-didnt-fire", -REWARD_TINY)
 FIRED_CORRECTLY_REWARD = Reward("reward-fired-correctly", REWARD_TINY)
@@ -33,7 +34,7 @@ INJURE_KILL_MOVEMENT_ROOM_REWARD = Reward("reward-incidental-hit", REWARD_SMALL)
 PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
 USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
-PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_MAXIMUM)
+PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_MEDIUM)
 PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -REWARD_MAXIMUM)
 FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_TINY)
 MOVED_OFF_OF_WALLMASTER_REWARD = Reward("reward-moved-off-wallmaster", REWARD_TINY - REWARD_MINIMUM)
@@ -81,7 +82,6 @@ class ZeldaCritic:
         raise NotImplementedError()
 
 
-DISTANCE_THRESHOLD = 28
 
 class GameplayCritic(ZeldaCritic):
     """Base class for Zelda gameplay critics."""
@@ -93,7 +93,7 @@ class GameplayCritic(ZeldaCritic):
         self._equipment_rewards = {}
         self._progress = 0.0
         self._room_combat_counts = {}  # full_location -> combat event count
-        self._tile_count = {}  # tile -> visit count (for stalling detection)
+        self._room_steps = 0  # steps in current room (for stalling detection)
 
     def clear(self):
         super().clear()
@@ -101,7 +101,7 @@ class GameplayCritic(ZeldaCritic):
         self._total_hits = 0
         self._progress = 0.0
         self._room_combat_counts.clear()
-        self._tile_count.clear()
+        self._room_steps = 0
 
     def _get_combat_decay(self, full_location):
         """Returns a decay multiplier for combat rewards in this room.
@@ -127,7 +127,7 @@ class GameplayCritic(ZeldaCritic):
         self.critique_item_usage(state_change, rewards)
 
         # items
-        #self.critique_used_key(state_change, rewards)
+        self.critique_used_key(state_change, rewards)
         self.critique_equipment_pickup(state_change, rewards)
 
         # movement
@@ -238,7 +238,6 @@ class GameplayCritic(ZeldaCritic):
 
     def critique_attack(self, state_change : StateChange, rewards):
         """Critiques attacks made by the player."""
-        # pylint: disable=too-many-branches
 
         for e_index in state_change.enemies_hit:
             enemy = state_change.state.get_enemy_by_index(e_index)
@@ -263,21 +262,7 @@ class GameplayCritic(ZeldaCritic):
                 rewards.add(PENALTY_CAVE_ATTACK)
 
         elif state_change.action.kind in (ActionKind.SWORD, ActionKind.BEAMS):
-            if not curr.enemies:
-                rewards.add(ATTACK_NO_ENEMIES_PENALTY)
-
-            elif (active_enemies := [x for x in curr.active_enemies if x.distance > 0]):
-                enemy_vectors = torch.stack([x.vector for x in active_enemies])
-
-                if enemy_vectors is not None:
-                    dotproducts = torch.sum(curr.link.direction.vector * enemy_vectors, dim=1)
-                    if not torch.any(dotproducts > torch.sqrt(torch.tensor(2)) / 2):
-                        rewards.add(ATTACK_MISS_PENALTY)
-                    elif not prev.link.are_beams_available:
-                        distance = active_enemies[0].distance
-                        if distance > DISTANCE_THRESHOLD:
-                            rewards.add(ATTACK_MISS_PENALTY)
-            else:
+            if curr.enemies:
                 rewards.add(ATTACK_MISS_PENALTY)
 
     def critique_item_usage(self, state_change : StateChange, rewards):
@@ -323,13 +308,12 @@ class GameplayCritic(ZeldaCritic):
 
         # Don't evaluate movement rewards if we took damage or changed rooms.
         if state_change.health_lost or prev.full_location != curr.full_location:
-            self._tile_count.clear()
+            self._room_steps = 0
             return
 
-        # Reset tile counts on combat hits or item gains (don't penalize combat engagement)
-        if state_change.hits or state_change.items_gained:
-            self._tile_count.clear()
-            return
+        # Reset room step counter when enemies are killed or items gained
+        if state_change.items_gained or len(curr.active_enemies) < len(prev.active_enemies):
+            self._room_steps = 0
 
         # Did link run into a wall?
         if self._did_link_run_into_wall(prev, curr, rewards):
@@ -338,13 +322,15 @@ class GameplayCritic(ZeldaCritic):
         # Did link get too close to an enemy?
         self.critique_moving_into_danger(state_change, rewards)
 
-        # Tile revisit penalty: escalates when the model stalls on the same tiles.
-        # PBRS provides direction, this provides urgency to keep exploring new tiles.
-        tile = curr.link.tile
-        count = self._tile_count.get(tile, 0) + 1
-        self._tile_count[tile] = count
-        if count >= TILE_REVISIT_THRESHOLD:
-            rewards.add(Penalty("penalty-revisit", -REWARD_MINIMUM * count))
+        # Room stalling penalty: flat -0.01 per step after grace, ramping to -0.02.
+        # Resets on room change, enemy kills, or item pickups.
+        # PBRS provides direction, this provides urgency to leave the room.
+        self._room_steps += 1
+        if self._room_steps > ROOM_STEP_GRACE:
+            excess = self._room_steps - ROOM_STEP_GRACE
+            t = min(excess / ROOM_STEP_RAMP, 1.0)
+            penalty = -(ROOM_STEP_PENALTY_MIN + t * (ROOM_STEP_PENALTY_MAX - ROOM_STEP_PENALTY_MIN))
+            rewards.add(Penalty("penalty-room-stalling", penalty))
 
         # PBRS: F(s,s') = Φ(s') - Φ(s), Φ(s) = -distance / scale
         # Uses γ=1 so round trips cancel exactly (no oscillation exploit).
@@ -417,7 +403,7 @@ class GameplayCritic(ZeldaCritic):
 
 REWARD_ENTERED_CAVE = Reward("reward-entered-cave", REWARD_LARGE)
 REWARD_LEFT_CAVE = Reward("reward-left-cave", REWARD_LARGE)
-REWARD_NEW_LOCATION = Reward("reward-new-location", REWARD_LARGE)
+REWARD_NEW_LOCATION = Reward("reward-new-location", REWARD_MAXIMUM)
 REWARD_REVIST_LOCATION = Reward("reward-revisit-location", REWARD_TINY)
 PENALTY_REENTERED_CAVE = Penalty("penalty-reentered-cave", -REWARD_MAXIMUM)
 PENALTY_LEFT_CAVE_EARLY = Penalty("penalty-left-cave-early", -REWARD_MAXIMUM)

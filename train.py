@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run python3
 """Train models to play The Legend of Zelda (NES)."""
 
 # pylint: disable=duplicate-code
@@ -43,9 +43,6 @@ def _model_stem(model_kind_name, action_space_name):
 
 def _get_kwargs_from_args(args, model_kind, action_space_def):
     kwargs = {}
-    if not args.high_lr:
-        kwargs['dynamic_lr'] = True
-
     if args.load is not None:
         obs, act = Network.load_spaces(args.load)
         network = model_kind.network_class(obs, act,
@@ -225,7 +222,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description="train - Train Zelda ML models")
     parser.add_argument("--verbose", type=int, default=0, help="Verbosity.")
     parser.add_argument("--ent-coef", type=float, default=None, help="Entropy coefficient for the PPO algorithm.")
-    parser.add_argument("--high-lr", action='store_true', default=None, help="Use a fixed high learning rate.")
     parser.add_argument("--frame-stack", type=int, default=None, help="The number of frames to stack.")
     parser.add_argument("--device", choices=['cpu', 'cuda'], default=None, help="The device to use.")
     parser.add_argument("--render-mode", type=str, default=None, help="The render mode to use.")

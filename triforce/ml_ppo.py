@@ -9,9 +9,7 @@ from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network, create_network
 
 # default hyperparameters
-LEARNING_RATE =         0.0001
-LEARNING_RATE_LOW =     0.00005
-LEARNING_RATE_MINIMUM = 0.000025
+LEARNING_RATE = 0.0001
 NORM_ADVANTAGES = True
 CLIP_VAL_LOSS = False
 GAMMA = 0.99
@@ -129,9 +127,6 @@ class PPO:
                     if exit_criteria and self._hit_exit_criteria(network.metrics, exit_criteria, exit_threshold):
                         break
 
-                    if kwargs.get('dynamic_lr', False):
-                        self._adjust_learning_rate(network.metrics)
-
             # Save model, hopefully log rate and save interval are multiples of each other
             if save_path and next_model_save.add(buffer.memory_length):
                 model_name = kwargs.get('model_name', "network").replace(' ', '_')
@@ -199,9 +194,6 @@ class PPO:
                                                                      exit_threshold):
                             break
 
-                        if kwargs.get('dynamic_lr', False):
-                            self._adjust_learning_rate(network.metrics)
-
                 # Save model
                 if save_path and next_model_save.add(env_steps_per_iteration):
                     model_name = kwargs.get('model_name', "network").replace(' ', '_')
@@ -241,27 +233,6 @@ class PPO:
 
         if metrics:
             self.tensorboard.flush()
-
-    def _adjust_learning_rate(self, metrics):
-        first_metric = next(iter(metrics))
-        success_rate = metrics.get(first_metric, None)
-        assert success_rate is not None, "Attempted to adjust learning rate without success rate."
-
-        # Example logic:
-        #  - if success_rate == 0 => high LR
-        #  - If success_rate < 0.2 => elevated LR
-        #  - If success_rate < 0.95 => moderate LR
-        #  - Else => very low LR
-        if success_rate < 0.90:
-            new_lr = LEARNING_RATE
-        elif success_rate < 0.95:
-            new_lr = LEARNING_RATE_LOW
-        else:
-            new_lr = LEARNING_RATE_MINIMUM
-
-        assert self.optimizer, "Attempted to adjust learning rate before optimizer was created."
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = new_lr
 
     def _optimize(self, network : Network, variables : PPORolloutBuffer, iterations : int):
         # pylint: disable=too-many-locals, too-many-statements, too-many-branches

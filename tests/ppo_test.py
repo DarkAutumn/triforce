@@ -20,7 +20,7 @@ from triforce.models import SharedNatureAgent
 from triforce import ActionSpaceDefinition
 from triforce.zelda_env import make_zelda_env
 
-class TestNetwork(Network):
+class PpoTestNetwork(Network):
     def __init__(self, observation, action_space):
         network = nn.Sequential(
             Network.layer_init(nn.Linear(8, 64)),
@@ -32,7 +32,7 @@ class TestNetwork(Network):
         super().__init__(network, observation, action_space)
 
 
-class TestEnvironment:
+class PpoTestEnvironment:
     """
     A deterministic environment for testing PPO. Observations and rewards are based on fixed logic:
     - Observations in [0, 0.25]: Reward 1.0 for action 0.
@@ -107,9 +107,9 @@ def test_ppo_training(device, num_envs):
     num_iterations = 75_000 * num_envs
     progress_mock = MagicMock()
     def create_env():
-        return TestEnvironment(8, 3)
+        return PpoTestEnvironment(8, 3)
 
-    network = ppo.train(TestNetwork, create_env, num_iterations, progress_mock, envs=num_envs)
+    network = ppo.train(PpoTestNetwork, create_env, num_iterations, progress_mock, envs=num_envs)
 
     assert progress_mock.update.call_count > 2, "PPO did not train for the expected number of iterations"
 
