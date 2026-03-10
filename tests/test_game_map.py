@@ -210,3 +210,24 @@ class TestKeyAwareRouting:
         game_map = _load()
         loc = MapLocation(0, 0x77, False)
         assert game_map.find_next_rooms(loc, loc) == set()
+
+    def test_collected_keys_excludes_room(self):
+        """When a key room is marked collected, routing doesn't plan to collect there."""
+        game_map = _load()
+        start = MapLocation(1, 0x73, False)
+        triforce = MapLocation(1, 0x36, False)
+        loc_72 = MapLocation(1, 0x72, False)
+        # With 0x72 collected, only 0x74 should be offered as first move
+        next_rooms = game_map.find_next_rooms(start, triforce, keys=0, collected_keys={loc_72})
+        assert MapLocation(1, 0x74, False) in next_rooms
+        assert loc_72 not in next_rooms
+
+    def test_collected_keys_still_routes(self):
+        """Route still works when some key rooms are collected and agent has keys."""
+        game_map = _load()
+        loc_72 = MapLocation(1, 0x72, False)
+        triforce = MapLocation(1, 0x36, False)
+        route = game_map.find_route(loc_72, triforce, keys=1, collected_keys={loc_72})
+        assert route is not None
+        assert route[0] == loc_72
+        assert route[-1] == triforce

@@ -423,6 +423,7 @@ class _GameMapObjective(ObjectiveSelector):
             _GameMapObjective._game_map = GameMap.load()
         self._last_route_key = None
         self._last_route_result = None
+        self._collected_key_rooms: Set[MapLocation] = set()
 
     def _get_game_map(self):
         return self._game_map
@@ -432,7 +433,8 @@ class _GameMapObjective(ObjectiveSelector):
         raise NotImplementedError()
 
     def _should_collect_treasure(self, state: ZeldaGame) -> bool:  # pylint: disable=unused-argument
-        """Whether to fight/collect treasure in the current room. Subclasses override."""
+        """Whether to fight/collect treasure in the current room. Subclasses override.
+        Used for caves only; dungeon rooms always collect."""
         return False
 
     def get_current_objectives(self, prev: Optional[ZeldaGame], state: ZeldaGame) -> Objective:
@@ -512,30 +514,33 @@ class _GameMapObjective(ObjectiveSelector):
         return ObjectiveKind.MOVE, tile_objectives, next_rooms
 
     def _get_dungeon_room_objective(self, prev, state):
-        """Handle dungeon room: fight enemies / collect treasure."""
+        """Handle dungeon room: always fight enemies / collect treasure when available."""
         kind = ObjectiveKind.NONE
         tile_objectives = []
 
-        if not self._should_collect_treasure(state):
+        room_memory = self._rooms.get(state.full_location, None)
+        if room_memory is None:
             return kind, tile_objectives, []
 
+        # Track key collection: if treasure was just picked up, mark room as collected
+        if prev and room_memory.item and prev.treasure is not None and state.treasure is None:
+            if room_memory.item == "key":
+                self._collected_key_rooms.add(state.full_location)
+            room_memory.item = None
+
+        # If treasure is dropped, collect it (skip map/compass)
         if state.treasure:
-            room_memory = self._rooms.get(state.full_location, None)
-            treasure = room_memory.item if room_memory else None
-            if treasure not in ("map", "compass"):
+            if room_memory.item not in ("map", "compass"):
                 kind = ObjectiveKind.TREASURE
                 tile_objectives.extend(state.treasure.link_overlap_tiles)
-        else:
-            room_memory = self._rooms.get(state.full_location, None)
-            if room_memory and room_memory.item and prev and prev.treasure is not None:
-                room_memory.item = None
 
-            if room_memory and room_memory.item is not None and state.enemies:
-                kind = ObjectiveKind.FIGHT
-                tiles = self._get_enemy_tile_objectives(state)
-                tile_objectives.extend(tiles)
-                if not tiles:
-                    room_memory.item = None
+        # If we know treasure exists but hasn't spawned, fight enemies to spawn it
+        elif room_memory.item is not None and state.enemies:
+            kind = ObjectiveKind.FIGHT
+            tiles = self._get_enemy_tile_objectives(state)
+            tile_objectives.extend(tiles)
+            if not tiles:
+                room_memory.item = None
 
         return kind, tile_objectives, []
 
@@ -549,11 +554,15 @@ class _GameMapObjective(ObjectiveSelector):
             return [], []
 
         # Cache to avoid re-routing every frame in the same room
-        route_key = (state.full_location, target, state.link.keys)
+        collected_frozen = frozenset(self._collected_key_rooms)
+        route_key = (state.full_location, target, state.link.keys, collected_frozen)
         if route_key == self._last_route_key:
             return self._last_route_result
 
-        next_rooms = self._game_map.find_next_rooms(state.full_location, target, state.link.keys)
+        next_rooms = self._game_map.find_next_rooms(
+            state.full_location, target, state.link.keys,
+            collected_keys=self._collected_key_rooms
+        )
         if not next_rooms:
             self._last_route_key = route_key
             self._last_route_result = ([], set())
@@ -606,7 +615,10 @@ class TreasureObjective(_GameMapObjective):
         best = None
         best_cost = float('inf')
         for target in self._target_rooms:
-            route = self._game_map.find_route(state.full_location, target, state.link.keys)
+            route = self._game_map.find_route(
+                state.full_location, target, state.link.keys,
+                collected_keys=self._collected_key_rooms
+            )
             if route and len(route) < best_cost:
                 best_cost = len(route)
                 best = target

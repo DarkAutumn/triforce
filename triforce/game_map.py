@@ -69,44 +69,56 @@ class GameMap:
         return self.find_route(start, end, keys=99)
 
     def find_route(self, start: MapLocation, end: MapLocation,
-                   keys: int = 0) -> Optional[List[MapLocation]]:
+                   keys: int = 0,
+                   collected_keys: Optional[Set[MapLocation]] = None) -> Optional[List[MapLocation]]:
         """Dijkstra shortest path considering locked doors and key collection.
 
         Locked doors cost LOCKED_COST and consume a key. Rooms with 'key' treasure
         grant a key when first visited. Keys are fungible (any key opens any door).
+
+        Args:
+            collected_keys: Key rooms already collected this episode (won't grant keys again).
 
         Returns the path including both endpoints, or None if no path exists.
         """
         if start == end:
             return [start]
 
-        paths = self._find_all_routes(start, end, keys)
+        paths = self._find_all_routes(start, end, keys, collected_keys)
         if not paths:
             return None
         return paths[0]
 
     def find_next_rooms(self, start: MapLocation, end: MapLocation,
-                        keys: int = 0) -> Set[MapLocation]:
+                        keys: int = 0,
+                        collected_keys: Optional[Set[MapLocation]] = None) -> Set[MapLocation]:
         """Find all equally-optimal next rooms from start toward end.
 
         Returns the set of rooms that are valid first moves on any shortest path.
         Useful for setting multiple objective arrows when paths tie.
+
+        Args:
+            collected_keys: Key rooms already collected this episode (won't grant keys again).
         """
         if start == end:
             return set()
 
-        paths = self._find_all_routes(start, end, keys)
+        paths = self._find_all_routes(start, end, keys, collected_keys)
         if not paths:
             return set()
 
         return {path[1] for path in paths if len(path) > 1}
 
     def _find_all_routes(self, start: MapLocation, end: MapLocation,
-                         keys: int) -> List[List[MapLocation]]:
+                         keys: int,
+                         collected_keys: Optional[Set[MapLocation]] = None) -> List[List[MapLocation]]:
         """Dijkstra over (room, keys_held) state space. Returns all shortest paths.
 
         Key rooms grant +1 key on first visit (tracked via bitmask to prevent
         double-counting). Locked doors cost LOCKED_COST and consume a key.
+
+        Args:
+            collected_keys: Key rooms already collected (pre-set in the bitmask).
         """
         # Assign each key room a bit index for tracking collection
         key_room_list = sorted(
@@ -115,14 +127,21 @@ class GameMap:
         )
         key_bit = {loc: (1 << i) for i, loc in enumerate(key_room_list)}
 
+        # Build initial bitmask from already-collected key rooms
+        initial_mask = 0
+        if collected_keys:
+            for loc in collected_keys:
+                bit = key_bit.get(loc, 0)
+                initial_mask |= bit
+
         # State: (room, keys_held, collected_mask)
         # collected_mask tracks which key rooms have been visited to prevent re-collection
-        start_state = (start, keys, 0)
+        start_state = (start, keys, initial_mask)
 
         cost_so_far = {start_state: 0}
         parents: Dict[Tuple, List[Tuple]] = defaultdict(list)
         counter = 0
-        heap = [(0, counter, start, keys, 0)]
+        heap = [(0, counter, start, keys, initial_mask)]
         best_cost_to_end = None
 
         while heap:
@@ -159,7 +178,7 @@ class GameMap:
 
                 # Pick up key only if this key room hasn't been collected yet
                 bit = key_bit.get(neighbor, 0)
-                if bit and not (collected & bit):
+                if bit and not collected & bit:
                     next_keys += 1
                     next_collected |= bit
 
@@ -175,8 +194,8 @@ class GameMap:
                     parents[next_state].append(state)
 
         # Reconstruct all optimal paths to end (any key count / collected state)
-        end_states = [s for s in cost_so_far
-                      if s[0] == end and cost_so_far[s] == best_cost_to_end]
+        end_states = [s for s, c in cost_so_far.items()
+                      if s[0] == end and c == best_cost_to_end]
 
         if not end_states:
             return []
