@@ -554,6 +554,10 @@ class _GameMapObjective(ObjectiveSelector):
                 self._collected_key_rooms.add(state.full_location)
             room_memory.item = None
 
+        # If we already collected this room's key, clear it so we don't fight/collect again
+        if room_memory.item == 'key' and state.full_location in self._collected_key_rooms:
+            room_memory.item = None
+
         # If treasure is dropped, collect it (skip map/compass)
         if state.treasure:
             if room_memory.item not in ("map", "compass"):
@@ -652,7 +656,8 @@ class TreasureObjective(_GameMapObjective):
         for target in self._target_rooms:
             route = self._game_map.find_route(
                 state.full_location, target, state.link.keys,
-                collected_keys=self._collected_key_rooms
+                collected_keys=self._collected_key_rooms,
+                opened_doors=self._opened_doors
             )
             if route and len(route) < best_cost:
                 best_cost = len(route)
