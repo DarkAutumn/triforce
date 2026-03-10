@@ -58,12 +58,12 @@ class TestSkipSwordToTriforceScenario:
         assert scenario is not None, "skip-sword-to-triforce not found in triforce.yaml"
 
     def test_end_conditions_exact(self):
-        """End conditions must be exactly [GainedTriforce, GameOver, Timeout].
+        """End conditions must include triforce collection and no early termination.
 
         No early termination conditions that would cap progress before triforce collection.
         """
         scenario = TrainingScenarioDefinition.get("skip-sword-to-triforce")
-        expected = ["GainedTriforce", "GameOver", "Timeout"]
+        expected = ["GainedTriforce", "CollectedTreasure", "GameOver", "Timeout"]
         assert scenario.end_conditions == expected, (
             f"Expected end conditions {expected}, got {scenario.end_conditions}. "
             "Early termination conditions would cap game progress."

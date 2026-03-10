@@ -99,10 +99,13 @@ scenarios:
   description: Overworld through dungeon 1 triforce, skipping the sword cave
   iterations: 2000000
   scenario_selector: round-robin
-  objective: GameCompletion
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
   critic: GameplayCritic
   end_conditions:
   - GainedTriforce
+  - CollectedTreasure
   - GameOver
   - Timeout
   metrics:
@@ -124,11 +127,14 @@ scenarios:
   description: The full game with training variables
   iterations: 2000000
   scenario_selector: round-robin
-  objective: GameCompletion
+  objective: TreasureObjective
+  objective_params:
+    treasure: wood-sword
   critic: GameplayCritic
   end_conditions:
   - LeftOverworld1Area
   - StartingSwordCondition
+  - CollectedTreasure
   - EnteredDungeon
   - GameOver
   - Timeout
@@ -206,11 +212,15 @@ scenarios:
   description: A scoped down room walk
   iterations: 2500000
   scenario_selector: round-robin
-  objective: GameCompletion
+  objective: ReachLocation
+  objective_params:
+    level: 1
+    location: '0x73'
   critic: GameplayCritic
   end_conditions:
   - StartingSwordCondition
   - EnteredDungeon
+  - ReachedLocation
   - GameOver
   - Timeout
   metrics:
@@ -316,11 +326,14 @@ scenarios:
   description: Dungeon 1.
   iterations: 2000000
   scenario_selector: probabilistic
-  objective: GameCompletion
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
   critic: GameplayCritic
   end_conditions:
   - LeftDungeon
   - GainedTriforce
+  - CollectedTreasure
   - GameOver
   - Timeout
   - NowhereToGoCondition
@@ -372,11 +385,14 @@ scenarios:
   description: Dungeon 1.
   iterations: 2000000
   scenario_selector: round-robin
-  objective: GameCompletion
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
   critic: GameplayCritic
   end_conditions:
   - LeftDungeon
   - GainedTriforce
+  - CollectedTreasure
   - GameOver
   - Timeout
   - LeftWallmasterRoom
@@ -397,11 +413,14 @@ scenarios:
   description: Dungeon 1.
   iterations: 5000000
   scenario_selector: round-robin
-  objective: GameCompletion
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
   critic: GameplayCritic
   end_conditions:
   - LeftDungeon
   - GainedTriforce
+  - CollectedTreasure
   - GameOver
   - Timeout
   - NowhereToGoCondition
