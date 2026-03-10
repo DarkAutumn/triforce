@@ -53,7 +53,10 @@ class Room:
         self.tiles : torch.Tensor = tiles
         self._is_overworld = location.level == 0
         self._threshold = OW_FIRST_UNWALKABLE if self._is_overworld else UW_FIRST_UNWALKABLE
+        self._corridor_tiles = frozenset()
         self._is_loaded = self._check_loaded()
+        if not self._is_overworld:
+            self._corridor_tiles = self._compute_corridor_tiles()
         self.exits = self._get_exit_tiles()
         self.cave_tile = self._get_cave_coordinates()
         self._wf_lru = OrderedDict()
@@ -69,9 +72,17 @@ class Room:
         return False
 
     def is_tile_walkable(self, tc, tr):
-        """Check if the tile at grid position (tc, tr) is walkable using NES thresholds."""
+        """Check if the tile at grid position (tc, tr) is walkable using NES thresholds.
+
+        Out-of-bounds returns True: walking off-screen triggers a room transition,
+        so movement toward the screen edge is not blocked by tile checks.
+        Dungeon corridor tiles (computed from open doors) also return True since
+        the NES bypasses tile checks in doorway corridors (DoorwayDir != 0).
+        """
         if tc < 0 or tr < 0 or tc >= self.tiles.shape[0] or tr >= self.tiles.shape[1]:
-            return False
+            return True
+        if (tc, tr) in self._corridor_tiles:
+            return True
         val = int(self.tiles[tc, tr])
         if self._is_overworld and val in OW_WALKABLE_OVERRIDES:
             return True
@@ -107,6 +118,50 @@ class Room:
         The NES uses the higher tile ID of the two. If either is unwalkable, movement is blocked.
         """
         return self.is_tile_walkable(tc, tr) and self.is_tile_walkable(tc + 1, tr)
+
+    def _compute_corridor_tiles(self):
+        """Compute dungeon doorway corridor tiles that Link can walk through.
+
+        The NES bypasses tile walkability checks when DoorwayDir is set, allowing Link
+        to walk through the wall tiles in doorway corridors. This replicates that behavior
+        by marking corridor tiles as walkable.
+
+        Horizontal corridors (E/W) need tiles at the door row and row+1 (feet level).
+        Vertical corridors (N/S) need tiles at the door column and column+1 (Link's width).
+        """
+        corridor = set()
+        cols, rows = self.tiles.shape
+
+        if self._is_raw_tile_walkable(*EAST_DOOR_TILE):
+            dc, dr = EAST_DOOR_TILE
+            for c in range(dc, cols):
+                corridor.add((c, dr))
+                corridor.add((c, dr + 1))
+
+        if self._is_raw_tile_walkable(*WEST_DOOR_TILE):
+            dc, dr = WEST_DOOR_TILE
+            for c in range(0, dc + 1):
+                corridor.add((c, dr))
+                corridor.add((c, dr + 1))
+
+        if self._is_raw_tile_walkable(*NORTH_DOOR_TILE):
+            dc, dr = NORTH_DOOR_TILE
+            for r in range(0, dr + 1):
+                corridor.add((dc, r))
+                corridor.add((dc + 1, r))
+
+        if self._is_raw_tile_walkable(*SOUTH_DOOR_TILE):
+            dc, dr = SOUTH_DOOR_TILE
+            for r in range(dr, rows):
+                corridor.add((dc, r))
+                corridor.add((dc + 1, r))
+
+        return frozenset(corridor)
+
+    def _is_raw_tile_walkable(self, tc, tr):
+        """Threshold-only walkability check, without corridor overrides."""
+        val = int(self.tiles[tc, tr])
+        return val < self._threshold
 
 
     def is_door_locked(self, direction : Direction, fresh_tiles):
@@ -182,7 +237,9 @@ class Room:
                     curr.append(index)
                     exits[index] = Direction.W
         else:
-            # Dungeons: check if door tile positions are walkable
+            # Dungeons: exit tiles are at the room boundary where Link transitions
+            # to the next room. Corridor walkability (computed in _compute_corridor_tiles)
+            # ensures the wavefront can expand from these boundary tiles inward.
             if self.is_tile_walkable(*NORTH_DOOR_TILE):
                 index = TileIndex(*NORTH_DOOR_TILE)
                 exits[Direction.N] = [TileIndex(index.x, 0)]

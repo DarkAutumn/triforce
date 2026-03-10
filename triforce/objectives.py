@@ -535,8 +535,9 @@ class RoomWalk(ObjectiveSelector):
 
             for direction, (dx, dy) in _DIRECTION_DELTAS:
                 next_tile = TileIndex(tile.x + dx, tile.y + dy)
-                if next_tile not in seen and room.can_move(tile.x, tile.y, direction):
-                    todo.append(next_tile)
+                if 0 <= next_tile.x < room.tiles.shape[0] and 0 <= next_tile.y < room.tiles.shape[1]:
+                    if next_tile not in seen and room.can_move(tile.x, tile.y, direction):
+                        todo.append(next_tile)
 
         return list(result)
 
