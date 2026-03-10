@@ -3,7 +3,7 @@ The triforce library is a collection of tools for training and running AI models
 """
 
 import os
-import retro
+import stable_retro as retro
 
 from .zelda_env import make_zelda_env
 from .simulate_critic import simulate_critique

@@ -7,7 +7,7 @@ import os
 from typing import Deque, Dict, List, Optional
 from pydantic import BaseModel, field_validator
 import gymnasium as gym
-import retro
+import stable_retro as retro
 import torch
 
 from .metrics import MetricTracker
