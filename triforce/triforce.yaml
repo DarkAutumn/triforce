@@ -129,13 +129,10 @@ scenarios:
   scenario_selector: round-robin
   objective: TreasureObjective
   objective_params:
-    treasure: wood-sword
+    treasure: triforce
   critic: GameplayCritic
   end_conditions:
-  - LeftOverworld1Area
-  - StartingSwordCondition
   - CollectedTreasure
-  - EnteredDungeon
   - GameOver
   - Timeout
   metrics:
