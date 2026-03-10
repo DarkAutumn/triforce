@@ -126,7 +126,7 @@ class TestOWBoundaries:
 
     def test_ow_right_boundary(self):
         """OW right boundary: sword blocked at X >= $E9."""
-        emu = ZeldaFixture("debug_0_67_1772056964.state")
+        emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(emu)
 
         # Walk east until sword is blocked
@@ -160,7 +160,7 @@ class TestBoundaryConstants:
 
     def test_ow_is_sword_screen_locked(self):
         """OW lock boundaries match assembly outer OW bounds."""
-        emu = ZeldaFixture("debug_0_67_1772056964.state")
+        emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(emu)
         game = emu.game_state()
         link = game.link
@@ -230,7 +230,7 @@ class TestBoundaryConstants:
 
     def test_ow_sword_directions_allowed(self):
         """OW directions match assembly outer OW bounds."""
-        emu = ZeldaFixture("debug_0_67_1772056964.state")
+        emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(emu)
         game = emu.game_state()
         link = game.link

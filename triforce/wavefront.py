@@ -5,6 +5,16 @@ import heapq
 from .zelda_enums import Direction
 from .zelda_objects import ZeldaObject
 
+# Maps (dx, dy) deltas to the Direction needed to move FROM the neighbor back
+# toward the source tile. Used by wavefront: if expanding from A to neighbor B,
+# the question is "can Link at B move toward A?" — the reverse direction.
+_DELTA_TO_REVERSE_DIR = {
+    (-1, 0): Direction.E,   # B is left of A → B moves right (E) to reach A
+    (1, 0): Direction.W,    # B is right of A → B moves left (W) to reach A
+    (0, -1): Direction.S,   # B is above A → B moves down (S) to reach A
+    (0, 1): Direction.N,    # B is below A → B moves up (N) to reach A
+}
+
 class Wavefront:
     """A wavefront for a room."""
     _room_cache = {}
@@ -21,14 +31,18 @@ class Wavefront:
 
         while todo:
             dist, tile = heapq.heappop(todo)
-            for neighbor in self._get_neighbors(room, tile):
+            for neighbor, direction in self._get_neighbors(room, tile):
                 if neighbor in wavefront:
                     continue
 
                 if neighbor in impassible:
                     continue
 
-                if not room.walkable[neighbor]:
+                # Check if Link can move FROM the neighbor TO the current tile.
+                # The wavefront expands outward from targets, so the actual movement
+                # direction is from the neighbor toward the target (the reverse direction).
+                nx, ny = neighbor
+                if not room.can_move(nx, ny, direction):
                     continue
 
                 wavefront[neighbor] = dist + 1
@@ -47,9 +61,10 @@ class Wavefront:
         """Get the distance to a tile, or a default value if the tile is not reachable."""
         return self._wavefront.get(tile, default)
 
-    def _get_neighbors(self, room, tile):
+    @staticmethod
+    def _get_neighbors(room, tile):
         x, y = tile
-        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        for (dx, dy), move_dir in _DELTA_TO_REVERSE_DIR.items():
             nx, ny = x + dx, y + dy
-            if -1 <= nx < room.tiles.shape[0] and -1 <= ny < room.tiles.shape[1]:
-                yield nx, ny
+            if 0 <= nx < room.tiles.shape[0] and 0 <= ny < room.tiles.shape[1]:
+                yield (nx, ny), move_dir

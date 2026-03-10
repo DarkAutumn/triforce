@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run python3
+#!/usr/bin/env python3
 """Train models to play The Legend of Zelda (NES)."""
 
 # pylint: disable=duplicate-code

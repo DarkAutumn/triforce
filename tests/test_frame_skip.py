@@ -18,7 +18,7 @@ BEAM_ANIMATION = OBJ_STATE + 0x0E   # ObjState[SLOT_BEAM]
 @pytest.fixture
 def emu():
     """Emulator fixture with debug savestate (full health, center of room)."""
-    fix = ZeldaFixture("debug_0_67_1772056964.state")
+    fix = ZeldaFixture("test_ow_full_health.state")
     yield fix
     fix.close()
 

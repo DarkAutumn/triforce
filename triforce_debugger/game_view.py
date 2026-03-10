@@ -180,9 +180,9 @@ class GameView(QWidget):
         if OverlayFlags.WALKABILITY in self._overlays:
             room = getattr(state, 'room', None)
             if room is not None:
-                walkable = room.walkable
-                if tile_x < walkable.shape[0] and tile_y < walkable.shape[1]:
-                    return "X" if walkable[tile_x, tile_y] else ""
+                if room.is_tile_walkable(tile_x, tile_y):
+                    return "X"
+                return ""
 
         return ""
 
@@ -217,9 +217,8 @@ class GameView(QWidget):
             val = wf.get((tile_x, tile_y), None)
             lines.append(f"Wavefront: {val if val is not None else 'N/A'}")
 
-        walkable = room.walkable
-        if tile_x < walkable.shape[0] and tile_y < walkable.shape[1]:
-            lines.append("Walkable" if walkable[tile_x, tile_y] else "Not Walkable")
+        walkable_str = "Walkable" if room.is_tile_walkable(tile_x, tile_y) else "Not Walkable"
+        lines.append(walkable_str)
 
         QToolTip.showText(event.globalPosition().toPoint(), "\n".join(lines), self)
 

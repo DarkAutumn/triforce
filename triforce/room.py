@@ -1,4 +1,5 @@
-# This file contains the Room class, which represents a single room in the game.""
+# This file contains the Room class, which represents a single room in the game.
+# Walkability uses the NES threshold system from GetCollidingTileMoving (Z_07.asm:2161-2320).
 from collections import OrderedDict
 from typing import Sequence, Tuple
 import torch
@@ -19,25 +20,16 @@ TOP_CAVE_TILE = 0xf3
 BOTTOM_CAVE_TILE = 0x24
 CAVE_TILES = [TOP_CAVE_TILE, BOTTOM_CAVE_TILE]
 
-def init_walkable_tiles():
-    """Returns a lookup table of whether particular tile codes are walkable."""
-    tiles = [0x26, 0x24, 0xf3, 0x8d, 0x91, 0xac, 0xad, 0xcc, 0xd2, 0xd5, 0x68, 0x6f, 0x82, 0x78, 0x7d]
-    tiles += [0x84, 0x85, 0x86, 0x87]
-    tiles += list(range(0x74, 0x77+1))  # dungeon floor tiles
-    tiles += DOOR_TILES    # we allow walking through doors for pathfinding
-    tiles += BARRED_DOOR_TILES
-    return tiles
+# NES walkability thresholds (Z_05.asm:6446-6450, ObjectRoomBoundsOW/UW)
+# Tiles with value < threshold are walkable.
+OW_FIRST_UNWALKABLE = 0x89
+UW_FIRST_UNWALKABLE = 0x78
 
-def init_half_walkable_tiles():
-    """Returns tiles that the top half of link can pass through."""
-    return [0x95, 0x97, 0xb1, 0xb3, 0xd5, 0xd7, 0xc5, 0xc7, 0xc9, 0xcb, 0xd4, 0xb5, 0xb7,
-            0xaf, 0xb9, 0xbb, 0xad, 0xb1, 0xdd, 0xde, 0xd9, 0xdb, 0xdf, 0xd1, 0xdc, 0xd0, 0xda
-            ]
+# Overworld-only walkable overrides (Z_07.asm:2137-2139, WalkableTiles table).
+# These tiles are >= OW_FIRST_UNWALKABLE but the NES treats them as walkable
+# by substituting them with $26 before the threshold check.
+OW_WALKABLE_OVERRIDES = frozenset([0x8D, 0x91, 0x9C, 0xAC, 0xAD, 0xCC, 0xD2, 0xD5, 0xDF])
 
-WALKABLE_TILES = torch.tensor(init_walkable_tiles(), dtype=torch.uint8)
-WALKABLE_TILES_SET = frozenset(init_walkable_tiles())
-HALF_WALKABLE_TILES = torch.tensor(init_half_walkable_tiles(), dtype=torch.uint8)
-BRICK_TILE = 0xf6
 
 class Room:
     """A room in the game."""
@@ -50,66 +42,127 @@ class Room:
     @staticmethod
     def create(full_location, tiles):
         """Gets or creates a room."""
-        # pylint: disable=too-many-locals
-
-        walkable_tiles = torch.zeros(((tiles.shape[0] + 1, tiles.shape[1] + 1)), dtype=bool)
-        for x in range(-1, tiles.shape[0]):
-            for y in range(-1, tiles.shape[1]):
-                # top left
-                walkable = True
-                if x != -1 and y != -1:
-                    tile_id = tiles[(x, y)]
-                    walkable = walkable and (tile_id in WALKABLE_TILES or tile_id in HALF_WALKABLE_TILES)
-
-                # top right
-                x += 1
-                if x < tiles.shape[0] and y != -1:
-                    tile_id = tiles[(x, y)]
-                    walkable = walkable and (tile_id in WALKABLE_TILES or tile_id in HALF_WALKABLE_TILES)
-
-                # bottom right
-                y += 1
-                if x < tiles.shape[0] and y < tiles.shape[1]:
-                    tile_id = tiles[(x, y)]
-                    walkable = walkable and tile_id in WALKABLE_TILES
-
-                # bottom left
-                x -= 1
-                if x != -1 and y < tiles.shape[1]:
-                    tile_id = tiles[(x, y)]
-                    walkable = walkable and tile_id in WALKABLE_TILES
-
-                y -= 1
-                walkable_tiles[x, y] = walkable
-
-        if full_location.level != 0:
-            west_open = tiles[2, 0xa] in WALKABLE_TILES
-            east_open = tiles[0x1d, 0xa] in WALKABLE_TILES
-            north_open = tiles[0xf, 2] in WALKABLE_TILES
-            south_open = tiles[0xf, 0x13] in WALKABLE_TILES
-
-            for x in range (4):
-                walkable_tiles[x, 0xa] = west_open
-                walkable_tiles[walkable_tiles.shape[0] - x - 1, 0xa] = east_open
-
-            for y in range(4):
-                walkable_tiles[0xf, y] = north_open
-                walkable_tiles[0xf, walkable_tiles.shape[1] - y - 1] = south_open
-
-        result = Room(full_location, tiles, walkable_tiles)
+        result = Room(full_location, tiles)
         if result.is_loaded:
             Room._cache[full_location] = result
 
         return result
 
-    def __init__(self, location, tiles : torch.Tensor, walkable : torch.Tensor):
+    def __init__(self, location, tiles : torch.Tensor):
         self.full_location = location
         self.tiles : torch.Tensor = tiles
-        self.walkable : torch.Tensor = walkable
-        self._is_loaded = bool(any(int(t) in WALKABLE_TILES_SET for t in tiles.flatten()))
+        self._is_overworld = location.level == 0
+        self._threshold = OW_FIRST_UNWALKABLE if self._is_overworld else UW_FIRST_UNWALKABLE
+        self._corridor_tiles = frozenset()
+        self._is_loaded = self._check_loaded()
+        if not self._is_overworld:
+            self._corridor_tiles = self._compute_corridor_tiles()
         self.exits = self._get_exit_tiles()
         self.cave_tile = self._get_cave_coordinates()
         self._wf_lru = OrderedDict()
+
+    def _check_loaded(self):
+        """Check if the room has any walkable tiles (indicating it's been loaded)."""
+        for t in self.tiles.flatten():
+            val = int(t)
+            if val < self._threshold:
+                return True
+            if self._is_overworld and val in OW_WALKABLE_OVERRIDES:
+                return True
+        return False
+
+    def is_tile_walkable(self, tc, tr):
+        """Check if the tile at grid position (tc, tr) is walkable using NES thresholds.
+
+        Out-of-bounds returns True: walking off-screen triggers a room transition,
+        so movement toward the screen edge is not blocked by tile checks.
+        Dungeon corridor tiles (computed from open doors) also return True since
+        the NES bypasses tile checks in doorway corridors (DoorwayDir != 0).
+        """
+        if tc < 0 or tr < 0 or tc >= self.tiles.shape[0] or tr >= self.tiles.shape[1]:
+            return True
+        if (tc, tr) in self._corridor_tiles:
+            return True
+        val = int(self.tiles[tc, tr])
+        if self._is_overworld and val in OW_WALKABLE_OVERRIDES:
+            return True
+        return val < self._threshold
+
+    def can_move(self, tc, tr, direction):
+        """Check if Link can move from tile position (tc, tr) in the given direction.
+
+        Uses the NES GetCollidingTileMoving hotspot logic (Z_07.asm:2161-2320).
+        link.tile.y is 1 row above the NES hotspot row, so feet checks use tr+1.
+
+        For horizontal movement, one tile is checked (at feet level).
+        For vertical movement, two tiles are checked (both columns Link overlaps).
+
+        UW boundary enforcement (Z_05.asm:6449) is NOT applied here because:
+        - The NES bypasses BoundByRoom in doorway corridors (DoorwayDir != 0)
+        - UW wall tiles outside the play area are already >= UW_FIRST_UNWALKABLE
+        - Tile walkability checks alone correctly handle both cases
+        """
+        match direction:
+            case Direction.E:
+                return self.is_tile_walkable(tc + 2, tr + 1)
+            case Direction.W:
+                return self.is_tile_walkable(tc - 1, tr + 1)
+            case Direction.S:
+                return self._check_vertical(tc, tr + 2)
+            case Direction.N:
+                return self._check_vertical(tc, tr)
+
+    def _check_vertical(self, tc, tr):
+        """For vertical movement, check both columns Link overlaps (Z_07.asm:2264-2275).
+
+        The NES uses the higher tile ID of the two. If either is unwalkable, movement is blocked.
+        """
+        return self.is_tile_walkable(tc, tr) and self.is_tile_walkable(tc + 1, tr)
+
+    def _compute_corridor_tiles(self):
+        """Compute dungeon doorway corridor tiles that Link can walk through.
+
+        The NES bypasses tile walkability checks when DoorwayDir is set, allowing Link
+        to walk through the wall tiles in doorway corridors. This replicates that behavior
+        by marking corridor tiles as walkable.
+
+        Horizontal corridors (E/W) need tiles at the door row and row+1 (feet level).
+        Vertical corridors (N/S) need tiles at the door column and column+1 (Link's width).
+        """
+        corridor = set()
+        cols, rows = self.tiles.shape
+
+        if self._is_raw_tile_walkable(*EAST_DOOR_TILE):
+            dc, dr = EAST_DOOR_TILE
+            for c in range(dc, cols):
+                corridor.add((c, dr))
+                corridor.add((c, dr + 1))
+
+        if self._is_raw_tile_walkable(*WEST_DOOR_TILE):
+            dc, dr = WEST_DOOR_TILE
+            for c in range(0, dc + 1):
+                corridor.add((c, dr))
+                corridor.add((c, dr + 1))
+
+        if self._is_raw_tile_walkable(*NORTH_DOOR_TILE):
+            dc, dr = NORTH_DOOR_TILE
+            for r in range(0, dr + 1):
+                corridor.add((dc, r))
+                corridor.add((dc + 1, r))
+
+        if self._is_raw_tile_walkable(*SOUTH_DOOR_TILE):
+            dc, dr = SOUTH_DOOR_TILE
+            for r in range(dr, rows):
+                corridor.add((dc, r))
+                corridor.add((dc + 1, r))
+
+        return frozenset(corridor)
+
+    def _is_raw_tile_walkable(self, tc, tr):
+        """Threshold-only walkability check, without corridor overrides."""
+        val = int(self.tiles[tc, tr])
+        return val < self._threshold
+
 
     def is_door_locked(self, direction : Direction, fresh_tiles):
         """Returns whether the door in a particular direction is locked."""
@@ -157,7 +210,7 @@ class Room:
             curr = exits[Direction.N] = []
             for x in range(0, self.tiles.shape[0] - 1):
                 index = TileIndex(x, 0)
-                if self.walkable[index.x, index.y]:
+                if self.is_tile_walkable(index.x, index.y + 1):
                     curr.append(index)
                     exits[index] = Direction.N
 
@@ -165,7 +218,7 @@ class Room:
             y = self.tiles.shape[1] - 2
             for x in range(0, self.tiles.shape[0] - 1):
                 index = TileIndex(x, y)
-                if self.walkable[index.x, index.y]:
+                if self.is_tile_walkable(index.x, index.y + 1):
                     curr.append(index)
                     exits[index] = Direction.S
 
@@ -173,34 +226,36 @@ class Room:
             x = self.tiles.shape[0] - 1
             for y in range(0, self.tiles.shape[1] - 1):
                 index = TileIndex(x, y)
-                if self.walkable[index.x, index.y]:
+                if self.is_tile_walkable(index.x, index.y + 1):
                     curr.append(index)
                     exits[index] = Direction.E
 
             curr = exits[Direction.W] = []
             for y in range(0, self.tiles.shape[1] - 1):
                 index = TileIndex(0, y)
-                if self.walkable[index.x, index.y]:
+                if self.is_tile_walkable(index.x, index.y + 1):
                     curr.append(index)
                     exits[index] = Direction.W
         else:
-            # dungeons only have the exit in one position:
-            if self.walkable[NORTH_DOOR_TILE]:
+            # Dungeons: exit tiles are at the room boundary where Link transitions
+            # to the next room. Corridor walkability (computed in _compute_corridor_tiles)
+            # ensures the wavefront can expand from these boundary tiles inward.
+            if self.is_tile_walkable(*NORTH_DOOR_TILE):
                 index = TileIndex(*NORTH_DOOR_TILE)
                 exits[Direction.N] = [TileIndex(index.x, 0)]
                 exits[index] = Direction.N
 
-            if self.walkable[SOUTH_DOOR_TILE]:
+            if self.is_tile_walkable(*SOUTH_DOOR_TILE):
                 index = TileIndex(*SOUTH_DOOR_TILE)
                 exits[Direction.S] = [TileIndex(index.x, self.tiles.shape[1] - 1)]
                 exits[index] = Direction.S
 
-            if self.walkable[WEST_DOOR_TILE]:
+            if self.is_tile_walkable(*WEST_DOOR_TILE):
                 index = TileIndex(*WEST_DOOR_TILE)
                 exits[Direction.W] = [TileIndex(0, index.y)]
                 exits[index] = Direction.W
 
-            if self.walkable[EAST_DOOR_TILE]:
+            if self.is_tile_walkable(*EAST_DOOR_TILE):
                 index = TileIndex(*EAST_DOOR_TILE)
                 exits[Direction.E] = [TileIndex(self.tiles.shape[0] - 1, index.y)]
                 exits[index] = Direction.E

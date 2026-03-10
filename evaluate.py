@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run python3
+#!/usr/bin/env python3
 """Evaluates the result of trained models."""
 from collections import Counter
 from math import ceil

@@ -4,7 +4,7 @@
 Tests verify ObjState lifecycle for sword melee (slot $0D) and beam (slot $0E),
 health requirements for beam firing, and Python constant correctness.
 
-Requires debug_0_67_1772056964.state: overworld room $67, Link centered,
+Requires test_ow_full_health.state: overworld room $67, Link centered,
 sword equipped, full health. A button fires sword (retro maps sword to A).
 """
 
@@ -19,7 +19,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from conftest import ZeldaFixture, RAMWatcher
 from asm_addresses import *
 
-BEAM_STATE_FILE = "debug_0_67_1772056964.state"
+BEAM_STATE_FILE = "test_ow_full_health.state"
 
 
 def _fire_beam(emu, idle_frames=10):
