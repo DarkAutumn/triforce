@@ -571,8 +571,15 @@ class _GameMapObjective(ObjectiveSelector):
         directions = [state.full_location.get_direction_to(r) for r in next_rooms]
         targets = []
         for d in directions:
-            if d != Direction.NONE and d in state.room.exits:
+            if d == Direction.NONE:
+                continue
+            if d in state.room.exits:
                 targets.extend(state.room.exits[d])
+            else:
+                # Door exists (from routing) but isn't in exits — likely locked.
+                # Add the Direction as a target so the wavefront can handle it
+                # when locked_doors is set.
+                targets.append(d)
 
         self._last_route_key = route_key
         self._last_route_result = (targets, next_rooms)

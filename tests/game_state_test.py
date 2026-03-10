@@ -46,3 +46,31 @@ def test_direction_to():
     assert start_tile.get_direction_to(north) == Direction.N
     assert start_tile.get_direction_to(east) == Direction.E
     assert start_tile.get_direction_to(west) == Direction.W
+
+
+def test_wavefront_blocked_by_locked_door():
+    """Wavefront should NOT flow through a locked door without locked_doors set."""
+    gamestate = _initialize_gamestate()
+    room = gamestate.room
+
+    # North door is locked — direction should not be in exits
+    assert Direction.N not in room.exits
+
+    # Wavefront targeting north with no locked_doors: no start tiles → empty
+    wf = room.calculate_wavefront_for_link([Direction.N])
+    assert wf.get((15, 5)) is None
+
+
+def test_wavefront_flows_through_locked_door_with_key():
+    """Wavefront should flow through a locked door when locked_doors is set."""
+    gamestate = _initialize_gamestate()
+    room = gamestate.room
+
+    # With locked_doors={N}, wavefront should start from north exit and flood inward
+    wf = room.calculate_wavefront_for_link([Direction.N], locked_doors=frozenset({Direction.N}))
+
+    # North corridor tile should be reachable
+    assert wf.get((15, 2)) is not None
+
+    # A tile in the room interior should also be reachable
+    assert wf.get((15, 10)) is not None
