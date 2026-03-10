@@ -303,7 +303,7 @@ class GameCompletion(ObjectiveSelector):
             # don't force link to get the map/compass
             if dungeon_to_item.get(state.location, None) not in (ZeldaItemKind.Map, ZeldaItemKind.Compass):
                 kind = ObjectiveKind.TREASURE
-                tile_objectives.append(state.treasure.tile)
+                tile_objectives.extend(state.treasure.link_overlap_tiles)
 
         # If we collect the treasure, mark it as taken
         else:
@@ -435,7 +435,7 @@ class RoomWalk(ObjectiveSelector):
                     self._sequence.pop(0)
                     continue
 
-                objective.targets = [state.treasure.tile]
+                objective.targets = list(state.treasure.link_overlap_tiles)
 
             return objective
 
