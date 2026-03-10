@@ -1100,6 +1100,7 @@ rooms:
     E:
       level: 1
       location: '0x44'
+      locked: true
     W:
       level: 1
       location: '0x42'
