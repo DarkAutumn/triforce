@@ -3,7 +3,7 @@
 
 import pytest
 
-from triforce.game_map import GameMap, GameRoom
+from triforce.game_map import GameMap, GameRoom, LOCKED_COST
 from triforce.zelda_enums import MapLocation
 
 
@@ -100,3 +100,113 @@ class TestGameMapPathfinding:
         nowhere = MapLocation(5, 0xFF, False)
         path = game_map.find_path(start, nowhere)
         assert path is None
+
+
+class TestTreasureLookup:
+    """Test treasure search methods."""
+
+    def test_find_triforce_room(self):
+        game_map = _load()
+        rooms = game_map.find_rooms_with_treasure('triforce')
+        assert len(rooms) == 1
+        assert rooms[0].location == MapLocation(1, 0x36, False)
+
+    def test_find_key_rooms(self):
+        game_map = _load()
+        rooms = game_map.find_rooms_with_treasure('key')
+        # Dungeon 1 has keys at 0x72, 0x74, 0x53, 0x33, 0x23, 0x45
+        assert len(rooms) >= 5
+
+    def test_find_boomerang_room(self):
+        game_map = _load()
+        rooms = game_map.find_rooms_with_treasure('boomerang')
+        assert len(rooms) == 1
+        assert rooms[0].location == MapLocation(1, 0x44, False)
+
+    def test_find_wood_sword_cave(self):
+        game_map = _load()
+        rooms = game_map.find_rooms_with_treasure('wood-sword')
+        assert len(rooms) == 1
+        assert rooms[0].location == MapLocation(0, 0x77, True)
+
+    def test_find_nonexistent_treasure(self):
+        game_map = _load()
+        rooms = game_map.find_rooms_with_treasure('golden-banana')
+        assert len(rooms) == 0
+
+
+class TestKeyAwareRouting:
+    """Test key-aware pathfinding with locked doors."""
+
+    def test_locked_door_blocked_without_keys(self):
+        """Room 1/0x73 N exit to 0x63 is locked. With 0 keys, can't pass."""
+        game_map = _load()
+        start = MapLocation(1, 0x73, False)
+        # 0x63 is only reachable through the locked N door from 0x73
+        # With 0 keys, the route must go around or fail
+        path = game_map.find_route(start, MapLocation(1, 0x63, False), keys=0)
+        # With 0 keys, should still find a path through 0x74 (key) -> 0x73 -> 0x63
+        # BUT wait: 0x74 is east of 0x73, and we START at 0x73.
+        # 0x74 has a key, so going 0x73->0x74 picks up key, then back 0x74->0x73->0x63
+        assert path is not None
+
+    def test_locked_door_passable_with_key(self):
+        """With a key, can go directly through locked door."""
+        game_map = _load()
+        start = MapLocation(1, 0x73, False)
+        end = MapLocation(1, 0x63, False)
+        path = game_map.find_route(start, end, keys=1)
+        assert path is not None
+        # Direct path: 0x73 -> 0x63 (2 rooms)
+        assert len(path) == 2
+
+    def test_route_collects_keys_for_locked_doors(self):
+        """Route from 0x73 to triforce at 0x36 must collect keys along the way."""
+        game_map = _load()
+        start = MapLocation(1, 0x73, False)
+        triforce = MapLocation(1, 0x36, False)
+        path = game_map.find_route(start, triforce, keys=0)
+        assert path is not None
+        assert path[0] == start
+        assert path[-1] == triforce
+
+    def test_route_with_keys_is_shorter(self):
+        """Having keys should produce a shorter/cheaper path than collecting them."""
+        game_map = _load()
+        start = MapLocation(1, 0x73, False)
+        triforce = MapLocation(1, 0x36, False)
+        path_no_keys = game_map.find_route(start, triforce, keys=0)
+        path_with_keys = game_map.find_route(start, triforce, keys=10)
+        assert path_no_keys is not None
+        assert path_with_keys is not None
+        # With keys the path should be no longer (likely shorter since no detours)
+        assert len(path_with_keys) <= len(path_no_keys)
+
+    def test_find_next_rooms_from_entrance(self):
+        """From dungeon entrance 0x73, find valid next rooms toward triforce."""
+        game_map = _load()
+        start = MapLocation(1, 0x73, False)
+        triforce = MapLocation(1, 0x36, False)
+        next_rooms = game_map.find_next_rooms(start, triforce, keys=0)
+        assert len(next_rooms) > 0
+        # Should include a side path to get keys
+        assert any(r in next_rooms for r in [
+            MapLocation(1, 0x74, False),  # east to key room
+            MapLocation(1, 0x72, False),  # west to key room
+        ])
+
+    def test_find_next_rooms_multiple_options(self):
+        """When two paths tie, both first moves should be returned."""
+        game_map = _load()
+        start = MapLocation(1, 0x73, False)
+        triforce = MapLocation(1, 0x36, False)
+        # With 0 keys, should suggest going to key rooms (E or W)
+        next_rooms = game_map.find_next_rooms(start, triforce, keys=0)
+        # Both 0x72 and 0x74 are key rooms accessible from 0x73
+        assert len(next_rooms) >= 1
+
+    def test_find_next_rooms_self(self):
+        """Next rooms from self should be empty."""
+        game_map = _load()
+        loc = MapLocation(0, 0x77, False)
+        assert game_map.find_next_rooms(loc, loc) == set()

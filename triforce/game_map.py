@@ -4,14 +4,17 @@ Loads the room graph from triforce/game.yaml and provides structured access
 to room exits, enemies, and treasure for pathfinding and objectives.
 """
 
+import heapq
 import os
-from collections import deque
+from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set, Tuple
 
 import yaml
 
 from .zelda_enums import MapLocation
+
+LOCKED_COST = 4
 
 
 @dataclass
@@ -56,33 +59,140 @@ class GameMap:
         """All rooms in the game map."""
         return self._rooms
 
+    def find_rooms_with_treasure(self, treasure: str) -> List[GameRoom]:
+        """Find all rooms containing a specific treasure."""
+        return [r for r in self._rooms.values() if r.treasure == treasure]
+
     def find_path(self, start: MapLocation, end: MapLocation) -> Optional[List[MapLocation]]:
-        """BFS shortest path from start to end. Returns the path including both endpoints,
-        or None if no path exists."""
+        """BFS shortest path from start to end, ignoring locked doors.
+        Returns the path including both endpoints, or None if no path exists."""
+        return self.find_route(start, end, keys=99)
+
+    def find_route(self, start: MapLocation, end: MapLocation,
+                   keys: int = 0) -> Optional[List[MapLocation]]:
+        """Dijkstra shortest path considering locked doors and key collection.
+
+        Locked doors cost LOCKED_COST and consume a key. Rooms with 'key' treasure
+        grant a key when first visited. Keys are fungible (any key opens any door).
+
+        Returns the path including both endpoints, or None if no path exists.
+        """
         if start == end:
             return [start]
 
-        queue = deque([(start, [start])])
-        visited = {start}
+        paths = self._find_all_routes(start, end, keys)
+        if not paths:
+            return None
+        return paths[0]
 
-        while queue:
-            current, path = queue.popleft()
+    def find_next_rooms(self, start: MapLocation, end: MapLocation,
+                        keys: int = 0) -> Set[MapLocation]:
+        """Find all equally-optimal next rooms from start toward end.
+
+        Returns the set of rooms that are valid first moves on any shortest path.
+        Useful for setting multiple objective arrows when paths tie.
+        """
+        if start == end:
+            return set()
+
+        paths = self._find_all_routes(start, end, keys)
+        if not paths:
+            return set()
+
+        return {path[1] for path in paths if len(path) > 1}
+
+    def _find_all_routes(self, start: MapLocation, end: MapLocation,
+                         keys: int) -> List[List[MapLocation]]:
+        """Dijkstra over (room, keys_held) state space. Returns all shortest paths.
+
+        Key rooms grant +1 key on first visit (tracked via bitmask to prevent
+        double-counting). Locked doors cost LOCKED_COST and consume a key.
+        """
+        # Assign each key room a bit index for tracking collection
+        key_room_list = sorted(
+            [loc for loc, room in self._rooms.items() if room.treasure == 'key'],
+            key=lambda loc: (loc.level, loc.value)
+        )
+        key_bit = {loc: (1 << i) for i, loc in enumerate(key_room_list)}
+
+        # State: (room, keys_held, collected_mask)
+        # collected_mask tracks which key rooms have been visited to prevent re-collection
+        start_state = (start, keys, 0)
+
+        cost_so_far = {start_state: 0}
+        parents: Dict[Tuple, List[Tuple]] = defaultdict(list)
+        counter = 0
+        heap = [(0, counter, start, keys, 0)]
+        best_cost_to_end = None
+
+        while heap:
+            cost, _, current, cur_keys, collected = heapq.heappop(heap)
+
+            state = (current, cur_keys, collected)
+            if cost > cost_so_far.get(state, float('inf')):
+                continue
+
+            if best_cost_to_end is not None and cost > best_cost_to_end:
+                break
+
+            if current == end:
+                best_cost_to_end = cost
+                continue
+
             room = self._rooms.get(current)
             if room is None:
                 continue
 
-            for neighbor in room.get_neighbors():
-                if neighbor in visited:
-                    continue
-                visited.add(neighbor)
+            for exit_info in room.exits.values():
+                neighbor = exit_info.destination
 
-                new_path = path + [neighbor]
-                if neighbor == end:
-                    return new_path
+                if exit_info.locked:
+                    if cur_keys <= 0:
+                        continue
+                    move_cost = LOCKED_COST
+                    next_keys = cur_keys - 1
+                else:
+                    move_cost = 1
+                    next_keys = cur_keys
 
-                queue.append((neighbor, new_path))
+                next_collected = collected
 
-        return None
+                # Pick up key only if this key room hasn't been collected yet
+                bit = key_bit.get(neighbor, 0)
+                if bit and not (collected & bit):
+                    next_keys += 1
+                    next_collected |= bit
+
+                new_cost = cost + move_cost
+                next_state = (neighbor, next_keys, next_collected)
+
+                if next_state not in cost_so_far or new_cost < cost_so_far[next_state]:
+                    cost_so_far[next_state] = new_cost
+                    parents[next_state] = [state]
+                    counter += 1
+                    heapq.heappush(heap, (new_cost, counter, neighbor, next_keys, next_collected))
+                elif new_cost == cost_so_far[next_state]:
+                    parents[next_state].append(state)
+
+        # Reconstruct all optimal paths to end (any key count / collected state)
+        end_states = [s for s in cost_so_far
+                      if s[0] == end and cost_so_far[s] == best_cost_to_end]
+
+        if not end_states:
+            return []
+
+        # Backtrack from end states to start
+        all_paths = []
+        stack = [(es, [end]) for es in end_states]
+        while stack:
+            state, path = stack.pop()
+            if state == start_state:
+                all_paths.append(list(reversed(path)))
+                continue
+            for parent_state in parents.get(state, []):
+                stack.append((parent_state, path + [parent_state[0]]))
+
+        return all_paths
 
     @staticmethod
     def load(path: str = None) -> 'GameMap':
