@@ -407,3 +407,5 @@ zelda-asm
 .venv/
 docs/todo/
 .bookkeeping/
+triforce/custom_integrations/Zelda-NES/*.png
+triforce/custom_integrations/Zelda-NES/*.yaml
