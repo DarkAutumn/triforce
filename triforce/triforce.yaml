@@ -333,10 +333,8 @@ scenarios:
   end_conditions:
   - LeftDungeon
   - GainedTriforce
-  - CollectedTreasure
   - GameOver
   - Timeout
-  - NowhereToGoCondition
   metrics:
   - success-rate
   - overworld-progress
