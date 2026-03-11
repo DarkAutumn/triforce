@@ -1,6 +1,5 @@
 from enum import Enum
 
-import heapq
 import inspect
 import random
 import sys
@@ -8,9 +7,7 @@ from typing import Dict, Optional, Sequence, Set
 
 from .game_map import GameMap
 from .zelda_game import ZeldaGame
-from .zelda_enums import BoomerangKind, Direction, MapLocation, SwordKind, TileIndex, ZeldaItemKind
-
-LOCKED_DISTANCE = 4
+from .zelda_enums import Direction, MapLocation, SwordKind, TileIndex
 
 _DIRECTION_DELTAS = [
     (Direction.E, (1, 0)),
@@ -18,35 +15,6 @@ _DIRECTION_DELTAS = [
     (Direction.S, (0, 1)),
     (Direction.N, (0, -1)),
 ]
-
-overworld_to_item = {
-    0x77 : SwordKind.WOOD,
-    0x37 : 1,
-    0x3c : 2,
-    0x23 : SwordKind.WHITE,
-}
-
-dungeon_entrances = { 1: 0x73, 2 : 0x7d }
-
-dungeon_to_item = {
-    0x72 : ZeldaItemKind.Key,
-    0x74: ZeldaItemKind.Key,
-    0x53: ZeldaItemKind.Key,
-    0x33: ZeldaItemKind.Key,
-    0x23: ZeldaItemKind.Key,
-    0x44: BoomerangKind.WOOD,
-    0x45: ZeldaItemKind.Key,
-    0x35: ZeldaItemKind.HeartContainer,
-    0x36: ZeldaItemKind.Triforce1,
-    0x43 : ZeldaItemKind.Map,
-    0x54 : ZeldaItemKind.Compass,
-
-    0x00 : ZeldaItemKind.Triforce2,
-}
-
-item_to_overworld = {v: k for k, v in overworld_to_item.items()}
-
-item_to_dungeon = {v: k for k, v in dungeon_to_item.items() if v != ZeldaItemKind.Key}
 
 class ObjectiveKind(Enum):
     """The objective that the agent should be persuing."""
@@ -70,22 +38,21 @@ CAVE_TREASURE_TILE = TileIndex(0x0f, 0x0b)
 
 class RoomMemory:
     """What the agent learns over the course of the playthrough."""
-    def __init__(self, state : ZeldaGame, game_map=None):
+    def __init__(self, state : ZeldaGame, game_map : GameMap = None):
         self.level = state.level
         self.full_location = state.full_location
         self.exits = state.room.exits.copy()
-        if state.location in dungeon_entrances.values():
-            self.exits[Direction.S] = []
 
         self.locked = None
         self.barred = None
 
-        if game_map is not None:
-            map_room = game_map.get(state.full_location)
-            self.item = map_room.treasure if map_room else None
-        else:
-            item_map = overworld_to_item if self.level == 0 else dungeon_to_item
-            self.item = item_map.get(state.location, None)
+        map_room = game_map.get(state.full_location) if game_map else None
+        self.item = map_room.treasure if map_room else None
+
+        # Dungeon entrances have no south exit in the game map — block backtracking
+        if map_room and state.level > 0 and 'S' not in map_room.exits:
+            self.exits[Direction.S] = []
+
         self.referesh_state(state)
 
 
@@ -104,17 +71,21 @@ class RoomMemory:
 
 class ObjectiveSelector:
     """Determines the current objectives for the agent."""
+
+    _game_map = None
+
     def __init__(self):
         self._rooms : Dict[RoomMemory] = {}
-        self._last_route = 0, 0, []
+        if ObjectiveSelector._game_map is None:
+            ObjectiveSelector._game_map = GameMap.load()
 
     def get_current_objectives(self, prev : Optional[ZeldaGame], state : ZeldaGame) -> Objective:
         """Get the current objectives for the agent."""
         raise NotImplementedError()
 
-    def _get_game_map(self) -> Optional[GameMap]:
-        """Override to provide a GameMap for room memory item lookup."""
-        return None
+    def _get_game_map(self) -> GameMap:
+        """Returns the shared GameMap instance."""
+        return ObjectiveSelector._game_map
 
     def _update_exits(self, state: ZeldaGame):
         if state.in_cave:
@@ -136,123 +107,16 @@ class ObjectiveSelector:
 
         return [tile for enemy in state.enemies for tile in enemy.link_overlap_tiles]
 
-    def _get_route_with_astar(self, level, start, end, key_count):
-        # pylint: disable=too-many-locals, too-many-branches
-        # Special case: if start == end, return immediately
-        if not isinstance(start, MapLocation):
-            start = MapLocation(level, start, False)
-        if not isinstance(end, MapLocation):
-            end = MapLocation(level, end, False)
-
-        if start == end:
-            return [[start]]
-
-        # Priority queue holds (f, g, room), where
-        #   g = cost_so_far to reach `room`
-        #   f = g + heuristic(room, end)
-        open_list = []
-        start_h = start.manhattan_distance(end)
-        heapq.heappush(open_list, (start_h, 0, start))
-
-        # cost_so_far[node] = minimal cost to get to that node
-        cost_so_far = {start: 0}
-
-        # parents[node] = list of immediate predecessors on equally minimal-cost paths
-        parents = {start: []}
-
-        best_cost_to_end = None  # once found, store the minimal cost to reach `end`
-
-        while open_list:
-            _, g, current_room = heapq.heappop(open_list)
-
-            # If we've reached the end
-            if current_room == end:
-                # If it's the first time we reach `end`, record that cost
-                if best_cost_to_end is None:
-                    best_cost_to_end = g
-                # If this path cost is strictly greater than the best found, we can stop
-                elif g > best_cost_to_end:
-                    break
-                # If this path cost equals best_cost_to_end, we just keep going
-                # because we might find other expansions that tie on cost.
-
-            # If we already know a best cost and our current cost g
-            # is beyond that, no need to expand further.
-            if best_cost_to_end is not None and g > best_cost_to_end:
-                continue
-
-            # Explore neighbors
-            for next_room, locked in self._enumerate_attached_rooms(current_room, key_count):
-                move_cost = LOCKED_DISTANCE if locked else 1
-                new_cost = g + move_cost
-
-                # If we already know the best cost to end AND new_cost can't beat it, skip
-                if best_cost_to_end is not None and new_cost > best_cost_to_end:
-                    continue
-
-                if next_room not in cost_so_far or new_cost < cost_so_far[next_room]:
-                    # We found a strictly better path to `next_room`
-                    cost_so_far[next_room] = new_cost
-                    parents[next_room] = [current_room]
-                    new_f = new_cost + next_room.manhattan_distance(end)
-                    heapq.heappush(open_list, (new_f, new_cost, next_room))
-
-                elif new_cost == cost_so_far[next_room]:
-                    # We found an equally good path, so store an additional parent
-                    parents[next_room].append(current_room)
-
-        # If we never reached `end`, return empty
-        if best_cost_to_end is None:
-            return []
-
-        # Reconstruct all shortest paths from `start` to `end`.
-        # We'll do a simple DFS/backtrack that accumulates all paths.
-        def backtrack_paths(node):
-            if node == start:
-                return [[start]]
-            all_paths = []
-            for p in parents[node]:
-                for partial_path in backtrack_paths(p):
-                    all_paths.append(partial_path + [node])
-            return all_paths
-
-        return backtrack_paths(end)
-
-    def _enumerate_attached_rooms(self, location, key_count):
-        # if we have memory of the room, use that
-        if (room_memory := self._rooms.get(location, None)) is not None:
-            for direction, next_room in room_memory.enumerate_adjacent_rooms():
-                locked = direction in room_memory.locked
-                if locked and not key_count:
-                    continue
-
-                if direction in room_memory.barred:
-                    continue
-
-                yield next_room, locked
-
-        # otherwise we'll just assume every room is connected
-        else:
-            for next_room in location.enumerate_possible_neighbors():
-                yield next_room, False
-
 
 class _GameMapObjective(ObjectiveSelector):
     """Base class for objectives that use GameMap for routing."""
 
-    _game_map = None
-
     def __init__(self):
         super().__init__()
-        if _GameMapObjective._game_map is None:
-            _GameMapObjective._game_map = GameMap.load()
         self._last_route_key = None
         self._last_route_result = None
         self._collected_key_rooms: Set[MapLocation] = set()
         self._opened_doors: Set[tuple] = set()  # (MapLocation, direction_str) for doors opened at runtime
-
-    def _get_game_map(self):
-        return self._game_map
 
     _DIR_STR_TO_ENUM = {'N': Direction.N, 'S': Direction.S, 'E': Direction.E, 'W': Direction.W}
 
