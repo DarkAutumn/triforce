@@ -427,8 +427,13 @@ class _GameMapObjective(ObjectiveSelector):
 
         directions = [state.full_location.get_direction_to(r) for r in next_rooms]
         targets = []
-        for d in directions:
+        for d, room in zip(directions, next_rooms):
             if d == Direction.NONE:
+                # Cave transition: same location but different in_cave flag
+                if room.in_cave != state.full_location.in_cave:
+                    cave_tile = state.room.cave_tile
+                    if cave_tile is not None:
+                        targets.append(cave_tile)
                 continue
             if d in state.room.exits:
                 targets.extend(state.room.exits[d])
