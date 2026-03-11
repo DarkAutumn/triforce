@@ -29,8 +29,8 @@ class Network(nn.Module):
         self.metrics : dict[str, float] = {}
 
         self.base = base_network
-        self.action_net = self.layer_init(nn.Linear(64, action_space.n), std=0.01)
-        self.value_net = self.layer_init(nn.Linear(64, 1), std=1.0)
+        self.action_net = self.layer_init(nn.Linear(256, action_space.n), std=0.01)
+        self.value_net = self.layer_init(nn.Linear(256, 1), std=1.0)
 
     def forward(self, obs):
         """Forward pass."""
@@ -199,22 +199,31 @@ class NatureCNN(nn.Module):
 
 class MlpExtractor(nn.Module):
     """MLP for policy and value."""
-    def __init__(self, input_size, policy_hidden_size=64, value_hidden_size=64):
+    def __init__(self, input_size, policy_hidden_size=256, value_hidden_size=256):
         super().__init__()
+        self.policy_output_dim = policy_hidden_size
+        self.value_output_dim = value_hidden_size
+
         self.policy_net = nn.Sequential(
             Network.layer_init(nn.Linear(input_size, policy_hidden_size)),
+            nn.LayerNorm(policy_hidden_size),
             nn.ReLU(),
             Network.layer_init(nn.Linear(policy_hidden_size, policy_hidden_size)),
+            nn.LayerNorm(policy_hidden_size),
             nn.ReLU(),
             Network.layer_init(nn.Linear(policy_hidden_size, policy_hidden_size)),
+            nn.LayerNorm(policy_hidden_size),
             nn.Tanh(),
         )
         self.value_net = nn.Sequential(
             Network.layer_init(nn.Linear(input_size, value_hidden_size)),
+            nn.LayerNorm(value_hidden_size),
             nn.ReLU(),
             Network.layer_init(nn.Linear(value_hidden_size, value_hidden_size)),
+            nn.LayerNorm(value_hidden_size),
             nn.ReLU(),
             Network.layer_init(nn.Linear(value_hidden_size, value_hidden_size)),
+            nn.LayerNorm(value_hidden_size),
             nn.ReLU(),
         )
 
@@ -354,11 +363,14 @@ class MultiHeadAgent(Network):
 
         # Two action heads: action_type (K) and direction (4)
         num_action_types = int(action_space.nvec[0])
-        self.action_type_net = self.layer_init(nn.Linear(64, num_action_types), std=0.01)
-        self.direction_net = self.layer_init(nn.Linear(64, 4), std=0.01)
+        self.action_type_net = self.layer_init(
+            nn.Linear(self.mlp_extractor.policy_output_dim, num_action_types), std=0.01)
+        self.direction_net = self.layer_init(
+            nn.Linear(self.mlp_extractor.policy_output_dim, 4), std=0.01)
 
         # Single shared value head
-        self.value_net = self.layer_init(nn.Linear(64, 1), std=1.0)
+        self.value_net = self.layer_init(
+            nn.Linear(self.mlp_extractor.value_output_dim, 1), std=1.0)
 
         # Placeholder so Network.base class annotation is satisfied
         self.action_net = nn.Identity()
@@ -501,9 +513,11 @@ class SharedNatureAgent(Network):
         # Now we create an MLP for policy/value.
         self.mlp_extractor = MlpExtractor(input_size=self.base.output_dim)
 
-        # Overwrite action_net and value_net to match the new dimension (64 is from MlpExtractor default).
-        self.action_net = self.layer_init(nn.Linear(64, action_space.n), std=0.01)
-        self.value_net = self.layer_init(nn.Linear(64, 1), std=1.0)
+        # Overwrite action_net and value_net to match MLP output dimensions.
+        self.action_net = self.layer_init(
+            nn.Linear(self.mlp_extractor.policy_output_dim, action_space.n), std=0.01)
+        self.value_net = self.layer_init(
+            nn.Linear(self.mlp_extractor.value_output_dim, 1), std=1.0)
 
     def forward(self, obs):
         obs = self._unsqueeze(obs)
