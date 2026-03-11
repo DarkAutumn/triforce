@@ -53,12 +53,42 @@ The PPO implementation (`ml_ppo.py`) and neural network (`models.py`) are custom
 
 ### Key Concepts
 
-- **Models** (`triforce.json` → `"models"`): Define the neural network architecture, action space, and selection priority. Multiple models handle different game contexts (overworld vs dungeon, beams vs no-beams).
-- **Scenarios** (`triforce.json` → `"scenarios"`): Define what critic, end conditions, starting room(s), and RAM overrides to use for training/evaluation. The `per_reset`/`per_frame` fields manipulate NES RAM (e.g., force full health for beam training).
-- **Training Circuits** (`triforce.json` → `"training-circuits"`): Ordered sequences of scenarios with exit criteria for curriculum learning (e.g., teach room navigation first, then full dungeon).
+- **Models** (`triforce.yaml` → `"model-kinds"`): Define the neural network architecture class. Two types: `SharedNatureAgent` (default, single policy head) and `MultiHeadAgent` (per-action heads for MultiDiscrete spaces).
+- **Action Spaces** (`triforce.yaml` → `"action-spaces"`): Named sets of available actions (e.g., MOVE, SWORD, BEAMS, BOMBS, MAGIC). Different scenarios use different action spaces.
+- **Scenarios** (`triforce.yaml` → `"scenarios"`): Define what critic, end conditions, objectives, starting room(s), metrics, and RAM overrides to use for training/evaluation. The `per_reset`/`per_frame` fields manipulate NES RAM (e.g., force full health for beam training).
+- **Training Circuits** (`triforce.yaml` → `"training-circuits"`): Ordered sequences of scenarios with exit criteria for curriculum learning (e.g., teach room navigation first, then full dungeon).
 - **Critics** (`critics.py`): Produce a reward dictionary (not a single scalar) for debuggability. Each named reward/penalty is a constant defined at module level using the `Reward`/`Penalty` dataclasses and the magnitude scale from `rewards.py` (`REWARD_MINIMUM` through `REWARD_MAXIMUM`).
 - **Progress** is separate from rewards — rewards train the model, progress evaluates scenario completion.
 - **End Conditions** (`end_conditions.py`): Return `(terminated, truncated)` tuples to signal when a scenario should stop.
+
+### Configuration Files
+
+- **`triforce/triforce.yaml`**: Central configuration defining action-spaces, model-kinds, training-circuits, and scenarios. This is the main file agents and developers modify to add new training scenarios or change curriculum.
+- **`triforce/game.yaml`**: Static game map data — room exits, locked doors, enemies, treasure for each room. Used by the objective/routing system for pathfinding.
+
+### Objectives & Routing
+
+The objective system (`objectives.py`) guides the agent through the game:
+
+- **`ObjectiveSelector`** base class with `GameMapObjective` subclass that uses Dijkstra routing via `game.yaml`
+- **`GameMap`** (`game_map.py`): Shortest-path routing between rooms, handling locked doors and key availability
+- **`wavefront.py`**: BFS-based in-room tile navigation — computes distances from target tiles for directional objectives
+- **`RoomMemory`**: Tracks learned state (exits, locked doors, treasure) across an episode
+
+### Metrics
+
+`metrics.py` defines metric types used by scenarios in `triforce.yaml` for evaluation: `EnumMetric` (discrete outcomes like room-result), `AveragedMetric` (success-rate, reward-average), `RoomProgressMetric` (milestone progression with percentiles), `RoomHealthChangeMetric`, `RewardDetailsMetric`, and `EndingMetric`.
+
+### Multi-Head Models
+
+Two model architectures in `models.py`, selected via `model-kinds` in `triforce.yaml`:
+
+- **`SharedNatureAgent`** (default): Single policy head with Categorical distribution for Discrete action spaces.
+- **`MultiHeadAgent`**: Separate policy/value heads per action dimension for MultiDiscrete spaces. Entropy = sum of per-head entropies.
+
+### Training Hints
+
+`TrainingHintWrapper` (`training_hints.py`) applies action masking during training to prevent obviously bad behaviors (e.g., moving north at screen edge, exiting rooms in wrong directions). Works via the `bad_actions` field in step info.
 
 ### Game State Object Model
 
@@ -83,6 +113,49 @@ The PPO implementation (`ml_ppo.py`) and neural network (`models.py`) are custom
 
 ## Entry Points
 
-- **`debug.py [--path DIR]`** — Launch the Qt debugger GUI
-- **`train.py <model> <scenario>`** — Train a model (outputs to `training/` by default)
-- **`evaluate.py <model_path> <model> <scenario>`** — Evaluate model performance over multiple episodes
+- **`train.py <scenario> [action_space] [model_kind]`** — Train a model. Key options: `--output DIR`, `--iterations N`, `--load MODEL.pt`, `--parallel N` (default 6), `--evaluate N` (run eval episodes after training).
+- **`evaluate.py <model_path> <scenario>`** — Evaluate model performance over multiple episodes (default 100). Produces `.eval.json` + `.eval.md` files. Supports `--compare file1.eval.json file2.eval.json` for statistical model comparison (Mann-Whitney U test).
+- **`diagnose.py --model NAME --scenario NAME --model-path PATH`** — Agent-facing diagnostic tool (see below).
+- **`debug.py [--path DIR]`** — Launch the Qt debugger GUI.
+
+## Diagnostic Tool (`diagnose.py`)
+
+`diagnose.py` is a headless diagnostic tool **designed for AI agents** to use when debugging training and evaluation problems. It produces detailed text reports that agents can analyze to identify why a model is failing or underperforming.
+
+### Usage
+
+```bash
+# Standard diagnostic — run 20 episodes, get summary + per-episode details
+python diagnose.py --model <model> --scenario <scenario> --model-path <path_to_pt> --episodes 20
+
+# PBRS diagnostic — find stuck rooms, print step-by-step reward analysis
+python diagnose.py --model <model> --scenario <scenario> --model-path <path_to_pt> --infinite-pbrs --tail 50
+
+# Write output to file for analysis
+python diagnose.py --model <model> --scenario <scenario> --model-path <path_to_pt> -o report.txt
+```
+
+### Standard Mode Output
+
+The standard report includes these sections:
+- **Summary**: Mean/median/percentile progress, mean steps, mean reward
+- **Progress Histogram**: Visual distribution of milestone completion
+- **Episode Endings**: Why episodes ended (timeout, death, success, stuck-in-room) with counts
+- **Where Episodes End**: Final room distribution with progress levels
+- **Stuck Detection**: Rooms where the agent spent >200 steps (signals navigation problems)
+- **Reward Breakdown**: Aggregated reward/penalty totals, averages, and counts across all episodes
+- **Per-Episode Details**: Room traces, top rewards/penalties, health, steps without progress
+
+### PBRS Mode Output (`--infinite-pbrs`)
+
+Step-by-step potential-based reward shaping analysis for stuck rooms. Shows tile positions, wavefront distances, objective kinds, cumulative PBRS, wall hits, and health changes per step.
+
+### Extending `diagnose.py`
+
+**Agents should extend `diagnose.py` with new diagnostic features** when they encounter problems that need deeper analysis. For example, if debugging enemy targeting issues, an agent might add enemy-proximity tracking to the per-step output.
+
+Guidelines for extending:
+- Build new features in a **reusable, general-purpose** way (not one-off hacks)
+- Follow the existing patterns: `DiagnosticWrapper` for data capture, `EpisodeRecord`/`PbrsStepRecord` for storage, `generate_report()` for formatting
+- **Commit improvements to `diagnose.py` separately** from the bug fix being investigated — these are persistent tools that benefit future debugging sessions
+- New diagnostic modes can be added as CLI flags (like `--infinite-pbrs`)
