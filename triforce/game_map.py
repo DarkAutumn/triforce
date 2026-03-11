@@ -127,32 +127,38 @@ class GameMap:
             collected_keys: Key rooms already collected (pre-set in the bitmask).
             opened_doors: Doors already opened at runtime (treated as free passages).
         """
-        # Assign each key room a bit index for tracking collection
+        key_bit, initial_mask = self._build_key_bitmask(collected_keys)
+        start_state = (start, keys, initial_mask)
+        opened = opened_doors or set()
+
+        cost_so_far, parents, best_cost_to_end = self._dijkstra(
+            start_state, end, key_bit, opened
+        )
+
+        return self._reconstruct_paths(start_state, end, cost_so_far, parents, best_cost_to_end)
+
+    def _build_key_bitmask(self, collected_keys):
+        """Build a bit-index map for key rooms and initial collection bitmask."""
         key_room_list = sorted(
             [loc for loc, room in self._rooms.items() if room.treasure == 'key'],
             key=lambda loc: (loc.level, loc.value)
         )
         key_bit = {loc: (1 << i) for i, loc in enumerate(key_room_list)}
 
-        # Build initial bitmask from already-collected key rooms
         initial_mask = 0
         if collected_keys:
             for loc in collected_keys:
-                bit = key_bit.get(loc, 0)
-                initial_mask |= bit
+                initial_mask |= key_bit.get(loc, 0)
 
-        # State: (room, keys_held, collected_mask)
-        # collected_mask tracks which key rooms have been visited to prevent re-collection
-        start_state = (start, keys, initial_mask)
+        return key_bit, initial_mask
 
+    def _dijkstra(self, start_state, end, key_bit, opened):
+        """Run Dijkstra over (room, keys_held, collected_mask) state space."""
         cost_so_far = {start_state: 0}
         parents: Dict[Tuple, List[Tuple]] = defaultdict(list)
         counter = 0
-        heap = [(0, counter, start, keys, initial_mask)]
+        heap = [(0, counter, *start_state)]
         best_cost_to_end = None
-
-        # Build set of opened doors for O(1) lookup
-        opened = opened_doors or set()
 
         while heap:
             cost, _, current, cur_keys, collected = heapq.heappop(heap)
@@ -160,10 +166,8 @@ class GameMap:
             state = (current, cur_keys, collected)
             if cost > cost_so_far.get(state, float('inf')):
                 continue
-
             if best_cost_to_end is not None and cost > best_cost_to_end:
                 break
-
             if current == end:
                 best_cost_to_end = cost
                 continue
@@ -173,46 +177,52 @@ class GameMap:
                 continue
 
             for exit_info in room.exits.values():
-                neighbor = exit_info.destination
+                result = self._evaluate_exit(current, exit_info, cur_keys, collected, key_bit, opened)
+                if result is None:
+                    continue
 
-                # A locked door that has been opened at runtime is free
-                door_opened = (current, exit_info.direction) in opened
-                if exit_info.locked and not door_opened:
-                    if cur_keys <= 0:
-                        continue
-                    move_cost = LOCKED_COST
-                    next_keys = cur_keys - 1
-                else:
-                    move_cost = 1
-                    next_keys = cur_keys
-
-                next_collected = collected
-
-                # Pick up key only if this key room hasn't been collected yet
-                bit = key_bit.get(neighbor, 0)
-                if bit and not collected & bit:
-                    next_keys += 1
-                    next_collected |= bit
-
+                move_cost, next_keys, next_collected = result
                 new_cost = cost + move_cost
-                next_state = (neighbor, next_keys, next_collected)
+                next_state = (exit_info.destination, next_keys, next_collected)
 
                 if next_state not in cost_so_far or new_cost < cost_so_far[next_state]:
                     cost_so_far[next_state] = new_cost
                     parents[next_state] = [state]
                     counter += 1
-                    heapq.heappush(heap, (new_cost, counter, neighbor, next_keys, next_collected))
+                    heapq.heappush(heap, (new_cost, counter, *next_state))
                 elif new_cost == cost_so_far[next_state]:
                     parents[next_state].append(state)
 
-        # Reconstruct all optimal paths to end (any key count / collected state)
+        return cost_so_far, parents, best_cost_to_end
+
+    def _evaluate_exit(self, current, exit_info, cur_keys, collected, key_bit, opened):
+        """Evaluate cost and key changes for taking an exit. Returns None if blocked."""
+        door_opened = (current, exit_info.direction) in opened
+        if exit_info.locked and not door_opened:
+            if cur_keys <= 0:
+                return None
+            move_cost = LOCKED_COST
+            next_keys = cur_keys - 1
+        else:
+            move_cost = 1
+            next_keys = cur_keys
+
+        next_collected = collected
+        bit = key_bit.get(exit_info.destination, 0)
+        if bit and not collected & bit:
+            next_keys += 1
+            next_collected |= bit
+
+        return move_cost, next_keys, next_collected
+
+    @staticmethod
+    def _reconstruct_paths(start_state, end, cost_so_far, parents, best_cost_to_end):
+        """Backtrack from end states to reconstruct all optimal paths."""
         end_states = [s for s, c in cost_so_far.items()
                       if s[0] == end and c == best_cost_to_end]
-
         if not end_states:
             return []
 
-        # Backtrack from end states to start
         all_paths = []
         stack = [(es, [end]) for es in end_states]
         while stack:
