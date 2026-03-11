@@ -1,0 +1,426 @@
+action-spaces:
+  basic:
+    default: true
+    actions:
+    - MOVE
+    - SWORD
+    - BEAMS
+  move-only:
+    actions:
+    - MOVE
+model-kinds:
+  shared-nature:
+    default: true
+    class: SharedNatureAgent
+  multihead:
+    class: MultiHeadAgent
+training-circuits:
+- name: main-circuit
+  description: 'Train the overworld model through curriculum: room navigation, sword pickup, overworld traversal, dungeon
+    1, then full game.'
+  scenarios:
+  - scenario: overworld-room-walk
+    exit_criteria: room-result/correct-exit
+    threshold: 0.9
+    iterations: 250000
+  - scenario: overworld-sword
+    exit_criteria: success-rate
+    threshold: 0.8
+    iterations: 250000
+  - scenario: overworld-skip-sword
+    exit_criteria: success-rate
+    threshold: 0.9
+    iterations: 500000
+  - scenario: game-start
+    exit_criteria: success-rate
+    threshold: 0.9
+    iterations: 500000
+  - scenario: dungeon1
+    exit_criteria: success-rate
+    threshold: 0.02
+    iterations: 500000
+  - scenario: full-game
+- name: dungeon1-circuit
+  description: Train the dungeon model by first teaching it to walk rooms, then to make it to dungeon1, then to grab the sword,
+    then all together.
+  scenarios:
+  - scenario: dungeon1-skip-opening
+    exit_criteria: rewards
+    threshold: 0.0
+    iterations: 2000000
+  - scenario: dungeon1-entry-room
+    exit_criteria: room-result/correct-exit
+    threshold: 0.9
+  - scenario: dungeon1-side-room-opening
+    exit_criteria: success-rate
+    threshold: 0.85
+  - scenario: dungeon1-wallmaster
+    exit_criteria: success-rate
+    threshold: 0.85
+  - scenario: dungeon1-entry-room
+    exit_criteria: room-result/correct-exit
+    threshold: 0.9
+  - scenario: dungeon1
+    iterations: 20000000
+scenarios:
+- name: full-game
+  description: Full game from start through dungeon 1 triforce
+  iterations: 2000000
+  scenario_selector: round-robin
+  objective: GameCompletion
+  critic: GameplayCritic
+  end_conditions:
+  - GainedTriforce
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - game-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 0_77c
+  use_hints: true
+- name: skip-sword-to-triforce
+  description: Overworld through dungeon 1 triforce, skipping the sword cave
+  iterations: 2000000
+  scenario_selector: round-robin
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
+  critic: GameplayCritic
+  end_conditions:
+  - GainedTriforce
+  - CollectedTreasure
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - game-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 0_67s
+  use_hints: true
+  per_reset:
+    bombs: 3
+    sword: 1
+    hearts_and_containers: 34
+    partial_hearts: 254
+- name: game-start
+  description: The full game with training variables
+  iterations: 2000000
+  scenario_selector: round-robin
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
+  critic: GameplayCritic
+  end_conditions:
+  - CollectedTreasure
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - overworld-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 0_77c
+  use_hints: true
+- name: dungeon1-dungeon2
+  description: ''
+  iterations: 2000000
+  scenario_selector: round-robin
+  objective: GameCompletion
+  critic: GameplayCritic
+  end_conditions:
+  - LeftOverworld2Area
+  - EnteredDungeon
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - overworld-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 0_37c
+  use_hints: false
+- name: no-end-conditions
+  description: The full game with training variables
+  iterations: 2000000
+  scenario_selector: round-robin
+  objective: GameCompletion
+  critic: GameplayCritic
+  end_conditions:
+  - GameOver
+  metrics:
+  - reward-average
+  - reward-details
+  per_reset:
+    hearts_and_containers: 51
+    partial_hearts: 254
+  start:
+  - 0_37c
+  use_hints: false
+- name: overworld-sword
+  description: Start of the game to the sword
+  iterations: 1000000
+  scenario_selector: none
+  objective: TreasureObjective
+  objective_params:
+    treasure: wood-sword
+  critic: OverworldSwordCritic
+  end_conditions:
+  - StartingRoomConditions
+  - CollectedTreasure
+  - Timeout
+  metrics:
+  - success-rate
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 0_77c
+  per_reset:
+    hearts_and_containers: 34
+    partial_hearts: 254
+- name: overworld-skip-sword
+  description: A scoped down room walk
+  iterations: 2500000
+  scenario_selector: round-robin
+  objective: ReachLocation
+  objective_params:
+    level: 1
+    location: '0x73'
+  critic: GameplayCritic
+  end_conditions:
+  - StartingSwordCondition
+  - EnteredDungeon
+  - ReachedLocation
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - room-result
+  - room-health
+  - ending
+  - game-progress
+  - reward-average
+  - reward-details
+  start:
+  - 0_67s
+  use_hints: true
+  per_reset:
+    bombs: 3
+    sword: 1
+    hearts_and_containers: 34
+    partial_hearts: 254
+- name: overworld-room-walk
+  description: A training scenario to teach the model how to traverse the map and follow directions
+  iterations: 2000000
+  scenario_selector: probabilistic
+  objective: RoomWalk
+  critic: GameplayCritic
+  end_conditions:
+  - RoomWalkCondition
+  metrics:
+  - success-rate
+  - room-result
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 0_58
+  - 0_68
+  use_hints: false
+  per_reset:
+    bombs: 3
+    sword: 1
+    hearts_and_containers: 34
+    partial_hearts: 254
+- name: dungeon1-room-walk
+  description: Dungeon 1 room walk.
+  iterations: 5000000
+  scenario_selector: probabilistic
+  objective: RoomWalk
+  critic: GameplayCritic
+  end_conditions:
+  - RoomWalkCondition
+  - GainedTriforce
+  metrics:
+  - success-rate
+  - room-result
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - '1_23'
+  - '1_33'
+  - '1_42'
+  - '1_43'
+  - '1_44'
+  - '1_35'
+  - '1_36'
+  - '1_72'
+  - '1_74'
+  - '1_63'
+  - '1_52'
+  - '1_53'
+  use_hints: false
+  per_reset:
+    bombs: 3
+    hearts_and_containers: 34
+    partial_hearts: 254
+    keys: 4
+- name: dungeon1-entry-room
+  description: Dungeon 1 entry room.
+  iterations: 1000000
+  scenario_selector: round-robin
+  objective: RoomWalk
+  critic: GameplayCritic
+  end_conditions:
+  - RoomWalkCondition
+  - LeftDungeon
+  metrics:
+  - success-rate
+  - room-result
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - '1_73'
+  use_hints: false
+  per_reset:
+    bombs: 3
+    hearts_and_containers: 34
+    partial_hearts: 254
+    keys: 4
+- name: dungeon1-side-room-opening
+  description: Dungeon 1.
+  iterations: 2000000
+  scenario_selector: probabilistic
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
+  critic: GameplayCritic
+  end_conditions:
+  - LeftDungeon
+  - GainedTriforce
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - overworld-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_72e
+  - 1_74w
+  - 1_63s
+  - 1_44w
+  use_hints: false
+  per_reset:
+    bombs: 3
+    hearts_and_containers: 34
+    partial_hearts: 254
+- name: dungeon1
+  description: Dungeon 1.
+  iterations: 10000000
+  scenario_selector: round-robin
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
+  critic: GameplayCritic
+  end_conditions:
+  - LeftDungeon
+  - GainedTriforce
+  - CollectedTreasure
+  - GameOver
+  - Timeout
+  - Dungeon1DidntGetKey
+  - NowhereToGoCondition
+  metrics:
+  - success-rate
+  - overworld-progress
+  - game-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_73s
+  use_hints: false
+- name: dungeon1-wallmaster
+  description: Dungeon 1.
+  iterations: 2000000
+  scenario_selector: round-robin
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
+  critic: GameplayCritic
+  end_conditions:
+  - LeftDungeon
+  - GainedTriforce
+  - CollectedTreasure
+  - GameOver
+  - Timeout
+  - LeftWallmasterRoom
+  metrics:
+  - success-rate
+  - overworld-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  per_reset:
+    hearts_and_containers: 34
+    partial_hearts: 254
+  start:
+  - 1_45w
+  use_hints: false
+- name: dungeon1-skip-opening
+  description: Dungeon 1.
+  iterations: 5000000
+  scenario_selector: round-robin
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
+  critic: GameplayCritic
+  end_conditions:
+  - LeftDungeon
+  - GainedTriforce
+  - CollectedTreasure
+  - GameOver
+  - Timeout
+  - NowhereToGoCondition
+  - LeftPlayArea
+  metrics:
+  - room-result
+  - success-rate
+  - dungeon1-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_63s
+  use_hints: true
+  per_reset:
+    bombs: 3
+    hearts_and_containers: 34
+    partial_hearts: 254
+    keys: 3

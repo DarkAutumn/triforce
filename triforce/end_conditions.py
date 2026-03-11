@@ -1,8 +1,9 @@
 """All end conditions for training."""
 
+from .game_map import GameMap
 from .objectives import ObjectiveKind, ObjectiveSelector
 from .state_change_wrapper import StateChange
-from .zelda_enums import SwordKind, ZeldaEnemyKind
+from .zelda_enums import MapLocation, SwordKind, ZeldaEnemyKind
 
 class ZeldaEndCondition:
     """
@@ -274,5 +275,54 @@ class Dungeon1DidntGetKey(ZeldaEndCondition):
     def is_scenario_ended(self, state_change):
         if state_change.state.location == 0x63 and state_change.state.link.keys == 0:
             return True, False, "failure-no-key"
+
+        return False, False, None
+
+
+class ReachedLocation(ZeldaEndCondition):
+    """End condition: terminates with success when agent reaches target location."""
+    def __init__(self, level=0, location=0, in_cave=False):
+        super().__init__()
+        loc = int(location, 16) if isinstance(location, str) else location
+        self._target = MapLocation(level, loc, in_cave)
+
+    def is_scenario_ended(self, state_change):
+        if state_change.state.full_location == self._target:
+            return True, False, "success-reached-location"
+
+        return False, False, None
+
+
+class CollectedTreasure(ZeldaEndCondition):
+    """End condition: terminates with success when target treasure is collected."""
+    def __init__(self, treasure="triforce"):
+        super().__init__()
+        self._treasure = treasure
+        self._was_in_target_room = False
+        game_map = GameMap.load()
+        self._target_rooms = [r.location for r in game_map.find_rooms_with_treasure(treasure)]
+
+    def clear(self):
+        self._was_in_target_room = False
+
+    def is_scenario_ended(self, state_change):
+        state = state_change.state
+        prev = state_change.previous
+
+        if prev.full_location in self._target_rooms:
+            self._was_in_target_room = True
+
+        # Check if treasure was collected (was in target room, treasure disappeared)
+        if self._was_in_target_room and prev.treasure is not None and state.treasure is None:
+            return True, False, "success-collected-treasure"
+
+        # Special case for triforce: check gained_triforce flag
+        if self._treasure == "triforce" and state_change.gained_triforce:
+            return True, False, "success-collected-treasure"
+
+        # Special case for sword: check if Link gained a sword
+        if "sword" in self._treasure and state.link.sword != SwordKind.NONE \
+                and prev.link.sword == SwordKind.NONE:
+            return True, False, "success-collected-treasure"
 
         return False, False, None

@@ -13,8 +13,10 @@ WEST_DOOR_TILE = 0x2, 0xa
 EAST_DOOR_TILE = 0x1c, 0xa
 SOUTH_DOOR_TILE = 0xf, 0x12
 
-             # north                     east
-DOOR_TILES = list(range(0x98, 0x9b+1)) + list(range(0xa4, 0xa7+1))
+             # north                     south
+DOOR_TILES = list(range(0x98, 0x9c)) + list(range(0x9c, 0xa0)) + \
+             list(range(0xa0, 0xa4)) + list(range(0xa4, 0xa8))
+             # west                      east
 BARRED_DOOR_TILES = list(range(0xac, 0xaf+1))
 TOP_CAVE_TILE = 0xf3
 BOTTOM_CAVE_TILE = 0x24
@@ -163,6 +165,53 @@ class Room:
         val = int(self.tiles[tc, tr])
         return val < self._threshold
 
+    def _compute_locked_door_corridor(self, direction):
+        """Compute corridor tiles for a locked door in the given direction.
+
+        Like _compute_corridor_tiles but extends 1 extra tile toward the room interior.
+        Locked doors are 2 tiles deep: the open-door corridor covers the doorway wall
+        to the door tile, but for locked doors the second tile row/column is also
+        impassable and must be included.
+        """
+        corridor = set()
+        cols, rows = self.tiles.shape
+
+        match direction:
+            case Direction.E:
+                dc, dr = EAST_DOOR_TILE
+                for c in range(dc - 1, cols):
+                    corridor.add((c, dr))
+                    corridor.add((c, dr + 1))
+            case Direction.W:
+                dc, dr = WEST_DOOR_TILE
+                for c in range(0, dc + 2):
+                    corridor.add((c, dr))
+                    corridor.add((c, dr + 1))
+            case Direction.N:
+                dc, dr = NORTH_DOOR_TILE
+                for r in range(0, dr + 2):
+                    corridor.add((dc, r))
+                    corridor.add((dc + 1, r))
+            case Direction.S:
+                dc, dr = SOUTH_DOOR_TILE
+                for r in range(dr - 1, rows):
+                    corridor.add((dc, r))
+                    corridor.add((dc + 1, r))
+
+        return corridor
+
+    def _get_door_exit_tile(self, direction):
+        """Get the boundary exit tile for a door direction (where Link transitions rooms)."""
+        match direction:
+            case Direction.N:
+                return TileIndex(NORTH_DOOR_TILE[0], 0)
+            case Direction.S:
+                return TileIndex(SOUTH_DOOR_TILE[0], self.tiles.shape[1] - 1)
+            case Direction.W:
+                return TileIndex(0, WEST_DOOR_TILE[1])
+            case Direction.E:
+                return TileIndex(self.tiles.shape[0] - 1, EAST_DOOR_TILE[1])
+        return None
 
     def is_door_locked(self, direction : Direction, fresh_tiles):
         """Returns whether the door in a particular direction is locked."""
@@ -272,21 +321,45 @@ class Room:
         return None
 
     def calculate_wavefront_for_link(self, targets : Sequence[ZeldaObject | Direction | Tuple[int, int]],
-                                     impassible : Sequence[Tuple[int, int] | ZeldaObject] = None):
-        """Calculates the wavefront for the room for Link."""
-        start_tiles, impassible_tiles = self._get_wf_start_impass(targets, impassible)
+                                     impassible : Sequence[Tuple[int, int] | ZeldaObject] = None,
+                                     locked_doors : frozenset = None):
+        """Calculates the wavefront for the room for Link.
 
-        key = tuple(sorted(start_tiles)), tuple(sorted(impassible_tiles))
-        if key in self._wf_lru:
-            self._wf_lru.move_to_end(key)
-            return self._wf_lru[key]
+        locked_doors: frozenset of Direction for locked doors that should be treated as passable
+        (e.g., when the agent has keys and the route goes through a locked door).
+        """
+        # Temporarily add corridor tiles and exit tiles for locked doors so the
+        # wavefront can flow through them as if the doors were open.
+        old_corridor = self._corridor_tiles
+        old_exits = self.exits
+        try:
+            if locked_doors:
+                new_corridor = set(self._corridor_tiles)
+                new_exits = dict(self.exits)
+                for direction in locked_doors:
+                    new_corridor.update(self._compute_locked_door_corridor(direction))
+                    exit_tile = self._get_door_exit_tile(direction)
+                    new_exits[direction] = [exit_tile]
+                self._corridor_tiles = frozenset(new_corridor)
+                self.exits = new_exits
 
-        wavefront = Wavefront(self, start_tiles, impassible_tiles)
-        self._wf_lru[key] = wavefront
-        if len(self._wf_lru) > 256:
-            self._wf_lru.popitem(last=False)
+            start_tiles, impassible_tiles = self._get_wf_start_impass(targets, impassible)
 
-        return wavefront
+            locked_key = locked_doors if locked_doors else frozenset()
+            key = tuple(sorted(start_tiles)), tuple(sorted(impassible_tiles)), locked_key
+            if key in self._wf_lru:
+                self._wf_lru.move_to_end(key)
+                return self._wf_lru[key]
+
+            wavefront = Wavefront(self, start_tiles, impassible_tiles)
+            self._wf_lru[key] = wavefront
+            if len(self._wf_lru) > 256:
+                self._wf_lru.popitem(last=False)
+
+            return wavefront
+        finally:
+            self._corridor_tiles = old_corridor
+            self.exits = old_exits
 
     def _get_wf_start_impass(self, targets, impassible):
         impassible_tiles = set()
@@ -314,8 +387,9 @@ class Room:
                     start_tiles.add(tile)
 
             elif isinstance(target, Direction):
-                for tile in self.exits[target]:
-                    start_tiles.add(tile)
+                if target in self.exits:
+                    for tile in self.exits[target]:
+                        start_tiles.add(tile)
 
             elif isinstance(target, TileIndex):
                 start_tiles.add(target)

@@ -1,13 +1,13 @@
 import inspect
 import pickle
 import sys
-import json
 import os
 from typing import List
 import torch
 from torch import nn
 import torch.distributions as dist
 import numpy as np
+import yaml
 from gymnasium.spaces import Dict
 
 class Network(nn.Module):
@@ -561,15 +561,15 @@ def get_neural_network(name):
     """Get a model by name."""
     return NEURAL_NETWORK_DEFINITIONS[name]
 
-def _load_triforce_json():
-    """Load and return the parsed triforce.json."""
+def _load_triforce_yaml():
+    """Load and return the parsed triforce.yaml."""
     script_dir = os.path.dirname(os.path.realpath(__file__))
-    with open(os.path.join(script_dir, 'triforce.json'), encoding='utf-8') as f:
-        return json.load(f)
+    with open(os.path.join(script_dir, 'triforce.yaml'), encoding='utf-8') as f:
+        return yaml.safe_load(f)
 
 
 class ActionSpaceDefinition:
-    """A named action space from triforce.json."""
+    """A named action space from triforce.yaml."""
     def __init__(self, name: str, actions: List[str], default: bool = False):
         self.name = name
         self.actions = actions
@@ -577,9 +577,9 @@ class ActionSpaceDefinition:
 
     @staticmethod
     def get_all():
-        """Load all action space definitions from triforce.json."""
+        """Load all action space definitions from triforce.yaml."""
         result = {}
-        data = _load_triforce_json()
+        data = _load_triforce_yaml()
         for name, entry in data["action-spaces"].items():
             result[name] = ActionSpaceDefinition(
                 name=name,
@@ -599,11 +599,11 @@ class ActionSpaceDefinition:
         for asd in ActionSpaceDefinition.get_all().values():
             if asd.default:
                 return asd
-        raise ValueError("No default action space defined in triforce.json")
+        raise ValueError("No default action space defined in triforce.yaml")
 
 
 class ModelKindDefinition:
-    """A named model kind from triforce.json mapping to a Network subclass."""
+    """A named model kind from triforce.yaml mapping to a Network subclass."""
     def __init__(self, name: str, network_class: type, default: bool = False):
         self.name = name
         self.network_class = network_class
@@ -611,9 +611,9 @@ class ModelKindDefinition:
 
     @staticmethod
     def get_all():
-        """Load all model kind definitions from triforce.json."""
+        """Load all model kind definitions from triforce.yaml."""
         result = {}
-        data = _load_triforce_json()
+        data = _load_triforce_yaml()
         for name, entry in data["model-kinds"].items():
             result[name] = ModelKindDefinition(
                 name=name,
@@ -633,7 +633,7 @@ class ModelKindDefinition:
         for mkd in ModelKindDefinition.get_all().values():
             if mkd.default:
                 return mkd
-        raise ValueError("No default model kind defined in triforce.json")
+        raise ValueError("No default model kind defined in triforce.yaml")
 
 
 __all__ = [

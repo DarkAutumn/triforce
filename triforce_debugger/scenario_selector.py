@@ -1,6 +1,6 @@
 """Scenario selector dropdown for the Triforce Debugger.
 
-Populates a QComboBox from triforce.json scenarios.  Emits a signal when the
+Populates a QComboBox from triforce.yaml scenarios.  Emits a signal when the
 user picks a different scenario so the environment can be reset.
 """
 
@@ -11,7 +11,7 @@ from triforce import TrainingScenarioDefinition
 
 
 class ScenarioSelector(QWidget):
-    """Dropdown listing all scenarios from triforce.json.
+    """Dropdown listing all scenarios from triforce.yaml.
 
     Signals:
         scenario_changed(str): Emitted with the new scenario name when the
@@ -72,7 +72,7 @@ class ScenarioSelector(QWidget):
     # ── Internal ──────────────────────────────────────────────
 
     def _populate(self):
-        """Load scenarios from triforce.json and fill the combobox."""
+        """Load scenarios from triforce.yaml and fill the combobox."""
         self._scenarios = TrainingScenarioDefinition.get_all()
         self._combo.blockSignals(True)
         self._combo.clear()

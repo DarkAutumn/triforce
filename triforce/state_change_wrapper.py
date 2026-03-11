@@ -9,7 +9,7 @@ import gymnasium as gym
 
 from .objectives import ObjectiveSelector
 from .action_space import ActionTaken
-from .zelda_enums import AnimationState, ZeldaItemKind, ZeldaAnimationKind
+from .zelda_enums import AnimationState, Direction, ZeldaItemKind, ZeldaAnimationKind
 from .zelda_game import ZeldaGame
 
 # Predictions older than this many frames are discarded.  This prevents stale predictions
@@ -324,6 +324,7 @@ class StateChangeWrapper(gym.Wrapper):
         super().__init__(env)
         self._ledger = FutureCreditLedger()
         self._objective_type = scenario.objective if scenario else None
+        self._objective_params = scenario.objective_params if scenario else {}
         self._objectives : ObjectiveSelector = None
         self._prev_state = None
 
@@ -346,7 +347,7 @@ class StateChangeWrapper(gym.Wrapper):
         self._ledger.clear()
         self._prev_state = None
         if self._objective_type:
-            self._objectives = self._objective_type()
+            self._objectives = self._objective_type(**self._objective_params)
 
         state = self._update_state(None, frames, info)
         return frames, state
@@ -369,8 +370,20 @@ class StateChangeWrapper(gym.Wrapper):
         if self._objectives:
             objectives = self._objectives.get_current_objectives(prev, state)
             state.objectives = objectives
-            state.wavefront = state.room.calculate_wavefront_for_link(objectives.targets)
-            state.pbrs_wavefront = state.room.calculate_wavefront_for_link(objectives.pbrs_targets)
+
+            # Detect locked doors the wavefront should flow through.
+            # When the agent has keys, locked door corridors become passable.
+            locked_doors = None
+            if state.link.keys > 0 and state.level > 0:
+                locked = frozenset(d for d in (Direction.N, Direction.S, Direction.E, Direction.W)
+                                   if state.is_door_locked(d))
+                if locked:
+                    locked_doors = locked
+
+            state.wavefront = state.room.calculate_wavefront_for_link(
+                objectives.targets, locked_doors=locked_doors)
+            state.pbrs_wavefront = state.room.calculate_wavefront_for_link(
+                objectives.pbrs_targets, locked_doors=locked_doors)
 
         if prev:
             return StateChange(self, prev, state, action, frames, self._ledger, health_change_ignore)

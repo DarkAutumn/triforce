@@ -17,7 +17,7 @@ def get_app():
 
 
 def _expected_scenario_names():
-    """Return scenario names from triforce.json for comparison."""
+    """Return scenario names from triforce.yaml for comparison."""
     return [s.name for s in TrainingScenarioDefinition.get_all()]
 
 
@@ -25,11 +25,11 @@ class TestScenarioSelector:
     """Tests for the ScenarioSelector widget."""
 
     def test_populated_from_triforce_json(self):
-        """Combobox contains all scenarios from triforce.json."""
+        """Combobox contains all scenarios from triforce.yaml."""
         _app = get_app()
         widget = ScenarioSelector()
         expected = _expected_scenario_names()
-        assert len(expected) > 0, "triforce.json should have scenarios"
+        assert len(expected) > 0, "triforce.yaml should have scenarios"
         assert widget.scenario_names == expected
 
     def test_current_scenario_name(self):
