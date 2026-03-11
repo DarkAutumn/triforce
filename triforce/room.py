@@ -8,6 +8,13 @@ from .wavefront import Wavefront
 from .zelda_objects import ZeldaObject
 from .zelda_enums import Direction, TileIndex
 
+_DIRECTION_OFFSETS = {
+    Direction.N: (0, -1),
+    Direction.S: (0, 1),
+    Direction.E: (1, 0),
+    Direction.W: (-1, 0),
+}
+
 NORTH_DOOR_TILE = 0xf, 0x2
 WEST_DOOR_TILE = 0x2, 0xa
 EAST_DOOR_TILE = 0x1c, 0xa
@@ -290,24 +297,24 @@ class Room:
             # to the next room. Corridor walkability (computed in _compute_corridor_tiles)
             # ensures the wavefront can expand from these boundary tiles inward.
             if self.is_tile_walkable(*NORTH_DOOR_TILE):
-                index = TileIndex(*NORTH_DOOR_TILE)
-                exits[Direction.N] = [TileIndex(index.x, 0)]
-                exits[index] = Direction.N
+                exit_tile = TileIndex(NORTH_DOOR_TILE[0], 0)
+                exits[Direction.N] = [exit_tile]
+                exits[exit_tile] = Direction.N
 
             if self.is_tile_walkable(*SOUTH_DOOR_TILE):
-                index = TileIndex(*SOUTH_DOOR_TILE)
-                exits[Direction.S] = [TileIndex(index.x, self.tiles.shape[1] - 1)]
-                exits[index] = Direction.S
+                exit_tile = TileIndex(SOUTH_DOOR_TILE[0], self.tiles.shape[1] - 1)
+                exits[Direction.S] = [exit_tile]
+                exits[exit_tile] = Direction.S
 
             if self.is_tile_walkable(*WEST_DOOR_TILE):
-                index = TileIndex(*WEST_DOOR_TILE)
-                exits[Direction.W] = [TileIndex(0, index.y)]
-                exits[index] = Direction.W
+                exit_tile = TileIndex(0, WEST_DOOR_TILE[1])
+                exits[Direction.W] = [exit_tile]
+                exits[exit_tile] = Direction.W
 
             if self.is_tile_walkable(*EAST_DOOR_TILE):
-                index = TileIndex(*EAST_DOOR_TILE)
-                exits[Direction.E] = [TileIndex(self.tiles.shape[0] - 1, index.y)]
-                exits[index] = Direction.E
+                exit_tile = TileIndex(self.tiles.shape[0] - 1, EAST_DOOR_TILE[1])
+                exits[Direction.E] = [exit_tile]
+                exits[exit_tile] = Direction.E
 
         return exits
 
@@ -381,6 +388,8 @@ class Room:
     def _get_wf_start(self, targets, impassible_tiles):
         # pylint: disable=too-many-branches
         start_tiles = set()
+        exit_groups = {}
+
         for target in targets:
             if isinstance(target, ZeldaObject):
                 for tile in target.link_overlap_tiles:
@@ -388,14 +397,27 @@ class Room:
 
             elif isinstance(target, Direction):
                 if target in self.exits:
-                    for tile in self.exits[target]:
-                        start_tiles.add(tile)
+                    exit_groups.setdefault(target, []).extend(self.exits[target])
 
             elif isinstance(target, TileIndex):
-                start_tiles.add(target)
+                if target in self.exits:
+                    direction = self.exits[target]
+                    exit_groups.setdefault(direction, []).append(target)
+                else:
+                    start_tiles.add(target)
 
             else:
                 raise ValueError(f"Invalid target {target}")
+
+        # For each exit direction, place a single center tile one step off-screen.
+        # Using the center (not all exit tiles) creates a gradient along the exit
+        # boundary so lateral movement produces negative PBRS, pushing the agent
+        # to actually exit the room rather than idle at the boundary.
+        for direction, tiles in exit_groups.items():
+            tiles.sort()
+            center = tiles[len(tiles) // 2]
+            dx, dy = _DIRECTION_OFFSETS[direction]
+            start_tiles.add(TileIndex(center.x + dx, center.y + dy))
 
         start_tiles -= impassible_tiles
         return start_tiles
