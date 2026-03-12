@@ -6,7 +6,7 @@ import torch
 
 from .wavefront import Wavefront
 from .zelda_objects import ZeldaObject
-from .zelda_enums import Direction, GAMEPLAY_START_Y, TileIndex
+from .zelda_enums import Direction, TileIndex
 
 _DIRECTION_OFFSETS = {
     Direction.N: (0, -1),
@@ -112,28 +112,46 @@ class Room:
     def can_link_move_from(self, px, py, direction):
         """Check if Link can move from pixel position (px, py) in the given direction.
 
-        Always performs the tile walkability check.  While the NES skips tile checks
-        when ObjGridOffset != 0 (Z_07.asm:2874), a nonzero grid_offset may be from
-        a different axis than the requested direction.  The tile check is conservative
-        and never produces false positives.
+        Uses the exact NES hotspot positions from GetCollidingTileMoving (Z_07.asm:2161-2320).
+        Link's base collision Y = ObjY + $0B (11px below sprite top).
+        Hotspot offsets from base:
+            Left:  X = ObjX - 8,  Y = base        (feet level)
+            Right: X = ObjX + 16, Y = base         (feet level)
+            Up:    X = ObjX,      Y = base - 8     (above feet)
+            Down:  X = ObjX,      Y = base + 8     (below feet)
+        Tile row = (hotspot_Y - $40) >> 3,  tile col = hotspot_X >> 3.
+        Vertical directions check two columns: col and col+1 (Z_07.asm:2264-2275).
+
+        Always performs the tile check (conservative). The NES skips checks when
+        ObjGridOffset != 0 (Z_07.asm:2874) but grid_offset is axis-agnostic, so
+        checking unconditionally avoids false positives.
         """
-        tc = int(px // 8)
-        tr = int((py - GAMEPLAY_START_Y) // 8)
-        return self.can_move(tc, tr, direction)
+        # NES status bar = $40 (64px). Tile row = (hotspot_Y - 64) // 8.
+        feet_row = (py - 53) // 8    # base_Y - 64 = (py + 11) - 64 = py - 53
+        match direction:
+            case Direction.W:
+                return self.is_tile_walkable((px - 8) // 8, feet_row)
+            case Direction.E:
+                return self.is_tile_walkable((px + 16) // 8, feet_row)
+            case Direction.N:
+                row = (py - 61) // 8  # (base_Y - 8 - 64) = py + 3 - 64 = py - 61
+                col = px // 8
+                return self.is_tile_walkable(col, row) and self.is_tile_walkable(col + 1, row)
+            case Direction.S:
+                row = (py - 45) // 8  # (base_Y + 8 - 64) = py + 19 - 64 = py - 45
+                col = px // 8
+                return self.is_tile_walkable(col, row) and self.is_tile_walkable(col + 1, row)
 
     def can_move(self, tc, tr, direction):
-        """Check if Link can move from tile position (tc, tr) in the given direction.
+        """Tile-space movement check used by wavefront BFS.
 
-        Uses the NES GetCollidingTileMoving hotspot logic (Z_07.asm:2161-2320).
-        link.tile.y is 1 row above the NES hotspot row, so feet checks use tr+1.
+        NOTE: For pixel-accurate Link movement checks, use can_link_move_from() instead.
+        This method uses approximate offsets (tr+1 for feet, tr+2 for south) that are
+        internally consistent for wavefront pathfinding but don't match the exact NES
+        hotspot math for all pixel positions.
 
         For horizontal movement, one tile is checked (at feet level).
         For vertical movement, two tiles are checked (both columns Link overlaps).
-
-        UW boundary enforcement (Z_05.asm:6449) is NOT applied here because:
-        - The NES bypasses BoundByRoom in doorway corridors (DoorwayDir != 0)
-        - UW wall tiles outside the play area are already >= UW_FIRST_UNWALKABLE
-        - Tile walkability checks alone correctly handle both cases
         """
         match direction:
             case Direction.E:
