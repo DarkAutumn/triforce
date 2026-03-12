@@ -35,6 +35,7 @@ class GameView(QWidget):
         self.setObjectName("game_view")
         self.setMinimumSize(240, 224)
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._frame_image: QImage | None = None
         self._overlays: OverlayFlags = OverlayFlags.NONE
         self._game_state = None  # ZeldaGame, set each step for overlay data

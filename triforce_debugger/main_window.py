@@ -341,6 +341,10 @@ class MainWindow(QMainWindow):
             self.model_browser.set_loaded_model(self._bridge.selector.model_path)
             self._do_restart()
             self.setWindowTitle(f"Triforce Debugger — {self._bridge.model_details}")
+
+            # Move focus to the game view so arrow keys aren't consumed by
+            # the model browser tree or scenario combo for widget navigation.
+            self.game_view.setFocus()
         except Exception:  # pylint: disable=broad-except
             log.error("Failed to create bridge:\n%s", traceback.format_exc())
             self._bridge = None
@@ -585,10 +589,24 @@ class MainWindow(QMainWindow):
     }
 
     def eventFilter(self, obj, event):  # pylint: disable=invalid-name
-        """Intercept ALL key events application-wide for game controls."""
+        """Intercept ALL key events application-wide for game controls.
+
+        We also intercept ShortcutOverride so that focused widgets (e.g.
+        QTreeView, QComboBox) cannot claim arrow/A keys for their own
+        navigation, which would prevent the KeyPress from reaching us.
+        """
         from PySide6.QtCore import QEvent  # pylint: disable=import-outside-toplevel
 
-        if event.type() == QEvent.Type.KeyPress:
+        etype = event.type()
+
+        # Consume ShortcutOverride for our game-control keys so widgets
+        # like QTreeView don't swallow the subsequent KeyPress.
+        if etype == QEvent.Type.ShortcutOverride:
+            key = event.key()
+            if key == Qt.Key.Key_A or key in self._ARROW_TO_DIR:
+                return True
+
+        if etype == QEvent.Type.KeyPress:
             key = event.key()
             if key == Qt.Key.Key_A:
                 self._a_key_held = True
@@ -602,7 +620,7 @@ class MainWindow(QMainWindow):
                     self.manual_move_requested.emit(direction)
                 return True
 
-        elif event.type() == QEvent.Type.KeyRelease:
+        elif etype == QEvent.Type.KeyRelease:
             if event.key() == Qt.Key.Key_A and not event.isAutoRepeat():
                 self._a_key_held = False
                 return True
