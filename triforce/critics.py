@@ -30,8 +30,6 @@ DIDNT_FIRE_PENALTY = Penalty("penalty-didnt-fire", -REWARD_TINY)
 FIRED_CORRECTLY_REWARD = Reward("reward-fired-correctly", REWARD_TINY)
 INJURE_KILL_MOVEMENT_ROOM_REWARD = Reward("reward-incidental-hit", REWARD_SMALL)
 PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
-USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
-BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
 PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_MEDIUM)
 PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -REWARD_MAXIMUM)
 FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_TINY)
@@ -122,8 +120,6 @@ class GameplayCritic(ZeldaCritic):
 
         # combat
         self.critique_attack(state_change, rewards)
-        self.critique_item_usage(state_change, rewards)
-
         # items
         self.critique_used_key(state_change, rewards)
         self.critique_equipment_pickup(state_change, rewards)
@@ -262,15 +258,6 @@ class GameplayCritic(ZeldaCritic):
         elif state_change.action.kind in (ActionKind.SWORD, ActionKind.BEAMS):
             if curr.enemies:
                 rewards.add(ATTACK_MISS_PENALTY)
-
-    def critique_item_usage(self, state_change : StateChange, rewards):
-        """Critiques the usage of items."""
-        # Always penalize using a bomb, but offset it by the reward for hitting something
-        if state_change.previous.link.bombs > state_change.state.link.bombs:
-            rewards.add(USED_BOMB_PENALTY)
-
-        if state_change.action.kind == ActionKind.BOMBS:
-            rewards.add(BOMB_HIT_REWARD, state_change.hits)
 
     def critique_location_change(self, state_change : StateChange, rewards):
         """Critiques the discovery of new locations."""
