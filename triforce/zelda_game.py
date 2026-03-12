@@ -241,8 +241,7 @@ class ZeldaGame:
         the door before the tile check fires).
         """
         px, py = self.link.position
-        grid_offset = int(self.info.get('link_grid_offset', 0))
-        if self.room.can_link_move_from(px, py, direction, grid_offset):
+        if self.room.can_link_move_from(px, py, direction):
             return True
 
         # NES CheckDoorway (Z_05.asm) opens a locked door if Link has a key,

@@ -228,8 +228,7 @@ class ZeldaCooldownHandler:
         if room is None:
             return True
 
-        grid_offset = int(info.get('link_grid_offset', 0))
-        if room.can_link_move_from(pos.x, pos.y, direction, grid_offset):
+        if room.can_link_move_from(pos.x, pos.y, direction):
             return True
 
         # Locked door with key: NES CheckDoorway opens the door before tile check.
