@@ -31,10 +31,6 @@ training-circuits:
     exit_criteria: success-rate
     threshold: 0.9
     iterations: 1000000
-  - scenario: game-start
-    exit_criteria: success-rate
-    threshold: 0.9
-    iterations: 1000000
   - scenario: dungeon1
     exit_criteria: success-rate
     threshold: 0.9
@@ -111,16 +107,14 @@ scenarios:
     sword: 1
     hearts_and_containers: 34
     partial_hearts: 254
-- name: game-start
+- name: overworld-sword
   description: The full game with training variables
   iterations: 2000000
   scenario_selector: round-robin
-  objective: TreasureObjective
-  objective_params:
-    treasure: triforce
+  objective: GameCompletion
   critic: GameplayCritic
   end_conditions:
-  - CollectedTreasure
+  - StartingRoomConditions
   - GameOver
   - Timeout
   metrics:
@@ -171,28 +165,6 @@ scenarios:
   start:
   - 0_37c
   use_hints: false
-- name: overworld-sword
-  description: Start of the game to the sword
-  iterations: 1000000
-  scenario_selector: none
-  objective: TreasureObjective
-  objective_params:
-    treasure: wood-sword
-  critic: OverworldSwordCritic
-  end_conditions:
-  - StartingRoomConditions
-  - CollectedTreasure
-  - Timeout
-  metrics:
-  - success-rate
-  - ending
-  - reward-average
-  - reward-details
-  start:
-  - 0_77c
-  per_reset:
-    hearts_and_containers: 34
-    partial_hearts: 254
 - name: overworld-skip-sword
   description: A scoped down room walk
   iterations: 2500000
