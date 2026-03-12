@@ -433,15 +433,14 @@ class Room:
             else:
                 raise ValueError(f"Invalid target {target}")
 
-        # For each exit direction, place a single center tile one step off-screen.
-        # Using the center (not all exit tiles) creates a gradient along the exit
-        # boundary so lateral movement produces negative PBRS, pushing the agent
-        # to actually exit the room rather than idle at the boundary.
+        # Place all exit tiles one step off-screen as seeds.  The off-screen
+        # offset preserves a gradient (tiles closer to the exit have lower
+        # distance) while ensuring the wavefront can expand from every exit
+        # point.  A single center seed fails when obstacles block expansion.
         for direction, tiles in exit_groups.items():
-            tiles.sort()
-            center = tiles[len(tiles) // 2]
             dx, dy = _DIRECTION_OFFSETS[direction]
-            start_tiles.add(TileIndex(center.x + dx, center.y + dy))
+            for tile in tiles:
+                start_tiles.add(TileIndex(tile.x + dx, tile.y + dy))
 
         start_tiles -= impassible_tiles
         return start_tiles
