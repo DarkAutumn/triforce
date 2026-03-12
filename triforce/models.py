@@ -18,7 +18,7 @@ class Network(nn.Module):
     is_multihead = False
 
     def __init__(self, base_network : nn.Module, obs_space, action_space,
-                 model_kind=None, action_space_name=None):
+                 model_kind=None, action_space_name=None, base_output_size=64):
         super().__init__()
         self.observation_space = obs_space
         self.action_space = action_space
@@ -29,8 +29,8 @@ class Network(nn.Module):
         self.metrics : dict[str, float] = {}
 
         self.base = base_network
-        self.action_net = self.layer_init(nn.Linear(256, action_space.n), std=0.01)
-        self.value_net = self.layer_init(nn.Linear(256, 1), std=1.0)
+        self.action_net = self.layer_init(nn.Linear(base_output_size, action_space.n), std=0.01)
+        self.value_net = self.layer_init(nn.Linear(base_output_size, 1), std=1.0)
 
     def forward(self, obs):
         """Forward pass."""
@@ -158,12 +158,15 @@ class Network(nn.Module):
     def load_metadata(path):
         """Load model_kind and action_space_name from a saved .pt file."""
         save_data = torch.load(path, weights_only=False)
+        metrics_pickled = save_data.get("metrics")
+        metrics = pickle.loads(metrics_pickled) if metrics_pickled else {}
         return {
             "model_kind": save_data.get("model_kind"),
             "action_space_name": save_data.get("action_space_name"),
             "steps_trained": save_data.get("steps_trained", 0),
             "obs_space": save_data.get("obs_space"),
             "action_space": save_data.get("action_space"),
+            "metrics": metrics,
         }
 
 class NatureCNN(nn.Module):
