@@ -30,15 +30,15 @@ training-circuits:
   - scenario: overworld-skip-sword
     exit_criteria: success-rate
     threshold: 0.9
-    iterations: 500000
+    iterations: 1000000
   - scenario: game-start
     exit_criteria: success-rate
     threshold: 0.9
-    iterations: 500000
+    iterations: 1000000
   - scenario: dungeon1
     exit_criteria: success-rate
-    threshold: 0.02
-    iterations: 500000
+    threshold: 0.9
+    iterations: 1000000
   - scenario: full-game
 - name: dungeon1-circuit
   description: Train the dungeon model by first teaching it to walk rooms, then to make it to dungeon1, then to grab the sword,

@@ -51,16 +51,24 @@ def _find_pt_files(path):
 
 
 class ModelSelector:
-    """Discovers, loads, and switches between trained models."""
+    """Discovers, loads, and switches between trained models.
+
+    Models are lazy-loaded: only metadata is read at discovery time.
+    Full weights are loaded on first access (select, next, previous, etc.).
+    """
     def __init__(self, env, model_path):
         self._model_path = model_path
-        self._loaded_models = OrderedDict()
+        self._env = env
         self.action_space: ZeldaActionSpace = env
         while not isinstance(self.action_space, ZeldaActionSpace):
             self.action_space = self.action_space.env
 
-        # Discover and load all .pt files from the path
-        models = []
+        # _entries: ordered list of (label, path, metadata_dict, network_or_None)
+        # network_or_None is None until the model is actually needed.
+        self._entries = OrderedDict()
+
+        # Discover .pt files — load only metadata, NOT full weights
+        discovered = []
         pt_files = _find_pt_files(model_path)
         for pt_path in pt_files:
             try:
@@ -70,43 +78,68 @@ class ModelSelector:
                 if not model_kind_name or not action_space_name:
                     continue
 
-                model_kind = ModelKindDefinition.get(model_kind_name)
-                network = model_kind.network_class(
-                    env.observation_space, env.action_space,
-                    model_kind=model_kind_name,
-                    action_space_name=action_space_name)
-                network.load(pt_path)
-                label = os.path.basename(pt_path)[:-3]  # filename without .pt
-                models.append((network, label, pt_path))
+                label = os.path.basename(pt_path)[:-3]
+                discovered.append((label, pt_path, metadata))
             except Exception:  # pylint: disable=broad-exception-caught
                 continue
 
-        models.sort(key=lambda x: x[0].steps_trained)
+        discovered.sort(key=lambda x: x[2].get("steps_trained", 0))
 
-        name = None
-        for network, name, path in models:
-            self._loaded_models[name] = (network, path)
+        self._network_class = None
+        self._model_kind_name = None
+        self._action_space_name = None
 
-        # Add an untrained model using the first discovered model's class, or default
-        if models:
-            first_net = models[0][0]
-            untrained = first_net.__class__(
+        for label, pt_path, metadata in discovered:
+            self._entries[label] = {"path": pt_path, "metadata": metadata, "network": None}
+            if self._network_class is None:
+                self._model_kind_name = metadata.get("model_kind")
+                self._action_space_name = metadata.get("action_space_name")
+                mk = ModelKindDefinition.get(self._model_kind_name)
+                self._network_class = mk.network_class
+
+        # Add an untrained model (always eagerly created — it's cheap, no weights to load)
+        if self._network_class:
+            untrained = self._network_class(
                 env.observation_space, env.action_space,
-                model_kind=first_net.model_kind,
-                action_space_name=first_net.action_space_name)
+                model_kind=self._model_kind_name,
+                action_space_name=self._action_space_name)
         else:
             mk = ModelKindDefinition.get_default()
             asd = ActionSpaceDefinition.get_default()
+            self._network_class = mk.network_class
+            self._model_kind_name = mk.name
+            self._action_space_name = asd.name
             untrained = mk.network_class(
                 env.observation_space, env.action_space,
                 model_kind=mk.name, action_space_name=asd.name)
 
-        self._loaded_models["untrained"] = (untrained, "untrained")
+        self._entries["untrained"] = {"path": "untrained", "metadata": {}, "network": untrained}
 
+        # Find best model from metadata alone (uses metrics inside the saved file)
         best = self._find_best_model()
-        self._loaded_models["best"] = (self._loaded_models[best][0], "best")
-        self._curr_index = name if name is not None else "untrained"
-        self._curr = self._loaded_models[self._curr_index]
+        self._entries["best"] = self._entries[best]
+
+        last_label = discovered[-1][0] if discovered else "untrained"
+        self._curr_index = last_label
+
+    def _load_network(self, entry):
+        """Load full weights for an entry on demand."""
+        if entry["network"] is not None:
+            return entry["network"]
+
+        pt_path = entry["path"]
+        metadata = entry["metadata"]
+        model_kind_name = metadata.get("model_kind", self._model_kind_name)
+        action_space_name = metadata.get("action_space_name", self._action_space_name)
+
+        model_kind = ModelKindDefinition.get(model_kind_name)
+        network = model_kind.network_class(
+            self._env.observation_space, self._env.action_space,
+            model_kind=model_kind_name,
+            action_space_name=action_space_name)
+        network.load(pt_path)
+        entry["network"] = network
+        return network
 
     @property
     def model_name(self):
@@ -116,49 +149,48 @@ class ModelSelector:
     @property
     def model_path(self):
         """The path to the current model."""
-        return self._curr[1]
+        return self._entries[self._curr_index]["path"]
 
     @property
     def model(self):
-        """The current model."""
-        return self._curr[0]
+        """The current model (lazy-loaded on first access)."""
+        entry = self._entries[self._curr_index]
+        return self._load_network(entry)
 
     def select(self, name):
         """Select a model by name."""
-        if name not in self._loaded_models:
-            raise KeyError(f"Model '{name}' not found. Available: {list(self._loaded_models.keys())}")
+        if name not in self._entries:
+            raise KeyError(f"Model '{name}' not found. Available: {list(self._entries.keys())}")
         self._curr_index = name
-        self._curr = self._loaded_models[name]
 
     def next(self):
         """Selects the next model."""
-        keys = list(self._loaded_models.keys())
+        keys = list(self._entries.keys())
         self._curr_index = keys[(keys.index(self._curr_index) + 1) % len(keys)]
-        self._curr = self._loaded_models[self._curr_index]
 
     def previous(self):
         """Selects the previous model."""
-        keys = list(self._loaded_models.keys())
+        keys = list(self._entries.keys())
         self._curr_index = keys[(keys.index(self._curr_index) - 1) % len(keys)]
-        self._curr = self._loaded_models[self._curr_index]
 
     def select_by_path(self, path):
         """Select a model by its file path.  Returns True if found."""
-        for name, (network, model_path) in self._loaded_models.items():
-            if model_path == path:
+        for name, entry in self._entries.items():
+            if entry["path"] == path:
                 self._curr_index = name
-                self._curr = (network, model_path)
                 return True
         return False
 
     def _find_best_model(self):
         best_model = "untrained"
         best_score = -math.inf
-        for name, (network, _) in self._loaded_models.items():
-            if not network.metrics:
-                continue
+        for name, entry in self._entries.items():
+            metadata = entry.get("metadata", {})
+            metrics = metadata.get("metrics", {})
+            if not metrics and entry["network"] is not None:
+                metrics = entry["network"].metrics
 
-            score = network.metrics.get("success-rate", None)
+            score = metrics.get("success-rate", None)
             if score is not None and score > best_score:
                 best_score = score
                 best_model = name
