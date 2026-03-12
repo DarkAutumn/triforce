@@ -64,8 +64,12 @@ class ZeldaGame:
 
     @cached_property
     def room(self):
-        """The current room."""
-        return Room.get(self.full_location) or Room.create(self.full_location, self.current_tiles)
+        """The current room, always built from current RAM tiles.
+
+        This ensures corridor tiles reflect the latest door state (e.g. after
+        a key is used or enemies are cleared and a barred door opens).
+        """
+        return Room.create(self.full_location, self.current_tiles)
 
     @cached_property
     def items(self) -> List[Item]:
@@ -236,9 +240,9 @@ class ZeldaGame:
     def can_link_move(self, direction):
         """Whether Link can move in the given direction from his current position.
 
-        Accounts for NES ObjGridOffset (tile checks only fire at boundaries),
-        tile walkability, and locked doors that Link has keys for (NES CheckDoorway opens
-        the door before the tile check fires).
+        Checks tile walkability (via self.room which uses current RAM tiles) and
+        locked-door-with-key override (NES CheckDoorway opens the door before the
+        tile check fires).
         """
         px, py = self.link.position
         if self.room.can_link_move_from(px, py, direction):

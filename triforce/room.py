@@ -50,7 +50,11 @@ class Room:
 
     @staticmethod
     def create(full_location, tiles):
-        """Gets or creates a room."""
+        """Gets or creates a room.  Reuses the cached Room if tiles are unchanged."""
+        cached = Room._cache.get(full_location, None)
+        if cached is not None and torch.equal(cached.tiles, tiles):
+            return cached
+
         result = Room(full_location, tiles)
         if result.is_loaded:
             Room._cache[full_location] = result
