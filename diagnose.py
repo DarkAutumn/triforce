@@ -29,7 +29,10 @@ from typing import List, Dict, Optional, Tuple
 import gymnasium as gym
 
 from triforce import ActionSpaceDefinition, ModelKindDefinition, Network, TrainingScenarioDefinition, make_zelda_env
+from triforce.action_space import ActionKind
 from triforce.critics import PBRS_SCALE
+from triforce.room import Room
+from triforce.zelda_enums import MapLocation, Direction
 
 # ---------------------------------------------------------------------------
 # Game progress milestone labels (from metrics.py game-progress map)
@@ -702,20 +705,339 @@ def _run_pbrs_episode(env, network, ep_idx):
         room_segments.append((current_room_id, current_room_steps))
 
     return step_num, ending, all_steps, room_segments
-    """Parse command-line arguments."""
-    parser = argparse.ArgumentParser(description="Diagnostic tool for trained triforce models")
-    parser.add_argument("--model", required=True, help="Model name from triforce.yaml")
-    parser.add_argument("--scenario", required=True, help="Scenario name from triforce.yaml")
-    parser.add_argument("--model-path", required=True,
-                        help="Path to .pt model file (supports glob patterns)")
-    parser.add_argument("--episodes", type=int, default=20, help="Number of episodes to run")
-    parser.add_argument("--output", "-o", default=None, help="Output file path (default: stdout)")
-    parser.add_argument("--infinite-pbrs", action="store_true",
-                        help="Run PBRS diagnostic: play until stuck/timeout, print step-by-step "
-                             "PBRS calculation for the stuck room")
-    parser.add_argument("--tail", type=int, default=50,
-                        help="Number of trailing steps to show in --infinite-pbrs mode (default: 50)")
-    return parser.parse_args()
+
+
+# ---------------------------------------------------------------------------
+# --invariants mode: movement & reward invariant checker
+# ---------------------------------------------------------------------------
+
+@dataclass
+class InvariantViolation:
+    """A single invariant violation detected during gameplay."""
+    episode: int
+    step: int
+    kind: str               # short tag: "zero-movement", "no-wavefront", etc.
+    description: str        # human-readable detail
+    room: int
+    level: int
+    tile: tuple
+    position: tuple
+    action_kind: str
+    action_direction: str
+
+
+def run_invariant_checker(model_name, scenario_name, model_path, episodes, output_path=None):
+    """Run episodes checking movement and reward invariants at every step."""
+    scenario_def = TrainingScenarioDefinition.get(scenario_name)
+    metadata = Network.load_metadata(model_path)
+    model_kind = ModelKindDefinition.get(metadata["model_kind"] or model_name)
+    action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "basic")
+    multihead = getattr(model_kind.network_class, 'is_multihead', False)
+
+    env = make_zelda_env(scenario_def, action_space_def.actions,
+                         render_mode=None, multihead=multihead, translation=False)
+    env = DiagnosticWrapper(env)
+
+    obs_space, act_space = Network.load_spaces(model_path)
+    network = model_kind.network_class(obs_space, act_space)
+    network.load(model_path)
+    network.eval()
+
+    all_violations = []
+    for ep_idx in range(episodes):
+        violations = _check_one_episode(env, network, ep_idx)
+        all_violations.extend(violations)
+        tag = f"{len(violations)} violations" if violations else "clean"
+        print(f"  Episode {ep_idx+1}/{episodes}: {tag}")
+
+    env.close()
+
+    report = _generate_invariant_report(all_violations, model_name, scenario_name,
+                                        model_path, episodes)
+    if output_path:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(report)
+        print(f"\nReport written to: {output_path}")
+    else:
+        print(report)
+
+    return all_violations
+
+
+def _check_one_episode(env, network, ep_idx):
+    """Run one episode, checking invariants at every step. Returns list of violations."""
+    violations = []
+    obs, info = env.reset()
+    state = env.last_reset_state
+
+    terminated = truncated = False
+    step_num = 0
+
+    while not terminated and not truncated:
+        action_mask = info.get('action_mask', None)
+        if action_mask is not None:
+            action_mask_batched = action_mask.unsqueeze(0) if action_mask.dim() == 1 else action_mask
+        else:
+            action_mask_batched = None
+
+        action = network.get_action(obs, action_mask_batched)
+        action = action.squeeze(0)
+        obs, _, terminated, truncated, info = env.step(action)
+
+        sc = env.last_state_change
+        rewards = env.last_rewards
+        prev = sc.previous
+        curr = sc.state
+        act = sc.action
+
+        def _make_violation(kind, description):
+            return InvariantViolation(
+                episode=ep_idx, step=step_num, kind=kind,
+                description=description, room=curr.location,
+                level=curr.level,
+                tile=(curr.link.tile.x, curr.link.tile.y),
+                position=(curr.link.position.x, curr.link.position.y),
+                action_kind=act.kind.name, action_direction=act.direction.name
+            )
+
+        # --- Invariant 1: Zero-pixel movement on MOVE action ---
+        if act.kind == ActionKind.MOVE:
+            if prev.full_location == curr.full_location:  # same room
+                px_prev = prev.link.position
+                px_curr = curr.link.position
+                if px_prev == px_curr and not sc.health_lost:
+                    # Classify: did our tile prediction think Link could move?
+                    location = MapLocation(prev.level, prev.location,
+                                           prev.full_location.in_cave)
+                    room = Room.get(location)
+                    # Check tile walkability, doorway constraint, and UW room boundary.
+                    predicted_can_move = (room is not None and
+                                         room.can_link_move_from(px_prev.x, px_prev.y,
+                                                                 act.direction))
+                    if predicted_can_move:
+                        pi = prev.info
+                        doorway_dir = pi.get('doorway_dir', 0)
+                        # In a doorway, NES only allows movement in the doorway direction.
+                        if doorway_dir != 0 and act.direction.value != doorway_dir:
+                            predicted_can_move = False
+                        # UW BoundByRoom: check direction depends on gridOffset.
+                        elif prev.level != 0 and doorway_dir == 0:
+                            grid_offset = pi.get('link_grid_offset', 0)
+                            if grid_offset == 0:
+                                check_dir = act.direction
+                            elif abs(grid_offset) >= 4:
+                                obj_dir = pi.get('link_direction', 0)
+                                try:
+                                    check_dir = Direction(obj_dir)
+                                except ValueError:
+                                    check_dir = None
+                            else:
+                                check_dir = None
+                            if check_dir is not None:
+                                if check_dir == Direction.N and px_prev.y < 0x5E:
+                                    predicted_can_move = False
+                                elif check_dir == Direction.S and px_prev.y >= 0xBD:
+                                    predicted_can_move = False
+                                elif check_dir == Direction.W and px_prev.x < 0x21:
+                                    predicted_can_move = False
+                                elif check_dir == Direction.E and px_prev.x >= 0xD0:
+                                    predicted_can_move = False
+                    if predicted_can_move:
+                        # BUG: We predicted Link could move but the NES blocked it.
+                        # Capture detailed NES state for debugging.
+                        pi = prev.info
+                        ci = curr.info
+                        n_frames = len(sc.frames) if sc.frames else 0
+                        enemies = [e for e in prev.enemies if e.is_active]
+                        enemy_str = ", ".join(
+                            f"{e.id.name}@({e.position.x},{e.position.y})" for e in enemies
+                        ) if enemies else "none"
+                        grid_off = pi.get('link_grid_offset', -1)
+                        obj_timer = pi.get('link_obj_timer', -1)
+                        shove_dir = pi.get('link_shove_dir', -1)
+
+                        # Dump the hotspot tile values for debugging
+                        px_x, px_y = px_prev.x, px_prev.y
+                        tile_info = ""
+                        match act.direction:
+                            case Direction.N:
+                                r = (px_y - 61) // 8
+                                c = px_x // 8
+                                t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
+                                t2 = int(room.tiles[c+1, r]) if 0 <= c+1 < 32 and 0 <= r < 22 else -1
+                                tile_info = f"N tiles[{c},{r}]=0x{t1:02x} [{c+1},{r}]=0x{t2:02x}"
+                            case Direction.S:
+                                r = (px_y - 45) // 8
+                                c = px_x // 8
+                                t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
+                                t2 = int(room.tiles[c+1, r]) if 0 <= c+1 < 32 and 0 <= r < 22 else -1
+                                tile_info = f"S tiles[{c},{r}]=0x{t1:02x} [{c+1},{r}]=0x{t2:02x}"
+                            case Direction.W:
+                                r = (px_y - 53) // 8
+                                c = (px_x - 8) // 8
+                                t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
+                                tile_info = f"W tile[{c},{r}]=0x{t1:02x}"
+                            case Direction.E:
+                                r = (px_y - 53) // 8
+                                c = (px_x + 16) // 8
+                                t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
+                                tile_info = f"E tile[{c},{r}]=0x{t1:02x}"
+
+                        violations.append(_make_violation(
+                            "movement-prediction-wrong",
+                            f"MOVE {act.direction.name}: predicted can_move=True but "
+                            f"NES blocked. pos={px_prev}, tile={prev.link.tile}\n"
+                            f"      link_status=0x{pi.get('link_status',0):02x} "
+                            f"mode=0x{pi.get('mode',0):02x} "
+                            f"sword_anim=0x{pi.get('sword_animation',0):02x} "
+                            f"link_dir=0x{pi.get('link_direction',0):02x} "
+                            f"grid_offset={grid_off}\n"
+                            f"      obj_timer={obj_timer} "
+                            f"shove_dir=0x{shove_dir:02x} "
+                            f"curr_link_status=0x{ci.get('link_status',0):02x} "
+                            f"curr_mode=0x{ci.get('mode',0):02x} "
+                            f"curr_pos=({ci.get('link_x',0)},{ci.get('link_y',0)}) "
+                            f"curr_grid_offset={ci.get('link_grid_offset', -1)}\n"
+                            f"      curr_obj_timer={ci.get('link_obj_timer', -1)} "
+                            f"curr_shove_dir=0x{ci.get('link_shove_dir', 0):02x}\n"
+                            f"      doorway_dir=0x{pi.get('doorway_dir', 0):02x} "
+                            f"cur_opened_doors=0x{pi.get('cur_opened_doors', 0):02x} "
+                            f"triggered_door_cmd=0x{pi.get('triggered_door_cmd', 0):02x}\n"
+                            f"      {tile_info}\n"
+                            f"      frames={n_frames} enemies=[{enemy_str}]"
+                        ))
+                    # Don't flag wall-hit (predicted False) — that's expected with
+                    # multihead's always-True direction mask.
+
+        # --- Invariant 2: No wavefront available ---
+        if act.kind == ActionKind.MOVE and prev.full_location == curr.full_location:
+            wf = prev.pbrs_wavefront if hasattr(prev, 'pbrs_wavefront') else None
+            if wf is None:
+                violations.append(_make_violation(
+                    "no-wavefront",
+                    f"No pbrs_wavefront on prev state. room=0x{prev.location:02x}"
+                ))
+            else:
+                old_dist = wf.get(prev.link.tile)
+                new_dist = wf.get(curr.link.tile)
+
+                # --- Invariant 3: Wavefront has no distance for Link's tile ---
+                if old_dist is None:
+                    violations.append(_make_violation(
+                        "wavefront-missing-tile",
+                        f"Wavefront has no distance for prev tile {prev.link.tile}. "
+                        f"room=0x{prev.location:02x}"
+                    ))
+                if new_dist is None and px_prev != px_curr if act.kind == ActionKind.MOVE else False:
+                    violations.append(_make_violation(
+                        "wavefront-missing-tile",
+                        f"Wavefront has no distance for curr tile {curr.link.tile}. "
+                        f"room=0x{curr.location:02x}"
+                    ))
+
+                # --- Invariant 4: Movement changed tiles but PBRS=0 ---
+                if (old_dist is not None and new_dist is not None
+                        and not sc.health_lost
+                        and prev.link.position != curr.link.position
+                        and prev.link.tile != curr.link.tile):  # tile must change
+                    shaped = (old_dist - new_dist) / PBRS_SCALE
+                    if shaped == 0.0:
+                        has_pbrs = any('pbrs' in o.name for o in rewards)
+                        if not has_pbrs:
+                            violations.append(_make_violation(
+                                "zero-pbrs-tile-change",
+                                f"Moved {act.direction.name} (tile {prev.link.tile}→"
+                                f"{curr.link.tile}) but PBRS=0. "
+                                f"old_dist={old_dist}, new_dist={new_dist}"
+                            ))
+
+        # --- Invariant 5: No valid move directions in action mask ---
+        if action_mask is not None:
+            # For multihead: first K entries are action types, last 4 are directions
+            # For flat: check that MOVE indices have at least one True
+            mask_np = action_mask.numpy() if hasattr(action_mask, 'numpy') else action_mask
+            # Check if total mask is all False (catastrophic)
+            if not mask_np.any():
+                violations.append(_make_violation(
+                    "empty-mask",
+                    f"Action mask is entirely False! No valid actions at all."
+                ))
+
+        # --- Invariant 6: MOVE action was taken but mask said it was invalid ---
+        if action_mask is not None and act.kind == ActionKind.MOVE:
+            # The action space wrapper checks can_link_move per direction.
+            # If the model took a move that was masked, that's a bug in the
+            # mask→action pipeline.
+            pass  # This is enforced by the model's logit masking; skip for now.
+
+        # --- Invariant 7: Room changed on non-edge tile ---
+        if prev.full_location != curr.full_location and act.kind == ActionKind.MOVE:
+            tile = prev.link.tile
+            # Normal room transitions happen at screen edges
+            at_edge = (tile.x <= 0 or tile.x >= 0x1e or tile.y <= 0 or tile.y >= 0x15)
+            if not at_edge and not prev.full_location.in_cave and not curr.full_location.in_cave:
+                # Could be wallmaster, staircase, etc. — note but don't flag as critical
+                pass
+
+        step_num += 1
+        state = curr
+
+    return violations
+
+
+def _generate_invariant_report(violations, model_name, scenario_name, model_path, episodes):
+    """Generate a text report of invariant violations."""
+    lines = []
+    w = lines.append
+
+    w("=" * 72)
+    w(f"INVARIANT CHECK REPORT: {model_name}")
+    w(f"Scenario: {scenario_name}")
+    w(f"Model: {model_path}")
+    w(f"Episodes: {episodes}")
+    w(f"Total violations: {len(violations)}")
+    w("=" * 72)
+    w("")
+
+    if not violations:
+        w("No invariant violations detected. All checks passed.")
+        w("")
+        return "\n".join(lines)
+
+    # Summary by kind
+    w("## VIOLATION SUMMARY")
+    kind_counts = Counter(v.kind for v in violations)
+    for kind, count in kind_counts.most_common():
+        w(f"  {kind:30s}: {count:5d}")
+    w("")
+
+    # Summary by room
+    w("## VIOLATIONS BY ROOM")
+    room_counts = Counter((v.level, v.room) for v in violations)
+    for (level, room), count in room_counts.most_common(15):
+        w(f"  Level={level} Room=0x{room:02x}: {count:5d} violations")
+    w("")
+
+    # Detailed violations (cap at 50 to keep output manageable)
+    # Sort so movement-prediction-wrong appears first (most important).
+    priority = {'movement-prediction-wrong': 0, 'no-wavefront': 1, 'empty-action-mask': 2}
+    sorted_violations = sorted(violations, key=lambda v: (priority.get(v.kind, 99), v.episode, v.step))
+    w("## VIOLATION DETAILS")
+    shown = min(len(sorted_violations), 50)
+    w(f"  Showing {shown} of {len(sorted_violations)} violations:")
+    w("")
+    for v in sorted_violations[:shown]:
+        w(f"  [{v.kind}] Episode {v.episode+1}, Step {v.step}")
+        w(f"    Room: Level={v.level} 0x{v.room:02x} | Tile: {v.tile} | Pos: {v.position}")
+        w(f"    Action: {v.action_kind} {v.action_direction}")
+        w(f"    {v.description}")
+        w("")
+
+    w("=" * 72)
+    w("END OF INVARIANT CHECK REPORT")
+    w("=" * 72)
+
+    return "\n".join(lines)
 
 
 def parse_args():
@@ -732,6 +1054,9 @@ def parse_args():
                              "PBRS calculation for the stuck room")
     parser.add_argument("--tail", type=int, default=50,
                         help="Number of trailing steps to show in --infinite-pbrs mode (default: 50)")
+    parser.add_argument("--invariants", action="store_true",
+                        help="Run movement/reward invariant checker: detect zero-movement, "
+                             "missing wavefronts, empty masks, and zero-PBRS violations")
     return parser.parse_args()
 
 
@@ -769,6 +1094,9 @@ def main():
     if args.infinite_pbrs:
         run_pbrs_diagnostic(args.model, args.scenario, model_path,
                             args.episodes, args.tail, args.output)
+    elif args.invariants:
+        run_invariant_checker(args.model, args.scenario, model_path,
+                              args.episodes, args.output)
     else:
         run_diagnostic(args.model, args.scenario, model_path, args.episodes, args.output)
 
