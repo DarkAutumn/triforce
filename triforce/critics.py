@@ -10,8 +10,8 @@ from triforce.rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD
 from .zelda_enums import SwordKind, ZeldaAnimationKind, AnimationState, ZeldaEnemyKind
 from .state_change_wrapper import StateChange
 
-HEALTH_LOST_PENALTY = Penalty("penalty-lost-health", -REWARD_LARGE)
-HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
+PENALTY_LOST_BEAMS = Penalty("penalty-lost-beams", -REWARD_SMALL)
+BEAM_DISTANCE_THRESHOLD = 48
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_SMALL)
 PBRS_SCALE = 20.0
 ROOM_STEP_GRACE = 150          # steps in a room before stalling penalty kicks in
@@ -26,13 +26,10 @@ DANGER_TILE_PENALTY = Penalty("penalty-move-danger", -REWARD_MEDIUM)
 MOVED_TO_SAFETY_REWARD = Reward("reward-move-safety", REWARD_TINY)
 ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_MINIMUM)
 
-DIDNT_FIRE_PENALTY = Penalty("penalty-didnt-fire", -REWARD_TINY)
-FIRED_CORRECTLY_REWARD = Reward("reward-fired-correctly", REWARD_TINY)
-INJURE_KILL_MOVEMENT_ROOM_REWARD = Reward("reward-incidental-hit", REWARD_SMALL)
 PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
 USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
-PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_MEDIUM)
+PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_SMALL)
 PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -REWARD_MAXIMUM)
 FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_TINY)
 MOVED_OFF_OF_WALLMASTER_REWARD = Reward("reward-moved-off-wallmaster", REWARD_TINY - REWARD_MINIMUM)
@@ -59,7 +56,7 @@ def _init_equipment_rewards():
         'boomerang': REWARD_MAXIMUM,
         'compass': REWARD_MAXIMUM,
         'map': REWARD_MAXIMUM,
-        'rupees' : REWARD_SMALL,
+        'rupees' : REWARD_MEDIUM,
         'heart-container' : REWARD_MAXIMUM,
         'triforce' : REWARD_MAXIMUM,
         'bombs' : REWARD_MAXIMUM,
@@ -141,9 +138,9 @@ class GameplayCritic(ZeldaCritic):
         # Special cases
         self.critique_wallmaster(state_change, rewards)
 
-        # If we lost health, remove all rewards since we want that to be the focus
+        # If we lost health, scale down positive rewards (equipment pickups exempt)
         if state_change.health_lost > 0:
-            rewards.remove_rewards()
+            rewards.scale_rewards(0.5, exempt_prefixes=("reward-gained-",))
 
     # Pre-computed list of equipment attribute names for batch checking
     _EQUIPMENT_ATTRS = ('sword', 'arrows', 'bow', 'candle', 'whistle', 'food', 'potion',
@@ -189,10 +186,21 @@ class GameplayCritic(ZeldaCritic):
         elif state_change.health_gained:
             # Don't reward for refilling health after triforce pickup
             if not state_change.gained_triforce:
-                rewards.add(HEALTH_GAINED_REWARD)
+                # Scale reward by urgency: low health = higher reward for healing
+                urgency = 1.0 - (prev_link.health / curr_link.max_health)
+                reward_value = REWARD_SMALL + REWARD_MEDIUM * urgency
+                rewards.add(Reward("reward-gained-health", reward_value))
 
         elif state_change.health_lost:
-            rewards.add(HEALTH_LOST_PENALTY)
+            # Scale penalty by damage amount (half-hearts)
+            half_hearts = state_change.health_lost * 2
+            penalty_value = min(REWARD_SMALL * half_hearts, REWARD_MAXIMUM)
+            rewards.add(Penalty("penalty-lost-health", -penalty_value))
+
+            # Extra penalty for losing beam capability
+            if (prev_link.is_health_full and not curr_link.is_health_full
+                    and curr_link.sword != SwordKind.NONE):
+                rewards.add(PENALTY_LOST_BEAMS)
 
     def critique_triforce(self, state_change : StateChange, rewards):
         """Critiques the acquisition of the triforce."""
@@ -244,13 +252,20 @@ class GameplayCritic(ZeldaCritic):
 
             # no penalty or rewards for hitting wallmasters up close
             if enemy.id == ZeldaEnemyKind.Wallmaster and enemy.distance < 30:
-                return
+                continue
 
         prev, curr = state_change.previous, state_change.state
         if state_change.hits and prev.link.are_beams_available \
                              and curr.link.get_animation_state(ZeldaAnimationKind.BEAMS) != AnimationState.INACTIVE:
             decay = self._get_combat_decay(curr.full_location)
-            rewards.add(Reward("reward-beam-hit", REWARD_SMALL * decay))
+            rewards.add(Reward("reward-beam-hit", REWARD_MEDIUM * decay))
+
+            # Distance bonus for beam hits from afar
+            for e_index in state_change.enemies_hit:
+                enemy = curr.get_enemy_by_index(e_index)
+                if enemy and enemy.distance > BEAM_DISTANCE_THRESHOLD:
+                    rewards.add(Reward("reward-beam-distance", REWARD_TINY * decay))
+                    break
 
         elif state_change.hits:
             if not curr.in_cave:

@@ -128,3 +128,19 @@ class StepRewards:
     def remove_rewards(self):
         """Removes all rewards for this step."""
         self._outcomes = {x: y for x, y in self._outcomes.items() if isinstance(y, Penalty)}
+
+    def scale_rewards(self, factor, exempt_prefixes=None):
+        """Scales all positive rewards by the given factor.
+
+        Rewards whose names start with any of the exempt_prefixes are not scaled.
+        Penalties are never scaled.
+        """
+        if exempt_prefixes is None:
+            exempt_prefixes = ()
+        scaled = {}
+        for name, outcome in self._outcomes.items():
+            if isinstance(outcome, Reward) and not any(name.startswith(p) for p in exempt_prefixes):
+                scaled[name] = Reward(name, outcome.value * factor, outcome.count)
+            else:
+                scaled[name] = outcome
+        self._outcomes = scaled
