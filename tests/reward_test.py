@@ -5,9 +5,11 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from triforce.critics import GameplayCritic
+from triforce.zelda_enums import Direction
 from utilities import CriticWrapper, ZeldaActionReplay
 
-def test_wall_collision():
+def test_wall_movement_masked():
+    """Movement into walls should be masked when Link is at a tile boundary."""
     actions = ZeldaActionReplay("1_44e.state")
     actions.env = CriticWrapper(actions.env, critics=[GameplayCritic()])
     actions.reset()
@@ -15,15 +17,18 @@ def test_wall_collision():
     # move under a block
     actions.run_steps('llllll')
 
-    # step up to the block, we shouldn't get penalized here even though we don't fully move
+    # Move up until we're at the block — keep moving until we stop making progress
+    for _ in range(10):
+        actions.move('u')
+
     _, rewards, _, _, state_change = actions.move('u')
+
+    # No wall collision penalty exists anymore
     assert 'penalty-wall-collision' not in rewards
 
-    # now we are against a block, we should get penalized for moving up and not changing position
-    actions.move('u')
-    _, rewards, _, _, state_change = actions.move('u')
-    assert 'penalty-wall-collision' in rewards
-    assert rewards['penalty-wall-collision'] < 0
+    # Verify that the proactive mask correctly blocks upward movement when
+    # Link is flush against the block (at a tile boundary)
+    assert not state_change.state.can_link_move(Direction.N)
 
 def test_close_distance():
     actions = ZeldaActionReplay("1_44w.state")

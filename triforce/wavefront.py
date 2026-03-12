@@ -22,6 +22,7 @@ class Wavefront:
                  targets : Sequence[ZeldaObject | Direction | Tuple[int, int]],
                 impassible : Sequence[Tuple[int, int] | ZeldaObject] = None):
         """Calculates the wavefront for the room for Link."""
+        cols, rows = room.tiles.shape
         wavefront = {}
         todo = []
 
@@ -31,6 +32,12 @@ class Wavefront:
 
         while todo:
             dist, tile = heapq.heappop(todo)
+
+            # Off-screen seeds (placed by _get_wf_start for exit gradient) are
+            # not real tiles, so skip the can_move check when expanding from them.
+            tx, ty = tile
+            source_offscreen = tx < 0 or ty < 0 or tx >= cols or ty >= rows
+
             for neighbor, direction in self._get_neighbors(room, tile):
                 if neighbor in wavefront:
                     continue
@@ -41,9 +48,10 @@ class Wavefront:
                 # Check if Link can move FROM the neighbor TO the current tile.
                 # The wavefront expands outward from targets, so the actual movement
                 # direction is from the neighbor toward the target (the reverse direction).
-                nx, ny = neighbor
-                if not room.can_move(nx, ny, direction):
-                    continue
+                if not source_offscreen:
+                    nx, ny = neighbor
+                    if not room.can_move(nx, ny, direction):
+                        continue
 
                 wavefront[neighbor] = dist + 1
                 heapq.heappush(todo, (dist + 1, neighbor))

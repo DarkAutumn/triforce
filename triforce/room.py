@@ -39,6 +39,12 @@ UW_FIRST_UNWALKABLE = 0x78
 # by substituting them with $26 before the threshold check.
 OW_WALKABLE_OVERRIDES = frozenset([0x8D, 0x91, 0x9C, 0xAC, 0xAD, 0xCC, 0xD2, 0xD5, 0xDF])
 
+# Cave entry tiles (0xF3 top, 0x24 bottom).  The NES treats these as unwalkable
+# but triggers a cave transition via CheckPassiveTileObjects when Link walks into
+# them (Z_07.asm:2957-2962).  We treat them as walkable for movement masking so
+# the agent can enter caves.
+OW_CAVE_ENTRY_TILES = frozenset([TOP_CAVE_TILE])
+
 
 class Room:
     """A room in the game."""
@@ -50,7 +56,11 @@ class Room:
 
     @staticmethod
     def create(full_location, tiles):
-        """Gets or creates a room."""
+        """Gets or creates a room.  Reuses the cached Room if tiles are unchanged."""
+        cached = Room._cache.get(full_location, None)
+        if cached is not None and torch.equal(cached.tiles, tiles):
+            return cached
+
         result = Room(full_location, tiles)
         if result.is_loaded:
             Room._cache[full_location] = result
@@ -95,21 +105,53 @@ class Room:
         val = int(self.tiles[tc, tr])
         if self._is_overworld and val in OW_WALKABLE_OVERRIDES:
             return True
+        if self._is_overworld and val in OW_CAVE_ENTRY_TILES:
+            return True
         return val < self._threshold
 
-    def can_move(self, tc, tr, direction):
-        """Check if Link can move from tile position (tc, tr) in the given direction.
+    def can_link_move_from(self, px, py, direction):
+        """Check if Link can move from pixel position (px, py) in the given direction.
 
-        Uses the NES GetCollidingTileMoving hotspot logic (Z_07.asm:2161-2320).
-        link.tile.y is 1 row above the NES hotspot row, so feet checks use tr+1.
+        Uses the exact NES hotspot positions from GetCollidingTileMoving (Z_07.asm:2161-2320).
+        Link's base collision Y = ObjY + $0B (11px below sprite top).
+        Hotspot offsets from base:
+            Left:  X = ObjX - 8,  Y = base        (feet level)
+            Right: X = ObjX + 16, Y = base         (feet level)
+            Up:    X = ObjX,      Y = base - 8     (above feet)
+            Down:  X = ObjX,      Y = base + 8     (below feet)
+        Tile row = (hotspot_Y - $40) >> 3,  tile col = hotspot_X >> 3.
+        Vertical directions check two columns: col and col+1 (Z_07.asm:2264-2275).
+
+        Always performs the tile check (conservative). The NES skips checks when
+        ObjGridOffset != 0 (Z_07.asm:2874) but grid_offset is axis-agnostic, so
+        checking unconditionally avoids false positives.
+        """
+        # NES status bar = $40 (64px). Tile row = (hotspot_Y - 64) // 8.
+        feet_row = (py - 53) // 8    # base_Y - 64 = (py + 11) - 64 = py - 53
+        match direction:
+            case Direction.W:
+                return self.is_tile_walkable((px - 8) // 8, feet_row)
+            case Direction.E:
+                return self.is_tile_walkable((px + 16) // 8, feet_row)
+            case Direction.N:
+                row = (py - 61) // 8  # (base_Y - 8 - 64) = py + 3 - 64 = py - 61
+                col = px // 8
+                return self.is_tile_walkable(col, row) and self.is_tile_walkable(col + 1, row)
+            case Direction.S:
+                row = (py - 45) // 8  # (base_Y + 8 - 64) = py + 19 - 64 = py - 45
+                col = px // 8
+                return self.is_tile_walkable(col, row) and self.is_tile_walkable(col + 1, row)
+
+    def can_move(self, tc, tr, direction):
+        """Tile-space movement check used by wavefront BFS.
+
+        NOTE: For pixel-accurate Link movement checks, use can_link_move_from() instead.
+        This method uses approximate offsets (tr+1 for feet, tr+2 for south) that are
+        internally consistent for wavefront pathfinding but don't match the exact NES
+        hotspot math for all pixel positions.
 
         For horizontal movement, one tile is checked (at feet level).
         For vertical movement, two tiles are checked (both columns Link overlaps).
-
-        UW boundary enforcement (Z_05.asm:6449) is NOT applied here because:
-        - The NES bypasses BoundByRoom in doorway corridors (DoorwayDir != 0)
-        - UW wall tiles outside the play area are already >= UW_FIRST_UNWALKABLE
-        - Tile walkability checks alone correctly handle both cases
         """
         match direction:
             case Direction.E:
@@ -409,15 +451,14 @@ class Room:
             else:
                 raise ValueError(f"Invalid target {target}")
 
-        # For each exit direction, place a single center tile one step off-screen.
-        # Using the center (not all exit tiles) creates a gradient along the exit
-        # boundary so lateral movement produces negative PBRS, pushing the agent
-        # to actually exit the room rather than idle at the boundary.
+        # Place all exit tiles one step off-screen as seeds.  The off-screen
+        # offset preserves a gradient (tiles closer to the exit have lower
+        # distance) while ensuring the wavefront can expand from every exit
+        # point.  A single center seed fails when obstacles block expansion.
         for direction, tiles in exit_groups.items():
-            tiles.sort()
-            center = tiles[len(tiles) // 2]
             dx, dy = _DIRECTION_OFFSETS[direction]
-            start_tiles.add(TileIndex(center.x + dx, center.y + dy))
+            for tile in tiles:
+                start_tiles.add(TileIndex(tile.x + dx, tile.y + dy))
 
         start_tiles -= impassible_tiles
         return start_tiles

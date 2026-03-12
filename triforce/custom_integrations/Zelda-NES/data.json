@@ -28,6 +28,10 @@
             "address": 152,
             "type": "=u1"
         },
+        "link_grid_offset": {
+            "address": 916,
+            "type": "=i1"
+        },
         "rng_0": {
             "address": 24,
             "type": "=u1"

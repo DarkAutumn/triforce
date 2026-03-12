@@ -51,7 +51,7 @@ def _make_action_space(actions=None, multihead=False):
     if actions is None:
         actions = ["MOVE", "SWORD", "BEAMS"]
     env = MockEnv()
-    return ZeldaActionSpace(env, actions, prevent_wall_bumping=False, multihead=multihead)
+    return ZeldaActionSpace(env, actions, multihead=multihead)
 
 
 class TestMultiheadToFlat:

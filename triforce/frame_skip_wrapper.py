@@ -9,6 +9,7 @@ import gymnasium as gym
 import numpy as np
 
 from .action_space import ActionKind, ActionTaken
+from .room import Room
 from .zelda_enums import Direction, MapLocation, Position
 from .zelda_game import ZeldaGame
 
@@ -53,11 +54,13 @@ class ZeldaCooldownHandler:
         self.was_link_in_cave = False
         self.none_action = np.zeros(9, dtype=bool)
         self._link_pos : Position = None
+        self._last_info : dict = None
 
     def reset(self):
         """Resets the handler."""
         self.was_link_in_cave = False
         self._link_pos = None
+        self._last_info = None
 
     def gain_control_of_link(self):
         """Skips frames until Link is in a state where the agent can control him."""
@@ -104,6 +107,7 @@ class ZeldaCooldownHandler:
         frame_capture.append(obs)
 
         self._link_pos = Position(info['link_x'], info['link_y'])
+        self._last_info = info
 
         return terminated, truncated, info
 
@@ -169,13 +173,20 @@ class ZeldaCooldownHandler:
             loc = self._get_location(info)
         else:
             loc = None
+            info = self._last_info
+            terminated, truncated = False, False
+
+        # Deterministic check: will this movement actually move Link?
+        # Room.get() retrieves the cached Room from previous ZeldaGame construction.
+        if not self._can_move_from(start_pos, action.direction, info):
+            # Step once so we have a valid frame capture and info, then bail.
+            terminated, truncated, info = self._step_with_frame_capture(action, frame_capture)
+            if loc is None:
+                loc = self._get_location(info)
+            return terminated, truncated, info, loc
 
         old_tile_index = start_pos.tile_index
 
-        # Stuck max == 8 is the minimum to wait to ensure a key opens a locked door
-        stuck_max = 8
-        stuck_count = 0
-        prev_pos = start_pos
         for _ in range(MAX_MOVEMENT_FRAMES):
             terminated, truncated, info = self._step_with_frame_capture(action, frame_capture)
             if loc is None:
@@ -201,13 +212,33 @@ class ZeldaCooldownHandler:
                 case _:
                     raise ValueError(f'Unsupported direction: {action.direction}')
 
-            if prev_pos == pos:
-                stuck_count += 1
-
-            if stuck_count >= stuck_max:
-                break
-
         return terminated, truncated, info, loc
+
+    def _can_move_from(self, pos, direction, info):
+        """Deterministic check: will Link move if we press direction from pos?
+
+        Uses the cached Room to check tile walkability.  If the Room is not cached
+        yet (first step of an episode), conservatively returns True.
+        """
+        if info is None:
+            return True
+
+        location = self._get_location(info)
+        room = Room.get(location)
+        if room is None:
+            return True
+
+        if room.can_link_move_from(pos.x, pos.y, direction):
+            return True
+
+        # Locked door with key: NES CheckDoorway opens the door before tile check.
+        if room.is_door_locked(direction, room.tiles):
+            keys = info.get('keys', 0)
+            magic_key = info.get('magic_key', 0)
+            if keys > 0 or magic_key:
+                return True
+
+        return False
 
     def _get_location(self, info):
         return MapLocation(info['level'], info['location'], info['mode'] == MODE_CAVE)

@@ -64,8 +64,12 @@ class ZeldaGame:
 
     @cached_property
     def room(self):
-        """The current room."""
-        return Room.get(self.full_location) or Room.create(self.full_location, self.current_tiles)
+        """The current room, always built from current RAM tiles.
+
+        This ensures corridor tiles reflect the latest door state (e.g. after
+        a key is used or enemies are cleared and a barred door opens).
+        """
+        return Room.create(self.full_location, self.current_tiles)
 
     @cached_property
     def items(self) -> List[Item]:
@@ -232,6 +236,35 @@ class ZeldaGame:
     def is_door_open(self, direction):
         """Returns True if the door in the given direction is open."""
         return not self.is_door_locked(direction) and not self.is_door_barred(direction)
+
+    # NES doorway required coordinates (Z_05.asm:3706).
+    # CheckDoorway only fires when Link's perpendicular coordinate matches:
+    #   N/S doors: Link.x == $78 (120)
+    #   E/W doors: Link.y == $8D (141)
+    _DOORWAY_REQUIRED_X = 0x78  # for N/S doorways
+    _DOORWAY_REQUIRED_Y = 0x8D  # for E/W doorways
+
+    def can_link_move(self, direction):
+        """Whether Link can move in the given direction from his current position.
+
+        Checks tile walkability (via self.room which uses current RAM tiles) and
+        locked-door-with-key override (NES CheckDoorway opens the door before the
+        tile check fires).
+        """
+        px, py = self.link.position
+        if self.room.can_link_move_from(px, py, direction):
+            return True
+
+        # NES CheckDoorway (Z_05.asm:3755) opens a locked door if Link has a key,
+        # before Walker_CheckTileCollision runs.  But CheckDoorway only fires when
+        # Link is in the doorway corridor — perpendicular coordinate must match.
+        if self.is_door_locked(direction) and (self.link.keys > 0 or self.link.magic_key):
+            if direction in (Direction.N, Direction.S) and px == self._DOORWAY_REQUIRED_X:
+                return True
+            if direction in (Direction.E, Direction.W) and py == self._DOORWAY_REQUIRED_Y:
+                return True
+
+        return False
 
     @cached_property
     def current_tiles(self):

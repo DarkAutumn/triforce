@@ -66,13 +66,12 @@ class ZeldaActionSpace(gym.Wrapper):
     """
     # pylint: disable=too-many-instance-attributes
     def __init__(self, env, actions_allowed : Sequence[ActionKind | str],
-                 prevent_wall_bumping : bool = True, multihead : bool = False):
+                 multihead : bool = False):
         super().__init__(env)
 
         self.actions_allowed = ActionKind.get_from_list(actions_allowed)
         self.multihead = multihead
 
-        self.prevent_wall_bumping = prevent_wall_bumping
         self.button_count = env.action_space.n
 
         self.action_to_index = {}
@@ -87,8 +86,6 @@ class ZeldaActionSpace(gym.Wrapper):
 
         self.a = env.unwrapped.buttons.index('A')
         self.b = env.unwrapped.buttons.index('B')
-
-        self.move_mask = torch.ones(4, dtype=bool)
 
         self._setup_actions(self.actions_allowed)
 
@@ -199,7 +196,6 @@ class ZeldaActionSpace(gym.Wrapper):
 
     def reset(self, **kwargs):
         observation, state = self.env.reset(**kwargs)
-        self.move_mask = torch.ones(4, dtype=bool)
         state.info['action_mask'] = self.get_action_mask(state)
         return observation, state
 
@@ -207,7 +203,6 @@ class ZeldaActionSpace(gym.Wrapper):
         action = self.get_action_taken(action)
 
         observation, reward, terminated, truncated, state_change = self.env.step(action)
-        self._handle_wall_bump(state_change)
         state_change.action_mask = self.get_action_mask(state_change.state)
         state_change.state.info['action_mask'] = state_change.action_mask
 
@@ -273,15 +268,6 @@ class ZeldaActionSpace(gym.Wrapper):
 
         return index
 
-    def _handle_wall_bump(self, state_change):
-        if self.prevent_wall_bumping and state_change.action.kind == ActionKind.MOVE:
-            if state_change.previous.link.position == state_change.state.link.position:
-                self.move_mask[self._direction_to_index(state_change.action.direction)] = False
-                if torch.any(self.move_mask):
-                    return
-
-        self.move_mask = torch.ones(4, dtype=bool)
-
     def get_action_mask(self, state : ZeldaGame):
         """Returns the actions that are available to the agent.
 
@@ -312,7 +298,9 @@ class ZeldaActionSpace(gym.Wrapper):
             index = self.action_to_index[action]
             match action:
                 case ActionKind.MOVE:
-                    mask[index:index + 4] = self.move_mask
+                    for direction in (Direction.N, Direction.S, Direction.W, Direction.E):
+                        if state.can_link_move(direction):
+                            mask[index + self._direction_to_index(direction)] = True
 
                 case ActionKind.BOMBS:
                     mask[index:index + 4] = True
@@ -360,12 +348,12 @@ class ZeldaActionSpace(gym.Wrapper):
         link = state.link
         if state.level != 0:
             if link.tile.x <= 0x03 or link.tile.x >= 0x1c:
-                for action in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS):
+                for action in (ActionKind.SWORD, ActionKind.BEAMS):
                     invalid.setdefault(action, []).append(Direction.N)
                     invalid.setdefault(action, []).append(Direction.S)
 
             if link.tile.y <= 0x03 or link.tile.y >= 0x12:
-                for action in (ActionKind.MOVE, ActionKind.SWORD, ActionKind.BEAMS):
+                for action in (ActionKind.SWORD, ActionKind.BEAMS):
                     invalid.setdefault(action, []).append(Direction.W)
                     invalid.setdefault(action, []).append(Direction.E)
 
