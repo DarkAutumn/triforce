@@ -39,6 +39,12 @@ UW_FIRST_UNWALKABLE = 0x78
 # by substituting them with $26 before the threshold check.
 OW_WALKABLE_OVERRIDES = frozenset([0x8D, 0x91, 0x9C, 0xAC, 0xAD, 0xCC, 0xD2, 0xD5, 0xDF])
 
+# Cave entry tiles (0xF3 top, 0x24 bottom).  The NES treats these as unwalkable
+# but triggers a cave transition via CheckPassiveTileObjects when Link walks into
+# them (Z_07.asm:2957-2962).  We treat them as walkable for movement masking so
+# the agent can enter caves.
+OW_CAVE_ENTRY_TILES = frozenset([TOP_CAVE_TILE])
+
 
 class Room:
     """A room in the game."""
@@ -98,6 +104,8 @@ class Room:
             return True
         val = int(self.tiles[tc, tr])
         if self._is_overworld and val in OW_WALKABLE_OVERRIDES:
+            return True
+        if self._is_overworld and val in OW_CAVE_ENTRY_TILES:
             return True
         return val < self._threshold
 
