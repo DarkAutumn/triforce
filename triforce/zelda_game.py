@@ -233,6 +233,25 @@ class ZeldaGame:
         """Returns True if the door in the given direction is open."""
         return not self.is_door_locked(direction) and not self.is_door_barred(direction)
 
+    def can_link_move(self, direction):
+        """Whether Link can move in the given direction from his current position.
+
+        Accounts for NES ObjGridOffset (tile checks only fire at boundaries),
+        tile walkability, and locked doors that Link has keys for (NES CheckDoorway opens
+        the door before the tile check fires).
+        """
+        px, py = self.link.position
+        grid_offset = int(self.info.get('link_grid_offset', 0))
+        if self.room.can_link_move_from(px, py, direction, grid_offset):
+            return True
+
+        # NES CheckDoorway (Z_05.asm) opens a locked door if Link has a key,
+        # before Walker_CheckTileCollision runs.  Replicate that override.
+        if self.is_door_locked(direction) and (self.link.keys > 0 or self.link.magic_key):
+            return True
+
+        return False
+
     @cached_property
     def current_tiles(self):
         """Returns the current, up to date tiles in the room."""

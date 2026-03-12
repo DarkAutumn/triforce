@@ -6,15 +6,13 @@ from typing import Dict
 from triforce.action_space import ActionKind
 from triforce.rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL, REWARD_TINY, \
     Penalty, Reward, StepRewards
-from triforce.zelda_game import ZeldaGame
 
-from .zelda_enums import Direction, SwordKind, ZeldaAnimationKind, AnimationState, ZeldaEnemyKind
+from .zelda_enums import SwordKind, ZeldaAnimationKind, AnimationState, ZeldaEnemyKind
 from .state_change_wrapper import StateChange
 
 HEALTH_LOST_PENALTY = Penalty("penalty-lost-health", -REWARD_LARGE)
 HEALTH_GAINED_REWARD = Reward("reward-gained-health", REWARD_LARGE)
 USED_KEY_REWARD = Reward("reward-used-key", REWARD_SMALL)
-WALL_COLLISION_PENALTY = Penalty("penalty-wall-collision", -REWARD_SMALL)
 PBRS_SCALE = 20.0
 ROOM_STEP_GRACE = 150          # steps in a room before stalling penalty kicks in
 ROOM_STEP_PENALTY_MIN = 0.01   # initial per-step penalty after grace
@@ -315,10 +313,6 @@ class GameplayCritic(ZeldaCritic):
         if state_change.items_gained or len(curr.active_enemies) < len(prev.active_enemies):
             self._room_steps = 0
 
-        # Did link run into a wall?
-        if self._did_link_run_into_wall(prev, curr, rewards):
-            return
-
         # Did link get too close to an enemy?
         self.critique_moving_into_danger(state_change, rewards)
 
@@ -350,22 +344,6 @@ class GameplayCritic(ZeldaCritic):
         elif shaped < 0:
             rewards.add(Penalty("penalty-pbrs-movement", shaped))
 
-
-    def _did_link_run_into_wall(self, prev : ZeldaGame, curr : ZeldaGame, rewards):
-        if prev.link.position != curr.link.position:
-            return False
-
-        door_entry = {(0xf, 0x4) : Direction.N,
-                      (0xf, 0x10) : Direction.S,
-                      (0x4, 0xa) : Direction.W,
-                      (0x1a, 0xa) : Direction.E}
-
-        if (direction := door_entry.get((curr.link.tile.x, curr.link.tile.y))) is not None:
-            if prev.is_door_locked(direction):
-                return True
-
-        rewards.add(WALL_COLLISION_PENALTY)
-        return True
 
     def critique_moving_into_danger(self, state_change : StateChange, rewards):
         """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted

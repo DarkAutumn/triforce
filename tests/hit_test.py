@@ -57,7 +57,7 @@ def test_stalfos_injury():
     assert state_change.hits == 1
 
     assert state_change.action.kind == ActionKind.BEAMS
-    assert_no_hit(replay, 'lllllllllr')
+    assert_no_hit(replay, 'rrrlllllllllllr')
 
     _, _, terminated, truncated, state_change = replay.act(ActionKind.BEAMS, Direction.E)
     assert not terminated

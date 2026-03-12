@@ -6,7 +6,7 @@ import torch
 
 from .wavefront import Wavefront
 from .zelda_objects import ZeldaObject
-from .zelda_enums import Direction, TileIndex
+from .zelda_enums import Direction, GAMEPLAY_START_Y, TileIndex
 
 _DIRECTION_OFFSETS = {
     Direction.N: (0, -1),
@@ -96,6 +96,24 @@ class Room:
         if self._is_overworld and val in OW_WALKABLE_OVERRIDES:
             return True
         return val < self._threshold
+
+    def can_link_move_from(self, px, py, direction, grid_offset=0):
+        """Check if Link can move from pixel position (px, py) in the given direction.
+
+        The NES only checks tile collision when ObjGridOffset == 0, i.e. when Link
+        is at a tile boundary in the movement system (Z_07.asm:2874).  Between
+        boundaries movement is always allowed, so a nonzero grid_offset means Link
+        has room to travel before the next tile check fires.
+
+        grid_offset comes from NES RAM at $394 (ObjGridOffset for Link).  When not
+        available, defaults to 0 (conservative: always checks tiles).
+        """
+        if grid_offset != 0:
+            return True
+
+        tc = int(px // 8)
+        tr = int((py - GAMEPLAY_START_Y) // 8)
+        return self.can_move(tc, tr, direction)
 
     def can_move(self, tc, tr, direction):
         """Check if Link can move from tile position (tc, tr) in the given direction.
