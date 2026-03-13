@@ -144,6 +144,14 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
         print(f"Training on {scenario_def.name} for up to {iterations:,} iterations{criteria}.")
         model, used = train_once(ppo, scenario_def, model_kind, action_space_def,
                                  checkpoint_dir, iterations, **kwargs)
+
+        if scenario_entry.exit_criteria:
+            last_value = model.metrics.get(scenario_entry.exit_criteria, 0) if model.metrics else 0
+            hit = last_value >= scenario_entry.threshold
+            status = "reached" if hit else "not reached"
+            print(f"  {scenario_entry.exit_criteria} = {last_value:.4f} "
+                  f"(target {scenario_entry.threshold}, {status})")
+
         kwargs['model'] = model
         iterations_spent += used
 
