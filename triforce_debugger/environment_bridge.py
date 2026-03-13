@@ -229,7 +229,8 @@ class ModelSelector:
         num_action_types = int(self.model.action_space.nvec[0])
 
         if mask is not None:
-            multihead_mask = self.action_space.flat_mask_to_multihead(mask.squeeze(0))
+            # mask is already in multihead [K+4] format from get_action_mask()
+            multihead_mask = mask.squeeze(0)
             type_mask = multihead_mask[:num_action_types].unsqueeze(0)
             dir_mask = multihead_mask[num_action_types:].unsqueeze(0)
 

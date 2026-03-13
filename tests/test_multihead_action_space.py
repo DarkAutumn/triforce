@@ -249,21 +249,37 @@ class TestFlatMaskToMultihead:
         assert mh_mask[1] == True    # SWORD available
         assert mh_mask[2] == True    # BEAMS available
 
-    def test_direction_mask_always_true(self):
-        """Direction mask (last 4 entries) should always be True regardless of flat mask."""
+    def test_direction_mask_reflects_valid_directions(self):
+        """Direction mask reflects union of valid directions from all valid action types."""
         space = _make_action_space()
         flat_mask = torch.zeros(12, dtype=torch.bool)
         flat_mask[0] = True  # Only MOVE N
         mh_mask = space.flat_mask_to_multihead(flat_mask)
-        assert mh_mask[3:7].all(), "Direction mask should always be all True"
+        # Only N should be valid in the direction mask
+        assert mh_mask[3] == True, "N should be valid"
+        assert mh_mask[4] == False, "S should not be valid"
+        assert mh_mask[5] == False, "W should not be valid"
+        assert mh_mask[6] == False, "E should not be valid"
 
-    def test_no_actions_gives_no_types(self):
-        """Empty flat mask → no action types enabled, but directions still True."""
+    def test_direction_mask_union_across_types(self):
+        """Direction mask is the union of directions across all valid action types."""
+        space = _make_action_space()
+        flat_mask = torch.zeros(12, dtype=torch.bool)
+        flat_mask[1] = True  # MOVE S
+        flat_mask[4] = True  # SWORD N
+        mh_mask = space.flat_mask_to_multihead(flat_mask)
+        assert mh_mask[3] == True, "N valid (from SWORD)"
+        assert mh_mask[4] == True, "S valid (from MOVE)"
+        assert mh_mask[5] == False, "W not valid"
+        assert mh_mask[6] == False, "E not valid"
+
+    def test_no_actions_gives_no_directions(self):
+        """Empty flat mask → no action types and no directions enabled."""
         space = _make_action_space()
         flat_mask = torch.zeros(12, dtype=torch.bool)
         mh_mask = space.flat_mask_to_multihead(flat_mask)
         assert not mh_mask[0:3].any(), "No action types should be enabled"
-        assert mh_mask[3:7].all(), "Direction mask should still be all True"
+        assert not mh_mask[3:7].any(), "No directions should be enabled"
 
 
 class TestMultiheadActionSpace:
