@@ -117,6 +117,9 @@ class MainWindow(QMainWindow):
         self.action_open_dir.setShortcut("Ctrl+O")
         self.action_open_dir.triggered.connect(self.open_directory)
         self.file_menu.addSeparator()
+        self.action_load_state = self.file_menu.addAction("Load State...")
+        self.action_load_state.setShortcut("Ctrl+L")
+        self.action_load_state.triggered.connect(self._load_state)
         self.action_save_state = self.file_menu.addAction("Save State...")
         self.action_save_state.setShortcut("Ctrl+S")
         self.action_save_state.triggered.connect(self._save_state)
@@ -584,6 +587,43 @@ class MainWindow(QMainWindow):
         )
         if directory:
             self.model_browser.scan_directory(directory)
+
+    def _load_state(self):
+        """Load an emulator state from a gzip-compressed .state file."""
+        if not self._bridge:
+            return
+
+        default_dir = os.path.join(os.path.dirname(__file__), os.pardir,
+                                    'triforce', 'custom_integrations', 'Zelda-NES')
+        default_dir = os.path.normpath(default_dir)
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Emulator State",
+            default_dir,
+            "State Files (*.state)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            with gzip.open(file_path, 'rb') as f:
+                state_bytes = f.read()
+
+            self.game_timer.pause()
+            self._step_count = 0
+            self.step_history.clear_history()
+            self.rewards_tab.clear()
+            self.state_tab.clear()
+            self._last_state_dict = None
+            self._last_zelda_state = None
+
+            step_result = self._bridge.load_state(state_bytes)
+            self._show_step_result(step_result, initial=True)
+            log.info("Loaded state from %s", file_path)
+        except Exception:  # pylint: disable=broad-except
+            log.error("Failed to load state:\n%s", traceback.format_exc())
 
     def _save_state(self):
         """Save the current emulator state to a gzip-compressed .state file."""

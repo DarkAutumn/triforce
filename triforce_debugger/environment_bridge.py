@@ -327,6 +327,30 @@ class EnvironmentBridge:
 
         return StepResult(obs, frames, state, None, False, False, StepRewards(), self._action_mask, allowed_actions)
 
+    def load_state(self, state_bytes):
+        """Load emulator state bytes and re-derive observation.
+
+        Performs a normal reset first to initialize the wrapper chain,
+        then injects the raw state bytes and steps a noop to re-derive
+        all wrapper state from the new emulator RAM.
+        """
+        self.restart()
+        self.env.unwrapped.em.set_state(state_bytes)
+
+        # Step a noop to let all wrappers re-derive from the new RAM
+        noop = torch.zeros(self.env.action_space.shape, dtype=torch.long)
+        obs, _, _, _, state_change = self.env.step(noop)
+
+        self._observation = obs
+        state = state_change.state
+        frames = state_change.frames
+
+        self._action_mask = state.info['action_mask']
+        allowed_actions = self.action_space.get_allowed_actions(state, self._action_mask)  # pylint: disable=no-member
+
+        return StepResult(obs, frames, state, state_change, False, False,
+                          StepRewards(), self._action_mask, allowed_actions)
+
     def step(self, action=None):
         """Steps the environment. If action is None, uses the model to select one."""
         if action is None:
