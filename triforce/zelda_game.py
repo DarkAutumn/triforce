@@ -247,12 +247,20 @@ class ZeldaGame:
     def can_link_move(self, direction):
         """Whether Link can move in the given direction from his current position.
 
-        Checks tile walkability (via self.room which uses current RAM tiles) and
-        locked-door-with-key override (NES CheckDoorway opens the door before the
-        tile check fires).
+        Checks tile walkability (via self.room which uses current RAM tiles),
+        cave entry override, and locked-door-with-key override (NES CheckDoorway
+        opens the door before the tile check fires).
         """
         px, py = self.link.position
         if self.room.can_link_move_from(px, py, direction):
+            return True
+
+        # OW cave entrance tiles (0xF3) are physically unwalkable — the NES triggers
+        # a cave warp via PlayerUnwalkable→CheckPassiveTileObjects on collision.  Allow
+        # the agent to try moving into cave tiles so it can enter caves, UNLESS we just
+        # exited one (the NES blocks re-entry via CheckWarps/UndergroundExitType).
+        if (self.room.is_cave_entry_direction(px, py, direction)
+                and not self.info.get('just_exited_cave', False)):
             return True
 
         # NES CheckDoorway (Z_05.asm:3755) opens a locked door if Link has a key,

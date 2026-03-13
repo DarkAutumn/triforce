@@ -52,6 +52,7 @@ class ZeldaCooldownHandler:
     def __init__(self, env):
         self.env = env
         self.was_link_in_cave = False
+        self.just_exited_cave = False
         self.none_action = np.zeros(9, dtype=bool)
         self._link_pos : Position = None
         self._last_info : dict = None
@@ -59,6 +60,7 @@ class ZeldaCooldownHandler:
     def reset(self):
         """Resets the handler."""
         self.was_link_in_cave = False
+        self.just_exited_cave = False
         self._link_pos = None
         self._last_info = None
 
@@ -116,6 +118,7 @@ class ZeldaCooldownHandler:
         in a state where the agent can control Link."""
 
         # These states are transient in the game and will not cause an infinite loop.
+        prev_was_in_cave = self.was_link_in_cave
         in_cave = is_in_cave(info)
         while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']) \
                 or self._is_level_transition(start_location, info) \
@@ -131,6 +134,8 @@ class ZeldaCooldownHandler:
             assert not terminated and not truncated
 
         self.was_link_in_cave = in_cave
+        if prev_was_in_cave and not in_cave:
+            self.just_exited_cave = True
         terminated, truncated, info = self._act_for(None, 1, frame_capture)
         return terminated, truncated, info
 
@@ -197,16 +202,20 @@ class ZeldaCooldownHandler:
             match action.direction:
                 case Direction.N:
                     if old_tile_index.y != new_tile_index.y:
+                        self.just_exited_cave = False
                         break
                 case Direction.S:
                     if old_tile_index.y != new_tile_index.y:
+                        self.just_exited_cave = False
                         terminated, truncated, info = self._act_for(action, WS_ADJUSTMENT_FRAMES, frame_capture)
                         break
                 case Direction.E:
                     if old_tile_index.x != new_tile_index.x:
+                        self.just_exited_cave = False
                         break
                 case Direction.W:
                     if old_tile_index.x != new_tile_index.x:
+                        self.just_exited_cave = False
                         terminated, truncated, info = self._act_for(action, WS_ADJUSTMENT_FRAMES, frame_capture)
                         break
                 case _:
@@ -219,9 +228,44 @@ class ZeldaCooldownHandler:
 
         Uses the cached Room to check tile walkability.  If the Room is not cached
         yet (first step of an episode), conservatively returns True.
+
+        In underworld rooms, the NES BoundByRoom function enforces room boundaries
+        that block movement before tile collision is checked.
         """
         if info is None:
             return True
+
+        # When in a doorway, NES constrains Link to only move in the doorway direction.
+        # Walker_Move skips BoundByRoom but Link_ModifyDirInDoorway forces the direction.
+        doorway_dir = info.get('doorway_dir', 0)
+        if doorway_dir != 0 and direction.value != doorway_dir:
+            return False
+
+        # UW room boundary check (NES BoundByRoom in Z_01.asm:3505).
+        # When gridOffset==0: check input direction against boundaries.
+        # When gridOffset!=0 and |gridOffset|>=4: NES keeps ObjDir (Link_ModifyDirOnGridLine
+        # exits at Z_05.asm:7211), so check ObjDir against boundaries instead.
+        # When gridOffset!=0 and |gridOffset|<4: NES reverses ObjDir, skip check (reversal
+        # moves away from boundary).
+        if info.get('level', 0) != 0 and doorway_dir == 0:
+            grid_offset = info.get('link_grid_offset', 0)
+            if grid_offset == 0:
+                check_dir = direction
+            elif abs(grid_offset) >= 4:
+                obj_dir = info.get('link_direction', 0)
+                check_dir = Direction(obj_dir) if obj_dir in Direction._value2member_map_ else None
+            else:
+                check_dir = None
+
+            if check_dir is not None:
+                if check_dir == Direction.W and pos.x < 0x21:
+                    return False
+                if check_dir == Direction.E and pos.x >= 0xD0:
+                    return False
+                if check_dir == Direction.N and pos.y < 0x5E:
+                    return False
+                if check_dir == Direction.S and pos.y >= 0xBD:
+                    return False
 
         location = self._get_location(info)
         room = Room.get(location)
@@ -292,6 +336,7 @@ class FrameSkipWrapper(gym.Wrapper):
 
         info['total_frames'] = self._total_frames
         info['steps'] = self._steps = self._steps + 1
+        info['just_exited_cave'] = self.cooldown_handler.just_exited_cave
         return frames, 0, terminated, truncated, info
 
 __all__ = [
