@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from PySide6.QtCore import Qt, QAbstractItemModel, QModelIndex, Signal
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QTreeView, QWidget, QVBoxLayout, QAbstractItemView, QHeaderView
+from PySide6.QtGui import QColor, QKeySequence, QShortcut
+from PySide6.QtWidgets import (QTreeView, QWidget, QVBoxLayout, QAbstractItemView, QHeaderView,
+                                QApplication)
 
 
 # ── Colors for reward display ─────────────────────────────────────────
@@ -297,7 +298,7 @@ class StepHistoryWidget(QWidget):
         self._tree.setModel(self._model)
         self._tree.setRootIsDecorated(True)
         self._tree.setItemsExpandable(True)
-        self._tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._tree.setUniformRowHeights(True)
 
         header = self._tree.header()
@@ -315,6 +316,10 @@ class StepHistoryWidget(QWidget):
 
         # Forward selection changes
         self._tree.selectionModel().currentChanged.connect(self._on_current_changed)
+
+        # Ctrl+C copies selected rows as tab-separated text
+        copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, self._tree)
+        copy_shortcut.activated.connect(self._copy_selection)  # pylint: disable=no-member
 
     # ── Public API ────────────────────────────────────────────────────
 
@@ -408,3 +413,28 @@ class StepHistoryWidget(QWidget):
             return
         buf_idx = self._model._buf_index(current.row())  # pylint: disable=protected-access
         self.step_selected.emit(buf_idx)
+
+    def _copy_selection(self):
+        """Copy selected rows to clipboard as tab-separated text."""
+        indexes = self._tree.selectionModel().selectedIndexes()
+        if not indexes:
+            return
+
+        # Group indexes by (parent_id, row) to reconstruct rows
+        rows: dict[tuple, dict[int, str]] = {}
+        for idx in indexes:
+            key = (idx.internalId(), idx.row())
+            text = self._model.data(idx, Qt.ItemDataRole.DisplayRole) or ""
+            rows.setdefault(key, {})[idx.column()] = str(text)
+
+        # Sort by internal_id (top-level first) then row, and format
+        col_count = self._model.columnCount()
+        lines = []
+        for key in sorted(rows):
+            cells = rows[key]
+            line = "\t".join(cells.get(c, "") for c in range(col_count))
+            lines.append(line)
+
+        clipboard = QApplication.clipboard()
+        if clipboard:
+            clipboard.setText("\n".join(lines))
