@@ -122,9 +122,9 @@ class ActionTable(QWidget):
         layout.addLayout(arrow_layout)
 
         # Table
-        self.table = QTableWidget(0, 3)
+        self.table = QTableWidget(0, 4)
         self.table.setObjectName("action_prob_table")
-        self.table.setHorizontalHeaderLabels(["ACTION", "DIRECTION", "PROBABILITY"])
+        self.table.setHorizontalHeaderLabels(["ACTION", "DIRECTION", "PROBABILITY", "UNMASKED"])
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self.table.verticalHeader().setVisible(False)
@@ -186,22 +186,32 @@ class ActionTable(QWidget):
             widget.set_probabilities(arrow_data.get(kind, {}))
 
         # Populate table
+        # Compute sum of unmasked probabilities for renormalization
+        unmasked_sum = sum(prob for (_, _, prob, masked) in rows if not masked)
+
         self.table.setRowCount(len(rows))
         for i, (action_kind, direction, prob, is_masked) in enumerate(rows):
             action_item = QTableWidgetItem(action_kind.value)
             direction_item = QTableWidgetItem(direction.name)
+
+            # UNMASKED column: raw probability from the model
+            unmasked_item = QTableWidgetItem(f"{prob * 100:.1f}%")
 
             if is_masked:
                 prob_item = QTableWidgetItem(MASKED_TEXT)
                 prob_item.setForeground(GREY)
                 action_item.setForeground(GREY)
                 direction_item.setForeground(GREY)
+                unmasked_item.setForeground(GREY)
             else:
-                prob_item = QTableWidgetItem(f"{prob * 100:.1f}%")
+                # PROBABILITY column: renormalized so unmasked actions sum to 100%
+                normed = (prob / unmasked_sum) if unmasked_sum > 0 else 0.0
+                prob_item = QTableWidgetItem(f"{normed * 100:.1f}%")
 
-            for item in (action_item, direction_item, prob_item):
+            for item in (action_item, direction_item, prob_item, unmasked_item):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self.table.setItem(i, 0, action_item)
             self.table.setItem(i, 1, direction_item)
             self.table.setItem(i, 2, prob_item)
+            self.table.setItem(i, 3, unmasked_item)
