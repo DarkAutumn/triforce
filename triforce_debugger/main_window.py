@@ -17,9 +17,12 @@ from PySide6.QtWidgets import (
     QToolBar,
     QMenuBar,
     QFileDialog,
+    QDoubleSpinBox,
+    QLabel,
 )
 
 from triforce.zelda_enums import ActionKind, Direction
+from triforce.ml_ppo import GAMMA, LAMBDA
 from triforce_debugger.action_table import ActionTable
 from triforce_debugger.environment_bridge import EnvironmentBridge
 from triforce_debugger.game_timer import GameTimer
@@ -155,13 +158,35 @@ class MainWindow(QMainWindow):
 
     # ── Layout ────────────────────────────────────────────────
 
-    def _build_layout(self):
-        # Toolbar with scenario selector
+    def _build_layout(self):  # pylint: disable=too-many-statements
+        # Toolbar with scenario selector and GAE parameters
         self.scenario_selector = ScenarioSelector()
         toolbar = QToolBar("Main")
         toolbar.setObjectName("main_toolbar")
         toolbar.setMovable(False)
         toolbar.addWidget(self.scenario_selector)
+
+        toolbar.addSeparator()
+        toolbar.addWidget(QLabel(" γ:"))
+        self._gamma_spin = QDoubleSpinBox()
+        self._gamma_spin.setRange(0.0, 1.0)
+        self._gamma_spin.setSingleStep(0.01)
+        self._gamma_spin.setDecimals(2)
+        self._gamma_spin.setValue(GAMMA)
+        self._gamma_spin.setToolTip("Discount factor (gamma) for GAE advantage computation")
+        self._gamma_spin.valueChanged.connect(self._on_gae_params_changed)  # pylint: disable=no-member
+        toolbar.addWidget(self._gamma_spin)
+
+        toolbar.addWidget(QLabel(" λ:"))
+        self._lambda_spin = QDoubleSpinBox()
+        self._lambda_spin.setRange(0.0, 1.0)
+        self._lambda_spin.setSingleStep(0.01)
+        self._lambda_spin.setDecimals(2)
+        self._lambda_spin.setValue(LAMBDA)
+        self._lambda_spin.setToolTip("Smoothing factor (lambda) for GAE advantage computation")
+        self._lambda_spin.valueChanged.connect(self._on_gae_params_changed)  # pylint: disable=no-member
+        toolbar.addWidget(self._lambda_spin)
+
         self.addToolBar(toolbar)
 
         # Top section: obs panel | game view | right panel
@@ -296,6 +321,11 @@ class MainWindow(QMainWindow):
             if step.step_number == entry.step_number and i > 0:
                 return history[i - 1].state
         return None
+
+    def _on_gae_params_changed(self):
+        """Recompute GAE advantages when γ or λ spinbox values change."""
+        self.step_history.recompute_advantages(
+            self._gamma_spin.value(), self._lambda_spin.value())
 
     def _on_step_selected(self, buf_index):
         """Handle step selection in history list (time-travel)."""
@@ -467,6 +497,12 @@ class MainWindow(QMainWindow):
         if step_result.state_change and hasattr(step_result.state_change, 'action'):
             action = step_result.state_change.action
 
+        # Extract value estimate from model probabilities
+        value = 0.0
+        if probs and 'value' in probs:
+            v = probs['value']
+            value = v.item() if hasattr(v, 'item') else float(v)
+
         # Append to step history
         entry = StepEntry(
             step_number=self._step_count,
@@ -480,8 +516,13 @@ class MainWindow(QMainWindow):
             truncated=step_result.truncated,
             frame=frame,
             action_mask_desc=step_result.action_mask_desc,
+            value=value,
         )
         self.step_history.append_step(entry)
+
+        # Recompute GAE advantages with current γ/λ
+        self.step_history.recompute_advantages(
+            self._gamma_spin.value(), self._lambda_spin.value())
 
         # Update window title with model info
         self.setWindowTitle(f"Triforce Debugger — {self._bridge.model_details}")
