@@ -52,6 +52,7 @@ class ZeldaCooldownHandler:
     def __init__(self, env):
         self.env = env
         self.was_link_in_cave = False
+        self.just_exited_cave = False
         self.none_action = np.zeros(9, dtype=bool)
         self._link_pos : Position = None
         self._last_info : dict = None
@@ -59,6 +60,7 @@ class ZeldaCooldownHandler:
     def reset(self):
         """Resets the handler."""
         self.was_link_in_cave = False
+        self.just_exited_cave = False
         self._link_pos = None
         self._last_info = None
 
@@ -116,6 +118,7 @@ class ZeldaCooldownHandler:
         in a state where the agent can control Link."""
 
         # These states are transient in the game and will not cause an infinite loop.
+        prev_was_in_cave = self.was_link_in_cave
         in_cave = is_in_cave(info)
         while is_mode_scrolling(info["mode"]) or is_link_stunned(info['link_status']) \
                 or self._is_level_transition(start_location, info) \
@@ -131,6 +134,8 @@ class ZeldaCooldownHandler:
             assert not terminated and not truncated
 
         self.was_link_in_cave = in_cave
+        if prev_was_in_cave and not in_cave:
+            self.just_exited_cave = True
         terminated, truncated, info = self._act_for(None, 1, frame_capture)
         return terminated, truncated, info
 
@@ -197,16 +202,20 @@ class ZeldaCooldownHandler:
             match action.direction:
                 case Direction.N:
                     if old_tile_index.y != new_tile_index.y:
+                        self.just_exited_cave = False
                         break
                 case Direction.S:
                     if old_tile_index.y != new_tile_index.y:
+                        self.just_exited_cave = False
                         terminated, truncated, info = self._act_for(action, WS_ADJUSTMENT_FRAMES, frame_capture)
                         break
                 case Direction.E:
                     if old_tile_index.x != new_tile_index.x:
+                        self.just_exited_cave = False
                         break
                 case Direction.W:
                     if old_tile_index.x != new_tile_index.x:
+                        self.just_exited_cave = False
                         terminated, truncated, info = self._act_for(action, WS_ADJUSTMENT_FRAMES, frame_capture)
                         break
                 case _:
@@ -327,6 +336,7 @@ class FrameSkipWrapper(gym.Wrapper):
 
         info['total_frames'] = self._total_frames
         info['steps'] = self._steps = self._steps + 1
+        info['just_exited_cave'] = self.cooldown_handler.just_exited_cave
         return frames, 0, terminated, truncated, info
 
 __all__ = [

@@ -8,6 +8,10 @@
             "address": 192,
             "type": "=u1"
         },
+        "underground_exit_type": {
+            "address": 90,
+            "type": "=u1"
+        },
         "doorway_dir": {
             "address": 83,
             "type": "=u1"

@@ -105,8 +105,6 @@ class Room:
         val = int(self.tiles[tc, tr])
         if self._is_overworld and val in OW_WALKABLE_OVERRIDES:
             return True
-        if self._is_overworld and val in OW_CAVE_ENTRY_TILES:
-            return True
         return val < self._threshold
 
     def can_link_move_from(self, px, py, direction):
@@ -141,6 +139,39 @@ class Room:
                 row = (py - 45) // 8  # (base_Y + 8 - 64) = py + 19 - 64 = py - 45
                 col = px // 8
                 return self.is_tile_walkable(col, row) and self.is_tile_walkable(col + 1, row)
+
+    def is_cave_entry_direction(self, px, py, direction):
+        """Check if moving in direction from (px, py) would collide with a cave entry tile.
+
+        The NES cave entrance tile (0xF3) is physically unwalkable — Walker_CheckTileCollision
+        blocks movement.  But PlayerUnwalkable (Z_07.asm:2952) calls CheckPassiveTileObjects
+        on collision, which triggers the cave warp.  So the agent should be allowed to TRY
+        moving into a cave tile for action masking purposes.
+        """
+        if not self._is_overworld:
+            return False
+
+        match direction:
+            case Direction.N:
+                row = (py - 61) // 8
+                col = px // 8
+                tiles_to_check = [(col, row), (col + 1, row)]
+            case Direction.S:
+                row = (py - 45) // 8
+                col = px // 8
+                tiles_to_check = [(col, row), (col + 1, row)]
+            case Direction.W:
+                feet_row = (py - 53) // 8
+                tiles_to_check = [((px - 8) // 8, feet_row)]
+            case Direction.E:
+                feet_row = (py - 53) // 8
+                tiles_to_check = [((px + 16) // 8, feet_row)]
+
+        for tc, tr in tiles_to_check:
+            if 0 <= tc < self.tiles.shape[0] and 0 <= tr < self.tiles.shape[1]:
+                if int(self.tiles[tc, tr]) in OW_CAVE_ENTRY_TILES:
+                    return True
+        return False
 
     def can_move(self, tc, tr, direction):
         """Tile-space movement check used by wavefront BFS.
