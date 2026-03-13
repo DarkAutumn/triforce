@@ -170,23 +170,31 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self.scenario_selector)
 
         toolbar.addSeparator()
-        toolbar.addWidget(QLabel(" γ:"))
+        gamma_label = QLabel(" γ:")
+        gamma_label.setToolTip("Gamma — discount factor. Controls how much future rewards matter.\n"
+                               "1.0 = all future rewards count equally, 0.0 = only immediate reward.")
+        toolbar.addWidget(gamma_label)
         self._gamma_spin = QDoubleSpinBox()
         self._gamma_spin.setRange(0.0, 1.0)
         self._gamma_spin.setSingleStep(0.01)
         self._gamma_spin.setDecimals(2)
         self._gamma_spin.setValue(GAMMA)
-        self._gamma_spin.setToolTip("Discount factor (gamma) for GAE advantage computation")
+        self._gamma_spin.setToolTip("Gamma — discount factor. Controls how much future rewards matter.\n"
+                                    "1.0 = all future rewards count equally, 0.0 = only immediate reward.")
         self._gamma_spin.valueChanged.connect(self._on_gae_params_changed)  # pylint: disable=no-member
         toolbar.addWidget(self._gamma_spin)
 
-        toolbar.addWidget(QLabel(" λ:"))
+        lambda_label = QLabel(" λ:")
+        lambda_label.setToolTip("Lambda — GAE smoothing. Controls bias-variance tradeoff in advantage estimates.\n"
+                                "1.0 = low bias/high variance (Monte Carlo), 0.0 = high bias/low variance (TD).")
+        toolbar.addWidget(lambda_label)
         self._lambda_spin = QDoubleSpinBox()
         self._lambda_spin.setRange(0.0, 1.0)
         self._lambda_spin.setSingleStep(0.01)
         self._lambda_spin.setDecimals(2)
         self._lambda_spin.setValue(LAMBDA)
-        self._lambda_spin.setToolTip("Smoothing factor (lambda) for GAE advantage computation")
+        self._lambda_spin.setToolTip("Lambda — GAE smoothing. Controls bias-variance tradeoff in advantage estimates.\n"
+                                     "1.0 = low bias/high variance (Monte Carlo), 0.0 = high bias/low variance (TD).")
         self._lambda_spin.valueChanged.connect(self._on_gae_params_changed)  # pylint: disable=no-member
         toolbar.addWidget(self._lambda_spin)
 
