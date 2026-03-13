@@ -157,32 +157,33 @@ class TestStepHistoryModel:
         model, _ = self._make_model([_entry(7, action="SWORD_W", reward_val=0.25)])
         assert model.data(model.index(0, 0)) == "#7"
         assert model.data(model.index(0, 1)) == "SWORD_W"
-        assert model.data(model.index(0, 2)) == "+0.250"
+        assert model.data(model.index(0, 3)) == "+0.250"
 
     def test_reward_color_positive(self):
         model, _ = self._make_model([_entry(1, reward_val=0.5)])
-        color = model.data(model.index(0, 2), Qt.ItemDataRole.ForegroundRole)
+        color = model.data(model.index(0, 3), Qt.ItemDataRole.ForegroundRole)
         assert color == COLOR_POSITIVE
 
     def test_reward_color_negative(self):
         model, _ = self._make_model([_entry(1, reward_val=-0.5)])
-        color = model.data(model.index(0, 2), Qt.ItemDataRole.ForegroundRole)
+        color = model.data(model.index(0, 3), Qt.ItemDataRole.ForegroundRole)
         assert color == COLOR_NEGATIVE
 
     def test_reward_color_zero(self):
         model, _ = self._make_model([_entry(1, reward_val=0.0)])
-        color = model.data(model.index(0, 2), Qt.ItemDataRole.ForegroundRole)
+        color = model.data(model.index(0, 3), Qt.ItemDataRole.ForegroundRole)
         assert color == COLOR_NEUTRAL
 
     def test_column_count(self):
         model, _ = self._make_model()
-        assert model.columnCount() == 3
+        assert model.columnCount() == 4
 
     def test_header_data(self):
         model, _ = self._make_model()
         assert model.headerData(0, Qt.Orientation.Horizontal) == "Step"
         assert model.headerData(1, Qt.Orientation.Horizontal) == "Action"
-        assert model.headerData(2, Qt.Orientation.Horizontal) == "Reward"
+        assert model.headerData(2, Qt.Orientation.Horizontal) == "Advantage"
+        assert model.headerData(3, Qt.Orientation.Horizontal) == "Reward"
 
     # ── Child (reward breakdown) rows ─────────────────────────────────
 
@@ -199,20 +200,20 @@ class TestStepHistoryModel:
         # First child
         child0 = model.index(0, 0, parent_idx)
         assert model.data(child0) == "reward-hit"
-        child0_val = model.index(0, 2, parent_idx)
+        child0_val = model.index(0, 3, parent_idx)
         assert model.data(child0_val) == "+0.500"
         # Second child
         child1 = model.index(1, 0, parent_idx)
         assert model.data(child1) == "penalty-hp"
-        child1_val = model.index(1, 2, parent_idx)
+        child1_val = model.index(1, 3, parent_idx)
         assert model.data(child1_val) == "-0.200"
 
     def test_child_color(self):
         entry = _entry_with_outcomes(1, 0.0, [("reward-a", 0.1), ("penalty-b", -0.1)])
         model, _ = self._make_model([entry])
         parent_idx = model.index(0, 0)
-        pos_color = model.data(model.index(0, 2, parent_idx), Qt.ItemDataRole.ForegroundRole)
-        neg_color = model.data(model.index(1, 2, parent_idx), Qt.ItemDataRole.ForegroundRole)
+        pos_color = model.data(model.index(0, 3, parent_idx), Qt.ItemDataRole.ForegroundRole)
+        neg_color = model.data(model.index(1, 3, parent_idx), Qt.ItemDataRole.ForegroundRole)
         assert pos_color == COLOR_POSITIVE
         assert neg_color == COLOR_NEGATIVE
 
@@ -304,3 +305,39 @@ class TestStepHistoryWidget:
         # Row 0 should be step 300
         idx = widget.model.index(0, 0)
         assert widget.model.data(idx) == "#300"
+
+    def test_recompute_advantages_single_step(self):
+        widget = StepHistoryWidget()
+        widget.append_step(_entry(1, reward_val=0.5, value=0.3))
+        widget.recompute_advantages(0.99, 0.95)
+        # Single step: A = r - V(s) since mask=0 for the last step
+        entry = widget.history[0]
+        assert entry.advantage == pytest.approx(0.5 - 0.3)
+
+    def test_recompute_advantages_two_steps(self):
+        widget = StepHistoryWidget()
+        widget.append_step(_entry(1, reward_val=0.1, value=0.5))
+        widget.append_step(_entry(2, reward_val=0.2, value=0.6))
+        widget.recompute_advantages(0.99, 0.95)
+        # Step 2 (latest): A = r - V = 0.2 - 0.6 = -0.4
+        assert widget.history[1].advantage == pytest.approx(-0.4)
+        # Step 1: delta = 0.1 + 0.99*0.6 - 0.5 = 0.194, A = 0.194 + 0.99*0.95*1.0*(-0.4)
+        delta_0 = 0.1 + 0.99 * 0.6 - 0.5
+        expected_a0 = delta_0 + 0.99 * 0.95 * (-0.4)
+        assert widget.history[0].advantage == pytest.approx(expected_a0)
+
+    def test_recompute_advantages_terminal_masks(self):
+        widget = StepHistoryWidget()
+        widget.append_step(_entry(1, reward_val=1.0, value=0.5, terminated=True))
+        widget.append_step(_entry(2, reward_val=0.2, value=0.6))
+        widget.recompute_advantages(0.99, 0.95)
+        # Step 1 is terminal so mask=0: delta = 1.0 + 0 - 0.5 = 0.5, no GAE carry
+        assert widget.history[0].advantage == pytest.approx(0.5)
+
+    def test_advantage_column_display(self):
+        widget = StepHistoryWidget()
+        widget.append_step(_entry(1, reward_val=0.5, value=0.3))
+        widget.recompute_advantages(0.99, 0.95)
+        # Advantage column (col 2) should show the value
+        idx = widget.model.index(0, 2)
+        assert widget.model.data(idx) == "+0.200"

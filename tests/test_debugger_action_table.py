@@ -64,12 +64,12 @@ def test_table_creates_without_crash():
     table.close()
 
 
-def test_table_has_three_columns():
-    """Table has ACTION, DIRECTION, PROBABILITY columns."""
+def test_table_has_four_columns():
+    """Table has ACTION, DIRECTION, PROBABILITY, UNMASKED columns."""
     table = _make_table()
-    assert table.table.columnCount() == 3
-    headers = [table.table.horizontalHeaderItem(i).text() for i in range(3)]
-    assert headers == ["ACTION", "DIRECTION", "PROBABILITY"]
+    assert table.table.columnCount() == 4
+    headers = [table.table.horizontalHeaderItem(i).text() for i in range(4)]
+    assert headers == ["ACTION", "DIRECTION", "PROBABILITY", "UNMASKED"]
     table.close()
 
 
@@ -116,15 +116,15 @@ def test_populate_multiple_action_kinds():
 
     # 4 MOVE + 4 SWORD = 8
     assert table.table.rowCount() == 8
-    # Verify SWORD rows
+    # Verify SWORD rows — UNMASKED shows raw prob, PROBABILITY shows renormalized
     assert table.table.item(4, 0).text() == "SWORD"
     assert table.table.item(4, 1).text() == "N"
-    assert table.table.item(4, 2).text() == "8.0%"
+    assert table.table.item(4, 3).text() == "8.0%"   # raw unmasked
     table.close()
 
 
 def test_probability_formatting():
-    """Probabilities are formatted as 'XX.X%'."""
+    """UNMASKED column shows raw probabilities as 'XX.X%'."""
     table = _make_table()
     probs = _make_probs(move=[
         (_Direction.N, 0.001),
@@ -134,10 +134,11 @@ def test_probability_formatting():
     ])
     table.update_probabilities(probs)
 
-    assert table.table.item(0, 2).text() == "0.1%"
-    assert table.table.item(1, 2).text() == "99.9%"
-    assert table.table.item(2, 2).text() == "0.0%"
-    assert table.table.item(3, 2).text() == "50.0%"
+    # UNMASKED column (3) shows raw values
+    assert table.table.item(0, 3).text() == "0.1%"
+    assert table.table.item(1, 3).text() == "99.9%"
+    assert table.table.item(2, 3).text() == "0.0%"
+    assert table.table.item(3, 3).text() == "50.0%"
     table.close()
 
 
@@ -162,7 +163,7 @@ def test_value_display_negative():
 # ── Masking ──────────────────────────────────────────────────
 
 def test_masked_actions_show_masked_text():
-    """Masked actions display '[masked]' instead of a probability."""
+    """Masked actions display '[masked]' in PROBABILITY; renormalized for unmasked."""
     from triforce_debugger.action_table import MASKED_TEXT  # pylint: disable=import-outside-toplevel
     table = _make_table()
     probs = _make_probs()
@@ -170,14 +171,18 @@ def test_masked_actions_show_masked_text():
     mask_desc = [(_ActionKind.MOVE, [_Direction.N, _Direction.E])]
     table.update_probabilities(probs, action_mask_desc=mask_desc)
 
-    # Row 0 (N): allowed
-    assert table.table.item(0, 2).text() == "45.0%"
+    # Row 0 (N): allowed, renormalized 0.45/(0.45+0.10) = 81.8%
+    assert table.table.item(0, 2).text() == "81.8%"
     # Row 1 (S): masked
     assert table.table.item(1, 2).text() == MASKED_TEXT
     # Row 2 (W): masked
     assert table.table.item(2, 2).text() == MASKED_TEXT
-    # Row 3 (E): allowed
-    assert table.table.item(3, 2).text() == "10.0%"
+    # Row 3 (E): allowed, renormalized 0.10/(0.45+0.10) = 18.2%
+    assert table.table.item(3, 2).text() == "18.2%"
+    # UNMASKED column shows raw values for all rows
+    assert table.table.item(0, 3).text() == "45.0%"
+    assert table.table.item(1, 3).text() == "30.0%"
+    assert table.table.item(3, 3).text() == "10.0%"
     table.close()
 
 
@@ -190,7 +195,7 @@ def test_masked_action_items_are_grey():
     table.update_probabilities(probs, action_mask_desc=mask_desc)
 
     # Row 1 (S): masked — all cells should be grey
-    for col in range(3):
+    for col in range(4):
         assert table.table.item(1, col).foreground().color() == GREY
     table.close()
 

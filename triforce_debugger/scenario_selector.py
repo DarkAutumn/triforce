@@ -5,7 +5,7 @@ user picks a different scenario so the environment can be reset.
 """
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QComboBox
 
 from triforce import TrainingScenarioDefinition
 
@@ -27,11 +27,9 @@ class ScenarioSelector(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
 
-        label = QLabel("Scenario:")
         self._combo = QComboBox()
         self._combo.setObjectName("scenario_combo")
 
-        layout.addWidget(label)
         layout.addWidget(self._combo)
 
         self._scenarios: list[TrainingScenarioDefinition] = []

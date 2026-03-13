@@ -17,9 +17,12 @@ from PySide6.QtWidgets import (
     QToolBar,
     QMenuBar,
     QFileDialog,
+    QDoubleSpinBox,
+    QLabel,
 )
 
 from triforce.zelda_enums import ActionKind, Direction
+from triforce.ml_ppo import GAMMA, LAMBDA
 from triforce_debugger.action_table import ActionTable
 from triforce_debugger.environment_bridge import EnvironmentBridge
 from triforce_debugger.game_timer import GameTimer
@@ -114,6 +117,9 @@ class MainWindow(QMainWindow):
         self.action_open_dir.setShortcut("Ctrl+O")
         self.action_open_dir.triggered.connect(self.open_directory)
         self.file_menu.addSeparator()
+        self.action_load_state = self.file_menu.addAction("Load State...")
+        self.action_load_state.setShortcut("Ctrl+L")
+        self.action_load_state.triggered.connect(self._load_state)
         self.action_save_state = self.file_menu.addAction("Save State...")
         self.action_save_state.setShortcut("Ctrl+S")
         self.action_save_state.triggered.connect(self._save_state)
@@ -155,13 +161,43 @@ class MainWindow(QMainWindow):
 
     # ── Layout ────────────────────────────────────────────────
 
-    def _build_layout(self):
-        # Toolbar with scenario selector
+    def _build_layout(self):  # pylint: disable=too-many-statements
+        # Toolbar with scenario selector and GAE parameters
         self.scenario_selector = ScenarioSelector()
         toolbar = QToolBar("Main")
         toolbar.setObjectName("main_toolbar")
         toolbar.setMovable(False)
         toolbar.addWidget(self.scenario_selector)
+
+        toolbar.addSeparator()
+        gamma_label = QLabel(" γ:")
+        gamma_label.setToolTip("Gamma — discount factor. Controls how much future rewards matter.\n"
+                               "1.0 = all future rewards count equally, 0.0 = only immediate reward.")
+        toolbar.addWidget(gamma_label)
+        self._gamma_spin = QDoubleSpinBox()
+        self._gamma_spin.setRange(0.0, 1.0)
+        self._gamma_spin.setSingleStep(0.01)
+        self._gamma_spin.setDecimals(2)
+        self._gamma_spin.setValue(GAMMA)
+        self._gamma_spin.setToolTip("Gamma — discount factor. Controls how much future rewards matter.\n"
+                                    "1.0 = all future rewards count equally, 0.0 = only immediate reward.")
+        self._gamma_spin.valueChanged.connect(self._on_gae_params_changed)  # pylint: disable=no-member
+        toolbar.addWidget(self._gamma_spin)
+
+        lambda_label = QLabel(" λ:")
+        lambda_label.setToolTip("Lambda — GAE smoothing. Controls bias-variance tradeoff in advantage estimates.\n"
+                                "1.0 = low bias/high variance (Monte Carlo), 0.0 = high bias/low variance (TD).")
+        toolbar.addWidget(lambda_label)
+        self._lambda_spin = QDoubleSpinBox()
+        self._lambda_spin.setRange(0.0, 1.0)
+        self._lambda_spin.setSingleStep(0.01)
+        self._lambda_spin.setDecimals(2)
+        self._lambda_spin.setValue(LAMBDA)
+        self._lambda_spin.setToolTip("Lambda — GAE smoothing. Controls bias-variance tradeoff in advantage estimates.\n"
+                                     "1.0 = low bias/high variance (Monte Carlo), 0.0 = high bias/low variance (TD).")
+        self._lambda_spin.valueChanged.connect(self._on_gae_params_changed)  # pylint: disable=no-member
+        toolbar.addWidget(self._lambda_spin)
+
         self.addToolBar(toolbar)
 
         # Top section: obs panel | game view | right panel
@@ -297,6 +333,11 @@ class MainWindow(QMainWindow):
                 return history[i - 1].state
         return None
 
+    def _on_gae_params_changed(self):
+        """Recompute GAE advantages when γ or λ spinbox values change."""
+        self.step_history.recompute_advantages(
+            self._gamma_spin.value(), self._lambda_spin.value())
+
     def _on_step_selected(self, buf_index):
         """Handle step selection in history list (time-travel)."""
         try:
@@ -341,6 +382,10 @@ class MainWindow(QMainWindow):
             self.model_browser.set_loaded_model(self._bridge.selector.model_path)
             self._do_restart()
             self.setWindowTitle(f"Triforce Debugger — {self._bridge.model_details}")
+
+            # Move focus to the game view so arrow keys aren't consumed by
+            # the model browser tree or scenario combo for widget navigation.
+            self.game_view.setFocus()
         except Exception:  # pylint: disable=broad-except
             log.error("Failed to create bridge:\n%s", traceback.format_exc())
             self._bridge = None
@@ -463,6 +508,12 @@ class MainWindow(QMainWindow):
         if step_result.state_change and hasattr(step_result.state_change, 'action'):
             action = step_result.state_change.action
 
+        # Extract value estimate from model probabilities
+        value = 0.0
+        if probs and 'value' in probs:
+            v = probs['value']
+            value = v.item() if hasattr(v, 'item') else float(v)
+
         # Append to step history
         entry = StepEntry(
             step_number=self._step_count,
@@ -476,8 +527,13 @@ class MainWindow(QMainWindow):
             truncated=step_result.truncated,
             frame=frame,
             action_mask_desc=step_result.action_mask_desc,
+            value=value,
         )
         self.step_history.append_step(entry)
+
+        # Recompute GAE advantages with current γ/λ
+        self.step_history.recompute_advantages(
+            self._gamma_spin.value(), self._lambda_spin.value())
 
         # Update window title with model info
         self.setWindowTitle(f"Triforce Debugger — {self._bridge.model_details}")
@@ -540,6 +596,43 @@ class MainWindow(QMainWindow):
         if directory:
             self.model_browser.scan_directory(directory)
 
+    def _load_state(self):
+        """Load an emulator state from a gzip-compressed .state file."""
+        if not self._bridge:
+            return
+
+        default_dir = os.path.join(os.path.dirname(__file__), os.pardir,
+                                    'triforce', 'custom_integrations', 'Zelda-NES')
+        default_dir = os.path.normpath(default_dir)
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Emulator State",
+            default_dir,
+            "State Files (*.state)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            with gzip.open(file_path, 'rb') as f:
+                state_bytes = f.read()
+
+            self.game_timer.pause()
+            self._step_count = 0
+            self.step_history.clear_history()
+            self.rewards_tab.clear()
+            self.state_tab.clear()
+            self._last_state_dict = None
+            self._last_zelda_state = None
+
+            step_result = self._bridge.load_state(state_bytes)
+            self._show_step_result(step_result, initial=True)
+            log.info("Loaded state from %s", file_path)
+        except Exception:  # pylint: disable=broad-except
+            log.error("Failed to load state:\n%s", traceback.format_exc())
+
     def _save_state(self):
         """Save the current emulator state to a gzip-compressed .state file."""
         if not self._bridge:
@@ -585,10 +678,24 @@ class MainWindow(QMainWindow):
     }
 
     def eventFilter(self, obj, event):  # pylint: disable=invalid-name
-        """Intercept ALL key events application-wide for game controls."""
+        """Intercept ALL key events application-wide for game controls.
+
+        We also intercept ShortcutOverride so that focused widgets (e.g.
+        QTreeView, QComboBox) cannot claim arrow/A keys for their own
+        navigation, which would prevent the KeyPress from reaching us.
+        """
         from PySide6.QtCore import QEvent  # pylint: disable=import-outside-toplevel
 
-        if event.type() == QEvent.Type.KeyPress:
+        etype = event.type()
+
+        # Consume ShortcutOverride for our game-control keys so widgets
+        # like QTreeView don't swallow the subsequent KeyPress.
+        if etype == QEvent.Type.ShortcutOverride:
+            key = event.key()
+            if key == Qt.Key.Key_A or key in self._ARROW_TO_DIR:
+                return True
+
+        if etype == QEvent.Type.KeyPress:
             key = event.key()
             if key == Qt.Key.Key_A:
                 self._a_key_held = True
@@ -602,7 +709,7 @@ class MainWindow(QMainWindow):
                     self.manual_move_requested.emit(direction)
                 return True
 
-        elif event.type() == QEvent.Type.KeyRelease:
+        elif etype == QEvent.Type.KeyRelease:
             if event.key() == Qt.Key.Key_A and not event.isAutoRepeat():
                 self._a_key_held = False
                 return True

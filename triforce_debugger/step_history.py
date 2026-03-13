@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from PySide6.QtCore import Qt, QAbstractItemModel, QModelIndex, Signal
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QTreeView, QWidget, QVBoxLayout, QAbstractItemView, QHeaderView
+from PySide6.QtGui import QColor, QKeySequence, QShortcut
+from PySide6.QtWidgets import (QTreeView, QWidget, QVBoxLayout, QAbstractItemView, QHeaderView,
+                                QApplication)
 
 
 # ── Colors for reward display ─────────────────────────────────────────
@@ -41,6 +42,8 @@ class StepEntry:
     truncated: bool
     frame: Any                # RGB numpy array (last game frame)
     action_mask_desc: Any = None  # list of (ActionKind, [Direction]) for masking display
+    value: float = 0.0        # V(s) from the model's value head
+    advantage: Optional[float] = None  # GAE advantage (computed retroactively)
 
 
 # ── Ring buffer ───────────────────────────────────────────────────────
@@ -156,7 +159,7 @@ class StepHistoryModel(QAbstractItemModel):
     Only visible rows are materialised thanks to QTreeView virtual scrolling.
     """
 
-    COLUMNS = ("Step", "Action", "Reward")
+    COLUMNS = ("Step", "Action", "Advantage", "Reward")
 
     def __init__(self, history: StepHistory, parent=None):
         super().__init__(parent)
@@ -231,12 +234,16 @@ class StepHistoryModel(QAbstractItemModel):
         col = index.column()
 
         if role == Qt.ItemDataRole.DisplayRole:
+            adv_str = f"{entry.advantage:+.3f}" if entry.advantage is not None else ""
             display = {0: f"#{entry.step_number}", 1: format_action(entry.action),
-                       2: format_reward_value(entry.reward)}
+                       2: adv_str, 3: format_reward_value(entry.reward)}
             return display.get(col)
 
-        if role == Qt.ItemDataRole.ForegroundRole and col == 2:
-            return reward_color(entry.reward)
+        if role == Qt.ItemDataRole.ForegroundRole:
+            if col == 2 and entry.advantage is not None:
+                return _outcome_color(entry.advantage)
+            if col == 3:
+                return reward_color(entry.reward)
 
         return None
 
@@ -256,10 +263,10 @@ class StepHistoryModel(QAbstractItemModel):
         col = index.column()
 
         if role == Qt.ItemDataRole.DisplayRole:
-            display = {0: outcome.name, 2: f"{outcome.value:+.3f}"}
+            display = {0: outcome.name, 3: f"{outcome.value:+.3f}"}
             return display.get(col)
 
-        if role == Qt.ItemDataRole.ForegroundRole and col == 2:
+        if role == Qt.ItemDataRole.ForegroundRole and col == 3:
             return _outcome_color(outcome.value)
 
         return None
@@ -291,7 +298,7 @@ class StepHistoryWidget(QWidget):
         self._tree.setModel(self._model)
         self._tree.setRootIsDecorated(True)
         self._tree.setItemsExpandable(True)
-        self._tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._tree.setUniformRowHeights(True)
 
         header = self._tree.header()
@@ -299,6 +306,7 @@ class StepHistoryWidget(QWidget):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
 
         layout.addWidget(self._tree)
 
@@ -308,6 +316,10 @@ class StepHistoryWidget(QWidget):
 
         # Forward selection changes
         self._tree.selectionModel().currentChanged.connect(self._on_current_changed)
+
+        # Ctrl+C copies selected rows as tab-separated text
+        copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, self._tree)
+        copy_shortcut.activated.connect(self._copy_selection)  # pylint: disable=no-member
 
     # ── Public API ────────────────────────────────────────────────────
 
@@ -344,6 +356,42 @@ class StepHistoryWidget(QWidget):
         if self._sticky_scroll:
             self._tree.scrollToTop()
 
+    def recompute_advantages(self, gamma: float, lam: float) -> None:
+        """Recompute GAE advantages for all steps in the buffer.
+
+        Uses the standard GAE formula:
+          δ_t = r_t + γ·V(s_{t+1})·mask - V(s_t)
+          A_t = δ_t + γ·λ·mask·A_{t+1}
+        where mask=0 if step t was terminal/truncated (episode boundary).
+        """
+        n = len(self._history)
+        if n == 0:
+            return
+
+        last_gae = 0.0
+        for t in reversed(range(n)):
+            entry = self._history[t]
+            reward = entry.reward.value if hasattr(entry.reward, 'value') else float(entry.reward)
+
+            if t + 1 < n:
+                next_entry = self._history[t + 1]
+                next_value = next_entry.value
+                mask = 0.0 if entry.terminated or entry.truncated else 1.0
+            else:
+                next_value = 0.0
+                mask = 0.0  # no future info for the latest step
+
+            delta = reward + gamma * next_value * mask - entry.value
+            last_gae = delta + gamma * lam * mask * last_gae
+            entry.advantage = last_gae
+
+        # Notify the view that the advantage column changed
+        if n > 0:
+            adv_col = 2  # Advantage column index
+            top_left = self._model.index(0, adv_col)
+            bottom_right = self._model.index(n - 1, adv_col)
+            self._model.dataChanged.emit(top_left, bottom_right)  # pylint: disable=no-member
+
     def clear_history(self) -> None:
         """Clear all steps (e.g. on episode reset)."""
         self._model.beginResetModel()
@@ -365,3 +413,28 @@ class StepHistoryWidget(QWidget):
             return
         buf_idx = self._model._buf_index(current.row())  # pylint: disable=protected-access
         self.step_selected.emit(buf_idx)
+
+    def _copy_selection(self):
+        """Copy selected rows to clipboard as tab-separated text."""
+        indexes = self._tree.selectionModel().selectedIndexes()
+        if not indexes:
+            return
+
+        # Group indexes by (parent_id, row) to reconstruct rows
+        rows: dict[tuple, dict[int, str]] = {}
+        for idx in indexes:
+            key = (idx.internalId(), idx.row())
+            text = self._model.data(idx, Qt.ItemDataRole.DisplayRole) or ""
+            rows.setdefault(key, {})[idx.column()] = str(text)
+
+        # Sort by internal_id (top-level first) then row, and format
+        col_count = self._model.columnCount()
+        lines = []
+        for key in sorted(rows):
+            cells = rows[key]
+            line = "\t".join(cells.get(c, "") for c in range(col_count))
+            lines.append(line)
+
+        clipboard = QApplication.clipboard()
+        if clipboard:
+            clipboard.setText("\n".join(lines))

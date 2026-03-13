@@ -246,18 +246,29 @@ class ZeldaActionSpace(gym.Wrapper):
 
         Returns a concatenated tensor where the first K entries are the action type
         mask (True if ANY direction is valid for that type) and the last 4 entries
-        are the direction mask (always True per spec — wall penalty handles bad moves).
+        are the direction mask (True if ANY valid action type allows that direction).
         """
         k = self.num_action_types
         multihead_mask = torch.zeros(k + 4, dtype=torch.bool)
 
-        # Action type mask: type is available if any of its 4 directions are valid
         for i, action_kind in enumerate(self.actions_allowed):
             base = self.action_to_index[action_kind]
-            multihead_mask[i] = flat_mask[base:base + 4].any()
 
-        # Direction mask: always all True (spec: direction head is unconstrained)
-        multihead_mask[k:] = True
+            # Determine how many flat entries this action type uses
+            if i + 1 < k:
+                next_base = self.action_to_index[self.actions_allowed[i + 1]]
+            else:
+                next_base = len(flat_mask)
+            span = next_base - base
+
+            chunk = flat_mask[base:next_base]
+            multihead_mask[i] = chunk.any()
+
+            # Accumulate direction mask from the first 4 entries (N/S/W/E)
+            # of action types that have directional variants
+            if multihead_mask[i] and span >= 4:
+                multihead_mask[k:] |= chunk[:4]
+
         return multihead_mask
 
     def _action_direction_to_index(self, action, direction):
