@@ -4,7 +4,7 @@ from typing import Set, Tuple
 
 import torch
 
-from .zelda_enums import TileIndex, ZeldaEnemyKind, ZeldaItemKind, ZeldaProjectileId, Position
+from .zelda_enums import Direction, TileIndex, ZeldaEnemyKind, ZeldaItemKind, ZeldaProjectileId, Position
 
 @dataclass
 class ZeldaObject:
@@ -80,6 +80,8 @@ class ZeldaObject:
 @dataclass
 class Projectile(ZeldaObject):
     """Structured data for a projectile."""
+    direction : Direction = Direction.NONE
+
     def __eq__(self, value):
         return self.id == value or super().__eq__(value)
 

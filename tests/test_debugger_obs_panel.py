@@ -27,10 +27,9 @@ def _make_obs(**overrides):
     """Build a mock observation dict with sensible defaults."""
     obs = {
         "image": torch.zeros(4, 1, 84, 84),
-        "enemy_features": torch.zeros(4, 6),
-        "item_features": torch.zeros(2, 4),
-        "projectile_features": torch.zeros(2, 5),
-        "information": torch.zeros(14),
+        "entities": torch.zeros(12, 9),
+        "entity_types": torch.zeros(12).long(),
+        "information": torch.zeros(15),
     }
     obs.update(overrides)
     return obs
@@ -54,13 +53,10 @@ def test_panel_has_obs_image():
     panel.close()
 
 
-def test_panel_has_eight_vector_widgets():
-    """Panel has 8 vector circle widgets (4 enemy + 2 proj + 2 item)."""
+def test_panel_has_twelve_entity_rows():
+    """Panel has 12 entity row widgets."""
     panel = _make_panel()
-    assert len(panel.vector_widgets) == 8
-    expected = {"Enemy 1", "Enemy 2", "Enemy 3", "Enemy 4",
-                "Proj 1", "Proj 2", "Item 1", "Item 2"}
-    assert set(panel.vector_widgets.keys()) == expected
+    assert len(panel.entity_rows) == 12
     panel.close()
 
 
@@ -74,11 +70,11 @@ def test_panel_has_directional_circles():
     panel.close()
 
 
-def test_panel_has_four_boolean_indicators():
-    """Panel has 4 boolean indicators."""
+def test_panel_has_five_boolean_indicators():
+    """Panel has 5 boolean indicators."""
     panel = _make_panel()
-    assert len(panel.bool_indicators) == 4
-    expected = {"Enemies", "Beams", "Low HP", "Full HP"}
+    assert len(panel.bool_indicators) == 5
+    expected = {"Enemies", "Beams", "Low HP", "Full HP", "Clock"}
     assert set(panel.bool_indicators.keys()) == expected
     panel.close()
 
@@ -132,24 +128,15 @@ def test_obs_image_set_none_clears():
     widget.close()
 
 
-# ── VectorCircleWidget ────────────────────────────────────────
+# ── SmallArrowWidget ───────────────────────────────────────────
 
 
-def test_vector_circle_label():
-    """VectorCircleWidget stores and exposes its label."""
-    from triforce_debugger.observation_panel import VectorCircleWidget  # pylint: disable=import-outside-toplevel
+def test_small_arrow_widget():
+    """SmallArrowWidget renders without crash."""
+    from triforce_debugger.observation_panel import SmallArrowWidget  # pylint: disable=import-outside-toplevel
     _app = get_app()
-    w = VectorCircleWidget("Enemy 1")
-    assert w.label == "Enemy 1"
-    w.close()
-
-
-def test_vector_circle_set_vector():
-    """Setting vector and scale doesn't crash."""
-    from triforce_debugger.observation_panel import VectorCircleWidget  # pylint: disable=import-outside-toplevel
-    _app = get_app()
-    w = VectorCircleWidget("Test")
-    w.set_vector(np.array([0.5, -0.3]), 0.8)
+    w = SmallArrowWidget()
+    w.set_vector(0.5, -0.3)
     w.show()
     w.repaint()
     w.close()
@@ -230,9 +217,10 @@ def test_boolean_indicator_set_inactive():
 def test_update_observation_sets_booleans():
     """update_observation correctly sets boolean indicators."""
     panel = _make_panel()
-    info = torch.zeros(14)
+    info = torch.zeros(15)
     info[10] = 1.0  # Enemies active
     info[13] = 1.0  # Full HP
+    info[14] = 1.0  # Clock
     obs = _make_obs(information=info)
     panel.update_observation(obs)
 
@@ -240,13 +228,14 @@ def test_update_observation_sets_booleans():
     assert not panel.bool_indicators["Beams"].active
     assert not panel.bool_indicators["Low HP"].active
     assert panel.bool_indicators["Full HP"].active
+    assert panel.bool_indicators["Clock"].active
     panel.close()
 
 
 def test_update_observation_sets_objective_directions():
     """update_observation sets objective directional circle."""
     panel = _make_panel()
-    info = torch.zeros(14)
+    info = torch.zeros(15)
     info[0] = 1.0  # Objective North
     info[2] = 1.0  # Objective East
     obs = _make_obs(information=info)
@@ -261,7 +250,7 @@ def test_update_observation_sets_objective_directions():
 def test_update_observation_sets_source_directions():
     """update_observation sets source directional circle."""
     panel = _make_panel()
-    info = torch.zeros(14)
+    info = torch.zeros(15)
     info[7] = 1.0  # Source South
     obs = _make_obs(information=info)
     panel.update_observation(obs)
@@ -271,16 +260,20 @@ def test_update_observation_sets_source_directions():
     panel.close()
 
 
-def test_update_observation_sets_enemy_vectors():
-    """update_observation populates enemy vector widgets."""
+def test_update_observation_sets_entity_rows():
+    """update_observation populates entity rows."""
     panel = _make_panel()
-    enemy_features = torch.zeros(4, 6)
-    enemy_features[0, 1] = 0.3   # closeness → scale = 0.7
-    enemy_features[0, 2] = 0.5   # direction x
-    enemy_features[0, 3] = -0.5  # direction y
-    obs = _make_obs(enemy_features=enemy_features)
+    panel.show()
+    entities = torch.zeros(12, 9)
+    entities[0, 0] = 1.0    # presence
+    entities[0, 1] = 0.5    # rel_x
+    entities[0, 2] = -0.3   # rel_y
+    entity_types = torch.zeros(12).long()
+    entity_types[0] = 1
+    obs = _make_obs(entities=entities, entity_types=entity_types)
     panel.update_observation(obs)
-    # No crash — visual verification would need manual inspection
+    assert panel.entity_rows[0].isVisible()
+    assert not panel.entity_rows[1].isVisible()
     panel.close()
 
 

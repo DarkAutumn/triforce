@@ -5,59 +5,53 @@ convert the image to grayscale.  We also stack multiple frames together to give 
 of motion over time.
 """
 
-from enum import Enum
 from typing import List
 import gymnasium as gym
-from gymnasium.spaces import Box, Dict, Discrete
+from gymnasium.spaces import Box, Dict
 import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .zelda_enums import GAMEPLAY_START_Y, Direction
+from .zelda_enums import GAMEPLAY_START_Y, Direction, ZeldaEnemyKind, ZeldaItemKind, ZeldaProjectileId
 from .objectives import ObjectiveKind
 from .zelda_game import ZeldaGame
 
 GRAYSCALE_WEIGHTS = torch.FloatTensor([0.2989, 0.5870, 0.1140])
 _GRAYSCALE_WEIGHTS_4D = GRAYSCALE_WEIGHTS.view(1, -1, 1, 1)
 _GRAYSCALE_NORM_WEIGHTS_4D = _GRAYSCALE_WEIGHTS_4D / 255.0
-BOOLEAN_FEATURES = 14
-DISTANCE_SCALE = 100.0
+BOOLEAN_FEATURES = 15
 VIEWPORT_PIXELS = 128
 
-ENEMY_COUNT = 4
-ENEMY_FEATURES = 6
-NUM_ENEMY_TYPES = 49
-ITEM_COUNT = 2
-ITEM_FEATURES = 4
-PROJECTILE_COUNT = 2
-PROJECTILE_FEATURES = 5
+# Unified entity observation: 11 NES object slots + 1 treasure slot
+ENTITY_SLOTS = 12
+ENTITY_FEATURES = 9
+POSITION_SCALE = 128.0
 
-# Image features are defined as a grayscale image of the game screen.
-# This can be trimmed to remove the HUD, or resized to be a viewport around Link.
+# Entity type ID mapping for unified embedding (0 = empty/unknown)
+_ENTITY_TYPE_MAP = {}
+_next_id = 1
 
+for _member in ZeldaEnemyKind:
+    _ENTITY_TYPE_MAP[_member] = _next_id
+    _next_id += 1
 
-# Object features are defined as a normalized vector (x, y) and a distance scaled to [0, 1]:
-#   0: closest enemy tile
-#   1: closest projectile tile
-#   2: closest item tile
+for _member in ZeldaItemKind:
+    _ENTITY_TYPE_MAP[_member] = _next_id
+    _next_id += 1
 
-# Objective features:
-#   0: move_north
-#   1: move_south
-#   2: move_east
-#   3: move_west
-#   4: get_item
-#   5: fight_enemies
+for _member in ZeldaProjectileId:
+    _ENTITY_TYPE_MAP[_member] = _next_id
+    _next_id += 1
 
-# Source location:
-#   0: from_north
-#   1: from_south
-#   2: from_east
-#   3: from_west
+TREASURE_TYPE_ID = _next_id
+_next_id += 1
+NUM_ENTITY_TYPES = _next_id
 
-# Boolean features:
-#   0 has_beams: whether link has beams available
-#   1 has_enemies: whether there are active enemies
+# Reverse mapping for debugger display
+ENTITY_TYPE_NAMES = {0: "Empty"}
+for _key, _val in _ENTITY_TYPE_MAP.items():
+    ENTITY_TYPE_NAMES[_val] = _key.name
+ENTITY_TYPE_NAMES[TREASURE_TYPE_ID] = "Treasure"
 
 class ObservationWrapper(gym.Wrapper):
     """A wrapper that trims the HUD and converts the image to grayscale."""
@@ -80,14 +74,10 @@ class ObservationWrapper(gym.Wrapper):
 
         self.observation_space = Dict({
             "image": self._get_box_observation_space(),
-            "enemy_features": Box(low=-1.0, high=1.0, shape=(4, ENEMY_FEATURES), dtype=np.float32),
-            "enemy_id": Discrete(ENEMY_COUNT),
-            "item_features": Box(low=-1.0, high=1.0, shape=(2, ITEM_FEATURES), dtype=np.float32),
-            "projectile_features": Box(low=-1.0, high=1.0, shape=(2, PROJECTILE_FEATURES), dtype=np.float32),
+            "entities": Box(low=-1.0, high=1.0, shape=(ENTITY_SLOTS, ENTITY_FEATURES), dtype=np.float32),
+            "entity_types": gym.spaces.MultiDiscrete([NUM_ENTITY_TYPES] * ENTITY_SLOTS),
             "information" : gym.spaces.MultiBinary(BOOLEAN_FEATURES)
         })
-
-        self._id_cache = {}
 
     def reset(self, **kwargs):
         frames, state = self.env.reset(**kwargs)
@@ -105,12 +95,11 @@ class ObservationWrapper(gym.Wrapper):
 
     def _get_observation(self, state : ZeldaGame, frames : List[np.ndarray]):
         tensor = self._get_stacked_frames(frames, self.frame_stack, self.frame_skip)
+        entities, entity_types = self._get_entity_observation(state)
         return {
             "image" : self._get_image_observation(state, tensor),
-            "enemy_features" : self._get_enemy_features(state),
-            "enemy_id" : self._get_enemy_ids(state),
-            "item_features" : self._get_item_features(state),
-            "projectile_features" : self._get_projectile_features(state),
+            "entities" : entities,
+            "entity_types" : entity_types,
             "information" : self._get_information(state)
             }
 
@@ -238,86 +227,57 @@ class ObservationWrapper(gym.Wrapper):
 
         return frame
 
-    def _get_enemy_features(self, state: ZeldaGame) -> torch.Tensor:
-        # Enemy features:
-        #   0: presence (0 or 1 if there is an enemy in this slot)
-        #   1: closeness (0 if far away, 1 if right on top of link)
-        #   2-3: vector
-        #   4-5: direction
-        vectors = torch.zeros(ENEMY_COUNT, ENEMY_FEATURES, dtype=torch.float32)
-        enemies = state.active_enemies or state.enemies
-        if enemies:
-            for i, enemy in enumerate(enemies):
-                if i >= ENEMY_COUNT:
-                    break
-                vectors[i, 0] = 1
-                vectors[i, 1] = self._distance_to_proximity(enemy.distance, DISTANCE_SCALE)
-                vectors[i, 2:4] = enemy.vector
-                vectors[i, 4:6] = enemy.direction.vector
+    def _get_entity_observation(self, state: ZeldaGame):
+        """Build unified entity features and type IDs for all 12 slots.
 
-        return vectors.clamp(-1, 1)
+        Entity features per slot (9 dims):
+            0: presence (0 or 1)
+            1: rel_x  (entity.x - link.x) / POSITION_SCALE
+            2: rel_y  (entity.y - link.y) / POSITION_SCALE
+            3: dir_x  entity movement direction x
+            4: dir_y  entity movement direction y
+            5: health (enemy HP / 15, 0 for non-enemies)
+            6: stun   (enemy stun_timer / 255, 1.0 when clock active)
+            7: hurts_on_touch (1 for enemies/projectiles, 0 when clock active)
+            8: killable (1 for enemies only)
+        """
+        features = torch.zeros(ENTITY_SLOTS, ENTITY_FEATURES, dtype=torch.float32)
+        types = torch.zeros(ENTITY_SLOTS, dtype=torch.int64)
 
-    def _get_enemy_ids(self, state: ZeldaGame) -> torch.Tensor:
-        ids = torch.zeros(ENEMY_COUNT, dtype=torch.float32)
-        enemies = state.active_enemies or state.enemies
-        for i, enemy in enumerate(enemies):
-            if i >= ENEMY_COUNT:
-                break
+        has_clock = bool(state.link.clock)
+        link_x = state.link.position.x
+        link_y = state.link.position.y
 
-            if (e_id := self._id_cache.get(enemy.id, None)) is None:
-                e_id = enemy.id
-                if isinstance(e_id, Enum):
-                    e_id = e_id.value
-                self._id_cache[enemy.id] = int(e_id)
+        # NES object slots 1-11 (indices 0-10)
+        for i, entry in enumerate(state.all_entities):
+            if entry is None:
+                continue
+            entity, category = entry
+            features[i, 0] = 1.0
+            features[i, 1] = (entity.position.x - link_x) / POSITION_SCALE
+            features[i, 2] = (entity.position.y - link_y) / POSITION_SCALE
 
-            ids[i] = e_id
+            if category == 'enemy':
+                features[i, 3:5] = entity.direction.vector
+                features[i, 5] = entity.health / 15.0
+                features[i, 6] = 1.0 if has_clock else min(entity.stun_timer / 255.0, 1.0)
+                features[i, 7] = 0.0 if has_clock else 1.0
+                features[i, 8] = 1.0
+            elif category == 'projectile':
+                features[i, 3:5] = entity.direction.vector
+                features[i, 7] = 0.0 if has_clock else 1.0
 
-        return ids
+            types[i] = _ENTITY_TYPE_MAP.get(entity.id, 0)
 
-    def _get_item_features(self, state: ZeldaGame) -> torch.Tensor:
-        # Item features:
-        #   0: presence (0 or 1 if there is an item in this slot)
-        #   1: closeness (0 if far away, 1 if right on top of link)
-        #   2-3: vector
-        vectors = torch.zeros(ITEM_COUNT, ITEM_FEATURES, dtype=torch.float32)
-        items = state.items
-        if state.treasure is not None:
-            items = [state.treasure, *items]
+        # Slot 11 (index 11): treasure
+        treasure = state.treasure
+        if treasure is not None:
+            features[11, 0] = 1.0
+            features[11, 1] = (treasure.position.x - link_x) / POSITION_SCALE
+            features[11, 2] = (treasure.position.y - link_y) / POSITION_SCALE
+            types[11] = TREASURE_TYPE_ID
 
-        for i, item in enumerate(items):
-            if i >= ITEM_COUNT:
-                break
-            vectors[i, 0] = 1
-            vectors[i, 1] = self._distance_to_proximity(item.distance, DISTANCE_SCALE)
-            vectors[i, 2:4] = item.vector
-
-        return vectors.clamp(-1, 1)
-
-    def _get_projectile_features(self, state: ZeldaGame) -> torch.Tensor:
-        # Projectile features:
-        #   0: presence (0 or 1 if there is a projectile in this slot)
-        #   1: closeness (0 if far away, 1 if right on top of link)
-        #   2-3: vector
-        #   4: blockable
-        vectors = torch.zeros(PROJECTILE_COUNT, PROJECTILE_FEATURES, dtype=torch.float32)
-        for i, proj in enumerate(state.projectiles):
-            if i >= PROJECTILE_COUNT:
-                break
-            vectors[i, 0] = 1
-            vectors[i, 1] = self._distance_to_proximity(proj.distance, DISTANCE_SCALE)
-            vectors[i, 2:4] = proj.vector
-            vectors[i, 4] = 1 if proj.blockable else -1
-
-        return vectors.clamp(-1, 1)
-
-    def _distance_to_proximity(self, distance: float, scale: float, min_closeness: float = 0.1) -> float:
-        if distance <= 5:
-            return 1.0
-        if distance >= scale:
-            return min_closeness
-
-        closeness = 1.0 - ((distance - 5) / (scale - 5))
-        return max(min_closeness, min_closeness + closeness * (1 - min_closeness))
+        return features.clamp(-1, 1), types
 
     def _get_information(self, state : ZeldaGame):
         result = torch.zeros(BOOLEAN_FEATURES, dtype=torch.float32)
@@ -339,11 +299,12 @@ class ObservationWrapper(gym.Wrapper):
         direction = full_loc.get_direction_to(self._prev_loc)
         self._assign_direction_offset(result, 6, direction)
 
-        # Features (indices 10-13)
+        # Features (indices 10-14)
         result[10] = 1.0 if state.active_enemies else 0.0
         result[11] = 1.0 if state.link.are_beams_available else 0.0
         result[12] = 1.0 if state.link.health <= 1 else 0.0
         result[13] = 1.0 if state.link.is_health_full else 0.0
+        result[14] = 1.0 if state.link.clock else 0.0
 
         return result
 

@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 import torch
+import gymnasium as gym
 from gymnasium.spaces import Box, Dict, Discrete, MultiDiscrete, MultiBinary
 
 from triforce.ml_ppo import PPO
@@ -26,11 +27,9 @@ def _make_obs_space():
     """Create a mock observation space matching ZeldaObservationWrapper output."""
     return Dict({
         "image": Box(low=0.0, high=1.0, shape=(1, 128, 128), dtype=np.float32),
-        "enemy_features": Box(low=-1.0, high=1.0, shape=(4, 6), dtype=np.float32),
-        "enemy_id": Discrete(4),
-        "item_features": Box(low=-1.0, high=1.0, shape=(2, 4), dtype=np.float32),
-        "projectile_features": Box(low=-1.0, high=1.0, shape=(2, 5), dtype=np.float32),
-        "information": MultiBinary(14),
+        "entities": Box(low=-1.0, high=1.0, shape=(12, 9), dtype=np.float32),
+        "entity_types": gym.spaces.MultiDiscrete([74] * 12),
+        "information": MultiBinary(15),
     })
 
 
@@ -38,11 +37,9 @@ def _make_random_obs():
     """Create a random observation as tensors."""
     return {
         "image": torch.randn(1, 128, 128),
-        "enemy_features": torch.randn(4, 6),
-        "enemy_id": torch.zeros(4),
-        "item_features": torch.randn(2, 4),
-        "projectile_features": torch.randn(2, 5),
-        "information": torch.zeros(14),
+        "entities": torch.randn(12, 9),
+        "entity_types": torch.zeros(12).long(),
+        "information": torch.zeros(15),
     }
 
 
@@ -130,11 +127,9 @@ class TestMultiHeadPPOUpdate:
 
         obs = {
             "image": torch.randn(4, 1, 128, 128),
-            "enemy_features": torch.randn(4, 4, 6),
-            "enemy_id": torch.zeros(4, 4),
-            "item_features": torch.randn(4, 2, 4),
-            "projectile_features": torch.randn(4, 2, 5),
-            "information": torch.zeros(4, 14),
+            "entities": torch.randn(4, 12, 9),
+            "entity_types": torch.zeros(4, 12).long(),
+            "information": torch.zeros(4, 15),
         }
         mask = torch.ones(4, 7, dtype=torch.bool)
 
@@ -159,11 +154,9 @@ class TestPerHeadEntropyDetails:
 
         obs = {
             "image": torch.randn(4, 1, 128, 128),
-            "enemy_features": torch.randn(4, 4, 6),
-            "enemy_id": torch.zeros(4, 4),
-            "item_features": torch.randn(4, 2, 4),
-            "projectile_features": torch.randn(4, 2, 5),
-            "information": torch.zeros(4, 14),
+            "entities": torch.randn(4, 12, 9),
+            "entity_types": torch.zeros(4, 12).long(),
+            "information": torch.zeros(4, 15),
         }
         mask = torch.ones(4, 7, dtype=torch.bool)
 
@@ -185,11 +178,9 @@ class TestPerHeadEntropyDetails:
 
         obs = {
             "image": torch.randn(4, 1, 128, 128),
-            "enemy_features": torch.randn(4, 4, 6),
-            "enemy_id": torch.zeros(4, 4),
-            "item_features": torch.randn(4, 2, 4),
-            "projectile_features": torch.randn(4, 2, 5),
-            "information": torch.zeros(4, 14),
+            "entities": torch.randn(4, 12, 9),
+            "entity_types": torch.zeros(4, 12).long(),
+            "information": torch.zeros(4, 15),
         }
 
         full_mask = torch.ones(4, 7, dtype=torch.bool)
