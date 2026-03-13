@@ -431,13 +431,15 @@ class MultiHeadAgent(Network):
             bad_dir = ~direction_mask.any(dim=-1)
             if bad_type.any() or bad_dir.any():
                 idx = (bad_type | bad_dir).nonzero(as_tuple=True)[0][0].item()
+                info_vec = obs['info'][idx].tolist() if 'info' in obs else 'N/A'
                 raise ValueError(
-                    f"Empty action mask in batch element {idx}. "
-                    f"action_type_mask={action_type_mask[idx].tolist()}, "
-                    f"direction_mask={direction_mask[idx].tolist()}, "
-                    f"full_mask={mask[idx].tolist()}, "
-                    f"num_action_types={num_action_types}, "
-                    f"nvec={self.action_space.nvec.tolist()}"
+                    f"Empty action mask in batch element {idx}.\n"
+                    f"  action_type_mask={action_type_mask[idx].tolist()}\n"
+                    f"  direction_mask={direction_mask[idx].tolist()}\n"
+                    f"  full_mask={mask[idx].tolist()}\n"
+                    f"  num_action_types={num_action_types}\n"
+                    f"  nvec={self.action_space.nvec.tolist()}\n"
+                    f"  info={info_vec}"
                 )
 
             action_type_logits = action_type_logits.clone()
