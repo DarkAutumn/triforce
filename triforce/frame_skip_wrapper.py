@@ -223,7 +223,7 @@ class ZeldaCooldownHandler:
 
         return terminated, truncated, info, loc
 
-    def _can_move_from(self, pos, direction, info):
+    def _can_move_from(self, pos, direction, info):  # pylint: disable=too-many-return-statements
         """Deterministic check: will Link move if we press direction from pos?
 
         Uses the cached Room to check tile walkability.  If the Room is not cached
@@ -238,7 +238,7 @@ class ZeldaCooldownHandler:
         # When in a doorway, NES constrains Link to only move in the doorway direction.
         # Walker_Move skips BoundByRoom but Link_ModifyDirInDoorway forces the direction.
         doorway_dir = info.get('doorway_dir', 0)
-        if doorway_dir != 0 and direction.value != doorway_dir:
+        if doorway_dir not in (0, direction.value):
             return False
 
         # UW room boundary check (NES BoundByRoom in Z_01.asm:3505).
@@ -253,7 +253,10 @@ class ZeldaCooldownHandler:
                 check_dir = direction
             elif abs(grid_offset) >= 4:
                 obj_dir = info.get('link_direction', 0)
-                check_dir = Direction(obj_dir) if obj_dir in Direction._value2member_map_ else None
+                try:
+                    check_dir = Direction(obj_dir)
+                except ValueError:
+                    check_dir = None
             else:
                 check_dir = None
 
