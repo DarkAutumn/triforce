@@ -426,8 +426,19 @@ class MultiHeadAgent(Network):
         if mask is not None:
             action_type_mask = mask[..., :num_action_types]
             direction_mask = mask[..., num_action_types:]
-            assert action_type_mask.any(dim=-1).all(), "Action type mask must have at least one valid action"
-            assert direction_mask.any(dim=-1).all(), "Direction mask must have at least one valid direction"
+
+            bad_type = ~action_type_mask.any(dim=-1)
+            bad_dir = ~direction_mask.any(dim=-1)
+            if bad_type.any() or bad_dir.any():
+                idx = (bad_type | bad_dir).nonzero(as_tuple=True)[0][0].item()
+                raise ValueError(
+                    f"Empty action mask in batch element {idx}. "
+                    f"action_type_mask={action_type_mask[idx].tolist()}, "
+                    f"direction_mask={direction_mask[idx].tolist()}, "
+                    f"full_mask={mask[idx].tolist()}, "
+                    f"num_action_types={num_action_types}, "
+                    f"nvec={self.action_space.nvec.tolist()}"
+                )
 
             action_type_logits = action_type_logits.clone()
             action_type_logits[~action_type_mask] = -1e9

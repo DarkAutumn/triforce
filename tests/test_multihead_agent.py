@@ -176,7 +176,7 @@ class TestMultiHeadMasking:
         obs = _make_obs_batch(1)
         mask = torch.zeros(1, 7, dtype=torch.bool)
         mask[:, 3:7] = True  # directions OK, but no action types
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError, match="Empty action mask"):
             agent.get_action_and_value(obs, mask=mask)
 
     def test_mask_assertion_no_valid_direction(self):
@@ -188,7 +188,7 @@ class TestMultiHeadMasking:
         obs = _make_obs_batch(1)
         mask = torch.zeros(1, 7, dtype=torch.bool)
         mask[:, 0:3] = True  # types OK, but no directions
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError, match="Empty action mask"):
             agent.get_action_and_value(obs, mask=mask)
 
 

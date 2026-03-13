@@ -352,6 +352,13 @@ class ZeldaActionSpace(gym.Wrapper):
                 for direction in invalid[action]:
                     mask[index + self._direction_to_index(direction)] = False
 
+        # Safety: if the mask is entirely empty (Link stuck + no valid sword/beams),
+        # force-enable all MOVE directions so the agent can always act.
+        if not mask.any():
+            move_index = self.action_to_index[ActionKind.MOVE]
+            for direction in (Direction.N, Direction.S, Direction.W, Direction.E):
+                mask[move_index + self._direction_to_index(direction)] = True
+
         return mask
 
     def _update_mask(self, state : ZeldaGame, invalid):
