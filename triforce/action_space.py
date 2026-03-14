@@ -5,6 +5,8 @@
 
 from numbers import Integral
 from typing import List, Sequence
+import gzip
+import os
 import gymnasium as gym
 from gymnasium.spaces import MultiDiscrete
 import numpy as np
@@ -353,23 +355,62 @@ class ZeldaActionSpace(gym.Wrapper):
                     mask[index + self._direction_to_index(direction)] = False
 
         if not mask.any():
-            px, py = link.position
-            tile = link.tile
-            move_results = {d: state.can_link_move(d) for d in
-                            (Direction.N, Direction.S, Direction.W, Direction.E)}
-            raise RuntimeError(
-                f"Empty action mask — Link should always have at least one valid move.\n"
-                f"  location: {state.full_location}, level: {state.level}\n"
-                f"  link position: ({px}, {py}), tile: ({tile.x}, {tile.y})\n"
-                f"  link_status: {link.status}, direction: {link.direction}\n"
-                f"  can_link_move: {move_results}\n"
-                f"  actions_possible: {sorted(a.name for a in actions_possible)}\n"
-                f"  invalid_actions: {state.info.get('invalid_actions', [])}\n"
-                f"  active_enemies: {len(state.active_enemies)}, items: {len(state.items)}\n"
-                f"  flat_mask: {mask.tolist()}"
-            )
+            self._raise_empty_mask(state, link, actions_possible, mask)
 
         return mask
+
+    def _raise_empty_mask(self, state, link, actions_possible, mask):
+        """Raise a detailed RuntimeError when the action mask is entirely empty."""
+        px, py = link.position
+        tile = link.tile
+        move_results = {d: state.can_link_move(d) for d in
+                        (Direction.N, Direction.S, Direction.W, Direction.E)}
+
+        # Collect tile values at all 6 hotspot positions
+        room = state.room
+        feet_row = (py - 53) // 8
+        hotspots = {
+            'W': ((px - 8) // 8, feet_row),
+            'E': ((px + 16) // 8, feet_row),
+            'N_left': (px // 8, (py - 61) // 8),
+            'N_right': (px // 8 + 1, (py - 61) // 8),
+            'S_left': (px // 8, (py - 45) // 8),
+            'S_right': (px // 8 + 1, (py - 45) // 8),
+        }
+        tile_vals = {}
+        for name, (tc, tr) in hotspots.items():
+            if 0 <= tc < room.tiles.shape[0] and 0 <= tr < room.tiles.shape[1]:
+                val = int(room.tiles[tc, tr])
+                tile_vals[name] = f"({tc},{tr})=0x{val:02x} walk={val < room.threshold}"
+            else:
+                tile_vals[name] = f"({tc},{tr})=OOB"
+
+        # Save emulator state for debugging
+        state_path = ""
+        try:
+            emu_state = self.env.unwrapped.em.get_state()
+            state_path = os.path.join(os.path.dirname(__file__),
+                                      'custom_integrations', 'Zelda-NES',
+                                      'debug_empty_mask.state')
+            with gzip.open(state_path, 'wb') as f:
+                f.write(emu_state)
+        except Exception as save_err:  # pylint: disable=broad-except
+            state_path = f"(save failed: {save_err})"
+
+        raise RuntimeError(
+            f"Empty action mask — Link should always have at least one valid move.\n"
+            f"  location: {state.full_location}, level: {state.level}\n"
+            f"  link position: ({px}, {py}), tile: ({tile.x}, {tile.y})\n"
+            f"  link_status: {link.status}, direction: {link.direction}\n"
+            f"  can_link_move: {move_results}\n"
+            f"  actions_possible: {sorted(a.name for a in actions_possible)}\n"
+            f"  invalid_actions: {state.info.get('invalid_actions', [])}\n"
+            f"  active_enemies: {len(state.active_enemies)}, items: {len(state.items)}\n"
+            f"  tile hotspots: {tile_vals}\n"
+            f"  room loaded: {room.is_loaded}, threshold: 0x{room.threshold:02x}\n"
+            f"  saved state: {state_path}\n"
+            f"  flat_mask: {mask.tolist()}"
+        )
 
     def _update_mask(self, state : ZeldaGame, invalid):
         """Removes certain actions if we are at the edge of the screen which link cannot perform."""
