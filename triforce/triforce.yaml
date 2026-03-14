@@ -67,6 +67,7 @@ scenarios:
   critic: GameplayCritic
   end_conditions:
   - GainedTriforce
+  - GotWallmastered
   - GameOver
   - Timeout
   metrics:
@@ -89,6 +90,7 @@ scenarios:
   critic: GameplayCritic
   end_conditions:
   - GainedTriforce
+  - GotWallmastered
   - CollectedTreasure
   - GameOver
   - Timeout
@@ -228,6 +230,7 @@ scenarios:
   critic: GameplayCritic
   end_conditions:
   - RoomWalkCondition
+  - GotWallmastered
   - GainedTriforce
   metrics:
   - success-rate
@@ -263,6 +266,7 @@ scenarios:
   critic: GameplayCritic
   end_conditions:
   - RoomWalkCondition
+  - GotWallmastered
   - LeftDungeon
   metrics:
   - success-rate
@@ -288,6 +292,7 @@ scenarios:
     treasure: triforce
   critic: GameplayCritic
   end_conditions:
+  - GotWallmastered
   - LeftDungeon
   - GainedTriforce
   - GameOver
@@ -318,6 +323,7 @@ scenarios:
     treasure: triforce
   critic: GameplayCritic
   end_conditions:
+  - GotWallmastered
   - LeftDungeon
   - GainedTriforce
   - CollectedTreasure
@@ -345,6 +351,7 @@ scenarios:
     treasure: triforce
   critic: GameplayCritic
   end_conditions:
+  - GotWallmastered
   - LeftDungeon
   - GainedTriforce
   - CollectedTreasure
@@ -373,6 +380,7 @@ scenarios:
     treasure: triforce
   critic: GameplayCritic
   end_conditions:
+  - GotWallmastered
   - LeftDungeon
   - GainedTriforce
   - CollectedTreasure

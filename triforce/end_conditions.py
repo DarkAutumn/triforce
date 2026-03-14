@@ -116,16 +116,21 @@ class GainedTriforce(ZeldaEndCondition):
 
         return False, False, None
 
+class GotWallmastered(ZeldaEndCondition):
+    """End the scenario if the agent gets grabbed by a Wallmaster."""
+    def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
+        if any(x.id == ZeldaEnemyKind.Wallmaster for x in state_change.previous.enemies) \
+                and state_change.previous.full_location.manhattan_distance(state_change.state.full_location) > 1:
+            return True, False, "failure-wallmastered"
+
+        return False, False, None
+
 class LeftDungeon(ZeldaEndCondition):
     """End the scenario if the agent leaves the dungeon."""
     def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
         if state_change.state.level == 0:
             if not state_change.gained_triforce:
                 return True, False, "failure-left-dungeon"
-
-        if any(x.id == ZeldaEnemyKind.Wallmaster for x in state_change.previous.enemies) \
-                and state_change.previous.full_location.manhattan_distance(state_change.state.full_location) > 1:
-            return True, False, "failure-wallmastered"
 
         return False, False, None
 

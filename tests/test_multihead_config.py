@@ -63,7 +63,7 @@ class TestSkipSwordToTriforceScenario:
         No early termination conditions that would cap progress before triforce collection.
         """
         scenario = TrainingScenarioDefinition.get("skip-sword-to-triforce")
-        expected = ["GainedTriforce", "CollectedTreasure", "GameOver", "Timeout"]
+        expected = ["GainedTriforce", "GotWallmastered", "CollectedTreasure", "GameOver", "Timeout"]
         assert scenario.end_conditions == expected, (
             f"Expected end conditions {expected}, got {scenario.end_conditions}. "
             "Early termination conditions would cap game progress."
