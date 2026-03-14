@@ -361,7 +361,7 @@ class ZeldaActionSpace(gym.Wrapper):
                 f"Empty action mask — Link should always have at least one valid move.\n"
                 f"  location: {state.full_location}, level: {state.level}\n"
                 f"  link position: ({px}, {py}), tile: ({tile.x}, {tile.y})\n"
-                f"  link_status: {link.status}, animation: {link.animation}\n"
+                f"  link_status: {link.status}, direction: {link.direction}\n"
                 f"  can_link_move: {move_results}\n"
                 f"  actions_possible: {sorted(a.name for a in actions_possible)}\n"
                 f"  invalid_actions: {state.info.get('invalid_actions', [])}\n"
