@@ -1,13 +1,14 @@
-"""Observation panel — displays network input image, vector arrows, booleans, directional circles."""
+"""Observation panel — displays network input image, entity list, booleans, directional circles."""
 
 import math
 
 import numpy as np
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPainter, QImage, QColor, QPen, QPolygonF
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel
+from PySide6.QtGui import QPainter, QImage, QColor, QPen, QPolygonF, QFont
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 
 from triforce.zelda_enums import Direction
+from triforce.observation_wrapper import ENTITY_SLOTS, ENTITY_TYPE_NAMES
 
 
 # ── Observation image widget ──────────────────────────────────
@@ -78,47 +79,97 @@ class ObsImageWidget(QWidget):
         painter.end()
 
 
-# ── Vector circle widget ─────────────────────────────────────
+# ── Small arrow widget ────────────────────────────────────────
 
-class VectorCircleWidget(QWidget):
-    """A labeled circle with a directional arrow showing an entity's direction and distance."""
+class SmallArrowWidget(QWidget):
+    """A small circle with a directional arrow showing relative entity position."""
 
-    RADIUS = 30
+    RADIUS = 12
     ARROW_COLOR = QColor(255, 0, 0)
-    ARROWHEAD_SIZE = 7
+    ARROWHEAD_SIZE = 5
 
-    def __init__(self, label: str, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self._label = label
         self._vector = np.array([0.0, 0.0])
-        self._scale = 0.0
         size = self.RADIUS * 2 + 4
-        self.setFixedSize(size, size + 16)
+        self.setFixedSize(size, size)
 
-    @property
-    def label(self) -> str:
-        """The widget label text."""
-        return self._label
-
-    def set_vector(self, vector: np.ndarray, scale: float):
-        """Set the direction vector and scale (0=far/invisible, 1=close/full arrow)."""
-        self._vector = np.asarray(vector, dtype=np.float64)
-        self._scale = float(np.clip(scale, 0.0, 1.0))
+    def set_vector(self, rel_x: float, rel_y: float):
+        """Set the direction vector from link to entity (already normalized to [-1,1])."""
+        self._vector = np.array([float(rel_x), float(rel_y)], dtype=np.float64)
         self.update()
 
     def paintEvent(self, _event):  # pylint: disable=invalid-name
-        """Draw the labeled circle with directional arrow."""
+        """Draw the circle with directional arrow."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        center = _paint_labeled_circle(painter, self.width(), self.RADIUS, self._label)
+        cx = self.width() / 2
+        cy = self.height() / 2
+        center = QPointF(cx, cy)
 
-        # Arrow
-        if self._scale > 0.01 and (self._vector[0] != 0 or self._vector[1] != 0):
-            _draw_arrow(painter, center, self._vector, self._scale,
+        painter.setPen(QPen(QColor(0, 0, 0), 1))
+        painter.drawEllipse(center, self.RADIUS, self.RADIUS)
+
+        mag = math.sqrt(self._vector[0] ** 2 + self._vector[1] ** 2)
+        if mag > 0.01:
+            norm = self._vector / mag
+            scale = min(mag, 1.0)
+            _draw_arrow(painter, center, norm, scale,
                         self.RADIUS, self.ARROW_COLOR, self.ARROWHEAD_SIZE)
 
         painter.end()
+
+
+# ── Entity row widget ─────────────────────────────────────────
+
+class EntityRowWidget(QWidget):
+    """Single entity row: direction arrow + type name + properties."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(2, 1, 2, 1)
+        layout.setSpacing(4)
+
+        self.arrow = SmallArrowWidget()
+        layout.addWidget(self.arrow)
+
+        self.name_label = QLabel("")
+        self.name_label.setMinimumWidth(90)
+        font = QFont()
+        font.setPointSize(8)
+        font.setBold(True)
+        self.name_label.setFont(font)
+        layout.addWidget(self.name_label)
+
+        self.props_label = QLabel("")
+        props_font = QFont()
+        props_font.setPointSize(7)
+        self.props_label.setFont(props_font)
+        layout.addWidget(self.props_label)
+        layout.addStretch()
+
+    def set_entity(self, type_name, rel_x, rel_y, health, stun, hurts, killable):
+        """Update the row with entity data."""
+        self.arrow.set_vector(rel_x, rel_y)
+        self.name_label.setText(type_name)
+        props = []
+        if health > 0.01:
+            props.append(f"HP:{health * 15:.0f}")
+        if stun > 0.01:
+            props.append(f"Stun:{stun:.2f}")
+        if hurts > 0.5:
+            props.append("\u26a0")  # ⚠
+        if killable > 0.5:
+            props.append("\u2694")  # ⚔
+        self.props_label.setText(" ".join(props))
+
+    def clear_entity(self):
+        """Hide this row's data."""
+        self.arrow.set_vector(0, 0)
+        self.name_label.setText("")
+        self.props_label.setText("")
 
 
 # ── Directional circle widget ────────────────────────────────
@@ -216,10 +267,7 @@ class BooleanIndicator(QLabel):
 
 def _paint_labeled_circle(painter: QPainter, width: int, radius: float,
                           label: str, bold: bool = False) -> QPointF:
-    """Draw a labeled circle and return its center point.
-
-    Used by VectorCircleWidget, DirectionalCircleWidget, and ProbabilityArrowWidget.
-    """
+    """Draw a labeled circle and return its center point."""
     font = painter.font()
     font.setPointSize(7)
     font.setBold(bold)
@@ -264,7 +312,7 @@ def _draw_arrow(painter: QPainter, center: QPointF, vector: np.ndarray,
 # ── Main observation panel ────────────────────────────────────
 
 class ObservationPanel(QWidget):
-    """Full observation panel: network input image, vector arrows, directional circles, booleans."""
+    """Full observation panel: network input image, entity list, directional circles, booleans."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -287,21 +335,23 @@ class ObservationPanel(QWidget):
         self.obs_image = ObsImageWidget()
         layout.addWidget(self.obs_image)
 
-        # Vector circles: 4 enemies, 2 projectiles, 2 items in a 4×2 grid
-        vector_grid = QGridLayout()
-        vector_grid.setSpacing(2)
-        self.vector_widgets: dict[str, VectorCircleWidget] = {}
-        labels = [
-            "Enemy 1", "Enemy 2",
-            "Enemy 3", "Enemy 4",
-            "Proj 1", "Proj 2",
-            "Item 1", "Item 2",
-        ]
-        for i, label in enumerate(labels):
-            widget = VectorCircleWidget(label)
-            self.vector_widgets[label] = widget
-            vector_grid.addWidget(widget, i // 2, i % 2)
-        layout.addLayout(vector_grid)
+        # Entity list header
+        entity_header = QLabel("Entities")
+        entity_header.setObjectName("entity_header")
+        entity_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hfont = entity_header.font()
+        hfont.setBold(True)
+        hfont.setPointSize(8)
+        entity_header.setFont(hfont)
+        layout.addWidget(entity_header)
+
+        # Entity rows (pre-allocated, hidden when empty)
+        self.entity_rows: list[EntityRowWidget] = []
+        for _ in range(ENTITY_SLOTS):
+            row = EntityRowWidget()
+            row.setVisible(False)
+            self.entity_rows.append(row)
+            layout.addWidget(row)
 
         # Directional circles: Objective + Source
         dir_layout = QHBoxLayout()
@@ -316,7 +366,7 @@ class ObservationPanel(QWidget):
         bool_layout = QHBoxLayout()
         bool_layout.setSpacing(6)
         self.bool_indicators: dict[str, BooleanIndicator] = {}
-        for name in ("Enemies", "Beams", "Low HP", "Full HP"):
+        for name in ("Enemies", "Beams", "Low HP", "Full HP", "Clock"):
             indicator = BooleanIndicator(name)
             self.bool_indicators[name] = indicator
             bool_layout.addWidget(indicator)
@@ -333,19 +383,37 @@ class ObservationPanel(QWidget):
         if "image" in obs:
             self.obs_image.set_image(obs["image"])
 
-        # Vector widgets — enemy features
-        self._update_vector("Enemy 1", obs, "enemy_features", 0)
-        self._update_vector("Enemy 2", obs, "enemy_features", 1)
-        self._update_vector("Enemy 3", obs, "enemy_features", 2)
-        self._update_vector("Enemy 4", obs, "enemy_features", 3)
+        # Entity list
+        if "entities" in obs:
+            entities = obs["entities"]
+            entity_types = obs.get("entity_types")
+            if hasattr(entities, 'cpu'):
+                entities = entities.cpu().numpy()
+            if entity_types is not None and hasattr(entity_types, 'cpu'):
+                entity_types = entity_types.cpu().numpy()
 
-        # Vector widgets — projectile features
-        self._update_vector("Proj 1", obs, "projectile_features", 0)
-        self._update_vector("Proj 2", obs, "projectile_features", 1)
+            for i, row in enumerate(self.entity_rows):
+                if i >= entities.shape[0]:
+                    row.setVisible(False)
+                    continue
 
-        # Vector widgets — item features
-        self._update_vector("Item 1", obs, "item_features", 0)
-        self._update_vector("Item 2", obs, "item_features", 1)
+                presence = float(entities[i, 0])
+                if presence < 0.5:
+                    row.setVisible(False)
+                    continue
+
+                type_id = int(entity_types[i]) if entity_types is not None else 0
+                type_name = ENTITY_TYPE_NAMES.get(type_id, f"Unknown({type_id})")
+                row.set_entity(
+                    type_name=type_name,
+                    rel_x=float(entities[i, 1]),
+                    rel_y=float(entities[i, 2]),
+                    health=float(entities[i, 5]),
+                    stun=float(entities[i, 6]),
+                    hurts=float(entities[i, 7]),
+                    killable=float(entities[i, 8]),
+                )
+                row.setVisible(True)
 
         # Directional circles
         if "information" in obs:
@@ -355,22 +423,12 @@ class ObservationPanel(QWidget):
             self.source_circle.set_directions(
                 _directions_from_info(info, 6))
 
-            # Boolean indicators (indices 10-13)
+            # Boolean indicators (indices 10-14)
             self.bool_indicators["Enemies"].set_active(_info_bool(info, 10))
             self.bool_indicators["Beams"].set_active(_info_bool(info, 11))
             self.bool_indicators["Low HP"].set_active(_info_bool(info, 12))
             self.bool_indicators["Full HP"].set_active(_info_bool(info, 13))
-
-    def _update_vector(self, widget_name: str, obs: dict, feature_key: str, index: int):
-        """Update a vector widget from observation features."""
-        if feature_key not in obs:
-            return
-        features = obs[feature_key]
-        if hasattr(features, 'cpu'):
-            features = features.cpu().numpy()
-        vector = features[index, 2:4]
-        scale = float(1.0 - features[index, 1])
-        self.vector_widgets[widget_name].set_vector(vector, scale)
+            self.bool_indicators["Clock"].set_active(_info_bool(info, 14))
 
 
 def _directions_from_info(info, offset: int) -> list[Direction]:

@@ -392,6 +392,17 @@ class StepHistoryWidget(QWidget):
             bottom_right = self._model.index(n - 1, adv_col)
             self._model.dataChanged.emit(top_left, bottom_right)  # pylint: disable=no-member
 
+    def clear_advantages(self) -> None:
+        """Clear all advantage values (set to None)."""
+        n = len(self._history)
+        for entry in self._history:
+            entry.advantage = None
+        if n > 0:
+            adv_col = 2
+            top_left = self._model.index(0, adv_col)
+            bottom_right = self._model.index(n - 1, adv_col)
+            self._model.dataChanged.emit(top_left, bottom_right)  # pylint: disable=no-member
+
     def clear_history(self) -> None:
         """Clear all steps (e.g. on episode reset)."""
         self._model.beginResetModel()

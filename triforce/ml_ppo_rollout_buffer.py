@@ -94,6 +94,9 @@ class PPORolloutBuffer:
         if isinstance(space, Discrete):
             return torch.empty(self.n_envs, self.memory_length + 1, space.n, dtype=torch.float32, device="cpu")
 
+        if isinstance(space, MultiDiscrete):
+            return torch.empty(self.n_envs, self.memory_length + 1, len(space.nvec), dtype=torch.float32, device="cpu")
+
         raise ValueError(f"Unsupported observation space: {space}")
 
     def ppo_main_loop(self, batch_index, network, env, progress):

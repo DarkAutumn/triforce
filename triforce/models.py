@@ -236,29 +236,79 @@ class MlpExtractor(nn.Module):
         value_features = self.value_net(combined_features)
         return policy_features, value_features
 
+class EntityAttentionEncoder(nn.Module):
+    """Self-attention encoder for a unified entity list.
+
+    Processes a flat list of entity slots (enemies, items, projectiles, treasure)
+    through a transformer encoder, masking empty slots, then mean-pools present
+    entities into a fixed-size output vector.
+    """
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def __init__(self, num_entity_types, continuous_features=9, embedding_dim=8,
+                 d_model=64, num_heads=4, num_layers=1, ff_dim=128, output_dim=64):
+        super().__init__()
+        self.type_embedding = nn.Embedding(num_entity_types, embedding_dim)
+        input_dim = continuous_features + embedding_dim
+        self.input_proj = Network.layer_init(nn.Linear(input_dim, d_model))
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, nhead=num_heads, dim_feedforward=ff_dim,
+            batch_first=True, dropout=0.0
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers,
+                                                enable_nested_tensor=False)
+        self.output_proj = Network.layer_init(nn.Linear(d_model, output_dim))
+        self.output_dim = output_dim
+
+    def forward(self, entity_features, entity_types):
+        """Forward pass.
+
+        Args:
+            entity_features: (batch, slots, continuous_features)
+            entity_types: (batch, slots) long tensor of type IDs
+        Returns:
+            (batch, output_dim) pooled entity representation
+        """
+        type_embeds = self.type_embedding(entity_types.long())
+        combined = torch.cat([entity_features, type_embeds], dim=-1)
+        projected = self.input_proj(combined)
+
+        # Mask empty slots (presence == 0) so they don't attend or get attended to
+        empty_mask = entity_features[:, :, 0] == 0
+
+        # Prevent all-masked rows: unmask slot 0 so attention softmax never sees all -inf
+        all_empty = empty_mask.all(dim=1)
+        safe_mask = empty_mask.clone()
+        safe_mask[all_empty, 0] = False
+
+        attended = self.transformer(projected, src_key_padding_mask=safe_mask)
+
+        # Mean pool over genuinely present entities (use original mask, not safe_mask)
+        present = (~empty_mask).unsqueeze(-1).float()
+        num_present = present.sum(dim=1).clamp(min=1)
+        pooled = (attended * present).sum(dim=1) / num_present
+
+        return self.output_proj(pooled)
+
+
 class CombinedExtractor(nn.Module):
-    """Combined extractor for CNN and other inputs"""
+    """Combined extractor for CNN image + entity attention + boolean info."""
     # pylint: disable=too-many-positional-arguments, too-many-arguments
     def __init__(
         self,
         image_channels: int,
         input_height: int,
         input_width: int,
-        enemy_feature_dim: int = 6,
-        enemy_count: int = 4,
-        num_enemy_types: int = 150,
-        embedding_dim: int = 4,
-        item_feature_dim: int = 4,
-        item_count: int = 2,
-        projectile_feature_dim: int = 5,
-        projectile_count: int = 2,
-        info_size: int = 8,
+        num_entity_types: int,
+        entity_features: int = 9,
+        embedding_dim: int = 8,
+        attention_heads: int = 4,
+        attention_layers: int = 1,
+        attention_output_dim: int = 64,
+        info_size: int = 14,
         image_linear_size: int = 256,
     ):
         super().__init__()
-        self.enemy_id_max = num_enemy_types - 1
 
-        # CNN for the image
         self.image_extractor = NatureCNN(
             input_channels=image_channels,
             input_height=input_height,
@@ -266,58 +316,25 @@ class CombinedExtractor(nn.Module):
             linear_output_size=image_linear_size
         )
 
-        # Embedding for enemy IDs (0 == no enemy)
-        self.enemy_embedding = nn.Embedding(num_enemy_types, embedding_dim)
-
-        self.item_count = item_count
-        self.enemy_count = enemy_count
-        self.projectile_count = projectile_count
-        self.enemy_feature_dim = enemy_feature_dim
-        self.item_feature_dim = item_feature_dim
-        self.projectile_feature_dim = projectile_feature_dim
-        self.embedding_dim = embedding_dim
-        self.image_linear_size = image_linear_size
-        self.info_size = info_size
-
-        # final output dimension after concatenation
-        self.output_dim = (
-            image_linear_size
-            + (enemy_count * enemy_feature_dim)
-            + (enemy_count * embedding_dim)
-            + (item_count * item_feature_dim)
-            + (projectile_count * projectile_feature_dim)
-            + info_size
+        self.entity_encoder = EntityAttentionEncoder(
+            num_entity_types=num_entity_types,
+            continuous_features=entity_features,
+            embedding_dim=embedding_dim,
+            num_heads=attention_heads,
+            num_layers=attention_layers,
+            output_dim=attention_output_dim
         )
 
-    def forward(self, image: torch.Tensor, enemy_features: torch.Tensor, enemy_ids: torch.Tensor,
-                item_features: torch.Tensor, projectile_features: torch.Tensor,
-                information: torch.Tensor) -> torch.Tensor:
+        self.info_size = info_size
+        self.output_dim = image_linear_size + attention_output_dim + info_size
+
+    def forward(self, image: torch.Tensor, entities: torch.Tensor,
+                entity_types: torch.Tensor, information: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
-        # pylint: disable=too-many-locals
-        bsz = image.shape[0]
-        # CNN on image
         img_out = self.image_extractor(image)
-
-        enemy_feat_flat = enemy_features.view(bsz, -1)
-        item_feat_flat = item_features.view(bsz, -1)
-        proj_feat_flat = projectile_features.view(bsz, -1)
-
-        # embedding
-        enemy_ids_embed = self.enemy_embedding(enemy_ids.long())
-        enemy_ids_embed_flat = enemy_ids_embed.view(bsz, -1)
-
+        entity_out = self.entity_encoder(entities, entity_types)
         info_float = information.float()
-
-        combined = torch.cat([
-            img_out,
-            enemy_feat_flat,
-            enemy_ids_embed_flat,
-            item_feat_flat,
-            proj_feat_flat,
-            info_float
-        ], dim=1)
-
-        return combined
+        return torch.cat([img_out, entity_out, info_float], dim=1)
 
 class MultiHeadAgent(Network):
     """Two-head action decomposition: action_type (K) + direction (4).
@@ -337,14 +354,8 @@ class MultiHeadAgent(Network):
             image_channels=channels,
             input_height=height,
             input_width=width,
-            enemy_feature_dim=obs_space["enemy_features"].shape[1],
-            enemy_count=obs_space["enemy_features"].shape[0],
-            num_enemy_types=150,
-            embedding_dim=4,
-            item_feature_dim=obs_space["item_features"].shape[1],
-            item_count=obs_space["item_features"].shape[0],
-            projectile_feature_dim=obs_space["projectile_features"].shape[1],
-            projectile_count=obs_space["projectile_features"].shape[0],
+            num_entity_types=int(obs_space["entity_types"].nvec[0]),
+            entity_features=obs_space["entities"].shape[1],
             info_size=obs_space["information"].n,
             image_linear_size=image_linear_size
         )
@@ -384,10 +395,8 @@ class MultiHeadAgent(Network):
 
         combined_features = self.base(
             image=obs["image"],
-            enemy_features=obs["enemy_features"],
-            enemy_ids=obs["enemy_id"],
-            item_features=obs["item_features"],
-            projectile_features=obs["projectile_features"],
+            entities=obs["entities"],
+            entity_types=obs["entity_types"],
             information=obs["information"]
         )
 
@@ -417,8 +426,21 @@ class MultiHeadAgent(Network):
         if mask is not None:
             action_type_mask = mask[..., :num_action_types]
             direction_mask = mask[..., num_action_types:]
-            assert action_type_mask.any(dim=-1).all(), "Action type mask must have at least one valid action"
-            assert direction_mask.any(dim=-1).all(), "Direction mask must have at least one valid direction"
+
+            bad_type = ~action_type_mask.any(dim=-1)
+            bad_dir = ~direction_mask.any(dim=-1)
+            if bad_type.any() or bad_dir.any():
+                idx = (bad_type | bad_dir).nonzero(as_tuple=True)[0][0].item()
+                info_vec = obs['info'][idx].tolist() if 'info' in obs else 'N/A'
+                raise ValueError(
+                    f"Empty action mask in batch element {idx}.\n"
+                    f"  action_type_mask={action_type_mask[idx].tolist()}\n"
+                    f"  direction_mask={direction_mask[idx].tolist()}\n"
+                    f"  full_mask={mask[idx].tolist()}\n"
+                    f"  num_action_types={num_action_types}\n"
+                    f"  nvec={self.action_space.nvec.tolist()}\n"
+                    f"  info={info_vec}"
+                )
 
             action_type_logits = action_type_logits.clone()
             action_type_logits[~action_type_mask] = -1e9
@@ -496,14 +518,8 @@ class SharedNatureAgent(Network):
                 image_channels=channels,
                 input_height=height,
                 input_width=width,
-                enemy_feature_dim=obs_space["enemy_features"].shape[1],
-                enemy_count=obs_space["enemy_features"].shape[0],
-                num_enemy_types=150,
-                embedding_dim=4,
-                item_feature_dim=obs_space["item_features"].shape[1],
-                item_count=obs_space["item_features"].shape[0],
-                projectile_feature_dim=obs_space["projectile_features"].shape[1],
-                projectile_count=obs_space["projectile_features"].shape[0],
+                num_entity_types=int(obs_space["entity_types"].nvec[0]),
+                entity_features=obs_space["entities"].shape[1],
                 info_size=obs_space["information"].n,
                 image_linear_size=image_linear_size
             ),
@@ -527,10 +543,8 @@ class SharedNatureAgent(Network):
 
         combined_features = self.base(
             image=obs["image"],
-            enemy_features=obs["enemy_features"],
-            enemy_ids=obs["enemy_id"],
-            item_features=obs["item_features"],
-            projectile_features=obs["projectile_features"],
+            entities=obs["entities"],
+            entity_types=obs["entity_types"],
             information=obs["information"]
         )
 

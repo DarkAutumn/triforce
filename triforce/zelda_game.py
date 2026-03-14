@@ -225,6 +225,22 @@ class ZeldaGame:
         """Enemies which are both alive an active."""
         return [x for x in self.enemies if x.is_active and not x.is_dying]
 
+    @cached_property
+    def all_entities(self):
+        """Returns entities for NES object slots 1-11 in slot order.
+
+        Each element is (entity, category) where category is 'enemy', 'item', or 'projectile',
+        or None for empty/inactive slots. Enemies are filtered to active only.
+        """
+        result = [None] * 11
+        for enemy in self.active_enemies:
+            result[enemy.index - 1] = (enemy, 'enemy')
+        for item in self.items:
+            result[item.index - 1] = (item, 'item')
+        for proj in self.projectiles:
+            result[proj.index - 1] = (proj, 'projectile')
+        return result
+
     def is_door_locked(self, direction):
         """Returns True if the door in the given direction is locked."""
         return self.level != 0 and self.room.is_door_locked(direction, self.current_tiles)
@@ -344,7 +360,8 @@ class ZeldaGame:
 
     def _build_projectile(self, tables, index, obj_id):
         obj_id = PROJECTILE_MAP.get(obj_id, obj_id)
-        return Projectile(self, index, obj_id, self._read_position(tables, index))
+        return Projectile(self, index, obj_id, self._read_position(tables, index),
+                          self._read_direction(tables, index))
 
     def _read_position(self, tables, index):
         x = int(tables.read('obj_pos_x')[index])

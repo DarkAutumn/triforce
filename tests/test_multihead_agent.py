@@ -14,6 +14,7 @@ import tempfile
 import torch
 import numpy as np
 import pytest
+import gymnasium as gym
 from gymnasium.spaces import Box, Dict, Discrete, MultiDiscrete, MultiBinary
 
 from triforce.models import MultiHeadAgent, SharedNatureAgent, Network, get_neural_network
@@ -23,11 +24,9 @@ def _make_obs_space():
     """Create a mock observation space matching ZeldaObservationWrapper output."""
     return Dict({
         "image": Box(low=0.0, high=1.0, shape=(1, 128, 128), dtype=np.float32),
-        "enemy_features": Box(low=-1.0, high=1.0, shape=(4, 6), dtype=np.float32),
-        "enemy_id": Discrete(4),
-        "item_features": Box(low=-1.0, high=1.0, shape=(2, 4), dtype=np.float32),
-        "projectile_features": Box(low=-1.0, high=1.0, shape=(2, 5), dtype=np.float32),
-        "information": MultiBinary(14),
+        "entities": Box(low=-1.0, high=1.0, shape=(12, 9), dtype=np.float32),
+        "entity_types": gym.spaces.MultiDiscrete([74] * 12),
+        "information": MultiBinary(15),
     })
 
 
@@ -35,11 +34,9 @@ def _make_obs_batch(batch_size=2):
     """Create a batch of mock observations as tensors."""
     return {
         "image": torch.randn(batch_size, 1, 128, 128),
-        "enemy_features": torch.randn(batch_size, 4, 6),
-        "enemy_id": torch.zeros(batch_size, 4),
-        "item_features": torch.randn(batch_size, 2, 4),
-        "projectile_features": torch.randn(batch_size, 2, 5),
-        "information": torch.zeros(batch_size, 14),
+        "entities": torch.randn(batch_size, 12, 9),
+        "entity_types": torch.zeros(batch_size, 12).long(),
+        "information": torch.zeros(batch_size, 15),
     }
 
 
@@ -75,11 +72,9 @@ class TestMultiHeadForward:
 
         obs = {
             "image": torch.randn(1, 128, 128),
-            "enemy_features": torch.randn(4, 6),
-            "enemy_id": torch.zeros(4),
-            "item_features": torch.randn(2, 4),
-            "projectile_features": torch.randn(2, 5),
-            "information": torch.zeros(14),
+            "entities": torch.randn(12, 9),
+            "entity_types": torch.zeros(12).long(),
+            "information": torch.zeros(15),
         }
         type_logits, dir_logits, value = agent.forward(obs)
         assert type_logits.shape == (1, 3)
@@ -181,7 +176,7 @@ class TestMultiHeadMasking:
         obs = _make_obs_batch(1)
         mask = torch.zeros(1, 7, dtype=torch.bool)
         mask[:, 3:7] = True  # directions OK, but no action types
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError, match="Empty action mask"):
             agent.get_action_and_value(obs, mask=mask)
 
     def test_mask_assertion_no_valid_direction(self):
@@ -193,7 +188,7 @@ class TestMultiHeadMasking:
         obs = _make_obs_batch(1)
         mask = torch.zeros(1, 7, dtype=torch.bool)
         mask[:, 0:3] = True  # types OK, but no directions
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError, match="Empty action mask"):
             agent.get_action_and_value(obs, mask=mask)
 
 

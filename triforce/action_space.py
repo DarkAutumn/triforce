@@ -352,6 +352,23 @@ class ZeldaActionSpace(gym.Wrapper):
                 for direction in invalid[action]:
                     mask[index + self._direction_to_index(direction)] = False
 
+        if not mask.any():
+            px, py = link.position
+            tile = link.tile
+            move_results = {d: state.can_link_move(d) for d in
+                            (Direction.N, Direction.S, Direction.W, Direction.E)}
+            raise RuntimeError(
+                f"Empty action mask — Link should always have at least one valid move.\n"
+                f"  location: {state.full_location}, level: {state.level}\n"
+                f"  link position: ({px}, {py}), tile: ({tile.x}, {tile.y})\n"
+                f"  link_status: {link.status}, animation: {link.animation}\n"
+                f"  can_link_move: {move_results}\n"
+                f"  actions_possible: {sorted(a.name for a in actions_possible)}\n"
+                f"  invalid_actions: {state.info.get('invalid_actions', [])}\n"
+                f"  active_enemies: {len(state.active_enemies)}, items: {len(state.items)}\n"
+                f"  flat_mask: {mask.tolist()}"
+            )
+
         return mask
 
     def _update_mask(self, state : ZeldaGame, invalid):

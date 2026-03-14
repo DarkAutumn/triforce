@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QDoubleSpinBox,
     QLabel,
+    QCheckBox,
 )
 
 from triforce.zelda_enums import ActionKind, Direction
@@ -170,6 +171,12 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self.scenario_selector)
 
         toolbar.addSeparator()
+        self._gae_checkbox = QCheckBox("GAE")
+        self._gae_checkbox.setToolTip("Enable GAE advantage calculation (slow).")
+        self._gae_checkbox.setChecked(False)
+        self._gae_checkbox.toggled.connect(self._on_gae_toggled)  # pylint: disable=no-member
+        toolbar.addWidget(self._gae_checkbox)
+
         gamma_label = QLabel(" γ:")
         gamma_label.setToolTip("Gamma — discount factor. Controls how much future rewards matter.\n"
                                "1.0 = all future rewards count equally, 0.0 = only immediate reward.")
@@ -335,8 +342,17 @@ class MainWindow(QMainWindow):
 
     def _on_gae_params_changed(self):
         """Recompute GAE advantages when γ or λ spinbox values change."""
-        self.step_history.recompute_advantages(
-            self._gamma_spin.value(), self._lambda_spin.value())
+        if self._gae_checkbox.isChecked():
+            self.step_history.recompute_advantages(
+                self._gamma_spin.value(), self._lambda_spin.value())
+
+    def _on_gae_toggled(self, enabled):
+        """Enable/disable GAE advantage calculation."""
+        if enabled:
+            self.step_history.recompute_advantages(
+                self._gamma_spin.value(), self._lambda_spin.value())
+        else:
+            self.step_history.clear_advantages()
 
     def _on_step_selected(self, buf_index):
         """Handle step selection in history list (time-travel)."""
@@ -531,9 +547,10 @@ class MainWindow(QMainWindow):
         )
         self.step_history.append_step(entry)
 
-        # Recompute GAE advantages with current γ/λ
-        self.step_history.recompute_advantages(
-            self._gamma_spin.value(), self._lambda_spin.value())
+        # Recompute GAE advantages with current γ/λ (only if enabled)
+        if self._gae_checkbox.isChecked():
+            self.step_history.recompute_advantages(
+                self._gamma_spin.value(), self._lambda_spin.value())
 
         # Update window title with model info
         self.setWindowTitle(f"Triforce Debugger — {self._bridge.model_details}")
