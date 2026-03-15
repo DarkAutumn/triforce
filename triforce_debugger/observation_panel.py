@@ -5,7 +5,7 @@ import math
 import numpy as np
 from PySide6.QtCore import Qt, QRectF, QPointF
 from PySide6.QtGui import QPainter, QImage, QColor, QPen, QPolygonF, QFont
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea
 
 from triforce.zelda_enums import Direction
 from triforce.observation_wrapper import ENTITY_SLOTS, ENTITY_TYPE_NAMES
@@ -335,25 +335,7 @@ class ObservationPanel(QWidget):
         self.obs_image = ObsImageWidget()
         layout.addWidget(self.obs_image)
 
-        # Entity list header
-        entity_header = QLabel("Entities")
-        entity_header.setObjectName("entity_header")
-        entity_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hfont = entity_header.font()
-        hfont.setBold(True)
-        hfont.setPointSize(8)
-        entity_header.setFont(hfont)
-        layout.addWidget(entity_header)
-
-        # Entity rows (pre-allocated, hidden when empty)
-        self.entity_rows: list[EntityRowWidget] = []
-        for _ in range(ENTITY_SLOTS):
-            row = EntityRowWidget()
-            row.setVisible(False)
-            self.entity_rows.append(row)
-            layout.addWidget(row)
-
-        # Directional circles: Objective + Source
+        # Directional circles: Objective + Source (immediately under image)
         dir_layout = QHBoxLayout()
         dir_layout.setSpacing(4)
         self.objective_circle = DirectionalCircleWidget("Objective")
@@ -372,7 +354,41 @@ class ObservationPanel(QWidget):
             bool_layout.addWidget(indicator)
         layout.addLayout(bool_layout)
 
-        layout.addStretch()
+        # Entity list header
+        entity_header = QLabel("Entities")
+        entity_header.setObjectName("entity_header")
+        entity_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hfont = entity_header.font()
+        hfont.setBold(True)
+        hfont.setPointSize(8)
+        entity_header.setFont(hfont)
+        layout.addWidget(entity_header)
+
+        # Entity rows in a fixed-size scroll area
+        entity_container = QWidget()
+        entity_layout = QVBoxLayout(entity_container)
+        entity_layout.setContentsMargins(0, 0, 0, 0)
+        entity_layout.setSpacing(0)
+
+        self.entity_rows: list[EntityRowWidget] = []
+        for _ in range(ENTITY_SLOTS):
+            row = EntityRowWidget()
+            row.setVisible(False)
+            self.entity_rows.append(row)
+            entity_layout.addWidget(row)
+        entity_layout.addStretch()
+
+        self._entity_scroll = QScrollArea()
+        self._entity_scroll.setObjectName("entity_scroll")
+        self._entity_scroll.setWidget(entity_container)
+        self._entity_scroll.setWidgetResizable(True)
+        self._entity_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._entity_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        # Fixed height: show ~4 entity rows without expanding the panel
+        self._entity_scroll.setFixedHeight(140)
+        layout.addWidget(self._entity_scroll, stretch=1)
 
     def update_observation(self, obs: dict):
         """Update all sub-widgets from an observation dict."""

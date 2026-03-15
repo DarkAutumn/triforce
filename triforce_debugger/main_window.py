@@ -419,7 +419,6 @@ class MainWindow(QMainWindow):
             return
 
         self._step_count = 0
-        self.step_history.clear_history()
         self.rewards_tab.clear()
         self.state_tab.clear()
         self._last_state_dict = None
@@ -638,7 +637,6 @@ class MainWindow(QMainWindow):
 
             self.game_timer.pause()
             self._step_count = 0
-            self.step_history.clear_history()
             self.rewards_tab.clear()
             self.state_tab.clear()
             self._last_state_dict = None

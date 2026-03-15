@@ -55,7 +55,7 @@ class StepHistory:
     silently evicted when the buffer is full.
     """
 
-    MAX_STEPS = 50_000
+    MAX_STEPS = 100
 
     def __init__(self, maxlen: Optional[int] = None):
         capacity = maxlen if maxlen is not None else self.MAX_STEPS
