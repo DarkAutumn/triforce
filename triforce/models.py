@@ -1,5 +1,6 @@
 import inspect
 import pickle
+import subprocess
 import sys
 import os
 from typing import List
@@ -9,6 +10,19 @@ import torch.distributions as dist
 import numpy as np
 import yaml
 from gymnasium.spaces import Dict
+
+
+def _get_git_commit():
+    """Get the current git commit hash, or None if not in a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
 
 class Network(nn.Module):
     """The base class of neural networks used for PPO training."""
@@ -27,6 +41,7 @@ class Network(nn.Module):
         self.steps_trained = 0
         self.episodes_evaluated = 0
         self.metrics : dict[str, float] = {}
+        self.git_commit = _get_git_commit()
 
         self.base = base_network
         self.action_net = self.layer_init(nn.Linear(base_output_size, action_space.n), std=0.01)
@@ -115,6 +130,7 @@ class Network(nn.Module):
             "action_space": self.action_space,
             "model_kind": self.model_kind,
             "action_space_name": self.action_space_name,
+            "git_commit": _get_git_commit(),
         }
 
         torch.save(save_data, path)
@@ -128,6 +144,7 @@ class Network(nn.Module):
         self.episodes_evaluated = save_data.get("episodes_evaluated", 0)
         self.model_kind = save_data.get("model_kind")
         self.action_space_name = save_data.get("action_space_name")
+        self.git_commit = save_data.get("git_commit")
         metrics_pickled = save_data.get("metrics")
         self.metrics = pickle.loads(metrics_pickled) if metrics_pickled else {}
 
@@ -166,6 +183,7 @@ class Network(nn.Module):
             "steps_trained": save_data.get("steps_trained", 0),
             "obs_space": save_data.get("obs_space"),
             "action_space": save_data.get("action_space"),
+            "git_commit": save_data.get("git_commit"),
             "metrics": metrics,
         }
 
@@ -371,6 +389,7 @@ class MultiHeadAgent(Network):
         self.steps_trained = 0
         self.episodes_evaluated = 0
         self.metrics = {}
+        self.git_commit = _get_git_commit()
 
         self.base = base_network
         self.mlp_extractor = MlpExtractor(input_size=self.base.output_dim)
