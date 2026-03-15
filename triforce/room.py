@@ -80,6 +80,11 @@ class Room:
         self.cave_tile = self._get_cave_coordinates()
         self._wf_lru = OrderedDict()
 
+    @property
+    def threshold(self):
+        """The walkability threshold for this room."""
+        return self._threshold
+
     def _check_loaded(self):
         """Check if the room has any walkable tiles (indicating it's been loaded)."""
         for t in self.tiles.flatten():
