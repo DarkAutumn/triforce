@@ -72,6 +72,13 @@ class PPO:
         self.start_time = None
         self._steps_at_start = 0
 
+    def set_log_dir(self, log_dir):
+        """Switch tensorboard logging to a new directory."""
+        if self.tensorboard:
+            self.tensorboard.close()
+        self.log_dir = log_dir
+        self.tensorboard = SummaryWriter(log_dir) if log_dir else None
+
     def train(self, network, create_env, iterations, progress=None, **kwargs):
         """Train the network."""
         self.start_time = time.time()

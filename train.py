@@ -121,7 +121,8 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
     model.save(f"{checkpoint_dir}/{stem}_{scenario_def.name}_{model.steps_trained}.pt")
     return model, model.steps_trained - steps_before
 
-def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget):
+def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
+                 log_dir=None):
     """Run training circuit and return (final_model, final_scenario_def)."""
     iterations_spent = 0
     model = None
@@ -131,6 +132,12 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
         scenario_def = TrainingScenarioDefinition.get(scenario_entry.scenario)
         if scenario_def is None:
             raise ValueError(f"Unknown scenario: {scenario_entry.scenario}")
+
+        # Give each scenario its own tensorboard log directory
+        if log_dir:
+            scenario_log_dir = os.path.join(log_dir, scenario_def.name)
+            os.makedirs(scenario_log_dir, exist_ok=True)
+            ppo.set_log_dir(scenario_log_dir)
 
         if scenario_entry.iterations is not None:
             iterations = scenario_entry.iterations
@@ -206,10 +213,11 @@ def main():
     print(f"Model kind: {model_kind.name}, Action space: {action_space_def.name}")
 
     kwargs, circuit = _get_kwargs_from_args(args, model_kind, action_space_def)
-    ppo = PPO(log_dir, **kwargs)
+    ppo = PPO(None, **kwargs)  # log_dir set per-scenario in _run_circuit
 
     model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
-                                       checkpoint_dir, kwargs, args.iterations)
+                                       checkpoint_dir, kwargs, args.iterations,
+                                       log_dir=log_dir)
 
     # Save final result in the run directory (not checkpoints)
     stem = _model_stem(model_kind.name, action_space_def.name)
