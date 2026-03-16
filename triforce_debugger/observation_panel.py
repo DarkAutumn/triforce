@@ -8,13 +8,13 @@ from PySide6.QtGui import QPainter, QImage, QColor, QPen, QPolygonF, QFont
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea
 
 from triforce.zelda_enums import Direction
-from triforce.observation_wrapper import ENTITY_SLOTS, ENTITY_TYPE_NAMES
+from triforce.observation_wrapper import ENTITY_SLOTS, ENTITY_TYPE_NAMES, VIEWPORT_PIXELS
 
 
 # ── Observation image widget ──────────────────────────────────
 
 class ObsImageWidget(QWidget):
-    """Displays the 84×84 grayscale observation image scaled up for visibility."""
+    """Displays the grayscale observation image scaled up for visibility."""
 
     SCALE_FACTOR = 2
 
@@ -22,7 +22,7 @@ class ObsImageWidget(QWidget):
         super().__init__(parent)
         self.setObjectName("obs_image")
         self._qimage: QImage | None = None
-        self.setMinimumSize(84 * self.SCALE_FACTOR, 84 * self.SCALE_FACTOR)
+        self.setMinimumSize(VIEWPORT_PIXELS * self.SCALE_FACTOR, VIEWPORT_PIXELS * self.SCALE_FACTOR)
 
     def set_image(self, image_tensor):
         """Set image from observation tensor.  Accepts (C, H, W) or (frames, C, H, W)."""

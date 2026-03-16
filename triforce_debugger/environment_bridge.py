@@ -14,6 +14,7 @@ import torch
 from triforce import TrainingScenarioDefinition, ActionSpaceDefinition, ModelKindDefinition
 from triforce.action_space import ZeldaActionSpace
 from triforce.models import Network
+from triforce.observation_wrapper import ObservationWrapper
 from triforce.rewards import StepRewards
 from triforce.zelda_env import make_zelda_env
 
@@ -299,6 +300,20 @@ class EnvironmentBridge:
         self.action_space: ZeldaActionSpace = action_space
         self._observation = None
         self._action_mask = None
+
+        # Detect full_screen mode from the observation wrapper
+        self._full_screen = False
+        env_walk = self.env
+        while env_walk:
+            if isinstance(env_walk, ObservationWrapper):
+                self._full_screen = env_walk.full_screen  # pylint: disable=no-member
+                break
+            env_walk = getattr(env_walk, 'env', None)
+
+    @property
+    def full_screen(self) -> bool:
+        """Whether the environment is in full-screen (256×240) or cropped (240×224) mode."""
+        return self._full_screen
 
     @staticmethod
     def _detect_from_models(model_path):

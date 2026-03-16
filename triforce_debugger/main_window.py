@@ -391,6 +391,9 @@ class MainWindow(QMainWindow):
             self._bridge = EnvironmentBridge(
                 self._model_dir, scenario_def, self._frame_stack)
 
+            # Configure the game view for the detected NES resolution mode
+            self.game_view.set_full_screen(self._bridge.full_screen)
+
             # Select the specific .pt file if one was chosen
             if self._selected_model_path:
                 self._bridge.selector.select_by_path(self._selected_model_path)
