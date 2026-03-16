@@ -1,5 +1,6 @@
 # A wrapper to create a Zelda environment.
 
+import logging
 import random
 import stable_retro as retro
 
@@ -10,6 +11,16 @@ from .frame_skip_wrapper import FrameSkipWrapper
 from .action_space import ZeldaActionSpace
 from .observation_wrapper import ObservationWrapper
 from .scenario_wrapper import ScenarioWrapper, TrainingScenarioDefinition
+
+_logger = logging.getLogger(__name__)
+
+def _has_crop_overscan():
+    """Check if the installed stable-retro supports the crop_overscan parameter."""
+    import inspect # pylint: disable=import-outside-toplevel
+    sig = inspect.signature(retro.retro_env.RetroEnv.__init__)
+    return 'crop_overscan' in sig.parameters
+
+_SUPPORTS_CROP_OVERSCAN = _has_crop_overscan()
 
 def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **kwargs):
     """
@@ -28,8 +39,18 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **
     obs_kind = kwargs.get('obs_kind', 'viewport')
 
     state = random.choice(scenario.start)
-    env = retro.make(game='Zelda-NES', state=state, inttype=retro.data.Integrations.CUSTOM_ONLY,
-                     render_mode=render_mode)
+
+    # Try to use full-screen (no overscan) if the installed stable-retro supports it.
+    if _SUPPORTS_CROP_OVERSCAN:
+        env = retro.make(game='Zelda-NES', state=state, inttype=retro.data.Integrations.CUSTOM_ONLY,
+                         render_mode=render_mode, crop_overscan=False)
+        full_screen = True
+        _logger.info("Using full-screen NES output (256x240, crop_overscan=False)")
+    else:
+        env = retro.make(game='Zelda-NES', state=state, inttype=retro.data.Integrations.CUSTOM_ONLY,
+                         render_mode=render_mode)
+        full_screen = False
+        _logger.info("Using cropped NES output (240x224, stock stable-retro)")
 
     # Skip frames where Link is not controllable.  Returns all frames skipped as its observation.
     env = FrameSkipWrapper(env)
@@ -48,7 +69,8 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **
     env = ZeldaActionSpace(env, action_space, multihead=multihead)
 
     # Converts our list of frames into a standard observation space.
-    env = ObservationWrapper(env, obs_kind, frame_stack, frame_skip=2, normalize=True)
+    env = ObservationWrapper(env, obs_kind, frame_stack, frame_skip=2, normalize=True,
+                             full_screen=full_screen)
 
     # Process the scenario. This is where we define the end conditions and rewards for the scenario.
     # Replaces the float reward with a StepRewards object.

@@ -6,7 +6,42 @@ from functools import cached_property
 import torch
 
 # the y coordinate where the gameplay window starts (above this line is the HUD)
+# This is a fixed NES constant used to convert between RAM coordinates and tile indices.
+# It does NOT change with overscan settings — RAM coordinates are always absolute NES coordinates.
 GAMEPLAY_START_Y = 56
+
+# Frame dimensions depend on whether the emulator crops overscan.
+# Cropped (default stable-retro): 240×224, removes 8px from each edge.
+# Full (fork with crop_overscan=False): 256×240, full NES output.
+NES_FULL_WIDTH = 256
+NES_FULL_HEIGHT = 240
+NES_CROPPED_WIDTH = 240
+NES_CROPPED_HEIGHT = 224
+
+# How many pixels to trim from the top of the emulator frame to remove the HUD.
+#
+# The NES HUD occupies scanlines 0-47 (48px). Scanlines 48-63 are a gap between
+# HUD and gameplay tiles (may render as black or scroll artifacts). The first
+# gameplay tile row starts at NES scanline 64 (0x40), which is what the game's
+# collision code uses as the tile area offset.
+#
+# In cropped mode (240×224), the emulator already removes the top 8 NES scanlines,
+# so frame pixel 0 = NES scanline 8.  Trimming 56 pixels reaches NES scanline 64.
+#
+# In full mode (256×240), frame pixel 0 = NES scanline 0.  Trimming 64 pixels
+# reaches the same NES scanline 64.
+#
+# The viewport centering uses a *separate* offset (GAMEPLAY_START_Y = 56) which
+# is subtracted from Link's RAM y-coordinate. This produces a consistent viewport
+# position across both modes — models trained in cropped mode work in full mode.
+HUD_TRIM_CROPPED = 56
+HUD_TRIM_FULL = 64
+
+# Number of visible tile columns after overscan clipping.
+# Cropped: columns 1-30 visible (0 and 31 clipped), Full: all 32 columns visible.
+VISIBLE_COLS_CROPPED = 30
+VISIBLE_COLS_FULL = 32
+VISIBLE_ROWS = 22
 
 class SoundKind(Enum):
     """Sound codes for the game."""

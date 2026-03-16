@@ -7,6 +7,10 @@ from PySide6.QtCore import Qt, QRect, QRectF, QPoint
 from PySide6.QtGui import QImage, QPainter, QColor, QFont, QPen
 from PySide6.QtWidgets import QWidget, QToolTip
 
+from triforce.zelda_enums import (NES_FULL_WIDTH, NES_FULL_HEIGHT, NES_CROPPED_WIDTH, NES_CROPPED_HEIGHT,
+                                  HUD_TRIM_FULL, HUD_TRIM_CROPPED,
+                                  VISIBLE_COLS_FULL, VISIBLE_COLS_CROPPED, VISIBLE_ROWS)
+
 
 class OverlayFlags(Flag):
     """Bit-flags for which overlays are active. Multiple can be combined."""
@@ -16,29 +20,55 @@ class OverlayFlags(Flag):
     WALKABILITY = auto()
 
 
-# NES tile grid constants (after emulator overscan clipping)
-_VISIBLE_COLS = 30         # tile columns 1..30 (column 0 and 31 are clipped)
-_VISIBLE_ROWS = 22
 _NES_TILE_PX = 8           # one tile = 8 NES pixels
-_NES_HUD_PX = 48 + 8       # HUD height + 1 tile offset in the 224px clipped frame
 
 
 class GameView(QWidget):
     """Widget that displays an RGB numpy array (NES frame) scaled to fit."""
 
-    # NES native resolution
-    NES_WIDTH = 240
-    NES_HEIGHT = 224
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("game_view")
-        self.setMinimumSize(240, 224)
+        self.setMinimumSize(NES_CROPPED_WIDTH, NES_CROPPED_HEIGHT)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._frame_image: QImage | None = None
         self._overlays: OverlayFlags = OverlayFlags.NONE
         self._game_state = None  # ZeldaGame, set each step for overlay data
+        self._full_screen = False  # set via set_full_screen()
+
+    # ── Public API ─────────────────────────────────────────────
+
+    def set_full_screen(self, full_screen: bool):
+        """Configure whether the game is running in full-screen (256×240) or cropped (240×224) mode."""
+        self._full_screen = full_screen
+        self.update()
+
+    @property
+    def full_screen(self) -> bool:
+        """Whether the game is in full-screen mode."""
+        return self._full_screen
+
+    @property
+    def _nes_width(self):
+        return NES_FULL_WIDTH if self._full_screen else NES_CROPPED_WIDTH
+
+    @property
+    def _nes_height(self):
+        return NES_FULL_HEIGHT if self._full_screen else NES_CROPPED_HEIGHT
+
+    @property
+    def _hud_px(self):
+        return HUD_TRIM_FULL if self._full_screen else HUD_TRIM_CROPPED
+
+    @property
+    def _visible_cols(self):
+        return VISIBLE_COLS_FULL if self._full_screen else VISIBLE_COLS_CROPPED
+
+    @property
+    def _col_offset(self):
+        """Tile column offset: in cropped mode column 0 is clipped, so visible col 0 maps to tile 1."""
+        return 0 if self._full_screen else 1
 
     # ── Public API ─────────────────────────────────────────────
 
@@ -121,14 +151,14 @@ class GameView(QWidget):
         op = QPainter(overlay)
         op.setRenderHint(QPainter.RenderHint.Antialiasing, False)
 
-        scale_x = target_rect.width() / self.NES_WIDTH
-        scale_y = target_rect.height() / self.NES_HEIGHT
+        scale_x = target_rect.width() / self._nes_width
+        scale_y = target_rect.height() / self._nes_height
 
         tile_w = _NES_TILE_PX * scale_x
         tile_h = _NES_TILE_PX * scale_y
 
         origin_x = 0.0
-        origin_y = _NES_HUD_PX * scale_y
+        origin_y = self._hud_px * scale_y
 
         grid_color = QColor(255, 255, 255, 60)
         bg_color = QColor(0, 0, 0, 160)
@@ -140,10 +170,11 @@ class GameView(QWidget):
         op.setFont(font)
 
         grid_pen = QPen(grid_color, 1)
+        col_offset = self._col_offset
 
-        for col in range(_VISIBLE_COLS):
-            tile_x = col + 1  # tile data index (skip clipped column 0)
-            for tile_y in range(_VISIBLE_ROWS):
+        for col in range(self._visible_cols):
+            tile_x = col + col_offset
+            for tile_y in range(VISIBLE_ROWS):
                 rx = origin_x + col * tile_w
                 ry = origin_y + tile_y * tile_h
                 cell = QRectF(rx, ry, tile_w, tile_h)
@@ -233,21 +264,23 @@ class GameView(QWidget):
             return None
 
         # Map widget pixel to NES pixel
-        nes_x = (pos.x() - target_rect.x()) / target_rect.width() * self.NES_WIDTH
-        nes_y = (pos.y() - target_rect.y()) / target_rect.height() * self.NES_HEIGHT
+        nes_x = (pos.x() - target_rect.x()) / target_rect.width() * self._nes_width
+        nes_y = (pos.y() - target_rect.y()) / target_rect.height() * self._nes_height
 
         # Must be below the HUD
-        if nes_y < _NES_HUD_PX:
+        if nes_y < self._hud_px:
             return None
 
         col = int(nes_x / _NES_TILE_PX)
-        row = int((nes_y - _NES_HUD_PX) / _NES_TILE_PX)
+        row = int((nes_y - self._hud_px) / _NES_TILE_PX)
 
-        # Column 0 is clipped off-screen; visible pixel 0 is tile column 1
-        tile_x = col + 1
+        col_offset = self._col_offset
+        tile_x = col + col_offset
         tile_y = row
 
-        if tile_x < 1 or tile_x > 30 or tile_y < 0 or tile_y >= _VISIBLE_ROWS:
+        min_col = col_offset
+        max_col = self._visible_cols - 1 + col_offset
+        if tile_x < min_col or tile_x > max_col or tile_y < 0 or tile_y >= VISIBLE_ROWS:
             return None
 
         return tile_x, tile_y

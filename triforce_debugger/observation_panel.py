@@ -8,13 +8,13 @@ from PySide6.QtGui import QPainter, QImage, QColor, QPen, QPolygonF, QFont
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea
 
 from triforce.zelda_enums import Direction
-from triforce.observation_wrapper import ENTITY_SLOTS, ENTITY_TYPE_NAMES
+from triforce.observation_wrapper import ENTITY_SLOTS, ENTITY_TYPE_NAMES, VIEWPORT_PIXELS
 
 
 # ── Observation image widget ──────────────────────────────────
 
 class ObsImageWidget(QWidget):
-    """Displays the 84×84 grayscale observation image scaled up for visibility."""
+    """Displays the grayscale observation image scaled up for visibility."""
 
     SCALE_FACTOR = 2
 
@@ -22,7 +22,7 @@ class ObsImageWidget(QWidget):
         super().__init__(parent)
         self.setObjectName("obs_image")
         self._qimage: QImage | None = None
-        self.setMinimumSize(84 * self.SCALE_FACTOR, 84 * self.SCALE_FACTOR)
+        self.setMinimumSize(VIEWPORT_PIXELS * self.SCALE_FACTOR, VIEWPORT_PIXELS * self.SCALE_FACTOR)
 
     def set_image(self, image_tensor):
         """Set image from observation tensor.  Accepts (C, H, W) or (frames, C, H, W)."""
@@ -323,13 +323,7 @@ class ObservationPanel(QWidget):
         layout.setSpacing(4)
 
         # Title
-        title = QLabel("Observation")
-        title.setObjectName("obs_title")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        font = title.font()
-        font.setBold(True)
-        title.setFont(font)
-        layout.addWidget(title)
+        layout.addWidget(self._make_header("Observation", "obs_title", bold=True))
 
         # Network input image
         self.obs_image = ObsImageWidget()
@@ -354,41 +348,47 @@ class ObservationPanel(QWidget):
             bool_layout.addWidget(indicator)
         layout.addLayout(bool_layout)
 
-        # Entity list header
-        entity_header = QLabel("Entities")
-        entity_header.setObjectName("entity_header")
-        entity_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hfont = entity_header.font()
-        hfont.setBold(True)
-        hfont.setPointSize(8)
-        entity_header.setFont(hfont)
-        layout.addWidget(entity_header)
-
-        # Entity rows in a fixed-size scroll area
-        entity_container = QWidget()
-        entity_layout = QVBoxLayout(entity_container)
-        entity_layout.setContentsMargins(0, 0, 0, 0)
-        entity_layout.setSpacing(0)
-
+        # Entity list
+        layout.addWidget(self._make_header("Entities", "entity_header", bold=True, point_size=8))
         self.entity_rows: list[EntityRowWidget] = []
+        layout.addWidget(self._build_entity_scroll(), stretch=1)
+
+    @staticmethod
+    def _make_header(text, object_name, bold=False, point_size=None):
+        """Create a centered header label."""
+        label = QLabel(text)
+        label.setObjectName(object_name)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        font = label.font()
+        font.setBold(bold)
+        if point_size:
+            font.setPointSize(point_size)
+        label.setFont(font)
+        return label
+
+    def _build_entity_scroll(self):
+        """Build the scrollable entity row list."""
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
         for _ in range(ENTITY_SLOTS):
             row = EntityRowWidget()
             row.setVisible(False)
             self.entity_rows.append(row)
-            entity_layout.addWidget(row)
-        entity_layout.addStretch()
+            layout.addWidget(row)
+        layout.addStretch()
 
-        self._entity_scroll = QScrollArea()
-        self._entity_scroll.setObjectName("entity_scroll")
-        self._entity_scroll.setWidget(entity_container)
-        self._entity_scroll.setWidgetResizable(True)
-        self._entity_scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._entity_scroll.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        # Fixed height: show ~4 entity rows without expanding the panel
-        self._entity_scroll.setFixedHeight(140)
-        layout.addWidget(self._entity_scroll, stretch=1)
+        scroll = QScrollArea()
+        scroll.setObjectName("entity_scroll")
+        scroll.setWidget(container)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setFixedHeight(140)
+        self._entity_scroll = scroll
+        return scroll
 
     def update_observation(self, obs: dict):
         """Update all sub-widgets from an observation dict."""

@@ -12,7 +12,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .zelda_enums import GAMEPLAY_START_Y, Direction, ZeldaEnemyKind, ZeldaItemKind, ZeldaProjectileId
+from .zelda_enums import (GAMEPLAY_START_Y, HUD_TRIM_FULL, HUD_TRIM_CROPPED,
+                          Direction, ZeldaEnemyKind, ZeldaItemKind, ZeldaProjectileId)
 from .objectives import ObjectiveKind
 from .zelda_game import ZeldaGame
 
@@ -55,17 +56,24 @@ ENTITY_TYPE_NAMES[TREASURE_TYPE_ID] = "Treasure"
 
 class ObservationWrapper(gym.Wrapper):
     """A wrapper that trims the HUD and converts the image to grayscale."""
-    def __init__(self, env, kind, frame_stack, frame_skip, normalize):
+    def __init__(self, env, kind, frame_stack, frame_skip, normalize, full_screen=False):
         super().__init__(env)
         self._prev_loc = None
         self._normalize = normalize
         self.frame_stack = frame_stack
         self.frame_skip = frame_skip
+        self.full_screen = full_screen
 
         if kind in ('gameplay', 'viewport'):
-            self._trim = GAMEPLAY_START_Y
+            self._trim = HUD_TRIM_FULL if full_screen else HUD_TRIM_CROPPED
+            # Viewport centering always uses GAMEPLAY_START_Y so that the viewport
+            # position relative to Link is identical across cropped and full modes.
+            # (In cropped mode, _trim==56 happens to equal GAMEPLAY_START_Y; in full
+            # mode _trim==64 cuts 8 more pixels but we still subtract 56 from link.y.)
+            self._viewport_y_offset = GAMEPLAY_START_Y
         else:
             self._trim = 0
+            self._viewport_y_offset = 0
 
         if kind == 'viewport':
             self._viewport_size = VIEWPORT_PIXELS
@@ -167,7 +175,7 @@ class ObservationWrapper(gym.Wrapper):
 
         if self._viewport_size:
             x = state.link.position.x
-            y = state.link.position.y - self._trim  # we already trimmed
+            y = state.link.position.y - self._viewport_y_offset
             half_vp = self._viewport_size // 2
 
             # Current height and width (after trimming)
