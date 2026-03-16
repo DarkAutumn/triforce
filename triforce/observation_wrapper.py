@@ -63,8 +63,9 @@ class ObservationWrapper(gym.Wrapper):
         self.frame_stack = frame_stack
         self.frame_skip = frame_skip
         self.full_screen = full_screen
+        self._grayscale = kind != 'full-rgb'
 
-        if kind in ('gameplay', 'viewport'):
+        if kind in ('gameplay', 'viewport', 'full-rgb'):
             self._trim = HUD_TRIM_FULL if full_screen else HUD_TRIM_CROPPED
             # Viewport centering always uses GAMEPLAY_START_Y so that the viewport
             # position relative to Link is identical across cropped and full modes.
@@ -116,7 +117,9 @@ class ObservationWrapper(gym.Wrapper):
         # we also move the last channel count to be the first dimension to avoid a VecTransposeImage wrapper
         height = self.observation_space.shape[0]
         width = self.observation_space.shape[1]
-        channels = self.frame_stack
+
+        # Grayscale: 1 channel per stacked frame. RGB: 3 channels per stacked frame.
+        channels = self.frame_stack if self._grayscale else self.frame_stack * 3
 
         low = 0.0
         high = 1.0 if self._normalize else 255.0
@@ -162,16 +165,26 @@ class ObservationWrapper(gym.Wrapper):
             frames (torch.Tensor): Batch of frames with shape (N, C, H, W).
 
         Returns:
-            torch.Tensor: Processed batch of frames with shape (N, 1, viewport_size, viewport_size).
+            torch.Tensor: Processed frames. Shape depends on mode:
+                - Grayscale viewport: (N, H_vp, W_vp)
+                - Grayscale gameplay: (N, H_trim, W)
+                - full-rgb: (N*3, H_trim, W)
         """
         if self._trim:
             frames = frames[:, :, self._trim:, :]
 
-        if self._normalize:
-            # Combine normalization and grayscale in one multiply+sum
-            frames = (frames * _GRAYSCALE_NORM_WEIGHTS_4D).sum(dim=1, keepdim=False)
+        if self._grayscale:
+            if self._normalize:
+                # Combine normalization and grayscale in one multiply+sum
+                frames = (frames * _GRAYSCALE_NORM_WEIGHTS_4D).sum(dim=1, keepdim=False)
+            else:
+                frames = (frames * _GRAYSCALE_WEIGHTS_4D).sum(dim=1, keepdim=False)
         else:
-            frames = (frames * _GRAYSCALE_WEIGHTS_4D).sum(dim=1, keepdim=False)
+            # full-rgb: keep RGB channels, flatten frame_stack × 3 into channel dim
+            if self._normalize:
+                frames = frames / 255.0
+            # frames shape: (N, 3, H, W) → reshape to (N*3, H, W) for channel stacking
+            frames = frames.reshape(-1, frames.shape[-2], frames.shape[-1])
 
         if self._viewport_size:
             x = state.link.position.x

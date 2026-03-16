@@ -398,6 +398,22 @@ class EnvironmentBridge:
         mask = mask if mask is not None else self._action_mask
         return self.selector.get_probabilities(obs, mask)
 
+    def get_attention_weights(self, obs=None):
+        """Returns spatial attention weights if the model supports it, else None.
+
+        Returns:
+            numpy array of shape (H', W') or None if the model has no attention.
+        """
+        obs = obs if obs is not None else self._observation
+        model = self.selector.model
+        if not hasattr(model, 'forward_with_attention'):
+            return None
+
+        with torch.no_grad():
+            result = model.forward_with_attention(obs)
+            attn = result[-1]  # Last element is always attention weights
+            return attn.squeeze(0).cpu().numpy()
+
     @property
     def model_details(self):
         """Returns a human-readable string describing the current model."""
