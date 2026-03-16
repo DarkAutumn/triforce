@@ -51,8 +51,27 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
         network.load(args.load)
         kwargs['model'] = network
 
+        # Infer obs_kind and frame_stack from saved model when not explicitly set
+        if args.obs_kind is None and args.frame_stack is None:
+            from triforce.observation_wrapper import infer_obs_kind  # pylint: disable=import-outside-toplevel
+            inferred_kind, inferred_stack = infer_obs_kind(obs)
+            kwargs['obs_kind'] = inferred_kind
+            kwargs['frame_stack'] = inferred_stack
+
     if args.frame_stack is not None:
         kwargs['frame_stack'] = args.frame_stack
+
+    # Auto-select obs_kind for impala models (they require full-rgb)
+    if 'obs_kind' not in kwargs:
+        obs_kind = args.obs_kind
+        if obs_kind is None and model_kind.name.startswith('impala'):
+            obs_kind = 'full-rgb'
+        if obs_kind is not None:
+            kwargs['obs_kind'] = obs_kind
+
+    # impala models use frame_stack=1 by default with full-rgb
+    if kwargs.get('obs_kind') == 'full-rgb' and 'frame_stack' not in kwargs:
+        kwargs['frame_stack'] = 1
 
     if args.render_mode:
         kwargs['render_mode'] = args.render_mode
@@ -233,6 +252,9 @@ def parse_args():
     parser.add_argument("--frame-stack", type=int, default=None, help="The number of frames to stack.")
     parser.add_argument("--device", choices=['cpu', 'cuda'], default=None, help="The device to use.")
     parser.add_argument("--render-mode", type=str, default=None, help="The render mode to use.")
+    parser.add_argument("--obs-kind", type=str, default=None,
+                        choices=['viewport', 'gameplay', 'full-rgb'],
+                        help="Observation kind. Auto-selected for impala models if not set.")
 
     parser.add_argument('scenario', type=str, help='The scenario or circuit to train on.')
     parser.add_argument('action_space', type=str, nargs='?', default=None,

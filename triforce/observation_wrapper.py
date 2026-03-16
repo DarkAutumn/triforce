@@ -54,6 +54,27 @@ for _key, _val in _ENTITY_TYPE_MAP.items():
     ENTITY_TYPE_NAMES[_val] = _key.name
 ENTITY_TYPE_NAMES[TREASURE_TYPE_ID] = "Treasure"
 
+
+def infer_obs_kind(obs_space):
+    """Infer the observation kind from a saved observation space.
+
+    Returns:
+        (obs_kind, frame_stack) tuple, e.g. ('viewport', 3) or ('full-rgb', 1).
+    """
+    image_shape = obs_space["image"].shape  # (channels, H, W)
+    channels, h, w = image_shape
+
+    if h == VIEWPORT_PIXELS and w == VIEWPORT_PIXELS:
+        return 'viewport', channels
+
+    # full-rgb: channels is a multiple of 3 (RGB per stacked frame)
+    if channels % 3 == 0 and channels <= 9:
+        return 'full-rgb', channels // 3
+
+    # grayscale gameplay: channels == frame_stack
+    return 'gameplay', channels
+
+
 class ObservationWrapper(gym.Wrapper):
     """A wrapper that trims the HUD and converts the image to grayscale."""
     def __init__(self, env, kind, frame_stack, frame_skip, normalize, full_screen=False):

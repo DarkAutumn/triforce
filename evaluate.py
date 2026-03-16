@@ -285,12 +285,18 @@ def _discover_models(path):
 
 def _make_env_from_network(network, scenario_def, render_mode=None, frame_stack=3):
     """Create an env using metadata from a loaded network."""
+    from triforce.observation_wrapper import infer_obs_kind  # pylint: disable=import-outside-toplevel
+
     action_space_name = network.action_space_name
     action_space_def = ActionSpaceDefinition.get(action_space_name)
     multihead = getattr(network, 'is_multihead', False)
+
+    # Infer obs_kind and frame_stack from the saved observation space
+    obs_kind, frame_stack = infer_obs_kind(network.observation_space)
+
     return make_zelda_env(scenario_def, action_space_def.actions,
                           render_mode=render_mode, frame_stack=frame_stack,
-                          multihead=multihead)
+                          multihead=multihead, obs_kind=obs_kind)
 
 def main():
     """Main entry point."""
