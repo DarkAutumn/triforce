@@ -9,6 +9,7 @@ import os
 import time
 import faulthandler
 import traceback
+from collections import deque
 
 from rich.console import Console, Group
 from rich.live import Live
@@ -25,6 +26,7 @@ from triforce.scenario_wrapper import TrainingCircuitDefinition, TrainingCircuit
 BAR_WIDTH = 50
 BAR_FILL = "▄"
 BAR_EMPTY = " "
+SPS_WINDOW = 25_000
 
 
 class TrainingDisplay(TrainingCallback):
@@ -49,9 +51,15 @@ class TrainingDisplay(TrainingCallback):
         self._current_steps = 0
         self._current_total = 0
 
+        # SPS tracking for ETA — rolling window over last SPS_WINDOW iterations
+        self._sps_samples = deque()   # (timestamp, cumulative_steps)
+        self._cumulative_steps = 0
+        self._rolling_sps = None
+
         # Metrics state
         self._game_metrics = {}
         self._optimize_stats = {}
+        self._prev_rewards_avg = None
 
     def on_circuit_start(self, scenarios):
         self._scenarios = scenarios
@@ -85,6 +93,7 @@ class TrainingDisplay(TrainingCallback):
         self._scenario_steps[scenario_name] = self._current_steps
         self._total_spent += self._current_steps
         self._completed.add(scenario_name)
+        self._prev_rewards_avg = None
         self._refresh()
 
     def on_progress(self, steps, total_steps):
@@ -94,10 +103,35 @@ class TrainingDisplay(TrainingCallback):
             name = self._scenarios[self._active_index][0]
             self._scenario_steps[name] = self._current_steps
             self._scenario_total[name] = total_steps
+
+        # Track SPS samples
+        self._cumulative_steps += steps
+        now = time.monotonic()
+        self._sps_samples.append((now, self._cumulative_steps))
+
+        # Evict samples older than SPS_WINDOW iterations
+        cutoff = self._cumulative_steps - SPS_WINDOW
+        while len(self._sps_samples) > 1 and self._sps_samples[0][1] < cutoff:
+            self._sps_samples.popleft()
+
+        # Compute rolling SPS once we have enough data
+        if self._cumulative_steps >= SPS_WINDOW and len(self._sps_samples) > 1:
+            oldest_time, oldest_steps = self._sps_samples[0]
+            dt = now - oldest_time
+            ds = self._cumulative_steps - oldest_steps
+            self._rolling_sps = ds / dt if dt > 0 else None
+
         self._refresh()
 
     def on_metrics(self, metrics, iteration, total_iterations):
-        self._game_metrics = dict(metrics)
+        # Track rewards-since-last before updating
+        new_rewards = metrics.get("rewards")
+        if new_rewards is not None and self._prev_rewards_avg is not None:
+            self._game_metrics["rewards-since-last"] = new_rewards - self._prev_rewards_avg
+        if new_rewards is not None:
+            self._prev_rewards_avg = new_rewards
+
+        self._game_metrics.update(metrics)
         if self._tensorboard:
             timestamp = time.time()
             for name, value in metrics.items():
@@ -126,7 +160,7 @@ class TrainingDisplay(TrainingCallback):
 
     def _render(self):
         parts = []
-        parts.append(Text(""))  # blank line
+        parts.append(Text(""))
 
         for i, (name, _) in enumerate(self._scenarios):
             if name in self._completed:
@@ -141,12 +175,17 @@ class TrainingDisplay(TrainingCallback):
                 total = self._scenario_total.get(name, 0)
                 parts.append(self._render_bar(name, 0, total, active=False))
 
-        # Total progress bar
+        # Total progress bar with ETA
         total_done = self._total_spent + (self._current_steps if self._active_index >= 0 else 0)
         parts.append(Text(""))
-        parts.append(self._render_bar("Total", total_done, self._total_budget, active=True))
+        total_bar = self._render_bar("Total", total_done, self._total_budget, active=True)
+        if self._rolling_sps and total_done < self._total_budget:
+            remaining = self._total_budget - total_done
+            eta_seconds = remaining / self._rolling_sps
+            total_bar.append(f"  ETA {self._format_duration(eta_seconds)}", style="yellow")
+        parts.append(total_bar)
 
-        # Metrics table
+        # Metrics
         if self._game_metrics or self._optimize_stats:
             parts.append(Text(""))
             parts.append(self._render_metrics())
@@ -167,29 +206,70 @@ class TrainingDisplay(TrainingCallback):
             line.append(f"  ({steps:,} / {total:,})")
         return line
 
+    @staticmethod
+    def _format_duration(seconds):
+        """Format seconds into a human-readable duration string."""
+        if seconds < 60:
+            return f"{seconds:.0f}s"
+        if seconds < 3600:
+            m, s = divmod(int(seconds), 60)
+            return f"{m}m{s:02d}s"
+        h, remainder = divmod(int(seconds), 3600)
+        m, s = divmod(remainder, 60)
+        return f"{h}h{m:02d}m{s:02d}s"
+
     def _render_metrics(self):
-        table = Table(show_header=True, show_edge=False, pad_edge=False, box=None)
+        table = Table(show_header=False, show_edge=False, pad_edge=False, box=None, padding=(0, 2))
         table.add_column("Metric", style="cyan", min_width=24)
         table.add_column("Value", justify="right", min_width=12)
 
-        # Key game metrics first
-        key_game = ["success-rate", "rewards", "room-progress", "progress/median"]
-        for key in key_game:
-            if key in self._game_metrics:
-                table.add_row(key, f"{self._game_metrics[key]:.4f}")
-
-        # Key optimization stats
-        key_stats = [
-            ("charts/SPS", "SPS", ",.0f"),
-            ("losses/policy_loss", "policy loss", ".4f"),
-            ("losses/value_loss", "value loss", ".4f"),
-            ("losses/entropy", "entropy", ".4f"),
-            ("losses/approx_kl", "approx KL", ".4f"),
-            ("losses/explained_variance", "explained var", ".4f"),
+        # Performance metrics
+        perf_metrics = [
+            ("progress/p75", "progress/p75", ".2f"),
+            ("rewards", "rewards", ".2f"),
+            ("success-rate", "success-rate", ".4f"),
+            ("rewards-since-last", "rewards-since-last", "+.2f"),
         ]
-        for stat_key, display_name, fmt in key_stats:
-            if stat_key in self._optimize_stats:
-                table.add_row(display_name, f"{self._optimize_stats[stat_key]:{fmt}}")
+        has_perf = False
+        for key, display_name, fmt in perf_metrics:
+            val = self._game_metrics.get(key)
+            if val is not None:
+                table.add_row(display_name, f"{val:{fmt}}")
+                has_perf = True
+
+        # Entropy / attention metrics
+        entropy_metrics = [
+            ("losses/attention/entropy", "attention/entropy", ".4f"),
+            ("losses/attention/top1_weight", "attention/top1_weight", ".4f"),
+            ("losses/entropy/action_type", "entropy/action_type", ".4f"),
+            ("losses/entropy/direction", "entropy/direction", ".4f"),
+        ]
+        has_entropy = False
+        for key, display_name, fmt in entropy_metrics:
+            val = self._optimize_stats.get(key)
+            if val is not None:
+                if not has_entropy and has_perf:
+                    table.add_row("", "")
+                table.add_row(display_name, f"{val:{fmt}}")
+                has_entropy = True
+
+        # Loss metrics
+        loss_metrics = [
+            ("losses/value_loss", "value_loss", ".4f"),
+            ("losses/policy_loss", "policy_loss", ".4f"),
+            ("losses/entropy", "entropy", ".4f"),
+            ("losses/approx_kl", "approx_kl", ".6f"),
+            ("losses/clipfrac", "clipfrac", ".4f"),
+            ("losses/explained_variance", "explained_var", ".4f"),
+        ]
+        has_loss = False
+        for key, display_name, fmt in loss_metrics:
+            val = self._optimize_stats.get(key)
+            if val is not None:
+                if not has_loss and (has_perf or has_entropy):
+                    table.add_row("", "")
+                table.add_row(display_name, f"{val:{fmt}}")
+                has_loss = True
 
         return table
 
