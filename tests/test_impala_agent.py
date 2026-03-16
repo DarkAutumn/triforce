@@ -208,6 +208,7 @@ class TestImpalaSharedAgent:
         agent.steps_trained = 100
         agent.episodes_evaluated = 5
         agent.metrics = {"test": 1.0}
+        agent.eval()
 
         obs = _make_obs_batch(2)
         with torch.no_grad():
@@ -220,6 +221,7 @@ class TestImpalaSharedAgent:
             agent.save(path)
             loaded = ImpalaSharedAgent(obs_space, action_space)
             loaded.load(path)
+            loaded.eval()
 
             assert loaded.steps_trained == 100
             assert loaded.episodes_evaluated == 5
@@ -288,6 +290,7 @@ class TestImpalaMultiHeadAgent:
         obs_space = _make_obs_space()
         action_space = MultiDiscrete([3, 4])
         agent = ImpalaMultiHeadAgent(obs_space, action_space)
+        agent.eval()
 
         obs = _make_obs_batch(2)
         with torch.no_grad():
@@ -301,6 +304,7 @@ class TestImpalaMultiHeadAgent:
             agent.save(path)
             loaded = ImpalaMultiHeadAgent(obs_space, action_space)
             loaded.load(path)
+            loaded.eval()
 
             with torch.no_grad():
                 load_actions, load_lp, _, load_val = loaded.get_action_and_value(

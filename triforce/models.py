@@ -379,7 +379,7 @@ class SpatialAttentionPool(nn.Module):
     computes scaled dot-product attention across all spatial positions, and
     produces a single weighted-sum feature vector per batch element.
     """
-    def __init__(self, in_channels, hidden_dim=64, output_dim=256):
+    def __init__(self, in_channels, hidden_dim=64, output_dim=256, dropout=0.1):
         super().__init__()
         self.query_proj = nn.Conv2d(in_channels, hidden_dim, kernel_size=1)
         self.key_proj = nn.Conv2d(in_channels, hidden_dim, kernel_size=1)
@@ -388,6 +388,7 @@ class SpatialAttentionPool(nn.Module):
             Network.layer_init(nn.Linear(hidden_dim, output_dim)),
             nn.ReLU()
         )
+        self.attn_dropout = nn.Dropout(p=dropout)
         self.scale = hidden_dim ** -0.5
         self.output_dim = output_dim
 
@@ -410,6 +411,7 @@ class SpatialAttentionPool(nn.Module):
         # Scaled dot-product attention: (batch, N, N)
         attn_logits = torch.bmm(q, k.transpose(1, 2)) * self.scale
         attn = torch.softmax(attn_logits, dim=-1)
+        attn = self.attn_dropout(attn)
 
         # Weighted sum of values: (batch, N, hidden_dim)
         attended = torch.bmm(attn, v)
