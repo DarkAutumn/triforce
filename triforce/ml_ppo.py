@@ -366,6 +366,15 @@ class PPO:
                 detail_masks = mb_masks.cpu()
                 per_head_entropy = network.get_entropy_details(detail_obs, detail_masks)
 
+        # Compute attention entropy for IMPALA models
+        attention_stats = {}
+        if hasattr(network, 'get_attention_entropy'):
+            with torch.no_grad():
+                if not per_head_entropy:
+                    detail_obs = {k: v.cpu() for k, v in mb_obs.items()} \
+                        if isinstance(mb_obs, dict) else mb_obs.cpu()
+                attention_stats = network.get_attention_entropy(detail_obs)
+
         if self.tensorboard:
             self.tensorboard.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], iterations)
             self.tensorboard.add_scalar("losses/value_loss", v_loss.item(), iterations)
@@ -382,6 +391,10 @@ class PPO:
 
             # Per-head entropy for MultiHeadAgent
             for name, value in per_head_entropy.items():
+                self.tensorboard.add_scalar(f"losses/{name}", value, iterations)
+
+            # Attention health for IMPALA models
+            for name, value in attention_stats.items():
                 self.tensorboard.add_scalar(f"losses/{name}", value, iterations)
 
         return network

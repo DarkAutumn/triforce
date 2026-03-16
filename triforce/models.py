@@ -813,6 +813,11 @@ class ImpalaSharedAgent(Network):
         value = self.value_net(value_features)
         return action_logits, value, attn_weights
 
+    def get_attention_entropy(self, obs):
+        """Returns attention entropy and top-1 concentration for tensorboard."""
+        _, _, attn = self.forward_with_attention(obs)
+        return _attention_entropy_stats(attn)
+
 
 class ImpalaMultiHeadAgent(Network):
     """Two-head action decomposition with IMPALA ResNet backbone."""
@@ -963,6 +968,29 @@ class ImpalaMultiHeadAgent(Network):
             "entropy/action_type": type_dist.entropy().mean().item(),
             "entropy/direction": dir_dist.entropy().mean().item(),
         }
+
+    def get_attention_entropy(self, obs):
+        """Returns attention entropy and top-1 concentration for tensorboard."""
+        _, _, _, attn = self.forward_with_attention(obs)
+        return _attention_entropy_stats(attn)
+
+
+def _attention_entropy_stats(attn_map):
+    """Compute attention entropy and top-1 weight from an attention map.
+
+    Args:
+        attn_map: (batch, H, W) attention weights that sum to 1 over H×W.
+    Returns:
+        dict with 'attention/entropy' and 'attention/top1_weight'.
+    """
+    flat = attn_map.flatten(1)  # (batch, N)
+    log_flat = torch.log(flat + 1e-10)
+    entropy = -(flat * log_flat).sum(dim=1).mean().item()
+    top1 = flat.max(dim=1).values.mean().item()
+    return {
+        "attention/entropy": entropy,
+        "attention/top1_weight": top1,
+    }
 
 
 def create_network(network, obs_space, action_space, model_kind=None, action_space_name=None):
