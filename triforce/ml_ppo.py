@@ -56,6 +56,7 @@ class PPO:
         self._max_grad_norm = kwargs.get('max_grad_norm', MAX_GRAD_NORM)
         self._epsilon = kwargs.get('epsilon', EPSILON)
         self.minibatches = kwargs.get('minibatches', MINIBATCHES)
+        self._minibatches_override = 'minibatches' in kwargs
         self.num_epochs = kwargs.get('num_epochs', EPOCHS)
         self._target_kl = kwargs.get('target_kl', TARGET_KL)
         self.optimizer = None
@@ -268,7 +269,11 @@ class PPO:
 
         # standard PPO update
         batch_size = variables.memory_length * variables.n_envs
-        minibatch_size = batch_size // self.minibatches
+        minibatches = self.minibatches
+        if not self._minibatches_override:
+            minibatches = max(minibatches,
+                              getattr(network, 'recommended_minibatches', minibatches))
+        minibatch_size = batch_size // minibatches
 
         network = network.to(self.device)
         optimizer = self.optimizer

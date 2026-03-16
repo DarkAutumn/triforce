@@ -756,6 +756,8 @@ class SharedNatureAgent(Network):
 
 class ImpalaSharedAgent(Network):
     """Actor-critic with IMPALA ResNet, CoordConv, and spatial attention pooling."""
+    recommended_minibatches = 16  # spatial attention needs smaller minibatches
+
     def __init__(self, obs_space: Dict, action_space, model_kind=None, action_space_name=None):
         channels, height, width = obs_space["image"].shape
         image_output_size = 256
@@ -813,6 +815,7 @@ class ImpalaSharedAgent(Network):
 class ImpalaMultiHeadAgent(Network):
     """Two-head action decomposition with IMPALA ResNet backbone."""
     is_multihead = True
+    recommended_minibatches = 16  # spatial attention needs smaller minibatches
 
     # pylint: disable=super-init-not-called
     def __init__(self, obs_space: Dict, action_space, model_kind=None, action_space_name=None):
