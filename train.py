@@ -6,14 +6,192 @@
 import argparse
 import sys
 import os
+import time
 import faulthandler
 import traceback
 
-from tqdm import tqdm
-from triforce import ActionSpaceDefinition, ModelKindDefinition, TrainingScenarioDefinition, make_zelda_env
+from rich.console import Console, Group
+from rich.live import Live
+from rich.text import Text
+from rich.table import Table
+from torch.utils.tensorboard import SummaryWriter
+
+from triforce import (ActionSpaceDefinition, ModelKindDefinition, TrainingScenarioDefinition,
+                      TrainingCallback, make_zelda_env)
 from triforce.ml_ppo import PPO
 from triforce.models import Network
 from triforce.scenario_wrapper import TrainingCircuitDefinition, TrainingCircuitEntry
+
+BAR_WIDTH = 50
+BAR_FILL = "▄"
+BAR_EMPTY = " "
+
+
+class TrainingDisplay(TrainingCallback):
+    """Rich-based TUI for training progress and metrics, with tensorboard logging."""
+
+    def __init__(self, live, log_dir):
+        self._live = live
+        self._log_dir = log_dir
+        self._tensorboard = None
+
+        # Circuit-level state
+        self._scenarios = []        # list of (name, iterations)
+        self._name_width = 0
+        self._active_index = -1
+        self._scenario_steps = {}   # scenario_name -> steps completed
+        self._scenario_total = {}   # scenario_name -> total steps
+        self._completed = set()     # scenario names that are done
+        self._total_budget = 0
+        self._total_spent = 0
+
+        # Current scenario state
+        self._current_steps = 0
+        self._current_total = 0
+
+        # Metrics state
+        self._game_metrics = {}
+        self._optimize_stats = {}
+
+    def on_circuit_start(self, scenarios):
+        self._scenarios = scenarios
+        self._name_width = max(len(name) for name, _ in scenarios)
+        self._name_width = max(self._name_width, len("Total"))
+        self._total_budget = sum(iters for _, iters in scenarios)
+        self._total_spent = 0
+        for name, iters in scenarios:
+            self._scenario_steps[name] = 0
+            self._scenario_total[name] = iters
+        self._refresh()
+
+    def on_scenario_start(self, scenario_name, iterations):
+        self._active_index = next(
+            i for i, (name, _) in enumerate(self._scenarios) if name == scenario_name)
+        self._current_steps = 0
+        self._current_total = iterations
+        self._scenario_total[scenario_name] = iterations
+        self._game_metrics = {}
+        self._optimize_stats = {}
+
+        # Set up tensorboard for this scenario
+        if self._tensorboard:
+            self._tensorboard.close()
+        scenario_log_dir = os.path.join(self._log_dir, scenario_name)
+        os.makedirs(scenario_log_dir, exist_ok=True)
+        self._tensorboard = SummaryWriter(scenario_log_dir)
+        self._refresh()
+
+    def on_scenario_end(self, scenario_name):
+        self._scenario_steps[scenario_name] = self._current_steps
+        self._total_spent += self._current_steps
+        self._completed.add(scenario_name)
+        self._refresh()
+
+    def on_progress(self, steps, total_steps):
+        self._current_steps += steps
+        self._current_total = total_steps
+        if self._active_index >= 0:
+            name = self._scenarios[self._active_index][0]
+            self._scenario_steps[name] = self._current_steps
+            self._scenario_total[name] = total_steps
+        self._refresh()
+
+    def on_metrics(self, metrics, iteration, total_iterations):
+        self._game_metrics = dict(metrics)
+        if self._tensorboard:
+            timestamp = time.time()
+            for name, value in metrics.items():
+                if '/' not in name:
+                    name = f"metrics/{name}"
+                self._tensorboard.add_scalar(name, value, iteration, timestamp)
+            self._tensorboard.flush()
+        self._refresh()
+
+    def on_optimize(self, stats, iteration, total_iterations):
+        self._optimize_stats = dict(stats)
+        if self._tensorboard:
+            for name, value in stats.items():
+                self._tensorboard.add_scalar(name, value, iteration)
+            self._tensorboard.flush()
+        self._refresh()
+
+    def on_training_complete(self):
+        if self._tensorboard:
+            self._tensorboard.close()
+            self._tensorboard = None
+        self._refresh()
+
+    def _refresh(self):
+        self._live.update(self._render())
+
+    def _render(self):
+        parts = []
+        parts.append(Text(""))  # blank line
+
+        for i, (name, _) in enumerate(self._scenarios):
+            if name in self._completed:
+                line = Text("  ✔ ", style="green")
+                line.append(name, style="green")
+                parts.append(line)
+            elif i == self._active_index:
+                steps = self._scenario_steps.get(name, 0)
+                total = self._scenario_total.get(name, 1)
+                parts.append(self._render_bar(name, steps, total, active=True))
+            else:
+                total = self._scenario_total.get(name, 0)
+                parts.append(self._render_bar(name, 0, total, active=False))
+
+        # Total progress bar
+        total_done = self._total_spent + (self._current_steps if self._active_index >= 0 else 0)
+        parts.append(Text(""))
+        parts.append(self._render_bar("Total", total_done, self._total_budget, active=True))
+
+        # Metrics table
+        if self._game_metrics or self._optimize_stats:
+            parts.append(Text(""))
+            parts.append(self._render_metrics())
+
+        return Group(*parts)
+
+    def _render_bar(self, name, steps, total, active):
+        padded = name.ljust(self._name_width)
+        pct = (steps / total * 100) if total > 0 else 0
+        filled = int(BAR_WIDTH * min(steps, total) / total) if total > 0 else 0
+        bar_str = BAR_FILL * filled + BAR_EMPTY * (BAR_WIDTH - filled)
+
+        line = Text(f"  {padded}  [")
+        line.append(bar_str[:filled], style="green")
+        line.append(bar_str[filled:])
+        line.append(f"] {pct:5.1f}%")
+        if active and total > 0:
+            line.append(f"  ({steps:,} / {total:,})")
+        return line
+
+    def _render_metrics(self):
+        table = Table(show_header=True, show_edge=False, pad_edge=False, box=None)
+        table.add_column("Metric", style="cyan", min_width=24)
+        table.add_column("Value", justify="right", min_width=12)
+
+        # Key game metrics first
+        key_game = ["success-rate", "rewards", "room-progress", "progress/median"]
+        for key in key_game:
+            if key in self._game_metrics:
+                table.add_row(key, f"{self._game_metrics[key]:.4f}")
+
+        # Key optimization stats
+        key_stats = [
+            ("charts/SPS", "SPS", ",.0f"),
+            ("losses/policy_loss", "policy loss", ".4f"),
+            ("losses/value_loss", "value loss", ".4f"),
+            ("losses/entropy", "entropy", ".4f"),
+            ("losses/approx_kl", "approx KL", ".4f"),
+            ("losses/explained_variance", "explained var", ".4f"),
+        ]
+        for stat_key, display_name, fmt in key_stats:
+            if stat_key in self._optimize_stats:
+                table.add_row(display_name, f"{self._optimize_stats[stat_key]:{fmt}}")
+
+        return table
 
 def _dump_trace_with_locals(exc_type, exc_value, exc_traceback):
     with open("crash_log.txt", "w", encoding="utf8") as f:
@@ -93,7 +271,8 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
 
     return kwargs, circuit
 
-def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, iterations, **kwargs):
+def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, iterations,
+               callback=None, **kwargs):
     """Trains a model with the given scenario.  Returns (model, iterations_used)."""
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
     kwargs['multihead'] = multihead
@@ -114,7 +293,7 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
     kwargs['model_kind'] = model_kind.name
     kwargs['action_space_name_str'] = action_space_def.name
 
-    model = ppo.train(model_kind.network_class, create_env, iterations, tqdm(ncols=100),
+    model = ppo.train(model_kind.network_class, create_env, iterations, callback,
                       save_path=checkpoint_dir, **kwargs)
 
     # Save leg checkpoint with scenario name
@@ -122,22 +301,32 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
     return model, model.steps_trained - steps_before
 
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
-                 log_dir=None):
+                 callback=None):
     """Run training circuit and return (final_model, final_scenario_def)."""
     iterations_spent = 0
     model = None
     scenario_def = None
 
+    # Resolve iteration counts for all scenarios upfront so the display can show them
+    scenario_plan = []
     for scenario_entry in circuit:
-        scenario_def = TrainingScenarioDefinition.get(scenario_entry.scenario)
-        if scenario_def is None:
+        sdef = TrainingScenarioDefinition.get(scenario_entry.scenario)
+        if sdef is None:
             raise ValueError(f"Unknown scenario: {scenario_entry.scenario}")
 
-        # Give each scenario its own tensorboard log directory
-        if log_dir:
-            scenario_log_dir = os.path.join(log_dir, scenario_def.name)
-            os.makedirs(scenario_log_dir, exist_ok=True)
-            ppo.set_log_dir(scenario_log_dir)
+        if scenario_entry.iterations is not None:
+            iters = scenario_entry.iterations
+        elif total_budget is not None:
+            iters = total_budget
+        else:
+            iters = sdef.iterations
+        scenario_plan.append((sdef.name, iters))
+
+    if callback:
+        callback.on_circuit_start(scenario_plan)
+
+    for scenario_entry in circuit:
+        scenario_def = TrainingScenarioDefinition.get(scenario_entry.scenario)
 
         if scenario_entry.iterations is not None:
             iterations = scenario_entry.iterations
@@ -151,7 +340,6 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
             iterations = min(iterations, total_budget - iterations_spent)
 
         if iterations <= 0:
-            print(f"Skipping {scenario_def.name}: no iteration budget remaining.")
             break
 
         if scenario_entry.exit_criteria:
@@ -162,21 +350,14 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
             del kwargs['exit_criteria']
             del kwargs['exit_threshold']
 
-        if scenario_entry.exit_criteria:
-            criteria = f" or {scenario_entry.exit_criteria} >= {scenario_entry.threshold}"
-        else:
-            criteria = ""
+        if callback:
+            callback.on_scenario_start(scenario_def.name, iterations)
 
-        print(f"Training on {scenario_def.name} for up to {iterations:,} iterations{criteria}.")
         model, used = train_once(ppo, scenario_def, model_kind, action_space_def,
-                                 checkpoint_dir, iterations, **kwargs)
+                                 checkpoint_dir, iterations, callback, **kwargs)
 
-        if scenario_entry.exit_criteria:
-            last_value = model.metrics.get(scenario_entry.exit_criteria, 0) if model.metrics else 0
-            hit = last_value >= scenario_entry.threshold
-            status = "reached" if hit else "not reached"
-            print(f"  {scenario_entry.exit_criteria} = {last_value:.4f} "
-                  f"(target {scenario_entry.threshold}, {status})")
+        if callback:
+            callback.on_scenario_end(scenario_def.name)
 
         kwargs['model'] = model
         iterations_spent += used
@@ -209,33 +390,41 @@ def main():
     os.makedirs(checkpoint_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
 
-    print(f"Output: {run_dir}")
-    print(f"Model kind: {model_kind.name}, Action space: {action_space_def.name}")
+    console = Console()
+    console.print(f"Output: {run_dir}")
+    console.print(f"Model kind: {model_kind.name}, Action space: {action_space_def.name}")
 
     kwargs, circuit = _get_kwargs_from_args(args, model_kind, action_space_def)
-    ppo = PPO(None, **kwargs)  # log_dir set per-scenario in _run_circuit
+    ppo = PPO(**kwargs)
 
-    model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
-                                       checkpoint_dir, kwargs, args.iterations,
-                                       log_dir=log_dir)
+    with Live(console=console, refresh_per_second=4) as live:
+        display = TrainingDisplay(live, log_dir)
+        model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
+                                           checkpoint_dir, kwargs, args.iterations,
+                                           callback=display)
+        display.on_training_complete()
 
     # Save final result in the run directory (not checkpoints)
     stem = _model_stem(model_kind.name, action_space_def.name)
     final_path = f"{run_dir}/{stem}.pt"
     model.save(final_path)
-    print(f"Final model: {final_path}")
+    console.print(f"\nFinal model: {final_path}")
 
     if args.evaluate:
         _run_post_training_eval(model, action_space_def, model_kind, scenario_def,
-                                args.evaluate, **kwargs)
+                                args.evaluate, console, **kwargs)
 
 
-def _run_post_training_eval(model, action_space_def, model_kind, scenario_def, episodes, **kwargs):
+def _run_post_training_eval(model, action_space_def, model_kind, scenario_def, episodes,
+                            console=None, **kwargs):
     """Runs evaluation episodes after training and prints a progress report."""
     # pylint: disable=import-outside-toplevel
+    from rich.progress import Progress
     from evaluate import evaluate_one_model, print_progress_report
 
-    print(f"\nRunning {episodes} evaluation episodes...")
+    if console is None:
+        console = Console()
+    console.print(f"\nRunning {episodes} evaluation episodes...")
 
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
     kwargs['multihead'] = multihead
@@ -243,9 +432,10 @@ def _run_post_training_eval(model, action_space_def, model_kind, scenario_def, e
     def create_eval_env():
         return make_zelda_env(scenario_def, action_space_def.actions, **kwargs)
 
-    with tqdm(total=episodes) as progress:
+    with Progress(console=console) as progress:
+        task = progress.add_task("Evaluating...", total=episodes)
         def update():
-            progress.update(1)
+            progress.advance(task)
         _, progress_values, max_progress = evaluate_one_model(
             create_eval_env, model, episodes, update)
 

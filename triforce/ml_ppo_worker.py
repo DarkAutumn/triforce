@@ -123,7 +123,7 @@ class RolloutWorkerPool:
         # Release all workers past the weights barrier
         self._weights_barrier.wait()
 
-    def collect_rollouts(self, target_buffer, progress=None):
+    def collect_rollouts(self, target_buffer):
         """Waits for all workers to finish writing into the shared buffer."""
         # Wait for all workers to complete their rollouts
         self._rollouts_barrier.wait()
@@ -134,9 +134,6 @@ class RolloutWorkerPool:
             metrics = conn.recv()
             if metrics:
                 all_metrics.append(metrics)
-
-        if progress:
-            progress.update(target_buffer.memory_length * target_buffer.n_envs)
 
         aggregated = _aggregate_metrics(all_metrics)
         return target_buffer.memory_length, aggregated
