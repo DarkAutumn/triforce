@@ -387,9 +387,14 @@ class TrainingDisplay(TrainingCallback):
         entropy_metrics = [
             ("losses/attention/entropy", "attention/entropy", ".4f"),
             ("losses/attention/top1_weight", "attention/top1_weight", ".4f"),
+        ]
+        for i in range(4):
+            entropy_metrics.append((f"losses/attention/head_{i}/entropy", f"  head_{i}/entropy", ".4f"))
+            entropy_metrics.append((f"losses/attention/head_{i}/top1_weight", f"  head_{i}/top1", ".4f"))
+        entropy_metrics.extend([
             ("losses/entropy/action_type", "entropy/action_type", ".4f"),
             ("losses/entropy/direction", "entropy/direction", ".4f"),
-        ]
+        ])
         has_entropy = False
         for key, display_name, fmt in entropy_metrics:
             val = self._optimize_stats.get(key)
