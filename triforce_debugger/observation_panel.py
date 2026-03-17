@@ -206,10 +206,10 @@ class ObservationPanel(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(4)
+        layout.setSpacing(2)
 
         # Title
-        layout.addWidget(self._make_header("Observation", "obs_title", bold=True))
+        layout.addWidget(self._make_header("Observation", "obs_title", bold=True), stretch=0)
 
         # Directional circles: Objective + Source
         dir_layout = QHBoxLayout()
@@ -218,7 +218,7 @@ class ObservationPanel(QWidget):
         self.source_circle = DirectionalCircleWidget("Source")
         dir_layout.addWidget(self.objective_circle)
         dir_layout.addWidget(self.source_circle)
-        layout.addLayout(dir_layout)
+        layout.addLayout(dir_layout, 0)
 
         # Boolean indicators
         bool_layout = QHBoxLayout()
@@ -228,10 +228,10 @@ class ObservationPanel(QWidget):
             indicator = BooleanIndicator(name)
             self.bool_indicators[name] = indicator
             bool_layout.addWidget(indicator)
-        layout.addLayout(bool_layout)
+        layout.addLayout(bool_layout, 0)
 
         # Entity list
-        layout.addWidget(self._make_header("Entities", "entity_header", bold=True, point_size=8))
+        layout.addWidget(self._make_header("Entities", "entity_header", bold=True, point_size=8), stretch=0)
         self.entity_rows: list[EntityRowWidget] = []
         layout.addWidget(self._build_entity_scroll(), stretch=1)
 
@@ -268,7 +268,7 @@ class ObservationPanel(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setFixedHeight(140)
+        scroll.setMinimumHeight(100)
         self._entity_scroll = scroll
         return scroll
 
