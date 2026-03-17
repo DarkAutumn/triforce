@@ -28,7 +28,7 @@ from triforce.models import Network
 from triforce.scenario_wrapper import TrainingCircuitDefinition, TrainingCircuitEntry
 
 BAR_WIDTH = 50
-BAR_FILL = "▄"
+BAR_FILL = "▬"
 BAR_EMPTY = " "
 SPS_WINDOW = 25_000
 
@@ -111,6 +111,10 @@ class TrainingDisplay(TrainingCallback):
         self._frozen_eta = None     # ETA seconds frozen at pause time
         self._pause_start = None    # monotonic time when pause began
 
+        # Quit state
+        self._quit_confirm = False
+        self._stop_requested = False
+
         # Keyboard listener
         self._keyboard = _KeyboardListener(self._on_key)
         self._keyboard.start()
@@ -120,7 +124,27 @@ class TrainingDisplay(TrainingCallback):
         return time.monotonic() - self._pause_time_offset
 
     def _on_key(self, ch):
-        if ch.lower() != 'p':
+        ch = ch.lower()
+
+        if ch == 'q':
+            if self._quit_confirm:
+                self._stop_requested = True
+                self._quit_confirm = False
+                # If paused, resume so check_pause can return False
+                if self._pause_state == _PAUSED:
+                    self._resume()
+                self._refresh()
+            else:
+                self._quit_confirm = True
+                self._refresh()
+            return
+
+        # Any non-q key cancels quit confirm
+        if self._quit_confirm:
+            self._quit_confirm = False
+            self._refresh()
+
+        if ch != 'p':
             return
 
         if self._pause_state == _RUNNING:
@@ -144,22 +168,26 @@ class TrainingDisplay(TrainingCallback):
         self._refresh()
 
     def check_pause(self):
-        """Called by PPO after each training iteration. Blocks while paused."""
-        if self._pause_state != _REQUESTING:
-            return
+        """Called by PPO after each training iteration. Blocks while paused.
+        Returns True to continue training, False to stop early."""
+        if self._stop_requested:
+            return False
 
-        # Freeze ETA before pausing
-        if self._rolling_sps:
-            total_done = self._total_spent + self._current_steps
-            remaining = self._total_budget - total_done
-            self._frozen_eta = remaining / self._rolling_sps
-        self._pause_start = time.monotonic()
-        self._pause_state = _PAUSED
-        self._resume_event.clear()
-        self._refresh()
+        if self._pause_state == _REQUESTING:
+            # Freeze ETA before pausing
+            if self._rolling_sps:
+                total_done = self._total_spent + self._current_steps
+                remaining = self._total_budget - total_done
+                self._frozen_eta = remaining / self._rolling_sps
+            self._pause_start = time.monotonic()
+            self._pause_state = _PAUSED
+            self._resume_event.clear()
+            self._refresh()
 
-        # Block until resumed
-        self._resume_event.wait()
+            # Block until resumed
+            self._resume_event.wait()
+
+        return not self._stop_requested
 
     def on_circuit_start(self, scenarios):
         self._scenarios = scenarios
@@ -289,8 +317,14 @@ class TrainingDisplay(TrainingCallback):
             total_bar.append(f"  ETA {self._format_duration(eta_seconds)}", style="yellow")
         parts.append(total_bar)
 
-        # Pause status message
-        if self._pause_state == _REQUESTING:
+        # Pause / quit status messages
+        if self._stop_requested:
+            parts.append(Text(""))
+            parts.append(Text("  ⏹  Stopping after next training point...", style="red"))
+        elif self._quit_confirm:
+            parts.append(Text(""))
+            parts.append(Text("  ⏹  Press q again to end training early.", style="red"))
+        elif self._pause_state == _REQUESTING:
             parts.append(Text(""))
             parts.append(Text("  ⏸  Pausing after next training point...", style="yellow"))
         elif self._pause_state == _PAUSED:

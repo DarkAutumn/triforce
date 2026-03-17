@@ -31,7 +31,9 @@ class TrainingCallback:
         """Called when all training is done."""
 
     def check_pause(self):
-        """Called after each training iteration. May block if training is paused."""
+        """Called after each training iteration. May block if training is paused.
+        Returns True to continue training, False to stop early."""
+        return True
 
 
 class NullCallback(TrainingCallback):
