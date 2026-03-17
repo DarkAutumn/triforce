@@ -263,7 +263,7 @@ class EntityAttentionEncoder(nn.Module):
     entities into a fixed-size output vector.
     """
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    def __init__(self, num_entity_types, continuous_features=9, embedding_dim=8,
+    def __init__(self, num_entity_types, continuous_features=7, embedding_dim=8,
                  d_model=64, num_heads=4, num_layers=1, ff_dim=128, output_dim=64):
         super().__init__()
         self.type_embedding = nn.Embedding(num_entity_types, embedding_dim)

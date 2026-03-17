@@ -27,7 +27,7 @@ def _make_obs_space():
     """Create a mock observation space matching ZeldaObservationWrapper output."""
     return Dict({
         "image": Box(low=0.0, high=1.0, shape=(1, 128, 128), dtype=np.float32),
-        "entities": Box(low=-1.0, high=1.0, shape=(12, 9), dtype=np.float32),
+        "entities": Box(low=-1.0, high=1.0, shape=(12, 7), dtype=np.float32),
         "entity_types": gym.spaces.MultiDiscrete([74] * 12),
         "information": MultiBinary(15),
     })
@@ -37,7 +37,7 @@ def _make_random_obs():
     """Create a random observation as tensors."""
     return {
         "image": torch.randn(1, 128, 128),
-        "entities": torch.randn(12, 9),
+        "entities": torch.randn(12, 7),
         "entity_types": torch.zeros(12).long(),
         "information": torch.zeros(15),
     }
@@ -127,7 +127,7 @@ class TestMultiHeadPPOUpdate:
 
         obs = {
             "image": torch.randn(4, 1, 128, 128),
-            "entities": torch.randn(4, 12, 9),
+            "entities": torch.randn(4, 12, 7),
             "entity_types": torch.zeros(4, 12).long(),
             "information": torch.zeros(4, 15),
         }
@@ -154,7 +154,7 @@ class TestPerHeadEntropyDetails:
 
         obs = {
             "image": torch.randn(4, 1, 128, 128),
-            "entities": torch.randn(4, 12, 9),
+            "entities": torch.randn(4, 12, 7),
             "entity_types": torch.zeros(4, 12).long(),
             "information": torch.zeros(4, 15),
         }
@@ -178,7 +178,7 @@ class TestPerHeadEntropyDetails:
 
         obs = {
             "image": torch.randn(4, 1, 128, 128),
-            "entities": torch.randn(4, 12, 9),
+            "entities": torch.randn(4, 12, 7),
             "entity_types": torch.zeros(4, 12).long(),
             "information": torch.zeros(4, 15),
         }

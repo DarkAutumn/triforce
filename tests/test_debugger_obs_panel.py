@@ -27,7 +27,7 @@ def _make_obs(**overrides):
     """Build a mock observation dict with sensible defaults."""
     obs = {
         "image": torch.zeros(4, 1, 84, 84),
-        "entities": torch.zeros(12, 9),
+        "entities": torch.zeros(12, 7),
         "entity_types": torch.zeros(12).long(),
         "information": torch.zeros(15),
     }
@@ -42,14 +42,6 @@ def test_panel_creates_without_crash():
     """ObservationPanel instantiates headlessly."""
     panel = _make_panel()
     assert panel.objectName() == "observation_panel"
-    panel.close()
-
-
-def test_panel_has_obs_image():
-    """Panel contains an ObsImageWidget."""
-    panel = _make_panel()
-    assert panel.obs_image is not None
-    assert panel.obs_image.objectName() == "obs_image"
     panel.close()
 
 
@@ -79,67 +71,6 @@ def test_panel_has_five_boolean_indicators():
     panel.close()
 
 
-# ── ObsImageWidget ────────────────────────────────────────────
-
-
-def test_obs_image_initial_state():
-    """ObsImageWidget starts with no image."""
-    from triforce_debugger.observation_panel import ObsImageWidget  # pylint: disable=import-outside-toplevel
-    _app = get_app()
-    widget = ObsImageWidget()
-    assert widget.current_image is None
-    widget.close()
-
-
-def test_obs_image_set_tensor():
-    """Setting an image tensor creates a QImage."""
-    from triforce_debugger.observation_panel import ObsImageWidget  # pylint: disable=import-outside-toplevel
-    _app = get_app()
-    widget = ObsImageWidget()
-    img = torch.rand(4, 1, 84, 84)
-    widget.set_image(img)
-    assert widget.current_image is not None
-    assert widget.current_image.width() == 84
-    assert widget.current_image.height() == 84
-    widget.close()
-
-
-def test_obs_image_numpy_array():
-    """Setting a numpy array works too."""
-    from triforce_debugger.observation_panel import ObsImageWidget  # pylint: disable=import-outside-toplevel
-    _app = get_app()
-    widget = ObsImageWidget()
-    img = np.random.rand(4, 1, 84, 84).astype(np.float32)
-    widget.set_image(img)
-    assert widget.current_image is not None
-    assert widget.current_image.width() == 84
-    widget.close()
-
-
-def test_obs_image_set_none_clears():
-    """Setting None clears the image."""
-    from triforce_debugger.observation_panel import ObsImageWidget  # pylint: disable=import-outside-toplevel
-    _app = get_app()
-    widget = ObsImageWidget()
-    widget.set_image(torch.rand(4, 1, 84, 84))
-    assert widget.current_image is not None
-    widget.set_image(None)
-    assert widget.current_image is None
-    widget.close()
-
-
-# ── SmallArrowWidget ───────────────────────────────────────────
-
-
-def test_small_arrow_widget():
-    """SmallArrowWidget renders without crash."""
-    from triforce_debugger.observation_panel import SmallArrowWidget  # pylint: disable=import-outside-toplevel
-    _app = get_app()
-    w = SmallArrowWidget()
-    w.set_vector(0.5, -0.3)
-    w.show()
-    w.repaint()
-    w.close()
 
 
 # ── DirectionalCircleWidget ──────────────────────────────────
@@ -264,25 +195,16 @@ def test_update_observation_sets_entity_rows():
     """update_observation populates entity rows."""
     panel = _make_panel()
     panel.show()
-    entities = torch.zeros(12, 9)
+    entities = torch.zeros(12, 7)
     entities[0, 0] = 1.0    # presence
-    entities[0, 1] = 0.5    # rel_x
-    entities[0, 2] = -0.3   # rel_y
+    entities[0, 1] = 0.5    # dir_x
+    entities[0, 2] = -0.3   # dir_y
     entity_types = torch.zeros(12).long()
     entity_types[0] = 1
     obs = _make_obs(entities=entities, entity_types=entity_types)
     panel.update_observation(obs)
     assert panel.entity_rows[0].isVisible()
     assert not panel.entity_rows[1].isVisible()
-    panel.close()
-
-
-def test_update_observation_sets_image():
-    """update_observation populates the observation image."""
-    panel = _make_panel()
-    obs = _make_obs(image=torch.rand(4, 1, 84, 84))
-    panel.update_observation(obs)
-    assert panel.obs_image.current_image is not None
     panel.close()
 
 

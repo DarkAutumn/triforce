@@ -25,8 +25,7 @@ VIEWPORT_PIXELS = 128
 
 # Unified entity observation: 11 NES object slots + 1 treasure slot
 ENTITY_SLOTS = 12
-ENTITY_FEATURES = 9
-POSITION_SCALE = 128.0
+ENTITY_FEATURES = 7
 
 # Entity type ID mapping for unified embedding (0 = empty/unknown)
 _ENTITY_TYPE_MAP = {}
@@ -272,23 +271,22 @@ class ObservationWrapper(gym.Wrapper):
     def _get_entity_observation(self, state: ZeldaGame):
         """Build unified entity features and type IDs for all 12 slots.
 
-        Entity features per slot (9 dims):
+        Entity features per slot (7 dims):
             0: presence (0 or 1)
-            1: rel_x  (entity.x - link.x) / POSITION_SCALE
-            2: rel_y  (entity.y - link.y) / POSITION_SCALE
-            3: dir_x  entity movement direction x
-            4: dir_y  entity movement direction y
-            5: health (enemy HP / 15, 0 for non-enemies)
-            6: stun   (enemy stun_timer / 255, 1.0 when clock active)
-            7: hurts_on_touch (1 for enemies/projectiles, 0 when clock active)
-            8: killable (1 for enemies only)
+            1: dir_x  entity movement direction x
+            2: dir_y  entity movement direction y
+            3: health (enemy HP / 15, 0 for non-enemies)
+            4: stun   (enemy stun_timer / 255, 1.0 when clock active)
+            5: hurts_on_touch (1 for enemies/projectiles, 0 when clock active)
+            6: killable (1 for enemies only)
+
+        Positions are intentionally omitted — the full-screen visual encoder
+        learns spatial relationships from pixels via CoordConv.
         """
         features = torch.zeros(ENTITY_SLOTS, ENTITY_FEATURES, dtype=torch.float32)
         types = torch.zeros(ENTITY_SLOTS, dtype=torch.int64)
 
         has_clock = bool(state.link.clock)
-        link_x = state.link.position.x
-        link_y = state.link.position.y
 
         # NES object slots 1-11 (indices 0-10)
         for i, entry in enumerate(state.all_entities):
@@ -296,18 +294,16 @@ class ObservationWrapper(gym.Wrapper):
                 continue
             entity, category = entry
             features[i, 0] = 1.0
-            features[i, 1] = (entity.position.x - link_x) / POSITION_SCALE
-            features[i, 2] = (entity.position.y - link_y) / POSITION_SCALE
 
             if category == 'enemy':
-                features[i, 3:5] = entity.direction.vector
-                features[i, 5] = entity.health / 15.0
-                features[i, 6] = 1.0 if has_clock else min(entity.stun_timer / 255.0, 1.0)
-                features[i, 7] = 0.0 if has_clock else 1.0
-                features[i, 8] = 1.0
+                features[i, 1:3] = entity.direction.vector
+                features[i, 3] = entity.health / 15.0
+                features[i, 4] = 1.0 if has_clock else min(entity.stun_timer / 255.0, 1.0)
+                features[i, 5] = 0.0 if has_clock else 1.0
+                features[i, 6] = 1.0
             elif category == 'projectile':
-                features[i, 3:5] = entity.direction.vector
-                features[i, 7] = 0.0 if has_clock else 1.0
+                features[i, 1:3] = entity.direction.vector
+                features[i, 5] = 0.0 if has_clock else 1.0
 
             types[i] = _ENTITY_TYPE_MAP.get(entity.id, 0)
 
@@ -315,8 +311,6 @@ class ObservationWrapper(gym.Wrapper):
         treasure = state.treasure
         if treasure is not None:
             features[11, 0] = 1.0
-            features[11, 1] = (treasure.position.x - link_x) / POSITION_SCALE
-            features[11, 2] = (treasure.position.y - link_y) / POSITION_SCALE
             types[11] = TREASURE_TYPE_ID
 
         return features.clamp(-1, 1), types
