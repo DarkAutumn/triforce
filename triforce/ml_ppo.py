@@ -135,6 +135,7 @@ class PPO:
             # Optimize the network
             network.steps_trained += buffer.memory_length
             network = self._optimize(network, buffer, network.steps_trained, callback, total_steps)
+            callback.check_pause()
 
         return network
 
@@ -203,6 +204,7 @@ class PPO:
                 # Optimize the network
                 network.steps_trained += env_steps_per_iteration
                 network = self._optimize(network, buffer, network.steps_trained, callback, total_steps)
+                callback.check_pause()
 
             return network
         finally:

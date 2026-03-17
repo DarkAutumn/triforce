@@ -30,6 +30,9 @@ class TrainingCallback:
     def on_training_complete(self):
         """Called when all training is done."""
 
+    def check_pause(self):
+        """Called after each training iteration. May block if training is paused."""
+
 
 class NullCallback(TrainingCallback):
     """No-op callback used when no display is needed."""

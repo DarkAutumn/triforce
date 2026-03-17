@@ -6,7 +6,11 @@
 import argparse
 import sys
 import os
+import select
+import termios
+import threading
 import time
+import tty
 import faulthandler
 import traceback
 from collections import deque
@@ -27,6 +31,44 @@ BAR_WIDTH = 50
 BAR_FILL = "▄"
 BAR_EMPTY = " "
 SPS_WINDOW = 25_000
+
+# Pause states
+_RUNNING = "running"
+_REQUESTING = "requesting"
+_PAUSED = "paused"
+
+
+class _KeyboardListener:
+    """Background thread that reads single keypresses from stdin in raw mode."""
+
+    def __init__(self, on_key):
+        self._on_key = on_key
+        self._stop = threading.Event()
+        self._old_settings = None
+        self._thread = None
+
+    def start(self):
+        """Start listening for keypresses."""
+        if not sys.stdin.isatty():
+            return
+        self._old_settings = termios.tcgetattr(sys.stdin)
+        tty.setcbreak(sys.stdin.fileno())
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        """Stop listening and restore terminal."""
+        self._stop.set()
+        if self._old_settings is not None:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self._old_settings)
+            self._old_settings = None
+
+    def _loop(self):
+        while not self._stop.is_set():
+            if select.select([sys.stdin], [], [], 0.1)[0]:
+                ch = sys.stdin.read(1)
+                if ch:
+                    self._on_key(ch)
 
 
 class TrainingDisplay(TrainingCallback):
@@ -52,14 +94,72 @@ class TrainingDisplay(TrainingCallback):
         self._current_total = 0
 
         # SPS tracking for ETA — rolling window over last SPS_WINDOW iterations
-        self._sps_samples = deque()   # (timestamp, cumulative_steps)
+        self._sps_samples = deque()   # (adjusted_time, cumulative_steps)
         self._cumulative_steps = 0
         self._rolling_sps = None
+        self._pause_time_offset = 0.0  # total seconds spent paused, subtracted from monotonic
 
         # Metrics state
         self._game_metrics = {}
         self._optimize_stats = {}
         self._prev_rewards_avg = None
+
+        # Pause state
+        self._pause_state = _RUNNING
+        self._resume_event = threading.Event()
+        self._resume_event.set()
+        self._frozen_eta = None     # ETA seconds frozen at pause time
+        self._pause_start = None    # monotonic time when pause began
+
+        # Keyboard listener
+        self._keyboard = _KeyboardListener(self._on_key)
+        self._keyboard.start()
+
+    def _active_time(self):
+        """Returns time.monotonic() adjusted for pause durations."""
+        return time.monotonic() - self._pause_time_offset
+
+    def _on_key(self, ch):
+        if ch.lower() != 'p':
+            return
+
+        if self._pause_state == _RUNNING:
+            self._pause_state = _REQUESTING
+            self._refresh()
+        elif self._pause_state == _REQUESTING:
+            # Cancel pause request before it took effect
+            self._pause_state = _RUNNING
+            self._refresh()
+        elif self._pause_state == _PAUSED:
+            self._resume()
+
+    def _resume(self):
+        """Resume from paused state."""
+        if self._pause_start is not None:
+            self._pause_time_offset += time.monotonic() - self._pause_start
+            self._pause_start = None
+        self._frozen_eta = None
+        self._pause_state = _RUNNING
+        self._resume_event.set()
+        self._refresh()
+
+    def check_pause(self):
+        """Called by PPO after each training iteration. Blocks while paused."""
+        if self._pause_state != _REQUESTING:
+            return
+
+        # Freeze ETA before pausing
+        if self._rolling_sps:
+            total_done = self._total_spent + self._current_steps
+            remaining = self._total_budget - total_done
+            self._frozen_eta = remaining / self._rolling_sps
+        self._pause_start = time.monotonic()
+        self._pause_state = _PAUSED
+        self._resume_event.clear()
+        self._refresh()
+
+        # Block until resumed
+        self._resume_event.wait()
 
     def on_circuit_start(self, scenarios):
         self._scenarios = scenarios
@@ -104,9 +204,9 @@ class TrainingDisplay(TrainingCallback):
             self._scenario_steps[name] = self._current_steps
             self._scenario_total[name] = total_steps
 
-        # Track SPS samples
+        # Track SPS samples using pause-adjusted time
         self._cumulative_steps += steps
-        now = time.monotonic()
+        now = self._active_time()
         self._sps_samples.append((now, self._cumulative_steps))
 
         # Evict samples older than SPS_WINDOW iterations
@@ -153,6 +253,7 @@ class TrainingDisplay(TrainingCallback):
         if self._tensorboard:
             self._tensorboard.close()
             self._tensorboard = None
+        self._keyboard.stop()
         self._refresh()
 
     def _refresh(self):
@@ -179,11 +280,22 @@ class TrainingDisplay(TrainingCallback):
         total_done = self._total_spent + (self._current_steps if self._active_index >= 0 else 0)
         parts.append(Text(""))
         total_bar = self._render_bar("Total", total_done, self._total_budget, active=True)
-        if self._rolling_sps and total_done < self._total_budget:
+
+        if self._pause_state == _PAUSED and self._frozen_eta is not None:
+            total_bar.append(f"  ETA {self._format_duration(self._frozen_eta)}", style="yellow")
+        elif self._rolling_sps and total_done < self._total_budget:
             remaining = self._total_budget - total_done
             eta_seconds = remaining / self._rolling_sps
             total_bar.append(f"  ETA {self._format_duration(eta_seconds)}", style="yellow")
         parts.append(total_bar)
+
+        # Pause status message
+        if self._pause_state == _REQUESTING:
+            parts.append(Text(""))
+            parts.append(Text("  ⏸  Pausing after next training point...", style="yellow"))
+        elif self._pause_state == _PAUSED:
+            parts.append(Text(""))
+            parts.append(Text("  ⏸  Paused (press p to resume)", style="yellow bold"))
 
         # Metrics
         if self._game_metrics or self._optimize_stats:
