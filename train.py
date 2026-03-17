@@ -6,14 +6,418 @@
 import argparse
 import sys
 import os
+import select
+import termios
+import threading
+import time
+import tty
 import faulthandler
 import traceback
+from collections import deque
 
-from tqdm import tqdm
-from triforce import ActionSpaceDefinition, ModelKindDefinition, TrainingScenarioDefinition, make_zelda_env
+from rich.console import Console, Group
+from rich.live import Live
+from rich.text import Text
+from rich.table import Table
+from torch.utils.tensorboard import SummaryWriter
+
+from triforce import (ActionSpaceDefinition, ModelKindDefinition, TrainingScenarioDefinition,
+                      TrainingCallback, make_zelda_env)
 from triforce.ml_ppo import PPO
 from triforce.models import Network
 from triforce.scenario_wrapper import TrainingCircuitDefinition, TrainingCircuitEntry
+
+BAR_WIDTH = 50
+BAR_FILL = "▬"
+BAR_EMPTY = " "
+SPS_WINDOW = 25_000
+
+# Pause states
+_RUNNING = "running"
+_REQUESTING = "requesting"
+_PAUSED = "paused"
+
+
+class _KeyboardListener:
+    """Background thread that reads single keypresses from stdin in raw mode."""
+
+    def __init__(self, on_key):
+        self._on_key = on_key
+        self._stop = threading.Event()
+        self._old_settings = None
+        self._thread = None
+
+    def start(self):
+        """Start listening for keypresses."""
+        if not sys.stdin.isatty():
+            return
+        self._old_settings = termios.tcgetattr(sys.stdin)
+        tty.setcbreak(sys.stdin.fileno())
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        """Stop listening and restore terminal."""
+        self._stop.set()
+        if self._old_settings is not None:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self._old_settings)
+            self._old_settings = None
+
+    def _loop(self):
+        while not self._stop.is_set():
+            if select.select([sys.stdin], [], [], 0.1)[0]:
+                ch = sys.stdin.read(1)
+                if ch:
+                    self._on_key(ch)
+
+
+class TrainingDisplay(TrainingCallback):
+    """Rich-based TUI for training progress and metrics, with tensorboard logging."""
+
+    def __init__(self, live, log_dir):
+        self._live = live
+        self._log_dir = log_dir
+        self._tensorboard = None
+
+        # Circuit-level state
+        self._scenarios = []        # list of (name, iterations)
+        self._name_width = 0
+        self._active_index = -1
+        self._scenario_steps = {}   # scenario_name -> steps completed
+        self._scenario_total = {}   # scenario_name -> total steps
+        self._completed = set()     # scenario names that are done
+        self._total_budget = 0
+        self._total_spent = 0
+
+        # Current scenario state
+        self._current_steps = 0
+        self._current_total = 0
+
+        # SPS tracking for ETA — rolling window over last SPS_WINDOW iterations
+        self._sps_samples = deque()   # (adjusted_time, cumulative_steps)
+        self._cumulative_steps = 0
+        self._rolling_sps = None
+        self._pause_time_offset = 0.0  # total seconds spent paused, subtracted from monotonic
+
+        # Metrics state
+        self._game_metrics = {}
+        self._optimize_stats = {}
+        self._prev_rewards_avg = None
+
+        # Pause state
+        self._pause_state = _RUNNING
+        self._resume_event = threading.Event()
+        self._resume_event.set()
+        self._frozen_eta = None     # ETA seconds frozen at pause time
+        self._pause_start = None    # monotonic time when pause began
+
+        # Quit state
+        self._quit_confirm = False
+        self._stop_requested = False
+
+        # Keyboard listener
+        self._keyboard = _KeyboardListener(self._on_key)
+        self._keyboard.start()
+
+    def _active_time(self):
+        """Returns time.monotonic() adjusted for pause durations."""
+        return time.monotonic() - self._pause_time_offset
+
+    def _on_key(self, ch):
+        ch = ch.lower()
+
+        if ch == 'q':
+            if self._quit_confirm:
+                self._stop_requested = True
+                self._quit_confirm = False
+                # If paused, resume so check_pause can return False
+                if self._pause_state == _PAUSED:
+                    self._resume()
+                self._refresh()
+            else:
+                self._quit_confirm = True
+                self._refresh()
+            return
+
+        # Any non-q key cancels quit confirm
+        if self._quit_confirm:
+            self._quit_confirm = False
+            self._refresh()
+
+        if ch != 'p':
+            return
+
+        if self._pause_state == _RUNNING:
+            self._pause_state = _REQUESTING
+            self._refresh()
+        elif self._pause_state == _REQUESTING:
+            # Cancel pause request before it took effect
+            self._pause_state = _RUNNING
+            self._refresh()
+        elif self._pause_state == _PAUSED:
+            self._resume()
+
+    def _resume(self):
+        """Resume from paused state."""
+        if self._pause_start is not None:
+            self._pause_time_offset += time.monotonic() - self._pause_start
+            self._pause_start = None
+        self._frozen_eta = None
+        self._pause_state = _RUNNING
+        self._resume_event.set()
+        self._refresh()
+
+    def check_pause(self):
+        """Called by PPO after each training iteration. Blocks while paused.
+        Returns True to continue training, False to stop early."""
+        if self._stop_requested:
+            return False
+
+        if self._pause_state == _REQUESTING:
+            # Freeze ETA before pausing
+            if self._rolling_sps:
+                total_done = self._total_spent + self._current_steps
+                remaining = self._total_budget - total_done
+                self._frozen_eta = remaining / self._rolling_sps
+            self._pause_start = time.monotonic()
+            self._pause_state = _PAUSED
+            self._resume_event.clear()
+            self._refresh()
+
+            # Block until resumed
+            self._resume_event.wait()
+
+        return not self._stop_requested
+
+    def on_circuit_start(self, scenarios):
+        self._scenarios = scenarios
+        self._name_width = max(len(name) for name, _ in scenarios)
+        self._name_width = max(self._name_width, len("Total"))
+        self._total_budget = sum(iters for _, iters in scenarios)
+        self._total_spent = 0
+        for name, iters in scenarios:
+            self._scenario_steps[name] = 0
+            self._scenario_total[name] = iters
+        self._refresh()
+
+    def on_scenario_start(self, scenario_name, iterations):
+        self._active_index = next(
+            i for i, (name, _) in enumerate(self._scenarios) if name == scenario_name)
+        self._current_steps = 0
+        self._current_total = iterations
+        self._scenario_total[scenario_name] = iterations
+        self._game_metrics = {}
+        self._optimize_stats = {}
+
+        # Set up tensorboard for this scenario
+        if self._tensorboard:
+            self._tensorboard.close()
+        scenario_log_dir = os.path.join(self._log_dir, scenario_name)
+        os.makedirs(scenario_log_dir, exist_ok=True)
+        self._tensorboard = SummaryWriter(scenario_log_dir)
+        self._refresh()
+
+    def on_scenario_end(self, scenario_name):
+        self._scenario_steps[scenario_name] = self._current_steps
+        self._total_spent += self._current_steps
+        self._completed.add(scenario_name)
+        self._prev_rewards_avg = None
+        self._refresh()
+
+    def on_progress(self, steps, total_steps):
+        self._current_steps += steps
+        self._current_total = total_steps
+        if self._active_index >= 0:
+            name = self._scenarios[self._active_index][0]
+            self._scenario_steps[name] = self._current_steps
+            self._scenario_total[name] = total_steps
+
+        # Track SPS samples using pause-adjusted time
+        self._cumulative_steps += steps
+        now = self._active_time()
+        self._sps_samples.append((now, self._cumulative_steps))
+
+        # Evict samples older than SPS_WINDOW iterations
+        cutoff = self._cumulative_steps - SPS_WINDOW
+        while len(self._sps_samples) > 1 and self._sps_samples[0][1] < cutoff:
+            self._sps_samples.popleft()
+
+        # Compute rolling SPS once we have enough data
+        if self._cumulative_steps >= SPS_WINDOW and len(self._sps_samples) > 1:
+            oldest_time, oldest_steps = self._sps_samples[0]
+            dt = now - oldest_time
+            ds = self._cumulative_steps - oldest_steps
+            self._rolling_sps = ds / dt if dt > 0 else None
+
+        self._refresh()
+
+    def on_metrics(self, metrics, iteration, total_iterations):
+        # Track rewards-since-last before updating
+        new_rewards = metrics.get("rewards")
+        if new_rewards is not None and self._prev_rewards_avg is not None:
+            self._game_metrics["rewards-since-last"] = new_rewards - self._prev_rewards_avg
+        if new_rewards is not None:
+            self._prev_rewards_avg = new_rewards
+
+        self._game_metrics.update(metrics)
+        if self._tensorboard:
+            timestamp = time.time()
+            for name, value in metrics.items():
+                if '/' not in name:
+                    name = f"metrics/{name}"
+                self._tensorboard.add_scalar(name, value, iteration, timestamp)
+            self._tensorboard.flush()
+        self._refresh()
+
+    def on_optimize(self, stats, iteration, total_iterations):
+        self._optimize_stats = dict(stats)
+        if self._tensorboard:
+            for name, value in stats.items():
+                self._tensorboard.add_scalar(name, value, iteration)
+            self._tensorboard.flush()
+        self._refresh()
+
+    def on_training_complete(self):
+        if self._tensorboard:
+            self._tensorboard.close()
+            self._tensorboard = None
+        self._keyboard.stop()
+        self._refresh()
+
+    def _refresh(self):
+        self._live.update(self._render())
+
+    def _render(self):
+        parts = []
+        parts.append(Text(""))
+
+        for i, (name, _) in enumerate(self._scenarios):
+            if name in self._completed:
+                line = Text("  ✔ ", style="green")
+                line.append(name, style="green")
+                parts.append(line)
+            elif i == self._active_index:
+                steps = self._scenario_steps.get(name, 0)
+                total = self._scenario_total.get(name, 1)
+                parts.append(self._render_bar(name, steps, total, active=True))
+            else:
+                total = self._scenario_total.get(name, 0)
+                parts.append(self._render_bar(name, 0, total, active=False))
+
+        # Total progress bar with ETA
+        total_done = self._total_spent + (self._current_steps if self._active_index >= 0 else 0)
+        parts.append(Text(""))
+        total_bar = self._render_bar("Total", total_done, self._total_budget, active=True)
+
+        if self._pause_state == _PAUSED and self._frozen_eta is not None:
+            total_bar.append(f"  ETA {self._format_duration(self._frozen_eta)}", style="yellow")
+        elif self._rolling_sps and total_done < self._total_budget:
+            remaining = self._total_budget - total_done
+            eta_seconds = remaining / self._rolling_sps
+            total_bar.append(f"  ETA {self._format_duration(eta_seconds)}", style="yellow")
+        parts.append(total_bar)
+
+        # Pause / quit status messages
+        if self._stop_requested:
+            parts.append(Text(""))
+            parts.append(Text("  ⏹  Stopping after next training point...", style="red"))
+        elif self._quit_confirm:
+            parts.append(Text(""))
+            parts.append(Text("  ⏹  Press q again to end training early.", style="red"))
+        elif self._pause_state == _REQUESTING:
+            parts.append(Text(""))
+            parts.append(Text("  ⏸  Pausing after next training point...", style="yellow"))
+        elif self._pause_state == _PAUSED:
+            parts.append(Text(""))
+            parts.append(Text("  ⏸  Paused (press p to resume)", style="yellow bold"))
+
+        # Metrics
+        if self._game_metrics or self._optimize_stats:
+            parts.append(Text(""))
+            parts.append(self._render_metrics())
+
+        return Group(*parts)
+
+    def _render_bar(self, name, steps, total, active):
+        padded = name.ljust(self._name_width)
+        pct = (steps / total * 100) if total > 0 else 0
+        filled = int(BAR_WIDTH * min(steps, total) / total) if total > 0 else 0
+        bar_str = BAR_FILL * filled + BAR_EMPTY * (BAR_WIDTH - filled)
+
+        line = Text(f"  {padded}  [")
+        line.append(bar_str[:filled], style="green")
+        line.append(bar_str[filled:])
+        line.append(f"] {pct:5.1f}%")
+        if active and total > 0:
+            line.append(f"  ({steps:,} / {total:,})")
+        return line
+
+    @staticmethod
+    def _format_duration(seconds):
+        """Format seconds into a human-readable duration string."""
+        if seconds < 60:
+            return f"{seconds:.0f}s"
+        if seconds < 3600:
+            m, s = divmod(int(seconds), 60)
+            return f"{m}m{s:02d}s"
+        h, remainder = divmod(int(seconds), 3600)
+        m, s = divmod(remainder, 60)
+        return f"{h}h{m:02d}m{s:02d}s"
+
+    def _render_metrics(self):
+        table = Table(show_header=False, show_edge=False, pad_edge=False, box=None, padding=(0, 2))
+        table.add_column("Metric", style="cyan", min_width=24)
+        table.add_column("Value", justify="right", min_width=12)
+
+        # Performance metrics
+        perf_metrics = [
+            ("progress/p75", "progress/p75", ".2f"),
+            ("rewards", "rewards", ".2f"),
+            ("success-rate", "success-rate", ".4f"),
+            ("rewards-since-last", "rewards-since-last", "+.2f"),
+        ]
+        has_perf = False
+        for key, display_name, fmt in perf_metrics:
+            val = self._game_metrics.get(key)
+            if val is not None:
+                table.add_row(display_name, f"{val:{fmt}}")
+                has_perf = True
+
+        # Entropy / attention metrics
+        entropy_metrics = [
+            ("losses/attention/entropy", "attention/entropy", ".4f"),
+            ("losses/attention/top1_weight", "attention/top1_weight", ".4f"),
+            ("losses/entropy/action_type", "entropy/action_type", ".4f"),
+            ("losses/entropy/direction", "entropy/direction", ".4f"),
+        ]
+        has_entropy = False
+        for key, display_name, fmt in entropy_metrics:
+            val = self._optimize_stats.get(key)
+            if val is not None:
+                if not has_entropy and has_perf:
+                    table.add_row("", "")
+                table.add_row(display_name, f"{val:{fmt}}")
+                has_entropy = True
+
+        # Loss metrics
+        loss_metrics = [
+            ("losses/value_loss", "value_loss", ".4f"),
+            ("losses/policy_loss", "policy_loss", ".4f"),
+            ("losses/entropy", "entropy", ".4f"),
+            ("losses/approx_kl", "approx_kl", ".6f"),
+            ("losses/clipfrac", "clipfrac", ".4f"),
+            ("losses/explained_variance", "explained_var", ".4f"),
+        ]
+        has_loss = False
+        for key, display_name, fmt in loss_metrics:
+            val = self._optimize_stats.get(key)
+            if val is not None:
+                if not has_loss and (has_perf or has_entropy):
+                    table.add_row("", "")
+                table.add_row(display_name, f"{val:{fmt}}")
+                has_loss = True
+
+        return table
 
 def _dump_trace_with_locals(exc_type, exc_value, exc_traceback):
     with open("crash_log.txt", "w", encoding="utf8") as f:
@@ -93,7 +497,8 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
 
     return kwargs, circuit
 
-def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, iterations, **kwargs):
+def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, iterations,
+               callback=None, **kwargs):
     """Trains a model with the given scenario.  Returns (model, iterations_used)."""
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
     kwargs['multihead'] = multihead
@@ -114,7 +519,7 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
     kwargs['model_kind'] = model_kind.name
     kwargs['action_space_name_str'] = action_space_def.name
 
-    model = ppo.train(model_kind.network_class, create_env, iterations, tqdm(ncols=100),
+    model = ppo.train(model_kind.network_class, create_env, iterations, callback,
                       save_path=checkpoint_dir, **kwargs)
 
     # Save leg checkpoint with scenario name
@@ -122,22 +527,32 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
     return model, model.steps_trained - steps_before
 
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
-                 log_dir=None):
+                 callback=None):
     """Run training circuit and return (final_model, final_scenario_def)."""
     iterations_spent = 0
     model = None
     scenario_def = None
 
+    # Resolve iteration counts for all scenarios upfront so the display can show them
+    scenario_plan = []
     for scenario_entry in circuit:
-        scenario_def = TrainingScenarioDefinition.get(scenario_entry.scenario)
-        if scenario_def is None:
+        sdef = TrainingScenarioDefinition.get(scenario_entry.scenario)
+        if sdef is None:
             raise ValueError(f"Unknown scenario: {scenario_entry.scenario}")
 
-        # Give each scenario its own tensorboard log directory
-        if log_dir:
-            scenario_log_dir = os.path.join(log_dir, scenario_def.name)
-            os.makedirs(scenario_log_dir, exist_ok=True)
-            ppo.set_log_dir(scenario_log_dir)
+        if scenario_entry.iterations is not None:
+            iters = scenario_entry.iterations
+        elif total_budget is not None:
+            iters = total_budget
+        else:
+            iters = sdef.iterations
+        scenario_plan.append((sdef.name, iters))
+
+    if callback:
+        callback.on_circuit_start(scenario_plan)
+
+    for scenario_entry in circuit:
+        scenario_def = TrainingScenarioDefinition.get(scenario_entry.scenario)
 
         if scenario_entry.iterations is not None:
             iterations = scenario_entry.iterations
@@ -151,7 +566,6 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
             iterations = min(iterations, total_budget - iterations_spent)
 
         if iterations <= 0:
-            print(f"Skipping {scenario_def.name}: no iteration budget remaining.")
             break
 
         if scenario_entry.exit_criteria:
@@ -162,21 +576,14 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
             del kwargs['exit_criteria']
             del kwargs['exit_threshold']
 
-        if scenario_entry.exit_criteria:
-            criteria = f" or {scenario_entry.exit_criteria} >= {scenario_entry.threshold}"
-        else:
-            criteria = ""
+        if callback:
+            callback.on_scenario_start(scenario_def.name, iterations)
 
-        print(f"Training on {scenario_def.name} for up to {iterations:,} iterations{criteria}.")
         model, used = train_once(ppo, scenario_def, model_kind, action_space_def,
-                                 checkpoint_dir, iterations, **kwargs)
+                                 checkpoint_dir, iterations, callback, **kwargs)
 
-        if scenario_entry.exit_criteria:
-            last_value = model.metrics.get(scenario_entry.exit_criteria, 0) if model.metrics else 0
-            hit = last_value >= scenario_entry.threshold
-            status = "reached" if hit else "not reached"
-            print(f"  {scenario_entry.exit_criteria} = {last_value:.4f} "
-                  f"(target {scenario_entry.threshold}, {status})")
+        if callback:
+            callback.on_scenario_end(scenario_def.name)
 
         kwargs['model'] = model
         iterations_spent += used
@@ -209,33 +616,41 @@ def main():
     os.makedirs(checkpoint_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
 
-    print(f"Output: {run_dir}")
-    print(f"Model kind: {model_kind.name}, Action space: {action_space_def.name}")
+    console = Console()
+    console.print(f"Output: {run_dir}")
+    console.print(f"Model kind: {model_kind.name}, Action space: {action_space_def.name}")
 
     kwargs, circuit = _get_kwargs_from_args(args, model_kind, action_space_def)
-    ppo = PPO(None, **kwargs)  # log_dir set per-scenario in _run_circuit
+    ppo = PPO(**kwargs)
 
-    model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
-                                       checkpoint_dir, kwargs, args.iterations,
-                                       log_dir=log_dir)
+    with Live(console=console, refresh_per_second=4) as live:
+        display = TrainingDisplay(live, log_dir)
+        model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
+                                           checkpoint_dir, kwargs, args.iterations,
+                                           callback=display)
+        display.on_training_complete()
 
     # Save final result in the run directory (not checkpoints)
     stem = _model_stem(model_kind.name, action_space_def.name)
     final_path = f"{run_dir}/{stem}.pt"
     model.save(final_path)
-    print(f"Final model: {final_path}")
+    console.print(f"\nFinal model: {final_path}")
 
     if args.evaluate:
         _run_post_training_eval(model, action_space_def, model_kind, scenario_def,
-                                args.evaluate, **kwargs)
+                                args.evaluate, console, **kwargs)
 
 
-def _run_post_training_eval(model, action_space_def, model_kind, scenario_def, episodes, **kwargs):
+def _run_post_training_eval(model, action_space_def, model_kind, scenario_def, episodes,
+                            console=None, **kwargs):
     """Runs evaluation episodes after training and prints a progress report."""
     # pylint: disable=import-outside-toplevel
+    from rich.progress import Progress
     from evaluate import evaluate_one_model, print_progress_report
 
-    print(f"\nRunning {episodes} evaluation episodes...")
+    if console is None:
+        console = Console()
+    console.print(f"\nRunning {episodes} evaluation episodes...")
 
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
     kwargs['multihead'] = multihead
@@ -243,9 +658,10 @@ def _run_post_training_eval(model, action_space_def, model_kind, scenario_def, e
     def create_eval_env():
         return make_zelda_env(scenario_def, action_space_def.actions, **kwargs)
 
-    with tqdm(total=episodes) as progress:
+    with Progress(console=console) as progress:
+        task = progress.add_task("Evaluating...", total=episodes)
         def update():
-            progress.update(1)
+            progress.advance(task)
         _, progress_values, max_progress = evaluate_one_model(
             create_eval_env, model, episodes, update)
 
