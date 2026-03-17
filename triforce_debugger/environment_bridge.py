@@ -409,7 +409,7 @@ class EnvironmentBridge:
         """Returns spatial attention weights if the model supports it, else None.
 
         Returns:
-            numpy array of shape (H', W') or None if the model has no attention.
+            numpy array of shape (num_heads, H', W') or None if the model has no attention.
         """
         obs = obs if obs is not None else self._observation
         model = self.selector.model
@@ -419,7 +419,7 @@ class EnvironmentBridge:
         with torch.no_grad():
             result = model.forward_with_attention(obs)
             attn = result[-1]  # Last element is always attention weights
-            return attn.squeeze(0).cpu().numpy()
+            return attn.squeeze(0).cpu().numpy()  # (num_heads, H', W')
 
     @property
     def model_details(self):

@@ -373,14 +373,17 @@ class ResBlock(nn.Module):
 
 
 class SpatialAttentionPool(nn.Module):
-    """Self-attention pooling over spatial positions in a feature map.
+    """Multi-head self-attention pooling over spatial positions in a feature map.
 
     Projects the feature map to queries, keys, and values via 1×1 convolutions,
-    computes scaled dot-product attention across all spatial positions, and
-    produces a single weighted-sum feature vector per batch element.
+    splits into multiple heads, computes per-head scaled dot-product attention,
+    concatenates, and projects to a single feature vector per batch element.
     """
-    def __init__(self, in_channels, hidden_dim=64, output_dim=256, dropout=0.1):
+    def __init__(self, in_channels, hidden_dim=64, output_dim=256, num_heads=4, dropout=0.1):
         super().__init__()
+        assert hidden_dim % num_heads == 0, f"hidden_dim ({hidden_dim}) must be divisible by num_heads ({num_heads})"
+        self.num_heads = num_heads
+        self.head_dim = hidden_dim // num_heads
         self.query_proj = nn.Conv2d(in_channels, hidden_dim, kernel_size=1)
         self.key_proj = nn.Conv2d(in_channels, hidden_dim, kernel_size=1)
         self.value_proj = nn.Conv2d(in_channels, hidden_dim, kernel_size=1)
@@ -389,7 +392,7 @@ class SpatialAttentionPool(nn.Module):
             nn.ReLU()
         )
         self.attn_dropout = nn.Dropout(p=dropout)
-        self.scale = hidden_dim ** -0.5
+        self.scale = self.head_dim ** -0.5
         self.output_dim = output_dim
 
     def forward(self, feature_map):
@@ -399,31 +402,43 @@ class SpatialAttentionPool(nn.Module):
             feature_map: (batch, C, H, W) feature map from the ResNet backbone.
         Returns:
             features: (batch, output_dim) pooled feature vector.
-            attn_weights: (batch, H, W) attention weights over spatial positions.
+            attn_weights: (batch, num_heads, H, W) per-head attention weights.
         """
         batch, _, h, w = feature_map.shape
+        n = h * w
 
         # Project to Q, K, V: (batch, hidden_dim, H, W) → (batch, N, hidden_dim)
         q = self.query_proj(feature_map).flatten(2).transpose(1, 2)
         k = self.key_proj(feature_map).flatten(2).transpose(1, 2)
         v = self.value_proj(feature_map).flatten(2).transpose(1, 2)
 
-        # Scaled dot-product attention: (batch, N, N)
+        # Reshape to (batch, num_heads, N, head_dim) → (batch*num_heads, N, head_dim)
+        q = q.view(batch, n, self.num_heads, self.head_dim).transpose(1, 2).reshape(batch * self.num_heads, n,
+                                                                                     self.head_dim)
+        k = k.view(batch, n, self.num_heads, self.head_dim).transpose(1, 2).reshape(batch * self.num_heads, n,
+                                                                                     self.head_dim)
+        v = v.view(batch, n, self.num_heads, self.head_dim).transpose(1, 2).reshape(batch * self.num_heads, n,
+                                                                                     self.head_dim)
+
+        # Scaled dot-product attention: (batch*num_heads, N, N)
         attn_logits = torch.bmm(q, k.transpose(1, 2)) * self.scale
         attn = torch.softmax(attn_logits, dim=-1)
         attn = self.attn_dropout(attn)
 
-        # Weighted sum of values: (batch, N, hidden_dim)
+        # Weighted sum of values: (batch*num_heads, N, head_dim)
         attended = torch.bmm(attn, v)
 
-        # Average attention weights across query positions → (batch, N)
+        # Average attention across query positions → (batch*num_heads, N)
         attn_weights = attn.mean(dim=1)
 
-        # Pool across spatial positions using attention weights
-        pooled = (attended * attn_weights.unsqueeze(-1)).sum(dim=1)
+        # Pool each head using its attention weights
+        pooled = (attended * attn_weights.unsqueeze(-1)).sum(dim=1)  # (batch*num_heads, head_dim)
+
+        # Reshape back: (batch, num_heads, head_dim) → (batch, hidden_dim)
+        pooled = pooled.view(batch, self.num_heads, self.head_dim).reshape(batch, -1)
 
         features = self.output_proj(pooled)
-        attn_map = attn_weights.view(batch, h, w)
+        attn_map = attn_weights.view(batch, self.num_heads, h, w)
         return features, attn_map
 
 
@@ -976,21 +991,27 @@ class ImpalaMultiHeadAgent(Network):
 
 
 def _attention_entropy_stats(attn_map):
-    """Compute attention entropy and top-1 weight from an attention map.
+    """Compute attention entropy and top-1 weight from a multi-head attention map.
 
     Args:
-        attn_map: (batch, H, W) attention weights that sum to 1 over H×W.
+        attn_map: (batch, num_heads, H, W) attention weights that sum to 1 over H×W per head.
     Returns:
-        dict with 'attention/entropy' and 'attention/top1_weight'.
+        dict with combined and per-head 'attention/entropy' and 'attention/top1_weight'.
     """
-    flat = attn_map.flatten(1)  # (batch, N)
+    batch, num_heads, h, w = attn_map.shape
+    flat = attn_map.reshape(batch, num_heads, h * w)  # (batch, num_heads, N)
     log_flat = torch.log(flat + 1e-10)
-    entropy = -(flat * log_flat).sum(dim=1).mean().item()
-    top1 = flat.max(dim=1).values.mean().item()
-    return {
-        "attention/entropy": entropy,
-        "attention/top1_weight": top1,
+    per_head_entropy = -(flat * log_flat).sum(dim=2).mean(dim=0)  # (num_heads,)
+    per_head_top1 = flat.max(dim=2).values.mean(dim=0)  # (num_heads,)
+
+    stats = {
+        "attention/entropy": per_head_entropy.mean().item(),
+        "attention/top1_weight": per_head_top1.mean().item(),
     }
+    for i in range(num_heads):
+        stats[f"attention/head_{i}/entropy"] = per_head_entropy[i].item()
+        stats[f"attention/head_{i}/top1_weight"] = per_head_top1[i].item()
+    return stats
 
 
 def create_network(network, obs_space, action_space, model_kind=None, action_space_name=None):

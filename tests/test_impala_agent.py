@@ -73,25 +73,25 @@ class TestResBlock:
 
 class TestSpatialAttentionPool:
     def test_output_shapes(self):
-        pool = SpatialAttentionPool(in_channels=32, hidden_dim=64, output_dim=256)
+        pool = SpatialAttentionPool(in_channels=32, hidden_dim=64, output_dim=256, num_heads=4)
         feature_map = torch.randn(2, 32, 21, 30)
         features, attn = pool(feature_map)
         assert features.shape == (2, 256)
-        assert attn.shape == (2, 21, 30)
+        assert attn.shape == (2, 4, 21, 30)
 
     def test_attention_weights_positive(self):
-        pool = SpatialAttentionPool(in_channels=32, hidden_dim=64, output_dim=256)
+        pool = SpatialAttentionPool(in_channels=32, hidden_dim=64, output_dim=256, num_heads=4)
         feature_map = torch.randn(2, 32, 21, 30)
         _, attn = pool(feature_map)
         assert (attn >= 0).all()
 
     def test_different_spatial_sizes(self):
         """Verify pooling works with different spatial dimensions."""
-        pool = SpatialAttentionPool(in_channels=32, hidden_dim=64, output_dim=128)
+        pool = SpatialAttentionPool(in_channels=32, hidden_dim=64, output_dim=128, num_heads=4)
         for h, w in [(21, 30), (22, 32), (10, 10)]:
             features, attn = pool(torch.randn(1, 32, h, w))
             assert features.shape == (1, 128)
-            assert attn.shape == (1, h, w)
+            assert attn.shape == (1, 4, h, w)
 
 
 # === ImpalaResNet Tests ===
@@ -104,9 +104,9 @@ class TestImpalaResNet:
         image = torch.randn(2, 3, h, w)
         features, attn = resnet(image)
         assert features.shape == (2, 256)
-        # Attention map should be 1/8th of input size (3 max-pools with stride 2)
+        # Attention map: (batch, num_heads, H/8, W/8)
         assert attn.shape[0] == 2
-        assert attn.shape[1] == (h + 1) // 2 // 2 // 2 or True  # dynamic, just check 2D
+        assert len(attn.shape) == 4  # (batch, num_heads, H', W')
 
     def test_coordconv_buffers_not_parameters(self):
         resnet = ImpalaResNet(input_channels=3, input_height=168, input_width=240)
@@ -185,7 +185,7 @@ class TestImpalaSharedAgent:
         assert logits.shape == (2, 12)
         assert value.shape == (2, 1)
         assert attn.shape[0] == 2
-        assert len(attn.shape) == 3  # (batch, H', W')
+        assert len(attn.shape) == 4  # (batch, num_heads, H', W')
 
     def test_single_obs_unsqueeze(self):
         obs_space = _make_obs_space()
@@ -281,7 +281,7 @@ class TestImpalaMultiHeadAgent:
         assert dir_logits.shape == (2, 4)
         assert value.shape == (2, 1)
         assert attn.shape[0] == 2
-        assert len(attn.shape) == 3
+        assert len(attn.shape) == 4  # (batch, num_heads, H', W')
 
     def test_is_multihead(self):
         assert ImpalaMultiHeadAgent.is_multihead is True
