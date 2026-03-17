@@ -12,20 +12,25 @@ from triforce.zelda_enums import (NES_FULL_WIDTH, NES_FULL_HEIGHT, NES_CROPPED_W
                                   VISIBLE_COLS_FULL, VISIBLE_COLS_CROPPED, VISIBLE_ROWS)
 
 
-def _jet_colormap(value):
-    """Map a value in [0, 1] to an (R, G, B) tuple using a JET-like colormap."""
-    v = max(0.0, min(1.0, value))
-    if v < 0.125:
-        r, g, b = 0.0, 0.0, 0.5 + v * 4.0
-    elif v < 0.375:
-        r, g, b = 0.0, (v - 0.125) * 4.0, 1.0
-    elif v < 0.625:
-        r, g, b = (v - 0.375) * 4.0, 1.0, 1.0 - (v - 0.375) * 4.0
-    elif v < 0.875:
-        r, g, b = 1.0, 1.0 - (v - 0.625) * 4.0, 0.0
-    else:
-        r, g, b = 1.0 - (v - 0.875) * 4.0, 0.0, 0.0
-    return int(r * 255), int(g * 255), int(b * 255)
+def _build_jet_lut():
+    """Build a 256-entry JET colormap lookup table (uint8, shape (256, 3))."""
+    lut = np.empty((256, 3), dtype=np.uint8)
+    for i in range(256):
+        v = i / 255.0
+        if v < 0.125:
+            r, g, b = 0.0, 0.0, 0.5 + v * 4.0
+        elif v < 0.375:
+            r, g, b = 0.0, (v - 0.125) * 4.0, 1.0
+        elif v < 0.625:
+            r, g, b = (v - 0.375) * 4.0, 1.0, 1.0 - (v - 0.375) * 4.0
+        elif v < 0.875:
+            r, g, b = 1.0, 1.0 - (v - 0.625) * 4.0, 0.0
+        else:
+            r, g, b = 1.0 - (v - 0.875) * 4.0, 0.0, 0.0
+        lut[i] = (int(r * 255), int(g * 255), int(b * 255))
+    return lut
+
+_JET_LUT = _build_jet_lut()
 
 
 class OverlayFlags(Flag):
@@ -168,15 +173,14 @@ class GameView(QWidget):
                      normalized[r0, c1] * (1 - dr) * dc +
                      normalized[r1, c1] * dr * dc)
 
-        # Build ARGB heatmap image (full NES frame size, HUD area is transparent)
+        # Build RGBA heatmap image (full NES frame size, HUD area is transparent)
         heatmap = np.zeros((self._nes_height, self._nes_width, 4), dtype=np.uint8)
         alpha = 140  # Semi-transparent
 
-        for y in range(gameplay_h):
-            for x in range(gameplay_w):
-                r, g, b = _jet_colormap(upsampled[y, x])
-                nes_y = y + self._hud_px
-                heatmap[nes_y, x] = [r, g, b, alpha]
+        indices = np.clip((upsampled * 255).astype(np.uint8), 0, 255)
+        rgb = _JET_LUT[indices]  # (gameplay_h, gameplay_w, 3)
+        heatmap[self._hud_px:, :, :3] = rgb
+        heatmap[self._hud_px:, :, 3] = alpha
 
         data = np.ascontiguousarray(heatmap)
         image = QImage(data.data, self._nes_width, self._nes_height,
