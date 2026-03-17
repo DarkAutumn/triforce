@@ -12,12 +12,34 @@ from triforce.zelda_enums import (NES_FULL_WIDTH, NES_FULL_HEIGHT, NES_CROPPED_W
                                   VISIBLE_COLS_FULL, VISIBLE_COLS_CROPPED, VISIBLE_ROWS)
 
 
+def _build_jet_lut():
+    """Build a 256-entry JET colormap lookup table (uint8, shape (256, 3))."""
+    lut = np.empty((256, 3), dtype=np.uint8)
+    for i in range(256):
+        v = i / 255.0
+        if v < 0.125:
+            r, g, b = 0.0, 0.0, 0.5 + v * 4.0
+        elif v < 0.375:
+            r, g, b = 0.0, (v - 0.125) * 4.0, 1.0
+        elif v < 0.625:
+            r, g, b = (v - 0.375) * 4.0, 1.0, 1.0 - (v - 0.375) * 4.0
+        elif v < 0.875:
+            r, g, b = 1.0, 1.0 - (v - 0.625) * 4.0, 0.0
+        else:
+            r, g, b = 1.0 - (v - 0.875) * 4.0, 0.0, 0.0
+        lut[i] = (int(r * 255), int(g * 255), int(b * 255))
+    return lut
+
+_JET_LUT = _build_jet_lut()
+
+
 class OverlayFlags(Flag):
     """Bit-flags for which overlays are active. Multiple can be combined."""
     NONE = 0
     WAVEFRONT = auto()
     TILE_IDS = auto()
     WALKABILITY = auto()
+    ATTENTION = auto()
 
 
 _NES_TILE_PX = 8           # one tile = 8 NES pixels
@@ -36,6 +58,10 @@ class GameView(QWidget):
         self._overlays: OverlayFlags = OverlayFlags.NONE
         self._game_state = None  # ZeldaGame, set each step for overlay data
         self._full_screen = False  # set via set_full_screen()
+        self._attention_image: QImage | None = None  # Precomputed heatmap overlay
+        self._attention_weights = None  # Raw multi-head weights (num_heads, H, W)
+        self._attention_head = 0  # 0=combined, 1..N=individual heads
+        self._num_attention_heads = 0
 
     # ── Public API ─────────────────────────────────────────────
 
@@ -106,6 +132,110 @@ class GameView(QWidget):
             self._overlays &= ~flag
         self.update()
 
+    def set_attention_weights(self, weights):
+        """Set spatial attention weights for heatmap overlay.
+
+        Args:
+            weights: numpy array of shape (num_heads, H', W') or (H', W'),
+                     or None to clear.
+        """
+        if weights is None:
+            self._attention_weights = None
+            self._attention_image = None
+            self._num_attention_heads = 0
+            if OverlayFlags.ATTENTION in self._overlays:
+                self.update()
+            return
+
+        # Normalize to 3D: (num_heads, H, W)
+        if weights.ndim == 2:
+            weights = weights[np.newaxis]  # (1, H, W)
+
+        self._attention_weights = weights
+        self._num_attention_heads = weights.shape[0]
+        self._rebuild_attention_image()
+
+    @property
+    def attention_head(self):
+        """Which attention head to display: 0=combined (mean), 1..N=individual."""
+        return self._attention_head
+
+    @attention_head.setter
+    def attention_head(self, value):
+        """Set which attention head to display."""
+        self._attention_head = value
+        self._rebuild_attention_image()
+
+    @property
+    def num_attention_heads(self):
+        """Number of attention heads available."""
+        return self._num_attention_heads
+
+    def attention_head_label(self):
+        """Human-readable label for the current attention head selection."""
+        if self._attention_head == 0:
+            return "Combined"
+        return f"Head {self._attention_head}"
+
+    def _rebuild_attention_image(self):
+        """Rebuild the heatmap QImage from stored weights and current head selection."""
+        if self._attention_weights is None:
+            self._attention_image = None
+            return
+
+        # Select which weights to display
+        if self._attention_head == 0:
+            selected = self._attention_weights.mean(axis=0)  # (H, W)
+        else:
+            idx = min(self._attention_head - 1, self._attention_weights.shape[0] - 1)
+            selected = self._attention_weights[idx]  # (H, W)
+
+        # Normalize to [0, 1]
+        w_min, w_max = selected.min(), selected.max()
+        if w_max > w_min:
+            normalized = (selected - w_min) / (w_max - w_min)
+        else:
+            normalized = np.zeros_like(selected)
+
+        # Upsample to gameplay area pixel size
+        gameplay_h = self._nes_height - self._hud_px
+        gameplay_w = self._nes_width
+        src_h, src_w = normalized.shape
+
+        row_idx = np.linspace(0, src_h - 1, gameplay_h)
+        col_idx = np.linspace(0, src_w - 1, gameplay_w)
+        row_grid, col_grid = np.meshgrid(row_idx, col_idx, indexing='ij')
+
+        r0 = np.floor(row_grid).astype(int).clip(0, src_h - 1)
+        r1 = np.minimum(r0 + 1, src_h - 1)
+        c0 = np.floor(col_grid).astype(int).clip(0, src_w - 1)
+        c1 = np.minimum(c0 + 1, src_w - 1)
+
+        dr = row_grid - r0
+        dc = col_grid - c0
+
+        upsampled = (normalized[r0, c0] * (1 - dr) * (1 - dc) +
+                     normalized[r1, c0] * dr * (1 - dc) +
+                     normalized[r0, c1] * (1 - dr) * dc +
+                     normalized[r1, c1] * dr * dc)
+
+        # Build RGBA heatmap image (full NES frame size, HUD area is transparent)
+        heatmap = np.zeros((self._nes_height, self._nes_width, 4), dtype=np.uint8)
+        alpha = 140
+
+        indices = np.clip((upsampled * 255).astype(np.uint8), 0, 255)
+        rgb = _JET_LUT[indices]
+        heatmap[self._hud_px:, :, :3] = rgb
+        heatmap[self._hud_px:, :, 3] = alpha
+
+        data = np.ascontiguousarray(heatmap)
+        image = QImage(data.data, self._nes_width, self._nes_height,
+                       self._nes_width * 4, QImage.Format.Format_RGBA8888)
+        self._attention_image = image.copy()
+
+        if OverlayFlags.ATTENTION in self._overlays:
+            self.update()
+
     @property
     def overlays(self) -> OverlayFlags:
         """Currently active overlay flags."""
@@ -135,8 +265,20 @@ class GameView(QWidget):
         painter.fillRect(self.rect(), QColor(0, 0, 0))
         painter.drawImage(target_rect, self._frame_image)
 
-        # Draw overlays on top of the frame
-        if self._overlays != OverlayFlags.NONE and self._game_state is not None:
+        # Draw attention heatmap overlay (below tile overlays so text is readable)
+        if OverlayFlags.ATTENTION in self._overlays and self._attention_image is not None:
+            painter.drawImage(target_rect, self._attention_image)
+            # Draw head label in top-left of gameplay area
+            label = f"Attn: {self.attention_head_label()}"
+            font = QFont("monospace", 10)
+            font.setBold(True)
+            painter.setFont(font)
+            painter.setPen(QColor(255, 255, 255))
+            label_y = target_rect.top() + int(self._hud_px * target_rect.height() / self._nes_height) + 14
+            painter.drawText(target_rect.left() + 4, label_y, label)
+
+        # Draw tile overlays on top of the frame
+        if self._overlays & ~OverlayFlags.ATTENTION and self._game_state is not None:
             self._paint_overlays(painter, target_rect)
 
         painter.end()

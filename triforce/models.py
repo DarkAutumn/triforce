@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 import inspect
 import pickle
 import subprocess
@@ -262,7 +263,7 @@ class EntityAttentionEncoder(nn.Module):
     entities into a fixed-size output vector.
     """
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    def __init__(self, num_entity_types, continuous_features=9, embedding_dim=8,
+    def __init__(self, num_entity_types, continuous_features=7, embedding_dim=8,
                  d_model=64, num_heads=4, num_layers=1, ff_dim=128, output_dim=64):
         super().__init__()
         self.type_embedding = nn.Embedding(num_entity_types, embedding_dim)
@@ -353,6 +354,202 @@ class CombinedExtractor(nn.Module):
         entity_out = self.entity_encoder(entities, entity_types)
         info_float = information.float()
         return torch.cat([img_out, entity_out, info_float], dim=1)
+
+class ResBlock(nn.Module):
+    """Pre-activation residual block: ReLU → Conv3×3 → ReLU → Conv3×3 + skip."""
+    def __init__(self, channels):
+        super().__init__()
+        self.conv1 = Network.layer_init(nn.Conv2d(channels, channels, kernel_size=3, padding=1))
+        self.conv2 = Network.layer_init(nn.Conv2d(channels, channels, kernel_size=3, padding=1))
+
+    def forward(self, x):
+        """Forward pass."""
+        residual = x
+        x = torch.relu(x)
+        x = self.conv1(x)
+        x = torch.relu(x)
+        x = self.conv2(x)
+        return x + residual
+
+
+class SpatialAttentionPool(nn.Module):
+    """Multi-head self-attention pooling over spatial positions in a feature map.
+
+    Projects the feature map to queries, keys, and values via 1×1 convolutions,
+    splits into multiple heads, computes per-head scaled dot-product attention,
+    concatenates, and projects to a single feature vector per batch element.
+    """
+    def __init__(self, in_channels, hidden_dim=64, output_dim=256, num_heads=4, dropout=0.1):
+        super().__init__()
+        assert hidden_dim % num_heads == 0, f"hidden_dim ({hidden_dim}) must be divisible by num_heads ({num_heads})"
+        self.num_heads = num_heads
+        self.head_dim = hidden_dim // num_heads
+        self.query_proj = nn.Conv2d(in_channels, hidden_dim, kernel_size=1)
+        self.key_proj = nn.Conv2d(in_channels, hidden_dim, kernel_size=1)
+        self.value_proj = nn.Conv2d(in_channels, hidden_dim, kernel_size=1)
+        self.output_proj = nn.Sequential(
+            Network.layer_init(nn.Linear(hidden_dim, output_dim)),
+            nn.ReLU()
+        )
+        self.attn_dropout = nn.Dropout(p=dropout)
+        self.scale = self.head_dim ** -0.5
+        self.output_dim = output_dim
+
+    def forward(self, feature_map):
+        """Forward pass.
+
+        Args:
+            feature_map: (batch, C, H, W) feature map from the ResNet backbone.
+        Returns:
+            features: (batch, output_dim) pooled feature vector.
+            attn_weights: (batch, num_heads, H, W) per-head attention weights.
+        """
+        batch, _, h, w = feature_map.shape
+        n = h * w
+
+        # Project to Q, K, V: (batch, hidden_dim, H, W) → (batch, N, hidden_dim)
+        q = self.query_proj(feature_map).flatten(2).transpose(1, 2)
+        k = self.key_proj(feature_map).flatten(2).transpose(1, 2)
+        v = self.value_proj(feature_map).flatten(2).transpose(1, 2)
+
+        # Reshape to (batch, num_heads, N, head_dim) → (batch*num_heads, N, head_dim)
+        q = q.view(batch, n, self.num_heads, self.head_dim).transpose(1, 2).reshape(batch * self.num_heads, n,
+                                                                                     self.head_dim)
+        k = k.view(batch, n, self.num_heads, self.head_dim).transpose(1, 2).reshape(batch * self.num_heads, n,
+                                                                                     self.head_dim)
+        v = v.view(batch, n, self.num_heads, self.head_dim).transpose(1, 2).reshape(batch * self.num_heads, n,
+                                                                                     self.head_dim)
+
+        # Scaled dot-product attention: (batch*num_heads, N, N)
+        attn_logits = torch.bmm(q, k.transpose(1, 2)) * self.scale
+        attn = torch.softmax(attn_logits, dim=-1)
+        attn = self.attn_dropout(attn)
+
+        # Weighted sum of values: (batch*num_heads, N, head_dim)
+        attended = torch.bmm(attn, v)
+
+        # Average attention across query positions → (batch*num_heads, N)
+        attn_weights = attn.mean(dim=1)
+
+        # Pool each head using its attention weights
+        pooled = (attended * attn_weights.unsqueeze(-1)).sum(dim=1)  # (batch*num_heads, head_dim)
+
+        # Reshape back: (batch, num_heads, head_dim) → (batch, hidden_dim)
+        pooled = pooled.view(batch, self.num_heads, self.head_dim).reshape(batch, -1)
+
+        features = self.output_proj(pooled)
+        attn_map = attn_weights.view(batch, self.num_heads, h, w)
+        return features, attn_map
+
+
+class ImpalaResNet(nn.Module):
+    """IMPALA-style ResNet with CoordConv and spatial attention pooling.
+
+    Processes full-screen RGB frames (with HUD trimmed) through three residual stacks
+    and produces a fixed-size feature vector via spatial self-attention pooling.
+    All spatial dimensions are computed dynamically from (input_height, input_width).
+    """
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def __init__(self, input_channels=3, input_height=168, input_width=240,
+                 channels=(16, 32, 32), attention_hidden=64, output_dim=256):
+        super().__init__()
+
+        # CoordConv: 2 static coordinate channels
+        h_coords = torch.linspace(0, 1, input_height).view(1, 1, input_height, 1)
+        coord_h = h_coords.expand(1, 1, input_height, input_width).clone()
+        w_coords = torch.linspace(0, 1, input_width).view(1, 1, 1, input_width)
+        coord_w = w_coords.expand(1, 1, input_height, input_width).clone()
+        self.register_buffer('coord_h', coord_h)
+        self.register_buffer('coord_w', coord_w)
+
+        in_ch = input_channels + 2  # RGB + 2 coord channels
+
+        # Three residual stacks: Conv3×3 → MaxPool(stride=2) → 2× ResBlock
+        stacks = []
+        for out_ch in channels:
+            stacks.append(nn.Sequential(
+                Network.layer_init(nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1)),
+                nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+                ResBlock(out_ch),
+                ResBlock(out_ch),
+            ))
+            in_ch = out_ch
+        self.stacks = nn.Sequential(*stacks)
+
+        # Spatial attention pooling
+        self.attention_pool = SpatialAttentionPool(
+            in_channels=channels[-1],
+            hidden_dim=attention_hidden,
+            output_dim=output_dim
+        )
+        self.output_dim = output_dim
+
+    def forward(self, image):
+        """Forward pass.
+
+        Args:
+            image: (batch, C, H, W) RGB image tensor.
+        Returns:
+            features: (batch, output_dim) feature vector.
+            attn_weights: (batch, H', W') spatial attention weights.
+        """
+        batch = image.shape[0]
+        coord_h = self.coord_h.expand(batch, -1, -1, -1)
+        coord_w = self.coord_w.expand(batch, -1, -1, -1)
+        x = torch.cat([image, coord_h, coord_w], dim=1)
+
+        x = self.stacks(x)
+        x = torch.relu(x)
+
+        return self.attention_pool(x)
+
+
+class ImpalaCombinedExtractor(nn.Module):
+    """Combined extractor using ImpalaResNet image + entity attention + boolean info."""
+    # pylint: disable=too-many-positional-arguments, too-many-arguments
+    def __init__(
+        self,
+        image_channels: int,
+        input_height: int,
+        input_width: int,
+        num_entity_types: int,
+        entity_features: int = 9,
+        embedding_dim: int = 8,
+        attention_heads: int = 4,
+        attention_layers: int = 1,
+        attention_output_dim: int = 64,
+        info_size: int = 14,
+        image_output_size: int = 256,
+    ):
+        super().__init__()
+
+        self.image_extractor = ImpalaResNet(
+            input_channels=image_channels,
+            input_height=input_height,
+            input_width=input_width,
+            output_dim=image_output_size
+        )
+
+        self.entity_encoder = EntityAttentionEncoder(
+            num_entity_types=num_entity_types,
+            continuous_features=entity_features,
+            embedding_dim=embedding_dim,
+            num_heads=attention_heads,
+            num_layers=attention_layers,
+            output_dim=attention_output_dim
+        )
+
+        self.info_size = info_size
+        self.output_dim = image_output_size + attention_output_dim + info_size
+
+    def forward(self, image, entities, entity_types, information):
+        """Forward pass. Returns (combined_features, attn_weights)."""
+        img_out, attn_weights = self.image_extractor(image)
+        entity_out = self.entity_encoder(entities, entity_types)
+        info_float = information.float()
+        combined = torch.cat([img_out, entity_out, info_float], dim=1)
+        return combined, attn_weights
+
 
 class MultiHeadAgent(Network):
     """Two-head action decomposition: action_type (K) + direction (4).
@@ -573,6 +770,250 @@ class SharedNatureAgent(Network):
         value = self.value_net(value_features)
         return action_logits, value
 
+
+class ImpalaSharedAgent(Network):
+    """Actor-critic with IMPALA ResNet, CoordConv, and spatial attention pooling."""
+    recommended_minibatches = 16  # spatial attention needs smaller minibatches
+
+    def __init__(self, obs_space: Dict, action_space, model_kind=None, action_space_name=None):
+        channels, height, width = obs_space["image"].shape
+        image_output_size = 256
+
+        super().__init__(
+            base_network=ImpalaCombinedExtractor(
+                image_channels=channels,
+                input_height=height,
+                input_width=width,
+                num_entity_types=int(obs_space["entity_types"].nvec[0]),
+                entity_features=obs_space["entities"].shape[1],
+                info_size=obs_space["information"].n,
+                image_output_size=image_output_size
+            ),
+            obs_space=obs_space,
+            action_space=action_space,
+            model_kind=model_kind,
+            action_space_name=action_space_name
+        )
+
+        self.mlp_extractor = MlpExtractor(input_size=self.base.output_dim)
+        self.action_net = self.layer_init(
+            nn.Linear(self.mlp_extractor.policy_output_dim, action_space.n), std=0.01)
+        self.value_net = self.layer_init(
+            nn.Linear(self.mlp_extractor.value_output_dim, 1), std=1.0)
+
+    def forward(self, obs):
+        obs = self._unsqueeze(obs)
+        combined_features, _ = self.base(
+            image=obs["image"],
+            entities=obs["entities"],
+            entity_types=obs["entity_types"],
+            information=obs["information"]
+        )
+        policy_features, value_features = self.mlp_extractor(combined_features)
+        action_logits = self.action_net(policy_features)
+        value = self.value_net(value_features)
+        return action_logits, value
+
+    def forward_with_attention(self, obs):
+        """Forward pass that also returns spatial attention weights for visualization."""
+        obs = self._unsqueeze(obs)
+        combined_features, attn_weights = self.base(
+            image=obs["image"],
+            entities=obs["entities"],
+            entity_types=obs["entity_types"],
+            information=obs["information"]
+        )
+        policy_features, value_features = self.mlp_extractor(combined_features)
+        action_logits = self.action_net(policy_features)
+        value = self.value_net(value_features)
+        return action_logits, value, attn_weights
+
+    def get_attention_entropy(self, obs):
+        """Returns attention entropy and top-1 concentration for tensorboard."""
+        _, _, attn = self.forward_with_attention(obs)
+        return _attention_entropy_stats(attn)
+
+
+class ImpalaMultiHeadAgent(Network):
+    """Two-head action decomposition with IMPALA ResNet backbone."""
+    is_multihead = True
+    recommended_minibatches = 16  # spatial attention needs smaller minibatches
+
+    # pylint: disable=super-init-not-called
+    def __init__(self, obs_space: Dict, action_space, model_kind=None, action_space_name=None):
+        channels, height, width = obs_space["image"].shape
+        image_output_size = 256
+
+        base_network = ImpalaCombinedExtractor(
+            image_channels=channels,
+            input_height=height,
+            input_width=width,
+            num_entity_types=int(obs_space["entity_types"].nvec[0]),
+            entity_features=obs_space["entities"].shape[1],
+            info_size=obs_space["information"].n,
+            image_output_size=image_output_size
+        )
+
+        # Bypass Network.__init__ because MultiDiscrete has no .n attribute.
+        # pylint: disable=non-parent-init-called
+        nn.Module.__init__(self)
+        self.observation_space = obs_space
+        self.action_space = action_space
+        self.model_kind = model_kind
+        self.action_space_name = action_space_name
+        self.steps_trained = 0
+        self.episodes_evaluated = 0
+        self.metrics = {}
+        self.git_commit = _get_git_commit()
+
+        self.base = base_network
+        self.mlp_extractor = MlpExtractor(input_size=self.base.output_dim)
+
+        num_action_types = int(action_space.nvec[0])
+        self.action_type_net = self.layer_init(
+            nn.Linear(self.mlp_extractor.policy_output_dim, num_action_types), std=0.01)
+        self.direction_net = self.layer_init(
+            nn.Linear(self.mlp_extractor.policy_output_dim, 4), std=0.01)
+        self.value_net = self.layer_init(
+            nn.Linear(self.mlp_extractor.value_output_dim, 1), std=1.0)
+        self.action_net = nn.Identity()
+
+    def forward(self, obs):
+        """Returns (action_type_logits, direction_logits, value)."""
+        obs = self._unsqueeze(obs)
+        combined_features, _ = self.base(
+            image=obs["image"],
+            entities=obs["entities"],
+            entity_types=obs["entity_types"],
+            information=obs["information"]
+        )
+        policy_features, value_features = self.mlp_extractor(combined_features)
+        action_type_logits = self.action_type_net(policy_features)
+        direction_logits = self.direction_net(policy_features)
+        value = self.value_net(value_features)
+        return action_type_logits, direction_logits, value
+
+    def forward_with_attention(self, obs):
+        """Forward pass that also returns spatial attention weights for visualization."""
+        obs = self._unsqueeze(obs)
+        combined_features, attn_weights = self.base(
+            image=obs["image"],
+            entities=obs["entities"],
+            entity_types=obs["entity_types"],
+            information=obs["information"]
+        )
+        policy_features, value_features = self.mlp_extractor(combined_features)
+        action_type_logits = self.action_type_net(policy_features)
+        direction_logits = self.direction_net(policy_features)
+        value = self.value_net(value_features)
+        return action_type_logits, direction_logits, value, attn_weights
+
+    def get_action_and_value(self, obs, mask, actions=None, deterministic=False):
+        """Gets action, joint log-prob, summed entropy, and value."""
+        action_type_logits, direction_logits, value = self.forward(obs)
+        num_action_types = int(self.action_space.nvec[0])
+
+        if mask is not None:
+            action_type_mask = mask[..., :num_action_types]
+            direction_mask = mask[..., num_action_types:]
+
+            bad_type = ~action_type_mask.any(dim=-1)
+            bad_dir = ~direction_mask.any(dim=-1)
+            if bad_type.any() or bad_dir.any():
+                idx = (bad_type | bad_dir).nonzero(as_tuple=True)[0][0].item()
+                info_vec = obs['info'][idx].tolist() if 'info' in obs else 'N/A'
+                raise ValueError(
+                    f"Empty action mask in batch element {idx}.\n"
+                    f"  action_type_mask={action_type_mask[idx].tolist()}\n"
+                    f"  direction_mask={direction_mask[idx].tolist()}\n"
+                    f"  full_mask={mask[idx].tolist()}\n"
+                    f"  num_action_types={num_action_types}\n"
+                    f"  nvec={self.action_space.nvec.tolist()}\n"
+                    f"  info={info_vec}"
+                )
+
+            action_type_logits = action_type_logits.clone()
+            action_type_logits[~action_type_mask] = -1e9
+            direction_logits = direction_logits.clone()
+            direction_logits[~direction_mask] = -1e9
+
+        type_dist = dist.Categorical(logits=action_type_logits)
+        dir_dist = dist.Categorical(logits=direction_logits)
+
+        if actions is None:
+            if deterministic:
+                type_action = action_type_logits.argmax(dim=-1)
+                dir_action = direction_logits.argmax(dim=-1)
+            else:
+                type_action = type_dist.sample()
+                dir_action = dir_dist.sample()
+            actions = torch.stack([type_action, dir_action], dim=-1)
+
+        log_prob = type_dist.log_prob(actions[..., 0]) + dir_dist.log_prob(actions[..., 1])
+        entropy = type_dist.entropy() + dir_dist.entropy()
+        return actions, log_prob, entropy, value.view(-1)
+
+    def get_value(self, obs):
+        """Get value estimate."""
+        _, _, value = self.forward(obs)
+        return value.view(-1)
+
+    def get_action(self, obs, mask=None, deterministic=False):
+        """Get the action from the observation."""
+        action, _, _, _ = self.get_action_and_value(obs, mask, deterministic=deterministic)
+        return action
+
+    def get_entropy_details(self, obs, mask):
+        """Returns per-head entropy means for Tensorboard logging."""
+        action_type_logits, direction_logits, _ = self.forward(obs)
+        num_action_types = int(self.action_space.nvec[0])
+
+        if mask is not None:
+            action_type_mask = mask[..., :num_action_types]
+            direction_mask = mask[..., num_action_types:]
+            action_type_logits = action_type_logits.clone()
+            action_type_logits[~action_type_mask] = -1e9
+            direction_logits = direction_logits.clone()
+            direction_logits[~direction_mask] = -1e9
+
+        type_dist = dist.Categorical(logits=action_type_logits)
+        dir_dist = dist.Categorical(logits=direction_logits)
+
+        return {
+            "entropy/action_type": type_dist.entropy().mean().item(),
+            "entropy/direction": dir_dist.entropy().mean().item(),
+        }
+
+    def get_attention_entropy(self, obs):
+        """Returns attention entropy and top-1 concentration for tensorboard."""
+        _, _, _, attn = self.forward_with_attention(obs)
+        return _attention_entropy_stats(attn)
+
+
+def _attention_entropy_stats(attn_map):
+    """Compute attention entropy and top-1 weight from a multi-head attention map.
+
+    Args:
+        attn_map: (batch, num_heads, H, W) attention weights that sum to 1 over H×W per head.
+    Returns:
+        dict with combined and per-head 'attention/entropy' and 'attention/top1_weight'.
+    """
+    batch, num_heads, h, w = attn_map.shape
+    flat = attn_map.reshape(batch, num_heads, h * w)  # (batch, num_heads, N)
+    log_flat = torch.log(flat + 1e-10)
+    per_head_entropy = -(flat * log_flat).sum(dim=2).mean(dim=0)  # (num_heads,)
+    per_head_top1 = flat.max(dim=2).values.mean(dim=0)  # (num_heads,)
+
+    stats = {
+        "attention/entropy": per_head_entropy.mean().item(),
+        "attention/top1_weight": per_head_top1.mean().item(),
+    }
+    for i in range(num_heads):
+        stats[f"attention/head_{i}/entropy"] = per_head_entropy[i].item()
+        stats[f"attention/head_{i}/top1_weight"] = per_head_top1[i].item()
+    return stats
+
+
 def create_network(network, obs_space, action_space, model_kind=None, action_space_name=None):
     """Create a network from a class or instance."""
     if isinstance(network, type) and issubclass(network, Network):
@@ -690,6 +1131,8 @@ __all__ = [
     Network.__name__,
     MultiHeadAgent.__name__,
     SharedNatureAgent.__name__,
+    ImpalaSharedAgent.__name__,
+    ImpalaMultiHeadAgent.__name__,
     register_neural_network.__name__,
     get_neural_network.__name__,
     ActionSpaceDefinition.__name__,

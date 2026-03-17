@@ -25,8 +25,7 @@ VIEWPORT_PIXELS = 128
 
 # Unified entity observation: 11 NES object slots + 1 treasure slot
 ENTITY_SLOTS = 12
-ENTITY_FEATURES = 9
-POSITION_SCALE = 128.0
+ENTITY_FEATURES = 7
 
 # Entity type ID mapping for unified embedding (0 = empty/unknown)
 _ENTITY_TYPE_MAP = {}
@@ -54,6 +53,27 @@ for _key, _val in _ENTITY_TYPE_MAP.items():
     ENTITY_TYPE_NAMES[_val] = _key.name
 ENTITY_TYPE_NAMES[TREASURE_TYPE_ID] = "Treasure"
 
+
+def infer_obs_kind(obs_space):
+    """Infer the observation kind from a saved observation space.
+
+    Returns:
+        (obs_kind, frame_stack) tuple, e.g. ('viewport', 3) or ('full-rgb', 1).
+    """
+    image_shape = obs_space["image"].shape  # (channels, H, W)
+    channels, h, w = image_shape
+
+    if h == VIEWPORT_PIXELS and w == VIEWPORT_PIXELS:
+        return 'viewport', channels
+
+    # full-rgb: channels is a multiple of 3 (RGB per stacked frame)
+    if channels % 3 == 0 and channels <= 9:
+        return 'full-rgb', channels // 3
+
+    # grayscale gameplay: channels == frame_stack
+    return 'gameplay', channels
+
+
 class ObservationWrapper(gym.Wrapper):
     """A wrapper that trims the HUD and converts the image to grayscale."""
     def __init__(self, env, kind, frame_stack, frame_skip, normalize, full_screen=False):
@@ -63,8 +83,9 @@ class ObservationWrapper(gym.Wrapper):
         self.frame_stack = frame_stack
         self.frame_skip = frame_skip
         self.full_screen = full_screen
+        self._grayscale = kind != 'full-rgb'
 
-        if kind in ('gameplay', 'viewport'):
+        if kind in ('gameplay', 'viewport', 'full-rgb'):
             self._trim = HUD_TRIM_FULL if full_screen else HUD_TRIM_CROPPED
             # Viewport centering always uses GAMEPLAY_START_Y so that the viewport
             # position relative to Link is identical across cropped and full modes.
@@ -116,7 +137,9 @@ class ObservationWrapper(gym.Wrapper):
         # we also move the last channel count to be the first dimension to avoid a VecTransposeImage wrapper
         height = self.observation_space.shape[0]
         width = self.observation_space.shape[1]
-        channels = self.frame_stack
+
+        # Grayscale: 1 channel per stacked frame. RGB: 3 channels per stacked frame.
+        channels = self.frame_stack if self._grayscale else self.frame_stack * 3
 
         low = 0.0
         high = 1.0 if self._normalize else 255.0
@@ -162,16 +185,26 @@ class ObservationWrapper(gym.Wrapper):
             frames (torch.Tensor): Batch of frames with shape (N, C, H, W).
 
         Returns:
-            torch.Tensor: Processed batch of frames with shape (N, 1, viewport_size, viewport_size).
+            torch.Tensor: Processed frames. Shape depends on mode:
+                - Grayscale viewport: (N, H_vp, W_vp)
+                - Grayscale gameplay: (N, H_trim, W)
+                - full-rgb: (N*3, H_trim, W)
         """
         if self._trim:
             frames = frames[:, :, self._trim:, :]
 
-        if self._normalize:
-            # Combine normalization and grayscale in one multiply+sum
-            frames = (frames * _GRAYSCALE_NORM_WEIGHTS_4D).sum(dim=1, keepdim=False)
+        if self._grayscale:
+            if self._normalize:
+                # Combine normalization and grayscale in one multiply+sum
+                frames = (frames * _GRAYSCALE_NORM_WEIGHTS_4D).sum(dim=1, keepdim=False)
+            else:
+                frames = (frames * _GRAYSCALE_WEIGHTS_4D).sum(dim=1, keepdim=False)
         else:
-            frames = (frames * _GRAYSCALE_WEIGHTS_4D).sum(dim=1, keepdim=False)
+            # full-rgb: keep RGB channels, flatten frame_stack × 3 into channel dim
+            if self._normalize:
+                frames = frames / 255.0
+            # frames shape: (N, 3, H, W) → reshape to (N*3, H, W) for channel stacking
+            frames = frames.reshape(-1, frames.shape[-2], frames.shape[-1])
 
         if self._viewport_size:
             x = state.link.position.x
@@ -238,23 +271,22 @@ class ObservationWrapper(gym.Wrapper):
     def _get_entity_observation(self, state: ZeldaGame):
         """Build unified entity features and type IDs for all 12 slots.
 
-        Entity features per slot (9 dims):
+        Entity features per slot (7 dims):
             0: presence (0 or 1)
-            1: rel_x  (entity.x - link.x) / POSITION_SCALE
-            2: rel_y  (entity.y - link.y) / POSITION_SCALE
-            3: dir_x  entity movement direction x
-            4: dir_y  entity movement direction y
-            5: health (enemy HP / 15, 0 for non-enemies)
-            6: stun   (enemy stun_timer / 255, 1.0 when clock active)
-            7: hurts_on_touch (1 for enemies/projectiles, 0 when clock active)
-            8: killable (1 for enemies only)
+            1: dir_x  entity movement direction x
+            2: dir_y  entity movement direction y
+            3: health (enemy HP / 15, 0 for non-enemies)
+            4: stun   (enemy stun_timer / 255, 1.0 when clock active)
+            5: hurts_on_touch (1 for enemies/projectiles, 0 when clock active)
+            6: killable (1 for enemies only)
+
+        Positions are intentionally omitted — the full-screen visual encoder
+        learns spatial relationships from pixels via CoordConv.
         """
         features = torch.zeros(ENTITY_SLOTS, ENTITY_FEATURES, dtype=torch.float32)
         types = torch.zeros(ENTITY_SLOTS, dtype=torch.int64)
 
         has_clock = bool(state.link.clock)
-        link_x = state.link.position.x
-        link_y = state.link.position.y
 
         # NES object slots 1-11 (indices 0-10)
         for i, entry in enumerate(state.all_entities):
@@ -262,18 +294,16 @@ class ObservationWrapper(gym.Wrapper):
                 continue
             entity, category = entry
             features[i, 0] = 1.0
-            features[i, 1] = (entity.position.x - link_x) / POSITION_SCALE
-            features[i, 2] = (entity.position.y - link_y) / POSITION_SCALE
 
             if category == 'enemy':
-                features[i, 3:5] = entity.direction.vector
-                features[i, 5] = entity.health / 15.0
-                features[i, 6] = 1.0 if has_clock else min(entity.stun_timer / 255.0, 1.0)
-                features[i, 7] = 0.0 if has_clock else 1.0
-                features[i, 8] = 1.0
+                features[i, 1:3] = entity.direction.vector
+                features[i, 3] = entity.health / 15.0
+                features[i, 4] = 1.0 if has_clock else min(entity.stun_timer / 255.0, 1.0)
+                features[i, 5] = 0.0 if has_clock else 1.0
+                features[i, 6] = 1.0
             elif category == 'projectile':
-                features[i, 3:5] = entity.direction.vector
-                features[i, 7] = 0.0 if has_clock else 1.0
+                features[i, 1:3] = entity.direction.vector
+                features[i, 5] = 0.0 if has_clock else 1.0
 
             types[i] = _ENTITY_TYPE_MAP.get(entity.id, 0)
 
@@ -281,8 +311,6 @@ class ObservationWrapper(gym.Wrapper):
         treasure = state.treasure
         if treasure is not None:
             features[11, 0] = 1.0
-            features[11, 1] = (treasure.position.x - link_x) / POSITION_SCALE
-            features[11, 2] = (treasure.position.y - link_y) / POSITION_SCALE
             types[11] = TREASURE_TYPE_ID
 
         return features.clamp(-1, 1), types

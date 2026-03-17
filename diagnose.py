@@ -31,6 +31,7 @@ import gymnasium as gym
 from triforce import ActionSpaceDefinition, ModelKindDefinition, Network, TrainingScenarioDefinition, make_zelda_env
 from triforce.action_space import ActionKind
 from triforce.critics import PBRS_SCALE
+from triforce.observation_wrapper import infer_obs_kind
 from triforce.room import Room
 from triforce.zelda_enums import MapLocation, Direction
 
@@ -127,9 +128,13 @@ def run_diagnostic(model_name, scenario_name, model_path, episodes, output_path=
     action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "basic")
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
 
+    # Infer obs_kind and frame_stack from the saved observation space
+    obs_kind, frame_stack = infer_obs_kind(metadata["obs_space"])
+
     # Create env WITHOUT GymTranslationWrapper, use our DiagnosticWrapper instead
     env = make_zelda_env(scenario_def, action_space_def.actions,
-                         render_mode=None, multihead=multihead, translation=False)
+                         render_mode=None, multihead=multihead, translation=False,
+                         obs_kind=obs_kind, frame_stack=frame_stack)
     env = DiagnosticWrapper(env)
 
     # Load model
@@ -425,8 +430,10 @@ def run_pbrs_diagnostic(model_name, scenario_name, model_path, episodes, tail, o
     action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "basic")
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
 
+    obs_kind, frame_stack = infer_obs_kind(metadata["obs_space"])
     env = make_zelda_env(scenario_def, action_space_def.actions,
-                         render_mode=None, multihead=multihead, translation=False)
+                         render_mode=None, multihead=multihead, translation=False,
+                         obs_kind=obs_kind, frame_stack=frame_stack)
     env = DiagnosticWrapper(env)
 
     obs_space, act_space = Network.load_spaces(model_path)
@@ -734,8 +741,10 @@ def run_invariant_checker(model_name, scenario_name, model_path, episodes, outpu
     action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "basic")
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
 
+    obs_kind, frame_stack = infer_obs_kind(metadata["obs_space"])
     env = make_zelda_env(scenario_def, action_space_def.actions,
-                         render_mode=None, multihead=multihead, translation=False)
+                         render_mode=None, multihead=multihead, translation=False,
+                         obs_kind=obs_kind, frame_stack=frame_stack)
     env = DiagnosticWrapper(env)
 
     obs_space, act_space = Network.load_spaces(model_path)

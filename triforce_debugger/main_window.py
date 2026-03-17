@@ -137,6 +137,10 @@ class MainWindow(QMainWindow):
         self.action_overlay_tile_ids.setCheckable(True)
         self.action_overlay_walkability = self.view_menu.addAction("Overlay: Walkability")
         self.action_overlay_walkability.setCheckable(True)
+        self.action_overlay_attention = self.view_menu.addAction("Overlay: Attention")
+        self.action_overlay_attention.setCheckable(True)
+        self.action_attention_prev = self.view_menu.addAction("Attention: Prev Head  [")
+        self.action_attention_next = self.view_menu.addAction("Attention: Next Head  ]")
         self.view_menu.addSeparator()
         self.action_uncap_fps = self.view_menu.addAction("Uncap FPS")
         self.action_uncap_fps.setCheckable(True)
@@ -290,6 +294,14 @@ class MainWindow(QMainWindow):
             lambda on: self.game_view.set_overlay(OverlayFlags.TILE_IDS, on))
         self.action_overlay_walkability.toggled.connect(
             lambda on: self.game_view.set_overlay(OverlayFlags.WALKABILITY, on))
+        self.action_overlay_attention.toggled.connect(
+            lambda on: self.game_view.set_overlay(OverlayFlags.ATTENTION, on))
+        self.action_attention_prev.setShortcut("[")
+        self.action_attention_prev.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        self.action_attention_prev.triggered.connect(self._cycle_attention_head_prev)
+        self.action_attention_next.setShortcut("]")
+        self.action_attention_next.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        self.action_attention_next.triggered.connect(self._cycle_attention_head_next)
 
     def _wire_integration(self):
         """Connect all integration signals for end-to-end operation."""
@@ -504,6 +516,14 @@ class MainWindow(QMainWindow):
             self.game_view.set_frame(frame)
         if state:
             self.game_view.set_game_state(state)
+
+        # Update attention heatmap if overlay is active
+        if OverlayFlags.ATTENTION in self.game_view.overlays:
+            try:
+                attn = self._bridge.get_attention_weights()
+                self.game_view.set_attention_weights(attn)
+            except Exception:  # pylint: disable=broad-except
+                log.warning("Failed to get attention weights:\n%s", traceback.format_exc())
 
         # Update observation panel
         if step_result.observation is not None:
@@ -778,3 +798,21 @@ class MainWindow(QMainWindow):
             self.game_timer.play_frames(frames, step_result)
         except Exception:  # pylint: disable=broad-except
             log.error("Manual step error:\n%s", traceback.format_exc())
+
+    # ── Attention head cycling ───────────────────────────────
+
+    def _cycle_attention_head_prev(self):
+        """Cycle to the previous attention head (wraps around)."""
+        n = self.game_view.num_attention_heads
+        if n == 0:
+            return
+        current = self.game_view.attention_head
+        self.game_view.attention_head = (current - 1) % (n + 1)
+
+    def _cycle_attention_head_next(self):
+        """Cycle to the next attention head (wraps around)."""
+        n = self.game_view.num_attention_heads
+        if n == 0:
+            return
+        current = self.game_view.attention_head
+        self.game_view.attention_head = (current + 1) % (n + 1)

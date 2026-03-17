@@ -14,6 +14,10 @@ model-kinds:
     class: SharedNatureAgent
   multihead:
     class: MultiHeadAgent
+  impala-shared:
+    class: ImpalaSharedAgent
+  impala-multihead:
+    class: ImpalaMultiHeadAgent
 training-circuits:
 - name: main-circuit
   description: 'Train the overworld model through curriculum: room navigation, sword pickup, overworld traversal, dungeon

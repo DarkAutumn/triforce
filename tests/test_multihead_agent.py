@@ -24,7 +24,7 @@ def _make_obs_space():
     """Create a mock observation space matching ZeldaObservationWrapper output."""
     return Dict({
         "image": Box(low=0.0, high=1.0, shape=(1, 128, 128), dtype=np.float32),
-        "entities": Box(low=-1.0, high=1.0, shape=(12, 9), dtype=np.float32),
+        "entities": Box(low=-1.0, high=1.0, shape=(12, 7), dtype=np.float32),
         "entity_types": gym.spaces.MultiDiscrete([74] * 12),
         "information": MultiBinary(15),
     })
@@ -34,7 +34,7 @@ def _make_obs_batch(batch_size=2):
     """Create a batch of mock observations as tensors."""
     return {
         "image": torch.randn(batch_size, 1, 128, 128),
-        "entities": torch.randn(batch_size, 12, 9),
+        "entities": torch.randn(batch_size, 12, 7),
         "entity_types": torch.zeros(batch_size, 12).long(),
         "information": torch.zeros(batch_size, 15),
     }
@@ -72,7 +72,7 @@ class TestMultiHeadForward:
 
         obs = {
             "image": torch.randn(1, 128, 128),
-            "entities": torch.randn(12, 9),
+            "entities": torch.randn(12, 7),
             "entity_types": torch.zeros(12).long(),
             "information": torch.zeros(15),
         }

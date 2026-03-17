@@ -99,7 +99,7 @@ class PPORolloutBuffer:
 
         raise ValueError(f"Unsupported observation space: {space}")
 
-    def ppo_main_loop(self, batch_index, network, env, progress):
+    def ppo_main_loop(self, batch_index, network, env, callback, total_steps=0):
         """Processes a single loop of training, filling one batch of variables."""
 
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements
@@ -168,8 +168,8 @@ class PPORolloutBuffer:
 
                 obs = next_obs
 
-                if progress:
-                    progress.update(1)
+                if callback:
+                    callback.on_progress(1, total_steps)
 
             # Store final obs/done/mask
             if isinstance(obs, dict):

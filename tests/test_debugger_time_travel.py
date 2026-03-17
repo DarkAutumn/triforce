@@ -86,11 +86,13 @@ class TestTimeTravelSelection:
 
     def test_updates_observation_panel(self):
         window = MainWindow()
-        obs = {"image": np.random.rand(1, 1, 84, 84).astype(np.float32)}
+        info = np.zeros(15, dtype=np.float32)
+        info[10] = 1.0  # enemies_present
+        obs = {"information": info}
         entry = _make_entry(1, observation=obs)
         window.step_history.append_step(entry)
         _select_display_row(window, 0)
-        assert window.obs_panel.obs_image.current_image is not None
+        assert window.obs_panel.bool_indicators["Enemies"].active
 
     def test_updates_action_table(self):
         window = MainWindow()

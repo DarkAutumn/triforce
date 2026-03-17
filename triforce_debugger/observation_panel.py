@@ -1,139 +1,27 @@
-"""Observation panel — displays network input image, entity list, booleans, directional circles."""
+"""Observation panel — displays entity list, booleans, directional circles."""
 
 import math
 
 import numpy as np
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPainter, QImage, QColor, QPen, QPolygonF, QFont
+from PySide6.QtGui import QPainter, QColor, QPen, QPolygonF, QFont
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea
 
 from triforce.zelda_enums import Direction
-from triforce.observation_wrapper import ENTITY_SLOTS, ENTITY_TYPE_NAMES, VIEWPORT_PIXELS
+from triforce.observation_wrapper import ENTITY_SLOTS, ENTITY_TYPE_NAMES
 
-
-# ── Observation image widget ──────────────────────────────────
-
-class ObsImageWidget(QWidget):
-    """Displays the grayscale observation image scaled up for visibility."""
-
-    SCALE_FACTOR = 2
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("obs_image")
-        self._qimage: QImage | None = None
-        self.setMinimumSize(VIEWPORT_PIXELS * self.SCALE_FACTOR, VIEWPORT_PIXELS * self.SCALE_FACTOR)
-
-    def set_image(self, image_tensor):
-        """Set image from observation tensor.  Accepts (C, H, W) or (frames, C, H, W)."""
-        if image_tensor is None:
-            self._qimage = None
-            self.update()
-            return
-
-        img = image_tensor
-        if hasattr(img, 'cpu'):
-            img = img.cpu().numpy()
-
-        # Take the last frame if stacked: (frames, C, H, W) → (C, H, W)
-        if img.ndim == 4:
-            img = img[-1]
-
-        # (C, H, W) → (H, W) for single-channel grayscale
-        if img.ndim == 3 and img.shape[0] == 1:
-            img = img.squeeze(0)
-
-        # Normalize to 0-255 uint8
-        if img.dtype != np.uint8:
-            img = (np.clip(img, 0, 1) * 255).astype(np.uint8)
-
-        # Grayscale → RGB for QImage
-        if img.ndim == 2:
-            rgb = np.stack([img, img, img], axis=-1)
-        else:
-            rgb = np.moveaxis(img, 0, -1)  # (C, H, W) → (H, W, C)
-
-        rgb = np.ascontiguousarray(rgb)
-        h, w, _ = rgb.shape
-        qimg = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888)
-        self._qimage = qimg.copy()
-        self.update()
-
-    @property
-    def current_image(self) -> QImage | None:
-        """The current QImage (for testing)."""
-        return self._qimage
-
-    def paintEvent(self, _event):  # pylint: disable=invalid-name
-        """Paint the observation image scaled up."""
-        painter = QPainter(self)
-        if self._qimage is None:
-            painter.fillRect(self.rect(), QColor(0, 0, 0))
-            painter.setPen(QColor(128, 128, 128))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No obs")
-        else:
-            scaled_w = self._qimage.width() * self.SCALE_FACTOR
-            scaled_h = self._qimage.height() * self.SCALE_FACTOR
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-            painter.drawImage(QRectF(0, 0, scaled_w, scaled_h), self._qimage)
-        painter.end()
-
-
-# ── Small arrow widget ────────────────────────────────────────
-
-class SmallArrowWidget(QWidget):
-    """A small circle with a directional arrow showing relative entity position."""
-
-    RADIUS = 12
-    ARROW_COLOR = QColor(255, 0, 0)
-    ARROWHEAD_SIZE = 5
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._vector = np.array([0.0, 0.0])
-        size = self.RADIUS * 2 + 4
-        self.setFixedSize(size, size)
-
-    def set_vector(self, rel_x: float, rel_y: float):
-        """Set the direction vector from link to entity (already normalized to [-1,1])."""
-        self._vector = np.array([float(rel_x), float(rel_y)], dtype=np.float64)
-        self.update()
-
-    def paintEvent(self, _event):  # pylint: disable=invalid-name
-        """Draw the circle with directional arrow."""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        cx = self.width() / 2
-        cy = self.height() / 2
-        center = QPointF(cx, cy)
-
-        painter.setPen(QPen(QColor(0, 0, 0), 1))
-        painter.drawEllipse(center, self.RADIUS, self.RADIUS)
-
-        mag = math.sqrt(self._vector[0] ** 2 + self._vector[1] ** 2)
-        if mag > 0.01:
-            norm = self._vector / mag
-            scale = min(mag, 1.0)
-            _draw_arrow(painter, center, norm, scale,
-                        self.RADIUS, self.ARROW_COLOR, self.ARROWHEAD_SIZE)
-
-        painter.end()
 
 
 # ── Entity row widget ─────────────────────────────────────────
 
 class EntityRowWidget(QWidget):
-    """Single entity row: direction arrow + type name + properties."""
+    """Single entity row: type name + properties."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 1, 2, 1)
         layout.setSpacing(4)
-
-        self.arrow = SmallArrowWidget()
-        layout.addWidget(self.arrow)
 
         self.name_label = QLabel("")
         self.name_label.setMinimumWidth(90)
@@ -150,9 +38,8 @@ class EntityRowWidget(QWidget):
         layout.addWidget(self.props_label)
         layout.addStretch()
 
-    def set_entity(self, type_name, rel_x, rel_y, health, stun, hurts, killable):
+    def set_entity(self, type_name, health, stun, hurts, killable):
         """Update the row with entity data."""
-        self.arrow.set_vector(rel_x, rel_y)
         self.name_label.setText(type_name)
         props = []
         if health > 0.01:
@@ -167,7 +54,6 @@ class EntityRowWidget(QWidget):
 
     def clear_entity(self):
         """Hide this row's data."""
-        self.arrow.set_vector(0, 0)
         self.name_label.setText("")
         self.props_label.setText("")
 
@@ -312,7 +198,7 @@ def _draw_arrow(painter: QPainter, center: QPointF, vector: np.ndarray,
 # ── Main observation panel ────────────────────────────────────
 
 class ObservationPanel(QWidget):
-    """Full observation panel: network input image, entity list, directional circles, booleans."""
+    """Full observation panel: entity list, directional circles, booleans."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -320,23 +206,19 @@ class ObservationPanel(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(4)
+        layout.setSpacing(2)
 
         # Title
-        layout.addWidget(self._make_header("Observation", "obs_title", bold=True))
+        layout.addWidget(self._make_header("Observation", "obs_title", bold=True), stretch=0)
 
-        # Network input image
-        self.obs_image = ObsImageWidget()
-        layout.addWidget(self.obs_image)
-
-        # Directional circles: Objective + Source (immediately under image)
+        # Directional circles: Objective + Source
         dir_layout = QHBoxLayout()
         dir_layout.setSpacing(4)
         self.objective_circle = DirectionalCircleWidget("Objective")
         self.source_circle = DirectionalCircleWidget("Source")
         dir_layout.addWidget(self.objective_circle)
         dir_layout.addWidget(self.source_circle)
-        layout.addLayout(dir_layout)
+        layout.addLayout(dir_layout, 0)
 
         # Boolean indicators
         bool_layout = QHBoxLayout()
@@ -346,10 +228,10 @@ class ObservationPanel(QWidget):
             indicator = BooleanIndicator(name)
             self.bool_indicators[name] = indicator
             bool_layout.addWidget(indicator)
-        layout.addLayout(bool_layout)
+        layout.addLayout(bool_layout, 0)
 
         # Entity list
-        layout.addWidget(self._make_header("Entities", "entity_header", bold=True, point_size=8))
+        layout.addWidget(self._make_header("Entities", "entity_header", bold=True, point_size=8), stretch=0)
         self.entity_rows: list[EntityRowWidget] = []
         layout.addWidget(self._build_entity_scroll(), stretch=1)
 
@@ -386,7 +268,7 @@ class ObservationPanel(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setFixedHeight(140)
+        scroll.setMinimumHeight(100)
         self._entity_scroll = scroll
         return scroll
 
@@ -394,10 +276,6 @@ class ObservationPanel(QWidget):
         """Update all sub-widgets from an observation dict."""
         if obs is None:
             return
-
-        # Network input image
-        if "image" in obs:
-            self.obs_image.set_image(obs["image"])
 
         # Entity list
         if "entities" in obs:
@@ -422,12 +300,10 @@ class ObservationPanel(QWidget):
                 type_name = ENTITY_TYPE_NAMES.get(type_id, f"Unknown({type_id})")
                 row.set_entity(
                     type_name=type_name,
-                    rel_x=float(entities[i, 1]),
-                    rel_y=float(entities[i, 2]),
-                    health=float(entities[i, 5]),
-                    stun=float(entities[i, 6]),
-                    hurts=float(entities[i, 7]),
-                    killable=float(entities[i, 8]),
+                    health=float(entities[i, 3]),
+                    stun=float(entities[i, 4]),
+                    hurts=float(entities[i, 5]),
+                    killable=float(entities[i, 6]),
                 )
                 row.setVisible(True)
 

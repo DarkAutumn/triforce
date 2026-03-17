@@ -266,13 +266,12 @@ class EnvironmentBridge:
                  action_space_name=None, model_kind_name=None):
         self.scenario_def: TrainingScenarioDefinition = scenario_def
 
-        # Peek at .pt files to determine model kind and action space from metadata
-        if not model_kind_name or not action_space_name:
-            detected = self._detect_from_models(model_path)
-            if not model_kind_name and detected.get("model_kind"):
-                model_kind_name = detected["model_kind"]
-            if not action_space_name and detected.get("action_space_name"):
-                action_space_name = detected["action_space_name"]
+        # Peek at .pt files to determine model kind, action space, and obs kind from metadata
+        detected = self._detect_from_models(model_path)
+        if not model_kind_name and detected.get("model_kind"):
+            model_kind_name = detected["model_kind"]
+        if not action_space_name and detected.get("action_space_name"):
+            action_space_name = detected["action_space_name"]
 
         asd = ActionSpaceDefinition.get(action_space_name) if action_space_name \
             else ActionSpaceDefinition.get_default()
@@ -280,9 +279,16 @@ class EnvironmentBridge:
             else ModelKindDefinition.get_default()
 
         multihead = getattr(mk.network_class, 'is_multihead', False)
+
+        # Infer obs_kind and frame_stack from the saved model's observation space
+        obs_kind = 'viewport'
+        if detected.get("obs_space"):
+            from triforce.observation_wrapper import infer_obs_kind  # pylint: disable=import-outside-toplevel
+            obs_kind, frame_stack = infer_obs_kind(detected["obs_space"])
+
         self.env = env = make_zelda_env(self.scenario_def, asd.actions, render_mode='rgb_array',
                                         translation=False, frame_stack=frame_stack,
-                                        multihead=multihead)
+                                        multihead=multihead, obs_kind=obs_kind)
 
         self.selector = ModelSelector(self.env, model_path)
 
@@ -317,7 +323,7 @@ class EnvironmentBridge:
 
     @staticmethod
     def _detect_from_models(model_path):
-        """Peek at .pt files to detect model_kind and action_space_name."""
+        """Peek at .pt files to detect model_kind, action_space_name, and obs_space."""
         pt_files = _find_pt_files(model_path)
         for pt_path in pt_files:
             try:
@@ -325,7 +331,8 @@ class EnvironmentBridge:
                 mk = meta.get("model_kind")
                 asn = meta.get("action_space_name")
                 if mk and asn:
-                    return {"model_kind": mk, "action_space_name": asn}
+                    return {"model_kind": mk, "action_space_name": asn,
+                            "obs_space": meta.get("obs_space")}
             except Exception:  # pylint: disable=broad-exception-caught
                 continue
         return {}
@@ -397,6 +404,22 @@ class EnvironmentBridge:
         obs = obs if obs is not None else self._observation
         mask = mask if mask is not None else self._action_mask
         return self.selector.get_probabilities(obs, mask)
+
+    def get_attention_weights(self, obs=None):
+        """Returns spatial attention weights if the model supports it, else None.
+
+        Returns:
+            numpy array of shape (num_heads, H', W') or None if the model has no attention.
+        """
+        obs = obs if obs is not None else self._observation
+        model = self.selector.model
+        if not hasattr(model, 'forward_with_attention'):
+            return None
+
+        with torch.no_grad():
+            result = model.forward_with_attention(obs)
+            attn = result[-1]  # Last element is always attention weights
+            return attn.squeeze(0).cpu().numpy()  # (num_heads, H', W')
 
     @property
     def model_details(self):

@@ -2,9 +2,9 @@ import math
 import time
 import torch
 from torch import nn
-from torch.utils.tensorboard import SummaryWriter
 
 from .metrics import MetricTracker
+from .ml_ppo_callback import NullCallback
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network, create_network
 
@@ -43,7 +43,7 @@ class Threshold:
 
 class PPO:
     """PPO Implementation.  Adapted from from https://www.youtube.com/watch?v=MEt6rrxH8W4."""
-    def __init__(self, log_dir, **kwargs):
+    def __init__(self, **kwargs):
         self.device = kwargs.get('device', torch.device("cuda" if torch.cuda.is_available() else "cpu"))
         self.target_steps = kwargs.get('target_steps', TARGET_STEPS)
         self._norm_advantages = kwargs.get('norm_advantages', NORM_ADVANTAGES)
@@ -56,14 +56,12 @@ class PPO:
         self._max_grad_norm = kwargs.get('max_grad_norm', MAX_GRAD_NORM)
         self._epsilon = kwargs.get('epsilon', EPSILON)
         self.minibatches = kwargs.get('minibatches', MINIBATCHES)
+        self._minibatches_override = 'minibatches' in kwargs
         self.num_epochs = kwargs.get('num_epochs', EPOCHS)
         self._target_kl = kwargs.get('target_kl', TARGET_KL)
         self.optimizer = None
 
         self.kwargs = kwargs
-
-        self.log_dir = log_dir
-        self.tensorboard = SummaryWriter(log_dir) if log_dir else None
 
         self.total_steps = 0
 
@@ -71,9 +69,11 @@ class PPO:
         self.start_time = None
         self._steps_at_start = 0
 
-    def train(self, network, create_env, iterations, progress=None, **kwargs):
+    def train(self, network, create_env, iterations, callback=None, **kwargs):
         """Train the network."""
         self.start_time = time.time()
+        if callback is None:
+            callback = NullCallback()
 
         n_envs = kwargs.get('envs', 1)
 
@@ -94,35 +94,35 @@ class PPO:
         if n_envs > 1:
             # Multi-env mode: close the initial env (workers create their own) and train
             env.close()
-            return self._train_multi(network, n_envs, iterations, progress, **kwargs)
+            return self._train_multi(network, n_envs, iterations, callback, **kwargs)
 
         try:
-            return self._train_single(network, env, iterations, progress, **kwargs)
+            return self._train_single(network, env, iterations, callback, **kwargs)
         finally:
             env.close()
 
-    def _train_single(self, network, env, iterations, progress, **kwargs):
+    def _train_single(self, network, env, iterations, callback, **kwargs):
         buffer = PPORolloutBuffer(self.target_steps, 1, env.observation_space, env.action_space,
                                   self._gamma, self._lambda)
 
         save_path = kwargs.get('save_path', None)
         exit_criteria = kwargs.get('exit_criteria', None)
         exit_threshold = kwargs.get('exit_threshold', None)
-        next_tensorboard = Threshold(LOG_RATE)
+        next_metrics = Threshold(LOG_RATE)
         next_model_save = Threshold(SAVE_INTERVAL)
-        progress.total = math.ceil(iterations / buffer.memory_length) * buffer.memory_length
+        total_steps = math.ceil(iterations / buffer.memory_length) * buffer.memory_length
         total_iterations = 0
 
         while total_iterations < iterations:
             # Collect training data
-            buffer.ppo_main_loop(0, network, env, progress)
+            buffer.ppo_main_loop(0, network, env, callback, total_steps)
             total_iterations += buffer.memory_length
 
             # Save metrics
-            if next_tensorboard.add(buffer.memory_length):
+            if next_metrics.add(buffer.memory_length):
                 network.metrics = MetricTracker.get_metrics_and_clear()
                 if network.metrics:
-                    self._write_metrics(network.metrics, network.steps_trained)
+                    callback.on_metrics(network.metrics, network.steps_trained, total_steps)
 
                     if exit_criteria and self._hit_exit_criteria(network.metrics, exit_criteria, exit_threshold):
                         break
@@ -134,11 +134,13 @@ class PPO:
 
             # Optimize the network
             network.steps_trained += buffer.memory_length
-            network = self._optimize(network, buffer, network.steps_trained)
+            network = self._optimize(network, buffer, network.steps_trained, callback, total_steps)
+            if not callback.check_pause():
+                break
 
         return network
 
-    def _train_multi(self, network, n_envs, iterations, progress, **kwargs):
+    def _train_multi(self, network, n_envs, iterations, callback, **kwargs):
         """Train with multiple environments in separate subprocesses."""
         # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
         from .ml_ppo_worker import RolloutWorkerPool, EnvFactory  # pylint: disable=import-outside-toplevel
@@ -165,30 +167,31 @@ class PPO:
             save_path = kwargs.get('save_path', None)
             exit_criteria = kwargs.get('exit_criteria', None)
             exit_threshold = kwargs.get('exit_threshold', None)
-            next_tensorboard = Threshold(LOG_RATE)
+            next_metrics = Threshold(LOG_RATE)
             next_model_save = Threshold(SAVE_INTERVAL)
 
             # Each collection gathers target_steps total env steps (split across workers).
             # Count total env steps for iteration tracking, matching single-env behavior.
             env_steps_per_iteration = buffer.memory_length * n_envs
-            progress.total = math.ceil(iterations / env_steps_per_iteration) * env_steps_per_iteration
+            total_steps = math.ceil(iterations / env_steps_per_iteration) * env_steps_per_iteration
             total_iterations = 0
             accumulated_metrics = []
 
             while total_iterations < iterations:
                 # Send current weights to workers and collect rollouts
                 pool.update_weights(network)
-                _, worker_metrics = pool.collect_rollouts(buffer, progress)
+                _, worker_metrics = pool.collect_rollouts(buffer)
                 total_iterations += env_steps_per_iteration
+                callback.on_progress(env_steps_per_iteration, total_steps)
                 if worker_metrics:
                     accumulated_metrics.append(worker_metrics)
 
                 # Log aggregated metrics from worker subprocesses
-                if next_tensorboard.add(env_steps_per_iteration):
+                if next_metrics.add(env_steps_per_iteration):
                     network.metrics = self._average_metric_dicts(accumulated_metrics)
                     accumulated_metrics.clear()
                     if network.metrics:
-                        self._write_metrics(network.metrics, network.steps_trained)
+                        callback.on_metrics(network.metrics, network.steps_trained, total_steps)
 
                         if exit_criteria and self._hit_exit_criteria(network.metrics, exit_criteria,
                                                                      exit_threshold):
@@ -201,7 +204,9 @@ class PPO:
 
                 # Optimize the network
                 network.steps_trained += env_steps_per_iteration
-                network = self._optimize(network, buffer, network.steps_trained)
+                network = self._optimize(network, buffer, network.steps_trained, callback, total_steps)
+                if not callback.check_pause():
+                    break
 
             return network
         finally:
@@ -223,19 +228,10 @@ class PPO:
                 combined[key].append(value)
         return {key: sum(values) / len(values) for key, values in combined.items()}
 
-    def _write_metrics(self, metrics, total_iterations):
-        timestamp = time.time()
-        for name, value in metrics.items():
-            if '/' not in name:
-                name = f"metrics/{name}"
-
-            self.tensorboard.add_scalar(name, value, total_iterations, timestamp)
-
-        if metrics:
-            self.tensorboard.flush()
-
-    def _optimize(self, network : Network, variables : PPORolloutBuffer, iterations : int):
-        # pylint: disable=too-many-locals, too-many-statements, too-many-branches
+    def _optimize(self, network : Network, variables : PPORolloutBuffer, iterations : int,
+                  callback=None, total_steps=0):
+        # pylint: disable=too-many-locals, too-many-statements, too-many-branches, too-many-arguments
+        # pylint: disable=too-many-positional-arguments
 
         # flatten observations
         if isinstance(variables.observation, dict):
@@ -268,7 +264,11 @@ class PPO:
 
         # standard PPO update
         batch_size = variables.memory_length * variables.n_envs
-        minibatch_size = batch_size // self.minibatches
+        minibatches = self.minibatches
+        if not self._minibatches_override:
+            minibatches = max(minibatches,
+                              getattr(network, 'recommended_minibatches', minibatches))
+        minibatch_size = batch_size // minibatches
 
         network = network.to(self.device)
         optimizer = self.optimizer
@@ -361,22 +361,38 @@ class PPO:
                 detail_masks = mb_masks.cpu()
                 per_head_entropy = network.get_entropy_details(detail_obs, detail_masks)
 
-        if self.tensorboard:
-            self.tensorboard.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], iterations)
-            self.tensorboard.add_scalar("losses/value_loss", v_loss.item(), iterations)
-            self.tensorboard.add_scalar("losses/policy_loss", pg_loss.item(), iterations)
-            self.tensorboard.add_scalar("losses/entropy", entropy_loss.item(), iterations)
-            self.tensorboard.add_scalar("losses/old_approx_kl", old_approx_kl.item(), iterations)
-            self.tensorboard.add_scalar("losses/approx_kl", approx_kl.item(), iterations)
-            self.tensorboard.add_scalar("losses/clipfrac", torch.mean(torch.tensor(clipfracs)).item(), iterations)
-            self.tensorboard.add_scalar("losses/explained_variance", explained_var, iterations)
-            if self.start_time is not None:
-                steps_this_run = iterations - self._steps_at_start
-                sps = int(steps_this_run / (time.time() - self.start_time))
-                self.tensorboard.add_scalar("charts/SPS", sps, iterations)
+        # Compute attention entropy for IMPALA models
+        attention_stats = {}
+        if hasattr(network, 'get_attention_entropy'):
+            with torch.no_grad():
+                if not per_head_entropy:
+                    detail_obs = {k: v.cpu() for k, v in mb_obs.items()} \
+                        if isinstance(mb_obs, dict) else mb_obs.cpu()
+                attention_stats = network.get_attention_entropy(detail_obs)
 
-            # Per-head entropy for MultiHeadAgent
-            for name, value in per_head_entropy.items():
-                self.tensorboard.add_scalar(f"losses/{name}", value, iterations)
+        stats = {
+            "charts/learning_rate": optimizer.param_groups[0]["lr"],
+            "losses/value_loss": v_loss.item(),
+            "losses/policy_loss": pg_loss.item(),
+            "losses/entropy": entropy_loss.item(),
+            "losses/old_approx_kl": old_approx_kl.item(),
+            "losses/approx_kl": approx_kl.item(),
+            "losses/clipfrac": torch.mean(torch.tensor(clipfracs)).item(),
+            "losses/explained_variance": explained_var,
+        }
+
+        if self.start_time is not None:
+            steps_this_run = iterations - self._steps_at_start
+            sps = int(steps_this_run / (time.time() - self.start_time))
+            stats["charts/SPS"] = sps
+
+        for name, value in per_head_entropy.items():
+            stats[f"losses/{name}"] = value
+
+        for name, value in attention_stats.items():
+            stats[f"losses/{name}"] = value
+
+        if callback is not None:
+            callback.on_optimize(stats, iterations, total_steps)
 
         return network
