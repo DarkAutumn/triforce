@@ -185,7 +185,7 @@ class GameView(QWidget):
 
         # Select which weights to display
         if self._attention_head == 0:
-            selected = self._attention_weights.mean(axis=0)  # (H, W)
+            selected = self._attention_weights.max(axis=0)  # (H, W)
         else:
             idx = min(self._attention_head - 1, self._attention_weights.shape[0] - 1)
             selected = self._attention_weights[idx]  # (H, W)
