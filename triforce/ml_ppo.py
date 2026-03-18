@@ -356,13 +356,15 @@ class PPO:
         per_head_entropy = {}
         if hasattr(network, 'get_entropy_details'):
             with torch.no_grad():
-                per_head_entropy = network.get_entropy_details(mb_obs, mb_masks)
+                cpu_obs = {k: v.cpu() for k, v in mb_obs.items()} if isinstance(mb_obs, dict) else mb_obs.cpu()
+                per_head_entropy = network.get_entropy_details(cpu_obs, mb_masks.cpu())
 
         # Compute attention entropy for IMPALA models
         attention_stats = {}
         if hasattr(network, 'get_attention_entropy'):
             with torch.no_grad():
-                attention_stats = network.get_attention_entropy(mb_obs)
+                cpu_obs = {k: v.cpu() for k, v in mb_obs.items()} if isinstance(mb_obs, dict) else mb_obs.cpu()
+                attention_stats = network.get_attention_entropy(cpu_obs)
 
         stats = {
             "charts/learning_rate": optimizer.param_groups[0]["lr"],
