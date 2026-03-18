@@ -102,7 +102,8 @@ class TrainingDisplay(TrainingCallback):
         # Metrics state
         self._game_metrics = {}
         self._optimize_stats = {}
-        self._prev_rewards_avg = None
+        self._prev_game_metrics = {}
+        self._prev_optimize_stats = {}
 
         # Pause state
         self._pause_state = _RUNNING
@@ -208,6 +209,8 @@ class TrainingDisplay(TrainingCallback):
         self._scenario_total[scenario_name] = iterations
         self._game_metrics = {}
         self._optimize_stats = {}
+        self._prev_game_metrics = {}
+        self._prev_optimize_stats = {}
 
         # Set up tensorboard for this scenario
         if self._tensorboard:
@@ -221,7 +224,8 @@ class TrainingDisplay(TrainingCallback):
         self._scenario_steps[scenario_name] = self._current_steps
         self._total_spent += self._current_steps
         self._completed.add(scenario_name)
-        self._prev_rewards_avg = None
+        self._prev_game_metrics = {}
+        self._prev_optimize_stats = {}
         self._refresh()
 
     def on_progress(self, steps, total_steps):
@@ -252,13 +256,7 @@ class TrainingDisplay(TrainingCallback):
         self._refresh()
 
     def on_metrics(self, metrics, iteration, total_iterations):
-        # Track rewards-since-last before updating
-        new_rewards = metrics.get("rewards")
-        if new_rewards is not None and self._prev_rewards_avg is not None:
-            self._game_metrics["rewards-since-last"] = new_rewards - self._prev_rewards_avg
-        if new_rewards is not None:
-            self._prev_rewards_avg = new_rewards
-
+        self._prev_game_metrics = dict(self._game_metrics)
         self._game_metrics.update(metrics)
         if self._tensorboard:
             timestamp = time.time()
@@ -270,6 +268,7 @@ class TrainingDisplay(TrainingCallback):
         self._refresh()
 
     def on_optimize(self, stats, iteration, total_iterations):
+        self._prev_optimize_stats = dict(self._optimize_stats)
         self._optimize_stats = dict(stats)
         if self._tensorboard:
             for name, value in stats.items():
@@ -364,23 +363,81 @@ class TrainingDisplay(TrainingCallback):
         m, s = divmod(remainder, 60)
         return f"{h}h{m:02d}m{s:02d}s"
 
+    # Healthy ranges for coloring: (low, high) inclusive.  None means no bound.
+    _HEALTHY_RANGES = {
+        "charts/SPS":                       (150, None),
+        "losses/value_loss":                (0.01, 1.0),
+        "losses/policy_loss":               (-0.05, 0.05),
+        "losses/entropy":                   (0.5, 2.0),
+        "losses/approx_kl":                 (0.001, 0.02),
+        "losses/clipfrac":                  (0.05, 0.25),
+        "losses/explained_variance":        (0.3, 0.9),
+        "losses/attention/entropy":         (2.0, 6.5),
+        "losses/attention/top1_weight":     (None, 0.10),
+        "losses/entropy/action_type":       (0.3, 1.5),
+        "losses/entropy/direction":         (0.5, 1.4),
+    }
+
+    def _is_healthy(self, key, value):
+        """Returns True if value is within healthy range for the given metric key."""
+        # Per-head attention metrics share the same ranges as aggregate
+        if "/head_" in key:
+            if key.endswith("/entropy"):
+                key = "losses/attention/entropy"
+            elif key.endswith("/top1"):
+                key = "losses/attention/top1_weight"
+
+        bounds = self._HEALTHY_RANGES.get(key)
+        if bounds is None:
+            return True
+        lo, hi = bounds
+        if lo is not None and value < lo:
+            return False
+        if hi is not None and value > hi:
+            return False
+        return True
+
+    def _add_metric_row(self, table, key, display_name, fmt, value, prev_value):
+        """Add a metric row with value coloring and delta column."""
+        style = "white" if self._is_healthy(key, value) else "red"
+        val_text = Text(f"{value:{fmt}}", style=style)
+
+        if prev_value is not None:
+            delta = value - prev_value
+            delta_text = Text(f"{delta:+{fmt}}", style="dim")
+        else:
+            delta_text = Text("", style="dim")
+
+        table.add_row(display_name, val_text, delta_text)
+
     def _render_metrics(self):
         table = Table(show_header=False, show_edge=False, pad_edge=False, box=None, padding=(0, 2))
         table.add_column("Metric", style="cyan", min_width=24)
         table.add_column("Value", justify="right", min_width=12)
+        table.add_column("Δ", justify="right", min_width=10, style="dim")
+
+        # SPS — always first, standalone
+        sps = self._optimize_stats.get("charts/SPS")
+        has_sps = False
+        if sps is not None:
+            prev_sps = self._prev_optimize_stats.get("charts/SPS")
+            self._add_metric_row(table, "charts/SPS", "SPS", ".0f", sps, prev_sps)
+            has_sps = True
 
         # Performance metrics
         perf_metrics = [
             ("progress/p75", "progress/p75", ".2f"),
             ("rewards", "rewards", ".2f"),
             ("success-rate", "success-rate", ".4f"),
-            ("rewards-since-last", "rewards-since-last", "+.2f"),
         ]
         has_perf = False
         for key, display_name, fmt in perf_metrics:
             val = self._game_metrics.get(key)
             if val is not None:
-                table.add_row(display_name, f"{val:{fmt}}")
+                if not has_perf and has_sps:
+                    table.add_row("", "", "")
+                prev = self._prev_game_metrics.get(key)
+                self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_perf = True
 
         # Entropy / attention metrics
@@ -399,9 +456,10 @@ class TrainingDisplay(TrainingCallback):
         for key, display_name, fmt in entropy_metrics:
             val = self._optimize_stats.get(key)
             if val is not None:
-                if not has_entropy and has_perf:
-                    table.add_row("", "")
-                table.add_row(display_name, f"{val:{fmt}}")
+                if not has_entropy and (has_perf or has_sps):
+                    table.add_row("", "", "")
+                prev = self._prev_optimize_stats.get(key)
+                self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_entropy = True
 
         # Loss metrics
@@ -417,9 +475,10 @@ class TrainingDisplay(TrainingCallback):
         for key, display_name, fmt in loss_metrics:
             val = self._optimize_stats.get(key)
             if val is not None:
-                if not has_loss and (has_perf or has_entropy):
-                    table.add_row("", "")
-                table.add_row(display_name, f"{val:{fmt}}")
+                if not has_loss and (has_perf or has_entropy or has_sps):
+                    table.add_row("", "", "")
+                prev = self._prev_optimize_stats.get(key)
+                self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_loss = True
 
         return table
