@@ -1,5 +1,6 @@
 """Subprocess worker for parallel PPO rollout collection using shared memory."""
 
+import threading
 import traceback
 
 import torch.multiprocessing as mp
@@ -164,7 +165,7 @@ class RolloutWorkerPool:
         self._close_flag.value = True
         try:
             self._weights_barrier.wait(timeout=5)
-        except mp.context.TimeoutError:
+        except (threading.BrokenBarrierError, BrokenPipeError, OSError):
             pass
 
         for conn in self.metric_conns:
