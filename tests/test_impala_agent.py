@@ -74,13 +74,24 @@ class TestResBlock:
 class TestSpatialAttentionPool:
     def test_output_shapes(self):
         pool = SpatialAttentionPool(in_channels=32, hidden_dim=64, output_dim=256, num_heads=4)
+        pool.eval()
         feature_map = torch.randn(2, 32, 21, 30)
         features, attn = pool(feature_map)
         assert features.shape == (2, 256)
         assert attn.shape == (2, 4, 21, 30)
 
+    def test_training_returns_none_attn(self):
+        """During training, attention weights are None (SDPA doesn't compute them)."""
+        pool = SpatialAttentionPool(in_channels=32, hidden_dim=64, output_dim=256, num_heads=4)
+        pool.train()
+        feature_map = torch.randn(2, 32, 21, 30)
+        features, attn = pool(feature_map)
+        assert features.shape == (2, 256)
+        assert attn is None
+
     def test_attention_weights_positive(self):
         pool = SpatialAttentionPool(in_channels=32, hidden_dim=64, output_dim=256, num_heads=4)
+        pool.eval()
         feature_map = torch.randn(2, 32, 21, 30)
         _, attn = pool(feature_map)
         assert (attn >= 0).all()
@@ -88,6 +99,7 @@ class TestSpatialAttentionPool:
     def test_different_spatial_sizes(self):
         """Verify pooling works with different spatial dimensions."""
         pool = SpatialAttentionPool(in_channels=32, hidden_dim=64, output_dim=128, num_heads=4)
+        pool.eval()
         for h, w in [(21, 30), (22, 32), (10, 10)]:
             features, attn = pool(torch.randn(1, 32, h, w))
             assert features.shape == (1, 128)
@@ -101,6 +113,7 @@ class TestImpalaResNet:
     def test_forward_shape(self, screen):
         h, w = screen["height"], screen["width"]
         resnet = ImpalaResNet(input_channels=3, input_height=h, input_width=w, output_dim=256)
+        resnet.eval()
         image = torch.randn(2, 3, h, w)
         features, attn = resnet(image)
         assert features.shape == (2, 256)
@@ -179,6 +192,7 @@ class TestImpalaSharedAgent:
         obs_space = _make_obs_space()
         action_space = Discrete(12)
         agent = ImpalaSharedAgent(obs_space, action_space)
+        agent.eval()
 
         obs = _make_obs_batch(2)
         logits, value, attn = agent.forward_with_attention(obs)
@@ -274,6 +288,7 @@ class TestImpalaMultiHeadAgent:
         obs_space = _make_obs_space()
         action_space = MultiDiscrete([3, 4])
         agent = ImpalaMultiHeadAgent(obs_space, action_space)
+        agent.eval()
 
         obs = _make_obs_batch(2)
         type_logits, dir_logits, value, attn = agent.forward_with_attention(obs)

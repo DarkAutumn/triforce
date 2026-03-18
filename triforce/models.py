@@ -407,38 +407,31 @@ class SpatialAttentionPool(nn.Module):
         batch, _, h, w = feature_map.shape
         n = h * w
 
-        # Project to Q, K, V: (batch, hidden_dim, H, W) → (batch, N, hidden_dim)
-        q = self.query_proj(feature_map).flatten(2).transpose(1, 2)
-        k = self.key_proj(feature_map).flatten(2).transpose(1, 2)
-        v = self.value_proj(feature_map).flatten(2).transpose(1, 2)
+        # Project to Q, K, V: (batch, hidden_dim, H, W) → (batch, num_heads, N, head_dim)
+        q = self.query_proj(feature_map).reshape(batch, self.num_heads, self.head_dim, n).transpose(2, 3)
+        k = self.key_proj(feature_map).reshape(batch, self.num_heads, self.head_dim, n).transpose(2, 3)
+        v = self.value_proj(feature_map).reshape(batch, self.num_heads, self.head_dim, n).transpose(2, 3)
 
-        # Reshape to (batch, num_heads, N, head_dim) → (batch*num_heads, N, head_dim)
-        q = q.view(batch, n, self.num_heads, self.head_dim).transpose(1, 2).reshape(batch * self.num_heads, n,
-                                                                                     self.head_dim)
-        k = k.view(batch, n, self.num_heads, self.head_dim).transpose(1, 2).reshape(batch * self.num_heads, n,
-                                                                                     self.head_dim)
-        v = v.view(batch, n, self.num_heads, self.head_dim).transpose(1, 2).reshape(batch * self.num_heads, n,
-                                                                                     self.head_dim)
+        # Compute attention (manual path needed for attention-weighted pooling)
+        q_flat = q.reshape(batch * self.num_heads, n, self.head_dim)
+        k_flat = k.reshape(batch * self.num_heads, n, self.head_dim)
+        v_flat = v.reshape(batch * self.num_heads, n, self.head_dim)
 
-        # Scaled dot-product attention: (batch*num_heads, N, N)
-        attn_logits = torch.bmm(q, k.transpose(1, 2)) * self.scale
+        attn_logits = torch.bmm(q_flat, k_flat.transpose(1, 2)) * self.scale
         attn = torch.softmax(attn_logits, dim=-1)
-        attn = self.attn_dropout(attn)
+        if self.training:
+            attn = self.attn_dropout(attn)
 
-        # Weighted sum of values: (batch*num_heads, N, head_dim)
-        attended = torch.bmm(attn, v)
+        attended = torch.bmm(attn, v_flat)  # (batch*num_heads, N, head_dim)
+        attn_weights = attn.mean(dim=1)  # (batch*num_heads, N)
 
-        # Average attention across query positions → (batch*num_heads, N)
-        attn_weights = attn.mean(dim=1)
+        pooled = (attended * attn_weights.unsqueeze(-1)).sum(dim=1)
+        pooled = pooled.view(batch, self.num_heads, self.head_dim)
 
-        # Pool each head using its attention weights
-        pooled = (attended * attn_weights.unsqueeze(-1)).sum(dim=1)  # (batch*num_heads, head_dim)
+        # Only materialize attention map during eval (for visualization)
+        attn_map = None if self.training else attn_weights.view(batch, self.num_heads, h, w)
 
-        # Reshape back: (batch, num_heads, head_dim) → (batch, hidden_dim)
-        pooled = pooled.view(batch, self.num_heads, self.head_dim).reshape(batch, -1)
-
-        features = self.output_proj(pooled)
-        attn_map = attn_weights.view(batch, self.num_heads, h, w)
+        features = self.output_proj(pooled.reshape(batch, -1))
         return features, attn_map
 
 
@@ -830,7 +823,11 @@ class ImpalaSharedAgent(Network):
 
     def get_attention_entropy(self, obs):
         """Returns attention entropy and top-1 concentration for tensorboard."""
+        was_training = self.training
+        self.eval()
         _, _, attn = self.forward_with_attention(obs)
+        if was_training:
+            self.train()
         return _attention_entropy_stats(attn)
 
 
@@ -986,7 +983,11 @@ class ImpalaMultiHeadAgent(Network):
 
     def get_attention_entropy(self, obs):
         """Returns attention entropy and top-1 concentration for tensorboard."""
+        was_training = self.training
+        self.eval()
         _, _, _, attn = self.forward_with_attention(obs)
+        if was_training:
+            self.train()
         return _attention_entropy_stats(attn)
 
 
