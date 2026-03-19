@@ -1,8 +1,15 @@
 """Subprocess worker for parallel PPO rollout collection using shared memory."""
 
+import threading
+import traceback
+
 import torch.multiprocessing as mp
 
 from .metrics import MetricTracker
+
+
+class WorkerError(Exception):
+    """Wraps a formatted traceback from a crashed worker subprocess."""
 
 
 class EnvFactory:
@@ -64,6 +71,18 @@ def _worker_loop(env_index, shared_buffer, shared_weights, network_class,
 
             # Signal rollout complete
             rollouts_barrier.wait()
+    except Exception:  # pylint: disable=broad-except
+        # Send formatted traceback to main process instead of printing to stderr
+        tb = traceback.format_exc()
+        try:
+            metrics_conn.send({"__worker_error__": f"Worker {env_index} crashed:\n{tb}"})
+        except (BrokenPipeError, OSError):
+            pass
+        # Still reach the rollouts barrier so main doesn't deadlock
+        try:
+            rollouts_barrier.wait()
+        except Exception:  # pylint: disable=broad-except
+            pass  # best-effort barrier release
     finally:
         env.close()
         metrics_conn.close()
@@ -133,6 +152,9 @@ class RolloutWorkerPool:
         for conn in self.metric_conns:
             metrics = conn.recv()
             if metrics:
+                # Check for worker crash
+                if "__worker_error__" in metrics:
+                    raise WorkerError(metrics["__worker_error__"])
                 all_metrics.append(metrics)
 
         aggregated = _aggregate_metrics(all_metrics)
@@ -143,7 +165,7 @@ class RolloutWorkerPool:
         self._close_flag.value = True
         try:
             self._weights_barrier.wait(timeout=5)
-        except mp.context.TimeoutError:
+        except (threading.BrokenBarrierError, BrokenPipeError, OSError):
             pass
 
         for conn in self.metric_conns:

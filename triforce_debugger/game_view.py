@@ -185,13 +185,14 @@ class GameView(QWidget):
 
         # Select which weights to display
         if self._attention_head == 0:
-            selected = self._attention_weights.mean(axis=0)  # (H, W)
+            selected = self._attention_weights.max(axis=0)  # (H, W)
         else:
             idx = min(self._attention_head - 1, self._attention_weights.shape[0] - 1)
             selected = self._attention_weights[idx]  # (H, W)
 
-        # Normalize to [0, 1]
-        w_min, w_max = selected.min(), selected.max()
+        # Normalize to [0, 1] using global min/max across all heads so brightness is comparable
+        w_min = self._attention_weights.min()
+        w_max = self._attention_weights.max()
         if w_max > w_min:
             normalized = (selected - w_min) / (w_max - w_min)
         else:

@@ -417,8 +417,14 @@ class EnvironmentBridge:
             return None
 
         with torch.no_grad():
+            was_training = model.training
+            model.eval()
             result = model.forward_with_attention(obs)
+            if was_training:
+                model.train()
             attn = result[-1]  # Last element is always attention weights
+            if attn is None:
+                return None
             return attn.squeeze(0).cpu().numpy()  # (num_heads, H', W')
 
     @property

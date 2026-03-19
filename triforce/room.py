@@ -126,8 +126,8 @@ class Room:
         Vertical directions check two columns: col and col+1 (Z_07.asm:2264-2275).
 
         Always performs the tile check (conservative). The NES skips checks when
-        ObjGridOffset != 0 (Z_07.asm:2874) but grid_offset is axis-agnostic, so
-        checking unconditionally avoids false positives.
+        ObjGridOffset != 0 (Z_07.asm:2874); that bypass is handled at the
+        ZeldaGame.can_link_move level using the link_grid_offset RAM variable.
         """
         # NES status bar = $40 (64px). Tile row = (hotspot_Y - 64) // 8.
         feet_row = (py - 53) // 8    # base_Y - 64 = (py + 11) - 64 = py - 53

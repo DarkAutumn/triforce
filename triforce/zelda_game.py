@@ -266,7 +266,14 @@ class ZeldaGame:
         Checks tile walkability (via self.room which uses current RAM tiles),
         cave entry override, and locked-door-with-key override (NES CheckDoorway
         opens the door before the tile check fires).
+
+        When link_grid_offset != 0 the NES skips Walker_CheckTileCollision entirely
+        (Z_07.asm:2874), so we allow movement in all directions.  This handles cases
+        where Link gets pushed into unwalkable tiles by sword knockback.
         """
+        if self.info.get('link_grid_offset', 0) != 0:
+            return True
+
         px, py = self.link.position
         if self.room.can_link_move_from(px, py, direction):
             return True
