@@ -21,7 +21,6 @@ from triforce.zelda_enums import (ActionKind, Direction, NES_FULL_WIDTH, NES_FUL
                                   NES_CROPPED_WIDTH, NES_CROPPED_HEIGHT,
                                   HUD_TRIM_FULL, HUD_TRIM_CROPPED)
 
-
 VIDEO_WIDTH = 1920
 VIDEO_HEIGHT = 1080
 FOURCC = cv2.VideoWriter_fourcc(*'mp4v')  # pylint: disable=no-member
@@ -45,7 +44,6 @@ COLOR_ACTIVE_YELLOW = (255, 255, 100)
 
 
 # ── Font Loading ────────────────────────────────────────────────
-
 _FONT_CACHE = {}
 _FONT_WARNING_SHOWN = False
 
@@ -94,7 +92,6 @@ def get_font(size):
 
 
 # ── JET Colormap (ported from game_view.py) ────────────────────
-
 def _build_jet_lut():
     """Build a 256-entry JET colormap lookup table (uint8, shape (256, 3))."""
     lut = np.empty((256, 3), dtype=np.uint8)
@@ -117,7 +114,6 @@ _JET_LUT = _build_jet_lut()
 
 
 # ── Sprite Loading ──────────────────────────────────────────────
-
 def _load_sprite_frames(gif_path, scale=3):
     """Load all frames from a GIF, scale up, and return as list of RGBA numpy arrays."""
     img = Image.open(gif_path)
@@ -135,7 +131,6 @@ def _load_sprite_frames(gif_path, scale=3):
 
 
 # ── AttentionOverlay ────────────────────────────────────────────
-
 class AttentionOverlay:
     """Applies JET heatmap attention overlay onto gameplay frames."""
 
@@ -206,7 +201,6 @@ class AttentionOverlay:
 
 
 # ── ObservationRenderer ─────────────────────────────────────────
-
 class ObservationRenderer:
     """Renders the observation panel as a numpy array using Pillow."""
 
@@ -360,7 +354,6 @@ class ObservationRenderer:
 
 
 # ── ActionRenderer ──────────────────────────────────────────────
-
 class ActionRenderer:
     """Renders the action probabilities panel with animated GIF sprites."""
 
@@ -524,7 +517,6 @@ class ActionRenderer:
 
 
 # ── FrameComposer ──────────────────────────────────────────────
-
 class FrameComposer:
     """Composes the 1920×1080 video frame from gameplay + panels."""
 
@@ -603,7 +595,6 @@ class FrameComposer:
 
 
 # ── VideoRecorder ──────────────────────────────────────────────
-
 class VideoRecorder:
     """Manages OpenCV VideoWriter with temp-file strategy for --only-wins."""
 
@@ -681,12 +672,25 @@ class VideoRecorder:
 
 
 # ── Probability Computation (ported from environment_bridge.py) ─
+def get_action_and_probabilities(model, action_space, obs, mask, need_probs=True):
+    """Select action and compute probabilities in a single forward pass.
 
-def get_probabilities(model, action_space, obs, mask):
-    """Compute post-mask action probabilities. Returns OrderedDict."""
+    Returns (action, probs_dict) where probs_dict is an OrderedDict or None.
+    """
+    device = next(model.parameters()).device
+    if isinstance(obs, dict):
+        obs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in obs.items()}
+    elif isinstance(obs, torch.Tensor):
+        obs = obs.to(device)
+    if mask is not None and isinstance(mask, torch.Tensor):
+        mask = mask.to(device)
     if model.is_multihead:
-        return _get_multihead_probabilities(model, action_space, obs, mask)
+        return _get_multihead_action_and_probs(model, action_space, obs, mask, need_probs)
+    return _get_singlehead_action_and_probs(model, action_space, obs, mask, need_probs)
 
+
+def _get_singlehead_action_and_probs(model, action_space, obs, mask, need_probs):
+    """Single forward pass for single-head models."""
     with torch.no_grad():
         logits, value = model.forward(obs)
 
@@ -696,20 +700,23 @@ def get_probabilities(model, action_space, obs, mask):
         logits = logits.clone()
         logits[~mask] = -1e9
 
-    probs = torch.nn.functional.softmax(logits, dim=-1)
+    action = logits.argmax(dim=-1)
 
+    if not need_probs:
+        return action, None
+
+    probs = torch.nn.functional.softmax(logits, dim=-1)
     result = OrderedDict()
     result['value'] = value
-
     for i, prob in enumerate(probs.squeeze()):
         taken = action_space.get_action_taken(i)
         result.setdefault(taken.kind, []).append((taken.direction, prob.item()))
 
-    return result
+    return action, result
 
 
-def _get_multihead_probabilities(model, action_space, obs, mask):
-    """Compute multihead probabilities."""
+def _get_multihead_action_and_probs(model, action_space, obs, mask, need_probs):
+    """Single forward pass for multihead models."""
     with torch.no_grad():
         action_type_logits, direction_logits, value = model.forward(obs)
 
@@ -725,12 +732,18 @@ def _get_multihead_probabilities(model, action_space, obs, mask):
         direction_logits = direction_logits.clone()
         direction_logits[~dir_mask] = -1e9
 
+    type_action = action_type_logits.argmax(dim=-1)
+    dir_action = direction_logits.argmax(dim=-1)
+    action = torch.stack([type_action, dir_action], dim=-1)
+
+    if not need_probs:
+        return action, None
+
     type_probs = torch.nn.functional.softmax(action_type_logits, dim=-1).squeeze(0)
     dir_probs = torch.nn.functional.softmax(direction_logits, dim=-1).squeeze(0)
 
     result = OrderedDict()
     result['value'] = value
-
     for type_idx in range(num_action_types):
         for dir_idx in range(4):
             flat_idx = action_space.multihead_to_flat(type_idx, dir_idx)
@@ -738,13 +751,17 @@ def _get_multihead_probabilities(model, action_space, obs, mask):
             joint_prob = (type_probs[type_idx] * dir_probs[dir_idx]).item()
             result.setdefault(taken.kind, []).append((taken.direction, joint_prob))
 
-    return result
+    return action, result
 
 
 def get_attention_weights(model, obs):
     """Get attention weights from model. Returns numpy array or None."""
     if not hasattr(model, 'forward_with_attention'):
         return None
+
+    device = next(model.parameters()).device
+    if isinstance(obs, dict):
+        obs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in obs.items()}
 
     with torch.no_grad():
         was_training = model.training
@@ -759,7 +776,6 @@ def get_attention_weights(model, obs):
 
 
 # ── Environment & Model Setup ──────────────────────────────────
-
 def load_model_and_env(model_path, scenario_name, device):
     """Load model and create environment. Returns (network, env, action_space, nes_dims)."""
     # Load model
@@ -813,7 +829,6 @@ def load_model_and_env(model_path, scenario_name, device):
 
 
 # ── Main Recording Loop ────────────────────────────────────────
-
 def _compose_frame(composer, nes_frame, obs, network, action_space, state, action_mask,
                    show_obs, show_actions, show_attention, attention_overlay):
     """Compose a single video frame with all overlays."""
@@ -827,7 +842,7 @@ def _compose_frame(composer, nes_frame, obs, network, action_space, state, actio
     mask_desc = None
     if show_actions:
         mask_for_probs = action_mask.unsqueeze(0) if action_mask is not None else None
-        probs = get_probabilities(network, action_space, obs, mask_for_probs)
+        _, probs = get_action_and_probabilities(network, action_space, obs, mask_for_probs)
         mask_desc = action_space.get_allowed_actions(state, action_mask)
 
     return composer.compose(nes_frame, obs if show_obs else None, probs, mask_desc)
@@ -879,16 +894,12 @@ def record_episodes(args):
             end_reason = None
 
             while not terminated and not truncated:
-                # Select action
+                # Select action and compute probabilities in one forward pass
                 mask_batch = action_mask.unsqueeze(0) if action_mask is not None else None
-                action = network.get_action(obs, mask_batch)
+                action, probs = get_action_and_probabilities(
+                    network, action_space, obs, mask_batch, need_probs=show_actions)
                 action = action.squeeze(0)
 
-                # Compute pre-step data for display
-                probs = None
-                mask_desc = None
-                if show_actions:
-                    probs = get_probabilities(network, action_space, obs, mask_batch)
                 attn_weights = None
                 if show_attention:
                     attn_weights = get_attention_weights(network, obs)
@@ -897,6 +908,7 @@ def record_episodes(args):
                 obs, _rewards, terminated, truncated, state_change = env.step(action)
                 action_mask = state_change.state.info['action_mask']
 
+                mask_desc = None
                 if show_actions:
                     mask_desc = action_space.get_allowed_actions(state_change.state, action_mask)
 
@@ -936,7 +948,6 @@ def record_episodes(args):
 
 
 # ── CLI ─────────────────────────────────────────────────────────
-
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(

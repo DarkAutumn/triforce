@@ -6,7 +6,7 @@ trained Zelda RL agent, with observation panels, animated action probability spr
 optional attention heatmap overlay.
 
 ## Status
-STATUS: IN_PROGRESS
+STATUS: COMPLETE
 
 ## Tasks
 
@@ -20,7 +20,7 @@ STATUS: IN_PROGRESS
 - [x] Implement AttentionOverlay: port JET colormap and attention compositing from game_view.py, support combined (.max) and per-head selection, bilinear upsample, alpha blend at ~55%
 - [x] Implement main recording loop: sequential episode recording, --only-wins filtering with success detection, --count episodes, progress output, --max-attempts safety limit
 - [x] Add record.py to pylint targets in .github/copilot-instructions.md, ensure record.py passes pylint
-- [ ] End-to-end test: run record.py against a real model and verify the output video plays correctly and contains all three panels
+- [x] End-to-end test: run record.py against a real model and verify the output video plays correctly and contains all three panels
 
 ## Notes
 
@@ -31,3 +31,6 @@ STATUS: IN_PROGRESS
 - For --only-wins: write to temp file, rename on success, delete on failure (avoids memory issues).
 - FiraCode Nerd Font: try common system paths, fall back to PIL default with warning.
 - The full spec is at docs/specs/recording.md — read it for complete details.
+- The models/multihead.pt model is incompatible with the current ENTITY_FEATURES=7 (was trained with 9). Use training/ models instead.
+- CPU inference is ~1.2s per step for IMPALA multihead; use --device cuda for reasonable recording speed.
+- Action selection and probability computation share a single forward pass to avoid 2x inference cost.
