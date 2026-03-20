@@ -28,7 +28,7 @@ pytest tests/reward_test.py::test_wall_collision
 pytest tests/ -v -m ""
 
 # Lint (required for PRs)
-pylint triforce/ triforce_debugger/ debug.py evaluate.py train.py
+pylint triforce/ triforce_debugger/ debug.py evaluate.py train.py record.py
 ```
 
 ## Git Workflow
