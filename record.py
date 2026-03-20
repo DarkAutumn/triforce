@@ -4,12 +4,11 @@
 import argparse
 import os
 import re
-import shutil
-import subprocess
 import tempfile
 import warnings
 from collections import OrderedDict
 
+import cv2
 import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
@@ -24,6 +23,7 @@ from triforce.zelda_enums import (ActionKind, Direction, NES_FULL_WIDTH, NES_FUL
 
 VIDEO_WIDTH = 1920
 VIDEO_HEIGHT = 1080
+FOURCC = cv2.VideoWriter_fourcc(*'mp4v')  # pylint: disable=no-member
 GAMEPLAY_SCALE = 4
 
 CELL_LABELS = {0: "MOVEMENT", 1: "SWORD / BEAMS", 2: "BOMB", 3: "BOOMERANG"}
@@ -578,8 +578,8 @@ class FrameComposer:
         canvas = np.zeros((VIDEO_HEIGHT, VIDEO_WIDTH, 3), dtype=np.uint8)
 
         # Scale gameplay frame
-        scaled = np.array(Image.fromarray(nes_frame).resize(
-            (self._game_w, self._game_h), Image.Resampling.NEAREST))
+        scaled = cv2.resize(nes_frame, (self._game_w, self._game_h),  # pylint: disable=no-member
+                            interpolation=cv2.INTER_NEAREST)  # pylint: disable=no-member
         canvas[self._game_y:self._game_y + self._game_h,
                self._game_x:self._game_x + self._game_w] = scaled
 
@@ -599,17 +599,14 @@ class FrameComposer:
 
 # ── VideoRecorder ──────────────────────────────────────────────
 class VideoRecorder:
-    """Manages ffmpeg-based H.264 video recording with temp-file strategy for --only-wins."""
+    """Manages OpenCV VideoWriter with temp-file strategy for --only-wins."""
 
     def __init__(self, output_dir, fps):
         self._output_dir = output_dir
         self._fps = fps
-        self._process = None
+        self._writer = None
         self._temp_path = None
         self._final_path = None
-
-        if not shutil.which('ffmpeg'):
-            raise RuntimeError("ffmpeg not found. Install ffmpeg for H.264 video encoding.")
 
         os.makedirs(output_dir, exist_ok=True)
 
@@ -629,40 +626,30 @@ class VideoRecorder:
         return os.path.join(self._output_dir, f"triforce_{n:02d}.mp4")
 
     def start(self):
-        """Start recording a new video to a temp file via ffmpeg."""
+        """Start recording a new video to a temp file."""
         self._final_path = self._next_filename()
 
+        # Write to temp file in same directory (to allow atomic rename)
         fd, self._temp_path = tempfile.mkstemp(suffix='.mp4', dir=self._output_dir)
         os.close(fd)
 
-        cmd = [
-            'ffmpeg', '-y',
-            '-f', 'rawvideo',
-            '-vcodec', 'rawvideo',
-            '-s', f'{VIDEO_WIDTH}x{VIDEO_HEIGHT}',
-            '-pix_fmt', 'rgb24',
-            '-r', str(self._fps),
-            '-i', '-',
-            '-c:v', 'libx264',
-            '-preset', 'medium',
-            '-crf', '18',
-            '-pix_fmt', 'yuv420p',
-            '-movflags', '+faststart',
-            self._temp_path,
-        ]
-        self._process = subprocess.Popen(  # pylint: disable=consider-using-with
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self._writer = cv2.VideoWriter(  # pylint: disable=no-member
+            self._temp_path, FOURCC, self._fps, (VIDEO_WIDTH, VIDEO_HEIGHT))
+
+        if not self._writer.isOpened():
+            raise RuntimeError(f"Failed to open video writer for {self._temp_path}")
 
     def write_frame(self, frame_rgb):
         """Write a single RGB frame (H, W, 3) to the video."""
-        self._process.stdin.write(np.ascontiguousarray(frame_rgb).tobytes())
+        # OpenCV expects BGR
+        frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)  # pylint: disable=no-member
+        self._writer.write(frame_bgr)
 
     def finish(self, keep):
         """Finish recording. If keep=True, rename to final path. If False, delete."""
-        if self._process is not None:
-            self._process.stdin.close()
-            self._process.wait()
-            self._process = None
+        if self._writer is not None:
+            self._writer.release()
+            self._writer = None
 
         if self._temp_path and os.path.exists(self._temp_path):
             if keep:
@@ -679,10 +666,9 @@ class VideoRecorder:
 
     def cleanup(self):
         """Clean up any dangling temp file."""
-        if self._process is not None:
-            self._process.stdin.close()
-            self._process.wait()
-            self._process = None
+        if self._writer is not None:
+            self._writer.release()
+            self._writer = None
         if self._temp_path and os.path.exists(self._temp_path):
             os.remove(self._temp_path)
             self._temp_path = None
