@@ -60,8 +60,12 @@ class GameView(QWidget):
         self._full_screen = False  # set via set_full_screen()
         self._attention_image: QImage | None = None  # Precomputed heatmap overlay
         self._attention_weights = None  # Raw multi-head weights (num_heads, H, W)
+        self._cross_attention_weights = None  # (num_heads, slots, H, W) or None
+        self._entity_presence = None  # (slots,) bool mask of present entities
         self._attention_head = 0  # 0=combined, 1..N=individual heads
         self._num_attention_heads = 0
+        self._attention_mode = 'spatial'  # 'spatial' or 'entity'
+        self._entity_slot = 0  # which entity slot to display when mode='entity'
 
     # ── Public API ─────────────────────────────────────────────
 
@@ -155,6 +159,18 @@ class GameView(QWidget):
         self._num_attention_heads = weights.shape[0]
         self._rebuild_attention_image()
 
+    def set_cross_attention_weights(self, weights, entity_presence=None):
+        """Set entity-spatial cross-attention weights for overlay.
+
+        Args:
+            weights: numpy array of shape (num_heads, slots, H', W') or None.
+            entity_presence: (slots,) bool array indicating which entities are present.
+        """
+        self._cross_attention_weights = weights
+        self._entity_presence = entity_presence
+        if self._attention_mode == 'entity':
+            self._rebuild_attention_image()
+
     @property
     def attention_head(self):
         """Which attention head to display: 0=combined (mean), 1..N=individual."""
@@ -173,12 +189,89 @@ class GameView(QWidget):
 
     def attention_head_label(self):
         """Human-readable label for the current attention head selection."""
+        if self._attention_mode == 'entity':
+            return f"Entity {self._entity_slot}"
         if self._attention_head == 0:
             return "Combined"
         return f"Head {self._attention_head}"
 
+    @property
+    def attention_mode(self):
+        """Current attention mode: 'spatial' or 'entity'."""
+        return self._attention_mode
+
+    def _present_entity_slots(self):
+        """Returns list of entity slot indices with presence=1."""
+        if self._entity_presence is None:
+            return []
+        return [i for i in range(len(self._entity_presence)) if self._entity_presence[i]]
+
+    def cycle_attention_next(self):
+        """Cycle to next attention view: Combined → Head 1-N → Entity slots → Combined."""
+        if self._attention_mode == 'spatial':
+            if self._attention_head < self._num_attention_heads:
+                self._attention_head += 1
+                self._rebuild_attention_image()
+                return
+            # Past last head: try entity mode
+            present = self._present_entity_slots()
+            if present and self._cross_attention_weights is not None:
+                self._attention_mode = 'entity'
+                self._entity_slot = present[0]
+                self._rebuild_attention_image()
+                return
+            # No entities: wrap to combined
+            self._attention_head = 0
+            self._rebuild_attention_image()
+        else:
+            # In entity mode: advance to next present entity
+            present = self._present_entity_slots()
+            if present:
+                idx = present.index(self._entity_slot) if self._entity_slot in present else -1
+                if idx + 1 < len(present):
+                    self._entity_slot = present[idx + 1]
+                    self._rebuild_attention_image()
+                    return
+            # Wrap back to spatial combined
+            self._attention_mode = 'spatial'
+            self._attention_head = 0
+            self._rebuild_attention_image()
+
+    def cycle_attention_prev(self):
+        """Cycle to previous attention view."""
+        if self._attention_mode == 'entity':
+            present = self._present_entity_slots()
+            if present:
+                idx = present.index(self._entity_slot) if self._entity_slot in present else 0
+                if idx > 0:
+                    self._entity_slot = present[idx - 1]
+                    self._rebuild_attention_image()
+                    return
+            # At first entity: go back to last spatial head
+            self._attention_mode = 'spatial'
+            self._attention_head = self._num_attention_heads
+            self._rebuild_attention_image()
+        else:
+            if self._attention_head > 0:
+                self._attention_head -= 1
+                self._rebuild_attention_image()
+                return
+            # At combined: wrap to last entity or last head
+            present = self._present_entity_slots()
+            if present and self._cross_attention_weights is not None:
+                self._attention_mode = 'entity'
+                self._entity_slot = present[-1]
+                self._rebuild_attention_image()
+                return
+            self._attention_head = self._num_attention_heads
+            self._rebuild_attention_image()
+
     def _rebuild_attention_image(self):
-        """Rebuild the heatmap QImage from stored weights and current head selection."""
+        """Rebuild the heatmap QImage from stored weights and current head/entity selection."""
+        if self._attention_mode == 'entity':
+            self._rebuild_entity_attention_image()
+            return
+
         if self._attention_weights is None:
             self._attention_image = None
             return
@@ -193,6 +286,23 @@ class GameView(QWidget):
         # Normalize to [0, 1] using global min/max across all heads so brightness is comparable
         w_min = self._attention_weights.min()
         w_max = self._attention_weights.max()
+        self._render_heatmap(selected, w_min, w_max)
+
+    def _rebuild_entity_attention_image(self):
+        """Build heatmap for a specific entity's cross-attention weights."""
+        if self._cross_attention_weights is None:
+            self._attention_image = None
+            return
+
+        # cross_attention_weights: (num_heads, slots, H', W')
+        entity_weights = self._cross_attention_weights[:, self._entity_slot]  # (num_heads, H', W')
+        selected = entity_weights.max(axis=0)  # (H', W') — max across heads
+        w_min = entity_weights.min()
+        w_max = entity_weights.max()
+        self._render_heatmap(selected, w_min, w_max)
+
+    def _render_heatmap(self, selected, w_min, w_max):
+        """Render a 2D attention map as a JET heatmap QImage."""
         if w_max > w_min:
             normalized = (selected - w_min) / (w_max - w_min)
         else:

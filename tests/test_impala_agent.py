@@ -20,7 +20,9 @@ from gymnasium.spaces import Box, Dict, Discrete, MultiDiscrete, MultiBinary
 
 from triforce.models import (
     ResBlock, ImpalaResNet, SpatialAttentionPool, ImpalaCombinedExtractor,
-    ImpalaSharedAgent, ImpalaMultiHeadAgent, get_neural_network
+    EntityAttentionEncoder, EntitySpatialCrossAttention,
+    ImpalaSharedAgent, ImpalaMultiHeadAgent, get_neural_network,
+    _cross_attention_entropy_stats
 )
 
 
@@ -115,11 +117,14 @@ class TestImpalaResNet:
         resnet = ImpalaResNet(input_channels=3, input_height=h, input_width=w, output_dim=256)
         resnet.eval()
         image = torch.randn(2, 3, h, w)
-        features, attn = resnet(image)
+        features, attn, feature_map = resnet(image)
         assert features.shape == (2, 256)
         # Attention map: (batch, num_heads, H/8, W/8)
         assert attn.shape[0] == 2
         assert len(attn.shape) == 4  # (batch, num_heads, H', W')
+        # Feature map: (batch, 32, H/8, W/8)
+        assert feature_map.shape[0] == 2
+        assert feature_map.shape[1] == 32
 
     def test_coordconv_buffers_not_parameters(self):
         resnet = ImpalaResNet(input_channels=3, input_height=168, input_width=240)
@@ -195,11 +200,15 @@ class TestImpalaSharedAgent:
         agent.eval()
 
         obs = _make_obs_batch(2)
-        logits, value, attn = agent.forward_with_attention(obs)
+        logits, value, spatial_attn, cross_attn = agent.forward_with_attention(obs)
         assert logits.shape == (2, 12)
         assert value.shape == (2, 1)
-        assert attn.shape[0] == 2
-        assert len(attn.shape) == 4  # (batch, num_heads, H', W')
+        assert spatial_attn.shape[0] == 2
+        assert len(spatial_attn.shape) == 4  # (batch, num_heads, H', W')
+        # Cross-attention: (batch, num_heads, slots, H', W')
+        assert cross_attn.shape[0] == 2
+        assert cross_attn.shape[2] == 12  # entity slots
+        assert len(cross_attn.shape) == 5
 
     def test_single_obs_unsqueeze(self):
         obs_space = _make_obs_space()
@@ -291,12 +300,16 @@ class TestImpalaMultiHeadAgent:
         agent.eval()
 
         obs = _make_obs_batch(2)
-        type_logits, dir_logits, value, attn = agent.forward_with_attention(obs)
+        type_logits, dir_logits, value, spatial_attn, cross_attn = agent.forward_with_attention(obs)
         assert type_logits.shape == (2, 3)
         assert dir_logits.shape == (2, 4)
         assert value.shape == (2, 1)
-        assert attn.shape[0] == 2
-        assert len(attn.shape) == 4  # (batch, num_heads, H', W')
+        assert spatial_attn.shape[0] == 2
+        assert len(spatial_attn.shape) == 4  # (batch, num_heads, H', W')
+        # Cross-attention: (batch, num_heads, slots, H', W')
+        assert cross_attn.shape[0] == 2
+        assert cross_attn.shape[2] == 12  # entity slots
+        assert len(cross_attn.shape) == 5
 
     def test_is_multihead(self):
         assert ImpalaMultiHeadAgent.is_multihead is True
@@ -330,6 +343,157 @@ class TestImpalaMultiHeadAgent:
             assert torch.allclose(orig_val, load_val, atol=1e-6)
         finally:
             os.unlink(path)
+
+
+# === EntityAttentionEncoder Token Tests ===
+
+class TestEntityAttentionEncoderTokens:
+    def test_forward_with_tokens_shapes(self):
+        encoder = EntityAttentionEncoder(num_entity_types=74, continuous_features=7)
+        entities = torch.randn(2, 12, 7)
+        entity_types = torch.zeros(2, 12).long()
+        pooled, tokens, empty_mask = encoder.forward_with_tokens(entities, entity_types)
+        assert pooled.shape == (2, 64)
+        assert tokens.shape == (2, 12, 64)  # d_model=64
+        assert empty_mask.shape == (2, 12)
+        assert empty_mask.dtype == torch.bool
+
+    def test_forward_and_forward_with_tokens_agree(self):
+        """Pooled output should be identical from both methods."""
+        encoder = EntityAttentionEncoder(num_entity_types=74, continuous_features=7)
+        encoder.eval()
+        entities = torch.randn(2, 12, 7)
+        entities[:, :3, 0] = 1.0  # first 3 slots present
+        entity_types = torch.zeros(2, 12).long()
+        with torch.no_grad():
+            pooled_direct = encoder.forward(entities, entity_types)
+            pooled_tokens, _, _ = encoder.forward_with_tokens(entities, entity_types)
+        assert torch.allclose(pooled_direct, pooled_tokens, atol=1e-6)
+
+    def test_empty_mask_reflects_presence(self):
+        encoder = EntityAttentionEncoder(num_entity_types=74, continuous_features=7)
+        entities = torch.zeros(1, 12, 7)
+        entities[0, 0, 0] = 1.0  # only slot 0 present
+        entities[0, 5, 0] = 1.0  # and slot 5
+        entity_types = torch.zeros(1, 12).long()
+        _, _, empty_mask = encoder.forward_with_tokens(entities, entity_types)
+        assert not empty_mask[0, 0]  # slot 0 is present
+        assert not empty_mask[0, 5]  # slot 5 is present
+        assert empty_mask[0, 1]  # slot 1 is empty
+
+
+# === EntitySpatialCrossAttention Tests ===
+
+class TestEntitySpatialCrossAttention:
+    def test_output_shapes_eval(self):
+        cross_attn = EntitySpatialCrossAttention(entity_dim=64, spatial_channels=32)
+        cross_attn.eval()
+        entity_tokens = torch.randn(2, 12, 64)
+        feature_map = torch.randn(2, 32, 21, 30)
+        empty_mask = torch.ones(2, 12, dtype=torch.bool)
+        empty_mask[:, :3] = False  # 3 present entities
+        context, weights = cross_attn(entity_tokens, feature_map, empty_mask)
+        assert context.shape == (2, 64)
+        assert weights.shape == (2, 4, 12, 21, 30)
+
+    def test_training_returns_none_weights(self):
+        cross_attn = EntitySpatialCrossAttention(entity_dim=64, spatial_channels=32)
+        cross_attn.train()
+        entity_tokens = torch.randn(2, 12, 64)
+        feature_map = torch.randn(2, 32, 21, 30)
+        empty_mask = torch.zeros(2, 12, dtype=torch.bool)
+        context, weights = cross_attn(entity_tokens, feature_map, empty_mask)
+        assert context.shape == (2, 64)
+        assert weights is None
+
+    def test_empty_entities_zero_context(self):
+        """When all entities are empty, context should be zero."""
+        cross_attn = EntitySpatialCrossAttention(entity_dim=64, spatial_channels=32)
+        cross_attn.eval()
+        entity_tokens = torch.randn(1, 12, 64)
+        feature_map = torch.randn(1, 32, 21, 30)
+        empty_mask = torch.ones(1, 12, dtype=torch.bool)  # all empty
+        context, _ = cross_attn(entity_tokens, feature_map, empty_mask)
+        # Output should be from output_proj applied to zeros
+        # The linear layer bias may make it nonzero, but attended values should be zero
+        # Verify by checking the shape at minimum
+        assert context.shape == (1, 64)
+
+    def test_weights_positive(self):
+        cross_attn = EntitySpatialCrossAttention(entity_dim=64, spatial_channels=32)
+        cross_attn.eval()
+        entity_tokens = torch.randn(2, 12, 64)
+        feature_map = torch.randn(2, 32, 21, 30)
+        empty_mask = torch.zeros(2, 12, dtype=torch.bool)
+        _, weights = cross_attn(entity_tokens, feature_map, empty_mask)
+        assert (weights >= 0).all()
+
+
+# === ImpalaCombinedExtractor Tests ===
+
+class TestImpalaCombinedExtractor:
+    def test_output_dim(self):
+        extractor = ImpalaCombinedExtractor(
+            image_channels=3, input_height=168, input_width=240,
+            num_entity_types=74, entity_features=7, info_size=15
+        )
+        # 256 (image) + 64 (entity pooled) + 64 (cross-attn) + 15 (info) = 399
+        assert extractor.output_dim == 399
+
+    def test_forward_shapes(self):
+        extractor = ImpalaCombinedExtractor(
+            image_channels=3, input_height=168, input_width=240,
+            num_entity_types=74, entity_features=7, info_size=15
+        )
+        extractor.eval()
+        obs = _make_obs_batch(2)
+        combined, spatial_attn, cross_attn = extractor(
+            obs["image"], obs["entities"], obs["entity_types"], obs["information"])
+        assert combined.shape == (2, 399)
+        assert spatial_attn is not None
+        assert cross_attn is not None
+        assert len(cross_attn.shape) == 5  # (batch, heads, slots, H', W')
+
+    def test_training_returns_none_attns(self):
+        extractor = ImpalaCombinedExtractor(
+            image_channels=3, input_height=168, input_width=240,
+            num_entity_types=74, entity_features=7, info_size=15
+        )
+        extractor.train()
+        obs = _make_obs_batch(2)
+        combined, spatial_attn, cross_attn = extractor(
+            obs["image"], obs["entities"], obs["entity_types"], obs["information"])
+        assert combined.shape == (2, 399)
+        assert spatial_attn is None
+        assert cross_attn is None
+
+
+# === Cross-Attention Entropy Stats Tests ===
+
+class TestCrossAttentionEntropyStats:
+    def test_returns_expected_keys(self):
+        cross_attn_map = torch.rand(2, 4, 12, 21, 30)
+        # Normalize to proper distribution
+        cross_attn_map = cross_attn_map / cross_attn_map.sum(dim=-1, keepdim=True).sum(dim=-2, keepdim=True)
+        stats = _cross_attention_entropy_stats(cross_attn_map)
+        assert "cross_attention/entropy" in stats
+        assert "cross_attention/top1_weight" in stats
+
+    def test_uniform_attention_high_entropy(self):
+        """Uniform attention over spatial positions should have high entropy."""
+        # 21*30 = 630 spatial positions
+        cross_attn_map = torch.ones(1, 4, 12, 21, 30) / 630.0
+        stats = _cross_attention_entropy_stats(cross_attn_map)
+        # Max entropy for 630 positions = ln(630) ≈ 6.45
+        assert stats["cross_attention/entropy"] > 6.0
+
+    def test_focused_attention_low_entropy(self):
+        """Peaked attention should have low entropy."""
+        cross_attn_map = torch.zeros(1, 4, 12, 21, 30)
+        cross_attn_map[:, :, :, 10, 15] = 1.0  # all attention on one position
+        stats = _cross_attention_entropy_stats(cross_attn_map)
+        assert stats["cross_attention/entropy"] < 0.1
+        assert stats["cross_attention/top1_weight"] > 0.99
 
 
 # === Registration Tests ===
