@@ -908,7 +908,7 @@ def record_episodes(args):
                     attn_weights = get_attention_weights(network, obs)
 
                 # Step environment
-                obs, _rewards, terminated, truncated, state_change = env.step(action)
+                obs, rewards, terminated, truncated, state_change = env.step(action)
                 action_mask = state_change.state.info['action_mask']
 
                 mask_desc = None
@@ -925,7 +925,7 @@ def record_episodes(args):
                     recorder.write_frame(video_frame)
 
                 if terminated or truncated:
-                    end_reason = state_change.state.info.get('end_reason', '')
+                    end_reason = rewards.ending
 
             # Determine success
             is_success = isinstance(end_reason, str) and end_reason.startswith("success")
