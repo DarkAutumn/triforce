@@ -224,16 +224,16 @@ class ObservationRenderer:
         if observation is None:
             return np.array(img)
 
-        # Entities
-        y = self._draw_entities(draw, y, observation)
-        y += 10
-
         # Directions
         y = self._draw_directions(draw, y, observation)
         y += 10
 
         # Booleans
-        self._draw_booleans(draw, y, observation)
+        y = self._draw_booleans(draw, y, observation)
+        y += 10
+
+        # Entities (last, so it can use remaining space)
+        self._draw_entities(draw, y, observation)
 
         return np.array(img)
 
@@ -271,9 +271,9 @@ class ObservationRenderer:
             if stun > 0.01:
                 props.append(f"Stun:{stun:.2f}")
             if hurts > 0.5:
-                props.append("\u26a0")  # ⚠
+                props.append("Hurts")
             if killable > 0.5:
-                props.append("\u2694")  # ⚔
+                props.append("Kill")
 
             text = f"  {type_name}  {' '.join(props)}"
             draw.text((10, y), text, fill=COLOR_TEXT, font=self._font_body)
@@ -304,10 +304,11 @@ class ObservationRenderer:
 
     @staticmethod
     def _extract_directions(info, offset):
-        """Extract cardinal directions from info vector."""
+        """Extract cardinal directions from info vector, ordered N S W E."""
         dirs = []
-        labels = ["N", "S", "E", "W"]
-        for i, label in enumerate(labels):
+        # Info vector order: N(0) S(1) E(2) W(3); display order: N S W E
+        indices_and_labels = [(0, "N"), (1, "S"), (3, "W"), (2, "E")]
+        for i, label in indices_and_labels:
             val = info[offset + i]
             if hasattr(val, 'item'):
                 val = val.item()
@@ -327,7 +328,7 @@ class ObservationRenderer:
         """Draw boolean indicators."""
         info = obs.get("information")
         if info is None:
-            return
+            return y
 
         if hasattr(info, 'cpu'):
             info = info.cpu().numpy()
@@ -351,6 +352,8 @@ class ObservationRenderer:
             text_color = color if active else COLOR_DIM
             draw.text((10, y), f"  {label}", fill=text_color, font=self._font_body)
             y += 22
+
+        return y
 
 
 # ── ActionRenderer ──────────────────────────────────────────────
