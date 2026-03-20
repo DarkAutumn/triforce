@@ -22,8 +22,7 @@ ROOM_STEP_RAMP = 1850          # steps over grace to reach max penalty
 # Combat rewards decay after this many events per room to prevent farming respawning enemies.
 COMBAT_DECAY_THRESHOLD = 8
 COMBAT_DECAY_RATE = 0.5
-DANGER_TILE_PENALTY = Penalty("penalty-move-danger", -REWARD_MEDIUM)
-MOVED_TO_SAFETY_REWARD = Reward("reward-move-safety", REWARD_TINY)
+
 ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_MINIMUM)
 
 PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
@@ -328,8 +327,6 @@ class GameplayCritic(ZeldaCritic):
         if state_change.items_gained or len(curr.active_enemies) < len(prev.active_enemies):
             self._room_steps = 0
 
-        # Did link get too close to an enemy?
-        self.critique_moving_into_danger(state_change, rewards)
 
         # Room stalling penalty: flat -0.01 per step after grace, ramping to -0.02.
         # Resets on room change, enemy kills, or item pickups.
@@ -359,40 +356,6 @@ class GameplayCritic(ZeldaCritic):
         elif shaped < 0:
             rewards.add(Penalty("penalty-pbrs-movement", shaped))
 
-
-    def critique_moving_into_danger(self, state_change : StateChange, rewards):
-        """Critiques the agent for moving too close to an enemy or projectile.  These are added and subtracted
-        independent of other movement rewards.  This ensures that even if the agent is moving in the right direction,
-        it is still wary of moving too close to an enemy."""
-        prev, curr = state_change.previous, state_change.state
-
-        # Skip evaluation if health was lost or Link is blocking
-        if state_change.health_lost or curr.link.is_blocking:
-            return
-
-        prev_active_indices = {enemy.index for enemy in prev.active_enemies}
-
-        prev_overlap = {
-            tile
-            for enemy in prev.active_enemies
-            for tile in enemy.link_overlap_tiles
-            if tile in prev.link.self_tiles
-        }
-
-        curr_overlap = {
-            tile
-            for enemy in curr.active_enemies
-            if enemy.index in prev_active_indices
-            for tile in enemy.link_overlap_tiles
-            if tile in curr.link.self_tiles
-        }
-
-        danger_diff = len(curr_overlap) - len(prev_overlap)
-        if danger_diff > 0:
-            rewards.add(DANGER_TILE_PENALTY)
-        elif danger_diff < 0:
-            if len(prev.active_enemies) == len(curr.active_enemies):
-                rewards.add(MOVED_TO_SAFETY_REWARD)
 
 REWARD_ENTERED_CAVE = Reward("reward-entered-cave", REWARD_LARGE)
 REWARD_LEFT_CAVE = Reward("reward-left-cave", REWARD_LARGE)
