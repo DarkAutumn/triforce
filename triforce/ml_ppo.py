@@ -332,7 +332,6 @@ class PPO:
                                weights, action_space, exit_criteria_map, callback, **kwargs):
         """Weighted training with multiple environments via manager RPC."""
         # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
-        from .ml_ppo_worker import RolloutWorkerPool, WeightedEnvFactory  # pylint: disable=import-outside-toplevel
         from .scenario_wrapper import WeightedScenarioSelector  # pylint: disable=import-outside-toplevel
         import multiprocessing.managers  # pylint: disable=import-outside-toplevel
 
@@ -346,68 +345,78 @@ class PPO:
         scenario_names = [s.name for s in scenario_defs]
 
         manager = _SelectorManager()
-        manager.start()
+        manager.start()  # pylint: disable=consider-using-with
 
         try:
+            # pylint: disable=no-member
             selector_proxy = manager.WeightedScenarioSelector(scenario_names, list(weights))
-
-            obs_space = network.observation_space
-            act_space = network.action_space
-            steps_per_env = self.target_steps // n_envs
-            buffer = PPORolloutBuffer(steps_per_env, n_envs, obs_space, act_space,
-                                      self._gamma, self._lambda)
-            buffer.share_memory_()
-
-            env_kwargs = {k: v for k, v in kwargs.items()
-                          if k in ('render_mode', 'translation', 'frame_stack', 'obs_kind', 'multihead')}
-            env_factory = WeightedEnvFactory(scenario_defs, action_space, selector_proxy,
-                                             **env_kwargs)
-
-            network_class_type = kwargs.get('network_class', type(network))
-            pool = RolloutWorkerPool(n_envs, buffer, network, env_factory, network_class_type)
-            try:
-                save_path = kwargs.get('save_path', None)
-                next_metrics = Threshold(LOG_RATE)
-                next_model_save = Threshold(SAVE_INTERVAL)
-
-                env_steps_per_iteration = buffer.memory_length * n_envs
-                total_steps = math.ceil(iterations / env_steps_per_iteration) * env_steps_per_iteration
-                total_iterations = 0
-                accumulated_metrics = []
-
-                while total_iterations < iterations:
-                    pool.update_weights(network)
-                    _, worker_metrics = pool.collect_rollouts(buffer)
-                    total_iterations += env_steps_per_iteration
-                    callback.on_progress(env_steps_per_iteration, total_steps)
-                    if worker_metrics:
-                        accumulated_metrics.append(worker_metrics)
-
-                    if next_metrics.add(env_steps_per_iteration):
-                        network.metrics = self._average_weighted_metric_dicts(accumulated_metrics)
-                        accumulated_metrics.clear()
-                        if network.metrics:
-                            callback.on_metrics(network.metrics, network.steps_trained, total_steps)
-
-                            if exit_criteria_map and self._check_weighted_exit_criteria(
-                                    network.metrics, exit_criteria_map):
-                                break
-
-                    if save_path and next_model_save.add(env_steps_per_iteration):
-                        model_name = kwargs.get('model_name', "network").replace(' ', '_')
-                        network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
-
-                    network.steps_trained += env_steps_per_iteration
-                    network = self._optimize(network, buffer, network.steps_trained, callback,
-                                             total_steps)
-                    if not callback.check_pause():
-                        break
-
-                return network
-            finally:
-                pool.close()
+            return self._train_weighted_multi_loop(
+                network, n_envs, iterations, selector_proxy, scenario_defs,
+                action_space, exit_criteria_map, callback, **kwargs)
         finally:
             manager.shutdown()
+
+    def _train_weighted_multi_loop(self, network, n_envs, iterations, selector_proxy, scenario_defs,
+                                    action_space, exit_criteria_map, callback, **kwargs):
+        """Inner training loop for weighted multi-env training."""
+        # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
+        from .ml_ppo_worker import RolloutWorkerPool, WeightedEnvFactory  # pylint: disable=import-outside-toplevel
+
+        obs_space = network.observation_space
+        act_space = network.action_space
+        steps_per_env = self.target_steps // n_envs
+        buffer = PPORolloutBuffer(steps_per_env, n_envs, obs_space, act_space,
+                                  self._gamma, self._lambda)
+        buffer.share_memory_()
+
+        env_kwargs = {k: v for k, v in kwargs.items()
+                      if k in ('render_mode', 'translation', 'frame_stack', 'obs_kind', 'multihead')}
+        env_factory = WeightedEnvFactory(scenario_defs, action_space, selector_proxy,
+                                         **env_kwargs)
+
+        network_class_type = kwargs.get('network_class', type(network))
+        pool = RolloutWorkerPool(n_envs, buffer, network, env_factory, network_class_type)
+        try:
+            save_path = kwargs.get('save_path', None)
+            next_metrics = Threshold(LOG_RATE)
+            next_model_save = Threshold(SAVE_INTERVAL)
+
+            env_steps_per_iteration = buffer.memory_length * n_envs
+            total_steps = math.ceil(iterations / env_steps_per_iteration) * env_steps_per_iteration
+            total_iterations = 0
+            accumulated_metrics = []
+
+            while total_iterations < iterations:
+                pool.update_weights(network)
+                _, worker_metrics = pool.collect_rollouts(buffer)
+                total_iterations += env_steps_per_iteration
+                callback.on_progress(env_steps_per_iteration, total_steps)
+                if worker_metrics:
+                    accumulated_metrics.append(worker_metrics)
+
+                if next_metrics.add(env_steps_per_iteration):
+                    network.metrics = self._average_weighted_metric_dicts(accumulated_metrics)
+                    accumulated_metrics.clear()
+                    if network.metrics:
+                        callback.on_metrics(network.metrics, network.steps_trained, total_steps)
+
+                        if exit_criteria_map and self._check_weighted_exit_criteria(
+                                network.metrics, exit_criteria_map):
+                            break
+
+                if save_path and next_model_save.add(env_steps_per_iteration):
+                    model_name = kwargs.get('model_name', "network").replace(' ', '_')
+                    network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
+
+                network.steps_trained += env_steps_per_iteration
+                network = self._optimize(network, buffer, network.steps_trained, callback,
+                                         total_steps)
+                if not callback.check_pause():
+                    break
+
+            return network
+        finally:
+            pool.close()
 
     @staticmethod
     def _average_weighted_metric_dicts(dicts):

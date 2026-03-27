@@ -606,6 +606,7 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
 
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
                  callback=None, circuit_def=None):
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     """Run training circuit and return (final_model, final_scenario_def).
 
     For weighted circuits, dispatches to _run_weighted_circuit.
@@ -684,6 +685,7 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
 
 def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkpoint_dir, kwargs,
                            total_budget, callback=None):
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     """Run a weighted training circuit.
 
     All scenarios run concurrently with step-count proportional to their weights.
@@ -727,7 +729,6 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
     kwargs['action_space_name_str'] = action_space_def.name
     kwargs['network_class'] = model_kind.network_class
 
-    scenario_names = [f"{s.name} (w={w})" for s, w in zip(scenario_defs, weights)]
     weighted_label = f"weighted[{len(scenario_defs)}]"
     if callback:
         callback.on_circuit_start([(weighted_label, iterations)])

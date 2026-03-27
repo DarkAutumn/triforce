@@ -378,14 +378,19 @@ class MetricTracker:
         assert MetricTracker._instance is None
         MetricTracker._instance = self
 
+    @property
+    def scenario_name(self):
+        """The scenario name for weighted-mode metric buffering, or None."""
+        return self._scenario_name
+
     @staticmethod
     def close():
         """Closes the metric tracker, buffering metrics if in weighted mode."""
         instance = MetricTracker._instance
-        if instance is not None and instance._scenario_name is not None:
+        if instance is not None and instance.scenario_name is not None:
             metrics = instance.get_metrics()
             if metrics:
-                name = instance._scenario_name
+                name = instance.scenario_name
                 if name not in MetricTracker._buffered_metrics:
                     MetricTracker._buffered_metrics[name] = {}
                 existing = MetricTracker._buffered_metrics[name]
@@ -443,7 +448,7 @@ class MetricTracker:
             return {}
 
         # Normal mode: no buffered metrics, return flat dict
-        if not buffered and (instance is None or instance._scenario_name is None):
+        if not buffered and (instance is None or instance.scenario_name is None):
             if instance is None:
                 return {}
             result = instance.get_metrics()
@@ -452,10 +457,10 @@ class MetricTracker:
             return result
 
         # Weighted mode: merge current instance metrics into buffer, return per-scenario
-        if instance is not None and instance._scenario_name is not None:
+        if instance is not None and instance.scenario_name is not None:
             current = instance.get_metrics()
             if current:
-                name = instance._scenario_name
+                name = instance.scenario_name
                 if name not in buffered:
                     buffered[name] = {}
                 existing = buffered[name]
