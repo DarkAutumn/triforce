@@ -107,9 +107,18 @@ def _worker_loop(env_index, shared_buffer, shared_weights, network_class,
 
 
 def _aggregate_metrics(metrics_list):
-    """Averages metric dicts from multiple workers."""
+    """Averages metric dicts from multiple workers.
+
+    Handles both flat dicts {metric: value} and per-scenario nested dicts
+    {scenario: {metric: value}} from weighted mode.
+    """
     if not metrics_list:
         return {}
+
+    # Detect weighted mode: values are dicts instead of numbers
+    first_value = next(iter(metrics_list[0].values()), None)
+    if isinstance(first_value, dict):
+        return _aggregate_weighted_metrics(metrics_list)
 
     combined = {}
     for metrics in metrics_list:
@@ -119,6 +128,22 @@ def _aggregate_metrics(metrics_list):
             combined[key].append(value)
 
     return {key: sum(values) / len(values) for key, values in combined.items()}
+
+
+def _aggregate_weighted_metrics(metrics_list):
+    """Averages per-scenario metric dicts: {scenario: {metric: [values]}}."""
+    combined = {}
+    for metrics in metrics_list:
+        for scenario, scenario_metrics in metrics.items():
+            if scenario not in combined:
+                combined[scenario] = {}
+            for key, value in scenario_metrics.items():
+                if key not in combined[scenario]:
+                    combined[scenario][key] = []
+                combined[scenario][key].append(value)
+
+    return {scenario: {key: sum(vals) / len(vals) for key, vals in metrics.items()}
+            for scenario, metrics in combined.items()}
 
 
 class RolloutWorkerPool:

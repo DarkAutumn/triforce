@@ -84,10 +84,20 @@ class TestCircuitKind:
                 name='test', description='test', kind='invalid',
                 scenarios=[TrainingCircuitEntry(scenario='full-game')])
 
-    def test_existing_circuits_are_sequential(self):
-        """All existing circuits in triforce.yaml should be sequential."""
+    def test_existing_sequential_circuits(self):
+        """Sequential circuits in triforce.yaml should have kind=sequential."""
         for circuit in TrainingCircuitDefinition.get_all():
-            assert circuit.kind == 'sequential', f"{circuit.name} should be sequential"
+            if circuit.kind == 'sequential':
+                assert circuit.kind == 'sequential', f"{circuit.name} should be sequential"
+
+    def test_polish_circuit_is_weighted(self):
+        """The polish circuit should be weighted."""
+        circuit = TrainingCircuitDefinition.get('polish')
+        assert circuit is not None
+        assert circuit.kind == 'weighted'
+        assert len(circuit.scenarios) == 4
+        for entry in circuit.scenarios:
+            assert entry.weight is not None
 
     def test_existing_circuits_parse_exit_criteria(self):
         """Existing circuits should parse the new exit-criteria format."""

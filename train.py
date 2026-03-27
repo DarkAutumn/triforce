@@ -257,10 +257,20 @@ class TrainingDisplay(TrainingCallback):
 
     def on_metrics(self, metrics, iteration, total_iterations):
         self._prev_game_metrics = dict(self._game_metrics)
-        self._game_metrics.update(metrics)
+
+        # Weighted mode returns {scenario: {metric: value}} — flatten for display/tensorboard
+        flat_metrics = {}
+        for key, value in metrics.items():
+            if isinstance(value, dict):
+                for metric_name, metric_value in value.items():
+                    flat_metrics[f"{key}/{metric_name}"] = metric_value
+            else:
+                flat_metrics[key] = value
+
+        self._game_metrics.update(flat_metrics)
         if self._tensorboard:
             timestamp = time.time()
-            for name, value in metrics.items():
+            for name, value in flat_metrics.items():
                 if '/' not in name:
                     name = f"metrics/{name}"
                 self._tensorboard.add_scalar(name, value, iteration, timestamp)
@@ -718,16 +728,18 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
     kwargs['network_class'] = model_kind.network_class
 
     scenario_names = [f"{s.name} (w={w})" for s, w in zip(scenario_defs, weights)]
+    weighted_label = f"weighted[{len(scenario_defs)}]"
     if callback:
-        callback.on_circuit_start([(', '.join(scenario_names), iterations)])
+        callback.on_circuit_start([(weighted_label, iterations)])
 
     if callback:
-        callback.on_scenario_start(f"weighted[{len(scenario_defs)}]", iterations)
+        callback.on_scenario_start(weighted_label, iterations)
 
     model = ppo.train_weighted(
         model_kind.network_class, create_env, scenario_defs, weights,
         action_space_def.actions, iterations, exit_criteria_map, callback,
-        save_path=checkpoint_dir, **kwargs)
+        save_path=checkpoint_dir,
+        **{k: v for k, v in kwargs.items() if k != 'network_class'})
 
     if callback:
         callback.on_scenario_end(f"weighted[{len(scenario_defs)}]")
