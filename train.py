@@ -637,9 +637,8 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
             break
 
         if scenario_entry.exit_criteria:
-            assert scenario_entry.threshold is not None, "Threshold must be set if exit criteria is set"
-            kwargs['exit_criteria'] = scenario_entry.exit_criteria
-            kwargs['exit_threshold'] = scenario_entry.threshold
+            kwargs['exit_criteria'] = scenario_entry.exit_criteria.metric
+            kwargs['exit_threshold'] = scenario_entry.exit_criteria.threshold
         elif 'exit_criteria' in kwargs:
             del kwargs['exit_criteria']
             del kwargs['exit_threshold']

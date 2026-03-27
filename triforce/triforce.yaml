@@ -24,20 +24,24 @@ training-circuits:
     1, then full game.'
   scenarios:
   - scenario: overworld-room-walk
-    exit_criteria: room-result/correct-exit
-    threshold: 0.9
+    exit-criteria:
+      metric: room-result/correct-exit
+      threshold: 0.9
     iterations: 500000
   - scenario: overworld-sword
-    exit_criteria: success-rate
-    threshold: 0.8
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.8
     iterations: 500000
   - scenario: overworld-skip-sword
-    exit_criteria: success-rate
-    threshold: 0.9
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.9
     iterations: 2000000
   - scenario: dungeon1
-    exit_criteria: success-rate
-    threshold: 0.9
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.9
     iterations: 2000000
   - scenario: full-game
 - name: dungeon1-circuit
@@ -45,21 +49,26 @@ training-circuits:
     then all together.
   scenarios:
   - scenario: dungeon1-skip-opening
-    exit_criteria: rewards
-    threshold: 0.0
+    exit-criteria:
+      metric: rewards
+      threshold: 0.0
     iterations: 2000000
   - scenario: dungeon1-entry-room
-    exit_criteria: room-result/correct-exit
-    threshold: 0.9
+    exit-criteria:
+      metric: room-result/correct-exit
+      threshold: 0.9
   - scenario: dungeon1-side-room-opening
-    exit_criteria: success-rate
-    threshold: 0.85
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.85
   - scenario: dungeon1-wallmaster
-    exit_criteria: success-rate
-    threshold: 0.85
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.85
   - scenario: dungeon1-entry-room
-    exit_criteria: room-result/correct-exit
-    threshold: 0.9
+    exit-criteria:
+      metric: room-result/correct-exit
+      threshold: 0.9
   - scenario: dungeon1
     iterations: 20000000
 scenarios:

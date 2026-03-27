@@ -4,7 +4,7 @@ from collections import deque
 import gzip
 import os
 from typing import Deque, Dict, List, Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import gymnasium as gym
 import stable_retro as retro
 import torch
@@ -96,12 +96,18 @@ class TrainingScenarioDefinition(BaseModel):
         """Loads all scenarios from triforce.yaml."""
         return list(TrainingScenarioDefinition._load_scenarios().values())
 
+class ExitCriteria(BaseModel):
+    """Exit criteria for a training circuit entry."""
+    metric : str
+    threshold : float
+
 class TrainingCircuitEntry(BaseModel):
     """An entry in a training circuit."""
+    model_config = ConfigDict(populate_by_name=True)
+
     scenario : str
     iterations : Optional[int] = None
-    exit_criteria : Optional[str] = None
-    threshold : Optional[float] = None
+    exit_criteria : Optional[ExitCriteria] = Field(None, alias='exit-criteria')
 
 class TrainingCircuitDefinition(BaseModel):
     """A training circuit."""
