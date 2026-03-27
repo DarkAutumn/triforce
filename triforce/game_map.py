@@ -128,6 +128,15 @@ class GameMap:
             opened_doors: Doors already opened at runtime (treated as free passages).
         """
         key_bit, initial_mask = self._build_key_bitmask(collected_keys)
+
+        # Pre-collect current room's key: if the agent is standing in an uncollected
+        # key room, count it as collected so routing doesn't generate leave-and-return
+        # paths just to "pick up" the key we're already on top of.
+        start_bit = key_bit.get(start, 0)
+        if start_bit and not initial_mask & start_bit:
+            initial_mask |= start_bit
+            keys += 1
+
         start_state = (start, keys, initial_mask)
         opened = opened_doors or set()
 

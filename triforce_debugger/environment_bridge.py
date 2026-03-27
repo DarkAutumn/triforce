@@ -422,10 +422,33 @@ class EnvironmentBridge:
             result = model.forward_with_attention(obs)
             if was_training:
                 model.train()
-            attn = result[-1]  # Last element is always attention weights
-            if attn is None:
+            # Spatial attention is second-to-last; cross-attention is last
+            spatial_attn = result[-2]
+            if spatial_attn is None:
                 return None
-            return attn.squeeze(0).cpu().numpy()  # (num_heads, H', W')
+            return spatial_attn.squeeze(0).cpu().numpy()  # (num_heads, H', W')
+
+    def get_cross_attention_weights(self, obs=None):
+        """Returns entity-spatial cross-attention weights, else None.
+
+        Returns:
+            numpy array of shape (num_heads, slots, H', W') or None.
+        """
+        obs = obs if obs is not None else self._observation
+        model = self.selector.model
+        if not hasattr(model, 'forward_with_attention'):
+            return None
+
+        with torch.no_grad():
+            was_training = model.training
+            model.eval()
+            result = model.forward_with_attention(obs)
+            if was_training:
+                model.train()
+            cross_attn = result[-1]
+            if cross_attn is None:
+                return None
+            return cross_attn.squeeze(0).cpu().numpy()  # (num_heads, slots, H', W')
 
     @property
     def model_details(self):

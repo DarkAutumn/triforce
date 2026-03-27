@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** — not yet implemented.
+**Implemented** — cross-attention module added in models.py, integrated into ImpalaCombinedExtractor.
 
 ## Problem
 
@@ -221,10 +221,20 @@ A new model must be trained from scratch, or a migration script could initialize
 
 1. **Should cross-attention replace or supplement the entity pooling?** Current proposal: cross-attention produces spatially-grounded entity features, then pools them. Alternative: feed both the pooled entity vector *and* the cross-attention context into the policy head (larger input dim).
 
+Answer: Feed them both.
+
 2. **How many cross-attention heads?** 4 matches the spatial self-attention. Could use fewer (2) since entity queries are lower-dimensional than spatial queries.
+
+Answer: 4.
 
 3. **Should the information vector (15 booleans) participate in cross-attention?** Some boolean features (objective direction, enemy presence) could benefit from spatial grounding. But 15 features is small — the added complexity may not be worth it.
 
+Answer: No
+
 4. **Training curriculum impact.** Cross-attention adds parameters and a new learning signal. Early training may be slower as the model learns entity-spatial correspondence. Consider whether the training circuit needs adjustment.
 
+Answer: As part of this, double the length of main-circuit's legs (except for the last).
+
 5. **K/V sharing.** Share spatial K/V between self-attention and cross-attention, or keep separate? Sharing saves ~4K parameters (small), but couples the representations.
+
+Answer: Don't share.

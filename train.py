@@ -374,6 +374,8 @@ class TrainingDisplay(TrainingCallback):
         "losses/explained_variance":        (0.3, 0.9),
         "losses/attention/entropy":         (2.0, 6.5),
         "losses/attention/top1_weight":     (None, 0.10),
+        "losses/cross_attention/entropy":   (2.0, 6.5),
+        "losses/cross_attention/top1_weight": (None, 0.10),
         "losses/entropy/action_type":       (0.3, 1.5),
         "losses/entropy/direction":         (0.5, 1.4),
     }
@@ -449,6 +451,8 @@ class TrainingDisplay(TrainingCallback):
             entropy_metrics.append((f"losses/attention/head_{i}/entropy", f"  head_{i}/entropy", ".4f"))
             entropy_metrics.append((f"losses/attention/head_{i}/top1_weight", f"  head_{i}/top1", ".4f"))
         entropy_metrics.extend([
+            ("losses/cross_attention/entropy", "cross_attn/entropy", ".4f"),
+            ("losses/cross_attention/top1_weight", "cross_attn/top1", ".4f"),
             ("losses/entropy/action_type", "entropy/action_type", ".4f"),
             ("losses/entropy/direction", "entropy/direction", ".4f"),
         ])

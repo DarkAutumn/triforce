@@ -522,6 +522,14 @@ class MainWindow(QMainWindow):
             try:
                 attn = self._bridge.get_attention_weights()
                 self.game_view.set_attention_weights(attn)
+
+                cross_attn = self._bridge.get_cross_attention_weights()
+                entity_presence = None
+                if step_result.observation is not None:
+                    entities = step_result.observation.get("entities")
+                    if entities is not None:
+                        entity_presence = entities[:, 0] > 0  # presence flag
+                self.game_view.set_cross_attention_weights(cross_attn, entity_presence)
             except Exception:  # pylint: disable=broad-except
                 log.warning("Failed to get attention weights:\n%s", traceback.format_exc())
 
@@ -802,17 +810,9 @@ class MainWindow(QMainWindow):
     # ── Attention head cycling ───────────────────────────────
 
     def _cycle_attention_head_prev(self):
-        """Cycle to the previous attention head (wraps around)."""
-        n = self.game_view.num_attention_heads
-        if n == 0:
-            return
-        current = self.game_view.attention_head
-        self.game_view.attention_head = (current - 1) % (n + 1)
+        """Cycle to the previous attention view (spatial heads + entity slots)."""
+        self.game_view.cycle_attention_prev()
 
     def _cycle_attention_head_next(self):
-        """Cycle to the next attention head (wraps around)."""
-        n = self.game_view.num_attention_heads
-        if n == 0:
-            return
-        current = self.game_view.attention_head
-        self.game_view.attention_head = (current + 1) % (n + 1)
+        """Cycle to the next attention view (spatial heads + entity slots)."""
+        self.game_view.cycle_attention_next()

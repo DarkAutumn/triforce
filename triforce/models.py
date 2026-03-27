@@ -278,14 +278,12 @@ class EntityAttentionEncoder(nn.Module):
         self.output_proj = Network.layer_init(nn.Linear(d_model, output_dim))
         self.output_dim = output_dim
 
-    def forward(self, entity_features, entity_types):
-        """Forward pass.
+    def _encode(self, entity_features, entity_types):
+        """Shared encoder logic: embed, project, mask, transform.
 
-        Args:
-            entity_features: (batch, slots, continuous_features)
-            entity_types: (batch, slots) long tensor of type IDs
         Returns:
-            (batch, output_dim) pooled entity representation
+            attended: (batch, slots, d_model) transformer output
+            empty_mask: (batch, slots) bool — True for empty slots
         """
         type_embeds = self.type_embedding(entity_types.long())
         combined = torch.cat([entity_features, type_embeds], dim=-1)
@@ -300,13 +298,125 @@ class EntityAttentionEncoder(nn.Module):
         safe_mask[all_empty, 0] = False
 
         attended = self.transformer(projected, src_key_padding_mask=safe_mask)
+        return attended, empty_mask
 
-        # Mean pool over genuinely present entities (use original mask, not safe_mask)
+    def forward(self, entity_features, entity_types):
+        """Forward pass.
+
+        Args:
+            entity_features: (batch, slots, continuous_features)
+            entity_types: (batch, slots) long tensor of type IDs
+        Returns:
+            (batch, output_dim) pooled entity representation
+        """
+        attended, empty_mask = self._encode(entity_features, entity_types)
+
+        # Mean pool over genuinely present entities
         present = (~empty_mask).unsqueeze(-1).float()
         num_present = present.sum(dim=1).clamp(min=1)
         pooled = (attended * present).sum(dim=1) / num_present
 
         return self.output_proj(pooled)
+
+    def forward_with_tokens(self, entity_features, entity_types):
+        """Forward pass returning both pooled output and per-entity tokens.
+
+        Used by cross-attention: entity tokens query the spatial feature map.
+
+        Returns:
+            pooled: (batch, output_dim) mean-pooled entity vector
+            tokens: (batch, slots, d_model) per-entity transformer output
+            empty_mask: (batch, slots) bool — True for empty slots
+        """
+        attended, empty_mask = self._encode(entity_features, entity_types)
+
+        present = (~empty_mask).unsqueeze(-1).float()
+        num_present = present.sum(dim=1).clamp(min=1)
+        pooled = (attended * present).sum(dim=1) / num_present
+
+        return self.output_proj(pooled), attended, empty_mask
+
+
+class EntitySpatialCrossAttention(nn.Module):
+    """Multi-head cross-attention: entity tokens query spatial feature map positions.
+
+    Each entity asks "where am I on screen?" via scaled dot-product attention over
+    the spatial feature map. The result is a spatially-grounded context vector.
+    """
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def __init__(self, entity_dim=64, spatial_channels=32, hidden_dim=64,
+                 output_dim=64, num_heads=4, dropout=0.1):
+        super().__init__()
+        assert hidden_dim % num_heads == 0
+        self.num_heads = num_heads
+        self.head_dim = hidden_dim // num_heads
+        self.hidden_dim = hidden_dim
+        self.scale = self.head_dim ** -0.5
+
+        self.q_proj = Network.layer_init(nn.Linear(entity_dim, hidden_dim))
+        self.k_proj = nn.Conv2d(spatial_channels, hidden_dim, kernel_size=1)
+        self.v_proj = nn.Conv2d(spatial_channels, hidden_dim, kernel_size=1)
+        self.attn_dropout = nn.Dropout(p=dropout)
+
+        self.output_proj = nn.Sequential(
+            Network.layer_init(nn.Linear(hidden_dim, output_dim)),
+            nn.ReLU()
+        )
+        self.output_dim = output_dim
+
+    def forward(self, entity_tokens, feature_map, empty_mask):
+        """Cross-attention: entities attend to spatial positions.
+
+        Args:
+            entity_tokens: (batch, slots, entity_dim) per-entity transformer output
+            feature_map: (batch, C, H, W) spatial feature map from ResNet
+            empty_mask: (batch, slots) bool — True for empty entity slots
+
+        Returns:
+            context: (batch, output_dim) pooled cross-attention context vector
+            cross_attn_weights: (batch, num_heads, slots, H, W) or None during training
+        """
+        batch, slots, _ = entity_tokens.shape
+        _, _, h, w = feature_map.shape
+        n_spatial = h * w
+
+        # Project entity tokens to queries: (batch, slots, hidden_dim)
+        q = self.q_proj(entity_tokens)
+        # Reshape to multi-head: (batch, num_heads, slots, head_dim)
+        q = q.view(batch, slots, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # Project spatial feature map to keys and values
+        k = self.k_proj(feature_map)  # (batch, hidden_dim, H, W)
+        v = self.v_proj(feature_map)  # (batch, hidden_dim, H, W)
+        # Reshape to multi-head: (batch, num_heads, head_dim, N) → (batch, num_heads, N, head_dim)
+        k = k.view(batch, self.num_heads, self.head_dim, n_spatial).transpose(2, 3)
+        v = v.view(batch, self.num_heads, self.head_dim, n_spatial).transpose(2, 3)
+
+        # Scaled dot-product attention: (batch, num_heads, slots, N)
+        attn_logits = torch.matmul(q, k.transpose(-2, -1)) * self.scale
+        attn_weights = torch.softmax(attn_logits, dim=-1)
+        if self.training:
+            attn_weights = self.attn_dropout(attn_weights)
+
+        # Weighted sum of spatial values: (batch, num_heads, slots, head_dim)
+        attended = torch.matmul(attn_weights, v)
+        # Concatenate heads: (batch, slots, hidden_dim)
+        attended = attended.transpose(1, 2).reshape(batch, slots, self.hidden_dim)
+
+        # Zero out empty entity slots
+        present = (~empty_mask).unsqueeze(-1).float()  # (batch, slots, 1)
+        attended = attended * present
+
+        # Mean pool over present entities
+        num_present = present.sum(dim=1).clamp(min=1)  # (batch, 1)
+        pooled = attended.sum(dim=1) / num_present  # (batch, hidden_dim)
+
+        context = self.output_proj(pooled)
+
+        # Only materialize attention map during eval (for visualization)
+        cross_attn_map = None if self.training else attn_weights.view(batch, self.num_heads, slots, h, w)
+
+        return context, cross_attn_map
 
 
 class CombinedExtractor(nn.Module):
@@ -484,7 +594,8 @@ class ImpalaResNet(nn.Module):
             image: (batch, C, H, W) RGB image tensor.
         Returns:
             features: (batch, output_dim) feature vector.
-            attn_weights: (batch, H', W') spatial attention weights.
+            attn_weights: (batch, num_heads, H', W') spatial attention weights (None during training).
+            feature_map: (batch, C_out, H', W') spatial feature map before attention pooling.
         """
         batch = image.shape[0]
         coord_h = self.coord_h.expand(batch, -1, -1, -1)
@@ -494,11 +605,19 @@ class ImpalaResNet(nn.Module):
         x = self.stacks(x)
         x = torch.relu(x)
 
-        return self.attention_pool(x)
+        features, attn_weights = self.attention_pool(x)
+        return features, attn_weights, x
 
 
 class ImpalaCombinedExtractor(nn.Module):
-    """Combined extractor using ImpalaResNet image + entity attention + boolean info."""
+    """Combined extractor using ImpalaResNet image + entity attention + cross-attention + boolean info.
+
+    Architecture:
+        Image  → ImpalaResNet → feature_map → SpatialAttentionPool → 256-d
+        Entities → EntityAttentionEncoder → pooled (64-d) + per-entity tokens
+        Entity tokens + feature_map → EntitySpatialCrossAttention → 64-d context
+        Concat [img(256), entity_pooled(64), cross_attn(64), info(15)] → 399-d
+    """
     # pylint: disable=too-many-positional-arguments, too-many-arguments
     def __init__(
         self,
@@ -511,6 +630,7 @@ class ImpalaCombinedExtractor(nn.Module):
         attention_heads: int = 4,
         attention_layers: int = 1,
         attention_output_dim: int = 64,
+        cross_attn_output_dim: int = 64,
         info_size: int = 14,
         image_output_size: int = 256,
     ):
@@ -532,16 +652,38 @@ class ImpalaCombinedExtractor(nn.Module):
             output_dim=attention_output_dim
         )
 
+        # Cross-attention: entity tokens query spatial feature map
+        # entity_dim = d_model from EntityAttentionEncoder (default 64)
+        # spatial_channels = last ResNet stack channel count (default 32)
+        self.cross_attention = EntitySpatialCrossAttention(
+            entity_dim=64,
+            spatial_channels=32,
+            hidden_dim=64,
+            output_dim=cross_attn_output_dim,
+            num_heads=attention_heads
+        )
+
         self.info_size = info_size
-        self.output_dim = image_output_size + attention_output_dim + info_size
+        self.output_dim = image_output_size + attention_output_dim + cross_attn_output_dim + info_size
 
     def forward(self, image, entities, entity_types, information):
-        """Forward pass. Returns (combined_features, attn_weights)."""
-        img_out, attn_weights = self.image_extractor(image)
-        entity_out = self.entity_encoder(entities, entity_types)
+        """Forward pass.
+
+        Returns:
+            combined: (batch, output_dim) concatenated features
+            spatial_attn: (batch, num_heads, H', W') or None during training
+            cross_attn: (batch, num_heads, slots, H', W') or None during training
+        """
+        img_out, spatial_attn, feature_map = self.image_extractor(image)
+
+        entity_pooled, entity_tokens, empty_mask = self.entity_encoder.forward_with_tokens(
+            entities, entity_types)
+
+        cross_context, cross_attn = self.cross_attention(entity_tokens, feature_map, empty_mask)
+
         info_float = information.float()
-        combined = torch.cat([img_out, entity_out, info_float], dim=1)
-        return combined, attn_weights
+        combined = torch.cat([img_out, entity_pooled, cross_context, info_float], dim=1)
+        return combined, spatial_attn, cross_attn
 
 
 class MultiHeadAgent(Network):
@@ -796,7 +938,7 @@ class ImpalaSharedAgent(Network):
 
     def forward(self, obs):
         obs = self._unsqueeze(obs)
-        combined_features, _ = self.base(
+        combined_features, _, _ = self.base(
             image=obs["image"],
             entities=obs["entities"],
             entity_types=obs["entity_types"],
@@ -808,9 +950,9 @@ class ImpalaSharedAgent(Network):
         return action_logits, value
 
     def forward_with_attention(self, obs):
-        """Forward pass that also returns spatial attention weights for visualization."""
+        """Forward pass returning spatial and cross-attention weights for visualization."""
         obs = self._unsqueeze(obs)
-        combined_features, attn_weights = self.base(
+        combined_features, spatial_attn, cross_attn = self.base(
             image=obs["image"],
             entities=obs["entities"],
             entity_types=obs["entity_types"],
@@ -819,16 +961,19 @@ class ImpalaSharedAgent(Network):
         policy_features, value_features = self.mlp_extractor(combined_features)
         action_logits = self.action_net(policy_features)
         value = self.value_net(value_features)
-        return action_logits, value, attn_weights
+        return action_logits, value, spatial_attn, cross_attn
 
     def get_attention_entropy(self, obs):
         """Returns attention entropy and top-1 concentration for tensorboard."""
         was_training = self.training
         self.eval()
-        _, _, attn = self.forward_with_attention(obs)
+        _, _, spatial_attn, cross_attn = self.forward_with_attention(obs)
         if was_training:
             self.train()
-        return _attention_entropy_stats(attn)
+        stats = _attention_entropy_stats(spatial_attn)
+        if cross_attn is not None:
+            stats.update(_cross_attention_entropy_stats(cross_attn))
+        return stats
 
 
 class ImpalaMultiHeadAgent(Network):
@@ -878,7 +1023,7 @@ class ImpalaMultiHeadAgent(Network):
     def forward(self, obs):
         """Returns (action_type_logits, direction_logits, value)."""
         obs = self._unsqueeze(obs)
-        combined_features, _ = self.base(
+        combined_features, _, _ = self.base(
             image=obs["image"],
             entities=obs["entities"],
             entity_types=obs["entity_types"],
@@ -891,9 +1036,9 @@ class ImpalaMultiHeadAgent(Network):
         return action_type_logits, direction_logits, value
 
     def forward_with_attention(self, obs):
-        """Forward pass that also returns spatial attention weights for visualization."""
+        """Forward pass returning spatial and cross-attention weights for visualization."""
         obs = self._unsqueeze(obs)
-        combined_features, attn_weights = self.base(
+        combined_features, spatial_attn, cross_attn = self.base(
             image=obs["image"],
             entities=obs["entities"],
             entity_types=obs["entity_types"],
@@ -903,7 +1048,7 @@ class ImpalaMultiHeadAgent(Network):
         action_type_logits = self.action_type_net(policy_features)
         direction_logits = self.direction_net(policy_features)
         value = self.value_net(value_features)
-        return action_type_logits, direction_logits, value, attn_weights
+        return action_type_logits, direction_logits, value, spatial_attn, cross_attn
 
     def get_action_and_value(self, obs, mask, actions=None, deterministic=False):
         """Gets action, joint log-prob, summed entropy, and value."""
@@ -985,10 +1130,13 @@ class ImpalaMultiHeadAgent(Network):
         """Returns attention entropy and top-1 concentration for tensorboard."""
         was_training = self.training
         self.eval()
-        _, _, _, attn = self.forward_with_attention(obs)
+        _, _, _, spatial_attn, cross_attn = self.forward_with_attention(obs)
         if was_training:
             self.train()
-        return _attention_entropy_stats(attn)
+        stats = _attention_entropy_stats(spatial_attn)
+        if cross_attn is not None:
+            stats.update(_cross_attention_entropy_stats(cross_attn))
+        return stats
 
 
 def _attention_entropy_stats(attn_map):
@@ -1013,6 +1161,29 @@ def _attention_entropy_stats(attn_map):
         stats[f"attention/head_{i}/entropy"] = per_head_entropy[i].item()
         stats[f"attention/head_{i}/top1_weight"] = per_head_top1[i].item()
     return stats
+
+
+def _cross_attention_entropy_stats(cross_attn_map):
+    """Compute entropy stats for entity-spatial cross-attention.
+
+    Args:
+        cross_attn_map: (batch, num_heads, slots, H, W) cross-attention weights.
+    Returns:
+        dict with 'cross_attention/entropy' and 'cross_attention/top1_weight'.
+    """
+    batch, num_heads, slots, h, w = cross_attn_map.shape
+    # Flatten spatial dims: (batch, num_heads, slots, N)
+    flat = cross_attn_map.reshape(batch, num_heads, slots, h * w)
+    log_flat = torch.log(flat + 1e-10)
+    # Per-entity entropy: (batch, num_heads, slots)
+    entity_entropy = -(flat * log_flat).sum(dim=3)
+    entity_top1 = flat.max(dim=3).values
+
+    # Average over batch, heads, and entities
+    return {
+        "cross_attention/entropy": entity_entropy.mean().item(),
+        "cross_attention/top1_weight": entity_top1.mean().item(),
+    }
 
 
 def create_network(network, obs_space, action_space, model_kind=None, action_space_name=None):
