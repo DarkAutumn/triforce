@@ -357,23 +357,45 @@ METRICS = {
 }
 
 class MetricTracker:
-    """Singleton class that tracks all metrics."""
+    """Singleton class that tracks all metrics.
+
+    In weighted-circuit mode, tracks metrics per scenario name. When the active scenario
+    switches (via close() + new __init__), current metrics are buffered under the scenario
+    name. get_metrics_and_clear() returns per-scenario metrics when buffered data exists.
+    """
     _instance : 'MetricTracker' = None
+    _buffered_metrics : dict = {}
 
     @staticmethod
     def get_instance():
         """Returns the singleton instance."""
         return MetricTracker._instance
 
-    def __init__(self, metric_names):
+    def __init__(self, metric_names, scenario_name=None):
         self.metrics = [METRICS[name]() for name in metric_names]
+        self._scenario_name = scenario_name
 
         assert MetricTracker._instance is None
         MetricTracker._instance = self
 
     @staticmethod
     def close():
-        """Closes the metric tracker."""
+        """Closes the metric tracker, buffering metrics if in weighted mode."""
+        instance = MetricTracker._instance
+        if instance is not None and instance._scenario_name is not None:
+            metrics = instance.get_metrics()
+            if metrics:
+                name = instance._scenario_name
+                if name not in MetricTracker._buffered_metrics:
+                    MetricTracker._buffered_metrics[name] = {}
+                existing = MetricTracker._buffered_metrics[name]
+                for key, value in metrics.items():
+                    if key in existing:
+                        # Average with previously buffered values from same scenario
+                        old_val, old_count = existing[key]
+                        existing[key] = (old_val + value, old_count + 1)
+                    else:
+                        existing[key] = (value, 1)
         MetricTracker._instance = None
 
     def begin_scenario(self, state):
@@ -409,13 +431,47 @@ class MetricTracker:
 
     @staticmethod
     def get_metrics_and_clear():
-        """Enumerates the values of the metrics and clears them."""
+        """Enumerates the values of the metrics and clears them.
+
+        In weighted mode (when buffered metrics exist), returns a nested dict:
+        {scenario_name: {metric_name: value}}. In normal mode, returns a flat dict.
+        """
         instance = MetricTracker._instance
-        if instance is None:
+        buffered = MetricTracker._buffered_metrics
+
+        if instance is None and not buffered:
             return {}
 
-        result = instance.get_metrics()
-        for metric in instance.metrics:
-            metric.clear()
+        # Normal mode: no buffered metrics, return flat dict
+        if not buffered and (instance is None or instance._scenario_name is None):
+            if instance is None:
+                return {}
+            result = instance.get_metrics()
+            for metric in instance.metrics:
+                metric.clear()
+            return result
 
+        # Weighted mode: merge current instance metrics into buffer, return per-scenario
+        if instance is not None and instance._scenario_name is not None:
+            current = instance.get_metrics()
+            if current:
+                name = instance._scenario_name
+                if name not in buffered:
+                    buffered[name] = {}
+                existing = buffered[name]
+                for key, value in current.items():
+                    if key in existing:
+                        old_val, old_count = existing[key]
+                        existing[key] = (old_val + value, old_count + 1)
+                    else:
+                        existing[key] = (value, 1)
+
+            for metric in instance.metrics:
+                metric.clear()
+
+        # Flatten accumulated (value, count) tuples to averages
+        result = {}
+        for scenario_name, metrics in buffered.items():
+            result[scenario_name] = {key: total / count for key, (total, count) in metrics.items()}
+        buffered.clear()
         return result

@@ -385,8 +385,10 @@ class ScenarioWrapper(gym.Wrapper):
             except TypeError:
                 self._conditions.append(ec_class())
 
+        # In weighted mode, pass scenario name so MetricTracker buffers per-scenario
+        scenario_name = scenario.name if self._weighted_selector is not None else None
         MetricTracker.close()
-        self._metrics : MetricTracker = MetricTracker(scenario.metrics)
+        self._metrics : MetricTracker = MetricTracker(scenario.metrics, scenario_name=scenario_name)
 
         match scenario.scenario_selector:
             case 'round-robin':

@@ -83,4 +83,51 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **
 
     return env
 
-__all__ = ['make_zelda_env']
+
+def make_weighted_zelda_env(scenarios, action_space, weighted_selector, **kwargs):
+    """Creates a Zelda environment that switches between scenarios using a weighted selector.
+
+    The initial scenario is the first in the list. On each reset, the ScenarioWrapper
+    consults the weighted_selector to decide which scenario to run next.
+
+    Args:
+        scenarios:         List of TrainingScenarioDefinition objects.
+        action_space:      The action space to use (shared across all scenarios).
+        weighted_selector: A WeightedScenarioSelector (or proxy) with an update() method.
+    """
+    initial = scenarios[0]
+    render_mode = kwargs.get('render_mode', None)
+    translation = kwargs.get('translation', True)
+    frame_stack = kwargs.get('frame_stack', 3)
+    obs_kind = kwargs.get('obs_kind', 'viewport')
+
+    state = random.choice(initial.start)
+
+    if _SUPPORTS_CROP_OVERSCAN:
+        env = retro.make(game='Zelda-NES', state=state, inttype=retro.data.Integrations.CUSTOM_ONLY,
+                         render_mode=render_mode, crop_overscan=False)
+        full_screen = True
+    else:
+        env = retro.make(game='Zelda-NES', state=state, inttype=retro.data.Integrations.CUSTOM_ONLY,
+                         render_mode=render_mode)
+        full_screen = False
+
+    env = FrameSkipWrapper(env)
+    env = StateChangeWrapper(env, initial)
+
+    if initial.use_hints:
+        env = TrainingHintWrapper(env)
+
+    multihead = kwargs.get('multihead', False)
+    env = ZeldaActionSpace(env, action_space, multihead=multihead)
+    env = ObservationWrapper(env, obs_kind, frame_stack, frame_skip=2, normalize=True,
+                             full_screen=full_screen)
+    env = ScenarioWrapper(env, initial, weighted_selector=weighted_selector)
+
+    if translation:
+        env = GymTranslationWrapper(env)
+
+    return env
+
+
+__all__ = ['make_zelda_env', 'make_weighted_zelda_env']

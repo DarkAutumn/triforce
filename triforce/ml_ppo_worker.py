@@ -35,6 +35,24 @@ class SimpleEnvFactory:
         return self.env_class(*self.args, **self.kwargs)
 
 
+class WeightedEnvFactory:
+    """Picklable factory for creating weighted Zelda environments in worker subprocesses.
+
+    The selector_proxy is a multiprocessing.managers proxy to a WeightedScenarioSelector
+    in the main process. Manager proxies are picklable (they serialize over sockets).
+    """
+    def __init__(self, scenario_defs, action_space, selector_proxy, **kwargs):
+        self.scenario_defs = scenario_defs
+        self.action_space = action_space
+        self.selector_proxy = selector_proxy
+        self.kwargs = kwargs
+
+    def __call__(self):
+        from .zelda_env import make_weighted_zelda_env  # pylint: disable=import-outside-toplevel
+        return make_weighted_zelda_env(self.scenario_defs, self.action_space,
+                                       self.selector_proxy, **self.kwargs)
+
+
 def _worker_loop(env_index, shared_buffer, shared_weights, network_class,
                  create_env_fn, sync):
     """Main loop for a rollout worker subprocess using shared memory.
