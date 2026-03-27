@@ -215,6 +215,224 @@ class PPO:
     def _hit_exit_criteria(self, metrics, exit_criteria, exit_threshold):
         return metrics.get(exit_criteria, 0) >= exit_threshold
 
+    def _check_weighted_exit_criteria(self, metrics, exit_criteria_map):
+        """Check per-scenario exit criteria against per-scenario metrics.
+
+        Args:
+            metrics: {scenario_name: {metric_name: value}} from weighted mode
+            exit_criteria_map: {scenario_name: ExitCriteria} for scenarios with exit criteria
+        Returns:
+            True if any scenario's exit criteria is met.
+        """
+        for scenario_name, criteria in exit_criteria_map.items():
+            if scenario_name in metrics:
+                scenario_metrics = metrics[scenario_name]
+                if scenario_metrics.get(criteria.metric, 0) >= criteria.threshold:
+                    return True
+        return False
+
+    def train_weighted(self, network_class, create_env, scenario_defs, weights,
+                       action_space, iterations, exit_criteria_map, callback=None, **kwargs):
+        """Train with weighted scenario mixing across parallel environments.
+
+        Args:
+            network_class: Network class to instantiate.
+            create_env:    Factory for creating an initial env (for observation/action space).
+            scenario_defs: List of TrainingScenarioDefinition objects.
+            weights:       List of float weights (same length as scenario_defs).
+            action_space:  Action space string (shared across all scenarios).
+            iterations:    Total training steps.
+            exit_criteria_map: {scenario_name: ExitCriteria} for scenarios with exit criteria.
+            callback:      Training callback.
+        """
+        # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
+        from .scenario_wrapper import WeightedScenarioSelector  # pylint: disable=import-outside-toplevel
+
+        self.start_time = time.time()
+        if callback is None:
+            callback = NullCallback()
+
+        n_envs = kwargs.get('envs', 1)
+
+        # Create network from initial env
+        env = create_env()
+        network = kwargs.get('model', None) or create_network(
+            network_class, env.observation_space, env.action_space,
+            model_kind=kwargs.get('model_kind'),
+            action_space_name=kwargs.get('action_space_name_str'))
+        self._steps_at_start = network.steps_trained
+        if self.optimizer is None:
+            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=self._epsilon)
+        else:
+            for param_group, new_params in zip(self.optimizer.param_groups,
+                                                [list(network.parameters())]):
+                param_group['params'] = new_params
+        env.close()
+
+        # Create the centralized scenario selector (used directly in single-env mode)
+        scenario_names = [s.name for s in scenario_defs]
+        selector = WeightedScenarioSelector(scenario_names, weights)
+
+        if n_envs > 1:
+            return self._train_weighted_multi(
+                network, n_envs, iterations, scenario_defs, weights,
+                action_space, exit_criteria_map, callback, **kwargs)
+
+        return self._train_weighted_single(
+            network, iterations, selector, scenario_defs, action_space,
+            exit_criteria_map, callback, **kwargs)
+
+    def _train_weighted_single(self, network, iterations, selector, scenario_defs, action_space,
+                                exit_criteria_map, callback, **kwargs):
+        """Weighted training with a single environment."""
+        # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
+        from .zelda_env import make_weighted_zelda_env  # pylint: disable=import-outside-toplevel
+
+        env_kwargs = {k: v for k, v in kwargs.items()
+                      if k in ('render_mode', 'translation', 'frame_stack', 'obs_kind', 'multihead')}
+        env = make_weighted_zelda_env(scenario_defs, action_space, selector, **env_kwargs)
+
+        buffer = PPORolloutBuffer(self.target_steps, 1, env.observation_space, env.action_space,
+                                  self._gamma, self._lambda)
+
+        try:
+            save_path = kwargs.get('save_path', None)
+            next_metrics = Threshold(LOG_RATE)
+            next_model_save = Threshold(SAVE_INTERVAL)
+            total_steps = math.ceil(iterations / buffer.memory_length) * buffer.memory_length
+            total_iterations = 0
+
+            while total_iterations < iterations:
+                buffer.ppo_main_loop(0, network, env, callback, total_steps)
+                total_iterations += buffer.memory_length
+
+                if next_metrics.add(buffer.memory_length):
+                    network.metrics = MetricTracker.get_metrics_and_clear()
+                    if network.metrics:
+                        callback.on_metrics(network.metrics, network.steps_trained, total_steps)
+
+                        if exit_criteria_map and self._check_weighted_exit_criteria(
+                                network.metrics, exit_criteria_map):
+                            break
+
+                if save_path and next_model_save.add(buffer.memory_length):
+                    model_name = kwargs.get('model_name', "network").replace(' ', '_')
+                    network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
+
+                network.steps_trained += buffer.memory_length
+                network = self._optimize(network, buffer, network.steps_trained, callback, total_steps)
+                if not callback.check_pause():
+                    break
+
+            return network
+        finally:
+            env.close()
+
+    def _train_weighted_multi(self, network, n_envs, iterations, scenario_defs,
+                               weights, action_space, exit_criteria_map, callback, **kwargs):
+        """Weighted training with multiple environments via manager RPC."""
+        # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
+        from .ml_ppo_worker import RolloutWorkerPool, WeightedEnvFactory  # pylint: disable=import-outside-toplevel
+        from .scenario_wrapper import WeightedScenarioSelector  # pylint: disable=import-outside-toplevel
+        import multiprocessing.managers  # pylint: disable=import-outside-toplevel
+
+        # Expose the selector via a manager so workers can call update() via RPC.
+        # Register with exposed=['update'] so the proxy knows which methods to forward.
+        class _SelectorManager(multiprocessing.managers.BaseManager):
+            pass
+        _SelectorManager.register('WeightedScenarioSelector', WeightedScenarioSelector,
+                                   exposed=['update'])
+
+        scenario_names = [s.name for s in scenario_defs]
+
+        manager = _SelectorManager()
+        manager.start()
+
+        try:
+            selector_proxy = manager.WeightedScenarioSelector(scenario_names, list(weights))
+
+            obs_space = network.observation_space
+            act_space = network.action_space
+            steps_per_env = self.target_steps // n_envs
+            buffer = PPORolloutBuffer(steps_per_env, n_envs, obs_space, act_space,
+                                      self._gamma, self._lambda)
+            buffer.share_memory_()
+
+            env_kwargs = {k: v for k, v in kwargs.items()
+                          if k in ('render_mode', 'translation', 'frame_stack', 'obs_kind', 'multihead')}
+            env_factory = WeightedEnvFactory(scenario_defs, action_space, selector_proxy,
+                                             **env_kwargs)
+
+            network_class_type = kwargs.get('network_class', type(network))
+            pool = RolloutWorkerPool(n_envs, buffer, network, env_factory, network_class_type)
+            try:
+                save_path = kwargs.get('save_path', None)
+                next_metrics = Threshold(LOG_RATE)
+                next_model_save = Threshold(SAVE_INTERVAL)
+
+                env_steps_per_iteration = buffer.memory_length * n_envs
+                total_steps = math.ceil(iterations / env_steps_per_iteration) * env_steps_per_iteration
+                total_iterations = 0
+                accumulated_metrics = []
+
+                while total_iterations < iterations:
+                    pool.update_weights(network)
+                    _, worker_metrics = pool.collect_rollouts(buffer)
+                    total_iterations += env_steps_per_iteration
+                    callback.on_progress(env_steps_per_iteration, total_steps)
+                    if worker_metrics:
+                        accumulated_metrics.append(worker_metrics)
+
+                    if next_metrics.add(env_steps_per_iteration):
+                        network.metrics = self._average_weighted_metric_dicts(accumulated_metrics)
+                        accumulated_metrics.clear()
+                        if network.metrics:
+                            callback.on_metrics(network.metrics, network.steps_trained, total_steps)
+
+                            if exit_criteria_map and self._check_weighted_exit_criteria(
+                                    network.metrics, exit_criteria_map):
+                                break
+
+                    if save_path and next_model_save.add(env_steps_per_iteration):
+                        model_name = kwargs.get('model_name', "network").replace(' ', '_')
+                        network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
+
+                    network.steps_trained += env_steps_per_iteration
+                    network = self._optimize(network, buffer, network.steps_trained, callback,
+                                             total_steps)
+                    if not callback.check_pause():
+                        break
+
+                return network
+            finally:
+                pool.close()
+        finally:
+            manager.shutdown()
+
+    @staticmethod
+    def _average_weighted_metric_dicts(dicts):
+        """Average a list of per-scenario metric dicts from weighted workers.
+
+        Each dict is {scenario_name: {metric: value}} from workers. Averages per-scenario
+        metrics across workers that reported for that scenario.
+        """
+        if not dicts:
+            return {}
+
+        # Collect: {scenario: {metric: [values]}}
+        combined = {}
+        for d in dicts:
+            for scenario, metrics in d.items():
+                if scenario not in combined:
+                    combined[scenario] = {}
+                for key, value in metrics.items():
+                    if key not in combined[scenario]:
+                        combined[scenario][key] = []
+                    combined[scenario][key].append(value)
+
+        return {scenario: {key: sum(vals) / len(vals) for key, vals in metrics.items()}
+                for scenario, metrics in combined.items()}
+
     @staticmethod
     def _average_metric_dicts(dicts):
         """Average a list of metric dicts into one."""
