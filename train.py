@@ -563,7 +563,7 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
     else:
         circuit = circuit_def.scenarios
 
-    return kwargs, circuit
+    return kwargs, circuit, circuit_def
 
 def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, iterations,
                callback=None, **kwargs):
@@ -595,7 +595,21 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
     return model, model.steps_trained - steps_before
 
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
-                 callback=None):
+                 callback=None, circuit_def=None):
+    """Run training circuit and return (final_model, final_scenario_def).
+
+    For weighted circuits, dispatches to _run_weighted_circuit.
+    """
+    if circuit_def is not None and circuit_def.kind == 'weighted':
+        return _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def,
+                                     checkpoint_dir, kwargs, total_budget, callback)
+
+    return _run_sequential_circuit(ppo, circuit, model_kind, action_space_def,
+                                    checkpoint_dir, kwargs, total_budget, callback)
+
+
+def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs,
+                             total_budget, callback=None):
     """Run training circuit and return (final_model, final_scenario_def)."""
     iterations_spent = 0
     model = None
@@ -658,6 +672,71 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
     return model, scenario_def
 
 
+def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkpoint_dir, kwargs,
+                           total_budget, callback=None):
+    """Run a weighted training circuit.
+
+    All scenarios run concurrently with step-count proportional to their weights.
+    The WeightedScenarioSelector (via RPC) decides which scenario each worker runs on reset.
+    """
+    # Resolve scenario definitions and weights
+    scenario_defs = []
+    weights = []
+    exit_criteria_map = {}
+
+    for entry in circuit_def.scenarios:
+        sdef = TrainingScenarioDefinition.get(entry.scenario)
+        if sdef is None:
+            raise ValueError(f"Unknown scenario: {entry.scenario}")
+        scenario_defs.append(sdef)
+        weights.append(entry.weight)
+        if entry.exit_criteria:
+            exit_criteria_map[entry.scenario] = entry.exit_criteria
+
+    # Determine iteration budget
+    if total_budget is not None:
+        iterations = total_budget
+    else:
+        # Use max iterations from any scenario, or a sensible default
+        iterations = max((s.iterations for s in scenario_defs), default=2_000_000)
+
+    multihead = getattr(model_kind.network_class, 'is_multihead', False)
+    kwargs['multihead'] = multihead
+
+    def create_env():
+        from triforce.zelda_env import make_weighted_zelda_env  # pylint: disable=import-outside-toplevel
+        from triforce.scenario_wrapper import WeightedScenarioSelector  # pylint: disable=import-outside-toplevel
+        dummy_selector = WeightedScenarioSelector([s.name for s in scenario_defs], weights)
+        return make_weighted_zelda_env(scenario_defs, action_space_def.actions,
+                                       dummy_selector, **kwargs)
+
+    # Pass metadata for checkpoint naming
+    stem = _model_stem(model_kind.name, action_space_def.name)
+    kwargs['model_name'] = stem
+    kwargs['model_kind'] = model_kind.name
+    kwargs['action_space_name_str'] = action_space_def.name
+    kwargs['network_class'] = model_kind.network_class
+
+    scenario_names = [f"{s.name} (w={w})" for s, w in zip(scenario_defs, weights)]
+    if callback:
+        callback.on_circuit_start([(', '.join(scenario_names), iterations)])
+
+    if callback:
+        callback.on_scenario_start(f"weighted[{len(scenario_defs)}]", iterations)
+
+    model = ppo.train_weighted(
+        model_kind.network_class, create_env, scenario_defs, weights,
+        action_space_def.actions, iterations, exit_criteria_map, callback,
+        save_path=checkpoint_dir, **kwargs)
+
+    if callback:
+        callback.on_scenario_end(f"weighted[{len(scenario_defs)}]")
+
+    # Save final checkpoint
+    model.save(f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt")
+    return model, scenario_defs[0]
+
+
 def main():
     """Main entry point."""
     args = parse_args()
@@ -687,14 +766,14 @@ def main():
     console.print(f"Output: {run_dir}")
     console.print(f"Model kind: {model_kind.name}, Action space: {action_space_def.name}")
 
-    kwargs, circuit = _get_kwargs_from_args(args, model_kind, action_space_def)
+    kwargs, circuit, circuit_def = _get_kwargs_from_args(args, model_kind, action_space_def)
     ppo = PPO(**kwargs)
 
     with Live(console=console, refresh_per_second=4) as live:
         display = TrainingDisplay(live, log_dir)
         model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
                                            checkpoint_dir, kwargs, args.iterations,
-                                           callback=display)
+                                           callback=display, circuit_def=circuit_def)
         display.on_training_complete()
 
     # Save final result in the run directory (not checkpoints)
