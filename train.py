@@ -496,6 +496,13 @@ class TrainingDisplay(TrainingCallback):
                 self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_loss = True
 
+        # KL rollback indicator — only show when a rollback occurred
+        kl_rollback = self._optimize_stats.get("losses/kl_rollback")
+        if kl_rollback and kl_rollback > 0:
+            if has_loss or has_perf or has_entropy or has_sps:
+                table.add_row("", "", "")
+            table.add_row("[bold red]⚠ KL ROLLBACK[/bold red]", "[bold red]weights restored[/bold red]", "")
+
         return table
 
 def _dump_trace_with_locals(exc_type, exc_value, exc_traceback):
