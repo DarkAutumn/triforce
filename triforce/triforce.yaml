@@ -71,6 +71,19 @@ training-circuits:
       threshold: 0.9
   - scenario: dungeon1
     iterations: 20000000
+- name: polish
+  kind: weighted
+  description: Polish a trained model by mixing full-game with targeted scenarios to prevent
+    catastrophic forgetting while improving weak areas.
+  scenarios:
+  - scenario: full-game
+    weight: 70
+  - scenario: dungeon1
+    weight: 5
+  - scenario: dungeon1-wallmaster
+    weight: 5
+  - scenario: dungeon1-dungeon2
+    weight: 10
 scenarios:
 - name: full-game
   description: Full game from start through dungeon 1 triforce
