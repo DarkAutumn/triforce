@@ -323,10 +323,14 @@ class StateChangeWrapper(gym.Wrapper):
     def __init__(self, env, scenario):
         super().__init__(env)
         self._ledger = FutureCreditLedger()
-        self._objective_type = scenario.objective if scenario else None
-        self._objective_params = scenario.objective_params if scenario else {}
         self._objectives : ObjectiveSelector = None
         self._prev_state = None
+        self._apply_scenario(scenario)
+
+    def _apply_scenario(self, scenario):
+        """Configure objective and RAM modification lists from a scenario definition."""
+        self._objective_type = scenario.objective if scenario else None
+        self._objective_params = scenario.objective_params if scenario else {}
 
         self.per_reset = []
         self.per_room = []
@@ -341,6 +345,10 @@ class StateChangeWrapper(gym.Wrapper):
 
             for key, value in scenario.per_frame.items():
                 self.per_frame.append((key, value))
+
+    def switch_scenario(self, scenario):
+        """Switch to a new scenario, updating objectives and RAM modifications."""
+        self._apply_scenario(scenario)
 
     def reset(self, **kwargs):
         frames, info = self.env.reset(**kwargs)
