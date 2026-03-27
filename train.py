@@ -438,7 +438,8 @@ class TrainingDisplay(TrainingCallback):
 
         # Performance metrics
         perf_metrics = [
-            ("progress/p75", "progress/p75", ".2f"),
+            ("room-progress", "progress/avg", ".1f"),
+            ("progress/max", "progress/max", ".0f"),
             ("rewards", "rewards", ".2f"),
             ("success-rate", "success-rate", ".4f"),
         ]

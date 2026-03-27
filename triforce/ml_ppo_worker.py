@@ -106,6 +106,13 @@ def _worker_loop(env_index, shared_buffer, shared_weights, network_class,
         metrics_conn.close()
 
 
+def _reduce_metric(key, values):
+    """Reduce a list of metric values: max() for '/max' keys, mean for everything else."""
+    if '/max' in key:
+        return max(values)
+    return sum(values) / len(values)
+
+
 def _aggregate_metrics(metrics_list):
     """Averages metric dicts from multiple workers.
 
@@ -127,9 +134,7 @@ def _aggregate_metrics(metrics_list):
                 combined[key] = []
             combined[key].append(value)
 
-    return {key: sum(values) / len(values) for key, values in combined.items()}
-
-
+    return {key: _reduce_metric(key, values) for key, values in combined.items()}
 def _aggregate_weighted_metrics(metrics_list):
     """Averages per-scenario metric dicts: {scenario: {metric: [values]}}."""
     combined = {}
@@ -142,7 +147,7 @@ def _aggregate_weighted_metrics(metrics_list):
                     combined[scenario][key] = []
                 combined[scenario][key].append(value)
 
-    return {scenario: {key: sum(vals) / len(vals) for key, vals in metrics.items()}
+    return {scenario: {key: _reduce_metric(key, vals) for key, vals in metrics.items()}
             for scenario, metrics in combined.items()}
 
 

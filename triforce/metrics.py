@@ -1,7 +1,7 @@
 
 from collections import Counter
 from enum import Enum
-from math import ceil
+
 from typing import Any, Iterable, Tuple
 
 from .rewards import Reward, StepRewards
@@ -111,13 +111,8 @@ class RoomProgressMetric(AveragedMetric):
         if not self.values:
             return
 
-        sorted_vals = sorted(self.values)
-        n = len(sorted_vals)
-        yield "progress/median", sorted_vals[n // 2]
-        yield "progress/p25", sorted_vals[max(0, ceil(n * 0.25) - 1)]
-        yield "progress/p75", sorted_vals[max(0, ceil(n * 0.75) - 1)]
-        yield "progress/p90", sorted_vals[max(0, ceil(n * 0.90) - 1)]
-        yield "progress/max", sorted_vals[-1]
+        yield "progress/max", max(self.values)
+        n = len(self.values)
         yield "progress/success", sum(1 for v in self.values if v >= self._max_progress) / n
 
 class RoomResult(Enum):
@@ -395,8 +390,13 @@ class MetricTracker:
                     MetricTracker._buffered_metrics[name] = {}
                 existing = MetricTracker._buffered_metrics[name]
                 for key, value in metrics.items():
-                    if key in existing:
-                        # Average with previously buffered values from same scenario
+                    if '/max' in key:
+                        # Track maximum, not sum
+                        if key in existing:
+                            existing[key] = (max(existing[key][0], value), 1)
+                        else:
+                            existing[key] = (value, 1)
+                    elif key in existing:
                         old_val, old_count = existing[key]
                         existing[key] = (old_val + value, old_count + 1)
                     else:
@@ -465,7 +465,12 @@ class MetricTracker:
                     buffered[name] = {}
                 existing = buffered[name]
                 for key, value in current.items():
-                    if key in existing:
+                    if '/max' in key:
+                        if key in existing:
+                            existing[key] = (max(existing[key][0], value), 1)
+                        else:
+                            existing[key] = (value, 1)
+                    elif key in existing:
                         old_val, old_count = existing[key]
                         existing[key] = (old_val + value, old_count + 1)
                     else:

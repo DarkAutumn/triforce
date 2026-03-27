@@ -1,3 +1,4 @@
+import copy
 import math
 import time
 import torch
@@ -25,6 +26,8 @@ MINIBATCHES = 4
 LOG_RATE = 25_000
 SAVE_INTERVAL = 50_000
 TARGET_KL = 0.02
+# KL rollback: if KL exceeds this multiple of target_kl, discard the entire optimization round
+KL_ROLLBACK_MULTIPLIER = 4.0
 
 class Threshold:
     """A counter class to see if we've reached our intervals."""
@@ -59,6 +62,7 @@ class PPO:
         self._minibatches_override = 'minibatches' in kwargs
         self.num_epochs = kwargs.get('num_epochs', EPOCHS)
         self._target_kl = kwargs.get('target_kl', TARGET_KL)
+        self._kl_rollback = kwargs.get('kl_rollback', KL_ROLLBACK_MULTIPLIER)
         self.optimizer = None
 
         self.kwargs = kwargs
@@ -439,7 +443,8 @@ class PPO:
                         combined[scenario][key] = []
                     combined[scenario][key].append(value)
 
-        return {scenario: {key: sum(vals) / len(vals) for key, vals in metrics.items()}
+        return {scenario: {key: (max(vals) if '/max' in key else sum(vals) / len(vals))
+                          for key, vals in metrics.items()}
                 for scenario, metrics in combined.items()}
 
     @staticmethod
@@ -453,7 +458,8 @@ class PPO:
                 if key not in combined:
                     combined[key] = []
                 combined[key].append(value)
-        return {key: sum(values) / len(values) for key, values in combined.items()}
+        return {key: (max(values) if '/max' in key else sum(values) / len(values))
+                for key, values in combined.items()}
 
     def _optimize(self, network : Network, variables : PPORolloutBuffer, iterations : int,
                   callback=None, total_steps=0):
@@ -499,6 +505,15 @@ class PPO:
 
         network = network.to(self.device)
         optimizer = self.optimizer
+
+        # Snapshot weights for KL rollback
+        kl_rollback_threshold = None
+        saved_state = None
+        saved_optimizer = None
+        if self._kl_rollback and self._target_kl:
+            kl_rollback_threshold = self._target_kl * self._kl_rollback
+            saved_state = {k: v.clone() for k, v in network.state_dict().items()}
+            saved_optimizer = copy.deepcopy(optimizer.state_dict())
 
         b_inds = torch.arange(batch_size)
         clipfracs = []
@@ -571,6 +586,13 @@ class PPO:
                     kl_exceeded = True
                     break
 
+        # KL rollback: if KL is catastrophically high, restore pre-optimization weights
+        kl_rolled_back = False
+        if kl_rollback_threshold and saved_state and approx_kl > kl_rollback_threshold:
+            network.load_state_dict(saved_state)
+            optimizer.load_state_dict(saved_optimizer)
+            kl_rolled_back = True
+
         network = network.to("cpu")
 
         # After training, compute stats like explained variance
@@ -602,6 +624,7 @@ class PPO:
             "losses/approx_kl": approx_kl.item(),
             "losses/clipfrac": torch.mean(torch.tensor(clipfracs)).item(),
             "losses/explained_variance": explained_var,
+            "losses/kl_rollback": 1.0 if kl_rolled_back else 0.0,
         }
 
         if self.start_time is not None:
