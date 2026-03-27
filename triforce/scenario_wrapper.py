@@ -108,12 +108,22 @@ class TrainingCircuitEntry(BaseModel):
     scenario : str
     iterations : Optional[int] = None
     exit_criteria : Optional[ExitCriteria] = Field(None, alias='exit-criteria')
+    weight : Optional[float] = None
 
 class TrainingCircuitDefinition(BaseModel):
     """A training circuit."""
     name : str
     description : str
+    kind : str = 'sequential'
     scenarios : List[TrainingCircuitEntry]
+
+    @field_validator('kind')
+    @classmethod
+    def validate_kind(cls, value):
+        """Validates the circuit kind."""
+        if value not in ('sequential', 'weighted'):
+            raise ValueError(f"Unknown circuit kind '{value}', must be 'sequential' or 'weighted'")
+        return value
 
     @staticmethod
     def _load_circuits():
@@ -123,6 +133,19 @@ class TrainingCircuitDefinition(BaseModel):
         with open(os.path.join(script_dir, 'triforce.yaml'), encoding='utf-8') as f:
             for circuit in yaml.safe_load(f)["training-circuits"]:
                 circuit = TrainingCircuitDefinition(**circuit)
+
+                # Validate weight fields match circuit kind
+                if circuit.kind == 'weighted':
+                    for entry in circuit.scenarios:
+                        if entry.weight is None:
+                            raise ValueError(f"Weighted circuit '{circuit.name}' entry "
+                                             f"'{entry.scenario}' must have a weight")
+                else:
+                    for entry in circuit.scenarios:
+                        if entry.weight is not None:
+                            raise ValueError(f"Sequential circuit '{circuit.name}' entry "
+                                             f"'{entry.scenario}' must not have a weight")
+
                 circuits[circuit.name] = circuit
 
         return circuits
