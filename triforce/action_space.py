@@ -357,7 +357,7 @@ class ZeldaActionSpace(gym.Wrapper):
 
         return mask
 
-    def _handle_empty_mask(self, state, link, actions_possible, mask):
+    def _handle_empty_mask(self, _state, _link, _actions_possible, mask):
         """Fallback when all actions are masked — unmask all MOVE directions.
 
         Link can get into 'impossible' positions via sword knockback on certain
