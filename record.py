@@ -772,7 +772,9 @@ def get_attention_weights(model, obs):
         result = model.forward_with_attention(obs)
         if was_training:
             model.train()
-        attn = result[-1]
+
+        # spatial_attn is second-to-last; last is cross_attn (entity-spatial, higher dim)
+        attn = result[-2]
         if attn is None:
             return None
         return attn.squeeze(0).cpu().numpy()

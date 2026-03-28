@@ -77,13 +77,13 @@ training-circuits:
     catastrophic forgetting while improving weak areas.
   scenarios:
   - scenario: full-game
-    weight: 70
+    weight: 92
   - scenario: dungeon1
-    weight: 15
-  - scenario: dungeon1-wallmaster
-    weight: 10
-  - scenario: overworld-sword
     weight: 5
+  - scenario: dungeon1-wallmaster
+    weight: 2
+  - scenario: overworld-sword
+    weight: 1
 scenarios:
 - name: full-game
   description: Full game from start through dungeon 1 triforce
