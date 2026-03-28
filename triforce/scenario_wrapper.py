@@ -4,7 +4,7 @@ from collections import deque
 import gzip
 import os
 from typing import Deque, Dict, List, Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import gymnasium as gym
 import stable_retro as retro
 import torch
@@ -96,18 +96,34 @@ class TrainingScenarioDefinition(BaseModel):
         """Loads all scenarios from triforce.yaml."""
         return list(TrainingScenarioDefinition._load_scenarios().values())
 
+class ExitCriteria(BaseModel):
+    """Exit criteria for a training circuit entry."""
+    metric : str
+    threshold : float
+
 class TrainingCircuitEntry(BaseModel):
     """An entry in a training circuit."""
+    model_config = ConfigDict(populate_by_name=True)
+
     scenario : str
     iterations : Optional[int] = None
-    exit_criteria : Optional[str] = None
-    threshold : Optional[float] = None
+    exit_criteria : Optional[ExitCriteria] = Field(None, alias='exit-criteria')
+    weight : Optional[float] = None
 
 class TrainingCircuitDefinition(BaseModel):
     """A training circuit."""
     name : str
     description : str
+    kind : str = 'sequential'
     scenarios : List[TrainingCircuitEntry]
+
+    @field_validator('kind')
+    @classmethod
+    def validate_kind(cls, value):
+        """Validates the circuit kind."""
+        if value not in ('sequential', 'weighted'):
+            raise ValueError(f"Unknown circuit kind '{value}', must be 'sequential' or 'weighted'")
+        return value
 
     @staticmethod
     def _load_circuits():
@@ -117,6 +133,19 @@ class TrainingCircuitDefinition(BaseModel):
         with open(os.path.join(script_dir, 'triforce.yaml'), encoding='utf-8') as f:
             for circuit in yaml.safe_load(f)["training-circuits"]:
                 circuit = TrainingCircuitDefinition(**circuit)
+
+                # Validate weight fields match circuit kind
+                if circuit.kind == 'weighted':
+                    for entry in circuit.scenarios:
+                        if entry.weight is None:
+                            raise ValueError(f"Weighted circuit '{circuit.name}' entry "
+                                             f"'{entry.scenario}' must have a weight")
+                else:
+                    for entry in circuit.scenarios:
+                        if entry.weight is not None:
+                            raise ValueError(f"Sequential circuit '{circuit.name}' entry "
+                                             f"'{entry.scenario}' must not have a weight")
+
                 circuits[circuit.name] = circuit
 
         return circuits
@@ -131,6 +160,45 @@ class TrainingCircuitDefinition(BaseModel):
     def get_all():
         """Loads all training circuits from triforce.yaml."""
         return list(TrainingCircuitDefinition._load_circuits().values())
+
+
+class WeightedScenarioSelector:
+    """Centralized scenario selector for weighted circuits.
+
+    Tracks total step counts per scenario and selects the most underweight
+    scenario on each episode reset. Used from the main process directly
+    (single-env) or exposed via multiprocessing.managers for worker
+    subprocesses to call via RPC.
+    """
+    def __init__(self, scenario_names, weights):
+        self._scenarios = list(scenario_names)
+        self._weights = list(weights)
+        self._total_weight = sum(self._weights)
+        self._steps = {s: 0 for s in self._scenarios}
+
+    def update(self, last_scenario, steps):
+        """Record steps for the completed scenario and return the next scenario to run.
+
+        Call with (None, 0) for the initial reset of each worker.
+        """
+        if last_scenario is not None:
+            self._steps[last_scenario] += steps
+
+        total_steps = sum(self._steps.values())
+        if total_steps == 0:
+            return self._scenarios[0]
+
+        best = None
+        best_deficit = -float('inf')
+        for scenario, weight in zip(self._scenarios, self._weights):
+            target = weight / self._total_weight
+            actual = self._steps[scenario] / total_steps
+            deficit = target - actual
+            if deficit > best_deficit:
+                best_deficit = deficit
+                best = scenario
+
+        return best
 
 class RoomResult:
     """Tracks whether link took damage in a room."""
@@ -297,9 +365,16 @@ class ProbabilisticSelector(RoomSelector):
 
 class ScenarioWrapper(gym.Wrapper):
     """Wraps the environment to call our critic and end conditions."""
-    def __init__(self, env, scenario : TrainingScenarioDefinition):
+    def __init__(self, env, scenario : TrainingScenarioDefinition, weighted_selector=None):
         super().__init__(env)
         self._last_save_state = None
+        self._scenario = scenario
+        self._step_count = 0
+        self._weighted_selector = weighted_selector
+        self._configure_scenario(scenario)
+
+    def _configure_scenario(self, scenario):
+        """Set up critic, end conditions, room selector, and metrics for a scenario."""
         self._scenario = scenario
         self._critic = getattr(critics, scenario.critic)()
         self._conditions = []
@@ -309,7 +384,12 @@ class ScenarioWrapper(gym.Wrapper):
                 self._conditions.append(ec_class(**scenario.objective_params))
             except TypeError:
                 self._conditions.append(ec_class())
-        self._metrics : MetricTracker = MetricTracker(scenario.metrics)
+
+        # In weighted mode, pass scenario name so MetricTracker buffers per-scenario
+        scenario_name = scenario.name if self._weighted_selector is not None else None
+        MetricTracker.close()
+        self._metrics : MetricTracker = MetricTracker(scenario.metrics, scenario_name=scenario_name)
+
         match scenario.scenario_selector:
             case 'round-robin':
                 self.room_selector = RoundRobinSelector(scenario.start)
@@ -318,10 +398,35 @@ class ScenarioWrapper(gym.Wrapper):
             case _:
                 raise ValueError(f"Unknown scenario selector {scenario.scenario_selector}")
 
+    def switch_scenario(self, scenario : TrainingScenarioDefinition):
+        """Switch to a new scenario, reconfiguring all components."""
+        self._configure_scenario(scenario)
+        self._find_state_change_wrapper().switch_scenario(scenario)
+
     def __del__(self):
         MetricTracker.close()
 
+    def _find_state_change_wrapper(self):
+        """Walk the wrapper chain to find the StateChangeWrapper."""
+        from .state_change_wrapper import StateChangeWrapper as SCW  # pylint: disable=import-outside-toplevel
+        env = self.env
+        while env is not None:
+            if isinstance(env, SCW):
+                return env
+            env = getattr(env, 'env', None)
+        raise RuntimeError("StateChangeWrapper not found in wrapper chain")
+
     def reset(self, **kwargs):
+        # In weighted mode, ask the selector which scenario to run next
+        if self._weighted_selector is not None:
+            next_scenario_name = self._weighted_selector.update(
+                self._scenario.name if self._step_count > 0 else None,
+                self._step_count)
+            self._step_count = 0
+            if next_scenario_name != self._scenario.name:
+                next_scenario = TrainingScenarioDefinition.get(next_scenario_name)
+                self.switch_scenario(next_scenario)
+
         self.room_selector.reset()
 
         save_state = self.room_selector.next()
@@ -338,6 +443,8 @@ class ScenarioWrapper(gym.Wrapper):
         return obs, state
 
     def step(self, action):
+        self._step_count += 1
+
         # Step the environment
         obs, _, terminated, truncated, state_change = self.env.step(action)
         rewards = StepRewards()

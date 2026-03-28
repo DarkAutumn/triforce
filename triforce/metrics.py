@@ -1,7 +1,7 @@
 
 from collections import Counter
 from enum import Enum
-from math import ceil
+
 from typing import Any, Iterable, Tuple
 
 from .rewards import Reward, StepRewards
@@ -111,13 +111,8 @@ class RoomProgressMetric(AveragedMetric):
         if not self.values:
             return
 
-        sorted_vals = sorted(self.values)
-        n = len(sorted_vals)
-        yield "progress/median", sorted_vals[n // 2]
-        yield "progress/p25", sorted_vals[max(0, ceil(n * 0.25) - 1)]
-        yield "progress/p75", sorted_vals[max(0, ceil(n * 0.75) - 1)]
-        yield "progress/p90", sorted_vals[max(0, ceil(n * 0.90) - 1)]
-        yield "progress/max", sorted_vals[-1]
+        yield "progress/max", max(self.values)
+        n = len(self.values)
         yield "progress/success", sum(1 for v in self.values if v >= self._max_progress) / n
 
 class RoomResult(Enum):
@@ -357,23 +352,55 @@ METRICS = {
 }
 
 class MetricTracker:
-    """Singleton class that tracks all metrics."""
+    """Singleton class that tracks all metrics.
+
+    In weighted-circuit mode, tracks metrics per scenario name. When the active scenario
+    switches (via close() + new __init__), current metrics are buffered under the scenario
+    name. get_metrics_and_clear() returns per-scenario metrics when buffered data exists.
+    """
     _instance : 'MetricTracker' = None
+    _buffered_metrics : dict = {}
 
     @staticmethod
     def get_instance():
         """Returns the singleton instance."""
         return MetricTracker._instance
 
-    def __init__(self, metric_names):
+    def __init__(self, metric_names, scenario_name=None):
         self.metrics = [METRICS[name]() for name in metric_names]
+        self._scenario_name = scenario_name
 
         assert MetricTracker._instance is None
         MetricTracker._instance = self
 
+    @property
+    def scenario_name(self):
+        """The scenario name for weighted-mode metric buffering, or None."""
+        return self._scenario_name
+
     @staticmethod
     def close():
-        """Closes the metric tracker."""
+        """Closes the metric tracker, buffering metrics if in weighted mode."""
+        instance = MetricTracker._instance
+        if instance is not None and instance.scenario_name is not None:
+            metrics = instance.get_metrics()
+            if metrics:
+                name = instance.scenario_name
+                if name not in MetricTracker._buffered_metrics:
+                    MetricTracker._buffered_metrics[name] = {}
+                existing = MetricTracker._buffered_metrics[name]
+                for key, value in metrics.items():
+                    if '/max' in key:
+                        # Track maximum, not sum
+                        if key in existing:
+                            existing[key] = (max(existing[key][0], value), 1)
+                        else:
+                            existing[key] = (value, 1)
+                    elif key in existing:
+                        old_val, old_count = existing[key]
+                        existing[key] = (old_val + value, old_count + 1)
+                    else:
+                        existing[key] = (value, 1)
         MetricTracker._instance = None
 
     def begin_scenario(self, state):
@@ -409,13 +436,52 @@ class MetricTracker:
 
     @staticmethod
     def get_metrics_and_clear():
-        """Enumerates the values of the metrics and clears them."""
+        """Enumerates the values of the metrics and clears them.
+
+        In weighted mode (when buffered metrics exist), returns a nested dict:
+        {scenario_name: {metric_name: value}}. In normal mode, returns a flat dict.
+        """
         instance = MetricTracker._instance
-        if instance is None:
+        buffered = MetricTracker._buffered_metrics
+
+        if instance is None and not buffered:
             return {}
 
-        result = instance.get_metrics()
-        for metric in instance.metrics:
-            metric.clear()
+        # Normal mode: no buffered metrics, return flat dict
+        if not buffered and (instance is None or instance.scenario_name is None):
+            if instance is None:
+                return {}
+            result = instance.get_metrics()
+            for metric in instance.metrics:
+                metric.clear()
+            return result
 
+        # Weighted mode: merge current instance metrics into buffer, return per-scenario
+        if instance is not None and instance.scenario_name is not None:
+            current = instance.get_metrics()
+            if current:
+                name = instance.scenario_name
+                if name not in buffered:
+                    buffered[name] = {}
+                existing = buffered[name]
+                for key, value in current.items():
+                    if '/max' in key:
+                        if key in existing:
+                            existing[key] = (max(existing[key][0], value), 1)
+                        else:
+                            existing[key] = (value, 1)
+                    elif key in existing:
+                        old_val, old_count = existing[key]
+                        existing[key] = (old_val + value, old_count + 1)
+                    else:
+                        existing[key] = (value, 1)
+
+            for metric in instance.metrics:
+                metric.clear()
+
+        # Flatten accumulated (value, count) tuples to averages
+        result = {}
+        for scenario_name, metrics in buffered.items():
+            result[scenario_name] = {key: total / count for key, (total, count) in metrics.items()}
+        buffered.clear()
         return result

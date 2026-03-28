@@ -104,6 +104,7 @@ class TrainingDisplay(TrainingCallback):
         self._optimize_stats = {}
         self._prev_game_metrics = {}
         self._prev_optimize_stats = {}
+        self._kl_rollback_count = 0
 
         # Pause state
         self._pause_state = _RUNNING
@@ -257,10 +258,20 @@ class TrainingDisplay(TrainingCallback):
 
     def on_metrics(self, metrics, iteration, total_iterations):
         self._prev_game_metrics = dict(self._game_metrics)
-        self._game_metrics.update(metrics)
+
+        # Weighted mode returns {scenario: {metric: value}} — flatten for display/tensorboard
+        flat_metrics = {}
+        for key, value in metrics.items():
+            if isinstance(value, dict):
+                for metric_name, metric_value in value.items():
+                    flat_metrics[f"{key}/{metric_name}"] = metric_value
+            else:
+                flat_metrics[key] = value
+
+        self._game_metrics.update(flat_metrics)
         if self._tensorboard:
             timestamp = time.time()
-            for name, value in metrics.items():
+            for name, value in flat_metrics.items():
                 if '/' not in name:
                     name = f"metrics/{name}"
                 self._tensorboard.add_scalar(name, value, iteration, timestamp)
@@ -270,6 +281,8 @@ class TrainingDisplay(TrainingCallback):
     def on_optimize(self, stats, iteration, total_iterations):
         self._prev_optimize_stats = dict(self._optimize_stats)
         self._optimize_stats = dict(stats)
+        if stats.get("losses/kl_rollback", 0) > 0:
+            self._kl_rollback_count += 1
         if self._tensorboard:
             for name, value in stats.items():
                 self._tensorboard.add_scalar(name, value, iteration)
@@ -428,7 +441,8 @@ class TrainingDisplay(TrainingCallback):
 
         # Performance metrics
         perf_metrics = [
-            ("progress/p75", "progress/p75", ".2f"),
+            ("room-progress", "progress/avg", ".1f"),
+            ("progress/max", "progress/max", ".0f"),
             ("rewards", "rewards", ".2f"),
             ("success-rate", "success-rate", ".4f"),
         ]
@@ -484,6 +498,13 @@ class TrainingDisplay(TrainingCallback):
                 prev = self._prev_optimize_stats.get(key)
                 self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_loss = True
+
+        # KL rollback counter — only show when rollbacks have occurred
+        if self._kl_rollback_count > 0:
+            if has_loss or has_perf or has_entropy or has_sps:
+                table.add_row("", "", "")
+            table.add_row("[bold red]⚠ KL rollbacks[/bold red]",
+                          f"[bold red]{self._kl_rollback_count}[/bold red]", "")
 
         return table
 
@@ -563,7 +584,7 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
     else:
         circuit = circuit_def.scenarios
 
-    return kwargs, circuit
+    return kwargs, circuit, circuit_def
 
 def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, iterations,
                callback=None, **kwargs):
@@ -595,7 +616,22 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
     return model, model.steps_trained - steps_before
 
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
-                 callback=None):
+                 callback=None, circuit_def=None):
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    """Run training circuit and return (final_model, final_scenario_def).
+
+    For weighted circuits, dispatches to _run_weighted_circuit.
+    """
+    if circuit_def is not None and circuit_def.kind == 'weighted':
+        return _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def,
+                                     checkpoint_dir, kwargs, total_budget, callback)
+
+    return _run_sequential_circuit(ppo, circuit, model_kind, action_space_def,
+                                    checkpoint_dir, kwargs, total_budget, callback)
+
+
+def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs,
+                             total_budget, callback=None):
     """Run training circuit and return (final_model, final_scenario_def)."""
     iterations_spent = 0
     model = None
@@ -637,9 +673,8 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
             break
 
         if scenario_entry.exit_criteria:
-            assert scenario_entry.threshold is not None, "Threshold must be set if exit criteria is set"
-            kwargs['exit_criteria'] = scenario_entry.exit_criteria
-            kwargs['exit_threshold'] = scenario_entry.threshold
+            kwargs['exit_criteria'] = scenario_entry.exit_criteria.metric
+            kwargs['exit_threshold'] = scenario_entry.exit_criteria.threshold
         elif 'exit_criteria' in kwargs:
             del kwargs['exit_criteria']
             del kwargs['exit_threshold']
@@ -657,6 +692,73 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
         iterations_spent += used
 
     return model, scenario_def
+
+
+def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkpoint_dir, kwargs,
+                           total_budget, callback=None):
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    """Run a weighted training circuit.
+
+    All scenarios run concurrently with step-count proportional to their weights.
+    The WeightedScenarioSelector (via RPC) decides which scenario each worker runs on reset.
+    """
+    # Resolve scenario definitions and weights
+    scenario_defs = []
+    weights = []
+    exit_criteria_map = {}
+
+    for entry in circuit_def.scenarios:
+        sdef = TrainingScenarioDefinition.get(entry.scenario)
+        if sdef is None:
+            raise ValueError(f"Unknown scenario: {entry.scenario}")
+        scenario_defs.append(sdef)
+        weights.append(entry.weight)
+        if entry.exit_criteria:
+            exit_criteria_map[entry.scenario] = entry.exit_criteria
+
+    # Determine iteration budget
+    if total_budget is not None:
+        iterations = total_budget
+    else:
+        # Use max iterations from any scenario, or a sensible default
+        iterations = max((s.iterations for s in scenario_defs), default=2_000_000)
+
+    multihead = getattr(model_kind.network_class, 'is_multihead', False)
+    kwargs['multihead'] = multihead
+
+    def create_env():
+        from triforce.zelda_env import make_weighted_zelda_env  # pylint: disable=import-outside-toplevel
+        from triforce.scenario_wrapper import WeightedScenarioSelector  # pylint: disable=import-outside-toplevel
+        dummy_selector = WeightedScenarioSelector([s.name for s in scenario_defs], weights)
+        return make_weighted_zelda_env(scenario_defs, action_space_def.actions,
+                                       dummy_selector, **kwargs)
+
+    # Pass metadata for checkpoint naming
+    stem = _model_stem(model_kind.name, action_space_def.name)
+    kwargs['model_name'] = stem
+    kwargs['model_kind'] = model_kind.name
+    kwargs['action_space_name_str'] = action_space_def.name
+    kwargs['network_class'] = model_kind.network_class
+
+    weighted_label = f"weighted[{len(scenario_defs)}]"
+    if callback:
+        callback.on_circuit_start([(weighted_label, iterations)])
+
+    if callback:
+        callback.on_scenario_start(weighted_label, iterations)
+
+    model = ppo.train_weighted(
+        model_kind.network_class, create_env, scenario_defs, weights,
+        action_space_def.actions, iterations, exit_criteria_map, callback,
+        save_path=checkpoint_dir,
+        **{k: v for k, v in kwargs.items() if k != 'network_class'})
+
+    if callback:
+        callback.on_scenario_end(f"weighted[{len(scenario_defs)}]")
+
+    # Save final checkpoint
+    model.save(f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt")
+    return model, scenario_defs[0]
 
 
 def main():
@@ -688,14 +790,14 @@ def main():
     console.print(f"Output: {run_dir}")
     console.print(f"Model kind: {model_kind.name}, Action space: {action_space_def.name}")
 
-    kwargs, circuit = _get_kwargs_from_args(args, model_kind, action_space_def)
+    kwargs, circuit, circuit_def = _get_kwargs_from_args(args, model_kind, action_space_def)
     ppo = PPO(**kwargs)
 
     with Live(console=console, refresh_per_second=4) as live:
         display = TrainingDisplay(live, log_dir)
         model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
                                            checkpoint_dir, kwargs, args.iterations,
-                                           callback=display)
+                                           callback=display, circuit_def=circuit_def)
         display.on_training_complete()
 
     # Save final result in the run directory (not checkpoints)
