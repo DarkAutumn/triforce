@@ -53,7 +53,7 @@ class _MockMultiDiscreteEnv:
         self.observation_space = MultiBinary(obs_size)
         self.action_space = MultiDiscrete(list(nvec))
         self._step = 0
-        self._mask_size = int(sum(nvec))
+        self._mask_size = int(nvec[0]) * 4  # K*4 joint mask
 
     def reset(self):
         self._step = 0
@@ -162,10 +162,10 @@ class TestMultiDiscreteBufferInit:
         assert buf.logp_ent_val.shape == (2, 16, 3)
 
     def test_mask_shape(self):
-        """MultiDiscrete([3, 4]) → mask size = 3 + 4 = 7."""
+        """MultiDiscrete([3, 4]) → mask size = 3 * 4 = 12."""
         buf = PPORolloutBuffer(16, 1, MultiBinary(8), MultiDiscrete([3, 4]), 0.99, 0.95)
-        assert buf.masks.shape == (1, 17, 7)
-        assert buf.ones_mask.shape == (7,)
+        assert buf.masks.shape == (1, 17, 12)
+        assert buf.ones_mask.shape == (12,)
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +297,7 @@ class TestBufferAssignment:
         src.logp_ent_val[0] = torch.tensor([[-1.0, 2.0, 0.5]] * 4)
         src.dones[0] = torch.zeros(5)
         src.rewards[0] = torch.ones(4)
-        src.masks[0] = torch.ones(5, 7, dtype=torch.bool)
+        src.masks[0] = torch.ones(5, 12, dtype=torch.bool)  # K=3, 3*4=12
         src.returns[0] = torch.ones(4)
         src.advantages[0] = torch.ones(4)
         src.has_data[0] = True

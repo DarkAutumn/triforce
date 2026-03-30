@@ -144,10 +144,9 @@ class TestMultiHeadMasking:
         agent = MultiHeadAgent(obs_space, action_space)
 
         obs = _make_obs_batch(100)
-        # Mask: only action type 1 allowed, all directions allowed
-        mask = torch.zeros(100, 7, dtype=torch.bool)
-        mask[:, 1] = True        # only type index 1
-        mask[:, 3:7] = True      # all 4 directions
+        # [K*4] = [12]: only action type 1 allowed, all directions
+        mask = torch.zeros(100, 12, dtype=torch.bool)
+        mask[:, 4:8] = True      # type 1 (indices 4-7), all 4 directions
 
         actions, _, _, _ = agent.get_action_and_value(obs, mask=mask)
         assert (actions[:, 0] == 1).all(), "Only action type 1 should be selected"
@@ -159,10 +158,11 @@ class TestMultiHeadMasking:
         agent = MultiHeadAgent(obs_space, action_space)
 
         obs = _make_obs_batch(100)
-        # Mask: all action types allowed, only direction 2 allowed
-        mask = torch.zeros(100, 7, dtype=torch.bool)
-        mask[:, 0:3] = True      # all 3 types
-        mask[:, 5] = True         # only direction index 2 (offset by K=3)
+        # [K*4] = [12]: all types allowed, only direction 2 (W) for each
+        mask = torch.zeros(100, 12, dtype=torch.bool)
+        mask[:, 2] = True    # type 0, dir 2
+        mask[:, 6] = True    # type 1, dir 2
+        mask[:, 10] = True   # type 2, dir 2
 
         actions, _, _, _ = agent.get_action_and_value(obs, mask=mask)
         assert (actions[:, 1] == 2).all(), "Only direction 2 should be selected"
@@ -174,22 +174,44 @@ class TestMultiHeadMasking:
         agent = MultiHeadAgent(obs_space, action_space)
 
         obs = _make_obs_batch(1)
-        mask = torch.zeros(1, 7, dtype=torch.bool)
-        mask[:, 3:7] = True  # directions OK, but no action types
+        # All zeros — no valid type
+        mask = torch.zeros(1, 12, dtype=torch.bool)
         with pytest.raises(ValueError, match="Empty action mask"):
             agent.get_action_and_value(obs, mask=mask)
 
     def test_mask_assertion_no_valid_direction(self):
-        """Should assert if no valid direction in mask."""
+        """Should assert if selected type has no valid direction."""
         obs_space = _make_obs_space()
         action_space = MultiDiscrete([3, 4])
         agent = MultiHeadAgent(obs_space, action_space)
 
         obs = _make_obs_batch(1)
-        mask = torch.zeros(1, 7, dtype=torch.bool)
-        mask[:, 0:3] = True  # types OK, but no directions
+        # All zeros — no valid type or direction
+        mask = torch.zeros(1, 12, dtype=torch.bool)
         with pytest.raises(ValueError, match="Empty action mask"):
             agent.get_action_and_value(obs, mask=mask)
+
+    def test_cross_type_direction_isolation(self):
+        """MOVE N masked but SWORD N valid: model should never pick MOVE N."""
+        obs_space = _make_obs_space()
+        action_space = MultiDiscrete([3, 4])
+        agent = MultiHeadAgent(obs_space, action_space)
+
+        obs = _make_obs_batch(200)
+        # MOVE: only S (index 1), SWORD: only N (index 4)
+        mask = torch.zeros(200, 12, dtype=torch.bool)
+        mask[:, 1] = True  # MOVE S
+        mask[:, 4] = True  # SWORD N
+
+        actions, _, _, _ = agent.get_action_and_value(obs, mask=mask)
+        for i in range(200):
+            t, d = actions[i, 0].item(), actions[i, 1].item()
+            if t == 0:  # MOVE
+                assert d == 1, f"MOVE should only pick direction 1 (S), got {d}"
+            elif t == 1:  # SWORD
+                assert d == 0, f"SWORD should only pick direction 0 (N), got {d}"
+            else:
+                assert False, f"Type 2 (BEAMS) should not be selected, mask is all False"
 
 
 class TestJointLogProb:

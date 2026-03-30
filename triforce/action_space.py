@@ -242,14 +242,18 @@ class ZeldaActionSpace(gym.Wrapper):
         return self.action_to_index[action_kind] + dir_idx
 
     def flat_mask_to_multihead(self, flat_mask):
-        """Decompose a flat action mask [N] into multihead format [K+4].
+        """Decompose a flat action mask [N] into multihead format [K*4].
 
-        Returns a concatenated tensor where the first K entries are the action type
-        mask (True if ANY direction is valid for that type) and the last 4 entries
-        are the direction mask (True if ANY valid action type allows that direction).
+        Returns a tensor of shape [K*4] where mask[i*4 + j] is True if action
+        type i with cardinal direction j (N=0, S=1, W=2, E=3) is valid.  This
+        preserves the per-type direction constraints that are lost in a marginal
+        [K+4] representation.
+
+        The model derives the type mask as mask.view(K,4).any(dim=-1) and
+        conditions the direction mask on the sampled type.
         """
         k = self.num_action_types
-        multihead_mask = torch.zeros(k + 4, dtype=torch.bool)
+        multihead_mask = torch.zeros(k * 4, dtype=torch.bool)
 
         for i, action_kind in enumerate(self.actions_allowed):
             base = self.action_to_index[action_kind]
@@ -262,12 +266,12 @@ class ZeldaActionSpace(gym.Wrapper):
             span = next_base - base
 
             chunk = flat_mask[base:next_base]
-            multihead_mask[i] = chunk.any()
-
-            # Accumulate direction mask from the first 4 entries (N/S/W/E)
-            # of action types that have directional variants
-            if multihead_mask[i] and span >= 4:
-                multihead_mask[k:] |= chunk[:4]
+            if span >= 4:
+                multihead_mask[i * 4:(i + 1) * 4] = chunk[:4]
+            elif chunk.any():
+                # Non-directional actions (whistle, potion, etc.): mark all 4
+                # direction slots so the type is always selectable.
+                multihead_mask[i * 4:(i + 1) * 4] = True
 
         return multihead_mask
 
@@ -385,23 +389,23 @@ class ZeldaActionSpace(gym.Wrapper):
     def is_valid_action(self, action, action_mask):
         """Returns True if the action is valid.
 
-        Handles both flat [N] and multihead [K+4] mask formats.
+        Handles both flat [N] and multihead [K*4] mask formats.
         """
         if action is None:
             return False
 
         action = self.get_action_taken(action)
         if len(action_mask) != self.total_actions:
-            # Multihead mask: check action type and direction independently
+            # Multihead [K*4] mask: direct (type, direction) lookup
             type_idx = self.actions_allowed.index(action.kind)
             dir_idx = self._direction_to_index(action.direction)
-            return bool(action_mask[type_idx]) and bool(action_mask[self.num_action_types + dir_idx])
+            return bool(action_mask[type_idx * 4 + dir_idx])
         return action_mask[action.id]
 
     def get_allowed_actions(self, state, action_mask):
         """Returns the allowed actions from the action mask.
 
-        Handles both flat [N] and multihead [K+4] mask formats.
+        Handles both flat [N] and multihead [K*4] mask formats.
         """
         # For multihead mask, convert to flat for consistent processing
         if len(action_mask) != self.total_actions:

@@ -230,23 +230,29 @@ class ModelSelector:
         num_action_types = int(self.model.action_space.nvec[0])
 
         if mask is not None:
-            # mask is already in multihead [K+4] format from get_action_mask()
+            # mask is [K*4] joint format from get_action_mask()
             multihead_mask = mask.squeeze(0)
-            type_mask = multihead_mask[:num_action_types].unsqueeze(0)
-            dir_mask = multihead_mask[num_action_types:].unsqueeze(0)
+            mask_2d = multihead_mask.view(num_action_types, 4)
+            type_mask = mask_2d.any(dim=-1).unsqueeze(0)
 
             action_type_logits = action_type_logits.clone()
             action_type_logits[~type_mask] = -1e9
-            direction_logits = direction_logits.clone()
-            direction_logits[~dir_mask] = -1e9
 
         type_probs = torch.nn.functional.softmax(action_type_logits, dim=-1).squeeze(0)
-        dir_probs = torch.nn.functional.softmax(direction_logits, dim=-1).squeeze(0)
 
         result = OrderedDict()
         result['value'] = value
 
         for type_idx in range(num_action_types):
+            # Condition direction mask on this specific action type
+            if mask is not None:
+                dir_mask = mask_2d[type_idx].unsqueeze(0)
+                masked_dir_logits = direction_logits.clone()
+                masked_dir_logits[~dir_mask] = -1e9
+                dir_probs = torch.nn.functional.softmax(masked_dir_logits, dim=-1).squeeze(0)
+            else:
+                dir_probs = torch.nn.functional.softmax(direction_logits, dim=-1).squeeze(0)
+
             for dir_idx in range(4):
                 flat_idx = self.action_space.multihead_to_flat(type_idx, dir_idx)
                 taken = self.action_space.get_action_taken(flat_idx)

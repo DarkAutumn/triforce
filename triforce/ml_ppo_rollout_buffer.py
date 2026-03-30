@@ -19,7 +19,8 @@ class PPORolloutBuffer:
         # Determine action dimensionality and mask size for Discrete vs MultiDiscrete
         if isinstance(action_space, MultiDiscrete):
             self.action_dim = len(action_space.nvec)
-            mask_size = int(sum(action_space.nvec))
+            # [K*4] joint mask: one entry per (action_type, direction) pair
+            mask_size = int(action_space.nvec[0]) * 4
         else:
             self.action_dim = 1
             mask_size = action_space.n

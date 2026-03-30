@@ -962,8 +962,7 @@ def _check_one_episode(env, network, ep_idx):
 
         # --- Invariant 5: No valid move directions in action mask ---
         if action_mask is not None:
-            # For multihead: first K entries are action types, last 4 are directions
-            # For flat: check that MOVE indices have at least one True
+            # mask format: [K*4] joint (multihead) or [N] flat (discrete)
             mask_np = action_mask.numpy() if hasattr(action_mask, 'numpy') else action_mask
             # Check if total mask is all False (catastrophic)
             if not mask_np.any():

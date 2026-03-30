@@ -763,7 +763,8 @@ class MultiHeadAgent(Network):
 
         Args:
             obs: Dict observation.
-            mask: Concatenated [batch, K+4] mask — first K for action type, last 4 for direction.
+            mask: Joint [batch, K*4] mask where mask[..., i*4+j] indicates whether
+                  action type i with direction j is valid.
             actions: Optional [batch, 2] tensor of (action_type, direction) indices.
             deterministic: If True, use argmax instead of sampling.
 
@@ -773,20 +774,20 @@ class MultiHeadAgent(Network):
         action_type_logits, direction_logits, value = self.forward(obs)
         num_action_types = int(self.action_space.nvec[0])
 
-        # Per-head masking from concatenated mask
         if mask is not None:
-            action_type_mask = mask[..., :num_action_types]
-            direction_mask = mask[..., num_action_types:]
+            # Reshape [batch, K*4] → [batch, K, 4] for per-type direction masking
+            mask_2d = mask.view(*mask.shape[:-1], num_action_types, 4)
+
+            # Type mask: a type is valid if ANY of its directions are valid
+            action_type_mask = mask_2d.any(dim=-1)
 
             bad_type = ~action_type_mask.any(dim=-1)
-            bad_dir = ~direction_mask.any(dim=-1)
-            if bad_type.any() or bad_dir.any():
-                idx = (bad_type | bad_dir).nonzero(as_tuple=True)[0][0].item()
+            if bad_type.any():
+                idx = bad_type.nonzero(as_tuple=True)[0][0].item()
                 info_vec = obs['info'][idx].tolist() if 'info' in obs else 'N/A'
                 raise ValueError(
                     f"Empty action mask in batch element {idx}.\n"
                     f"  action_type_mask={action_type_mask[idx].tolist()}\n"
-                    f"  direction_mask={direction_mask[idx].tolist()}\n"
                     f"  full_mask={mask[idx].tolist()}\n"
                     f"  num_action_types={num_action_types}\n"
                     f"  nvec={self.action_space.nvec.tolist()}\n"
@@ -796,22 +797,34 @@ class MultiHeadAgent(Network):
             action_type_logits = action_type_logits.clone()
             action_type_logits[~action_type_mask] = -1e9
 
-            direction_logits = direction_logits.clone()
-            direction_logits[~direction_mask] = -1e9
-
         type_dist = dist.Categorical(logits=action_type_logits)
-        dir_dist = dist.Categorical(logits=direction_logits)
 
         if actions is None:
             if deterministic:
                 type_action = action_type_logits.argmax(dim=-1)
-                dir_action = direction_logits.argmax(dim=-1)
             else:
                 type_action = type_dist.sample()
+        else:
+            type_action = actions[..., 0].long()
+
+        # Condition direction mask on the selected/given action type
+        if mask is not None:
+            batch_range = torch.arange(mask_2d.shape[0], device=mask.device)
+            dir_mask = mask_2d[batch_range, type_action]  # [batch, 4]
+
+            direction_logits = direction_logits.clone()
+            direction_logits[~dir_mask] = -1e9
+
+        dir_dist = dist.Categorical(logits=direction_logits)
+
+        if actions is None:
+            if deterministic:
+                dir_action = direction_logits.argmax(dim=-1)
+            else:
                 dir_action = dir_dist.sample()
             actions = torch.stack([type_action, dir_action], dim=-1)
 
-        # Joint log-prob: log π(a|s) = log π_type(a_type|s) + log π_dir(a_dir|s)
+        # Joint log-prob: log π(a|s) = log π_type(a_type|s) + log π_dir(a_dir|s,a_type)
         log_prob = type_dist.log_prob(actions[..., 0]) + dir_dist.log_prob(actions[..., 1])
 
         # Entropy: sum of per-head entropies
@@ -834,13 +847,18 @@ class MultiHeadAgent(Network):
 
         Used by PPO._optimize to log action_type and direction entropy separately,
         enabling diagnosis of per-head entropy collapse.
+
+        Direction entropy is averaged over all samples using the marginal direction
+        mask (union across types) since we don't have a specific type per sample here.
         """
         action_type_logits, direction_logits, _ = self.forward(obs)
         num_action_types = int(self.action_space.nvec[0])
 
         if mask is not None:
-            action_type_mask = mask[..., :num_action_types]
-            direction_mask = mask[..., num_action_types:]
+            mask_2d = mask.view(*mask.shape[:-1], num_action_types, 4)
+            action_type_mask = mask_2d.any(dim=-1)
+            # Marginal direction mask (union across types) for entropy logging
+            direction_mask = mask_2d.any(dim=-2)
             action_type_logits = action_type_logits.clone()
             action_type_logits[~action_type_mask] = -1e9
             direction_logits = direction_logits.clone()
@@ -1056,18 +1074,16 @@ class ImpalaMultiHeadAgent(Network):
         num_action_types = int(self.action_space.nvec[0])
 
         if mask is not None:
-            action_type_mask = mask[..., :num_action_types]
-            direction_mask = mask[..., num_action_types:]
+            mask_2d = mask.view(*mask.shape[:-1], num_action_types, 4)
+            action_type_mask = mask_2d.any(dim=-1)
 
             bad_type = ~action_type_mask.any(dim=-1)
-            bad_dir = ~direction_mask.any(dim=-1)
-            if bad_type.any() or bad_dir.any():
-                idx = (bad_type | bad_dir).nonzero(as_tuple=True)[0][0].item()
+            if bad_type.any():
+                idx = bad_type.nonzero(as_tuple=True)[0][0].item()
                 info_vec = obs['info'][idx].tolist() if 'info' in obs else 'N/A'
                 raise ValueError(
                     f"Empty action mask in batch element {idx}.\n"
                     f"  action_type_mask={action_type_mask[idx].tolist()}\n"
-                    f"  direction_mask={direction_mask[idx].tolist()}\n"
                     f"  full_mask={mask[idx].tolist()}\n"
                     f"  num_action_types={num_action_types}\n"
                     f"  nvec={self.action_space.nvec.tolist()}\n"
@@ -1076,18 +1092,29 @@ class ImpalaMultiHeadAgent(Network):
 
             action_type_logits = action_type_logits.clone()
             action_type_logits[~action_type_mask] = -1e9
-            direction_logits = direction_logits.clone()
-            direction_logits[~direction_mask] = -1e9
 
         type_dist = dist.Categorical(logits=action_type_logits)
-        dir_dist = dist.Categorical(logits=direction_logits)
 
         if actions is None:
             if deterministic:
                 type_action = action_type_logits.argmax(dim=-1)
-                dir_action = direction_logits.argmax(dim=-1)
             else:
                 type_action = type_dist.sample()
+        else:
+            type_action = actions[..., 0].long()
+
+        if mask is not None:
+            batch_range = torch.arange(mask_2d.shape[0], device=mask.device)
+            dir_mask = mask_2d[batch_range, type_action]
+            direction_logits = direction_logits.clone()
+            direction_logits[~dir_mask] = -1e9
+
+        dir_dist = dist.Categorical(logits=direction_logits)
+
+        if actions is None:
+            if deterministic:
+                dir_action = direction_logits.argmax(dim=-1)
+            else:
                 dir_action = dir_dist.sample()
             actions = torch.stack([type_action, dir_action], dim=-1)
 
@@ -1111,8 +1138,9 @@ class ImpalaMultiHeadAgent(Network):
         num_action_types = int(self.action_space.nvec[0])
 
         if mask is not None:
-            action_type_mask = mask[..., :num_action_types]
-            direction_mask = mask[..., num_action_types:]
+            mask_2d = mask.view(*mask.shape[:-1], num_action_types, 4)
+            action_type_mask = mask_2d.any(dim=-1)
+            direction_mask = mask_2d.any(dim=-2)
             action_type_logits = action_type_logits.clone()
             action_type_logits[~action_type_mask] = -1e9
             direction_logits = direction_logits.clone()
