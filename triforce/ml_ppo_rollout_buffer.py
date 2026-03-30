@@ -119,79 +119,83 @@ class PPORolloutBuffer:
 
         infos = []
 
-        with torch.no_grad():
-            for t in range(self.memory_length):
-                # Store current obs/done
-                self.dones[batch_index, t] = done
+        network.eval()
+        try:
+            with torch.no_grad():
+                for t in range(self.memory_length):
+                    # Store current obs/done
+                    self.dones[batch_index, t] = done
 
-                # Unsqueeze obs and the action_mask, since get_action_and_value expects a batch
+                    # Unsqueeze obs and the action_mask, since get_action_and_value expects a batch
+                    if isinstance(obs, dict):
+                        for key, ob_tensor in obs.items():
+                            self.observation[key][batch_index, t] = ob_tensor
+
+                    else:
+                        self.observation[batch_index, t] = obs
+
+                    if action_mask is not None:
+                        action_mask = action_mask.unsqueeze(0)
+
+                    # Record the action, logp, entropy, and value
+                    action, logp, ent, val = network.get_action_and_value(obs, action_mask)
+
+                    # Store action: scalar for Discrete, [action_dim] for MultiDiscrete
+                    if self.action_dim == 1:
+                        self.actions[batch_index, t, 0] = action.item()
+                    else:
+                        self.actions[batch_index, t] = action.squeeze(0)
+
+                    self.logp_ent_val[batch_index, t, 0] = logp.squeeze()
+                    self.logp_ent_val[batch_index, t, 1] = ent.squeeze()
+                    self.logp_ent_val[batch_index, t, 2] = val.squeeze()
+
+                    self.masks[batch_index, t] = action_mask if action_mask is not None else self.ones_mask
+
+                    # step environment
+                    if self.action_dim == 1:
+                        step_action = action.item()
+                    else:
+                        step_action = action.squeeze(0)
+                    next_obs, reward, terminated, truncated, info = env.step(step_action)
+
+                    action_mask = info.get('action_mask', None)
+                    infos.append(info)
+                    self.rewards[batch_index, t] = float(reward)
+
+                    done = 1.0 if (terminated or truncated) else 0.0
+                    if terminated or truncated:
+                        next_obs, info = env.reset()
+                        action_mask = info.get('action_mask', None)
+
+                    obs = next_obs
+
+                    if callback:
+                        callback.on_progress(1, total_steps)
+
+                # Store final obs/done/mask
                 if isinstance(obs, dict):
                     for key, ob_tensor in obs.items():
-                        self.observation[key][batch_index, t] = ob_tensor
-
+                        self.observation[key][batch_index, self.memory_length] = ob_tensor
                 else:
-                    self.observation[batch_index, t] = obs
+                    self.observation[batch_index, self.memory_length] = obs
 
+                self.dones[batch_index, self.memory_length] = done
                 if action_mask is not None:
-                    action_mask = action_mask.unsqueeze(0)
-
-                # Record the action, logp, entropy, and value
-                action, logp, ent, val = network.get_action_and_value(obs, action_mask)
-
-                # Store action: scalar for Discrete, [action_dim] for MultiDiscrete
-                if self.action_dim == 1:
-                    self.actions[batch_index, t, 0] = action.item()
+                    self.masks[batch_index, self.memory_length] = action_mask
                 else:
-                    self.actions[batch_index, t] = action.squeeze(0)
+                    self.masks[batch_index, self.memory_length] = self.ones_mask
 
-                self.logp_ent_val[batch_index, t, 0] = logp.squeeze()
-                self.logp_ent_val[batch_index, t, 1] = ent.squeeze()
-                self.logp_ent_val[batch_index, t, 2] = val.squeeze()
+                # Get the value of the final observation and calculate returns/advantages
+                last_value = network.get_value(obs).item()
+                returns, advantages = self._compute_returns_advantages(batch_index, last_value)
+                self.returns[batch_index] = returns
+                self.advantages[batch_index] = advantages
+                self.has_data[batch_index] = True
 
-                self.masks[batch_index, t] = action_mask if action_mask is not None else self.ones_mask
-
-                # step environment
-                if self.action_dim == 1:
-                    step_action = action.item()
-                else:
-                    step_action = action.squeeze(0)
-                next_obs, reward, terminated, truncated, info = env.step(step_action)
-
-                action_mask = info.get('action_mask', None)
-                infos.append(info)
-                self.rewards[batch_index, t] = float(reward)
-
-                done = 1.0 if (terminated or truncated) else 0.0
-                if terminated or truncated:
-                    next_obs, info = env.reset()
-                    action_mask = info.get('action_mask', None)
-
-                obs = next_obs
-
-                if callback:
-                    callback.on_progress(1, total_steps)
-
-            # Store final obs/done/mask
-            if isinstance(obs, dict):
-                for key, ob_tensor in obs.items():
-                    self.observation[key][batch_index, self.memory_length] = ob_tensor
-            else:
-                self.observation[batch_index, self.memory_length] = obs
-
-            self.dones[batch_index, self.memory_length] = done
-            if action_mask is not None:
-                self.masks[batch_index, self.memory_length] = action_mask
-            else:
-                self.masks[batch_index, self.memory_length] = self.ones_mask
-
-            # Get the value of the final observation and calculate returns/advantages
-            last_value = network.get_value(obs).item()
-            returns, advantages = self._compute_returns_advantages(batch_index, last_value)
-            self.returns[batch_index] = returns
-            self.advantages[batch_index] = advantages
-            self.has_data[batch_index] = True
-
-        return infos
+            return infos
+        finally:
+            network.train()
 
     def _compute_returns_advantages(self, batch_idx, last_value):
         with torch.no_grad():
