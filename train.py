@@ -4,6 +4,7 @@
 # pylint: disable=duplicate-code
 
 import argparse
+import cProfile
 import sys
 import os
 import select
@@ -36,6 +37,89 @@ SPS_WINDOW = 25_000
 _RUNNING = "running"
 _REQUESTING = "requesting"
 _PAUSED = "paused"
+
+
+PROFILE_WARMUP_STEPS = 20_000
+PROFILE_OUTPUT = "training.prof"
+
+
+class ProfilingCallback(TrainingCallback):
+    """Wraps another callback to collect cProfile data after a warmup period.
+
+    Skips the first PROFILE_WARMUP_STEPS steps, then profiles the next `profile_steps`
+    environment steps plus the subsequent model update, saves to PROFILE_OUTPUT, and exits.
+    """
+    def __init__(self, inner, profile_steps):
+        self._inner = inner
+        self._profile_steps = profile_steps
+        self._total_steps = 0
+        self._profiled_steps = 0
+        self._profiler = None
+        self._collecting = False
+        self._ready_to_stop = False
+        self._done = False
+
+    def on_progress(self, steps, total_steps):
+        self._total_steps += steps
+        if self._inner:
+            self._inner.on_progress(steps, total_steps)
+
+        if self._done:
+            return
+
+        # After warmup, start collecting on the next rollout
+        if not self._collecting and self._total_steps >= PROFILE_WARMUP_STEPS:
+            self._collecting = True
+            self._profiler = cProfile.Profile()
+            self._profiler.enable()
+
+        # Count profiled steps
+        if self._collecting and not self._ready_to_stop:
+            self._profiled_steps += steps
+            if self._profiled_steps >= self._profile_steps:
+                self._ready_to_stop = True
+
+    def on_metrics(self, metrics, iteration, total_iterations):
+        if self._inner:
+            self._inner.on_metrics(metrics, iteration, total_iterations)
+
+    def on_optimize(self, stats, iteration, total_iterations):
+        if self._inner:
+            self._inner.on_optimize(stats, iteration, total_iterations)
+
+        # Stop profiling after the model update that follows our collection window
+        if self._ready_to_stop and not self._done:
+            self._profiler.disable()
+            self._profiler.dump_stats(PROFILE_OUTPUT)
+            self._done = True
+
+    def check_pause(self):
+        if self._done:
+            return False
+        if self._inner:
+            return self._inner.check_pause()
+        return True
+
+    # Delegate circuit/scenario lifecycle methods
+    def on_scenario_start(self, scenario_name, iterations):
+        """Delegate scenario start to inner callback."""
+        if self._inner and hasattr(self._inner, 'on_scenario_start'):
+            self._inner.on_scenario_start(scenario_name, iterations)
+
+    def on_scenario_complete(self, scenario_name):
+        """Delegate scenario completion to inner callback."""
+        if self._inner and hasattr(self._inner, 'on_scenario_complete'):
+            self._inner.on_scenario_complete(scenario_name)
+
+    def on_training_complete(self):
+        """Delegate training completion to inner callback."""
+        if self._inner and hasattr(self._inner, 'on_training_complete'):
+            self._inner.on_training_complete()
+
+    def on_circuit_start(self, scenarios):
+        """Delegate circuit start to inner callback."""
+        if self._inner and hasattr(self._inner, 'on_circuit_start'):
+            self._inner.on_circuit_start(scenarios)
 
 
 class _KeyboardListener:
@@ -116,6 +200,7 @@ class TrainingDisplay(TrainingCallback):
         # Quit state
         self._quit_confirm = False
         self._stop_requested = False
+        self._last_refresh_time = 0.0
 
         # Keyboard listener
         self._keyboard = _KeyboardListener(self._on_key)
@@ -135,27 +220,27 @@ class TrainingDisplay(TrainingCallback):
                 # If paused, resume so check_pause can return False
                 if self._pause_state == _PAUSED:
                     self._resume()
-                self._refresh()
+                self._refresh(force=True)
             else:
                 self._quit_confirm = True
-                self._refresh()
+                self._refresh(force=True)
             return
 
         # Any non-q key cancels quit confirm
         if self._quit_confirm:
             self._quit_confirm = False
-            self._refresh()
+            self._refresh(force=True)
 
         if ch != 'p':
             return
 
         if self._pause_state == _RUNNING:
             self._pause_state = _REQUESTING
-            self._refresh()
+            self._refresh(force=True)
         elif self._pause_state == _REQUESTING:
             # Cancel pause request before it took effect
             self._pause_state = _RUNNING
-            self._refresh()
+            self._refresh(force=True)
         elif self._pause_state == _PAUSED:
             self._resume()
 
@@ -167,7 +252,7 @@ class TrainingDisplay(TrainingCallback):
         self._frozen_eta = None
         self._pause_state = _RUNNING
         self._resume_event.set()
-        self._refresh()
+        self._refresh(force=True)
 
     def check_pause(self):
         """Called by PPO after each training iteration. Blocks while paused.
@@ -184,7 +269,7 @@ class TrainingDisplay(TrainingCallback):
             self._pause_start = time.monotonic()
             self._pause_state = _PAUSED
             self._resume_event.clear()
-            self._refresh()
+            self._refresh(force=True)
 
             # Block until resumed
             self._resume_event.wait()
@@ -200,7 +285,7 @@ class TrainingDisplay(TrainingCallback):
         for name, iters in scenarios:
             self._scenario_steps[name] = 0
             self._scenario_total[name] = iters
-        self._refresh()
+        self._refresh(force=True)
 
     def on_scenario_start(self, scenario_name, iterations):
         self._active_index = next(
@@ -219,7 +304,7 @@ class TrainingDisplay(TrainingCallback):
         scenario_log_dir = os.path.join(self._log_dir, scenario_name)
         os.makedirs(scenario_log_dir, exist_ok=True)
         self._tensorboard = SummaryWriter(scenario_log_dir)
-        self._refresh()
+        self._refresh(force=True)
 
     def on_scenario_end(self, scenario_name):
         self._scenario_steps[scenario_name] = self._current_steps
@@ -227,7 +312,7 @@ class TrainingDisplay(TrainingCallback):
         self._completed.add(scenario_name)
         self._prev_game_metrics = {}
         self._prev_optimize_stats = {}
-        self._refresh()
+        self._refresh(force=True)
 
     def on_progress(self, steps, total_steps):
         self._current_steps += steps
@@ -276,7 +361,7 @@ class TrainingDisplay(TrainingCallback):
                     name = f"metrics/{name}"
                 self._tensorboard.add_scalar(name, value, iteration, timestamp)
             self._tensorboard.flush()
-        self._refresh()
+        self._refresh(force=True)
 
     def on_optimize(self, stats, iteration, total_iterations):
         self._prev_optimize_stats = dict(self._optimize_stats)
@@ -287,16 +372,20 @@ class TrainingDisplay(TrainingCallback):
             for name, value in stats.items():
                 self._tensorboard.add_scalar(name, value, iteration)
             self._tensorboard.flush()
-        self._refresh()
+        self._refresh(force=True)
 
     def on_training_complete(self):
         if self._tensorboard:
             self._tensorboard.close()
             self._tensorboard = None
         self._keyboard.stop()
-        self._refresh()
+        self._refresh(force=True)
 
-    def _refresh(self):
+    def _refresh(self, force=False):
+        now = time.monotonic()
+        if not force and now - self._last_refresh_time < 0.5:
+            return
+        self._last_refresh_time = now
         self._live.update(self._render())
 
     def _render(self):
@@ -769,6 +858,12 @@ def main():
         faulthandler.enable()
         sys.excepthook = _dump_trace_with_locals
 
+    if args.profile:
+        if args.parallel not in (1, 6):
+            print("Error: --profile requires single-env mode. Do not set --parallel with --profile.")
+            sys.exit(1)
+        args.parallel = 1
+
     # Resolve model kind and action space (use defaults if not specified)
     action_space_def = ActionSpaceDefinition.get(args.action_space) if args.action_space \
         else ActionSpaceDefinition.get_default()
@@ -795,9 +890,13 @@ def main():
 
     with Live(console=console, refresh_per_second=4) as live:
         display = TrainingDisplay(live, log_dir)
+        callback = display
+        if args.profile:
+            callback = ProfilingCallback(display, args.profile)
+            console.print(f"Profiling: {args.profile} steps after {PROFILE_WARMUP_STEPS} warmup → {PROFILE_OUTPUT}")
         model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
                                            checkpoint_dir, kwargs, args.iterations,
-                                           callback=display, circuit_def=circuit_def)
+                                           callback=callback, circuit_def=circuit_def)
         display.on_training_complete()
 
     # Save final result in the run directory (not checkpoints)
@@ -862,6 +961,8 @@ def parse_args():
     parser.add_argument("--evaluate", type=int, default=None, metavar="N",
                         help="Run N evaluation episodes after training and print a progress report.")
     parser.add_argument("--hook-exceptions", action='store_true', help="Dump tracebacks on unhandled exceptions.")
+    parser.add_argument("--profile", type=int, default=None, metavar="N",
+                        help="Profile N environment steps (after 20K warmup), save to training.prof, then exit.")
 
     try:
         args = parser.parse_args()
