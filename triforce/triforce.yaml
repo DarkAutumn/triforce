@@ -116,6 +116,14 @@ training-circuits:
       threshold: 0.9
     iterations: 2000000
   - scenario: full-game-all-items
+- name: check-for-reward-hacking
+  description: 'Quick circuit for validating reward hacking fixes: room-walk then
+    overworld navigation with all items.'
+  scenarios:
+  - scenario: overworld-room-walk
+    iterations: 500000
+  - scenario: overworld-skip-sword-all-items
+    iterations: 750000
 scenarios:
 - name: full-game
   description: Full game from start through dungeon 1 triforce
