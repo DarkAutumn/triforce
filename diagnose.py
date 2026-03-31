@@ -1,4 +1,5 @@
 #!/usr/bin/env -S uv run python3
+# pylint: disable=too-many-lines
 """Headless diagnostic tool for analyzing trained model behavior.
 
 Runs N episodes and produces a detailed text report showing:
@@ -65,7 +66,7 @@ class EpisodeRecord:
     """All diagnostic data collected for one episode."""
     episode_idx: int
     room_trace: List[Tuple[int, int, bool]] = field(default_factory=list)  # (level, location, in_cave)
-    room_step_counts: Dict[Tuple[int, int, bool], int] = field(default_factory=lambda: Counter())
+    room_step_counts: Dict[Tuple[int, int, bool], int] = field(default_factory=Counter)
     reward_totals: Dict[str, float] = field(default_factory=lambda: defaultdict(float))
     reward_counts: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
     total_steps: int = 0
@@ -190,7 +191,7 @@ def run_one_episode(env, network, ep_idx):
 
         action = network.get_action(obs, action_mask)
         action = action.squeeze(0)  # [1, 2] -> [2] for multihead, [1] -> scalar for flat
-        obs, reward_value, terminated, truncated, info = env.step(action)
+        obs, _, terminated, truncated, info = env.step(action)
 
         record.total_steps += 1
 
@@ -237,7 +238,7 @@ def run_one_episode(env, network, ep_idx):
     return record
 
 
-def generate_report(records, model_name, scenario_name, model_path, episodes):
+def generate_report(records, model_name, scenario_name, model_path, episodes):  # pylint: disable=too-many-statements
     """Generate a text report from episode records."""
     lines = []
     w = lines.append
@@ -277,9 +278,9 @@ def generate_report(records, model_name, scenario_name, model_path, episodes):
     max_bar = max(progress_counts.values()) if progress_counts else 1
     for milestone in range(max_progress + 1):
         count = progress_counts.get(milestone, 0)
-        bar = '█' * max(1, round(count / max_bar * 30)) if count > 0 else ''
+        histogram = '█' * max(1, round(count / max_bar * 30)) if count > 0 else ''
         label = MILESTONE_NAMES.get(milestone, f"milestone {milestone}")
-        w(f"  {milestone:2d} | {count:3d} | {bar:30s} | {label}")
+        w(f"  {milestone:2d} | {count:3d} | {histogram:30s} | {label}")
     w("")
 
     # ---- Ending Breakdown ----
@@ -422,7 +423,8 @@ class PbrsStepRecord:
     enemy_ids: tuple = ()   # enemy type IDs this step
 
 
-def run_pbrs_diagnostic(model_name, scenario_name, model_path, episodes, tail, output_path):
+def run_pbrs_diagnostic(model_name, scenario_name, model_path,  # pylint: disable=too-many-statements
+                        episodes, tail, output_path):
     """Run episodes looking for stuck/timeout endings, then print step-by-step PBRS detail."""
     scenario_def = TrainingScenarioDefinition.get(scenario_name)
     metadata = Network.load_metadata(model_path)
@@ -452,7 +454,7 @@ def run_pbrs_diagnostic(model_name, scenario_name, model_path, episodes, tail, o
     found_stuck = 0
     for ep_idx in range(episodes):
         result = _run_pbrs_episode(env, network, ep_idx)
-        ep_steps, ending, all_steps, room_segments = result
+        ep_steps, ending, _, room_segments = result
 
         is_stuck = ending and "stuck" in ending or "no-next-room" in ending
         print(f"  Episode {ep_idx+1}/{episodes}: steps={ep_steps}, ending={ending}, "
@@ -539,7 +541,7 @@ def run_pbrs_diagnostic(model_name, scenario_name, model_path, episodes, tail, o
                     name, val = part.rsplit("=", 1)
                     stuck_reward_totals[name] += float(val)
         if stuck_reward_totals:
-            w(f"  Non-PBRS rewards in stuck room:")
+            w("  Non-PBRS rewards in stuck room:")
             for name, total in stuck_reward_totals.most_common():
                 w(f"    {name}: {total:+.3f}")
 
@@ -604,7 +606,7 @@ def run_pbrs_diagnostic(model_name, scenario_name, model_path, episodes, tail, o
         print(report)
 
 
-def _run_pbrs_episode(env, network, ep_idx):
+def _run_pbrs_episode(env, network, _ep_idx):  # pylint: disable=too-many-statements
     """Run one episode, capturing per-step PBRS detail. Returns (steps, ending, all_steps, room_segments)."""
     obs, info = env.reset()
     state = env.last_reset_state
@@ -626,7 +628,7 @@ def _run_pbrs_episode(env, network, ep_idx):
 
         action = network.get_action(obs, action_mask)
         action = action.squeeze(0)
-        obs, reward_value, terminated, truncated, info = env.step(action)
+        obs, _, terminated, truncated, info = env.step(action)
 
         sc = env.last_state_change
         rewards = env.last_rewards
@@ -773,11 +775,44 @@ def run_invariant_checker(model_name, scenario_name, model_path, episodes, outpu
     return all_violations
 
 
-def _check_one_episode(env, network, ep_idx):
+def _predict_can_move(prev, act):
+    """Predict whether Link should be able to move, considering tiles, doorways, and UW bounds."""
+    location = MapLocation(prev.level, prev.location, prev.full_location.in_cave)
+    room = Room.get(location)
+    px_prev = prev.link.position
+    if room is None or not room.can_link_move_from(px_prev.x, px_prev.y, act.direction):
+        return False, room
+
+    pi = prev.info
+    doorway_dir = pi.get('doorway_dir', 0)
+    if doorway_dir not in (0, act.direction.value):
+        return False, room
+
+    if prev.level != 0 and doorway_dir == 0:
+        grid_offset = pi.get('link_grid_offset', 0)
+        if grid_offset == 0:
+            check_dir = act.direction
+        elif abs(grid_offset) >= 4:
+            try:
+                check_dir = Direction(pi.get('link_direction', 0))
+            except ValueError:
+                check_dir = None
+        else:
+            check_dir = None
+
+        bounds = {Direction.N: px_prev.y < 0x5E, Direction.S: px_prev.y >= 0xBD,
+                  Direction.W: px_prev.x < 0x21, Direction.E: px_prev.x >= 0xD0}
+        if check_dir is not None and bounds.get(check_dir, False):
+            return False, room
+
+    return True, room
+
+
+def _check_one_episode(env, network, ep_idx):  # pylint: disable=too-many-statements
     """Run one episode, checking invariants at every step. Returns list of violations."""
     violations = []
     obs, info = env.reset()
-    state = env.last_reset_state
+    _state = env.last_reset_state
 
     terminated = truncated = False
     step_num = 0
@@ -810,113 +845,76 @@ def _check_one_episode(env, network, ep_idx):
             )
 
         # --- Invariant 1: Zero-pixel movement on MOVE action ---
-        if act.kind == ActionKind.MOVE:
-            if prev.full_location == curr.full_location:  # same room
-                px_prev = prev.link.position
-                px_curr = curr.link.position
-                if px_prev == px_curr and not sc.health_lost:
-                    # Classify: did our tile prediction think Link could move?
-                    location = MapLocation(prev.level, prev.location,
-                                           prev.full_location.in_cave)
-                    room = Room.get(location)
-                    # Check tile walkability, doorway constraint, and UW room boundary.
-                    predicted_can_move = (room is not None and
-                                         room.can_link_move_from(px_prev.x, px_prev.y,
-                                                                 act.direction))
-                    if predicted_can_move:
-                        pi = prev.info
-                        doorway_dir = pi.get('doorway_dir', 0)
-                        # In a doorway, NES only allows movement in the doorway direction.
-                        if doorway_dir != 0 and act.direction.value != doorway_dir:
-                            predicted_can_move = False
-                        # UW BoundByRoom: check direction depends on gridOffset.
-                        elif prev.level != 0 and doorway_dir == 0:
-                            grid_offset = pi.get('link_grid_offset', 0)
-                            if grid_offset == 0:
-                                check_dir = act.direction
-                            elif abs(grid_offset) >= 4:
-                                obj_dir = pi.get('link_direction', 0)
-                                try:
-                                    check_dir = Direction(obj_dir)
-                                except ValueError:
-                                    check_dir = None
-                            else:
-                                check_dir = None
-                            if check_dir is not None:
-                                if check_dir == Direction.N and px_prev.y < 0x5E:
-                                    predicted_can_move = False
-                                elif check_dir == Direction.S and px_prev.y >= 0xBD:
-                                    predicted_can_move = False
-                                elif check_dir == Direction.W and px_prev.x < 0x21:
-                                    predicted_can_move = False
-                                elif check_dir == Direction.E and px_prev.x >= 0xD0:
-                                    predicted_can_move = False
-                    if predicted_can_move:
-                        # BUG: We predicted Link could move but the NES blocked it.
-                        # Capture detailed NES state for debugging.
-                        pi = prev.info
-                        ci = curr.info
-                        n_frames = len(sc.frames) if sc.frames else 0
-                        enemies = [e for e in prev.enemies if e.is_active]
-                        enemy_str = ", ".join(
-                            f"{e.id.name}@({e.position.x},{e.position.y})" for e in enemies
-                        ) if enemies else "none"
-                        grid_off = pi.get('link_grid_offset', -1)
-                        obj_timer = pi.get('link_obj_timer', -1)
-                        shove_dir = pi.get('link_shove_dir', -1)
+        if act.kind == ActionKind.MOVE and prev.full_location == curr.full_location:
+            px_prev = prev.link.position
+            px_curr = curr.link.position
+            if px_prev == px_curr and not sc.health_lost:
+                predicted_can_move, room = _predict_can_move(prev, act)
+                if predicted_can_move:
+                    # BUG: We predicted Link could move but the NES blocked it.
+                    pi = prev.info
+                    ci = curr.info
+                    n_frames = len(sc.frames) if sc.frames else 0
+                    enemies = [e for e in prev.enemies if e.is_active]
+                    enemy_str = ", ".join(
+                        f"{e.id.name}@({e.position.x},{e.position.y})" for e in enemies
+                    ) if enemies else "none"
+                    grid_off = pi.get('link_grid_offset', -1)
+                    obj_timer = pi.get('link_obj_timer', -1)
+                    shove_dir = pi.get('link_shove_dir', -1)
 
-                        # Dump the hotspot tile values for debugging
-                        px_x, px_y = px_prev.x, px_prev.y
-                        tile_info = ""
-                        match act.direction:
-                            case Direction.N:
-                                r = (px_y - 61) // 8
-                                c = px_x // 8
-                                t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
-                                t2 = int(room.tiles[c+1, r]) if 0 <= c+1 < 32 and 0 <= r < 22 else -1
-                                tile_info = f"N tiles[{c},{r}]=0x{t1:02x} [{c+1},{r}]=0x{t2:02x}"
-                            case Direction.S:
-                                r = (px_y - 45) // 8
-                                c = px_x // 8
-                                t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
-                                t2 = int(room.tiles[c+1, r]) if 0 <= c+1 < 32 and 0 <= r < 22 else -1
-                                tile_info = f"S tiles[{c},{r}]=0x{t1:02x} [{c+1},{r}]=0x{t2:02x}"
-                            case Direction.W:
-                                r = (px_y - 53) // 8
-                                c = (px_x - 8) // 8
-                                t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
-                                tile_info = f"W tile[{c},{r}]=0x{t1:02x}"
-                            case Direction.E:
-                                r = (px_y - 53) // 8
-                                c = (px_x + 16) // 8
-                                t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
-                                tile_info = f"E tile[{c},{r}]=0x{t1:02x}"
+                    # Dump the hotspot tile values for debugging
+                    px_x, px_y = px_prev.x, px_prev.y
+                    tile_info = ""
+                    match act.direction:
+                        case Direction.N:
+                            r = (px_y - 61) // 8
+                            c = px_x // 8
+                            t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
+                            t2 = int(room.tiles[c+1, r]) if 0 <= c+1 < 32 and 0 <= r < 22 else -1
+                            tile_info = f"N tiles[{c},{r}]=0x{t1:02x} [{c+1},{r}]=0x{t2:02x}"
+                        case Direction.S:
+                            r = (px_y - 45) // 8
+                            c = px_x // 8
+                            t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
+                            t2 = int(room.tiles[c+1, r]) if 0 <= c+1 < 32 and 0 <= r < 22 else -1
+                            tile_info = f"S tiles[{c},{r}]=0x{t1:02x} [{c+1},{r}]=0x{t2:02x}"
+                        case Direction.W:
+                            r = (px_y - 53) // 8
+                            c = (px_x - 8) // 8
+                            t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
+                            tile_info = f"W tile[{c},{r}]=0x{t1:02x}"
+                        case Direction.E:
+                            r = (px_y - 53) // 8
+                            c = (px_x + 16) // 8
+                            t1 = int(room.tiles[c, r]) if 0 <= c < 32 and 0 <= r < 22 else -1
+                            tile_info = f"E tile[{c},{r}]=0x{t1:02x}"
 
-                        violations.append(_make_violation(
-                            "movement-prediction-wrong",
-                            f"MOVE {act.direction.name}: predicted can_move=True but "
-                            f"NES blocked. pos={px_prev}, tile={prev.link.tile}\n"
-                            f"      link_status=0x{pi.get('link_status',0):02x} "
-                            f"mode=0x{pi.get('mode',0):02x} "
-                            f"sword_anim=0x{pi.get('sword_animation',0):02x} "
-                            f"link_dir=0x{pi.get('link_direction',0):02x} "
-                            f"grid_offset={grid_off}\n"
-                            f"      obj_timer={obj_timer} "
-                            f"shove_dir=0x{shove_dir:02x} "
-                            f"curr_link_status=0x{ci.get('link_status',0):02x} "
-                            f"curr_mode=0x{ci.get('mode',0):02x} "
-                            f"curr_pos=({ci.get('link_x',0)},{ci.get('link_y',0)}) "
-                            f"curr_grid_offset={ci.get('link_grid_offset', -1)}\n"
-                            f"      curr_obj_timer={ci.get('link_obj_timer', -1)} "
-                            f"curr_shove_dir=0x{ci.get('link_shove_dir', 0):02x}\n"
-                            f"      doorway_dir=0x{pi.get('doorway_dir', 0):02x} "
-                            f"cur_opened_doors=0x{pi.get('cur_opened_doors', 0):02x} "
-                            f"triggered_door_cmd=0x{pi.get('triggered_door_cmd', 0):02x}\n"
-                            f"      {tile_info}\n"
-                            f"      frames={n_frames} enemies=[{enemy_str}]"
-                        ))
-                    # Don't flag wall-hit (predicted False) — that's expected with
-                    # multihead's always-True direction mask.
+                    violations.append(_make_violation(
+                        "movement-prediction-wrong",
+                        f"MOVE {act.direction.name}: predicted can_move=True but "
+                        f"NES blocked. pos={px_prev}, tile={prev.link.tile}\n"
+                        f"      link_status=0x{pi.get('link_status',0):02x} "
+                        f"mode=0x{pi.get('mode',0):02x} "
+                        f"sword_anim=0x{pi.get('sword_animation',0):02x} "
+                        f"link_dir=0x{pi.get('link_direction',0):02x} "
+                        f"grid_offset={grid_off}\n"
+                        f"      obj_timer={obj_timer} "
+                        f"shove_dir=0x{shove_dir:02x} "
+                        f"curr_link_status=0x{ci.get('link_status',0):02x} "
+                        f"curr_mode=0x{ci.get('mode',0):02x} "
+                        f"curr_pos=({ci.get('link_x',0)},{ci.get('link_y',0)}) "
+                        f"curr_grid_offset={ci.get('link_grid_offset', -1)}\n"
+                        f"      curr_obj_timer={ci.get('link_obj_timer', -1)} "
+                        f"curr_shove_dir=0x{ci.get('link_shove_dir', 0):02x}\n"
+                        f"      doorway_dir=0x{pi.get('doorway_dir', 0):02x} "
+                        f"cur_opened_doors=0x{pi.get('cur_opened_doors', 0):02x} "
+                        f"triggered_door_cmd=0x{pi.get('triggered_door_cmd', 0):02x}\n"
+                        f"      {tile_info}\n"
+                        f"      frames={n_frames} enemies=[{enemy_str}]"
+                    ))
+                    # Don't flag wall-hit (predicted False) — that's expected
+                    # when the model hits a wall the mask didn't block.
 
         # --- Invariant 2: No wavefront available ---
         if act.kind == ActionKind.MOVE and prev.full_location == curr.full_location:
@@ -968,7 +966,7 @@ def _check_one_episode(env, network, ep_idx):
             if not mask_np.any():
                 violations.append(_make_violation(
                     "empty-mask",
-                    f"Action mask is entirely False! No valid actions at all."
+                    "Action mask is entirely False! No valid actions at all."
                 ))
 
         # --- Invariant 6: MOVE action was taken but mask said it was invalid ---
@@ -988,7 +986,6 @@ def _check_one_episode(env, network, ep_idx):
                 pass
 
         step_num += 1
-        state = curr
 
     return violations
 
