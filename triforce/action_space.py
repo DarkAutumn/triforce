@@ -373,16 +373,17 @@ class ZeldaActionSpace(gym.Wrapper):
             mask[move_index + i] = True
 
     def _update_mask(self, state : ZeldaGame, invalid):
-        """Removes certain actions if we are at the edge of the screen which link cannot perform."""
+        """Removes non-MOVE actions at screen edges where directional buttons cause room transitions."""
         link = state.link
         if state.level != 0:
+            non_move = [a for a in self.actions_allowed if a != ActionKind.MOVE]
             if link.tile.x <= 0x03 or link.tile.x >= 0x1c:
-                for action in (ActionKind.SWORD, ActionKind.BEAMS):
+                for action in non_move:
                     invalid.setdefault(action, []).append(Direction.N)
                     invalid.setdefault(action, []).append(Direction.S)
 
             if link.tile.y <= 0x03 or link.tile.y >= 0x12:
-                for action in (ActionKind.SWORD, ActionKind.BEAMS):
+                for action in non_move:
                     invalid.setdefault(action, []).append(Direction.W)
                     invalid.setdefault(action, []).append(Direction.E)
 

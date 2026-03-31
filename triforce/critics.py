@@ -128,12 +128,13 @@ class GameplayCritic(ZeldaCritic):
         self.critique_used_key(state_change, rewards)
         self.critique_equipment_pickup(state_change, rewards)
 
-        # movement
-        if state_change.action.kind == ActionKind.MOVE:
-            self.critique_location_change(state_change, rewards)
-            self.critique_movement(state_change, rewards)
+        # movement — applies to all actions since weapons press directional buttons
+        # and can cause room changes or tile movement
+        self.critique_location_change(state_change, rewards)
+        self.critique_movement(state_change, rewards)
 
-            # Blocking projectiles only happens when not using an item
+        # Blocking projectiles only happens when not using an item
+        if state_change.action.kind == ActionKind.MOVE:
             self.critique_block(state_change, rewards)
 
         self.critique_health_change(state_change, rewards)
@@ -342,8 +343,10 @@ class GameplayCritic(ZeldaCritic):
         F(s, s') = Φ(s') − Φ(s) where Φ(s) = −wavefront_distance(s) / PBRS_SCALE.
         Uses γ=1 so round trips cancel exactly — no oscillation exploits.
 
-        PBRS baseline only updates on MOVE actions to prevent weapon actions
-        (which press directional buttons) from creating ratchet exploits.
+        For MOVE actions, PBRS always fires.  For weapon/item actions, PBRS only
+        fires when the action caused a tile change (e.g. bomb at screen edge pushing
+        Link into the next tile).  Sub-tile pixel shifts from weapons are ignored
+        to prevent ratchet exploits.
         """
         prev = state_change.previous
         curr = state_change.state
@@ -358,7 +361,6 @@ class GameplayCritic(ZeldaCritic):
         if state_change.items_gained or len(curr.active_enemies) < len(prev.active_enemies):
             self._room_steps = 0
 
-
         # Room stalling penalty: flat -0.01 per step after grace, ramping to -0.02.
         # Resets on room change, enemy kills, or item pickups.
         # PBRS provides direction, this provides urgency to leave the room.
@@ -369,19 +371,17 @@ class GameplayCritic(ZeldaCritic):
             penalty = -(ROOM_STEP_PENALTY_MIN + t * (ROOM_STEP_PENALTY_MAX - ROOM_STEP_PENALTY_MIN))
             rewards.add(Penalty("penalty-room-stalling", penalty))
 
-        # Only compute PBRS on MOVE actions. Weapon actions press directional buttons
-        # which can shift Link's position, creating a ratchet exploit if PBRS rewards
-        # the resulting movement without penalizing the weapon-induced shift.
-        if state_change.action.kind != ActionKind.MOVE:
+        # For weapon/item actions, only compute PBRS when the tile actually changed.
+        # Sub-tile pixel shifts from weapon directional buttons are ignored to prevent
+        # the ratchet exploit (weapon shifts go unpenalized, corrective MOVE gets rewarded).
+        is_move = state_change.action.kind == ActionKind.MOVE
+        if not is_move and curr.link.tile == prev.link.tile:
             return
 
         # PBRS: F(s,s') = Φ(s') - Φ(s), Φ(s) = -distance / scale
-        # Uses the PBRS baseline tile (last MOVE position) as the "old" state so that
-        # weapon-induced position shifts are invisible to the potential function.
-        #
-        # After a room change (or first step), _pbrs_tile is None. In that case, seed
-        # the baseline from the current position and skip this step. This prevents
-        # cross-room wavefront comparisons (prev's wavefront is from the old room).
+        # After a room change (or first step), _pbrs_tile is None. Seed the
+        # baseline from the current position and skip — prevents cross-room
+        # wavefront comparisons.
         if self._pbrs_tile is None:
             self._pbrs_tile = curr.link.tile
             return
