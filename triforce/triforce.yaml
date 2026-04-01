@@ -8,6 +8,13 @@ action-spaces:
   move-only:
     actions:
     - MOVE
+  all-items:
+    actions:
+    - MOVE
+    - SWORD
+    - BEAMS
+    - BOMBS
+    - BOOMERANG
 model-kinds:
   shared-nature:
     default: true
@@ -84,6 +91,49 @@ training-circuits:
     weight: 2
   - scenario: overworld-sword
     weight: 1
+- name: all-items-circuit
+  description: 'Train a model with all items: mirrors main-circuit but with all-items
+    scenario variants that equip boomerang, bombs, arrows, wand, and candle.'
+  scenarios:
+  - scenario: overworld-room-walk
+    exit-criteria:
+      metric: room-result/correct-exit
+      threshold: 0.9
+    iterations: 500000
+  - scenario: overworld-sword
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.8
+    iterations: 500000
+  - scenario: overworld-skip-sword-all-items
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.9
+    iterations: 2000000
+  - scenario: dungeon1-all-items
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.75
+    iterations: 750000
+  - scenario: dungeon1-wallmaster
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.85
+    iterations: 250000
+  - scenario: dungeon1-all-items
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.9
+    iterations: 750000
+  - scenario: full-game-all-items
+- name: check-for-reward-hacking
+  description: 'Quick circuit for validating reward hacking fixes: room-walk then
+    overworld navigation with all items.'
+  scenarios:
+  - scenario: overworld-room-walk
+    iterations: 500000
+  - scenario: overworld-skip-sword-all-items
+    iterations: 750000
 scenarios:
 - name: full-game
   description: Full game from start through dungeon 1 triforce
@@ -242,10 +292,17 @@ scenarios:
   - 0_68
   use_hints: false
   per_reset:
-    bombs: 3
+    regular_boomerang: 1
     sword: 1
+    magic_rod: 1
+    bow: 1
+    arrows: 1
+    candle: 1
     hearts_and_containers: 34
     partial_hearts: 254
+  per_frame:
+    bombs: 4
+    rupees: 100
 - name: dungeon1-room-walk
   description: Dungeon 1 room walk.
   iterations: 5000000
@@ -422,3 +479,111 @@ scenarios:
     hearts_and_containers: 34
     partial_hearts: 254
     keys: 3
+- name: overworld-skip-sword-all-items
+  description: Navigate to dungeon 1 with all items equipped.
+  iterations: 2500000
+  scenario_selector: round-robin
+  objective: ReachLocation
+  objective_params:
+    level: 1
+    location: '0x73'
+  critic: GameplayCritic
+  end_conditions:
+  - StartingSwordCondition
+  - EnteredDungeon
+  - ReachedLocation
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - room-result
+  - room-health
+  - ending
+  - game-progress
+  - reward-average
+  - reward-details
+  start:
+  - 0_67s
+  use_hints: true
+  per_reset:
+    regular_boomerang: 1
+    sword: 1
+    magic_rod: 1
+    bow: 1
+    arrows: 1
+    candle: 1
+    hearts_and_containers: 34
+    partial_hearts: 254
+  per_frame:
+    bombs: 4
+    rupees: 100
+- name: dungeon1-all-items
+  description: Full dungeon 1 with all items equipped.
+  iterations: 5000000
+  scenario_selector: round-robin
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
+  critic: GameplayCritic
+  end_conditions:
+  - LeftDungeon
+  - GainedTriforce
+  - CollectedTreasure
+  - GameOver
+  - Timeout
+  - Dungeon1DidntGetKey
+  - NowhereToGoCondition
+  metrics:
+  - success-rate
+  - overworld-progress
+  - game-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_73s
+  use_hints: false
+  per_reset:
+    regular_boomerang: 1
+    magic_rod: 1
+    bow: 1
+    arrows: 1
+    candle: 1
+    hearts_and_containers: 34
+    partial_hearts: 254
+    keys: 4
+  per_frame:
+    bombs: 4
+    rupees: 100
+- name: full-game-all-items
+  description: Full game from start through dungeon 1 triforce with all items equipped.
+  iterations: 2000000
+  scenario_selector: round-robin
+  objective: GameCompletion
+  critic: GameplayCritic
+  end_conditions:
+  - GainedTriforce
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - game-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 0_77c
+  use_hints: true
+  per_reset:
+    regular_boomerang: 1
+    magic_rod: 1
+    bow: 1
+    arrows: 1
+    candle: 1
+    hearts_and_containers: 34
+    partial_hearts: 254
+  per_frame:
+    bombs: 4
+    rupees: 100

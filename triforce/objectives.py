@@ -471,7 +471,7 @@ class RoomWalk(ObjectiveSelector):
 
         # Check if this room has a treasure
         room_memory = self._get_room(state.full_location)
-        if room_memory.item is not None:
+        if room_memory is not None and room_memory.item is not None:
             self._sequence.append(Objective(ObjectiveKind.FIGHT, set(), set()))
             self._sequence.append(Objective(ObjectiveKind.TREASURE, set(), set()))
 

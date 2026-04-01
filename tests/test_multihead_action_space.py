@@ -207,36 +207,36 @@ class TestGetActionTakenMultihead:
 
 
 class TestFlatMaskToMultihead:
-    """Verify flat mask decomposition into multihead [K+4] format."""
+    """Verify flat mask decomposition into multihead [K*4] format."""
 
     def test_all_actions_available(self):
         """When all flat actions are valid, all types and all dirs should be True."""
         space = _make_action_space()
         flat_mask = torch.ones(12, dtype=torch.bool)
         mh_mask = space.flat_mask_to_multihead(flat_mask)
-        assert mh_mask.shape == (7,)  # K=3, 3+4=7
+        assert mh_mask.shape == (12,)  # K=3, 3*4=12
         assert mh_mask.all(), "All should be True when flat mask is all True"
 
     def test_move_only(self):
-        """When only MOVE is available, only type 0 should be True."""
+        """When only MOVE is available, only MOVE directions should be True."""
         space = _make_action_space()
         flat_mask = torch.zeros(12, dtype=torch.bool)
         flat_mask[0:4] = True  # MOVE N/S/W/E
         mh_mask = space.flat_mask_to_multihead(flat_mask)
-        assert mh_mask[0] == True    # MOVE available
-        assert mh_mask[1] == False   # SWORD not available
-        assert mh_mask[2] == False   # BEAMS not available
-        assert mh_mask[3:7].all()    # All 4 directions always True
+        assert mh_mask[0:4].all(), "MOVE all 4 directions should be True"
+        assert not mh_mask[4:8].any(), "SWORD should be all False"
+        assert not mh_mask[8:12].any(), "BEAMS should be all False"
 
     def test_partial_move_still_enables_type(self):
-        """If any direction of a type is valid, the type mask is True."""
+        """If any direction of a type is valid, that type+direction entry is True."""
         space = _make_action_space()
         flat_mask = torch.zeros(12, dtype=torch.bool)
         flat_mask[0] = True  # Only MOVE N
         mh_mask = space.flat_mask_to_multihead(flat_mask)
-        assert mh_mask[0] == True    # MOVE available (at least one direction)
-        assert mh_mask[1] == False   # SWORD not available
-        assert mh_mask[2] == False   # BEAMS not available
+        assert mh_mask[0] == True, "MOVE N should be True"
+        assert mh_mask[1] == False, "MOVE S should be False"
+        assert not mh_mask[4:8].any(), "SWORD should be all False"
+        assert not mh_mask[8:12].any(), "BEAMS should be all False"
 
     def test_sword_and_beams(self):
         """SWORD and BEAMS availability reflected correctly."""
@@ -245,41 +245,47 @@ class TestFlatMaskToMultihead:
         flat_mask[4:8] = True   # SWORD all dirs
         flat_mask[8:12] = True  # BEAMS all dirs
         mh_mask = space.flat_mask_to_multihead(flat_mask)
-        assert mh_mask[0] == False   # MOVE not available
-        assert mh_mask[1] == True    # SWORD available
-        assert mh_mask[2] == True    # BEAMS available
+        assert not mh_mask[0:4].any(), "MOVE should be all False"
+        assert mh_mask[4:8].all(), "SWORD all dirs should be True"
+        assert mh_mask[8:12].all(), "BEAMS all dirs should be True"
 
-    def test_direction_mask_reflects_valid_directions(self):
-        """Direction mask reflects union of valid directions from all valid action types."""
+    def test_per_type_direction_constraints_preserved(self):
+        """Each type preserves its own direction constraints independently."""
         space = _make_action_space()
         flat_mask = torch.zeros(12, dtype=torch.bool)
         flat_mask[0] = True  # Only MOVE N
         mh_mask = space.flat_mask_to_multihead(flat_mask)
-        # Only N should be valid in the direction mask
-        assert mh_mask[3] == True, "N should be valid"
-        assert mh_mask[4] == False, "S should not be valid"
-        assert mh_mask[5] == False, "W should not be valid"
-        assert mh_mask[6] == False, "E should not be valid"
+        mh_2d = mh_mask.view(3, 4)
+        # MOVE: only N
+        assert mh_2d[0, 0] == True, "MOVE N should be True"
+        assert mh_2d[0, 1] == False, "MOVE S should be False"
+        assert mh_2d[0, 2] == False, "MOVE W should be False"
+        assert mh_2d[0, 3] == False, "MOVE E should be False"
+        # SWORD/BEAMS: all False
+        assert not mh_2d[1].any(), "SWORD should be all False"
+        assert not mh_2d[2].any(), "BEAMS should be all False"
 
-    def test_direction_mask_union_across_types(self):
-        """Direction mask is the union of directions across all valid action types."""
+    def test_cross_type_direction_independence(self):
+        """MOVE S masked but SWORD N valid: model cannot pick MOVE N."""
         space = _make_action_space()
         flat_mask = torch.zeros(12, dtype=torch.bool)
         flat_mask[1] = True  # MOVE S
         flat_mask[4] = True  # SWORD N
         mh_mask = space.flat_mask_to_multihead(flat_mask)
-        assert mh_mask[3] == True, "N valid (from SWORD)"
-        assert mh_mask[4] == True, "S valid (from MOVE)"
-        assert mh_mask[5] == False, "W not valid"
-        assert mh_mask[6] == False, "E not valid"
+        mh_2d = mh_mask.view(3, 4)
+        # MOVE: only S, NOT N
+        assert mh_2d[0, 0] == False, "MOVE N should be False"
+        assert mh_2d[0, 1] == True, "MOVE S should be True"
+        # SWORD: only N
+        assert mh_2d[1, 0] == True, "SWORD N should be True"
+        assert mh_2d[1, 1] == False, "SWORD S should be False"
 
-    def test_no_actions_gives_no_directions(self):
-        """Empty flat mask → no action types and no directions enabled."""
+    def test_no_actions_gives_empty_mask(self):
+        """Empty flat mask → all entries False."""
         space = _make_action_space()
         flat_mask = torch.zeros(12, dtype=torch.bool)
         mh_mask = space.flat_mask_to_multihead(flat_mask)
-        assert not mh_mask[0:3].any(), "No action types should be enabled"
-        assert not mh_mask[3:7].any(), "No directions should be enabled"
+        assert not mh_mask.any(), "All entries should be False"
 
 
 class TestMultiheadActionSpace:
@@ -356,7 +362,7 @@ class TestMoveOnlyActionSpace:
         space = _make_action_space(actions=["MOVE"], multihead=True)
         flat_mask = torch.ones(4, dtype=torch.bool)
         mh_mask = space.flat_mask_to_multihead(flat_mask)
-        assert mh_mask.shape == (5,)   # K=1, 1+4=5
+        assert mh_mask.shape == (4,)   # K=1, 1*4=4
         assert mh_mask.all()
 
     def test_single_type_multihead_to_flat(self):

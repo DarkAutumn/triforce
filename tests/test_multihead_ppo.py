@@ -54,7 +54,7 @@ class MultiHeadTestEnv:
     def reset(self):
         self.step_count = 0
         obs = _make_random_obs()
-        mask = torch.ones(7, dtype=torch.bool)  # K=3, 3+4=7
+        mask = torch.ones(12, dtype=torch.bool)  # K=3, 3*4=12
         return obs, {"action_mask": mask}
 
     def step(self, action):
@@ -69,7 +69,7 @@ class MultiHeadTestEnv:
         reward = 1.0 if action_type == 0 else -0.5
         terminated = self.step_count >= 50
         truncated = False
-        mask = torch.ones(7, dtype=torch.bool)
+        mask = torch.ones(12, dtype=torch.bool)  # K=3, 3*4=12
         return obs, reward, terminated, truncated, {"action_mask": mask}
 
     def close(self):
@@ -131,7 +131,7 @@ class TestMultiHeadPPOUpdate:
             "entity_types": torch.zeros(4, 12).long(),
             "information": torch.zeros(4, 15),
         }
-        mask = torch.ones(4, 7, dtype=torch.bool)
+        mask = torch.ones(4, 12, dtype=torch.bool)  # K=3, 3*4=12
 
         with torch.no_grad():
             _, _, entropy, _ = network.get_action_and_value(obs, mask)
@@ -158,7 +158,7 @@ class TestPerHeadEntropyDetails:
             "entity_types": torch.zeros(4, 12).long(),
             "information": torch.zeros(4, 15),
         }
-        mask = torch.ones(4, 7, dtype=torch.bool)
+        mask = torch.ones(4, 12, dtype=torch.bool)  # K=3, 3*4=12
 
         with torch.no_grad():
             details = agent.get_entropy_details(obs, mask)
@@ -183,13 +183,13 @@ class TestPerHeadEntropyDetails:
             "information": torch.zeros(4, 15),
         }
 
-        full_mask = torch.ones(4, 7, dtype=torch.bool)
+        full_mask = torch.ones(4, 12, dtype=torch.bool)  # K=3, 3*4=12
         with torch.no_grad():
             full_details = agent.get_entropy_details(obs, full_mask)
 
-        restricted_mask = torch.zeros(4, 7, dtype=torch.bool)
-        restricted_mask[:, 0] = True    # Only MOVE
-        restricted_mask[:, 3:7] = True  # All directions
+        # Only MOVE with all directions: first 4 entries (type 0, dirs 0-3)
+        restricted_mask = torch.zeros(4, 12, dtype=torch.bool)
+        restricted_mask[:, 0:4] = True   # MOVE N/S/W/E
         with torch.no_grad():
             restricted_details = agent.get_entropy_details(obs, restricted_mask)
 

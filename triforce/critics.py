@@ -26,8 +26,8 @@ COMBAT_DECAY_RATE = 0.5
 ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_MINIMUM)
 
 PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
-USED_BOMB_PENALTY = Penalty("penalty-bomb-miss", -REWARD_MEDIUM)
-BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_SMALL)
+USED_BOMB_PENALTY = Penalty("penalty-bomb-used", -REWARD_SMALL)
+BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_MEDIUM)
 PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_SMALL)
 PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -REWARD_MAXIMUM)
 FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_TINY)
@@ -88,6 +88,8 @@ class GameplayCritic(ZeldaCritic):
         self._progress = 0.0
         self._room_combat_counts = {}  # full_location -> combat event count
         self._room_steps = 0  # steps in current room (for stalling detection)
+        self._stunned_enemies = set()  # (full_location, enemy_index) already stunned this room
+        self._pbrs_tile = None  # baseline tile for PBRS, only updated on MOVE actions
 
     def clear(self):
         super().clear()
@@ -96,6 +98,8 @@ class GameplayCritic(ZeldaCritic):
         self._progress = 0.0
         self._room_combat_counts.clear()
         self._room_steps = 0
+        self._stunned_enemies.clear()
+        self._pbrs_tile = None
 
     def _get_combat_decay(self, full_location):
         """Returns a decay multiplier for combat rewards in this room.
@@ -124,12 +128,13 @@ class GameplayCritic(ZeldaCritic):
         self.critique_used_key(state_change, rewards)
         self.critique_equipment_pickup(state_change, rewards)
 
-        # movement
-        if state_change.action.kind == ActionKind.MOVE:
-            self.critique_location_change(state_change, rewards)
-            self.critique_movement(state_change, rewards)
+        # movement — applies to all actions since weapons press directional buttons
+        # and can cause room changes or tile movement
+        self.critique_location_change(state_change, rewards)
+        self.critique_movement(state_change, rewards)
 
-            # Blocking projectiles only happens when not using an item
+        # Blocking projectiles only happens when not using an item
+        if state_change.action.kind == ActionKind.MOVE:
             self.critique_block(state_change, rewards)
 
         self.critique_health_change(state_change, rewards)
@@ -273,18 +278,41 @@ class GameplayCritic(ZeldaCritic):
             else:
                 rewards.add(PENALTY_CAVE_ATTACK)
 
-        elif state_change.action.kind in (ActionKind.SWORD, ActionKind.BEAMS):
-            if curr.enemies:
-                rewards.add(ATTACK_MISS_PENALTY)
+        # Miss penalty for any weapon/item action that doesn't hit or stun.
+        # Bombs get their own penalty-bomb-used on placement, so skip them here.
+        elif (state_change.action.kind != ActionKind.MOVE
+              and state_change.action.kind != ActionKind.BOMBS
+              and not state_change.enemies_stunned):
+            rewards.add(ATTACK_MISS_PENALTY)
+
+        # Boomerang stun reward (only first stun per enemy per room to prevent farming)
+        if state_change.enemies_stunned and state_change.action.kind == ActionKind.BOOMERANG:
+            loc = curr.full_location
+            new_stuns = [i for i in state_change.enemies_stunned if (loc, i) not in self._stunned_enemies]
+            for i in new_stuns:
+                self._stunned_enemies.add((loc, i))
+            if new_stuns:
+                decay = self._get_combat_decay(curr.full_location)
+                rewards.add(Reward("reward-boomerang-stun", REWARD_SMALL * decay))
 
     def critique_item_usage(self, state_change : StateChange, rewards):
         """Critiques the usage of items."""
-        # Always penalize using a bomb, but offset it by the reward for hitting something
-        if state_change.previous.link.bombs > state_change.state.link.bombs:
+        # Detect bomb placement via animation state, not inventory delta (per_frame can mask it).
+        if state_change.action.kind == ActionKind.BOMBS and self._bomb_was_placed(state_change):
             rewards.add(USED_BOMB_PENALTY)
+            if state_change.hits:
+                rewards.add(BOMB_HIT_REWARD, state_change.hits)
 
-        if state_change.action.kind == ActionKind.BOMBS:
-            rewards.add(BOMB_HIT_REWARD, state_change.hits)
+    @staticmethod
+    def _bomb_was_placed(state_change : StateChange):
+        """Returns True if a bomb was actually placed this step (animation INACTIVE → ACTIVE)."""
+        prev = state_change.previous.link
+        curr = state_change.state.link
+        for kind in (ZeldaAnimationKind.BOMB_1, ZeldaAnimationKind.BOMB_2):
+            if (curr.get_animation_state(kind) != AnimationState.INACTIVE
+                    and prev.get_animation_state(kind) == AnimationState.INACTIVE):
+                return True
+        return False
 
     def critique_location_change(self, state_change : StateChange, rewards):
         """Critiques the discovery of new locations."""
@@ -314,6 +342,11 @@ class GameplayCritic(ZeldaCritic):
 
         F(s, s') = Φ(s') − Φ(s) where Φ(s) = −wavefront_distance(s) / PBRS_SCALE.
         Uses γ=1 so round trips cancel exactly — no oscillation exploits.
+
+        For MOVE actions, PBRS always fires.  For weapon/item actions, PBRS only
+        fires when the action caused a tile change (e.g. bomb at screen edge pushing
+        Link into the next tile).  Sub-tile pixel shifts from weapons are ignored
+        to prevent ratchet exploits.
         """
         prev = state_change.previous
         curr = state_change.state
@@ -321,12 +354,12 @@ class GameplayCritic(ZeldaCritic):
         # Don't evaluate movement rewards if we took damage or changed rooms.
         if state_change.health_lost or prev.full_location != curr.full_location:
             self._room_steps = 0
+            self._pbrs_tile = None
             return
 
         # Reset room step counter when enemies are killed or items gained
         if state_change.items_gained or len(curr.active_enemies) < len(prev.active_enemies):
             self._room_steps = 0
-
 
         # Room stalling penalty: flat -0.01 per step after grace, ramping to -0.02.
         # Resets on room change, enemy kills, or item pickups.
@@ -338,14 +371,26 @@ class GameplayCritic(ZeldaCritic):
             penalty = -(ROOM_STEP_PENALTY_MIN + t * (ROOM_STEP_PENALTY_MAX - ROOM_STEP_PENALTY_MIN))
             rewards.add(Penalty("penalty-room-stalling", penalty))
 
+        # For weapon/item actions, only compute PBRS when the tile actually changed.
+        # Sub-tile pixel shifts from weapon directional buttons are ignored to prevent
+        # the ratchet exploit (weapon shifts go unpenalized, corrective MOVE gets rewarded).
+        is_move = state_change.action.kind == ActionKind.MOVE
+        if not is_move and curr.link.tile == prev.link.tile:
+            return
+
         # PBRS: F(s,s') = Φ(s') - Φ(s), Φ(s) = -distance / scale
-        # Uses γ=1 so round trips cancel exactly (no oscillation exploit).
-        # Both distances measured against prev.pbrs_wavefront — a wavefront computed
-        # without items, so it's stationary within a room (items appearing/disappearing
-        # from enemy drops don't shift the potential function).
+        # After a room change (or first step), _pbrs_tile is None. Seed the
+        # baseline from the current position and skip — prevents cross-room
+        # wavefront comparisons.
+        if self._pbrs_tile is None:
+            self._pbrs_tile = curr.link.tile
+            return
+
         wf = prev.pbrs_wavefront
-        old_dist = wf.get(prev.link.tile)
+        old_dist = wf.get(self._pbrs_tile)
         new_dist = wf.get(curr.link.tile)
+        self._pbrs_tile = curr.link.tile
+
         if old_dist is None or new_dist is None:
             return
 
