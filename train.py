@@ -123,6 +123,46 @@ class ProfilingCallback(TrainingCallback):
             self._inner.on_circuit_start(scenarios)
 
 
+class _SubCircuitCallback:
+    """Wrapper that forwards training events but suppresses circuit/scenario display events.
+
+    Used when running a sub-circuit so the parent circuit's TUI display is not clobbered."""
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    def on_progress(self, steps, total_steps):
+        """Forward progress updates to the parent display."""
+        self._inner.on_progress(steps, total_steps)
+
+    def on_optimize(self, stats, iteration, total_iterations):
+        """Forward optimize stats to the parent display."""
+        self._inner.on_optimize(stats, iteration, total_iterations)
+
+    def on_metrics(self, metrics, iteration, total_iterations):
+        """Forward metrics to the parent display."""
+        self._inner.on_metrics(metrics, iteration, total_iterations)
+
+    def check_pause(self):
+        """Delegate pause checks to the parent."""
+        return self._inner.check_pause()
+
+    def on_circuit_start(self, scenarios):
+        """Suppressed — sub-circuit must not overwrite parent's scenario list."""
+
+    def on_scenario_start(self, scenario_name, iterations):
+        """Suppressed — sub-circuit must not change parent's active scenario."""
+
+    def on_scenario_end(self, scenario_name):
+        """Suppressed — sub-circuit must not mark parent scenarios as complete."""
+
+    def on_scenario_complete(self, scenario_name):
+        """Suppressed."""
+
+    def on_training_complete(self):
+        """Suppressed."""
+
+
 class _KeyboardListener:
     """Background thread that reads single keypresses from stdin in raw mode."""
 
@@ -769,11 +809,12 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
             if callback:
                 callback.on_scenario_start(f"[circuit] {scenario_entry.circuit}", sub_budget or 0)
 
-            # Pass current model into sub-circuit
+            # Pass current model into sub-circuit with suppressed display events
             sub_kwargs = dict(kwargs)
+            sub_callback = _SubCircuitCallback(callback) if callback else None
             model, scenario_def = _run_circuit(ppo, sub_circuit_def.scenarios, model_kind,
                                                action_space_def, checkpoint_dir, sub_kwargs,
-                                               sub_budget, callback, sub_circuit_def)
+                                               sub_budget, sub_callback, sub_circuit_def)
 
             if callback:
                 callback.on_scenario_end(f"[circuit] {scenario_entry.circuit}")
