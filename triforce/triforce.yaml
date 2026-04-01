@@ -111,9 +111,26 @@ training-circuits:
     weight: 20
   - scenario: dungeon1-finite-bombs
     weight: 10
+- name: all-items-polish
+  description: 'Polish phase mixing full game with finite bombs, sword-only full game,
+    dungeon reinforcement, wallmaster practice, and overworld sword training.'
+  kind: weighted
+  scenarios:
+  - scenario: full-game-all-items-finite
+    weight: 70
+  - scenario: full-game
+    weight: 20
+  - scenario: dungeon1-finite-bombs
+    weight: 4
+  - scenario: dungeon1-dungeon2
+    weight: 4
+  - scenario: dungeon1-wallmaster
+    weight: 1
+  - scenario: overworld-sword
+    weight: 1
 - name: all-items-circuit
-  description: 'Train a model with all items: starts with sword-only basics, adds items
-    with mixed infinite/finite bombs, trains dungeon with wallmasters, then full game.'
+  description: 'Full curriculum: sword-only basics, item training with finite/infinite
+    bombs, dungeon with wallmasters, overworld2 route, full game, and polish phase.'
   scenarios:
   - scenario: overworld-room-walk
     exit-criteria:
@@ -134,7 +151,15 @@ training-circuits:
     iterations: 1500000
   - circuit: dungeon1-with-wallmasters
     iterations: 1500000
+  - scenario: dungeon1-dungeon2
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.7
+    iterations: 500000
   - scenario: full-game-all-items
+    iterations: 4000000
+  - circuit: all-items-polish
+    iterations: 2000000
 - name: check-for-reward-hacking
   description: 'Quick circuit for validating reward hacking fixes: room-walk then
     overworld navigation with all items.'
@@ -213,7 +238,7 @@ scenarios:
   - 0_77c
   use_hints: true
 - name: dungeon1-dungeon2
-  description: ''
+  description: Navigate from dungeon 1 exit to dungeon 2 entrance with bombs and boomerang.
   iterations: 2000000
   scenario_selector: round-robin
   objective: GameCompletion
@@ -233,6 +258,9 @@ scenarios:
   start:
   - 0_37c
   use_hints: false
+  per_reset:
+    regular_boomerang: 1
+    bombs: 8
 - name: no-end-conditions
   description: The full game with training variables
   iterations: 2000000
@@ -597,6 +625,30 @@ scenarios:
   per_frame:
     bombs: 4
     rupees: 100
+- name: full-game-all-items-finite
+  description: Full game with finite bombs (8) and boomerang. No per-frame refills.
+  iterations: 2000000
+  scenario_selector: round-robin
+  objective: GameCompletion
+  critic: GameplayCritic
+  end_conditions:
+  - GainedTriforce
+  - EnteredDungeon
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - game-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 0_77c
+  use_hints: true
+  per_reset:
+    regular_boomerang: 1
+    bombs: 8
 - name: overworld-skip-sword-finite-bombs
   description: Navigate to dungeon 1 with all items but finite bombs (start with 8).
   iterations: 2500000
