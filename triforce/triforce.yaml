@@ -91,9 +91,29 @@ training-circuits:
     weight: 2
   - scenario: overworld-sword
     weight: 1
+- name: learn-items
+  description: 'Weighted mix of overworld navigation with infinite and finite bombs to
+    teach item usage and bomb conservation.'
+  kind: weighted
+  scenarios:
+  - scenario: overworld-skip-sword-all-items
+    weight: 60
+  - scenario: overworld-skip-sword-finite-bombs
+    weight: 40
+- name: dungeon1-with-wallmasters
+  description: 'Weighted mix of dungeon 1 training with wallmaster practice and finite
+    bombs to teach dungeon completion with resource management.'
+  kind: weighted
+  scenarios:
+  - scenario: dungeon1-all-items
+    weight: 70
+  - scenario: dungeon1-wallmaster
+    weight: 20
+  - scenario: dungeon1-finite-bombs
+    weight: 10
 - name: all-items-circuit
-  description: 'Train a model with all items: mirrors main-circuit but with all-items
-    scenario variants that equip boomerang, bombs, arrows, wand, and candle.'
+  description: 'Train a model with all items: starts with sword-only basics, adds items
+    with mixed infinite/finite bombs, trains dungeon with wallmasters, then full game.'
   scenarios:
   - scenario: overworld-room-walk
     exit-criteria:
@@ -105,26 +125,15 @@ training-circuits:
       metric: success-rate
       threshold: 0.8
     iterations: 500000
-  - scenario: overworld-skip-sword-all-items
+  - scenario: overworld-skip-sword
     exit-criteria:
       metric: success-rate
       threshold: 0.9
-    iterations: 2000000
-  - scenario: dungeon1-all-items
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.75
-    iterations: 750000
-  - scenario: dungeon1-wallmaster
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.85
-    iterations: 250000
-  - scenario: dungeon1-all-items
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.9
-    iterations: 750000
+    iterations: 1500000
+  - circuit: learn-items
+    iterations: 1500000
+  - circuit: dungeon1-with-wallmasters
+    iterations: 1500000
   - scenario: full-game-all-items
 - name: check-for-reward-hacking
   description: 'Quick circuit for validating reward hacking fixes: room-walk then
@@ -557,13 +566,14 @@ scenarios:
     bombs: 4
     rupees: 100
 - name: full-game-all-items
-  description: Full game from start through dungeon 1 triforce with all items equipped.
+  description: Full game from start through dungeon 2 entrance with all items equipped.
   iterations: 2000000
   scenario_selector: round-robin
   objective: GameCompletion
   critic: GameplayCritic
   end_conditions:
   - GainedTriforce
+  - EnteredDungeon
   - GameOver
   - Timeout
   metrics:
@@ -586,4 +596,81 @@ scenarios:
     partial_hearts: 254
   per_frame:
     bombs: 4
+    rupees: 100
+- name: overworld-skip-sword-finite-bombs
+  description: Navigate to dungeon 1 with all items but finite bombs (start with 8).
+  iterations: 2500000
+  scenario_selector: round-robin
+  objective: ReachLocation
+  objective_params:
+    level: 1
+    location: '0x73'
+  critic: GameplayCritic
+  end_conditions:
+  - StartingSwordCondition
+  - EnteredDungeon
+  - ReachedLocation
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - room-result
+  - room-health
+  - ending
+  - game-progress
+  - reward-average
+  - reward-details
+  start:
+  - 0_67s
+  use_hints: true
+  per_reset:
+    regular_boomerang: 1
+    sword: 1
+    magic_rod: 1
+    bow: 1
+    arrows: 1
+    candle: 1
+    bombs: 8
+    hearts_and_containers: 34
+    partial_hearts: 254
+  per_frame:
+    rupees: 100
+- name: dungeon1-finite-bombs
+  description: Full dungeon 1 with all items but finite bombs (start with 8).
+  iterations: 5000000
+  scenario_selector: round-robin
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
+  critic: GameplayCritic
+  end_conditions:
+  - LeftDungeon
+  - GainedTriforce
+  - CollectedTreasure
+  - GameOver
+  - Timeout
+  - Dungeon1DidntGetKey
+  - NowhereToGoCondition
+  metrics:
+  - success-rate
+  - overworld-progress
+  - game-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_73s
+  use_hints: false
+  per_reset:
+    regular_boomerang: 1
+    magic_rod: 1
+    bow: 1
+    arrows: 1
+    candle: 1
+    bombs: 8
+    hearts_and_containers: 34
+    partial_hearts: 254
+    keys: 4
+  per_frame:
     rupees: 100
