@@ -113,8 +113,18 @@ training-circuits:
   - scenario: dungeon1-all-items
     exit-criteria:
       metric: success-rate
+      threshold: 0.75
+    iterations: 750000
+  - scenario: dungeon1-wallmaster
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.85
+    iterations: 250000
+  - scenario: dungeon1-all-items
+    exit-criteria:
+      metric: success-rate
       threshold: 0.9
-    iterations: 2000000
+    iterations: 750000
   - scenario: full-game-all-items
 - name: check-for-reward-hacking
   description: 'Quick circuit for validating reward hacking fixes: room-walk then
