@@ -10,8 +10,20 @@ import numpy as np
 
 from .action_space import ActionKind, ActionTaken
 from .room import Room
-from .zelda_enums import Direction, MapLocation, Position
+from .zelda_enums import Direction, MapLocation, Position, SelectedEquipmentKind
 from .zelda_game import ZeldaGame
+
+# Maps B-button ActionKinds to the NES selected_item RAM value.
+_ACTION_TO_SELECTED_ITEM = {
+    ActionKind.BOMBS: SelectedEquipmentKind.BOMBS.value,
+    ActionKind.BOOMERANG: SelectedEquipmentKind.BOOMERANG.value,
+    ActionKind.ARROW: SelectedEquipmentKind.ARROWS.value,
+    ActionKind.WAND: SelectedEquipmentKind.WAND.value,
+    ActionKind.WHISTLE: SelectedEquipmentKind.WHISTLE.value,
+    ActionKind.FOOD: SelectedEquipmentKind.FOOD.value,
+    ActionKind.POTION: SelectedEquipmentKind.POTION.value,
+    ActionKind.CANDLE: SelectedEquipmentKind.CANDLE.value,
+}
 
 # movement related constants
 WS_ADJUSTMENT_FRAMES = 4
@@ -150,6 +162,11 @@ class ZeldaCooldownHandler:
         return loc.level != loc2.level and loc.value == loc2.value
 
     def _act_attack_or_item(self, action, frame_capture):
+        # Set the NES selected item so B-button actions use the correct item.
+        selected = _ACTION_TO_SELECTED_ITEM.get(action.kind)
+        if selected is not None:
+            self.env.unwrapped.data.set_value('selected_item', selected)
+
         if action.direction in (Direction.N, Direction.S, Direction.E, Direction.W):
             self._set_direction(action.direction)
         elif action.direction in (Direction.NW, Direction.NE):
