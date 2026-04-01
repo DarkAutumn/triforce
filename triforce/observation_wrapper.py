@@ -20,7 +20,7 @@ from .zelda_game import ZeldaGame
 GRAYSCALE_WEIGHTS = torch.FloatTensor([0.2989, 0.5870, 0.1140])
 _GRAYSCALE_WEIGHTS_4D = GRAYSCALE_WEIGHTS.view(1, -1, 1, 1)
 _GRAYSCALE_NORM_WEIGHTS_4D = _GRAYSCALE_WEIGHTS_4D / 255.0
-BOOLEAN_FEATURES = 15
+INFO_FEATURES = 16
 VIEWPORT_PIXELS = 128
 
 # Unified entity observation: 11 NES object slots + 1 treasure slot
@@ -105,7 +105,7 @@ class ObservationWrapper(gym.Wrapper):
             "image": self._get_box_observation_space(),
             "entities": Box(low=-1.0, high=1.0, shape=(ENTITY_SLOTS, ENTITY_FEATURES), dtype=np.float32),
             "entity_types": gym.spaces.MultiDiscrete([NUM_ENTITY_TYPES] * ENTITY_SLOTS),
-            "information" : gym.spaces.MultiBinary(BOOLEAN_FEATURES)
+            "information" : gym.spaces.MultiBinary(INFO_FEATURES)
         })
 
     def reset(self, **kwargs):
@@ -316,7 +316,7 @@ class ObservationWrapper(gym.Wrapper):
         return features.clamp(-1, 1), types
 
     def _get_information(self, state : ZeldaGame):
-        result = torch.zeros(BOOLEAN_FEATURES, dtype=torch.float32)
+        result = torch.zeros(INFO_FEATURES, dtype=torch.float32)
 
         # Objectives (indices 0-5)
         objectives = state.objectives
@@ -341,6 +341,9 @@ class ObservationWrapper(gym.Wrapper):
         result[12] = 1.0 if state.link.health <= 1 else 0.0
         result[13] = 1.0 if state.link.is_health_full else 0.0
         result[14] = 1.0 if state.link.clock else 0.0
+
+        # Continuous features (index 15)
+        result[15] = min(state.link.bombs / 8.0, 1.0)
 
         return result
 

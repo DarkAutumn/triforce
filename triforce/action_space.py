@@ -318,7 +318,8 @@ class ZeldaActionSpace(gym.Wrapper):
                             mask[index + self._direction_to_index(direction)] = True
 
                 case ActionKind.BOMBS:
-                    mask[index:index + 4] = True
+                    if link.bombs > 0:
+                        mask[index:index + 4] = True
 
                 case ActionKind.ARROW:
                     mask[index:index + 4] = True
