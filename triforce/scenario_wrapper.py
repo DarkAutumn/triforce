@@ -105,7 +105,8 @@ class TrainingCircuitEntry(BaseModel):
     """An entry in a training circuit."""
     model_config = ConfigDict(populate_by_name=True)
 
-    scenario : str
+    scenario : Optional[str] = None
+    circuit : Optional[str] = None
     iterations : Optional[int] = None
     exit_criteria : Optional[ExitCriteria] = Field(None, alias='exit-criteria')
     weight : Optional[float] = None
@@ -134,21 +135,53 @@ class TrainingCircuitDefinition(BaseModel):
             for circuit in yaml.safe_load(f)["training-circuits"]:
                 circuit = TrainingCircuitDefinition(**circuit)
 
+                for entry in circuit.scenarios:
+                    # Each entry must have exactly one of scenario or circuit
+                    if entry.scenario and entry.circuit:
+                        raise ValueError(f"Circuit '{circuit.name}' entry has both "
+                                         f"'scenario' and 'circuit' — use one or the other")
+                    if not entry.scenario and not entry.circuit:
+                        raise ValueError(f"Circuit '{circuit.name}' entry must have "
+                                         f"either 'scenario' or 'circuit'")
+
                 # Validate weight fields match circuit kind
                 if circuit.kind == 'weighted':
                     for entry in circuit.scenarios:
                         if entry.weight is None:
+                            name = entry.scenario or entry.circuit
                             raise ValueError(f"Weighted circuit '{circuit.name}' entry "
-                                             f"'{entry.scenario}' must have a weight")
+                                             f"'{name}' must have a weight")
                 else:
                     for entry in circuit.scenarios:
                         if entry.weight is not None:
+                            name = entry.scenario or entry.circuit
                             raise ValueError(f"Sequential circuit '{circuit.name}' entry "
-                                             f"'{entry.scenario}' must not have a weight")
+                                             f"'{name}' must not have a weight")
 
                 circuits[circuit.name] = circuit
 
+        # Validate no circular references
+        TrainingCircuitDefinition._check_cycles(circuits)
+
         return circuits
+
+    @staticmethod
+    def _check_cycles(circuits):
+        """Detect circular references in circuit-in-circuit nesting."""
+        def visit(name, visiting):
+            if name not in circuits:
+                return
+            if name in visiting:
+                cycle = ' -> '.join(list(visiting) + [name])
+                raise ValueError(f"Circular circuit reference: {cycle}")
+            visiting.add(name)
+            for entry in circuits[name].scenarios:
+                if entry.circuit:
+                    visit(entry.circuit, visiting)
+            visiting.discard(name)
+
+        for name in circuits:
+            visit(name, set())
 
     @staticmethod
     def get(name, default=None):

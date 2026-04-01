@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pylint: disable=too-many-lines
 """Train models to play The Legend of Zelda (NES)."""
 
 # pylint: disable=duplicate-code
@@ -721,6 +722,7 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
 
 def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs,
                              total_budget, callback=None):
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-statements,too-many-branches
     """Run training circuit and return (final_model, final_scenario_def)."""
     iterations_spent = 0
     model = None
@@ -729,22 +731,57 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
     # Resolve iteration counts for all scenarios upfront so the display can show them
     scenario_plan = []
     for scenario_entry in circuit:
-        sdef = TrainingScenarioDefinition.get(scenario_entry.scenario)
-        if sdef is None:
-            raise ValueError(f"Unknown scenario: {scenario_entry.scenario}")
-
-        if scenario_entry.iterations is not None:
-            iters = scenario_entry.iterations
-        elif total_budget is not None:
-            iters = total_budget
+        if scenario_entry.circuit:
+            name = f"[circuit] {scenario_entry.circuit}"
+            sub_circuit_def = TrainingCircuitDefinition.get(scenario_entry.circuit)
+            if sub_circuit_def is None:
+                raise ValueError(f"Unknown circuit: {scenario_entry.circuit}")
+            iters = scenario_entry.iterations or total_budget or 2000000
         else:
-            iters = sdef.iterations
-        scenario_plan.append((sdef.name, iters))
+            sdef = TrainingScenarioDefinition.get(scenario_entry.scenario)
+            if sdef is None:
+                raise ValueError(f"Unknown scenario: {scenario_entry.scenario}")
+            name = sdef.name
+
+            if scenario_entry.iterations is not None:
+                iters = scenario_entry.iterations
+            elif total_budget is not None:
+                iters = total_budget
+            else:
+                iters = sdef.iterations
+        scenario_plan.append((name, iters))
 
     if callback:
         callback.on_circuit_start(scenario_plan)
 
     for scenario_entry in circuit:
+        if scenario_entry.circuit:
+            sub_circuit_def = TrainingCircuitDefinition.get(scenario_entry.circuit)
+            sub_budget = scenario_entry.iterations or total_budget
+
+            if total_budget is not None:
+                remaining = total_budget - iterations_spent
+                sub_budget = min(sub_budget, remaining) if sub_budget else remaining
+
+            if sub_budget is not None and sub_budget <= 0:
+                break
+
+            if callback:
+                callback.on_scenario_start(f"[circuit] {scenario_entry.circuit}", sub_budget or 0)
+
+            # Pass current model into sub-circuit
+            sub_kwargs = dict(kwargs)
+            model, scenario_def = _run_circuit(ppo, sub_circuit_def.scenarios, model_kind,
+                                               action_space_def, checkpoint_dir, sub_kwargs,
+                                               sub_budget, callback, sub_circuit_def)
+
+            if callback:
+                callback.on_scenario_end(f"[circuit] {scenario_entry.circuit}")
+
+            kwargs['model'] = model
+            iterations_spent += sub_budget or 0
+            continue
+
         scenario_def = TrainingScenarioDefinition.get(scenario_entry.scenario)
 
         if scenario_entry.iterations is not None:
