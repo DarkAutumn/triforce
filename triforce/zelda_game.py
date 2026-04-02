@@ -9,7 +9,7 @@ import gymnasium as gym
 import torch
 
 from .room import Room
-from .zelda_objects import Item, Projectile
+from .zelda_objects import Item, Projectile, BombWall
 from .enemy import Enemy
 from .link import Link
 from .zelda_enums import ENEMY_MAP, ITEM_MAP, PROJECTILE_MAP, MapLocation, Position, Direction, SoundKind
@@ -40,6 +40,7 @@ class ZeldaGame:
     # pylint: disable=too-many-public-methods
 
     __active = None
+    _game_map = None
     _env : gym.Env
     info : dict
     frames : int
@@ -226,11 +227,39 @@ class ZeldaGame:
         return [x for x in self.enemies if x.is_active and not x.is_dying]
 
     @cached_property
+    def bomb_walls(self) -> list:
+        """Returns BombWall entities for intact bombable walls in the current room.
+
+        Uses game.yaml bomb_walls data to know which directions are bombable,
+        then checks tile data to see if the wall is still intact.
+        """
+        if self.level == 0:
+            return []
+
+        if ZeldaGame._game_map is None:
+            from .game_map import GameMap  # pylint: disable=import-outside-toplevel
+            ZeldaGame._game_map = GameMap.load()
+
+        game_room = ZeldaGame._game_map.get(self.full_location)
+        if game_room is None or not game_room.bomb_walls:
+            return []
+
+        dir_map = {'N': Direction.N, 'S': Direction.S, 'E': Direction.E, 'W': Direction.W}
+        tiles = self.current_tiles
+        result = []
+        for dir_str in game_room.bomb_walls:
+            direction = dir_map[dir_str]
+            if self.room.is_wall_intact(direction, tiles):
+                result.append(BombWall.for_direction(self, direction))
+        return result
+
+    @cached_property
     def all_entities(self):
         """Returns entities for NES object slots 1-11 in slot order.
 
-        Each element is (entity, category) where category is 'enemy', 'item', or 'projectile',
-        or None for empty/inactive slots. Enemies are filtered to active only.
+        Each element is (entity, category) where category is 'enemy', 'item',
+        'projectile', or 'bomb_wall'. Enemies are filtered to active only.
+        Bomb walls occupy the first empty slots after NES objects.
         """
         result = [None] * 11
         for enemy in self.active_enemies:
@@ -239,6 +268,14 @@ class ZeldaGame:
             result[item.index - 1] = (item, 'item')
         for proj in self.projectiles:
             result[proj.index - 1] = (proj, 'projectile')
+
+        # Place bomb walls in the first available empty slots
+        for bw in self.bomb_walls:
+            for i in range(11):
+                if result[i] is None:
+                    result[i] = (bw, 'bomb_wall')
+                    break
+
         return result
 
     def is_door_locked(self, direction):
@@ -260,7 +297,7 @@ class ZeldaGame:
     _DOORWAY_REQUIRED_X = 0x78  # for N/S doorways
     _DOORWAY_REQUIRED_Y = 0x8D  # for E/W doorways
 
-    def can_link_move(self, direction):
+    def can_link_move(self, direction):  # pylint: disable=too-many-return-statements
         """Whether Link can move in the given direction from his current position.
 
         Checks NES BoundByRoom boundaries (underworld only), tile walkability

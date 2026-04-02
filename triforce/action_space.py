@@ -308,9 +308,33 @@ class ZeldaActionSpace(gym.Wrapper):
 
         self._update_mask(state, invalid)
 
+        has_enemies = bool(state.active_enemies)
+        has_items = bool(state.items)
+        has_bomb_walls = bool(state.bomb_walls)
+
+        # Determine which action categories are allowed based on room contents:
+        #   - No enemies, no items, no bomb walls (treasure doesn't count): MOVE only
+        #   - Items but no enemies: MOVE + SWORD/BEAMS + BOOMERANG (+ ARROW, TODO: add when implemented)
+        #   - Bomb walls present: also allow BOMBS
+        #   - Enemies present: all applicable actions
+        item_pickup_actions = frozenset({
+            ActionKind.SWORD, ActionKind.BEAMS, ActionKind.BOOMERANG,
+            # TODO: Add ActionKind.ARROW here when arrow action is wired up — arrows can pick up items too
+        })
+
         mask = torch.zeros(self.total_actions, dtype=bool)
         for action in actions_possible:
             index = self.action_to_index[action]
+
+            # Skip non-MOVE actions when nothing to fight or pick up
+            if action != ActionKind.MOVE:
+                if not has_enemies and not has_items and not has_bomb_walls:
+                    continue
+                if not has_enemies and not has_bomb_walls and action not in item_pickup_actions:
+                    continue
+                if not has_enemies and has_bomb_walls and action not in (item_pickup_actions | {ActionKind.BOMBS}):
+                    continue
+
             match action:
                 case ActionKind.MOVE:
                     for direction in (Direction.N, Direction.S, Direction.W, Direction.E):
@@ -344,13 +368,8 @@ class ZeldaActionSpace(gym.Wrapper):
 
                 case _:
                     if action in (ActionKind.SWORD, ActionKind.BEAMS):
-                        # If there are no enemies or items, we can't use the sword.
-                        # We allow items so we can pick up with a stab.
-                        if not state.active_enemies and not state.items:
-                            mask[index:index + 4] = False
-                        else:
-                            for direction in link.get_sword_directions_allowed():
-                                mask[index + self._direction_to_index(direction)] = True
+                        for direction in link.get_sword_directions_allowed():
+                            mask[index + self._direction_to_index(direction)] = True
 
             if action in invalid:
                 index = self.action_to_index[action]

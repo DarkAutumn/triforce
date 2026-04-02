@@ -38,7 +38,7 @@ class EntityRowWidget(QWidget):
         layout.addWidget(self.props_label)
         layout.addStretch()
 
-    def set_entity(self, type_name, health, stun, hurts, killable):
+    def set_entity(self, type_name, health, stun, hurts, killable, secret=0.0):
         """Update the row with entity data."""
         self.name_label.setText(type_name)
         props = []
@@ -50,6 +50,8 @@ class EntityRowWidget(QWidget):
             props.append("\u26a0")  # ⚠
         if killable > 0.5:
             props.append("\u2694")  # ⚔
+        if secret > 0.5:
+            props.append("\U0001f4a3")  # 💣
         self.props_label.setText(" ".join(props))
 
     def clear_entity(self):
@@ -304,6 +306,7 @@ class ObservationPanel(QWidget):
                     stun=float(entities[i, 4]),
                     hurts=float(entities[i, 5]),
                     killable=float(entities[i, 6]),
+                    secret=float(entities[i, 7]),
                 )
                 row.setVisible(True)
 

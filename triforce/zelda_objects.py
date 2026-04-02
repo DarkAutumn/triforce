@@ -102,3 +102,33 @@ class Item(ZeldaObject):
     def dimensions(self) -> Tuple[int, int]:
         """The dimensions of the object."""
         return 1, 1
+
+
+@dataclass
+class BombWall(ZeldaObject):
+    """Synthetic entity representing a bombable wall in a dungeon room.
+
+    Not a real NES object — created from game.yaml bomb_walls data so the model
+    can learn which walls to bomb. Positioned at the NES bombable wall hotspot
+    for the given direction (BombableWallHotspotsX/Y in Z_07.asm:4809).
+    """
+    wall_direction : Direction = Direction.NONE
+
+    # Fixed positions from NES BombableWallHotspotsX/Y (Z_07.asm:4809-4812)
+    _HOTSPOTS = {
+        Direction.N: Position(0x78, 0x5D),
+        Direction.S: Position(0x78, 0xBD),
+        Direction.W: Position(0x20, 0x8D),
+        Direction.E: Position(0xD0, 0x8D),
+    }
+
+    @staticmethod
+    def for_direction(game, direction):
+        """Create a BombWall entity for a bombable wall in the given direction."""
+        pos = BombWall._HOTSPOTS[direction]
+        return BombWall(game=game, index=-2, id=-2, position=pos, wall_direction=direction)
+
+    @property
+    def dimensions(self) -> Tuple[int, int]:
+        """The dimensions of the object."""
+        return 2, 2

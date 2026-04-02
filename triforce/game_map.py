@@ -32,6 +32,7 @@ class GameRoom:
     exits: Dict[str, RoomExit] = field(default_factory=dict)
     enemies: Dict[str, int] = field(default_factory=dict)
     treasure: Optional[str] = None
+    bomb_walls: List[str] = field(default_factory=list)
 
     def get_neighbors(self) -> List[MapLocation]:
         """Returns the MapLocations reachable from this room."""
@@ -269,7 +270,9 @@ class GameMap:
 
             enemies = entry.get('enemies') or {}
             treasure = entry.get('treasure')
+            bomb_walls = entry.get('bomb_walls') or []
 
-            rooms[loc] = GameRoom(location=loc, exits=exits, enemies=enemies, treasure=treasure)
+            rooms[loc] = GameRoom(location=loc, exits=exits, enemies=enemies,
+                                  treasure=treasure, bomb_walls=bomb_walls)
 
         return GameMap(rooms)
