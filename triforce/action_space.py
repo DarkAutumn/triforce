@@ -319,7 +319,7 @@ class ZeldaActionSpace(gym.Wrapper):
         #   - Enemies present: all applicable actions
         item_pickup_actions = frozenset({
             ActionKind.SWORD, ActionKind.BEAMS, ActionKind.BOOMERANG,
-            # TODO: Add ActionKind.ARROW here when arrow action is wired up — arrows can pick up items too
+            # Note: Add ActionKind.ARROW here when arrow action is wired up — arrows can pick up items too
         })
 
         mask = torch.zeros(self.total_actions, dtype=bool)

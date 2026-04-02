@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# pylint: disable=too-many-lines
+# pylint: disable=too-many-lines,duplicate-code
 """Records gameplay videos of trained Zelda RL agents as 1920×1080 MP4 files."""
 
 import argparse
