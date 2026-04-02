@@ -272,10 +272,19 @@ class ZeldaGame:
         (Z_07.asm:2874), so we allow movement in all directions.  This handles cases
         where Link gets pushed into unwalkable tiles by sword knockback.
         """
-        # NES Link_ModifyDirInDoorway forces Link to the doorway direction.
+        # NES Link_ModifyDirInDoorway (Z_05.asm:3658) constrains movement in doorways
+        # to the doorway direction or its opposite ("you can only move in the direction
+        # that you entered it or the opposite").
         doorway_dir = self.info.get('doorway_dir', 0)
-        if doorway_dir != 0 and doorway_dir != direction.value:
-            return False
+        if doorway_dir != 0:
+            opposite = {Direction.N: Direction.S, Direction.S: Direction.N,
+                        Direction.E: Direction.W, Direction.W: Direction.E}
+            try:
+                dw_direction = Direction(doorway_dir)
+            except ValueError:
+                dw_direction = None
+            if dw_direction is not None and direction not in (dw_direction, opposite[dw_direction]):
+                return False
 
         if self.info.get('link_grid_offset', 0) != 0:
             return True
