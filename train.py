@@ -385,14 +385,23 @@ class TrainingDisplay(TrainingCallback):
     def on_metrics(self, metrics, iteration, total_iterations):
         self._prev_game_metrics = dict(self._game_metrics)
 
-        # Weighted mode returns {scenario: {metric: value}} — flatten for display/tensorboard
+        # Weighted mode returns {scenario: {metric: value}} — flatten for display/tensorboard.
+        # The first scenario's metrics are promoted to top-level so TUI perf metrics
+        # (success-rate, room-progress, etc.) and tensorboard metrics/ path work normally.
         flat_metrics = {}
+        first_scenario_metrics = None
         for key, value in metrics.items():
             if isinstance(value, dict):
+                if first_scenario_metrics is None:
+                    first_scenario_metrics = value
                 for metric_name, metric_value in value.items():
                     flat_metrics[f"{key}/{metric_name}"] = metric_value
             else:
                 flat_metrics[key] = value
+
+        if first_scenario_metrics is not None:
+            for metric_name, metric_value in first_scenario_metrics.items():
+                flat_metrics.setdefault(metric_name, metric_value)
 
         self._game_metrics.update(flat_metrics)
         if self._tensorboard:
