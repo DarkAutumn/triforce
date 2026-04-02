@@ -398,12 +398,14 @@ class ProbabilisticSelector(RoomSelector):
 
 class ScenarioWrapper(gym.Wrapper):
     """Wraps the environment to call our critic and end conditions."""
-    def __init__(self, env, scenario : TrainingScenarioDefinition, weighted_selector=None):
+    def __init__(self, env, scenario : TrainingScenarioDefinition, weighted_selector=None,
+                 state_override=None):
         super().__init__(env)
         self._last_save_state = None
         self._scenario = scenario
         self._step_count = 0
         self._weighted_selector = weighted_selector
+        self._state_override = state_override
         self._configure_scenario(scenario)
 
     def _configure_scenario(self, scenario):
@@ -462,7 +464,13 @@ class ScenarioWrapper(gym.Wrapper):
 
         self.room_selector.reset()
 
-        save_state = self.room_selector.next()
+        # Use the one-shot state override if set (for debugging), otherwise ask the selector.
+        if self._state_override is not None:
+            save_state = self._state_override
+            self._state_override = None
+        else:
+            save_state = self.room_selector.next()
+
         if save_state != self._last_save_state:
             self._last_save_state = save_state
             self.unwrapped.load_state(save_state, retro.data.Integrations.CUSTOM_ONLY)

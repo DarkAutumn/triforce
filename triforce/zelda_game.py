@@ -263,18 +263,37 @@ class ZeldaGame:
     def can_link_move(self, direction):
         """Whether Link can move in the given direction from his current position.
 
-        Checks tile walkability (via self.room which uses current RAM tiles),
-        cave entry override, and locked-door-with-key override (NES CheckDoorway
-        opens the door before the tile check fires).
+        Checks NES BoundByRoom boundaries (underworld only), tile walkability
+        (via self.room which uses current RAM tiles), cave entry override, and
+        locked-door-with-key override (NES CheckDoorway opens the door before
+        the tile check fires).
 
         When link_grid_offset != 0 the NES skips Walker_CheckTileCollision entirely
         (Z_07.asm:2874), so we allow movement in all directions.  This handles cases
         where Link gets pushed into unwalkable tiles by sword knockback.
         """
+        # NES Link_ModifyDirInDoorway forces Link to the doorway direction.
+        doorway_dir = self.info.get('doorway_dir', 0)
+        if doorway_dir != 0 and doorway_dir != direction.value:
+            return False
+
         if self.info.get('link_grid_offset', 0) != 0:
             return True
 
         px, py = self.link.position
+
+        # NES BoundByRoom (Z_01.asm:3505) enforces room boundaries in dungeons.
+        # Skipped when in a doorway (Walker_Move jumps past it).
+        if self.level != 0 and doorway_dir == 0:
+            if direction == Direction.W and px < 0x21:
+                return False
+            if direction == Direction.E and px >= 0xD0:
+                return False
+            if direction == Direction.N and py < 0x5E:
+                return False
+            if direction == Direction.S and py >= 0xBD:
+                return False
+
         if self.room.can_link_move_from(px, py, direction):
             return True
 
