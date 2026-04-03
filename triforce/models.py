@@ -120,8 +120,8 @@ class Network(nn.Module):
         torch.nn.init.constant_(layer.bias, bias_const)
         return layer
 
-    def save(self, path):
-        """Save the network to a file."""
+    def save(self, path, optimizer=None):
+        """Save the network to a file, optionally including optimizer state."""
         save_data = {
             "model_state_dict": self.state_dict(),
             "steps_trained": self.steps_trained,
@@ -133,6 +133,9 @@ class Network(nn.Module):
             "action_space_name": self.action_space_name,
             "git_commit": _get_git_commit(),
         }
+
+        if optimizer is not None:
+            save_data["optimizer_state_dict"] = optimizer.state_dict()
 
         torch.save(save_data, path)
 
@@ -156,6 +159,12 @@ class Network(nn.Module):
             raise ValueError("Mismatch in action space!")
 
         return self
+
+    @staticmethod
+    def load_optimizer_state(path):
+        """Load optimizer state dict from a checkpoint, or None if not present."""
+        save_data = torch.load(path, weights_only=False)
+        return save_data.get("optimizer_state_dict")
 
     @staticmethod
     def load_metrics(path):

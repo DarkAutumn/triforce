@@ -764,6 +764,11 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
         network.load(args.load)
         kwargs['model'] = network
 
+        # Restore optimizer state if present in checkpoint
+        optimizer_state = Network.load_optimizer_state(args.load)
+        if optimizer_state is not None:
+            kwargs['optimizer_state'] = optimizer_state
+
         # Infer obs_kind and frame_stack from saved model when not explicitly set
         if args.obs_kind is None and args.frame_stack is None:
             from triforce.observation_wrapper import infer_obs_kind  # pylint: disable=import-outside-toplevel
@@ -832,7 +837,8 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
                       save_path=checkpoint_dir, **kwargs)
 
     # Save leg checkpoint with scenario name
-    model.save(f"{checkpoint_dir}/{stem}_{scenario_def.name}_{model.steps_trained}.pt")
+    model.save(f"{checkpoint_dir}/{stem}_{scenario_def.name}_{model.steps_trained}.pt",
+               optimizer=ppo.optimizer)
     return model, model.steps_trained - steps_before
 
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
@@ -1020,7 +1026,8 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
         callback.on_scenario_end(f"weighted[{len(scenario_defs)}]")
 
     # Save final checkpoint
-    model.save(f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt")
+    model.save(f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt",
+               optimizer=ppo.optimizer)
     return model, scenario_defs[0]
 
 
@@ -1076,7 +1083,7 @@ def main():
     # Save final result in the run directory (not checkpoints)
     stem = _model_stem(model_kind.name, action_space_def.name)
     final_path = f"{run_dir}/{stem}.pt"
-    model.save(final_path)
+    model.save(final_path, optimizer=ppo.optimizer)
     console.print(f"\nFinal model: {final_path}")
 
     if args.evaluate:
