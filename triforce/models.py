@@ -120,8 +120,8 @@ class Network(nn.Module):
         torch.nn.init.constant_(layer.bias, bias_const)
         return layer
 
-    def save(self, path, optimizer=None):
-        """Save the network to a file, optionally including optimizer state."""
+    def save(self, path, optimizer=None, circuit_position=None):
+        """Save the network to a file, optionally including optimizer and circuit state."""
         save_data = {
             "model_state_dict": self.state_dict(),
             "steps_trained": self.steps_trained,
@@ -136,6 +136,9 @@ class Network(nn.Module):
 
         if optimizer is not None:
             save_data["optimizer_state_dict"] = optimizer.state_dict()
+
+        if circuit_position is not None:
+            save_data["circuit_position"] = circuit_position
 
         torch.save(save_data, path)
 
@@ -165,6 +168,12 @@ class Network(nn.Module):
         """Load optimizer state dict from a checkpoint, or None if not present."""
         save_data = torch.load(path, weights_only=False)
         return save_data.get("optimizer_state_dict")
+
+    @staticmethod
+    def load_circuit_position(path):
+        """Load circuit position from a checkpoint, or None if not present."""
+        save_data = torch.load(path, weights_only=False)
+        return save_data.get("circuit_position")
 
     @staticmethod
     def load_metrics(path):

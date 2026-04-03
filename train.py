@@ -836,13 +836,14 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
     model = ppo.train(model_kind.network_class, create_env, iterations, callback,
                       save_path=checkpoint_dir, **kwargs)
 
-    # Save leg checkpoint with scenario name
+    # Save leg checkpoint with scenario name and circuit position
+    circuit_position = kwargs.pop('circuit_position', None)
     model.save(f"{checkpoint_dir}/{stem}_{scenario_def.name}_{model.steps_trained}.pt",
-               optimizer=ppo.optimizer)
+               optimizer=ppo.optimizer, circuit_position=circuit_position)
     return model, model.steps_trained - steps_before
 
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
-                 callback=None, circuit_def=None):
+                 callback=None, circuit_def=None, skip_to=None):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     """Run training circuit and return (final_model, final_scenario_def).
 
@@ -853,16 +854,18 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
                                      checkpoint_dir, kwargs, total_budget, callback)
 
     return _run_sequential_circuit(ppo, circuit, model_kind, action_space_def,
-                                    checkpoint_dir, kwargs, total_budget, callback)
+                                    checkpoint_dir, kwargs, total_budget, callback,
+                                    skip_to=skip_to)
 
 
 def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs,
-                             total_budget, callback=None):
+                             total_budget, callback=None, skip_to=None):
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-statements,too-many-branches
     """Run training circuit and return (final_model, final_scenario_def)."""
     iterations_spent = 0
     model = None
     scenario_def = None
+    skipping = skip_to is not None
 
     # Resolve iteration counts for all scenarios upfront so the display can show them
     scenario_plan = []
@@ -891,6 +894,20 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
         callback.on_circuit_start(scenario_plan)
 
     for scenario_entry in circuit:
+        # Determine the name for skip-to matching
+        entry_name = (f"[circuit] {scenario_entry.circuit}" if scenario_entry.circuit
+                      else scenario_entry.scenario)
+
+        # Skip completed legs when resuming
+        if skipping:
+            if entry_name in (skip_to, f"[circuit] {skip_to}"):
+                skipping = False
+            else:
+                if callback:
+                    callback.on_scenario_start(entry_name, 0)
+                    callback.on_scenario_end(entry_name)
+                continue
+
         if scenario_entry.circuit:
             sub_circuit_def = TrainingCircuitDefinition.get(scenario_entry.circuit)
             sub_budget = scenario_entry.iterations or total_budget
@@ -948,6 +965,7 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
                                        exit_criteria=ec.metric if ec else None,
                                        exit_threshold=ec.threshold if ec else None)
 
+        kwargs['circuit_position'] = scenario_def.name
         model, used = train_once(ppo, scenario_def, model_kind, action_space_def,
                                  checkpoint_dir, iterations, callback, **kwargs)
 
@@ -1067,6 +1085,20 @@ def main():
     console.print(f"Model kind: {model_kind.name}, Action space: {action_space_def.name}")
 
     kwargs, circuit, circuit_def = _get_kwargs_from_args(args, model_kind, action_space_def)
+
+    # Resolve --resume / --skip-to
+    skip_to = args.skip_to
+    if args.resume and not skip_to:
+        if args.load is None:
+            console.print("[red]--resume requires --load[/red]")
+            sys.exit(1)
+        saved_position = Network.load_circuit_position(args.load)
+        if saved_position:
+            skip_to = saved_position
+            console.print(f"Resuming after: {saved_position}")
+        else:
+            console.print("[yellow]Warning: --resume but checkpoint has no circuit position[/yellow]")
+
     ppo = PPO(**kwargs)
 
     with Live(console=console, refresh_per_second=4) as live:
@@ -1077,13 +1109,15 @@ def main():
             console.print(f"Profiling: {args.profile} steps after {PROFILE_WARMUP_STEPS} warmup → {PROFILE_OUTPUT}")
         model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
                                            checkpoint_dir, kwargs, args.iterations,
-                                           callback=callback, circuit_def=circuit_def)
+                                           callback=callback, circuit_def=circuit_def,
+                                           skip_to=skip_to)
         display.on_training_complete()
 
     # Save final result in the run directory (not checkpoints)
     stem = _model_stem(model_kind.name, action_space_def.name)
     final_path = f"{run_dir}/{stem}.pt"
-    model.save(final_path, optimizer=ppo.optimizer)
+    model.save(final_path, optimizer=ppo.optimizer,
+               circuit_position=scenario_def.name if scenario_def else None)
     console.print(f"\nFinal model: {final_path}")
 
     if args.evaluate:
@@ -1139,6 +1173,10 @@ def parse_args():
     parser.add_argument("--iterations", type=int, default=None, help="Override iteration count.")
     parser.add_argument("--parallel", type=int, default=16, help="Number of parallel environments to run.")
     parser.add_argument("--load", type=str, help="Load a model to continue training.")
+    parser.add_argument("--resume", action='store_true',
+                        help="Resume circuit from saved position in --load checkpoint.")
+    parser.add_argument("--skip-to", type=str, default=None, metavar="SCENARIO",
+                        help="Skip circuit legs until reaching SCENARIO (overrides --resume).")
     parser.add_argument("--evaluate", type=int, default=None, metavar="N",
                         help="Run N evaluation episodes after training and print a progress report.")
     parser.add_argument("--hook-exceptions", action='store_true', help="Dump tracebacks on unhandled exceptions.")
