@@ -830,6 +830,19 @@ class MultiHeadAgent(Network):
         # Entropy: sum of per-head entropies
         entropy = type_dist.entropy() + dir_dist.entropy()
 
+        # When only one action type is valid, exclude the type head from both log_prob
+        # and entropy.  This prevents MOVE-dominated frames (where the type choice is
+        # forced) from pushing the type logits so extreme that the head collapses to
+        # always-MOVE even on frames where other types are available.
+        if mask is not None:
+            has_choice = action_type_mask.sum(dim=-1) > 1  # [batch]
+            no_choice = ~has_choice
+            if no_choice.any():
+                type_logp = type_dist.log_prob(actions[..., 0])
+                log_prob = torch.where(no_choice, log_prob - type_logp, log_prob)
+                type_ent = type_dist.entropy()
+                entropy = torch.where(no_choice, entropy - type_ent, entropy)
+
         return actions, log_prob, entropy, value.view(-1)
 
     def get_value(self, obs):
@@ -1119,7 +1132,23 @@ class ImpalaMultiHeadAgent(Network):
             actions = torch.stack([type_action, dir_action], dim=-1)
 
         log_prob = type_dist.log_prob(actions[..., 0]) + dir_dist.log_prob(actions[..., 1])
+
+        # Entropy: sum of per-head entropies
         entropy = type_dist.entropy() + dir_dist.entropy()
+
+        # When only one action type is valid, exclude the type head from both log_prob
+        # and entropy.  This prevents MOVE-dominated frames (where the type choice is
+        # forced) from pushing the type logits so extreme that the head collapses to
+        # always-MOVE even on frames where other types are available.
+        if mask is not None:
+            has_choice = action_type_mask.sum(dim=-1) > 1  # [batch]
+            no_choice = ~has_choice
+            if no_choice.any():
+                type_logp = type_dist.log_prob(actions[..., 0])
+                log_prob = torch.where(no_choice, log_prob - type_logp, log_prob)
+                type_ent = type_dist.entropy()
+                entropy = torch.where(no_choice, entropy - type_ent, entropy)
+
         return actions, log_prob, entropy, value.view(-1)
 
     def get_value(self, obs):

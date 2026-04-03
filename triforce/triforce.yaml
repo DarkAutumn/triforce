@@ -98,6 +98,9 @@ training-circuits:
   scenarios:
   - scenario: overworld-skip-sword-all-items
     weight: 60
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.8
   - scenario: overworld-skip-sword-finite-bombs
     weight: 40
 - name: dungeon1-with-wallmasters
@@ -107,6 +110,9 @@ training-circuits:
   scenarios:
   - scenario: dungeon1-all-items
     weight: 70
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.8
   - scenario: dungeon1-wallmaster
     weight: 20
   - scenario: dungeon1-finite-bombs
@@ -118,6 +124,9 @@ training-circuits:
   scenarios:
   - scenario: full-game-all-items-finite
     weight: 70
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.9
   - scenario: full-game
     weight: 20
   - scenario: dungeon1-finite-bombs
@@ -135,7 +144,7 @@ training-circuits:
   - scenario: overworld-room-walk
     exit-criteria:
       metric: room-result/correct-exit
-      threshold: 0.9
+      threshold: 0.8
     iterations: 500000
   - scenario: overworld-sword
     exit-criteria:
@@ -145,7 +154,7 @@ training-circuits:
   - scenario: overworld-skip-sword
     exit-criteria:
       metric: success-rate
-      threshold: 0.9
+      threshold: 0.8
     iterations: 1500000
   - circuit: learn-items
     iterations: 1500000
