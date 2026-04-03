@@ -481,7 +481,10 @@ class TrainingDisplay(TrainingCallback):
 
         steps = info.get('steps', 0)
         total = info.get('total', 0)
-        line.append(f"  {steps:>10,} of {total:>10,} steps", style="green")
+        line.append(f"  {steps:>10,}", style="cyan")
+        line.append(" of ", style="white")
+        line.append(f"{total:>10,}", style="cyan")
+        line.append(" steps", style="white")
 
         metric_name = info.get('metric')
         metric_val = info.get('value')
@@ -649,7 +652,7 @@ class TrainingDisplay(TrainingCallback):
         table.add_column("Metric", style="cyan", min_width=24)
         table.add_column("Value", justify="right", min_width=12)
         table.add_column("Δ", justify="right", min_width=10, style="dim")
-        table.add_column("Target", justify="right", min_width=10, style="dim")
+        table.add_column("Target", justify="left", min_width=10, style="dim")
 
         # SPS — always first, standalone
         sps = self._optimize_stats.get("charts/SPS")
