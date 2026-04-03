@@ -102,10 +102,13 @@ class ProfilingCallback(TrainingCallback):
         return True
 
     # Delegate circuit/scenario lifecycle methods
-    def on_scenario_start(self, scenario_name, iterations):
+    def on_scenario_start(self, scenario_name, iterations, exit_criteria=None,
+                          exit_threshold=None):
         """Delegate scenario start to inner callback."""
         if self._inner and hasattr(self._inner, 'on_scenario_start'):
-            self._inner.on_scenario_start(scenario_name, iterations)
+            self._inner.on_scenario_start(scenario_name, iterations,
+                                          exit_criteria=exit_criteria,
+                                          exit_threshold=exit_threshold)
 
     def on_scenario_complete(self, scenario_name):
         """Delegate scenario completion to inner callback."""
@@ -150,7 +153,8 @@ class _SubCircuitCallback:
     def on_circuit_start(self, scenarios):
         """Suppressed — sub-circuit must not overwrite parent's scenario list."""
 
-    def on_scenario_start(self, scenario_name, iterations):
+    def on_scenario_start(self, scenario_name, iterations, exit_criteria=None,
+                          exit_threshold=None):
         """Suppressed — sub-circuit must not change parent's active scenario."""
 
     def on_scenario_end(self, scenario_name):
@@ -230,6 +234,10 @@ class TrainingDisplay(TrainingCallback):
         self._prev_game_metrics = {}
         self._prev_optimize_stats = {}
         self._kl_rollback_count = 0
+
+        # Exit criteria for current scenario
+        self._exit_criteria = None
+        self._exit_threshold = None
 
         # Pause state
         self._pause_state = _RUNNING
@@ -328,7 +336,8 @@ class TrainingDisplay(TrainingCallback):
             self._scenario_total[name] = iters
         self._refresh(force=True)
 
-    def on_scenario_start(self, scenario_name, iterations):
+    def on_scenario_start(self, scenario_name, iterations, exit_criteria=None,
+                          exit_threshold=None):
         self._active_index = next(
             i for i, (name, _) in enumerate(self._scenarios) if name == scenario_name)
         self._current_steps = 0
@@ -338,6 +347,8 @@ class TrainingDisplay(TrainingCallback):
         self._optimize_stats = {}
         self._prev_game_metrics = {}
         self._prev_optimize_stats = {}
+        self._exit_criteria = exit_criteria
+        self._exit_threshold = exit_threshold
 
         # Set up tensorboard for this scenario
         if self._tensorboard:
@@ -551,6 +562,32 @@ class TrainingDisplay(TrainingCallback):
             return False
         return True
 
+    def _get_target_text(self, key):
+        """Return a dim-styled Text showing the target/healthy range for a metric."""
+        # Check exit criteria first (takes priority for the matched metric)
+        if self._exit_criteria and self._exit_criteria == key and self._exit_threshold is not None:
+            return Text(f"≥{self._exit_threshold:g}", style="dim")
+
+        # Resolve per-head keys to their aggregate range
+        lookup = key
+        if "/head_" in key:
+            if key.endswith("/entropy"):
+                lookup = "losses/attention/entropy"
+            elif key.endswith("/top1"):
+                lookup = "losses/attention/top1_weight"
+
+        bounds = self._HEALTHY_RANGES.get(lookup)
+        if bounds is None:
+            return Text("", style="dim")
+        lo, hi = bounds
+        if lo is not None and hi is not None:
+            return Text(f"{lo:g}–{hi:g}", style="dim")
+        if lo is not None:
+            return Text(f"≥{lo:g}", style="dim")
+        if hi is not None:
+            return Text(f"≤{hi:g}", style="dim")
+        return Text("", style="dim")
+
     def _add_metric_row(self, table, key, display_name, fmt, value, prev_value):
         """Add a metric row with value coloring and delta column."""
         style = "white" if self._is_healthy(key, value) else "red"
@@ -562,13 +599,15 @@ class TrainingDisplay(TrainingCallback):
         else:
             delta_text = Text("", style="dim")
 
-        table.add_row(display_name, val_text, delta_text)
+        target_text = self._get_target_text(key)
+        table.add_row(display_name, val_text, delta_text, target_text)
 
     def _render_metrics(self):
         table = Table(show_header=False, show_edge=False, pad_edge=False, box=None, padding=(0, 2))
         table.add_column("Metric", style="cyan", min_width=24)
         table.add_column("Value", justify="right", min_width=12)
         table.add_column("Δ", justify="right", min_width=10, style="dim")
+        table.add_column("Target", justify="right", min_width=10, style="dim")
 
         # SPS — always first, standalone
         sps = self._optimize_stats.get("charts/SPS")
@@ -590,7 +629,7 @@ class TrainingDisplay(TrainingCallback):
             val = self._game_metrics.get(key)
             if val is not None:
                 if not has_perf and has_sps:
-                    table.add_row("", "", "")
+                    table.add_row("", "", "", "")
                 prev = self._prev_game_metrics.get(key)
                 self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_perf = True
@@ -614,7 +653,7 @@ class TrainingDisplay(TrainingCallback):
             val = self._optimize_stats.get(key)
             if val is not None:
                 if not has_entropy and (has_perf or has_sps):
-                    table.add_row("", "", "")
+                    table.add_row("", "", "", "")
                 prev = self._prev_optimize_stats.get(key)
                 self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_entropy = True
@@ -633,7 +672,7 @@ class TrainingDisplay(TrainingCallback):
             val = self._optimize_stats.get(key)
             if val is not None:
                 if not has_loss and (has_perf or has_entropy or has_sps):
-                    table.add_row("", "", "")
+                    table.add_row("", "", "", "")
                 prev = self._prev_optimize_stats.get(key)
                 self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_loss = True
@@ -641,9 +680,9 @@ class TrainingDisplay(TrainingCallback):
         # KL rollback counter — only show when rollbacks have occurred
         if self._kl_rollback_count > 0:
             if has_loss or has_perf or has_entropy or has_sps:
-                table.add_row("", "", "")
+                table.add_row("", "", "", "")
             table.add_row("[bold red]⚠ KL rollbacks[/bold red]",
-                          f"[bold red]{self._kl_rollback_count}[/bold red]", "")
+                          f"[bold red]{self._kl_rollback_count}[/bold red]", "", "")
 
         return table
 
@@ -856,7 +895,10 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
             del kwargs['exit_threshold']
 
         if callback:
-            callback.on_scenario_start(scenario_def.name, iterations)
+            ec = scenario_entry.exit_criteria
+            callback.on_scenario_start(scenario_def.name, iterations,
+                                       exit_criteria=ec.metric if ec else None,
+                                       exit_threshold=ec.threshold if ec else None)
 
         model, used = train_once(ppo, scenario_def, model_kind, action_space_def,
                                  checkpoint_dir, iterations, callback, **kwargs)
@@ -921,7 +963,10 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
         callback.on_circuit_start([(weighted_label, iterations)])
 
     if callback:
-        callback.on_scenario_start(weighted_label, iterations)
+        first_ec = exit_criteria_map.get(scenario_defs[0].name) if scenario_defs else None
+        callback.on_scenario_start(weighted_label, iterations,
+                                   exit_criteria=first_ec.metric if first_ec else None,
+                                   exit_threshold=first_ec.threshold if first_ec else None)
 
     model = ppo.train_weighted(
         model_kind.network_class, create_env, scenario_defs, weights,
