@@ -239,6 +239,10 @@ class TrainingDisplay(TrainingCallback):
         self._exit_criteria = None
         self._exit_threshold = None
 
+        # Per-scenario completion metadata: name -> {metric, value, met, steps, total, duration}
+        self._completion_info = {}
+        self._scenario_start_time = None
+
         # Pause state
         self._pause_state = _RUNNING
         self._resume_event = threading.Event()
@@ -349,6 +353,7 @@ class TrainingDisplay(TrainingCallback):
         self._prev_optimize_stats = {}
         self._exit_criteria = exit_criteria
         self._exit_threshold = exit_threshold
+        self._scenario_start_time = time.monotonic()
 
         # Set up tensorboard for this scenario
         if self._tensorboard:
@@ -362,6 +367,22 @@ class TrainingDisplay(TrainingCallback):
         self._scenario_steps[scenario_name] = self._current_steps
         self._total_spent += self._current_steps
         self._completed.add(scenario_name)
+
+        # Snapshot completion metadata for display
+        duration = time.monotonic() - self._scenario_start_time if self._scenario_start_time else 0
+        metric_value = self._game_metrics.get(self._exit_criteria) if self._exit_criteria else None
+        met = (metric_value is not None and self._exit_threshold is not None
+               and metric_value >= self._exit_threshold)
+        self._completion_info[scenario_name] = {
+            'metric': self._exit_criteria,
+            'threshold': self._exit_threshold,
+            'value': metric_value,
+            'met': met,
+            'steps': self._current_steps,
+            'total': self._current_total,
+            'duration': duration,
+        }
+
         self._prev_game_metrics = {}
         self._prev_optimize_stats = {}
         self._refresh(force=True)
@@ -449,15 +470,36 @@ class TrainingDisplay(TrainingCallback):
         self._last_refresh_time = now
         self._live.update(self._render())
 
+    def _render_completed_scenario(self, name):
+        """Render a completed scenario line with checkmark, duration, steps, and metric."""
+        info = self._completion_info.get(name, {})
+        line = Text("  ✔ ", style="green")
+        line.append(name.ljust(self._name_width), style="green")
+
+        dur = info.get('duration', 0)
+        line.append(f"  {self._format_duration(dur):>7}", style="dim")
+
+        steps = info.get('steps', 0)
+        total = info.get('total', 0)
+        line.append(f"  {steps:>10,} of {total:>10,} steps", style="green")
+
+        metric_name = info.get('metric')
+        metric_val = info.get('value')
+        if metric_name is not None and metric_val is not None:
+            met = info.get('met', False)
+            style = "white" if met else "red"
+            line.append(f"  {metric_name}: ", style="dim")
+            line.append(f"{metric_val:.4f}", style=style)
+
+        return line
+
     def _render(self):
         parts = []
         parts.append(Text(""))
 
         for i, (name, _) in enumerate(self._scenarios):
             if name in self._completed:
-                line = Text("  ✔ ", style="green")
-                line.append(name, style="green")
-                parts.append(line)
+                parts.append(self._render_completed_scenario(name))
             elif i == self._active_index:
                 steps = self._scenario_steps.get(name, 0)
                 total = self._scenario_total.get(name, 1)
@@ -516,15 +558,15 @@ class TrainingDisplay(TrainingCallback):
 
     @staticmethod
     def _format_duration(seconds):
-        """Format seconds into a human-readable duration string."""
+        """Format seconds into a human-readable duration string (no seconds)."""
         if seconds < 60:
-            return f"{seconds:.0f}s"
+            return "<1m"
         if seconds < 3600:
-            m, s = divmod(int(seconds), 60)
-            return f"{m}m{s:02d}s"
+            m = int(seconds) // 60
+            return f"{m}m"
         h, remainder = divmod(int(seconds), 3600)
-        m, s = divmod(remainder, 60)
-        return f"{h}h{m:02d}m{s:02d}s"
+        m = remainder // 60
+        return f"{h}h{m:02d}m"
 
     # Healthy ranges for coloring: (low, high) inclusive.  None means no bound.
     _HEALTHY_RANGES = {
