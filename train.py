@@ -577,7 +577,7 @@ class TrainingDisplay(TrainingCallback):
         "losses/value_loss":                (0.01, 1.0),
         "losses/policy_loss":               (-0.05, 0.05),
         "losses/entropy":                   (0.5, 2.0),
-        "losses/approx_kl":                 (0.001, 0.02),
+        "losses/approx_kl":                 (0.001, 0.03),
         "losses/clipfrac":                  (0.05, 0.25),
         "losses/explained_variance":        (0.3, 0.9),
         "losses/attention/entropy":         (2.0, 6.5),
