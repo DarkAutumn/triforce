@@ -81,6 +81,11 @@ class PPO:
             if self._pending_optimizer_state is not None:
                 self.optimizer.load_state_dict(self._pending_optimizer_state)
                 self._pending_optimizer_state = None
+                # Move optimizer state tensors to match parameter device
+                for state in self.optimizer.state.values():
+                    for k, v in state.items():
+                        if isinstance(v, torch.Tensor):
+                            state[k] = v.to(self.device)
         else:
             for param_group, new_params in zip(self.optimizer.param_groups,
                                                 [list(network.parameters())]):
