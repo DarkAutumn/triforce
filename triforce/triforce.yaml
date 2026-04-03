@@ -170,13 +170,14 @@ training-circuits:
     iterations: 750000
 scenarios:
 - name: full-game
-  description: Full game from start through dungeon 1 triforce
+  description: Full game from start through dungeon 2 entrance
   iterations: 2000000
   scenario_selector: round-robin
   objective: GameCompletion
   critic: GameplayCritic
   end_conditions:
   - GainedTriforce
+  - EnteredDungeon2
   - GameOver
   - Timeout
   metrics:
@@ -601,7 +602,7 @@ scenarios:
   critic: GameplayCritic
   end_conditions:
   - GainedTriforce
-  - EnteredDungeon
+  - EnteredDungeon2
   - GameOver
   - Timeout
   metrics:
@@ -633,7 +634,7 @@ scenarios:
   critic: GameplayCritic
   end_conditions:
   - GainedTriforce
-  - EnteredDungeon
+  - EnteredDungeon2
   - GameOver
   - Timeout
   metrics:

@@ -138,7 +138,7 @@ class LeftWallmasterRoom(ZeldaEndCondition):
         return False, False, None
 
 class EnteredDungeon(ZeldaEndCondition):
-    """End the scenario if the agent enters the dungeon."""
+    """End the scenario if the agent enters any dungeon (level != 0)."""
     def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
         state = state_change.state
         if state.level == 0:
@@ -148,6 +148,18 @@ class EnteredDungeon(ZeldaEndCondition):
             return True, False, "failure-reentered-dungeon"
 
         return True, False, "success-entered-dungeon"
+
+class EnteredDungeon2(ZeldaEndCondition):
+    """End the scenario if the agent enters dungeon 2 (level == 2).
+
+    Use this instead of EnteredDungeon for scenarios that should run through dungeon 1.
+    """
+    def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
+        state = state_change.state
+        if state.level == 2:
+            return True, False, "success-entered-dungeon2"
+
+        return False, False, None
 
 class LeftOverworld1Area(ZeldaEndCondition):
     """End the scenario if the agent leaves the allowable areas between the start room and dungeon 1."""
