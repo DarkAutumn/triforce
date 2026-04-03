@@ -573,7 +573,7 @@ class TrainingDisplay(TrainingCallback):
 
     # Healthy ranges for coloring: (low, high) inclusive.  None means no bound.
     _HEALTHY_RANGES = {
-        "charts/SPS":                       (150, None),
+        "charts/SPS":                       (100, None),
         "losses/value_loss":                (0.01, 1.0),
         "losses/policy_loss":               (-0.05, 0.05),
         "losses/entropy":                   (0.5, 2.0),
