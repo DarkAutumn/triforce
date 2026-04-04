@@ -441,7 +441,7 @@ class TrainingDisplay(TrainingCallback):
             'value': actual,
             'met': met,
             'steps': steps,
-            'total': steps,
+            'total': self._scenario_total.get(scenario_name, steps),
             'duration': 0,
         }
         self._refresh(force=True)
