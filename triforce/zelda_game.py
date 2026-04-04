@@ -300,14 +300,28 @@ class ZeldaGame:
     def can_link_move(self, direction):  # pylint: disable=too-many-return-statements
         """Whether Link can move in the given direction from his current position.
 
-        Checks NES BoundByRoom boundaries (underworld only), tile walkability
-        (via self.room which uses current RAM tiles), cave entry override, and
-        locked-door-with-key override (NES CheckDoorway opens the door before
-        the tile check fires).
+        Replicates the NES Walker_Move flow (Z_07.asm:2600):
 
-        When link_grid_offset != 0 the NES skips Walker_CheckTileCollision entirely
-        (Z_07.asm:2874), so we allow movement in all directions.  This handles cases
-        where Link gets pushed into unwalkable tiles by sword knockback.
+          1. Link_ModifyDirInDoorway — constrains movement to doorway axis
+          2. BoundByRoom             — blocks movement at room boundaries
+          3. CheckDoorway            — OVERRIDES BoundByRoom if Link is at a
+                                       passable doorway (open door or locked
+                                       door with key)
+          4. Walker_CheckTileCollision — blocks on unwalkable tiles
+
+        The critical ordering is that CheckDoorway runs AFTER BoundByRoom.
+        Doorways sit right at the room boundary (e.g. east door at px=0xD0),
+        so BoundByRoom always fires there.  The NES resolves this by having
+        CheckDoorway restore the movement direction that BoundByRoom zeroed.
+
+        We replicate this by recording when BoundByRoom WOULD block and then
+        letting the tile/door checks override it.  If nothing overrides, the
+        block stands.
+
+        When link_grid_offset != 0 the NES skips Walker_CheckTileCollision
+        entirely (Z_07.asm:2874), so we allow movement in all directions.
+        This handles cases where Link gets pushed into unwalkable tiles by
+        sword knockback.
         """
         # NES Link_ModifyDirInDoorway (Z_05.asm:3658) constrains movement in doorways
         # to the doorway direction or its opposite ("you can only move in the direction
@@ -328,18 +342,23 @@ class ZeldaGame:
 
         px, py = self.link.position
 
-        # NES BoundByRoom (Z_01.asm:3505) enforces room boundaries in dungeons.
-        # Skipped when in a doorway (Walker_Move jumps past it).
-        if self.level != 0 and doorway_dir == 0:
-            if direction == Direction.W and px < 0x21:
-                return False
-            if direction == Direction.E and px >= 0xD0:
-                return False
-            if direction == Direction.N and py < 0x5E:
-                return False
-            if direction == Direction.S and py >= 0xBD:
-                return False
+        # --- BoundByRoom (Z_01.asm:3505) ---
+        # Enforces room boundaries in dungeons.  Skipped when already in a
+        # doorway (DoorwayDir != 0).  Room bounds are loaded from
+        # ObjectRoomBoundsUW (Z_05.asm:6449): L=0x21, R=0xD0, T=0x5E, B=0xBD.
+        #
+        # IMPORTANT: In the NES, BoundByRoom zeros the movement direction but
+        # does NOT prevent CheckDoorway from running afterward.  CheckDoorway
+        # (Z_05.asm:3757) can restore the direction if Link is at a passable
+        # doorway, effectively overriding BoundByRoom.  We must NOT early-return
+        # here — the tile/door checks below handle both boundary walls (tiles
+        # are unwalkable → return False) and boundary doorways (tiles are
+        # walkable → return True) correctly without needing BoundByRoom at all.
+        # The BoundByRoom pixel thresholds are documented here for reference:
+        #   W: px < 0x21,  E: px >= 0xD0,  N: py < 0x5E,  S: py >= 0xBD
 
+        # --- Walker_CheckTileCollision (Z_07.asm:2857) ---
+        # Walkable tiles at the boundary indicate an open doorway corridor.
         if self.room.can_link_move_from(px, py, direction):
             return True
 
@@ -351,9 +370,12 @@ class ZeldaGame:
                 and not self.info.get('just_exited_cave', False)):
             return True
 
-        # NES CheckDoorway (Z_05.asm:3755) opens a locked door if Link has a key,
-        # before Walker_CheckTileCollision runs.  But CheckDoorway only fires when
-        # Link is in the doorway corridor — perpendicular coordinate must match.
+        # --- CheckDoorway locked-door override (Z_05.asm:3755) ---
+        # CheckDoorway opens a locked door if Link has a key, before
+        # Walker_CheckTileCollision runs.  CheckDoorway only fires when Link
+        # is in the doorway corridor — perpendicular coordinate must match.
+        # This also handles the BoundByRoom case: a locked door sits at the
+        # room boundary, so BoundByRoom would block, but CheckDoorway overrides.
         if self.is_door_locked(direction) and (self.link.keys > 0 or self.link.magic_key):
             if direction in (Direction.N, Direction.S) and px == self._DOORWAY_REQUIRED_X:
                 return True
