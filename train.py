@@ -120,6 +120,11 @@ class ProfilingCallback(TrainingCallback):
         if self._inner:
             self._inner.on_scenario_end(scenario_name)
 
+    def on_scenario_resumed(self, scenario_name, history_entry):
+        """Delegate scenario resumed to inner callback."""
+        if self._inner:
+            self._inner.on_scenario_resumed(scenario_name, history_entry)
+
     def get_completion_info(self, scenario_name):
         """Delegate completion info to inner callback."""
         if self._inner:
@@ -402,6 +407,32 @@ class TrainingDisplay(TrainingCallback):
         self._prev_optimize_stats = {}
         self._refresh(force=True)
 
+    def on_scenario_resumed(self, scenario_name, history_entry):
+        """Mark a scenario as completed from loaded training history (for --resume display)."""
+        self._active_index = next(
+            (i for i, (name, _) in enumerate(self._scenarios) if name == scenario_name), -1)
+        self._completed.add(scenario_name)
+
+        steps = history_entry.get('steps', 0)
+        self._scenario_steps[scenario_name] = steps
+
+        em = history_entry.get('exit_metric') or {}
+        metric_name = em.get('name')
+        target = em.get('target')
+        actual = em.get('actual')
+        met = actual is not None and target is not None and actual >= target
+
+        self._completion_info[scenario_name] = {
+            'metric': metric_name,
+            'threshold': target,
+            'value': actual,
+            'met': met,
+            'steps': steps,
+            'total': steps,
+            'duration': 0,
+        }
+        self._refresh(force=True)
+
     def get_completion_info(self, scenario_name):
         return self._completion_info.get(scenario_name)
 
@@ -495,7 +526,10 @@ class TrainingDisplay(TrainingCallback):
         line.append(name.ljust(self._name_width), style="green")
 
         dur = info.get('duration', 0)
-        line.append(f"  {self._format_duration(dur):>7}", style="dim")
+        if dur == 0 and info.get('steps', 0) > 0:
+            line.append("  resumed", style="dim")
+        else:
+            line.append(f"  {self._format_duration(dur):>7}", style="dim")
 
         steps = info.get('steps', 0)
         total = info.get('total', 0)
@@ -943,6 +977,11 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
     if callback:
         callback.on_circuit_start(scenario_plan)
 
+    # Build lookup from training history for resumed scenario display
+    history_by_name = {}
+    for entry in training_history:
+        history_by_name[entry.get('scenario', '')] = entry
+
     for scenario_entry in circuit:
         # Determine the name for skip-to matching
         entry_name = (f"[circuit] {scenario_entry.circuit}" if scenario_entry.circuit
@@ -954,8 +993,8 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
                 skipping = False
             else:
                 if callback:
-                    callback.on_scenario_start(entry_name, 0)
-                    callback.on_scenario_end(entry_name)
+                    hist = history_by_name.get(entry_name, {})
+                    callback.on_scenario_resumed(entry_name, hist)
                 continue
 
         if scenario_entry.circuit:

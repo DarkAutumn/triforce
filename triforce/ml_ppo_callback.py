@@ -22,6 +22,9 @@ class TrainingCallback:
     def on_scenario_end(self, scenario_name):
         """Called when a scenario finishes."""
 
+    def on_scenario_resumed(self, scenario_name, history_entry):
+        """Called for skipped scenarios during --resume to populate display from history."""
+
     def get_completion_info(self, scenario_name):  # pylint: disable=unused-argument
         """Return completion metadata for a finished scenario.
 
