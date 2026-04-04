@@ -932,6 +932,12 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
                                                action_space_def, checkpoint_dir, sub_kwargs,
                                                sub_budget, sub_callback, sub_circuit_def)
 
+            # Save leg checkpoint for the completed embedded circuit
+            stem = _model_stem(model_kind.name, action_space_def.name)
+            circuit_name = scenario_entry.circuit
+            model.save(f"{checkpoint_dir}/{stem}_{circuit_name}_{model.steps_trained}.pt",
+                       optimizer=ppo.optimizer, circuit_position=circuit_name)
+
             if callback:
                 callback.on_scenario_end(f"[circuit] {scenario_entry.circuit}")
 
