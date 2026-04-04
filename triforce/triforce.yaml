@@ -248,7 +248,11 @@ scenarios:
   description: Navigate from dungeon 1 exit to dungeon 2 entrance with bombs and boomerang.
   iterations: 2000000
   scenario_selector: round-robin
-  objective: GameCompletion
+  objective: ReachLocation
+  objective_params:
+    level: 2
+    location: '0x77'
+    in_cave: true
   critic: GameplayCritic
   end_conditions:
   - LeftOverworld2Area
@@ -596,7 +600,6 @@ scenarios:
     candle: 1
     hearts_and_containers: 34
     partial_hearts: 254
-    keys: 4
   per_frame:
     bombs: 4
     rupees: 100
