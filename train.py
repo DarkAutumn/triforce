@@ -751,10 +751,15 @@ class TrainingDisplay(TrainingCallback):
                 self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_perf = True
 
-        # Top ending — find the highest-percentage endings/* metric
+        # Top ending — find the highest-percentage endings/* metric.
+        # In weighted mode, prefer the exit-criteria scenario's qualified endings
+        # (e.g. "scenario/endings/X") over the first-scenario promoted ones.
+        endings_prefix = f"{self._exit_criteria_scenario}/endings/" if self._exit_criteria_scenario \
+            else "endings/"
         top_ending_key, top_ending_val = None, -1
         for key, val in self._game_metrics.items():
-            if key.startswith("endings/") and isinstance(val, (int, float)) and val > top_ending_val:
+            if key.startswith(endings_prefix) and isinstance(val, (int, float)) \
+                    and val > top_ending_val:
                 top_ending_key, top_ending_val = key, val
         if top_ending_key is not None:
             if not has_perf and has_sps:
