@@ -276,6 +276,7 @@ class TrainingDisplay(TrainingCallback):
         self._quit_confirm = False
         self._stop_requested = False
         self._last_refresh_time = 0.0
+        self._circuit_start_time = None
 
         # Keyboard listener
         self._keyboard = _KeyboardListener(self._on_key)
@@ -357,6 +358,7 @@ class TrainingDisplay(TrainingCallback):
         self._name_width = max(self._name_width, len("Total"))
         self._total_budget = sum(iters for _, iters in scenarios)
         self._total_spent = 0
+        self._circuit_start_time = time.monotonic()
         for name, iters in scenarios:
             self._scenario_steps[name] = 0
             self._scenario_total[name] = iters
@@ -712,14 +714,19 @@ class TrainingDisplay(TrainingCallback):
         target_text = self._get_target_text(key)
         table.add_row(display_name, val_text, delta_text, target_text)
 
-    def _render_metrics(self):
+    def _render_metrics(self):  # pylint: disable=too-many-statements
         table = Table(show_header=False, show_edge=False, pad_edge=False, box=None, padding=(0, 2))
         table.add_column("Metric", style="cyan", min_width=24)
         table.add_column("Value", justify="right", min_width=12)
         table.add_column("Δ", justify="right", min_width=10, style="dim")
         table.add_column("Target", justify="left", min_width=10, style="dim")
 
-        # SPS — always first, standalone
+        # Total elapsed time — always first
+        if self._circuit_start_time is not None:
+            elapsed = time.monotonic() - self._circuit_start_time - self._pause_time_offset
+            table.add_row("Time", Text(self._format_duration(elapsed), style="yellow"), "", "")
+
+        # SPS — always next, standalone
         sps = self._optimize_stats.get("charts/SPS")
         has_sps = False
         if sps is not None:
@@ -743,6 +750,20 @@ class TrainingDisplay(TrainingCallback):
                 prev = self._prev_game_metrics.get(key)
                 self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_perf = True
+
+        # Top ending — find the highest-percentage endings/* metric
+        top_ending_key, top_ending_val = None, -1
+        for key, val in self._game_metrics.items():
+            if key.startswith("endings/") and isinstance(val, (int, float)) and val > top_ending_val:
+                top_ending_key, top_ending_val = key, val
+        if top_ending_key is not None:
+            if not has_perf and has_sps:
+                table.add_row("", "", "", "")
+            ending_name = top_ending_key.rsplit("/", 1)[-1]
+            prev_val = self._prev_game_metrics.get(top_ending_key)
+            self._add_metric_row(table, top_ending_key, ending_name, ".2f",
+                                 top_ending_val, prev_val)
+            has_perf = True
 
         # Entropy / attention metrics
         entropy_metrics = [
