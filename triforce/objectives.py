@@ -198,8 +198,8 @@ class _GameMapObjective(ObjectiveSelector):
                 cave_exit = game_room.exits.get('cave') if game_room else None
                 if cave_exit:
                     cave_dest = cave_exit.destination
-                    # Enter if the cave IS the target, or is on the path to the target
-                    if cave_dest == target or (cave_dest.level != state.level):
+                    # Enter if the cave IS the target, or leads to the target's level
+                    if cave_dest == target or cave_dest.level == target.level:
                         # Dungeon entrance: cave leads to different level
                         if cave_dest.level != state.level:
                             next_rooms.append(cave_dest)
