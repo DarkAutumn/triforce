@@ -832,6 +832,16 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
 
     return kwargs, circuit, circuit_def
 
+def _get_circuit_exit_criteria(scenario_entry, sub_circuit_def):
+    """Get exit criteria for an embedded circuit entry, checking the entry then the sub-circuit."""
+    ec = scenario_entry.exit_criteria
+    if ec is None:
+        for sub_entry in sub_circuit_def.scenarios:
+            if sub_entry.exit_criteria:
+                return sub_entry.exit_criteria
+    return ec
+
+
 def _build_history_entry(scenario_name, steps, callback=None):
     """Build a training history entry for a completed scenario/circuit leg."""
     entry = {"scenario": scenario_name, "steps": steps}
@@ -960,7 +970,10 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
                 break
 
             if callback:
-                callback.on_scenario_start(f"[circuit] {scenario_entry.circuit}", sub_budget or 0)
+                ec = _get_circuit_exit_criteria(scenario_entry, sub_circuit_def)
+                callback.on_scenario_start(f"[circuit] {scenario_entry.circuit}", sub_budget or 0,
+                                           exit_criteria=ec.metric if ec else None,
+                                           exit_threshold=ec.threshold if ec else None)
 
             # Pass current model and history into sub-circuit with suppressed display events
             sub_kwargs = dict(kwargs)
