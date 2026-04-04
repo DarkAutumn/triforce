@@ -120,8 +120,8 @@ class Network(nn.Module):
         torch.nn.init.constant_(layer.bias, bias_const)
         return layer
 
-    def save(self, path, optimizer=None, circuit_position=None):
-        """Save the network to a file, optionally including optimizer and circuit state."""
+    def save(self, path, optimizer=None, training_history=None):
+        """Save the network to a file, optionally including optimizer and training history."""
         save_data = {
             "model_state_dict": self.state_dict(),
             "steps_trained": self.steps_trained,
@@ -137,8 +137,8 @@ class Network(nn.Module):
         if optimizer is not None:
             save_data["optimizer_state_dict"] = optimizer.state_dict()
 
-        if circuit_position is not None:
-            save_data["circuit_position"] = circuit_position
+        if training_history is not None:
+            save_data["training_history"] = training_history
 
         torch.save(save_data, path)
 
@@ -170,10 +170,23 @@ class Network(nn.Module):
         return save_data.get("optimizer_state_dict")
 
     @staticmethod
-    def load_circuit_position(path):
-        """Load circuit position from a checkpoint, or None if not present."""
+    def load_training_history(path):
+        """Load training history from a checkpoint, or None if not present.
+
+        Backward compatible: if the checkpoint has old-style circuit_position,
+        returns a minimal history list with that as the last completed entry.
+        """
         save_data = torch.load(path, weights_only=False)
-        return save_data.get("circuit_position")
+        history = save_data.get("training_history")
+        if history is not None:
+            return history
+
+        # Backward compat: convert old circuit_position to minimal history
+        position = save_data.get("circuit_position")
+        if position is not None:
+            return [{"scenario": position, "steps": save_data.get("steps_trained", 0)}]
+
+        return None
 
     @staticmethod
     def load_metrics(path):

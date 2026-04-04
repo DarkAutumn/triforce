@@ -115,6 +115,17 @@ class ProfilingCallback(TrainingCallback):
         if self._inner and hasattr(self._inner, 'on_scenario_complete'):
             self._inner.on_scenario_complete(scenario_name)
 
+    def on_scenario_end(self, scenario_name):
+        """Delegate scenario end to inner callback."""
+        if self._inner:
+            self._inner.on_scenario_end(scenario_name)
+
+    def get_completion_info(self, scenario_name):
+        """Delegate completion info to inner callback."""
+        if self._inner:
+            return self._inner.get_completion_info(scenario_name)
+        return None
+
     def on_training_complete(self):
         """Delegate training completion to inner callback."""
         if self._inner and hasattr(self._inner, 'on_training_complete'):
@@ -159,6 +170,10 @@ class _SubCircuitCallback:
 
     def on_scenario_end(self, scenario_name):
         """Suppressed — sub-circuit must not mark parent scenarios as complete."""
+
+    def get_completion_info(self, scenario_name):
+        """Delegate to parent — completion info is tracked at the display level."""
+        return self._inner.get_completion_info(scenario_name)
 
     def on_scenario_complete(self, scenario_name):
         """Suppressed."""
@@ -386,6 +401,9 @@ class TrainingDisplay(TrainingCallback):
         self._prev_game_metrics = {}
         self._prev_optimize_stats = {}
         self._refresh(force=True)
+
+    def get_completion_info(self, scenario_name):
+        return self._completion_info.get(scenario_name)
 
     def on_progress(self, steps, total_steps):
         self._current_steps += steps
@@ -814,6 +832,22 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
 
     return kwargs, circuit, circuit_def
 
+def _build_history_entry(scenario_name, steps, callback=None):
+    """Build a training history entry for a completed scenario/circuit leg."""
+    entry = {"scenario": scenario_name, "steps": steps}
+    if callback:
+        info = callback.get_completion_info(scenario_name)
+        if info:
+            entry["steps"] = info.get("steps", steps)
+            if info.get("metric"):
+                entry["exit_metric"] = {
+                    "name": info["metric"],
+                    "target": info.get("threshold"),
+                    "actual": info.get("value"),
+                }
+    return entry
+
+
 def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, iterations,
                callback=None, **kwargs):
     """Trains a model with the given scenario.  Returns (model, iterations_used)."""
@@ -839,10 +873,10 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
     model = ppo.train(model_kind.network_class, create_env, iterations, callback,
                       save_path=checkpoint_dir, **kwargs)
 
-    # Save leg checkpoint with scenario name and circuit position
-    circuit_position = kwargs.pop('circuit_position', None)
+    # Save leg checkpoint with training history
+    training_history = kwargs.get('training_history')
     model.save(f"{checkpoint_dir}/{stem}_{scenario_def.name}_{model.steps_trained}.pt",
-               optimizer=ppo.optimizer, circuit_position=circuit_position)
+               optimizer=ppo.optimizer, training_history=training_history)
     return model, model.steps_trained - steps_before
 
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
@@ -863,12 +897,15 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
 
 def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs,
                              total_budget, callback=None, skip_to=None):
-    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-statements,too-many-branches
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-statements,too-many-branches,too-many-locals
     """Run training circuit and return (final_model, final_scenario_def)."""
     iterations_spent = 0
     model = None
     scenario_def = None
     skipping = skip_to is not None
+
+    # Initialize training history from kwargs (may be inherited from loaded checkpoint)
+    training_history = list(kwargs.get('training_history') or [])
 
     # Resolve iteration counts for all scenarios upfront so the display can show them
     scenario_plan = []
@@ -925,21 +962,26 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
             if callback:
                 callback.on_scenario_start(f"[circuit] {scenario_entry.circuit}", sub_budget or 0)
 
-            # Pass current model into sub-circuit with suppressed display events
+            # Pass current model and history into sub-circuit with suppressed display events
             sub_kwargs = dict(kwargs)
+            sub_kwargs['training_history'] = training_history
             sub_callback = _SubCircuitCallback(callback) if callback else None
             model, scenario_def = _run_circuit(ppo, sub_circuit_def.scenarios, model_kind,
                                                action_space_def, checkpoint_dir, sub_kwargs,
                                                sub_budget, sub_callback, sub_circuit_def)
 
+            if callback:
+                callback.on_scenario_end(f"[circuit] {scenario_entry.circuit}")
+
+            # Record completed circuit in training history
+            circuit_label = f"[circuit] {scenario_entry.circuit}"
+            training_history.append(_build_history_entry(circuit_label, sub_budget or 0, callback))
+
             # Save leg checkpoint for the completed embedded circuit
             stem = _model_stem(model_kind.name, action_space_def.name)
             circuit_name = scenario_entry.circuit
             model.save(f"{checkpoint_dir}/{stem}_{circuit_name}_{model.steps_trained}.pt",
-                       optimizer=ppo.optimizer, circuit_position=circuit_name)
-
-            if callback:
-                callback.on_scenario_end(f"[circuit] {scenario_entry.circuit}")
+                       optimizer=ppo.optimizer, training_history=training_history)
 
             kwargs['model'] = model
             iterations_spent += sub_budget or 0
@@ -974,12 +1016,16 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
                                        exit_criteria=ec.metric if ec else None,
                                        exit_threshold=ec.threshold if ec else None)
 
-        kwargs['circuit_position'] = scenario_def.name
+        # Thread training history through so periodic saves include it
+        kwargs['training_history'] = training_history
         model, used = train_once(ppo, scenario_def, model_kind, action_space_def,
                                  checkpoint_dir, iterations, callback, **kwargs)
 
         if callback:
             callback.on_scenario_end(scenario_def.name)
+
+        # Record completed scenario in training history
+        training_history.append(_build_history_entry(scenario_def.name, used, callback))
 
         kwargs['model'] = model
         iterations_spent += used
@@ -1052,13 +1098,15 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
     if callback:
         callback.on_scenario_end(f"weighted[{len(scenario_defs)}]")
 
-    # Save final checkpoint
+    # Save final checkpoint with training history
+    training_history = kwargs.get('training_history')
     model.save(f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt",
-               optimizer=ppo.optimizer)
+               optimizer=ppo.optimizer, training_history=training_history)
     return model, scenario_defs[0]
 
 
 def main():
+    # pylint: disable=too-many-statements
     """Main entry point."""
     args = parse_args()
 
@@ -1097,16 +1145,22 @@ def main():
 
     # Resolve --resume / --skip-to
     skip_to = args.skip_to
+    training_history = None
     if args.resume and not skip_to:
         if args.load is None:
             console.print("[red]--resume requires --load[/red]")
             sys.exit(1)
-        saved_position = Network.load_circuit_position(args.load)
-        if saved_position:
-            skip_to = saved_position
-            console.print(f"Resuming after: {saved_position}")
+        training_history = Network.load_training_history(args.load)
+        if training_history:
+            last_scenario = training_history[-1].get("scenario", "")
+            skip_to = last_scenario
+            console.print(f"Resuming after: {last_scenario} ({len(training_history)} legs in history)")
         else:
-            console.print("[yellow]Warning: --resume but checkpoint has no circuit position[/yellow]")
+            console.print("[yellow]Warning: --resume but checkpoint has no training history[/yellow]")
+
+    # Seed training history into kwargs so circuit runners pick it up
+    if training_history:
+        kwargs['training_history'] = training_history
 
     ppo = PPO(**kwargs)
 
@@ -1125,8 +1179,8 @@ def main():
     # Save final result in the run directory (not checkpoints)
     stem = _model_stem(model_kind.name, action_space_def.name)
     final_path = f"{run_dir}/{stem}.pt"
-    model.save(final_path, optimizer=ppo.optimizer,
-               circuit_position=scenario_def.name if scenario_def else None)
+    final_history = kwargs.get('training_history')
+    model.save(final_path, optimizer=ppo.optimizer, training_history=final_history)
     console.print(f"\nFinal model: {final_path}")
 
     if args.evaluate:

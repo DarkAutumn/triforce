@@ -147,7 +147,8 @@ class PPO:
             if save_path and next_model_save.add(buffer.memory_length):
                 model_name = kwargs.get('model_name', "network").replace(' ', '_')
                 network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt",
-                             optimizer=self.optimizer)
+                             optimizer=self.optimizer,
+                             training_history=kwargs.get('training_history'))
 
             # Optimize the network
             network.steps_trained += buffer.memory_length
@@ -218,7 +219,8 @@ class PPO:
                 if save_path and next_model_save.add(env_steps_per_iteration):
                     model_name = kwargs.get('model_name', "network").replace(' ', '_')
                     network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt",
-                                 optimizer=self.optimizer)
+                                 optimizer=self.optimizer,
+                                 training_history=kwargs.get('training_history'))
 
                 # Optimize the network
                 network.steps_trained += env_steps_per_iteration
@@ -331,7 +333,8 @@ class PPO:
                 if save_path and next_model_save.add(buffer.memory_length):
                     model_name = kwargs.get('model_name', "network").replace(' ', '_')
                     network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt",
-                                 optimizer=self.optimizer)
+                                 optimizer=self.optimizer,
+                                 training_history=kwargs.get('training_history'))
 
                 network.steps_trained += buffer.memory_length
                 network = self._optimize(network, buffer, network.steps_trained, callback, total_steps)
@@ -421,7 +424,8 @@ class PPO:
                 if save_path and next_model_save.add(env_steps_per_iteration):
                     model_name = kwargs.get('model_name', "network").replace(' ', '_')
                     network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt",
-                                 optimizer=self.optimizer)
+                                 optimizer=self.optimizer,
+                                 training_history=kwargs.get('training_history'))
 
                 network.steps_trained += env_steps_per_iteration
                 network = self._optimize(network, buffer, network.steps_trained, callback,
