@@ -991,11 +991,10 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
         if skipping:
             if entry_name in (skip_to, f"[circuit] {skip_to}"):
                 skipping = False
-            else:
-                if callback:
-                    hist = history_by_name.get(entry_name, {})
-                    callback.on_scenario_resumed(entry_name, hist)
-                continue
+            if callback:
+                hist = history_by_name.get(entry_name, {})
+                callback.on_scenario_resumed(entry_name, hist)
+            continue
 
         if scenario_entry.circuit:
             sub_circuit_def = TrainingCircuitDefinition.get(scenario_entry.circuit)
