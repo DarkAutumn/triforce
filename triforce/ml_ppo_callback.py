@@ -16,7 +16,7 @@ class TrainingCallback:
         """Called as env steps are collected. Used for progress bars."""
 
     def on_scenario_start(self, scenario_name, iterations, exit_criteria=None,
-                          exit_threshold=None):
+                          exit_threshold=None, exit_criteria_scenario=None):
         """Called when a scenario begins training."""
 
     def on_scenario_end(self, scenario_name):

@@ -103,12 +103,13 @@ class ProfilingCallback(TrainingCallback):
 
     # Delegate circuit/scenario lifecycle methods
     def on_scenario_start(self, scenario_name, iterations, exit_criteria=None,
-                          exit_threshold=None):
+                          exit_threshold=None, exit_criteria_scenario=None):
         """Delegate scenario start to inner callback."""
         if self._inner and hasattr(self._inner, 'on_scenario_start'):
             self._inner.on_scenario_start(scenario_name, iterations,
                                           exit_criteria=exit_criteria,
-                                          exit_threshold=exit_threshold)
+                                          exit_threshold=exit_threshold,
+                                          exit_criteria_scenario=exit_criteria_scenario)
 
     def on_scenario_complete(self, scenario_name):
         """Delegate scenario completion to inner callback."""
@@ -170,7 +171,7 @@ class _SubCircuitCallback:
         """Suppressed — sub-circuit must not overwrite parent's scenario list."""
 
     def on_scenario_start(self, scenario_name, iterations, exit_criteria=None,
-                          exit_threshold=None):
+                          exit_threshold=None, exit_criteria_scenario=None):
         """Suppressed — sub-circuit must not change parent's active scenario."""
 
     def on_scenario_end(self, scenario_name):
@@ -258,6 +259,7 @@ class TrainingDisplay(TrainingCallback):
         # Exit criteria for current scenario
         self._exit_criteria = None
         self._exit_threshold = None
+        self._exit_criteria_scenario = None
 
         # Per-scenario completion metadata: name -> {metric, value, met, steps, total, duration}
         self._completion_info = {}
@@ -361,7 +363,7 @@ class TrainingDisplay(TrainingCallback):
         self._refresh(force=True)
 
     def on_scenario_start(self, scenario_name, iterations, exit_criteria=None,
-                          exit_threshold=None):
+                          exit_threshold=None, exit_criteria_scenario=None):
         self._active_index = next(
             i for i, (name, _) in enumerate(self._scenarios) if name == scenario_name)
         self._current_steps = 0
@@ -373,6 +375,7 @@ class TrainingDisplay(TrainingCallback):
         self._prev_optimize_stats = {}
         self._exit_criteria = exit_criteria
         self._exit_threshold = exit_threshold
+        self._exit_criteria_scenario = exit_criteria_scenario
         self._scenario_start_time = time.monotonic()
 
         # Set up tensorboard for this scenario
@@ -390,7 +393,17 @@ class TrainingDisplay(TrainingCallback):
 
         # Snapshot completion metadata for display
         duration = time.monotonic() - self._scenario_start_time if self._scenario_start_time else 0
-        metric_value = self._game_metrics.get(self._exit_criteria) if self._exit_criteria else None
+
+        # For weighted circuits, the exit criteria metric belongs to a specific scenario.
+        # Look up the qualified key (e.g. "overworld-skip-sword-all-items/success-rate") first,
+        # then fall back to the unqualified key (which may be the first scenario's promoted value).
+        metric_value = None
+        if self._exit_criteria:
+            if self._exit_criteria_scenario:
+                qualified = f"{self._exit_criteria_scenario}/{self._exit_criteria}"
+                metric_value = self._game_metrics.get(qualified)
+            if metric_value is None:
+                metric_value = self._game_metrics.get(self._exit_criteria)
         met = (metric_value is not None and self._exit_threshold is not None
                and metric_value >= self._exit_threshold)
         self._completion_info[scenario_name] = {
@@ -867,13 +880,19 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
     return kwargs, circuit, circuit_def
 
 def _get_circuit_exit_criteria(scenario_entry, sub_circuit_def):
-    """Get exit criteria for an embedded circuit entry, checking the entry then the sub-circuit."""
+    """Get exit criteria for an embedded circuit entry, checking the entry then the sub-circuit.
+
+    Returns (ExitCriteria, scenario_name) where scenario_name is the owning scenario
+    (used to look up qualified metric keys in weighted mode).
+    """
     ec = scenario_entry.exit_criteria
-    if ec is None:
-        for sub_entry in sub_circuit_def.scenarios:
-            if sub_entry.exit_criteria:
-                return sub_entry.exit_criteria
-    return ec
+    if ec is not None:
+        return ec, None
+
+    for sub_entry in sub_circuit_def.scenarios:
+        if sub_entry.exit_criteria:
+            return sub_entry.exit_criteria, sub_entry.scenario
+    return None, None
 
 
 def _build_history_entry(scenario_name, steps, callback=None):
@@ -1008,10 +1027,11 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
                 break
 
             if callback:
-                ec = _get_circuit_exit_criteria(scenario_entry, sub_circuit_def)
+                ec, ec_scenario = _get_circuit_exit_criteria(scenario_entry, sub_circuit_def)
                 callback.on_scenario_start(f"[circuit] {scenario_entry.circuit}", sub_budget or 0,
                                            exit_criteria=ec.metric if ec else None,
-                                           exit_threshold=ec.threshold if ec else None)
+                                           exit_threshold=ec.threshold if ec else None,
+                                           exit_criteria_scenario=ec_scenario)
 
             # Pass current model and history into sub-circuit with suppressed display events
             sub_kwargs = dict(kwargs)
@@ -1135,10 +1155,18 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
         callback.on_circuit_start([(weighted_label, iterations)])
 
     if callback:
-        first_ec = exit_criteria_map.get(scenario_defs[0].name) if scenario_defs else None
+        # Find the scenario that has exit criteria for display purposes
+        ec_scenario_name = None
+        ec = None
+        for sdef in scenario_defs:
+            ec = exit_criteria_map.get(sdef.name)
+            if ec is not None:
+                ec_scenario_name = sdef.name
+                break
         callback.on_scenario_start(weighted_label, iterations,
-                                   exit_criteria=first_ec.metric if first_ec else None,
-                                   exit_threshold=first_ec.threshold if first_ec else None)
+                                   exit_criteria=ec.metric if ec else None,
+                                   exit_threshold=ec.threshold if ec else None,
+                                   exit_criteria_scenario=ec_scenario_name)
 
     model = ppo.train_weighted(
         model_kind.network_class, create_env, scenario_defs, weights,
