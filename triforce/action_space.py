@@ -393,10 +393,18 @@ class ZeldaActionSpace(gym.Wrapper):
             mask[move_index + i] = True
 
     def _update_mask(self, state : ZeldaGame, invalid):
-        """Removes non-MOVE actions at screen edges where directional buttons cause room transitions."""
+        """Removes non-MOVE actions at screen edges where directional buttons cause room transitions.
+
+        Only applies to actions that have directional sub-actions (4+ slots).
+        Single-slot actions (WHISTLE, FOOD, POTION, CANDLE) are unaffected since
+        pressing a direction with those doesn't cause a room transition — the NES
+        only uses the B button press, not the d-pad.
+        """
         link = state.link
         if state.level != 0:
-            non_move = [a for a in self.actions_allowed if a != ActionKind.MOVE]
+            # Only mask directional actions (4+ slots), not single-button actions
+            non_move = [a for a in self.actions_allowed
+                        if a != ActionKind.MOVE and self._action_slot_count(a) >= 4]
             if link.tile.x <= 0x03 or link.tile.x >= 0x1c:
                 for action in non_move:
                     invalid.setdefault(action, []).append(Direction.N)
@@ -406,6 +414,17 @@ class ZeldaActionSpace(gym.Wrapper):
                 for action in non_move:
                     invalid.setdefault(action, []).append(Direction.W)
                     invalid.setdefault(action, []).append(Direction.E)
+
+    def _action_slot_count(self, action):
+        """Returns the number of action slots for the given action kind."""
+        idx = self.action_to_index[action]
+        # Find next action's index or total_actions
+        next_idx = self.total_actions
+        for a in self.actions_allowed:
+            a_idx = self.action_to_index[a]
+            if idx < a_idx < next_idx:
+                next_idx = a_idx
+        return next_idx - idx
 
     def is_valid_action(self, action, action_mask):
         """Returns True if the action is valid.

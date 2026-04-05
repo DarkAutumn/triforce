@@ -302,7 +302,10 @@ class ZeldaGame:
 
         Replicates the NES Walker_Move flow (Z_07.asm:2600):
 
-          1. Link_ModifyDirInDoorway — constrains movement to doorway axis
+          0. grid_offset != 0         — movement unrestricted (mid-tile, NES
+                                       skips Walker_CheckTileCollision entirely)
+          1. Link_ModifyDirInDoorway — constrains INPUT to doorway axis (only
+                                       at grid points, i.e. grid_offset == 0)
           2. BoundByRoom             — blocks movement at room boundaries
           3. CheckDoorway            — OVERRIDES BoundByRoom if Link is at a
                                        passable doorway (open door or locked
@@ -314,18 +317,23 @@ class ZeldaGame:
         so BoundByRoom always fires there.  The NES resolves this by having
         CheckDoorway restore the movement direction that BoundByRoom zeroed.
 
-        We replicate this by recording when BoundByRoom WOULD block and then
-        letting the tile/door checks override it.  If nothing overrides, the
-        block stands.
-
-        When link_grid_offset != 0 the NES skips Walker_CheckTileCollision
-        entirely (Z_07.asm:2874), so we allow movement in all directions.
-        This handles cases where Link gets pushed into unwalkable tiles by
-        sword knockback.
+        We replicate this by letting the tile/door checks handle both boundary
+        walls (unwalkable tiles → False) and boundary doorways (walkable tiles
+        → True) without needing BoundByRoom early-returns at all.
         """
+        # When link_grid_offset != 0 the NES skips Walker_CheckTileCollision
+        # entirely (Z_07.asm:2874), so movement is unrestricted.  This must be
+        # checked BEFORE the doorway constraint below — Link_ModifyDirInDoorway
+        # (Z_05.asm:3658) is an input remapping (changes ObjInputDir to align
+        # with the doorway axis), not a physics block.  When grid_offset != 0,
+        # the NES allows movement in any direction regardless of DoorwayDir.
+        if self.info.get('link_grid_offset', 0) != 0:
+            return True
+
         # NES Link_ModifyDirInDoorway (Z_05.asm:3658) constrains movement in doorways
         # to the doorway direction or its opposite ("you can only move in the direction
-        # that you entered it or the opposite").
+        # that you entered it or the opposite").  Only applies at grid points
+        # (grid_offset == 0, checked above).
         doorway_dir = self.info.get('doorway_dir', 0)
         if doorway_dir != 0:
             opposite = {Direction.N: Direction.S, Direction.S: Direction.N,
@@ -336,9 +344,6 @@ class ZeldaGame:
                 dw_direction = None
             if dw_direction is not None and direction not in (dw_direction, opposite[dw_direction]):
                 return False
-
-        if self.info.get('link_grid_offset', 0) != 0:
-            return True
 
         px, py = self.link.position
 
