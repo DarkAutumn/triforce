@@ -105,7 +105,8 @@ class TrainingCircuitEntry(BaseModel):
     """An entry in a training circuit."""
     model_config = ConfigDict(populate_by_name=True)
 
-    scenario : str
+    scenario : Optional[str] = None
+    circuit : Optional[str] = None
     iterations : Optional[int] = None
     exit_criteria : Optional[ExitCriteria] = Field(None, alias='exit-criteria')
     weight : Optional[float] = None
@@ -134,21 +135,53 @@ class TrainingCircuitDefinition(BaseModel):
             for circuit in yaml.safe_load(f)["training-circuits"]:
                 circuit = TrainingCircuitDefinition(**circuit)
 
+                for entry in circuit.scenarios:
+                    # Each entry must have exactly one of scenario or circuit
+                    if entry.scenario and entry.circuit:
+                        raise ValueError(f"Circuit '{circuit.name}' entry has both "
+                                         f"'scenario' and 'circuit' — use one or the other")
+                    if not entry.scenario and not entry.circuit:
+                        raise ValueError(f"Circuit '{circuit.name}' entry must have "
+                                         f"either 'scenario' or 'circuit'")
+
                 # Validate weight fields match circuit kind
                 if circuit.kind == 'weighted':
                     for entry in circuit.scenarios:
                         if entry.weight is None:
+                            name = entry.scenario or entry.circuit
                             raise ValueError(f"Weighted circuit '{circuit.name}' entry "
-                                             f"'{entry.scenario}' must have a weight")
+                                             f"'{name}' must have a weight")
                 else:
                     for entry in circuit.scenarios:
                         if entry.weight is not None:
+                            name = entry.scenario or entry.circuit
                             raise ValueError(f"Sequential circuit '{circuit.name}' entry "
-                                             f"'{entry.scenario}' must not have a weight")
+                                             f"'{name}' must not have a weight")
 
                 circuits[circuit.name] = circuit
 
+        # Validate no circular references
+        TrainingCircuitDefinition._check_cycles(circuits)
+
         return circuits
+
+    @staticmethod
+    def _check_cycles(circuits):
+        """Detect circular references in circuit-in-circuit nesting."""
+        def visit(name, visiting):
+            if name not in circuits:
+                return
+            if name in visiting:
+                cycle = ' -> '.join(list(visiting) + [name])
+                raise ValueError(f"Circular circuit reference: {cycle}")
+            visiting.add(name)
+            for entry in circuits[name].scenarios:
+                if entry.circuit:
+                    visit(entry.circuit, visiting)
+            visiting.discard(name)
+
+        for name in circuits:
+            visit(name, set())
 
     @staticmethod
     def get(name, default=None):
@@ -365,12 +398,14 @@ class ProbabilisticSelector(RoomSelector):
 
 class ScenarioWrapper(gym.Wrapper):
     """Wraps the environment to call our critic and end conditions."""
-    def __init__(self, env, scenario : TrainingScenarioDefinition, weighted_selector=None):
+    def __init__(self, env, scenario : TrainingScenarioDefinition, weighted_selector=None,
+                 state_override=None):
         super().__init__(env)
         self._last_save_state = None
         self._scenario = scenario
         self._step_count = 0
         self._weighted_selector = weighted_selector
+        self._state_override = state_override
         self._configure_scenario(scenario)
 
     def _configure_scenario(self, scenario):
@@ -429,7 +464,13 @@ class ScenarioWrapper(gym.Wrapper):
 
         self.room_selector.reset()
 
-        save_state = self.room_selector.next()
+        # Use the one-shot state override if set (for debugging), otherwise ask the selector.
+        if self._state_override is not None:
+            save_state = self._state_override
+            self._state_override = None
+        else:
+            save_state = self.room_selector.next()
+
         if save_state != self._last_save_state:
             self._last_save_state = save_state
             self.unwrapped.load_state(save_state, retro.data.Integrations.CUSTOM_ONLY)

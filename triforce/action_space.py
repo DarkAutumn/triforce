@@ -308,9 +308,33 @@ class ZeldaActionSpace(gym.Wrapper):
 
         self._update_mask(state, invalid)
 
+        has_enemies = bool(state.active_enemies)
+        has_items = bool(state.items)
+        has_bomb_walls = bool(state.bomb_walls)
+
+        # Determine which action categories are allowed based on room contents:
+        #   - No enemies, no items, no bomb walls (treasure doesn't count): MOVE only
+        #   - Items but no enemies: MOVE + SWORD/BEAMS + BOOMERANG (+ ARROW, TODO: add when implemented)
+        #   - Bomb walls present: also allow BOMBS
+        #   - Enemies present: all applicable actions
+        item_pickup_actions = frozenset({
+            ActionKind.SWORD, ActionKind.BEAMS, ActionKind.BOOMERANG,
+            # Note: Add ActionKind.ARROW here when arrow action is wired up — arrows can pick up items too
+        })
+
         mask = torch.zeros(self.total_actions, dtype=bool)
         for action in actions_possible:
             index = self.action_to_index[action]
+
+            # Skip non-MOVE actions when nothing to fight or pick up
+            if action != ActionKind.MOVE:
+                if not has_enemies and not has_items and not has_bomb_walls:
+                    continue
+                if not has_enemies and not has_bomb_walls and action not in item_pickup_actions:
+                    continue
+                if not has_enemies and has_bomb_walls and action not in (item_pickup_actions | {ActionKind.BOMBS}):
+                    continue
+
             match action:
                 case ActionKind.MOVE:
                     for direction in (Direction.N, Direction.S, Direction.W, Direction.E):
@@ -318,7 +342,8 @@ class ZeldaActionSpace(gym.Wrapper):
                             mask[index + self._direction_to_index(direction)] = True
 
                 case ActionKind.BOMBS:
-                    mask[index:index + 4] = True
+                    if link.bombs > 0:
+                        mask[index:index + 4] = True
 
                 case ActionKind.ARROW:
                     mask[index:index + 4] = True
@@ -343,13 +368,8 @@ class ZeldaActionSpace(gym.Wrapper):
 
                 case _:
                     if action in (ActionKind.SWORD, ActionKind.BEAMS):
-                        # If there are no enemies or items, we can't use the sword.
-                        # We allow items so we can pick up with a stab.
-                        if not state.active_enemies and not state.items:
-                            mask[index:index + 4] = False
-                        else:
-                            for direction in link.get_sword_directions_allowed():
-                                mask[index + self._direction_to_index(direction)] = True
+                        for direction in link.get_sword_directions_allowed():
+                            mask[index + self._direction_to_index(direction)] = True
 
             if action in invalid:
                 index = self.action_to_index[action]
@@ -373,10 +393,18 @@ class ZeldaActionSpace(gym.Wrapper):
             mask[move_index + i] = True
 
     def _update_mask(self, state : ZeldaGame, invalid):
-        """Removes non-MOVE actions at screen edges where directional buttons cause room transitions."""
+        """Removes non-MOVE actions at screen edges where directional buttons cause room transitions.
+
+        Only applies to actions that have directional sub-actions (4+ slots).
+        Single-slot actions (WHISTLE, FOOD, POTION, CANDLE) are unaffected since
+        pressing a direction with those doesn't cause a room transition — the NES
+        only uses the B button press, not the d-pad.
+        """
         link = state.link
         if state.level != 0:
-            non_move = [a for a in self.actions_allowed if a != ActionKind.MOVE]
+            # Only mask directional actions (4+ slots), not single-button actions
+            non_move = [a for a in self.actions_allowed
+                        if a != ActionKind.MOVE and self._action_slot_count(a) >= 4]
             if link.tile.x <= 0x03 or link.tile.x >= 0x1c:
                 for action in non_move:
                     invalid.setdefault(action, []).append(Direction.N)
@@ -386,6 +414,17 @@ class ZeldaActionSpace(gym.Wrapper):
                 for action in non_move:
                     invalid.setdefault(action, []).append(Direction.W)
                     invalid.setdefault(action, []).append(Direction.E)
+
+    def _action_slot_count(self, action):
+        """Returns the number of action slots for the given action kind."""
+        idx = self.action_to_index[action]
+        # Find next action's index or total_actions
+        next_idx = self.total_actions
+        for a in self.actions_allowed:
+            a_idx = self.action_to_index[a]
+            if idx < a_idx < next_idx:
+                next_idx = a_idx
+        return next_idx - idx
 
     def is_valid_action(self, action, action_mask):
         """Returns True if the action is valid.

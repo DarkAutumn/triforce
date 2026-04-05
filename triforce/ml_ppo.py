@@ -64,6 +64,7 @@ class PPO:
         self._target_kl = kwargs.get('target_kl', TARGET_KL)
         self._kl_rollback = kwargs.get('kl_rollback', KL_ROLLBACK_MULTIPLIER)
         self.optimizer = None
+        self._pending_optimizer_state = kwargs.get('optimizer_state', None)
 
         self.kwargs = kwargs
 
@@ -72,6 +73,23 @@ class PPO:
         self._logging = {}
         self.start_time = None
         self._steps_at_start = 0
+
+    def _setup_optimizer(self, network):
+        """Create or reattach the optimizer, restoring saved state if available."""
+        if self.optimizer is None:
+            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=self._epsilon)
+            if self._pending_optimizer_state is not None:
+                self.optimizer.load_state_dict(self._pending_optimizer_state)
+                self._pending_optimizer_state = None
+                # Move optimizer state tensors to match parameter device
+                for state in self.optimizer.state.values():
+                    for k, v in state.items():
+                        if isinstance(v, torch.Tensor):
+                            state[k] = v.to(self.device)
+        else:
+            for param_group, new_params in zip(self.optimizer.param_groups,
+                                                [list(network.parameters())]):
+                param_group['params'] = new_params
 
     def train(self, network, create_env, iterations, callback=None, **kwargs):
         """Train the network."""
@@ -87,13 +105,7 @@ class PPO:
             model_kind=kwargs.get('model_kind'),
             action_space_name=kwargs.get('action_space_name_str'))
         self._steps_at_start = network.steps_trained
-        if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=self._epsilon)
-        else:
-            # Reattach optimizer to new parameter references while preserving momentum/variance
-            for param_group, new_params in zip(self.optimizer.param_groups,
-                                                [list(network.parameters())]):
-                param_group['params'] = new_params
+        self._setup_optimizer(network)
 
         if n_envs > 1:
             # Multi-env mode: close the initial env (workers create their own) and train
@@ -134,7 +146,9 @@ class PPO:
             # Save model, hopefully log rate and save interval are multiples of each other
             if save_path and next_model_save.add(buffer.memory_length):
                 model_name = kwargs.get('model_name', "network").replace(' ', '_')
-                network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
+                network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt",
+                             optimizer=self.optimizer,
+                             training_history=kwargs.get('training_history'))
 
             # Optimize the network
             network.steps_trained += buffer.memory_length
@@ -204,7 +218,9 @@ class PPO:
                 # Save model
                 if save_path and next_model_save.add(env_steps_per_iteration):
                     model_name = kwargs.get('model_name', "network").replace(' ', '_')
-                    network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
+                    network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt",
+                                 optimizer=self.optimizer,
+                                 training_history=kwargs.get('training_history'))
 
                 # Optimize the network
                 network.steps_trained += env_steps_per_iteration
@@ -265,12 +281,7 @@ class PPO:
             model_kind=kwargs.get('model_kind'),
             action_space_name=kwargs.get('action_space_name_str'))
         self._steps_at_start = network.steps_trained
-        if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE, eps=self._epsilon)
-        else:
-            for param_group, new_params in zip(self.optimizer.param_groups,
-                                                [list(network.parameters())]):
-                param_group['params'] = new_params
+        self._setup_optimizer(network)
         env.close()
 
         # Create the centralized scenario selector (used directly in single-env mode)
@@ -321,7 +332,9 @@ class PPO:
 
                 if save_path and next_model_save.add(buffer.memory_length):
                     model_name = kwargs.get('model_name', "network").replace(' ', '_')
-                    network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
+                    network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt",
+                                 optimizer=self.optimizer,
+                                 training_history=kwargs.get('training_history'))
 
                 network.steps_trained += buffer.memory_length
                 network = self._optimize(network, buffer, network.steps_trained, callback, total_steps)
@@ -410,7 +423,9 @@ class PPO:
 
                 if save_path and next_model_save.add(env_steps_per_iteration):
                     model_name = kwargs.get('model_name', "network").replace(' ', '_')
-                    network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt")
+                    network.save(f"{save_path}/{model_name}_{network.steps_trained}.pt",
+                                 optimizer=self.optimizer,
+                                 training_history=kwargs.get('training_history'))
 
                 network.steps_trained += env_steps_per_iteration
                 network = self._optimize(network, buffer, network.steps_trained, callback,

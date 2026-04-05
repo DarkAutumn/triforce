@@ -38,7 +38,7 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **
     frame_stack = kwargs.get('frame_stack', 3)
     obs_kind = kwargs.get('obs_kind', 'viewport')
 
-    state = random.choice(scenario.start)
+    state = kwargs.get('state', None) or random.choice(scenario.start)
 
     # Try to use full-screen (no overscan) if the installed stable-retro supports it.
     if _SUPPORTS_CROP_OVERSCAN:
@@ -74,7 +74,8 @@ def make_zelda_env(scenario : TrainingScenarioDefinition, action_space : str, **
 
     # Process the scenario. This is where we define the end conditions and rewards for the scenario.
     # Replaces the float reward with a StepRewards object.
-    env = ScenarioWrapper(env, scenario)
+    state_override = kwargs.get('state', None)
+    env = ScenarioWrapper(env, scenario, state_override=state_override)
 
     # Translates our state/state_change objects back into the info dictionary, and our StepRewards back into
     # a float.

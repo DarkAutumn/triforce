@@ -252,11 +252,14 @@ class ZeldaCooldownHandler:
         if info is None:
             return True
 
-        # When in a doorway, NES constrains Link to only move in the doorway direction.
-        # Walker_Move skips BoundByRoom but Link_ModifyDirInDoorway forces the direction.
+        # When in a doorway, NES constrains Link to the doorway direction or its opposite.
+        # Link_ModifyDirInDoorway (Z_05.asm:3658): "you can only move in the direction
+        # that you entered it or the opposite."  Walker_Move skips BoundByRoom in doorways.
         doorway_dir = info.get('doorway_dir', 0)
         if doorway_dir not in (0, direction.value):
-            return False
+            opposite = {1: 2, 2: 1, 4: 8, 8: 4}
+            if doorway_dir not in opposite or opposite[doorway_dir] != direction.value:
+                return False
 
         # UW room boundary check (NES BoundByRoom in Z_01.asm:3505).
         # When gridOffset==0: check input direction against boundaries.

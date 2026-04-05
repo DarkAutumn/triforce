@@ -367,6 +367,15 @@ rooms:
     BlueLeever: 4
   treasure: null
 - level: 0
+  location: '0x3c'
+  exits:
+    cave:
+      level: 2
+      location: '0x77'
+      in_cave: true
+  enemies:
+    BlueSlowOctorok: 1
+- level: 0
   location: '0x3d'
   exits:
     N:
@@ -1107,6 +1116,7 @@ rooms:
   enemies:
     BlueGel: 5
   treasure: map
+  bomb_walls: [S]
 - level: 1
   location: '0x44'
   exits:
@@ -1119,6 +1129,7 @@ rooms:
   enemies:
     RedGoriya: 3
   treasure: boomerang
+  bomb_walls: [S]
 - level: 1
   location: '0x45'
   exits:
@@ -1157,6 +1168,7 @@ rooms:
   enemies:
     Stalfos: 5
   treasure: key
+  bomb_walls: [N]
 - level: 1
   location: '0x54'
   exits:
@@ -1166,6 +1178,7 @@ rooms:
   enemies:
     BlueKeese: 8
   treasure: compass
+  bomb_walls: [N]
 - level: 1
   location: '0x63'
   exits:

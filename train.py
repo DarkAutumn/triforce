@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pylint: disable=too-many-lines
 """Train models to play The Legend of Zelda (NES)."""
 
 # pylint: disable=duplicate-code
@@ -101,15 +102,35 @@ class ProfilingCallback(TrainingCallback):
         return True
 
     # Delegate circuit/scenario lifecycle methods
-    def on_scenario_start(self, scenario_name, iterations):
+    def on_scenario_start(self, scenario_name, iterations, exit_criteria=None,
+                          exit_threshold=None, exit_criteria_scenario=None):
         """Delegate scenario start to inner callback."""
         if self._inner and hasattr(self._inner, 'on_scenario_start'):
-            self._inner.on_scenario_start(scenario_name, iterations)
+            self._inner.on_scenario_start(scenario_name, iterations,
+                                          exit_criteria=exit_criteria,
+                                          exit_threshold=exit_threshold,
+                                          exit_criteria_scenario=exit_criteria_scenario)
 
     def on_scenario_complete(self, scenario_name):
         """Delegate scenario completion to inner callback."""
         if self._inner and hasattr(self._inner, 'on_scenario_complete'):
             self._inner.on_scenario_complete(scenario_name)
+
+    def on_scenario_end(self, scenario_name):
+        """Delegate scenario end to inner callback."""
+        if self._inner:
+            self._inner.on_scenario_end(scenario_name)
+
+    def on_scenario_resumed(self, scenario_name, history_entry):
+        """Delegate scenario resumed to inner callback."""
+        if self._inner:
+            self._inner.on_scenario_resumed(scenario_name, history_entry)
+
+    def get_completion_info(self, scenario_name):
+        """Delegate completion info to inner callback."""
+        if self._inner:
+            return self._inner.get_completion_info(scenario_name)
+        return None
 
     def on_training_complete(self):
         """Delegate training completion to inner callback."""
@@ -120,6 +141,51 @@ class ProfilingCallback(TrainingCallback):
         """Delegate circuit start to inner callback."""
         if self._inner and hasattr(self._inner, 'on_circuit_start'):
             self._inner.on_circuit_start(scenarios)
+
+
+class _SubCircuitCallback:
+    """Wrapper that forwards training events but suppresses circuit/scenario display events.
+
+    Used when running a sub-circuit so the parent circuit's TUI display is not clobbered."""
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    def on_progress(self, steps, total_steps):
+        """Forward progress updates to the parent display."""
+        self._inner.on_progress(steps, total_steps)
+
+    def on_optimize(self, stats, iteration, total_iterations):
+        """Forward optimize stats to the parent display."""
+        self._inner.on_optimize(stats, iteration, total_iterations)
+
+    def on_metrics(self, metrics, iteration, total_iterations):
+        """Forward metrics to the parent display."""
+        self._inner.on_metrics(metrics, iteration, total_iterations)
+
+    def check_pause(self):
+        """Delegate pause checks to the parent."""
+        return self._inner.check_pause()
+
+    def on_circuit_start(self, scenarios):
+        """Suppressed — sub-circuit must not overwrite parent's scenario list."""
+
+    def on_scenario_start(self, scenario_name, iterations, exit_criteria=None,
+                          exit_threshold=None, exit_criteria_scenario=None):
+        """Suppressed — sub-circuit must not change parent's active scenario."""
+
+    def on_scenario_end(self, scenario_name):
+        """Suppressed — sub-circuit must not mark parent scenarios as complete."""
+
+    def get_completion_info(self, scenario_name):
+        """Delegate to parent — completion info is tracked at the display level."""
+        return self._inner.get_completion_info(scenario_name)
+
+    def on_scenario_complete(self, scenario_name):
+        """Suppressed."""
+
+    def on_training_complete(self):
+        """Suppressed."""
 
 
 class _KeyboardListener:
@@ -190,6 +256,15 @@ class TrainingDisplay(TrainingCallback):
         self._prev_optimize_stats = {}
         self._kl_rollback_count = 0
 
+        # Exit criteria for current scenario
+        self._exit_criteria = None
+        self._exit_threshold = None
+        self._exit_criteria_scenario = None
+
+        # Per-scenario completion metadata: name -> {metric, value, met, steps, total, duration}
+        self._completion_info = {}
+        self._scenario_start_time = None
+
         # Pause state
         self._pause_state = _RUNNING
         self._resume_event = threading.Event()
@@ -201,6 +276,7 @@ class TrainingDisplay(TrainingCallback):
         self._quit_confirm = False
         self._stop_requested = False
         self._last_refresh_time = 0.0
+        self._circuit_start_time = None
 
         # Keyboard listener
         self._keyboard = _KeyboardListener(self._on_key)
@@ -282,12 +358,14 @@ class TrainingDisplay(TrainingCallback):
         self._name_width = max(self._name_width, len("Total"))
         self._total_budget = sum(iters for _, iters in scenarios)
         self._total_spent = 0
+        self._circuit_start_time = time.monotonic()
         for name, iters in scenarios:
             self._scenario_steps[name] = 0
             self._scenario_total[name] = iters
         self._refresh(force=True)
 
-    def on_scenario_start(self, scenario_name, iterations):
+    def on_scenario_start(self, scenario_name, iterations, exit_criteria=None,
+                          exit_threshold=None, exit_criteria_scenario=None):
         self._active_index = next(
             i for i, (name, _) in enumerate(self._scenarios) if name == scenario_name)
         self._current_steps = 0
@@ -297,6 +375,10 @@ class TrainingDisplay(TrainingCallback):
         self._optimize_stats = {}
         self._prev_game_metrics = {}
         self._prev_optimize_stats = {}
+        self._exit_criteria = exit_criteria
+        self._exit_threshold = exit_threshold
+        self._exit_criteria_scenario = exit_criteria_scenario
+        self._scenario_start_time = time.monotonic()
 
         # Set up tensorboard for this scenario
         if self._tensorboard:
@@ -310,9 +392,64 @@ class TrainingDisplay(TrainingCallback):
         self._scenario_steps[scenario_name] = self._current_steps
         self._total_spent += self._current_steps
         self._completed.add(scenario_name)
+
+        # Snapshot completion metadata for display
+        duration = time.monotonic() - self._scenario_start_time if self._scenario_start_time else 0
+
+        # For weighted circuits, the exit criteria metric belongs to a specific scenario.
+        # Look up the qualified key (e.g. "overworld-skip-sword-all-items/success-rate") first,
+        # then fall back to the unqualified key (which may be the first scenario's promoted value).
+        metric_value = None
+        if self._exit_criteria:
+            if self._exit_criteria_scenario:
+                qualified = f"{self._exit_criteria_scenario}/{self._exit_criteria}"
+                metric_value = self._game_metrics.get(qualified)
+            if metric_value is None:
+                metric_value = self._game_metrics.get(self._exit_criteria)
+        met = (metric_value is not None and self._exit_threshold is not None
+               and metric_value >= self._exit_threshold)
+        self._completion_info[scenario_name] = {
+            'metric': self._exit_criteria,
+            'threshold': self._exit_threshold,
+            'value': metric_value,
+            'met': met,
+            'steps': self._current_steps,
+            'total': self._current_total,
+            'duration': duration,
+        }
+
         self._prev_game_metrics = {}
         self._prev_optimize_stats = {}
         self._refresh(force=True)
+
+    def on_scenario_resumed(self, scenario_name, history_entry):
+        """Mark a scenario as completed from loaded training history (for --resume display)."""
+        self._active_index = next(
+            (i for i, (name, _) in enumerate(self._scenarios) if name == scenario_name), -1)
+        self._completed.add(scenario_name)
+
+        steps = history_entry.get('steps', 0)
+        self._scenario_steps[scenario_name] = steps
+
+        em = history_entry.get('exit_metric') or {}
+        metric_name = em.get('name')
+        target = em.get('target')
+        actual = em.get('actual')
+        met = actual is not None and target is not None and actual >= target
+
+        self._completion_info[scenario_name] = {
+            'metric': metric_name,
+            'threshold': target,
+            'value': actual,
+            'met': met,
+            'steps': steps,
+            'total': self._scenario_total.get(scenario_name, steps),
+            'duration': 0,
+        }
+        self._refresh(force=True)
+
+    def get_completion_info(self, scenario_name):
+        return self._completion_info.get(scenario_name)
 
     def on_progress(self, steps, total_steps):
         self._current_steps += steps
@@ -344,14 +481,23 @@ class TrainingDisplay(TrainingCallback):
     def on_metrics(self, metrics, iteration, total_iterations):
         self._prev_game_metrics = dict(self._game_metrics)
 
-        # Weighted mode returns {scenario: {metric: value}} — flatten for display/tensorboard
+        # Weighted mode returns {scenario: {metric: value}} — flatten for display/tensorboard.
+        # The first scenario's metrics are promoted to top-level so TUI perf metrics
+        # (success-rate, room-progress, etc.) and tensorboard metrics/ path work normally.
         flat_metrics = {}
+        first_scenario_metrics = None
         for key, value in metrics.items():
             if isinstance(value, dict):
+                if first_scenario_metrics is None:
+                    first_scenario_metrics = value
                 for metric_name, metric_value in value.items():
                     flat_metrics[f"{key}/{metric_name}"] = metric_value
             else:
                 flat_metrics[key] = value
+
+        if first_scenario_metrics is not None:
+            for metric_name, metric_value in first_scenario_metrics.items():
+                flat_metrics.setdefault(metric_name, metric_value)
 
         self._game_metrics.update(flat_metrics)
         if self._tensorboard:
@@ -388,15 +534,42 @@ class TrainingDisplay(TrainingCallback):
         self._last_refresh_time = now
         self._live.update(self._render())
 
+    def _render_completed_scenario(self, name):
+        """Render a completed scenario line with checkmark, duration, steps, and metric."""
+        info = self._completion_info.get(name, {})
+        line = Text("  ✔ ", style="green")
+        line.append(name.ljust(self._name_width), style="green")
+
+        dur = info.get('duration', 0)
+        if dur == 0 and info.get('steps', 0) > 0:
+            line.append("  resumed", style="dim")
+        else:
+            line.append(f"  {self._format_duration(dur):>7}", style="dim")
+
+        steps = info.get('steps', 0)
+        total = info.get('total', 0)
+        line.append(f"  {steps:>10,}", style="cyan")
+        line.append(" of ", style="white")
+        line.append(f"{total:>10,}", style="cyan")
+        line.append(" steps", style="white")
+
+        metric_name = info.get('metric')
+        metric_val = info.get('value')
+        if metric_name is not None and metric_val is not None:
+            met = info.get('met', False)
+            style = "white" if met else "red"
+            line.append(f"  {metric_name}: ", style="dim")
+            line.append(f"{metric_val:.4f}", style=style)
+
+        return line
+
     def _render(self):
         parts = []
         parts.append(Text(""))
 
         for i, (name, _) in enumerate(self._scenarios):
             if name in self._completed:
-                line = Text("  ✔ ", style="green")
-                line.append(name, style="green")
-                parts.append(line)
+                parts.append(self._render_completed_scenario(name))
             elif i == self._active_index:
                 steps = self._scenario_steps.get(name, 0)
                 total = self._scenario_total.get(name, 1)
@@ -455,23 +628,23 @@ class TrainingDisplay(TrainingCallback):
 
     @staticmethod
     def _format_duration(seconds):
-        """Format seconds into a human-readable duration string."""
+        """Format seconds into a human-readable duration string (no seconds)."""
         if seconds < 60:
-            return f"{seconds:.0f}s"
+            return "<1m"
         if seconds < 3600:
-            m, s = divmod(int(seconds), 60)
-            return f"{m}m{s:02d}s"
+            m = int(seconds) // 60
+            return f"{m}m"
         h, remainder = divmod(int(seconds), 3600)
-        m, s = divmod(remainder, 60)
-        return f"{h}h{m:02d}m{s:02d}s"
+        m = remainder // 60
+        return f"{h}h{m:02d}m"
 
     # Healthy ranges for coloring: (low, high) inclusive.  None means no bound.
     _HEALTHY_RANGES = {
-        "charts/SPS":                       (150, None),
+        "charts/SPS":                       (100, None),
         "losses/value_loss":                (0.01, 1.0),
         "losses/policy_loss":               (-0.05, 0.05),
         "losses/entropy":                   (0.5, 2.0),
-        "losses/approx_kl":                 (0.001, 0.02),
+        "losses/approx_kl":                 (0.001, 0.03),
         "losses/clipfrac":                  (0.05, 0.25),
         "losses/explained_variance":        (0.3, 0.9),
         "losses/attention/entropy":         (2.0, 6.5),
@@ -501,6 +674,32 @@ class TrainingDisplay(TrainingCallback):
             return False
         return True
 
+    def _get_target_text(self, key):
+        """Return a dim-styled Text showing the target/healthy range for a metric."""
+        # Check exit criteria first (takes priority for the matched metric)
+        if self._exit_criteria and self._exit_criteria == key and self._exit_threshold is not None:
+            return Text(f"≥{self._exit_threshold:g}", style="dim")
+
+        # Resolve per-head keys to their aggregate range
+        lookup = key
+        if "/head_" in key:
+            if key.endswith("/entropy"):
+                lookup = "losses/attention/entropy"
+            elif key.endswith("/top1"):
+                lookup = "losses/attention/top1_weight"
+
+        bounds = self._HEALTHY_RANGES.get(lookup)
+        if bounds is None:
+            return Text("", style="dim")
+        lo, hi = bounds
+        if lo is not None and hi is not None:
+            return Text(f"{lo:g}–{hi:g}", style="dim")
+        if lo is not None:
+            return Text(f"≥{lo:g}", style="dim")
+        if hi is not None:
+            return Text(f"≤{hi:g}", style="dim")
+        return Text("", style="dim")
+
     def _add_metric_row(self, table, key, display_name, fmt, value, prev_value):
         """Add a metric row with value coloring and delta column."""
         style = "white" if self._is_healthy(key, value) else "red"
@@ -512,15 +711,22 @@ class TrainingDisplay(TrainingCallback):
         else:
             delta_text = Text("", style="dim")
 
-        table.add_row(display_name, val_text, delta_text)
+        target_text = self._get_target_text(key)
+        table.add_row(display_name, val_text, delta_text, target_text)
 
-    def _render_metrics(self):
+    def _render_metrics(self):  # pylint: disable=too-many-statements
         table = Table(show_header=False, show_edge=False, pad_edge=False, box=None, padding=(0, 2))
         table.add_column("Metric", style="cyan", min_width=24)
         table.add_column("Value", justify="right", min_width=12)
         table.add_column("Δ", justify="right", min_width=10, style="dim")
+        table.add_column("Target", justify="left", min_width=10, style="dim")
 
-        # SPS — always first, standalone
+        # Total elapsed time — always first
+        if self._circuit_start_time is not None:
+            elapsed = time.monotonic() - self._circuit_start_time - self._pause_time_offset
+            table.add_row("Time", Text(self._format_duration(elapsed), style="yellow"), "", "")
+
+        # SPS — always next, standalone
         sps = self._optimize_stats.get("charts/SPS")
         has_sps = False
         if sps is not None:
@@ -540,10 +746,29 @@ class TrainingDisplay(TrainingCallback):
             val = self._game_metrics.get(key)
             if val is not None:
                 if not has_perf and has_sps:
-                    table.add_row("", "", "")
+                    table.add_row("", "", "", "")
                 prev = self._prev_game_metrics.get(key)
                 self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_perf = True
+
+        # Top ending — find the highest-percentage endings/* metric.
+        # In weighted mode, prefer the exit-criteria scenario's qualified endings
+        # (e.g. "scenario/endings/X") over the first-scenario promoted ones.
+        endings_prefix = f"{self._exit_criteria_scenario}/endings/" if self._exit_criteria_scenario \
+            else "endings/"
+        top_ending_key, top_ending_val = None, -1
+        for key, val in self._game_metrics.items():
+            if key.startswith(endings_prefix) and isinstance(val, (int, float)) \
+                    and val > top_ending_val:
+                top_ending_key, top_ending_val = key, val
+        if top_ending_key is not None:
+            if not has_perf and has_sps:
+                table.add_row("", "", "", "")
+            ending_name = top_ending_key.rsplit("/", 1)[-1]
+            prev_val = self._prev_game_metrics.get(top_ending_key)
+            self._add_metric_row(table, top_ending_key, ending_name, ".2f",
+                                 top_ending_val, prev_val)
+            has_perf = True
 
         # Entropy / attention metrics
         entropy_metrics = [
@@ -564,7 +789,7 @@ class TrainingDisplay(TrainingCallback):
             val = self._optimize_stats.get(key)
             if val is not None:
                 if not has_entropy and (has_perf or has_sps):
-                    table.add_row("", "", "")
+                    table.add_row("", "", "", "")
                 prev = self._prev_optimize_stats.get(key)
                 self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_entropy = True
@@ -583,7 +808,7 @@ class TrainingDisplay(TrainingCallback):
             val = self._optimize_stats.get(key)
             if val is not None:
                 if not has_loss and (has_perf or has_entropy or has_sps):
-                    table.add_row("", "", "")
+                    table.add_row("", "", "", "")
                 prev = self._prev_optimize_stats.get(key)
                 self._add_metric_row(table, key, display_name, fmt, val, prev)
                 has_loss = True
@@ -591,9 +816,9 @@ class TrainingDisplay(TrainingCallback):
         # KL rollback counter — only show when rollbacks have occurred
         if self._kl_rollback_count > 0:
             if has_loss or has_perf or has_entropy or has_sps:
-                table.add_row("", "", "")
+                table.add_row("", "", "", "")
             table.add_row("[bold red]⚠ KL rollbacks[/bold red]",
-                          f"[bold red]{self._kl_rollback_count}[/bold red]", "")
+                          f"[bold red]{self._kl_rollback_count}[/bold red]", "", "")
 
         return table
 
@@ -632,6 +857,11 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
                                            action_space_name=action_space_def.name)
         network.load(args.load)
         kwargs['model'] = network
+
+        # Restore optimizer state if present in checkpoint
+        optimizer_state = Network.load_optimizer_state(args.load)
+        if optimizer_state is not None:
+            kwargs['optimizer_state'] = optimizer_state
 
         # Infer obs_kind and frame_stack from saved model when not explicitly set
         if args.obs_kind is None and args.frame_stack is None:
@@ -675,6 +905,38 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
 
     return kwargs, circuit, circuit_def
 
+def _get_circuit_exit_criteria(scenario_entry, sub_circuit_def):
+    """Get exit criteria for an embedded circuit entry, checking the entry then the sub-circuit.
+
+    Returns (ExitCriteria, scenario_name) where scenario_name is the owning scenario
+    (used to look up qualified metric keys in weighted mode).
+    """
+    ec = scenario_entry.exit_criteria
+    if ec is not None:
+        return ec, None
+
+    for sub_entry in sub_circuit_def.scenarios:
+        if sub_entry.exit_criteria:
+            return sub_entry.exit_criteria, sub_entry.scenario
+    return None, None
+
+
+def _build_history_entry(scenario_name, steps, callback=None):
+    """Build a training history entry for a completed scenario/circuit leg."""
+    entry = {"scenario": scenario_name, "steps": steps}
+    if callback:
+        info = callback.get_completion_info(scenario_name)
+        if info:
+            entry["steps"] = info.get("steps", steps)
+            if info.get("metric"):
+                entry["exit_metric"] = {
+                    "name": info["metric"],
+                    "target": info.get("threshold"),
+                    "actual": info.get("value"),
+                }
+    return entry
+
+
 def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, iterations,
                callback=None, **kwargs):
     """Trains a model with the given scenario.  Returns (model, iterations_used)."""
@@ -700,12 +962,14 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
     model = ppo.train(model_kind.network_class, create_env, iterations, callback,
                       save_path=checkpoint_dir, **kwargs)
 
-    # Save leg checkpoint with scenario name
-    model.save(f"{checkpoint_dir}/{stem}_{scenario_def.name}_{model.steps_trained}.pt")
+    # Save leg checkpoint with training history
+    training_history = kwargs.get('training_history')
+    model.save(f"{checkpoint_dir}/{stem}_{scenario_def.name}_{model.steps_trained}.pt",
+               optimizer=ppo.optimizer, training_history=training_history)
     return model, model.steps_trained - steps_before
 
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
-                 callback=None, circuit_def=None):
+                 callback=None, circuit_def=None, skip_to=None):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     """Run training circuit and return (final_model, final_scenario_def).
 
@@ -716,35 +980,110 @@ def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwa
                                      checkpoint_dir, kwargs, total_budget, callback)
 
     return _run_sequential_circuit(ppo, circuit, model_kind, action_space_def,
-                                    checkpoint_dir, kwargs, total_budget, callback)
+                                    checkpoint_dir, kwargs, total_budget, callback,
+                                    skip_to=skip_to)
 
 
 def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs,
-                             total_budget, callback=None):
+                             total_budget, callback=None, skip_to=None):
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-statements,too-many-branches,too-many-locals
     """Run training circuit and return (final_model, final_scenario_def)."""
     iterations_spent = 0
     model = None
     scenario_def = None
+    skipping = skip_to is not None
+
+    # Initialize training history from kwargs (may be inherited from loaded checkpoint)
+    training_history = list(kwargs.get('training_history') or [])
 
     # Resolve iteration counts for all scenarios upfront so the display can show them
     scenario_plan = []
     for scenario_entry in circuit:
-        sdef = TrainingScenarioDefinition.get(scenario_entry.scenario)
-        if sdef is None:
-            raise ValueError(f"Unknown scenario: {scenario_entry.scenario}")
-
-        if scenario_entry.iterations is not None:
-            iters = scenario_entry.iterations
-        elif total_budget is not None:
-            iters = total_budget
+        if scenario_entry.circuit:
+            name = f"[circuit] {scenario_entry.circuit}"
+            sub_circuit_def = TrainingCircuitDefinition.get(scenario_entry.circuit)
+            if sub_circuit_def is None:
+                raise ValueError(f"Unknown circuit: {scenario_entry.circuit}")
+            iters = scenario_entry.iterations or total_budget or 2000000
         else:
-            iters = sdef.iterations
-        scenario_plan.append((sdef.name, iters))
+            sdef = TrainingScenarioDefinition.get(scenario_entry.scenario)
+            if sdef is None:
+                raise ValueError(f"Unknown scenario: {scenario_entry.scenario}")
+            name = sdef.name
+
+            if scenario_entry.iterations is not None:
+                iters = scenario_entry.iterations
+            elif total_budget is not None:
+                iters = total_budget
+            else:
+                iters = sdef.iterations
+        scenario_plan.append((name, iters))
 
     if callback:
         callback.on_circuit_start(scenario_plan)
 
+    # Build lookup from training history for resumed scenario display
+    history_by_name = {}
+    for entry in training_history:
+        history_by_name[entry.get('scenario', '')] = entry
+
     for scenario_entry in circuit:
+        # Determine the name for skip-to matching
+        entry_name = (f"[circuit] {scenario_entry.circuit}" if scenario_entry.circuit
+                      else scenario_entry.scenario)
+
+        # Skip completed legs when resuming
+        if skipping:
+            if entry_name in (skip_to, f"[circuit] {skip_to}"):
+                skipping = False
+            if callback:
+                hist = history_by_name.get(entry_name, {})
+                callback.on_scenario_resumed(entry_name, hist)
+            continue
+
+        if scenario_entry.circuit:
+            sub_circuit_def = TrainingCircuitDefinition.get(scenario_entry.circuit)
+            sub_budget = scenario_entry.iterations or total_budget
+
+            if total_budget is not None:
+                remaining = total_budget - iterations_spent
+                sub_budget = min(sub_budget, remaining) if sub_budget else remaining
+
+            if sub_budget is not None and sub_budget <= 0:
+                break
+
+            if callback:
+                ec, ec_scenario = _get_circuit_exit_criteria(scenario_entry, sub_circuit_def)
+                callback.on_scenario_start(f"[circuit] {scenario_entry.circuit}", sub_budget or 0,
+                                           exit_criteria=ec.metric if ec else None,
+                                           exit_threshold=ec.threshold if ec else None,
+                                           exit_criteria_scenario=ec_scenario)
+
+            # Pass current model and history into sub-circuit with suppressed display events
+            sub_kwargs = dict(kwargs)
+            sub_kwargs['training_history'] = training_history
+            sub_callback = _SubCircuitCallback(callback) if callback else None
+            model, scenario_def = _run_circuit(ppo, sub_circuit_def.scenarios, model_kind,
+                                               action_space_def, checkpoint_dir, sub_kwargs,
+                                               sub_budget, sub_callback, sub_circuit_def)
+
+            if callback:
+                callback.on_scenario_end(f"[circuit] {scenario_entry.circuit}")
+
+            # Record completed circuit in training history
+            circuit_label = f"[circuit] {scenario_entry.circuit}"
+            training_history.append(_build_history_entry(circuit_label, sub_budget or 0, callback))
+
+            # Save leg checkpoint for the completed embedded circuit
+            stem = _model_stem(model_kind.name, action_space_def.name)
+            circuit_name = scenario_entry.circuit
+            model.save(f"{checkpoint_dir}/{stem}_{circuit_name}_{model.steps_trained}.pt",
+                       optimizer=ppo.optimizer, training_history=training_history)
+
+            kwargs['model'] = model
+            iterations_spent += sub_budget or 0
+            continue
+
         scenario_def = TrainingScenarioDefinition.get(scenario_entry.scenario)
 
         if scenario_entry.iterations is not None:
@@ -769,13 +1108,21 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
             del kwargs['exit_threshold']
 
         if callback:
-            callback.on_scenario_start(scenario_def.name, iterations)
+            ec = scenario_entry.exit_criteria
+            callback.on_scenario_start(scenario_def.name, iterations,
+                                       exit_criteria=ec.metric if ec else None,
+                                       exit_threshold=ec.threshold if ec else None)
 
+        # Thread training history through so periodic saves include it
+        kwargs['training_history'] = training_history
         model, used = train_once(ppo, scenario_def, model_kind, action_space_def,
                                  checkpoint_dir, iterations, callback, **kwargs)
 
         if callback:
             callback.on_scenario_end(scenario_def.name)
+
+        # Record completed scenario in training history
+        training_history.append(_build_history_entry(scenario_def.name, used, callback))
 
         kwargs['model'] = model
         iterations_spent += used
@@ -834,7 +1181,18 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
         callback.on_circuit_start([(weighted_label, iterations)])
 
     if callback:
-        callback.on_scenario_start(weighted_label, iterations)
+        # Find the scenario that has exit criteria for display purposes
+        ec_scenario_name = None
+        ec = None
+        for sdef in scenario_defs:
+            ec = exit_criteria_map.get(sdef.name)
+            if ec is not None:
+                ec_scenario_name = sdef.name
+                break
+        callback.on_scenario_start(weighted_label, iterations,
+                                   exit_criteria=ec.metric if ec else None,
+                                   exit_threshold=ec.threshold if ec else None,
+                                   exit_criteria_scenario=ec_scenario_name)
 
     model = ppo.train_weighted(
         model_kind.network_class, create_env, scenario_defs, weights,
@@ -845,12 +1203,15 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
     if callback:
         callback.on_scenario_end(f"weighted[{len(scenario_defs)}]")
 
-    # Save final checkpoint
-    model.save(f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt")
+    # Save final checkpoint with training history
+    training_history = kwargs.get('training_history')
+    model.save(f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt",
+               optimizer=ppo.optimizer, training_history=training_history)
     return model, scenario_defs[0]
 
 
 def main():
+    # pylint: disable=too-many-statements
     """Main entry point."""
     args = parse_args()
 
@@ -886,6 +1247,26 @@ def main():
     console.print(f"Model kind: {model_kind.name}, Action space: {action_space_def.name}")
 
     kwargs, circuit, circuit_def = _get_kwargs_from_args(args, model_kind, action_space_def)
+
+    # Resolve --resume / --skip-to
+    skip_to = args.skip_to
+    training_history = None
+    if args.resume and not skip_to:
+        if args.load is None:
+            console.print("[red]--resume requires --load[/red]")
+            sys.exit(1)
+        training_history = Network.load_training_history(args.load)
+        if training_history:
+            last_scenario = training_history[-1].get("scenario", "")
+            skip_to = last_scenario
+            console.print(f"Resuming after: {last_scenario} ({len(training_history)} legs in history)")
+        else:
+            console.print("[yellow]Warning: --resume but checkpoint has no training history[/yellow]")
+
+    # Seed training history into kwargs so circuit runners pick it up
+    if training_history:
+        kwargs['training_history'] = training_history
+
     ppo = PPO(**kwargs)
 
     with Live(console=console, refresh_per_second=4) as live:
@@ -896,13 +1277,15 @@ def main():
             console.print(f"Profiling: {args.profile} steps after {PROFILE_WARMUP_STEPS} warmup → {PROFILE_OUTPUT}")
         model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
                                            checkpoint_dir, kwargs, args.iterations,
-                                           callback=callback, circuit_def=circuit_def)
+                                           callback=callback, circuit_def=circuit_def,
+                                           skip_to=skip_to)
         display.on_training_complete()
 
     # Save final result in the run directory (not checkpoints)
     stem = _model_stem(model_kind.name, action_space_def.name)
     final_path = f"{run_dir}/{stem}.pt"
-    model.save(final_path)
+    final_history = kwargs.get('training_history')
+    model.save(final_path, optimizer=ppo.optimizer, training_history=final_history)
     console.print(f"\nFinal model: {final_path}")
 
     if args.evaluate:
@@ -958,6 +1341,10 @@ def parse_args():
     parser.add_argument("--iterations", type=int, default=None, help="Override iteration count.")
     parser.add_argument("--parallel", type=int, default=16, help="Number of parallel environments to run.")
     parser.add_argument("--load", type=str, help="Load a model to continue training.")
+    parser.add_argument("--resume", action='store_true',
+                        help="Resume circuit from saved position in --load checkpoint.")
+    parser.add_argument("--skip-to", type=str, default=None, metavar="SCENARIO",
+                        help="Skip circuit legs until reaching SCENARIO (overrides --resume).")
     parser.add_argument("--evaluate", type=int, default=None, metavar="N",
                         help="Run N evaluation episodes after training and print a progress report.")
     parser.add_argument("--hook-exceptions", action='store_true', help="Dump tracebacks on unhandled exceptions.")

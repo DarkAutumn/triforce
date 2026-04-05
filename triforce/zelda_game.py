@@ -9,7 +9,7 @@ import gymnasium as gym
 import torch
 
 from .room import Room
-from .zelda_objects import Item, Projectile
+from .zelda_objects import Item, Projectile, BombWall
 from .enemy import Enemy
 from .link import Link
 from .zelda_enums import ENEMY_MAP, ITEM_MAP, PROJECTILE_MAP, MapLocation, Position, Direction, SoundKind
@@ -40,6 +40,7 @@ class ZeldaGame:
     # pylint: disable=too-many-public-methods
 
     __active = None
+    _game_map = None
     _env : gym.Env
     info : dict
     frames : int
@@ -226,11 +227,39 @@ class ZeldaGame:
         return [x for x in self.enemies if x.is_active and not x.is_dying]
 
     @cached_property
+    def bomb_walls(self) -> list:
+        """Returns BombWall entities for intact bombable walls in the current room.
+
+        Uses game.yaml bomb_walls data to know which directions are bombable,
+        then checks tile data to see if the wall is still intact.
+        """
+        if self.level == 0:
+            return []
+
+        if ZeldaGame._game_map is None:
+            from .game_map import GameMap  # pylint: disable=import-outside-toplevel
+            ZeldaGame._game_map = GameMap.load()
+
+        game_room = ZeldaGame._game_map.get(self.full_location)
+        if game_room is None or not game_room.bomb_walls:
+            return []
+
+        dir_map = {'N': Direction.N, 'S': Direction.S, 'E': Direction.E, 'W': Direction.W}
+        tiles = self.current_tiles
+        result = []
+        for dir_str in game_room.bomb_walls:
+            direction = dir_map[dir_str]
+            if self.room.is_wall_intact(direction, tiles):
+                result.append(BombWall.for_direction(self, direction))
+        return result
+
+    @cached_property
     def all_entities(self):
         """Returns entities for NES object slots 1-11 in slot order.
 
-        Each element is (entity, category) where category is 'enemy', 'item', or 'projectile',
-        or None for empty/inactive slots. Enemies are filtered to active only.
+        Each element is (entity, category) where category is 'enemy', 'item',
+        'projectile', or 'bomb_wall'. Enemies are filtered to active only.
+        Bomb walls occupy the first empty slots after NES objects.
         """
         result = [None] * 11
         for enemy in self.active_enemies:
@@ -239,6 +268,14 @@ class ZeldaGame:
             result[item.index - 1] = (item, 'item')
         for proj in self.projectiles:
             result[proj.index - 1] = (proj, 'projectile')
+
+        # Place bomb walls in the first available empty slots
+        for bw in self.bomb_walls:
+            for i in range(11):
+                if result[i] is None:
+                    result[i] = (bw, 'bomb_wall')
+                    break
+
         return result
 
     def is_door_locked(self, direction):
@@ -260,21 +297,73 @@ class ZeldaGame:
     _DOORWAY_REQUIRED_X = 0x78  # for N/S doorways
     _DOORWAY_REQUIRED_Y = 0x8D  # for E/W doorways
 
-    def can_link_move(self, direction):
+    def can_link_move(self, direction):  # pylint: disable=too-many-return-statements
         """Whether Link can move in the given direction from his current position.
 
-        Checks tile walkability (via self.room which uses current RAM tiles),
-        cave entry override, and locked-door-with-key override (NES CheckDoorway
-        opens the door before the tile check fires).
+        Replicates the NES Walker_Move flow (Z_07.asm:2600):
 
-        When link_grid_offset != 0 the NES skips Walker_CheckTileCollision entirely
-        (Z_07.asm:2874), so we allow movement in all directions.  This handles cases
-        where Link gets pushed into unwalkable tiles by sword knockback.
+          0. grid_offset != 0         — movement unrestricted (mid-tile, NES
+                                       skips Walker_CheckTileCollision entirely)
+          1. Link_ModifyDirInDoorway — constrains INPUT to doorway axis (only
+                                       at grid points, i.e. grid_offset == 0)
+          2. BoundByRoom             — blocks movement at room boundaries
+          3. CheckDoorway            — OVERRIDES BoundByRoom if Link is at a
+                                       passable doorway (open door or locked
+                                       door with key)
+          4. Walker_CheckTileCollision — blocks on unwalkable tiles
+
+        The critical ordering is that CheckDoorway runs AFTER BoundByRoom.
+        Doorways sit right at the room boundary (e.g. east door at px=0xD0),
+        so BoundByRoom always fires there.  The NES resolves this by having
+        CheckDoorway restore the movement direction that BoundByRoom zeroed.
+
+        We replicate this by letting the tile/door checks handle both boundary
+        walls (unwalkable tiles → False) and boundary doorways (walkable tiles
+        → True) without needing BoundByRoom early-returns at all.
         """
+        # When link_grid_offset != 0 the NES skips Walker_CheckTileCollision
+        # entirely (Z_07.asm:2874), so movement is unrestricted.  This must be
+        # checked BEFORE the doorway constraint below — Link_ModifyDirInDoorway
+        # (Z_05.asm:3658) is an input remapping (changes ObjInputDir to align
+        # with the doorway axis), not a physics block.  When grid_offset != 0,
+        # the NES allows movement in any direction regardless of DoorwayDir.
         if self.info.get('link_grid_offset', 0) != 0:
             return True
 
+        # NES Link_ModifyDirInDoorway (Z_05.asm:3658) constrains movement in doorways
+        # to the doorway direction or its opposite ("you can only move in the direction
+        # that you entered it or the opposite").  Only applies at grid points
+        # (grid_offset == 0, checked above).
+        doorway_dir = self.info.get('doorway_dir', 0)
+        if doorway_dir != 0:
+            opposite = {Direction.N: Direction.S, Direction.S: Direction.N,
+                        Direction.E: Direction.W, Direction.W: Direction.E}
+            try:
+                dw_direction = Direction(doorway_dir)
+            except ValueError:
+                dw_direction = None
+            if dw_direction is not None and direction not in (dw_direction, opposite[dw_direction]):
+                return False
+
         px, py = self.link.position
+
+        # --- BoundByRoom (Z_01.asm:3505) ---
+        # Enforces room boundaries in dungeons.  Skipped when already in a
+        # doorway (DoorwayDir != 0).  Room bounds are loaded from
+        # ObjectRoomBoundsUW (Z_05.asm:6449): L=0x21, R=0xD0, T=0x5E, B=0xBD.
+        #
+        # IMPORTANT: In the NES, BoundByRoom zeros the movement direction but
+        # does NOT prevent CheckDoorway from running afterward.  CheckDoorway
+        # (Z_05.asm:3757) can restore the direction if Link is at a passable
+        # doorway, effectively overriding BoundByRoom.  We must NOT early-return
+        # here — the tile/door checks below handle both boundary walls (tiles
+        # are unwalkable → return False) and boundary doorways (tiles are
+        # walkable → return True) correctly without needing BoundByRoom at all.
+        # The BoundByRoom pixel thresholds are documented here for reference:
+        #   W: px < 0x21,  E: px >= 0xD0,  N: py < 0x5E,  S: py >= 0xBD
+
+        # --- Walker_CheckTileCollision (Z_07.asm:2857) ---
+        # Walkable tiles at the boundary indicate an open doorway corridor.
         if self.room.can_link_move_from(px, py, direction):
             return True
 
@@ -286,9 +375,12 @@ class ZeldaGame:
                 and not self.info.get('just_exited_cave', False)):
             return True
 
-        # NES CheckDoorway (Z_05.asm:3755) opens a locked door if Link has a key,
-        # before Walker_CheckTileCollision runs.  But CheckDoorway only fires when
-        # Link is in the doorway corridor — perpendicular coordinate must match.
+        # --- CheckDoorway locked-door override (Z_05.asm:3755) ---
+        # CheckDoorway opens a locked door if Link has a key, before
+        # Walker_CheckTileCollision runs.  CheckDoorway only fires when Link
+        # is in the doorway corridor — perpendicular coordinate must match.
+        # This also handles the BoundByRoom case: a locked door sits at the
+        # room boundary, so BoundByRoom would block, but CheckDoorway overrides.
         if self.is_door_locked(direction) and (self.link.keys > 0 or self.link.magic_key):
             if direction in (Direction.N, Direction.S) and px == self._DOORWAY_REQUIRED_X:
                 return True

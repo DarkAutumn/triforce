@@ -20,12 +20,12 @@ from .zelda_game import ZeldaGame
 GRAYSCALE_WEIGHTS = torch.FloatTensor([0.2989, 0.5870, 0.1140])
 _GRAYSCALE_WEIGHTS_4D = GRAYSCALE_WEIGHTS.view(1, -1, 1, 1)
 _GRAYSCALE_NORM_WEIGHTS_4D = _GRAYSCALE_WEIGHTS_4D / 255.0
-BOOLEAN_FEATURES = 15
+INFO_FEATURES = 16
 VIEWPORT_PIXELS = 128
 
 # Unified entity observation: 11 NES object slots + 1 treasure slot
 ENTITY_SLOTS = 12
-ENTITY_FEATURES = 7
+ENTITY_FEATURES = 8
 
 # Entity type ID mapping for unified embedding (0 = empty/unknown)
 _ENTITY_TYPE_MAP = {}
@@ -45,6 +45,8 @@ for _member in ZeldaProjectileId:
 
 TREASURE_TYPE_ID = _next_id
 _next_id += 1
+BOMB_WALL_TYPE_ID = _next_id
+_next_id += 1
 NUM_ENTITY_TYPES = _next_id
 
 # Reverse mapping for debugger display
@@ -52,6 +54,7 @@ ENTITY_TYPE_NAMES = {0: "Empty"}
 for _key, _val in _ENTITY_TYPE_MAP.items():
     ENTITY_TYPE_NAMES[_val] = _key.name
 ENTITY_TYPE_NAMES[TREASURE_TYPE_ID] = "Treasure"
+ENTITY_TYPE_NAMES[BOMB_WALL_TYPE_ID] = "BombWall"
 
 
 def infer_obs_kind(obs_space):
@@ -105,7 +108,7 @@ class ObservationWrapper(gym.Wrapper):
             "image": self._get_box_observation_space(),
             "entities": Box(low=-1.0, high=1.0, shape=(ENTITY_SLOTS, ENTITY_FEATURES), dtype=np.float32),
             "entity_types": gym.spaces.MultiDiscrete([NUM_ENTITY_TYPES] * ENTITY_SLOTS),
-            "information" : gym.spaces.MultiBinary(BOOLEAN_FEATURES)
+            "information" : gym.spaces.MultiBinary(INFO_FEATURES)
         })
 
     def reset(self, **kwargs):
@@ -271,7 +274,7 @@ class ObservationWrapper(gym.Wrapper):
     def _get_entity_observation(self, state: ZeldaGame):
         """Build unified entity features and type IDs for all 12 slots.
 
-        Entity features per slot (7 dims):
+        Entity features per slot (8 dims):
             0: presence (0 or 1)
             1: dir_x  entity movement direction x
             2: dir_y  entity movement direction y
@@ -279,6 +282,7 @@ class ObservationWrapper(gym.Wrapper):
             4: stun   (enemy stun_timer / 255, 1.0 when clock active)
             5: hurts_on_touch (1 for enemies/projectiles, 0 when clock active)
             6: killable (1 for enemies only)
+            7: secret  (1 for bomb walls only)
 
         Positions are intentionally omitted — the full-screen visual encoder
         learns spatial relationships from pixels via CoordConv.
@@ -304,8 +308,13 @@ class ObservationWrapper(gym.Wrapper):
             elif category == 'projectile':
                 features[i, 1:3] = entity.direction.vector
                 features[i, 5] = 0.0 if has_clock else 1.0
+            elif category == 'bomb_wall':
+                features[i, 3] = 1.0 / 15.0  # health = 1 (one bomb to destroy)
+                features[i, 7] = 1.0          # secret flag
 
             types[i] = _ENTITY_TYPE_MAP.get(entity.id, 0)
+            if category == 'bomb_wall':
+                types[i] = BOMB_WALL_TYPE_ID
 
         # Slot 11 (index 11): treasure
         treasure = state.treasure
@@ -316,7 +325,7 @@ class ObservationWrapper(gym.Wrapper):
         return features.clamp(-1, 1), types
 
     def _get_information(self, state : ZeldaGame):
-        result = torch.zeros(BOOLEAN_FEATURES, dtype=torch.float32)
+        result = torch.zeros(INFO_FEATURES, dtype=torch.float32)
 
         # Objectives (indices 0-5)
         objectives = state.objectives
@@ -341,6 +350,9 @@ class ObservationWrapper(gym.Wrapper):
         result[12] = 1.0 if state.link.health <= 1 else 0.0
         result[13] = 1.0 if state.link.is_health_full else 0.0
         result[14] = 1.0 if state.link.clock else 0.0
+
+        # Continuous features (index 15)
+        result[15] = min(state.link.bombs / 8.0, 1.0)
 
         return result
 

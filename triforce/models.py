@@ -120,8 +120,8 @@ class Network(nn.Module):
         torch.nn.init.constant_(layer.bias, bias_const)
         return layer
 
-    def save(self, path):
-        """Save the network to a file."""
+    def save(self, path, optimizer=None, training_history=None):
+        """Save the network to a file, optionally including optimizer and training history."""
         save_data = {
             "model_state_dict": self.state_dict(),
             "steps_trained": self.steps_trained,
@@ -133,6 +133,12 @@ class Network(nn.Module):
             "action_space_name": self.action_space_name,
             "git_commit": _get_git_commit(),
         }
+
+        if optimizer is not None:
+            save_data["optimizer_state_dict"] = optimizer.state_dict()
+
+        if training_history is not None:
+            save_data["training_history"] = training_history
 
         torch.save(save_data, path)
 
@@ -156,6 +162,31 @@ class Network(nn.Module):
             raise ValueError("Mismatch in action space!")
 
         return self
+
+    @staticmethod
+    def load_optimizer_state(path):
+        """Load optimizer state dict from a checkpoint, or None if not present."""
+        save_data = torch.load(path, weights_only=False)
+        return save_data.get("optimizer_state_dict")
+
+    @staticmethod
+    def load_training_history(path):
+        """Load training history from a checkpoint, or None if not present.
+
+        Backward compatible: if the checkpoint has old-style circuit_position,
+        returns a minimal history list with that as the last completed entry.
+        """
+        save_data = torch.load(path, weights_only=False)
+        history = save_data.get("training_history")
+        if history is not None:
+            return history
+
+        # Backward compat: convert old circuit_position to minimal history
+        position = save_data.get("circuit_position")
+        if position is not None:
+            return [{"scenario": position, "steps": save_data.get("steps_trained", 0)}]
+
+        return None
 
     @staticmethod
     def load_metrics(path):
@@ -830,6 +861,19 @@ class MultiHeadAgent(Network):
         # Entropy: sum of per-head entropies
         entropy = type_dist.entropy() + dir_dist.entropy()
 
+        # When only one action type is valid, exclude the type head from both log_prob
+        # and entropy.  This prevents MOVE-dominated frames (where the type choice is
+        # forced) from pushing the type logits so extreme that the head collapses to
+        # always-MOVE even on frames where other types are available.
+        if mask is not None:
+            has_choice = action_type_mask.sum(dim=-1) > 1  # [batch]
+            no_choice = ~has_choice
+            if no_choice.any():
+                type_logp = type_dist.log_prob(actions[..., 0])
+                log_prob = torch.where(no_choice, log_prob - type_logp, log_prob)
+                type_ent = type_dist.entropy()
+                entropy = torch.where(no_choice, entropy - type_ent, entropy)
+
         return actions, log_prob, entropy, value.view(-1)
 
     def get_value(self, obs):
@@ -1119,7 +1163,23 @@ class ImpalaMultiHeadAgent(Network):
             actions = torch.stack([type_action, dir_action], dim=-1)
 
         log_prob = type_dist.log_prob(actions[..., 0]) + dir_dist.log_prob(actions[..., 1])
+
+        # Entropy: sum of per-head entropies
         entropy = type_dist.entropy() + dir_dist.entropy()
+
+        # When only one action type is valid, exclude the type head from both log_prob
+        # and entropy.  This prevents MOVE-dominated frames (where the type choice is
+        # forced) from pushing the type logits so extreme that the head collapses to
+        # always-MOVE even on frames where other types are available.
+        if mask is not None:
+            has_choice = action_type_mask.sum(dim=-1) > 1  # [batch]
+            no_choice = ~has_choice
+            if no_choice.any():
+                type_logp = type_dist.log_prob(actions[..., 0])
+                log_prob = torch.where(no_choice, log_prob - type_logp, log_prob)
+                type_ent = type_dist.entropy()
+                entropy = torch.where(no_choice, entropy - type_ent, entropy)
+
         return actions, log_prob, entropy, value.view(-1)
 
     def get_value(self, obs):

@@ -332,6 +332,31 @@ class Room:
         tile = fresh_tiles[location]
         return tile in BARRED_DOOR_TILES
 
+    def is_wall_intact(self, direction : Direction, fresh_tiles):
+        """Returns True if the wall in the given direction is a solid wall (not a door).
+
+        A solid wall has a tile value >= the walkability threshold at the door
+        position, and is NOT a door tile (locked) or barred tile. This detects
+        walls that could be bombable — if they've been bombed, the tile will
+        change to an open door tile (< threshold).
+        """
+        match direction:
+            case Direction.N:
+                location = NORTH_DOOR_TILE
+            case Direction.E:
+                location = EAST_DOOR_TILE
+            case Direction.W:
+                location = WEST_DOOR_TILE
+            case Direction.S:
+                location = SOUTH_DOOR_TILE
+            case _:
+                raise ValueError(f"Invalid direction {direction}")
+
+        tile = int(fresh_tiles[location])
+        if tile in DOOR_TILES or tile in BARRED_DOOR_TILES:
+            return False
+        return tile >= self._threshold
+
     @property
     def is_loaded(self):
         """Returns True if the room is loaded."""

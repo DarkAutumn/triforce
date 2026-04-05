@@ -27,7 +27,7 @@ def _make_obs(**overrides):
     """Build a mock observation dict with sensible defaults."""
     obs = {
         "image": torch.zeros(4, 1, 84, 84),
-        "entities": torch.zeros(12, 7),
+        "entities": torch.zeros(12, 8),
         "entity_types": torch.zeros(12).long(),
         "information": torch.zeros(15),
     }
@@ -195,7 +195,7 @@ def test_update_observation_sets_entity_rows():
     """update_observation populates entity rows."""
     panel = _make_panel()
     panel.show()
-    entities = torch.zeros(12, 7)
+    entities = torch.zeros(12, 8)
     entities[0, 0] = 1.0    # presence
     entities[0, 1] = 0.5    # dir_x
     entities[0, 2] = -0.3   # dir_y
