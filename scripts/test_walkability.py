@@ -77,6 +77,18 @@ def make_game(env, info):
     return ZeldaGame(env, dict(info), 0)
 
 
+def kill_enemies(env):
+    """Zero out obj_id for all non-Link object slots to remove enemies/projectiles.
+
+    Uses the low-level memory.assign interface since data.set_value doesn't work
+    for table-defined variables. obj_id table starts at NES RAM 0x34F with 12 entries;
+    slot 0 is Link, slots 1-11 are enemies/objects/projectiles.
+    """
+    mem = env.data.memory
+    for i in range(1, 12):
+        mem.assign(0x34F + i, '=u1', 0)
+
+
 def settle_grid_offset(env, buttons, direction):
     """Continue pressing the movement direction until link_grid_offset reaches 0.
 
@@ -222,6 +234,9 @@ def run_weapon_test(savestate, start_x, start_y):
 
     obs, info = env.reset()
 
+    # Remove all enemies so they can't interfere with testing
+    kill_enemies(env)
+
     # Max health, give equipment
     env.data.set_value('hearts_and_containers', 0xFF)
     env.data.set_value('partial_hearts', 0xFF)
@@ -363,6 +378,9 @@ def run_walkability_test(savestate, start_x, start_y):
 
     obs, info = env.reset()
 
+    # Remove all enemies so they can't interfere with testing
+    kill_enemies(env)
+
     # Max out health to reduce enemy interference
     env.data.set_value('hearts_and_containers', 0xFF)
     env.data.set_value('partial_hearts', 0xFF)
@@ -408,10 +426,20 @@ def run_walkability_test(savestate, start_x, start_y):
     tiles_tested = 0
     directions_tested = 0
 
+    skipped = 0
+
     while stack:
         tile, em_state = stack.pop()
         tiles_tested += 1
         tx, ty = tile
+
+        # Check for transition state (cave entrance, scrolling, etc.)
+        env.em.set_state(em_state)
+        info = sync_step(env, no_action)
+        if info['mode'] != 5:
+            skipped += 1
+            print(f"  {YELLOW}SKIP{RESET} ({tx:2},{ty:2}) — NES in transition state (mode={info['mode']})")
+            continue
 
         for direction in CARDINAL_DIRS:
             # Restore emulator state for this tile
@@ -458,8 +486,9 @@ def run_walkability_test(savestate, start_x, start_y):
                 stack.append((new_tile, new_tile_state))
 
     # Summary
+    skip_str = f", {YELLOW}Skipped: {skipped}{RESET}" if skipped else ""
     print(f"  Tiles: {tiles_tested}, Dirs: {directions_tested}, "
-          f"{GREEN}Pass: {passes}{RESET}, {RED}Fail: {len(bugs)}{RESET}")
+          f"{GREEN}Pass: {passes}{RESET}, {RED}Fail: {len(bugs)}{RESET}{skip_str}")
 
     if bugs:
         for i, bug in enumerate(bugs, 1):
