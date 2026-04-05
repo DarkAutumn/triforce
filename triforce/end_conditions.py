@@ -283,9 +283,25 @@ class LeftPlayArea(ZeldaEndCondition):
         return False, False, None
 
 class Dungeon1DidntGetKey(ZeldaEndCondition):
-    """End condition for leaving the initial room walk scenario."""
+    """End condition: fail if the agent reaches room 0x63 without having picked up a key.
+
+    The north door from 0x73 to 0x63 is locked, so reaching 0x63 normally requires
+    getting and using a key.  But if the door was already opened in a previous visit
+    (room memory), the agent could walk through with keys==0 legitimately.  We track
+    whether a key was ever held during the episode to distinguish the two cases.
+    """
+    def __init__(self):
+        super().__init__()
+        self._ever_had_key = False
+
+    def clear(self):
+        self._ever_had_key = False
+
     def is_scenario_ended(self, state_change):
-        if state_change.state.location == 0x63 and state_change.state.link.keys == 0:
+        if state_change.state.link.keys > 0:
+            self._ever_had_key = True
+
+        if state_change.state.location == 0x63 and not self._ever_had_key:
             return True, False, "failure-no-key"
 
         return False, False, None
