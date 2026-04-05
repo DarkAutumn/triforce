@@ -1,8 +1,9 @@
 #!/usr/bin/env python
-"""Walk every reachable tile in a room and validate can_link_move against actual NES behavior.
+"""Walk every reachable tile in a room and validate movement + weapon masking against NES behavior.
 
 Usage:
     python scripts/test_walkability.py <savestate> [savestate2 ...] [--start-x 10] [--start-y 10]
+    python scripts/test_walkability.py <savestate> --weapons-only
 
 Example:
     python scripts/test_walkability.py debug_0_68 debug_0_77 debug_1_73
@@ -166,6 +167,189 @@ def test_direction(env, buttons, direction, start_info):
     return moved, new_tile, new_room, end_pos
 
 
+def test_weapon_at_tile(env, buttons, no_action, direction, weapon):
+    """Test if a weapon can actually be used at Link's current position facing the given direction.
+
+    Args:
+        weapon: 'sword', 'bomb', or 'boomerang'
+    Returns:
+        True if the weapon activates within 4 frames.
+    """
+    data = env.data
+    data.set_value('link_direction', direction.value)
+    data.set_value('sword_animation', 0)
+    data.set_value('bomb_or_flame_animation', 0)
+    data.set_value('bait_or_boomerang_animation', 0)
+
+    if weapon == 'bomb':
+        data.set_value('selected_item', 1)  # Bombs
+        data.set_value('bombs', 8)
+    elif weapon == 'boomerang':
+        data.set_value('selected_item', 0)  # Boomerang
+
+    # Step once to apply RAM changes
+    env.step(no_action)
+
+    # Press the appropriate button
+    action = np.zeros(len(buttons), dtype=np.int8)
+    if weapon == 'sword':
+        action[buttons.index('A')] = 1
+        anim_key = 'sword_animation'
+    elif weapon == 'bomb':
+        action[buttons.index('B')] = 1
+        anim_key = 'bomb_or_flame_animation'
+    elif weapon == 'boomerang':
+        action[buttons.index('B')] = 1
+        anim_key = 'bait_or_boomerang_animation'
+
+    for _ in range(4):
+        _, _, _, _, info = env.step(action)
+        if info[anim_key] != 0:
+            return True
+    return False
+
+
+def run_weapon_test(savestate, start_x, start_y):
+    """BFS to collect all reachable tiles, then test weapons at each tile."""
+    env = retro.make(
+        game='Zelda-NES',
+        state=savestate,
+        inttype=retro.data.Integrations.CUSTOM_ONLY,
+    )
+
+    buttons = env.buttons
+    no_action = np.zeros(len(buttons), dtype=np.int8)
+
+    obs, info = env.reset()
+
+    # Max health, give equipment
+    env.data.set_value('hearts_and_containers', 0xFF)
+    env.data.set_value('partial_hearts', 0xFF)
+    env.data.set_value('sword', 1)       # Wood sword
+    env.data.set_value('bombs', 8)
+    env.data.set_value('regular_boomerang', 1)
+
+    # Position Link at the start tile
+    start_px = start_x * 8
+    start_py = start_y * 8 + GAMEPLAY_START_Y
+    env.data.set_value('link_x', start_px)
+    env.data.set_value('link_y', start_py)
+    env.data.set_value('link_grid_offset', 0)
+
+    initial_state = env.em.get_state()
+    info = sync_step(env, no_action)
+    env.em.set_state(initial_state)
+    info = sync_step(env, no_action)
+
+    actual_pos = Position(info['link_x'], info['link_y'])
+    actual_tile = actual_pos.tile_index
+    print(f"{BOLD}=== {savestate} (weapons) ==={RESET}")
+    print(f"  Level: {info['level']}, Location: 0x{info['location']:02X}")
+
+    initial_state = env.em.get_state()
+
+    # Phase 1: BFS to collect all reachable tiles with saved emulator states
+    start_tile = (actual_tile.x, actual_tile.y)
+    visited = {start_tile}
+    stack = [(start_tile, initial_state)]
+    tile_states = {start_tile: initial_state}
+
+    while stack:
+        tile, em_state = stack.pop()
+        for direction in CARDINAL_DIRS:
+            env.em.set_state(em_state)
+            info = sync_step(env, no_action)
+            moved, new_tile, new_room, _ = test_direction(env, buttons, direction, info)
+            if new_tile and not new_room and new_tile not in visited:
+                new_state = env.em.get_state()
+                visited.add(new_tile)
+                stack.append((new_tile, new_state))
+                tile_states[new_tile] = new_state
+
+    print(f"  Reachable tiles: {len(tile_states)}")
+
+    # Phase 2: Test weapons at each tile
+    bugs = []
+    passes = 0
+    skipped = 0
+    weapons = ['sword', 'bomb', 'boomerang']
+
+    for tile, em_state in sorted(tile_states.items()):
+        tx, ty = tile
+
+        # Quick check: if ALL weapons in ALL directions are blocked, the NES is in a
+        # non-gameplay state (e.g., cave transition with scroll_type=0xFF in debug states).
+        # Skip this tile rather than reporting false positives.
+        env.em.set_state(em_state)
+        info = sync_step(env, no_action)
+        env.data.set_value('sword', 1)
+        env.data.set_value('bombs', 8)
+        env.data.set_value('regular_boomerang', 1)
+        any_weapon_works = False
+        for d in CARDINAL_DIRS:
+            env.em.set_state(em_state)
+            sync_step(env, no_action)
+            env.data.set_value('sword', 1)
+            if test_weapon_at_tile(env, buttons, no_action, d, 'sword'):
+                any_weapon_works = True
+                break
+        if not any_weapon_works:
+            skipped += 1
+            print(f"  {YELLOW}SKIP{RESET} ({tx:2},{ty:2}) — NES blocks all weapons (transition state)")
+            continue
+
+        for direction in CARDINAL_DIRS:
+            # Get predictions
+            env.em.set_state(em_state)
+            info = sync_step(env, no_action)
+            game = make_game(env, info)
+            sword_dirs = set(game.link.get_sword_directions_allowed())
+            item_dirs = set(game.link.get_item_directions_allowed())
+            game.deactivate()
+
+            for weapon in weapons:
+                if weapon == 'sword':
+                    predicted = direction in sword_dirs
+                else:
+                    predicted = direction in item_dirs
+
+                # Test actual NES behavior
+                env.em.set_state(em_state)
+                info = sync_step(env, no_action)
+                # Give equipment (state may not have it)
+                env.data.set_value('sword', 1)
+                env.data.set_value('bombs', 8)
+                env.data.set_value('regular_boomerang', 1)
+
+                actual = test_weapon_at_tile(env, buttons, no_action, direction, weapon)
+
+                if actual and not predicted:
+                    pos = Position(info['link_x'], info['link_y'])
+                    bug = (f"FALSE NEG {weapon.upper()} at tile ({tx},{ty}) dir={direction.name}: "
+                           f"weapon WORKS but predicted=False [px=({pos.x},{pos.y})]")
+                    bugs.append(bug)
+                    print(f"  {RED}FAIL{RESET} ({tx:2},{ty:2}) {direction.name} "
+                          f"{weapon:10s}: works but MASKED  px=({pos.x},{pos.y})")
+                elif not actual and predicted:
+                    pos = Position(info['link_x'], info['link_y'])
+                    bug = (f"FALSE POS {weapon.upper()} at tile ({tx},{ty}) dir={direction.name}: "
+                           f"weapon BLOCKED but predicted=True [px=({pos.x},{pos.y})]")
+                    bugs.append(bug)
+                    print(f"  {RED}FAIL{RESET} ({tx:2},{ty:2}) {direction.name} "
+                          f"{weapon:10s}: blocked but UNMASKED  px=({pos.x},{pos.y})")
+                else:
+                    passes += 1
+
+    skipped_note = f", {YELLOW}{skipped} skipped{RESET}" if skipped else ""
+    print(f"  Weapon tests: {passes} pass, {RED}{len(bugs)} fail{RESET}{skipped_note}")
+    if bugs:
+        for i, bug in enumerate(bugs, 1):
+            print(f"    {i}. {RED}{bug}{RESET}")
+
+    env.close()
+    return bugs
+
+
 def run_walkability_test(savestate, start_x, start_y):
     """Main BFS walkability test. Returns list of bug strings."""
     env = retro.make(
@@ -288,23 +472,38 @@ def run_walkability_test(savestate, start_x, start_y):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Walk every reachable tile in a room and validate can_link_move masking."
+        description="Walk every reachable tile in a room and validate movement + weapon masking."
     )
     parser.add_argument('savestates', nargs='+', help='Name(s) of savestates to test')
     parser.add_argument('--start-x', type=int, default=10,
                         help='Starting tile X coordinate (default: 10)')
     parser.add_argument('--start-y', type=int, default=10,
                         help='Starting tile Y coordinate (default: 10)')
+    parser.add_argument('--weapons-only', action='store_true',
+                        help='Only test weapon masking, skip movement')
+    parser.add_argument('--movement-only', action='store_true',
+                        help='Only test movement masking, skip weapons')
     args = parser.parse_args()
 
     total_bugs = 0
     all_bugs = {}
+
     for savestate in args.savestates:
-        bugs = run_walkability_test(savestate, args.start_x, args.start_y)
-        if bugs:
-            all_bugs[savestate] = bugs
-        total_bugs += len(bugs)
-        print()
+        state_bugs = []
+
+        if not args.weapons_only:
+            bugs = run_walkability_test(savestate, args.start_x, args.start_y)
+            state_bugs.extend(bugs)
+            print()
+
+        if not args.movement_only:
+            bugs = run_weapon_test(savestate, args.start_x, args.start_y)
+            state_bugs.extend(bugs)
+            print()
+
+        if state_bugs:
+            all_bugs[savestate] = state_bugs
+        total_bugs += len(state_bugs)
 
     # Grand summary
     print(f"{BOLD}{'='*60}{RESET}")

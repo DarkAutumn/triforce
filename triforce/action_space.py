@@ -343,19 +343,35 @@ class ZeldaActionSpace(gym.Wrapper):
 
                 case ActionKind.BOMBS:
                     if link.bombs > 0:
-                        mask[index:index + 4] = True
+                        for direction in link.get_item_directions_allowed():
+                            mask[index + self._direction_to_index(direction)] = True
 
                 case ActionKind.ARROW:
-                    mask[index:index + 4] = True
+                    for direction in link.get_item_directions_allowed():
+                        mask[index + self._direction_to_index(direction)] = True
 
                 case ActionKind.WAND:
-                    mask[index:index + 4] = True
+                    for direction in link.get_item_directions_allowed():
+                        mask[index + self._direction_to_index(direction)] = True
 
                 case ActionKind.CANDLE:
-                    mask[index:index + 4] = True
+                    for direction in link.get_item_directions_allowed():
+                        mask[index + self._direction_to_index(direction)] = True
 
                 case ActionKind.BOOMERANG:
-                    mask[index:index + 8] = True
+                    item_dirs = set(link.get_item_directions_allowed())
+                    for direction in (Direction.N, Direction.S, Direction.W, Direction.E):
+                        if direction in item_dirs:
+                            mask[index + self._direction_to_index(direction)] = True
+                    # Diagonals: allow if both component cardinals are allowed
+                    for diag, (c1, c2) in {
+                        Direction.NW: (Direction.N, Direction.W),
+                        Direction.NE: (Direction.N, Direction.E),
+                        Direction.SW: (Direction.S, Direction.W),
+                        Direction.SE: (Direction.S, Direction.E),
+                    }.items():
+                        if c1 in item_dirs and c2 in item_dirs:
+                            mask[index + self._direction_to_index(diag)] = True
 
                 case ActionKind.WHISTLE:
                     mask[index] = True

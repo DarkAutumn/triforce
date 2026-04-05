@@ -227,40 +227,85 @@ class Link(ZeldaObject):
 
     @property
     def is_sword_screen_locked(self) -> bool:
-        """Returns True when Link is at the edge of the screen.  During this time he cannot use his weapons or
-        be harmed.  Note: The NES check is direction-dependent (only the facing axis is checked), but this
-        property conservatively returns True if ANY axis boundary is crossed."""
-        x, y = self.position
-        if self.game.level == 0:
-            return x < 0x07 or x > 0xe8 or y < 0x45 or y > 0xd5
+        """Returns True when Link is at the edge of the screen where ALL weapons are blocked.
 
-        # UW outer bounds from BorderBounds table: left=$17, right=$D9, up=$55, down=$C6
-        return x < 0x17 or x >= 0xd9 or y < 0x55 or y >= 0xc6
+        The NES checks both bounds on the facing-direction's axis (MaskInputInBorder).
+        E/W check both left and right X bounds; N/S check both up and down Y bounds.
+        This property returns True when no direction allows the sword."""
+        return not self.get_sword_directions_allowed()
 
     def get_sword_directions_allowed(self):
-        """Returns the directions that link can attack in.  E/W require X to be within horizontal outer bounds,
-        N/S require Y to be within vertical outer bounds."""
+        """Returns directions Link can swing the sword (A-button).
+
+        The NES outer BorderBounds check fires per-axis: facing E or W checks both
+        left AND right X bounds; facing N or S checks both up AND down Y bounds.
+        So E/W are always masked/unmasked together, and N/S together.
+
+        Empirical bounds determined by systematic NES testing."""
         x, y = self.position
         directions = []
 
         if self.game.level == 0:
-            # OW outer bounds: left=$07, right=$E9, up=$45, down=$D6
-            if 0x06 < x < 0xe9:
+            # OW outer: E/W need 8<=x<=239, N/S need 64<=y<=215
+            if 8 <= x <= 239:
                 directions.append(Direction.E)
                 directions.append(Direction.W)
-
-            if 0x44 < y < 0xd6:
-                directions.append(Direction.S)
+            if 64 <= y <= 215:
                 directions.append(Direction.N)
+                directions.append(Direction.S)
         else:
-            # UW outer bounds: left=$17, right=$D9, up=$55, down=$C6
-            if 0x16 < x < 0xd9:
+            # UW outer: E/W need 24<=x<=223, N/S need 80<=y<=199
+            if 24 <= x <= 223:
                 directions.append(Direction.E)
                 directions.append(Direction.W)
-
-            if 0x54 < y < 0xc6:
-                directions.append(Direction.S)
+            if 80 <= y <= 199:
                 directions.append(Direction.N)
+                directions.append(Direction.S)
+
+        return directions
+
+    def get_item_directions_allowed(self):
+        """Returns directions Link can use B-button items (bombs, boomerang, etc.).
+
+        Two independent checks determine if an item is blocked for a facing direction:
+        1. Inner BorderBounds: per-DIRECTION check (only the facing direction's bound fires)
+        2. Outer BorderBounds: per-AXIS check (both bounds on the axis fire)
+
+        An item direction is blocked if EITHER check fires. The inner bounds are the same
+        for OW and UW. Empirical bounds determined by systematic NES testing."""
+        x, y = self.position
+        directions = []
+
+        # Inner bounds (per-direction, same for OW and UW):
+        #   E blocked when x >= 216, W blocked when x <= 31
+        #   N blocked when y <= 79,  S blocked when y >= 192
+
+        if self.game.level == 0:
+            # OW outer (per-axis): X axis blocked when x<8 or x>239; Y axis blocked when y<64 or y>215
+            x_outer_ok = 8 <= x <= 239
+            y_outer_ok = 64 <= y <= 215
+
+            if x_outer_ok and x <= 215:   # E: outer X ok AND inner RIGHT ok
+                directions.append(Direction.E)
+            if x_outer_ok and x >= 32:    # W: outer X ok AND inner LEFT ok
+                directions.append(Direction.W)
+            if y_outer_ok and y >= 80:    # N: outer Y ok AND inner UP ok
+                directions.append(Direction.N)
+            if y_outer_ok and y <= 191:   # S: outer Y ok AND inner DOWN ok
+                directions.append(Direction.S)
+        else:
+            # UW outer (per-axis): X axis blocked when x<24 or x>223; Y axis blocked when y<80 or y>199
+            x_outer_ok = 24 <= x <= 223
+            y_outer_ok = 80 <= y <= 199
+
+            if x_outer_ok and x <= 215:
+                directions.append(Direction.E)
+            if x_outer_ok and x >= 32:
+                directions.append(Direction.W)
+            if y_outer_ok and y >= 80:
+                directions.append(Direction.N)
+            if y_outer_ok and y <= 191:
+                directions.append(Direction.S)
 
         return directions
 
