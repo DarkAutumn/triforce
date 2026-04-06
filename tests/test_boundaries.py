@@ -159,77 +159,57 @@ class TestBoundaryConstants:
     """Verify Python boundary values match assembly BorderBounds table."""
 
     def test_ow_is_sword_screen_locked(self):
-        """OW lock boundaries match assembly outer OW bounds."""
+        """OW: is_sword_screen_locked requires BOTH axes outside outer bounds.
+
+        Since E/W are paired and N/S are paired, locked requires:
+        x outside [8,239] AND y outside [64,215] simultaneously."""
         emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(emu)
         game = emu.game_state()
         link = game.link
         assert game.level == 0
 
-        y_center = 0x80
+        # Center: not locked
+        link.position = Position(0x78, 0x80)
+        assert not link.is_sword_screen_locked
 
-        # Left bound: $07
-        link.position = Position(0x06, y_center)
+        # At edges: only one axis out of bounds — not locked
+        link.position = Position(7, 0x80)   # X out, Y in
+        assert not link.is_sword_screen_locked
+        link.position = Position(0x78, 63)   # Y out, X in
+        assert not link.is_sword_screen_locked
+
+        # Both axes out of bounds — locked
+        link.position = Position(7, 63)
         assert link.is_sword_screen_locked
-        link.position = Position(0x07, y_center)
-        assert not link.is_sword_screen_locked
-
-        # Right bound: $E9
-        link.position = Position(0xE8, y_center)
-        assert not link.is_sword_screen_locked
-        link.position = Position(0xE9, y_center)
-        assert link.is_sword_screen_locked
-
-        # Up bound: $45
-        link.position = Position(0x78, 0x44)
-        assert link.is_sword_screen_locked
-        link.position = Position(0x78, 0x45)
-        assert not link.is_sword_screen_locked
-
-        # Down bound: $D6
-        link.position = Position(0x78, 0xD5)
-        assert not link.is_sword_screen_locked
-        link.position = Position(0x78, 0xD6)
+        link.position = Position(240, 216)
         assert link.is_sword_screen_locked
         emu.close()
 
     def test_uw_is_sword_screen_locked(self):
-        """UW lock boundaries match assembly outer UW bounds."""
+        """UW: same paired-axis logic — locked only when both axes out of bounds."""
         emu = ZeldaFixture("1_44e.state")
         _wait_for_gameplay(emu)
         game = emu.game_state()
         link = game.link
         assert game.level > 0
 
-        y_center = 0x80
-
-        # Left bound: $17
-        link.position = Position(0x16, y_center)
-        assert link.is_sword_screen_locked
-        link.position = Position(0x17, y_center)
+        link.position = Position(0x78, 0x80)
         assert not link.is_sword_screen_locked
 
-        # Right bound: $D9
-        link.position = Position(0xD8, y_center)
-        assert not link.is_sword_screen_locked
-        link.position = Position(0xD9, y_center)
-        assert link.is_sword_screen_locked
-
-        # Up bound: $55
-        link.position = Position(0x78, 0x54)
-        assert link.is_sword_screen_locked
-        link.position = Position(0x78, 0x55)
+        # One axis out: not locked
+        link.position = Position(23, 0x80)
         assert not link.is_sword_screen_locked
 
-        # Down bound: $C6
-        link.position = Position(0x78, 0xC5)
-        assert not link.is_sword_screen_locked
-        link.position = Position(0x78, 0xC6)
+        # Both axes out: locked
+        link.position = Position(23, 79)
         assert link.is_sword_screen_locked
         emu.close()
 
     def test_ow_sword_directions_allowed(self):
-        """OW directions match assembly outer OW bounds."""
+        """OW: E/W paired on X axis [8,239], N/S paired on Y axis [64,215].
+
+        Empirical outer bounds verified by systematic NES testing."""
         emu = ZeldaFixture("test_ow_full_health.state")
         _wait_for_gameplay(emu)
         game = emu.game_state()
@@ -240,49 +220,45 @@ class TestBoundaryConstants:
         dirs = link.get_sword_directions_allowed()
         assert set(dirs) == {Direction.E, Direction.W, Direction.N, Direction.S}
 
-        # At X=$07 (left edge, but still in bounds): E/W allowed
-        link.position = Position(0x07, 0x80)
+        # X axis: E/W paired, blocked when x < 8 or x > 239
+        link.position = Position(8, 0x80)  # Just inside left
         dirs = link.get_sword_directions_allowed()
         assert Direction.E in dirs and Direction.W in dirs
 
-        # At X=$06: E/W NOT allowed
-        link.position = Position(0x06, 0x80)
+        link.position = Position(7, 0x80)  # Outside left
         dirs = link.get_sword_directions_allowed()
         assert Direction.E not in dirs and Direction.W not in dirs
 
-        # At X=$E8 (right edge, still in bounds): E/W allowed
-        link.position = Position(0xE8, 0x80)
+        link.position = Position(239, 0x80)  # Just inside right
         dirs = link.get_sword_directions_allowed()
         assert Direction.E in dirs and Direction.W in dirs
 
-        # At X=$E9: E/W NOT allowed
-        link.position = Position(0xE9, 0x80)
+        link.position = Position(240, 0x80)  # Outside right
         dirs = link.get_sword_directions_allowed()
         assert Direction.E not in dirs and Direction.W not in dirs
 
-        # At Y=$45 (top edge, still in bounds): N/S allowed
-        link.position = Position(0x78, 0x45)
+        # Y axis: N/S paired, blocked when y < 64 or y > 215
+        link.position = Position(0x78, 64)  # Just inside top
         dirs = link.get_sword_directions_allowed()
         assert Direction.N in dirs and Direction.S in dirs
 
-        # At Y=$44: N/S NOT allowed
-        link.position = Position(0x78, 0x44)
+        link.position = Position(0x78, 63)  # Outside top
         dirs = link.get_sword_directions_allowed()
         assert Direction.N not in dirs and Direction.S not in dirs
 
-        # At Y=$D5 (bottom edge, still in bounds): N/S allowed
-        link.position = Position(0x78, 0xD5)
+        link.position = Position(0x78, 215)  # Just inside bottom
         dirs = link.get_sword_directions_allowed()
         assert Direction.N in dirs and Direction.S in dirs
 
-        # At Y=$D6: N/S NOT allowed
-        link.position = Position(0x78, 0xD6)
+        link.position = Position(0x78, 216)  # Outside bottom
         dirs = link.get_sword_directions_allowed()
         assert Direction.N not in dirs and Direction.S not in dirs
         emu.close()
 
     def test_uw_sword_directions_allowed(self):
-        """UW directions match assembly outer UW bounds."""
+        """UW: E/W paired on X axis [24,223], N/S paired on Y axis [80,199].
+
+        Empirical outer bounds verified by systematic NES testing."""
         emu = ZeldaFixture("1_44e.state")
         _wait_for_gameplay(emu)
         game = emu.game_state()
@@ -293,35 +269,37 @@ class TestBoundaryConstants:
         dirs = link.get_sword_directions_allowed()
         assert set(dirs) == {Direction.E, Direction.W, Direction.N, Direction.S}
 
-        # Left bound: $17
-        link.position = Position(0x17, 0x80)
+        # X axis: E/W paired
+        link.position = Position(24, 0x80)
         dirs = link.get_sword_directions_allowed()
         assert Direction.E in dirs and Direction.W in dirs
-        link.position = Position(0x16, 0x80)
+
+        link.position = Position(23, 0x80)
         dirs = link.get_sword_directions_allowed()
         assert Direction.E not in dirs and Direction.W not in dirs
 
-        # Right bound: $D9
-        link.position = Position(0xD8, 0x80)
+        link.position = Position(223, 0x80)
         dirs = link.get_sword_directions_allowed()
         assert Direction.E in dirs and Direction.W in dirs
-        link.position = Position(0xD9, 0x80)
+
+        link.position = Position(224, 0x80)
         dirs = link.get_sword_directions_allowed()
         assert Direction.E not in dirs and Direction.W not in dirs
 
-        # Up bound: $55
-        link.position = Position(0x78, 0x55)
+        # Y axis: N/S paired
+        link.position = Position(0x78, 80)
         dirs = link.get_sword_directions_allowed()
         assert Direction.N in dirs and Direction.S in dirs
-        link.position = Position(0x78, 0x54)
+
+        link.position = Position(0x78, 79)
         dirs = link.get_sword_directions_allowed()
         assert Direction.N not in dirs and Direction.S not in dirs
 
-        # Down bound: $C6
-        link.position = Position(0x78, 0xC5)
+        link.position = Position(0x78, 199)
         dirs = link.get_sword_directions_allowed()
         assert Direction.N in dirs and Direction.S in dirs
-        link.position = Position(0x78, 0xC6)
+
+        link.position = Position(0x78, 200)
         dirs = link.get_sword_directions_allowed()
         assert Direction.N not in dirs and Direction.S not in dirs
         emu.close()

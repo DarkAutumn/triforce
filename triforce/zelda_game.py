@@ -297,7 +297,7 @@ class ZeldaGame:
     _DOORWAY_REQUIRED_X = 0x78  # for N/S doorways
     _DOORWAY_REQUIRED_Y = 0x8D  # for E/W doorways
 
-    def can_link_move(self, direction):  # pylint: disable=too-many-return-statements
+    def can_link_move(self, direction):  # pylint: disable=too-many-return-statements,too-many-branches
         """Whether Link can move in the given direction from his current position.
 
         Replicates the NES Walker_Move flow (Z_07.asm:2600):
@@ -312,14 +312,10 @@ class ZeldaGame:
                                        door with key)
           4. Walker_CheckTileCollision — blocks on unwalkable tiles
 
-        The critical ordering is that CheckDoorway runs AFTER BoundByRoom.
-        Doorways sit right at the room boundary (e.g. east door at px=0xD0),
-        so BoundByRoom always fires there.  The NES resolves this by having
-        CheckDoorway restore the movement direction that BoundByRoom zeroed.
-
-        We replicate this by letting the tile/door checks handle both boundary
-        walls (unwalkable tiles → False) and boundary doorways (walkable tiles
-        → True) without needing BoundByRoom early-returns at all.
+        Overworld skips BoundByRoom entirely (Z_07.asm:2725 @SkipSubroom).
+        Instead, overworld uses screen edge bounds (PlayerScreenEdgeBounds,
+        Z_07.asm:2831): Up=$3D, Down=$DD, Left=$00, Right=$F0.  Movement to
+        a screen edge triggers a room transition and skips tile collision.
         """
         # When link_grid_offset != 0 the NES skips Walker_CheckTileCollision
         # entirely (Z_07.asm:2874), so movement is unrestricted.  This must be
@@ -347,23 +343,39 @@ class ZeldaGame:
 
         px, py = self.link.position
 
-        # --- BoundByRoom (Z_01.asm:3505) ---
-        # Enforces room boundaries in dungeons.  Skipped when already in a
-        # doorway (DoorwayDir != 0).  Room bounds are loaded from
+        # --- Overworld screen edge handling (Z_07.asm:2725, 2831) ---
+        # BoundByRoom is skipped for overworld (@SkipSubroom).  Instead, the
+        # PlayerScreenEdgeBounds check triggers room transitions at screen edges.
+        # At the edge itself, Link cannot move further.  One step before the
+        # edge, tile collision is bypassed (the transition takes priority).
+        if self.level == 0:
+            at_edge, approaching_edge = self._check_ow_screen_edge(px, py, direction)
+            if at_edge:
+                return False
+            if approaching_edge:
+                return True
+
+        # --- Screen edge limits (PlayerScreenEdgeBounds) ---
+        # The N screen edge ($3D = 61) is a hard limit at all levels: dungeon
+        # N corridors terminate here without a room transition.  S/E/W edges
+        # trigger room transitions even in dungeons (detected via tile checks
+        # and MapLocation changes downstream).
+        if self.level > 0:
+            if direction == Direction.N and py <= self._OW_EDGE_N:
+                return False
+
+        # --- BoundByRoom for dungeons (Z_01.asm:3505) ---
+        # Enforces room boundaries in underworld rooms.  Bounds from
         # ObjectRoomBoundsUW (Z_05.asm:6449): L=0x21, R=0xD0, T=0x5E, B=0xBD.
-        #
-        # IMPORTANT: In the NES, BoundByRoom zeros the movement direction but
-        # does NOT prevent CheckDoorway from running afterward.  CheckDoorway
-        # (Z_05.asm:3757) can restore the direction if Link is at a passable
-        # doorway, effectively overriding BoundByRoom.  We must NOT early-return
-        # here — the tile/door checks below handle both boundary walls (tiles
-        # are unwalkable → return False) and boundary doorways (tiles are
-        # walkable → return True) correctly without needing BoundByRoom at all.
-        # The BoundByRoom pixel thresholds are documented here for reference:
-        #   W: px < 0x21,  E: px >= 0xD0,  N: py < 0x5E,  S: py >= 0xBD
+        # CheckDoorway (Z_05.asm:3757) overrides BoundByRoom when Link is at a
+        # passable doorway coordinate.
+        if self.level > 0 and doorway_dir == 0:
+            if self._at_dungeon_bound(px, py, direction):
+                if self._can_pass_doorway(px, py, direction):
+                    return True
+                return False
 
         # --- Walker_CheckTileCollision (Z_07.asm:2857) ---
-        # Walkable tiles at the boundary indicate an open doorway corridor.
         if self.room.can_link_move_from(px, py, direction):
             return True
 
@@ -379,13 +391,89 @@ class ZeldaGame:
         # CheckDoorway opens a locked door if Link has a key, before
         # Walker_CheckTileCollision runs.  CheckDoorway only fires when Link
         # is in the doorway corridor — perpendicular coordinate must match.
-        # This also handles the BoundByRoom case: a locked door sits at the
-        # room boundary, so BoundByRoom would block, but CheckDoorway overrides.
         if self.is_door_locked(direction) and (self.link.keys > 0 or self.link.magic_key):
             if direction in (Direction.N, Direction.S) and px == self._DOORWAY_REQUIRED_X:
                 return True
             if direction in (Direction.E, Direction.W) and py == self._DOORWAY_REQUIRED_Y:
                 return True
+
+        return False
+
+    # --- Overworld screen edge bounds (PlayerScreenEdgeBounds, Z_07.asm:2831) ---
+    _OW_EDGE_N = 0x3D   # Y = 61
+    _OW_EDGE_S = 0xDD   # Y = 221
+    _OW_EDGE_W = 0x00   # X = 0
+    _OW_EDGE_E = 0xF0   # X = 240
+
+    def _check_ow_screen_edge(self, px, py, direction):
+        """Check overworld screen edge for movement masking.
+
+        Returns (at_edge, approaching_edge):
+          at_edge=True: Link is at the screen boundary, can't move further.
+          approaching_edge=True: movement would bring Link to the edge, triggering
+              a room transition.  Tile collision is skipped in this case.
+
+        Only N blocks at the edge — at py=$3D the NES does not scroll, it just
+        blocks.  For S/W/E the OOB tile check naturally returns walkable, so no
+        special at_edge handling is needed (the transition fires and Link moves).
+
+        The "approaching" skip is needed for N and W, where one step before the
+        edge has in-bounds tiles that may be unwalkable but the NES skips tile
+        collision to allow the screen transition.
+        """
+        match direction:
+            case Direction.N:
+                at_edge = py <= self._OW_EDGE_N
+                approaching = not at_edge and py - 8 <= self._OW_EDGE_N
+                return (at_edge, approaching)
+            case Direction.W:
+                # At px=0, the tile check uses OOB column → walkable, so no block.
+                # At px=8 (approaching), skip tile check (NES allows transition).
+                approaching = px > self._OW_EDGE_W and px - 8 <= self._OW_EDGE_W
+                return (False, approaching)
+            case _:
+                return (False, False)
+
+    # --- Dungeon room bounds (ObjectRoomBoundsUW, Z_05.asm:6449) ---
+    _UW_BOUND_L = 0x21   # px < 33 → West blocked
+    _UW_BOUND_R = 0xD0   # px >= 208 → East blocked
+    _UW_BOUND_T = 0x5E   # py < 94 → North blocked
+    _UW_BOUND_B = 0xBD   # py >= 189 → South blocked
+
+    def _at_dungeon_bound(self, px, py, direction):
+        """Check if Link is at the dungeon room boundary for the given direction."""
+        match direction:
+            case Direction.N: return py < self._UW_BOUND_T
+            case Direction.S: return py >= self._UW_BOUND_B
+            case Direction.W: return px < self._UW_BOUND_L
+            case Direction.E: return px >= self._UW_BOUND_R
+        return False
+
+    def _can_pass_doorway(self, px, py, direction):
+        """Check if Link can pass through a doorway at the boundary (CheckDoorway override).
+
+        NES CheckDoorway (Z_05.asm:3757) requires:
+          1. Link's perpendicular coordinate matches the doorway position
+             (N/S: px == $78, E/W: py == $8D)
+          2. The door is passable: either already open (tile < threshold)
+             or locked with a key available (NES unlocks the door as Link
+             approaches, before BoundByRoom fires).
+        """
+        # Check perpendicular coordinate
+        if direction in (Direction.N, Direction.S):
+            if px != self._DOORWAY_REQUIRED_X:
+                return False
+        elif direction in (Direction.E, Direction.W):
+            if py != self._DOORWAY_REQUIRED_Y:
+                return False
+
+        # Check door tile is currently walkable (open)
+        if self.room.is_door_tile_walkable(direction):
+            return True
+
+        # Locked door with key — NES opens it as Link approaches
+        if self.is_door_locked(direction) and (self.link.keys > 0 or self.link.magic_key):
+            return True
 
         return False
 

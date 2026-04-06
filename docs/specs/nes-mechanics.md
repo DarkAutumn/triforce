@@ -148,10 +148,32 @@ Full health (NES standard): `filled = containers - 1`, `partial = $FF`.
 | Inner | $BE | $54 | $D1 | $1F |
 
 `Link_FilterInput` calls `MaskInputInBorder` twice:
-1. Inner bounds + mask $80 → keeps A button, blocks movement
+1. Inner bounds + mask $80 → keeps A button, blocks B and movement
 2. Outer bounds + mask $00 → blocks everything including A button
 
-Only the **outer** bounds block the sword.  The inner bounds still allow attacks.
+### Empirical Effective Bounds
+
+The documented ROM values above don't map directly to pixel coordinates due to internal
+offsets in the NES comparison code.  The following were determined by systematic testing:
+
+**Inner bounds (B-button blocked: bombs, boomerang, etc.) — per-DIRECTION check:**
+Only the facing direction's bound fires.  Same values for OW and UW.
+
+| Facing | Blocked when |
+|--------|-------------|
+| N (Up) | y ≤ 79 |
+| S (Down) | y ≥ 192 |
+| E (Right) | x ≥ 216 |
+| W (Left) | x ≤ 31 |
+
+**Outer bounds (everything blocked: sword, items) — per-AXIS check:**
+Both bounds on the facing direction's axis fire (e.g., facing E or W checks both
+left AND right X bounds).  E/W are always masked/unmasked together; N/S together.
+
+| Axis | OW blocked when | UW blocked when |
+|------|----------------|----------------|
+| X (E/W) | x < 8 or x > 239 | x < 24 or x > 223 |
+| Y (N/S) | y < 64 or y > 215 | y < 80 or y > 199 |
 
 ## Direction Encoding
 

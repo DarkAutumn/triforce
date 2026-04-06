@@ -124,6 +124,7 @@ class Room:
             Down:  X = ObjX,      Y = base + 8     (below feet)
         Tile row = (hotspot_Y - $40) >> 3,  tile col = hotspot_X >> 3.
         Vertical directions check two columns: col and col+1 (Z_07.asm:2264-2275).
+        The NES uses the HIGHER of the two tile values for the walkability check.
 
         Always performs the tile check (conservative). The NES skips checks when
         ObjGridOffset != 0 (Z_07.asm:2874); that bypass is handled at the
@@ -139,11 +140,30 @@ class Room:
             case Direction.N:
                 row = (py - 61) // 8  # (base_Y - 8 - 64) = py + 3 - 64 = py - 61
                 col = px // 8
-                return self.is_tile_walkable(col, row) and self.is_tile_walkable(col + 1, row)
+                return self._is_vertical_walkable(col, row)
             case Direction.S:
                 row = (py - 45) // 8  # (base_Y + 8 - 64) = py + 19 - 64 = py - 45
                 col = px // 8
-                return self.is_tile_walkable(col, row) and self.is_tile_walkable(col + 1, row)
+                return self._is_vertical_walkable(col, row)
+
+    def _is_vertical_walkable(self, col, row):
+        """NES vertical movement checks two columns and uses the HIGHER tile value.
+
+        The NES reads tiles at (col, row) and (col+1, row), takes the max value,
+        then applies WalkableTiles substitution and threshold comparison to the max
+        (Z_07.asm:2264-2275).  This means if the higher tile is a walkable override
+        (e.g. 0xDF), the entire pair is treated as walkable.
+        """
+        if row < 0 or row >= self.tiles.shape[1]:
+            return True
+        if col < 0 or col >= self.tiles.shape[0] or col + 1 >= self.tiles.shape[0]:
+            return True
+        if (col, row) in self._corridor_tiles or (col + 1, row) in self._corridor_tiles:
+            return True
+        val = max(int(self.tiles[col, row]), int(self.tiles[col + 1, row]))
+        if self._is_overworld and val in OW_WALKABLE_OVERRIDES:
+            return True
+        return val < self._threshold
 
     def is_cave_entry_direction(self, px, py, direction):
         """Check if moving in direction from (px, py) would collide with a cave entry tile.
@@ -297,6 +317,20 @@ class Room:
             case Direction.E:
                 return TileIndex(self.tiles.shape[0] - 1, EAST_DOOR_TILE[1])
         return None
+
+    def is_door_tile_walkable(self, direction):
+        """Returns whether the tile at the door position in the given direction is walkable.
+
+        This checks the raw tile value against the walkability threshold — it returns True
+        when the door opening has walkable tiles, regardless of locked/barred status.
+        """
+        door_tile_pos = {
+            Direction.N: NORTH_DOOR_TILE,
+            Direction.S: SOUTH_DOOR_TILE,
+            Direction.E: EAST_DOOR_TILE,
+            Direction.W: WEST_DOOR_TILE,
+        }[direction]
+        return self._is_raw_tile_walkable(*door_tile_pos)
 
     def is_door_locked(self, direction : Direction, fresh_tiles):
         """Returns whether the door in a particular direction is locked."""
