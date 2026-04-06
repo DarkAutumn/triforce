@@ -33,6 +33,13 @@ class TrainingCallback:
         """
         return None
 
+    def on_conditional_start(self, parent_scenario, child_scenario, iterations,
+                             exit_criteria=None, exit_threshold=None):
+        """Called when a conditional remediation scenario is triggered during weighted training."""
+
+    def on_conditional_end(self, child_scenario):
+        """Called when a conditional remediation scenario finishes."""
+
     def on_metrics(self, metrics, iteration, total_iterations):
         """Called at each metric reporting interval with collected metrics."""
 

@@ -6,12 +6,14 @@ Tests:
 - WeightedScenarioSelector deficit-based scenario selection
 - Backward compatibility of existing sequential circuits
 - MetricTracker per-scenario buffering in weighted mode
+- ConditionalTrigger schema and validation
+- _ConditionalMonitor trigger detection and cooldown
 """
 
 import pytest
 
 from triforce.scenario_wrapper import (
-    ExitCriteria, TrainingCircuitEntry, TrainingCircuitDefinition,
+    ConditionalTrigger, ExitCriteria, TrainingCircuitEntry, TrainingCircuitDefinition,
     WeightedScenarioSelector, TrainingScenarioDefinition,
 )
 from triforce.metrics import MetricTracker
@@ -218,3 +220,183 @@ class TestMetricTrackerWeighted:
 
         result = MetricTracker.get_metrics_and_clear()
         assert 'full-game' in result or 'dungeon1' in result
+
+
+# ---------------------------------------------------------------------------
+# ConditionalTrigger schema and validation
+# ---------------------------------------------------------------------------
+class TestConditionalTrigger:
+    """Verify ConditionalTrigger model and circuit validation."""
+
+    def test_basic_parsing(self):
+        ct = ConditionalTrigger(metric='endings/failure-wallmastered', threshold=0.5)
+        assert ct.metric == 'endings/failure-wallmastered'
+        assert ct.threshold == 0.5
+        assert ct.cooldown == 0  # default
+
+    def test_with_cooldown(self):
+        ct = ConditionalTrigger(metric='endings/failure-wallmastered',
+                                threshold=0.5, cooldown=100000)
+        assert ct.cooldown == 100000
+
+    def test_circuit_entry_with_condition(self):
+        entry = TrainingCircuitEntry(**{
+            'scenario': 'dungeon1-wallmaster',
+            'iterations': 250000,
+            'exit-criteria': {'metric': 'success-rate', 'threshold': 0.8},
+            'condition': {'metric': 'endings/failure-wallmastered',
+                          'threshold': 0.5, 'cooldown': 100000},
+        })
+        assert entry.condition is not None
+        assert entry.condition.metric == 'endings/failure-wallmastered'
+        assert entry.condition.threshold == 0.5
+        assert entry.condition.cooldown == 100000
+        assert entry.weight is None
+
+    def test_conditional_entry_without_weight_in_weighted_circuit(self):
+        """Conditional entries in weighted circuits must not have a weight."""
+        c = TrainingCircuitDefinition.get('dungeon1-circuit')
+        assert c is not None
+        assert c.kind == 'weighted'
+        conditional = [e for e in c.scenarios if e.condition is not None]
+        assert len(conditional) == 1
+        assert conditional[0].weight is None
+        assert conditional[0].scenario == 'dungeon1-wallmaster-finite-bombs'
+
+    def test_weighted_entry_with_condition_rejected(self):
+        """An entry with both weight and condition should be rejected."""
+        from pydantic import ValidationError  # pylint: disable=import-outside-toplevel
+        with pytest.raises(ValidationError, match="must not have a weight"):
+            TrainingCircuitDefinition(**{
+                'name': 'test',
+                'description': 'test',
+                'kind': 'weighted',
+                'scenarios': [
+                    {'scenario': 'full-game', 'weight': 90},
+                    {'scenario': 'dungeon1', 'weight': 10,
+                     'condition': {'metric': 'x', 'threshold': 0.5}},
+                ],
+            })
+
+    def test_condition_in_sequential_rejected(self):
+        """Conditions should be rejected in sequential circuits."""
+        from pydantic import ValidationError  # pylint: disable=import-outside-toplevel
+        with pytest.raises(ValidationError, match="only weighted circuits support conditions"):
+            TrainingCircuitDefinition(**{
+                'name': 'test',
+                'description': 'test',
+                'kind': 'sequential',
+                'scenarios': [
+                    {'scenario': 'full-game',
+                     'condition': {'metric': 'x', 'threshold': 0.5}},
+                ],
+            })
+
+    def test_weighted_entry_without_weight_and_without_condition_rejected(self):
+        """Weighted entries without condition must have a weight."""
+        from pydantic import ValidationError  # pylint: disable=import-outside-toplevel
+        with pytest.raises(ValidationError, match="must have a weight"):
+            TrainingCircuitDefinition(**{
+                'name': 'test',
+                'description': 'test',
+                'kind': 'weighted',
+                'scenarios': [
+                    {'scenario': 'full-game'},
+                ],
+            })
+
+
+# ---------------------------------------------------------------------------
+# _ConditionalMonitor trigger detection and cooldown
+# ---------------------------------------------------------------------------
+class TestConditionalMonitor:
+    """Verify conditional trigger detection and cooldown logic."""
+
+    def _make_monitor(self, threshold=0.5, cooldown=0):
+        # Import here to avoid circular imports at module level
+        from train import _ConditionalMonitor  # pylint: disable=import-outside-toplevel
+        entry = TrainingCircuitEntry(**{
+            'scenario': 'wallmaster-fix',
+            'iterations': 250000,
+            'exit-criteria': {'metric': 'success-rate', 'threshold': 0.8},
+            'condition': {'metric': 'endings/failure-wallmastered',
+                          'threshold': threshold, 'cooldown': cooldown},
+        })
+        return _ConditionalMonitor(inner=None, conditional_entries=[entry])
+
+    def test_no_trigger_below_threshold(self):
+        monitor = self._make_monitor(threshold=0.5)
+        monitor.on_progress(1000, 10000)
+        monitor.on_metrics({'endings/failure-wallmastered': 0.3}, 1000, 10000)
+        assert monitor.triggered_entry is None
+
+    def test_triggers_at_threshold(self):
+        monitor = self._make_monitor(threshold=0.5)
+        monitor.on_progress(1000, 10000)
+        monitor.on_metrics({'endings/failure-wallmastered': 0.5}, 1000, 10000)
+        assert monitor.triggered_entry is not None
+        assert monitor.triggered_entry.scenario == 'wallmaster-fix'
+
+    def test_triggers_above_threshold(self):
+        monitor = self._make_monitor(threshold=0.5)
+        monitor.on_progress(1000, 10000)
+        monitor.on_metrics({'endings/failure-wallmastered': 0.8}, 1000, 10000)
+        assert monitor.triggered_entry is not None
+
+    def test_check_pause_returns_false_when_triggered(self):
+        monitor = self._make_monitor(threshold=0.5)
+        assert monitor.check_pause() is True
+        monitor.on_progress(1000, 10000)
+        monitor.on_metrics({'endings/failure-wallmastered': 0.6}, 1000, 10000)
+        assert monitor.check_pause() is False
+
+    def test_clear_trigger(self):
+        monitor = self._make_monitor(threshold=0.5)
+        monitor.on_progress(1000, 10000)
+        monitor.on_metrics({'endings/failure-wallmastered': 0.6}, 1000, 10000)
+        assert monitor.triggered_entry is not None
+        monitor.clear_trigger()
+        assert monitor.triggered_entry is None
+        assert monitor.check_pause() is True
+
+    def test_cooldown_prevents_retrigger(self):
+        monitor = self._make_monitor(threshold=0.5, cooldown=50000)
+        # First trigger (no cooldown at startup)
+        monitor.on_progress(1000, 100000)
+        monitor.on_metrics({'endings/failure-wallmastered': 0.6}, 1000, 100000)
+        assert monitor.triggered_entry is not None
+        monitor.clear_trigger()
+
+        # Before cooldown expires — should not trigger
+        monitor.on_progress(10000, 100000)
+        monitor.on_metrics({'endings/failure-wallmastered': 0.9}, 11000, 100000)
+        assert monitor.triggered_entry is None
+
+        # After cooldown expires — should trigger again
+        monitor.on_progress(50000, 100000)
+        monitor.on_metrics({'endings/failure-wallmastered': 0.6}, 61000, 100000)
+        assert monitor.triggered_entry is not None
+
+    def test_no_cooldown_at_startup(self):
+        """Conditions should be able to trigger immediately at circuit startup."""
+        monitor = self._make_monitor(threshold=0.5, cooldown=100000)
+        # Initialize cooldown to cooldown value so it can trigger immediately
+        monitor.on_metrics({'endings/failure-wallmastered': 0.7}, 0, 100000)
+        assert monitor.triggered_entry is not None
+
+    def test_trigger_count_increments(self):
+        monitor = self._make_monitor(threshold=0.5, cooldown=0)
+        monitor.on_progress(1000, 100000)
+        monitor.on_metrics({'endings/failure-wallmastered': 0.6}, 1000, 100000)
+        assert monitor.trigger_counts[0] == 1
+        monitor.clear_trigger()
+
+        monitor.on_progress(1000, 100000)
+        monitor.on_metrics({'endings/failure-wallmastered': 0.7}, 2000, 100000)
+        assert monitor.trigger_counts[0] == 2
+
+    def test_missing_metric_does_not_trigger(self):
+        monitor = self._make_monitor(threshold=0.5)
+        monitor.on_progress(1000, 10000)
+        monitor.on_metrics({'success-rate': 0.9}, 1000, 10000)
+        assert monitor.triggered_entry is None

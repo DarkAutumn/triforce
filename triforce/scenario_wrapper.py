@@ -4,7 +4,7 @@ from collections import deque
 import gzip
 import os
 from typing import Deque, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 import gymnasium as gym
 import stable_retro as retro
 import torch
@@ -101,6 +101,12 @@ class ExitCriteria(BaseModel):
     metric : str
     threshold : float
 
+class ConditionalTrigger(BaseModel):
+    """Condition that triggers a remediation scenario during weighted training."""
+    metric : str
+    threshold : float
+    cooldown : int = 0
+
 class TrainingCircuitEntry(BaseModel):
     """An entry in a training circuit."""
     model_config = ConfigDict(populate_by_name=True)
@@ -110,6 +116,7 @@ class TrainingCircuitEntry(BaseModel):
     iterations : Optional[int] = None
     exit_criteria : Optional[ExitCriteria] = Field(None, alias='exit-criteria')
     weight : Optional[float] = None
+    condition : Optional[ConditionalTrigger] = None
 
 class TrainingCircuitDefinition(BaseModel):
     """A training circuit."""
@@ -125,6 +132,31 @@ class TrainingCircuitDefinition(BaseModel):
         if value not in ('sequential', 'weighted'):
             raise ValueError(f"Unknown circuit kind '{value}', must be 'sequential' or 'weighted'")
         return value
+
+    @model_validator(mode='after')
+    def validate_entries(self):
+        """Validates weight/condition fields match circuit kind."""
+        if self.kind == 'weighted':
+            for entry in self.scenarios:
+                name = entry.scenario or entry.circuit
+                if entry.condition is not None:
+                    if entry.weight is not None:
+                        raise ValueError(f"Weighted circuit '{self.name}' conditional "
+                                         f"entry '{name}' must not have a weight")
+                elif entry.weight is None:
+                    raise ValueError(f"Weighted circuit '{self.name}' entry "
+                                     f"'{name}' must have a weight")
+        else:
+            for entry in self.scenarios:
+                name = entry.scenario or entry.circuit
+                if entry.weight is not None:
+                    raise ValueError(f"Sequential circuit '{self.name}' entry "
+                                     f"'{name}' must not have a weight")
+                if entry.condition is not None:
+                    raise ValueError(f"Sequential circuit '{self.name}' entry "
+                                     f"'{name}' must not have a condition "
+                                     f"(only weighted circuits support conditions)")
+        return self
 
     @staticmethod
     def _load_circuits():
@@ -143,20 +175,6 @@ class TrainingCircuitDefinition(BaseModel):
                     if not entry.scenario and not entry.circuit:
                         raise ValueError(f"Circuit '{circuit.name}' entry must have "
                                          f"either 'scenario' or 'circuit'")
-
-                # Validate weight fields match circuit kind
-                if circuit.kind == 'weighted':
-                    for entry in circuit.scenarios:
-                        if entry.weight is None:
-                            name = entry.scenario or entry.circuit
-                            raise ValueError(f"Weighted circuit '{circuit.name}' entry "
-                                             f"'{name}' must have a weight")
-                else:
-                    for entry in circuit.scenarios:
-                        if entry.weight is not None:
-                            name = entry.scenario or entry.circuit
-                            raise ValueError(f"Sequential circuit '{circuit.name}' entry "
-                                             f"'{name}' must not have a weight")
 
                 circuits[circuit.name] = circuit
 

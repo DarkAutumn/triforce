@@ -142,6 +142,19 @@ class ProfilingCallback(TrainingCallback):
         if self._inner and hasattr(self._inner, 'on_circuit_start'):
             self._inner.on_circuit_start(scenarios)
 
+    def on_conditional_start(self, parent_scenario, child_scenario, iterations,
+                             exit_criteria=None, exit_threshold=None):
+        """Delegate conditional start to inner callback."""
+        if self._inner:
+            self._inner.on_conditional_start(parent_scenario, child_scenario, iterations,
+                                             exit_criteria=exit_criteria,
+                                             exit_threshold=exit_threshold)
+
+    def on_conditional_end(self, child_scenario):
+        """Delegate conditional end to inner callback."""
+        if self._inner:
+            self._inner.on_conditional_end(child_scenario)
+
 
 class _SubCircuitCallback:
     """Wrapper that forwards training events but suppresses circuit/scenario display events.
@@ -176,6 +189,17 @@ class _SubCircuitCallback:
 
     def on_scenario_end(self, scenario_name):
         """Suppressed — sub-circuit must not mark parent scenarios as complete."""
+
+    def on_conditional_start(self, parent_scenario, child_scenario, iterations,
+                             exit_criteria=None, exit_threshold=None):
+        """Forward conditional events to the parent display."""
+        self._inner.on_conditional_start(parent_scenario, child_scenario, iterations,
+                                         exit_criteria=exit_criteria,
+                                         exit_threshold=exit_threshold)
+
+    def on_conditional_end(self, child_scenario):
+        """Forward conditional end to the parent display."""
+        self._inner.on_conditional_end(child_scenario)
 
     def get_completion_info(self, scenario_name):
         """Delegate to parent — completion info is tracked at the display level."""
@@ -277,6 +301,16 @@ class TrainingDisplay(TrainingCallback):
         self._stop_requested = False
         self._last_refresh_time = 0.0
         self._circuit_start_time = None
+
+        # Conditional run tracking: list of dicts with keys:
+        #   parent, child, steps, total, completed, info, start_time
+        self._conditional_runs = []
+        self._active_conditional = None  # index into _conditional_runs
+        self._saved_weighted_steps = 0
+        self._saved_weighted_total = 0
+        self._saved_exit_criteria = None
+        self._saved_exit_threshold = None
+        self._saved_exit_criteria_scenario = None
 
         # Keyboard listener
         self._keyboard = _KeyboardListener(self._on_key)
@@ -422,6 +456,93 @@ class TrainingDisplay(TrainingCallback):
         self._prev_optimize_stats = {}
         self._refresh(force=True)
 
+    def on_conditional_start(self, parent_scenario, child_scenario, iterations,
+                             exit_criteria=None, exit_threshold=None):
+        """Track a conditional remediation scenario triggered during weighted training."""
+        # Save the parent weighted scenario's state so we can restore it after
+        self._saved_weighted_steps = self._current_steps
+        self._saved_weighted_total = self._current_total
+        self._saved_exit_criteria = self._exit_criteria
+        self._saved_exit_threshold = self._exit_threshold
+        self._saved_exit_criteria_scenario = self._exit_criteria_scenario
+
+        run = {
+            'parent': parent_scenario,
+            'child': child_scenario,
+            'steps': 0,
+            'total': iterations,
+            'completed': False,
+            'info': None,
+            'start_time': time.monotonic(),
+        }
+        self._conditional_runs.append(run)
+        self._active_conditional = len(self._conditional_runs) - 1
+
+        # Set up exit criteria/tensorboard for the conditional scenario
+        self._exit_criteria = exit_criteria
+        self._exit_threshold = exit_threshold
+        self._exit_criteria_scenario = None
+        self._current_steps = 0
+        self._current_total = iterations
+        self._scenario_start_time = time.monotonic()
+        self._game_metrics = {}
+        self._prev_game_metrics = {}
+        self._optimize_stats = {}
+        self._prev_optimize_stats = {}
+
+        if self._tensorboard:
+            self._tensorboard.close()
+        scenario_log_dir = os.path.join(self._log_dir, child_scenario)
+        os.makedirs(scenario_log_dir, exist_ok=True)
+        self._tensorboard = SummaryWriter(scenario_log_dir)
+        self._refresh(force=True)
+
+    def on_conditional_end(self, child_scenario):
+        """Mark a conditional remediation scenario as complete."""
+        if self._active_conditional is not None:
+            run = self._conditional_runs[self._active_conditional]
+            run['completed'] = True
+            run['steps'] = self._current_steps
+            duration = time.monotonic() - run['start_time']
+
+            metric_value = None
+            if self._exit_criteria:
+                metric_value = self._game_metrics.get(self._exit_criteria)
+            met = (metric_value is not None and self._exit_threshold is not None
+                   and metric_value >= self._exit_threshold)
+            run['info'] = {
+                'metric': self._exit_criteria,
+                'threshold': self._exit_threshold,
+                'value': metric_value,
+                'met': met,
+                'steps': self._current_steps,
+                'total': run['total'],
+                'duration': duration,
+            }
+            self._active_conditional = None
+
+        # Restore the parent weighted scenario's state
+        self._current_steps = getattr(self, '_saved_weighted_steps', 0)
+        self._current_total = getattr(self, '_saved_weighted_total', 0)
+        self._exit_criteria = getattr(self, '_saved_exit_criteria', None)
+        self._exit_threshold = getattr(self, '_saved_exit_threshold', None)
+        self._exit_criteria_scenario = getattr(self, '_saved_exit_criteria_scenario', None)
+
+        # Restore tensorboard for the weighted scenario
+        if self._tensorboard:
+            self._tensorboard.close()
+        if self._active_index >= 0:
+            scenario_name = self._scenarios[self._active_index][0]
+            scenario_log_dir = os.path.join(self._log_dir, scenario_name)
+            os.makedirs(scenario_log_dir, exist_ok=True)
+            self._tensorboard = SummaryWriter(scenario_log_dir)
+
+        self._game_metrics = {}
+        self._prev_game_metrics = {}
+        self._optimize_stats = {}
+        self._prev_optimize_stats = {}
+        self._refresh(force=True)
+
     def on_scenario_resumed(self, scenario_name, history_entry):
         """Mark a scenario as completed from loaded training history (for --resume display)."""
         self._active_index = next(
@@ -454,7 +575,12 @@ class TrainingDisplay(TrainingCallback):
     def on_progress(self, steps, total_steps):
         self._current_steps += steps
         self._current_total = total_steps
-        if self._active_index >= 0:
+
+        # Update the active conditional run's steps if one is active
+        if self._active_conditional is not None:
+            run = self._conditional_runs[self._active_conditional]
+            run['steps'] = self._current_steps
+        elif self._active_index >= 0:
             name = self._scenarios[self._active_index][0]
             self._scenario_steps[name] = self._current_steps
             self._scenario_total[name] = total_steps
@@ -563,6 +689,48 @@ class TrainingDisplay(TrainingCallback):
 
         return line
 
+    def _render_conditional_run(self, run):
+        """Render a conditional run entry with ↳ prefix."""
+        child = run['child']
+        if run['completed']:
+            info = run.get('info', {})
+            line = Text("    ↳ ✔ ", style="green")
+            line.append(child.ljust(max(self._name_width - 4, 0)), style="green")
+
+            dur = info.get('duration', 0)
+            line.append(f"  {self._format_duration(dur):>7}", style="dim")
+
+            steps = info.get('steps', 0)
+            total = info.get('total', 0)
+            line.append(f"  {steps:>10,}", style="cyan")
+            line.append(" of ", style="white")
+            line.append(f"{total:>10,}", style="cyan")
+            line.append(" steps", style="white")
+
+            metric_name = info.get('metric')
+            metric_val = info.get('value')
+            if metric_name is not None and metric_val is not None:
+                met = info.get('met', False)
+                style = "white" if met else "red"
+                line.append(f"  {metric_name}: ", style="dim")
+                line.append(f"{metric_val:.4f}", style=style)
+        else:
+            steps = run['steps']
+            total = run['total']
+            pct = (steps / total * 100) if total > 0 else 0
+            filled = int(BAR_WIDTH * min(steps, total) / total) if total > 0 else 0
+            bar_str = BAR_FILL * filled + BAR_EMPTY * (BAR_WIDTH - filled)
+
+            padded = child.ljust(max(self._name_width - 4, 0))
+            line = Text(f"    ↳ {padded}  [")
+            line.append(bar_str[:filled], style="green")
+            line.append(bar_str[filled:])
+            line.append(f"] {pct:5.1f}%")
+            if total > 0:
+                line.append(f"  ({steps:,} / {total:,})")
+
+        return line
+
     def _render(self):
         parts = []
         parts.append(Text(""))
@@ -577,6 +745,12 @@ class TrainingDisplay(TrainingCallback):
             else:
                 total = self._scenario_total.get(name, 0)
                 parts.append(self._render_bar(name, 0, total, active=False))
+
+            # Render conditional runs that belong to this scenario
+            for run in self._conditional_runs:
+                if run['parent'] != name:
+                    continue
+                parts.append(self._render_conditional_run(run))
 
         # Total progress bar with ETA
         total_done = self._total_spent + (self._current_steps if self._active_index >= 0 else 0)
@@ -1130,20 +1304,168 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
     return model, scenario_def
 
 
+def _resolve_condition_metric(metric_name):
+    """Resolve a condition metric name to the key used in the metrics dict.
+
+    If the metric contains '/', use it as-is (e.g., 'endings/failure-wallmastered').
+    Otherwise prefix with 'metrics/' for tensorboard convention, but look up without prefix
+    in the metrics dict since metrics are stored without the 'metrics/' prefix internally.
+    """
+    return metric_name
+
+
+class _ConditionalMonitor:
+    """Wraps a callback to monitor metrics for conditional trigger conditions.
+
+    When a condition is met, sets a flag and causes check_pause() to return False,
+    breaking the PPO training loop so the circuit runner can execute the conditional scenario.
+    """
+
+    def __init__(self, inner, conditional_entries):
+        self._inner = inner
+        self._conditional_entries = conditional_entries
+        self._triggered_entry = None
+        self._steps_since_trigger = {}  # entry index -> steps since last trigger
+        self._trigger_counts = {}       # entry index -> number of times triggered
+        self._weighted_steps = 0        # steps in current weighted training chunk
+
+        for i, entry in enumerate(conditional_entries):
+            # Initialize to cooldown so conditions can trigger immediately at startup
+            self._steps_since_trigger[i] = entry.condition.cooldown
+            self._trigger_counts[i] = 0
+
+    @property
+    def triggered_entry(self):
+        """The conditional entry that triggered, or None."""
+        return self._triggered_entry
+
+    @property
+    def trigger_counts(self):
+        """Number of times each conditional entry has triggered."""
+        return dict(self._trigger_counts)
+
+    def clear_trigger(self):
+        """Clear the triggered state after handling the conditional scenario."""
+        self._triggered_entry = None
+
+    def on_progress(self, steps, total_steps):
+        """Forward progress and track steps for cooldown."""
+        self._weighted_steps += steps
+        for i in self._steps_since_trigger:
+            self._steps_since_trigger[i] += steps
+        if self._inner:
+            self._inner.on_progress(steps, total_steps)
+
+    def on_metrics(self, metrics, iteration, total_iterations):
+        """Forward metrics and check conditional triggers."""
+        if self._inner:
+            self._inner.on_metrics(metrics, iteration, total_iterations)
+
+        # Check conditional triggers against promoted top-level metrics
+        if self._triggered_entry is None:
+            for i, entry in enumerate(self._conditional_entries):
+                cooldown = entry.condition.cooldown
+                if self._steps_since_trigger[i] < cooldown:
+                    continue
+
+                metric_key = _resolve_condition_metric(entry.condition.metric)
+                metric_value = metrics.get(metric_key, 0)
+                if metric_value >= entry.condition.threshold:
+                    self._triggered_entry = entry
+                    self._steps_since_trigger[i] = 0
+                    self._trigger_counts[i] = self._trigger_counts.get(i, 0) + 1
+                    break
+
+    def on_optimize(self, stats, iteration, total_iterations):
+        """Forward optimize stats."""
+        if self._inner:
+            self._inner.on_optimize(stats, iteration, total_iterations)
+
+    def check_pause(self):
+        """Return False when a condition triggers to break the PPO loop."""
+        if self._triggered_entry is not None:
+            return False
+        if self._inner:
+            return self._inner.check_pause()
+        return True
+
+    def on_circuit_start(self, scenarios):
+        """Forward circuit start."""
+        if self._inner:
+            self._inner.on_circuit_start(scenarios)
+
+    def on_scenario_start(self, scenario_name, iterations, exit_criteria=None,
+                          exit_threshold=None, exit_criteria_scenario=None):
+        """Forward scenario start."""
+        if self._inner:
+            self._inner.on_scenario_start(scenario_name, iterations,
+                                          exit_criteria=exit_criteria,
+                                          exit_threshold=exit_threshold,
+                                          exit_criteria_scenario=exit_criteria_scenario)
+
+    def on_scenario_end(self, scenario_name):
+        """Forward scenario end."""
+        if self._inner:
+            self._inner.on_scenario_end(scenario_name)
+
+    def on_conditional_start(self, parent_scenario, child_scenario, iterations,
+                             exit_criteria=None, exit_threshold=None):
+        """Forward conditional start."""
+        if self._inner:
+            self._inner.on_conditional_start(parent_scenario, child_scenario, iterations,
+                                             exit_criteria=exit_criteria,
+                                             exit_threshold=exit_threshold)
+
+    def on_conditional_end(self, child_scenario):
+        """Forward conditional end."""
+        if self._inner:
+            self._inner.on_conditional_end(child_scenario)
+
+    def on_scenario_resumed(self, scenario_name, history_entry):
+        """Forward scenario resumed."""
+        if self._inner:
+            self._inner.on_scenario_resumed(scenario_name, history_entry)
+
+    def get_completion_info(self, scenario_name):
+        """Forward completion info."""
+        if self._inner:
+            return self._inner.get_completion_info(scenario_name)
+        return None
+
+    def on_training_complete(self):
+        """Forward training complete."""
+        if self._inner:
+            self._inner.on_training_complete()
+
+
 def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkpoint_dir, kwargs,
                            total_budget, callback=None):
-    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches,too-many-statements
     """Run a weighted training circuit.
 
     All scenarios run concurrently with step-count proportional to their weights.
     The WeightedScenarioSelector (via RPC) decides which scenario each worker runs on reset.
+
+    Entries with a `condition` field are conditional — they are excluded from weighted training
+    and only run when their condition metric crosses the threshold. Conditional training steps
+    do not count against the parent circuit's iteration budget.
     """
-    # Resolve scenario definitions and weights
+    # Separate weighted entries from conditional entries
+    weighted_entries = []
+    conditional_entries = []
+
+    for entry in circuit_def.scenarios:
+        if entry.condition is not None:
+            conditional_entries.append(entry)
+        else:
+            weighted_entries.append(entry)
+
+    # Resolve scenario definitions and weights for weighted entries
     scenario_defs = []
     weights = []
     exit_criteria_map = {}
 
-    for entry in circuit_def.scenarios:
+    for entry in weighted_entries:
         sdef = TrainingScenarioDefinition.get(entry.scenario)
         if sdef is None:
             raise ValueError(f"Unknown scenario: {entry.scenario}")
@@ -1156,7 +1478,6 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
     if total_budget is not None:
         iterations = total_budget
     else:
-        # Use max iterations from any scenario, or a sensible default
         iterations = max((s.iterations for s in scenario_defs), default=2_000_000)
 
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
@@ -1177,10 +1498,15 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
     kwargs['network_class'] = model_kind.network_class
 
     weighted_label = f"weighted[{len(scenario_defs)}]"
-    if callback:
-        callback.on_circuit_start([(weighted_label, iterations)])
 
-    if callback:
+    # Set up conditional monitor if there are conditional entries
+    monitor = _ConditionalMonitor(callback, conditional_entries) if conditional_entries else None
+    active_callback = monitor or callback
+
+    if active_callback:
+        active_callback.on_circuit_start([(weighted_label, iterations)])
+
+    if active_callback:
         # Find the scenario that has exit criteria for display purposes
         ec_scenario_name = None
         ec = None
@@ -1189,24 +1515,75 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
             if ec is not None:
                 ec_scenario_name = sdef.name
                 break
-        callback.on_scenario_start(weighted_label, iterations,
-                                   exit_criteria=ec.metric if ec else None,
-                                   exit_threshold=ec.threshold if ec else None,
-                                   exit_criteria_scenario=ec_scenario_name)
+        active_callback.on_scenario_start(weighted_label, iterations,
+                                          exit_criteria=ec.metric if ec else None,
+                                          exit_threshold=ec.threshold if ec else None,
+                                          exit_criteria_scenario=ec_scenario_name)
 
-    model = ppo.train_weighted(
-        model_kind.network_class, create_env, scenario_defs, weights,
-        action_space_def.actions, iterations, exit_criteria_map, callback,
-        save_path=checkpoint_dir,
-        **{k: v for k, v in kwargs.items() if k != 'network_class'})
+    # Run weighted training in a loop to allow conditional interrupts
+    iterations_spent = 0
+    model = None
+    steps_before_weighted = kwargs.get('model', None)
+    steps_before_weighted = steps_before_weighted.steps_trained if steps_before_weighted else 0
 
-    if callback:
-        callback.on_scenario_end(f"weighted[{len(scenario_defs)}]")
+    while iterations_spent < iterations:
+        remaining = iterations - iterations_spent
+        steps_before_chunk = model.steps_trained if model else steps_before_weighted
+
+        model = ppo.train_weighted(
+            model_kind.network_class, create_env, scenario_defs, weights,
+            action_space_def.actions, remaining, exit_criteria_map, active_callback,
+            save_path=checkpoint_dir,
+            **{k: v for k, v in kwargs.items() if k != 'network_class'})
+
+        chunk_steps = model.steps_trained - steps_before_chunk
+        iterations_spent += chunk_steps
+        kwargs['model'] = model
+
+        # Check if a conditional was triggered
+        if monitor and monitor.triggered_entry is not None:
+            triggered = monitor.triggered_entry
+            cond_scenario_def = TrainingScenarioDefinition.get(triggered.scenario)
+            if cond_scenario_def is None:
+                raise ValueError(f"Unknown conditional scenario: {triggered.scenario}")
+
+            cond_iterations = triggered.iterations or 250_000
+            cond_ec = triggered.exit_criteria
+
+            # Notify TUI
+            if callback:
+                callback.on_conditional_start(
+                    weighted_label, triggered.scenario, cond_iterations,
+                    exit_criteria=cond_ec.metric if cond_ec else None,
+                    exit_threshold=cond_ec.threshold if cond_ec else None)
+
+            # Set up exit criteria for the conditional scenario
+            cond_kwargs = dict(kwargs)
+            if cond_ec:
+                cond_kwargs['exit_criteria'] = cond_ec.metric
+                cond_kwargs['exit_threshold'] = cond_ec.threshold
+
+            # Run conditional scenario — steps do NOT count against parent budget
+            model, _ = train_once(ppo, cond_scenario_def, model_kind, action_space_def,
+                                  checkpoint_dir, cond_iterations, callback, **cond_kwargs)
+
+            if callback:
+                callback.on_conditional_end(triggered.scenario)
+
+            kwargs['model'] = model
+            monitor.clear_trigger()
+        else:
+            # Normal completion (exit criteria met, budget exhausted, or user quit)
+            break
+
+    if active_callback:
+        active_callback.on_scenario_end(weighted_label)
 
     # Save final checkpoint with training history
     training_history = kwargs.get('training_history')
-    model.save(f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt",
-               optimizer=ppo.optimizer, training_history=training_history)
+    if model:
+        model.save(f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt",
+                   optimizer=ppo.optimizer, training_history=training_history)
     return model, scenario_defs[0]
 
 

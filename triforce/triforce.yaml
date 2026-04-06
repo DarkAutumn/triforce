@@ -139,6 +139,26 @@ training-circuits:
     weight: 1
   - scenario: overworld-sword
     weight: 1
+- name: dungeon1-circuit
+  kind: weighted
+  description: Weighted mix of dungeon 1 training with conditional wallmaster practice
+    when wallmaster failures are high.
+  scenarios:
+  - scenario: dungeon1-finite-bombs
+    weight: 90
+  - scenario: dungeon1
+    weight: 5
+  - scenario: dungeon1-all-items
+    weight: 5
+  - scenario: dungeon1-wallmaster-finite-bombs
+    iterations: 250000
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.8
+    condition:
+      metric: endings/failure-wallmastered
+      threshold: 0.5
+      cooldown: 100000
 - name: all-items-circuit
   description: 'Full curriculum: sword-only basics, item training with finite/infinite
     bombs, dungeon with wallmasters, overworld2 route, full game, and polish phase.'
@@ -155,17 +175,10 @@ training-circuits:
     iterations: 500000
   - circuit: learn-items
     iterations: 2000000
-  - scenario: dungeon1-all-items
+  - circuit: dungeon1-circuit
     exit-criteria:
       metric: success-rate
-      threshold: 0.8
-    iterations: 750000
-  - scenario: dungeon1-wallmaster
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.8
-    iterations: 250000
-  - circuit: dungeon1-with-wallmasters
+      threshold: 0.9
     iterations: 1000000
   - scenario: dungeon1-dungeon2
     exit-criteria:
@@ -502,6 +515,43 @@ scenarios:
   per_reset:
     hearts_and_containers: 34
     partial_hearts: 254
+  start:
+  - 1_45w
+  use_hints: false
+- name: dungeon1-wallmaster-finite-bombs
+  description: Wallmaster room practice with all items and finite bombs.
+  iterations: 250000
+  scenario_selector: round-robin
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
+  critic: GameplayCritic
+  end_conditions:
+  - LeftDungeon
+  - GainedTriforce
+  - CollectedTreasure
+  - GameOver
+  - Timeout
+  - LeftWallmasterRoom
+  metrics:
+  - success-rate
+  - overworld-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  per_reset:
+    regular_boomerang: 1
+    magic_rod: 1
+    bow: 1
+    arrows: 1
+    candle: 1
+    bombs: 8
+    hearts_and_containers: 34
+    partial_hearts: 254
+    keys: 4
+  per_frame:
+    rupees: 100
   start:
   - 1_45w
   use_hints: false
