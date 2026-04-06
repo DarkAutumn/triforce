@@ -19,30 +19,48 @@ from . import end_conditions
 
 class TrainingScenarioDefinition(BaseModel):
     """A scenario in the game to train on.  This is a combination of critics and end conditions."""
+    model_config = ConfigDict(populate_by_name=True)
+
     name : str
-    description : str
-    scenario_selector : Optional[str]
-    objective : type
+    scenario_selector : Optional[str] = Field(default='round-robin', alias='scenario-selector')
+    objective : object = Field(default='GameCompletion', validate_default=True)
     iterations : int
-    critic : str
+    critic : str = 'GameplayCritic'
     metrics : List[str]
-    end_conditions : List[str]
+    end_conditions : List[str] = Field(alias='end-conditions')
     start : List[str | int]
-    objective_params : Optional[Dict[str, object]] = {}
-    use_hints : Optional[bool] = False
-    per_reset : Optional[Dict[str, int | str]] = {}
-    per_frame : Optional[Dict[str, int | str]] = {}
-    per_room : Optional[Dict[str, int | str]] = {}
+    use_hints : Optional[bool] = Field(default=False, alias='use-hints')
+    modifiers : Optional[List[str | dict]] = None
+    per_reset : Optional[Dict[str, int | str]] = Field(default_factory=dict, exclude=True)
+    per_step : Optional[Dict[str, int | str]] = Field(default_factory=dict, exclude=True)
+    per_room : Optional[Dict[str, int | str]] = Field(default_factory=dict, exclude=True)
 
     @field_validator('objective', mode='before')
     @classmethod
     def objective_validator(cls, value):
-        """Gets the ObjectiveSelector from name."""
-        objectives = get_objective_selector(value)
+        """Gets the ObjectiveSelector from name or structured dict."""
+        if isinstance(value, str):
+            objectives = get_objective_selector(value)
+        elif isinstance(value, dict):
+            kind = value.pop('kind', None)
+            if kind is None:
+                raise ValueError("Structured objective must have 'kind'")
+            # Convert hyphenated keys to underscored kwargs
+            params = {k.replace('-', '_'): v for k, v in value.items()}
+            objectives = get_objective_selector(kind)
+            if objectives is None:
+                raise ValueError(f"Unknown objective selector {kind}")
+            # Store objective class + params for deferred instantiation
+            return (objectives, params)
+        elif isinstance(value, tuple):
+            return value
+        else:
+            objectives = value
+
         if objectives is None:
             raise ValueError(f"Unknown objective selector {value}")
 
-        return objectives
+        return (objectives, {})
 
     @field_validator('start', mode='before')
     @classmethod
@@ -61,10 +79,21 @@ class TrainingScenarioDefinition(BaseModel):
 
         return result
 
+    @field_validator('end_conditions', mode='before')
+    @classmethod
+    def end_conditions_validator(cls, value):
+        """Ensures GameOver is always present in end conditions."""
+        if 'GameOver' not in value:
+            value = list(value) + ['GameOver']
+        return value
+
     @field_validator('scenario_selector', mode='before')
     @classmethod
     def scenario_selector_validator(cls, value):
         """Gets the scenario selector from the name."""
+        if value is None:
+            return 'round-robin'
+
         if value in ('round-robin', 'probabilistic'):
             return value
 
@@ -76,11 +105,21 @@ class TrainingScenarioDefinition(BaseModel):
     @staticmethod
     def _load_scenarios():
         """Loads the scenarios from triforce.yaml."""
+        named_modifiers = TrainingCircuitDefinition._load_modifiers()  # pylint: disable=protected-access
         scenarios = {}
         script_dir = os.path.dirname(os.path.realpath(__file__))
         with open(os.path.join(script_dir, 'triforce.yaml'), encoding='utf-8') as f:
             for scenario in yaml.safe_load(f)["scenarios"]:
                 scenario = TrainingScenarioDefinition(**scenario)
+
+                # Resolve scenario-level modifiers into per_reset/per_step/per_room
+                if scenario.modifiers:
+                    per_reset, per_step, per_room = resolve_modifier_list(
+                        scenario.modifiers, named_modifiers)
+                    scenario.per_reset = per_reset
+                    scenario.per_step = per_step
+                    scenario.per_room = per_room
+
                 scenarios[scenario.name] = scenario
 
         return scenarios
@@ -95,6 +134,46 @@ class TrainingScenarioDefinition(BaseModel):
     def get_all():
         """Loads all scenarios from triforce.yaml."""
         return list(TrainingScenarioDefinition._load_scenarios().values())
+
+class ModifierDefinition(BaseModel):
+    """A named or inline modifier that overrides per_reset/per_step/per_room on scenarios."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    per_reset : Optional[Dict[str, int | str]] = Field(default_factory=dict, alias='per-reset')
+    per_step : Optional[Dict[str, int | str]] = Field(default_factory=dict, alias='per-step')
+    per_room : Optional[Dict[str, int | str]] = Field(default_factory=dict, alias='per-room')
+
+
+def resolve_modifier_list(modifier_list, named_modifiers):
+    """Resolve a list of modifier names/inline dicts into merged per_reset/per_step/per_room.
+
+    Each modifier is either a string (named ref) or a dict (inline definition).
+    Applied in list order — later entries override earlier ones (shallow merge per key).
+
+    Returns (per_reset, per_step, per_room) as plain dicts.
+    """
+    per_reset = {}
+    per_step = {}
+    per_room = {}
+
+    for mod in modifier_list:
+        if isinstance(mod, str):
+            resolved = named_modifiers.get(mod)
+            if resolved is None:
+                raise ValueError(f"Unknown modifier '{mod}'")
+        elif isinstance(mod, dict):
+            resolved = ModifierDefinition(**mod)
+        else:
+            raise ValueError(f"Invalid modifier entry: {mod}")
+
+        if resolved.per_reset:
+            per_reset.update(resolved.per_reset)
+        if resolved.per_step:
+            per_step.update(resolved.per_step)
+        if resolved.per_room:
+            per_room.update(resolved.per_room)
+
+    return per_reset, per_step, per_room
 
 class ExitCriteria(BaseModel):
     """Exit criteria for a training circuit entry."""
@@ -117,13 +196,18 @@ class TrainingCircuitEntry(BaseModel):
     exit_criteria : Optional[ExitCriteria] = Field(None, alias='exit-criteria')
     weight : Optional[float] = None
     condition : Optional[ConditionalTrigger] = None
+    modifiers : Optional[List[str | dict]] = None
 
 class TrainingCircuitDefinition(BaseModel):
     """A training circuit."""
+    model_config = ConfigDict(populate_by_name=True)
+
     name : str
-    description : str
     kind : str = 'sequential'
     scenarios : List[TrainingCircuitEntry]
+    modifiers : Optional[List[str | dict]] = None
+    iterations : Optional[int] = None
+    exit_criteria : Optional[ExitCriteria] = Field(None, alias='exit-criteria')
 
     @field_validator('kind')
     @classmethod
@@ -159,8 +243,22 @@ class TrainingCircuitDefinition(BaseModel):
         return self
 
     @staticmethod
+    def _load_modifiers():
+        """Loads named modifier definitions from triforce.yaml."""
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        with open(os.path.join(script_dir, 'triforce.yaml'), encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+        raw = data.get("modifiers", [])
+        result = {}
+        for item in raw:
+            for name, body in item.items():
+                result[name] = ModifierDefinition(**body)
+        return result
+
+    @staticmethod
     def _load_circuits():
         """Loads the training circuits from triforce.yaml."""
+        named_modifiers = TrainingCircuitDefinition._load_modifiers()
         circuits = {}
         script_dir = os.path.dirname(os.path.realpath(__file__))
         with open(os.path.join(script_dir, 'triforce.yaml'), encoding='utf-8') as f:
@@ -175,6 +273,21 @@ class TrainingCircuitDefinition(BaseModel):
                     if not entry.scenario and not entry.circuit:
                         raise ValueError(f"Circuit '{circuit.name}' entry must have "
                                          f"either 'scenario' or 'circuit'")
+
+                # Validate named modifier refs exist at both circuit and entry level
+                def _validate_modifier_refs(mod_list, context):
+                    if not mod_list:
+                        return
+                    for mod in mod_list:
+                        if isinstance(mod, str) and mod not in named_modifiers:
+                            raise ValueError(f"{context} references unknown modifier '{mod}'")
+
+                _validate_modifier_refs(circuit.modifiers, f"Circuit '{circuit.name}'")
+                for entry in circuit.scenarios:
+                    entry_name = entry.scenario or entry.circuit
+                    _validate_modifier_refs(
+                        entry.modifiers,
+                        f"Circuit '{circuit.name}' entry '{entry_name}'")
 
                 circuits[circuit.name] = circuit
 
@@ -431,10 +544,14 @@ class ScenarioWrapper(gym.Wrapper):
         self._scenario = scenario
         self._critic = getattr(critics, scenario.critic)()
         self._conditions = []
+
+        # Extract objective params for end conditions that accept them
+        _, obj_params = scenario.objective if isinstance(scenario.objective, tuple) else (None, {})
+
         for ec in scenario.end_conditions:
             ec_class = getattr(end_conditions, ec)
             try:
-                self._conditions.append(ec_class(**scenario.objective_params))
+                self._conditions.append(ec_class(**obj_params))
             except TypeError:
                 self._conditions.append(ec_class())
 

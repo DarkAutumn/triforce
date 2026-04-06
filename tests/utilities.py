@@ -52,11 +52,10 @@ class CriticWrapper(gym.Wrapper):
 
 class TestScenario:
     def __init__(self):
-        self.objective = GameCompletion
-        self.objective_params = {}
+        self.objective = (GameCompletion, {})
         self.per_reset = {}
         self.per_room = {}
-        self.per_frame = {}
+        self.per_step = {}
 
 class ZeldaActionReplay:
     def __init__(self, savestate, wrapper=None, render_mode=None):

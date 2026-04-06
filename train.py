@@ -5,6 +5,7 @@
 # pylint: disable=duplicate-code
 
 import argparse
+import copy
 import cProfile
 import sys
 import os
@@ -27,7 +28,8 @@ from triforce import (ActionSpaceDefinition, ModelKindDefinition, TrainingScenar
                       TrainingCallback, make_zelda_env)
 from triforce.ml_ppo import PPO
 from triforce.models import Network
-from triforce.scenario_wrapper import TrainingCircuitDefinition, TrainingCircuitEntry
+from triforce.scenario_wrapper import TrainingCircuitDefinition, TrainingCircuitEntry, \
+    resolve_modifier_list
 
 BAR_WIDTH = 50
 BAR_FILL = "▬"
@@ -1142,24 +1144,68 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
                optimizer=ppo.optimizer, training_history=training_history)
     return model, model.steps_trained - steps_before
 
+
+def _apply_modifier_chain(scenario_def, entry_modifiers=None, modifier_chain=None):
+    """Apply modifiers to a scenario definition in nesting-doll order.
+
+    Modifiers are applied inner-to-outer:
+      1. scenario's own modifiers (already resolved into per_reset/per_step/per_room at load time)
+      2. entry-level modifiers (from the circuit entry)
+      3. modifier_chain (circuit modifiers + parent chain, outermost last)
+
+    Each layer can only add/override keys; never erase.
+    Returns a deep copy of the scenario with merged per_reset/per_step/per_room,
+    or the original if no modifiers need applying.
+    """
+    modifier_layers = []
+    if entry_modifiers:
+        modifier_layers.append(entry_modifiers)
+    if modifier_chain:
+        modifier_layers.extend(modifier_chain)
+
+    if not modifier_layers:
+        return scenario_def
+
+    named_modifiers = TrainingCircuitDefinition._load_modifiers()  # pylint: disable=protected-access
+    modified = copy.deepcopy(scenario_def)
+
+    for layer in modifier_layers:
+        per_reset, per_step, per_room = resolve_modifier_list(layer, named_modifiers)
+        if per_reset:
+            modified.per_reset.update(per_reset)
+        if per_step:
+            modified.per_step.update(per_step)
+        if per_room:
+            modified.per_room.update(per_room)
+
+    return modified
+
+
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
-                 callback=None, circuit_def=None, skip_to=None):
+                 callback=None, circuit_def=None, skip_to=None, modifier_chain=None):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     """Run training circuit and return (final_model, final_scenario_def).
 
     For weighted circuits, dispatches to _run_weighted_circuit.
+    modifier_chain is a list of modifier lists from enclosing circuits (outermost last).
     """
+    # Prepend this circuit's own modifiers to the chain
+    effective_chain = list(modifier_chain or [])
+    if circuit_def is not None and circuit_def.modifiers:
+        effective_chain.insert(0, circuit_def.modifiers)
+
     if circuit_def is not None and circuit_def.kind == 'weighted':
         return _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def,
-                                     checkpoint_dir, kwargs, total_budget, callback)
+                                     checkpoint_dir, kwargs, total_budget, callback,
+                                     modifier_chain=effective_chain)
 
     return _run_sequential_circuit(ppo, circuit, model_kind, action_space_def,
                                     checkpoint_dir, kwargs, total_budget, callback,
-                                    skip_to=skip_to)
+                                    skip_to=skip_to, modifier_chain=effective_chain)
 
 
 def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs,
-                             total_budget, callback=None, skip_to=None):
+                             total_budget, callback=None, skip_to=None, modifier_chain=None):
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-statements,too-many-branches,too-many-locals
     """Run training circuit and return (final_model, final_scenario_def)."""
     iterations_spent = 0
@@ -1233,13 +1279,19 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
                                            exit_threshold=ec.threshold if ec else None,
                                            exit_criteria_scenario=ec_scenario)
 
+            # Build modifier chain for sub-circuit: entry modifiers → current chain
+            sub_modifier_chain = list(modifier_chain or [])
+            if scenario_entry.modifiers:
+                sub_modifier_chain.insert(0, scenario_entry.modifiers)
+
             # Pass current model and history into sub-circuit with suppressed display events
             sub_kwargs = dict(kwargs)
             sub_kwargs['training_history'] = training_history
             sub_callback = _SubCircuitCallback(callback) if callback else None
             model, scenario_def = _run_circuit(ppo, sub_circuit_def.scenarios, model_kind,
                                                action_space_def, checkpoint_dir, sub_kwargs,
-                                               sub_budget, sub_callback, sub_circuit_def)
+                                               sub_budget, sub_callback, sub_circuit_def,
+                                               modifier_chain=sub_modifier_chain)
 
             if callback:
                 callback.on_scenario_end(f"[circuit] {scenario_entry.circuit}")
@@ -1259,6 +1311,10 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
             continue
 
         scenario_def = TrainingScenarioDefinition.get(scenario_entry.scenario)
+
+        # Apply modifier chain: entry modifiers → current modifier chain
+        scenario_def = _apply_modifier_chain(scenario_def, scenario_entry.modifiers,
+                                             modifier_chain=modifier_chain)
 
         if scenario_entry.iterations is not None:
             iterations = scenario_entry.iterations
@@ -1439,7 +1495,7 @@ class _ConditionalMonitor:
 
 
 def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkpoint_dir, kwargs,
-                           total_budget, callback=None):
+                           total_budget, callback=None, modifier_chain=None):
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches,too-many-statements
     """Run a weighted training circuit.
 
@@ -1460,6 +1516,9 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
         else:
             weighted_entries.append(entry)
 
+    # The modifier chain already includes this circuit's modifiers (prepended by _run_circuit)
+    circuit_modifier_chain = list(modifier_chain or [])
+
     # Resolve scenario definitions and weights for weighted entries
     scenario_defs = []
     weights = []
@@ -1469,6 +1528,11 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
         sdef = TrainingScenarioDefinition.get(entry.scenario)
         if sdef is None:
             raise ValueError(f"Unknown scenario: {entry.scenario}")
+
+        # Apply modifiers: entry modifiers → circuit modifier chain
+        sdef = _apply_modifier_chain(sdef, entry.modifiers,
+                                     modifier_chain=circuit_modifier_chain)
+
         scenario_defs.append(sdef)
         weights.append(entry.weight)
         if entry.exit_criteria:
@@ -1546,6 +1610,10 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
             cond_scenario_def = TrainingScenarioDefinition.get(triggered.scenario)
             if cond_scenario_def is None:
                 raise ValueError(f"Unknown conditional scenario: {triggered.scenario}")
+
+            # Apply modifiers: entry modifiers → circuit modifier chain
+            cond_scenario_def = _apply_modifier_chain(cond_scenario_def, triggered.modifiers,
+                                                      modifier_chain=circuit_modifier_chain)
 
             cond_iterations = triggered.iterations or 250_000
             cond_ec = triggered.exit_criteria

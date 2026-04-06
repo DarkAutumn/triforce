@@ -64,26 +64,26 @@ class TestCircuitKind:
 
     def test_default_kind_is_sequential(self):
         c = TrainingCircuitDefinition(
-            name='test', description='test',
+            name='test',
             scenarios=[TrainingCircuitEntry(scenario='full-game')])
         assert c.kind == 'sequential'
 
     def test_explicit_sequential(self):
         c = TrainingCircuitDefinition(
-            name='test', description='test', kind='sequential',
+            name='test', kind='sequential',
             scenarios=[TrainingCircuitEntry(scenario='full-game')])
         assert c.kind == 'sequential'
 
     def test_weighted_kind(self):
         c = TrainingCircuitDefinition(
-            name='test', description='test', kind='weighted',
+            name='test', kind='weighted',
             scenarios=[TrainingCircuitEntry(scenario='full-game', weight=100)])
         assert c.kind == 'weighted'
 
     def test_invalid_kind_rejected(self):
         with pytest.raises(ValueError, match="Unknown circuit kind"):
             TrainingCircuitDefinition(
-                name='test', description='test', kind='invalid',
+                name='test', kind='invalid',
                 scenarios=[TrainingCircuitEntry(scenario='full-game')])
 
     def test_existing_sequential_circuits(self):
@@ -92,12 +92,12 @@ class TestCircuitKind:
             if circuit.kind == 'sequential':
                 assert circuit.kind == 'sequential', f"{circuit.name} should be sequential"
 
-    def test_polish_circuit_is_weighted(self):
-        """The polish circuit should be weighted."""
-        circuit = TrainingCircuitDefinition.get('polish')
+    def test_room_walk_circuit_is_weighted(self):
+        """The room-walk-circuit should be weighted."""
+        circuit = TrainingCircuitDefinition.get('room-walk-circuit')
         assert circuit is not None
         assert circuit.kind == 'weighted'
-        assert len(circuit.scenarios) == 4
+        assert len(circuit.scenarios) == 2
         for entry in circuit.scenarios:
             assert entry.weight is not None
 
@@ -105,11 +105,11 @@ class TestCircuitKind:
         """Existing circuits should parse the new exit-criteria format."""
         circuit = TrainingCircuitDefinition.get('main-circuit')
         assert circuit is not None
-        # First entry should have exit criteria
-        first = circuit.scenarios[0]
-        assert first.exit_criteria is not None
-        assert first.exit_criteria.metric == 'room-result/correct-exit'
-        assert first.exit_criteria.threshold == 0.9
+        # Second entry (overworld-sword) should have exit criteria
+        second = circuit.scenarios[1]
+        assert second.exit_criteria is not None
+        assert second.exit_criteria.metric == 'success-rate'
+        assert second.exit_criteria.threshold == 0.8
 
 
 # ---------------------------------------------------------------------------
@@ -255,13 +255,13 @@ class TestConditionalTrigger:
 
     def test_conditional_entry_without_weight_in_weighted_circuit(self):
         """Conditional entries in weighted circuits must not have a weight."""
-        c = TrainingCircuitDefinition.get('dungeon1-circuit')
+        c = TrainingCircuitDefinition.get('dungeon1-unrestricted-items')
         assert c is not None
         assert c.kind == 'weighted'
         conditional = [e for e in c.scenarios if e.condition is not None]
         assert len(conditional) == 1
         assert conditional[0].weight is None
-        assert conditional[0].scenario == 'dungeon1-wallmaster-finite-bombs'
+        assert conditional[0].scenario == 'dungeon1-wallmaster'
 
     def test_weighted_entry_with_condition_rejected(self):
         """An entry with both weight and condition should be rejected."""
@@ -269,7 +269,6 @@ class TestConditionalTrigger:
         with pytest.raises(ValidationError, match="must not have a weight"):
             TrainingCircuitDefinition(**{
                 'name': 'test',
-                'description': 'test',
                 'kind': 'weighted',
                 'scenarios': [
                     {'scenario': 'full-game', 'weight': 90},
@@ -284,7 +283,6 @@ class TestConditionalTrigger:
         with pytest.raises(ValidationError, match="only weighted circuits support conditions"):
             TrainingCircuitDefinition(**{
                 'name': 'test',
-                'description': 'test',
                 'kind': 'sequential',
                 'scenarios': [
                     {'scenario': 'full-game',
@@ -298,7 +296,6 @@ class TestConditionalTrigger:
         with pytest.raises(ValidationError, match="must have a weight"):
             TrainingCircuitDefinition(**{
                 'name': 'test',
-                'description': 'test',
                 'kind': 'weighted',
                 'scenarios': [
                     {'scenario': 'full-game'},
@@ -400,3 +397,160 @@ class TestConditionalMonitor:
         monitor.on_progress(1000, 10000)
         monitor.on_metrics({'success-rate': 0.9}, 1000, 10000)
         assert monitor.triggered_entry is None
+
+
+# ---------------------------------------------------------------------------
+# Modifier system
+# ---------------------------------------------------------------------------
+class TestModifierDefinition:
+    """Verify modifier parsing and resolution."""
+
+    def test_load_named_modifiers(self):
+        """Named modifiers should load from triforce.yaml."""
+        mods = TrainingCircuitDefinition._load_modifiers()
+        assert 'has-sword' in mods
+        assert 'all-equipment' in mods
+        assert mods['has-sword'].per_reset == {'sword': 1}
+
+    def test_per_step_on_modifier(self):
+        """Modifiers can have per-step fields."""
+        mods = TrainingCircuitDefinition._load_modifiers()
+        assert 'infinite-bombs' in mods
+        assert mods['infinite-bombs'].per_step == {'bombs': 4}
+
+    def test_modifier_with_both_per_reset_and_per_step(self):
+        """Modifiers can have both per-reset and per-step."""
+        mods = TrainingCircuitDefinition._load_modifiers()
+        assert 'infinite-arrows' in mods
+        assert mods['infinite-arrows'].per_reset == {'arrows': 1, 'bow': 1}
+        assert mods['infinite-arrows'].per_step == {'rupees': 10}
+
+
+class TestModifierResolution:
+    """Verify resolve_modifier_list function."""
+
+    def test_single_named_modifier(self):
+        from triforce.scenario_wrapper import resolve_modifier_list
+        mods = TrainingCircuitDefinition._load_modifiers()
+        per_reset, per_step, per_room = resolve_modifier_list(['has-sword'], mods)
+        assert per_reset == {'sword': 1}
+        assert per_step == {}
+        assert per_room == {}
+
+    def test_multiple_modifiers_merge(self):
+        from triforce.scenario_wrapper import resolve_modifier_list
+        mods = TrainingCircuitDefinition._load_modifiers()
+        per_reset, per_step, per_room = resolve_modifier_list(
+            ['has-sword', 'starting-bombs'], mods)
+        assert per_reset == {'sword': 1, 'bombs': 8}
+
+    def test_later_modifier_overrides_earlier(self):
+        """Later modifiers override earlier ones for the same key."""
+        from triforce.scenario_wrapper import resolve_modifier_list, ModifierDefinition
+        mods = {'a': ModifierDefinition(per_reset={'x': 1}),
+                'b': ModifierDefinition(per_reset={'x': 2})}
+        per_reset, _, _ = resolve_modifier_list(['a', 'b'], mods)
+        assert per_reset == {'x': 2}
+
+    def test_inline_modifier(self):
+        from triforce.scenario_wrapper import resolve_modifier_list
+        mods = {}
+        per_reset, per_step, _ = resolve_modifier_list(
+            [{'per-reset': {'foo': 1}, 'per-step': {'bar': 2}}], mods)
+        assert per_reset == {'foo': 1}
+        assert per_step == {'bar': 2}
+
+    def test_unknown_modifier_raises(self):
+        from triforce.scenario_wrapper import resolve_modifier_list
+        with pytest.raises(ValueError, match="Unknown modifier 'nonexistent'"):
+            resolve_modifier_list(['nonexistent'], {})
+
+
+class TestScenarioModifiers:
+    """Verify scenario-level modifiers resolve into per_reset/per_step."""
+
+    def test_scenario_with_modifiers(self):
+        """overworld-skip-sword has has-sword modifier, should have sword in per_reset."""
+        scenario = TrainingScenarioDefinition.get('overworld-skip-sword')
+        assert scenario.per_reset.get('sword') == 1
+
+    def test_scenario_without_modifiers(self):
+        """full-game has no modifiers, should have empty per_reset."""
+        scenario = TrainingScenarioDefinition.get('full-game')
+        assert scenario.per_reset == {}
+        assert scenario.per_step == {}
+
+    def test_dungeon1_room_walk_has_keys(self):
+        """dungeon1-room-walk has four-keys modifier."""
+        scenario = TrainingScenarioDefinition.get('dungeon1-room-walk')
+        assert scenario.per_reset.get('keys') == 4
+
+
+class TestCircuitModifiers:
+    """Verify circuit-level and entry-level modifiers."""
+
+    def test_circuit_has_modifiers(self):
+        """room-walk-circuit should have circuit-level modifiers."""
+        circuit = TrainingCircuitDefinition.get('room-walk-circuit')
+        assert circuit.modifiers is not None
+        assert 'all-equipment' in circuit.modifiers
+
+    def test_entry_has_modifiers(self):
+        """Entries in overworld-dungeon1-unrestricted-items should have entry modifiers."""
+        circuit = TrainingCircuitDefinition.get('overworld-dungeon1-unrestricted-items')
+        # Second entry should have modifiers
+        second = circuit.scenarios[1]
+        assert second.modifiers is not None
+        assert 'all-equipment' in second.modifiers
+
+    def test_entry_null_modifiers(self):
+        """First entry in overworld-dungeon1-unrestricted-items has null modifiers."""
+        circuit = TrainingCircuitDefinition.get('overworld-dungeon1-unrestricted-items')
+        first = circuit.scenarios[0]
+        assert first.modifiers is None
+
+
+class TestApplyModifierChain:
+    """Verify _apply_modifier_chain from train.py."""
+
+    def test_no_modifiers_returns_original(self):
+        from train import _apply_modifier_chain
+        scenario = TrainingScenarioDefinition.get('full-game')
+        result = _apply_modifier_chain(scenario)
+        assert result is scenario  # same object, not a copy
+
+    def test_entry_modifiers_applied(self):
+        from train import _apply_modifier_chain
+        scenario = TrainingScenarioDefinition.get('dungeon1')
+        result = _apply_modifier_chain(scenario, entry_modifiers=['starting-bombs'])
+        assert result is not scenario  # deep copy
+        assert result.per_reset.get('bombs') == 8
+        assert scenario.per_reset.get('bombs') is None  # original unchanged
+
+    def test_modifier_chain_applied(self):
+        from train import _apply_modifier_chain
+        scenario = TrainingScenarioDefinition.get('dungeon1')
+        result = _apply_modifier_chain(scenario,
+                                        modifier_chain=[['all-equipment'], ['infinite-bombs']])
+        assert result.per_reset.get('sword') == 1
+        assert result.per_step.get('bombs') == 4
+
+    def test_outer_overrides_inner(self):
+        """Outer modifier chain entries override inner ones."""
+        from train import _apply_modifier_chain
+        scenario = TrainingScenarioDefinition.get('overworld-skip-sword')
+        # Scenario has has-sword (sword: 1), chain adds all-equipment (also sword: 1)
+        # Then an inline modifier that sets sword: 0
+        result = _apply_modifier_chain(
+            scenario,
+            modifier_chain=[[{'per-reset': {'sword': 0}}]])
+        assert result.per_reset.get('sword') == 0
+
+    def test_scenario_base_preserved_with_chain(self):
+        """Scenario's own modifiers (per_reset) are preserved and extended by chain."""
+        from train import _apply_modifier_chain
+        scenario = TrainingScenarioDefinition.get('overworld-skip-sword')
+        assert scenario.per_reset.get('sword') == 1  # from has-sword
+        result = _apply_modifier_chain(scenario, entry_modifiers=['starting-bombs'])
+        assert result.per_reset.get('sword') == 1  # preserved
+        assert result.per_reset.get('bombs') == 8  # added

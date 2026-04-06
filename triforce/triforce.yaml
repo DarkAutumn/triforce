@@ -160,7 +160,7 @@ training-circuits:
     - all-equipment
     - infinite-bombs
     - infinite-arrows
-  - scenario: overworld-skip-sword-finite-bombs
+  - scenario: overworld-skip-sword
     weight: 30
     modifiers:
     - all-equipment
@@ -193,7 +193,11 @@ training-circuits:
     - starting-bombs
     - starting-arrows
 
-  - scenario: dungeon1-wallmaster-finite-bombs
+  - scenario: dungeon1-wallmaster
+    modifiers:
+    - all-equipment
+    - starting-bombs
+    - four-keys
     iterations: 250000
     exit-criteria:
       metric: success-rate
@@ -268,13 +272,13 @@ scenarios:
 # Teach the model to navigate from the exit of dungeon1 to the entrance of dungeon 2.
 - name: dungeon1-dungeon2
   iterations: 2000000
-  scenario_selector: round-robin
+  scenario-selector: round-robin
   objective:
     kind: ReachLocation
     level: 2
     location: '0x77'
-    in_cave: true
-  end_conditions:
+    in-cave: true
+  end-conditions:
   - LeftOverworld2Area
   - EnteredDungeon
   - Timeout
@@ -288,11 +292,10 @@ scenarios:
   start:
   - 0_37c
   modifiers:
-   - has-boomerang
+  - has-boomerang
 
 # From the entrance of dungeon 1 to gaining the triforce.
 - name: dungeon1
-  description: Dungeon 1.
   iterations: 10000000
   scenario-selector: round-robin
   objective:
@@ -389,7 +392,6 @@ scenarios:
 
 # Teaches the model to navigate the rooms of dungeon 1 and follow objective arrows/find treasure.
 - name: dungeon1-room-walk
-  description: Dungeon 1 room walk.
   iterations: 5000000
   scenario-selector: probabilistic
   objective:

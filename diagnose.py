@@ -126,7 +126,7 @@ def run_diagnostic(model_name, scenario_name, model_path, episodes, output_path=
     # Load model metadata from the .pt file
     metadata = Network.load_metadata(model_path)
     model_kind = ModelKindDefinition.get(metadata["model_kind"] or model_name)
-    action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "basic")
+    action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "sword-only")
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
 
     # Infer obs_kind and frame_stack from the saved observation space
@@ -429,7 +429,7 @@ def run_pbrs_diagnostic(model_name, scenario_name, model_path,  # pylint: disabl
     scenario_def = TrainingScenarioDefinition.get(scenario_name)
     metadata = Network.load_metadata(model_path)
     model_kind = ModelKindDefinition.get(metadata["model_kind"] or model_name)
-    action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "basic")
+    action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "sword-only")
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
 
     obs_kind, frame_stack = infer_obs_kind(metadata["obs_space"])
@@ -740,7 +740,7 @@ def run_invariant_checker(model_name, scenario_name, model_path, episodes, outpu
     scenario_def = TrainingScenarioDefinition.get(scenario_name)
     metadata = Network.load_metadata(model_path)
     model_kind = ModelKindDefinition.get(metadata["model_kind"] or model_name)
-    action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "basic")
+    action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "sword-only")
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
 
     obs_kind, frame_stack = infer_obs_kind(metadata["obs_space"])

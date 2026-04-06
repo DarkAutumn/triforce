@@ -329,12 +329,15 @@ class StateChangeWrapper(gym.Wrapper):
 
     def _apply_scenario(self, scenario):
         """Configure objective and RAM modification lists from a scenario definition."""
-        self._objective_type = scenario.objective if scenario else None
-        self._objective_params = scenario.objective_params if scenario else {}
+        if scenario and isinstance(scenario.objective, tuple):
+            self._objective_type, self._objective_params = scenario.objective
+        else:
+            self._objective_type = scenario.objective if scenario else None
+            self._objective_params = {}
 
         self.per_reset = []
         self.per_room = []
-        self.per_frame = []
+        self.per_step = []
 
         if scenario is not None:
             for key, value in scenario.per_reset.items():
@@ -343,8 +346,8 @@ class StateChangeWrapper(gym.Wrapper):
             for key, value in scenario.per_room.items():
                 self.per_room.append((key, value))
 
-            for key, value in scenario.per_frame.items():
-                self.per_frame.append((key, value))
+            for key, value in scenario.per_step.items():
+                self.per_step.append((key, value))
 
     def switch_scenario(self, scenario):
         """Switch to a new scenario, updating objectives and RAM modifications."""
@@ -413,7 +416,7 @@ class StateChangeWrapper(gym.Wrapper):
             for name, value in self.per_room:
                 self._set_value(curr, name, value)
 
-        for name, value in self.per_frame:
+        for name, value in self.per_step:
             self._set_value(curr, name, value)
 
         return curr.link.health - health
