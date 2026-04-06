@@ -1,13 +1,16 @@
+# Defines action spaces which can be used when training.  Note that all-items is intended to be all items in the game
+# but in practice it defines all of the items that the model is capable of being trained on (due to implementation
+# limitations)
 action-spaces:
-  basic:
+  move-only:
+    actions:
+    - MOVE
+  sword-only:
     default: true
     actions:
     - MOVE
     - SWORD
     - BEAMS
-  move-only:
-    actions:
-    - MOVE
   all-items:
     actions:
     - MOVE
@@ -15,141 +18,181 @@ action-spaces:
     - BEAMS
     - BOMBS
     - BOOMERANG
+
+# The kinds of models we are capable of being trained on.  These are neural network classes defined in triforce.
+# The ImpalaMultiHeadAgent is currently where work is going into.
 model-kinds:
   shared-nature:
-    default: true
     class: SharedNatureAgent
   multihead:
     class: MultiHeadAgent
   impala-shared:
     class: ImpalaSharedAgent
   impala-multihead:
+    default: true
     class: ImpalaMultiHeadAgent
+
+# Modifiers
+modifiers:
+  - has-sword:
+      per-reset:
+        sword: 1
+  - has-boomerang:
+      per-reset:
+        regular_boomerang: 1
+
+  - four-keys:
+      per-reset:
+        keys: 4
+
+  - starting-bombs:
+      per-reset:
+        bombs: 8
+  - starting-arrows:
+      per-reset:
+        arrows: 1
+        bow: 1
+        rupees: 10
+
+  - infinite-bombs:
+      per-step:
+        bombs: 4
+  - infinite-arrows:
+      per-reset:
+        arrows: 1
+        bow: 1
+      per-step:
+        rupees: 10
+
+  - all-equipment:
+      per-reset:
+        regular_boomerang: 1
+        sword: 1
+        magic_rod: 1
+        bow: 1
+        arrows: 1
+        candle: 1
+
+
+# Defines training circuits
 training-circuits:
+
+# Teaches the agent to play the full game, combining all relevant training scenarios.  This is used for unrestricted
+# action spaces that don't limit to just moving or sword-only.
 - name: main-circuit
-  description: 'Train the overworld model through curriculum: room navigation, sword pickup, overworld traversal, dungeon
-    1, then full game.'
+  scenarios:
+  - circuit: room-walk-circuit
+    iterations: 1000000
+
+  - scenario: overworld-sword
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.8
+    iterations: 500000
+
+  - circuit: overworld-dungeon1-unrestricted-items
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.8
+    iterations: 2000000
+
+  - circuit: dungeon1-unrestricted-items
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.8
+    iterations: 2000000
+
+  # make sure we didn't forget how to navigate to dungeon1 with only a sword after all the item training
+  - scenario: overworld-skip-sword
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.9
+    iterations: 500000
+
+  - scenario: dungeon1-dungeon2
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.8
+    iterations: 1000000
+
+  - scenario: full-game
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.9
+    iterations: 500000
+    
+# Teaches the agent to walk rooms in the overworld and dungeon 1 with all items and infinite bombs/arrows.  The goal
+# is to teach the model to either fight for tresasure, or follow the objective arrows to move to the right location.
+# This is the starting point for the curriculum that needs to be mastered before moving on to actually moving through
+# the world.  This can be used on any action space since items it can't use will be restricted.
+- name: room-walk-circuit
+  iterations: 2000000
+  exit-criteria:
+    metric: room-result/correct-exit
+    threshold: 0.8
+  modifiers:
+  - all-equipment
+  - infinite-bombs
+  - infinite-arrows
+  kind: weighted
   scenarios:
   - scenario: overworld-room-walk
-    exit-criteria:
-      metric: room-result/correct-exit
-      threshold: 0.9
-    iterations: 500000
-  - scenario: overworld-sword
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.8
-    iterations: 500000
-  - scenario: overworld-skip-sword
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.9
-    iterations: 2000000
-  - scenario: dungeon1
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.9
-    iterations: 2000000
-  - scenario: full-game
-- name: dungeon1-circuit
-  description: Train the dungeon model by first teaching it to walk rooms, then to make it to dungeon1, then to grab the sword,
-    then all together.
-  scenarios:
-  - scenario: dungeon1-skip-opening
-    exit-criteria:
-      metric: rewards
-      threshold: 0.0
-    iterations: 2000000
-  - scenario: dungeon1-entry-room
-    exit-criteria:
-      metric: room-result/correct-exit
-      threshold: 0.9
-  - scenario: dungeon1-side-room-opening
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.85
-  - scenario: dungeon1-wallmaster
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.85
-  - scenario: dungeon1-entry-room
-    exit-criteria:
-      metric: room-result/correct-exit
-      threshold: 0.9
-  - scenario: dungeon1
-    iterations: 20000000
-- name: polish
-  kind: weighted
-  description: Polish a trained model by mixing full-game with targeted scenarios to prevent
-    catastrophic forgetting while improving weak areas.
-  scenarios:
-  - scenario: full-game
-    weight: 92
-  - scenario: dungeon1
-    weight: 5
-  - scenario: dungeon1-wallmaster
-    weight: 2
-  - scenario: overworld-sword
     weight: 1
-- name: learn-items
-  description: 'Weighted mix of sword-only, all-items, and finite-bombs overworld
-    navigation to teach item usage while retaining sword-only basics.'
+  - scenario: dungeon1-room-walk
+    weight: 1
+
+# Teaches the agent to move from after grabbing the sword to the entrance of dungeon1, with an empahsis on using items
+# freely (mixing some sword-only and finite items).
+- name: overworld-dungeon1-unrestricted-items
+  exit-criteria:
+    metric: success-rate
+    threshold: 0.9
+
+  # Sword-only 40% of the time
   kind: weighted
   scenarios:
+  - scenario: overworld-skip-sword
+    weight: 40
+    modifiers:
   - scenario: overworld-skip-sword
     weight: 30
-  - scenario: overworld-skip-sword-all-items
-    weight: 40
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.9
+    modifiers:
+    - all-equipment
+    - infinite-bombs
+    - infinite-arrows
   - scenario: overworld-skip-sword-finite-bombs
     weight: 30
-- name: dungeon1-with-wallmasters
-  description: 'Weighted mix of dungeon 1 training with wallmaster practice and finite
-    bombs to teach dungeon completion with resource management.'
+    modifiers:
+    - all-equipment
+    - starting-bombs
+    - starting-arrows
+
+# Teaches the agent to move from after grabbing the sword to the entrance of dungeon1, with an empahsis on using items
+# freely (mixing some sword-only and finite items).
+- name: dungeon1-unrestricted-items
+  exit-criteria:
+    metric: success-rate
+    threshold: 0.9
+
+  # Sword-only 40% of the time
   kind: weighted
   scenarios:
-  - scenario: dungeon1-all-items
-    weight: 70
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.8
-  - scenario: dungeon1-wallmaster
-    weight: 20
-  - scenario: dungeon1-finite-bombs
-    weight: 10
-- name: all-items-polish
-  description: 'Polish phase mixing full game with finite bombs, sword-only full game,
-    dungeon reinforcement, wallmaster practice, and overworld sword training.'
-  kind: weighted
-  scenarios:
-  - scenario: full-game-all-items-finite
-    weight: 70
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.9
-  - scenario: full-game
-    weight: 20
-  - scenario: dungeon1-finite-bombs
-    weight: 4
-  - scenario: dungeon1-dungeon2
-    weight: 4
-  - scenario: dungeon1-wallmaster
-    weight: 1
-  - scenario: overworld-sword
-    weight: 1
-- name: dungeon1-circuit
-  kind: weighted
-  description: Weighted mix of dungeon 1 training with conditional wallmaster practice
-    when wallmaster failures are high.
-  scenarios:
-  - scenario: dungeon1-finite-bombs
-    weight: 90
   - scenario: dungeon1
-    weight: 5
-  - scenario: dungeon1-all-items
-    weight: 5
+    weight: 40
+    modifiers:
+  - scenario: dungeon1
+    weight: 30
+    modifiers:
+    - all-equipment
+    - infinite-bombs
+    - infinite-arrows
+  - scenario: dungeon1
+    weight: 30
+    modifiers:
+    - all-equipment
+    - starting-bombs
+    - starting-arrows
+
   - scenario: dungeon1-wallmaster-finite-bombs
     iterations: 250000
     exit-criteria:
@@ -159,55 +202,15 @@ training-circuits:
       metric: endings/failure-wallmastered
       threshold: 0.5
       cooldown: 100000
-- name: all-items-circuit
-  description: 'Full curriculum: sword-only basics, item training with finite/infinite
-    bombs, dungeon with wallmasters, overworld2 route, full game, and polish phase.'
-  scenarios:
-  - scenario: overworld-room-walk
-    exit-criteria:
-      metric: room-result/correct-exit
-      threshold: 0.8
-    iterations: 500000
-  - scenario: overworld-sword
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.8
-    iterations: 500000
-  - circuit: learn-items
-    iterations: 2000000
-  - circuit: dungeon1-circuit
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.9
-    iterations: 1000000
-  - scenario: dungeon1-dungeon2
-    exit-criteria:
-      metric: success-rate
-      threshold: 0.7
-    iterations: 500000
-  - scenario: full-game-all-items
-    iterations: 4000000
-  - circuit: all-items-polish
-    iterations: 2000000
-- name: check-for-reward-hacking
-  description: 'Quick circuit for validating reward hacking fixes: room-walk then
-    overworld navigation with all items.'
-  scenarios:
-  - scenario: overworld-room-walk
-    iterations: 500000
-  - scenario: overworld-skip-sword-all-items
-    iterations: 750000
+
+
 scenarios:
+# Runs the entire game from the start up to the point where we are capable of training (currently entering dungeon 2).
+# This is intended as the main inference scenario when evaluating the model's performance.
 - name: full-game
-  description: Full game from start through dungeon 2 entrance
   iterations: 2000000
-  scenario_selector: round-robin
-  objective: GameCompletion
-  critic: GameplayCritic
-  end_conditions:
-  - GainedTriforce
+  end-conditions:
   - EnteredDungeon2
-  - GameOver
   - Timeout
   metrics:
   - success-rate
@@ -218,44 +221,12 @@ scenarios:
   - reward-details
   start:
   - 0_77c
-  use_hints: true
-- name: skip-sword-to-triforce
-  description: Overworld through dungeon 1 triforce, skipping the sword cave
-  iterations: 2000000
-  scenario_selector: round-robin
-  objective: TreasureObjective
-  objective_params:
-    treasure: triforce
-  critic: GameplayCritic
-  end_conditions:
-  - GainedTriforce
-  - CollectedTreasure
-  - GameOver
-  - Timeout
-  metrics:
-  - success-rate
-  - game-progress
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  start:
-  - 0_67s
-  use_hints: true
-  per_reset:
-    bombs: 3
-    sword: 1
-    hearts_and_containers: 34
-    partial_hearts: 254
+
+# Training scenario to teach the model how to pick up the sword and navigate the overworld with it.
 - name: overworld-sword
-  description: The full game with training variables
   iterations: 2000000
-  scenario_selector: round-robin
-  objective: GameCompletion
-  critic: GameplayCritic
-  end_conditions:
+  end-conditions:
   - StartingRoomConditions
-  - GameOver
   - Timeout
   metrics:
   - success-rate
@@ -266,66 +237,19 @@ scenarios:
   - reward-details
   start:
   - 0_77c
-  use_hints: true
-- name: dungeon1-dungeon2
-  description: Navigate from dungeon 1 exit to dungeon 2 entrance with bombs and boomerang.
-  iterations: 2000000
-  scenario_selector: round-robin
-  objective: ReachLocation
-  objective_params:
-    level: 2
-    location: '0x77'
-    in_cave: true
-  critic: GameplayCritic
-  end_conditions:
-  - LeftOverworld2Area
-  - EnteredDungeon
-  - GameOver
-  - Timeout
-  metrics:
-  - success-rate
-  - overworld-progress
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  start:
-  - 0_37c
-  use_hints: false
-  per_reset:
-    regular_boomerang: 1
-    bombs: 8
-- name: no-end-conditions
-  description: The full game with training variables
-  iterations: 2000000
-  scenario_selector: round-robin
-  objective: GameCompletion
-  critic: GameplayCritic
-  end_conditions:
-  - GameOver
-  metrics:
-  - reward-average
-  - reward-details
-  per_reset:
-    hearts_and_containers: 51
-    partial_hearts: 254
-  start:
-  - 0_37c
-  use_hints: false
+  use-hints: true
+
+# Training scenario to teach the model to navigate to dungeon 1 after the sword has been obtained.
 - name: overworld-skip-sword
-  description: A scoped down room walk
   iterations: 2500000
-  scenario_selector: round-robin
-  objective: ReachLocation
-  objective_params:
+  objective:
+    kind: ReachLocation
     level: 1
     location: '0x73'
-  critic: GameplayCritic
-  end_conditions:
+  end-conditions:
   - StartingSwordCondition
   - EnteredDungeon
   - ReachedLocation
-  - GameOver
   - Timeout
   metrics:
   - success-rate
@@ -337,19 +261,117 @@ scenarios:
   - reward-details
   start:
   - 0_67s
-  use_hints: true
-  per_reset:
-    bombs: 3
-    sword: 1
-    hearts_and_containers: 34
-    partial_hearts: 254
-- name: overworld-room-walk
-  description: A training scenario to teach the model how to traverse the map and follow directions
+  use-hints: true
+  modifiers:
+  - has-sword
+
+# Teach the model to navigate from the exit of dungeon1 to the entrance of dungeon 2.
+- name: dungeon1-dungeon2
   iterations: 2000000
-  scenario_selector: probabilistic
-  objective: RoomWalk
-  critic: GameplayCritic
+  scenario_selector: round-robin
+  objective:
+    kind: ReachLocation
+    level: 2
+    location: '0x77'
+    in_cave: true
   end_conditions:
+  - LeftOverworld2Area
+  - EnteredDungeon
+  - Timeout
+  metrics:
+  - success-rate
+  - overworld-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 0_37c
+  modifiers:
+   - has-boomerang
+
+# From the entrance of dungeon 1 to gaining the triforce.
+- name: dungeon1
+  description: Dungeon 1.
+  iterations: 10000000
+  scenario-selector: round-robin
+  objective:
+    kind: TreasureObjective
+    treasure: triforce
+  end-conditions:
+  - LeftDungeon
+  - GainedTriforce
+  - CollectedTreasure
+  - Timeout
+  - Dungeon1DidntGetKey
+  - NowhereToGoCondition
+  metrics:
+  - success-rate
+  - overworld-progress
+  - game-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_73s
+
+# Dungeon 1 but starts from the keese room just west of the entrance room.  This is sometimes used because the opening
+# of dungeon 1 is suprisingly difficult for the model to learn sometimes.
+- name: dungeon1-skip-opening
+  iterations: 5000000
+  objective:
+    kind: TreasureObjective
+    treasure: triforce
+  end-conditions:
+  - LeftDungeon
+  - GainedTriforce
+  - CollectedTreasure
+  - Timeout
+  - NowhereToGoCondition
+  - LeftPlayArea
+  metrics:
+  - room-result
+  - success-rate
+  - dungeon1-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_63s
+  use-hints: true
+
+# Dungeon1 but starts at the wallmaster room with the objective of getting the triforce. This is intended to teach the
+# model how to deal with wallmasters while still having a clear objective and reward signal.
+- name: dungeon1-wallmaster
+  iterations: 2000000
+  objective:
+    kind: TreasureObjective
+    treasure: triforce
+  end-conditions:
+  - LeftDungeon
+  - GainedTriforce
+  - CollectedTreasure
+  - Timeout
+  - LeftWallmasterRoom
+  metrics:
+  - success-rate
+  - overworld-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_45w
+
+# Teach the model to navigate the overworld and follow objective arrows.
+- name: overworld-room-walk
+  iterations: 2000000
+  scenario-selector: probabilistic
+  objective:
+    kind: RoomWalk
+  end-conditions:
   - RoomWalkCondition
   metrics:
   - success-rate
@@ -361,26 +383,18 @@ scenarios:
   start:
   - 0_58
   - 0_68
-  use_hints: false
-  per_reset:
-    regular_boomerang: 1
-    sword: 1
-    magic_rod: 1
-    bow: 1
-    arrows: 1
-    candle: 1
-    hearts_and_containers: 34
-    partial_hearts: 254
-  per_frame:
-    bombs: 4
-    rupees: 100
+  use-hints: false
+  modifiers:
+  - has-sword
+
+# Teaches the model to navigate the rooms of dungeon 1 and follow objective arrows/find treasure.
 - name: dungeon1-room-walk
   description: Dungeon 1 room walk.
   iterations: 5000000
-  scenario_selector: probabilistic
-  objective: RoomWalk
-  critic: GameplayCritic
-  end_conditions:
+  scenario-selector: probabilistic
+  objective:
+    kind: RoomWalk
+  end-conditions:
   - RoomWalkCondition
   - GainedTriforce
   metrics:
@@ -403,396 +417,6 @@ scenarios:
   - '1_63'
   - '1_52'
   - '1_53'
-  use_hints: false
-  per_reset:
-    bombs: 3
-    hearts_and_containers: 34
-    partial_hearts: 254
-    keys: 4
-- name: dungeon1-entry-room
-  description: Dungeon 1 entry room.
-  iterations: 1000000
-  scenario_selector: round-robin
-  objective: RoomWalk
-  critic: GameplayCritic
-  end_conditions:
-  - RoomWalkCondition
-  - LeftDungeon
-  metrics:
-  - success-rate
-  - room-result
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  start:
-  - '1_73'
-  use_hints: false
-  per_reset:
-    bombs: 3
-    hearts_and_containers: 34
-    partial_hearts: 254
-    keys: 4
-- name: dungeon1-side-room-opening
-  description: Dungeon 1.
-  iterations: 2000000
-  scenario_selector: probabilistic
-  objective: TreasureObjective
-  objective_params:
-    treasure: triforce
-  critic: GameplayCritic
-  end_conditions:
-  - LeftDungeon
-  - GainedTriforce
-  - GameOver
-  - Timeout
-  metrics:
-  - success-rate
-  - overworld-progress
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  start:
-  - 1_72e
-  - 1_74w
-  - 1_63s
-  - 1_44w
-  use_hints: false
-  per_reset:
-    bombs: 3
-    hearts_and_containers: 34
-    partial_hearts: 254
-- name: dungeon1
-  description: Dungeon 1.
-  iterations: 10000000
-  scenario_selector: round-robin
-  objective: TreasureObjective
-  objective_params:
-    treasure: triforce
-  critic: GameplayCritic
-  end_conditions:
-  - LeftDungeon
-  - GainedTriforce
-  - CollectedTreasure
-  - GameOver
-  - Timeout
-  - Dungeon1DidntGetKey
-  - NowhereToGoCondition
-  metrics:
-  - success-rate
-  - overworld-progress
-  - game-progress
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  start:
-  - 1_73s
-  use_hints: false
-- name: dungeon1-wallmaster
-  description: Dungeon 1.
-  iterations: 2000000
-  scenario_selector: round-robin
-  objective: TreasureObjective
-  objective_params:
-    treasure: triforce
-  critic: GameplayCritic
-  end_conditions:
-  - LeftDungeon
-  - GainedTriforce
-  - CollectedTreasure
-  - GameOver
-  - Timeout
-  - LeftWallmasterRoom
-  metrics:
-  - success-rate
-  - overworld-progress
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  per_reset:
-    hearts_and_containers: 34
-    partial_hearts: 254
-  start:
-  - 1_45w
-  use_hints: false
-- name: dungeon1-wallmaster-finite-bombs
-  description: Wallmaster room practice with all items and finite bombs.
-  iterations: 250000
-  scenario_selector: round-robin
-  objective: TreasureObjective
-  objective_params:
-    treasure: triforce
-  critic: GameplayCritic
-  end_conditions:
-  - LeftDungeon
-  - GainedTriforce
-  - CollectedTreasure
-  - GameOver
-  - Timeout
-  - LeftWallmasterRoom
-  metrics:
-  - success-rate
-  - overworld-progress
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  per_reset:
-    regular_boomerang: 1
-    magic_rod: 1
-    bow: 1
-    arrows: 1
-    candle: 1
-    bombs: 8
-    hearts_and_containers: 34
-    partial_hearts: 254
-    keys: 4
-  per_frame:
-    rupees: 100
-  start:
-  - 1_45w
-  use_hints: false
-- name: dungeon1-skip-opening
-  description: Dungeon 1.
-  iterations: 5000000
-  scenario_selector: round-robin
-  objective: TreasureObjective
-  objective_params:
-    treasure: triforce
-  critic: GameplayCritic
-  end_conditions:
-  - LeftDungeon
-  - GainedTriforce
-  - CollectedTreasure
-  - GameOver
-  - Timeout
-  - NowhereToGoCondition
-  - LeftPlayArea
-  metrics:
-  - room-result
-  - success-rate
-  - dungeon1-progress
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  start:
-  - 1_63s
-  use_hints: true
-  per_reset:
-    bombs: 3
-    hearts_and_containers: 34
-    partial_hearts: 254
-    keys: 3
-- name: overworld-skip-sword-all-items
-  description: Navigate to dungeon 1 with all items equipped.
-  iterations: 2500000
-  scenario_selector: round-robin
-  objective: ReachLocation
-  objective_params:
-    level: 1
-    location: '0x73'
-  critic: GameplayCritic
-  end_conditions:
-  - StartingSwordCondition
-  - EnteredDungeon
-  - ReachedLocation
-  - GameOver
-  - Timeout
-  metrics:
-  - success-rate
-  - room-result
-  - room-health
-  - ending
-  - game-progress
-  - reward-average
-  - reward-details
-  start:
-  - 0_67s
-  use_hints: true
-  per_reset:
-    regular_boomerang: 1
-    sword: 1
-    magic_rod: 1
-    bow: 1
-    arrows: 1
-    candle: 1
-    hearts_and_containers: 34
-    partial_hearts: 254
-  per_frame:
-    bombs: 4
-    rupees: 100
-- name: dungeon1-all-items
-  description: Full dungeon 1 with all items equipped.
-  iterations: 5000000
-  scenario_selector: round-robin
-  objective: TreasureObjective
-  objective_params:
-    treasure: triforce
-  critic: GameplayCritic
-  end_conditions:
-  - LeftDungeon
-  - GainedTriforce
-  - CollectedTreasure
-  - GameOver
-  - Timeout
-  - Dungeon1DidntGetKey
-  - NowhereToGoCondition
-  metrics:
-  - success-rate
-  - overworld-progress
-  - game-progress
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  start:
-  - 1_73s
-  use_hints: false
-  per_reset:
-    regular_boomerang: 1
-    magic_rod: 1
-    bow: 1
-    arrows: 1
-    candle: 1
-    hearts_and_containers: 34
-    partial_hearts: 254
-  per_frame:
-    bombs: 4
-    rupees: 100
-- name: full-game-all-items
-  description: Full game from start through dungeon 2 entrance with all items equipped.
-  iterations: 2000000
-  scenario_selector: round-robin
-  objective: GameCompletion
-  critic: GameplayCritic
-  end_conditions:
-  - GainedTriforce
-  - EnteredDungeon2
-  - GameOver
-  - Timeout
-  metrics:
-  - success-rate
-  - game-progress
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  start:
-  - 0_77c
-  use_hints: true
-  per_reset:
-    regular_boomerang: 1
-    magic_rod: 1
-    bow: 1
-    arrows: 1
-    candle: 1
-    hearts_and_containers: 34
-    partial_hearts: 254
-  per_frame:
-    bombs: 4
-    rupees: 100
-- name: full-game-all-items-finite
-  description: Full game with finite bombs (8) and boomerang. No per-frame refills.
-  iterations: 2000000
-  scenario_selector: round-robin
-  objective: GameCompletion
-  critic: GameplayCritic
-  end_conditions:
-  - GainedTriforce
-  - EnteredDungeon2
-  - GameOver
-  - Timeout
-  metrics:
-  - success-rate
-  - game-progress
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  start:
-  - 0_77c
-  use_hints: true
-  per_reset:
-    regular_boomerang: 1
-    bombs: 8
-- name: overworld-skip-sword-finite-bombs
-  description: Navigate to dungeon 1 with all items but finite bombs (start with 8).
-  iterations: 2500000
-  scenario_selector: round-robin
-  objective: ReachLocation
-  objective_params:
-    level: 1
-    location: '0x73'
-  critic: GameplayCritic
-  end_conditions:
-  - StartingSwordCondition
-  - EnteredDungeon
-  - ReachedLocation
-  - GameOver
-  - Timeout
-  metrics:
-  - success-rate
-  - room-result
-  - room-health
-  - ending
-  - game-progress
-  - reward-average
-  - reward-details
-  start:
-  - 0_67s
-  use_hints: true
-  per_reset:
-    regular_boomerang: 1
-    sword: 1
-    magic_rod: 1
-    bow: 1
-    arrows: 1
-    candle: 1
-    bombs: 8
-    hearts_and_containers: 34
-    partial_hearts: 254
-  per_frame:
-    rupees: 100
-- name: dungeon1-finite-bombs
-  description: Full dungeon 1 with all items but finite bombs (start with 8).
-  iterations: 5000000
-  scenario_selector: round-robin
-  objective: TreasureObjective
-  objective_params:
-    treasure: triforce
-  critic: GameplayCritic
-  end_conditions:
-  - LeftDungeon
-  - GainedTriforce
-  - CollectedTreasure
-  - GameOver
-  - Timeout
-  - Dungeon1DidntGetKey
-  - NowhereToGoCondition
-  metrics:
-  - success-rate
-  - overworld-progress
-  - game-progress
-  - room-health
-  - ending
-  - reward-average
-  - reward-details
-  start:
-  - 1_73s
-  use_hints: false
-  per_reset:
-    regular_boomerang: 1
-    magic_rod: 1
-    bow: 1
-    arrows: 1
-    candle: 1
-    bombs: 8
-    hearts_and_containers: 34
-    partial_hearts: 254
-    keys: 4
-  per_frame:
-    rupees: 100
+  modifiers:
+  - four-keys
+  
