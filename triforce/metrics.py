@@ -360,6 +360,8 @@ class MetricTracker:
     """
     _instance : 'MetricTracker' = None
     _buffered_metrics : dict = {}
+    _buffered_batch_counts : dict = {}
+    _buffered_percentage_prefixes : dict = {}
 
     @staticmethod
     def get_instance():
@@ -369,6 +371,8 @@ class MetricTracker:
     def __init__(self, metric_names, scenario_name=None):
         self.metrics = [METRICS[name]() for name in metric_names]
         self._scenario_name = scenario_name
+        self._percentage_prefixes = frozenset(
+            m.base_name for m in self.metrics if isinstance(m, EnumMetric) and m.percentage)
 
         assert MetricTracker._instance is None
         MetricTracker._instance = self
@@ -379,28 +383,47 @@ class MetricTracker:
         return self._scenario_name
 
     @staticmethod
+    def _accumulate_buffered(scenario_name, metrics, percentage_prefixes):
+        """Accumulate metric values into the per-scenario buffer.
+
+        Tracks a shared batch count per scenario so that percentage-group metrics
+        (from EnumMetric) use total batches as the denominator, not just batches
+        where a particular key appeared.
+        """
+        if scenario_name not in MetricTracker._buffered_metrics:
+            MetricTracker._buffered_metrics[scenario_name] = {}
+        existing = MetricTracker._buffered_metrics[scenario_name]
+
+        MetricTracker._buffered_batch_counts[scenario_name] = \
+            MetricTracker._buffered_batch_counts.get(scenario_name, 0) + 1
+
+        if percentage_prefixes:
+            if scenario_name not in MetricTracker._buffered_percentage_prefixes:
+                MetricTracker._buffered_percentage_prefixes[scenario_name] = set()
+            MetricTracker._buffered_percentage_prefixes[scenario_name].update(
+                percentage_prefixes)
+
+        for key, value in metrics.items():
+            if '/max' in key:
+                if key in existing:
+                    existing[key] = (max(existing[key][0], value), 1)
+                else:
+                    existing[key] = (value, 1)
+            elif key in existing:
+                old_val, old_count = existing[key]
+                existing[key] = (old_val + value, old_count + 1)
+            else:
+                existing[key] = (value, 1)
+
+    @staticmethod
     def close():
         """Closes the metric tracker, buffering metrics if in weighted mode."""
         instance = MetricTracker._instance
         if instance is not None and instance.scenario_name is not None:
             metrics = instance.get_metrics()
             if metrics:
-                name = instance.scenario_name
-                if name not in MetricTracker._buffered_metrics:
-                    MetricTracker._buffered_metrics[name] = {}
-                existing = MetricTracker._buffered_metrics[name]
-                for key, value in metrics.items():
-                    if '/max' in key:
-                        # Track maximum, not sum
-                        if key in existing:
-                            existing[key] = (max(existing[key][0], value), 1)
-                        else:
-                            existing[key] = (value, 1)
-                    elif key in existing:
-                        old_val, old_count = existing[key]
-                        existing[key] = (old_val + value, old_count + 1)
-                    else:
-                        existing[key] = (value, 1)
+                MetricTracker._accumulate_buffered(
+                    instance.scenario_name, metrics, instance._percentage_prefixes)
         MetricTracker._instance = None
 
     def begin_scenario(self, state):
@@ -460,28 +483,29 @@ class MetricTracker:
         if instance is not None and instance.scenario_name is not None:
             current = instance.get_metrics()
             if current:
-                name = instance.scenario_name
-                if name not in buffered:
-                    buffered[name] = {}
-                existing = buffered[name]
-                for key, value in current.items():
-                    if '/max' in key:
-                        if key in existing:
-                            existing[key] = (max(existing[key][0], value), 1)
-                        else:
-                            existing[key] = (value, 1)
-                    elif key in existing:
-                        old_val, old_count = existing[key]
-                        existing[key] = (old_val + value, old_count + 1)
-                    else:
-                        existing[key] = (value, 1)
+                MetricTracker._accumulate_buffered(
+                    instance.scenario_name, current, instance._percentage_prefixes)
 
             for metric in instance.metrics:
                 metric.clear()
 
-        # Flatten accumulated (value, count) tuples to averages
+        # Flatten accumulated (value, count) tuples to final values.
+        # For percentage-group metrics (EnumMetric), use the shared batch count as the
+        # denominator so that missing keys correctly contribute 0 instead of being omitted.
         result = {}
         for scenario_name, metrics in buffered.items():
-            result[scenario_name] = {key: total / count for key, (total, count) in metrics.items()}
+            batch_count = MetricTracker._buffered_batch_counts.get(scenario_name, 1)
+            pct_prefixes = MetricTracker._buffered_percentage_prefixes.get(scenario_name, set())
+            scenario_result = {}
+            for key, (total, count) in metrics.items():
+                if '/max' in key:
+                    scenario_result[key] = total
+                elif pct_prefixes and any(key.startswith(p) for p in pct_prefixes):
+                    scenario_result[key] = total / batch_count
+                else:
+                    scenario_result[key] = total / count
+            result[scenario_name] = scenario_result
         buffered.clear()
+        MetricTracker._buffered_batch_counts.clear()
+        MetricTracker._buffered_percentage_prefixes.clear()
         return result
