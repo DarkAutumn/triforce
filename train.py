@@ -969,15 +969,17 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
     return model, model.steps_trained - steps_before
 
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
-                 callback=None, circuit_def=None, skip_to=None):
+                 callback=None, circuit_def=None, skip_to=None, outer_exit_criteria=None):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     """Run training circuit and return (final_model, final_scenario_def).
 
     For weighted circuits, dispatches to _run_weighted_circuit.
+    outer_exit_criteria: ExitCriteria from the parent sequential entry, overrides inner criteria.
     """
     if circuit_def is not None and circuit_def.kind == 'weighted':
         return _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def,
-                                     checkpoint_dir, kwargs, total_budget, callback)
+                                     checkpoint_dir, kwargs, total_budget, callback,
+                                     outer_exit_criteria=outer_exit_criteria)
 
     return _run_sequential_circuit(ppo, circuit, model_kind, action_space_def,
                                     checkpoint_dir, kwargs, total_budget, callback,
@@ -1065,7 +1067,8 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
             sub_callback = _SubCircuitCallback(callback) if callback else None
             model, scenario_def = _run_circuit(ppo, sub_circuit_def.scenarios, model_kind,
                                                action_space_def, checkpoint_dir, sub_kwargs,
-                                               sub_budget, sub_callback, sub_circuit_def)
+                                               sub_budget, sub_callback, sub_circuit_def,
+                                               outer_exit_criteria=scenario_entry.exit_criteria)
 
             if callback:
                 callback.on_scenario_end(f"[circuit] {scenario_entry.circuit}")
@@ -1131,12 +1134,14 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
 
 
 def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkpoint_dir, kwargs,
-                           total_budget, callback=None):
+                           total_budget, callback=None, outer_exit_criteria=None):
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     """Run a weighted training circuit.
 
     All scenarios run concurrently with step-count proportional to their weights.
     The WeightedScenarioSelector (via RPC) decides which scenario each worker runs on reset.
+    outer_exit_criteria: ExitCriteria from the parent sequential entry. When provided, overrides
+    inner entry exit criteria — applied to the first (primary) scenario.
     """
     # Resolve scenario definitions and weights
     scenario_defs = []
@@ -1151,6 +1156,10 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
         weights.append(entry.weight)
         if entry.exit_criteria:
             exit_criteria_map[entry.scenario] = entry.exit_criteria
+
+    # Outer exit criteria overrides inner — applied to the first (primary) scenario
+    if outer_exit_criteria and scenario_defs:
+        exit_criteria_map = {scenario_defs[0].name: outer_exit_criteria}
 
     # Determine iteration budget
     if total_budget is not None:
