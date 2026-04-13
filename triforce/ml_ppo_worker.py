@@ -136,10 +136,16 @@ def _aggregate_metrics(metrics_list):
 
     return {key: _reduce_metric(key, values) for key, values in combined.items()}
 def _aggregate_weighted_metrics(metrics_list):
-    """Averages per-scenario metric dicts: {scenario: {metric: [values]}}."""
+    """Averages per-scenario metric dicts: {scenario: {metric: [values]}}.
+
+    Missing keys are padded with 0 per scenario so that percentage metrics
+    (like endings/) use the correct denominator across workers.
+    """
     combined = {}
+    scenario_worker_counts = {}
     for metrics in metrics_list:
         for scenario, scenario_metrics in metrics.items():
+            scenario_worker_counts[scenario] = scenario_worker_counts.get(scenario, 0) + 1
             if scenario not in combined:
                 combined[scenario] = {}
             for key, value in scenario_metrics.items():
@@ -147,8 +153,18 @@ def _aggregate_weighted_metrics(metrics_list):
                     combined[scenario][key] = []
                 combined[scenario][key].append(value)
 
-    return {scenario: {key: _reduce_metric(key, vals) for key, vals in metrics.items()}
-            for scenario, metrics in combined.items()}
+    result = {}
+    for scenario, metrics in combined.items():
+        worker_count = scenario_worker_counts[scenario]
+        scenario_result = {}
+        for key, vals in metrics.items():
+            if '/max' in key:
+                scenario_result[key] = max(vals)
+            else:
+                # Pad with 0 for workers that didn't report this key
+                scenario_result[key] = sum(vals) / worker_count
+        result[scenario] = scenario_result
+    return result
 
 
 class RolloutWorkerPool:

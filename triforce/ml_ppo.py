@@ -242,14 +242,17 @@ class PPO:
             metrics: {scenario_name: {metric_name: value}} from weighted mode
             exit_criteria_map: {scenario_name: ExitCriteria} for scenarios with exit criteria
         Returns:
-            True if any scenario's exit criteria is met.
+            True if ALL scenarios with exit criteria have met their threshold.
         """
+        if not exit_criteria_map:
+            return False
         for scenario_name, criteria in exit_criteria_map.items():
-            if scenario_name in metrics:
-                scenario_metrics = metrics[scenario_name]
-                if scenario_metrics.get(criteria.metric, 0) >= criteria.threshold:
-                    return True
-        return False
+            if scenario_name not in metrics:
+                return False
+            scenario_metrics = metrics[scenario_name]
+            if scenario_metrics.get(criteria.metric, 0) < criteria.threshold:
+                return False
+        return True
 
     def train_weighted(self, network_class, create_env, scenario_defs, weights,
                        action_space, iterations, exit_criteria_map, callback=None, **kwargs):
@@ -442,15 +445,18 @@ class PPO:
         """Average a list of per-scenario metric dicts from weighted workers.
 
         Each dict is {scenario_name: {metric: value}} from workers. Averages per-scenario
-        metrics across workers that reported for that scenario.
+        metrics across workers that reported for that scenario. Missing keys are padded
+        with 0 so percentage metrics use the correct denominator.
         """
         if not dicts:
             return {}
 
-        # Collect: {scenario: {metric: [values]}}
+        # Collect: {scenario: {metric: [values]}} and count workers per scenario
         combined = {}
+        scenario_worker_counts = {}
         for d in dicts:
             for scenario, metrics in d.items():
+                scenario_worker_counts[scenario] = scenario_worker_counts.get(scenario, 0) + 1
                 if scenario not in combined:
                     combined[scenario] = {}
                 for key, value in metrics.items():
@@ -458,9 +464,17 @@ class PPO:
                         combined[scenario][key] = []
                     combined[scenario][key].append(value)
 
-        return {scenario: {key: (max(vals) if '/max' in key else sum(vals) / len(vals))
-                          for key, vals in metrics.items()}
-                for scenario, metrics in combined.items()}
+        result = {}
+        for scenario, metrics in combined.items():
+            worker_count = scenario_worker_counts[scenario]
+            scenario_result = {}
+            for key, vals in metrics.items():
+                if '/max' in key:
+                    scenario_result[key] = max(vals)
+                else:
+                    scenario_result[key] = sum(vals) / worker_count
+            result[scenario] = scenario_result
+        return result
 
     @staticmethod
     def _average_metric_dicts(dicts):

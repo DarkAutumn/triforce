@@ -176,10 +176,14 @@ class TestMetricTrackerWeighted:
         """Ensure clean state before each test."""
         MetricTracker.close()
         MetricTracker._buffered_metrics.clear()
+        MetricTracker._buffered_batch_counts.clear()
+        MetricTracker._buffered_percentage_prefixes.clear()
 
     def teardown_method(self):
         MetricTracker.close()
         MetricTracker._buffered_metrics.clear()
+        MetricTracker._buffered_batch_counts.clear()
+        MetricTracker._buffered_percentage_prefixes.clear()
 
     def test_normal_mode_flat_dict(self):
         """Non-weighted mode should return flat dict."""
@@ -218,3 +222,76 @@ class TestMetricTrackerWeighted:
 
         result = MetricTracker.get_metrics_and_clear()
         assert 'full-game' in result or 'dungeon1' in result
+
+    def test_ending_percentages_across_batches(self):
+        """EndingMetric percentages must sum to ~1.0 across single-episode batches.
+
+        Reproduces the bug where each failure type showed ~100% because missing
+        keys were not counted in the denominator.
+        """
+        # Batch 1: one episode ending with death
+        t1 = MetricTracker(['ending'], scenario_name='test-scenario')
+        t1.end_scenario(True, False, 'failure-death')
+        MetricTracker.close()
+
+        # Batch 2: one episode ending with stuck
+        t2 = MetricTracker(['ending'], scenario_name='test-scenario')
+        t2.end_scenario(False, True, 'failure-stuck')
+        MetricTracker.close()
+
+        # Batch 3: one episode ending with no-progress
+        t3 = MetricTracker(['ending'], scenario_name='test-scenario')
+        t3.end_scenario(False, True, 'failure-no-progress')
+        MetricTracker.close()
+
+        # Batch 4: one episode ending with death again
+        t4 = MetricTracker(['ending'], scenario_name='test-scenario')
+        t4.end_scenario(True, False, 'failure-death')
+
+        result = MetricTracker.get_metrics_and_clear()
+        assert 'test-scenario' in result
+        metrics = result['test-scenario']
+
+        # Each ending should appear with correct percentage (2 death, 1 stuck, 1 no-progress)
+        assert metrics['endings/failure-death'] == pytest.approx(0.5)
+        assert metrics['endings/failure-stuck'] == pytest.approx(0.25)
+        assert metrics['endings/failure-no-progress'] == pytest.approx(0.25)
+
+        # They must sum to 1.0
+        total = sum(v for k, v in metrics.items() if k.startswith('endings/'))
+        assert total == pytest.approx(1.0)
+
+    def test_late_appearing_key_uses_batch_count(self):
+        """A key that first appears in a late batch uses the total batch count."""
+        # Batches 1-3: all death
+        for _ in range(3):
+            t = MetricTracker(['ending'], scenario_name='test-scenario')
+            t.end_scenario(True, False, 'failure-death')
+            MetricTracker.close()
+
+        # Batch 4: stuck (first time this key appears)
+        t = MetricTracker(['ending'], scenario_name='test-scenario')
+        t.end_scenario(False, True, 'failure-stuck')
+
+        result = MetricTracker.get_metrics_and_clear()
+        metrics = result['test-scenario']
+
+        # 3 death out of 4 batches, 1 stuck out of 4
+        assert metrics['endings/failure-death'] == pytest.approx(0.75)
+        assert metrics['endings/failure-stuck'] == pytest.approx(0.25)
+
+    def test_non_percentage_metrics_unaffected(self):
+        """Non-percentage metrics like success-rate still use per-key averaging."""
+        t1 = MetricTracker(['success-rate'], scenario_name='test-scenario')
+        t1.end_scenario(True, False, 'success')
+        t1.end_scenario(True, False, 'success')
+        MetricTracker.close()
+
+        t2 = MetricTracker(['success-rate'], scenario_name='test-scenario')
+        t2.end_scenario(False, True, 'failure')
+
+        result = MetricTracker.get_metrics_and_clear()
+        metrics = result['test-scenario']
+
+        # Batch 1: 2/2 = 1.0, Batch 2: 0/1 = 0.0, average = 0.5
+        assert metrics['success-rate'] == pytest.approx(0.5)
