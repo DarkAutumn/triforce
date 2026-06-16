@@ -119,7 +119,7 @@ export default function triforceExperiment(pi: ExtensionAPI): void {
     uiHooks = {
       hasUI: () => ctx.hasUI,
       isIdle: () => ctx.isIdle(),
-      setWidget: (lines: string[]) => ctx.ui.setWidget(lines, { placement: "aboveEditor" }),
+      setWidget: (lines: string[]) => ctx.ui.setWidget("aboveEditor", lines),
       notify: (message: string, level: "info" | "warn" | "error") => ctx.ui.notify(message, level),
     };
     reattachNewestExperiment();
@@ -561,6 +561,9 @@ function reattachNewestExperiment(): void {
   for (const statusPath of statuses) {
     const parsed = readJsonFile(statusPath);
     if (!isStatus(parsed) || (parsed.state !== "running" && parsed.state !== "paused")) {
+      continue;
+    }
+    if (typeof parsed.pid !== "number" || !isProcessAlive(parsed.pid)) {
       continue;
     }
     const stat = fs.statSync(statusPath);
