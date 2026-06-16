@@ -19,8 +19,8 @@ class TrainingCallback:
                           exit_threshold=None, exit_criteria_scenario=None):
         """Called when a scenario begins training."""
 
-    def on_scenario_end(self, scenario_name):
-        """Called when a scenario finishes."""
+    def on_scenario_end(self, scenario_name, checkpoint_path=None):
+        """Called when a scenario finishes; checkpoint_path is the leg checkpoint if available."""
 
     def on_scenario_resumed(self, scenario_name, history_entry):
         """Called for skipped scenarios during --resume to populate display from history."""

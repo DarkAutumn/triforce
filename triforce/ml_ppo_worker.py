@@ -135,6 +135,7 @@ def _aggregate_metrics(metrics_list):
             combined[key].append(value)
 
     return {key: _reduce_metric(key, values) for key, values in combined.items()}
+# pylint: disable=duplicate-code
 def _aggregate_weighted_metrics(metrics_list):
     """Averages per-scenario metric dicts: {scenario: {metric: [values]}}.
 

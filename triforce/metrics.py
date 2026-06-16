@@ -382,6 +382,11 @@ class MetricTracker:
         """The scenario name for weighted-mode metric buffering, or None."""
         return self._scenario_name
 
+    @property
+    def percentage_prefixes(self):
+        """Metric prefixes that should be averaged across every batch."""
+        return self._percentage_prefixes
+
     @staticmethod
     def _accumulate_buffered(scenario_name, metrics, percentage_prefixes):
         """Accumulate metric values into the per-scenario buffer.
@@ -423,7 +428,7 @@ class MetricTracker:
             metrics = instance.get_metrics()
             if metrics:
                 MetricTracker._accumulate_buffered(
-                    instance.scenario_name, metrics, instance._percentage_prefixes)
+                    instance.scenario_name, metrics, instance.percentage_prefixes)
         MetricTracker._instance = None
 
     def begin_scenario(self, state):
@@ -484,7 +489,7 @@ class MetricTracker:
             current = instance.get_metrics()
             if current:
                 MetricTracker._accumulate_buffered(
-                    instance.scenario_name, current, instance._percentage_prefixes)
+                    instance.scenario_name, current, instance.percentage_prefixes)
 
             for metric in instance.metrics:
                 metric.clear()
