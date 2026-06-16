@@ -6,7 +6,7 @@ from copy import deepcopy
 from numbers import Number
 
 DEFAULT_HEALTH_RANGES = {
-    "charts/SPS": (100, None),
+    "charts/SPS": (50, None),
     "losses/value_loss": (0.01, 1.0),
     "losses/policy_loss": (-0.05, 0.05),
     "losses/entropy": (0.5, 2.0),
