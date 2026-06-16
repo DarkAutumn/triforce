@@ -518,11 +518,12 @@ function updateWidget(): void {
   const current = status.current ?? {};
   const overall = status.overall ?? {};
   const metrics = status.latest_metrics ?? {};
+  const legEtaSeconds = calculateLegEta(current, overall);
   const stats = status.latest_stats ?? {};
   const lines = [
     `Triforce: ${status.state ?? "unknown"} ${status.scenario ?? "unknown"} pid=${status.pid ?? state.childPid ?? "n/a"}`,
     `Run: ${state.experimentId}`,
-    `Leg: ${current.name ?? "none"} ${formatInt(current.steps)}/${formatInt(current.total_steps)} ${formatPct(current.pct)}`,
+    `Leg: ${current.name ?? "none"} ${formatInt(current.steps)}/${formatInt(current.total_steps)} ${formatPct(current.pct)} ETA=${formatEta(legEtaSeconds)}`,
     `Total: ${formatInt(overall.steps)}/${formatInt(overall.total_steps)} ${formatPct(overall.pct)} SPS=${formatNumber(overall.sps)} ETA=${formatEta(overall.eta_seconds)}`,
     `Latest: success=${formatUnknown(metrics["success-rate"])} reward=${formatUnknown(metrics["reward-average"])} entropy=${formatUnknown(stats["losses/entropy"])}`,
     `KL=${formatUnknown(stats["losses/approx_kl"])} clip=${formatUnknown(stats["losses/clipfrac"])} EV=${formatUnknown(stats["losses/explained_variance"])}`,
@@ -932,6 +933,16 @@ function formatNumber(value: unknown): string {
 
 function formatUnknown(value: unknown): string {
   return typeof value === "number" ? value.toFixed(4) : "n/a";
+}
+
+function calculateLegEta(current: CurrentStatus, overall: OverallStatus): number | null {
+  if (typeof current.steps !== "number" || typeof current.total_steps !== "number" || typeof overall.sps !== "number") {
+    return null;
+  }
+  if (overall.sps <= 0 || current.steps >= current.total_steps) {
+    return null;
+  }
+  return (current.total_steps - current.steps) / overall.sps;
 }
 
 function formatEta(value: unknown): string {
