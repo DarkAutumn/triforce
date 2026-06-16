@@ -497,7 +497,7 @@ async function sendMilestoneWake(pi: ExtensionAPI, milestone: MilestoneEvent, sk
     `Tuning: ${state.runDir ? path.join(state.runDir, "tuning.json") : "unknown"}`,
     `Control: ${state.runDir ? path.join(state.runDir, "control.json") : "unknown"}`,
     "",
-    "Use the triforce-experiment skill decision loop. Decide exactly one action: continue, stop/edit/restart, or finish. If continuing, call triforce_experiment_control with command continue and then yield.",
+    "Use the triforce-experiment skill decision loop. Decide exactly one run action: continue, stop/edit/restart, or finish. Also decide whether each wake-causing metric should keep waking, be loosened, or be disabled; cite evidence and edit tuning.json before continuing when appropriate. If continuing, call triforce_experiment_control with command continue and then yield.",
   ].join("\n");
   state.wakeInFlight = true;
   wakeToolTouched = false;

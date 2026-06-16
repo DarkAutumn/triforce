@@ -334,7 +334,10 @@ def _render_decision_prompt(lines: list[str], snapshot: dict) -> None:
         "## Decision Prompt",
         "",
         f"Journal: {journal_path if journal_path else 'Journal not found.'}",
-        "Decide exactly one action: continue, stop/edit/restart, or finish.",
+        "Decide exactly one run action: continue, stop/edit/restart, or finish.",
+        "Also decide whether each wake-causing metric should keep waking, be loosened, or be disabled.",
+        "Cite evidence for that wake-tuning decision.",
+        "If changing wake sensitivity, edit tuning.json before calling triforce_experiment_control or restart.",
         "If continuing, call triforce_experiment_control with command continue and then yield.",
         "",
     ])

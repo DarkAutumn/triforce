@@ -45,16 +45,29 @@ Before calling `triforce_experiment_start`, write or update `training/experiment
 
 ## Milestone decision loop
 
-On every milestone wake, read the milestone report and `journal.md`, then choose exactly one action.
+On every milestone wake, read the milestone report and `journal.md`, then make two decisions: exactly one run action, and a wake-tuning decision for every metric that caused the wake.
+
+For anomaly wakes, append a `Wake tuning decision` block to `journal.md` before calling a control/restart/finish tool:
+
+```markdown
+### Wake tuning decision
+
+| Metric | Decision | Evidence | tuning.json change |
+|---|---|---|---|
+| <metric> | keep waking / loosen / disable | <observed trend and why> | <exact change or none> |
+```
+
+Use `keep waking` when the metric is a real training-health risk. Use `loosen` when the metric is noisy or acceptable for this phase but still useful at a wider bound. Use `disable` only when the metric is not actionable for the current experiment. If the decision is `loosen` or `disable`, edit the active `tuning.json` before continuing or restarting.
 
 ### Continue
 
 Use when training is healthy enough or intentionally being observed through a danger zone.
 
-1. Optionally edit the active `tuning.json` to adjust wake/anomaly thresholds.
-2. Append a journal entry with the milestone, checkpoint path, observed metrics, and why continuing is correct.
-3. Call `triforce_experiment_control` with `{ "command": "continue" }`.
-4. Stop; let the extension wake the agent at the next milestone.
+1. Decide and document whether each wake-causing metric should keep waking, be loosened, or be disabled.
+2. Edit the active `tuning.json` when the wake-tuning decision is `loosen` or `disable`.
+3. Append a journal entry with the milestone, checkpoint path, observed metrics, run decision, wake-tuning decision, and evidence.
+4. Call `triforce_experiment_control` with `{ "command": "continue" }`.
+5. Stop; let the extension wake the agent at the next milestone.
 
 ### Stop, edit, restart
 
