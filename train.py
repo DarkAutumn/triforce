@@ -889,6 +889,8 @@ def _build_history_entry(scenario_name, steps, callback=None):
                     "target": info.get("threshold"),
                     "actual": info.get("value"),
                 }
+            entry["exit_metric_met"] = info.get("met")
+            entry["completion_reason"] = info.get("completion_reason")
     return entry
 
 
@@ -1025,17 +1027,17 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
                                                sub_budget, sub_callback, sub_circuit_def,
                                                outer_exit_criteria=scenario_entry.exit_criteria)
 
-            # Record completed circuit in training history before saving the leg checkpoint.
-            circuit_label = f"[circuit] {scenario_entry.circuit}"
-            training_history.append(_build_history_entry(circuit_label, sub_budget or 0, callback))
-
             stem = _model_stem(model_kind.name, action_space_def.name)
             circuit_name = scenario_entry.circuit
             checkpoint_path = f"{checkpoint_dir}/{stem}_{circuit_name}_{model.steps_trained}.pt"
-            model.save(checkpoint_path, optimizer=ppo.optimizer, training_history=training_history)
 
             if callback:
                 callback.on_scenario_end(f"[circuit] {scenario_entry.circuit}", checkpoint_path)
+
+            # Record completed circuit in training history before saving the leg checkpoint.
+            circuit_label = f"[circuit] {scenario_entry.circuit}"
+            training_history.append(_build_history_entry(circuit_label, sub_budget or 0, callback))
+            model.save(checkpoint_path, optimizer=ppo.optimizer, training_history=training_history)
 
             kwargs['model'] = model
             iterations_spent += sub_budget or 0
@@ -1078,8 +1080,9 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
         if callback:
             callback.on_scenario_end(scenario_def.name, checkpoint_path)
 
-        # Record completed scenario in training history
+        # Record completed scenario in training history and resave checkpoint metadata.
         training_history.append(_build_history_entry(scenario_def.name, used, callback))
+        model.save(checkpoint_path, optimizer=ppo.optimizer, training_history=training_history)
 
         kwargs['model'] = model
         iterations_spent += used
@@ -1162,14 +1165,16 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
         action_space_def.actions, iterations, exit_criteria_map, callback,
         save_path=checkpoint_dir,
         **{k: v for k, v in kwargs.items() if k != 'network_class'})
-
-    # Save final checkpoint with training history before emitting the leg-end callback.
+    # Save final checkpoint with training history after emitting the leg-end callback.
     training_history = kwargs.get('training_history')
     checkpoint_path = f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt"
-    model.save(checkpoint_path, optimizer=ppo.optimizer, training_history=training_history)
 
     if callback:
-        callback.on_scenario_end(f"weighted[{len(scenario_defs)}]", checkpoint_path)
+        label = f"weighted[{len(scenario_defs)}]"
+        callback.on_scenario_end(label, checkpoint_path)
+        if training_history is not None:
+            training_history.append(_build_history_entry(label, iterations, callback))
+    model.save(checkpoint_path, optimizer=ppo.optimizer, training_history=training_history)
     return model, scenario_defs[0]
 
 
@@ -1242,12 +1247,15 @@ def main():
                                          scenario=args.scenario,
                                          action_space=action_space_def.name,
                                          model_kind=model_kind.name,
-                                         baseline_eval_json=args.baseline_eval_json)
+                                         reporting={
+                                             'baseline_eval_json': args.baseline_eval_json,
+                                             'final_eval_scenario': getattr(circuit_def, 'final_eval_scenario', None),
+                                             'final_eval_episodes': getattr(circuit_def, 'final_eval_episodes', 100),
+                                         })
         model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
                                            checkpoint_dir, kwargs, args.iterations,
                                            callback=callback, circuit_def=circuit_def,
                                            skip_to=skip_to)
-        callback.on_training_complete()
     else:
         with Live(console=console, refresh_per_second=4) as live:
             display = TrainingDisplay(live, log_dir)
@@ -1267,6 +1275,9 @@ def main():
     final_history = kwargs.get('training_history')
     model.save(final_path, optimizer=ppo.optimizer, training_history=final_history)
     console.print(f"\nFinal model: {final_path}")
+    if args.headless_agent:
+        callback.set_final_model_path(final_path)
+        callback.on_training_complete()
 
     if args.evaluate:
         _run_post_training_eval(model, action_space_def, model_kind, scenario_def,

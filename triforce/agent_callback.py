@@ -1,5 +1,6 @@
 """File-based training callback used by the OMP Triforce experiment extension."""
 
+import hashlib
 import json
 import os
 import time
@@ -25,14 +26,17 @@ class AgentTrainingCallback(TrainingCallback):
     """Training callback that emits deterministic files for OMP agent supervision."""
 
     def __init__(self, run_dir: str, experiment_dir: str, log_dir: str, *, scenario: str,
-                 action_space: str, model_kind: str, baseline_eval_json: str | None = None) -> None:
+                 action_space: str, model_kind: str, reporting: dict | None = None) -> None:
         self.run_dir = run_dir
         self.experiment_dir = experiment_dir
         self.log_dir = log_dir
         self.scenario = scenario
         self.action_space = action_space
         self.model_kind = model_kind
-        self.baseline_eval_json = baseline_eval_json
+        reporting = reporting or {}
+        self.baseline_eval_json = reporting.get("baseline_eval_json")
+        self.final_eval_scenario = reporting.get("final_eval_scenario")
+        self.final_eval_episodes = reporting.get("final_eval_episodes") or 100
 
         self.events_path = os.path.join(run_dir, "events.jsonl")
         self.status_path = os.path.join(run_dir, "status.json")
@@ -53,17 +57,21 @@ class AgentTrainingCallback(TrainingCallback):
         self._latest_metrics = {}
         self._latest_stats = {}
         self._latest_checkpoint_path = None
+        self._final_model_path = None
         self._last_milestone_step = None
         self._last_milestone_reason = None
         self._last_anomaly_check_step = None
         self._milestone_id = 0
+        self._anomaly_state = {}
+        self._last_full_metrics_path = None
+        self._last_status_hash = None
         self._kl_rollback_count = 0
         self._started_at = time.time()
         self._last_progress_time = None
         self._last_progress_steps = 0
         self._sps = None
         self._last_valid_tuning = deepcopy(DEFAULT_TUNING)
-        self._baseline = self._load_baseline(baseline_eval_json)
+        self._baseline = self._load_baseline(self.baseline_eval_json)
 
         os.makedirs(run_dir, exist_ok=True)
         os.makedirs(experiment_dir, exist_ok=True)
@@ -79,6 +87,10 @@ class AgentTrainingCallback(TrainingCallback):
             "steps": 0,
             "status": "pending",
             "exit_criteria": None,
+            "completion_reason": None,
+            "exit_metric_value": None,
+            "exit_metric_threshold": None,
+            "exit_metric_met": None,
         } for name, iters in scenarios]
         self._total_budget = sum(iters for _, iters in scenarios)
         self._total_spent = 0
@@ -112,7 +124,11 @@ class AgentTrainingCallback(TrainingCallback):
         self._latest_stats = {}
         if self._active_index >= 0:
             self._scenarios[self._active_index]["status"] = _RUNNING
+            self._scenarios[self._active_index]["completion_reason"] = "running"
             self._scenarios[self._active_index]["total_steps"] = iterations
+            self._scenarios[self._active_index]["exit_metric_value"] = None
+            self._scenarios[self._active_index]["exit_metric_threshold"] = exit_threshold
+            self._scenarios[self._active_index]["exit_metric_met"] = None
             if exit_criteria:
                 self._scenarios[self._active_index]["exit_criteria"] = {
                     "metric": exit_criteria,
@@ -157,11 +173,16 @@ class AgentTrainingCallback(TrainingCallback):
 
     def on_scenario_end(self, scenario_name, checkpoint_path=None):
         milestone_step = self._current_step()
+        completion = self._completion_snapshot(scenario_name)
         if self._active_index >= 0:
             self._scenarios[self._active_index]["status"] = "complete"
             self._scenarios[self._active_index]["steps"] = self._current_steps
+            self._scenarios[self._active_index]["completion_reason"] = completion["completion_reason"]
+            self._scenarios[self._active_index]["exit_metric_value"] = completion["value"]
+            self._scenarios[self._active_index]["exit_metric_threshold"] = completion["threshold"]
+            self._scenarios[self._active_index]["exit_metric_met"] = completion["met"]
         self._total_spent += self._current_steps
-        self._completion_info[scenario_name] = self._completion_snapshot(scenario_name)
+        self._completion_info[scenario_name] = completion
         self._active_index = -1
         self._latest_checkpoint_path = checkpoint_path or self._latest_checkpoint_path
         self._write_status(_RUNNING)
@@ -178,6 +199,11 @@ class AgentTrainingCallback(TrainingCallback):
 
     def get_completion_info(self, scenario_name):
         return self._completion_info.get(scenario_name)
+
+    def set_final_model_path(self, final_model_path):
+        """Set final model path before emitting the terminal complete wake."""
+        self._final_model_path = final_model_path
+        self._write_status(_COMPLETE)
 
     def on_training_complete(self):
         if self._tensorboard:
@@ -233,6 +259,7 @@ class AgentTrainingCallback(TrainingCallback):
             return
         self._last_anomaly_check_step = iteration
         anomalies = detect_anomalies(self._metric_history, self._latest_metrics, self._latest_stats, tuning)
+        anomalies = self._categorize_anomalies(anomalies)
         if anomalies:
             self._emit_milestone("anomaly", iteration, anomalies=anomalies, dedupe=True)
 
@@ -251,7 +278,8 @@ class AgentTrainingCallback(TrainingCallback):
         if checkpoint_path:
             self._latest_checkpoint_path = checkpoint_path
         self._write_status(self._status_state())
-        snapshot = self._snapshot(anomalies or [])
+        full_metrics_path = self._write_full_metrics(self._milestone_id, anomalies or [])
+        snapshot = self._snapshot(anomalies or [], reason, full_metrics_path)
         report_path = os.path.join(self.run_dir, f"milestone_{self._milestone_id:04d}.md")
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(render_milestone_report(snapshot, tuning, self._baseline))
@@ -263,6 +291,9 @@ class AgentTrainingCallback(TrainingCallback):
             "report_path": report_path,
             "checkpoint_path": checkpoint_path or self._latest_checkpoint_path,
             "anomalies": anomalies or [],
+            "status_updated_at": snapshot["status"].get("updated_at"),
+            "status_hash": snapshot.get("status_hash"),
+            "final_model_path": self._final_model_path,
         })
         append_jsonl(self.events_path, event)
         self._write_status(self._status_state())
@@ -282,21 +313,36 @@ class AgentTrainingCallback(TrainingCallback):
                     value = self._latest_metrics.get(f"{criteria_scenario}/{metric}")
                 if value is None:
                     value = self._latest_metrics.get(metric)
+        met = value is not None and threshold is not None and value >= threshold
+        if met:
+            completion_reason = "exit_criterion"
+        elif self._current_steps >= self._current_total:
+            completion_reason = "budget_exhausted"
+        else:
+            completion_reason = "stopped"
         return {
             "scenario": scenario_name,
             "metric": metric,
             "threshold": threshold,
             "value": value,
-            "met": value is not None and threshold is not None and value >= threshold,
+            "met": met if threshold is not None else None,
+            "completion_reason": completion_reason,
             "steps": self._current_steps,
             "total": self._current_total,
         }
 
-    def _snapshot(self, anomalies):
+    def _snapshot(self, anomalies, reason=None, full_metrics_path=None):
+        status = self._build_status(self._status_state())
+        status_hash = _stable_hash(status)
+        self._last_status_hash = status_hash
         return {
-            "status": self._build_status(self._status_state()),
+            "status": status,
+            "status_hash": status_hash,
+            "reason": reason,
             "anomalies": anomalies,
+            "full_metrics_path": full_metrics_path or self._last_full_metrics_path,
             "journal_path": self.journal_path if os.path.exists(self.journal_path) else None,
+            "harness_health": self._harness_health(status),
         }
 
     def _status_state(self):
@@ -307,11 +353,19 @@ class AgentTrainingCallback(TrainingCallback):
     def _build_status(self, state):
         elapsed = time.time() - self._started_at
         total_done = self._total_spent + (self._current_steps if self._active_index >= 0 else 0)
-        pct = total_done / self._total_budget * 100 if self._total_budget else 0.0
-        current_pct = self._current_steps / self._current_total * 100 if self._current_total else 0.0
-        eta = None
-        if self._sps and self._total_budget and total_done < self._total_budget:
-            eta = (self._total_budget - total_done) / self._sps
+        planned_total = self._total_budget
+        if state == _COMPLETE:
+            pct = 100.0
+            eta = 0
+            reported_total = total_done
+            current_pct = 100.0 if self._current_total else 0.0
+        else:
+            pct = total_done / planned_total * 100 if planned_total else 0.0
+            eta = None
+            reported_total = planned_total
+            current_pct = self._current_steps / self._current_total * 100 if self._current_total else 0.0
+            if self._sps and planned_total and total_done < planned_total:
+                eta = (planned_total - total_done) / self._sps
         return {
             "schema_version": 1,
             "state": state,
@@ -334,7 +388,9 @@ class AgentTrainingCallback(TrainingCallback):
             },
             "overall": {
                 "steps": total_done,
-                "total_steps": self._total_budget,
+                "total_steps": reported_total,
+                "planned_total_steps": planned_total,
+                "actual_steps": total_done,
                 "pct": pct,
                 "sps": self._sps,
                 "eta_seconds": eta,
@@ -343,9 +399,72 @@ class AgentTrainingCallback(TrainingCallback):
             "latest_metrics": self._latest_metrics,
             "latest_stats": self._latest_stats,
             "latest_checkpoint_path": self._latest_checkpoint_path,
+            "final_model_path": self._final_model_path,
+            "final_eval_scenario": self.final_eval_scenario,
+            "final_eval_episodes": self.final_eval_episodes,
+            "final_eval_command": self._final_eval_command(),
             "last_milestone_step": self._last_milestone_step,
             "last_milestone_reason": self._last_milestone_reason,
+            "status_hash": self._last_status_hash,
         }
+
+    def _final_eval_command(self):
+        model_path = self._final_model_path or self._latest_checkpoint_path
+        if not model_path or not self.final_eval_scenario:
+            return None
+        return ("python evaluate.py "
+                f"{model_path} {self.final_eval_scenario} --episodes {self.final_eval_episodes} --reprocess")
+
+    def _write_full_metrics(self, milestone_id, anomalies):
+        full_metrics_path = os.path.join(self.run_dir, f"milestone_{milestone_id:04d}_metrics.json")
+        atomic_write_json(full_metrics_path, {
+            "latest_metrics": self._latest_metrics,
+            "latest_stats": self._latest_stats,
+            "anomalies": anomalies,
+            "metric_history_tail": self._metric_history[-5:],
+        })
+        self._last_full_metrics_path = full_metrics_path
+        return full_metrics_path
+
+    def _harness_health(self, status):
+        status_age = time.time() - status.get("updated_at", time.time())
+        logs_present = os.path.exists(os.path.join(self.experiment_dir, f"train-{os.getpid()}.stdout.log"))
+        return {
+            "process": "complete" if status.get("state") == _COMPLETE else "alive",
+            "status_freshness": f"updated {status_age:.1f}s ago",
+            "control_file": "present" if os.path.exists(self.control_path) else "missing",
+            "logs": "present" if logs_present else "not present",
+        }
+
+    def _categorize_anomalies(self, anomalies):
+        categorized = []
+        current_metrics = set()
+        for anomaly in anomalies:
+            metric = anomaly.get("metric")
+            value = anomaly.get("value")
+            severity = _severity(anomaly)
+            current_metrics.add(metric)
+            previous = self._anomaly_state.get(metric)
+            if previous is None:
+                category = "new_anomaly"
+            elif severity > previous.get("severity", 0.0) + 0.05:
+                category = "worsening_anomaly"
+            else:
+                category = "persistent_anomaly"
+            enriched = dict(anomaly)
+            enriched["category"] = category
+            enriched["severity"] = severity
+            if previous:
+                enriched["previous_value"] = previous.get("value")
+                if isinstance(value, (int, float)) and isinstance(previous.get("value"), (int, float)):
+                    enriched["delta"] = value - previous["value"]
+            self._anomaly_state[metric] = {"value": value, "severity": severity}
+            if category != "persistent_anomaly":
+                categorized.append(enriched)
+        for metric in list(self._anomaly_state):
+            if metric not in current_metrics:
+                del self._anomaly_state[metric]
+        return categorized
 
     def _current_exit_metric(self):
         if self._active_index < 0:
@@ -424,6 +543,25 @@ class AgentTrainingCallback(TrainingCallback):
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return None
+
+
+def _stable_hash(payload):
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _severity(anomaly):
+    value = anomaly.get("value")
+    expected = anomaly.get("expected") or [None, None]
+    if not isinstance(value, (int, float)):
+        return 0.0
+    low = expected[0] if len(expected) > 0 else None
+    high = expected[1] if len(expected) > 1 else None
+    if low is not None and value < low:
+        return abs(low - value) / max(abs(low), 1.0)
+    if high is not None and value > high:
+        return abs(value - high) / max(abs(high), 1.0)
+    return 0.0
 
 
 def _jsonable_dict(values):

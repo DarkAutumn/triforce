@@ -117,6 +117,8 @@ class TrainingCircuitDefinition(BaseModel):
     description : str
     kind : str = 'sequential'
     scenarios : List[TrainingCircuitEntry]
+    final_eval_scenario : Optional[str] = Field(None, alias='final-eval-scenario')
+    final_eval_episodes : int = Field(100, alias='final-eval-episodes')
 
     @field_validator('kind')
     @classmethod

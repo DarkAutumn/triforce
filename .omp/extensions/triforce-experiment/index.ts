@@ -16,6 +16,9 @@ interface MilestoneEvent {
   report_path: string;
   checkpoint_path: string | null;
   anomalies: unknown[];
+  status_updated_at?: number;
+  status_hash?: string;
+  final_model_path?: string | null;
 }
 
 interface CurrentStatus {
@@ -45,8 +48,11 @@ interface TriforceStatus {
   latest_metrics?: Record<string, unknown>;
   latest_stats?: Record<string, unknown>;
   latest_checkpoint_path?: string | null;
+  final_model_path?: string | null;
+  final_eval_command?: string | null;
   last_milestone_step?: number | null;
   last_milestone_reason?: string | null;
+  status_hash?: string | null;
 }
 
 interface ProcessOutput {
@@ -446,26 +452,29 @@ function pollEvents(pi: ExtensionAPI): void {
   }
   const chunk = text.slice(state.eventsOffset, lastNewline + 1);
   state.eventsOffset = lastNewline + 1;
+  const milestones: MilestoneEvent[] = [];
   for (const line of chunk.split("\n")) {
     if (!line.trim()) {
       continue;
     }
     const parsed = parseJsonObject(line);
     if (isMilestoneEvent(parsed)) {
-      queueOrDeliverMilestone(pi, parsed);
+      milestones.push(parsed);
     }
   }
+  queueOrDeliverMilestones(pi, milestones);
 }
 
-function queueOrDeliverMilestone(pi: ExtensionAPI, milestone: MilestoneEvent): void {
-  if (!state) {
+function queueOrDeliverMilestones(pi: ExtensionAPI, milestones: MilestoneEvent[]): void {
+  if (!state || milestones.length === 0) {
     return;
   }
   if (!state.wakeInFlight && (uiHooks?.isIdle() ?? true)) {
-    void sendMilestoneWake(pi, milestone, 0);
+    const selected = selectQueuedMilestone(milestones);
+    void sendMilestoneWake(pi, selected, milestones.length - 1);
     return;
   }
-  state.pendingMilestones.push(milestone);
+  state.pendingMilestones.push(...milestones);
 }
 
 async function deliverNewestQueuedMilestone(pi: ExtensionAPI): Promise<void> {
@@ -475,10 +484,10 @@ async function deliverNewestQueuedMilestone(pi: ExtensionAPI): Promise<void> {
   if (!(uiHooks?.isIdle() ?? true)) {
     return;
   }
+  const selected = selectQueuedMilestone(state.pendingMilestones);
   const skipped = Math.max(0, state.pendingMilestones.length - 1);
-  const milestone = state.pendingMilestones[state.pendingMilestones.length - 1];
   state.pendingMilestones = [];
-  await sendMilestoneWake(pi, milestone, skipped);
+  await sendMilestoneWake(pi, selected, skipped);
 }
 
 async function sendMilestoneWake(pi: ExtensionAPI, milestone: MilestoneEvent, skipped: number): Promise<void> {
@@ -487,8 +496,21 @@ async function sendMilestoneWake(pi: ExtensionAPI, milestone: MilestoneEvent, sk
   }
   const report = readTextIfExists(milestone.report_path) ?? `Report missing: ${milestone.report_path}`;
   const superseded = skipped > 0 ? `\n\n${skipped} older milestone(s) were superseded by this newest milestone.` : "";
+  const status = readCurrentStatus();
+  const stale = status && milestone.status_updated_at && status.updated_at
+    ? status.updated_at > milestone.status_updated_at && status.status_hash !== milestone.status_hash
+    : false;
+  const prompt = milestone.reason === "complete"
+    ? "Terminal completion wake. Write or review summary.md, run the recommended final evaluation if needed, then call triforce_experiment_finish. Do not continue training."
+    : "Use the triforce-experiment skill decision loop. Decide exactly one run action: continue, stop/edit/restart, or finish. Also decide whether each wake-causing metric should keep waking, be loosened, or be disabled; cite evidence and edit tuning.json before continuing when appropriate. If continuing, call triforce_experiment_control with command continue and then yield.";
   const message = [
     `Triforce training milestone: ${milestone.reason}`,
+    stale ? "STALE WAKE: live status has advanced since this milestone was generated." : "Wake freshness: current at delivery time.",
+    `Milestone id: ${milestone.id}`,
+    `Milestone status_updated_at: ${milestone.status_updated_at ?? "unknown"}`,
+    `Milestone status_hash: ${milestone.status_hash ?? "unknown"}`,
+    `Live status_updated_at: ${status?.updated_at ?? "unknown"}`,
+    `Live status_hash: ${status?.status_hash ?? "unknown"}`,
     superseded,
     report,
     "",
@@ -497,7 +519,7 @@ async function sendMilestoneWake(pi: ExtensionAPI, milestone: MilestoneEvent, sk
     `Tuning: ${state.runDir ? path.join(state.runDir, "tuning.json") : "unknown"}`,
     `Control: ${state.runDir ? path.join(state.runDir, "control.json") : "unknown"}`,
     "",
-    "Use the triforce-experiment skill decision loop. Decide exactly one run action: continue, stop/edit/restart, or finish. Also decide whether each wake-causing metric should keep waking, be loosened, or be disabled; cite evidence and edit tuning.json before continuing when appropriate. If continuing, call triforce_experiment_control with command continue and then yield.",
+    prompt,
   ].join("\n");
   state.wakeInFlight = true;
   wakeToolTouched = false;
@@ -611,6 +633,18 @@ function findStatusFiles(root: string): string[] {
   return result;
 }
 
+function selectQueuedMilestone(milestones: MilestoneEvent[]): MilestoneEvent {
+  const complete = milestones.find(milestone => milestone.reason === "complete");
+  if (complete) {
+    return complete;
+  }
+  const legEnd = milestones.find(milestone => milestone.reason === "leg_end");
+  if (legEnd) {
+    return legEnd;
+  }
+  return milestones[milestones.length - 1];
+}
+
 function enforceExtensionGuardrail(pi: ExtensionAPI): void {
   if (!state?.runDir) {
     return;
@@ -619,6 +653,9 @@ function enforceExtensionGuardrail(pi: ExtensionAPI): void {
   const elapsed = status?.overall?.elapsed_seconds;
   if (typeof elapsed === "number" && elapsed > 604_800) {
     writeControl(state, "stop", "extension 7 day failsafe exceeded");
+  }
+  if (status?.state === "complete") {
+    return;
   }
   const updatedAt = readUpdatedAt(status);
   if (updatedAt === null) {
@@ -638,8 +675,11 @@ async function sendProcessFailureWake(pi: ExtensionAPI, reason: string, details:
   state.wakeInFlight = true;
   wakeToolTouched = false;
   const output = state.processOutput;
+  const stdoutExists = output ? fs.existsSync(output.stdoutPath) : false;
+  const stderrExists = output ? fs.existsSync(output.stderrPath) : false;
   const stdoutTail = output ? output.stdoutTail.join("") : "No captured stdout tail.";
   const stderrTail = output ? output.stderrTail.join("") : "No captured stderr tail.";
+  const lastStatus = readCurrentStatus();
   const message = [
     `Triforce training process failure: ${reason}`,
     "",
@@ -647,8 +687,9 @@ async function sendProcessFailureWake(pi: ExtensionAPI, reason: string, details:
     "",
     `Experiment: ${state.experimentDir}`,
     `Run: ${state.runDir ?? "unknown"}`,
-    output ? `Stdout log: ${output.stdoutPath}` : "Stdout log: unavailable after reattach",
-    output ? `Stderr log: ${output.stderrPath}` : "Stderr log: unavailable after reattach",
+    `Last status update: ${lastStatus?.updated_at ?? "unknown"}`,
+    stdoutExists && output ? `Stdout log: ${output.stdoutPath}` : "Stdout log not present",
+    stderrExists && output ? `Stderr log: ${output.stderrPath}` : "Stderr log not present",
     "",
     "## stdout tail",
     "```text",

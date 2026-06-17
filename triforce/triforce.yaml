@@ -142,6 +142,8 @@ training-circuits:
 - name: all-items-circuit
   description: 'Full curriculum: sword-only basics, item training with finite/infinite
     bombs, dungeon with wallmasters, overworld2 route, full game, and polish phase.'
+  final-eval-scenario: full-game-all-items-finite
+  final-eval-episodes: 100
   scenarios:
   - scenario: overworld-room-walk
     exit-criteria:

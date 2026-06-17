@@ -172,6 +172,7 @@ def render_milestone_report(snapshot: dict, tuning: dict, baseline: dict | None 
     """Render a deterministic markdown report for an agent wake milestone."""
     lines = ["# Triforce Training Milestone", ""]
     _render_run(lines, snapshot)
+    _render_harness_health(lines, snapshot)
     _render_circuit(lines, snapshot)
     _render_health(lines, snapshot, tuning)
     _render_scenario_metrics(lines, snapshot)
@@ -194,6 +195,10 @@ def _render_run(lines: list[str], snapshot: dict) -> None:
         f"- Run dir: {status.get('run_dir', 'unknown')}",
         f"- Experiment dir: {status.get('experiment_dir', 'unknown')}",
         f"- Latest checkpoint: {status.get('latest_checkpoint_path') or 'none'}",
+        f"- Final model: {status.get('final_model_path') or 'none'}",
+        f"- Full metrics: {snapshot.get('full_metrics_path') or 'not written'}",
+        f"- Status updated at: {status.get('updated_at', 'unknown')}",
+        f"- Status hash: {snapshot.get('status_hash', 'unknown')}",
         "",
     ])
 
@@ -203,17 +208,20 @@ def _render_circuit(lines: list[str], snapshot: dict) -> None:
     lines.extend([
         "## Circuit Progress",
         "",
-        "| Leg | Status | Steps | Total | Exit criteria |",
-        "|---|---:|---:|---:|---|",
+        "| Leg | Status | Reason | Steps | Total | Exit metric | Value | Threshold | Met |",
+        "|---|---|---|---:|---:|---|---:|---:|---|",
     ])
     circuit = status.get("circuit") or []
     if not circuit:
         lines.append("| none | n/a | 0 | 0 | n/a |")
     for leg in circuit:
-        exit_criteria = leg.get("exit_criteria") or "n/a"
+        exit_criteria = leg.get("exit_criteria") or {}
+        exit_metric = exit_criteria.get("metric") if isinstance(exit_criteria, dict) else "n/a"
         lines.append(
-            f"| {leg.get('name')} | {leg.get('status')} | {leg.get('steps', 0)} | "
-            f"{leg.get('total_steps', 0)} | {exit_criteria} |"
+            f"| {leg.get('name')} | {leg.get('status')} | {leg.get('completion_reason') or 'n/a'} | "
+            f"{leg.get('steps', 0)} | {leg.get('total_steps', 0)} | {exit_metric or 'n/a'} | "
+            f"{_format_value(leg.get('exit_metric_value'))} | {_format_value(leg.get('exit_metric_threshold'))} | "
+            f"{_format_value(leg.get('exit_metric_met'))} |"
         )
     overall = status.get("overall", {})
     lines.extend([
@@ -261,23 +269,20 @@ def _render_health(lines: list[str], snapshot: dict, tuning: dict) -> None:
 
 def _render_scenario_metrics(lines: list[str], snapshot: dict) -> None:
     metrics = snapshot.get("status", {}).get("latest_metrics") or {}
+    keys = _summary_metric_keys(metrics)
     lines.extend([
         "## Scenario Metrics",
         "",
         "| Metric | Value |",
         "|---|---:|",
     ])
-    scenario_keys = [
-        key for key in sorted(metrics)
-        if not key.startswith("rewards/")
-        and not key.startswith("rewards-count/")
-        and not key.startswith("punishments/")
-        and not key.startswith("punishments-count/")
-    ]
-    if not scenario_keys:
+    if not keys:
         lines.append("| none | n/a |")
-    for key in scenario_keys:
+    for key in keys:
         lines.append(f"| {key} | {_format_value(metrics[key])} |")
+    omitted = max(0, len(metrics) - len(keys))
+    if omitted:
+        lines.append(f"| omitted detailed metrics | {omitted} linked in full metrics JSON |")
     lines.append("")
 
 
@@ -309,7 +314,10 @@ def _render_anomalies(lines: list[str], snapshot: dict) -> None:
         lines.extend(["None detected.", ""])
         return
     for anomaly in anomalies:
-        lines.append(f"- {anomaly.get('kind')}: {anomaly.get('message')}")
+        category = anomaly.get("category") or "uncategorized"
+        delta = anomaly.get("delta")
+        suffix = f" delta={_format_value(delta)}" if delta is not None else ""
+        lines.append(f"- {category} {anomaly.get('kind')}: {anomaly.get('message')}{suffix}")
     lines.append("")
 
 
@@ -328,8 +336,65 @@ def _render_baseline(lines: list[str], baseline: dict | None) -> None:
     lines.append("")
 
 
+def _render_harness_health(lines: list[str], snapshot: dict) -> None:
+    status = snapshot.get("status", {})
+    harness = snapshot.get("harness_health") or {}
+    lines.extend([
+        "## Harness Health",
+        "",
+        f"- Process: {harness.get('process', 'unknown')}",
+        f"- Status freshness: {harness.get('status_freshness', 'unknown')}",
+        f"- Checkpoint: {status.get('latest_checkpoint_path') or 'none'}",
+        f"- Control file: {harness.get('control_file', 'unknown')}",
+        f"- Logs: {harness.get('logs', 'unknown')}",
+        f"- Final eval command: {status.get('final_eval_command') or 'not configured'}",
+        "",
+    ])
+
+
+def _summary_metric_keys(metrics: dict) -> list[str]:
+    preferred = [
+        "success-rate",
+        "reward-average",
+        "rewards",
+        "progress/max",
+        "progress/success",
+        "room-result/correct-exit",
+        "endings/success-exit",
+        "endings/success-entered-dungeon",
+        "endings/failure-stuck",
+        "endings/failure-terminated-death",
+    ]
+    keys = [key for key in preferred if key in metrics]
+    if len(keys) >= 12:
+        return keys[:12]
+    for key in sorted(metrics):
+        if len(keys) >= 12:
+            break
+        if key in keys or key.startswith("rewards/") or key.startswith("rewards-count/"):
+            continue
+        if key.startswith("punishments/") or key.startswith("punishments-count/"):
+            continue
+        if "/" in key and not key.startswith("endings/"):
+            continue
+        keys.append(key)
+    return keys
+
+
 def _render_decision_prompt(lines: list[str], snapshot: dict) -> None:
     journal_path = snapshot.get("journal_path")
+    status = snapshot.get("status", {})
+    if status.get("state") == "complete" or snapshot.get("reason") == "complete":
+        lines.extend([
+            "## Decision Prompt",
+            "",
+            f"Journal: {journal_path if journal_path else 'Journal not found.'}",
+            "This is a terminal completion wake. Do not continue training.",
+            "Run or inspect the recommended final evaluation command, write summary.md, "
+            "then call triforce_experiment_finish.",
+            "",
+        ])
+        return
     lines.extend([
         "## Decision Prompt",
         "",

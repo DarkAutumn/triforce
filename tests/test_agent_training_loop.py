@@ -61,26 +61,52 @@ def test_reward_hacking_anomaly_requires_reward_gain_without_success_gain():
     assert not any(anomaly["kind"] == "reward_hacking" for anomaly in clean)
 
 
+def test_callback_suppresses_persistent_anomaly_until_worse(tmp_path):
+    run_dir = tmp_path / "run"
+    callback = AgentTrainingCallback(str(run_dir), str(tmp_path / "experiment"), str(run_dir / "logs"),
+                                     scenario="dummy", action_space="all-items", model_kind="impala-multihead")
+    anomaly = {
+        "kind": "health",
+        "metric": "losses/entropy",
+        "value": 0.4,
+        "expected": [0.5, 2.0],
+        "message": "entropy low",
+    }
+    first = callback._categorize_anomalies([anomaly])  # pylint: disable=protected-access
+    second = callback._categorize_anomalies([anomaly])  # pylint: disable=protected-access
+    worse = dict(anomaly)
+    worse["value"] = 0.1
+    third = callback._categorize_anomalies([worse])  # pylint: disable=protected-access
+
+    assert first[0]["category"] == "new_anomaly"
+    assert second == []
+    assert third[0]["category"] == "worsening_anomaly"
+
+
 def test_agent_callback_writes_status_events_and_milestone(tmp_path):
     run_dir = tmp_path / "run"
     experiment_dir = tmp_path / "experiment"
     log_dir = run_dir / "logs"
     callback = AgentTrainingCallback(str(run_dir), str(experiment_dir), str(log_dir),
                                      scenario="dummy-scenario", action_space="all-items",
-                                     model_kind="impala-multihead")
+                                     model_kind="impala-multihead",
+                                     reporting={"final_eval_scenario": "full-game-all-items-finite"})
 
     callback.on_circuit_start([("dummy", 1_000_000)])
     callback.on_scenario_start("dummy", 1_000_000, exit_criteria="success-rate", exit_threshold=0.8)
     callback.on_progress(1_000_000, 1_000_000)
     callback.on_metrics({"success-rate": 0.5, "reward-average": 1.0}, 1_000_000, 1_000_000)
     checkpoint_path = str(run_dir / "checkpoints" / "dummy.pt")
+    final_model_path = str(run_dir / "impala-multihead_all-items.pt")
     callback.on_scenario_end("dummy", checkpoint_path=checkpoint_path)
+    callback.set_final_model_path(final_model_path)
     callback.on_training_complete()
 
     assert (run_dir / "status.json").exists()
     assert (run_dir / "events.jsonl").exists()
     assert (run_dir / "tuning.json").exists()
     assert list(run_dir.glob("milestone_*.md"))
+    assert list(run_dir.glob("milestone_*_metrics.json"))
 
     events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()]
     milestones = [event for event in events if event["type"] == "milestone"]
@@ -89,6 +115,18 @@ def test_agent_callback_writes_status_events_and_milestone(tmp_path):
     assert milestones[-2]["step"] == 1_000_000
     assert milestones[-1]["reason"] == "complete"
     assert milestones[-1]["step"] == 1_000_000
+    assert milestones[-1]["final_model_path"] == final_model_path
+    assert milestones[-1]["status_hash"]
+    status = json.loads((run_dir / "status.json").read_text(encoding="utf-8"))
+    assert status["state"] == "complete"
+    assert status["overall"]["pct"] == 100.0
+    assert status["overall"]["eta_seconds"] == 0
+    assert status["final_eval_command"] == (
+        f"python evaluate.py {final_model_path} full-game-all-items-finite --episodes 100 --reprocess")
+    assert status["circuit"][0]["completion_reason"] == "budget_exhausted"
+    assert status["circuit"][0]["exit_metric_value"] == 0.5
+    assert status["circuit"][0]["exit_metric_threshold"] == 0.8
+    assert status["circuit"][0]["exit_metric_met"] is False
 
 
 def test_control_stop_returns_false(tmp_path):
