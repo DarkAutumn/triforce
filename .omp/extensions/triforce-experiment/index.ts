@@ -542,12 +542,13 @@ function updateWidget(): void {
   const metrics = status.latest_metrics ?? {};
   const legEtaSeconds = calculateLegEta(current, overall);
   const stats = status.latest_stats ?? {};
+  const latestReward = metrics["reward-average"] ?? metrics["rewards"];
   const lines = [
     `Triforce: ${status.state ?? "unknown"} ${status.scenario ?? "unknown"} pid=${status.pid ?? state.childPid ?? "n/a"}`,
     `Run: ${state.experimentId}`,
     `Leg: ${current.name ?? "none"} ${formatInt(current.steps)}/${formatInt(current.total_steps)} ${formatPct(current.pct)} ETA=${formatEta(legEtaSeconds)}`,
     `Total: ${formatInt(overall.steps)}/${formatInt(overall.total_steps)} ${formatPct(overall.pct)} SPS=${formatNumber(overall.sps)} ETA=${formatEta(overall.eta_seconds)}`,
-    `Latest: success=${formatUnknown(metrics["success-rate"])} reward=${formatUnknown(metrics["reward-average"])} entropy=${formatUnknown(stats["losses/entropy"])}`,
+    `Latest: success=${formatUnknown(metrics["success-rate"])} reward=${formatUnknown(latestReward)} entropy=${formatUnknown(stats["losses/entropy"])}`,
     `KL=${formatUnknown(stats["losses/approx_kl"])} clip=${formatUnknown(stats["losses/clipfrac"])} EV=${formatUnknown(stats["losses/explained_variance"])}`,
     `Checkpoint: ${status.latest_checkpoint_path ? path.basename(status.latest_checkpoint_path) : "none"}`,
     `Last wake: ${status.last_milestone_reason ?? "none"} @ ${status.last_milestone_step ?? "n/a"}`,
