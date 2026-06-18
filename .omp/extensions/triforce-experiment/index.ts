@@ -551,7 +551,7 @@ function updateWidget(): void {
     `Latest: success=${formatUnknown(metrics["success-rate"])} reward=${formatUnknown(latestReward)} entropy=${formatUnknown(stats["losses/entropy"])}`,
     `KL=${formatUnknown(stats["losses/approx_kl"])} clip=${formatUnknown(stats["losses/clipfrac"])} EV=${formatUnknown(stats["losses/explained_variance"])}`,
     `Checkpoint: ${status.latest_checkpoint_path ? path.basename(status.latest_checkpoint_path) : "none"}`,
-    `Last wake: ${status.last_milestone_reason ?? "none"} @ ${status.last_milestone_step ?? "n/a"}`,
+    `Last wake: ${status.last_milestone_reason ?? "none"} @ model-step ${status.last_milestone_step ?? "n/a"}`,
   ];
   void uiHooks?.setWidget(lines);
 }
