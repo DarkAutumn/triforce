@@ -19,3 +19,4 @@ pyyaml
 setuptools<81
 PySide6>=6.5
 rich
+python-lsp-server

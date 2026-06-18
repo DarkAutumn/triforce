@@ -22,6 +22,7 @@ from rich.live import Live
 from rich.text import Text
 from rich.table import Table
 from torch.utils.tensorboard import SummaryWriter
+from triforce.experiment_report import DEFAULT_HEALTH_RANGES, flatten_metrics, is_metric_healthy
 
 from triforce import (ActionSpaceDefinition, ModelKindDefinition, TrainingScenarioDefinition,
                       TrainingCallback, make_zelda_env)
@@ -116,10 +117,10 @@ class ProfilingCallback(TrainingCallback):
         if self._inner and hasattr(self._inner, 'on_scenario_complete'):
             self._inner.on_scenario_complete(scenario_name)
 
-    def on_scenario_end(self, scenario_name):
+    def on_scenario_end(self, scenario_name, checkpoint_path=None):
         """Delegate scenario end to inner callback."""
         if self._inner:
-            self._inner.on_scenario_end(scenario_name)
+            self._inner.on_scenario_end(scenario_name, checkpoint_path)
 
     def on_scenario_resumed(self, scenario_name, history_entry):
         """Delegate scenario resumed to inner callback."""
@@ -174,7 +175,7 @@ class _SubCircuitCallback:
                           exit_threshold=None, exit_criteria_scenario=None):
         """Suppressed — sub-circuit must not change parent's active scenario."""
 
-    def on_scenario_end(self, scenario_name):
+    def on_scenario_end(self, scenario_name, checkpoint_path=None):
         """Suppressed — sub-circuit must not mark parent scenarios as complete."""
 
     def get_completion_info(self, scenario_name):
@@ -388,7 +389,7 @@ class TrainingDisplay(TrainingCallback):
         self._tensorboard = SummaryWriter(scenario_log_dir)
         self._refresh(force=True)
 
-    def on_scenario_end(self, scenario_name):
+    def on_scenario_end(self, scenario_name, checkpoint_path=None):
         self._scenario_steps[scenario_name] = self._current_steps
         self._total_spent += self._current_steps
         self._completed.add(scenario_name)
@@ -481,23 +482,7 @@ class TrainingDisplay(TrainingCallback):
     def on_metrics(self, metrics, iteration, total_iterations):
         self._prev_game_metrics = dict(self._game_metrics)
 
-        # Weighted mode returns {scenario: {metric: value}} — flatten for display/tensorboard.
-        # The first scenario's metrics are promoted to top-level so TUI perf metrics
-        # (success-rate, room-progress, etc.) and tensorboard metrics/ path work normally.
-        flat_metrics = {}
-        first_scenario_metrics = None
-        for key, value in metrics.items():
-            if isinstance(value, dict):
-                if first_scenario_metrics is None:
-                    first_scenario_metrics = value
-                for metric_name, metric_value in value.items():
-                    flat_metrics[f"{key}/{metric_name}"] = metric_value
-            else:
-                flat_metrics[key] = value
-
-        if first_scenario_metrics is not None:
-            for metric_name, metric_value in first_scenario_metrics.items():
-                flat_metrics.setdefault(metric_name, metric_value)
+        flat_metrics = flatten_metrics(metrics)
 
         self._game_metrics.update(flat_metrics)
         if self._tensorboard:
@@ -638,41 +623,11 @@ class TrainingDisplay(TrainingCallback):
         m = remainder // 60
         return f"{h}h{m:02d}m"
 
-    # Healthy ranges for coloring: (low, high) inclusive.  None means no bound.
-    _HEALTHY_RANGES = {
-        "charts/SPS":                       (100, None),
-        "losses/value_loss":                (0.01, 1.0),
-        "losses/policy_loss":               (-0.05, 0.05),
-        "losses/entropy":                   (0.5, 2.0),
-        "losses/approx_kl":                 (0.001, 0.03),
-        "losses/clipfrac":                  (0.05, 0.25),
-        "losses/explained_variance":        (0.3, 0.9),
-        "losses/attention/entropy":         (2.0, 6.5),
-        "losses/attention/top1_weight":     (None, 0.10),
-        "losses/cross_attention/entropy":   (2.0, 6.5),
-        "losses/cross_attention/top1_weight": (None, 0.10),
-        "losses/entropy/action_type":       (0.3, 1.5),
-        "losses/entropy/direction":         (0.5, 1.4),
-    }
+    _HEALTHY_RANGES = DEFAULT_HEALTH_RANGES
 
     def _is_healthy(self, key, value):
         """Returns True if value is within healthy range for the given metric key."""
-        # Per-head attention metrics share the same ranges as aggregate
-        if "/head_" in key:
-            if key.endswith("/entropy"):
-                key = "losses/attention/entropy"
-            elif key.endswith("/top1"):
-                key = "losses/attention/top1_weight"
-
-        bounds = self._HEALTHY_RANGES.get(key)
-        if bounds is None:
-            return True
-        lo, hi = bounds
-        if lo is not None and value < lo:
-            return False
-        if hi is not None and value > hi:
-            return False
-        return True
+        return is_metric_healthy(key, value, self._HEALTHY_RANGES)
 
     def _get_target_text(self, key):
         """Return a dim-styled Text showing the target/healthy range for a metric."""
@@ -934,12 +889,14 @@ def _build_history_entry(scenario_name, steps, callback=None):
                     "target": info.get("threshold"),
                     "actual": info.get("value"),
                 }
+            entry["exit_metric_met"] = info.get("met")
+            entry["completion_reason"] = info.get("completion_reason")
     return entry
 
 
 def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, iterations,
                callback=None, **kwargs):
-    """Trains a model with the given scenario.  Returns (model, iterations_used)."""
+    """Trains a model with the given scenario.  Returns (model, iterations_used, checkpoint_path)."""
     multihead = getattr(model_kind.network_class, 'is_multihead', False)
     kwargs['multihead'] = multihead
 
@@ -964,9 +921,9 @@ def train_once(ppo, scenario_def, model_kind, action_space_def, checkpoint_dir, 
 
     # Save leg checkpoint with training history
     training_history = kwargs.get('training_history')
-    model.save(f"{checkpoint_dir}/{stem}_{scenario_def.name}_{model.steps_trained}.pt",
-               optimizer=ppo.optimizer, training_history=training_history)
-    return model, model.steps_trained - steps_before
+    checkpoint_path = f"{checkpoint_dir}/{stem}_{scenario_def.name}_{model.steps_trained}.pt"
+    model.save(checkpoint_path, optimizer=ppo.optimizer, training_history=training_history)
+    return model, model.steps_trained - steps_before, checkpoint_path
 
 def _run_circuit(ppo, circuit, model_kind, action_space_def, checkpoint_dir, kwargs, total_budget,
                  callback=None, circuit_def=None, skip_to=None, outer_exit_criteria=None):
@@ -1070,18 +1027,17 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
                                                sub_budget, sub_callback, sub_circuit_def,
                                                outer_exit_criteria=scenario_entry.exit_criteria)
 
-            if callback:
-                callback.on_scenario_end(f"[circuit] {scenario_entry.circuit}")
-
-            # Record completed circuit in training history
-            circuit_label = f"[circuit] {scenario_entry.circuit}"
-            training_history.append(_build_history_entry(circuit_label, sub_budget or 0, callback))
-
-            # Save leg checkpoint for the completed embedded circuit
             stem = _model_stem(model_kind.name, action_space_def.name)
             circuit_name = scenario_entry.circuit
-            model.save(f"{checkpoint_dir}/{stem}_{circuit_name}_{model.steps_trained}.pt",
-                       optimizer=ppo.optimizer, training_history=training_history)
+            checkpoint_path = f"{checkpoint_dir}/{stem}_{circuit_name}_{model.steps_trained}.pt"
+
+            if callback:
+                callback.on_scenario_end(f"[circuit] {scenario_entry.circuit}", checkpoint_path)
+
+            # Record completed circuit in training history before saving the leg checkpoint.
+            circuit_label = f"[circuit] {scenario_entry.circuit}"
+            training_history.append(_build_history_entry(circuit_label, sub_budget or 0, callback))
+            model.save(checkpoint_path, optimizer=ppo.optimizer, training_history=training_history)
 
             kwargs['model'] = model
             iterations_spent += sub_budget or 0
@@ -1118,14 +1074,15 @@ def _run_sequential_circuit(ppo, circuit, model_kind, action_space_def, checkpoi
 
         # Thread training history through so periodic saves include it
         kwargs['training_history'] = training_history
-        model, used = train_once(ppo, scenario_def, model_kind, action_space_def,
-                                 checkpoint_dir, iterations, callback, **kwargs)
+        model, used, checkpoint_path = train_once(ppo, scenario_def, model_kind, action_space_def,
+                                                 checkpoint_dir, iterations, callback, **kwargs)
 
         if callback:
-            callback.on_scenario_end(scenario_def.name)
+            callback.on_scenario_end(scenario_def.name, checkpoint_path)
 
-        # Record completed scenario in training history
+        # Record completed scenario in training history and resave checkpoint metadata.
         training_history.append(_build_history_entry(scenario_def.name, used, callback))
+        model.save(checkpoint_path, optimizer=ppo.optimizer, training_history=training_history)
 
         kwargs['model'] = model
         iterations_spent += used
@@ -1208,14 +1165,16 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
         action_space_def.actions, iterations, exit_criteria_map, callback,
         save_path=checkpoint_dir,
         **{k: v for k, v in kwargs.items() if k != 'network_class'})
+    # Save final checkpoint with training history after emitting the leg-end callback.
+    training_history = kwargs.get('training_history')
+    checkpoint_path = f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt"
 
     if callback:
-        callback.on_scenario_end(f"weighted[{len(scenario_defs)}]")
-
-    # Save final checkpoint with training history
-    training_history = kwargs.get('training_history')
-    model.save(f"{checkpoint_dir}/{stem}_weighted_{model.steps_trained}.pt",
-               optimizer=ppo.optimizer, training_history=training_history)
+        label = f"weighted[{len(scenario_defs)}]"
+        callback.on_scenario_end(label, checkpoint_path)
+        if training_history is not None:
+            training_history.append(_build_history_entry(label, iterations, callback))
+    model.save(checkpoint_path, optimizer=ppo.optimizer, training_history=training_history)
     return model, scenario_defs[0]
 
 
@@ -1252,7 +1211,11 @@ def main():
     os.makedirs(log_dir, exist_ok=True)
 
     console = Console()
+    experiment_dir = args.experiment_dir or run_dir
     console.print(f"Output: {run_dir}")
+    if args.headless_agent:
+        console.print(f"Experiment: {experiment_dir}")
+        console.print("Mode: headless-agent")
     console.print(f"Model kind: {model_kind.name}, Action space: {action_space_def.name}")
 
     kwargs, circuit, circuit_def = _get_kwargs_from_args(args, model_kind, action_space_def)
@@ -1278,17 +1241,33 @@ def main():
 
     ppo = PPO(**kwargs)
 
-    with Live(console=console, refresh_per_second=4) as live:
-        display = TrainingDisplay(live, log_dir)
-        callback = display
-        if args.profile:
-            callback = ProfilingCallback(display, args.profile)
-            console.print(f"Profiling: {args.profile} steps after {PROFILE_WARMUP_STEPS} warmup → {PROFILE_OUTPUT}")
+    if args.headless_agent:
+        from triforce.agent_callback import AgentTrainingCallback  # pylint: disable=import-outside-toplevel
+        callback = AgentTrainingCallback(run_dir, experiment_dir, log_dir,
+                                         scenario=args.scenario,
+                                         action_space=action_space_def.name,
+                                         model_kind=model_kind.name,
+                                         reporting={
+                                             'baseline_eval_json': args.baseline_eval_json,
+                                             'final_eval_scenario': getattr(circuit_def, 'final_eval_scenario', None),
+                                             'final_eval_episodes': getattr(circuit_def, 'final_eval_episodes', 100),
+                                         })
         model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
                                            checkpoint_dir, kwargs, args.iterations,
                                            callback=callback, circuit_def=circuit_def,
                                            skip_to=skip_to)
-        display.on_training_complete()
+    else:
+        with Live(console=console, refresh_per_second=4) as live:
+            display = TrainingDisplay(live, log_dir)
+            callback = display
+            if args.profile:
+                callback = ProfilingCallback(display, args.profile)
+                console.print(f"Profiling: {args.profile} steps after {PROFILE_WARMUP_STEPS} warmup → {PROFILE_OUTPUT}")
+            model, scenario_def = _run_circuit(ppo, circuit, model_kind, action_space_def,
+                                               checkpoint_dir, kwargs, args.iterations,
+                                               callback=callback, circuit_def=circuit_def,
+                                               skip_to=skip_to)
+            display.on_training_complete()
 
     # Save final result in the run directory (not checkpoints)
     stem = _model_stem(model_kind.name, action_space_def.name)
@@ -1296,6 +1275,9 @@ def main():
     final_history = kwargs.get('training_history')
     model.save(final_path, optimizer=ppo.optimizer, training_history=final_history)
     console.print(f"\nFinal model: {final_path}")
+    if args.headless_agent:
+        callback.set_final_model_path(final_path)
+        callback.on_training_complete()
 
     if args.evaluate:
         _run_post_training_eval(model, action_space_def, model_kind, scenario_def,
@@ -1359,6 +1341,12 @@ def parse_args():
     parser.add_argument("--hook-exceptions", action='store_true', help="Dump tracebacks on unhandled exceptions.")
     parser.add_argument("--profile", type=int, default=None, metavar="N",
                         help="Profile N environment steps (after 20K warmup), save to training.prof, then exit.")
+    parser.add_argument("--headless-agent", action="store_true",
+                        help="Use file-based OMP agent callback instead of Rich TUI.")
+    parser.add_argument("--experiment-dir", type=str, default=None,
+                        help="Experiment directory for journal and summary files.")
+    parser.add_argument("--baseline-eval-json", type=str, default=None,
+                        help="Optional baseline .eval.json for milestone reports.")
 
     try:
         args = parser.parse_args()
