@@ -3,10 +3,15 @@
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+from types import SimpleNamespace
+
 
 from triforce.action_space import ActionKind
 from triforce.critics import GameplayCritic
+from triforce.rewards import REWARD_MAXIMUM, Reward, StepRewards
+from triforce.scenario_wrapper import apply_terminal_penalty
 from triforce.zelda_enums import BoomerangKind, Direction, SelectedEquipmentKind, SwordKind
+from triforce.zelda_enums import MapLocation, TileIndex, ZeldaEnemyKind
 from utilities import CriticWrapper, ZeldaActionReplay
 
 def test_wall_movement_masked():
@@ -145,3 +150,81 @@ def test_bomb_hit_reward_adjusted():
     assert 'reward-bomb-hit' in rewards
     expected = min(0.50 * state_change.hits, 1.0)
     assert rewards['reward-bomb-hit'].value == expected
+
+
+def _synthetic_wallmaster_change(prev_location, curr_location, prev_tile=None, curr_tile=None, objectives=None):
+    prev_tile = prev_tile or TileIndex(0x05, 0x05)
+    curr_tile = curr_tile or TileIndex(0x05, 0x05)
+    objectives = objectives or SimpleNamespace(targets=set(), pbrs_targets=set())
+    prev = SimpleNamespace(
+        enemies={ZeldaEnemyKind.Wallmaster},
+        full_location=prev_location,
+        link=SimpleNamespace(tile=prev_tile),
+        objectives=objectives,
+    )
+    curr = SimpleNamespace(
+        enemies={ZeldaEnemyKind.Wallmaster},
+        full_location=curr_location,
+        link=SimpleNamespace(tile=curr_tile),
+        objectives=objectives,
+    )
+    return SimpleNamespace(previous=prev, state=curr, action=SimpleNamespace(kind=ActionKind.MOVE))
+
+
+def test_wallmastered_adds_wallmaster_penalty():
+    critic = GameplayCritic()
+    rewards = StepRewards()
+    prev_location = MapLocation(1, 0x45, False)
+    curr_location = MapLocation(1, 0x73, False)
+
+    critic.critique_wallmaster(_synthetic_wallmaster_change(prev_location, curr_location), rewards)
+
+    assert 'penalty-wall-master' in rewards
+    assert rewards['penalty-wall-master'].value == -20.0
+
+
+def test_terminal_failure_removes_positive_rewards_for_death():
+    rewards = StepRewards()
+    rewards.add(Reward("reward-new-location", REWARD_MAXIMUM))
+    rewards.ending = "failure-terminated-death"
+
+    apply_terminal_penalty(rewards)
+
+    assert rewards.value == -20.0
+    assert 'reward-new-location' not in rewards
+    assert 'penalty-terminal-failure' in rewards
+
+
+def test_nonterminal_rewards_keep_normal_clamp():
+    rewards = StepRewards()
+    rewards.add(Reward("reward-new-location", REWARD_MAXIMUM))
+    rewards.add(Reward("reward-gained-keys", REWARD_MAXIMUM))
+
+    assert rewards.value == 1.0
+
+
+def test_wallmastered_terminal_uses_wallmaster_penalty_name():
+    rewards = StepRewards()
+    rewards.add(Reward("reward-new-location", REWARD_MAXIMUM))
+    rewards.ending = "failure-wallmastered"
+
+    apply_terminal_penalty(rewards)
+
+    assert rewards.value == -20.0
+    assert 'reward-new-location' not in rewards
+    assert 'penalty-wall-master' in rewards
+    assert 'penalty-terminal-failure' not in rewards
+
+
+def test_objective_exit_tile_not_punished_as_wallmaster_tile():
+    critic = GameplayCritic()
+    rewards = StepRewards()
+    location = MapLocation(1, 0x45, False)
+    exit_tile = TileIndex(0x0F, 0x04)
+    objectives = SimpleNamespace(targets={exit_tile}, pbrs_targets={exit_tile})
+
+    critic.critique_wallmaster(
+        _synthetic_wallmaster_change(location, location, curr_tile=exit_tile, objectives=objectives), rewards)
+
+    assert 'penalty-fighting-wallmaster' not in rewards
+    assert 'penalty-moved-onto-wallmaster' not in rewards
