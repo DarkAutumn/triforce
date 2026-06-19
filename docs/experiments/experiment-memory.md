@@ -187,3 +187,40 @@ Do not continue from Experiment 2 final checkpoint. Before more PPO training, ru
 2. Confirm `ReachedLocation` fires success and `reward-terminal-success` appears.
 3. If reachable, create an easier wallmaster variant starting closer to the north exit or reducing wallmaster pressure.
 4. If not reachable or success does not fire, fix objective/end-condition detection first.
+
+## Experiment 3: wallmaster behavior cloning, 2026-06
+
+### Artifacts
+
+- Local experiment dir: `training/experiments/experiment3`
+- Valid run dir: `training/experiments/experiment3/runs/experiment3-circuit/1`
+- Tracked summary: `docs/experiments/experiment3-summary.md`
+- Expert demo: `docs/experiments/demos/wallmaster-north-exit.txt`
+- Strong BC checkpoint: `training/experiments/experiment3/wallmaster-bc-1000.pt`
+- Final checkpoint: `training/experiments/experiment3/runs/experiment3-circuit/1/checkpoints/impala-multihead_all-items_dungeon1-wallmaster-north-exit_2273280.pt`
+
+### Changes tested
+
+- Validated expert trace with `diagnose.py --demo-report`.
+- Added behavior cloning from the expert wallmaster movement sequence.
+- Ran PPO on `dungeon1-wallmaster-north-exit` from the BC checkpoint.
+
+### Training outcome
+
+- 400-epoch BC reached exact action accuracy `1.0`, but PPO later destroyed the behavior.
+- 1000-epoch BC reached exact action accuracy `1.0` and was used for final run.
+- Final run completed by exit criterion: `success-rate=0.568353 >= 0.5` after 77,824 steps.
+- Final training sample had `success-reached-location=0.607923`, `reward-terminal-success=17.9167`, and `penalty-wall-master=-16.25`.
+
+### Final eval
+
+- `dungeon1-wallmaster-north-exit`: scenario metric `success-rate=0.24` over 100 episodes; generic Markdown header incorrectly reported `0/100` because it only counted progress-histogram success.
+- `dungeon1-late-chain`: `0/40` success; median progress `9/11`; JSON metrics reached `room-progress=14.75`, `progress/max=16`.
+
+### Classification
+
+Partial success. Behavior cloning made the wallmaster room learnable and produced nonzero final wallmaster success, but robustness and late-chain transfer are not solved.
+
+### Next recommended experiment
+
+Start from `training/experiments/experiment3/runs/experiment3-circuit/1/checkpoints/impala-multihead_all-items_dungeon1-wallmaster-north-exit_2273280.pt`. Add demo regularization during PPO or periodic BC rehearsal so PPO keeps the safe wallmaster route. Train a late-chain curriculum alternating demo rehearsal, `dungeon1-wallmaster-north-exit`, and `dungeon1-late-chain`. Also fix `evaluate.py` reporting so `ReachedLocation` micro-scenarios use scenario `success-rate` in the header.
