@@ -4,7 +4,7 @@ import sys
 
 from triforce.objectives import GameCompletion
 from triforce.rewards import StepRewards
-from triforce.scenario_wrapper import apply_terminal_penalty
+from triforce.scenario_wrapper import apply_terminal_rewards
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
@@ -52,7 +52,7 @@ class CriticWrapper(gym.Wrapper):
             if terminated_result or truncated_result:
                 rewards.ending = reason
                 break
-        apply_terminal_penalty(rewards)
+        apply_terminal_rewards(rewards)
         return obs, rewards, terminated, truncated, change
 
 class TestScenario:

@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from triforce.action_space import ActionKind
 from triforce.critics import GameplayCritic
 from triforce.rewards import REWARD_MAXIMUM, Reward, StepRewards
-from triforce.scenario_wrapper import apply_terminal_penalty
+from triforce.scenario_wrapper import apply_terminal_rewards
 from triforce.zelda_enums import BoomerangKind, Direction, SelectedEquipmentKind, SwordKind
 from triforce.zelda_enums import MapLocation, TileIndex, ZeldaEnemyKind
 from utilities import CriticWrapper, ZeldaActionReplay
@@ -188,7 +188,7 @@ def test_terminal_failure_removes_positive_rewards_for_death():
     rewards.add(Reward("reward-new-location", REWARD_MAXIMUM))
     rewards.ending = "failure-terminated-death"
 
-    apply_terminal_penalty(rewards)
+    apply_terminal_rewards(rewards)
 
     assert rewards.value == -20.0
     assert 'reward-new-location' not in rewards
@@ -208,12 +208,24 @@ def test_wallmastered_terminal_uses_wallmaster_penalty_name():
     rewards.add(Reward("reward-new-location", REWARD_MAXIMUM))
     rewards.ending = "failure-wallmastered"
 
-    apply_terminal_penalty(rewards)
+    apply_terminal_rewards(rewards)
 
     assert rewards.value == -20.0
     assert 'reward-new-location' not in rewards
     assert 'penalty-wall-master' in rewards
     assert 'penalty-terminal-failure' not in rewards
+
+
+def test_terminal_success_adds_success_reward():
+    rewards = StepRewards()
+    rewards.add(Reward("reward-new-location", REWARD_MAXIMUM))
+    rewards.ending = "success-reached-location"
+
+    apply_terminal_rewards(rewards)
+
+    assert rewards.value == 20.0
+    assert 'reward-new-location' in rewards
+    assert 'reward-terminal-success' in rewards
 
 
 def test_objective_exit_tile_not_punished_as_wallmaster_tile():

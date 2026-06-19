@@ -12,11 +12,12 @@ import yaml
 
 from .metrics import MetricTracker
 from .objectives import get_objective_selector
-from .rewards import Penalty, StepRewards, TERMINAL_FAILURE_PENALTY_VALUE
+from .rewards import Penalty, Reward, StepRewards, TERMINAL_FAILURE_PENALTY_VALUE, TERMINAL_SUCCESS_REWARD_VALUE
 from .zelda_enums import Direction, MapLocation
 from . import critics
 from . import end_conditions
 
+REWARD_TERMINAL_SUCCESS = Reward("reward-terminal-success", TERMINAL_SUCCESS_REWARD_VALUE)
 PENALTY_FAILURE_TERMINAL = Penalty("penalty-terminal-failure", -TERMINAL_FAILURE_PENALTY_VALUE)
 HARD_FAILURE_ENDINGS = frozenset({"failure-terminated-death", "failure-stuck", "failure-no-progress"})
 OTHER_FAILURE_ENDINGS = frozenset({
@@ -25,9 +26,14 @@ OTHER_FAILURE_ENDINGS = frozenset({
     "failure-wrong-exit",
 })
 
-def apply_terminal_penalty(rewards: StepRewards) -> None:
-    """Adds terminal failure penalties after end conditions set rewards.ending."""
-    if rewards.ending is None or rewards.ending.startswith("success-"):
+def apply_terminal_rewards(rewards: StepRewards) -> None:
+    """Adds terminal success or failure rewards after end conditions set rewards.ending."""
+    if rewards.ending is None:
+        return
+
+    if rewards.ending.startswith("success-"):
+        if "reward-terminal-success" not in rewards:
+            rewards.add(REWARD_TERMINAL_SUCCESS)
         return
 
     if rewards.ending == "failure-wallmastered":
@@ -537,7 +543,7 @@ class ScenarioWrapper(gym.Wrapper):
                     rewards.ending = end_reason
                     break
 
-        self._apply_terminal_penalty(rewards)
+        self._apply_terminal_rewards(rewards)
 
         # Update metrics
         self._metrics.step(state_change, rewards)
@@ -549,8 +555,8 @@ class ScenarioWrapper(gym.Wrapper):
 
         return obs, rewards, terminated, truncated, state_change
 
-    def _apply_terminal_penalty(self, rewards: StepRewards) -> None:
-        apply_terminal_penalty(rewards)
+    def _apply_terminal_rewards(self, rewards: StepRewards) -> None:
+        apply_terminal_rewards(rewards)
 
     def _try_save_state(self, state_change):
         state = state_change.state

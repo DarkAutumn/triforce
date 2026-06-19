@@ -9,6 +9,7 @@ REWARD_LARGE = 0.75
 REWARD_MAXIMUM = 1.0
 TERMINAL_REWARD_MIN = -20.0
 TERMINAL_FAILURE_PENALTY_VALUE = 20.0
+TERMINAL_SUCCESS_REWARD_VALUE = 20.0
 
 @dataclass(frozen=True)
 class Outcome:
@@ -112,6 +113,8 @@ class StepRewards:
     def value(self):
         """The total reward value."""
         total = sum(self._outcomes.values())
+        if self.ending and self.ending.startswith("success-") and "reward-terminal-success" in self._outcomes:
+            return max(min(total, TERMINAL_SUCCESS_REWARD_VALUE), -REWARD_MAXIMUM)
         if self.ending and self.ending.startswith("failure-") and (
                 "penalty-terminal-failure" in self._outcomes or "penalty-wall-master" in self._outcomes):
             return max(min(total, REWARD_MAXIMUM), TERMINAL_REWARD_MIN)

@@ -180,6 +180,21 @@ training-circuits:
     exit-criteria:
       metric: success-rate
       threshold: 0.1
+- name: experiment2-circuit
+  description: Dungeon room acclimation followed by wallmaster north-exit experiment with explicit terminal success reward.
+  final-eval-scenario: dungeon1-wallmaster-north-exit
+  final-eval-episodes: 100
+  scenarios:
+  - scenario: dungeon1-room-walk
+    iterations: 500000
+    exit-criteria:
+      metric: room-result/correct-exit
+      threshold: 0.8
+  - scenario: dungeon1-wallmaster-north-exit
+    iterations: 750000
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.5
 - name: all-items-circuit
   description: 'Full curriculum: sword-only basics, item training with finite/infinite
     bombs, dungeon with wallmasters, overworld2 route, full game, and polish phase.'
