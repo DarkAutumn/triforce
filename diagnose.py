@@ -22,6 +22,7 @@ Usage:
 import argparse
 import glob as globmod
 import os
+import re
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -1045,12 +1046,134 @@ def _generate_invariant_report(violations, model_name, scenario_name, model_path
     return "\n".join(lines)
 
 
+DEMO_ACTION_TYPE_INDEX = {ActionKind.MOVE: 0}
+DEMO_DIRECTION_INDEX = {Direction.N: 0, Direction.S: 1, Direction.W: 2, Direction.E: 3}
+
+
+def parse_demo_trace(path: str) -> list[tuple[ActionKind, Direction]]:
+    """Parse a wallmaster movement trace from normalized or reverse trace format."""
+    with open(path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+
+    normalized = []
+    in_normalized = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "## Normalized forward trace":
+            in_normalized = True
+            continue
+        if stripped == "## Original reverse trace":
+            break
+        if in_normalized and stripped and not stripped.startswith('#'):
+            parts = stripped.split()
+            if len(parts) == 2:
+                normalized.append((ActionKind[parts[0]], Direction[parts[1]]))
+
+    if normalized:
+        actions = normalized
+    else:
+        reverse_entries = []
+        pattern = re.compile(r"^#(\d+)\s+(\S+)(?:\s+(\S+))?")
+        for line in lines:
+            match = pattern.match(line.strip())
+            if not match:
+                continue
+            step = int(match.group(1))
+            action_name = match.group(2)
+            direction_name = match.group(3)
+            if action_name == "None":
+                continue
+            reverse_entries.append((step, ActionKind[action_name], Direction[direction_name]))
+        actions = [(action, direction) for _, action, direction in sorted(reverse_entries)]
+
+    if not actions:
+        raise ValueError("Demo trace did not contain any actions")
+    if any(action != ActionKind.MOVE for action, _ in actions):
+        raise ValueError("Wallmaster demo traces must contain only MOVE actions")
+    return actions
+
+
+def demo_action_to_indices(action, direction):
+    """Convert a demo action to all-items MultiDiscrete indices."""
+    return DEMO_ACTION_TYPE_INDEX[action], DEMO_DIRECTION_INDEX[direction]
+
+
+def is_demo_action_allowed(action_mask, action, direction):
+    """Return whether a demo action is allowed by the joint action mask."""
+    action_type, direction_index = demo_action_to_indices(action, direction)
+    return bool(action_mask[action_type * 4 + direction_index])
+
+
+def _format_location(location):
+    return f"{location.level}:0x{location.value:02x}{'c' if location.in_cave else ''}"
+
+
+def run_demo_trace_report(trace_path, scenario_name, prefix_min, prefix_max, output_path=None):
+    """Replay an expert movement trace across optional east-prefix lengths."""
+    actions = parse_demo_trace(trace_path)
+    scenario_def = TrainingScenarioDefinition.get(scenario_name)
+    action_space_def = ActionSpaceDefinition.get("all-items")
+    env = make_zelda_env(scenario_def, action_space_def.actions,
+                         multihead=True, translation=False, frame_stack=4)
+    env = DiagnosticWrapper(env)
+    lines = [
+        "# Demo Trace Report",
+        f"trace: {trace_path}",
+        f"scenario: {scenario_name}",
+        "",
+        "| prefix_east | success | final_location | ending | total_reward | terminal_success | issue |",
+        "|---:|---|---|---|---:|---|---|",
+    ]
+    best_prefix = None
+    try:
+        for prefix in range(prefix_min, prefix_max + 1):
+            sequence = [(ActionKind.MOVE, Direction.E)] * prefix + actions
+            _obs, info = env.reset()
+            total_reward = 0.0
+            issue = ""
+            ending = ""
+            terminal_success = False
+            final_location = env.last_reset_state.full_location
+            for step, (action, direction) in enumerate(sequence, start=1):
+                action_mask = info.get('action_mask')
+                if action_mask is None or not is_demo_action_allowed(action_mask, action, direction):
+                    issue = f"invalid_action_at_step_{step}:{action.name}_{direction.name}"
+                    break
+                _obs, reward, terminated, truncated, info = env.step((action, direction))
+                total_reward += reward
+                rewards = env.last_rewards
+                state = env.last_state_change.state
+                final_location = state.full_location
+                terminal_success = terminal_success or rewards is not None and 'reward-terminal-success' in rewards
+                if terminated or truncated:
+                    ending = rewards.ending if rewards else "unknown"
+                    break
+            success = final_location.level == 1 and final_location.value == 0x35 and ending.startswith("success-")
+            if success and best_prefix is None:
+                best_prefix = prefix
+            lines.append(f"| {prefix} | {success} | {_format_location(final_location)} | {ending or 'none'} | "
+                         f"{total_reward:.3f} | {terminal_success} | {issue or 'none'} |")
+    finally:
+        env.close()
+
+    lines.append("")
+    lines.append(f"best_prefix_east: {best_prefix if best_prefix is not None else 'none'}")
+    report = "\n".join(lines)
+    if output_path:
+        with open(output_path, 'w', encoding='utf-8') as file:
+            file.write(report)
+        print(f"Demo report written to: {output_path}")
+    else:
+        print(report)
+    if best_prefix is None:
+        sys.exit(2)
+
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Diagnostic tool for trained triforce models")
-    parser.add_argument("--model", required=True, help="Model name from triforce.yaml")
-    parser.add_argument("--scenario", required=True, help="Scenario name from triforce.yaml")
-    parser.add_argument("--model-path", required=True,
+    parser.add_argument("--model", required=False, help="Model name from triforce.yaml")
+    parser.add_argument("--scenario", required=False, help="Scenario name from triforce.yaml")
+    parser.add_argument("--model-path", required=False,
                         help="Path to .pt model file (supports glob patterns)")
     parser.add_argument("--episodes", type=int, default=20, help="Number of episodes to run")
     parser.add_argument("--output", "-o", default=None, help="Output file path (default: stdout)")
@@ -1062,6 +1185,15 @@ def parse_args():
     parser.add_argument("--invariants", action="store_true",
                         help="Run movement/reward invariant checker: detect zero-movement, "
                              "missing wavefronts, empty masks, and zero-PBRS violations")
+    parser.add_argument("--demo-report", action="store_true",
+                        help="Replay a movement demo trace without loading a model")
+    parser.add_argument("--demo-trace", default=None, help="Path to demo movement trace")
+    parser.add_argument("--demo-scenario", default="dungeon1-wallmaster-north-exit",
+                        help="Scenario to use for --demo-report")
+    parser.add_argument("--demo-prefix-east-min", type=int, default=0,
+                        help="Minimum number of MOVE E prefix actions for --demo-report")
+    parser.add_argument("--demo-prefix-east-max", type=int, default=3,
+                        help="Maximum number of MOVE E prefix actions for --demo-report")
     return parser.parse_args()
 
 
@@ -1094,6 +1226,19 @@ def resolve_model_path(pattern):
 def main():
     """Entry point."""
     args = parse_args()
+
+    if args.demo_report:
+        if args.demo_trace is None:
+            print("Error: --demo-report requires --demo-trace")
+            sys.exit(1)
+        run_demo_trace_report(args.demo_trace, args.demo_scenario,
+                              args.demo_prefix_east_min, args.demo_prefix_east_max, args.output)
+        return
+
+    if args.model is None or args.scenario is None or args.model_path is None:
+        print("Error: --model, --scenario, and --model-path are required unless --demo-report is set")
+        sys.exit(1)
+
     model_path = resolve_model_path(args.model_path)
 
     if args.infinite_pbrs:

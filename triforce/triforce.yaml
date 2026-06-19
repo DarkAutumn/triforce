@@ -195,6 +195,16 @@ training-circuits:
     exit-criteria:
       metric: success-rate
       threshold: 0.5
+- name: experiment3-circuit
+  description: PPO fine-tuning for wallmaster north exit after behavior-cloning warm start.
+  final-eval-scenario: dungeon1-wallmaster-north-exit
+  final-eval-episodes: 100
+  scenarios:
+  - scenario: dungeon1-wallmaster-north-exit
+    iterations: 750000
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.5
 - name: all-items-circuit
   description: 'Full curriculum: sword-only basics, item training with finite/infinite
     bombs, dungeon with wallmasters, overworld2 route, full game, and polish phase.'
