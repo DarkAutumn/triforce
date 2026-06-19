@@ -141,3 +141,49 @@ The reward-accounting bug is fixed, but success is still not attractive/learnabl
 ### Next recommended experiment
 
 Keep the reward-accounting fixes. Do not continue from the Experiment 1 final checkpoint. Start from `impala-multihead_all-items_learn-items_2199552.pt`, add an explicit terminal success reward, run `dungeon1-room-walk` briefly to expose dungeon geometry, then train `dungeon1-wallmaster-north-exit` as a single micro-scenario.
+
+## Experiment 2: wallmaster micro-scenario with success reward, 2026-06
+
+### Artifacts
+
+- Local experiment dir: `training/experiments/experiment2`
+- Valid local run dir: `training/experiments/experiment2/runs/experiment2-circuit/3`
+- Tracked summary: `docs/experiments/experiment2-summary.md`
+- Load checkpoint: `training/experiments/baseline/runs/all-items-circuit/0/checkpoints/impala-multihead_all-items_learn-items_2199552.pt`
+- Final model: `training/experiments/experiment2/runs/experiment2-circuit/3/impala-multihead_all-items.pt`
+- Final checkpoint: `training/experiments/experiment2/runs/experiment2-circuit/3/checkpoints/impala-multihead_all-items_dungeon1-wallmaster-north-exit_3203072.pt`
+
+### Changes tested
+
+- Added tracked docs under `docs/experiments/`.
+- Added `reward-terminal-success`, allowing terminal success reward up to `+20.0`.
+- Kept terminal failure and wallmaster penalties from Experiment 1.
+- Ran `dungeon1-room-walk` before wallmaster training because the load checkpoint was pre-dungeon.
+- Added/fixed `experiment2-circuit` and `RoomWalk` fallback crash.
+
+### Training outcome
+
+- `dungeon1-room-walk`: passed early with `room-result/correct-exit=0.816667 >= 0.8`.
+- `dungeon1-wallmaster-north-exit`: failed by budget with `success-rate=0.0 < 0.5`.
+- Wallmaster failures were negative: final sample had `penalty-wall-master=-1.04167`, `penalty-terminal-failure=-2.08333`, `rewards=-43.5498`.
+
+### Final eval
+
+Final eval used 40 episodes due wallmaster runtime.
+
+- `dungeon1-wallmaster-north-exit`: `0/40`, median `9/11`, P25/P50/P75/P90 `9 / 9 / 9 / 9`.
+- `dungeon1-late-chain`: `0/40`, median `9/11`, P25/P50/P75/P90 `8 / 9 / 9 / 10`.
+- `dungeon1-room-walk`: eval command was run, but copied artifact appears overwritten/incorrectly labeled; treat room-walk final eval as inconclusive.
+
+### Current bottleneck after Experiment 2
+
+Reward penalties and success reward are mechanically present, and generic dungeon room walking can train. The wallmaster north-exit scenario still fails completely. The issue is now likely scenario reachability/objective detection or the wallmaster room setup being too hard/sparse, not reward sign alone.
+
+### Next recommended experiment
+
+Do not continue from Experiment 2 final checkpoint. Before more PPO training, run a scripted/manual reachability diagnostic from `1_45w` to `1_35`:
+
+1. Confirm controller actions can reach room `1_35` from `1_45w`.
+2. Confirm `ReachedLocation` fires success and `reward-terminal-success` appears.
+3. If reachable, create an easier wallmaster variant starting closer to the north exit or reducing wallmaster pressure.
+4. If not reachable or success does not fire, fix objective/end-condition detection first.
