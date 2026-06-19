@@ -483,7 +483,8 @@ class RoomWalk(ObjectiveSelector):
             cave_south_exit = [TileIndex(x, 0x15) for x in range(0xe, 0x12)]
             self._sequence.append(Objective(ObjectiveKind.MOVE, cave_south_exit, [state.full_location]))
 
-        exits = [x for x in room.exits if isinstance(x, Direction) if state.is_door_open(x) and room.exits[x]]
+        valid_exits = [x for x in room.exits if isinstance(x, Direction) if state.is_door_open(x) and room.exits[x]]
+        exits = list(valid_exits)
         came_from = self._came_from(prev, state)
         if came_from in exits:
             exits.remove(came_from)
@@ -491,7 +492,13 @@ class RoomWalk(ObjectiveSelector):
         exits = self._get_reachable(exits, state)
 
         if len(exits) == 0:
-            exits.append(came_from)
+            if came_from in valid_exits:
+                exits.append(came_from)
+            elif valid_exits:
+                exits.append(random.choice(valid_exits))
+            else:
+                self._sequence.append(Objective(ObjectiveKind.MOVE, set(), set()))
+                return
 
         if len(exits) == 1:
             self._target_exits = [exits[0]]
