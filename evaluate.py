@@ -13,7 +13,8 @@ from triforce import ActionSpaceDefinition, ModelKindDefinition, make_zelda_env,
     TrainingScenarioDefinition, MetricTracker
 
 
-def write_progress_markdown(md_path, progress_values, max_progress, episodes, scenario_name, model_name=None, *, metrics=None):
+def write_progress_markdown(md_path, progress_values, max_progress, episodes, scenario_name,
+                            model_name=None, *, metrics=None):
     """Writes a progress report as a markdown file."""
     if not progress_values:
         return

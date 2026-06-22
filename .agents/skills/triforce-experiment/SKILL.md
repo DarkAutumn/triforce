@@ -84,15 +84,14 @@ Use when training is reward hacking, diverging, stuck, or the experiment hypothe
 
 Use when the experiment succeeded, failed after exhausting high-value ideas, hit a guardrail, or needs human review.
 
-1. Run final evaluation commands:
+1. Use the evaluation plugin for final evaluation and comparison:
 
-```bash
-source .venv/bin/activate
-python evaluate.py <final_model_or_run_dir> <scenario> --episodes <N> --reprocess
-python evaluate.py --compare <baseline.eval.json> <new.eval.json>
-```
+   - Call `triforce_evaluation_start` with the final model path, final evaluation scenario, and the evaluation plugin default of 50 episodes unless the journal records a different user-approved episode count.
+   - Stop until the evaluation plugin sends a completion or failure wake.
+   - When comparing against a baseline `.eval.json`, call `triforce_evaluation_compare` and stop until its completion or failure wake.
+   - If the evaluation plugin fails, record the failure in `summary.md` and ask the user to fix the plugin/environment. Do not bypass the plugin by calling `evaluate.py` directly.
 
-Use `N=100` unless the journal records a different user-approved episode count.
+Evaluation is part of finish/reporting only. It is not a gate for training continue/restart decisions.
 
 2. Write `training/experiments/<experiment-id>/summary.md` with what was tried, code/config changes, outcomes, comparison results, and final decision.
 3. End `summary.md` with this exact heading and subsections:

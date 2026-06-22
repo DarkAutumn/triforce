@@ -115,7 +115,8 @@ def collect_demo_batch(model_path: str, scenario_name: str, trace_path: str, pre
                 break
         success = ending.startswith("success-") or (translation and total_reward > 1.0)
         if not success:
-            raise RuntimeError(f"Demo did not appear to reach success; ending={ending}, total_reward={total_reward:.3f}")
+            raise RuntimeError(
+                f"Demo did not appear to reach success; ending={ending}, total_reward={total_reward:.3f}")
     finally:
         env.close()
 

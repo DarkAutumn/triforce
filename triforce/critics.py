@@ -224,8 +224,10 @@ class GameplayCritic(ZeldaCritic):
         if ZeldaEnemyKind.Wallmaster not in curr.enemies:
             return
 
-        curr_on_wallmaster = self._is_wallmaster_tile(curr.link.tile) and not self._is_objective_tile(curr, curr.link.tile)
-        prev_on_wallmaster = self._is_wallmaster_tile(prev.link.tile) and not self._is_objective_tile(curr, curr.link.tile)
+        curr_on_wallmaster = (self._is_wallmaster_tile(curr.link.tile)
+                              and not self._is_objective_tile(curr, curr.link.tile))
+        prev_on_wallmaster = (self._is_wallmaster_tile(prev.link.tile)
+                              and not self._is_objective_tile(curr, curr.link.tile))
 
         # Are we on a tile which could be wallmastered?  If so, push away from it.
         if curr_on_wallmaster:
