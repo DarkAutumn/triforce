@@ -21,8 +21,10 @@ from rich.console import Console, Group
 from rich.live import Live
 from rich.text import Text
 from rich.table import Table
+import torch
 from torch.utils.tensorboard import SummaryWriter
 from triforce.experiment_report import DEFAULT_HEALTH_RANGES, flatten_metrics, is_metric_healthy
+from triforce.demo import collect_demo_batch
 
 from triforce import (ActionSpaceDefinition, ModelKindDefinition, TrainingScenarioDefinition,
                       TrainingCallback, make_zelda_env)
@@ -849,6 +851,18 @@ def _get_kwargs_from_args(args, model_kind, action_space_def):
     if args.device is not None:
         kwargs['device'] = args.device
 
+    if args.demo_trace is not None:
+        if args.load is None:
+            print("Error: --demo-trace requires --load")
+            sys.exit(1)
+        demo_device = torch.device(args.device or 'cpu')
+        kwargs["demo_batch"] = collect_demo_batch(args.load, args.demo_scenario, args.demo_trace,
+                                                    args.demo_prefix_east, demo_device)
+        kwargs["demo_bc_coeff"] = args.demo_bc_coeff
+        kwargs["demo_trace"] = args.demo_trace
+        kwargs["demo_scenario"] = args.demo_scenario
+        kwargs["demo_prefix_east"] = args.demo_prefix_east
+
     if args.parallel > 1:
         kwargs['envs'] = args.parallel
 
@@ -1309,7 +1323,7 @@ def _run_post_training_eval(model, action_space_def, model_kind, scenario_def, e
             create_eval_env, model, episodes, update)
 
     if progress_values is not None:
-        print_progress_report(progress_values, max_progress, episodes, scenario_def.name)
+        print_progress_report(progress_values, max_progress, episodes, scenario_def.name, metrics=None)
 
 def parse_args():
     """Parse command line arguments."""
@@ -1347,6 +1361,14 @@ def parse_args():
                         help="Experiment directory for journal and summary files.")
     parser.add_argument("--baseline-eval-json", type=str, default=None,
                         help="Optional baseline .eval.json for milestone reports.")
+    parser.add_argument("--demo-trace", type=str, default=None,
+                        help="Expert movement trace to regularize PPO updates.")
+    parser.add_argument("--demo-scenario", type=str, default="dungeon1-wallmaster-north-exit",
+                        help="Scenario used to collect expert demo observations.")
+    parser.add_argument("--demo-prefix-east", type=int, default=0,
+                        help="Number of MOVE E actions to prepend before the demo trace.")
+    parser.add_argument("--demo-bc-coeff", type=float, default=0.0,
+                        help="Behavior-cloning loss coefficient for demo-regularized PPO.")
 
     try:
         args = parser.parse_args()

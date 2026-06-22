@@ -3,10 +3,8 @@
 
 import pytest
 
-from diagnose import parse_demo_trace
+from triforce.demo import compute_demo_accuracy, parse_demo_trace
 import torch
-
-from scripts.behavior_clone import compute_demo_accuracy
 from triforce.action_space import ActionKind
 from triforce.zelda_enums import Direction
 

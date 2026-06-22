@@ -205,6 +205,37 @@ training-circuits:
     exit-criteria:
       metric: success-rate
       threshold: 0.5
+- name: experiment4-late-chain-demo
+  description: Late Dungeon 1 transfer with wallmaster demo regularization.
+  kind: weighted
+  scenarios:
+  - scenario: dungeon1-wallmaster-north-exit
+    weight: 30
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.5
+  - scenario: dungeon1-late-chain
+    weight: 50
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.1
+  - scenario: dungeon1-aquamentus-east
+    weight: 20
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.2
+- name: experiment4-circuit
+  description: Demo-regularized late-chain transfer after Experiment 3 wallmaster success.
+  final-eval-scenario: dungeon1-late-chain
+  final-eval-episodes: 100
+  scenarios:
+  - circuit: experiment4-late-chain-demo
+    iterations: 1500000
+  - scenario: dungeon1-finite-bombs
+    iterations: 500000
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.1
 - name: all-items-circuit
   description: 'Full curriculum: sword-only basics, item training with finite/infinite
     bombs, dungeon with wallmasters, overworld2 route, full game, and polish phase.'

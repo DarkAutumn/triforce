@@ -224,3 +224,43 @@ Partial success. Behavior cloning made the wallmaster room learnable and produce
 ### Next recommended experiment
 
 Start from `training/experiments/experiment3/runs/experiment3-circuit/1/checkpoints/impala-multihead_all-items_dungeon1-wallmaster-north-exit_2273280.pt`. Add demo regularization during PPO or periodic BC rehearsal so PPO keeps the safe wallmaster route. Train a late-chain curriculum alternating demo rehearsal, `dungeon1-wallmaster-north-exit`, and `dungeon1-late-chain`. Also fix `evaluate.py` reporting so `ReachedLocation` micro-scenarios use scenario `success-rate` in the header.
+
+## Experiment 4: demo-regularized late-chain transfer, 2026-06
+
+### Artifacts
+
+- Local experiment dir: `training/experiments/experiment4`
+- Run dir: `training/experiments/experiment4/runs/experiment4-circuit/0`
+- Tracked summary: `docs/experiments/experiment4-summary.md`
+- Load checkpoint: `training/experiments/experiment3/runs/experiment3-circuit/1/checkpoints/impala-multihead_all-items_dungeon1-wallmaster-north-exit_2273280.pt`
+- Final model: `training/experiments/experiment4/runs/experiment4-circuit/0/impala-multihead_all-items.pt`
+- Final checkpoint: `training/experiments/experiment4/runs/experiment4-circuit/0/checkpoints/impala-multihead_all-items_dungeon1-finite-bombs_4280320.pt`
+- Demo trace: `docs/experiments/demos/wallmaster-north-exit.txt`
+
+### Changes tested
+
+- Fixed `evaluate.py` to report scenario `metrics.success-rate` for micro-scenarios.
+- Added shared demo helpers in `triforce/demo.py`.
+- Refactored `diagnose.py` and `scripts/behavior_clone.py` to use shared demo helpers.
+- Added policy-only demo BC regularization to PPO with `--demo-trace`, `--demo-scenario`, `--demo-prefix-east`, and `--demo-bc-coeff`.
+- Added `experiment4-late-chain-demo` weighted circuit and `experiment4-circuit`.
+
+### Training outcome
+
+- `[circuit] experiment4-late-chain-demo`: budget exhausted, wallmaster exit metric `0.292806 < 0.5`.
+- `dungeon1-finite-bombs`: budget exhausted, `success-rate=0.0 < 0.1`.
+- Demo retention stayed active through the run: final stats `charts/demo_bc_accuracy=1.0`, `losses/demo_bc_loss=0.002919394988566637`.
+
+### Final eval
+
+- `dungeon1-wallmaster-north-exit`: `success-rate=1.0` over 100 episodes, median progress `10/11`, P25/P50/P75/P90 `10 / 10 / 10 / 10`.
+- `dungeon1-late-chain`: `success-rate=0.0` over 100 episodes, median progress `10/11`, P25/P50/P75/P90 `8 / 10 / 10 / 10`, JSON metrics `room-progress=14.77`, `progress/max=16`.
+- `dungeon1-finite-bombs`: `success-rate=0.0` over 40 episodes, progress values all `7/7`, JSON metrics `room-progress=9.875`, `progress/max=10`.
+
+### Classification
+
+Partial success. Demo-regularized PPO retained and improved the wallmaster route, raising final wallmaster eval from Experiment 3 `0.24` to `1.0`. Late-chain transfer improved only by partial criteria: median progress improved from `9/11` to `10/11` and progress `16` remained reachable, but no late-chain or finite-bombs completions occurred.
+
+### Next recommended experiment
+
+Keep demo-regularized PPO and the reporting fix. Do not use the Experiment 4 final model as a dungeon-solving checkpoint except for wallmaster-retention evidence. Add a late-chain/boss/triforce demonstration or separate rehearsal signal after the wallmaster north exit; the wallmaster-only demo is too narrow to teach Aquamentus and Triforce completion.

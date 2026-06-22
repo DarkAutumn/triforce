@@ -22,7 +22,6 @@ Usage:
 import argparse
 import glob as globmod
 import os
-import re
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -33,6 +32,7 @@ import gymnasium as gym
 from triforce import ActionSpaceDefinition, ModelKindDefinition, Network, TrainingScenarioDefinition, make_zelda_env
 from triforce.action_space import ActionKind
 from triforce.critics import PBRS_SCALE
+from triforce.demo import demo_action_to_indices, is_demo_action_allowed, parse_demo_trace
 from triforce.observation_wrapper import infer_obs_kind
 from triforce.room import Room
 from triforce.zelda_enums import MapLocation, Direction
@@ -1046,63 +1046,6 @@ def _generate_invariant_report(violations, model_name, scenario_name, model_path
     return "\n".join(lines)
 
 
-DEMO_ACTION_TYPE_INDEX = {ActionKind.MOVE: 0}
-DEMO_DIRECTION_INDEX = {Direction.N: 0, Direction.S: 1, Direction.W: 2, Direction.E: 3}
-
-
-def parse_demo_trace(path: str) -> list[tuple[ActionKind, Direction]]:
-    """Parse a wallmaster movement trace from normalized or reverse trace format."""
-    with open(path, 'r', encoding='utf-8') as file:
-        lines = file.readlines()
-
-    normalized = []
-    in_normalized = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped == "## Normalized forward trace":
-            in_normalized = True
-            continue
-        if stripped == "## Original reverse trace":
-            break
-        if in_normalized and stripped and not stripped.startswith('#'):
-            parts = stripped.split()
-            if len(parts) == 2:
-                normalized.append((ActionKind[parts[0]], Direction[parts[1]]))
-
-    if normalized:
-        actions = normalized
-    else:
-        reverse_entries = []
-        pattern = re.compile(r"^#(\d+)\s+(\S+)(?:\s+(\S+))?")
-        for line in lines:
-            match = pattern.match(line.strip())
-            if not match:
-                continue
-            step = int(match.group(1))
-            action_name = match.group(2)
-            direction_name = match.group(3)
-            if action_name == "None":
-                continue
-            reverse_entries.append((step, ActionKind[action_name], Direction[direction_name]))
-        actions = [(action, direction) for _, action, direction in sorted(reverse_entries)]
-
-    if not actions:
-        raise ValueError("Demo trace did not contain any actions")
-    if any(action != ActionKind.MOVE for action, _ in actions):
-        raise ValueError("Wallmaster demo traces must contain only MOVE actions")
-    return actions
-
-
-def demo_action_to_indices(action, direction):
-    """Convert a demo action to all-items MultiDiscrete indices."""
-    return DEMO_ACTION_TYPE_INDEX[action], DEMO_DIRECTION_INDEX[direction]
-
-
-def is_demo_action_allowed(action_mask, action, direction):
-    """Return whether a demo action is allowed by the joint action mask."""
-    action_type, direction_index = demo_action_to_indices(action, direction)
-    return bool(action_mask[action_type * 4 + direction_index])
-
 
 def _format_location(location):
     return f"{location.level}:0x{location.value:02x}{'c' if location.in_cave else ''}"
@@ -1135,6 +1078,7 @@ def run_demo_trace_report(trace_path, scenario_name, prefix_min, prefix_max, out
             terminal_success = False
             final_location = env.last_reset_state.full_location
             for step, (action, direction) in enumerate(sequence, start=1):
+                _ = demo_action_to_indices(action, direction)
                 action_mask = info.get('action_mask')
                 if action_mask is None or not is_demo_action_allowed(action_mask, action, direction):
                     issue = f"invalid_action_at_step_{step}:{action.name}_{direction.name}"

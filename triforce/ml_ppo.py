@@ -8,6 +8,7 @@ from .metrics import MetricTracker
 from .ml_ppo_callback import NullCallback
 from .ml_ppo_rollout_buffer import PPORolloutBuffer
 from .models import Network, create_network
+from .demo import compute_demo_accuracy
 
 # default hyperparameters
 LEARNING_RATE = 0.0001
@@ -65,6 +66,8 @@ class PPO:
         self._kl_rollback = kwargs.get('kl_rollback', KL_ROLLBACK_MULTIPLIER)
         self.optimizer = None
         self._pending_optimizer_state = kwargs.get('optimizer_state', None)
+        self._demo_bc_coeff = kwargs.get("demo_bc_coeff", 0.0)
+        self._demo_batch = kwargs.get("demo_batch", None)
 
         self.kwargs = kwargs
 
@@ -534,6 +537,17 @@ class PPO:
 
         network = network.to(self.device)
         optimizer = self.optimizer
+        demo_obs = demo_masks = demo_targets = None
+        demo_bc_loss = torch.tensor(0.0, device=self.device)
+        demo_bc_accuracy = None
+        if self._demo_batch is not None:
+            raw_demo_obs, raw_demo_masks, raw_demo_targets = self._demo_batch
+            if isinstance(raw_demo_obs, dict):
+                demo_obs = {key: value.to(self.device) for key, value in raw_demo_obs.items()}
+            else:
+                demo_obs = raw_demo_obs.to(self.device)
+            demo_masks = raw_demo_masks.to(self.device)
+            demo_targets = raw_demo_targets.to(self.device)
 
         # Snapshot weights for KL rollback
         kl_rollback_threshold = None
@@ -605,6 +619,10 @@ class PPO:
 
                 entropy_loss = entropy.mean()
                 loss = pg_loss - self._ent_coeff * entropy_loss + self._vf_coeff * v_loss
+                if demo_obs is not None and self._demo_bc_coeff > 0:
+                    _, demo_logprob, _, _ = network.get_action_and_value(demo_obs, demo_masks, demo_targets)
+                    demo_bc_loss = -demo_logprob.mean()
+                    loss = loss + self._demo_bc_coeff * demo_bc_loss
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -621,6 +639,11 @@ class PPO:
             network.load_state_dict(saved_state)
             optimizer.load_state_dict(saved_optimizer)
             kl_rolled_back = True
+
+        if demo_obs is not None:
+            with torch.no_grad():
+                demo_pred = network.get_action(demo_obs, demo_masks, deterministic=True)
+                demo_bc_accuracy = compute_demo_accuracy(demo_pred, demo_targets)
 
         network = network.to("cpu")
 
@@ -655,6 +678,11 @@ class PPO:
             "losses/explained_variance": explained_var,
             "losses/kl_rollback": 1.0 if kl_rolled_back else 0.0,
         }
+
+        if demo_obs is not None:
+            stats["losses/demo_bc_loss"] = demo_bc_loss.item()
+            stats["charts/demo_bc_accuracy"] = demo_bc_accuracy
+            stats["charts/demo_bc_coeff"] = self._demo_bc_coeff
 
         if self.start_time is not None:
             steps_this_run = iterations - self._steps_at_start

@@ -7,67 +7,14 @@ import sys
 from pathlib import Path
 
 
-import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from diagnose import demo_action_to_indices, is_demo_action_allowed, parse_demo_trace
-from triforce import ActionSpaceDefinition, ModelKindDefinition, Network, TrainingScenarioDefinition, make_zelda_env
-from triforce.observation_wrapper import infer_obs_kind
-from triforce.zelda_enums import ActionKind, Direction
+from triforce import ModelKindDefinition, Network
+from triforce.demo import collect_demo_batch, compute_demo_accuracy, parse_demo_trace
 
 
-def compute_demo_accuracy(pred_actions, target_actions):
-    """Return exact two-head action accuracy."""
-    return (pred_actions.long() == target_actions.long()).all(dim=-1).float().mean().item()
-
-
-def _stack_observations(observations, device):
-    keys = observations[0].keys()
-    return {key: torch.stack([torch.as_tensor(obs[key]) for obs in observations]).to(device) for key in keys}
-
-
-def _collect_demo(model_path, scenario_name, trace_path, prefix_east, device):
-    metadata = Network.load_metadata(model_path)
-    obs_kind, frame_stack = infer_obs_kind(metadata["obs_space"])
-    scenario_def = TrainingScenarioDefinition.get(scenario_name)
-    action_space_def = ActionSpaceDefinition.get("all-items")
-    env = make_zelda_env(scenario_def, action_space_def.actions, multihead=True,
-                         translation=True, obs_kind=obs_kind, frame_stack=frame_stack)
-
-    observations = []
-    masks = []
-    targets = []
-    actions = [(ActionKind.MOVE, Direction.E)] * prefix_east + parse_demo_trace(trace_path)
-    try:
-        obs, info = env.reset()
-        ending = ""
-        final_location = None
-        total_reward = 0.0
-        for step, (action, direction) in enumerate(actions, start=1):
-            action_mask = info.get('action_mask')
-            if action_mask is None:
-                raise RuntimeError(f"Missing action mask at demo step {step}")
-            if not is_demo_action_allowed(action_mask, action, direction):
-                raise RuntimeError(f"Invalid demo action at step {step}: {action.name} {direction.name}")
-            action_indices = demo_action_to_indices(action, direction)
-            observations.append(obs)
-            masks.append(torch.as_tensor(action_mask, dtype=torch.bool))
-            targets.append(torch.as_tensor(action_indices, dtype=torch.long))
-            obs, reward, terminated, truncated, info = env.step(np.asarray(action_indices, dtype=np.int64))
-            total_reward += float(reward)
-            if terminated or truncated:
-                ending = info.get('rewards', {}).get('ending') or info.get('ending') or "unknown"
-                break
-        # If the translated info did not carry ending, infer success from the final reset-free trace state where possible.
-        success = ending.startswith("success-") or total_reward > 1.0
-        if not success:
-            raise RuntimeError(f"Demo did not appear to reach success; ending={ending}, total_reward={total_reward:.3f}")
-    finally:
-        env.close()
-
-    return _stack_observations(observations, device), torch.stack(masks).to(device), torch.stack(targets).to(device)
 
 
 def behavior_clone(args):
@@ -80,7 +27,7 @@ def behavior_clone(args):
     network.load(args.model_path)
     network.train()
 
-    obs, masks, targets = _collect_demo(args.model_path, args.scenario, args.demo_trace, args.prefix_east, device)
+    obs, masks, targets = collect_demo_batch(args.model_path, args.scenario, args.demo_trace, args.prefix_east, device)
     optimizer = torch.optim.Adam(network.parameters(), lr=args.lr)
     first_loss = None
     final_loss = None
