@@ -31,6 +31,16 @@ def test_training_skill_uses_evaluation_plugin():
     assert "python evaluate.py <final_model_or_run_dir>" not in skill
 
 
+def test_evaluation_skills_forbid_sleep_poll_wait_loop():
+    evaluation_skill = (ROOT / ".agents/skills/triforce-evaluation/SKILL.md").read_text(encoding="utf-8")
+    training_skill = (ROOT / ".agents/skills/triforce-experiment/SKILL.md").read_text(encoding="utf-8")
+
+    for skill in (evaluation_skill, training_skill):
+        assert "Do not sleep, poll, wait" in skill
+        assert "sleep to wait" not in skill
+        assert "call status in a loop" in skill or "call evaluation status in a loop" in skill
+
+
 def test_evaluate_default_remains_100_for_cli_backcompat(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evaluate.py", "model.pt", "scenario-name"])
 

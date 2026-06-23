@@ -87,8 +87,8 @@ Use when the experiment succeeded, failed after exhausting high-value ideas, hit
 1. Use the evaluation plugin for final evaluation and comparison:
 
    - Call `triforce_evaluation_start` with the final model path, final evaluation scenario, and the evaluation plugin default of 50 episodes unless the journal records a different user-approved episode count.
-   - Stop until the evaluation plugin sends a completion or failure wake.
-   - When comparing against a baseline `.eval.json`, call `triforce_evaluation_compare` and stop until its completion or failure wake.
+   - End the turn immediately after `triforce_evaluation_start` returns. Do not sleep, poll, wait, or call evaluation status in a loop; the evaluation plugin will wake the agent on completion or failure.
+   - When comparing against a baseline `.eval.json`, call `triforce_evaluation_compare`, then end the turn immediately and rely on the plugin wake; do not sleep or poll.
    - If the evaluation plugin fails, record the failure in `summary.md` and ask the user to fix the plugin/environment. Do not bypass the plugin by calling `evaluate.py` directly.
 
 Evaluation is part of finish/reporting only. It is not a gate for training continue/restart decisions.

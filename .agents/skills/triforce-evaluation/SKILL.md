@@ -22,15 +22,15 @@ Evaluation is optional and not a training gate. The training skill may recommend
 
 1. Confirm model path and scenario from user input or current training milestone/status (`final_model_path`, `latest_checkpoint_path`, or `final_eval_scenario`). Do not ask when those paths are present in the report/status.
 2. Call `triforce_evaluation_start` with episodes default 50.
-3. Stop; wait for the plugin's completion or failure wake.
-4. On completion, read the result paths from the wake/status, then summarize results in chat or append to experiment `summary.md` when this is part of a training experiment.
+3. End the turn immediately after the tool returns. Do not sleep, poll, wait, or call status in a loop; the plugin will wake the agent on completion or failure.
+4. On the completion wake, read the result paths from the wake/status, then summarize results in chat or append to experiment `summary.md` when this is part of a training experiment.
 5. On failure, ask the user to fix the plugin/environment issue. Do not run evaluate.py directly.
 
 ## Comparing evaluations
 
 1. Use `triforce_evaluation_compare` for `evaluate.py --compare` behavior.
-2. Stop until the plugin sends the completion or failure wake.
-3. Summarize `compare.md`. Do not run compare directly in bash.
+2. End the turn immediately after the tool returns. Do not sleep, poll, wait, or call status in a loop; the plugin will wake the agent on completion or failure.
+3. On the completion wake, summarize `compare.md`. Do not run compare directly in bash.
 
 ## Failure handling
 
