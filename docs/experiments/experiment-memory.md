@@ -264,3 +264,45 @@ Partial success. Demo-regularized PPO retained and improved the wallmaster route
 ### Next recommended experiment
 
 Keep demo-regularized PPO and the reporting fix. Do not use the Experiment 4 final model as a dungeon-solving checkpoint except for wallmaster-retention evidence. Add a late-chain/boss/triforce demonstration or separate rehearsal signal after the wallmaster north exit; the wallmaster-only demo is too narrow to teach Aquamentus and Triforce completion.
+
+## Experiment 5: boss-transfer curriculum, 2026-06
+
+### Artifacts
+
+- Local experiment dir: `training/experiments/experiment5`
+- Final run dir: `training/experiments/experiment5/runs/experiment5-circuit/4`
+- Tracked summary: `docs/experiments/experiment5-summary.md`
+- Initial load model: `training/experiments/experiment4/runs/experiment4-circuit/0/impala-multihead_all-items.pt`
+- Recovery checkpoint used for final run: `training/experiments/experiment5/runs/experiment5-circuit/3/checkpoints/impala-multihead_all-items_experiment5-boss-transfer_7331840.pt`
+- Final model: `training/experiments/experiment5/runs/experiment5-circuit/4/impala-multihead_all-items.pt`
+- Final checkpoint: `training/experiments/experiment5/runs/experiment5-circuit/4/checkpoints/impala-multihead_all-items_dungeon1-late-chain_8335360.pt`
+- Wallmaster demo trace: `docs/experiments/demos/wallmaster-north-exit.txt`
+
+### Changes tested
+
+- Added `experiment5-boss-transfer` and `experiment5-circuit`.
+- Initial boss-transfer weights were `20 / 60 / 20` for wallmaster / Aquamentus / late-chain.
+- After the planned reweight trigger fired, changed weights to `10 / 80 / 10` because wallmaster retention was healthy but Aquamentus success remained `0.0` after more than 1,000,000 steps.
+- Continued wallmaster demo regularization with `--demo-bc-coeff 0.05`.
+
+### Training outcome
+
+- `[circuit] experiment5-boss-transfer`: completed from run `3` checkpoint, wallmaster exit metric `0.860073 >= 0.8`.
+- `dungeon1-late-chain`: budget exhausted in run `4`, `success-rate=0.0 < 0.1`.
+- Final late-chain training sample: `progress/max=14`, `room-progress=14.0`, `endings/failure-no-progress=0.75`, `endings/failure-stuck=0.5`, `endings/failure-terminated-death=1.0`, `endings/failure-wallmastered=1.0`.
+- Demo retention remained active at completion: `charts/demo_bc_accuracy=1.0`, `losses/demo_bc_loss=0.0010404533240944147`.
+
+### Final eval
+
+- `dungeon1-wallmaster-north-exit`: OMP evaluation plugin completed 100 episodes, `success-rate=1.0`, progress max `10/11`, P25/P50/P75/P90 `10 / 10 / 10 / 10`.
+- `dungeon1-aquamentus-east`: OMP evaluation plugin completed 100 episodes, `success-rate=0.0`, progress max `10/11`, P25/P50/P75/P90 `10 / 10 / 10 / 10`, `endings/failure-left-boss-room=1.0`.
+- `dungeon1-late-chain`: OMP evaluation plugin reported completion twice, but after stale artifacts were removed it produced no `.eval.json` or `.eval.md`. No direct `evaluate.py` fallback was run.
+- Late-chain compare was not run because the plugin did not produce a candidate late-chain JSON.
+
+### Classification
+
+Failure. Wallmaster retention remained solved, but boss transfer failed completely and final late-chain training regressed to `progress/max=14`. The `dungeon1-aquamentus-east` final eval shows a clear failure mode: every episode left the boss room.
+
+### Next recommended experiment
+
+Do not keep `experiment5-circuit` as a useful curriculum. Before another long run, diagnose `dungeon1-aquamentus-east` with action/reward traces around `failure-left-boss-room`; likely fix objective/end-condition/reward shaping for boss engagement before trying another curriculum.

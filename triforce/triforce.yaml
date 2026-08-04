@@ -236,6 +236,37 @@ training-circuits:
     exit-criteria:
       metric: success-rate
       threshold: 0.1
+- name: experiment5-boss-transfer
+  description: Late Dungeon 1 boss transfer with wallmaster demo retention.
+  kind: weighted
+  scenarios:
+  - scenario: dungeon1-wallmaster-north-exit
+    weight: 10
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.8
+  - scenario: dungeon1-aquamentus-east
+    weight: 80
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.6
+  - scenario: dungeon1-late-chain
+    weight: 10
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.1
+- name: experiment5-circuit
+  description: Boss-transfer curriculum after Experiment 4 wallmaster retention.
+  final-eval-scenario: dungeon1-late-chain
+  final-eval-episodes: 100
+  scenarios:
+  - circuit: experiment5-boss-transfer
+    iterations: 2000000
+  - scenario: dungeon1-late-chain
+    iterations: 1000000
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.1
 - name: all-items-circuit
   description: 'Full curriculum: sword-only basics, item training with finite/infinite
     bombs, dungeon with wallmasters, overworld2 route, full game, and polish phase.'
