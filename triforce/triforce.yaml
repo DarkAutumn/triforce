@@ -247,6 +247,7 @@ training-circuits:
       threshold: 0.8
   - scenario: dungeon1-aquamentus-east
     weight: 80
+    primary: true
     exit-criteria:
       metric: success-rate
       threshold: 0.6

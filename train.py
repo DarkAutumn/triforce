@@ -882,9 +882,12 @@ def _get_circuit_exit_criteria(scenario_entry, sub_circuit_def):
     """
     ec = scenario_entry.exit_criteria
     if ec is not None:
-        return ec, None
+        primary_entry = next((entry for entry in sub_circuit_def.scenarios if entry.primary), None)
+        owner = primary_entry or sub_circuit_def.scenarios[0]
+        return ec, owner.scenario
 
-    for sub_entry in sub_circuit_def.scenarios:
+    ordered_entries = sorted(sub_circuit_def.scenarios, key=lambda entry: not entry.primary)
+    for sub_entry in ordered_entries:
         if sub_entry.exit_criteria:
             return sub_entry.exit_criteria, sub_entry.scenario
     return None, None
@@ -1112,12 +1115,16 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
     All scenarios run concurrently with step-count proportional to their weights.
     The WeightedScenarioSelector (via RPC) decides which scenario each worker runs on reset.
     outer_exit_criteria: ExitCriteria from the parent sequential entry. When provided, overrides
-    inner entry exit criteria — applied to the first (primary) scenario.
+    inner entry exit criteria and applies to the designated primary scenario, or the first scenario
+    when no primary is configured.
     """
     # Resolve scenario definitions and weights
     scenario_defs = []
     weights = []
     exit_criteria_map = {}
+
+    primary_entry = next((entry for entry in circuit_def.scenarios if entry.primary), None)
+    criteria_entries = [primary_entry] if primary_entry else circuit_def.scenarios
 
     for entry in circuit_def.scenarios:
         sdef = TrainingScenarioDefinition.get(entry.scenario)
@@ -1125,12 +1132,13 @@ def _run_weighted_circuit(ppo, circuit_def, model_kind, action_space_def, checkp
             raise ValueError(f"Unknown scenario: {entry.scenario}")
         scenario_defs.append(sdef)
         weights.append(entry.weight)
-        if entry.exit_criteria:
+        if entry in criteria_entries and entry.exit_criteria:
             exit_criteria_map[entry.scenario] = entry.exit_criteria
 
-    # Outer exit criteria overrides inner — applied to the first (primary) scenario
+    # Outer exit criteria overrides inner and targets the configured primary scenario.
     if outer_exit_criteria and scenario_defs:
-        exit_criteria_map = {scenario_defs[0].name: outer_exit_criteria}
+        target_entry = primary_entry or circuit_def.scenarios[0]
+        exit_criteria_map = {target_entry.scenario: outer_exit_criteria}
 
     # Determine iteration budget
     if total_budget is not None:

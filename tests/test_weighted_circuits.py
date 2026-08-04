@@ -10,6 +10,7 @@ Tests:
 
 import pytest
 
+from train import _get_circuit_exit_criteria
 from triforce.scenario_wrapper import (
     ExitCriteria, TrainingCircuitEntry, TrainingCircuitDefinition,
     WeightedScenarioSelector, TrainingScenarioDefinition,
@@ -52,6 +53,10 @@ class TestExitCriteria:
     def test_circuit_entry_with_weight(self):
         entry = TrainingCircuitEntry(scenario='full-game', weight=70.0)
         assert entry.weight == 70.0
+
+    def test_circuit_entry_with_primary(self):
+        entry = TrainingCircuitEntry(scenario='full-game', weight=70.0, primary=True)
+        assert entry.primary is True
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +113,51 @@ class TestCircuitKind:
         assert first.exit_criteria is not None
         assert first.exit_criteria.metric == 'room-result/correct-exit'
         assert first.exit_criteria.threshold == 0.9
+
+    def test_experiment5_primary_controls_embedded_exit_criteria(self):
+        """A weighted circuit reports and gates on its designated primary scenario."""
+        circuit = TrainingCircuitDefinition.get('experiment5-boss-transfer')
+        parent_entry = TrainingCircuitEntry(circuit=circuit.name)
+
+        criteria, scenario = _get_circuit_exit_criteria(parent_entry, circuit)
+
+        assert scenario == 'dungeon1-aquamentus-east'
+        assert criteria.metric == 'success-rate'
+        assert criteria.threshold == 0.6
+
+    def test_primary_metric_map_excludes_non_primary_criteria(self, monkeypatch, tmp_path):
+        """A non-primary threshold cannot stop a weighted training leg."""
+        circuit = TrainingCircuitDefinition.get('experiment5-boss-transfer')
+        captured = {}
+
+        class FakePpo:
+            optimizer = None
+
+            def train_weighted(self, _network_class, _create_env, _scenario_defs, _weights,
+                               _actions, _iterations, exit_criteria_map, _callback, **_kwargs):
+                captured.update(exit_criteria_map)
+                raise RuntimeError("captured")
+
+        class FakeModelKind:
+            name = 'fake-model'
+            network_class = object
+
+        class FakeActionSpace:
+            name = 'fake-actions'
+            actions = 'fake-actions'
+
+        monkeypatch.setattr(
+            TrainingScenarioDefinition, 'get',
+            staticmethod(lambda name: type('Scenario', (), {'name': name, 'iterations': 100})()))
+
+        from train import _run_weighted_circuit
+
+        with pytest.raises(RuntimeError, match="captured"):
+            _run_weighted_circuit(
+                FakePpo(), circuit, FakeModelKind(), FakeActionSpace(), str(tmp_path),
+                {}, 100, callback=None)
+
+        assert list(captured) == ['dungeon1-aquamentus-east']
 
 
 # ---------------------------------------------------------------------------
