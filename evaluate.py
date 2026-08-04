@@ -12,6 +12,11 @@ from tqdm import tqdm
 from triforce import ActionSpaceDefinition, ModelKindDefinition, make_zelda_env, Network, \
     TrainingScenarioDefinition, MetricTracker
 
+# Hard per-episode step ceiling for evaluation. Bounds pathological episodes (e.g. a
+# room-to-room ping-pong that never satisfies an end condition) so an eval can never
+# run unbounded. Shared with train.py's post-training --evaluate path.
+DEFAULT_MAX_EPISODE_STEPS = 20000
+
 
 def write_progress_markdown(md_path, progress_values, max_progress, episodes, scenario_name,
                             model_name=None, *, metrics=None):
@@ -225,7 +230,7 @@ def _print_stat_row(filename, steps_trained, metrics: Dict[str, float], metric_c
 
     print(result)
 
-def evaluate_one_model(make_env, network, episodes, progress_callback):
+def evaluate_one_model(make_env, network, episodes, progress_callback, max_steps):
     """Runs a single scenario.  Returns (metrics_dict, progress_values, max_progress)."""
     # pylint: disable=redefined-outer-name,too-many-locals
     env = make_env()
@@ -234,12 +239,19 @@ def evaluate_one_model(make_env, network, episodes, progress_callback):
             obs, info = env.reset()
 
             terminated = truncated = False
+            steps = 0
             while not terminated and not truncated:
                 action_mask = info.get('action_mask', None)
                 action_mask = action_mask.unsqueeze(0) if action_mask is not None else None
                 action = network.get_action(obs, action_mask)
                 action = action.squeeze(0)  # remove batch dim: [1, 2] -> [2] or [1] -> scalar
                 obs, _, terminated, truncated, info = env.step(action)
+                steps += 1
+                if steps >= max_steps and not (terminated or truncated):
+                    tracker = MetricTracker.get_instance()
+                    if tracker is not None:
+                        tracker.end_scenario(False, True, "eval-step-cap")
+                    break
 
             progress_callback()
 
@@ -367,24 +379,33 @@ def main():
 def _save_results(path, metrics, progress_values, max_progress, episodes, scenario):
     """Saves evaluation results: updates model .pt, writes .eval.json and .eval.md."""
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    if metrics:
-        network, _, _ = _load_network_from_path(path)
-        network.metrics = metrics
-        network.episodes_evaluated = episodes
-        network.save(path)
+    if not metrics:
+        print(f"ERROR: evaluation produced no metrics for {path}; not saving results.",
+              file=sys.stderr)
+        sys.exit(1)
+    if progress_values is None:
+        print(f"ERROR: evaluation produced no progress metric for {path}; not saving results.",
+              file=sys.stderr)
+        sys.exit(1)
 
-    if progress_values is not None:
-        json_path = path.rsplit('.', 1)[0] + '.eval.json'
-        eval_data = {
-            'episodes': episodes,
-            'scenario': scenario,
-            'progress_values': progress_values,
-            'max_progress': max_progress,
-            'metrics': metrics,
-        }
-        with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(eval_data, f, indent=2)
-        convert_eval_json_to_md(json_path)
+    network, _, _ = _load_network_from_path(path)
+    network.metrics = metrics
+    network.episodes_evaluated = episodes
+    network.save(path)
+
+    json_path = path.rsplit('.', 1)[0] + '.eval.json'
+    eval_data = {
+        'episodes': episodes,
+        'scenario': scenario,
+        'progress_values': progress_values,
+        'max_progress': max_progress,
+        'metrics': metrics,
+    }
+    tmp_path = json_path + '.tmp'
+    with open(tmp_path, 'w', encoding='utf-8') as f:
+        json.dump(eval_data, f, indent=2)
+    os.replace(tmp_path, json_path)
+    convert_eval_json_to_md(json_path)
 
 
 def _run_sequential(args, scenario_def, to_process, total_episodes):
@@ -406,7 +427,7 @@ def _run_sequential(args, scenario_def, to_process, total_episodes):
                                               frame_stack=args.frame_stack)
 
             metrics, progress_values, max_progress = evaluate_one_model(
-                make_env, network, args.episodes, update_progress)
+                make_env, network, args.episodes, update_progress, args.max_steps)
             _save_results(path, metrics, progress_values, max_progress,
                           args.episodes, args.scenario)
 
@@ -420,6 +441,9 @@ def parse_args():
     parser.add_argument("--episodes", type=int, default=100, help="Number of episodes to test.")
     parser.add_argument("--render", action='store_true', help="Render the game while evaluating the models.")
     parser.add_argument("--limit", type=int, default=-1, help="Limit the number of models to evaluate.")
+    parser.add_argument("--max-steps", type=int, default=DEFAULT_MAX_EPISODE_STEPS,
+                        help="Hard per-episode step cap; on reach, truncate the episode with "
+                             "ending 'eval-step-cap'.")
 
     parser.add_argument('model_path', nargs='?', default=None,
                         help='Path to a .pt model file or directory of .pt files.')
