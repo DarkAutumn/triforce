@@ -1303,7 +1303,7 @@ def _run_post_training_eval(model, action_space_def, model_kind, scenario_def, e
     """Runs evaluation episodes after training and prints a progress report."""
     # pylint: disable=import-outside-toplevel
     from rich.progress import Progress
-    from evaluate import evaluate_one_model, print_progress_report
+    from evaluate import DEFAULT_MAX_EPISODE_STEPS, evaluate_one_model, print_progress_report
 
     if console is None:
         console = Console()
@@ -1320,7 +1320,7 @@ def _run_post_training_eval(model, action_space_def, model_kind, scenario_def, e
         def update():
             progress.advance(task)
         _, progress_values, max_progress = evaluate_one_model(
-            create_eval_env, model, episodes, update)
+            create_eval_env, model, episodes, update, DEFAULT_MAX_EPISODE_STEPS)
 
     if progress_values is not None:
         print_progress_report(progress_values, max_progress, episodes, scenario_def.name, metrics=None)

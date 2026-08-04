@@ -31,12 +31,14 @@ class Timeout(ZeldaEndCondition):
         super().__init__()
         self.__position_duration = 0
         self.__last_progress = 0
+        self.__entered_rooms = set()
         self.position_timeout = 50
         self.no_progress_timeout = 2000
 
     def clear(self):
         self.__position_duration = 0
         self.__last_progress = 0
+        self.__entered_rooms = set()
 
     def is_scenario_ended(self, state_change : StateChange) -> tuple[bool, bool, str]:
         prev, curr = state_change.previous, state_change.state
@@ -50,7 +52,9 @@ class Timeout(ZeldaEndCondition):
 
         if prev.full_location == curr.full_location:
             self.__last_progress += 1
-        elif curr.full_location in prev.objectives.next_rooms:
+        elif curr.full_location in prev.objectives.next_rooms \
+                and curr.full_location not in self.__entered_rooms:
+            self.__entered_rooms.add(curr.full_location)
             self.__last_progress = 0
 
         if self.__last_progress > self.no_progress_timeout:

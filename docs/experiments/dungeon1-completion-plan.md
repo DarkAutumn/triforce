@@ -100,55 +100,55 @@ Line numbers refresh via: `grep -n '^### ' docs/experiments/dungeon1-completion-
 
 | # | Task | Phase | Line |
 |---|------|-------|-----:|
-| [ ] ⛔ | P1 Combat/boss trace mode for diagnose.py | P Tooling | 314 |
-| [ ] ⛔ | P2 Fix evaluation hang + silent no-artifact evals | P Tooling | 335 |
-| [ ] | P3 Fix restart crash on completed circuits (train.py:1290) | P Tooling | 358 |
-| [ ] | P4 --compare must compare success-rate | P Tooling | 368 |
-| [ ] ⛔ | P5 Weighted-circuit exit criteria gate on primary scenario | P Tooling | 378 |
-| [ ] | P6 Verify worker metric aggregation under --parallel | P Tooling | 388 |
-| [ ] | P0 Land or discard the experiment5 branch leftovers | P Tooling | 399 |
-| [ ] ⛔ | V1 Empirical root-cause confirmation trace | V Probes | 412 |
-| [ ] ⛔ | V2 Scripted boss-kill probe (beams / bombs / melee) | V Probes | 424 |
-| [ ] | V3 DefeatedBoss false-positive check | V Probes | 447 |
-| [ ] | V4 Trace the hint-mask escape route | V Probes | 459 |
-| [ ] | V5 Fireball dodgeability / beam retention measurement | V Probes | 471 |
-| [ ] | V6 Aquamentus RAM fact sheet | V Probes | 481 |
-| [ ] ⛔ | R1 Terminal parity: leaving the boss room = −20 | R Reward spec | 496 |
-| [ ] ⛔ | R2 Boss-damage rewards, stall reset on hits, boss PBRS scale | R Reward spec | 513 |
-| [ ] ⛔ | R3 FIGHT rooms get route next_rooms (exit semantics) | R Reward spec | 540 |
-| [ ] | R4 Recompute and rebalance the boss-room payoff table | R Reward spec | 562 |
-| [ ] | R5 Split micro-scenarios: kill vs victory-lap | R Reward spec | 576 |
-| [ ] | R6 EXPERIMENT: retrain Aquamentus on the fixed spec | R Reward spec | 590 |
-| [ ] | B1 Demo format: non-MOVE actions | B Demos | 617 |
-| [ ] | B2 Multi-demo support in train.py/ml_ppo.py | B Demos | 631 |
-| [ ] | B3 Acquire a boss-kill demonstration | B Demos | 644 |
-| [ ] | B4 EXPERIMENT: BC + demo-regularized PPO on the boss | B Demos | 656 |
-| [ ] | B5 Value-head warmup after BC | B Demos | 673 |
-| [ ] | C1 Boss-HP reverse curriculum (1hp→2hp→4hp→6hp) | C Curriculum | 687 |
-| [ ] | C2 Mid-fight savestate curriculum | C Curriculum | 705 |
-| [ ] | C3 Invulnerability training wheels (per_frame health) | C Curriculum | 714 |
-| [ ] | C4 Start-state diversity for the boss room | C Curriculum | 730 |
-| [ ] | C5 Victory-lap scenario: post-kill → triforce | C Curriculum | 742 |
-| [ ] | C6 Boss-room action masking of useless items | C Curriculum | 756 |
-| [ ] | S1 Per-head entropy floor / adaptive ent_coef | S Structural | 772 |
-| [ ] | S2 Scope MOVE-only demo-BC loss to the direction head | S Structural | 786 |
-| [ ] | S3 EPOCHS 10→4 and expose LEARNING_RATE | S Structural | 798 |
-| [ ] | S4 Optimizer persistence across circuit legs | S Structural | 808 |
-| [ ] | S5 KL-anchor regularization (fallback to demo-BC) | S Structural | 816 |
-| [ ] | S6 Self-imitation on harvested successes | S Structural | 828 |
-| [ ] | S7 Per-leg ent_coef in circuit YAML | S Structural | 841 |
-| [ ] | S8 Entity distance/vector features (observation) | S Structural | 847 |
-| [ ] | I1 EXPERIMENT: late-chain integration | I Integration | 863 |
-| [ ] | I2 EXPERIMENT: full dungeon 1 | I Integration | 882 |
-| [ ] | I3 EXPERIMENT: full game gate | I Integration | 890 |
-| [ ] | X1 Auto-demo harvesting from scripted policies | X Backlog | 901 |
-| [ ] | X2 Auxiliary boss-HP prediction loss | X Backlog | 906 |
-| [ ] | X3 Sustained-threshold exit criteria | X Backlog | 911 |
-| [ ] | X4 Multi-seed replication harness for micro-scenarios | X Backlog | 916 |
-| [ ] | X5 Beam-alignment shaping (fired-correctly / didn't-fire) | X Backlog | 921 |
-| [ ] | X6 Update stale docs (combat-engagement, nes-mechanics boss section) | X Backlog | 928 |
-| [ ] | X7 Positive-clamp audit for multi-reward kill steps | X Backlog | 934 |
-| [ ] | X8 Fireball danger shaping (danger tiles / wavefront field) | X Backlog | 940 |
+| [x] | P1 Combat/boss trace mode for diagnose.py | P Tooling | 314 |
+| [x] | P2 Fix evaluation hang + silent no-artifact evals | P Tooling | 360 |
+| [ ] | P3 Fix restart crash on completed circuits (train.py:1290) | P Tooling | 414 |
+| [ ] | P4 --compare must compare success-rate | P Tooling | 424 |
+| [ ] ⛔ | P5 Weighted-circuit exit criteria gate on primary scenario | P Tooling | 434 |
+| [ ] | P6 Verify worker metric aggregation under --parallel | P Tooling | 444 |
+| [ ] | P0 Land or discard the experiment5 branch leftovers | P Tooling | 455 |
+| [ ] ⛔ | V1 Empirical root-cause confirmation trace | V Probes | 468 |
+| [ ] ⛔ | V2 Scripted boss-kill probe (beams / bombs / melee) | V Probes | 480 |
+| [ ] | V3 DefeatedBoss false-positive check | V Probes | 503 |
+| [ ] | V4 Trace the hint-mask escape route | V Probes | 515 |
+| [ ] | V5 Fireball dodgeability / beam retention measurement | V Probes | 527 |
+| [ ] | V6 Aquamentus RAM fact sheet | V Probes | 537 |
+| [ ] ⛔ | R1 Terminal parity: leaving the boss room = −20 | R Reward spec | 552 |
+| [ ] ⛔ | R2 Boss-damage rewards, stall reset on hits, boss PBRS scale | R Reward spec | 569 |
+| [ ] ⛔ | R3 FIGHT rooms get route next_rooms (exit semantics) | R Reward spec | 596 |
+| [ ] | R4 Recompute and rebalance the boss-room payoff table | R Reward spec | 618 |
+| [ ] | R5 Split micro-scenarios: kill vs victory-lap | R Reward spec | 632 |
+| [ ] | R6 EXPERIMENT: retrain Aquamentus on the fixed spec | R Reward spec | 646 |
+| [ ] | B1 Demo format: non-MOVE actions | B Demos | 673 |
+| [ ] | B2 Multi-demo support in train.py/ml_ppo.py | B Demos | 687 |
+| [ ] | B3 Acquire a boss-kill demonstration | B Demos | 700 |
+| [ ] | B4 EXPERIMENT: BC + demo-regularized PPO on the boss | B Demos | 712 |
+| [ ] | B5 Value-head warmup after BC | B Demos | 729 |
+| [ ] | C1 Boss-HP reverse curriculum (1hp→2hp→4hp→6hp) | C Curriculum | 743 |
+| [ ] | C2 Mid-fight savestate curriculum | C Curriculum | 761 |
+| [ ] | C3 Invulnerability training wheels (per_frame health) | C Curriculum | 770 |
+| [ ] | C4 Start-state diversity for the boss room | C Curriculum | 786 |
+| [ ] | C5 Victory-lap scenario: post-kill → triforce | C Curriculum | 798 |
+| [ ] | C6 Boss-room action masking of useless items | C Curriculum | 812 |
+| [ ] | S1 Per-head entropy floor / adaptive ent_coef | S Structural | 828 |
+| [ ] | S2 Scope MOVE-only demo-BC loss to the direction head | S Structural | 842 |
+| [ ] | S3 EPOCHS 10→4 and expose LEARNING_RATE | S Structural | 854 |
+| [ ] | S4 Optimizer persistence across circuit legs | S Structural | 864 |
+| [ ] | S5 KL-anchor regularization (fallback to demo-BC) | S Structural | 872 |
+| [ ] | S6 Self-imitation on harvested successes | S Structural | 884 |
+| [ ] | S7 Per-leg ent_coef in circuit YAML | S Structural | 897 |
+| [ ] | S8 Entity distance/vector features (observation) | S Structural | 903 |
+| [ ] | I1 EXPERIMENT: late-chain integration | I Integration | 919 |
+| [ ] | I2 EXPERIMENT: full dungeon 1 | I Integration | 938 |
+| [ ] | I3 EXPERIMENT: full game gate | I Integration | 946 |
+| [ ] | X1 Auto-demo harvesting from scripted policies | X Backlog | 957 |
+| [ ] | X2 Auxiliary boss-HP prediction loss | X Backlog | 962 |
+| [ ] | X3 Sustained-threshold exit criteria | X Backlog | 967 |
+| [ ] | X4 Multi-seed replication harness for micro-scenarios | X Backlog | 972 |
+| [ ] | X5 Beam-alignment shaping (fired-correctly / didn't-fire) | X Backlog | 977 |
+| [ ] | X6 Update stale docs (combat-engagement, nes-mechanics boss section) | X Backlog | 984 |
+| [ ] | X7 Positive-clamp audit for multi-reward kill steps | X Backlog | 990 |
+| [ ] | X8 Fireball danger shaping (danger tiles / wavefront field) | X Backlog | 996 |
 
 **Recommended experiment queue (the spine; everything else supports it):**
 1. **EXP6 (probes, no training):** P1+P2 → V1..V6. Deliverable: empirical root-cause verdict + a scripted boss-kill trace.
@@ -330,7 +330,32 @@ exit, boss-directed gradient, aggression ratio, alignment shaping), not the raw 
 --model-path training/experiments/experiment5/runs/experiment5-circuit/4/impala-multihead_all-items.pt
 --combat-trace --trace-endings left-boss-room --episodes 10 -o /tmp/boss-trace.txt` produces per-step
 traces for ≥5 episodes with exit attribution.
-**Outcome:** _not attempted_
+**Outcome:** ✅ **DONE 2026-08-04.** Implemented `--combat-trace` in `diagnose.py` (PR #192, commit
+`07d9be5`). `CombatStepRecord` captures per step: action kind/direction, Link tile/position/health/
+beams-available, `hits`/`damage_dealt`/`health_lost`, `enemies_hit` indices, per-enemy snapshot (id,
+index, health, position, distance, is_active, is_stunned, stun_timer, is_dying), objective kind +
+`next_rooms`, MOVE-mask summary, full rewards breakdown. Per-episode report: exit attribution, attack
+summary, enemies-observed w/ HP range, damage timeline, nearest-enemy distance percentiles, `--tail`
+step table. `--trace-endings` replaces the hardcoded filter and is shared with `--infinite-pbrs`
+(default behavior unchanged); `--trace-max-episodes` bounds output (default 5).
+
+Acceptance command run on the exp5 checkpoint (`--episodes 10 --trace-endings left-boss-room`):
+**10/10 episodes traced**, all `failure-left-boss-room`. Every episode: `Attacks: 0/N steps  hits=0
+damage_dealt=0  health_lost=0`, `Enemies observed: Aquamentus hp 6..6`, exit via `MOVE/S`. Episode
+lengths 6–197 steps. This independently reproduces §1.1 (zero `reward-hit` entries) on a 10-episode
+sample — the boss takes **no damage at all**, ever.
+
+**Two things the next agent must know:**
+1. **Implementation gotcha:** gymnasium 1.2.3 dropped implicit `Wrapper.__getattr__` delegation, so
+   the MOVE-mask readout resolves `is_valid_action` via `env.get_wrapper_attr('is_valid_action')`.
+   Any new diagnose mode reaching into `ZeldaActionSpace` must do the same.
+2. **Reading the exit step (matters for V4):** on the room-change step, `link_tile` and `masked_moves`
+   are from the **post-transition** state (e.g. tile `(15, 2)` in the *new* room 1_45). For V4, read
+   the step *before* the room change. Doing so already shows the exit action `MOVE/S` being taken from
+   tile `(15, 19)` = y `0x13` — **below** the `tile.y >= 0x14` hint threshold, so S was never masked
+   there. Traces also show S correctly masked at y=`0x14` (step 60 of one episode: `MaskS = S,W,E`).
+   That is direct support for V4's y-threshold-leak hypothesis; V4 remains open for the full
+   determination but the mechanism is already visible.
 
 ### P2. Fix evaluation hang + silent no-artifact evals ⛔
 **Goal:** we still have NO exp5 late-chain number; the eval ran 124h before SIGKILL, episode rate
@@ -353,7 +378,38 @@ degraded to ~11.5h/episode, and two other plugin evals "completed" without artif
   make both paths loud (warning + nonzero exit), and write the JSON atomically (tmp+rename).
 **Acceptance:** exp4-final and exp5-final both produce `dungeon1-late-chain` eval JSONs (100 eps) in
 bounded time (< 2h); an induced failure (missing MetricTracker) exits nonzero with a clear message.
-**Outcome:** _not attempted_
+**Outcome:** ✅ **DONE 2026-08-04.** PR #192, commit `e2fd96a`. **Hypothesis 1 CONFIRMED** as the
+cause; hypothesis 2 (emulator/FrameSkip wedge) was never reached.
+
+Changes:
+1. **`Timeout` (`end_conditions.py`)** — now resets the no-progress clock only on the **first** entry
+   to each next-room per episode (`__entered_rooms` set, cleared in `clear()`). Genuine forward
+   discovery still resets; re-entering an already-visited room does not, so the `1_45↔1_35` loop
+   accumulates to `no_progress_timeout` and fires `failure-no-progress`. `failure-stuck` untouched.
+2. **`evaluate.py --max-steps`** (default `DEFAULT_MAX_EPISODE_STEPS = 20000`) — cause-agnostic
+   per-episode ceiling; on reach the episode truncates with a distinct **`eval-step-cap`** ending
+   recorded through the normal `MetricTracker` path, so it shows up as `endings/eval-step-cap`.
+3. **`_save_results`** — empty `metrics` or `progress_values is None` now print to stderr and
+   `sys.exit(1)` instead of silently no-op'ing; JSON is written atomically (tmp + `os.replace`).
+4. **Missed callsite fixed:** `train.py:1322` (`--evaluate` post-training path) also calls
+   `evaluate_one_model` and now passes the shared `DEFAULT_MAX_EPISODE_STEPS`. Caught by pylint
+   `E1120`, not by grep — search `train.py` too when changing `evaluate.py` signatures.
+
+Tests: `tests/test_end_conditions_timeout.py` (ping-pong re-entry still times out; fresh discovery
+still resets) and `tests/test_evaluate_save_results.py` (both loud-exit paths). Emulator-free, 4 tests.
+Full suite 783 passed / 1 skipped; pylint 10.00/10.
+
+**Empirical proof the hang is gone:** `dungeon1-late-chain` on exp5-final completed **5 episodes in
+2m21s (~28s/episode), exit 0**, artifact written — versus 124h→SIGKILL before. Endings:
+`failure-no-progress 0.2`, `failure-terminated-death 0.6`, `failure-wallmastered 0.2`. That
+`failure-no-progress` episode is the smoking gun: it is precisely the ending that previously could
+never fire. **`eval-step-cap` never triggered**, so the `Timeout` fix alone resolves the livelock and
+the step cap is pure backstop.
+
+**Remaining measurement (not a code task):** the 100-episode Gate-B readings on exp4-final and
+exp5-final. A 100-ep exp5-final late-chain run was launched at ~28s/ep (≈47 min projected, well inside
+the <2h bound); see §9 for its result. exp4-final still needs its run. Gate B itself
+(success-rate > 0 and progress/max = 17) is I1's business, not P2's.
 
 ### P3. Fix restart crash on completed circuits (train.py:1290)
 **Goal:** `--resume` from a checkpoint whose history already covers the final leg leaves `model=None`
@@ -956,6 +1012,23 @@ _Append dated entries when outcomes change strategy._
   — and recorded 68.3% boss kills with zero flee-outs. Added C6, X5; strengthened R1/R2/R4/S8/X8
   rationale. Port structure, not constants (their shaping was non-potential-based and per-area models
   had no retention constraint).
+- **2026-08-04 (P1+P2 landed, PR #192):** EXP6 tooling done. Two findings that change what the next
+  agent should believe:
+  1. **The eval hang was hypothesis 1, not an emulator wedge.** `Timeout` resetting its no-progress
+     clock on every next-room re-entry was the whole bug. With the first-entry-only fix, late-chain on
+     exp5-final runs ~28s/episode and one of 5 episodes ended `failure-no-progress` — the ending that
+     structurally could not fire before. The `--max-steps` / `eval-step-cap` backstop never triggered.
+     **Consequence:** no emulator-timeout work is needed; treat P2 as closed and trust late-chain
+     numbers from here on. Historical exp5 late-chain "hangs" need no other explanation.
+  2. **The boss takes literally zero damage, confirmed on a 10-episode sample.** `--combat-trace`
+     reports `Attacks: 0/N  hits=0  damage_dealt=0` and `Aquamentus hp 6..6` in 10/10 episodes. This
+     upgrades §1.1's "zero reward-hit entries" from a single-eval reading to a reproducible per-step
+     observation, and it means V1's falsification branch (agent attacks and fails) is **already ruled
+     out** — the spec-bug theory keeps primacy. V1 remains open only to attach realized episode returns
+     to the payoff table.
+  Also visible in the traces, pre-empting V4: the south exit is taken from tile y=`0x13`, one tile
+  above the `tile.y >= 0x14` hint-mask threshold, so hints never mask it. R3 alone will not close that
+  leak.
 
 ---
 
