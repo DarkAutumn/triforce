@@ -139,6 +139,134 @@ training-circuits:
     weight: 1
   - scenario: overworld-sword
     weight: 1
+- name: dungeon1-endgame-skills
+  description: 'Focused late Dungeon 1 endgame skills: Red Goriya, Wallmaster, Aquamentus, and late-chain integration.'
+  kind: weighted
+  scenarios:
+  - scenario: dungeon1-red-goriya-east
+    weight: 25
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.7
+  - scenario: dungeon1-wallmaster-north-exit
+    weight: 35
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.7
+  - scenario: dungeon1-aquamentus-east
+    weight: 25
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.5
+  - scenario: dungeon1-late-chain
+    weight: 15
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.2
+- name: experiment1-circuit
+  description: Focused Experiment 1 late-Dungeon-1 curriculum after reward accounting fixes.
+  final-eval-scenario: full-game-all-items-finite
+  final-eval-episodes: 100
+  scenarios:
+  - circuit: dungeon1-endgame-skills
+    iterations: 2500000
+  - scenario: dungeon1-finite-bombs
+    iterations: 1000000
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.2
+  - scenario: full-game-all-items-finite
+    iterations: 1000000
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.1
+- name: experiment2-circuit
+  description: Dungeon room acclimation followed by wallmaster north-exit experiment with explicit terminal success reward.
+  final-eval-scenario: dungeon1-wallmaster-north-exit
+  final-eval-episodes: 100
+  scenarios:
+  - scenario: dungeon1-room-walk
+    iterations: 500000
+    exit-criteria:
+      metric: room-result/correct-exit
+      threshold: 0.8
+  - scenario: dungeon1-wallmaster-north-exit
+    iterations: 750000
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.5
+- name: experiment3-circuit
+  description: PPO fine-tuning for wallmaster north exit after behavior-cloning warm start.
+  final-eval-scenario: dungeon1-wallmaster-north-exit
+  final-eval-episodes: 100
+  scenarios:
+  - scenario: dungeon1-wallmaster-north-exit
+    iterations: 750000
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.5
+- name: experiment4-late-chain-demo
+  description: Late Dungeon 1 transfer with wallmaster demo regularization.
+  kind: weighted
+  scenarios:
+  - scenario: dungeon1-wallmaster-north-exit
+    weight: 30
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.5
+  - scenario: dungeon1-late-chain
+    weight: 50
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.1
+  - scenario: dungeon1-aquamentus-east
+    weight: 20
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.2
+- name: experiment4-circuit
+  description: Demo-regularized late-chain transfer after Experiment 3 wallmaster success.
+  final-eval-scenario: dungeon1-late-chain
+  final-eval-episodes: 100
+  scenarios:
+  - circuit: experiment4-late-chain-demo
+    iterations: 1500000
+  - scenario: dungeon1-finite-bombs
+    iterations: 500000
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.1
+- name: experiment5-boss-transfer
+  description: Late Dungeon 1 boss transfer with wallmaster demo retention.
+  kind: weighted
+  scenarios:
+  - scenario: dungeon1-wallmaster-north-exit
+    weight: 10
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.8
+  - scenario: dungeon1-aquamentus-east
+    weight: 80
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.6
+  - scenario: dungeon1-late-chain
+    weight: 10
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.1
+- name: experiment5-circuit
+  description: Boss-transfer curriculum after Experiment 4 wallmaster retention.
+  final-eval-scenario: dungeon1-late-chain
+  final-eval-episodes: 100
+  scenarios:
+  - circuit: experiment5-boss-transfer
+    iterations: 2000000
+  - scenario: dungeon1-late-chain
+    iterations: 1000000
+    exit-criteria:
+      metric: success-rate
+      threshold: 0.1
 - name: all-items-circuit
   description: 'Full curriculum: sword-only basics, item training with finite/infinite
     bombs, dungeon with wallmasters, overworld2 route, full game, and polish phase.'
@@ -577,6 +705,132 @@ scenarios:
   per_frame:
     bombs: 4
     rupees: 100
+- name: dungeon1-red-goriya-east
+  description: 'Red Goriya room: enter from west and reach the wallmaster room.'
+  iterations: 500000
+  scenario_selector: round-robin
+  objective: ReachLocation
+  objective_params:
+    level: 1
+    location: '0x45'
+  critic: GameplayCritic
+  end_conditions:
+  - ReachedLocation
+  - LeftRoute
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - dungeon1-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_44w
+  use_hints: true
+  per_reset:
+    regular_boomerang: 1
+    bombs: 4
+    keys: 1
+    hearts_and_containers: 34
+    partial_hearts: 254
+- name: dungeon1-wallmaster-north-exit
+  description: 'Wallmaster room: enter from west and reach the boss room north exit.'
+  iterations: 750000
+  scenario_selector: round-robin
+  objective: ReachLocation
+  objective_params:
+    level: 1
+    location: '0x35'
+  critic: GameplayCritic
+  end_conditions:
+  - ReachedLocation
+  - LeftWallmasterRoom
+  - LeftDungeon
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - dungeon1-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_45w
+  use_hints: true
+  per_reset:
+    regular_boomerang: 1
+    bombs: 4
+    keys: 1
+    hearts_and_containers: 34
+    partial_hearts: 254
+- name: dungeon1-aquamentus-east
+  description: 'Aquamentus room: defeat or survive boss room and reach the triforce room.'
+  iterations: 750000
+  scenario_selector: round-robin
+  objective: ReachLocation
+  objective_params:
+    level: 1
+    location: '0x36'
+  critic: GameplayCritic
+  end_conditions:
+  - ReachedLocation
+  - DefeatedBoss
+  - GameOver
+  - Timeout
+  metrics:
+  - success-rate
+  - dungeon1-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_35s
+  use_hints: true
+  per_reset:
+    regular_boomerang: 1
+    bombs: 4
+    keys: 1
+    hearts_and_containers: 34
+    partial_hearts: 254
+- name: dungeon1-late-chain
+  description: 'Late Dungeon 1 route from the locked-door branch through Red Goriya, Wallmaster, Aquamentus, and Triforce.'
+  iterations: 1000000
+  scenario_selector: round-robin
+  objective: TreasureObjective
+  objective_params:
+    treasure: triforce
+  critic: GameplayCritic
+  end_conditions:
+  - LeftDungeon
+  - GainedTriforce
+  - CollectedTreasure
+  - GameOver
+  - Timeout
+  - NowhereToGoCondition
+  metrics:
+  - success-rate
+  - dungeon1-progress
+  - game-progress
+  - room-health
+  - ending
+  - reward-average
+  - reward-details
+  start:
+  - 1_43e
+  - 1_44w
+  - 1_45w
+  - 1_35s
+  use_hints: true
+  per_reset:
+    regular_boomerang: 1
+    bombs: 4
+    keys: 2
+    hearts_and_containers: 34
+    partial_hearts: 254
 - name: dungeon1-all-items
   description: Full dungeon 1 with all items equipped.
   iterations: 5000000

@@ -5,7 +5,7 @@ from typing import Dict
 
 from triforce.action_space import ActionKind
 from triforce.rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL, REWARD_TINY, \
-    Penalty, Reward, StepRewards
+    TERMINAL_FAILURE_PENALTY_VALUE, Penalty, Reward, StepRewards
 
 from .zelda_enums import SwordKind, ZeldaAnimationKind, AnimationState, ZeldaEnemyKind
 from .state_change_wrapper import StateChange
@@ -29,7 +29,7 @@ PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
 USED_BOMB_PENALTY = Penalty("penalty-bomb-used", -REWARD_SMALL)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_MEDIUM)
 PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_SMALL)
-PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -REWARD_MAXIMUM)
+PENALTY_WALL_MASTER = Penalty("penalty-wall-master", -TERMINAL_FAILURE_PENALTY_VALUE)
 FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_TINY)
 MOVED_OFF_OF_WALLMASTER_REWARD = Reward("reward-moved-off-wallmaster", REWARD_TINY - REWARD_MINIMUM)
 MOVED_ONTO_WALLMASTER_PENALTY = Penalty("penalty-moved-onto-wallmaster", -REWARD_TINY)
@@ -215,28 +215,39 @@ class GameplayCritic(ZeldaCritic):
         """Special handling for rooms with a wallmaster."""
         prev, curr = state_change.previous, state_change.state
 
+        prev_had_wallmaster = ZeldaEnemyKind.Wallmaster in prev.enemies
+        if prev_had_wallmaster and prev.full_location != curr.full_location \
+                and prev.full_location.manhattan_distance(curr.full_location) > 1:
+            rewards.add(PENALTY_WALL_MASTER)
+            return
+
         if ZeldaEnemyKind.Wallmaster not in curr.enemies:
             return
 
-        # Did we get wallmastered?
-        if prev.full_location != curr.full_location:
-            if prev.full_location.manhattan_distance(curr.full_location) > 1:
-                rewards.add(PENALTY_WALL_MASTER)
+        curr_on_wallmaster = (self._is_wallmaster_tile(curr.link.tile)
+                              and not self._is_objective_tile(curr, curr.link.tile))
+        prev_on_wallmaster = (self._is_wallmaster_tile(prev.link.tile)
+                              and not self._is_objective_tile(curr, curr.link.tile))
 
         # Are we on a tile which could be wallmastered?  If so, push away from it.
-        elif self._is_wallmaster_tile(curr.link.tile):
+        if curr_on_wallmaster:
             if state_change.action.kind != ActionKind.MOVE:
                 rewards.add(FIGHTING_WALLMASTER_PENALTY)
             else:
                 rewards.add(MOVED_ONTO_WALLMASTER_PENALTY)
 
-        elif self._is_wallmaster_tile(prev.link.tile):
+        elif prev_on_wallmaster:
             # If we moved off the wallmaster tile, reward the agent
             if state_change.action.kind == ActionKind.MOVE:
                 rewards.add(MOVED_OFF_OF_WALLMASTER_REWARD)
 
     def _is_wallmaster_tile(self, tile):
         return tile.x in (0x4, 0x1a) or tile.y in (0x4, 0x10)
+
+    @staticmethod
+    def _is_objective_tile(state, tile):
+        objectives = state.objectives
+        return tile in objectives.targets or tile in objectives.pbrs_targets
 
 
     def critique_block(self, state_change : StateChange, rewards):

@@ -12,10 +12,44 @@ import yaml
 
 from .metrics import MetricTracker
 from .objectives import get_objective_selector
-from .rewards import StepRewards
+from .rewards import Penalty, Reward, StepRewards, TERMINAL_FAILURE_PENALTY_VALUE, TERMINAL_SUCCESS_REWARD_VALUE
 from .zelda_enums import Direction, MapLocation
 from . import critics
 from . import end_conditions
+
+REWARD_TERMINAL_SUCCESS = Reward("reward-terminal-success", TERMINAL_SUCCESS_REWARD_VALUE)
+PENALTY_FAILURE_TERMINAL = Penalty("penalty-terminal-failure", -TERMINAL_FAILURE_PENALTY_VALUE)
+HARD_FAILURE_ENDINGS = frozenset({"failure-terminated-death", "failure-stuck", "failure-no-progress"})
+OTHER_FAILURE_ENDINGS = frozenset({
+    "failure-left-dungeon", "failure-left-room", "failure-left-route", "failure-left-play-area",
+    "failure-left-wallmaster-room", "failure-reentered-dungeon", "failure-nowhere-to-go", "failure-no-key",
+    "failure-wrong-exit",
+})
+
+def apply_terminal_rewards(rewards: StepRewards) -> None:
+    """Adds terminal success or failure rewards after end conditions set rewards.ending."""
+    if rewards.ending is None:
+        return
+
+    if rewards.ending.startswith("success-"):
+        if "reward-terminal-success" not in rewards:
+            rewards.add(REWARD_TERMINAL_SUCCESS)
+        return
+
+    if rewards.ending == "failure-wallmastered":
+        rewards.remove_rewards()
+        if "penalty-wall-master" not in rewards:
+            rewards.add(Penalty("penalty-wall-master", -TERMINAL_FAILURE_PENALTY_VALUE))
+        return
+
+    if rewards.ending in HARD_FAILURE_ENDINGS:
+        rewards.remove_rewards()
+        if "penalty-terminal-failure" not in rewards:
+            rewards.add(PENALTY_FAILURE_TERMINAL)
+        return
+
+    if rewards.ending in OTHER_FAILURE_ENDINGS and "penalty-terminal-failure" not in rewards:
+        rewards.add(PENALTY_FAILURE_TERMINAL)
 
 class TrainingScenarioDefinition(BaseModel):
     """A scenario in the game to train on.  This is a combination of critics and end conditions."""
@@ -509,6 +543,8 @@ class ScenarioWrapper(gym.Wrapper):
                     rewards.ending = end_reason
                     break
 
+        self._apply_terminal_rewards(rewards)
+
         # Update metrics
         self._metrics.step(state_change, rewards)
         if terminated or truncated:
@@ -518,6 +554,9 @@ class ScenarioWrapper(gym.Wrapper):
         self.room_selector.step(state_change, rewards.ending)
 
         return obs, rewards, terminated, truncated, state_change
+
+    def _apply_terminal_rewards(self, rewards: StepRewards) -> None:
+        apply_terminal_rewards(rewards)
 
     def _try_save_state(self, state_change):
         state = state_change.state

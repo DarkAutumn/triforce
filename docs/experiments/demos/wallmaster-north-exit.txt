@@ -1,0 +1,102 @@
+# Wallmaster north-exit expert trace
+
+Start scenario: `dungeon1-wallmaster-north-exit`
+Start state: `1_45w`
+Goal: reach boss room `1_35` by taking the north exit.
+
+The original trace from `/tmp/movements.txt` was recorded in reverse order. Use the normalized forward trace below for replay, diagnostics, and behavior cloning.
+
+## Normalized forward trace
+
+MOVE E
+MOVE E
+MOVE S
+MOVE S
+MOVE E
+MOVE E
+MOVE E
+MOVE E
+MOVE E
+MOVE E
+MOVE E
+MOVE E
+MOVE E
+MOVE E
+MOVE E
+MOVE E
+MOVE E
+MOVE E
+MOVE S
+MOVE S
+MOVE S
+MOVE E
+MOVE E
+MOVE W
+MOVE W
+MOVE N
+MOVE N
+MOVE N
+MOVE N
+MOVE N
+MOVE N
+MOVE N
+MOVE N
+MOVE N
+MOVE N
+MOVE N
+MOVE W
+MOVE W
+MOVE W
+MOVE N
+MOVE N
+MOVE N
+MOVE N
+MOVE N
+
+## Original reverse trace
+
+#45	MOVE N		+1.000
+#44	MOVE N		+0.050
+#43	MOVE N		+0.050
+#42	MOVE N		+0.050
+#41	MOVE N		+0.340
+#40	MOVE W		+0.000
+#39	MOVE W		+0.000
+#38	MOVE W		+0.000
+#37	MOVE N		+0.000
+#36	MOVE N		+0.050
+#35	MOVE N		+0.050
+#34	MOVE N		+0.050
+#33	MOVE N		+0.050
+#32	MOVE N		+0.050
+#31	MOVE N		+0.050
+#30	MOVE N		+0.050
+#29	MOVE N		+0.050
+#28	MOVE N		+0.050
+#27	MOVE N		+0.050
+#26	MOVE W		+0.050
+#25	MOVE W		+0.050
+#24	MOVE E		-0.050
+#23	MOVE E		+1.000
+#22	MOVE S		+0.050
+#21	MOVE S		+0.050
+#20	MOVE S		+0.050
+#19	MOVE E		+0.050
+#18	MOVE E		+0.050
+#17	MOVE E		+0.050
+#16	MOVE E		+0.050
+#15	MOVE E		+0.050
+#14	MOVE E		+0.050
+#13	MOVE E		+0.050
+#12	MOVE E		+0.050
+#11	MOVE E		+0.050
+#10	MOVE E		+0.050
+#9	MOVE E		+0.050
+#8	MOVE E		+0.050
+#7	MOVE E		+0.050
+#6	MOVE E		+0.090
+#5	MOVE S		+0.000
+#4	MOVE S		+0.000
+#3	MOVE E		+0.000
+#2	MOVE E		+0.000
+#1	None		+0.000

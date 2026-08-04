@@ -13,7 +13,8 @@ from triforce import ActionSpaceDefinition, ModelKindDefinition, make_zelda_env,
     TrainingScenarioDefinition, MetricTracker
 
 
-def write_progress_markdown(md_path, progress_values, max_progress, episodes, scenario_name, model_name=None):
+def write_progress_markdown(md_path, progress_values, max_progress, episodes, scenario_name,
+                            model_name=None, *, metrics=None):
     """Writes a progress report as a markdown file."""
     if not progress_values:
         return
@@ -21,6 +22,12 @@ def write_progress_markdown(md_path, progress_values, max_progress, episodes, sc
     sorted_vals = sorted(progress_values)
     n = len(sorted_vals)
     success_count = sum(1 for v in sorted_vals if v >= max_progress)
+    metric_success_rate = metrics.get("success-rate") if metrics else None
+    if metric_success_rate is not None:
+        success_count = round(metric_success_rate * n)
+        success_suffix = f" (scenario success-rate; reached milestone {max_progress})"
+    else:
+        success_suffix = f" (reached milestone {max_progress})"
     counts = Counter(sorted_vals)
     max_count = max(counts.values()) if counts else 1
 
@@ -31,7 +38,7 @@ def write_progress_markdown(md_path, progress_values, max_progress, episodes, sc
         f.write(f"# {title}\n\n")
         f.write(f"- **Episodes**: {episodes}\n")
         f.write(f"- **Success rate**: {success_count}/{n} ({100*success_count/n:.0f}%)"
-                f" (reached milestone {max_progress})\n")
+                f"{success_suffix}\n")
         f.write(f"- **Median progress**: {sorted_vals[n//2]}/{max_progress}\n")
         f.write(f"- **P25**: {sorted_vals[max(0, ceil(n*0.25)-1)]}  "
                 f"**P50**: {sorted_vals[n//2]}  "
@@ -62,12 +69,13 @@ def convert_eval_json_to_md(json_path):
         data['episodes'],
         data['scenario'],
         model_name=model_name,
+        metrics=data.get('metrics'),
     )
     return md_path
 
 
 def print_progress_report(progress_values : List[int], max_progress : int,
-                          episodes : int, scenario_name : str):
+                          episodes : int, scenario_name : str, metrics=None):
     """Prints a progress-focused evaluation report with percentiles and histogram."""
     if not progress_values:
         print("No progress data collected.")
@@ -76,12 +84,18 @@ def print_progress_report(progress_values : List[int], max_progress : int,
     sorted_vals = sorted(progress_values)
     n = len(sorted_vals)
     success_count = sum(1 for v in sorted_vals if v >= max_progress)
+    metric_success_rate = metrics.get("success-rate") if metrics else None
+    if metric_success_rate is not None:
+        success_count = round(metric_success_rate * n)
+        success_suffix = f"  (scenario success-rate; reached milestone {max_progress})"
+    else:
+        success_suffix = f"  (reached milestone {max_progress})"
 
     print(f"\n{'='*60}")
     print(f"  Evaluation: {episodes} episodes of {scenario_name}")
     print(f"{'='*60}")
     print(f"  Success rate: {success_count}/{n} ({100*success_count/n:.0f}%)"
-          f"  (reached milestone {max_progress})")
+          f"{success_suffix}")
     print(f"  Median progress: {sorted_vals[n//2]}/{max_progress}")
     print(f"  P25: {sorted_vals[max(0, ceil(n*0.25)-1)]:>3}  "
           f"P50: {sorted_vals[n//2]:>3}  "
@@ -347,7 +361,7 @@ def main():
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             print_progress_report(data['progress_values'], data['max_progress'],
-                                  data['episodes'], args.scenario)
+                                  data['episodes'], args.scenario, data.get('metrics'))
 
 
 def _save_results(path, metrics, progress_values, max_progress, episodes, scenario):

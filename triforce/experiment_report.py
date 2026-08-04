@@ -25,7 +25,7 @@ DEFAULT_TUNING = {
     "schema_version": 1,
     "wake_interval_steps": 1_000_000,
     "wake_dedup_steps": 100_000,
-    "anomaly_check_interval_steps": 100_000,
+    "anomaly_check_interval_steps": 125_000,
     "wall_clock_limit_seconds": 604_800,
     "health_ranges": deepcopy(DEFAULT_HEALTH_RANGES),
     "reward_hacking": {
