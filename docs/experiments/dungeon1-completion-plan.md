@@ -102,53 +102,53 @@ Line numbers refresh via: `grep -n '^### ' docs/experiments/dungeon1-completion-
 |---|------|-------|-----:|
 | [x] | P1 Combat/boss trace mode for diagnose.py | P Tooling | 314 |
 | [x] | P2 Fix evaluation hang + silent no-artifact evals | P Tooling | 360 |
-| [ ] | P3 Fix restart crash on completed circuits (train.py:1290) | P Tooling | 414 |
-| [ ] | P4 --compare must compare success-rate | P Tooling | 424 |
-| [ ] ⛔ | P5 Weighted-circuit exit criteria gate on primary scenario | P Tooling | 434 |
-| [ ] | P6 Verify worker metric aggregation under --parallel | P Tooling | 444 |
-| [ ] | P0 Land or discard the experiment5 branch leftovers | P Tooling | 455 |
-| [ ] ⛔ | V1 Empirical root-cause confirmation trace | V Probes | 468 |
-| [ ] ⛔ | V2 Scripted boss-kill probe (beams / bombs / melee) | V Probes | 480 |
-| [ ] | V3 DefeatedBoss false-positive check | V Probes | 503 |
-| [ ] | V4 Trace the hint-mask escape route | V Probes | 515 |
-| [ ] | V5 Fireball dodgeability / beam retention measurement | V Probes | 527 |
-| [ ] | V6 Aquamentus RAM fact sheet | V Probes | 537 |
-| [ ] ⛔ | R1 Terminal parity: leaving the boss room = −20 | R Reward spec | 552 |
-| [ ] ⛔ | R2 Boss-damage rewards, stall reset on hits, boss PBRS scale | R Reward spec | 569 |
-| [ ] ⛔ | R3 FIGHT rooms get route next_rooms (exit semantics) | R Reward spec | 596 |
-| [ ] | R4 Recompute and rebalance the boss-room payoff table | R Reward spec | 618 |
-| [ ] | R5 Split micro-scenarios: kill vs victory-lap | R Reward spec | 632 |
-| [ ] | R6 EXPERIMENT: retrain Aquamentus on the fixed spec | R Reward spec | 646 |
-| [ ] | B1 Demo format: non-MOVE actions | B Demos | 673 |
-| [ ] | B2 Multi-demo support in train.py/ml_ppo.py | B Demos | 687 |
-| [ ] | B3 Acquire a boss-kill demonstration | B Demos | 700 |
-| [ ] | B4 EXPERIMENT: BC + demo-regularized PPO on the boss | B Demos | 712 |
-| [ ] | B5 Value-head warmup after BC | B Demos | 729 |
-| [ ] | C1 Boss-HP reverse curriculum (1hp→2hp→4hp→6hp) | C Curriculum | 743 |
-| [ ] | C2 Mid-fight savestate curriculum | C Curriculum | 761 |
-| [ ] | C3 Invulnerability training wheels (per_frame health) | C Curriculum | 770 |
-| [ ] | C4 Start-state diversity for the boss room | C Curriculum | 786 |
-| [ ] | C5 Victory-lap scenario: post-kill → triforce | C Curriculum | 798 |
-| [ ] | C6 Boss-room action masking of useless items | C Curriculum | 812 |
-| [ ] | S1 Per-head entropy floor / adaptive ent_coef | S Structural | 828 |
-| [ ] | S2 Scope MOVE-only demo-BC loss to the direction head | S Structural | 842 |
-| [ ] | S3 EPOCHS 10→4 and expose LEARNING_RATE | S Structural | 854 |
-| [ ] | S4 Optimizer persistence across circuit legs | S Structural | 864 |
-| [ ] | S5 KL-anchor regularization (fallback to demo-BC) | S Structural | 872 |
-| [ ] | S6 Self-imitation on harvested successes | S Structural | 884 |
-| [ ] | S7 Per-leg ent_coef in circuit YAML | S Structural | 897 |
-| [ ] | S8 Entity distance/vector features (observation) | S Structural | 903 |
-| [ ] | I1 EXPERIMENT: late-chain integration | I Integration | 919 |
-| [ ] | I2 EXPERIMENT: full dungeon 1 | I Integration | 938 |
-| [ ] | I3 EXPERIMENT: full game gate | I Integration | 946 |
-| [ ] | X1 Auto-demo harvesting from scripted policies | X Backlog | 957 |
-| [ ] | X2 Auxiliary boss-HP prediction loss | X Backlog | 962 |
-| [ ] | X3 Sustained-threshold exit criteria | X Backlog | 967 |
-| [ ] | X4 Multi-seed replication harness for micro-scenarios | X Backlog | 972 |
-| [ ] | X5 Beam-alignment shaping (fired-correctly / didn't-fire) | X Backlog | 977 |
-| [ ] | X6 Update stale docs (combat-engagement, nes-mechanics boss section) | X Backlog | 984 |
-| [ ] | X7 Positive-clamp audit for multi-reward kill steps | X Backlog | 990 |
-| [ ] | X8 Fireball danger shaping (danger tiles / wavefront field) | X Backlog | 996 |
+| [ ] | P3 Fix restart crash on completed circuits (train.py:1290) | P Tooling | 446 |
+| [ ] | P4 --compare must compare success-rate | P Tooling | 456 |
+| [ ] ⛔ | P5 Weighted-circuit exit criteria gate on primary scenario | P Tooling | 466 |
+| [ ] | P6 Verify worker metric aggregation under --parallel | P Tooling | 476 |
+| [ ] | P0 Land or discard the experiment5 branch leftovers | P Tooling | 487 |
+| [ ] ⛔ | V1 Empirical root-cause confirmation trace | V Probes | 500 |
+| [ ] ⛔ | V2 Scripted boss-kill probe (beams / bombs / melee) | V Probes | 512 |
+| [ ] | V3 DefeatedBoss false-positive check | V Probes | 535 |
+| [ ] | V4 Trace the hint-mask escape route | V Probes | 547 |
+| [ ] | V5 Fireball dodgeability / beam retention measurement | V Probes | 559 |
+| [ ] | V6 Aquamentus RAM fact sheet | V Probes | 569 |
+| [ ] ⛔ | R1 Terminal parity: leaving the boss room = −20 | R Reward spec | 584 |
+| [ ] ⛔ | R2 Boss-damage rewards, stall reset on hits, boss PBRS scale | R Reward spec | 601 |
+| [ ] ⛔ | R3 FIGHT rooms get route next_rooms (exit semantics) | R Reward spec | 628 |
+| [ ] | R4 Recompute and rebalance the boss-room payoff table | R Reward spec | 650 |
+| [ ] | R5 Split micro-scenarios: kill vs victory-lap | R Reward spec | 664 |
+| [ ] | R6 EXPERIMENT: retrain Aquamentus on the fixed spec | R Reward spec | 678 |
+| [ ] | B1 Demo format: non-MOVE actions | B Demos | 705 |
+| [ ] | B2 Multi-demo support in train.py/ml_ppo.py | B Demos | 719 |
+| [ ] | B3 Acquire a boss-kill demonstration | B Demos | 732 |
+| [ ] | B4 EXPERIMENT: BC + demo-regularized PPO on the boss | B Demos | 744 |
+| [ ] | B5 Value-head warmup after BC | B Demos | 761 |
+| [ ] | C1 Boss-HP reverse curriculum (1hp→2hp→4hp→6hp) | C Curriculum | 775 |
+| [ ] | C2 Mid-fight savestate curriculum | C Curriculum | 793 |
+| [ ] | C3 Invulnerability training wheels (per_frame health) | C Curriculum | 802 |
+| [ ] | C4 Start-state diversity for the boss room | C Curriculum | 818 |
+| [ ] | C5 Victory-lap scenario: post-kill → triforce | C Curriculum | 830 |
+| [ ] | C6 Boss-room action masking of useless items | C Curriculum | 844 |
+| [ ] | S1 Per-head entropy floor / adaptive ent_coef | S Structural | 860 |
+| [ ] | S2 Scope MOVE-only demo-BC loss to the direction head | S Structural | 874 |
+| [ ] | S3 EPOCHS 10→4 and expose LEARNING_RATE | S Structural | 886 |
+| [ ] | S4 Optimizer persistence across circuit legs | S Structural | 896 |
+| [ ] | S5 KL-anchor regularization (fallback to demo-BC) | S Structural | 904 |
+| [ ] | S6 Self-imitation on harvested successes | S Structural | 916 |
+| [ ] | S7 Per-leg ent_coef in circuit YAML | S Structural | 929 |
+| [ ] | S8 Entity distance/vector features (observation) | S Structural | 935 |
+| [ ] | I1 EXPERIMENT: late-chain integration | I Integration | 951 |
+| [ ] | I2 EXPERIMENT: full dungeon 1 | I Integration | 970 |
+| [ ] | I3 EXPERIMENT: full game gate | I Integration | 978 |
+| [ ] | X1 Auto-demo harvesting from scripted policies | X Backlog | 989 |
+| [ ] | X2 Auxiliary boss-HP prediction loss | X Backlog | 994 |
+| [ ] | X3 Sustained-threshold exit criteria | X Backlog | 999 |
+| [ ] | X4 Multi-seed replication harness for micro-scenarios | X Backlog | 1004 |
+| [ ] | X5 Beam-alignment shaping (fired-correctly / didn't-fire) | X Backlog | 1009 |
+| [ ] | X6 Update stale docs (combat-engagement, nes-mechanics boss section) | X Backlog | 1016 |
+| [ ] | X7 Positive-clamp audit for multi-reward kill steps | X Backlog | 1022 |
+| [ ] | X8 Fireball danger shaping (danger tiles / wavefront field) | X Backlog | 1028 |
 
 **Recommended experiment queue (the spine; everything else supports it):**
 1. **EXP6 (probes, no training):** P1+P2 → V1..V6. Deliverable: empirical root-cause verdict + a scripted boss-kill trace.
@@ -406,10 +406,42 @@ Full suite 783 passed / 1 skipped; pylint 10.00/10.
 never fire. **`eval-step-cap` never triggered**, so the `Timeout` fix alone resolves the livelock and
 the step cap is pure backstop.
 
-**Remaining measurement (not a code task):** the 100-episode Gate-B readings on exp4-final and
-exp5-final. A 100-ep exp5-final late-chain run was launched at ~28s/ep (≈47 min projected, well inside
-the <2h bound); see §9 for its result. exp4-final still needs its run. Gate B itself
-(success-rate > 0 and progress/max = 17) is I1's business, not P2's.
+**Acceptance fully met — the exp5 late-chain number now exists (first ever).** 100 episodes of
+`dungeon1-late-chain` on exp5-final completed in **54m44s, exit 0** (bound was < 2h), artifact
+`…/experiment5-circuit/4/impala-multihead_all-items.eval.json`. exp4-final's 100-episode late-chain
+JSON already existed from exp4
+(`…/experiment4-circuit/0/impala-multihead_all-items.dungeon1-late-chain.eval.json`), so both required
+readings are in hand.
+
+| | exp4-final | exp5-final |
+|---|---:|---:|
+| success-rate | 0.0 | 0.0 |
+| progress/max | 16 | 16 |
+| progress dist (of 11) | 7:23, 8:27, 10:50 | 7:5, 8:45, 10:50 |
+| median | 8 | 10 |
+| endings/failure-terminated-death | 0.72 | 0.42 |
+| endings/failure-no-progress | 0.18 | **0.32** |
+| endings/failure-wallmastered | 0.08 | **0.21** |
+| endings/failure-stuck | 0.02 | 0.05 |
+| endings/eval-step-cap | — | **0.0 (never fired)** |
+
+Three readings that matter for later tasks:
+1. **`failure-no-progress` = 0.32 on exp5-final.** Nearly a third of late-chain episodes were
+   livelock candidates before the fix — that alone explains the 124h hang, and `eval-step-cap` never
+   fired across 100 episodes, so the `Timeout` fix absorbs the whole failure mode.
+2. **Gate B is NOT met and was never going to be here:** both checkpoints cap at `progress/max = 16`
+   (boss room), never 17 (triforce). Consistent with the boss never taking damage (P1). Gate B is I1's
+   job after Phase R.
+3. **Micro-scenario success does NOT imply the skill survives in the chain.** `failure-wallmastered`
+   rose 0.08 → 0.21 from exp4 to exp5 in late-chain, which looks like the retention regression §0.4
+   rule 5 warns about — but it is not. exp5-final's standalone
+   `dungeon1-wallmaster-north-exit` eval is **1.0 success (100/100,
+   `endings/success-reached-location = 1.0`)**, so the wallmaster skill is fully retained in its own
+   scenario. The skill is intact; it just transfers worse into the chained context (different entry
+   states, arriving after other rooms, lower health). Deaths fell 0.72 → 0.42 and the median improved
+   8 → 10, so exp5 is better overall on late-chain — the failure mode moved, it did not worsen.
+   **Consequence for I1/B4: never treat a 1.0 micro-scenario eval as evidence of chain performance.**
+   Gate B must be read on `dungeon1-late-chain` itself, exactly as §0.4 rule 2 says for exit criteria.
 
 ### P3. Fix restart crash on completed circuits (train.py:1290)
 **Goal:** `--resume` from a checkpoint whose history already covers the final leg leaves `model=None`
@@ -1029,6 +1061,22 @@ _Append dated entries when outcomes change strategy._
   Also visible in the traces, pre-empting V4: the south exit is taken from tile y=`0x13`, one tile
   above the `tile.y >= 0x14` hint-mask threshold, so hints never mask it. R3 alone will not close that
   leak.
+- **2026-08-04 (100-ep late-chain readings, both finals):** exp5-final late-chain measured for the
+  first time — 100 episodes in **54m44s** (bound < 2h): success 0.0, `progress/max` 16, median 10/11,
+  endings `death 0.42 / no-progress 0.32 / wallmastered 0.21 / stuck 0.05`, **`eval-step-cap` 0.0**.
+  Versus exp4-final (100 eps, pre-existing): success 0.0, `progress/max` 16, median 8/11, endings
+  `death 0.72 / no-progress 0.18 / wallmastered 0.08 / stuck 0.02`. Full table in P2's outcome. Three
+  consequences:
+  1. **`no-progress` at 0.32 quantifies the old hang:** about a third of late-chain episodes were
+     livelock candidates, and the step-cap backstop never fired across 100 episodes — the `Timeout`
+     fix covers the entire failure mode. No further eval-robustness work is warranted.
+  2. **Neither final can reach milestone 17** (`progress/max` = 16 for both). Gate B is therefore
+     blocked on the boss, not on the chain: no amount of late-chain tuning moves it until Phase R
+     makes the boss killable. Do not spend a training budget on late-chain before R6.
+  3. **A 1.0 micro-scenario eval says nothing about chain performance.** exp5-final scores 1.0 on
+     standalone `dungeon1-wallmaster-north-exit` yet its late-chain `failure-wallmastered` is 0.21
+     (up from exp4's 0.08). The skill is retained; it transfers poorly under chained entry conditions.
+     Read every gate on its own scenario — this is §0.4 rule 2 applied to evals, not just exit criteria.
 
 ---
 
