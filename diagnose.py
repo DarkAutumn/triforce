@@ -22,6 +22,7 @@ Usage:
 import argparse
 import glob as globmod
 import os
+import statistics
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -91,6 +92,13 @@ PROGRESS_MAP = {
 }
 
 STUCK_THRESHOLD = 200  # steps in one room before flagging as stuck
+
+# Action kinds that constitute an "attack" (used by --combat-trace attack summary).
+# Everything except MOVE and the consumable/utility buttons (WHISTLE/FOOD/POTION).
+ATTACK_ACTION_KINDS = frozenset({
+    ActionKind.SWORD, ActionKind.BEAMS, ActionKind.BOMBS,
+    ActionKind.ARROW, ActionKind.WAND, ActionKind.BOOMERANG, ActionKind.CANDLE,
+})
 
 
 class DiagnosticWrapper(gym.Wrapper):
@@ -424,8 +432,34 @@ class PbrsStepRecord:
     enemy_ids: tuple = ()   # enemy type IDs this step
 
 
+@dataclass
+class CombatStepRecord:
+    """Per-step combat detail captured by --combat-trace."""
+    step: int
+    room: int                       # curr.location (int)
+    room_changed: bool
+    action_kind: str                # sc.action.kind.name
+    action_dir: str                 # sc.action.direction.name
+    link_tile: tuple                # (tile.x, tile.y)
+    link_pos: tuple                 # (position.x, position.y)
+    link_health: float
+    link_max_health: int
+    beams_available: bool
+    hits: int                       # sc.hits (number of enemies hit)
+    damage_dealt: int               # sc.damage_dealt
+    health_lost: float              # sc.health_lost (half-hearts)
+    enemies_hit: tuple              # ((enemy_index, damage), ...)
+    enemies: tuple                  # per-enemy snapshot, see _run_combat_episode
+    objective: str                  # objective kind name (or "NONE")
+    next_rooms: tuple               # (str(room), ...)
+    masked_moves: tuple             # cardinal dirs where MOVE is masked
+    allowed_moves: tuple            # cardinal dirs where MOVE is allowed
+    rewards: tuple                  # ((name, value, count), ...)
+    ending: Optional[str] = None
+
+
 def run_pbrs_diagnostic(model_name, scenario_name, model_path,  # pylint: disable=too-many-statements
-                        episodes, tail, output_path):
+                        episodes, tail, output_path, trace_endings=None):
     """Run episodes looking for stuck/timeout endings, then print step-by-step PBRS detail."""
     scenario_def = TrainingScenarioDefinition.get(scenario_name)
     metadata = Network.load_metadata(model_path)
@@ -452,14 +486,15 @@ def run_pbrs_diagnostic(model_name, scenario_name, model_path,  # pylint: disabl
     w(f"Scenario: {scenario_name}")
     w("=" * 90)
 
+    endings_filter = trace_endings if trace_endings else ["stuck", "no-next-room"]
     found_stuck = 0
     for ep_idx in range(episodes):
         result = _run_pbrs_episode(env, network, ep_idx)
         ep_steps, ending, _, room_segments = result
 
-        is_stuck = ending and "stuck" in ending or "no-next-room" in ending
+        is_stuck = _matches_endings(ending, endings_filter)
         print(f"  Episode {ep_idx+1}/{episodes}: steps={ep_steps}, ending={ending}, "
-              f"stuck={'YES' if is_stuck else 'no'}")
+              f"match={'YES' if is_stuck else 'no'}")
 
         if not is_stuck:
             continue
@@ -715,6 +750,268 @@ def _run_pbrs_episode(env, network, _ep_idx):  # pylint: disable=too-many-statem
         room_segments.append((current_room_id, current_room_steps))
 
     return step_num, ending, all_steps, room_segments
+
+
+# ---------------------------------------------------------------------------
+# --combat-trace mode: per-step combat/boss trace
+# ---------------------------------------------------------------------------
+
+def _percentiles(values):
+    """Return (min, p25, p50, p75, max) for a list of numbers, or None if empty."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        v = ordered[0]
+        return (v, v, v, v, v)
+    q = statistics.quantiles(ordered, n=4, method="inclusive")
+    return (ordered[0], q[0], q[1], q[2], ordered[-1])
+
+
+def _matches_endings(ending, trace_endings):
+    """True if this episode should be traced given the ending substring filter."""
+    if not trace_endings:
+        return True
+    if ending is None:
+        return False
+    return any(sub in ending for sub in trace_endings)
+
+
+def run_combat_diagnostic(model_name, scenario_name, model_path,  # pylint: disable=too-many-statements,too-many-locals,too-many-arguments
+                          episodes, tail, trace_endings, trace_max_episodes, output_path):
+    """Run episodes and print per-step combat detail for those matching --trace-endings."""
+    scenario_def = TrainingScenarioDefinition.get(scenario_name)
+    metadata = Network.load_metadata(model_path)
+    model_kind = ModelKindDefinition.get(metadata["model_kind"] or model_name)
+    action_space_def = ActionSpaceDefinition.get(metadata["action_space_name"] or "basic")
+    multihead = getattr(model_kind.network_class, 'is_multihead', False)
+
+    obs_kind, frame_stack = infer_obs_kind(metadata["obs_space"])
+    env = make_zelda_env(scenario_def, action_space_def.actions,
+                         render_mode=None, multihead=multihead, translation=False,
+                         obs_kind=obs_kind, frame_stack=frame_stack)
+    env = DiagnosticWrapper(env)
+
+    obs_space, act_space = Network.load_spaces(model_path)
+    network = model_kind.network_class(obs_space, act_space)
+    network.load(model_path)
+    network.eval()
+
+    lines = []
+    w = lines.append
+    w("=" * 90)
+    w(f"COMBAT TRACE: {model_name}")
+    w(f"Model: {model_path}")
+    w(f"Scenario: {scenario_name}")
+    w(f"Trace endings: {trace_endings if trace_endings else '(all)'}")
+    w("=" * 90)
+
+    traced = 0
+    for ep_idx in range(episodes):
+        ep_steps, ending, all_steps = _run_combat_episode(env, network, ep_idx)
+        is_traced = _matches_endings(ending, trace_endings)
+        print(f"  Episode {ep_idx+1}/{episodes}: steps={ep_steps}, ending={ending}, "
+              f"traced={'YES' if is_traced else 'no'}")
+
+        if not is_traced:
+            continue
+
+        traced += 1
+        if traced > trace_max_episodes:
+            continue
+
+        _render_combat_episode(w, ep_idx, ending, ep_steps, all_steps, tail)
+
+    env.close()
+
+    if traced == 0:
+        w("\n  No episodes matched the ending filter.")
+    elif traced > trace_max_episodes:
+        w(f"\n(Showing first {trace_max_episodes} traced episodes, "
+          f"{traced - trace_max_episodes} more matched.)")
+
+    w("")
+    w("=" * 90)
+    w("END OF COMBAT TRACE")
+    w("=" * 90)
+
+    report = "\n".join(lines)
+    if output_path:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(report)
+        print(f"\nReport written to: {output_path}")
+    else:
+        print(report)
+
+
+def _render_combat_episode(w, ep_idx, ending, ep_steps, all_steps, tail):  # pylint: disable=too-many-locals
+    """Append the full per-episode combat report block via writer `w`."""
+    w("")
+    w(f"## EPISODE {ep_idx+1} — ended: {ending} ({ep_steps} steps)")
+
+    # Exit attribution: last step that changed room.
+    exit_steps = [s for s in all_steps if s.room_changed]
+    if exit_steps:
+        ex = exit_steps[-1]
+        w(f"  Exit: step {ex.step}  tile {ex.link_tile}  action {ex.action_kind}/{ex.action_dir}  "
+          f"MOVE masked={ex.masked_moves} allowed={ex.allowed_moves}")
+    else:
+        w("  Exit: no room-change exit (ended in boss room)")
+
+    # Attack summary.
+    attack_steps = sum(1 for s in all_steps if s.action_kind in _ATTACK_KIND_NAMES)
+    total_hits = sum(s.hits for s in all_steps)
+    total_damage = sum(s.damage_dealt for s in all_steps)
+    total_health_lost = sum(s.health_lost for s in all_steps)
+    w(f"  Attacks: {attack_steps}/{len(all_steps)} steps  hits={total_hits}  "
+      f"damage_dealt={total_damage}  health_lost={total_health_lost}")
+
+    # Enemies observed: unique type names with the health range seen (boss HP countdown).
+    health_by_name = defaultdict(list)
+    for s in all_steps:
+        for e in s.enemies:
+            health_by_name[e[0]].append(e[2])
+    if health_by_name:
+        parts = [f"{name} hp {min(hs)}..{max(hs)}" for name, hs in sorted(health_by_name.items())]
+        w(f"  Enemies observed: {'; '.join(parts)}")
+    else:
+        w("  Enemies observed: none")
+
+    # Damage timeline.
+    dmg_steps = [s for s in all_steps if s.damage_dealt > 0 or s.health_lost > 0]
+    if dmg_steps:
+        w(f"  Damage timeline ({len(dmg_steps)} events):")
+        for s in dmg_steps:
+            w(f"    step {s.step}: {s.action_kind}/{s.action_dir}  hit={s.enemies_hit}  "
+              f"dmg_dealt={s.damage_dealt}  health_lost={s.health_lost}")
+    else:
+        w("  Damage timeline: none (no hits landed, no health lost)")
+
+    # Distance-to-nearest-enemy percentiles (first enemy is nearest; enemies are distance-sorted).
+    near_dists = [s.enemies[0][4] for s in all_steps if s.enemies]
+    pcts = _percentiles(near_dists)
+    if pcts:
+        w(f"  Nearest-enemy distance: min={pcts[0]:.1f} p25={pcts[1]:.1f} p50={pcts[2]:.1f} "
+          f"p75={pcts[3]:.1f} max={pcts[4]:.1f}  ({len(near_dists)} steps with enemies)")
+    else:
+        w("  Nearest-enemy distance: no enemies observed")
+
+    # Per-step table (last `tail` steps).
+    show = all_steps[-tail:]
+    start_idx = len(all_steps) - len(show)
+    w(f"\n  Last {len(show)} steps (of {len(all_steps)}):")
+    w(f"  {'Step':>5s}  {'Act':>8s} {'Dir':>4s}  {'LinkTile':>10s}  {'HP':>5s} {'Bm':>2s}  "
+      f"{'Ht':>2s} {'Dmg':>3s} {'HL':>4s}  {'Obj':>8s}  {'MaskS':>8s}  Rewards")
+    w(f"  {'-'*5}  {'-'*8} {'-'*4}  {'-'*10}  {'-'*5} {'-'*2}  "
+      f"{'-'*2} {'-'*3} {'-'*4}  {'-'*8}  {'-'*8}  {'-'*30}")
+    for s in show:
+        reward_str = ", ".join(f"{n}={v:+.2f}" for n, v, _ in s.rewards if v != 0)
+        masked = ",".join(s.masked_moves) if s.masked_moves else "-"
+        w(f"  {s.step:5d}  {s.action_kind:>8s} {s.action_dir:>4s}  {str(s.link_tile):>10s}  "
+          f"{s.link_health:5.1f} {('Y' if s.beams_available else 'n'):>2s}  "
+          f"{s.hits:2d} {s.damage_dealt:3d} {s.health_lost:4.1f}  {s.objective:>8s}  "
+          f"{masked:>8s}  {reward_str}")
+    w("")
+    _ = start_idx  # kept for parity with pbrs table; step numbers are absolute
+
+
+# Attack action-kind names (str) for fast per-step membership checks in the report.
+_ATTACK_KIND_NAMES = frozenset(k.name for k in ATTACK_ACTION_KINDS)
+
+
+def _run_combat_episode(env, network, _ep_idx):  # pylint: disable=too-many-locals
+    """Run one episode, capturing per-step combat detail. Returns (steps, ending, all_steps)."""
+    obs, info = env.reset()
+
+    all_steps = []
+    step_num = 0
+    ending = None
+    cardinals = (Direction.N, Direction.S, Direction.W, Direction.E)
+    try:
+        is_valid_action = env.get_wrapper_attr('is_valid_action')
+    except AttributeError:
+        is_valid_action = None
+
+    terminated = truncated = False
+    while not terminated and not truncated:
+        action_mask = info.get('action_mask', None)
+        if action_mask is not None:
+            action_mask = action_mask.unsqueeze(0) if action_mask.dim() == 1 else action_mask
+
+        action = network.get_action(obs, action_mask)
+        action = action.squeeze(0)
+        obs, _, terminated, truncated, info = env.step(action)
+
+        sc = env.last_state_change
+        rewards = env.last_rewards
+        curr = sc.state
+
+        link = curr.link
+        tile = link.tile
+        pos = link.position
+
+        enemies = tuple(
+            (
+                e.id.name if hasattr(e.id, 'name') else str(e.id),
+                e.index,
+                e.health,
+                (e.position.x, e.position.y),
+                round(float(e.distance), 1),
+                e.is_active,
+                e.is_stunned,
+                e.stun_timer,
+                e.is_dying,
+            )
+            for e in curr.enemies
+        )
+
+        objectives = curr.objectives
+        if objectives is not None:
+            obj_kind = objectives.kind.name
+            next_rooms = tuple(str(r) for r in objectives.next_rooms)
+        else:
+            obj_kind = "NONE"
+            next_rooms = ()
+
+        masked_moves = []
+        allowed_moves = []
+        if sc.action_mask is not None and is_valid_action is not None:
+            for d in cardinals:
+                if is_valid_action((ActionKind.MOVE, d), sc.action_mask):
+                    allowed_moves.append(d.name)
+                else:
+                    masked_moves.append(d.name)
+
+        record = CombatStepRecord(
+            step=step_num,
+            room=curr.location,
+            room_changed=sc.changed_location,
+            action_kind=sc.action.kind.name,
+            action_dir=sc.action.direction.name,
+            link_tile=(tile.x, tile.y),
+            link_pos=(pos.x, pos.y),
+            link_health=link.health,
+            link_max_health=link.max_health,
+            beams_available=link.are_beams_available,
+            hits=sc.hits,
+            damage_dealt=sc.damage_dealt,
+            health_lost=sc.health_lost,
+            enemies_hit=tuple(sorted(sc.enemies_hit.items())),
+            enemies=enemies,
+            objective=obj_kind,
+            next_rooms=next_rooms,
+            masked_moves=tuple(masked_moves),
+            allowed_moves=tuple(allowed_moves),
+            rewards=tuple((o.name, o.value, o.count) for o in rewards),
+        )
+        all_steps.append(record)
+        step_num += 1
+
+        if rewards.ending is not None:
+            ending = str(rewards.ending)
+            record.ending = ending
+
+    return step_num, ending, all_steps
 
 
 # ---------------------------------------------------------------------------
@@ -1126,6 +1423,15 @@ def parse_args():
                              "PBRS calculation for the stuck room")
     parser.add_argument("--tail", type=int, default=50,
                         help="Number of trailing steps to show in --infinite-pbrs mode (default: 50)")
+    parser.add_argument("--combat-trace", action="store_true",
+                        help="Run combat/boss trace: per-step action, enemy, hit, reward, "
+                             "objective, and MOVE-mask detail for episodes matching --trace-endings")
+    parser.add_argument("--trace-endings", default=None,
+                        help="Comma-separated ending substrings to trace (e.g. "
+                             "'left-boss-room,death'). --infinite-pbrs default keeps "
+                             "stuck/no-next-room; --combat-trace default traces all endings")
+    parser.add_argument("--trace-max-episodes", type=int, default=5,
+                        help="Max episodes to print full traces for in --combat-trace (default: 5)")
     parser.add_argument("--invariants", action="store_true",
                         help="Run movement/reward invariant checker: detect zero-movement, "
                              "missing wavefronts, empty masks, and zero-PBRS violations")
@@ -1185,9 +1491,14 @@ def main():
 
     model_path = resolve_model_path(args.model_path)
 
-    if args.infinite_pbrs:
+    parsed_endings = [s for s in args.trace_endings.split(",") if s] if args.trace_endings else None
+
+    if args.combat_trace:
+        run_combat_diagnostic(args.model, args.scenario, model_path, args.episodes,
+                              args.tail, parsed_endings or [], args.trace_max_episodes, args.output)
+    elif args.infinite_pbrs:
         run_pbrs_diagnostic(args.model, args.scenario, model_path,
-                            args.episodes, args.tail, args.output)
+                            args.episodes, args.tail, args.output, parsed_endings)
     elif args.invariants:
         run_invariant_checker(args.model, args.scenario, model_path,
                               args.episodes, args.output)
