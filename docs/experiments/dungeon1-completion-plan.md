@@ -104,51 +104,51 @@ Line numbers refresh via: `grep -n '^### ' docs/experiments/dungeon1-completion-
 | [x] | P2 Fix evaluation hang + silent no-artifact evals | P Tooling | 360 |
 | [ ] | P3 Fix restart crash on completed circuits (train.py:1290) | P Tooling | 446 |
 | [ ] | P4 --compare must compare success-rate | P Tooling | 456 |
-| [ ] ⛔ | P5 Weighted-circuit exit criteria gate on primary scenario | P Tooling | 466 |
-| [ ] | P6 Verify worker metric aggregation under --parallel | P Tooling | 476 |
-| [ ] | P0 Land or discard the experiment5 branch leftovers | P Tooling | 487 |
-| [ ] ⛔ | V1 Empirical root-cause confirmation trace | V Probes | 500 |
-| [ ] ⛔ | V2 Scripted boss-kill probe (beams / bombs / melee) | V Probes | 512 |
-| [ ] | V3 DefeatedBoss false-positive check | V Probes | 535 |
-| [ ] | V4 Trace the hint-mask escape route | V Probes | 547 |
-| [ ] | V5 Fireball dodgeability / beam retention measurement | V Probes | 559 |
-| [ ] | V6 Aquamentus RAM fact sheet | V Probes | 569 |
-| [ ] ⛔ | R1 Terminal parity: leaving the boss room = −20 | R Reward spec | 584 |
-| [ ] ⛔ | R2 Boss-damage rewards, stall reset on hits, boss PBRS scale | R Reward spec | 601 |
-| [ ] ⛔ | R3 FIGHT rooms get route next_rooms (exit semantics) | R Reward spec | 628 |
-| [ ] | R4 Recompute and rebalance the boss-room payoff table | R Reward spec | 650 |
-| [ ] | R5 Split micro-scenarios: kill vs victory-lap | R Reward spec | 664 |
-| [ ] | R6 EXPERIMENT: retrain Aquamentus on the fixed spec | R Reward spec | 678 |
-| [ ] | B1 Demo format: non-MOVE actions | B Demos | 705 |
-| [ ] | B2 Multi-demo support in train.py/ml_ppo.py | B Demos | 719 |
-| [ ] | B3 Acquire a boss-kill demonstration | B Demos | 732 |
-| [ ] | B4 EXPERIMENT: BC + demo-regularized PPO on the boss | B Demos | 744 |
-| [ ] | B5 Value-head warmup after BC | B Demos | 761 |
-| [ ] | C1 Boss-HP reverse curriculum (1hp→2hp→4hp→6hp) | C Curriculum | 775 |
-| [ ] | C2 Mid-fight savestate curriculum | C Curriculum | 793 |
-| [ ] | C3 Invulnerability training wheels (per_frame health) | C Curriculum | 802 |
-| [ ] | C4 Start-state diversity for the boss room | C Curriculum | 818 |
-| [ ] | C5 Victory-lap scenario: post-kill → triforce | C Curriculum | 830 |
-| [ ] | C6 Boss-room action masking of useless items | C Curriculum | 844 |
-| [ ] | S1 Per-head entropy floor / adaptive ent_coef | S Structural | 860 |
-| [ ] | S2 Scope MOVE-only demo-BC loss to the direction head | S Structural | 874 |
-| [ ] | S3 EPOCHS 10→4 and expose LEARNING_RATE | S Structural | 886 |
-| [ ] | S4 Optimizer persistence across circuit legs | S Structural | 896 |
-| [ ] | S5 KL-anchor regularization (fallback to demo-BC) | S Structural | 904 |
-| [ ] | S6 Self-imitation on harvested successes | S Structural | 916 |
-| [ ] | S7 Per-leg ent_coef in circuit YAML | S Structural | 929 |
-| [ ] | S8 Entity distance/vector features (observation) | S Structural | 935 |
-| [ ] | I1 EXPERIMENT: late-chain integration | I Integration | 951 |
-| [ ] | I2 EXPERIMENT: full dungeon 1 | I Integration | 970 |
-| [ ] | I3 EXPERIMENT: full game gate | I Integration | 978 |
-| [ ] | X1 Auto-demo harvesting from scripted policies | X Backlog | 989 |
-| [ ] | X2 Auxiliary boss-HP prediction loss | X Backlog | 994 |
-| [ ] | X3 Sustained-threshold exit criteria | X Backlog | 999 |
-| [ ] | X4 Multi-seed replication harness for micro-scenarios | X Backlog | 1004 |
-| [ ] | X5 Beam-alignment shaping (fired-correctly / didn't-fire) | X Backlog | 1009 |
-| [ ] | X6 Update stale docs (combat-engagement, nes-mechanics boss section) | X Backlog | 1016 |
-| [ ] | X7 Positive-clamp audit for multi-reward kill steps | X Backlog | 1022 |
-| [ ] | X8 Fireball danger shaping (danger tiles / wavefront field) | X Backlog | 1028 |
+| [x] | P5 Weighted-circuit exit criteria gate on primary scenario | P Tooling | 466 |
+| [ ] | P6 Verify worker metric aggregation under --parallel | P Tooling | 508 |
+| [ ] | P0 Land or discard the experiment5 branch leftovers | P Tooling | 519 |
+| [ ] ⛔ | V1 Empirical root-cause confirmation trace | V Probes | 532 |
+| [ ] ⛔ | V2 Scripted boss-kill probe (beams / bombs / melee) | V Probes | 544 |
+| [ ] | V3 DefeatedBoss false-positive check | V Probes | 567 |
+| [ ] | V4 Trace the hint-mask escape route | V Probes | 579 |
+| [ ] | V5 Fireball dodgeability / beam retention measurement | V Probes | 591 |
+| [ ] | V6 Aquamentus RAM fact sheet | V Probes | 601 |
+| [ ] ⛔ | R1 Terminal parity: leaving the boss room = −20 | R Reward spec | 616 |
+| [ ] ⛔ | R2 Boss-damage rewards, stall reset on hits, boss PBRS scale | R Reward spec | 633 |
+| [ ] ⛔ | R3 FIGHT rooms get route next_rooms (exit semantics) | R Reward spec | 660 |
+| [ ] | R4 Recompute and rebalance the boss-room payoff table | R Reward spec | 682 |
+| [ ] | R5 Split micro-scenarios: kill vs victory-lap | R Reward spec | 696 |
+| [ ] | R6 EXPERIMENT: retrain Aquamentus on the fixed spec | R Reward spec | 710 |
+| [ ] | B1 Demo format: non-MOVE actions | B Demos | 737 |
+| [ ] | B2 Multi-demo support in train.py/ml_ppo.py | B Demos | 751 |
+| [ ] | B3 Acquire a boss-kill demonstration | B Demos | 764 |
+| [ ] | B4 EXPERIMENT: BC + demo-regularized PPO on the boss | B Demos | 776 |
+| [ ] | B5 Value-head warmup after BC | B Demos | 793 |
+| [ ] | C1 Boss-HP reverse curriculum (1hp→2hp→4hp→6hp) | C Curriculum | 807 |
+| [ ] | C2 Mid-fight savestate curriculum | C Curriculum | 825 |
+| [ ] | C3 Invulnerability training wheels (per_frame health) | C Curriculum | 834 |
+| [ ] | C4 Start-state diversity for the boss room | C Curriculum | 850 |
+| [ ] | C5 Victory-lap scenario: post-kill → triforce | C Curriculum | 862 |
+| [ ] | C6 Boss-room action masking of useless items | C Curriculum | 876 |
+| [ ] | S1 Per-head entropy floor / adaptive ent_coef | S Structural | 892 |
+| [ ] | S2 Scope MOVE-only demo-BC loss to the direction head | S Structural | 906 |
+| [ ] | S3 EPOCHS 10→4 and expose LEARNING_RATE | S Structural | 918 |
+| [ ] | S4 Optimizer persistence across circuit legs | S Structural | 928 |
+| [ ] | S5 KL-anchor regularization (fallback to demo-BC) | S Structural | 936 |
+| [ ] | S6 Self-imitation on harvested successes | S Structural | 948 |
+| [ ] | S7 Per-leg ent_coef in circuit YAML | S Structural | 961 |
+| [ ] | S8 Entity distance/vector features (observation) | S Structural | 967 |
+| [ ] | I1 EXPERIMENT: late-chain integration | I Integration | 983 |
+| [ ] | I2 EXPERIMENT: full dungeon 1 | I Integration | 1002 |
+| [ ] | I3 EXPERIMENT: full game gate | I Integration | 1010 |
+| [ ] | X1 Auto-demo harvesting from scripted policies | X Backlog | 1021 |
+| [ ] | X2 Auxiliary boss-HP prediction loss | X Backlog | 1026 |
+| [ ] | X3 Sustained-threshold exit criteria | X Backlog | 1031 |
+| [ ] | X4 Multi-seed replication harness for micro-scenarios | X Backlog | 1036 |
+| [ ] | X5 Beam-alignment shaping (fired-correctly / didn't-fire) | X Backlog | 1041 |
+| [ ] | X6 Update stale docs (combat-engagement, nes-mechanics boss section) | X Backlog | 1048 |
+| [ ] | X7 Positive-clamp audit for multi-reward kill steps | X Backlog | 1054 |
+| [ ] | X8 Fireball danger shaping (danger tiles / wavefront field) | X Backlog | 1060 |
 
 **Recommended experiment queue (the spine; everything else supports it):**
 1. **EXP6 (probes, no training):** P1+P2 → V1..V6. Deliverable: empirical root-cause verdict + a scripted boss-kill trace.
@@ -471,7 +471,39 @@ only when the primary scenario's criterion is met (or all criteria, if none mark
 test in `tests/`.
 **Acceptance:** a config test proves a weighted circuit with a primary cannot exit on a non-primary
 metric; existing sequential circuits unaffected.
-**Outcome:** _not attempted_
+**Outcome:** ✅ **DONE 2026-08-04.** Commit `1de1f47` adds validated `primary: true` semantics for
+weighted circuit entries and marks `dungeon1-aquamentus-east` as the primary gate for
+`experiment5-boss-transfer`.
+
+Weighted circuits with a primary now pass only that scenario's exit criterion to PPO. Circuits
+without a primary preserve the existing all-configured-criteria behavior. Validation rejects multiple
+primaries, a primary without exit criteria, and `primary` on sequential entries. Parent-level exit
+criteria target the configured primary instead of implicitly targeting the first scenario.
+
+**Numbers:**
+
+| Proof | Result |
+|---|---:|
+| Focused weighted/config tests | 28 passed |
+| Full test suite | 804 passed, 1 skipped, 8 deselected |
+| Pylint | 10.00/10 |
+| Real exp5-checkpoint smoke run | 4,096 weighted trainer steps, exit 0 |
+| Criteria passed to PPO for `experiment5-boss-transfer` | 1: `dungeon1-aquamentus-east/success-rate >= 0.6` |
+| Non-primary criteria passed to PPO | 0 |
+
+Smoke artifact:
+`/home/leculver/.copilot/session-state/11df117b-6401-4911-a29e-0d8dbffd1ce4/files/p5-smoke/experiment5-boss-transfer/0/impala-multihead_all-items.pt`.
+
+**Verdict:** a weighted circuit with `primary: true` cannot exit on a non-primary metric; P5's
+acceptance criteria are met.
+
+**What the next agent must know:**
+1. Add `primary: true` only when one scenario should control completion; omitting it deliberately
+   requires all configured exit criteria.
+2. `experiment5-boss-transfer` now gates on Aquamentus, so a wallmaster-only success can no longer
+   reproduce exp5's false completion.
+3. P5 unblocks future weighted training structurally, but Phase R remains mandatory before R6; this
+   change does not repair the boss reward specification.
 
 ### P6. Verify worker metric aggregation under --parallel
 **Goal:** `docs/recommendations.md` item 2 claims worker MetricTracker data is not aggregated — exit

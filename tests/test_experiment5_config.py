@@ -15,6 +15,7 @@ def test_experiment5_weighted_circuit_loads():
         "dungeon1-late-chain",
     ]
     assert [entry.weight for entry in circuit.scenarios] == [10, 80, 10]
+    assert [entry.primary for entry in circuit.scenarios] == [False, True, False]
     assert [entry.exit_criteria.metric for entry in circuit.scenarios] == ["success-rate"] * 3
     assert [entry.exit_criteria.threshold for entry in circuit.scenarios] == [0.8, 0.6, 0.1]
 

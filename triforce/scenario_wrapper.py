@@ -144,6 +144,7 @@ class TrainingCircuitEntry(BaseModel):
     iterations : Optional[int] = None
     exit_criteria : Optional[ExitCriteria] = Field(None, alias='exit-criteria')
     weight : Optional[float] = None
+    primary : bool = False
 
 class TrainingCircuitDefinition(BaseModel):
     """A training circuit."""
@@ -182,17 +183,29 @@ class TrainingCircuitDefinition(BaseModel):
 
                 # Validate weight fields match circuit kind
                 if circuit.kind == 'weighted':
+                    primary_entries = [entry for entry in circuit.scenarios if entry.primary]
+                    if len(primary_entries) > 1:
+                        raise ValueError(f"Weighted circuit '{circuit.name}' must not have more than "
+                                         "one primary entry")
                     for entry in circuit.scenarios:
                         if entry.weight is None:
                             name = entry.scenario or entry.circuit
                             raise ValueError(f"Weighted circuit '{circuit.name}' entry "
                                              f"'{name}' must have a weight")
+                        if entry.primary and entry.exit_criteria is None:
+                            name = entry.scenario or entry.circuit
+                            raise ValueError(f"Weighted circuit '{circuit.name}' primary entry "
+                                             f"'{name}' must have exit criteria")
                 else:
                     for entry in circuit.scenarios:
                         if entry.weight is not None:
                             name = entry.scenario or entry.circuit
                             raise ValueError(f"Sequential circuit '{circuit.name}' entry "
                                              f"'{name}' must not have a weight")
+                        if entry.primary:
+                            name = entry.scenario or entry.circuit
+                            raise ValueError(f"Sequential circuit '{circuit.name}' entry "
+                                             f"'{name}' must not be primary")
 
                 circuits[circuit.name] = circuit
 
