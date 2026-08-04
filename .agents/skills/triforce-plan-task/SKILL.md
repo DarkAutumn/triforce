@@ -1,6 +1,6 @@
 ---
 name: triforce-plan-task
-description: Use when asked to work the next item from a Triforce living plan document — "work on the next proposed experiment", "do the next task", "next item from the table", "continue the dungeon 1 plan", "pick up the next blocking task". Drives one plan task end to end: select it, execute it, decide whether the code lands, PR and merge when green, and check the item off either way.
+description: Use when asked to work the next item from a Triforce living plan document, e.g. 'work on the next proposed experiment', 'do the next task', 'next item from the table', 'continue the dungeon 1 plan', or 'pick up the next blocking task'. Drives one plan task end to end. Selects it, executes it, decides whether the code lands, opens a PR and merges when green, then checks the item off either way.
 ---
 
 # Triforce Plan Task Skill

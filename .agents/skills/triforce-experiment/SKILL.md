@@ -1,6 +1,6 @@
 ---
 name: triforce-experiment
-description: Use when running autonomous Triforce training experiments through OMP: choose experiment scope, launch train.py, handle milestone wake reports, decide continue/stop-edit-restart/finish, compare to baselines, and write final summaries.
+description: Use when running autonomous Triforce training experiments through OMP. Covers choosing experiment scope, launching train.py, handling milestone wake reports, deciding continue/stop-edit-restart/finish, comparing to baselines, and writing final summaries.
 ---
 
 # Triforce Experiment Skill
