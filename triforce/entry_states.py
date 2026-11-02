@@ -1,23 +1,34 @@
-"""Pre-entry start states: generate them along the milestone route, and audit any start state.
+"""Pre-entry start states: generate them along the milestone route, convert old ones, and audit any start state.
 
-    python -m triforce.entry_states build [--chains 2] [--iterations 3000] [--patience 200] [--out DIR]
+    python -m triforce.entry_states build [--chains 0,1] [--iterations 3000] [--patience 200] [--out DIR]
+                                          [--start-step N --source STATE]
+    python -m triforce.entry_states convert STATE_GLOB ...
     python -m triforce.entry_states audit [--specialist NAME ...] [--states GLOB ...] [--loads 9]
 
 A start state saved after the game created the room's monsters always replays the same spawn layout, and if Link
-had already been in the room it may spawn fewer monsters, or none (``room_entry``).  ``build`` plays the route
-from the game's ``start`` state, one room at a time: Go-Explore (``explore.Explorer``) finds a way through the room
-to the route's next room through an objective-correct exit (so it takes the sword, keys, boomerang and triforce the
-objective asks for).  The replay of that path keeps the last frame before the next room's entry, with Link's
-hearts refilled.  That file is the next step's start state, so every state carries the progress (hearts,
-keys, items, triforce pieces) the route really has at that point.  Each chain is seeded differently.  Files go to
-``<integration dir>/entry/<level>_<room><entry>_<chain>.state``: entry is the route side n/s/e/w, ``c`` for coming
-out of a cave or dungeon stairs, ``cave`` for a cave interior.  The route's alternate rooms are generated from the
-step they branch off.  ``manifest.json`` records the route step, specialist and exploration cost of every file.
+had already been in the room it may spawn fewer monsters, or none (``room_entry``).
+
+``build`` plays the route from the game's ``start`` state (or from ``--source``, the entry state of route step
+``--start-step``), one room at a time: Go-Explore (``explore.Explorer``) finds a way through the room to the
+route's next room through an objective-correct exit, so it takes the sword, keys, boomerang, heart container and
+triforce the objective asks for.  The replay of that path keeps the last frame before the next room's entry, with
+Link's hearts refilled and the room's kill history cleared.  That file is the next step's start state, so every
+state carries the progress (max hearts, keys, items, triforce pieces) the route really has at that point.  Each
+chain is seeded differently.  Files are ``<level>_<room><entry>_<chain>.state`` in the integration dir: entry is
+the route side n/s/e/w, ``c`` for coming out of a cave or dungeon stairs, ``cave`` for a cave interior.  The route's
+alternate rooms are generated from the step they branch off.  ``entry_states.json`` records the route step,
+specialist and exploration cost of every file.
+
+``convert`` turns an old after-entry savestate taken at a room edge into a pre-entry one: Link walks out through
+the door he entered by and straight back in.  Max hearts become 3 + triforce pieces, hearts are full, and the room
+is fresh.  States that can't be converted are deleted: stairs/cave entries, locked or shutter doors that won't
+reopen, duplicates.
 
 ``audit`` loads each start state several times the way training does (random RNG and spawn cycle, fresh room).
 It reports the room each state really loads into, whether it was saved before entry, the monsters spawned versus
 the room's full count (``game.yaml``, Zoras excluded: they are not part of the room's monster list), the number
-of distinct spawn layouts, and Link's hearts.
+of distinct spawn layouts at the first controllable frame, and Link's hearts.  Edge-spawn overworld rooms bring
+their monsters in later from the screen edges (RNG-driven), so they show one layout here but still vary.
 """
 
 import argparse
@@ -42,7 +53,7 @@ from .specialist import RamRandomization, SpecialistConfig, list_specialists, lo
 from .start_states import state_label, write_savestate
 from .zelda_enums import Direction, MapLocation
 
-ENTRY_DIR = os.path.join(GAME_DIR, 'entry')
+MANIFEST = 'entry_states.json'
 GAME_YAML = os.path.join(os.path.dirname(__file__), 'game.yaml')
 NOT_ROOM_MONSTERS = ('Zora',)        # spawned by water rooms, not by the room's monster list
 
@@ -81,14 +92,15 @@ def route_steps(route: str = 'milestone1') -> List[RouteStep]:
 
 
 def alternate_steps(steps: List[RouteStep]) -> List[tuple]:
-    """(index of the step it branches from, RouteStep) for each alternate room: the step before the replaced room."""
+    """(index of the step it branches from, RouteStep) for each alternate room: the step before the replaced room.
+    The alternate's own index is the replaced step's (same place on the route)."""
     with open(ROUTES_YAML, encoding='utf-8') as file:
         alternates = yaml.safe_load(file).get('alternates', [])
     result = []
     for alt in alternates:
         replaced = alt['replaces'][0]
         index = next(s.index for s in steps if (s.level, s.room) == (replaced['level'], int(replaced['room'], 16)))
-        result.append((index - 1, _step(-1, alt['with'][0])))
+        result.append((index - 1, _step(index, alt['with'][0])))
     return result
 
 
@@ -149,15 +161,16 @@ def write_entry_state(session: GameSession, pre_entry: bytes, path: str, expecte
 
 
 def build_chain(chain: int, out: str, iterations: int, patience: int, log: Callable = print,
-                session: Optional[GameSession] = None) -> List[dict]:
-    """Plays the route from 'start', writing the entry state of every later step (and of alternates)."""
+                session: Optional[GameSession] = None, start_step: int = 0, source: str = 'start') -> List[dict]:
+    """Plays the route from ``source`` (the entry state of route step ``start_step``; the game's 'start' by
+    default), writing the entry state of every later step (and of alternates)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     session = session or GameSession()
     steps = route_steps()
     alternates = alternate_steps(steps)
     os.makedirs(out, exist_ok=True)
-    manifest, source = [], 'start'
-    for step, target in zip(steps, steps[1:]):
+    manifest = []
+    for step, target in zip(steps[start_step:], steps[start_step + 1:]):
         jobs = [(target, True)] + [(alt, False) for origin, alt in alternates if origin == step.index]
         next_source = None
         for goal, on_route in jobs:
@@ -183,18 +196,28 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
 
 
 def _build_worker(args):
-    chain, out, iterations, patience = args
-    return build_chain(chain, out, iterations, patience, log=lambda text: print(text, flush=True))
+    chain, out, iterations, patience, start_step, source = args
+    return build_chain(chain, out, iterations, patience, log=lambda text: print(text, flush=True),
+                       start_step=start_step, source=source)
 
 
-def build(chains: int, out: str, iterations: int, patience: int) -> List[dict]:
-    """Runs ``chains`` route chains in parallel processes and writes ``manifest.json``."""
-    jobs = [(chain, out, iterations, patience) for chain in range(chains)]
-    with mp.get_context('spawn').Pool(chains) as pool:
+def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_step: int = 0,
+          source: str = 'start') -> List[dict]:
+    """Runs one route chain per id in parallel processes and merges them into ``entry_states.json`` (a rebuilt
+    file replaces its old entry)."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    jobs = [(chain, out, iterations, patience, start_step, source) for chain in chain_ids]
+    with mp.get_context('spawn').Pool(len(jobs)) as pool:
         manifest = [entry for part in pool.map(_build_worker, jobs) for entry in part]
-    with open(os.path.join(out, 'manifest.json'), 'w', encoding='utf-8') as file:
-        json.dump(sorted(manifest, key=lambda e: (e['chain'], e['route_step'] if e['route_step'] >= 0 else 999)),
-                  file, indent=1)
+    path = os.path.join(out, MANIFEST)
+    old = []
+    if os.path.exists(path):
+        with open(path, encoding='utf-8') as file:
+            old = json.load(file)
+    new_files = {entry['file'] for entry in manifest}
+    merged = [entry for entry in old if entry['file'] not in new_files] + manifest
+    with open(path, 'w', encoding='utf-8') as file:
+        json.dump(sorted(merged, key=lambda e: (e['chain'], e['route_step'], e['file'])), file, indent=1)
     return manifest
 
 
@@ -354,10 +377,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog='python -m triforce.entry_states', description=__doc__.split('\n\n')[0])
     sub = parser.add_subparsers(dest='command', required=True)
     build_parser = sub.add_parser('build', help="generate pre-entry states along the route")
-    build_parser.add_argument('--chains', type=int, default=2, help="independent route chains (one process each)")
+    build_parser.add_argument('--chains', default='0,1', help="chain ids, comma-separated (one process each)")
     build_parser.add_argument('--iterations', type=int, default=3000, help="Go-Explore iterations per attempt")
     build_parser.add_argument('--patience', type=int, default=200)
-    build_parser.add_argument('--out', default=ENTRY_DIR)
+    build_parser.add_argument('--out', default=GAME_DIR)
+    build_parser.add_argument('--start-step', type=int, default=0, help="route step index to start from")
+    build_parser.add_argument('--source', default='start', help="entry state of --start-step (default: 'start')")
     audit_parser = sub.add_parser('audit', help="check start states (default: every specialist's)")
     audit_parser.add_argument('--specialist', action='append', default=None)
     audit_parser.add_argument('--states', action='append', default=None, help="savestate glob(s)")
@@ -368,7 +393,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     if args.command == 'build':
-        manifest = build(args.chains, args.out, args.iterations, args.patience)
+        manifest = build([int(c) for c in args.chains.split(',')], args.out, args.iterations, args.patience,
+                         args.start_step, args.source)
         print(f"{len(manifest)} entry states in {args.out}")
         return 0
 

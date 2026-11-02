@@ -204,6 +204,7 @@ class Runner:
                 result.rooms.append(record)
                 if current is None or current.name != name:
                     current = self._load(name)
+                    session.set_disabled_kinds(current.config.items.disabled_kinds())
                     obs = current.builder.reset(state, session.mask)
                 elif change is not None:
                     obs = current.builder.build(change, session.mask)

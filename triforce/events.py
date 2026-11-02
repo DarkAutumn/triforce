@@ -4,7 +4,7 @@ Layout, one folder per training invocation under ``logs/`` (repo root; ``$TRIFOR
 override; gitignored)::
 
     logs/<yymmdd>_<NNN>_<what>/
-        training.json        plan + status: every specialist run in order, its event file and its status
+        training.json        plan + status: every specialist run in order (pending / running / evaluating / final)
         <specialist>.jsonl   append-only event stream of one specialist's run
         <specialist>.log     its console output
         round.jsonl          run-level events (scripts/train_round.py only)
@@ -26,14 +26,16 @@ Events written by ``triforce.train`` (one specialist):
 - ``train_end``: status (completed | early_stop | interrupted | error), iterations, steps, wall_seconds, sps,
   checkpoint.
 
-Added by ``scripts/train_round.py``: ``eval`` (specialist evaluation summary) and ``error`` (non-zero exit,
-failed evaluation).  The last line of every stream is ``end`` (status, plus a summary); nothing follows it.  A
-stream without ``end`` belongs to a run that is still going or was killed.
+Added by ``scripts/train_round.py``: ``eval_start`` and ``eval`` (specialist evaluation; it runs on a background
+thread while the next specialist trains, so these can arrive after the next stream's ``start``) and ``error``
+(non-zero exit, failed evaluation).  The last line of every stream is ``end`` (status, plus a summary); nothing
+follows it.  A stream without ``end`` belongs to a run that is still going or was killed.
 """
 
 import json
 import os
 import socket
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -94,16 +96,18 @@ class EventLog:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.context = context
         self.seq = 0
+        self._lock = threading.Lock()
         if self.path.exists():               # continue a stream another process started
             with open(self.path, encoding='utf-8') as file:
                 self.seq = sum(1 for line in file if line.strip())
 
     def emit(self, event: str, **fields) -> dict:
-        """Appends one event and flushes it."""
-        record = {'seq': self.seq, **_now(), 'event': event, **self.context, **fields}
-        with open(self.path, 'a', encoding='utf-8') as file:
-            file.write(json.dumps(record, default=str) + '\n')
-        self.seq += 1
+        """Appends one event and flushes it (thread-safe)."""
+        with self._lock:
+            record = {'seq': self.seq, **_now(), 'event': event, **self.context, **fields}
+            with open(self.path, 'a', encoding='utf-8') as file:
+                file.write(json.dumps(record, default=str) + '\n')
+            self.seq += 1
         return record
 
 
@@ -118,24 +122,28 @@ class TrainingPlan:
                      'host': socket.gethostname(), 'pid': os.getpid(), **extra,
                      'runs': [{'index': i, 'status': 'pending', 'started': None, 'finished': None, **run}
                               for i, run in enumerate(runs)]}
+        self._lock = threading.RLock()
         self.save()
 
     def save(self):
         """Rewrites training.json atomically."""
-        self.data['updated'] = _now()['time']
-        _write_json(self.path, self.data)
+        with self._lock:
+            self.data['updated'] = _now()['time']
+            _write_json(self.path, self.data)
 
     def update_run(self, index: int, **fields):
-        """Sets fields on one run; status 'running' stamps started, a final status stamps finished."""
-        run = self.data['runs'][index]
-        if fields.get('status') == 'running' and run['started'] is None:
-            run['started'] = _now()['time']
-        if fields.get('status') not in (None, 'pending', 'running'):
-            run['finished'] = _now()['time']
-        run.update(fields)
-        self.save()
+        """Sets fields on one run; status 'running' stamps started, a final status stamps finished (thread-safe)."""
+        with self._lock:
+            run = self.data['runs'][index]
+            if fields.get('status') == 'running' and run['started'] is None:
+                run['started'] = _now()['time']
+            if fields.get('status') not in (None, 'pending', 'running', 'evaluating'):
+                run['finished'] = _now()['time']
+            run.update(fields)
+            self.save()
 
     def finish(self, status: str, **fields):
         """Marks the whole plan finished (completed | failed | interrupted)."""
-        self.data.update(status=status, finished=_now()['time'], **fields)
-        self.save()
+        with self._lock:
+            self.data.update(status=status, finished=_now()['time'], **fields)
+            self.save()

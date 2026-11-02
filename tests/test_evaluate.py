@@ -15,13 +15,13 @@ def test_evaluate_specialist_covers_every_seed_state_reproducibly(session, tmp_p
 
     result = evaluate_specialist(config, ckpt, episodes_per_state=2, session=session, seed=5)
     records = result['records']
-    assert result['episodes'] == 4 == len(records)
-    assert set(result['by_state']) == {'1_35e', '1_35s'}
+    assert result['episodes'] == 6 == len(records)
+    assert set(result['by_state']) == {'1_35s_0', '1_35s_1', '1_35s_2'}
     assert all(stats['episodes'] == 2 for stats in result['by_state'].values())
-    assert sorted(r['seed'] for r in records) == [5, 6, 7, 8]
+    assert sorted(r['seed'] for r in records) == list(range(5, 11))
     assert all(r['outcome'] in {'success', 'hard-failure', 'soft-failure'} for r in records)
     assert all(0 < r['steps'] <= 40 for r in records)
-    assert result['success_rate'] == sum(r['success'] for r in records) / 4
+    assert result['success_rate'] == sum(r['success'] for r in records) / 6
     assert set(result['by_room']) == {'1:0x35'}
 
     again = evaluate_specialist(config, ckpt, episodes_per_state=2, session=session, seed=5)

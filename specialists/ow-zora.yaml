@@ -1,11 +1,12 @@
 name: ow-zora
 rooms: ['(0, 0x48)', '(0, 0x38)', '(0, 0x28)', '(0, 0x2d)']
-start_states: ['0_48*', '0_38*', '0_28*', '0_2d*']
+start_states: ['0_48*_[0-9]', '0_38*_[0-9]', '0_28*_[0-9]', '0_2d*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {hp: [0.5, max], full_hp: 0.5}
+items: {bombs: off}
 max_steps: 2000
 warm_start: null
 notes: >-

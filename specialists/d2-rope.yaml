@@ -1,12 +1,13 @@
 name: d2-rope
 rooms: ['(2, 0x7d)', '(2, 0x6d)', '(2, 0x6e)', '(2, 0x4e)', '(2, 0x3e)', '(2, 0x2e)', '(2, 0x7e)']
-start_states: ['2_7d*', '2_3cn', '2_6d*', '2_6e*', '2_4e*', '2_3e*', '2_2e*', '2_7e*']
+start_states: ['2_7d*_[0-9]', '2_6d*_[0-9]', '2_6e*_[0-9]', '2_4e*_[0-9]', '2_3e*_[0-9]', '2_2e*_[0-9]', '2_7e*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {hp: [0.5, max], full_hp: 0.5}
+items: {bombs: off}
 max_steps: 3000
 warm_start: null
 notes: >-
-  2_3cn is mid-entry (loads into 0x7d). Most rooms still need seed states (docs/specialists.md).
+  Route-generated pre-entry states (triforce/entry_states.py) cover 0x7d, 0x6d, 0x6e, 0x4e, 0x3e, 0x2e and 0x7e.

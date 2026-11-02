@@ -25,6 +25,13 @@ class GameSession:
         self.mask: Optional[ActionMask] = None
         self.total_frames = 0
         self.steps = 0
+        self.disabled_kinds: frozenset = frozenset()    # action kinds the current specialist may not use
+
+    def set_disabled_kinds(self, kinds) -> None:
+        """Action kinds removed from every mask (a specialist's ``items`` config); recomputes the current mask."""
+        self.disabled_kinds = frozenset(kinds)
+        if self.state is not None:
+            self.mask = self._compute_mask(self.state)
 
     def close(self):
         """Releases the emulator."""
@@ -106,5 +113,11 @@ class GameSession:
         info = self.emu.info
         info['just_exited_cave'] = self.executor.just_exited_cave
         state = ZeldaGame(self.emu, info, self.emu.frame)
-        self.mask = compute_action_mask(state)
+        self.mask = self._compute_mask(state)
         return state
+
+    def _compute_mask(self, state: ZeldaGame) -> ActionMask:
+        mask = compute_action_mask(state)
+        for kind in self.disabled_kinds:
+            mask.disallow_kind(kind)
+        return mask

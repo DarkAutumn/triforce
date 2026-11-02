@@ -1,12 +1,13 @@
 name: d1-melee
 rooms: ['(1, 0x73)', '(1, 0x72)', '(1, 0x74)', '(1, 0x63)', '(1, 0x53)', '(1, 0x52)', '(1, 0x42)', '(1, 0x43)', '(1, 0x36)']
-start_states: ['1_73*', '1_37n', '1_72*', '1_74*', '1_63*', '1_53*', '1_83*', '1_52*', '1_42*', '1_43*', '1_36*']
+start_states: ['1_73*_[0-9]', '1_72*_[0-9]', '1_74*_[0-9]', '1_63*_[0-9]', '1_53*_[0-9]', '1_52*_[0-9]', '1_42*_[0-9]', '1_43*_[0-9]', '1_36*_[0-9]']
 success: [exit-correct, triforce-collected]
 reward_profile: default
 reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {hp: [0.5, max], full_hp: 0.5}
+items: {bombs: off}
 max_steps: 3000
 warm_start: null
 notes: >-
-  1_37n is mid-entry (loads into 0x73); 1_83e/1_83s are really room 0x53. 0x36 ends on triforce pickup.
+  0x36 ends on triforce pickup. Start states are the route-generated pre-entry states (triforce/entry_states.py).

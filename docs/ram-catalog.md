@@ -221,7 +221,7 @@ Notation: `r` = RoomId (`$EB`), `S(A)` = SRAM byte `get_ram()[A-0x5800]`, `flags
 | 5 | **visited** (dungeon map) | — (only set when `CurLevel≠0`) | `Z_07:MarkRoomVisited` (`ORA #$20`), `Z_05:Submenu_WriteScanningMapRoomMark` |
 | 6–7 | **kill count**: 0–2 partial kills (capped), **3 = all killed** | bit 7 = **secret found** (cave bombed/burned/stairs revealed) | UW `Z_05:SaveKillCountUW` (`AND #$3F`, `ROR`×3, `#$C0`); OW `Z_04:RevealAndFlagSecretTileObj` (`ORA #$80`), `Z_05:CheckShortcut`, `LayoutRoomOrCaveOW` (`AND #$80`) |
 
-Observed (ss `1_35e`, level-1 block): `$74:B0` (kills=2-of-cap, visited, key taken), `$53:F0` (all dead, visited, taken), `$35:F4` (boss dead, visited, heart taken, S door opened), `$52:68` (1 kill, visited, N opened), `$43:21` (visited, E opened). OW (ss `0_67w`): `$67:07` (OW kill count 7 = all), `$77:10` (sword taken).
+Observed (old savestate `1_35e`, since deleted, level-1 block): `$74:B0` (kills=2-of-cap, visited, key taken), `$53:F0` (all dead, visited, taken), `$35:F4` (boss dead, visited, heart taken, S door opened), `$52:68` (1 kill, visited, N opened), `$43:21` (visited, E opened). OW (old `0_67w`): `$67:07` (OW kill count 7 = all), `$77:10` (sword taken). The route-generated chain (`1_36w_2` walked back into 0x35, `tests/test_room_state.py`) reads `$53:F0`, `$35:F4`, `$74:70`, `$52:A8`, `$43:71`; the differences are kills and pickups taken in a different order.
 
 **Opening a key/bomb door sets the flag on both sides immediately** (`Z_05` L5188–5205: `SetDoorFlag` then `ORA LevelMasks, X^1` into room `r + DoorNextRoomIdOffsets[X]`). Shutters are never persisted (L5184 skips type 7). Bombable doors, once flagged, render as a hole (door face 9, `Z_05:LayOutDoors`).
 

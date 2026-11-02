@@ -1,11 +1,12 @@
 name: d1-wallmaster
 rooms: ['(1, 0x44)', '(1, 0x45)']
-start_states: ['1_44*', '1_45*']
+start_states: ['1_44*_[0-9]', '1_45*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {hp: [0.5, max], full_hp: 0.5}
+items: {bombs: off}
 max_steps: 2000
 warm_start: null
 notes: >-

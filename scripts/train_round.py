@@ -29,7 +29,9 @@ import os
 import shlex
 import subprocess
 import sys
+import threading
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import yaml
@@ -66,7 +68,9 @@ def parse_args(argv=None):
     parser.add_argument('--round', required=True, help="run id used for every specialist")
     parser.add_argument('--steps', type=int, default=2_000_000, help="env-step budget per specialist")
     parser.add_argument('--steps-per-update', type=int, default=4096)
-    parser.add_argument('--parallel', type=int, default=16, help="training env workers and eval processes")
+    parser.add_argument('--parallel', type=int, default=16, help="training env workers")
+    parser.add_argument('--eval-parallel', type=int, default=4,
+                        help="processes for each specialist's evaluation, which runs while the next one trains")
     parser.add_argument('--device', default='cuda', choices=['cpu', 'cuda'])
     parser.add_argument('--models-dir', default='models')
     parser.add_argument('--specialists', default=None, help="comma-separated names (default: all trainable)")
@@ -164,14 +168,15 @@ def _tail(path: Path, lines: int = 20) -> str:
         return ''.join(file.readlines()[-lines:])
 
 
-def run_specialist(name: str, args, models: Path, log_dir: Path) -> dict:
-    """Train, promote, evaluate one specialist; returns its summary record.  Appends driver events (skipped,
-    error, eval_start, eval, end) to log_dir/<name>.jsonl after the training subprocess is done with it."""
+def train_specialist(name: str, args, models: Path, log_dir: Path) -> dict:
+    """Trains (or skips) one specialist; returns its summary record.  record['status'] is 'ok' when there is a
+    checkpoint to evaluate.  Appends driver events (skipped, error, end on failure) to log_dir/<name>.jsonl after
+    the training subprocess is done with it."""
     config = load_specialist(name)
     run_dir = registry.run_dir(name, args.round, models)
     ckpt = registry.checkpoint_path(name, args.round, models)
     record = {'status': 'ok', 'rooms': len(config.rooms), 'seed_states': len(config.resolve_start_states()),
-              'run_dir': str(run_dir)}
+              'run_dir': str(run_dir), 'checkpoint': str(ckpt)}
 
     skipped = args.skip_existing and ckpt.is_file()
     code = None
@@ -194,13 +199,22 @@ def run_specialist(name: str, args, models: Path, log_dir: Path) -> dict:
         record['error'] = f"no checkpoint at {ckpt}"
         events.emit('end', status=record['status'], message=record['error'])
         return record
-
     if not args.no_promote:
         registry.promote(name, args.round, models)
-    events.emit('eval_start', checkpoint=str(ckpt), episodes_per_state=args.episodes_per_state,
-                episodes=args.episodes_per_state * record['seed_states'])
+    return record
+
+
+def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
+    """Evaluates a trained specialist (``triforce.evaluate``, ``--eval-parallel`` processes), writes eval.json and
+    the stream's eval/end events, and fills ``record``.  Runs on a background thread while the next specialist
+    trains."""
+    events = EventLog(log_dir / f'{name}.jsonl', specialist=name, run_id=args.round)
+    run_dir = Path(record['run_dir'])
+    events.emit('eval_start', checkpoint=record['checkpoint'], episodes_per_state=args.episodes_per_state,
+                episodes=args.episodes_per_state * record['seed_states'], parallel=args.eval_parallel)
     try:
-        result = evaluate_specialist(name, ckpt, args.episodes_per_state, parallel=args.parallel, seed=0)
+        result = evaluate_specialist(name, record['checkpoint'], args.episodes_per_state,
+                                     parallel=args.eval_parallel, seed=0)
     except Exception as error:  # pylint: disable=broad-exception-caught
         record['status'] = 'eval-failed' if record['status'] == 'ok' else record['status']
         record['error'] = f"{type(error).__name__}: {error}"
@@ -304,20 +318,37 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
     summary = {'round': args.round, 'steps_budget': args.steps, 'log_dir': str(log_dir), 'specialists': {},
                'chain': None}
 
+    summary_lock = threading.Lock()
+
     def write_summary():
-        with open(summary_path, 'w', encoding='utf-8') as file:
+        with summary_lock, open(summary_path, 'w', encoding='utf-8') as file:
             json.dump(summary, file, indent=2)
 
-    for index, name in enumerate(names):
-        current['index'] = index
-        plan.update_run(index, status='running')
-        events.emit('specialist_start', index=index, specialist=name)
-        record = run_specialist(name, args, models, log_dir)
-        summary['specialists'][name] = record
+    def finish(index: int, name: str, record: dict):
         plan.update_run(index, **end_fields(record))
         events.emit('specialist_end', index=index, specialist=name, **end_fields(record))
-        current['index'] = None
         write_summary()
+
+    def evaluate_and_finish(index: int, name: str, record: dict):
+        finish(index, name, evaluate_record(name, record, args, log_dir))
+
+    # Each evaluation runs on a background thread (its own process pool) while the next specialist trains.
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix='eval') as evaluations:
+        pending = []
+        for index, name in enumerate(names):
+            current['index'] = index
+            plan.update_run(index, status='running')
+            events.emit('specialist_start', index=index, specialist=name)
+            record = train_specialist(name, args, models, log_dir)
+            summary['specialists'][name] = record
+            current['index'] = None
+            if record['status'] == 'ok':
+                plan.update_run(index, **(end_fields(record) | {'status': 'evaluating'}))
+                pending.append(evaluations.submit(evaluate_and_finish, index, name, record))
+            else:
+                finish(index, name, record)
+        for future in pending:
+            future.result()
 
     chain = None
     if args.chain_runs > 0:

@@ -9,9 +9,9 @@ from triforce.end_conditions import (DEFAULT_FAILURES, UnclassifiedEndingError, 
 from triforce.rewards import (HARD_FAILURE, REWARD_MAXIMUM, SOFT_FAILURE, SUCCESS, Penalty, Reward, StepRewards,
                               apply_terminal_rewards, success_reward_value)
 from triforce.specialist import RamRandomization, RewardConfig
-from triforce.zelda_enums import MapLocation
+from triforce.zelda_enums import ActionKind, MapLocation
 
-from .test_env import greedy_step, make_env
+from .test_env import chase_action, greedy_step, make_env
 
 
 # --- StepRewards ---
@@ -132,7 +132,7 @@ def test_pbrs_switch_changes_only_movement_shaping(session):
     script = ['MOVE N 16', 'MOVE N 16', 'MOVE W 16', 'MOVE S 8', 'MOVE W 16', 'WAIT 8']
 
     def run(pbrs):
-        env = make_env(session, 'd1-melee', '1_73n', reward=RewardConfig(pbrs=pbrs))
+        env = make_env(session, 'd1-melee', '1_73s_0', reward=RewardConfig(pbrs=pbrs))
         env.reset(seed=5)
         return [env.step(Action.parse(a).to_indices())[4]['rewards'] for a in script]
 
@@ -145,7 +145,7 @@ def test_pbrs_switch_changes_only_movement_shaping(session):
 
 
 def test_wait_gets_no_movement_shaping(session):
-    env = make_env(session, 'd1-melee', '1_73n')
+    env = make_env(session, 'd1-melee', '1_73s_0')
     env.reset(seed=0)
     env.step(Action.parse('MOVE N 8').to_indices())          # seeds the PBRS baseline
     for _ in range(3):
@@ -156,7 +156,7 @@ def test_wait_gets_no_movement_shaping(session):
 
 def test_pbrs_rewards_walking_toward_objective(session):
     """From the 0x73 S entry (no keys) the objective is W or E; walking toward an exit earns positive PBRS."""
-    env = make_env(session, 'd1-melee', '1_73n')
+    env = make_env(session, 'd1-melee', '1_73s_0')
     env.reset(seed=0)
     total = sum(info['rewards'].get('reward-pbrs-movement', 0.0) + info['rewards'].get('penalty-pbrs-movement', 0.0)
                 for info in _walk(env, 8))
@@ -164,22 +164,15 @@ def test_pbrs_rewards_walking_toward_objective(session):
 
 
 def test_sword_miss_is_penalized(session):
-    env = make_env(session, 'd1-wallmaster', '1_44w')
+    env = make_env(session, 'd1-wallmaster', '1_44w', ram_randomization=RamRandomization(hp=(0.5, 0.5)))  # sword, not beams
     env.reset(seed=0)
-    env.step(Action.parse('MOVE E 16').to_indices())
+    for _ in range(10):         # off the door tile and the Goriyas out of their spawn clouds
+        env.step(Action.parse('MOVE E 16').to_indices())
+        if session.state.link.position.x >= 32 and session.state.active_enemies:
+            break
+    assert session.mask.kind[ActionKind.SWORD]
     info = env.step(Action.parse('SWORD S').to_indices())[4]   # goriyas are E of Link
     assert info['rewards'].get('penalty-attack-miss') == -0.01 or 'reward-hit' in info['rewards']
-
-
-def chase_action(state):
-    """MOVE 8 toward the nearest active enemy along the larger axis (to get hit)."""
-    enemy = min(state.active_enemies, key=lambda e: e.distance, default=None)
-    if enemy is None:
-        return 'WAIT 8'
-    dx, dy = enemy.position.x - state.link.position.x, enemy.position.y - state.link.position.y
-    if abs(dx) > abs(dy):
-        return 'MOVE E 8' if dx > 0 else 'MOVE W 8'
-    return 'MOVE S 8' if dy > 0 else 'MOVE N 8'
 
 
 def test_damage_penalty_and_reward_halving(session, monkeypatch):

@@ -71,8 +71,27 @@ def run_until_done(env, policy, max_steps=400):
     raise AssertionError(f"episode did not end in {max_steps} steps (room {env.session.state.full_location})")
 
 
+def chase_action(state):
+    """MOVE 8 toward the nearest active enemy along the larger axis (to get hit)."""
+    enemy = min(state.active_enemies, key=lambda e: e.distance, default=None)
+    if enemy is None:
+        return 'WAIT 8'
+    dx, dy = enemy.position.x - state.link.position.x, enemy.position.y - state.link.position.y
+    if abs(dx) > abs(dy):
+        return 'MOVE E 8' if dx > 0 else 'MOVE W 8'
+    return 'MOVE S 8' if dy > 0 else 'MOVE N 8'
+
+
+def chase_step(env):
+    """One env step toward the nearest enemy (WAIT when that move is masked)."""
+    action = Action.parse(chase_action(env.session.state))
+    if not env.session.mask.is_allowed(action):
+        action = Action.parse('WAIT 8')
+    return env.step(action.to_indices())
+
+
 def test_spaces_and_reset_contract(session):
-    env = make_env(session, 'd1-melee', '1_73n')
+    env = make_env(session, 'd1-melee', '1_73s_0')
     obs, info = env.reset(seed=1)
     assert env.observation_space.contains(obs)
     assert env.action_space.nvec.tolist() == [7, 8, 4]
@@ -83,7 +102,7 @@ def test_spaces_and_reset_contract(session):
 def test_random_legal_episode_ends_classified(session):
     """d1-melee from a start state with random legal actions: every episode ends with a classified outcome,
     every step returns valid observations and the info contract."""
-    env = make_env(session, 'd1-melee', '1_73n', max_steps=150)
+    env = make_env(session, 'd1-melee', '1_73s_0', max_steps=150)
     rng = random.Random(3)
     obs, _ = env.reset(seed=3)
     outcomes = []
@@ -135,8 +154,8 @@ def test_death_is_hard_failure(session):
     env = make_env(session, 'd1-wallmaster', '1_44w', ram_randomization=RamRandomization(hp=(0.01, 0.01)))   # rounds up to half a heart
     obs, _ = env.reset(seed=2)
     assert session.state.link.health == 0.5
-    rng = random.Random(2)
-    reward, info = run_until_done(env, lambda e: e.step(random_legal_action(e.session.mask.to_flat(), rng)))[-1]
+    env.step(Action.parse('MOVE E 16').to_indices())
+    reward, info = run_until_done(env, chase_step)[-1]
     assert (info['ending'], info['outcome']) == ('death', 'hard-failure')
     assert reward == pytest.approx(-20.0 + sum(v for k, v in info['rewards'].items()
                                                if k != 'penalty-terminal-failure'), abs=1.0)
@@ -152,7 +171,7 @@ def test_unlisted_ending_raises(session):
 
 
 def test_max_steps_truncates_without_terminal_reward(session):
-    env = make_env(session, 'd1-melee', '1_73n', max_steps=3)
+    env = make_env(session, 'd1-melee', '1_73s_0', max_steps=3)
     env.reset(seed=0)
     for _ in range(3):
         _, _, terminated, truncated, info = env.step(Action.parse('WAIT 8').to_indices())
@@ -164,18 +183,19 @@ def test_max_steps_truncates_without_terminal_reward(session):
 
 
 def test_masked_action_raises(session):
-    env = make_env(session, 'd1-melee', '1_73n')
+    env = make_env(session, 'd1-melee', '1_73s_0')
     env.reset(seed=0)
+    env.step(Action.parse('MOVE N 16').to_indices())        # off the S door tile, where weapons are masked anyway
     assert not session.mask.kind[ActionKind.SWORD]          # empty room: no weapons
     with pytest.raises(InvalidActionError):
         env.step(Action(ActionKind.SWORD, Direction.N).to_indices())
 
 
 def test_close_keeps_borrowed_session(session):
-    env = make_env(session, 'd1-melee', '1_73n')
+    env = make_env(session, 'd1-melee', '1_73s_0')
     env.reset(seed=0)
     env.close()
-    session.load('1_73n')
+    session.load('1_73s_0')
     assert session.state.location == 0x73
 
 
@@ -189,7 +209,7 @@ def test_start_state_outside_rooms_is_rejected(session):
 def test_sword_cave_objective_and_exit(session):
     """In the sword cave (no sword) the objective is the treasure; after taking it, S out of the cave is a correct
     exit that stays inside ow-start, and N from the start screen ends the episode with success."""
-    env = make_env(session, 'ow-start', '0_77cave')
+    env = make_env(session, 'ow-start', '0_77cave_0')
     env.reset(seed=0)
     objectives = session.state.objectives
     assert objectives.kind == ObjectiveKind.TREASURE and not objectives.next_rooms
@@ -218,3 +238,17 @@ def test_triforce_pickup_is_success_for_d1_melee(session):
     assert session.state.objectives.kind == ObjectiveKind.TREASURE
     _, info = run_until_done(env, greedy_step, max_steps=100)[-1]
     assert (info['ending'], info['outcome']) == ('triforce-collected', 'success')
+
+
+@pytest.mark.parametrize('bombs_on', [True, False])
+def test_items_config_masks_bombs_even_when_link_has_them(session, bombs_on):
+    env = make_env(session, 'd1-wallmaster', '1_44w', ram_randomization=RamRandomization(bombs=(4, 4)),
+                   items=load_specialist('d1-wallmaster').items.model_copy(update={'bombs': bombs_on}))
+    env.reset(seed=0)
+    for _ in range(10):         # off the door tile (items can't be used there) and the Goriyas out of their clouds
+        obs = env.step(Action.parse('MOVE E 16').to_indices())[0]
+        if session.state.link.position.x >= 32 and session.state.active_enemies:
+            break
+    assert session.state.link.bombs == 4 and session.state.active_enemies
+    assert bool(session.mask.kind[ActionKind.BOMB]) == bombs_on
+    assert bool(ActionMask.from_flat(obs['action_mask']).kind[ActionKind.BOMB]) == bombs_on

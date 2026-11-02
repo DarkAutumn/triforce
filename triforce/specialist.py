@@ -11,6 +11,7 @@ reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {hp: [0.5, max], bombs: [0, 8], keys: [0, 1]}
 fresh_rooms: true                         # pre-entry savestates: clear the room's kill history (full spawn)
+items: {bombs: off}                       # mask out items even when Link has them (bombs/boomerang/arrows)
 max_steps: 2000
 warm_start: null
 ```
@@ -27,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .emulator import GAME_DIR
 from .end_conditions import validate_success_kind
 from .rewards import OUTCOMES
-from .zelda_enums import MapLocation
+from .zelda_enums import ActionKind, MapLocation
 
 SPECIALISTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'specialists')
 HARVESTED_DIR = os.path.join(GAME_DIR, 'harvested')
@@ -64,6 +65,19 @@ class ObsConfig(BaseModel):
     """obs: block."""
     model_config = ConfigDict(extra='forbid')
     objective: bool = True
+
+
+class ItemsConfig(BaseModel):
+    """Which inventory items the specialist may use (off = masked out even when Link has the item)."""
+    model_config = ConfigDict(extra='forbid')
+    bombs: bool = True
+    boomerang: bool = True
+    arrows: bool = True
+
+    def disabled_kinds(self) -> frozenset:
+        """ActionKinds masked out for this specialist."""
+        pairs = ((self.bombs, ActionKind.BOMB), (self.boomerang, ActionKind.BOOMERANG), (self.arrows, ActionKind.ARROW))
+        return frozenset(kind for enabled, kind in pairs if not enabled)
 
 
 class RamRandomization(BaseModel):
@@ -117,6 +131,7 @@ class SpecialistConfig(BaseModel):
     obs: ObsConfig = Field(default_factory=ObsConfig)
     ram_randomization: RamRandomization = Field(default_factory=RamRandomization)
     fresh_rooms: bool = True                     # pre-entry start states spawn the room's full monster count
+    items: ItemsConfig = Field(default_factory=ItemsConfig)
     max_steps: int = 2000
     warm_start: Optional[str] = None
     harvested_states: Optional[str] = None       # directory; default <integration dir>/harvested/<name>

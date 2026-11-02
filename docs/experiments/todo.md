@@ -2,17 +2,31 @@
 
 Ideas and problems found but not acted on yet, with the round that found them.
 
-## Next up (after the savestate RNG / spawn / kill-history fix)
+## Next up
 
-- **d1-melee: cheap route fixes, then one-room episodes.**
+- **Round 3: re-baseline every specialist on the new start states.** Pre-entry states, random spawns, fresh rooms,
+  full/partial hp, route-true inventory and max hearts, bombs off (below).
+- **Round 4: d1-melee, cheap route fixes then one-room episodes.**
   - Make the curriculum a per-specialist config field: on for ow-zora and d1-wallmaster, off elsewhere.
-  - Promote ow-zora and d1-wallmaster from round 2.
+  - Promote ow-zora and d1-wallmaster (round 2 or round 3, whichever evaluates better).
   - Fix 0x43 → 0x33 (see Runner / objectives below).
-  - Then run round 3 with one-room episodes: every episode ends at its first room exit. Today a d1-melee episode
-    runs until Link leaves the 9-room family. Traced "0x73" episodes are 4–9 rooms, with the deaths in 0x74/0x63
-    (Stalfos), and 90% per room over 9 rooms is ~39%. Compare per room against the 78% no-curriculum run.
+  - One-room episodes: every episode ends at its first room exit. Today a d1-melee episode runs until Link leaves
+    the 9-room family. Traced "0x73" episodes are 4–9 rooms, with the deaths in 0x74/0x63 (Stalfos), and 90% per
+    room over 9 rooms is ~39%. Compare per room against round 3's d1-melee.
   - **Last resort only:** split Dungeon 1 into enemy-based specialists (Stalfos 0x53/0x63/0x74, Keese
     0x52/0x72, Gel 0x42/0x43). Do this only if one-room episodes and the other fixes fail.
+
+## Items
+
+- **Bombs are off for milestone 1 (`items: {bombs: off}`, round 3 on).** Bomb use paid more than it cost: −0.25 to
+  place, +0.5 per hit plus +0.25 hit reward. d2-goriya threw bombs on 22% of its actions in round 1, and no
+  canonical milestone-1 room needs bombs (`docs/route.md`).
+- **Bomb skill: with the Dodongo work, after the route reaches the Dungeon 2 boss room.**
+  - Grant bombs at reset (`ram_randomization: {bombs: [n, 8]}`).
+  - Add a bomb-into-Dodongo reward and a scarcity cost for bombs spent on other enemies.
+  - Then decide which specialists get bombs back (bomb walls in later dungeons).
+- **Boomerang stays on.** Route states carry it from 0x44 onward: d1-wallmaster, Aquamentus, the triforce room and
+  everything after Dungeon 1. It stuns Wallmasters, Goriyas and Keese. Watch `kind/BOOMERANG` in training metrics.
 
 ## Training methods (from "Training with Savestates and Branching", Nov 2, 2026)
 

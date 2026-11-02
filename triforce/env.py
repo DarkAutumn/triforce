@@ -96,6 +96,7 @@ class ZeldaEnv(gym.Env):
             if start is not None:
                 name, self._curriculum_tag = start
         name = name or self.pool.next()
+        self.session.set_disabled_kinds(self.config.items.disabled_kinds())
         state = self.session.load(name, fresh_room=self.config.fresh_rooms)
         if name not in self._verified:
             verify_start_room(name, state.full_location, self.config.rooms, self.config.name)
@@ -110,6 +111,7 @@ class ZeldaEnv(gym.Env):
         """Continues from a ``GameSession.snapshot()`` (exact emulator state, no RNG or RAM changes) as a new
         episode labelled ``name``; objectives, critic and end conditions restart as at reset.  For explore."""
         self._curriculum_tag = None
+        self.session.set_disabled_kinds(self.config.items.disabled_kinds())
         return self._begin_episode(self.session.restore(snapshot), name)
 
     def _begin_episode(self, state: ZeldaGame, name: str):

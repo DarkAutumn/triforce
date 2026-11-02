@@ -16,6 +16,8 @@ from triforce.observation import (ENTITY_FEATURES, ENTITY_VOCAB, HISTORY_FEATURE
 from triforce.tiles import NUM_TILE_CLASSES, TileClass
 from triforce.zelda_enums import MapLocation
 
+from .conftest import load_and_place
+
 R = {n: i for i, n in enumerate(ROOM_STATE_FEATURES)}
 L = {n: i for i, n in enumerate(LINK_FEATURES)}
 E = {n: i for i, n in enumerate(ENTITY_FEATURES)}
@@ -34,6 +36,16 @@ def _reset(session, name, objective=False, **kwargs):
 def _step(session, builder, command):
     change = session.act(Action.parse(command))
     return change, builder.build(change, session.mask)
+
+
+def _wait_until_spawned(session, builder, slots=3, max_steps=10):
+    """Pre-entry savestates load with the room's monsters just created, in their spawn clouds: WAIT until the first
+    `slots` entities are out.  Returns the last (change, obs)."""
+    for _ in range(max_steps):
+        change, obs = _step(session, builder, 'WAIT 8')
+        if not obs['entity_features'][:slots, E['spawning']].any():
+            return change, obs
+    raise AssertionError(f"monsters still spawning after {max_steps} WAITs")
 
 
 def test_space_matches_contract():
@@ -67,6 +79,10 @@ def test_every_savestate_builds_a_valid_observation(session):
 
 def test_goriya_room_entities_and_grid(session):
     builder, obs = _reset(session, '1_44w')
+    assert np.all(obs['entity_features'][:3, E['spawning']] == 1)       # just created, in their spawn clouds
+    assert np.all(obs['entity_features'][:3, E['hurts_on_touch']] == 0)
+    assert obs['history'][H['entered_from_W']] == 1 and obs['history'][H['has_last_action']] == 0
+    _, obs = _wait_until_spawned(session, builder)
     ram = session.state.ram
     for i in range(3):          # NES slots 1-3 hold the three RedGoriyas
         assert obs['entity_types'][i] == 0x06
@@ -96,12 +112,14 @@ def test_goriya_room_entities_and_grid(session):
     assert np.all(grid[10:12, 0:4] == TileClass.DOOR_W) and np.all(grid[10:12, 28:32] == TileClass.DOOR_E)
     assert np.all(grid[0:4, 15:17] == TileClass.WALL)
     assert grid[8, 8] == TileClass.BLOCK and grid[4, 4] == TileClass.WALKABLE
-    assert obs['history'][H['entered_from_W']] == 1 and obs['history'][H['has_last_action']] == 0
+    assert obs['history'][H['entered_from_W']] == 1
     assert builder.room_state.room == 0x44
 
 
 def test_push_block_in_grid_and_room_state(session):
-    builder, obs = _reset(session, '1_22e', ram_overrides={'link_x': 96, 'link_y': 125})
+    state = load_and_place(session, '1_22e', {'link_x': 96, 'link_y': 125}, randomize_rng=False)
+    builder = ObservationBuilder(objective=False)
+    obs = builder.reset(state, session.mask)
     cells = {tuple(c) for c in np.argwhere(obs['grid'] == TileClass.PUSH_BLOCK)}
     assert cells == {(10, 12), (10, 13), (11, 12), (11, 13)}
     assert obs['grid'][10, 16] == TileClass.STAIRS
@@ -136,7 +154,7 @@ def test_key_room_treasure(session):
 
 
 def test_sword_cave_exposes_ware_and_fires(session):
-    _, obs = _reset(session, '0_77cave')
+    _, obs = _reset(session, '0_77cave_0')
     types, feats = obs['entity_types'], obs['entity_features']
     assert list(types[:3]) == [0x6A, 0x40, 0x40]
     assert feats[0, E['hurts_on_touch']] == 0 and np.all(feats[1:3, E['hurts_on_touch']] == 1)
@@ -150,6 +168,7 @@ def test_sword_cave_exposes_ware_and_fires(session):
 def test_velocity_is_position_delta(session):
     builder, obs = _reset(session, '1_44w')
     assert not obs['entity_features'][:, [E['vx'], E['vy']]].any()
+    _, obs = _wait_until_spawned(session, builder)                  # monsters don't move inside spawn clouds
     before = obs['entity_features'][:3, [E['x'], E['y']]].copy()
     change, obs = _step(session, builder, 'WAIT 16')
     after = obs['entity_features'][:3, [E['x'], E['y']]]

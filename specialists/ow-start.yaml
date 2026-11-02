@@ -1,11 +1,12 @@
 name: ow-start
 rooms: ['(0, 0x77)', '(0, 0x77, cave)']
-start_states: ['start', '0_77*']
+start_states: ['start', '0_77*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {}
+items: {bombs: off}
 max_steps: 1000
 warm_start: null
 notes: >-
