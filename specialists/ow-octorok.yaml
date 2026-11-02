@@ -1,6 +1,6 @@
 name: ow-octorok
 rooms: ['(0, 0x67)', '(0, 0x68)', '(0, 0x58)', '(0, 0x37)', '(0, 0x4c)', '(0, 0x3c)', '(0, 0x78)']
-start_states: ['0_67*', '0_68*', '0_58*', '0_37*', '0_4c*', '0_3c*', '0_78*']
+start_states: ['0_67*', '0_68*', '0_58*', '0_37[!w]*', '0_4c*', '0_3c*', '0_78*']
 success: [exit-correct, enter-room:1:0x73, enter-room:2:0x7d]
 reward_profile: default
 reward: {pbrs: on}
@@ -10,3 +10,5 @@ max_steps: 2000
 warm_start: null
 notes: >-
   0x37 (first visit) and 0x3c exit through the dungeon stairs: enter-room (1,0x73) / (2,0x7d).
+  0_37w is excluded: Link sits on the W edge with only MOVE W / WAIT legal, so every episode is exit-wrong or
+  stuck (0% in rounds 1-2, Go-Explore found no other cell).

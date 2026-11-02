@@ -30,6 +30,8 @@ The ROM isn't checked in. Put an uncompressed *Legend of Zelda (U)* ROM at
 .venv/bin/python -m triforce.play "MOVE E 16" "SWORD E"         # act; the session persists between calls
 .venv/bin/python -m triforce.train --specialist ow-start --parallel 8 --iterations 100
 .venv/bin/python -m triforce.evaluate --specialist ow-start      # promoted model on its own rooms
+.venv/bin/python -m triforce.explore --specialist ow-zora --parallel 16   # Go-Explore: trajectories/ow-zora
+.venv/bin/python -m triforce.train --specialist ow-zora --parallel 16 --curriculum trajectories/ow-zora
 .venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist
 .venv/bin/python -m triforce.run --route milestone1 --seed 1
 triforce promote <specialist> <run-id>

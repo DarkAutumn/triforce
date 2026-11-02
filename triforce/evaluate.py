@@ -13,7 +13,6 @@ checkpoint defaults to the specialist's promoted model; results go to ``<checkpo
 import argparse
 import json
 import multiprocessing as mp
-import os
 from collections import Counter
 from pathlib import Path
 from typing import Optional
@@ -25,6 +24,7 @@ from . import registry
 from .env import ZeldaEnv
 from .session import GameSession
 from .specialist import SpecialistConfig, load_specialist
+from .start_states import state_label
 
 _WORKER = {}
 
@@ -86,7 +86,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     """Plays every seed start state `episodes_per_state` times and returns the summary dict (see module doc)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     config = load_specialist(specialist) if isinstance(specialist, str) else specialist
-    states = sorted(os.path.basename(p)[:-len('.state')] for p in config.resolve_start_states())
+    states = sorted(state_label(p) for p in config.resolve_start_states())
     if not states:
         raise ValueError(f"{config.name} has no seed start states")
     episode_states = [state for state in states for _ in range(episodes_per_state)]

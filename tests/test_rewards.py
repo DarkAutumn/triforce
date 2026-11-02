@@ -203,3 +203,17 @@ def test_damage_penalty_and_reward_halving(session, monkeypatch):
         if terminated:
             break
     pytest.skip("Link never took non-fatal damage")
+
+
+def test_stalling_penalty_fires_in_zora_room(session):
+    """The Zora surfaces and submerges every few steps; that must not reset the room-stalling counter (only kills
+    and pickups do), so dithering at the 0x38 entrance is penalized after the grace period."""
+    env = make_env(session, 'ow-zora', '0_38s')
+    env.reset(seed=0)
+    script = ['WAIT 8', 'WAIT 8', 'MOVE E 4', 'MOVE W 4']
+    for i in range(300):
+        _, _, terminated, truncated, info = env.step(Action.parse(script[i % len(script)]).to_indices())
+        assert not (terminated or truncated), info['ending']
+        if 'penalty-room-stalling' in info['rewards']:
+            return
+    pytest.fail("no room-stalling penalty in 300 steps of dithering")

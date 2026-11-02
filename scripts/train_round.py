@@ -3,7 +3,7 @@
 
     python scripts/train_round.py --round round1 [--steps 2000000] [--steps-per-update 4096] [--parallel 16]
         [--device cuda] [--models-dir models] [--specialists a,b] [--episodes-per-state 20]
-        [--chain-runs 20] [--chain-parallel 10] [--skip-existing]
+        [--chain-runs 20] [--chain-parallel 10] [--skip-existing] [--no-promote] [--train-args '...{name}...']
 
 Specialists (trainable, with seed start states; route order of ``milestone1``) train one at a time as
 ``python -m triforce.train ... --run-id <round> --stop-success 0.95 --stop-patience 5`` with the log teed to
@@ -12,12 +12,16 @@ Specialists (trainable, with seed start states; route order of ``milestone1``) t
 model.  Writes ``<models>/<round>-summary.json``, ``<round>-chain.jsonl`` and ``<round>-chain-summary.json``
 and prints a markdown table.  A failed training run is recorded and the round moves on; rerun with
 ``--skip-existing`` to resume (runs that already have ``ckpt.pt`` are only promoted and re-evaluated).
+Experiments use ``--no-promote`` (the chain then uses this round's checkpoints for the trained specialists and
+the promoted models elsewhere) and ``--train-args`` (``{name}`` expands to the specialist).  ``--chain-runs 0``
+skips the chain.
 """
 
 import argparse
 import json
 import math
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -52,6 +56,10 @@ def parse_args(argv=None):
     parser.add_argument('--chain-runs', type=int, default=20)
     parser.add_argument('--chain-parallel', type=int, default=10)
     parser.add_argument('--skip-existing', action='store_true', help="don't retrain runs that have ckpt.pt")
+    parser.add_argument('--no-promote', action='store_true',
+                        help="experiment mode: keep the promoted models; eval-chain uses this round's checkpoints "
+                             "for the trained specialists and the promoted ones for the rest")
+    parser.add_argument('--train-args', default='', help="extra arguments for triforce.train (one string)")
     return parser.parse_args(argv)
 
 
@@ -77,6 +85,7 @@ def train(name: str, args, models: Path, run_dir: Path) -> int:
                '--iterations', str(iterations), '--steps-per-update', str(args.steps_per_update),
                '--parallel', str(args.parallel), '--device', args.device, '--models-dir', str(models),
                '--stop-success', str(STOP_SUCCESS), '--stop-patience', str(STOP_PATIENCE)]
+    command += shlex.split(args.train_args.format(name=name))
     run_dir.mkdir(parents=True, exist_ok=True)
     print(f"[round] training {name}: {' '.join(command)}", flush=True)
     with open(run_dir / 'train.log', 'w', encoding='utf-8') as log, \
@@ -91,9 +100,10 @@ def train(name: str, args, models: Path, run_dir: Path) -> int:
 
 
 def training_record(run_dir: Path) -> dict:
-    """Iterations/steps/early stop/wall time from train_summary.json, plus the last-5 training success rate."""
+    """Iterations/steps/early stop/wall time from train_summary.json, plus the last-5 training success rate and
+    the last start-state-balanced success rate."""
     record = {'iterations': None, 'steps': None, 'stopped_early': None, 'wall_seconds': None,
-              'steps_per_second': None, 'train_success_last5': None}
+              'steps_per_second': None, 'train_success_last5': None, 'train_balanced_last': None}
     summary_path = run_dir / 'train_summary.json'
     if summary_path.is_file():
         with open(summary_path, encoding='utf-8') as file:
@@ -106,6 +116,9 @@ def training_record(run_dir: Path) -> dict:
         rates = [m['success_rate'] for m in metrics if 'success_rate' in m][-5:]
         if rates:
             record['train_success_last5'] = sum(rates) / len(rates)
+        balanced = [m['balanced_success_rate'] for m in metrics if 'balanced_success_rate' in m]
+        if balanced:
+            record['train_balanced_last'] = balanced[-1]
     return record
 
 
@@ -132,7 +145,8 @@ def run_specialist(name: str, args, models: Path) -> dict:
         record['error'] = f"no checkpoint at {ckpt}"
         return record
 
-    registry.promote(name, args.round, models)
+    if not args.no_promote:
+        registry.promote(name, args.round, models)
     try:
         result = evaluate_specialist(name, ckpt, args.episodes_per_state, parallel=args.parallel, seed=0)
     except Exception as error:  # pylint: disable=broad-exception-caught
@@ -156,9 +170,9 @@ def _pct(value) -> str:
 
 def format_table(specialists: dict) -> str:
     """Markdown table of the round."""
-    lines = ['| specialist | rooms | seed states | steps | early stop | train success (last 5) | eval success '
-             '| worst room (rate) | SPS |',
-             '|---|---|---|---|---|---|---|---|---|']
+    lines = ['| specialist | rooms | seed states | steps | early stop | train success (last 5) | train balanced '
+             '| eval success | worst room (rate) | SPS |',
+             '|---|---|---|---|---|---|---|---|---|---|']
     for name, rec in specialists.items():
         by_room = rec.get('eval_by_room') or {}
         worst = min(by_room.items(), key=lambda item: (item[1], item[0])) if by_room else None
@@ -170,7 +184,8 @@ def format_table(specialists: dict) -> str:
         worst_cell = f"{worst[0]} ({worst[1]:.0%})" if worst else '-'
         sps = '-' if rec['steps_per_second'] is None else f"{rec['steps_per_second']:.0f}"
         lines.append(f"| {name} | {rec['rooms']} | {rec['seed_states']} | {steps} | {early} "
-                     f"| {_pct(rec['train_success_last5'])} | {eval_cell} | {worst_cell} | {sps} |")
+                     f"| {_pct(rec['train_success_last5'])} | {_pct(rec.get('train_balanced_last'))} | {eval_cell} "
+                     f"| {worst_cell} | {sps} |")
     return '\n'.join(lines)
 
 
@@ -192,23 +207,32 @@ def main(argv=None):
         summary['specialists'][name] = run_specialist(name, args, models)
         write_summary()
 
-    print(f"[round] eval-chain milestone1: {args.chain_runs} runs, {args.chain_parallel} processes", flush=True)
-    try:
-        results, chain = eval_chain('milestone1', args.chain_runs, args.chain_parallel, models_dir=str(models))
-        chain_path = models / f"{args.round}-chain.jsonl"
-        chain_path.unlink(missing_ok=True)      # write_jsonl appends
-        write_jsonl(str(chain_path), results)
-    except Exception as error:  # pylint: disable=broad-exception-caught
-        chain = {'error': f"{type(error).__name__}: {error}"}
-    with open(models / f"{args.round}-chain-summary.json", 'w', encoding='utf-8') as file:
-        json.dump(chain, file, indent=2)
-    summary['chain'] = chain
-    write_summary()
+    chain = None
+    if args.chain_runs > 0:
+        overrides = None
+        if args.no_promote:
+            overrides = {name: str(registry.checkpoint_path(name, args.round, models)) for name in names
+                         if registry.checkpoint_path(name, args.round, models).is_file()}
+        print(f"[round] eval-chain milestone1: {args.chain_runs} runs, {args.chain_parallel} processes", flush=True)
+        try:
+            results, chain = eval_chain('milestone1', args.chain_runs, args.chain_parallel, models_dir=str(models),
+                                        overrides=overrides)
+            chain_path = models / f"{args.round}-chain.jsonl"
+            chain_path.unlink(missing_ok=True)      # write_jsonl appends
+            write_jsonl(str(chain_path), results)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            chain = {'error': f"{type(error).__name__}: {error}"}
+        with open(models / f"{args.round}-chain-summary.json", 'w', encoding='utf-8') as file:
+            json.dump(chain, file, indent=2)
+        summary['chain'] = chain
+        write_summary()
 
     print()
     print(format_table(summary['specialists']))
     print()
-    if 'error' in chain:
+    if chain is None:
+        print("chain: skipped")
+    elif 'error' in chain:
         print(f"chain: error {chain['error']}")
     else:
         print(f"chain: {chain['successes']}/{chain['runs']} = {chain['success_rate']:.0%}")

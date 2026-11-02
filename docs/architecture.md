@@ -91,8 +91,20 @@ class ZeldaEnv(gymnasium.Env):
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
   records iterations, steps, `stopped_early`, wall time and steps/sec.
-- `train --stop-success R [--stop-patience 5]` (`EarlyStop`) ends training once the training `success_rate`
-  is ≥ R for that many consecutive iterations that finished an episode.
+- `train --stop-success R [--stop-patience 5]` (`EarlyStop`) ends training once the start-state-balanced
+  success rate (mean over start states of each state's last 20 room-entry episodes; logged as
+  `balanced_success_rate`) is ≥ R for that many consecutive iterations. The raw `success_rate` is biased toward
+  the states the start-state pool oversamples (failures), so it is not used for stopping.
+- `python -m triforce.explore --specialist NAME` (Go-Explore phase A, `explore.py`): per seed start state, an
+  archive of cells (room, tile // 2, hearts, living enemies, keys, boomerang) with exact `GameSession`
+  snapshots; random legal actions from cells chosen by progress/closeness/novelty; the best success is replayed
+  and written as `trajectories/<specialist>/<state>/NNNN.state` + `trajectory.json`. `ZeldaEnv.restore(snapshot)`
+  starts an episode from an exact snapshot.
+- `train --curriculum trajectories/<specialist>` (`curriculum.py`, backward curriculum): half of the resets start
+  on a trajectory near its end; each trajectory's start point moves `ceil(len/10)` steps earlier once 6 of the
+  last 10 episodes from the current stage succeed, until it reaches the room entry. Progress is shared by all
+  workers through `<run dir>/curriculum.json`. Curriculum episodes are reported as `curriculum/*` and excluded
+  from the room-entry metrics.
 - `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=20, parallel=1, seed=0,
   deterministic=False)` plays every seed start state N times in `ZeldaEnv` (episode i seeded `seed + i`) and
   returns success rate, outcomes/endings and per-room/per-state breakdowns; `python -m triforce.evaluate

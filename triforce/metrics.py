@@ -5,7 +5,13 @@ raw counts and sums that merge exactly across workers.  ``RolloutMetrics.summary
 flat metric dict logged per iteration:
 
 - ``episodes``, ``success_rate``, ``outcome/<success|hard-failure|soft-failure>`` (fractions),
-  ``ending/<end-condition>`` (fractions) — from ``info['outcome']`` / ``info['ending']``.
+  ``ending/<end-condition>`` (fractions) — from ``info['outcome']`` / ``info['ending']``.  These and every other
+  per-episode metric count only episodes that started at a room entry (seed/harvested start states).
+  ``RolloutMetrics.start_results`` also counts them per (start state, success) for ``train.EarlyStop``; it is
+  not part of the flat dict.
+- ``curriculum/episodes``, ``curriculum/success_rate``, ``curriculum/start_fraction`` (mean start index /
+  trajectory length; 0 = room entry) and ``curriculum/point_fraction`` (mean current stage point / length)
+  for episodes started partway along an explored trajectory (``info['curriculum']``).
 - ``reward/total`` and ``reward/<term>``: mean per completed episode, from ``info['rewards']``.
 - ``health_at_exit`` (hp / max_hp) and ``hearts_at_exit`` (``info['health']``) at episode end.
 - ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['frames']``).
@@ -46,6 +52,11 @@ class RolloutMetrics:
         self.interrupts = Counter()
         self.kinds = Counter()
         self.durations = Counter()
+        self.curriculum_episodes = 0
+        self.curriculum_successes = 0
+        self.curriculum_start = 0.0
+        self.curriculum_point = 0.0
+        self.start_results = Counter()     # (start state label, success) -> episodes
 
     def merge(self, other: 'RolloutMetrics') -> 'RolloutMetrics':
         """Adds other's counts into self."""
@@ -75,6 +86,12 @@ class RolloutMetrics:
             result['hearts_at_exit'] = self.hearts / eps
             result['episode_frames'] = self.episode_frames / eps
             result['episode_steps'] = self.episode_steps / eps
+        if self.curriculum_episodes:
+            eps = float(self.curriculum_episodes)
+            result['curriculum/episodes'] = eps
+            result['curriculum/success_rate'] = self.curriculum_successes / eps
+            result['curriculum/start_fraction'] = self.curriculum_start / eps
+            result['curriculum/point_fraction'] = self.curriculum_point / eps
         if self.steps:
             for name, count in self.interrupts.items():
                 result[f'interrupt/{name}'] = count / self.steps
@@ -124,9 +141,17 @@ class EpisodeTracker:
         for name, value in (info.get('rewards') or {}).items():
             self._rewards[name] += float(value)
 
-        if done:
+        if done and info.get('curriculum'):
+            curriculum = info['curriculum']
+            metrics.curriculum_episodes += 1
+            metrics.curriculum_successes += int(info.get('outcome') == 'success')
+            metrics.curriculum_start += curriculum['index'] / curriculum['length']
+            metrics.curriculum_point += curriculum['point'] / curriculum['length']
+            self.begin()
+        elif done:
             metrics.episodes += 1
             metrics.outcomes[info.get('outcome', 'unknown')] += 1
+            metrics.start_results[(info.get('start_state'), info.get('outcome') == 'success')] += 1
             metrics.endings[info.get('ending', 'unknown')] += 1
             metrics.reward_terms.update(self._rewards)
             metrics.reward_total += self._reward_total
@@ -183,11 +208,12 @@ def read_jsonl(path: str) -> list[dict]:
 def format_summary(metrics: dict[str, float], keys: Optional[list[str]] = None) -> str:
     """One-line human summary for the console."""
     keys = keys or ['episodes', 'success_rate', 'reward/total', 'health_at_exit', 'episode_steps',
-                    'episode_frames', 'entropy/kind', 'entropy/direction', 'entropy/duration',
-                    'losses/approx_kl', 'charts/SPS']
+                    'episode_frames', 'curriculum/success_rate', 'curriculum/point_fraction', 'entropy/kind',
+                    'entropy/direction', 'entropy/duration', 'losses/approx_kl', 'charts/SPS']
     parts = []
     for key in keys:
         if key in metrics:
             value = metrics[key]
-            parts.append(f"{key.split('/')[-1]}={value:.3g}" if isinstance(value, float) else f"{key}={value}")
+            label = key if key.startswith('curriculum/') else key.split('/')[-1]
+            parts.append(f"{label}={value:.3g}" if isinstance(value, float) else f"{label}={value}")
     return ' '.join(parts)

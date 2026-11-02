@@ -1,7 +1,9 @@
 """Gymnasium environment for one specialist (docs/architecture.md, design §3).
 
 An episode starts from one of the specialist's start states (verified by RAM to be in its rooms), applies the
-config's RAM randomization, and runs timed options through ``GameSession``.  Rewards come from the critic
+config's RAM randomization, and runs timed options through ``GameSession``.  With a ``curriculum``, a share of
+episodes instead start partway along an explored trajectory (``curriculum.py``); their final ``info`` carries
+``curriculum`` and they don't feed the start-state pool.  Rewards come from the critic
 (``critics.py``) plus a terminal reward; endings come from ``end_conditions.py`` and are classified
 deny-by-default (an unlisted ending raises ``UnclassifiedEndingError``).
 
@@ -18,6 +20,7 @@ import numpy as np
 
 from .actions import NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS, Action
 from .critics import create_critic
+from .curriculum import BackwardCurriculum, CurriculumSpec
 from .emulator import GAME_DIR
 from .end_conditions import MAX_STEPS, build_end_conditions, classify_ending
 from .objectives import GameCompletion
@@ -25,7 +28,8 @@ from .observation import ObservationBuilder
 from .rewards import SUCCESS, StepRewards, apply_terminal_rewards
 from .session import GameSession
 from .specialist import SpecialistConfig, load_specialist
-from .start_states import SavestateCapture, StartStatePool, ram_randomization_values, verify_start_room
+from .start_states import SavestateCapture, StartStatePool, ram_randomization_values, state_label, \
+    verify_start_room
 from .zelda_enums import Direction
 from .zelda_game import ZeldaGame
 
@@ -44,13 +48,14 @@ class ZeldaEnv(gym.Env):
 
     def __init__(self, specialist: Union[str, SpecialistConfig], session: Optional[GameSession] = None,
                  start_state: Optional[str] = None, capture_dir: Optional[str] = GAME_DIR,
-                 strict_actions: bool = True):
+                 strict_actions: bool = True, curriculum: Optional[CurriculumSpec] = None):
         """
         specialist: name of specialists/<name>.yaml or a loaded config.
         session: an existing GameSession to drive (not closed by close()); one is created otherwise.
         start_state: always start from this savestate (name or path) instead of the start-state pool.
         capture_dir: where first-entry savestates are written (None disables capture).
         strict_actions: raise InvalidActionError for masked actions.
+        curriculum: start a share of episodes from explored trajectories (``curriculum.BackwardCurriculum``).
         """
         super().__init__()
         self.config = specialist if isinstance(specialist, SpecialistConfig) else load_specialist(specialist)
@@ -61,6 +66,7 @@ class ZeldaEnv(gym.Env):
         self.rng = random.Random()
 
         self.pool = StartStatePool(self.config, self.rng) if start_state is None else None
+        self.curriculum = BackwardCurriculum(curriculum, self.rng) if curriculum and start_state is None else None
         self.capture = SavestateCapture(capture_dir) if capture_dir else None
         self.critic = create_critic(self.config.reward_profile, self.config.reward.pbrs)
         self.end_conditions = build_end_conditions(self.config.rooms, self.config.success)
@@ -68,6 +74,7 @@ class ZeldaEnv(gym.Env):
         self.objectives: Optional[GameCompletion] = None
 
         self._episode_state: Optional[str] = None
+        self._curriculum_tag = None
         self._start_health = 0.0
         self._done = True
         self._verified = set()
@@ -80,7 +87,13 @@ class ZeldaEnv(gym.Env):
             random.seed(seed)       # GameSession.load draws the game RNG bytes from `random`
 
         options = options or {}
-        name = options.get('start_state') or self.start_state or self.pool.next()
+        name = options.get('start_state') or self.start_state
+        self._curriculum_tag = None
+        if name is None and self.curriculum is not None:
+            start = self.curriculum.next()
+            if start is not None:
+                name, self._curriculum_tag = start
+        name = name or self.pool.next()
         state = self.session.load(name)
         if name not in self._verified:
             verify_start_room(name, state.full_location, self.config.rooms, self.config.name)
@@ -89,7 +102,15 @@ class ZeldaEnv(gym.Env):
         values = ram_randomization_values(self.config.ram_randomization, state.link.max_health, self.rng)
         if values:
             state = self.session.apply_ram(values)
+        return self._begin_episode(state, name)
 
+    def restore(self, snapshot: dict, name: str):
+        """Continues from a ``GameSession.snapshot()`` (exact emulator state, no RNG or RAM changes) as a new
+        episode labelled ``name``; objectives, critic and end conditions restart as at reset.  For explore."""
+        self._curriculum_tag = None
+        return self._begin_episode(self.session.restore(snapshot), name)
+
+    def _begin_episode(self, state: ZeldaGame, name: str):
         self.objectives = GameCompletion()
         self._attach_objectives(None, state)
         self.critic.clear()
@@ -134,9 +155,11 @@ class ZeldaEnv(gym.Env):
         if ending is not None:
             outcome = classify_ending(ending, self.config.success, self.config.endings)
             apply_terminal_rewards(rewards, ending, outcome, terminated, state.link.health, state.link.max_health)
-            if self.pool is not None:
+            extra = {'ending': ending, 'outcome': outcome, 'start_state': state_label(self._episode_state)}
+            if self._curriculum_tag is not None:
+                extra['curriculum'] = self.curriculum.record(self._curriculum_tag, outcome == SUCCESS)
+            elif self.pool is not None:
                 self.pool.record(self._episode_state, outcome == SUCCESS, state.link.health < self._start_health)
-            extra = {'ending': ending, 'outcome': outcome}
             self._done = True
 
         if self.capture is not None:

@@ -365,8 +365,10 @@ class GameplayCritic:
             self._pbrs_tile = None
             return
 
-        # Reset room step counter when enemies are killed or items gained
-        if state_change.items_gained or len(curr.active_enemies) < len(prev.active_enemies):
+        # Reset room step counter when an enemy is killed or an item is gained.  Kills come from RoomKillCount:
+        # the active-enemy count also drops whenever a Zora or Leever submerges, which would reset the counter
+        # every few steps and disable the stalling penalty in those rooms.
+        if state_change.items_gained or curr.room_kills > prev.room_kills:
             self._room_steps = 0
 
         # Room stalling penalty: -0.01 per step after the grace period, ramping to -0.02.

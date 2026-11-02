@@ -125,6 +125,12 @@ class StartStatePool:
                 selector.record(state, success, health_lost)
 
 
+def state_label(name: str) -> str:
+    """A start state's short name: '…/0_38s.state' or '0_38s' -> '0_38s'."""
+    base = os.path.basename(name)
+    return base[:-len('.state')] if base.endswith('.state') else base
+
+
 def verify_start_room(name: str, location: MapLocation, rooms: Sequence[MapLocation], specialist: str):
     """Raises StartStateError if a loaded start state is outside the specialist's rooms."""
     if location not in rooms:

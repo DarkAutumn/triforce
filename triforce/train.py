@@ -2,14 +2,18 @@
 
     python -m triforce.train --specialist d1-melee [--load CKPT] [--parallel N] [--iterations N]
         [--steps-per-update N] [--device cpu|cuda] [--run-id ID] [--models-dir DIR]
-        [--stop-success RATE [--stop-patience N]]
+        [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR]
 
 Each iteration collects ``--steps-per-update`` env steps (split across ``--parallel`` subprocess workers, one
 emulator each; ``--parallel 1`` runs the env in-process for debugging), then runs one PPO update.  Output goes
 to ``<models>/<specialist>/<run-id>/``: ``ckpt.pt`` (see ``registry``), ``metrics.jsonl``, ``tb/``
 (TensorBoard), ``run.json`` (arguments and configs) and ``train_summary.json`` (iterations, steps, early
-stop, wall time).  ``--stop-success`` ends training once the training success rate stays at or above the
-threshold for ``--stop-patience`` consecutive iterations that finished at least one episode.
+stop, wall time).  ``--stop-success`` ends training once the start-state-balanced training success rate
+(``balanced_success_rate``, see ``EarlyStop``) stays at or above the threshold for ``--stop-patience``
+consecutive iterations.  Only episodes that started at a room entry count; ``--curriculum`` episodes are reported
+separately as ``curriculum/*``.
+``--curriculum`` starts a share of episodes along trajectories found by ``triforce.explore`` (backward
+curriculum, ``curriculum.py``); its shared progress file is ``<run dir>/curriculum.json``.
 
 Weights come from ``--load`` (a checkpoint file or run dir) or else the specialist's ``warm_start`` (a
 checkpoint path or another specialist's name, meaning its promoted checkpoint).  Loading a checkpoint of the
@@ -21,12 +25,14 @@ import argparse
 import json
 import os
 import time
+from collections import Counter, deque
 from pathlib import Path
-from typing import Optional
+from typing import Deque, Dict, Optional
 
 import torch
 
 from . import registry
+from .curriculum import CurriculumSpec
 from .demo import collect_demo_batch, parse_demo_actions
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy
@@ -37,18 +43,36 @@ from .specialist import load_specialist
 
 
 class EarlyStop:
-    """Stop once training success_rate >= threshold for `patience` consecutive iterations that finished episodes."""
+    """Stop once the start-state-balanced training success rate >= threshold for `patience` consecutive iterations
+    that finished room-entry episodes.
 
-    def __init__(self, threshold: Optional[float], patience: int):
+    The start-state pool oversamples states that fail, so the raw ``success_rate`` mostly measures the hardest (or
+    an unwinnable) state and moves with the sampling as well as the policy.  Balanced = mean over start states of
+    each state's success over its last ``window`` episodes; every state seen needs ``min_episodes`` first.
+    """
+
+    def __init__(self, threshold: Optional[float], patience: int, window: int = 20, min_episodes: int = 5):
         self.threshold = threshold
         self.patience = patience
+        self.min_episodes = min_episodes
+        self.window = window
+        self.results: Dict[str, Deque[bool]] = {}
+        self.balanced: Optional[float] = None
         self.streak = 0
 
-    def update(self, metrics: dict) -> bool:
-        """Feeds one iteration's metrics; True = stop now.  Iterations with no finished episode don't count."""
-        if self.threshold is None or not metrics.get('episodes'):
+    def update(self, start_results: Counter) -> bool:
+        """Feeds one iteration's (start state, success) -> episodes counts; True = stop now."""
+        if not start_results:
             return False
-        self.streak = self.streak + 1 if metrics['success_rate'] >= self.threshold else 0
+        for (state, success), count in start_results.items():
+            self.results.setdefault(state, deque(maxlen=self.window)).extend([success] * count)
+        if any(len(results) < self.min_episodes for results in self.results.values()):
+            self.balanced = None
+            return False
+        self.balanced = sum(sum(r) / len(r) for r in self.results.values()) / len(self.results)
+        if self.threshold is None:
+            return False
+        self.streak = self.streak + 1 if self.balanced >= self.threshold else 0
         return self.streak >= self.patience
 
 
@@ -79,6 +103,11 @@ def parse_args(argv=None):
     parser.add_argument('--stop-success', type=float, default=None,
                         help="stop early once training success_rate >= this for --stop-patience iterations")
     parser.add_argument('--stop-patience', type=int, default=5)
+    parser.add_argument('--curriculum', default=None,
+                        help="trajectories dir from triforce.explore: backward-curriculum starts (curriculum.py)")
+    parser.add_argument('--curriculum-fraction', type=float, default=CurriculumSpec.fraction,
+                        help="share of resets that start on a trajectory while any is incomplete")
+    parser.add_argument('--curriculum-threshold', type=float, default=CurriculumSpec.threshold)
     return parser.parse_args(argv)
 
 
@@ -122,7 +151,13 @@ def main(argv=None, session=None) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     network, optimizer_state, start_iteration, start_steps, source = initial_model(args, specialist, root)
-    env_factory = ZeldaEnvFactory(specialist, start_state=args.start_state,
+    curriculum = None
+    if args.curriculum:
+        state_path = out_dir / 'curriculum.json'
+        state_path.unlink(missing_ok=True)     # progress is per training invocation
+        curriculum = CurriculumSpec(args.curriculum, str(state_path), fraction=args.curriculum_fraction,
+                                    threshold=args.curriculum_threshold)
+    env_factory = ZeldaEnvFactory(specialist, start_state=args.start_state, curriculum=curriculum,
                                   **({} if args.capture_states else {'capture_dir': None}))
     in_process_env = env_factory(session) if args.parallel == 1 else None
 
@@ -165,14 +200,17 @@ def main(argv=None, session=None) -> Path:
         state['iteration'] = start_iteration + result.iteration
         state['steps'] = result.total_steps
         metrics = {**result.rollout.summary(), **result.stats}
+        stop = early.update(result.rollout.start_results)
+        if early.balanced is not None:
+            metrics['balanced_success_rate'] = early.balanced
         state['metrics'] = metrics
         logger.log(state['iteration'], state['steps'], metrics)
         print(f"[train] iter={state['iteration']} steps={state['steps']} " + format_summary(metrics), flush=True)
         if result.iteration % args.save_every == 0:
             save()
-        if early.update(metrics):
-            print(f"[train] early stop: success_rate >= {args.stop_success} for {args.stop_patience} iterations",
-                  flush=True)
+        if stop:
+            print(f"[train] early stop: balanced success_rate >= {args.stop_success} for {args.stop_patience} "
+                  "iterations", flush=True)
             state['stopped_early'] = True
             return False
         return True
