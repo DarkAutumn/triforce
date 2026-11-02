@@ -31,7 +31,7 @@ The ROM isn't checked in. Put an uncompressed *Legend of Zelda (U)* ROM at
 .venv/bin/python -m triforce.train --specialist ow-start --parallel 8 --iterations 100
 .venv/bin/python -m triforce.evaluate --specialist ow-start      # promoted model on its own rooms
 .venv/bin/python -m triforce.explore --specialist ow-zora --parallel 16   # Go-Explore: trajectories/ow-zora
-.venv/bin/python -m triforce.train --specialist ow-zora --parallel 16 --curriculum trajectories/ow-zora
+.venv/bin/python -m triforce.train --specialist ow-zora --parallel 16   # curriculum: on in ow-zora.yaml
 .venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist
 uv run training-gui.py                                          # live training monitor (newest logs/ folder)
 .venv/bin/python -m triforce.run --route milestone1 --seed 1

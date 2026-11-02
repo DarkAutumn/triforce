@@ -71,7 +71,7 @@ class ZeldaEnv(gym.Env):
         if self.capture is not None:
             self.session.executor.capture_pre_entry = True
         self.critic = create_critic(self.config.reward_profile, self.config.reward.pbrs)
-        self.end_conditions = build_end_conditions(self.config.rooms, self.config.success)
+        self.end_conditions = build_end_conditions(self.config.rooms, self.config.success, self.config.one_room)
         self.builder = ObservationBuilder(objective=self.config.obs.objective)
         self.objectives: Optional[GameCompletion] = None
 

@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 TRAJECTORY_FILE = 'trajectory.json'
+TRAJECTORIES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'trajectories')
 
 
 @dataclass(frozen=True)

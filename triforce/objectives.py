@@ -322,10 +322,13 @@ class _GameMapObjective(ObjectiveSelector):
             self._last_route_result = ([], set())
             return [], set()
 
-        # Ties between equally short paths go to the canonical milestone route (routes.yaml).
-        on_route = next_rooms & self._game_map.route_next_rooms(state.full_location)
-        if on_route:
-            next_rooms = on_route
+        # On the canonical milestone route (routes.yaml) only the route's exits are correct: ties between equally
+        # short paths go to the route, and a shorter off-route path is not offered at all (e.g. 0x43 N into untagged
+        # 0x33 when Link has no key for the locked 0x44 door; the runner then fails in 0x43 instead of leaving the
+        # route).  Rooms off the route keep plain shortest-path routing.
+        route_next = self._game_map.route_next_rooms(state.full_location)
+        if route_next:
+            next_rooms = (next_rooms & route_next) or set(route_next)
 
         directions = [state.full_location.get_direction_to(r) for r in next_rooms]
         targets = []

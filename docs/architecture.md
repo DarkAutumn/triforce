@@ -107,7 +107,9 @@ class ZeldaEnv(gymnasium.Env):
   snapshots; random legal actions from cells chosen by progress/closeness/novelty; the best success is replayed
   and written as `trajectories/<specialist>/<state>/NNNN.state` + `trajectory.json`. `ZeldaEnv.restore(snapshot)`
   starts an episode from an exact snapshot.
-- `train --curriculum trajectories/<specialist>` (`curriculum.py`, backward curriculum): half of the resets start
+- Backward curriculum (`curriculum.py`): on when the specialist's config has `curriculum: {enabled: on}`
+  (trajectories default to `trajectories/<specialist>`; `train --curriculum DIR` overrides, `--no-curriculum`
+  disables). Half of the resets start
   on a trajectory near its end; each trajectory's start point moves `ceil(len/10)` steps earlier once 6 of the
   last 10 episodes from the current stage succeed, until it reaches the room entry. Progress is shared by all
   workers through `<run dir>/curriculum.json`. Curriculum episodes are reported as `curriculum/*` and excluded

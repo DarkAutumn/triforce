@@ -252,3 +252,28 @@ def test_items_config_masks_bombs_even_when_link_has_them(session, bombs_on):
     assert session.state.link.bombs == 4 and session.state.active_enemies
     assert bool(session.mask.kind[ActionKind.BOMB]) == bombs_on
     assert bool(ActionMask.from_flat(obs['action_mask']).kind[ActionKind.BOMB]) == bombs_on
+
+
+@pytest.mark.parametrize('keys', [0, 1])
+def test_route_room_only_offers_the_route_exit(session, keys):
+    """0x43's route exit is the locked E door to 0x44.  Without a key the shortest path to the triforce goes N into
+    untagged 0x33; the objective must still only accept 0x44 (Link then has to find a key or fail in 0x43)."""
+    env = make_env(session, 'd1-melee', '1_43w_0', ram_randomization=RamRandomization(keys=(keys, keys)))
+    env.reset(seed=0)
+    assert session.state.link.keys == keys
+    assert session.state.objectives.next_rooms == {MapLocation(1, 0x44, False)}
+
+
+@pytest.mark.parametrize('one_room', [True, False])
+def test_one_room_episode_ends_at_the_first_correct_exit(session, one_room):
+    """1_73e (2 keys) exits N through the locked door into 0x63, another d1-melee room: one_room ends the episode
+    there as exit-correct, otherwise it continues."""
+    env = make_env(session, 'd1-melee', '1_73e', one_room=one_room)
+    env.reset(seed=0)
+    results = []
+    while not any(info['room'] == (1, 0x63, False) for _, info in results):
+        assert len(results) < 60 and not (results and 'ending' in results[-1][1])
+        _, reward, *_, info = greedy_step(env)
+        results.append((reward, info))
+    info = results[-1][1]
+    assert info.get('ending') == ('exit-correct' if one_room else None)
