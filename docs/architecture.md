@@ -91,7 +91,7 @@ class ZeldaEnv(gymnasium.Env):
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
   records iterations, steps, `stopped_early`, wall time and steps/sec.
-- Live event logs (`events.py`, for an external watcher): each training invocation gets
+- Live event logs (`events.py`, watched by `training-gui.py`): each training invocation gets
   `logs/<yymmdd>_<NNN>_<what>/` (gitignored; `--logs-dir` / `$TRIFORCE_LOGS_DIR`). `training.json` lists every
   specialist run in order with its status and is rewritten atomically. `<specialist>.jsonl` is an append-only
   stream (`start`, one `progress` per PPO iteration with steps/target/fraction/sps/eta and headline metrics,
