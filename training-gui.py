@@ -1,0 +1,1895 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["pyside6-essentials>=6.7"]
+# ///
+"""Live training watcher for the event logs written by ``triforce.train`` and ``scripts/train_round.py``.
+
+    uv run training-gui.py                          # newest folder under logs/, switches to new runs as they start
+    uv run training-gui.py logs/261102_001_round3   # one log folder
+    uv run training-gui.py /data/triforce-logs      # another logs root
+
+Reads ``training.json`` (the plan, rewritten atomically) and tails ``round.jsonl`` plus every ``<specialist>.jsonl``
+twice a second; see ``triforce/events.py`` for the format.  Self-contained (PEP 723 inline dependencies): it does
+not import triforce or need the project's virtualenv.
+"""
+
+import argparse
+import json
+import math
+import os
+import re
+import socket
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QLinearGradient, QPainter, QPainterPath,
+                           QPalette, QPen)
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
+                               QMainWindow, QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QStackedWidget,
+                               QTabWidget, QVBoxLayout, QWidget)
+
+PLAN_FILE = 'training.json'
+LOGS_DIR_ENV = 'TRIFORCE_LOGS_DIR'
+POLL_MS = 500
+FRAME_MS = 33
+ANSI = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]')
+
+
+# --------------------------------------------------------------------------------------------------------- theme
+
+class C:
+    """Palette (dark)."""
+    bg = QColor('#0e1116')
+    card = QColor('#161a22')
+    card_hi = QColor('#1d222d')
+    border = QColor('#262c38')
+    track = QColor('#232937')
+    text = QColor('#e7e9ee')
+    muted = QColor('#8a93a6')
+    faint = QColor('#5b6475')
+    accent = QColor('#4c8dff')
+    eval = QColor('#a774ff')
+    ok = QColor('#35c77b')
+    warn = QColor('#f0b440')
+    bad = QColor('#ff5b6b')
+    idle = QColor('#3a4252')
+
+
+# status -> (color, label)
+STATUS = {
+    'pending': (C.idle, 'pending'),
+    'starting': (C.accent, 'starting'),
+    'training': (C.accent, 'training'),
+    'evaluating': (C.eval, 'evaluating'),
+    'running': (C.accent, 'running'),
+    'ok': (C.ok, 'done'),
+    'early': (C.ok, 'early stop'),
+    'completed': (C.ok, 'completed'),
+    'failed': (C.bad, 'failed'),
+    'interrupted': (C.warn, 'interrupted'),
+    'lost': (C.warn, 'process gone'),
+    'skipped': (C.idle, 'skipped'),
+}
+ACTIVE = ('starting', 'training', 'evaluating', 'running')
+FINISHED = ('ok', 'early', 'completed', 'failed', 'interrupted', 'skipped')
+
+EVENT_COLORS = {
+    'start': C.accent, 'progress': C.faint, 'checkpoint': C.muted, 'early_stop': C.ok, 'error': C.bad,
+    'train_end': C.accent, 'skipped': C.muted, 'eval_start': C.eval, 'eval': C.eval, 'end': C.ok,
+    'specialist_start': C.accent, 'specialist_end': C.ok, 'chain_start': C.eval, 'chain': C.eval,
+}
+
+QSS = """
+QWidget { color: #e7e9ee; }
+QMainWindow, QWidget#root { background: #0e1116; }
+QScrollArea { border: none; background: transparent; }
+QScrollArea > QWidget > QWidget { background: transparent; }
+QTabWidget::pane { border: 1px solid #262c38; border-radius: 8px; top: -1px; background: #161a22; }
+QTabBar::tab { background: transparent; color: #8a93a6; padding: 7px 16px; border: none; font-weight: 600; }
+QTabBar::tab:selected { color: #e7e9ee; border-bottom: 2px solid #4c8dff; }
+QTabBar::tab:hover { color: #e7e9ee; }
+QPlainTextEdit { background: #11141a; border: none; border-radius: 8px; color: #c9cfdb; padding: 6px;
+                 selection-background-color: #2b4a80; }
+QComboBox { background: #161a22; border: 1px solid #262c38; border-radius: 6px; padding: 5px 10px; min-width: 300px; }
+QComboBox QAbstractItemView { background: #161a22; border: 1px solid #262c38; selection-background-color: #2b4a80; }
+QPushButton { background: #1d222d; border: 1px solid #262c38; border-radius: 6px; padding: 5px 14px; }
+QPushButton:hover { background: #232937; }
+QCheckBox { color: #8a93a6; spacing: 6px; }
+QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
+QScrollBar::handle:vertical { background: #2a3140; border-radius: 3px; min-height: 30px; }
+QScrollBar::add-line, QScrollBar::sub-line { height: 0; width: 0; }
+QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
+QScrollBar::handle:horizontal { background: #2a3140; border-radius: 3px; min-width: 30px; }
+QSplitter::handle { background: #0e1116; }
+"""
+
+
+def apply_theme(app: QApplication):
+    """Fusion + dark palette + stylesheet."""
+    app.setStyle('Fusion')
+    palette = QPalette()
+    for role, color in ((QPalette.ColorRole.Window, C.bg), (QPalette.ColorRole.WindowText, C.text),
+                        (QPalette.ColorRole.Base, C.card), (QPalette.ColorRole.AlternateBase, C.card_hi),
+                        (QPalette.ColorRole.Text, C.text), (QPalette.ColorRole.Button, C.card_hi),
+                        (QPalette.ColorRole.ButtonText, C.text), (QPalette.ColorRole.Highlight, C.accent),
+                        (QPalette.ColorRole.HighlightedText, QColor('white')),
+                        (QPalette.ColorRole.ToolTipBase, C.card), (QPalette.ColorRole.ToolTipText, C.text),
+                        (QPalette.ColorRole.PlaceholderText, C.muted)):
+        palette.setColor(role, color)
+    app.setPalette(palette)
+    app.setStyleSheet(QSS)
+
+
+# ------------------------------------------------------------------------------------------------------ formatting
+
+def fmt_steps(value) -> str:
+    """40960 -> 41.0k."""
+    if value is None:
+        return '–'
+    value = float(value)
+    for unit, scale in (('M', 1e6), ('k', 1e3)):
+        if abs(value) >= scale:
+            return f'{value / scale:.1f}{unit}'
+    return f'{value:.0f}'
+
+
+def fmt_duration(seconds) -> str:
+    """Seconds -> 1h 02m / 3m 05s / 42s."""
+    if seconds is None:
+        return '–'
+    seconds = max(0, int(round(seconds)))
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f'{hours}h {minutes:02d}m'
+    if minutes:
+        return f'{minutes}m {secs:02d}s'
+    return f'{secs}s'
+
+
+def fmt_pct(value) -> str:
+    """0.23 -> 23%."""
+    return '–' if value is None else f'{value:.0%}'
+
+
+def fmt_clock(ts) -> str:
+    """Unix seconds -> local HH:MM:SS."""
+    return '' if ts is None else datetime.fromtimestamp(ts).strftime('%H:%M:%S')
+
+
+def parse_time(text):
+    """ISO 8601 -> Unix seconds (None passes through)."""
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except ValueError:
+        return None
+
+
+def mix(a: QColor, b: QColor, t: float) -> QColor:
+    """Linear blend of two colors."""
+    t = min(1.0, max(0.0, t))
+    return QColor(round(a.red() + (b.red() - a.red()) * t), round(a.green() + (b.green() - a.green()) * t),
+                  round(a.blue() + (b.blue() - a.blue()) * t))
+
+
+def rate_color(value) -> QColor:
+    """Success rate -> red / amber / green."""
+    if value is None:
+        return C.muted
+    return mix(C.bad, C.warn, value * 2) if value < 0.5 else mix(C.warn, C.ok, (value - 0.5) * 2)
+
+
+def ease(shown: float, target: float) -> float:
+    """One animation frame of a bar's displayed fraction moving toward its real one."""
+    return shown + (target - shown) * 0.2 if abs(target - shown) > 0.0005 else target
+
+
+def with_alpha(color: QColor, alpha: int) -> QColor:
+    """Copy of color with alpha (0-255)."""
+    color = QColor(color)
+    color.setAlpha(alpha)
+    return color
+
+
+# ----------------------------------------------------------------------------------------------------------- model
+
+class JsonlTail:
+    """Incrementally reads complete lines appended to a JSONL file."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._offset = 0
+        self._partial = b''
+        self._inode = None
+
+    def poll(self) -> tuple[bool, list[dict]]:
+        """(reset, new events).  reset: the file was replaced or truncated, so earlier events are void."""
+        try:
+            stat = self.path.stat()
+        except OSError:
+            return False, []
+        reset = False
+        if self._inode is not None and (stat.st_ino != self._inode or stat.st_size < self._offset):
+            self._offset, self._partial, reset = 0, b'', True
+        self._inode = stat.st_ino
+        if stat.st_size == self._offset:
+            return reset, []
+        with open(self.path, 'rb') as file:
+            file.seek(self._offset)
+            data = file.read()
+        self._offset += len(data)
+        lines = (self._partial + data).split(b'\n')
+        self._partial = lines.pop()             # an unfinished last line waits for its newline
+        events = []
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(record, dict):
+                events.append(record)
+        return reset, events
+
+
+class Run:
+    """One specialist run: its training.json entry plus everything its event stream said so far."""
+
+    def __init__(self, log_dir: Path, index: int, entry: dict):
+        self.log_dir = log_dir
+        self.index = index
+        self.entry = entry
+        self.tail = JsonlTail(log_dir / self.events_file)
+        self.clear()
+
+    def clear(self):
+        """Forgets the stream (it was replaced)."""
+        self.events: list[dict] = []
+        self.start = self.early_stop = self.train_end = self.skipped = None
+        self.eval_start = self.eval = self.end = self.checkpoint = None
+        self.progress: list[dict] = []
+        self.errors: list[dict] = []
+
+    @property
+    def name(self) -> str:
+        return self.entry.get('specialist', f'run {self.index}')
+
+    @property
+    def events_file(self) -> str:
+        return self.entry.get('events') or f'{self.name}.jsonl'
+
+    @property
+    def log_path(self) -> Path:
+        return self.log_dir / (self.entry.get('log') or f'{self.name}.log')
+
+    def poll(self) -> bool:
+        """Reads new events; True if anything changed."""
+        reset, events = self.tail.poll()
+        if reset:
+            self.clear()
+        for event in events:
+            self.apply(event)
+        return reset or bool(events)
+
+    def apply(self, event: dict):
+        """Folds one event into the run state."""
+        self.events.append(event)
+        kind = event.get('event')
+        if kind == 'progress':
+            self.progress.append(event)
+        elif kind == 'error':
+            self.errors.append(event)
+        elif kind in ('start', 'early_stop', 'train_end', 'skipped', 'eval_start', 'eval', 'end', 'checkpoint'):
+            setattr(self, kind, event)
+
+    # -- derived state
+
+    def status(self, live) -> str:
+        """pending | starting | training | evaluating | ok | early | failed | interrupted | lost."""
+        final = (self.end or {}).get('status')
+        entry_status = self.entry.get('status')
+        if final is None and entry_status not in (None, 'pending', 'running'):
+            final = entry_status
+        if final is not None:
+            if final == 'interrupted':
+                return 'interrupted'
+            if final in ('ok', 'completed', 'early_stop'):
+                stopped = (final == 'early_stop' or self.early_stop is not None or self.entry.get('stopped_early')
+                           or (self.end or {}).get('stopped_early'))
+                return 'early' if stopped else 'ok'
+            return 'failed'
+        if self.start is None and entry_status != 'running' and self.skipped is None and not self.events:
+            return 'pending'
+        if live is False:
+            return 'lost'
+        if self.eval_start is not None:
+            return 'evaluating'
+        if not self.progress and self.train_end is None and self.skipped is None:
+            return 'starting'
+        return 'training'
+
+    @property
+    def target_steps(self) -> int:
+        return (self.start or {}).get('target_steps') or self.entry.get('target_steps') or 0
+
+    @property
+    def target_iterations(self) -> int:
+        return (self.start or {}).get('target_iterations') or self.entry.get('target_iterations') or 0
+
+    @property
+    def steps_per_update(self) -> int:
+        spu = (self.start or {}).get('steps_per_update')
+        if spu:
+            return spu
+        return self.target_steps // self.target_iterations if self.target_iterations else 0
+
+    @property
+    def steps(self) -> int:
+        if self.progress:
+            return self.progress[-1].get('steps') or 0
+        for source in (self.end, self.train_end, self.entry):
+            if source and source.get('steps') is not None:
+                return source['steps']
+        return (self.start or {}).get('start_steps') or 0
+
+    @property
+    def iteration(self) -> int:
+        if self.progress:
+            return self.progress[-1].get('iteration') or 0
+        for source in (self.end, self.train_end, self.entry):
+            if source and source.get('iterations') is not None:
+                return source['iterations']
+        return (self.start or {}).get('start_iteration') or 0
+
+    @property
+    def started_ts(self):
+        return parse_time(self.entry.get('started')) or (self.events[0]['ts'] if self.events else None)
+
+    @property
+    def finished_ts(self):
+        return (self.end or {}).get('ts') or parse_time(self.entry.get('finished'))
+
+    def rate(self):
+        """Steps/second of the latest iteration (falls back to the run average)."""
+        if len(self.progress) >= 2:
+            a, b = self.progress[-2], self.progress[-1]
+            dt = b['ts'] - a['ts']
+            if dt > 0 and b['steps'] > a['steps']:
+                return (b['steps'] - a['steps']) / dt
+        if self.progress:
+            return self.progress[-1].get('sps') or None
+        return None
+
+    def sps(self):
+        """Average steps/second to show."""
+        for source in (self.end, self.entry):
+            if source and source.get('steps_per_second'):
+                return source['steps_per_second']
+        if self.train_end and self.train_end.get('sps'):
+            return self.train_end['sps']
+        return self.progress[-1].get('sps') if self.progress else None
+
+    def eta(self, now: float):
+        """Seconds of training left (from the trainer's own estimate)."""
+        if not self.progress:
+            return None
+        last = self.progress[-1]
+        if last.get('eta') is None:
+            return None
+        return max(0.0, last['eta'] - (now - last['ts']))
+
+    def live_steps(self, now: float, status: str) -> float:
+        """Steps extrapolated between progress events so bars move smoothly (never past the next update)."""
+        steps = self.steps
+        if status != 'training' or not self.progress or self.train_end is not None:
+            return steps
+        rate = self.rate()
+        if not rate:
+            return steps
+        last = self.progress[-1]
+        guess = last['steps'] + rate * max(0.0, now - last['ts'])
+        cap = last['steps'] + (self.steps_per_update or 0)
+        return min(guess, cap, self.target_steps or guess)
+
+    def fraction(self, now: float, status: str) -> float:
+        """Training progress 0..1."""
+        if status == 'evaluating' or (status in ('ok',) and not self.early_stop):
+            return 1.0
+        target = self.target_steps
+        if not target:
+            return 1.0 if status in FINISHED else 0.0
+        start = (self.start or {}).get('start_steps') or 0
+        span = target - start
+        if span <= 0:
+            return 1.0
+        return min(1.0, max(0.0, (self.live_steps(now, status) - start) / span))
+
+    def message(self) -> str:
+        """Why it ended (failure text)."""
+        if self.errors:
+            return self.errors[0].get('message', '')
+        if self.end and self.end.get('message'):
+            return self.end['message']
+        return self.entry.get('error', '') or ''
+
+    def eval_rate(self):
+        for source in (self.eval, self.end, self.entry):
+            if source:
+                value = source.get('success_rate') if source is self.eval else source.get('eval_success_rate')
+                if value is not None:
+                    return value
+        return None
+
+    def eval_episodes(self):
+        for source in (self.eval, self.end, self.entry):
+            if source:
+                value = source.get('episodes') if source is self.eval else source.get('eval_episodes')
+                if value is not None:
+                    return value
+        return None
+
+    def train_success(self):
+        """Last balanced success rate during training (raw rate when balanced isn't logged)."""
+        for key in ('balanced_success_rate', 'success_rate'):
+            values = self.series(key)
+            if values:
+                return values[-1][1]
+        return self.entry.get('train_balanced_last')
+
+    def series(self, key: str) -> list[tuple[float, float]]:
+        """(iteration, metric) points from progress events."""
+        points = []
+        for event in self.progress:
+            value = (event.get('metrics') or {}).get(key)
+            if isinstance(value, (int, float)) and math.isfinite(value):
+                points.append((event.get('iteration', len(points) + 1), float(value)))
+        return points
+
+
+class Training:
+    """A log folder: training.json + round.jsonl + one Run per specialist."""
+
+    def __init__(self, log_dir: Path):
+        self.dir = log_dir
+        self.plan: dict = {}
+        self.runs: list[Run] = []
+        self.round_tail = None
+        self.round_events: list[dict] = []
+        self.live = None
+        self.version = 0
+        self._plan_signature = None
+
+    @property
+    def name(self) -> str:
+        return self.plan.get('name') or self.dir.name
+
+    def poll(self) -> bool:
+        """Reloads the plan if it changed and reads new events; True if anything changed."""
+        changed = self._load_plan()
+        for run in self.runs:
+            changed |= run.poll()
+        if self.round_tail is not None:
+            reset, events = self.round_tail.poll()
+            if reset:
+                self.round_events = []
+            self.round_events.extend(events)
+            changed |= reset or bool(events)
+        live = self._alive()
+        changed |= live != self.live
+        self.live = live
+        if changed:
+            self.version += 1
+        return changed
+
+    def _load_plan(self) -> bool:
+        path = self.dir / PLAN_FILE
+        try:
+            stat = path.stat()
+        except OSError:
+            return False
+        signature = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+        if signature == self._plan_signature:
+            return False
+        try:
+            plan = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            return False
+        self._plan_signature = signature
+        self.plan = plan
+        runs = []
+        for index, entry in enumerate(plan.get('runs') or []):
+            old = self.runs[index] if index < len(self.runs) else None
+            if old is not None and old.name == entry.get('specialist') and old.events_file == (
+                    entry.get('events') or f"{entry.get('specialist')}.jsonl"):
+                old.entry = entry
+                runs.append(old)
+            else:
+                runs.append(Run(self.dir, index, entry))
+        self.runs = runs
+        if plan.get('events') and self.round_tail is None:
+            self.round_tail = JsonlTail(self.dir / plan['events'])
+        return True
+
+    def _alive(self):
+        """Is the training process still there?  None when unknown (finished, other host)."""
+        if self.plan.get('status') != 'running':
+            return None
+        pid = self.plan.get('pid')
+        if not pid or self.plan.get('host') != socket.gethostname():
+            return None
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return None
+        return True
+
+    def status(self) -> str:
+        status = self.plan.get('status') or 'pending'
+        if status == 'running' and self.live is False:
+            return 'lost'
+        return status
+
+    @property
+    def log_path(self):
+        log = self.plan.get('log')
+        return self.dir / log if log else None
+
+    @property
+    def created_ts(self):
+        return parse_time(self.plan.get('created'))
+
+    @property
+    def finished_ts(self):
+        return parse_time(self.plan.get('finished'))
+
+    def statuses(self) -> list[str]:
+        return [run.status(self.live) for run in self.runs]
+
+    def active_index(self):
+        for index, status in enumerate(self.statuses()):
+            if status in ACTIVE:
+                return index
+        return None
+
+    def fraction(self, now: float) -> float:
+        """Whole plan 0..1 by target steps; finished runs count as complete."""
+        total = done = 0.0
+        for run, status in zip(self.runs, self.statuses()):
+            weight = run.target_steps or 1
+            total += weight
+            done += weight * (1.0 if status in FINISHED else run.fraction(now, status))
+        return done / total if total else 0.0
+
+    def eta(self, now: float):
+        """Rough seconds left: the current run's estimate, then the finished runs' pace for the rest."""
+        if self.plan.get('status') != 'running':
+            return None
+        statuses = self.statuses()
+        finished = [run for run, status in zip(self.runs, statuses) if status in ('ok', 'early')
+                    and run.started_ts and run.finished_ts and run.steps]
+        per_step = (sum(run.finished_ts - run.started_ts for run in finished) / sum(run.steps for run in finished)
+                    if finished else None)
+        tails = [run.end['ts'] - run.train_end['ts'] for run in finished if run.end and run.train_end]
+        after_training = sum(tails) / len(tails) if tails else 0.0
+        if not any(status in ('pending', *ACTIVE) for status in statuses):
+            return None                         # only the chain (no estimate) is left
+        remaining = 0.0
+        for run, status in zip(self.runs, statuses):
+            if status == 'training':
+                rate = run.rate()
+                if not rate:
+                    return None
+                remaining += (run.target_steps - run.live_steps(now, status)) / rate + after_training
+            elif status == 'evaluating':
+                remaining += max(0.0, after_training - (now - run.eval_start['ts']))
+            elif status in ('pending', 'starting'):
+                if per_step is None:
+                    active = self.active_index()
+                    rate = self.runs[active].rate() if active is not None else None
+                    if not rate:
+                        return None
+                    remaining += run.target_steps / rate
+                else:
+                    remaining += run.target_steps * per_step
+        return remaining
+
+    def chain(self):
+        """eval-chain state from round.jsonl (None when this plan has no chain)."""
+        runs = self.plan.get('chain_runs') or 0
+        start = result = error = None
+        for event in self.round_events:
+            kind = event.get('event')
+            if kind == 'chain_start':
+                start, result, error = event, None, None
+            elif kind == 'chain':
+                result = event
+            elif kind == 'error' and start is not None and str(event.get('message', '')).startswith('eval-chain'):
+                error = event
+        if not runs and start is None:
+            return None
+        if result is not None:
+            status = 'ok'
+        elif error is not None:
+            status = 'failed'
+        elif start is not None:
+            status = {'running': 'running', 'lost': 'lost'}.get(self.status(), 'interrupted')
+        else:
+            status = 'pending' if self.plan.get('status') == 'running' else 'skipped'
+        return {'status': status, 'runs': (start or {}).get('runs') or runs, 'parallel': (start or {}).get('parallel'),
+                'start': start, 'result': result, 'error': error}
+
+    def round_errors(self) -> list[dict]:
+        return [event for event in self.round_events if event.get('event') == 'error']
+
+
+def describe(event: dict) -> str:
+    """One-line summary of an event for the Events tab."""
+    kind = event.get('event')
+    get = event.get
+    if kind == 'progress':
+        metrics = get('metrics') or {}
+        parts = [f"it {get('iteration')}/{get('iterations')}", f"{fmt_steps(get('steps'))} steps"]
+        if 'balanced_success_rate' in metrics:
+            parts.append(f"balanced {fmt_pct(metrics['balanced_success_rate'])}")
+        if 'success_rate' in metrics:
+            parts.append(f"success {fmt_pct(metrics['success_rate'])}")
+        if 'reward/total' in metrics:
+            parts.append(f"reward {metrics['reward/total']:.1f}")
+        parts.append(f"{get('sps', 0):.0f} sps")
+        return ' · '.join(parts)
+    if kind == 'start':
+        if 'target_steps' in event:
+            return (f"{fmt_steps(get('target_steps'))} steps · {get('target_iterations')} it · "
+                    f"parallel {get('parallel')} · {get('device')}")
+        return ', '.join(get('specialists') or [])
+    if kind == 'checkpoint':
+        return f"it {get('iteration')} · {Path(str(get('path', ''))).name}"
+    if kind == 'early_stop':
+        return f"balanced success {fmt_pct(get('balanced_success_rate'))} at it {get('iteration')}"
+    if kind == 'error':
+        return str(get('message', ''))
+    if kind == 'train_end':
+        return f"{get('status')} · {fmt_steps(get('steps'))} steps · {fmt_duration(get('wall_seconds'))}"
+    if kind == 'skipped':
+        return str(get('reason', ''))
+    if kind == 'eval_start':
+        return f"{get('episodes')} episodes"
+    if kind == 'eval':
+        return f"success {fmt_pct(get('success_rate'))} over {get('episodes')} episodes · health {fmt_pct(get('health'))}"
+    if kind in ('end', 'specialist_end'):
+        prefix = f"{get('specialist')}: " if kind == 'specialist_end' else ''
+        text = f"{prefix}{get('status')}"
+        if get('eval_success_rate') is not None:
+            text += f" · eval {fmt_pct(get('eval_success_rate'))}"
+        if get('message'):
+            text += f" · {get('message')}"
+        return text
+    if kind == 'specialist_start':
+        return str(get('specialist'))
+    if kind == 'chain_start':
+        return f"{get('runs')} runs · {get('parallel')} parallel"
+    if kind == 'chain':
+        return f"{get('successes')}/{get('runs')} = {fmt_pct(get('success_rate'))}"
+    return ''
+
+
+def read_tail(path: Path, limit: int = 192 * 1024) -> str:
+    """Last ``limit`` bytes of a console log, without ANSI codes and carriage-return overdraws."""
+    try:
+        with open(path, 'rb') as file:
+            file.seek(0, os.SEEK_END)
+            size = file.tell()
+            file.seek(max(0, size - limit))
+            data = file.read()
+    except OSError:
+        return ''
+    text = data.decode('utf-8', errors='replace')
+    if size > limit:
+        text = text.split('\n', 1)[-1]
+    lines = [ANSI.sub('', line).rsplit('\r', 1)[-1] for line in text.split('\n')]
+    return '\n'.join(lines).rstrip('\n')
+
+
+def find_log_dirs(root: Path) -> list[Path]:
+    """Log folders under root, newest first (names start yymmdd_NNN)."""
+    try:
+        return sorted((path for path in root.iterdir() if (path / PLAN_FILE).is_file()), key=lambda p: p.name,
+                      reverse=True)
+    except OSError:
+        return []
+
+
+# -------------------------------------------------------------------------------------------------------- painting
+
+def rounded(rect: QRectF, radius: float) -> QPainterPath:
+    path = QPainterPath()
+    path.addRoundedRect(rect, radius, radius)
+    return path
+
+
+def font(size: float, weight=QFont.Weight.Normal, mono=False) -> QFont:
+    base = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont) if mono else QFont(QApplication.font())
+    base.setPointSizeF(size)
+    base.setWeight(weight)
+    return base
+
+
+def paint_lines(p: QPainter, rect: QRectF, color: QColor, spacing: float, width: float, offset: float = 0.0):
+    """Diagonal lines across rect (caller clips)."""
+    p.save()
+    p.setClipRect(rect, Qt.ClipOperation.IntersectClip)
+    p.setPen(QPen(color, width))
+    h = rect.height()
+    x = rect.left() - h + (offset % spacing) - spacing
+    while x < rect.right() + spacing:
+        p.drawLine(QPointF(x, rect.bottom()), QPointF(x + h, rect.top()))
+        x += spacing
+    p.restore()
+
+
+def paint_fill(p: QPainter, rect: QRectF, fraction: float, color: QColor, t: float, *, hatch_to=None,
+               stripes=False, shimmer=False):
+    """One filled stretch of a bar (caller clips to the bar's rounded shape)."""
+    if hatch_to is not None and hatch_to > fraction:
+        hatch = QRectF(rect.left() + rect.width() * fraction, rect.top(), rect.width() * (hatch_to - fraction),
+                       rect.height())
+        p.fillRect(hatch, with_alpha(color, 28))
+        paint_lines(p, hatch, with_alpha(color, 70), 7, 1.2)
+    if fraction <= 0:
+        return
+    fill = QRectF(rect.left(), rect.top(), rect.width() * fraction, rect.height())
+    gradient = QLinearGradient(0, fill.top(), 0, fill.bottom())
+    gradient.setColorAt(0, color.lighter(125))
+    gradient.setColorAt(1, color.darker(112))
+    p.fillRect(fill, gradient)
+    if stripes:
+        paint_lines(p, fill, QColor(255, 255, 255, 38), 14, 5, t * 28)
+    if shimmer and fill.width() > 6:
+        band = max(60.0, rect.width() * 0.18)
+        x = fill.left() - band + ((t * 0.55) % 1.0) * (fill.width() + band * 2)
+        glow = QLinearGradient(x - band / 2, 0, x + band / 2, 0)
+        glow.setColorAt(0, QColor(255, 255, 255, 0))
+        glow.setColorAt(0.5, QColor(255, 255, 255, 60))
+        glow.setColorAt(1, QColor(255, 255, 255, 0))
+        p.save()
+        p.setClipRect(fill, Qt.ClipOperation.IntersectClip)
+        p.fillRect(QRectF(x - band / 2, fill.top(), band, fill.height()), glow)
+        p.restore()
+    # bright leading edge
+    if fraction < 1.0:
+        p.fillRect(QRectF(fill.right() - 2, fill.top(), 2, fill.height()), color.lighter(160))
+
+
+def paint_bar_label(p: QPainter, rect: QRectF, text: str, size: float = 8.5):
+    p.setFont(font(size, QFont.Weight.Bold))
+    p.setPen(QColor(0, 0, 0, 150))
+    p.drawText(rect.translated(0, 1), Qt.AlignmentFlag.AlignCenter, text)
+    p.setPen(QColor('white'))
+    p.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+
+
+def paint_bar(p: QPainter, rect: QRectF, fraction: float, color: QColor, t: float, *, ticks: int = 0,
+              label: str = '', **fill):
+    """Rounded track + fill + iteration ticks + centered label."""
+    radius = rect.height() / 2
+    path = rounded(rect, radius)
+    p.fillPath(path, C.track)
+    p.save()
+    p.setClipPath(path)
+    paint_fill(p, rect, fraction, color, t, **fill)
+    if 1 < ticks <= 80 and rect.width() / ticks >= 5:
+        p.setPen(QPen(with_alpha(C.bg, 120), 1))
+        for i in range(1, ticks):
+            x = rect.left() + rect.width() * i / ticks
+            p.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()))
+    p.restore()
+    if label:
+        paint_bar_label(p, rect, label, 8.5 if rect.height() < 20 else 9.5)
+
+
+def paint_status_icon(p: QPainter, center: QPointF, status: str, t: float, radius: float = 8.0):
+    color = STATUS.get(status, (C.muted, ''))[0]
+    rect = QRectF(center.x() - radius, center.y() - radius, radius * 2, radius * 2)
+    p.save()
+    if status in ('pending', 'skipped'):
+        p.setPen(QPen(C.idle, 2))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(rect.adjusted(1, 1, -1, -1))
+        if status == 'skipped':
+            p.drawLine(QPointF(center.x() - 3.5, center.y()), QPointF(center.x() + 3.5, center.y()))
+    elif status in ACTIVE:
+        p.setPen(QPen(with_alpha(color, 60), 2.4))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(rect.adjusted(1, 1, -1, -1))
+        pen = QPen(color, 2.4)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(pen)
+        p.drawArc(rect.adjusted(1, 1, -1, -1), int(-(t * 400) % 360 * 16), 110 * 16)
+    else:
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(color)
+        p.drawEllipse(rect)
+        pen = QPen(C.bg, 2.2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        x, y = center.x(), center.y()
+        if status in ('ok', 'early', 'completed'):
+            path = QPainterPath(QPointF(x - 3.6, y + 0.2))
+            path.lineTo(x - 1.0, y + 2.8)
+            path.lineTo(x + 3.8, y - 2.6)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawPath(path)
+        elif status == 'failed':
+            p.drawLine(QPointF(x - 3, y - 3), QPointF(x + 3, y + 3))
+            p.drawLine(QPointF(x - 3, y + 3), QPointF(x + 3, y - 3))
+        else:                               # interrupted / lost: pause bars
+            p.drawLine(QPointF(x - 2, y - 3), QPointF(x - 2, y + 3))
+            p.drawLine(QPointF(x + 2, y - 3), QPointF(x + 2, y + 3))
+    p.restore()
+
+
+def paint_pill(p: QPainter, x: float, y: float, text: str, color: QColor, size: float = 8.5, right=False) -> float:
+    """Rounded tag; returns its width.  ``right`` anchors x at the pill's right edge."""
+    p.setFont(font(size, QFont.Weight.Bold))
+    width = p.fontMetrics().horizontalAdvance(text) + 16
+    height = p.fontMetrics().height() + 4
+    left = x - width if right else x
+    rect = QRectF(left, y, width, height)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(with_alpha(color, 45))
+    p.drawRoundedRect(rect, height / 2, height / 2)
+    p.setPen(color.lighter(115))
+    p.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+    return width
+
+
+def paint_sparkline(p: QPainter, rect: QRectF, points: list[tuple[float, float]], color: QColor, lo=0.0, hi=1.0):
+    p.save()
+    p.setPen(QPen(with_alpha(C.border, 255), 1, Qt.PenStyle.DotLine))
+    p.drawLine(QPointF(rect.left(), rect.bottom()), QPointF(rect.right(), rect.bottom()))
+    if len(points) >= 2:
+        x0, x1 = points[0][0], points[-1][0]
+        span = (x1 - x0) or 1
+
+        def at(point):
+            return QPointF(rect.left() + (point[0] - x0) / span * rect.width(),
+                           rect.bottom() - (min(hi, max(lo, point[1])) - lo) / (hi - lo) * rect.height())
+        path = QPainterPath(at(points[0]))
+        for point in points[1:]:
+            path.lineTo(at(point))
+        area = QPainterPath(path)
+        area.lineTo(QPointF(rect.right(), rect.bottom()))
+        area.lineTo(QPointF(rect.left(), rect.bottom()))
+        gradient = QLinearGradient(0, rect.top(), 0, rect.bottom())
+        gradient.setColorAt(0, with_alpha(color, 90))
+        gradient.setColorAt(1, with_alpha(color, 0))
+        p.fillPath(area, gradient)
+        p.setPen(QPen(color, 1.6))
+        p.drawPath(path)
+        p.setBrush(color)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(at(points[-1]), 2.5, 2.5)
+    p.restore()
+
+
+# --------------------------------------------------------------------------------------------------------- widgets
+
+class Clickable(QWidget):
+    """Painted card that reports clicks and tracks hover."""
+    clicked = Signal(object)
+
+    def __init__(self, key):
+        super().__init__()
+        self.key = key
+        self.hover = False
+        self.selected = False
+        self.setMouseTracking(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def enterEvent(self, _event):
+        self.hover = True
+        self.update()
+
+    def leaveEvent(self, _event):
+        self.hover = False
+        self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit(self.key)
+
+    def paint_card(self, p: QPainter) -> QRectF:
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        background = C.card_hi if (self.selected or self.hover) else C.card
+        p.setPen(QPen(C.accent if self.selected else C.border, 1))
+        p.setBrush(background)
+        p.drawRoundedRect(rect, 10, 10)
+        return rect
+
+
+class Header(Clickable):
+    """Plan name, status, timing and a segmented whole-plan bar."""
+
+    def __init__(self, window):
+        super().__init__('round')
+        self.window = window
+        self.setFixedHeight(138)
+        self.shown = {}
+
+    def step(self):
+        """Eases each segment toward its run's progress (called every frame)."""
+        model = self.window.model
+        if model is None:
+            return
+        now = time.time()
+        for run, status in zip(model.runs, model.statuses()):
+            self.shown[run.index] = ease(self.shown.get(run.index, 0.0), run.fraction(now, status))
+
+    def paintEvent(self, _event):
+        model = self.window.model
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.paint_card(p)
+        if model is None or not model.plan:
+            p.setPen(C.muted)
+            p.setFont(font(11))
+            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.window.empty_text)
+            return
+        now, t = time.time(), self.window.t
+        left, right = rect.left() + 18, rect.right() - 18
+
+        p.setFont(font(17, QFont.Weight.Bold))
+        p.setPen(C.text)
+        name = model.name
+        p.drawText(QPointF(left, rect.top() + 34), name)
+        x = left + p.fontMetrics().horizontalAdvance(name) + 12
+        status = model.status()
+        color, label = STATUS.get(status, (C.muted, status))
+        x += paint_pill(p, x, rect.top() + 17, label.upper(), color) + 6
+        paint_pill(p, x, rect.top() + 17, str(model.plan.get('kind', '')), C.muted)
+
+        created, finished = model.created_ts, model.finished_ts
+        elapsed = ((finished or now) - created) if created else None
+        meta = [f"started {fmt_clock(created)}", f"elapsed {fmt_duration(elapsed)}"]
+        if model.plan.get('host'):
+            meta.append(f"{model.plan['host']} · pid {model.plan.get('pid')}")
+        if model.plan.get('steps_budget'):
+            meta.append(f"{fmt_steps(model.plan['steps_budget'])} steps each")
+        p.setFont(font(9.5))
+        p.setPen(C.muted)
+        p.drawText(QPointF(left, rect.top() + 58), p.fontMetrics().elidedText(
+            '   ·   '.join(meta), Qt.TextElideMode.ElideRight, int(right - left)))
+
+        # segmented bar: one segment per run, width by target steps
+        bar = QRectF(left, rect.top() + 72, right - left, 24)
+        statuses = model.statuses()
+        weights = [run.target_steps or 1 for run in model.runs]
+        total = sum(weights) or 1
+        path = rounded(bar, bar.height() / 2)
+        p.fillPath(path, C.track)
+        p.save()
+        p.setClipPath(path)
+        x = bar.left()
+        for run, status, weight in zip(model.runs, statuses, weights):
+            seg = QRectF(x, bar.top(), bar.width() * weight / total, bar.height())
+            shown = self.shown.get(run.index, 0.0)
+            color = STATUS.get(status, (C.muted, ''))[0]
+            hatch = 1.0 if status in ('early', 'failed', 'interrupted', 'lost') else None
+            paint_fill(p, seg, shown, color, t, hatch_to=hatch, stripes=status == 'evaluating',
+                       shimmer=status == 'training')
+            x = seg.right()
+            if x < bar.right() - 1:
+                p.fillRect(QRectF(x - 1, bar.top(), 2, bar.height()), C.bg)
+        p.restore()
+        fraction = model.fraction(now)
+        paint_bar_label(p, bar, f'{fraction:.0%}', 9.5)
+
+        counts = {}
+        for status in statuses:
+            counts[status] = counts.get(status, 0) + 1
+        done = sum(counts.get(s, 0) for s in FINISHED)
+        summary = [f"{done} / {len(statuses)} done"]
+        for key in ('early', 'failed', 'interrupted', 'lost'):
+            if counts.get(key):
+                summary.append(f"{counts[key]} {STATUS[key][1]}")
+        active = model.active_index()
+        if active is not None:
+            summary.append(f"now: {model.runs[active].name}")
+        p.setFont(font(9.5))
+        p.setPen(C.muted)
+        p.drawText(QPointF(left, bar.bottom() + 22), '   ·   '.join(summary))
+        eta = model.eta(now)
+        if eta is not None:
+            p.setFont(font(10, QFont.Weight.Bold))
+            p.setPen(C.text)
+            p.drawText(QRectF(left, bar.bottom() + 8, right - left, 18), Qt.AlignmentFlag.AlignRight,
+                       f"≈ {fmt_duration(eta)} left")
+
+
+class RunRow(Clickable):
+    """One specialist: status icon, name, phase, progress bar, numbers, success sparkline, eval pill."""
+    HEIGHT = 56
+
+    def __init__(self, window, index: int):
+        super().__init__(index)
+        self.window = window
+        self.index = index
+        self.shown = 0.0
+        self.setFixedHeight(self.HEIGHT)
+
+    def step(self):
+        """Eases the bar toward the run's progress (called every frame)."""
+        self.shown = ease(self.shown, self.target())
+
+    def animating(self) -> bool:
+        model = self.window.model
+        if model is None or self.index >= len(model.runs):
+            return False
+        return model.runs[self.index].status(model.live) in ACTIVE or abs(self.shown - self.target()) > 0.001
+
+    def target(self) -> float:
+        model = self.window.model
+        run = model.runs[self.index]
+        return run.fraction(time.time(), run.status(model.live))
+
+    def paintEvent(self, _event):
+        model = self.window.model
+        if model is None or self.index >= len(model.runs):
+            return
+        run = model.runs[self.index]
+        now, t = time.time(), self.window.t
+        status = run.status(model.live)
+        color = STATUS.get(status, (C.muted, ''))[0]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.paint_card(p)
+        if status in ACTIVE:
+            p.fillRect(QRectF(rect.left() + 1, rect.top() + 10, 3, rect.height() - 20), color)
+        width = rect.width()
+        cy = rect.center().y()
+        paint_status_icon(p, QPointF(rect.left() + 22, cy), status, t)
+
+        # name + phase
+        name_w = min(210.0, max(140.0, width * 0.2))
+        p.setFont(font(11, QFont.Weight.Bold))
+        p.setPen(C.text if status != 'pending' else C.muted)
+        fm = p.fontMetrics()
+        p.drawText(QPointF(rect.left() + 40, rect.top() + 23), fm.elidedText(run.name, Qt.TextElideMode.ElideRight,
+                                                                          int(name_w)))
+        p.setFont(font(9))
+        p.setPen(color if status in ('failed', 'interrupted', 'lost') else C.muted)
+        phase = self.phase_text(run, status, now)
+        p.drawText(QPointF(rect.left() + 40, rect.top() + 41),
+                   p.fontMetrics().elidedText(phase, Qt.TextElideMode.ElideRight, int(name_w)))
+
+        # bar
+        right_w = 320.0 if width > 760 else 150.0
+        bar = QRectF(rect.left() + 40 + name_w + 14, cy - 8, max(60.0, width - name_w - right_w - 70), 16)
+        label = ''
+        if status == 'evaluating':
+            label = 'evaluating'
+        elif status != 'pending':
+            label = f'{self.shown:.0%}'
+        hatch = 1.0 if status in ('early', 'failed', 'interrupted', 'lost') else None
+        if status == 'starting':
+            paint_bar(p, bar, 1.0, with_alpha(C.accent, 90), t, stripes=True, label='starting')
+        else:
+            paint_bar(p, bar, self.shown, color, t, ticks=run.target_iterations if status != 'pending' else 0,
+                      label=label, hatch_to=hatch, stripes=status == 'evaluating', shimmer=status == 'training')
+
+        # numbers
+        nx = bar.right() + 16
+        p.setFont(font(9.5, QFont.Weight.DemiBold))
+        p.setPen(C.text if status != 'pending' else C.faint)
+        p.drawText(QPointF(nx, rect.top() + 24), f"{fmt_steps(run.steps)} / {fmt_steps(run.target_steps)}")
+        p.setFont(font(8.5))
+        p.setPen(C.muted)
+        p.drawText(QPointF(nx, rect.top() + 41), self.rate_text(run, status, now))
+
+        if right_w >= 320:
+            # success sparkline + eval
+            spark = QRectF(rect.right() - 178, rect.top() + 12, 78, rect.height() - 24)
+            key = 'balanced_success_rate' if len(run.series('balanced_success_rate')) >= 2 else 'success_rate'
+            points = run.series(key)
+            if points:
+                paint_sparkline(p, spark, points, rate_color(points[-1][1]))
+            evaluation = run.eval_rate()
+            if evaluation is not None:
+                paint_pill(p, rect.right() - 12, cy - 10, f"eval {fmt_pct(evaluation)}", rate_color(evaluation),
+                           8.5, right=True)
+            elif points:
+                p.setFont(font(8.5, QFont.Weight.Bold))
+                p.setPen(rate_color(points[-1][1]))
+                p.drawText(QRectF(rect.right() - 56, cy - 10, 46, 20), Qt.AlignmentFlag.AlignCenter,
+                           fmt_pct(points[-1][1]))
+
+    @staticmethod
+    def phase_text(run: Run, status: str, now: float) -> str:
+        iters = f"it {run.iteration}/{run.target_iterations}" if run.target_iterations else f"it {run.iteration}"
+        started = run.started_ts
+        duration = ((run.finished_ts or now) - started) if started else None
+        if status == 'pending':
+            return 'waiting'
+        if status == 'starting':
+            return f"starting · {fmt_duration(duration)}"
+        if status == 'training':
+            return f"training · {iters}"
+        if status == 'evaluating':
+            episodes = (run.eval_start or {}).get('episodes')
+            since = now - run.eval_start['ts'] if run.eval_start else None
+            return f"eval {episodes} episodes · {fmt_duration(since)}"
+        if status == 'ok':
+            return f"done · {iters} · {fmt_duration(duration)}"
+        if status == 'early':
+            stop = run.early_stop or {}
+            return f"early stop at it {stop.get('iteration', run.iteration)} · {fmt_duration(duration)}"
+        if status == 'lost':
+            return f"process gone · {iters}"
+        message = run.message()
+        return f"{(run.end or run.entry).get('status', status)}: {message}" if message else f"{status} · {iters}"
+
+    @staticmethod
+    def rate_text(run: Run, status: str, now: float) -> str:
+        sps = run.sps()
+        if status == 'training':
+            eta = run.eta(now)
+            parts = [f"{sps:,.0f} sps" if sps else '', f"{fmt_duration(eta)} left" if eta is not None else '']
+            return ' · '.join(part for part in parts if part)
+        if status in FINISHED and sps:
+            return f"{sps:,.0f} sps"
+        return ''
+
+
+class ChainCard(Clickable):
+    """eval-chain after the round: one block per chain run once results are in."""
+
+    def __init__(self, window):
+        super().__init__('round')
+        self.window = window
+        self.lines: list[tuple[str, QColor]] = []
+        self.setFixedHeight(RunRow.HEIGHT)
+
+    def refresh(self):
+        chain = self.window.model.chain() if self.window.model else None
+        lines = []
+        if chain and chain['result']:
+            result = chain['result']
+            runs = result.get('runs') or 1
+            for key, count in list((result.get('failures') or {}).items())[:5]:
+                lines.append((f"{count:>3}×  {key}  ({count / runs:.0%})", C.bad))
+            for error in (result.get('errors') or [])[:3]:
+                lines.append((f"error: {error}", C.warn))
+        elif chain and chain['error']:
+            lines.append((str(chain['error'].get('message', '')), C.bad))
+        self.lines = lines
+        self.setFixedHeight(RunRow.HEIGHT + (len(lines) * 18 + 6 if lines else 0))
+        self.setVisible(chain is not None)
+
+    def animating(self) -> bool:
+        chain = self.window.model.chain() if self.window.model else None
+        return bool(chain) and chain['status'] == 'running'
+
+    def paintEvent(self, _event):
+        model = self.window.model
+        chain = model.chain() if model else None
+        if chain is None:
+            return
+        t, now = self.window.t, time.time()
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.paint_card(p)
+        status = chain['status']
+        color = STATUS.get(status, (C.muted, ''))[0]
+        icon_status = status if status != 'running' else 'evaluating'
+        top = QRectF(rect.left(), rect.top(), rect.width(), RunRow.HEIGHT)
+        cy = top.center().y()
+        paint_status_icon(p, QPointF(rect.left() + 22, cy), icon_status, t)
+        name_w = min(210.0, max(140.0, rect.width() * 0.2))
+        p.setFont(font(11, QFont.Weight.Bold))
+        p.setPen(C.text if status != 'pending' else C.muted)
+        p.drawText(QPointF(rect.left() + 40, rect.top() + 23), 'eval-chain')
+        p.setFont(font(9))
+        p.setPen(C.muted)
+        runs = chain['runs']
+        sub = f"{runs} runs" + (f" · {chain['parallel']} parallel" if chain['parallel'] else '')
+        if status == 'running' and chain['start']:
+            sub += f" · {fmt_duration(now - chain['start']['ts'])}"
+        elif status in ('pending', 'skipped'):
+            sub = STATUS[status][1] + f" · {runs} runs"
+        p.drawText(QPointF(rect.left() + 40, rect.top() + 41), sub)
+
+        right_w = 320.0 if rect.width() > 760 else 150.0
+        bar = QRectF(rect.left() + 40 + name_w + 14, cy - 8, max(60.0, rect.width() - name_w - right_w - 70), 16)
+        result = chain['result']
+        if result:
+            total = max(1, result.get('runs') or 1)
+            successes = result.get('successes') or 0
+            path = rounded(bar, bar.height() / 2)
+            p.fillPath(path, C.track)
+            p.save()
+            p.setClipPath(path)
+            if total <= 120:
+                gap = 2.0 if bar.width() / total > 6 else 0.0
+                width = bar.width() / total
+                for i in range(total):
+                    block = QRectF(bar.left() + i * width, bar.top(), width - gap, bar.height())
+                    p.fillRect(block, C.ok if i < successes else with_alpha(C.bad, 170))
+            else:
+                p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * successes / total, bar.height()), C.ok)
+            p.restore()
+            paint_bar_label(p, bar, f"{successes}/{total} = {fmt_pct(result.get('success_rate'))}")
+            p.setFont(font(9.5, QFont.Weight.DemiBold))
+            p.setPen(rate_color(result.get('success_rate')))
+            p.drawText(QPointF(bar.right() + 16, rect.top() + 24), f"{fmt_pct(result.get('success_rate'))} success")
+        else:
+            paint_bar(p, bar, 1.0 if status == 'running' else 0.0, color, t, stripes=True,
+                      label='running' if status == 'running' else '')
+
+        p.setFont(font(9, mono=True))
+        y = rect.top() + RunRow.HEIGHT + 2
+        for text, line_color in self.lines:
+            p.setPen(line_color)
+            p.drawText(QPointF(rect.left() + 40, y + 12),
+                       p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, int(rect.width() - 60)))
+            y += 18
+
+
+class LineChart(QWidget):
+    """Small line chart: x = iteration."""
+
+    def __init__(self, title: str, fixed=None, fmt=lambda v: f'{v:.2f}'):
+        super().__init__()
+        self.title = title
+        self.fixed = fixed
+        self.fmt = fmt
+        self.series: list[dict] = []
+        self.hlines: list[tuple[float, QColor, str]] = []
+        self.setMinimumHeight(150)
+
+    def set_data(self, series: list[dict], hlines=()):
+        self.series = [s for s in series if s['points']]
+        self.hlines = list(hlines)
+        self.update()
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        p.setPen(QPen(C.border, 1))
+        p.setBrush(C.bg)
+        p.drawRoundedRect(rect, 8, 8)
+        p.setFont(font(9, QFont.Weight.Bold))
+        p.setPen(C.muted)
+        title = self.title.upper()
+        p.drawText(QPointF(rect.left() + 12, rect.top() + 20), title)
+        # legend: last values, right to left while they fit beside the title
+        limit = rect.left() + 12 + p.fontMetrics().horizontalAdvance(title) + 12
+        x = rect.right() - 10
+        p.setFont(font(8.5, QFont.Weight.DemiBold))
+        for series in reversed(self.series):
+            text = f"{series['label']} {self.fmt(series['points'][-1][1])}"
+            width = p.fontMetrics().horizontalAdvance(text)
+            if x - width < limit:
+                break
+            p.setPen(series['color'])
+            p.drawText(QPointF(x - width, rect.top() + 20), text)
+            x -= width + 14
+        plot = QRectF(rect.left() + 46, rect.top() + 32, rect.width() - 60, rect.height() - 52)
+        if not self.series or plot.width() < 20 or plot.height() < 20:
+            p.setFont(font(9))
+            p.setPen(C.faint)
+            p.drawText(plot, Qt.AlignmentFlag.AlignCenter, 'no data yet')
+            return
+        xs = [pt[0] for s in self.series for pt in s['points']]
+        ys = [pt[1] for s in self.series for pt in s['points']] + [h[0] for h in self.hlines]
+        x0, x1 = min(xs), max(xs)
+        if self.fixed:
+            y0, y1 = self.fixed
+        else:
+            y0, y1 = min(ys), max(ys)
+            pad = (y1 - y0) * 0.1 or abs(y1) * 0.1 or 1.0
+            y0, y1 = y0 - pad, y1 + pad
+        xspan, yspan = (x1 - x0) or 1, (y1 - y0) or 1
+
+        def at(px, py):
+            return QPointF(plot.left() + (px - x0) / xspan * plot.width(),
+                           plot.bottom() - (min(y1, max(y0, py)) - y0) / yspan * plot.height())
+
+        p.setFont(font(8))
+        for i in range(5):
+            value = y0 + yspan * i / 4
+            y = plot.bottom() - plot.height() * i / 4
+            p.setPen(QPen(with_alpha(C.border, 200), 1))
+            p.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y))
+            p.setPen(C.faint)
+            p.drawText(QRectF(rect.left() + 2, y - 8, 40, 16), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                       self.fmt(value))
+        p.drawText(QRectF(plot.left(), plot.bottom() + 3, 60, 14), Qt.AlignmentFlag.AlignLeft, f"it {x0:g}")
+        p.drawText(QRectF(plot.right() - 60, plot.bottom() + 3, 60, 14), Qt.AlignmentFlag.AlignRight, f"it {x1:g}")
+        for value, color, label in self.hlines:
+            y = at(x0, value).y()
+            p.setPen(QPen(color, 1, Qt.PenStyle.DashLine))
+            p.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y))
+            p.drawText(QRectF(plot.left() + 4, y - 15, 160, 14), Qt.AlignmentFlag.AlignLeft, label)
+        for series in self.series:
+            points = series['points']
+            path = QPainterPath(at(*points[0]))
+            for point in points[1:]:
+                path.lineTo(at(*point))
+            if series.get('area'):
+                area = QPainterPath(path)
+                area.lineTo(at(points[-1][0], y0))
+                area.lineTo(at(points[0][0], y0))
+                gradient = QLinearGradient(0, plot.top(), 0, plot.bottom())
+                gradient.setColorAt(0, with_alpha(series['color'], 70))
+                gradient.setColorAt(1, with_alpha(series['color'], 0))
+                p.fillPath(area, gradient)
+            pen = QPen(with_alpha(series['color'], series.get('alpha', 255)), series.get('width', 2.0))
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            if len(points) == 1:
+                p.setBrush(series['color'])
+                p.drawEllipse(at(*points[0]), 3, 3)
+            else:
+                p.drawPath(path)
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(series['color'])
+                p.drawEllipse(at(*points[-1]), 3, 3)
+
+
+class BarList(QWidget):
+    """Painted sections: ('bars', title, [(label, value 0..1 or None, text, color)]), ('grid', title,
+    [(label, value)]), ('text', title, [(text, color)])."""
+    ROW = 24
+
+    def __init__(self):
+        super().__init__()
+        self.sections = []
+        self.empty = 'nothing yet'
+
+    def set_sections(self, sections, empty='nothing yet'):
+        self.sections = sections
+        self.empty = empty
+        self._resize()
+        self.update()
+
+    def resizeEvent(self, _event):
+        self._resize()
+
+    def _layout(self, width: float):
+        """[(kind, y, height, payload)], total height."""
+        items, y = [], 14.0
+        fm = QFontMetrics(font(9))
+        for kind, title, rows in self.sections:
+            items.append(('title', y, 22, title))
+            y += 26
+            if kind == 'bars':
+                for row in rows:
+                    items.append(('bar', y, self.ROW, row))
+                    y += self.ROW
+            elif kind == 'grid':
+                cell_w, cell_h = 64.0, 24.0
+                per_row = max(1, int((width - 28) // (cell_w + 4)))
+                for i, cell in enumerate(rows):
+                    items.append(('cell', y + (i // per_row) * (cell_h + 4), cell_h, (i % per_row, cell_w, cell)))
+                y += math.ceil(len(rows) / per_row) * (cell_h + 4) if rows else 0
+            else:
+                for text, color in rows:
+                    height = fm.boundingRect(0, 0, int(width - 28), 10000, int(Qt.TextFlag.TextWordWrap), text).height()
+                    items.append(('text', y, height + 4, (text, color)))
+                    y += height + 6
+            y += 14
+        return items, y
+
+    def _resize(self):
+        _, height = self._layout(self.width())
+        self.setMinimumHeight(int(height) + 10)
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        width = self.width()
+        if not self.sections:
+            p.setFont(font(10))
+            p.setPen(C.faint)
+            p.drawText(QRectF(0, 20, width, 30), Qt.AlignmentFlag.AlignCenter, self.empty)
+            return
+        items, _ = self._layout(width)
+        label_w = min(200.0, width * 0.32)
+        for kind, y, height, payload in items:
+            if kind == 'title':
+                p.setFont(font(9, QFont.Weight.Bold))
+                p.setPen(C.muted)
+                p.drawText(QPointF(14, y + 16), payload.upper())
+            elif kind == 'bar':
+                label, value, text, color = payload
+                p.setFont(font(9))
+                p.setPen(C.text)
+                p.drawText(QRectF(14, y, label_w - 8, height), Qt.AlignmentFlag.AlignVCenter,
+                           p.fontMetrics().elidedText(label, Qt.TextElideMode.ElideRight, int(label_w - 8)))
+                bar = QRectF(14 + label_w, y + 6, max(40.0, width - label_w - 130), height - 12)
+                paint_bar(p, bar, value or 0.0, color, 0.0)
+                p.setFont(font(9, QFont.Weight.DemiBold))
+                p.setPen(color if value is not None else C.faint)
+                p.drawText(QRectF(bar.right() + 10, y, 100, height), Qt.AlignmentFlag.AlignVCenter, text)
+            elif kind == 'cell':
+                column, cell_w, (label, value) = payload
+                cell = QRectF(14 + column * (cell_w + 4), y, cell_w, height)
+                color = rate_color(value)
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(with_alpha(color, 60 + int(150 * (value or 0))))
+                p.drawRoundedRect(cell, 5, 5)
+                p.setFont(font(8, QFont.Weight.DemiBold))
+                p.setPen(C.text)
+                p.drawText(cell, Qt.AlignmentFlag.AlignCenter, label)
+            else:
+                text, color = payload
+                p.setFont(font(9))
+                p.setPen(color)
+                p.drawText(QRectF(14, y, width - 28, height), int(Qt.TextFlag.TextWordWrap), text)
+
+
+def scrolling(widget: QWidget) -> QScrollArea:
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setWidget(widget)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    return area
+
+
+class DetailPane(QWidget):
+    """Selected run (or the whole round): charts, evaluation, console log, events."""
+
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        self.title = QLabel()
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self.title)
+        self.tabs = QTabWidget()
+        layout.addWidget(self.tabs, 1)
+
+        self.charts = {
+            'success': LineChart('Success', (0.0, 1.0), fmt_pct),
+            'reward': LineChart('Reward / episode'),
+            'health': LineChart('Health at exit', (0.0, 1.0), fmt_pct),
+            'length': LineChart('Episode steps', fmt=lambda v: f'{v:.0f}'),
+            'kl': LineChart('Approx KL', fmt=lambda v: f'{v:.3f}'),
+            'sps': LineChart('Steps / second', fmt=lambda v: f'{v:.0f}'),
+        }
+        grid_page = QWidget()
+        grid = QGridLayout(grid_page)
+        grid.setContentsMargins(10, 10, 10, 10)
+        grid.setSpacing(10)
+        for i, chart in enumerate(self.charts.values()):
+            grid.addWidget(chart, i // 2, i % 2)
+        self.summary = BarList()
+        self.chart_stack = QStackedWidget()
+        self.chart_stack.addWidget(grid_page)
+        self.chart_stack.addWidget(scrolling(self.summary))
+        self.tabs.addTab(self.chart_stack, 'Charts')
+
+        self.evaluation = BarList()
+        self.tabs.addTab(scrolling(self.evaluation), 'Eval')
+
+        mono = font(9, mono=True)
+        self.log = QPlainTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setFont(mono)
+        self.log.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self.log.setMaximumBlockCount(5000)
+        self.tabs.addTab(self.log, 'Log')
+        self.events = QPlainTextEdit()
+        self.events.setReadOnly(True)
+        self.events.setFont(mono)
+        self.events.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self.tabs.addTab(self.events, 'Events')
+
+        self._key = None
+        self._log_signature = None
+
+    def refresh(self, model: Training, selection, force: bool = False):
+        key = (id(model), selection, model.version if model else None)
+        if key != self._key or force:
+            self._key = key
+            if model is None or not model.plan:
+                self.title.setText('')
+                return
+            if selection == 'round' or not isinstance(selection, int) or selection >= len(model.runs):
+                self._show_round(model)
+            else:
+                self._show_run(model, model.runs[selection])
+        self._refresh_log(model, selection)
+
+    # -- run
+
+    def _show_run(self, model: Training, run: Run):
+        status = run.status(model.live)
+        color, label = STATUS.get(status, (C.muted, status))
+        where = (run.start or {}).get('run_dir') or run.entry.get('run_dir') or ''
+        self.title.setText(f"<span style='font-size:15pt; font-weight:700'>{run.name}</span>"
+                           f"&nbsp;&nbsp;<span style='color:{color.name()}; font-weight:700'>{label}</span>"
+                           f"<br><span style='color:{C.faint.name()}'>{where}</span>")
+        self.chart_stack.setCurrentIndex(0)
+        stop = (run.start or {}).get('stop_success')
+        hlines = [(stop, C.faint, f"early stop {fmt_pct(stop)}")] if stop else []
+        if run.eval_rate() is not None:
+            hlines.append((run.eval_rate(), C.eval, f"eval {fmt_pct(run.eval_rate())}"))
+        self.charts['success'].set_data([
+            {'label': 'success', 'color': C.accent, 'points': run.series('success_rate'), 'width': 1.4, 'alpha': 150},
+            {'label': 'curriculum', 'color': C.warn, 'points': run.series('curriculum/success_rate'), 'width': 1.4},
+            {'label': 'balanced', 'color': C.ok, 'points': run.series('balanced_success_rate'), 'width': 2.4},
+        ], hlines)
+        self.charts['reward'].set_data([{'label': 'total', 'color': C.accent, 'points': run.series('reward/total'),
+                                         'area': True}])
+        self.charts['health'].set_data([{'label': 'health', 'color': C.ok, 'points': run.series('health_at_exit'),
+                                         'area': True}])
+        self.charts['length'].set_data([{'label': 'steps', 'color': C.warn, 'points': run.series('episode_steps'),
+                                         'area': True}])
+        self.charts['kl'].set_data([{'label': 'kl', 'color': C.eval, 'points': run.series('losses/approx_kl')}])
+        self.charts['sps'].set_data([{'label': 'sps', 'color': C.muted, 'points': run.series('charts/SPS'),
+                                      'area': True}])
+
+        sections = []
+        if run.eval:
+            ev = run.eval
+            sections.append(('bars', 'Evaluation', [
+                ('success', ev.get('success_rate'), f"{fmt_pct(ev.get('success_rate'))} of {ev.get('episodes')}",
+                 rate_color(ev.get('success_rate'))),
+                ('health', ev.get('health'), fmt_pct(ev.get('health')), C.ok)]))
+            by_room = ev.get('by_room') or {}
+            if by_room:
+                sections.append(('bars', 'By room', [(room, value, fmt_pct(value), rate_color(value))
+                                                     for room, value in sorted(by_room.items())]))
+            by_state = ev.get('by_state') or {}
+            if by_state:
+                sections.append(('grid', 'By start state', sorted(by_state.items())))
+        elif run.eval_start:
+            sections.append(('text', 'Evaluation', [(f"running {run.eval_start.get('episodes')} episodes…", C.eval)]))
+        problems = [(str(e.get('message', '')), C.bad) for e in run.errors]
+        if run.end and run.end.get('message') and all(run.end['message'] != text for text, _ in problems):
+            problems.append((run.end['message'], C.warn))
+        if problems:
+            sections.append(('text', 'Problems', problems))
+        self.evaluation.set_sections(sections, 'not evaluated yet')
+        self._set_events([(run.name, event) for event in run.events])
+
+    # -- round
+
+    def _show_round(self, model: Training):
+        status = model.status()
+        color, label = STATUS.get(status, (C.muted, status))
+        self.title.setText(f"<span style='font-size:15pt; font-weight:700'>{model.name}</span>"
+                           f"&nbsp;&nbsp;<span style='color:{color.name()}; font-weight:700'>{label}</span>"
+                           f"<br><span style='color:{C.faint.name()}'>{model.dir}</span>")
+        self.chart_stack.setCurrentIndex(1)
+        evals, train, sps, wall = [], [], [], []
+        speeds = [run.sps() or 0 for run in model.runs]
+        walls = [((run.finished_ts or time.time()) - run.started_ts) if run.started_ts else 0 for run in model.runs]
+        for run, speed, seconds in zip(model.runs, speeds, walls):
+            value = run.eval_rate()
+            episodes = run.eval_episodes()
+            evals.append((run.name, value, f"{fmt_pct(value)}" + (f" · {episodes} ep" if episodes else ''),
+                          rate_color(value)))
+            value = run.train_success()
+            train.append((run.name, value, fmt_pct(value), rate_color(value)))
+            sps.append((run.name, speed / max(speeds) if speed and max(speeds) else None,
+                        f"{speed:,.0f}" if speed else '–', C.accent))
+            wall.append((run.name, seconds / max(walls) if seconds and max(walls) else None,
+                         fmt_duration(seconds) if seconds else '–', C.muted))
+        self.summary.set_sections([('bars', 'Eval success', evals), ('bars', 'Training success (last)', train),
+                                   ('bars', 'Steps / second', sps), ('bars', 'Wall time', wall)])
+
+        sections = []
+        chain = model.chain()
+        if chain and chain['result']:
+            result = chain['result']
+            runs = result.get('runs') or 1
+            sections.append(('bars', 'eval-chain', [
+                ('success', result.get('success_rate'), f"{result.get('successes')}/{runs}",
+                 rate_color(result.get('success_rate')))]))
+            failures = result.get('failures') or {}
+            if failures:
+                sections.append(('bars', 'Chain failures', [(key, count / runs, f"{count}×", C.bad)
+                                                            for key, count in failures.items()]))
+            if result.get('errors'):
+                sections.append(('text', 'Chain errors', [(str(e), C.warn) for e in result['errors']]))
+        errors = [(str(e.get('message', '')), C.bad) for e in model.round_errors()]
+        for run in model.runs:
+            errors += [(f"{run.name}: {e.get('message', '')}", C.bad) for e in run.errors]
+        if errors:
+            sections.append(('text', 'Errors', errors))
+        self.evaluation.set_sections(sections, 'no chain results yet')
+        merged = [('round', event) for event in model.round_events]
+        for run in model.runs:
+            merged += [(run.name, event) for event in run.events if event.get('event') != 'progress']
+        merged.sort(key=lambda item: item[1].get('ts', 0))
+        self._set_events(merged)
+
+    # -- text tabs
+
+    def _set_events(self, events: list[tuple[str, dict]]):
+        bar = self.events.verticalScrollBar()
+        at_bottom = bar.value() >= bar.maximum() - 4
+        lines = []
+        for source, event in events[-600:]:
+            kind = str(event.get('event', ''))
+            color = EVENT_COLORS.get(kind, C.text).name()
+            text = describe(event).replace('&', '&amp;').replace('<', '&lt;')
+            lines.append(f"<span style='color:{C.faint.name()}'>{fmt_clock(event.get('ts'))}</span>&nbsp;&nbsp;"
+                         f"<span style='color:{C.muted.name()}'>{source:<17}</span>&nbsp;"
+                         f"<span style='color:{color}'>{kind:<17}</span>&nbsp;{text}".replace('  ', '&nbsp;&nbsp;'))
+        self.events.setUpdatesEnabled(False)
+        self.events.clear()
+        self.events.appendHtml('<br>'.join(lines))
+        self.events.setUpdatesEnabled(True)
+        if at_bottom:
+            bar.setValue(bar.maximum())
+
+    def _refresh_log(self, model: Training, selection):
+        if model is None:
+            return
+        if isinstance(selection, int) and selection < len(model.runs):
+            path = model.runs[selection].log_path
+        else:
+            path = model.log_path
+        try:
+            stat = path.stat() if path else None
+        except OSError:
+            stat = None
+        signature = (str(path), stat.st_size if stat else None, stat.st_mtime_ns if stat else None)
+        if signature == self._log_signature:
+            return
+        self._log_signature = signature
+        bar = self.log.verticalScrollBar()
+        at_bottom = bar.value() >= bar.maximum() - 4
+        self.log.setPlainText(read_tail(path) if stat else f'(no console log: {path})')
+        if at_bottom or signature[0] != getattr(self, '_log_path', None):
+            bar.setValue(bar.maximum())
+        self._log_path = signature[0]
+
+
+class Window(QMainWindow):
+    """Folder picker on top; plan + runs on the left; details on the right."""
+
+    def __init__(self, root: Path, initial, follow: bool):
+        super().__init__()
+        self.root = root
+        self.model = None
+        self.selection = None
+        self.auto_selection = True
+        self.t = 0.0
+        self._t0 = time.monotonic()
+        self.empty_text = f"no training logs under {root}"
+        self.dirs: list[Path] = []
+        self.setWindowTitle('Triforce training')
+        self.resize(1500, 920)
+
+        central = QWidget()
+        central.setObjectName('root')
+        self.setCentralWidget(central)
+        outer = QVBoxLayout(central)
+        outer.setContentsMargins(14, 12, 14, 14)
+        outer.setSpacing(10)
+
+        top = QHBoxLayout()
+        brand = QLabel("<span style='font-size:13pt; font-weight:800'>▲ Triforce</span>"
+                       f"<span style='color:{C.muted.name()}'>&nbsp;&nbsp;training monitor</span>")
+        top.addWidget(brand)
+        top.addStretch(1)
+        self.combo = QComboBox()
+        self.combo.activated.connect(self._picked)
+        top.addWidget(self.combo)
+        self.follow = QCheckBox('follow newest')
+        self.follow.setChecked(follow)
+        top.addWidget(self.follow)
+        open_button = QPushButton('Open…')
+        open_button.clicked.connect(self._open)
+        top.addWidget(open_button)
+        outer.addLayout(top)
+
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        outer.addWidget(splitter, 1)
+        left = QWidget()
+        self.left_layout = QVBoxLayout(left)
+        self.left_layout.setContentsMargins(0, 0, 6, 0)
+        self.left_layout.setSpacing(6)
+        self.header = Header(self)
+        self.header.clicked.connect(self._select)
+        self.left_layout.addWidget(self.header)
+        self.rows_layout = QVBoxLayout()
+        self.rows_layout.setSpacing(6)
+        self.left_layout.addLayout(self.rows_layout)
+        self.chain_card = ChainCard(self)
+        self.chain_card.clicked.connect(self._select)
+        self.chain_card.setVisible(False)
+        self.left_layout.addWidget(self.chain_card)
+        self.left_layout.addStretch(1)
+        splitter.addWidget(scrolling(left))
+        self.detail = DetailPane()
+        splitter.addWidget(self.detail)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
+        splitter.setSizes([860, 600])
+        self.rows: list[RunRow] = []
+
+        self._scan()
+        if initial is not None:
+            self.load(initial)
+        elif self.dirs:
+            self.load(self.dirs[0])
+
+        self.poll_timer = QTimer(self)
+        self.poll_timer.timeout.connect(self.poll)
+        self.poll_timer.start(POLL_MS)
+        self.scan_timer = QTimer(self)
+        self.scan_timer.timeout.connect(self._scan_and_follow)
+        self.scan_timer.start(2000)
+        self.frame_timer = QTimer(self)
+        self.frame_timer.timeout.connect(self.frame)
+        self.frame_timer.start(FRAME_MS)
+
+    # -- folders
+
+    def _scan(self):
+        dirs = find_log_dirs(self.root)
+        if self.model is not None and self.model.dir not in dirs:
+            dirs.append(self.model.dir)
+        if dirs != self.dirs:
+            self.dirs = dirs
+            self.combo.blockSignals(True)
+            self.combo.clear()
+            for path in dirs:
+                self.combo.addItem(path.name, str(path))
+            self._sync_combo()
+            self.combo.blockSignals(False)
+
+    def _sync_combo(self):
+        if self.model is not None:
+            index = self.combo.findData(str(self.model.dir))
+            if index >= 0:
+                self.combo.setCurrentIndex(index)
+
+    def _scan_and_follow(self):
+        self._scan()
+        if self.follow.isChecked() and self.dirs and (self.model is None or self.dirs[0].name > self.model.dir.name):
+            self.load(self.dirs[0])
+
+    def _picked(self, index: int):
+        path = Path(self.combo.itemData(index))
+        if self.model is None or path != self.model.dir:
+            self.follow.setChecked(path == (self.dirs[0] if self.dirs else None) and self.follow.isChecked())
+            self.load(path)
+
+    def _open(self):
+        chosen = QFileDialog.getExistingDirectory(self, 'Training log folder', str(self.root))
+        if not chosen:
+            return
+        path = Path(chosen)
+        if (path / PLAN_FILE).is_file():
+            self.follow.setChecked(False)
+            self.load(path)
+        else:
+            self.root = path
+            self.empty_text = f"no training logs under {path}"
+            self.follow.setChecked(True)
+            self._scan()
+            self._scan_and_follow()
+
+    def load(self, log_dir: Path):
+        """Switches to another log folder."""
+        self.model = Training(log_dir)
+        self.model.poll()
+        self.selection = None
+        self.auto_selection = True
+        self.header.shown = {}
+        self._rebuild_rows()
+        self._scan()
+        self._sync_combo()
+        self.poll(force=True)
+
+    # -- updates
+
+    def _rebuild_rows(self):
+        count = len(self.model.runs) if self.model else 0
+        while len(self.rows) > count:
+            row = self.rows.pop()
+            self.rows_layout.removeWidget(row)
+            row.deleteLater()
+        while len(self.rows) < count:
+            row = RunRow(self, len(self.rows))
+            row.clicked.connect(self._select)
+            self.rows_layout.addWidget(row)
+            self.rows.append(row)
+        for row in self.rows:
+            row.shown = 0.0
+
+    def _select(self, key):
+        self.selection = key
+        active = self.model.active_index() if self.model else None
+        self.auto_selection = key == active or (key == 'round' and active is None)
+        self._apply_selection()
+
+    def _apply_selection(self):
+        for row in self.rows:
+            row.selected = row.index == self.selection
+            row.update()
+        self.header.selected = self.selection == 'round'
+        self.header.update()
+        self.detail.refresh(self.model, self.selection)
+
+    def poll(self, force: bool = False):
+        if self.model is None:
+            self.header.update()
+            return
+        changed = self.model.poll()
+        if len(self.rows) != len(self.model.runs):
+            self._rebuild_rows()
+        if self.auto_selection:
+            active = self.model.active_index()
+            wanted = active if active is not None else 'round'
+            if wanted != self.selection:
+                self.selection = wanted
+                force = True
+        if changed or force:
+            self.chain_card.refresh()
+            self._apply_selection()
+            self.setWindowTitle(f"{self.model.fraction(time.time()):.0%} · {self.model.name} — Triforce training")
+        else:
+            self.detail.refresh(self.model, self.selection)     # console log may still be growing
+
+    def frame(self):
+        self.t = time.monotonic() - self._t0
+        self.header.step()
+        self.header.update()
+        for row in self.rows:
+            if row.animating():
+                row.step()
+                row.update()
+        if self.chain_card.isVisible() and self.chain_card.animating():
+            self.chain_card.update()
+
+
+def resolve(path_arg):
+    """(logs root, initial folder or None, follow)."""
+    if path_arg:
+        path = Path(path_arg).expanduser().resolve()
+        if (path / PLAN_FILE).is_file():
+            return path.parent, path, False
+        return path, None, True
+    root = os.environ.get(LOGS_DIR_ENV)
+    return (Path(root).expanduser().resolve() if root else Path(__file__).resolve().parent / 'logs'), None, True
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    parser.add_argument('path', nargs='?', help=f"log folder (has {PLAN_FILE}) or logs root "
+                                                f"(default ${LOGS_DIR_ENV} or logs/ next to this script)")
+    parser.add_argument('--no-follow', action='store_true', help="stay on the chosen folder when a newer one appears")
+    args = parser.parse_args(argv)
+    root, initial, follow = resolve(args.path)
+    app = QApplication(sys.argv[:1])
+    app.setApplicationName('Triforce training')
+    apply_theme(app)
+    window = Window(root, initial, follow and not args.no_follow)
+    window.show()
+    return app.exec()
+
+
+if __name__ == '__main__':
+    sys.exit(main())
