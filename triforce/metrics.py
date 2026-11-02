@@ -13,7 +13,9 @@ flat metric dict logged per iteration:
   trajectory length; 0 = room entry) and ``curriculum/point_fraction`` (mean current stage point / length)
   for episodes started partway along an explored trajectory (``info['curriculum']``).
 - ``reward/total`` and ``reward/<term>``: mean per completed episode, from ``info['rewards']``.
-- ``health_at_exit`` (hp / max_hp) and ``hearts_at_exit`` (``info['health']``) at episode end.
+- ``health_at_exit`` (hp / max_hp) and ``hearts_at_exit`` (``info['health']``) at episode end, and
+  ``health_change``: hearts at exit minus hearts at the start (after reset-time hp randomization), so +1.5 means
+  Link left with 1.5 more hearts than he came in with and -1 means he lost a heart.
 - ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['frames']``).
 - ``interrupt/<reason>``: fraction of steps that ended with each ``info['interrupt']`` reason.
 - ``kind/<KIND>`` and ``duration/<KIND>/<frames>``: action-kind and per-kind duration histograms (fractions).
@@ -47,6 +49,7 @@ class RolloutMetrics:
         self.reward_total = 0.0
         self.health_fraction = 0.0
         self.hearts = 0.0
+        self.health_change = 0.0
         self.episode_frames = 0
         self.episode_steps = 0
         self.interrupts = Counter()
@@ -84,6 +87,7 @@ class RolloutMetrics:
                 result[f'reward/{name}'] = total / eps
             result['health_at_exit'] = self.health_fraction / eps
             result['hearts_at_exit'] = self.hearts / eps
+            result['health_change'] = self.health_change / eps
             result['episode_frames'] = self.episode_frames / eps
             result['episode_steps'] = self.episode_steps / eps
         if self.curriculum_episodes:
@@ -158,6 +162,7 @@ class EpisodeTracker:
             health = float(info.get('health', 0.0))
             max_health = float(info.get('max_health', 0.0))
             metrics.hearts += health
+            metrics.health_change += health - float(info.get('start_health', health))
             metrics.health_fraction += health / max_health if max_health > 0 else 0.0
             metrics.episode_frames += self._frames
             metrics.episode_steps += self._steps
@@ -207,7 +212,7 @@ def read_jsonl(path: str) -> list[dict]:
 
 def format_summary(metrics: dict[str, float], keys: Optional[list[str]] = None) -> str:
     """One-line human summary for the console."""
-    keys = keys or ['episodes', 'success_rate', 'reward/total', 'health_at_exit', 'episode_steps',
+    keys = keys or ['episodes', 'success_rate', 'reward/total', 'health_change', 'episode_steps',
                     'episode_frames', 'curriculum/success_rate', 'curriculum/point_fraction', 'entropy/kind',
                     'entropy/direction', 'entropy/duration', 'losses/approx_kl', 'charts/SPS']
     parts = []

@@ -225,10 +225,11 @@ def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
     with open(run_dir / 'eval.json', 'w', encoding='utf-8') as file:
         json.dump(result, file, indent=2)
     record.update(eval_success_rate=result['success_rate'], eval_episodes=result['episodes'],
-                  eval_health=result['mean_health_fraction'],
+                  eval_health=result['mean_health_fraction'], eval_health_change=result['mean_health_change'],
                   eval_by_room={room: stats['success_rate'] for room, stats in result['by_room'].items()})
     events.emit('eval', success_rate=result['success_rate'], episodes=result['episodes'],
-                health=result['mean_health_fraction'], by_room=record['eval_by_room'],
+                health=result['mean_health_fraction'], health_change=result['mean_health_change'],
+                by_room=record['eval_by_room'],
                 by_state={state: stats['success_rate'] for state, stats in result['by_state'].items()},
                 path=str(run_dir / 'eval.json'))
     events.emit('end', **end_fields(record))
