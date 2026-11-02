@@ -1,0 +1,10 @@
+name: ow-moblin
+rooms: ['(0, 0x3d)', '(0, 0x4d)']
+start_states: ['0_3d*', '0_4d*']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: on}
+obs: {objective: on}
+ram_randomization: {hp: [0.5, max]}
+max_steps: 2000
+warm_start: null

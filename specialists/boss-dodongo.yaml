@@ -1,0 +1,14 @@
+name: boss-dodongo
+rooms: ['(2, 0x0e)']
+start_states: []
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: on}
+obs: {objective: on}
+ram_randomization: {}
+max_steps: 2000
+warm_start: null
+trainable: false
+notes: >-
+  Out of scope for milestone 1: the route ends when Link enters this room. Tagged so the runner never hits an
+  untagged room.

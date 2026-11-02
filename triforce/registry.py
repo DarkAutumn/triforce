@@ -1,0 +1,178 @@
+"""Model registry (design §9): ``<models>/<specialist>/<run-id>/ckpt.pt`` plus ``<models>/<specialist>/promoted``.
+
+A checkpoint is a dict with ``obs_schema_version``, ``action_schema_version``, ``specialist``, ``model_config``
+(including the observation layout, so the network can be rebuilt from it alone), ``state_dict``,
+``optimizer``, ``iterations``, ``steps``, ``metrics``.  Loading a checkpoint whose schema versions don't match
+the current code raises ``SchemaMismatchError``.
+
+The models root is, in order: the ``root`` argument, ``$TRIFORCE_MODELS_DIR``, ``<repo>/models``.
+
+CLI: ``python -m triforce.registry list <specialist>`` / ``promote <specialist> <run-id>``.
+"""
+
+import argparse
+import os
+import time
+from pathlib import Path
+from typing import Optional
+
+import torch
+
+from .actions import ACTION_SCHEMA_VERSION
+
+MODELS_DIR_ENV = 'TRIFORCE_MODELS_DIR'
+CHECKPOINT_NAME = 'ckpt.pt'
+PROMOTED_NAME = 'promoted'
+
+
+class SchemaMismatchError(ValueError):
+    """A checkpoint was saved with a different observation or action schema."""
+
+
+def obs_schema_version() -> int:
+    """The current observation schema version."""
+    from .observation import OBS_SCHEMA_VERSION  # pylint: disable=import-outside-toplevel
+    return OBS_SCHEMA_VERSION
+
+
+def models_root(root: Optional[str | os.PathLike] = None) -> Path:
+    """Resolves the models directory."""
+    if root is not None:
+        return Path(root)
+    if os.environ.get(MODELS_DIR_ENV):
+        return Path(os.environ[MODELS_DIR_ENV])
+    return Path(__file__).resolve().parent.parent / 'models'
+
+
+def new_run_id() -> str:
+    """A sortable, unique-enough run id."""
+    return time.strftime('%Y%m%d-%H%M%S') + f'-{os.getpid() % 10000:04d}'
+
+
+def run_dir(specialist: str, run_id: str, root=None) -> Path:
+    """``<models>/<specialist>/<run-id>``."""
+    return models_root(root) / specialist / run_id
+
+
+def checkpoint_path(specialist: str, run_id: str, root=None) -> Path:
+    """``<models>/<specialist>/<run-id>/ckpt.pt``."""
+    return run_dir(specialist, run_id, root) / CHECKPOINT_NAME
+
+
+def save_checkpoint(specialist: str, run_id: str, network, optimizer=None, *, iterations: int = 0, steps: int = 0,
+                    metrics: Optional[dict] = None, root=None, extra: Optional[dict] = None) -> Path:
+    """Writes ``ckpt.pt`` atomically and returns its path.  ``network`` is a ``model.ZeldaPolicy``."""
+    # pylint: disable=too-many-arguments
+    path = checkpoint_path(specialist, run_id, root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint = {
+        'obs_schema_version': obs_schema_version(),
+        'action_schema_version': ACTION_SCHEMA_VERSION,
+        'specialist': specialist,
+        'run_id': run_id,
+        'model_config': network.config.to_dict(),
+        'state_dict': {k: v.detach().cpu() for k, v in network.state_dict().items()},
+        'optimizer': optimizer.state_dict() if optimizer is not None else None,
+        'iterations': int(iterations),
+        'steps': int(steps),
+        'metrics': dict(metrics or {}),
+        **(extra or {}),
+    }
+    tmp = path.with_suffix('.tmp')
+    torch.save(checkpoint, tmp)
+    os.replace(tmp, path)
+    return path
+
+
+def _resolve(path) -> Path:
+    path = Path(path)
+    return path / CHECKPOINT_NAME if path.is_dir() else path
+
+
+def load_checkpoint(path, check_schema: bool = True) -> dict:
+    """Loads a checkpoint (file or run directory).  Raises SchemaMismatchError on a version mismatch."""
+    path = _resolve(path)
+    checkpoint = torch.load(path, map_location='cpu', weights_only=False)
+    if check_schema:
+        expected = {'obs_schema_version': obs_schema_version(), 'action_schema_version': ACTION_SCHEMA_VERSION}
+        for key, version in expected.items():
+            if checkpoint.get(key) != version:
+                raise SchemaMismatchError(f"{path}: {key} is {checkpoint.get(key)}, code expects {version}")
+    return checkpoint
+
+
+def load_model(path, check_schema: bool = True):
+    """Rebuilds the ``ZeldaPolicy`` stored in a checkpoint.  Returns (network, checkpoint)."""
+    from .model import ZeldaPolicy  # pylint: disable=import-outside-toplevel
+    checkpoint = load_checkpoint(path, check_schema)
+    network = ZeldaPolicy(config=checkpoint['model_config'])
+    network.load_state_dict(checkpoint['state_dict'])
+    return network, checkpoint
+
+
+def list_runs(specialist: str, root=None) -> list[str]:
+    """Run ids that have a checkpoint, oldest first."""
+    base = models_root(root) / specialist
+    if not base.is_dir():
+        return []
+    return sorted(p.name for p in base.iterdir() if (p / CHECKPOINT_NAME).is_file())
+
+
+def promote(specialist: str, run_id: str, root=None) -> Path:
+    """Marks run_id as the specialist's promoted model (``<models>/<specialist>/promoted`` holds the id)."""
+    ckpt = checkpoint_path(specialist, run_id, root)
+    if not ckpt.is_file():
+        raise FileNotFoundError(f"No checkpoint for {specialist}/{run_id}: {ckpt}")
+    load_checkpoint(ckpt)
+    pointer = models_root(root) / specialist / PROMOTED_NAME
+    tmp = pointer.with_suffix('.tmp')
+    tmp.write_text(run_id + '\n', encoding='utf-8')
+    os.replace(tmp, pointer)
+    return pointer
+
+
+def promoted_run(specialist: str, root=None) -> str:
+    """The promoted run id.  Raises FileNotFoundError if none is promoted."""
+    pointer = models_root(root) / specialist / PROMOTED_NAME
+    if not pointer.is_file():
+        raise FileNotFoundError(f"No promoted model for specialist '{specialist}' ({pointer})")
+    return pointer.read_text(encoding='utf-8').strip()
+
+
+def promoted_checkpoint(specialist: str, root=None) -> Path:
+    """Path of the promoted run's ``ckpt.pt``."""
+    path = checkpoint_path(specialist, promoted_run(specialist, root), root)
+    if not path.is_file():
+        raise FileNotFoundError(f"Promoted run for '{specialist}' has no checkpoint: {path}")
+    return path
+
+
+def main(argv=None):
+    """``list`` / ``promote`` subcommands."""
+    parser = argparse.ArgumentParser(prog='python -m triforce.registry')
+    parser.add_argument('--models-dir', default=None)
+    sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('list').add_argument('specialist')
+    promote_parser = sub.add_parser('promote')
+    promote_parser.add_argument('specialist')
+    promote_parser.add_argument('run_id')
+    args = parser.parse_args(argv)
+
+    if args.command == 'list':
+        try:
+            current = promoted_run(args.specialist, args.models_dir)
+        except FileNotFoundError:
+            current = None
+        for run_id in list_runs(args.specialist, args.models_dir):
+            ckpt = torch.load(checkpoint_path(args.specialist, run_id, args.models_dir), map_location='cpu',
+                              weights_only=False)
+            mark = '*' if run_id == current else ' '
+            success = ckpt.get('metrics', {}).get('success_rate')
+            print(f"{mark} {run_id}  iterations={ckpt.get('iterations')} steps={ckpt.get('steps')} "
+                  f"success_rate={success}")
+    else:
+        print(promote(args.specialist, args.run_id, args.models_dir))
+
+
+if __name__ == '__main__':
+    main()

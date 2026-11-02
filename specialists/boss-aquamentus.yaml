@@ -1,0 +1,13 @@
+name: boss-aquamentus
+rooms: ['(1, 0x35)']
+start_states: ['1_35*']
+success: [boss-dead-and-heart, exit-correct]
+reward_profile: default
+reward: {pbrs: on}
+obs: {objective: on}
+ram_randomization: {hp: [0.75, max]}
+max_steps: 2000
+warm_start: null
+notes: >-
+  Success when the heart container (which appears once Aquamentus dies) is collected, or (from a state where it
+  is already taken) on the E exit.

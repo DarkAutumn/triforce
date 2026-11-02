@@ -1,0 +1,65 @@
+# Milestone 1 route (design §1). Generated from docs/route.md; see that file for sources.
+# entry = side of the room Link enters from (start = game start, cave = emerging from a cave/dungeon stairs);
+# exit = direction Link leaves (cave = enter the cave/dungeon stairs in this room; triforce = level ends on pickup,
+# Z_01 TakeItem -> GameMode $12 -> OW; terminal = milestone ends on entering this room).
+# in_cave rooms follow v1 game.yaml: same (level, location) with in_cave: true.
+milestone1:
+- {level: 0, room: '0x77', specialist: ow-start, entry: start, exit: cave}
+- {level: 0, room: '0x77', in_cave: true, specialist: ow-start, entry: S, exit: S}
+- {level: 0, room: '0x77', specialist: ow-start, entry: cave, exit: N}
+- {level: 0, room: '0x67', specialist: ow-octorok, entry: S, exit: E}
+- {level: 0, room: '0x68', specialist: ow-octorok, entry: W, exit: N}
+- {level: 0, room: '0x58', specialist: ow-octorok, entry: S, exit: N}
+- {level: 0, room: '0x48', specialist: ow-leever-peahat, entry: S, exit: N}
+- {level: 0, room: '0x38', specialist: ow-octorok, entry: S, exit: W}
+- {level: 0, room: '0x37', specialist: ow-octorok, entry: E, exit: cave}
+- {level: 1, room: '0x73', specialist: d1-melee, entry: S, exit: W}
+- {level: 1, room: '0x72', specialist: d1-melee, entry: E, exit: E}
+- {level: 1, room: '0x73', specialist: d1-melee, entry: W, exit: E}
+- {level: 1, room: '0x74', specialist: d1-melee, entry: W, exit: W}
+- {level: 1, room: '0x73', specialist: d1-melee, entry: E, exit: N}
+- {level: 1, room: '0x63', specialist: d1-melee, entry: S, exit: N}
+- {level: 1, room: '0x53', specialist: d1-melee, entry: S, exit: W}
+- {level: 1, room: '0x52', specialist: d1-melee, entry: E, exit: N}
+- {level: 1, room: '0x42', specialist: d1-melee, entry: S, exit: E}
+- {level: 1, room: '0x43', specialist: d1-melee, entry: W, exit: E}
+- {level: 1, room: '0x44', specialist: d1-wallmaster, entry: W, exit: E}
+- {level: 1, room: '0x45', specialist: d1-wallmaster, entry: W, exit: N}
+- {level: 1, room: '0x35', specialist: boss-aquamentus, entry: S, exit: E}
+- {level: 1, room: '0x36', specialist: d1-melee, entry: W, exit: triforce}
+- {level: 0, room: '0x37', specialist: ow-octorok, entry: cave, exit: E}
+- {level: 0, room: '0x38', specialist: ow-octorok, entry: W, exit: N}
+- {level: 0, room: '0x28', specialist: ow-leever-peahat, entry: S, exit: E}
+- {level: 0, room: '0x29', specialist: ow-leever-peahat, entry: W, exit: E}
+- {level: 0, room: '0x2a', specialist: ow-leever-peahat, entry: W, exit: E}
+- {level: 0, room: '0x2b', specialist: ow-leever-peahat, entry: W, exit: E}
+- {level: 0, room: '0x2c', specialist: ow-leever-peahat, entry: W, exit: E}
+- {level: 0, room: '0x2d', specialist: ow-octorok, entry: W, exit: S}
+- {level: 0, room: '0x3d', specialist: ow-moblin, entry: N, exit: S}
+- {level: 0, room: '0x4d', specialist: ow-moblin, entry: N, exit: W}
+- {level: 0, room: '0x4c', specialist: ow-octorok, entry: E, exit: N}
+- {level: 0, room: '0x3c', specialist: ow-octorok, entry: S, exit: cave}
+- {level: 2, room: '0x7d', specialist: d2-rope, entry: S, exit: N}
+- {level: 2, room: '0x6d', specialist: d2-rope, entry: S, exit: E}
+- {level: 2, room: '0x6e', specialist: d2-rope, entry: W, exit: N}
+- {level: 2, room: '0x5e', specialist: d2-goriya, entry: S, exit: N}
+- {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
+- {level: 2, room: '0x3e', specialist: d2-rope, entry: S, exit: N}
+- {level: 2, room: '0x2e', specialist: d2-rope, entry: S, exit: N}
+- {level: 2, room: '0x1e', specialist: d2-goriya, entry: S, exit: N}
+- {level: 2, room: '0x0e', specialist: boss-dodongo, entry: S, exit: terminal}
+# Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
+alternates:
+- {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}
+- {replaces: [{level: 2, room: '0x6d'}], with: [{level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}], note: '0x7d E->0x7e N->0x6e instead of 0x7d N->0x6d E->0x6e'}
+families:
+  ow-start: ['(0, 0x77)', '(0, 0x77, cave)']
+  ow-octorok: ['(0, 0x2d)', '(0, 0x37)', '(0, 0x38)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x58)', '(0, 0x67)', '(0, 0x68)', '(0, 0x78)']
+  ow-leever-peahat: ['(0, 0x28)', '(0, 0x29)', '(0, 0x2a)', '(0, 0x2b)', '(0, 0x2c)', '(0, 0x48)']
+  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)']
+  d1-melee: ['(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)']
+  d1-wallmaster: ['(1, 0x44)', '(1, 0x45)']
+  boss-aquamentus: ['(1, 0x35)']
+  d2-rope: ['(2, 0x2e)', '(2, 0x3e)', '(2, 0x4e)', '(2, 0x6d)', '(2, 0x6e)', '(2, 0x7d)', '(2, 0x7e)']
+  d2-goriya: ['(2, 0x1e)', '(2, 0x5e)']
+  boss-dodongo: ['(2, 0x0e)']

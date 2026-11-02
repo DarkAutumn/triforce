@@ -1,0 +1,134 @@
+from dataclasses import dataclass
+from functools import cached_property
+from typing import Set, Tuple
+
+import torch
+
+from .zelda_enums import Direction, TileIndex, ZeldaEnemyKind, ZeldaItemKind, ZeldaProjectileId, Position
+
+@dataclass
+class ZeldaObject:
+    """
+    Structured data for objects on screen.
+
+    Attributes:
+        game: The game state containing this object.
+        index: The index of the object as it appears in the game's memory.
+        id: The id of the object.
+        position: The position of the object.
+    """
+    game : 'ZeldaGame' # type: ignore
+    index : int
+    id : ZeldaItemKind | ZeldaEnemyKind | ZeldaProjectileId | int
+    position : Position
+
+    @property
+    def dimensions(self) -> Tuple[int, int]:
+        """The dimensions of the object."""
+        return 2, 2
+
+    @cached_property
+    def tile(self) -> TileIndex:
+        """The x, y coordinates of the top-left tile in this object."""
+        return self.position.tile_index
+
+    @cached_property
+    def link_overlap_tiles(self) -> Set[TileIndex]:
+        """The tiles that the object overlaps with link's top-left tile."""
+        result = set()
+        x_dim, y_dim = self.dimensions
+        for x in range(-1, x_dim):
+            for y in range(-1, y_dim):
+                result.add(TileIndex(self.tile[0] + x, self.tile[1] + y))
+
+        return result
+
+    @cached_property
+    def self_tiles(self) -> Set[TileIndex]:
+        """The tiles that the object occupies."""
+        result = set()
+        x_dim, y_dim = self.dimensions
+        for x in range(x_dim):
+            for y in range(y_dim):
+                result.add(TileIndex(self.tile[0] + x, self.tile[1] + y))
+
+        return result
+
+    @cached_property
+    def distance(self) -> float:
+        """The distance from link to the object."""
+        value = torch.norm(self.vector_from_link)
+        if abs(value) < 1e-5:
+            return 0
+
+        return value
+
+    @cached_property
+    def vector(self) -> torch.Tensor:
+        """The normalized direction vector from link to the object."""
+        distance = self.distance
+        if distance == 0:
+            return torch.tensor([0, 0], dtype=torch.float32)
+
+        return self.vector_from_link / distance
+
+    @cached_property
+    def vector_from_link(self):
+        """The (un-normalized) vector from link to the object."""
+        return torch.tensor(self.position - self.game.link.position, dtype=torch.float32)
+
+@dataclass
+class Projectile(ZeldaObject):
+    """Structured data for a projectile."""
+    direction : Direction = Direction.NONE
+
+    def __eq__(self, value):
+        return self.id == value or super().__eq__(value)
+
+    @property
+    def blockable(self) -> bool:
+        """Returns True if the projectile can be blocked by a shield."""
+        return self.id in (ZeldaProjectileId.OtorokRock, ZeldaProjectileId.Boomerang, ZeldaProjectileId.Arrow)
+
+@dataclass
+class Item(ZeldaObject):
+    """Structured data for an item."""
+    timer : int
+
+    def __eq__(self, value):
+        return self.id == value or super().__eq__(value)
+
+    @property
+    def dimensions(self) -> Tuple[int, int]:
+        """The dimensions of the object."""
+        return 1, 1
+
+
+@dataclass
+class BombWall(ZeldaObject):
+    """Synthetic entity representing a bombable wall in a dungeon room.
+
+    Not a real NES object — created from game.yaml bomb_walls data so the model
+    can learn which walls to bomb. Positioned at the NES bombable wall hotspot
+    for the given direction (BombableWallHotspotsX/Y in Z_07.asm:4809).
+    """
+    wall_direction : Direction = Direction.NONE
+
+    # Fixed positions from NES BombableWallHotspotsX/Y (Z_07.asm:4809-4812)
+    _HOTSPOTS = {
+        Direction.N: Position(0x78, 0x5D),
+        Direction.S: Position(0x78, 0xBD),
+        Direction.W: Position(0x20, 0x8D),
+        Direction.E: Position(0xD0, 0x8D),
+    }
+
+    @staticmethod
+    def for_direction(game, direction):
+        """Create a BombWall entity for a bombable wall in the given direction."""
+        pos = BombWall._HOTSPOTS[direction]
+        return BombWall(game=game, index=-2, id=-2, position=pos, wall_direction=direction)
+
+    @property
+    def dimensions(self) -> Tuple[int, int]:
+        """The dimensions of the object."""
+        return 2, 2

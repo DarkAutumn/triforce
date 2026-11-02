@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "triforce"
+version = "2.0.0"
+description = "Specialist PPO agents that play The Legend of Zelda (NES) from structured RAM state"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "stable-retro>=1.0.1",
+    "numpy",
+    "torch",
+    "gymnasium",
+    "pyyaml",
+    "pydantic>=2",
+    "tensorboard",
+    "pillow",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+triforce = "triforce.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["triforce*"]
+
+[tool.setuptools.package-data]
+triforce = ["*.yaml", "*.txt", "custom_integrations/Zelda-NES/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not slow'"
+markers = [
+    "slow: long-running tests (deselect with '-m \"not slow\"')",
+]

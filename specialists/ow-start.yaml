@@ -1,0 +1,13 @@
+name: ow-start
+rooms: ['(0, 0x77)', '(0, 0x77, cave)']
+start_states: ['start', '0_77*']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: on}
+obs: {objective: on}
+ram_randomization: {}
+max_steps: 1000
+warm_start: null
+notes: >-
+  Start screen + sword cave. Correct exit depends on progress: no sword -> cave; in the cave -> S once the sword
+  is taken; with sword -> N (0x78 E is the tagged alternate).

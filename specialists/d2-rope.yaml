@@ -1,0 +1,12 @@
+name: d2-rope
+rooms: ['(2, 0x7d)', '(2, 0x6d)', '(2, 0x6e)', '(2, 0x4e)', '(2, 0x3e)', '(2, 0x2e)', '(2, 0x7e)']
+start_states: ['2_7d*', '2_3cn', '2_6d*', '2_6e*', '2_4e*', '2_3e*', '2_2e*', '2_7e*']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: on}
+obs: {objective: on}
+ram_randomization: {hp: [0.5, max]}
+max_steps: 3000
+warm_start: null
+notes: >-
+  2_3cn is mid-entry (loads into 0x7d). Most rooms still need seed states (docs/specialists.md).
