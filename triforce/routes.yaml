@@ -10,8 +10,8 @@ milestone1:
 - {level: 0, room: '0x67', specialist: ow-octorok, entry: S, exit: E}
 - {level: 0, room: '0x68', specialist: ow-octorok, entry: W, exit: N}
 - {level: 0, room: '0x58', specialist: ow-octorok, entry: S, exit: N}
-- {level: 0, room: '0x48', specialist: ow-leever-peahat, entry: S, exit: N}
-- {level: 0, room: '0x38', specialist: ow-octorok, entry: S, exit: W}
+- {level: 0, room: '0x48', specialist: ow-zora, entry: S, exit: N}
+- {level: 0, room: '0x38', specialist: ow-zora, entry: S, exit: W}
 - {level: 0, room: '0x37', specialist: ow-octorok, entry: E, exit: cave}
 - {level: 1, room: '0x73', specialist: d1-melee, entry: S, exit: W}
 - {level: 1, room: '0x72', specialist: d1-melee, entry: E, exit: E}
@@ -28,13 +28,13 @@ milestone1:
 - {level: 1, room: '0x35', specialist: boss-aquamentus, entry: S, exit: E}
 - {level: 1, room: '0x36', specialist: d1-melee, entry: W, exit: triforce}
 - {level: 0, room: '0x37', specialist: ow-octorok, entry: cave, exit: E}
-- {level: 0, room: '0x38', specialist: ow-octorok, entry: W, exit: N}
-- {level: 0, room: '0x28', specialist: ow-leever-peahat, entry: S, exit: E}
+- {level: 0, room: '0x38', specialist: ow-zora, entry: W, exit: N}
+- {level: 0, room: '0x28', specialist: ow-zora, entry: S, exit: E}
 - {level: 0, room: '0x29', specialist: ow-leever-peahat, entry: W, exit: E}
 - {level: 0, room: '0x2a', specialist: ow-leever-peahat, entry: W, exit: E}
 - {level: 0, room: '0x2b', specialist: ow-leever-peahat, entry: W, exit: E}
 - {level: 0, room: '0x2c', specialist: ow-leever-peahat, entry: W, exit: E}
-- {level: 0, room: '0x2d', specialist: ow-octorok, entry: W, exit: S}
+- {level: 0, room: '0x2d', specialist: ow-zora, entry: W, exit: S}
 - {level: 0, room: '0x3d', specialist: ow-moblin, entry: N, exit: S}
 - {level: 0, room: '0x4d', specialist: ow-moblin, entry: N, exit: W}
 - {level: 0, room: '0x4c', specialist: ow-octorok, entry: E, exit: N}
@@ -54,8 +54,9 @@ alternates:
 - {replaces: [{level: 2, room: '0x6d'}], with: [{level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}], note: '0x7d E->0x7e N->0x6e instead of 0x7d N->0x6d E->0x6e'}
 families:
   ow-start: ['(0, 0x77)', '(0, 0x77, cave)']
-  ow-octorok: ['(0, 0x2d)', '(0, 0x37)', '(0, 0x38)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x58)', '(0, 0x67)', '(0, 0x68)', '(0, 0x78)']
-  ow-leever-peahat: ['(0, 0x28)', '(0, 0x29)', '(0, 0x2a)', '(0, 0x2b)', '(0, 0x2c)', '(0, 0x48)']
+  ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x58)', '(0, 0x67)', '(0, 0x68)', '(0, 0x78)']
+  ow-leever-peahat: ['(0, 0x29)', '(0, 0x2a)', '(0, 0x2b)', '(0, 0x2c)']
+  ow-zora: ['(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x48)']
   ow-moblin: ['(0, 0x3d)', '(0, 0x4d)']
   d1-melee: ['(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)']
   d1-wallmaster: ['(1, 0x44)', '(1, 0x45)']

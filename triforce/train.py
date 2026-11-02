@@ -2,11 +2,14 @@
 
     python -m triforce.train --specialist d1-melee [--load CKPT] [--parallel N] [--iterations N]
         [--steps-per-update N] [--device cpu|cuda] [--run-id ID] [--models-dir DIR]
+        [--stop-success RATE [--stop-patience N]]
 
 Each iteration collects ``--steps-per-update`` env steps (split across ``--parallel`` subprocess workers, one
 emulator each; ``--parallel 1`` runs the env in-process for debugging), then runs one PPO update.  Output goes
 to ``<models>/<specialist>/<run-id>/``: ``ckpt.pt`` (see ``registry``), ``metrics.jsonl``, ``tb/``
-(TensorBoard) and ``run.json`` (arguments and configs).
+(TensorBoard), ``run.json`` (arguments and configs) and ``train_summary.json`` (iterations, steps, early
+stop, wall time).  ``--stop-success`` ends training once the training success rate stays at or above the
+threshold for ``--stop-patience`` consecutive iterations that finished at least one episode.
 
 Weights come from ``--load`` (a checkpoint file or run dir) or else the specialist's ``warm_start`` (a
 checkpoint path or another specialist's name, meaning its promoted checkpoint).  Loading a checkpoint of the
@@ -19,6 +22,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import Optional
 
 import torch
 
@@ -30,6 +34,22 @@ from .observation import ObservationBuilder
 from .ppo import PPO, IterationResult, PPOConfig
 from .ppo_worker import ModelFactory, ZeldaEnvFactory
 from .specialist import load_specialist
+
+
+class EarlyStop:
+    """Stop once training success_rate >= threshold for `patience` consecutive iterations that finished episodes."""
+
+    def __init__(self, threshold: Optional[float], patience: int):
+        self.threshold = threshold
+        self.patience = patience
+        self.streak = 0
+
+    def update(self, metrics: dict) -> bool:
+        """Feeds one iteration's metrics; True = stop now.  Iterations with no finished episode don't count."""
+        if self.threshold is None or not metrics.get('episodes'):
+            return False
+        self.streak = self.streak + 1 if metrics['success_rate'] >= self.threshold else 0
+        return self.streak >= self.patience
 
 
 def parse_args(argv=None):
@@ -56,6 +76,9 @@ def parse_args(argv=None):
     parser.add_argument('--demo-allow-incomplete', action='store_true',
                         help="accept a demo that stops before the episode ends in success")
     parser.add_argument('--seed', type=int, default=None)
+    parser.add_argument('--stop-success', type=float, default=None,
+                        help="stop early once training success_rate >= this for --stop-patience iterations")
+    parser.add_argument('--stop-patience', type=int, default=5)
     return parser.parse_args(argv)
 
 
@@ -129,7 +152,9 @@ def main(argv=None, session=None) -> Path:
           + (f" from={source}" if source else ""))
 
     logger = MetricsLogger(str(out_dir))
-    state = {'iteration': start_iteration, 'steps': start_steps, 'metrics': {}, 'saved': None}
+    state = {'iteration': start_iteration, 'steps': start_steps, 'metrics': {}, 'saved': None,
+             'stopped_early': False}
+    early = EarlyStop(args.stop_success, args.stop_patience)
 
     def save():
         registry.save_checkpoint(specialist, run_id, network, ppo.optimizer, iterations=state['iteration'],
@@ -145,6 +170,12 @@ def main(argv=None, session=None) -> Path:
         print(f"[train] iter={state['iteration']} steps={state['steps']} " + format_summary(metrics), flush=True)
         if result.iteration % args.save_every == 0:
             save()
+        if early.update(metrics):
+            print(f"[train] early stop: success_rate >= {args.stop_success} for {args.stop_patience} iterations",
+                  flush=True)
+            state['stopped_early'] = True
+            return False
+        return True
 
     started = time.time()
     try:
@@ -162,9 +193,13 @@ def main(argv=None, session=None) -> Path:
 
     elapsed = time.time() - started
     trained = state['steps'] - start_steps
+    sps = trained / elapsed if elapsed else 0.0
+    with open(out_dir / 'train_summary.json', 'w', encoding='utf-8') as file:
+        json.dump({'iterations': state['iteration'], 'steps': state['steps'],
+                   'stopped_early': state['stopped_early'], 'wall_seconds': elapsed,
+                   'steps_per_second': sps}, file, indent=2)
     print(f"[train] done: {state['iteration'] - start_iteration} iterations, {trained} steps in {elapsed:.1f}s "
-          f"({trained / elapsed if elapsed else 0:.1f} steps/sec); checkpoint "
-          f"{registry.checkpoint_path(specialist, run_id, root)}")
+          f"({sps:.1f} steps/sec); checkpoint {registry.checkpoint_path(specialist, run_id, root)}")
     return out_dir
 
 

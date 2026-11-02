@@ -190,7 +190,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x28'
-  specialist: ow-leever-peahat
+  specialist: ow-zora
   exits:
     E:
       level: 0
@@ -270,7 +270,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x2d'
-  specialist: ow-octorok
+  specialist: ow-zora
   exits:
     N:
       level: 0
@@ -317,7 +317,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x38'
-  specialist: ow-octorok
+  specialist: ow-zora
   exits:
     N:
       level: 0
@@ -453,7 +453,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x48'
-  specialist: ow-leever-peahat
+  specialist: ow-zora
   exits:
     N:
       level: 0

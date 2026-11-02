@@ -1,5 +1,7 @@
 """``python -m triforce.train`` against the real ZeldaEnv (tiny rollouts)."""
 
+import json
+
 from triforce import registry, train
 from triforce.metrics import read_jsonl
 
@@ -43,3 +45,31 @@ def test_train_parallel_workers(tmp_path):
     checkpoint, records = _check_run(run_dir, iterations=2)
     assert checkpoint['steps'] == 256 and [r['iteration'] for r in records] == [1, 2]
     assert sum(r['rollout/steps'] for r in records) == 256
+
+
+def test_early_stop_counts_consecutive_iterations_with_episodes():
+    early = train.EarlyStop(0.95, 3)
+    sequence = [({'episodes': 2, 'success_rate': 1.0}, False),
+                ({'episodes': 0}, False),                           # no finished episode: streak unchanged
+                ({'episodes': 3, 'success_rate': 0.96}, False),
+                ({'episodes': 1, 'success_rate': 0.5}, False),      # resets the streak
+                ({'episodes': 1, 'success_rate': 0.95}, False),
+                ({'episodes': 0}, False),
+                ({'episodes': 2, 'success_rate': 1.0}, False),
+                ({'episodes': 4, 'success_rate': 0.97}, True)]
+    assert [early.update(metrics) for metrics, _ in sequence] == [stop for _, stop in sequence]
+    never = train.EarlyStop(None, 1)
+    assert not any(never.update({'episodes': 5, 'success_rate': 1.0}) for _ in range(10))
+
+
+def test_train_stops_early_and_writes_summary(session, tmp_path):
+    run_dir = train.main(['--specialist', 'boss-aquamentus', '--parallel', '1', '--steps-per-update', '256',
+                          '--iterations', '50', '--models-dir', str(tmp_path), '--run-id', 'early', '--seed', '1',
+                          '--stop-success', '0.0', '--stop-patience', '1'], session=session)
+    with open(run_dir / 'train_summary.json', encoding='utf-8') as file:
+        summary = json.load(file)
+    checkpoint = registry.load_checkpoint(run_dir)
+    records = read_jsonl(str(run_dir / 'metrics.jsonl'))
+    assert summary['stopped_early'] and checkpoint['iterations'] < 50
+    assert summary['iterations'] == checkpoint['iterations'] == len(records)
+    assert records[-1]['episodes'] > 0 and all(r['episodes'] == 0 for r in records[:-1])

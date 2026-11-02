@@ -89,7 +89,17 @@ class ZeldaEnv(gymnasium.Env):
   `specialist`, `model_config`, `state_dict`, `optimizer`, `iterations`, `steps`, `metrics`.
   Loading with a mismatched schema version raises.
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
-- Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory.
+- Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
+  records iterations, steps, `stopped_early`, wall time and steps/sec.
+- `train --stop-success R [--stop-patience 5]` (`EarlyStop`) ends training once the training `success_rate`
+  is ≥ R for that many consecutive iterations that finished an episode.
+- `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=20, parallel=1, seed=0,
+  deterministic=False)` plays every seed start state N times in `ZeldaEnv` (episode i seeded `seed + i`) and
+  returns success rate, outcomes/endings and per-room/per-state breakdowns; `python -m triforce.evaluate
+  --specialist NAME` (or `triforce evaluate`) writes `eval.json` next to the checkpoint.
+- `scripts/train_round.py --round ID` trains every trainable specialist (route order), promotes and
+  evaluates each, then runs `eval-chain`; summaries go to `models/<round>-summary.json` and
+  `models/<round>-chain-summary.json`.
 
 ## Runner and CLI (`runner.py`, `run.py`, `cli.py`)
 
@@ -103,4 +113,4 @@ class ZeldaEnv(gymnasium.Env):
   prints one line per room and appends a JSON line to `runs/runner.jsonl`.
 - `triforce eval-chain --route milestone1 --runs 20 [--parallel N]` → success rate and per-room failure
   counts (`chain_summary`); `triforce promote <specialist> <run-id>`; `triforce list`;
-  `triforce train|run|play ...` forward to the module CLIs.
+  `triforce train|run|play|evaluate ...` forward to the module CLIs.

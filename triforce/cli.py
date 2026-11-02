@@ -75,7 +75,8 @@ def _cmd_list(args):
 def main(argv=None):
     """Entry point for the ``triforce`` console script."""
     argv = list(sys.argv[1:] if argv is None else argv)
-    passthrough = {'train': 'triforce.train', 'run': 'triforce.run', 'play': 'triforce.play'}
+    passthrough = {'train': 'triforce.train', 'run': 'triforce.run', 'play': 'triforce.play',
+                   'evaluate': 'triforce.evaluate'}
     if argv and argv[0] in passthrough:
         import importlib  # pylint: disable=import-outside-toplevel
         return importlib.import_module(passthrough[argv[0]]).main(argv[1:])
@@ -86,6 +87,7 @@ def main(argv=None):
     sub.add_parser('train', help="python -m triforce.train ...")
     sub.add_parser('run', help="python -m triforce.run ...")
     sub.add_parser('play', help="python -m triforce.play ...")
+    sub.add_parser('evaluate', help="python -m triforce.evaluate ... (one specialist on its own rooms)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
 
     promote = sub.add_parser('promote', help="mark a run as the specialist's promoted model")
