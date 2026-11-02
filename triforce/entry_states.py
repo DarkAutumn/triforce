@@ -34,12 +34,13 @@ import yaml
 
 from .emulator import GAME_DIR, load_state_bytes, state_path
 from .explore import Explorer
+from .frame_skip import buttons_for
 from .game_map import ROUTES_YAML
-from .room_entry import is_pre_entry
+from .room_entry import LEVEL, MODE, ROOM, is_pre_entry, make_room_fresh, pending_room
 from .session import GameSession
 from .specialist import RamRandomization, SpecialistConfig, list_specialists, load_specialist
 from .start_states import state_label, write_savestate
-from .zelda_enums import MapLocation
+from .zelda_enums import Direction, MapLocation
 
 ENTRY_DIR = os.path.join(GAME_DIR, 'entry')
 GAME_YAML = os.path.join(os.path.dirname(__file__), 'game.yaml')
@@ -127,10 +128,19 @@ def cross_room(session: GameSession, step: RouteStep, target: RouteStep, source:
     return None, stats
 
 
+def make_snapshot_fresh(session: GameSession):
+    """In the emulator's current (pre-entry) state, clears the pending room's kill history, so the file itself
+    spawns the full room for any loader."""
+    pending = pending_room(session.emu.read)
+    if pending is not None:
+        make_room_fresh(session.emu, *pending)
+
+
 def write_entry_state(session: GameSession, pre_entry: bytes, path: str, expected: MapLocation):
-    """Writes a pre-entry snapshot with full hearts; checks that it loads into ``expected``."""
+    """Writes a pre-entry snapshot with full hearts and a fresh room; checks that it loads into ``expected``."""
     session.emu.load_state(pre_entry)
     refill_hearts(session)
+    make_snapshot_fresh(session)
     write_savestate(path, session.emu.save_state())
     random.seed(0)
     state = session.load(path, fresh_room=True)
@@ -186,6 +196,89 @@ def build(chains: int, out: str, iterations: int, patience: int) -> List[dict]:
         json.dump(sorted(manifest, key=lambda e: (e['chain'], e['route_step'] if e['route_step'] >= 0 else 999)),
                   file, indent=1)
     return manifest
+
+
+# --- convert ---
+
+OPPOSITE = {'n': 's', 's': 'n', 'e': 'w', 'w': 'e'}
+DIRECTION = {'n': Direction.N, 's': Direction.S, 'e': Direction.E, 'w': Direction.W}
+BASE_HEARTS = 3                 # Link's containers at the start; each triforce piece's boss adds one
+
+
+def hop(session: GameSession, side: str, max_frames: int = 900) -> Optional[bytes]:
+    """Holds the d-pad toward ``side`` until Link has crossed into the next room; returns the last pre-entry frame
+    (None if no room transition happened)."""
+    emu, buttons, start = session.emu, buttons_for(DIRECTION[side]), (emu_location(session))
+    last = None
+    for _ in range(max_frames):
+        if is_pre_entry(emu.read):
+            last = emu.save_state()
+        elif last is not None and emu.read(MODE) == 5:
+            return last if emu_location(session) != start else None
+        emu.step(buttons, 1)
+    return None
+
+
+def emu_location(session: GameSession) -> tuple:
+    """(level, room) straight from RAM."""
+    return session.emu.read(LEVEL), session.emu.read(ROOM)
+
+
+def set_route_hearts(session: GameSession):
+    """Max hearts = 3 + triforce pieces (one boss heart container per piece on the route); hearts full."""
+    state = session._build_state()  # pylint: disable=protected-access
+    containers = BASE_HEARTS + state.link.triforce_pieces
+    session.emu.set_value('hearts_and_containers', ((containers - 1) << 4) | (containers - 1))
+    session.emu.set_value('partial_hearts', 0xFF)
+
+
+def convert_state(session: GameSession, path: str) -> tuple:
+    """Turns an after-entry savestate taken at a room edge into a pre-entry one: step out through the door Link
+    entered by and straight back in.  Returns (new label, bytes) or (None, reason)."""
+    label = state_label(path)
+    side = label[4:5] if len(label) >= 5 else ''
+    if side not in OPPOSITE:
+        return None, f"entry side {side!r} can't be walked back through"
+    random.seed(0)
+    state = session.load(path, randomize_rng=False)
+    room = (state.level, state.location)
+    if state.in_cave:
+        return None, "starts in a cave"
+    if hop(session, side) is None:
+        return None, f"no room transition walking {side.upper()}"
+    pre_entry = hop(session, OPPOSITE[side])
+    if pre_entry is None or emu_location(session) != room:
+        return None, "couldn't walk back in"
+    session.emu.load_state(pre_entry)
+    set_route_hearts(session)
+    make_snapshot_fresh(session)
+    return f"{room[0]}_{room[1]:02x}{side}", session.emu.save_state()
+
+
+def convert(paths: List[str], out: str = GAME_DIR, log: Callable = print) -> dict:
+    """Converts old savestates (see convert_state).  All input files are removed and the converted ones written
+    afterwards, so a rename can't collide with a file not yet converted; failures and duplicates are dropped.
+    Returns {'converted': {old: new}, 'deleted': {old: reason}}."""
+    session, report, results = GameSession(), {'converted': {}, 'deleted': {}}, {}
+    try:
+        for path in paths:
+            new, data = convert_state(session, path)
+            if new is not None and new in results:
+                new, data = None, f"duplicate of {new}"
+            if new is None:
+                report['deleted'][state_label(path)] = data
+                log(f"{state_label(path):10} deleted: {data}")
+            else:
+                results[new] = data
+                report['converted'][state_label(path)] = new
+                log(f"{state_label(path):10} -> {new}")
+    finally:
+        session.close()
+    for path in paths:
+        os.remove(path)
+    for new, data in results.items():
+        write_savestate(os.path.join(out, f"{new}.state"), data)
+    return report
 
 
 # --- audit ---
@@ -270,11 +363,19 @@ def main(argv=None):
     audit_parser.add_argument('--states', action='append', default=None, help="savestate glob(s)")
     audit_parser.add_argument('--loads', type=int, default=9)
     audit_parser.add_argument('--output', default=None, help="also write the rows as JSON")
+    convert_parser = sub.add_parser('convert', help="turn after-entry edge savestates into pre-entry ones")
+    convert_parser.add_argument('states', nargs='+', help="savestate globs (files are replaced)")
     args = parser.parse_args(argv)
 
     if args.command == 'build':
         manifest = build(args.chains, args.out, args.iterations, args.patience)
         print(f"{len(manifest)} entry states in {args.out}")
+        return 0
+
+    if args.command == 'convert':
+        paths = sorted({p for pattern in args.states for p in glob.glob(state_path(pattern))})
+        report = convert(paths)
+        print(f"{len(report['converted'])} converted, {len(report['deleted'])} deleted")
         return 0
 
     if args.states:
