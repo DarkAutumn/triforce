@@ -2,7 +2,7 @@
 
     python -m triforce.train --specialist d1-melee [--load CKPT] [--parallel N] [--iterations N]
         [--steps-per-update N] [--device cpu|cuda] [--run-id ID] [--models-dir DIR]
-        [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR]
+        [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
 
 Each iteration collects ``--steps-per-update`` env steps (split across ``--parallel`` subprocess workers, one
 emulator each; ``--parallel 1`` runs the env in-process for debugging), then runs one PPO update.  Output goes
@@ -15,6 +15,10 @@ separately as ``curriculum/*``.
 ``--curriculum`` starts a share of episodes along trajectories found by ``triforce.explore`` (backward
 curriculum, ``curriculum.py``); its shared progress file is ``<run dir>/curriculum.json``.
 
+Live progress goes to an event stream (``events.py``): ``--events FILE`` appends to a caller-owned stream
+(``scripts/train_round.py``); otherwise the run gets its own ``logs/<yymmdd>_<NNN>_<specialist>/`` folder with
+``training.json`` and ``<specialist>.jsonl``, ending with an ``end`` event.
+
 Weights come from ``--load`` (a checkpoint file or run dir) or else the specialist's ``warm_start`` (a
 checkpoint path or another specialist's name, meaning its promoted checkpoint).  Loading a checkpoint of the
 same specialist also restores the optimizer state and the iteration/step counters; a different specialist's
@@ -24,7 +28,10 @@ checkpoint only supplies weights.
 import argparse
 import json
 import os
+import signal
+import sys
 import time
+import traceback
 from collections import Counter, deque
 from pathlib import Path
 from typing import Deque, Dict, Optional
@@ -34,6 +41,7 @@ import torch
 from . import registry
 from .curriculum import CurriculumSpec
 from .demo import collect_demo_batch, parse_demo_actions
+from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy
 from .observation import ObservationBuilder
@@ -108,7 +116,19 @@ def parse_args(argv=None):
     parser.add_argument('--curriculum-fraction', type=float, default=CurriculumSpec.fraction,
                         help="share of resets that start on a trajectory while any is incomplete")
     parser.add_argument('--curriculum-threshold', type=float, default=CurriculumSpec.threshold)
+    parser.add_argument('--events', default=None,
+                        help="append events to this JSONL (the caller owns the stream and writes its final 'end'); "
+                             "default: a new folder under --logs-dir with training.json and <specialist>.jsonl")
+    parser.add_argument('--logs-dir', default=None, help=f"default ${LOGS_DIR_ENV} or <repo>/logs")
     return parser.parse_args(argv)
+
+
+def interrupt_on_sigterm():
+    """Makes SIGTERM raise KeyboardInterrupt, so a killed run still saves its checkpoint and writes its final
+    events.  (Background processes can inherit an ignored SIGINT; SIGTERM always arrives.)"""
+    def handler(signum, frame):  # pylint: disable=unused-argument
+        raise KeyboardInterrupt(f"signal {signum}")
+    signal.signal(signal.SIGTERM, handler)
 
 
 def resolve_warm_start(value: str, root) -> Path:
@@ -132,10 +152,25 @@ def initial_model(args, specialist: str, root):
     return network, None, 0, 0, source
 
 
+def open_events(args, specialist: str, run_id: str, run_dir: Path):
+    """(EventLog, TrainingPlan or None).  With --events the caller owns the stream; otherwise this training run
+    gets its own log folder and writes the final 'end' event itself."""
+    context = {'specialist': specialist, 'run_id': run_id}
+    if args.events:
+        return EventLog(args.events, **context), None
+    log_dir = new_log_dir(specialist, args.logs_dir)
+    plan = TrainingPlan(log_dir, specialist, 'train', [{
+        'specialist': specialist, 'run_id': run_id, 'events': f'{specialist}.jsonl', 'run_dir': str(run_dir),
+        'target_iterations': args.iterations, 'target_steps': args.iterations * args.steps_per_update}],
+                        command=['python', '-m', 'triforce.train', *sys.argv[1:]])
+    plan.update_run(0, status='running')
+    print(f"[train] events: {log_dir / f'{specialist}.jsonl'}")
+    return EventLog(log_dir / f'{specialist}.jsonl', **context), plan
+
+
 def main(argv=None, session=None) -> Path:
     """Runs training; returns the run directory.  ``session`` (an existing GameSession) is used by the
     in-process env when ``--parallel 1`` (tests share one emulator per process)."""
-    # pylint: disable=too-many-locals, too-many-statements
     args = parse_args(argv)
     if args.seed is not None:
         torch.manual_seed(args.seed)
@@ -149,7 +184,27 @@ def main(argv=None, session=None) -> Path:
     run_id = args.run_id or registry.new_run_id()
     out_dir = registry.run_dir(specialist, run_id, root)
     out_dir.mkdir(parents=True, exist_ok=True)
+    events, plan = open_events(args, specialist, run_id, out_dir)
+    try:
+        summary = _train(args, specialist, run_id, root, out_dir, session, events)
+    except Exception as error:
+        events.emit('error', message=f"{type(error).__name__}: {error}", traceback=traceback.format_exc())
+        events.emit('train_end', status='error')
+        if plan is not None:
+            events.emit('end', status='error', message=f"{type(error).__name__}: {error}")
+            plan.update_run(0, status='error')
+            plan.finish('failed')
+        raise
+    if plan is not None:
+        events.emit('end', **summary)
+        plan.update_run(0, **summary)
+        plan.finish('interrupted' if summary['status'] == 'interrupted' else 'completed')
+    return out_dir
 
+
+def _train(args, specialist: str, run_id: str, root, out_dir: Path, session, events: EventLog) -> dict:
+    """The training run proper; returns the train_end event fields."""
+    # pylint: disable=too-many-locals, too-many-statements, too-many-arguments, too-many-positional-arguments
     network, optimizer_state, start_iteration, start_steps, source = initial_model(args, specialist, root)
     curriculum = None
     if args.curriculum:
@@ -185,16 +240,24 @@ def main(argv=None, session=None) -> Path:
     print(f"[train] parameters={network.parameter_count():,} grid={network.config.grid_encoder} "
           f"parallel={args.parallel} steps/update={args.steps_per_update} device={args.device}"
           + (f" from={source}" if source else ""))
+    target_steps = start_steps + args.iterations * args.steps_per_update
+    events.emit('start', target_iterations=start_iteration + args.iterations, target_steps=target_steps,
+                start_iteration=start_iteration, start_steps=start_steps, steps_per_update=args.steps_per_update,
+                parallel=args.parallel, device=args.device, curriculum=args.curriculum, source=source,
+                stop_success=args.stop_success, stop_patience=args.stop_patience, run_dir=str(out_dir),
+                pid=os.getpid())
 
     logger = MetricsLogger(str(out_dir))
     state = {'iteration': start_iteration, 'steps': start_steps, 'metrics': {}, 'saved': None,
              'stopped_early': False}
     early = EarlyStop(args.stop_success, args.stop_patience)
+    ckpt = registry.checkpoint_path(specialist, run_id, root)
 
     def save():
         registry.save_checkpoint(specialist, run_id, network, ppo.optimizer, iterations=state['iteration'],
                                  steps=state['steps'], metrics=state['metrics'], root=root)
         state['saved'] = state['iteration']
+        events.emit('checkpoint', iteration=state['iteration'], steps=state['steps'], path=str(ckpt))
 
     def on_iteration(result: IterationResult):
         state['iteration'] = start_iteration + result.iteration
@@ -206,16 +269,26 @@ def main(argv=None, session=None) -> Path:
         state['metrics'] = metrics
         logger.log(state['iteration'], state['steps'], metrics)
         print(f"[train] iter={state['iteration']} steps={state['steps']} " + format_summary(metrics), flush=True)
+        elapsed = time.time() - started
+        fraction = result.iteration / args.iterations
+        events.emit('progress', iteration=state['iteration'], iterations=start_iteration + args.iterations,
+                    steps=state['steps'], target_steps=target_steps, fraction=round(fraction, 4),
+                    elapsed=round(elapsed, 1), sps=round((state['steps'] - start_steps) / elapsed, 1),
+                    eta=round(elapsed * (1 - fraction) / fraction, 1),
+                    metrics={k: metrics[k] for k in PROGRESS_METRICS if k in metrics})
         if result.iteration % args.save_every == 0:
             save()
         if stop:
             print(f"[train] early stop: balanced success_rate >= {args.stop_success} for {args.stop_patience} "
                   "iterations", flush=True)
+            events.emit('early_stop', iteration=state['iteration'], steps=state['steps'],
+                        balanced_success_rate=early.balanced)
             state['stopped_early'] = True
             return False
         return True
 
     started = time.time()
+    status = 'completed'
     try:
         ppo.train(network, (lambda: in_process_env) if in_process_env is not None else env_factory,
                   args.iterations, n_envs=args.parallel,
@@ -224,6 +297,7 @@ def main(argv=None, session=None) -> Path:
                   observation_space=ObservationBuilder.observation_space())
     except KeyboardInterrupt:
         print("[train] interrupted; saving checkpoint")
+        status = 'interrupted'
     finally:
         logger.close()
         if state['iteration'] > start_iteration and state['saved'] != state['iteration']:
@@ -237,9 +311,14 @@ def main(argv=None, session=None) -> Path:
                    'stopped_early': state['stopped_early'], 'wall_seconds': elapsed,
                    'steps_per_second': sps}, file, indent=2)
     print(f"[train] done: {state['iteration'] - start_iteration} iterations, {trained} steps in {elapsed:.1f}s "
-          f"({sps:.1f} steps/sec); checkpoint {registry.checkpoint_path(specialist, run_id, root)}")
-    return out_dir
+          f"({sps:.1f} steps/sec); checkpoint {ckpt}")
+    summary = {'status': 'early_stop' if state['stopped_early'] else status, 'iterations': state['iteration'],
+               'steps': state['steps'], 'wall_seconds': round(elapsed, 1), 'sps': round(sps, 1),
+               'checkpoint': str(ckpt) if ckpt.is_file() else None}
+    events.emit('train_end', **summary)
+    return summary
 
 
 if __name__ == '__main__':
+    interrupt_on_sigterm()
     main()

@@ -10,3 +10,4 @@ runs/
 triforce.egg-info/
 triforce/custom_integrations/Zelda-NES/*.yaml
 trajectories/
+logs/

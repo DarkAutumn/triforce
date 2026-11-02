@@ -3,6 +3,8 @@
 import json
 from collections import Counter
 
+import pytest
+
 from triforce import registry, train
 from triforce.metrics import read_jsonl
 
@@ -63,7 +65,7 @@ def test_early_stop_balances_start_states():
     assert not any(never.update(Counter({('a', True): 5})) for _ in range(10)) and never.balanced == 1.0
 
 
-def test_train_stops_early_and_writes_summary(session, tmp_path):
+def test_train_stops_early_and_writes_summary_and_events(session, tmp_path, logs_dir):
     run_dir = train.main(['--specialist', 'boss-aquamentus', '--parallel', '1', '--steps-per-update', '512',
                           '--iterations', '50', '--models-dir', str(tmp_path), '--run-id', 'early', '--seed', '1',
                           '--stop-success', '0.0', '--stop-patience', '1'], session=session)
@@ -75,3 +77,29 @@ def test_train_stops_early_and_writes_summary(session, tmp_path):
     assert summary['iterations'] == checkpoint['iterations'] == len(records)
     # Stops on the first iteration where every start state has min_episodes results (threshold 0).
     assert 'balanced_success_rate' in records[-1] and all('balanced_success_rate' not in r for r in records[:-1])
+
+    # Standalone training gets its own log folder: training.json plus one event stream ending in 'end'.
+    (log_dir,) = logs_dir.iterdir()
+    plan = json.loads((log_dir / 'training.json').read_text())
+    assert plan['status'] == 'completed' and [r['specialist'] for r in plan['runs']] == ['boss-aquamentus']
+    assert plan['runs'][0]['status'] == 'early_stop' and plan['runs'][0]['steps'] == checkpoint['steps']
+    events = read_jsonl(str(log_dir / plan['runs'][0]['events']))
+    kinds = [e['event'] for e in events]
+    assert kinds[0] == 'start' and kinds[-2:] == ['train_end', 'end'] and kinds.count('end') == 1
+    assert kinds.index('early_stop') > max(i for i, k in enumerate(kinds) if k == 'progress')
+    progress = [e for e in events if e['event'] == 'progress']
+    assert [e['iteration'] for e in progress] == [r['iteration'] for r in records]
+    assert progress[-1]['steps'] == checkpoint['steps'] and progress[-1]['target_steps'] == 50 * 512
+    assert [e['seq'] for e in events] == list(range(len(events)))
+
+
+def test_train_error_is_logged_before_raising(session, tmp_path):
+    events_path = tmp_path / 'stream.jsonl'
+    with pytest.raises(ValueError, match='No successful trajectories'):
+        train.main(['--specialist', 'boss-aquamentus', '--parallel', '1', '--iterations', '1',
+                    '--models-dir', str(tmp_path), '--run-id', 'bad', '--curriculum', str(tmp_path / 'missing'),
+                    '--events', str(events_path)], session=session)
+    events = read_jsonl(str(events_path))
+    assert [e['event'] for e in events] == ['error', 'train_end']    # the caller owns 'end'
+    assert 'No successful trajectories' in events[0]['message'] and 'Traceback' in events[0]['traceback']
+    assert events[1]['status'] == 'error'

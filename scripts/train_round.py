@@ -15,6 +15,11 @@ and prints a markdown table.  A failed training run is recorded and the round mo
 Experiments use ``--no-promote`` (the chain then uses this round's checkpoints for the trained specialists and
 the promoted models elsewhere) and ``--train-args`` (``{name}`` expands to the specialist).  ``--chain-runs 0``
 skips the chain.
+
+Live monitoring: every round gets ``logs/<yymmdd>_<NNN>_<round>/`` (``--logs-dir``; see ``triforce/events.py``)
+with ``training.json`` (every specialist in run order with its status), ``<specialist>.jsonl`` event streams
+(training progress from ``triforce.train --events``, then ``eval`` and a final ``end``), ``<specialist>.log``
+console output, and ``round.jsonl`` / ``round.log`` for the round itself (chain results, errors, final ``end``).
 """
 
 import argparse
@@ -24,6 +29,7 @@ import os
 import shlex
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 
 import yaml
@@ -34,12 +40,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from triforce import registry
 from triforce.cli import eval_chain
 from triforce.evaluate import evaluate_specialist
+from triforce.events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir
 from triforce.metrics import read_jsonl
 from triforce.runner import ROUTES_PATH, write_jsonl
 from triforce.specialist import list_specialists, load_specialist
+from triforce.train import interrupt_on_sigterm
 
 STOP_SUCCESS = 0.95
 STOP_PATIENCE = 5
+
+_CONSOLE = {'file': None}       # <log dir>/round.log once the log folder exists
+
+
+def say(text: str = ''):
+    """Prints to the console and to the log folder's round.log."""
+    print(text, flush=True)
+    if _CONSOLE['file'] is not None:
+        _CONSOLE['file'].write(text + '\n')
+        _CONSOLE['file'].flush()
 
 
 def parse_args(argv=None):
@@ -60,6 +78,7 @@ def parse_args(argv=None):
                         help="experiment mode: keep the promoted models; eval-chain uses this round's checkpoints "
                              "for the trained specialists and the promoted ones for the rest")
     parser.add_argument('--train-args', default='', help="extra arguments for triforce.train (one string)")
+    parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     return parser.parse_args(argv)
 
 
@@ -78,24 +97,40 @@ def default_specialists() -> list[str]:
     return sorted(names, key=lambda n: (order.index(n) if n in order else len(order), n))
 
 
-def train(name: str, args, models: Path, run_dir: Path) -> int:
-    """Runs triforce.train as a subprocess, teeing its output to run_dir/train.log.  Returns the exit code."""
-    iterations = math.ceil(args.steps / args.steps_per_update)
+def iterations_for(args) -> int:
+    """PPO iterations that cover the step budget."""
+    return math.ceil(args.steps / args.steps_per_update)
+
+
+def train(name: str, args, models: Path, run_dir: Path, log_dir: Path) -> int:
+    """Runs triforce.train as a subprocess with its event stream in log_dir/<name>.jsonl, teeing its output to
+    run_dir/train.log and log_dir/<name>.log.  Returns the exit code."""
     command = [sys.executable, '-m', 'triforce.train', '--specialist', name, '--run-id', args.round,
-               '--iterations', str(iterations), '--steps-per-update', str(args.steps_per_update),
+               '--iterations', str(iterations_for(args)), '--steps-per-update', str(args.steps_per_update),
                '--parallel', str(args.parallel), '--device', args.device, '--models-dir', str(models),
-               '--stop-success', str(STOP_SUCCESS), '--stop-patience', str(STOP_PATIENCE)]
+               '--stop-success', str(STOP_SUCCESS), '--stop-patience', str(STOP_PATIENCE),
+               '--events', str(log_dir / f'{name}.jsonl')]
     command += shlex.split(args.train_args.format(name=name))
     run_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[round] training {name}: {' '.join(command)}", flush=True)
+    say(f"[round] training {name}: {' '.join(command)}")
     with open(run_dir / 'train.log', 'w', encoding='utf-8') as log, \
+            open(log_dir / f'{name}.log', 'a', encoding='utf-8') as log_copy, \
             subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
                              env={**os.environ, 'PYTHONUNBUFFERED': '1'}) as process:
-        for line in process.stdout:
-            sys.stdout.write(line)
-            sys.stdout.flush()
-            log.write(line)
-            log.flush()
+        def copy_output():
+            for line in process.stdout:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+                for file in (log, log_copy):
+                    file.write(line)
+                    file.flush()
+        try:
+            copy_output()
+        except KeyboardInterrupt:
+            process.terminate()     # the trainer turns SIGTERM into an interrupt: checkpoint + final events
+            copy_output()
+            process.wait(timeout=120)
+            raise
     return process.returncode
 
 
@@ -122,46 +157,76 @@ def training_record(run_dir: Path) -> dict:
     return record
 
 
-def run_specialist(name: str, args, models: Path) -> dict:
-    """Train, promote, evaluate one specialist; returns its summary record."""
+def _tail(path: Path, lines: int = 20) -> str:
+    if not path.is_file():
+        return ''
+    with open(path, encoding='utf-8', errors='replace') as file:
+        return ''.join(file.readlines()[-lines:])
+
+
+def run_specialist(name: str, args, models: Path, log_dir: Path) -> dict:
+    """Train, promote, evaluate one specialist; returns its summary record.  Appends driver events (skipped,
+    error, eval_start, eval, end) to log_dir/<name>.jsonl after the training subprocess is done with it."""
     config = load_specialist(name)
     run_dir = registry.run_dir(name, args.round, models)
     ckpt = registry.checkpoint_path(name, args.round, models)
     record = {'status': 'ok', 'rooms': len(config.rooms), 'seed_states': len(config.resolve_start_states()),
               'run_dir': str(run_dir)}
 
-    if args.skip_existing and ckpt.is_file():
-        print(f"[round] {name}: {ckpt} exists; not retraining", flush=True)
+    skipped = args.skip_existing and ckpt.is_file()
+    code = None
+    if skipped:
+        say(f"[round] {name}: {ckpt} exists; not retraining")
     else:
-        code = train(name, args, models, run_dir)
-        if code != 0:
-            record['status'] = 'train-failed'
-            record['train_exit_code'] = code
-            print(f"[round] {name}: training exited with {code}", flush=True)
+        code = train(name, args, models, run_dir, log_dir)
+    events = EventLog(log_dir / f'{name}.jsonl', specialist=name, run_id=args.round)
+    if skipped:
+        events.emit('skipped', reason='checkpoint exists (--skip-existing)', checkpoint=str(ckpt))
+    elif code != 0:
+        record['status'] = 'train-failed'
+        record['train_exit_code'] = code
+        say(f"[round] {name}: training exited with {code}")
+        events.emit('error', message=f"training exited with code {code}", log_tail=_tail(run_dir / 'train.log'))
     record.update(training_record(run_dir))
 
     if not ckpt.is_file():
         record['status'] = 'train-failed'
         record['error'] = f"no checkpoint at {ckpt}"
+        events.emit('end', status=record['status'], message=record['error'])
         return record
 
     if not args.no_promote:
         registry.promote(name, args.round, models)
+    events.emit('eval_start', checkpoint=str(ckpt), episodes_per_state=args.episodes_per_state,
+                episodes=args.episodes_per_state * record['seed_states'])
     try:
         result = evaluate_specialist(name, ckpt, args.episodes_per_state, parallel=args.parallel, seed=0)
     except Exception as error:  # pylint: disable=broad-exception-caught
         record['status'] = 'eval-failed' if record['status'] == 'ok' else record['status']
         record['error'] = f"{type(error).__name__}: {error}"
-        print(f"[round] {name}: evaluation failed: {record['error']}", flush=True)
+        say(f"[round] {name}: evaluation failed: {record['error']}")
+        events.emit('error', message=f"evaluation failed: {record['error']}", traceback=traceback.format_exc())
+        events.emit('end', status=record['status'], message=record['error'])
         return record
     with open(run_dir / 'eval.json', 'w', encoding='utf-8') as file:
         json.dump(result, file, indent=2)
     record.update(eval_success_rate=result['success_rate'], eval_episodes=result['episodes'],
                   eval_health=result['mean_health_fraction'],
                   eval_by_room={room: stats['success_rate'] for room, stats in result['by_room'].items()})
-    print(f"[round] {name}: eval success {result['success_rate']:.0%} over {result['episodes']} episodes",
-          flush=True)
+    events.emit('eval', success_rate=result['success_rate'], episodes=result['episodes'],
+                health=result['mean_health_fraction'], by_room=record['eval_by_room'],
+                by_state={state: stats['success_rate'] for state, stats in result['by_state'].items()},
+                path=str(run_dir / 'eval.json'))
+    events.emit('end', **end_fields(record))
+    say(f"[round] {name}: eval success {result['success_rate']:.0%} over {result['episodes']} episodes")
     return record
+
+
+def end_fields(record: dict) -> dict:
+    """The summary a specialist's 'end' event and training.json entry carry."""
+    return {key: record.get(key) for key in ('status', 'iterations', 'steps', 'stopped_early', 'wall_seconds',
+                                             'steps_per_second', 'train_balanced_last', 'eval_success_rate',
+                                             'eval_episodes')}
 
 
 def _pct(value) -> str:
@@ -190,21 +255,68 @@ def format_table(specialists: dict) -> str:
 
 
 def main(argv=None):
-    """Runs the round."""
+    """Runs the round with a log folder: training.json (plan), round.jsonl/round.log and per-specialist streams."""
     args = parse_args(argv)
     models = Path(args.models_dir).resolve()
     models.mkdir(parents=True, exist_ok=True)
     names = args.specialists.split(',') if args.specialists else default_specialists()
+
+    log_dir = new_log_dir(args.round, args.logs_dir)
+    _CONSOLE['file'] = open(log_dir / 'round.log', 'a', encoding='utf-8')  # pylint: disable=consider-using-with
+    iterations = iterations_for(args)
+    plan = TrainingPlan(log_dir, args.round, 'round', [
+        {'specialist': name, 'run_id': args.round, 'events': f'{name}.jsonl', 'log': f'{name}.log',
+         'run_dir': str(registry.run_dir(name, args.round, models)), 'target_iterations': iterations,
+         'target_steps': iterations * args.steps_per_update} for name in names],
+                        command=[sys.executable, *sys.argv], models_dir=str(models), steps_budget=args.steps,
+                        events='round.jsonl', log='round.log', chain_runs=args.chain_runs)
+    events = EventLog(log_dir / 'round.jsonl', round=args.round)
+    events.emit('start', specialists=names, steps_budget=args.steps, models_dir=str(models), log_dir=str(log_dir),
+                no_promote=args.no_promote, train_args=args.train_args, pid=os.getpid())
+    say(f"[round] {args.round}: {', '.join(names)}  (logs: {log_dir})")
+    current = {'index': None}
+    try:
+        summary = _run_round(args, names, models, log_dir, plan, events, current)
+    except BaseException as error:
+        status = 'interrupted' if isinstance(error, KeyboardInterrupt) else 'failed'
+        message = f"{type(error).__name__}: {error}"
+        if current['index'] is not None:
+            name = names[current['index']]
+            EventLog(log_dir / f'{name}.jsonl', specialist=name, run_id=args.round).emit(
+                'end', status=status, message=message)
+            plan.update_run(current['index'], status=status)
+        if status == 'failed':
+            events.emit('error', message=message, traceback=traceback.format_exc())
+        events.emit('end', status=status, message=message)
+        plan.finish(status)
+        raise
+    events.emit('end', status='completed', chain=summary['chain'],
+                specialists={name: end_fields(rec) for name, rec in summary['specialists'].items()})
+    plan.finish('completed')
+    _CONSOLE['file'].close()
+    return 0
+
+
+def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, events: EventLog, current: dict):
+    """Trains/evaluates every specialist, then runs the chain; returns the round summary."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     summary_path = models / f"{args.round}-summary.json"
-    summary = {'round': args.round, 'steps_budget': args.steps, 'specialists': {}, 'chain': None}
+    summary = {'round': args.round, 'steps_budget': args.steps, 'log_dir': str(log_dir), 'specialists': {},
+               'chain': None}
 
     def write_summary():
         with open(summary_path, 'w', encoding='utf-8') as file:
             json.dump(summary, file, indent=2)
 
-    print(f"[round] {args.round}: {', '.join(names)}", flush=True)
-    for name in names:
-        summary['specialists'][name] = run_specialist(name, args, models)
+    for index, name in enumerate(names):
+        current['index'] = index
+        plan.update_run(index, status='running')
+        events.emit('specialist_start', index=index, specialist=name)
+        record = run_specialist(name, args, models, log_dir)
+        summary['specialists'][name] = record
+        plan.update_run(index, **end_fields(record))
+        events.emit('specialist_end', index=index, specialist=name, **end_fields(record))
+        current['index'] = None
         write_summary()
 
     chain = None
@@ -213,36 +325,40 @@ def main(argv=None):
         if args.no_promote:
             overrides = {name: str(registry.checkpoint_path(name, args.round, models)) for name in names
                          if registry.checkpoint_path(name, args.round, models).is_file()}
-        print(f"[round] eval-chain milestone1: {args.chain_runs} runs, {args.chain_parallel} processes", flush=True)
+        say(f"[round] eval-chain milestone1: {args.chain_runs} runs, {args.chain_parallel} processes")
+        events.emit('chain_start', runs=args.chain_runs, parallel=args.chain_parallel, overrides=overrides)
         try:
             results, chain = eval_chain('milestone1', args.chain_runs, args.chain_parallel, models_dir=str(models),
                                         overrides=overrides)
             chain_path = models / f"{args.round}-chain.jsonl"
             chain_path.unlink(missing_ok=True)      # write_jsonl appends
             write_jsonl(str(chain_path), results)
+            events.emit('chain', **chain)
         except Exception as error:  # pylint: disable=broad-exception-caught
             chain = {'error': f"{type(error).__name__}: {error}"}
+            events.emit('error', message=f"eval-chain failed: {chain['error']}", traceback=traceback.format_exc())
         with open(models / f"{args.round}-chain-summary.json", 'w', encoding='utf-8') as file:
             json.dump(chain, file, indent=2)
         summary['chain'] = chain
         write_summary()
 
-    print()
-    print(format_table(summary['specialists']))
-    print()
+    say()
+    say(format_table(summary['specialists']))
+    say()
     if chain is None:
-        print("chain: skipped")
+        say("chain: skipped")
     elif 'error' in chain:
-        print(f"chain: error {chain['error']}")
+        say(f"chain: error {chain['error']}")
     else:
-        print(f"chain: {chain['successes']}/{chain['runs']} = {chain['success_rate']:.0%}")
+        say(f"chain: {chain['successes']}/{chain['runs']} = {chain['success_rate']:.0%}")
         for key, count in list(chain['failures'].items())[:5]:
-            print(f"  {count:3}  {key}")
+            say(f"  {count:3}  {key}")
         for reason in chain['errors'][:5]:
-            print(f"  error: {reason}")
-    print(f"[round] summary: {summary_path}")
-    return 0
+            say(f"  error: {reason}")
+    say(f"[round] summary: {summary_path}")
+    return summary
 
 
 if __name__ == '__main__':
+    interrupt_on_sigterm()
     sys.exit(main())

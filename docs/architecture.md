@@ -91,6 +91,13 @@ class ZeldaEnv(gymnasium.Env):
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
   records iterations, steps, `stopped_early`, wall time and steps/sec.
+- Live event logs (`events.py`, for an external watcher): each training invocation gets
+  `logs/<yymmdd>_<NNN>_<what>/` (gitignored; `--logs-dir` / `$TRIFORCE_LOGS_DIR`). `training.json` lists every
+  specialist run in order with its status and is rewritten atomically. `<specialist>.jsonl` is an append-only
+  stream (`start`, one `progress` per PPO iteration with steps/target/fraction/sps/eta and headline metrics,
+  `checkpoint`, `early_stop`, `error`, `train_end`; the round driver adds `eval_start`, `eval`) whose last line
+  is `end`. `<specialist>.log` is its console output. `round.jsonl` / `round.log` cover the round (chain,
+  errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes `end`.
 - `train --stop-success R [--stop-patience 5]` (`EarlyStop`) ends training once the start-state-balanced
   success rate (mean over start states of each state's last 20 room-entry episodes; logged as
   `balanced_success_rate`) is ≥ R for that many consecutive iterations. The raw `success_rate` is biased toward

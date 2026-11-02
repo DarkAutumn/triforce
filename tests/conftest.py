@@ -2,7 +2,16 @@
 
 import pytest
 
+from triforce.events import LOGS_DIR_ENV
 from triforce.session import GameSession
+
+
+@pytest.fixture(autouse=True)
+def logs_dir(tmp_path, monkeypatch):
+    """Training event logs go under the test's tmp dir, never the repo's logs/."""
+    path = tmp_path / 'logs'
+    monkeypatch.setenv(LOGS_DIR_ENV, str(path))
+    return path
 
 
 @pytest.fixture(scope='session')
