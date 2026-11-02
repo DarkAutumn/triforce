@@ -149,13 +149,20 @@ def _hearts_encoding(health_half_hearts: int, max_health: int) -> Dict[str, int]
 
 
 def ram_randomization_values(spec: RamRandomization, max_health: int, rng: random.Random) -> Dict[str, int]:
-    """RAM variable values for one reset.  hp is drawn in half hearts within [min, max] fraction of max hp
-    (at least half a heart)."""
+    """RAM variable values for one reset.  hp is drawn in half hearts within [min, max] fraction of max hp (at least
+    half a heart); with ``full_hp``, that share of resets is full health (sword beams) and the rest stay below full."""
     values: Dict[str, int] = {}
     if spec.hp is not None:
         lo, hi = (1.0 if v == 'max' else float(v) for v in spec.hp)
         total = 2 * max_health
-        half_hearts = rng.randint(max(1, round(lo * total)), max(1, round(hi * total)))
+        low, high = max(1, round(lo * total)), max(1, round(hi * total))
+        if spec.full_hp is not None and high >= total:
+            if rng.random() < spec.full_hp or low >= total:
+                half_hearts = total
+            else:
+                half_hearts = rng.randint(low, total - 1)
+        else:
+            half_hearts = rng.randint(low, high)
         values.update(_hearts_encoding(half_hearts, max_health))
     if spec.bombs is not None:
         values['bombs'] = rng.randint(*spec.bombs)
@@ -175,7 +182,10 @@ def entry_side(prev: MapLocation, curr: MapLocation) -> str:
 
 
 class SavestateCapture:
-    """Saves the first entry of each (room, side) as ``<level>_<room><side>.state`` (v1 _try_save_state)."""
+    """Saves the first entry of each (room, side) as ``<level>_<room><side>.state`` (v1 _try_save_state).
+
+    With ``session.executor.capture_pre_entry`` on, the saved state is the last frame *before* the game created the
+    room's monsters (``room_entry``), so every load can draw a new spawn layout and refill the room."""
     def __init__(self, directory: str = GAME_DIR):
         self.directory = directory
         self.saved: List[str] = []
@@ -184,7 +194,7 @@ class SavestateCapture:
         """Savestate filename for entering curr from prev."""
         return f"{curr.level}_{curr.value:02x}{entry_side(prev, curr)}.state"
 
-    def on_step(self, change: StateChange, emu) -> Optional[str]:
+    def on_step(self, change: StateChange, session) -> Optional[str]:
         """Writes a savestate if this step entered a new (room, side); returns its path."""
         if not change.changed_location or change.state.in_cave or change.state.game_over:
             return None
@@ -192,9 +202,14 @@ class SavestateCapture:
         if os.path.exists(path):
             return None
         os.makedirs(self.directory, exist_ok=True)
-        tmp = f"{path}.{os.getpid()}.tmp"
-        with gzip.open(tmp, 'wb') as f:
-            f.write(emu.save_state())
-        os.replace(tmp, path)      # atomic: parallel workers may race on the same room
+        write_savestate(path, session.executor.last_pre_entry or session.emu.save_state())
         self.saved.append(path)
         return path
+
+
+def write_savestate(path: str, data: bytes):
+    """Writes a gzip savestate atomically (parallel workers may race on the same file)."""
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with gzip.open(tmp, 'wb') as f:
+        f.write(data)
+    os.replace(tmp, path)

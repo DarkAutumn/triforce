@@ -5,7 +5,7 @@ success: [exit-correct, enter-room:2:0x0e]
 reward_profile: default
 reward: {pbrs: on}
 obs: {objective: on}
-ram_randomization: {hp: [0.5, max]}
+ram_randomization: {hp: [0.5, max], full_hp: 0.5}
 max_steps: 2000
 warm_start: null
 notes: >-

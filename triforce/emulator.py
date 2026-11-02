@@ -132,6 +132,11 @@ class Emulator:
         self.data.set_value(name, int(value))
         self._invalidate()
 
+    def write(self, address: int, value: int):
+        """Writes one byte of NES work RAM ($0000-$07FF)."""
+        self.data.memory.assign(address, '|u1', int(value))
+        self._invalidate()
+
     def _invalidate(self):
         self._ram_frame = -1
         self._info_frame = -1

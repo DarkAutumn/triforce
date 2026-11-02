@@ -10,6 +10,7 @@ reward_profile: default
 reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {hp: [0.5, max], bombs: [0, 8], keys: [0, 1]}
+fresh_rooms: true                         # pre-entry savestates: clear the room's kill history (full spawn)
 max_steps: 2000
 warm_start: null
 ```
@@ -67,11 +68,23 @@ class ObsConfig(BaseModel):
 
 class RamRandomization(BaseModel):
     """Reset-time RAM randomization.  hp bounds are fractions of max hp (or 'max'); bombs/keys are inclusive
-    integer ranges.  Omitted fields leave the savestate's value."""
+    integer ranges.  Omitted fields leave the savestate's value.
+
+    ``full_hp`` (with ``hp``) is the share of resets that start at full health, the only state where the sword fires
+    beams; the rest draw hp below full (no beams) within the ``hp`` bounds.  Without it, hp is uniform over the bounds
+    (full health only as often as any other value)."""
     model_config = ConfigDict(extra='forbid')
     hp: Optional[Tuple[HpBound, HpBound]] = None
+    full_hp: Optional[float] = None
     bombs: Optional[Tuple[int, int]] = None
     keys: Optional[Tuple[int, int]] = None
+
+    @field_validator('full_hp')
+    @classmethod
+    def _check_full_hp(cls, value):
+        if value is not None and not 0.0 <= value <= 1.0:
+            raise ValueError(f"full_hp must be a probability in [0, 1], got {value}")
+        return value
 
     @field_validator('hp')
     @classmethod
@@ -103,6 +116,7 @@ class SpecialistConfig(BaseModel):
     reward: RewardConfig = Field(default_factory=RewardConfig)
     obs: ObsConfig = Field(default_factory=ObsConfig)
     ram_randomization: RamRandomization = Field(default_factory=RamRandomization)
+    fresh_rooms: bool = True                     # pre-entry start states spawn the room's full monster count
     max_steps: int = 2000
     warm_start: Optional[str] = None
     harvested_states: Optional[str] = None       # directory; default <integration dir>/harvested/<name>

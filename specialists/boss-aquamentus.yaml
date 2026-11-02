@@ -5,7 +5,7 @@ success: [boss-dead-and-heart, exit-correct]
 reward_profile: default
 reward: {pbrs: on}
 obs: {objective: on}
-ram_randomization: {hp: [0.75, max]}
+ram_randomization: {hp: [0.75, max], full_hp: 0.5}
 max_steps: 2000
 warm_start: null
 notes: >-

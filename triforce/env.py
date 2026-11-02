@@ -68,6 +68,8 @@ class ZeldaEnv(gym.Env):
         self.pool = StartStatePool(self.config, self.rng) if start_state is None else None
         self.curriculum = BackwardCurriculum(curriculum, self.rng) if curriculum and start_state is None else None
         self.capture = SavestateCapture(capture_dir) if capture_dir else None
+        if self.capture is not None:
+            self.session.executor.capture_pre_entry = True
         self.critic = create_critic(self.config.reward_profile, self.config.reward.pbrs)
         self.end_conditions = build_end_conditions(self.config.rooms, self.config.success)
         self.builder = ObservationBuilder(objective=self.config.obs.objective)
@@ -94,7 +96,7 @@ class ZeldaEnv(gym.Env):
             if start is not None:
                 name, self._curriculum_tag = start
         name = name or self.pool.next()
-        state = self.session.load(name)
+        state = self.session.load(name, fresh_room=self.config.fresh_rooms)
         if name not in self._verified:
             verify_start_room(name, state.full_location, self.config.rooms, self.config.name)
             self._verified.add(name)
@@ -163,7 +165,7 @@ class ZeldaEnv(gym.Env):
             self._done = True
 
         if self.capture is not None:
-            saved = self.capture.on_step(change, self.session.emu)
+            saved = self.capture.on_step(change, self.session)
             if saved:
                 extra['captured_state'] = saved
 

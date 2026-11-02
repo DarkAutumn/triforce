@@ -28,7 +28,7 @@ import os
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from .actions import DIRECTIONAL_KINDS, DURATIONS, KINDS, TIMED_KINDS, Action
 from .env import ZeldaEnv
@@ -130,8 +130,10 @@ class Explorer:
         self.env.close()
 
     def explore(self, start_state: str, iterations: int = 3000, explore_steps: int = 25,
-                patience: int = 300) -> ExploreResult:
-        """Searches for a successful path from start_state; returns the best one found."""
+                patience: int = 300, accept: Optional[Callable[[object], bool]] = None) -> ExploreResult:
+        """Searches for a successful path from start_state; returns the best one found.  ``accept(state)`` can
+        reject successes (e.g. a correct exit into the wrong room): a rejected success ends the attempt as a
+        failure."""
         # pylint: disable=too-many-locals
         started = time.time()
         env, session = self.env, self.env.session
@@ -158,7 +160,7 @@ class Explorer:
                 env_steps += 1
                 actions.append(tuple(int(x) for x in previous.to_indices()))
                 if terminated or truncated:
-                    if info['outcome'] == SUCCESS:
+                    if info['outcome'] == SUCCESS and (accept is None or accept(session.state)):
                         candidate = (info['health'], -len(actions), actions, info['ending'])
                         if best is None or candidate[:2] > best[:2]:
                             best = candidate
@@ -204,6 +206,22 @@ class Explorer:
         with open(os.path.join(directory, 'trajectory.json'), 'w', encoding='utf-8') as file:
             json.dump(meta, file, indent=1)
         return replayed
+
+    def replay(self, result: ExploreResult, capture_pre_entry: bool = False) -> Tuple[dict, Optional[bytes]]:
+        """Replays a result from the start of the last explore() (exact restores, so it reproduces).  Returns the
+        final step's info and, with capture_pre_entry, the savestate of the last frame before its room entry."""
+        env, session = self.env, self.env.session
+        env.restore(self._root, result.start_state)
+        session.executor.capture_pre_entry = capture_pre_entry
+        info = {}
+        try:
+            for indices in result.actions:
+                _, _, terminated, truncated, info = env.step(list(indices))
+                if terminated or truncated:
+                    break
+            return info, session.executor.last_pre_entry
+        finally:
+            session.executor.capture_pre_entry = False
 
 
 _WORKER = {}

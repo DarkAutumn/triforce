@@ -10,6 +10,7 @@ from typing import Optional
 from .actions import Action, ActionMask, compute_action_mask
 from .emulator import Emulator, load_state_bytes
 from .frame_skip import OptionExecutor, OptionResult
+from .room_entry import is_pre_entry, make_room_fresh, pending_room, randomize_spawn
 from .state_change import FutureCreditLedger, StateChange
 from .zelda_game import ZeldaGame
 
@@ -29,8 +30,13 @@ class GameSession:
         """Releases the emulator."""
         self.emu.close()
 
-    def load(self, state, randomize_rng: bool = True, ram_overrides=None) -> ZeldaGame:
-        """Loads a savestate (name, path, or raw bytes), applies RAM overrides, and gains control of Link."""
+    def load(self, state, randomize_rng: bool = True, ram_overrides=None, fresh_room: bool = False) -> ZeldaGame:
+        """Loads a savestate (name, path, or raw bytes), applies RAM overrides, and gains control of Link.
+
+        randomize_rng: new RNG bytes, and for a pre-entry savestate (``room_entry``) a random SpawnCycle/edge cell,
+            all drawn from the ``random`` module (seed it for reproducible loads).
+        fresh_room: for a pre-entry savestate, clear the pending room's kill history so it spawns every monster.
+        """
         data = state if isinstance(state, bytes) else load_state_bytes(state)
         self.emu.load_state(data)
         self.executor.reset()
@@ -39,6 +45,12 @@ class GameSession:
         if randomize_rng:
             for i in range(12):
                 self.emu.set_value(f'rng_{i}', random.randint(1, 255))
+        if is_pre_entry(self.emu.read):
+            if randomize_rng:
+                randomize_spawn(self.emu, random)
+            pending = pending_room(self.emu.read) if fresh_room else None
+            if pending is not None:
+                make_room_fresh(self.emu, *pending)
 
         for name, value in (ram_overrides or {}).items():
             self.emu.set_value(name, value)

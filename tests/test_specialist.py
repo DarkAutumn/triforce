@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from triforce.actions import Action
 from triforce.emulator import GAME_DIR
 from triforce.game_map import ROUTES_YAML, GameMap
+from triforce.room_entry import is_pre_entry
 from triforce.specialist import (RamRandomization, SpecialistConfig, format_room, list_specialists, load_specialist,
                                  parse_room)
 from triforce.start_states import (DAMAGE_WEIGHT, DECAY_FACTOR, FAILURE_WEIGHT, ProbabilisticSelector,
@@ -166,13 +167,27 @@ def test_hp_randomization_bounds(session, hp, max_health):
     lo = 1.0 if hp[0] == 'max' else hp[0]
     for _ in range(10):
         values = ram_randomization_values(spec, max_health, rng)
-        session.load('1_73n', randomize_rng=False, ram_overrides={'hearts_and_containers': (max_health - 1) << 4})
+        session.load('start', randomize_rng=False, ram_overrides={'hearts_and_containers': (max_health - 1) << 4})
         state = session.apply_ram(values)
         assert state.link.max_health == max_health
         assert max(0.5, round(lo * 2 * max_health) / 2) <= state.link.health <= max_health
         assert 1 <= state.link.bombs <= 3 and state.link.keys == 2
         if state.link.health == max_health:
             assert state.link.is_health_full            # beams need the NES full-health encoding
+
+
+def test_full_hp_share_splits_resets_between_beams_and_no_beams(session):
+    """full_hp: half the resets at full health (the sword fires beams), the rest strictly below full."""
+    rng = random.Random(0)
+    spec = RamRandomization(hp=(0.5, 'max'), full_hp=0.5)
+    draws = [ram_randomization_values(spec, 3, rng) for _ in range(400)]
+    full = [v for v in draws if v['partial_hearts'] == 0xFF]
+    assert 0.4 < len(full) / len(draws) < 0.6
+    for values in (full[0], next(v for v in draws if v['partial_hearts'] != 0xFF)):
+        session.load('start', randomize_rng=False, ram_overrides={'hearts_and_containers': 0x20, 'sword': 1})
+        link = session.apply_ram(values).link
+        assert link.is_health_full == (values in full) and 1.5 <= link.health <= 3.0
+        assert link.are_beams_available == link.is_health_full
 
 
 # --- savestate capture ---
@@ -184,15 +199,20 @@ def test_entry_side_letters():
     assert entry_side(MapLocation(0, 0x77, True), MapLocation(0, 0x77, False)) == 'c'
 
 
-def test_capture_saves_first_entry_once(session, tmp_path):
+def test_capture_saves_first_entry_once_before_monsters_spawn(session, tmp_path):
     capture = SavestateCapture(str(tmp_path))
     session.load('start', randomize_rng=False)
-    changes = act_until(session, 'MOVE E 32', lambda c: c.changed_location)
-    path = capture.on_step(changes[-1], session.emu)
+    session.executor.capture_pre_entry = True
+    try:
+        changes = act_until(session, 'MOVE E 32', lambda c: c.changed_location)
+    finally:
+        session.executor.capture_pre_entry = False
+    path = capture.on_step(changes[-1], session)
     assert os.path.basename(path) == '0_78w.state'
-    assert capture.on_step(changes[-1], session.emu) is None          # already exists
+    assert capture.on_step(changes[-1], session) is None          # already exists
     with gzip.open(path) as f:
-        assert f.read(4)
+        session.emu.load_state(f.read())
+    assert is_pre_entry(session.emu.read)                           # saved before the room's monsters exist
     state = session.load(path, randomize_rng=False)
     assert state.full_location == MapLocation(0, 0x78, False)
-    assert capture.on_step(session.act(Action.parse('MOVE E 8')), session.emu) is None   # no room change
+    assert capture.on_step(session.act(Action.parse('MOVE E 8')), session) is None   # no room change

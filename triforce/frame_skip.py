@@ -11,6 +11,7 @@ import numpy as np
 
 from .actions import Action
 from .emulator import BUTTON_INDEX, NUM_BUTTONS, Emulator
+from .room_entry import is_pre_entry
 from .zelda_enums import ActionKind, Direction, SelectedEquipmentKind
 
 # Game modes ($12).
@@ -174,11 +175,14 @@ class OptionExecutor:
         self.emu = emulator
         self.was_in_cave = False
         self.just_exited_cave = False
+        self.capture_pre_entry = False          # keep the last frame before each room entry (room_entry)
+        self.last_pre_entry: Optional[bytes] = None
 
     def reset(self):
         """Clears per-episode state."""
         self.was_in_cave = False
         self.just_exited_cave = False
+        self.last_pre_entry = None
 
     def gain_control(self) -> int:
         """Skips frames until the agent can control Link.  Returns frames elapsed."""
@@ -188,7 +192,10 @@ class OptionExecutor:
         return self.emu.frame - start
 
     def execute(self, action: Action, state) -> OptionResult:
-        """Executes action from ZeldaGame ``state`` (the current, controllable state)."""
+        """Executes action from ZeldaGame ``state`` (the current, controllable state).  With ``capture_pre_entry``,
+        ``last_pre_entry`` is the emulator state of the last frame before the room entry this action caused (None
+        if it caused none)."""
+        self.last_pre_entry = None
         start = self.emu.frame
         location = (state.level, state.location, state.in_cave)
         if action.kind in (ActionKind.MOVE, ActionKind.WAIT):
@@ -285,6 +292,8 @@ class OptionExecutor:
 
             if mode in SCROLLING_MODES or emu.read(ADDR_LINK_STATUS) & STUN_FLAG \
                     or self._is_level_transition(start_location):
+                if self.capture_pre_entry and is_pre_entry(emu.read):
+                    self.last_pre_entry = emu.save_state()
                 emu.step(None, 1)
                 continue
 
