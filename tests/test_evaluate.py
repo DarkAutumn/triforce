@@ -23,6 +23,10 @@ def test_evaluate_specialist_covers_every_seed_state_reproducibly(session, tmp_p
     assert all(0 < r['steps'] <= 40 for r in records)
     assert result['success_rate'] == sum(r['success'] for r in records) / 6
     assert set(result['by_room']) == {'1:0x35'}
+    assert all(set(r['hearts']) == {'dropped', 'taken', 'healed', 'wasted', 'left', 'expired'} for r in records)
+    assert result['hearts_dropped'] == sum(r['hearts']['dropped'] for r in records) / 6
+    assert result['mean_health_change_total'] == result['health_change_total'] >= result['mean_health_change']
+    assert {'health_change_total', 'hearts_dropped', 'hearts_taken', 'hearts_left'} <= set(result['by_room']['1:0x35'])
 
     again = evaluate_specialist(config, ckpt, episodes_per_state=2, session=session, seed=5)
     assert again['records'] == records

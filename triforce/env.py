@@ -5,7 +5,8 @@ config's RAM randomization, and runs timed options through ``GameSession``.  Wit
 episodes instead start partway along an explored trajectory (``curriculum.py``); their final ``info`` carries
 ``curriculum`` and they don't feed the start-state pool.  Rewards come from the critic
 (``critics.py``) plus a terminal reward; endings come from ``end_conditions.py`` and are classified
-deny-by-default (an unlisted ending raises ``UnclassifiedEndingError``).
+deny-by-default (an unlisted ending raises ``UnclassifiedEndingError``).  The final ``info`` also carries
+``hearts``, the episode's dropped-heart summary (``hearts.HeartTracker``).
 
 Actions are ``(kind, direction, duration)`` head indices.  Heads that don't apply to the kind are ignored.  A
 masked (illegal) action raises ``InvalidActionError`` unless the env was built with ``strict_actions=False``,
@@ -24,6 +25,7 @@ from .critics import create_critic
 from .curriculum import BackwardCurriculum, CurriculumSpec
 from .emulator import GAME_DIR
 from .end_conditions import MAX_STEPS, build_end_conditions, classify_ending
+from .hearts import HeartTracker
 from .objectives import GameCompletion
 from .observation import ObservationBuilder
 from .rewards import SUCCESS, StepRewards, apply_terminal_rewards
@@ -127,6 +129,8 @@ class ZeldaEnv(gym.Env):
 
         self._episode_state = name
         self._start_health = state.link.health
+        self.hearts = HeartTracker()
+        self.hearts.reset(state)
         self._done = False
         obs = self.builder.reset(state, self.session.mask)
         return obs, self._info(state, {'start_state': name})
@@ -142,6 +146,7 @@ class ZeldaEnv(gym.Env):
                 raise InvalidActionError(f"{act} is masked; legal: {self.session.mask}")
 
         change = self.session.act(act)
+        self.hearts.update(change)
         self._attach_objectives(change.previous, change.state)
 
         rewards = StepRewards()
@@ -163,8 +168,9 @@ class ZeldaEnv(gym.Env):
         if ending is not None:
             outcome = classify_ending(ending, self.config.success, self.config.endings)
             apply_terminal_rewards(rewards, ending, outcome, terminated, state.link.health, state.link.max_health)
+            self.hearts.finish(state)
             extra = {'ending': ending, 'outcome': outcome, 'start_state': state_label(self._episode_state),
-                     'start_health': self._start_health}
+                     'start_health': self._start_health, 'hearts': self.hearts.summary()}
             if self._curriculum_tag is not None:
                 extra['curriculum'] = self.curriculum.record(self._curriculum_tag, outcome == SUCCESS)
             elif self.pool is not None:

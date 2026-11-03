@@ -236,9 +236,14 @@ def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
         json.dump(result, file, indent=2)
     record.update(eval_success_rate=result['success_rate'], eval_episodes=result['episodes'],
                   eval_health=result['mean_health_fraction'], eval_health_change=result['mean_health_change'],
+                  eval_health_change_total=result['mean_health_change_total'],
+                  eval_hearts_dropped=result['hearts_dropped'], eval_hearts_taken=result['hearts_taken'],
+                  eval_hearts_left=result['hearts_left'],
                   eval_by_room={room: stats['success_rate'] for room, stats in result['by_room'].items()})
     events.emit('eval', success_rate=result['success_rate'], episodes=result['episodes'],
                 health=result['mean_health_fraction'], health_change=result['mean_health_change'],
+                health_change_total=result['mean_health_change_total'], hearts_dropped=result['hearts_dropped'],
+                hearts_taken=result['hearts_taken'], hearts_left=result['hearts_left'],
                 by_room=record['eval_by_room'],
                 by_state={state: stats['success_rate'] for state, stats in result['by_state'].items()},
                 path=str(run_dir / 'eval.json'))

@@ -9,6 +9,9 @@ isolation.  Every seed savestate of the specialist (``SpecialistConfig.resolve_s
 training), episode ``i`` seeded with ``seed + i``.  Actions are sampled unless ``--deterministic``.  The
 checkpoint defaults to the specialist's promoted model; results go to ``<checkpoint dir>/eval.json``.
 ``mean_health_change`` is hearts at the episode's end minus hearts at its start (after hp randomization).
+Dropped hearts (``triforce/hearts.py``) are kept per episode (``records[i]['hearts']``); ``mean_health_change_total``
+adds the hearts wasted by picking them up at (or near) full health, and ``hearts_dropped`` / ``hearts_taken`` /
+``hearts_left`` are means per episode (also per room and per start state).
 """
 
 import argparse
@@ -23,6 +26,7 @@ import torch
 
 from . import registry
 from .env import ZeldaEnv
+from .hearts import heart_change_total
 from .session import GameSession
 from .specialist import SpecialistConfig, load_specialist
 from .start_states import state_label
@@ -57,7 +61,7 @@ def _play(env: ZeldaEnv, network, state: str, episode_seed: int, deterministic: 
     return {'start_state': state, 'room': list(reset_info['room']), 'seed': episode_seed,
             'outcome': info['outcome'], 'ending': info['ending'], 'success': info['outcome'] == 'success',
             'steps': steps, 'frames': frames, 'start_health': reset_info['health'], 'health': info['health'],
-            'max_health': info['max_health']}
+            'max_health': info['max_health'], 'hearts': info['hearts']}
 
 
 def _worker_init(config: SpecialistConfig, checkpoint: str, deterministic: bool):
@@ -72,6 +76,17 @@ def _worker_run(job):
     return _play(_WORKER['env'], _WORKER['network'], state, episode_seed, _WORKER['deterministic'])
 
 
+def _heart_stats(records: list[dict]) -> dict:
+    """Means per episode of the total heart change (real + wasted) and the dropped-heart counts."""
+    count = len(records)
+    hearts = [r.get('hearts') or {} for r in records]
+    return {'health_change_total': sum(heart_change_total(r['health'] - r['start_health'], h)
+                                       for r, h in zip(records, hearts)) / count,
+            'hearts_dropped': sum(h.get('dropped', 0) for h in hearts) / count,
+            'hearts_taken': sum(h.get('taken', 0) for h in hearts) / count,
+            'hearts_left': sum(h.get('left', 0) for h in hearts) / count}
+
+
 def _group(records: list[dict], key) -> dict:
     groups = {}
     for record in records:
@@ -79,6 +94,7 @@ def _group(records: list[dict], key) -> dict:
     return {name: {'episodes': len(items),
                    'success_rate': sum(r['success'] for r in items) / len(items),
                    'health_change': sum(r['health'] - r['start_health'] for r in items) / len(items),
+                   **_heart_stats(items),
                    'endings': dict(Counter(r['ending'] for r in items))}
             for name, items in sorted(groups.items())}
 
@@ -119,6 +135,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     records.sort(key=lambda r: r['seed'])
 
     count = len(records)
+    hearts = _heart_stats(records)
     return {
         'specialist': config.name, 'checkpoint': str(checkpoint), 'episodes_per_state': episodes_per_state,
         'seed': seed, 'deterministic': deterministic, 'episodes': count,
@@ -126,6 +143,8 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         'mean_health_fraction': sum(r['health'] / r['max_health'] if r['max_health'] else 0.0
                                     for r in records) / count,
         'mean_health_change': sum(r['health'] - r['start_health'] for r in records) / count,
+        'mean_health_change_total': hearts['health_change_total'],
+        **hearts,
         'mean_steps': sum(r['steps'] for r in records) / count,
         'mean_frames': sum(r['frames'] for r in records) / count,
         'outcomes': dict(Counter(r['outcome'] for r in records)),
@@ -137,15 +156,22 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
 
 
 def format_report(result: dict) -> str:
-    """Total line plus one line per room, worst success rate first."""
+    """Total line plus one line per room, worst success rate first.  Health change is real (total incl. hearts
+    wasted at full health); hearts are dropped/taken/left per episode."""
     successes = sum(r['success'] for r in result['records'])
     lines = [f"{result['specialist']}: success {successes}/{result['episodes']} = {result['success_rate']:.0%}  "
-             f"health change {result['mean_health_change']:+.2f} hearts  steps {result['mean_steps']:.0f}"]
+             f"health change {result['mean_health_change']:+.2f} (total {result['mean_health_change_total']:+.2f}) "
+             f"hearts  dropped/taken/left {_fmt_hearts(result)}  steps {result['mean_steps']:.0f}"]
     for room, stats in sorted(result['by_room'].items(), key=lambda item: (item[1]['success_rate'], item[0])):
         top = max(stats['endings'].items(), key=lambda item: item[1])[0]
-        lines.append(f"  {room:12} {stats['success_rate']:5.0%}  {stats['health_change']:+5.2f} hearts  "
+        lines.append(f"  {room:12} {stats['success_rate']:5.0%}  {stats['health_change']:+5.2f} "
+                     f"({stats['health_change_total']:+5.2f}) hearts  {_fmt_hearts(stats)}  "
                      f"{stats['episodes']:4}  {top}")
     return '\n'.join(lines)
+
+
+def _fmt_hearts(stats: dict) -> str:
+    return f"{stats['hearts_dropped']:.2f}/{stats['hearts_taken']:.2f}/{stats['hearts_left']:.2f}"
 
 
 def main(argv=None):

@@ -172,6 +172,18 @@ def fmt_hearts_change(value) -> str:
     return '–' if value is None else f'{value:+.1f} ♥'
 
 
+def fmt_hearts_pair(real, total) -> str:
+    """Real and total heart change, '-0.4 ♥ / total -0.2 ♥'.  Total adds the dropped hearts Link picked up at (or
+    near) full health, which healed nothing; logs from before heart tracking have no total."""
+    text = fmt_hearts_change(real)
+    return text if total is None or real is None else f"{text} / total {fmt_hearts_change(total)}"
+
+
+def fmt_drops(dropped, taken, left) -> str:
+    """Dropped-heart counts per episode, 'dropped 0.40 · taken 0.10 · left 0.30 /ep'."""
+    return f"dropped {dropped:.2f} · taken {taken:.2f} · left {left:.2f} /ep"
+
+
 def fmt_clock(ts) -> str:
     """Unix seconds -> local HH:MM:SS."""
     return '' if ts is None else datetime.fromtimestamp(ts).strftime('%H:%M:%S')
@@ -199,6 +211,12 @@ def rate_color(value) -> QColor:
     if value is None:
         return C.muted
     return mix(C.bad, C.warn, value * 2) if value < 0.5 else mix(C.warn, C.ok, (value - 0.5) * 2)
+
+
+def heart_drop_row(label: str, dropped: float, taken: float, left: float) -> tuple:
+    """BarList row for dropped hearts per episode: the bar is the share Link picked up (blue = all taken)."""
+    share = min(1.0, taken / dropped) if dropped > 0 else None
+    return label, share, fmt_drops(dropped, taken, left) if dropped > 0 else 'no drops', rate_color(share)
 
 
 def ease(shown: float, target: float) -> float:
@@ -497,6 +515,16 @@ class Run:
                 points.append((iteration, float(value)))
         return points
 
+    def last(self, key: str):
+        """The metric's latest value, or None (e.g. a log from before the metric existed)."""
+        values = self.series(key)
+        return values[-1][1] if values else None
+
+    def recent_mean(self, key: str, iterations: int = 10):
+        """Mean of the metric over the last ``iterations`` progress events that have it, or None."""
+        values = self.series(key)[-iterations:]
+        return sum(value for _, value in values) / len(values) if values else None
+
 
 def plan_alive(plan: dict) -> bool | None:
     """Is a 'running' plan's training process still there?  None when unknown (finished, other host)."""
@@ -731,8 +759,11 @@ def describe(event: dict) -> str:
     if kind == 'eval_progress':
         return f"{get('done')}/{get('episodes')} episodes · success {fmt_pct(get('success_rate'))}"
     if kind == 'eval':
-        return (f"success {fmt_pct(get('success_rate'))} over {get('episodes')} episodes · "
-                f"health {fmt_hearts_change(get('health_change'))}")
+        text = (f"success {fmt_pct(get('success_rate'))} over {get('episodes')} episodes · "
+                f"health {fmt_hearts_pair(get('health_change'), get('health_change_total'))}")
+        if get('hearts_dropped') is not None:
+            text += f" · hearts {fmt_drops(get('hearts_dropped'), get('hearts_taken'), get('hearts_left'))}"
+        return text
     if kind in ('end', 'specialist_end'):
         prefix = f"{get('specialist')}: " if kind == 'specialist_end' else ''
         text = f"{prefix}{get('status')}"
@@ -1215,20 +1246,27 @@ class RunRow(Clickable):
                 paint_pill(p, rect.right() - 12, cy - 10, f"eval {fmt_pct(evaluation)}", rate_color(evaluation),
                            8.5, right=True)
             elif points:
-                # latest success and hearts change (exit - entry), e.g. "89% -0.2♥", right-aligned after the sparkline
-                hearts = run.series('health_change')
+                # latest success and hearts change (exit - entry), e.g. "89% -0.2♥", right-aligned after the sparkline;
+                # below it the total change, which adds hearts picked up at full health (absent in older logs)
+                real, total = run.last('health_change'), run.last('health_change_total')
                 parts = [(fmt_pct(points[-1][1]), rate_color(points[-1][1]))]
-                if hearts:
-                    parts.append((f"{hearts[-1][1]:+.1f}♥", C.muted))
+                if real is not None:
+                    parts.append((f"{real:+.1f}♥", C.muted))
+                top = cy - 10 if total is None or real is None else cy - 17
                 p.setFont(font(8.5, QFont.Weight.Bold))
                 metrics = p.fontMetrics()
                 x = rect.right() - 10
                 for text, color in reversed(parts):
                     x -= metrics.horizontalAdvance(text)
                     p.setPen(color)
-                    p.drawText(QRectF(x, cy - 10, metrics.horizontalAdvance(text) + 1, 20),
+                    p.drawText(QRectF(x, top, metrics.horizontalAdvance(text) + 1, 20),
                                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, text)
                     x -= 6
+                if real is not None and total is not None:
+                    p.setFont(font(7.5, QFont.Weight.DemiBold))
+                    p.setPen(C.faint)
+                    p.drawText(QRectF(rect.right() - 100, cy + 1, 90, 16),
+                               Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, f"total {total:+.1f}♥")
 
     @staticmethod
     def phase_text(run: Run, status: str, now: float) -> str:
@@ -1545,6 +1583,11 @@ class BarList(QWidget):
             return
         items, _ = self._layout(width)
         label_w = min(200.0, width * 0.32)
+        # value text column: 100 px, wider for long texts (e.g. heart drops), up to 45% of the width
+        p.setFont(font(9, QFont.Weight.DemiBold))
+        text_w = max([100.0] + [p.fontMetrics().horizontalAdvance(payload[2]) + 4.0
+                                for kind, _, _, payload in items if kind == 'bar'])
+        text_w = min(text_w, max(100.0, width * 0.45))
         for kind, y, height, payload in items:
             if kind == 'title':
                 p.setFont(font(9, QFont.Weight.Bold))
@@ -1556,11 +1599,11 @@ class BarList(QWidget):
                 p.setPen(C.text)
                 p.drawText(QRectF(14, y, label_w - 8, height), Qt.AlignmentFlag.AlignVCenter,
                            p.fontMetrics().elidedText(label, Qt.TextElideMode.ElideRight, int(label_w - 8)))
-                bar = QRectF(14 + label_w, y + 6, max(40.0, width - label_w - 130), height - 12)
+                bar = QRectF(14 + label_w, y + 6, max(40.0, width - label_w - text_w - 30), height - 12)
                 paint_bar(p, bar, value or 0.0, color, 0.0)
                 p.setFont(font(9, QFont.Weight.DemiBold))
                 p.setPen(color if value is not None else C.faint)
-                p.drawText(QRectF(bar.right() + 10, y, 100, height), Qt.AlignmentFlag.AlignVCenter, text)
+                p.drawText(QRectF(bar.right() + 10, y, text_w, height), Qt.AlignmentFlag.AlignVCenter, text)
             elif kind == 'cell':
                 column, cell_w, (label, value) = payload
                 cell = QRectF(14 + column * (cell_w + 4), y, cell_w, height)
@@ -1603,7 +1646,7 @@ class DetailPane(QWidget):
         self.charts = {
             'success': LineChart('Success', (0.0, 1.0), fmt_pct),
             'reward': LineChart('Reward / episode'),
-            'health': LineChart('Health change (hearts: exit − entry)', fmt=fmt_hearts_change),
+            'health': LineChart('Health change', fmt=fmt_hearts_change),
             'length': LineChart('Episode steps', fmt=lambda v: f'{v:.0f}'),
             'kl': LineChart('Approx KL', fmt=lambda v: f'{v:.3f}'),
             'sps': LineChart('Steps / second', fmt=lambda v: f'{v:.0f}'),
@@ -1683,9 +1726,13 @@ class DetailPane(QWidget):
         ], hlines, overlay)
         self.charts['reward'].set_data([{'label': 'total', 'color': C.accent,
                                          'points': run.series('reward/total', skip), 'area': True}], (), overlay)
-        self.charts['health'].set_data([{'label': 'health change', 'color': C.ok,
-                                         'points': run.series('health_change', skip), 'area': True}],
-                                       [(0.0, C.faint, 'no change')], overlay)
+        # hearts at exit - entry; total adds the dropped hearts picked up at full health (absent in older logs).
+        # Total first: the legend drops entries from the left when the title leaves no room, so 'real' stays.
+        self.charts['health'].set_data([
+            {'label': 'total (+wasted)', 'color': C.accent, 'points': run.series('health_change_total', skip),
+             'width': 1.4},
+            {'label': 'real', 'color': C.ok, 'points': run.series('health_change', skip), 'area': True},
+        ], [(0.0, C.faint, 'no change (exit = entry)')], overlay)
         self.charts['length'].set_data([{'label': 'steps', 'color': C.warn,
                                          'points': run.series('episode_steps', skip), 'area': True}], (), overlay)
         self.charts['kl'].set_data([{'label': 'kl', 'color': C.eval, 'points': run.series('losses/approx_kl', skip)}],
@@ -1696,11 +1743,16 @@ class DetailPane(QWidget):
         sections = []
         if run.eval:
             ev = run.eval
-            sections.append(('bars', 'Evaluation', [
+            rows = [
                 ('success', ev.get('success_rate'), f"{fmt_pct(ev.get('success_rate'))} of {ev.get('episodes')}",
                  rate_color(ev.get('success_rate'))),
-                ('health', ev.get('health'), f"{fmt_pct(ev.get('health'))} · {fmt_hearts_change(ev.get('health_change'))}",
-                 C.ok)]))
+                ('health', ev.get('health'), f"{fmt_pct(ev.get('health'))} · "
+                 f"{fmt_hearts_pair(ev.get('health_change'), ev.get('health_change_total'))}",
+                 C.ok)]
+            if ev.get('hearts_dropped') is not None:
+                rows.append(heart_drop_row('dropped hearts', ev['hearts_dropped'], ev['hearts_taken'],
+                                           ev['hearts_left']))
+            sections.append(('bars', 'Evaluation', rows))
             by_room = ev.get('by_room') or {}
             if by_room:
                 sections.append(('bars', 'By room', [(room, value, fmt_pct(value), rate_color(value))
@@ -1714,6 +1766,11 @@ class DetailPane(QWidget):
             sections.append(('bars', 'Evaluation (running)', [
                 ('episodes', done / total if total else 0.0, f"{done}/{total}", C.eval),
                 ('success so far', running, fmt_pct(running), rate_color(running))]))
+        drops = [run.recent_mean(f'hearts/{key}') for key in ('dropped', 'taken', 'left')]
+        if drops[0] is not None:
+            if not sections:
+                sections.append(('text', 'Evaluation', [('not evaluated yet', C.faint)]))
+            sections.append(('bars', 'Training (last 10 iterations)', [heart_drop_row('dropped hearts', *drops)]))
         problems = [(str(e.get('message', '')), C.bad) for e in run.errors]
         if run.end and run.end.get('message') and all(run.end['message'] != text for text, _ in problems):
             problems.append((run.end['message'], C.warn))
@@ -1737,12 +1794,15 @@ class DetailPane(QWidget):
         for run, speed, seconds in zip(model.runs, speeds, walls):
             value = run.eval_rate()
             episodes = run.eval_episodes()
-            evals.append((run.name, value, f"{fmt_pct(value)}" + (f" · {episodes} ep" if episodes else ''),
-                          rate_color(value)))
+            ev = run.eval or {}
+            text = f"{fmt_pct(value)}" + (f" · {episodes} ep" if episodes else '')
+            if ev.get('health_change') is not None:
+                text += f" · {fmt_hearts_pair(ev['health_change'], ev.get('health_change_total'))}"
+            evals.append((run.name, value, text, rate_color(value)))
             value = run.train_success()
-            hearts = run.series('health_change')
-            train.append((run.name, value, fmt_pct(value) + (f" {hearts[-1][1]:+.1f}♥" if hearts else ''),
-                          rate_color(value)))
+            real = run.last('health_change')
+            hearts = '' if real is None else ' ' + fmt_hearts_pair(real, run.last('health_change_total'))
+            train.append((run.name, value, fmt_pct(value) + hearts, rate_color(value)))
             sps.append((run.name, speed / max(speeds) if speed and max(speeds) else None,
                         f"{speed:,.0f}" if speed else '–', C.accent))
             wall.append((run.name, seconds / max(walls) if seconds and max(walls) else None,

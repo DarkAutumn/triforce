@@ -114,6 +114,8 @@ def test_random_legal_episode_ends_classified(session):
         if terminated or truncated:
             assert info['outcome'] in ('success', 'hard-failure', 'soft-failure')
             assert truncated == (info['ending'] == 'max-steps')
+            hearts = info['hearts']
+            assert hearts['dropped'] == hearts['taken'] + hearts['left'] + hearts['expired']
             outcomes.append(info['outcome'])
             if len(outcomes) == 2:
                 break

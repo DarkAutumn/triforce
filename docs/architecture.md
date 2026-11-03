@@ -78,7 +78,22 @@ class ZeldaEnv(gymnasium.Env):
 `info` keys every step: `frames` (int, frames this step: used for frame-aware discounting), `interrupt`,
 `action` (str), `rewards` (dict name → value), `room` ((level, room, in_cave)), `health`, `max_health`,
 `steps`, `total_frames`, `specialist`. On the last step: `ending` (end-condition name) and `outcome`
-(`success` / `hard-failure` / `soft-failure`). An end condition that is not classified raises.
+(`success` / `hard-failure` / `soft-failure`), `start_health` and `hearts` (below). An end condition that is not
+classified raises.
+
+### Heart drops (`hearts.py`)
+
+`HeartTracker` follows the hearts enemies drop (item 0x22 in monster slots 1–$B; fairies, triforce pieces and heart
+containers don't count) through one room visit: `reset(state)`, `update(change)` every step, `finish(state)`,
+`summary()` → `dropped`, `taken`, `healed` (real hearts gained), `wasted` (`taken − healed`), `left` (on the floor
+when Link left the room, died or the visit ended) and `expired` (timed out). A heart that vanishes while its
+lifetime timer (`Item.timer`, counts down once per 2 frames) is above what the step's frames could count down was
+taken (by Link, his sword, arrow or boomerang); one near the end of its lifetime counts as taken only if Link's
+health rose. A heart heals `min(1, max_health − health)`, so one picked up at full health wastes a whole heart.
+"Total" heart change = real change (`health − start_health`) + `wasted`. `ZeldaEnv` puts the summary in the
+terminal `info['hearts']`; metrics log `health_change_total` and `hearts/{dropped,taken,left,wasted}` per
+episode; `evaluate` keeps it per episode and reports `mean_health_change_total` and `hearts_dropped/taken/left`
+overall, per room and per start state; runner `RoomRecord`s carry `hearts_dropped/taken/healed/wasted/left/expired`.
 
 ## Learning (`model.py`, `ppo.py`, `train.py`, `registry.py`)
 

@@ -16,6 +16,7 @@ import yaml
 
 from .actions import Action
 from .game_map import GameMap
+from .hearts import HeartTracker
 from .objectives import GameCompletion
 from .observation import ObservationBuilder
 from .registry import load_model, promoted_checkpoint
@@ -76,6 +77,14 @@ class RoomRecord:
     health_out: float = 0.0
     max_health: int = 0
     outcome: str = 'in-progress'    # exit-correct, exit-wrong, death, stuck, milestone, error
+    # Dropped hearts during the visit (triforce/hearts.py): healed = real hearts gained, wasted = taken - healed,
+    # left = still on the floor when the visit ended.
+    hearts_dropped: int = 0
+    hearts_taken: int = 0
+    hearts_healed: float = 0.0
+    hearts_wasted: float = 0.0
+    hearts_left: int = 0
+    hearts_expired: int = 0
 
 
 @dataclass
@@ -193,6 +202,7 @@ class Runner:
         record: Optional[RoomRecord] = None
         obs = None
         change = None
+        hearts = HeartTracker()
 
         while True:
             location = state.full_location
@@ -202,6 +212,7 @@ class Runner:
                     record.health_out = state.link.health
                     correct = change is not None and location in change.previous.objectives.next_rooms
                     record.outcome = 'exit-correct' if correct else 'exit-wrong'
+                    _store_hearts(record, hearts, state)
 
                 if location == route.terminal:
                     result.result, result.reason = 'success', f"entered {_describe(location)}"
@@ -219,6 +230,7 @@ class Runner:
                 name = self.specialist_for(location)
                 record = self._new_record(len(result.rooms), location, name, state)
                 result.rooms.append(record)
+                hearts.reset(state)
                 if current is None or current.name != name:
                     current = self._load(name)
                     session.set_disabled_kinds(current.config.items.disabled_kinds())
@@ -231,19 +243,23 @@ class Runner:
             room_steps = max(current.config.max_steps, MIN_ROOM_STEPS)
             if record.steps >= room_steps:
                 record.outcome = 'stuck'
+                _store_hearts(record, hearts, state)
                 result.result, result.reason = 'failure', f"{current.name} exceeded {room_steps} steps"
                 return
             if result.steps >= self.max_steps:
                 record.outcome = 'stuck'
+                _store_hearts(record, hearts, state)
                 result.result, result.reason = 'failure', f"run exceeded {self.max_steps} steps"
                 return
 
             action = current.act(obs, self.deterministic)
             if not session.mask.is_allowed(action):
+                _store_hearts(record, hearts, state)
                 raise RunnerError(f"{current.name} chose masked action {action} (legal: {session.mask})")
 
             change = session.act(action)
             state = change.state
+            hearts.update(change)
             state.objectives = objectives.get_current_objectives(change.previous, state)
             record.steps += 1
             record.frames += change.frames
@@ -256,6 +272,7 @@ class Runner:
             if state.game_over:
                 record.outcome = 'death'
                 record.health_out = 0.0
+                _store_hearts(record, hearts, state)
                 result.result, result.reason = 'failure', f"died in {_describe(state.full_location)}"
                 return
 
@@ -264,6 +281,16 @@ class Runner:
         return RoomRecord(index, location.level, f"0x{location.value:02x}", bool(location.in_cave), name,
                           health_in=state.link.health, health_out=state.link.health,
                           max_health=state.link.max_health, outcome=outcome)
+
+
+def _store_hearts(record: RoomRecord, tracker: HeartTracker, state):
+    """Ends the record's heart tracking and copies the counts into it."""
+    tracker.finish(state)
+    summary = tracker.summary()
+    record.hearts_dropped, record.hearts_taken, record.hearts_left = (summary['dropped'], summary['taken'],
+                                                                      summary['left'])
+    record.hearts_healed, record.hearts_wasted = summary['healed'], summary['wasted']
+    record.hearts_expired = summary['expired']
 
 
 def _key(location: MapLocation) -> RoomKey:

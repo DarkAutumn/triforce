@@ -109,8 +109,9 @@ def test_episode_metrics_merge_across_workers():
     move16, sword_e, wait4 = [0, 0, 2], [2, 3, 0], [1, 0, 0]
     first, second = EpisodeTracker(), EpisodeTracker()
     first.step(move16, 0.5, info(16, rewards={'move-closer': 0.5}), False)
+    hearts = {'dropped': 3, 'taken': 2, 'healed': 0.5, 'wasted': 1.5, 'left': 1, 'expired': 0}
     first.step(sword_e, 20.0, info(10, 'damage', {'success': 20.0}, ending='exit-correct', outcome='success',
-                                   health=2.0, max_health=4.0, start_health=1.5), True)
+                                   health=2.0, max_health=4.0, start_health=1.5, hearts=hearts), True)
     first.step(wait4, 0.0, info(4), False)                                      # open episode, not counted
     second.step(move16, -20.0, info(12, 'wall', {'failure': -20.0}, ending='link-died', outcome='hard-failure',
                                     health=0.0, max_health=3.0, start_health=2.5), True)
@@ -122,6 +123,10 @@ def test_episode_metrics_merge_across_workers():
     assert summary['reward/success'] == 10.0 and summary['reward/move-closer'] == 0.25
     assert summary['health_at_exit'] == pytest.approx(0.25)                      # (0.5 + 0) / 2
     assert summary['health_change'] == pytest.approx(-1.0)                       # (+0.5 - 2.5) / 2
+    # The second episode has no 'hearts' (as in logs from before heart tracking): total = real, no drops.
+    assert summary['health_change_total'] == pytest.approx(-0.25)               # (+0.5 + 1.5 - 2.5) / 2
+    assert summary['hearts/dropped'] == 1.5 and summary['hearts/taken'] == 1.0
+    assert summary['hearts/left'] == 0.5 and summary['hearts/wasted'] == 0.75
     assert summary['episode_frames'] == 19.0 and summary['episode_steps'] == 1.5
     assert summary['rollout/steps'] == 4 and summary['rollout/frames'] == 42
     assert summary['interrupt/none'] == 0.5 and summary['interrupt/damage'] == 0.25

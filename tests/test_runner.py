@@ -68,7 +68,9 @@ def test_run_records_rooms_and_ends_cleanly(session, models_dir, tmp_path):
 
     path = tmp_path / 'runs.jsonl'
     write_jsonl(str(path), [result])
-    assert json.loads(path.read_text().splitlines()[0])['rooms'][0]['specialist'] == 'ow-start'
+    room = json.loads(path.read_text().splitlines()[0])['rooms'][0]
+    assert room['specialist'] == 'ow-start'
+    assert room['hearts_dropped'] == room['hearts_taken'] + room['hearts_left'] + room['hearts_expired']
 
 
 def test_same_seed_same_run(session, models_dir):
