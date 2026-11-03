@@ -77,3 +77,26 @@ Post-D1 chain from `0_37c_2` (20 runs): reaches 0x28 20/20, 0x2d 18/20, D2 (0x7d
 with 4 hearts and loses them on the way: 0x38 0.75, 0x2a/0x2b 0.47/0.76, 0x2d 0.47, 0x3d 0.83, 0x4c 0.83; deaths
 0x4c ×8, 0x2d ×3, ow-moblin ×3, ow-leever-peahat ×2. → r9: hp floor + one-room for the overworld specialists and
 d2-rope.
+
+### Full chain with every promoted model (after r8)
+
+| chain | 0x73 | 0x63 | 0x52 | 0x44 | 0x45 | 0x35 | 0x36 | 0x28 | 0x2d | where runs end |
+|---|---|---|---|---|---|---|---|---|---|---|
+| r5 | 19 | 18 | 9 | 6 | 1 | 1 | 0 | 0 | 0 | 0x53 ×6, 0x44 ×5, 0x63 ×3 |
+| after r8 | 19 | 19 | 14 | 10 | 3 | 3 | 1 | 1 | 1 | 0x44 ×7, 0x53 ×4, 0x35 stuck ×2, 0x43 ×2 |
+| after r10 | 19 | 19 | 14 | 10 | 2 | 2 | 2 | 2 | 2 | 0x44 ×8, 0x53 ×4, 0x43 ×2 |
+
+The first runs kill Aquamentus, take the triforce and leave Dungeon 1. In the chain, boss-aquamentus's
+`max_steps: 400` is also its room budget (`stuck` ×2 after r8). Link reaches 0x44 with ~1.15 of 3 hearts and loses
+0.85–0.95 there; 0x53 (Stalfos) is the other death room.
+
+### r9a: ow-zora with hp floor + one-room
+
+91% (0x38 89%, 0x48 90%) vs the r3c model under the same config 96% (0x38 92%, 0x48 97%, less damage: −0.34 vs
+−0.46 hearts). Not promoted: retraining with the curriculum at the lower hp didn't beat the r3c policy.
+
+### r10: d1-wallmaster one-room episodes (continued from r7)
+
+One-room eval: 88% (0x44 77%, 0x45 98%) vs r7 78% (0x44 62%, 0x45 95%). Promoted. The chain didn't move: 0x44
+still kills 8 of the 10 runs that reach it, at ~1 heart (the eval draws partial hp uniformly over 0.5–3 hearts).
+→ r11: partial resets drawn from 0.5–1.5 hearts (`hp: [0.15, 0.5]`, half the resets still full).
