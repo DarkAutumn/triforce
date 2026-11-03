@@ -1042,5 +1042,24 @@
   "entry": "S",
   "exit": "N",
   "alternate": false
+ },
+ {
+  "file": "2_1es_2.state",
+  "chain": 2,
+  "route_step": 42,
+  "from_step": 41,
+  "specialist": "d2-goriya",
+  "level": 2,
+  "room": "0x1e",
+  "in_cave": false,
+  "entry": "S",
+  "exit": "N",
+  "alternate": false,
+  "env_steps": 7740,
+  "attempts": 1,
+  "seconds": 69.78166341781616,
+  "steps": 136,
+  "health": 3.5,
+  "ending": "exit-correct"
  }
 ]
