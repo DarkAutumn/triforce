@@ -19,7 +19,7 @@ from typing import Dict, FrozenSet, List, Optional, Sequence, Set
 from .game_map import DEFAULT_ROUTE, GameMap, step_location
 from .room_state import room_flags
 from .zelda_game import ZeldaGame
-from .zelda_enums import Direction, MapLocation, SwordKind, TileIndex, ZeldaItemKind
+from .zelda_enums import Direction, MapLocation, SwordKind, TileIndex
 
 FLAG_ITEM_TAKEN = 0x10
 # Pond fairy (Z_04 UpdatePondFairy): Link at the pond edge, Y=$AD with $70 <= X < $81, is halted until every heart
@@ -151,13 +151,11 @@ class ObjectiveSelector:
 class _GameMapObjective(ObjectiveSelector):
     """Base class for objectives that use GameMap for routing."""
 
-    def __init__(self, route: str = DEFAULT_ROUTE, collect_hearts: bool = False):
+    def __init__(self, route: str = DEFAULT_ROUTE):
         super().__init__()
         if route not in self._game_map.routes:
             raise ValueError(f"Unknown route '{route}' (routes.yaml has {sorted(self._game_map.routes)})")
         self._route = route
-        # Below max hearts, a dropped heart on the floor is the objective (ITEM) and the PBRS target.
-        self.collect_hearts = collect_hearts
         self._last_route_key = None
         self._last_route_result = None
         self._collected_key_rooms: Set[MapLocation] = set()
@@ -238,12 +236,6 @@ class _GameMapObjective(ObjectiveSelector):
             next_rooms.extend(rooms)
             pbrs_targets.update(exit_tiles)
 
-        if self.collect_hearts and state.link.health < state.link.max_health:
-            hearts = {tile for item in state.items if item.id == ZeldaItemKind.Heart
-                      for tile in item.link_overlap_tiles}
-            if hearts:
-                # Exits stay correct; only the kind and the shaping change (round 6: agents left half the hearts).
-                return Objective(ObjectiveKind.ITEM, set(tile_objectives), set(next_rooms), hearts)
         return Objective(kind, set(tile_objectives), set(next_rooms), pbrs_targets)
 
     def _get_room_objective(self, prev, state):
@@ -453,8 +445,8 @@ class GameCompletion(_GameMapObjective):
         (SwordKind.WHITE, 'magic-sword', 13),
     ]
 
-    def __init__(self, route: str = DEFAULT_ROUTE, step: Optional[int] = None, collect_hearts: bool = False):
-        super().__init__(route, collect_hearts)
+    def __init__(self, route: str = DEFAULT_ROUTE, step: Optional[int] = None):
+        super().__init__(route)
         self._waypoints = [w for w in route_waypoints(self._game_map.routes[route]) if step is None or w.step >= step]
 
     def get_current_objectives(self, prev: Optional[ZeldaGame], state: ZeldaGame) -> Objective:

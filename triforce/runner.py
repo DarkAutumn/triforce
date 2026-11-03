@@ -234,7 +234,6 @@ class Runner:
                 if current is None or current.name != name:
                     current = self._load(name)
                     session.set_disabled_kinds(current.config.items.disabled_kinds())
-                    objectives.collect_hearts = current.config.collect_hearts   # as the specialist trained
                     obs = current.builder.reset(state, session.mask)
                 elif change is not None:
                     obs = current.builder.build(change, session.mask)
