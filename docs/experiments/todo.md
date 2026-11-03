@@ -4,8 +4,8 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 ## Next up
 
-- **Round 3: re-baseline every specialist on the new start states.** Pre-entry states, random spawns, fresh rooms,
-  full/partial hp, route-true inventory and max hearts, bombs off (below).
+- **Round 3 done** (`round3.md`): new pre-entry state set, plain-PPO baseline, curriculum for ow-zora,
+  d1-wallmaster and boss-aquamentus.
 - **Round 4: d1-melee, cheap route fixes then one-room episodes.**
   - Make the curriculum a per-specialist config field: on for ow-zora and d1-wallmaster, off elsewhere.
   - Promote ow-zora and d1-wallmaster (round 2 or round 3, whichever evaluates better).
@@ -15,6 +15,11 @@ Ideas and problems found but not acted on yet, with the round that found them.
     room over 9 rooms is ~39%. Compare per room against round 3's d1-melee.
   - **Last resort only:** split Dungeon 1 into enemy-based specialists (Stalfos 0x53/0x63/0x74, Keese
     0x52/0x72, Gel 0x42/0x43). Do this only if one-room episodes and the other fixes fail.
+- **boss-aquamentus: 0% on the route's 3 hearts (round 3), plain PPO and curriculum alike.** Go-Explore finds the
+  kill (6 sword hits from above, `round3.md`), but the policy runs from the boss: each hit taken costs 0.25–0.5,
+  each hit dealt pays 0.25, and the kill itself pays nothing beyond the last hit. Round 1's 100% came from 16
+  hearts. Candidates: a boss-damage reward that outweighs the damage taken (or a kill reward for bosses), then
+  the curriculum again.
 
 ## Items
 
@@ -52,24 +57,30 @@ Ideas and problems found but not acted on yet, with the round that found them.
 - **Explore misses progress that isn't in the cell.** It doesn't capture the sword pickup (`ow-start` `start` and
   `0_77c` unsolved) or long multi-room paths (d1-melee 13/26 solved, 1.17M explore steps). Add sword, triforce
   and the items in `progress_events` to the cell. Consider exploring room by room instead of per family.
+  Round 3 added enemy health to the cell (Aquamentus 0/3 → 3/3); ow-zora and d1-wallmaster were explored before
+  that, and d1-wallmaster `1_44w_2` is still unexplored: re-run it with the new cell.
 - **Training-time `balanced_success_rate` lags** when a specialist finishes few room-entry episodes per iteration
   (d1-melee: 26 states, 5–17 episodes per iteration). Consider a time-based window.
+- **Long episodes starve the curriculum.** boss-aquamentus finished 1–8 episodes per 4,096-step iteration (round
+  3), so a stage window of 10 episodes takes several iterations and stalled stages see few samples. Consider a
+  shorter `max_steps` for curriculum starts or more workers on the stalled stage.
 - **Single seed per configuration.** d1-wallmaster r2b (96%) vs r2c (87%) shows the run-to-run spread; repeat key
   comparisons over 2–3 seeds before acting on a few-point difference.
 
-## Start states (round 2 diagnosis)
+## Driver
 
-- **Seed states that end in one step.** `0_38w`, `0_2ds` (ow-zora) and `1_45n` (d1-wallmaster) start at an edge
-  whose exit is also the objective's exit, so they succeed in 1–2 steps and inflate eval success. They are
-  entries from the opposite direction of the route.
-- **Wrong objective for post-D1 overworld visits.** Every `0_28*` and `0_38*` state has 0 triforce pieces, so the
-  objective sends Link toward D1: 0x28 → S, 0x38 → W. On the route, 0x28 (S → E) and the second 0x38 visit
-  (W → N) happen after D1, so those room/exit pairs are never trained. Needs savestates (or a RAM override) with
-  triforce 1.
-- **d1-wallmaster states with 16 hearts.** `1_44e`, `1_44w` and `1_45w` have max health 16, not the route's 3.
-- **No savestates for D2 rooms 0x4e/0x3e/0x2e/0x1e** (from round 1).
-- **`0_4ce` (ow-octorok, the 0x4d → 0x4c route entry) learns slowly.** 90% in round 1 with 2M steps, 10–35%
-  with early-stopped runs. It is also the start state with 0.5 hearts in the savestate.
+- **Re-running a subset with the same `--round` overwrites `models/<round>-summary.json`** (round 3: the
+  boss-aquamentus r3c run replaced the ow-zora / d1-wallmaster summary). Merge into the existing summary, or
+  refuse to reuse a round ID.
+
+## Start states
+
+- Round 3 replaced the state set (`round3.md`): pre-entry, route-generated, route-true hearts and inventory. That
+  resolved the round 2 items (1-step states, triforce 0 on post-D1 visits, 16-heart states, missing D2 states).
+- **No state for 0x1e or 0x0e** (route chain 2 stops at `2_2es`). d2-goriya trains on `2_5es_2` only.
+- **Only chain 2 crosses Aquamentus**, so post-D1 rooms have one state each (`*_2`). More chains past 0x35 would
+  give them spawn/health variety from different paths.
+- **`0_4ce` (ow-octorok, the 0x4d → 0x4c route entry) is still the weak state:** 65% in round 3 (deaths).
 
 ## Runner / objectives
 
