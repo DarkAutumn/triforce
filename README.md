@@ -4,6 +4,8 @@ Specialist PPO agents that play *The Legend of Zelda* (NES) from structured game
 No pixels reach a network. Each specialist owns a family of rooms; a runner picks the specialist for each
 room and plays the route end to end.
 
+- Working on the repo (people or agents): `AGENTS.md` (standing rules, workflow, how to resume), then the newest
+  `docs/experiments/round*.md` and `docs/experiments/todo.md`.
 - Design and status: `docs/architecture.md` (modules and contracts), `docs/decisions.md` (departures from
   the design), `docs/progress.md` (phase status).
 - Game knowledge: `docs/ram-catalog.md` (RAM features), `docs/route.md` (milestone route),
