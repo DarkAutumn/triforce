@@ -1215,10 +1215,20 @@ class RunRow(Clickable):
                 paint_pill(p, rect.right() - 12, cy - 10, f"eval {fmt_pct(evaluation)}", rate_color(evaluation),
                            8.5, right=True)
             elif points:
+                # latest success and hearts change (exit - entry), e.g. "89% -0.2♥", right-aligned after the sparkline
+                hearts = run.series('health_change')
+                parts = [(fmt_pct(points[-1][1]), rate_color(points[-1][1]))]
+                if hearts:
+                    parts.append((f"{hearts[-1][1]:+.1f}♥", C.muted))
                 p.setFont(font(8.5, QFont.Weight.Bold))
-                p.setPen(rate_color(points[-1][1]))
-                p.drawText(QRectF(rect.right() - 56, cy - 10, 46, 20), Qt.AlignmentFlag.AlignCenter,
-                           fmt_pct(points[-1][1]))
+                metrics = p.fontMetrics()
+                x = rect.right() - 10
+                for text, color in reversed(parts):
+                    x -= metrics.horizontalAdvance(text)
+                    p.setPen(color)
+                    p.drawText(QRectF(x, cy - 10, metrics.horizontalAdvance(text) + 1, 20),
+                               Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, text)
+                    x -= 6
 
     @staticmethod
     def phase_text(run: Run, status: str, now: float) -> str:
