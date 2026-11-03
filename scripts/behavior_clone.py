@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Behavior-clone a specialist's policy from expert demo traces (BC warm start, design §8).
 
-    python scripts/behavior_clone.py --specialist d1-melee --start-state 1_73w --demo demos/d1_73.txt \\
+    python scripts/behavior_clone.py --specialist stalfos-keese-gel --start-state 1_73w --demo demos/d1_73.txt \\
         [--demo more.txt ...] [--load CKPT] [--epochs 400] [--run-id ID] [--models-dir DIR]
 
 Each trace (one ``Action.parse`` line per step, ``#`` comments allowed) is replayed from ``--start-state``

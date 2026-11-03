@@ -116,8 +116,8 @@ def _walk(env, steps):
 
 def test_locked_door_reward_fires_once(session):
     """1_73e has 2 keys and the N door is locked: walking to it opens the door, rewarded once, then Link
-    walks through (a correct exit inside d1-melee, so the episode continues)."""
-    env = make_env(session, 'd1-melee', '1_73e')
+    walks through into 0x63."""
+    env = make_env(session, 'stalfos-keese-gel', '1_73e')
     env.reset(seed=0)
     infos = _walk(env, 40)
     hits = [i for i, info in enumerate(infos) if REWARD_OPENED_LOCKED_DOOR.name in info['rewards']]
@@ -132,7 +132,7 @@ def test_pbrs_switch_changes_only_movement_shaping(session):
     script = ['MOVE N 16', 'MOVE N 16', 'MOVE W 16', 'MOVE S 8', 'MOVE W 16', 'WAIT 8']
 
     def run(pbrs):
-        env = make_env(session, 'd1-melee', '1_73s_0', reward=RewardConfig(pbrs=pbrs))
+        env = make_env(session, 'stalfos-keese-gel', '1_73s_0', reward=RewardConfig(pbrs=pbrs))
         env.reset(seed=5)
         return [env.step(Action.parse(a).to_indices())[4]['rewards'] for a in script]
 
@@ -145,7 +145,7 @@ def test_pbrs_switch_changes_only_movement_shaping(session):
 
 
 def test_wait_gets_no_movement_shaping(session):
-    env = make_env(session, 'd1-melee', '1_73s_0')
+    env = make_env(session, 'stalfos-keese-gel', '1_73s_0')
     env.reset(seed=0)
     env.step(Action.parse('MOVE N 8').to_indices())          # seeds the PBRS baseline
     for _ in range(3):
@@ -156,7 +156,7 @@ def test_wait_gets_no_movement_shaping(session):
 
 def test_pbrs_rewards_walking_toward_objective(session):
     """From the 0x73 S entry (no keys) the objective is W or E; walking toward an exit earns positive PBRS."""
-    env = make_env(session, 'd1-melee', '1_73s_0')
+    env = make_env(session, 'stalfos-keese-gel', '1_73s_0')
     env.reset(seed=0)
     total = sum(info['rewards'].get('reward-pbrs-movement', 0.0) + info['rewards'].get('penalty-pbrs-movement', 0.0)
                 for info in _walk(env, 8))
@@ -164,7 +164,7 @@ def test_pbrs_rewards_walking_toward_objective(session):
 
 
 def test_sword_miss_is_penalized(session):
-    env = make_env(session, 'd1-wallmaster', '1_44w', ram_randomization=RamRandomization(hp=(0.5, 0.5)))  # sword, not beams
+    env = make_env(session, 'goriya', '1_44w', ram_randomization=RamRandomization(hp=(0.5, 0.5)))  # sword, not beams
     env.reset(seed=0)
     for _ in range(10):         # off the door tile and the Goriyas out of their spawn clouds
         env.step(Action.parse('MOVE E 16').to_indices())
@@ -177,7 +177,7 @@ def test_sword_miss_is_penalized(session):
 
 def test_damage_penalty_and_reward_halving(session, monkeypatch):
     """Taking damage costs 0.25 per half heart and halves the step's other positive rewards (not pickups)."""
-    env = make_env(session, 'd1-wallmaster', '1_44w', ram_randomization=RamRandomization(hp=(0.5, 0.5)))
+    env = make_env(session, 'goriya', '1_44w', ram_randomization=RamRandomization(hp=(0.5, 0.5)))
     env.reset(seed=1)
     monkeypatch.setattr(env.critic, 'critique_triforce', lambda change, rewards: rewards.add(Reward('reward-hit', 0.5)))
     env.step(Action.parse('MOVE E 16').to_indices())

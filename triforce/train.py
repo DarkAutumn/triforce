@@ -1,6 +1,6 @@
 """Train one specialist with PPO (design §7.1).
 
-    python -m triforce.train --specialist d1-melee [--load CKPT] [--parallel N] [--iterations N]
+    python -m triforce.train --specialist stalfos-keese-gel [--load CKPT] [--parallel N] [--iterations N]
         [--steps-per-update N] [--device cpu|cuda] [--run-id ID] [--models-dir DIR]
         [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
 

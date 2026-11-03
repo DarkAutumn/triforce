@@ -102,3 +102,13 @@ Format: date — what changed — why — evidence.
 - **What:** the runner keeps one `ObservationBuilder` per specialist and resets it only when the specialist
   changes. Moving between rooms of the same family uses `build(change)`.
 - **Why:** this matches training, where an episode continues through correct exits inside the family.
+
+## 2026-11-03 — Families by enemy, not by dungeon (Lee)
+
+- **What:** `d1-melee` → `stalfos-keese-gel`; every Red Goriya room (D1 0x44, D2 0x5e and 0x1e, off-route D1 0x23)
+  → `goriya`; the Wallmaster room → `wallmaster`; `d1-wallmaster` and `d2-goriya` are gone. Off-route D1 0x33
+  (Stalfos, key) and 0x23 (Goriyas, key) on the way to the bow are trained too.
+- **Why:** a room full of Red Goriyas needs the same skills in any dungeon; only the geometry differs. The D1
+  Goriya room was the chain's main death room while two models each learned Goriyas separately.
+- **Note:** with 0x33 tagged, D1 pathfinding can use its key again; the route-only exits and route order
+  (`objectives._get_map_objective`, `GameMap.route_first`) keep the milestone route's objective unchanged.

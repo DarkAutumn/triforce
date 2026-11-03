@@ -138,9 +138,9 @@ class Explorer:
 
     def explore(self, start_state: str, iterations: int = 3000, explore_steps: int = 25,
                 patience: int = 300, accept: Optional[Callable[[object], bool]] = None) -> ExploreResult:
-        """Searches for a successful path from start_state; returns the best one found.  ``accept(state)`` can
-        reject successes (e.g. a correct exit into the wrong room): a rejected success ends the attempt as a
-        failure."""
+        """Searches for a successful path from start_state; returns the best one found.  ``accept(state)``, when
+        given, decides success at the end of an episode instead of the specialist's outcome (e.g. "Link entered room
+        X", whatever the objective wanted there: route-state builds for rooms off the milestone route)."""
         # pylint: disable=too-many-locals
         started = time.time()
         env, session = self.env, self.env.session
@@ -167,7 +167,7 @@ class Explorer:
                 env_steps += 1
                 actions.append(tuple(int(x) for x in previous.to_indices()))
                 if terminated or truncated:
-                    if info['outcome'] == SUCCESS and (accept is None or accept(session.state)):
+                    if accept(session.state) if accept is not None else info['outcome'] == SUCCESS:
                         candidate = (info['health'], -len(actions), actions, info['ending'])
                         if best is None or candidate[:2] > best[:2]:
                             best = candidate

@@ -13,20 +13,20 @@ milestone1:
 - {level: 0, room: '0x48', specialist: ow-zora, entry: S, exit: N}
 - {level: 0, room: '0x38', specialist: ow-zora, entry: S, exit: W}
 - {level: 0, room: '0x37', specialist: ow-octorok, entry: E, exit: cave}
-- {level: 1, room: '0x73', specialist: d1-melee, entry: S, exit: W}
-- {level: 1, room: '0x72', specialist: d1-melee, entry: E, exit: E}
-- {level: 1, room: '0x73', specialist: d1-melee, entry: W, exit: E}
-- {level: 1, room: '0x74', specialist: d1-melee, entry: W, exit: W}
-- {level: 1, room: '0x73', specialist: d1-melee, entry: E, exit: N}
-- {level: 1, room: '0x63', specialist: d1-melee, entry: S, exit: N}
-- {level: 1, room: '0x53', specialist: d1-melee, entry: S, exit: W}
-- {level: 1, room: '0x52', specialist: d1-melee, entry: E, exit: N}
-- {level: 1, room: '0x42', specialist: d1-melee, entry: S, exit: E}
-- {level: 1, room: '0x43', specialist: d1-melee, entry: W, exit: E}
-- {level: 1, room: '0x44', specialist: d1-wallmaster, entry: W, exit: E}
-- {level: 1, room: '0x45', specialist: d1-wallmaster, entry: W, exit: N}
+- {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: S, exit: W}
+- {level: 1, room: '0x72', specialist: stalfos-keese-gel, entry: E, exit: E}
+- {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: W, exit: E}
+- {level: 1, room: '0x74', specialist: stalfos-keese-gel, entry: W, exit: W}
+- {level: 1, room: '0x73', specialist: stalfos-keese-gel, entry: E, exit: N}
+- {level: 1, room: '0x63', specialist: stalfos-keese-gel, entry: S, exit: N}
+- {level: 1, room: '0x53', specialist: stalfos-keese-gel, entry: S, exit: W}
+- {level: 1, room: '0x52', specialist: stalfos-keese-gel, entry: E, exit: N}
+- {level: 1, room: '0x42', specialist: stalfos-keese-gel, entry: S, exit: E}
+- {level: 1, room: '0x43', specialist: stalfos-keese-gel, entry: W, exit: E}
+- {level: 1, room: '0x44', specialist: goriya, entry: W, exit: E}
+- {level: 1, room: '0x45', specialist: wallmaster, entry: W, exit: N}
 - {level: 1, room: '0x35', specialist: boss-aquamentus, entry: S, exit: E}
-- {level: 1, room: '0x36', specialist: d1-melee, entry: W, exit: triforce}
+- {level: 1, room: '0x36', specialist: stalfos-keese-gel, entry: W, exit: triforce}
 - {level: 0, room: '0x37', specialist: ow-octorok, entry: cave, exit: E}
 - {level: 0, room: '0x38', specialist: ow-zora, entry: W, exit: N}
 - {level: 0, room: '0x28', specialist: ow-zora, entry: S, exit: E}
@@ -42,11 +42,11 @@ milestone1:
 - {level: 2, room: '0x7d', specialist: d2-rope, entry: S, exit: N}
 - {level: 2, room: '0x6d', specialist: d2-rope, entry: S, exit: E}
 - {level: 2, room: '0x6e', specialist: d2-rope, entry: W, exit: N}
-- {level: 2, room: '0x5e', specialist: d2-goriya, entry: S, exit: N}
+- {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N}
 - {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
 - {level: 2, room: '0x3e', specialist: d2-rope, entry: S, exit: N}
 - {level: 2, room: '0x2e', specialist: d2-rope, entry: S, exit: N}
-- {level: 2, room: '0x1e', specialist: d2-goriya, entry: S, exit: N}
+- {level: 2, room: '0x1e', specialist: goriya, entry: S, exit: N}
 - {level: 2, room: '0x0e', specialist: boss-dodongo, entry: S, exit: terminal}
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
@@ -58,9 +58,9 @@ families:
   ow-leever-peahat: ['(0, 0x29)', '(0, 0x2a)', '(0, 0x2b)', '(0, 0x2c)']
   ow-zora: ['(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x48)']
   ow-moblin: ['(0, 0x3d)', '(0, 0x4d)']
-  d1-melee: ['(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)']
-  d1-wallmaster: ['(1, 0x44)', '(1, 0x45)']
+  stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)']
+  goriya: ['(1, 0x23)', '(1, 0x44)', '(2, 0x1e)', '(2, 0x5e)']
+  wallmaster: ['(1, 0x45)']
   boss-aquamentus: ['(1, 0x35)']
   d2-rope: ['(2, 0x2e)', '(2, 0x3e)', '(2, 0x4e)', '(2, 0x6d)', '(2, 0x6e)', '(2, 0x7d)', '(2, 0x7e)']
-  d2-goriya: ['(2, 0x1e)', '(2, 0x5e)']
   boss-dodongo: ['(2, 0x0e)']

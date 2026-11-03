@@ -8,7 +8,7 @@ import pytest
 from triforce import registry, train
 from triforce.metrics import read_jsonl
 
-SPECIALIST = 'd1-melee'
+SPECIALIST = 'stalfos-keese-gel'
 
 
 def _check_run(run_dir, iterations):
