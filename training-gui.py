@@ -42,7 +42,8 @@ ANSI = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]')
 # --------------------------------------------------------------------------------------------------------- theme
 
 class C:
-    """Palette (dark)."""
+    """Palette (dark).  Colorblind-safe: never red vs green.  Good is blue, bad is red, in between is purple
+    (``rate_color`` fades blue -> purple -> red); activity is gold, evaluation lavender."""
     bg = QColor('#0e1116')
     card = QColor('#161a22')
     card_hi = QColor('#1d222d')
@@ -51,11 +52,11 @@ class C:
     text = QColor('#e7e9ee')
     muted = QColor('#8a93a6')
     faint = QColor('#5b6475')
-    accent = QColor('#4c8dff')
-    eval = QColor('#a774ff')
-    ok = QColor('#35c77b')
-    warn = QColor('#f0b440')
-    bad = QColor('#ff5b6b')
+    accent = QColor('#f2c14e')
+    eval = QColor('#d9b8ff')
+    ok = QColor('#3d8bff')
+    warn = QColor('#a95cf0')
+    bad = QColor('#ff4d5e')
     idle = QColor('#3a4252')
 
 
@@ -184,7 +185,7 @@ def mix(a: QColor, b: QColor, t: float) -> QColor:
 
 
 def rate_color(value) -> QColor:
-    """Success rate -> red / amber / green."""
+    """Success rate -> red / purple / blue."""
     if value is None:
         return C.muted
     return mix(C.bad, C.warn, value * 2) if value < 0.5 else mix(C.warn, C.ok, (value - 0.5) * 2)
