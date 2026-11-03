@@ -105,3 +105,30 @@ chain (40 runs from `2_7ds_2`, only d2-rope swapped):
 No damage reduction in eval, no clear chain difference. **Dropped** (configs and code removed). The plain arm is a
 good d2-rope model anyway: 94% (0x4e 85%, 0x3e 90%, 0x2e 90%); promoted. With it the D2 chain reaches the Dodongo
 room in 4/40 (r14: 1/40).
+
+## 6. Chain-matched hp (goriya)
+
+`ram_randomization.chain_hp: 0.5`: half the room-entry resets take their hearts from the chain profile
+(`triforce/chain_hp.json`, 14 recent chains; the D1 Goriya room's arrivals average 1.14 of 3 hearts). Two arms from
+goriya r19, 1M steps each (6 workers, stop at 99%):
+
+| arm | eval (standard hp) | eval at chain hp (`chain_hp: 1.0`) | full chain (40): pass the D1 Goriya room |
+|---|---|---|---|
+| r19 (start) | 72% | 62% (0x44 53%) | 11/24 |
+| r21-goriya-plain | 72% | 61% (0x44 45%) | 8/24 |
+| r21-goriya-chainhp | 76% | 64% (0x44 50%) | 10/24 |
+
+All within noise; chain_hp is at best a small gain. r21-goriya-chainhp is promoted (best on both eval
+distributions). The trace explains the D1 Goriya room (`1_44w_0`, 20 episodes each, r21-goriya-chainhp):
+
+| start hp | success | mean steps | actions | damage taken from |
+|---|---|---|---|---|
+| 3 hearts | 95% | 73 | MOVE 65%, SWORD 29%, BEAMS 5% | contact ×27, boomerangs ×10 |
+| 1 heart | 45% | 389 | SWORD 38%, WAIT 33%, MOVE 28% | contact ×19, boomerangs ×9 |
+
+At full health the model wins by trading hits; at one heart it can't afford that, turns passive (a third of its
+actions are WAIT) and still dies mostly to contact. The chain arrives at this room with about one heart, so the
+fix is either less damage upstream or a way of fighting Goriyas without trading hits.
+
+Heart drops are not a way out: over 20 episodes per room, the 5-Stalfos rooms dropped hearts in 0 (0x53) and 8
+(0x74) episodes; 4 were picked up.
