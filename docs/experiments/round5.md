@@ -44,3 +44,36 @@ then solved 0x1e in 77k steps (158-step path), so d2-goriya gets the curriculum 
 
 d1-wallmaster `1_44w_2` is still unexplored with the enemy-health cell (8,000 iterations, 166k env steps, 6,340
 cells).
+
+### r6: d2-goriya with the curriculum (0x5e + 0x1e)
+
+88% (0x1e 85%, 0x5e 90%), full 2M steps at 8 workers. The r3 model on the same states: 50% (0x1e 0%: never
+trained there). Promoted.
+
+### r7: d1-wallmaster hp floor; Aquamentus with `max_steps: 400`
+
+- **boss-aquamentus: 0% → 93%** (56/60; 4 deaths; +0.12 hearts per episode because the heart container ends it).
+  Same boss hit reward and curriculum as r5; the only change is `max_steps: 400` (explored kills take 76–110
+  steps). Episodes that flee now end at 400 steps, so 4–17 episodes finish per iteration instead of 1–8, and
+  every trajectory finished the curriculum. Entry success stayed 0 until iteration ~380, then rose to 74% by 436.
+  Promoted. The lesson generalizes: a curriculum stage needs episodes, and `max_steps` sets the episode rate.
+- **d1-wallmaster `hp: [0.15, max]`**: 78% (0x44 60%, 0x45 95%) vs the r3c model at the same low-hp distribution
+  68% (0x44 50%, 0x45 87%), and less damage (−0.15 vs −0.28 hearts). Promoted. 0x44 (3 Goriyas + boomerang)
+  remains the weak room.
+
+### Bug: walking back down the Dungeon 1 stairs counted as success
+
+A chain started after Dungeon 1 (`eval-chain --from 0_37c_2`, new option) went back into Dungeon 1 in all 20
+runs: ow-octorok lists `enter-room:1:0x73` as success, and `RoomExit` returned enter-room endings before checking
+the objective. In r3's eval, 13 of 20 `0_37c_2` episodes "succeeded" that way. Now an enter-room ending needs the
+objective to want the room (test `test_enter_room_success_needs_the_objective`).
+
+### r8: ow-octorok one-room episodes + hp floor (with the fix)
+
+95% (0x4c 75%, the rest ≥ 95%), early stop at 1.14M steps (8 workers); `0_37c_2` 20/20 exit E. Promoted
+(replaces round 1).
+
+Post-D1 chain from `0_37c_2` (20 runs): reaches 0x28 20/20, 0x2d 18/20, D2 (0x7d) 2/20. Link leaves Dungeon 1
+with 4 hearts and loses them on the way: 0x38 0.75, 0x2a/0x2b 0.47/0.76, 0x2d 0.47, 0x3d 0.83, 0x4c 0.83; deaths
+0x4c ×8, 0x2d ×3, ow-moblin ×3, ow-leever-peahat ×2. → r9: hp floor + one-room for the overworld specialists and
+d2-rope.
