@@ -43,6 +43,12 @@ Trajectories: 0x23 explored 3/3 (76k env steps); 0x44 re-explored under the `gor
 `1_44w_2`, which the old two-room family never solved (its trajectories ran on into 0x45 and crashed the goriya
 curriculum: a trajectory's states must stay in the family's rooms).
 
+**r17** (warm start from `d2-goriya` r12, curriculum on, 8 workers, 2M steps): 66% over all four rooms (0x44 68%,
+0x23 67%, 0x5e 65%, 0x1e 60%; −0.96 hearts per room). Every trajectory finished the curriculum by iteration ~100;
+the balanced training rate then sat at 0.60–0.72 with 25–33% deaths. One model now plays every Goriya room at
+60–68%, against 0–85% for the old split models, but it is still below each old model in its own rooms (0x44 75%
+for `d1-wallmaster`, 0x5e/0x1e 80/85% for `d2-goriya`). r19 continues it.
+
 ## 4. Pass-through damage penalty (r16)
 
 `reward.pass_through_damage: k`: when an episode starts in a room whose objective is MOVE (no fight or pickup
