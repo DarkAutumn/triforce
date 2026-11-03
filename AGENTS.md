@@ -60,7 +60,8 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
   that wins 3% more but takes twice the damage loses in a chain.
 - **Chain segments** (20–40 runs each): full `triforce eval-chain --runs 20 --parallel 10`; after Dungeon 1
   `--from 0_37c_2`; Dungeon 2 `--from 2_7ds_2`. Per-room hp loss and deaths come from the chain jsonl
-  (`health_in`/`health_out`/`outcome` per room).
+  (`RoomRecord` also has `hearts_dropped/taken/left/...`). Two routes (Lee): `milestone1` and
+  `milestone1-fairy` (south road past the fairy pond after D1; `--route milestone1-fairy`); evaluate both.
 - **Trajectories (curriculum) must stay inside the family's rooms.** Re-explore (`python -m triforce.explore
   --specialist NAME --states ...`) whenever a family's rooms change; a trajectory that runs into another family's
   room crashes training.
