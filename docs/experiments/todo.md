@@ -6,24 +6,27 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Rounds 3–5 done** (`round3.md`, `round4.md`, `round5.md`). Every specialist works in isolation now (Aquamentus
-  93%, d2-goriya with 0x1e 88%); the full chain reaches Aquamentus in 2–3 of 20 runs and has left Dungeon 1 twice;
-  from the D2 entrance 2 of 20 runs reach the Dodongo room. What kills chains is **health drain**: Link loses
-  0.2–1.4 hearts per room and never heals.
-- **Chain-matched hp.** Sample each specialist's reset hp from the hp the chain actually arrives with (per room,
-  from the chain jsonl `health_in`), instead of a uniform range. r11 tries a cruder version for d1-wallmaster.
+- **Round 6 in progress** (`round6.md`): enemy-based families (`stalfos-keese-gel`, `goriya`, `wallmaster`),
+  states for D1's rooms toward the bow (0x33, 0x23, 0x22), pass-through damage penalty (inconclusive), chain-matched
+  hp (code done, not tried). Best chains so far (round 5): post-D1 → Dodongo room 1/20, D2 entrance → Dodongo
+  room 1–2/20; one run from the start reached D2. What kills chains is **health drain**: 0.2–1.4 hearts per room,
+  never healed.
+- **goriya**: r17 66% over all four Goriya rooms; r19 continues it (stop at 99%). Then promote (if it beats the old
+  split models per room, or at least overall) and rerun the chains.
+- **stalfos-keese-gel**: r18 adds the north Stalfos room (0x33) to the d1-melee r15 weights. Weak room: the
+  5-Stalfos key room (0x53, 78%, −0.56 hearts) did not improve with 2M more steps.
+- **wallmaster**: still the copied `d1-wallmaster` r10 (0x45 98%); retrain on 0x45 alone if the chain needs it.
+- **Chain-matched hp** (`ram_randomization.chain_hp`, `triforce/chain_hp.json`): try on stalfos-keese-gel /
+  goriya / d2-rope against the same model without it; promote by success and damage, then rerun chains.
+- **Pass-through damage penalty, second test**: d2-rope (the biggest D2 drain), r14 continued with vs without
+  `pass_through_damage`; keep it only if the D2 chain improves.
 - **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
   (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
-- **Damage-avoidance reward.** Terminal success already scales with hp at exit; per-hit penalties are 0.25 per
-  half heart. Try a larger lost-health penalty, or a terminal bonus on hp kept relative to entry (the new
-  `health_change`), for the transit rooms where fighting isn't required.
-- **Skip the optional boomerang in 0x44.** `docs/route.md`: the 0x44 boomerang is optional and E is open. The chain
-  arrives with ~1 heart and dies to the 3 Red Goriyas in 8 of 10 runs. A route variant that walks E needs the later
-  specialists (0x45, Aquamentus, D2) to cope without the boomerang (train some resets with it removed).
-- **d2-goriya one-room + hp floor**: 0x5e costs 1.36 hearts in the D2 chain.
-- **d1-wallmaster `1_44w_2` has no trajectory** (even with the enemy-health cell, 166k explore steps).
-- **Last resort only:** split Dungeon 1 into enemy-based specialists (Stalfos 0x53/0x63/0x74, Keese 0x52/0x72,
-  Gel 0x42/0x43). One-room episodes made per-room d1-melee 94–95%, so this is not needed now.
+- **Bow route** (later): 0x43 N → 0x33 (key) → 0x23 (key) → 0x22 (push block, stairs to the bow cellar 0x7F).
+  Needs a route/objective for the bow and a specialist for 0x22 and the cellar.
+- ~~Skip the optional boomerang in 0x44~~ **Rejected by Lee:** keep the boomerang.
+- ~~Split Dungeon 1 into one model per enemy type~~ **Rejected by Lee:** group models by the enemies in the room,
+  but don't boil it down to one model per enemy type or per room (beyond what Lee asks for, e.g. `wallmaster`).
 
 ## Items
 

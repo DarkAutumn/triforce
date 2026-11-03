@@ -19,9 +19,12 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
   room needs the same skills anywhere. Current families: ow-start, ow-octorok, ow-zora, ow-leever-peahat, ow-moblin,
   stalfos-keese-gel, goriya, wallmaster, boss-aquamentus, d2-rope, boss-dodongo (tag only).
 - **Start states** (`triforce/custom_integrations/Zelda-NES/`) must be clean pre-entry states: delete bad ones
-  rather than keep them (originals are backed up in the old triforce repo). No 16-heart states: max hearts follow
-  the route (3 through Dungeon 1, 4 after Aquamentus, +1 per later heart container). Boss rooms keep only the fight
-  entry. Build states with `python -m triforce.entry_states build|path` and check them with `... audit`.
+- **Families are by enemy, not by dungeon** (`docs/specialists.md`, `docs/decisions.md` 2026-11-03): a Red Goriya
+  room needs the same skills anywhere. Group rooms by the enemies in them, but don't boil it down to one model per
+  enemy type or per room beyond what Lee asks for. Current families: ow-start, ow-octorok, ow-zora,
+  ow-leever-peahat, ow-moblin, stalfos-keese-gel, goriya, wallmaster, boss-aquamentus, d2-rope, boss-dodongo (tag
+  only).
+- Rejected ideas stay rejected (marked in `todo.md`), e.g. skipping the optional D1 boomerang.
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`). The beam look-ahead must credit the firing step.
 - **Bombs are off for milestone 1** (`items: {bombs: off}`); bomb skill comes with the Dodongo work.
