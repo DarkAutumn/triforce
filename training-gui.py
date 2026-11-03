@@ -1740,7 +1740,9 @@ class DetailPane(QWidget):
             evals.append((run.name, value, f"{fmt_pct(value)}" + (f" · {episodes} ep" if episodes else ''),
                           rate_color(value)))
             value = run.train_success()
-            train.append((run.name, value, fmt_pct(value), rate_color(value)))
+            hearts = run.series('health_change')
+            train.append((run.name, value, fmt_pct(value) + (f" {hearts[-1][1]:+.1f}♥" if hearts else ''),
+                          rate_color(value)))
             sps.append((run.name, speed / max(speeds) if speed and max(speeds) else None,
                         f"{speed:,.0f}" if speed else '–', C.accent))
             wall.append((run.name, seconds / max(walls) if seconds and max(walls) else None,
