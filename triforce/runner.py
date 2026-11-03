@@ -189,6 +189,7 @@ class Runner:
         while True:
             location = state.full_location
             if record is None or (record.level, int(record.room, 16), record.in_cave) != _key(location):
+                correct = None
                 if record is not None:
                     record.health_out = state.link.health
                     correct = change is not None and location in change.previous.objectives.next_rooms
@@ -197,6 +198,14 @@ class Runner:
                 if location == route.terminal:
                     result.result, result.reason = 'success', f"entered {_describe(location)}"
                     result.rooms.append(self._new_record(len(result.rooms), location, '-', state, 'milestone'))
+                    return
+
+                # A wrong exit into a room no specialist plays is a gameplay failure, not a game.yaml problem
+                # (that is only an error when the objective wanted the room).
+                room = self.game_map.get(location)
+                if correct is False and (room is None or not room.specialist):
+                    result.result = 'failure'
+                    result.reason = f"{record.specialist} left the route into untagged {_describe(location)}"
                     return
 
                 name = self.specialist_for(location)

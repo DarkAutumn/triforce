@@ -51,6 +51,7 @@ class GameMap:
     def __init__(self, rooms: Dict[MapLocation, GameRoom]):
         self._rooms = rooms
         self.route_successors: Dict[MapLocation, Set[MapLocation]] = {}
+        self._route_ranks: Dict[MapLocation, Dict[MapLocation, int]] = {}
         self._route_cache: Dict[tuple, List[List[MapLocation]]] = {}
 
     def rooms_for_specialist(self, name: str) -> List[MapLocation]:
@@ -275,6 +276,17 @@ class GameMap:
         """Rooms the milestone route (incl. alternates) leaves `location` toward; empty if off-route."""
         return self.route_successors.get(location, set())
 
+    def route_first(self, location: MapLocation, candidates: Set[MapLocation]) -> Set[MapLocation]:
+        """Of `candidates`, the main-route exits of `location` taken earliest on the route, plus any candidate that
+        isn't a main-route exit (alternates stay equal).  Dungeon 1's 0x73 is left W (0x72), E (0x74) and N on
+        three visits: with no keys 0x72 and 0x74 tie on path length, and the route takes 0x72 first."""
+        ranks = self._route_ranks.get(location, {})
+        ranked = [ranks[room] for room in candidates if room in ranks]
+        if not ranked:
+            return set(candidates)
+        first = min(ranked)
+        return {room for room in candidates if ranks.get(room, first) == first}
+
     @staticmethod
     def load(path: str = None, routes_path: str = None) -> 'GameMap':
         """Load the game map from a YAML file (default triforce/game.yaml) plus the route successor table."""
@@ -303,11 +315,12 @@ class GameMap:
                                   treasure=treasure, bomb_walls=bomb_walls, specialist=entry.get('specialist'))
 
         game_map = GameMap(rooms)
-        game_map.route_successors = game_map._load_route_successors(routes_path or ROUTES_YAML)
+        game_map.route_successors, game_map._route_ranks = game_map._load_route_successors(routes_path or ROUTES_YAML)
         return game_map
 
-    def _load_route_successors(self, path: str) -> Dict[MapLocation, Set[MapLocation]]:
-        """(room -> rooms the route exits it toward) from routes.yaml's milestone1 + alternates.
+    def _load_route_successors(self, path: str):
+        """(room -> rooms the route exits it toward) from routes.yaml's milestone1 + alternates, and (room -> main
+        route exit -> index of the first step taking it).
 
         An alternate `{replaces: [R], with: [A]}` also makes A a successor of every route room whose exit
         leads to R and that is adjacent to A (0x77 N->0x67 becomes 0x77 E->0x78 as well)."""
@@ -318,16 +331,20 @@ class GameMap:
             return MapLocation(entry['level'], int(str(entry['room']), 16), bool(entry.get('in_cave', False)))
 
         successors: Dict[MapLocation, Set[MapLocation]] = defaultdict(set)
-        steps = list(route['milestone1'])
+        ranks: Dict[MapLocation, Dict[MapLocation, int]] = defaultdict(dict)
+        main_steps = list(route['milestone1'])
+        steps = list(main_steps)
         for alt in route.get('alternates') or []:
             steps.extend(alt['with'])
 
-        for step in steps:
+        for index, step in enumerate(steps):
             loc = loc_of(step)
             room = self._rooms.get(loc)
             exit_info = room.exits.get(step['exit']) if room else None
             if exit_info is not None:
                 successors[loc].add(exit_info.destination)
+                if index < len(main_steps):
+                    ranks[loc].setdefault(exit_info.destination, index)
 
         for alt in route.get('alternates') or []:
             replaced = {loc_of(r) for r in alt['replaces']}
@@ -337,4 +354,4 @@ class GameMap:
                     if nexts & replaced and alternate in room.get_neighbors():
                         nexts.add(alternate)
 
-        return dict(successors)
+        return dict(successors), dict(ranks)

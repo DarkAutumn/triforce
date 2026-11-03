@@ -96,7 +96,6 @@ def test_spaces_and_reset_contract(session):
     assert env.observation_space.contains(obs)
     assert env.action_space.nvec.tolist() == [7, 8, 4]
     assert STEP_INFO_KEYS <= set(info) and info['specialist'] == 'd1-melee' and info['room'] == (1, 0x73, False)
-    assert session.state.objectives.next_rooms == {MapLocation(1, 0x72, False), MapLocation(1, 0x74, False)}
 
 
 def test_random_legal_episode_ends_classified(session):
@@ -262,6 +261,15 @@ def test_route_room_never_offers_untagged_0x33(session, keys):
     env.reset(seed=0)
     assert session.state.link.keys == keys
     assert session.state.objectives.next_rooms == ({MapLocation(1, 0x44, False)} if keys else set())
+
+
+def test_first_visit_to_0x73_follows_the_route_order(session):
+    """Entering Dungeon 1 with no keys, 0x72 (W) and 0x74 (E) are equally short key detours; the route takes 0x72
+    first, and a policy that went E first met a 0x73-from-E-needing-W case it never trained on (r4 chain)."""
+    env = make_env(session, 'd1-melee', '1_73s_0')
+    env.reset(seed=0)
+    assert session.state.link.keys == 0
+    assert session.state.objectives.next_rooms == {MapLocation(1, 0x72, False)}
 
 
 @pytest.mark.parametrize('one_room', [True, False])

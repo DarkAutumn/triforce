@@ -5,6 +5,7 @@ import json
 import pytest
 import yaml
 
+from triforce.actions import Action
 from triforce.game_map import GameMap
 from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.observation import ObservationBuilder
@@ -52,6 +53,17 @@ def test_untagged_room_stops_with_clear_error(session, models_dir):
     result = runner.run(Route.load('milestone1'), seed=0)
     assert result.result == 'error'
     assert 'no specialist' in result.reason and '0x77' in result.reason
+
+
+def test_wrong_exit_into_untagged_room_is_a_failure(session, models_dir):
+    """Walking W out of 0x77 (the objective wants the sword cave) into untagged 0x76 ends the run as a gameplay
+    failure; only a room the objective wanted can be a game.yaml error."""
+    runner = Runner(session=session, models_dir=models_dir, max_steps=200)
+    runner._load('ow-start').act = lambda obs, deterministic: Action.parse('MOVE W 16')  # pylint: disable=protected-access
+    result = runner.run(Route.load('milestone1'), seed=0)
+    assert result.result == 'failure'
+    assert 'untagged' in result.reason and '0x76' in result.reason
+    assert (result.rooms[-1].room, result.rooms[-1].outcome) == ('0x77', 'exit-wrong')
 
 
 def test_missing_promoted_model_is_an_error(session, tmp_path):
