@@ -8,6 +8,7 @@ isolation.  Every seed savestate of the specialist (``SpecialistConfig.resolve_s
 ``--episodes-per-state`` times in a ``ZeldaEnv`` (same rewards, end conditions and RAM randomization as
 training), episode ``i`` seeded with ``seed + i``.  Actions are sampled unless ``--deterministic``.  The
 checkpoint defaults to the specialist's promoted model; results go to ``<checkpoint dir>/eval.json``.
+``mean_health_change`` is hearts at the episode's end minus hearts at its start (after hp randomization).
 """
 
 import argparse
@@ -55,7 +56,8 @@ def _play(env: ZeldaEnv, network, state: str, episode_seed: int, deterministic: 
         frames += info['frames']
     return {'start_state': state, 'room': list(reset_info['room']), 'seed': episode_seed,
             'outcome': info['outcome'], 'ending': info['ending'], 'success': info['outcome'] == 'success',
-            'steps': steps, 'frames': frames, 'health': info['health'], 'max_health': info['max_health']}
+            'steps': steps, 'frames': frames, 'start_health': reset_info['health'], 'health': info['health'],
+            'max_health': info['max_health']}
 
 
 def _worker_init(config: SpecialistConfig, checkpoint: str, deterministic: bool):
@@ -112,6 +114,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         'success_rate': sum(r['success'] for r in records) / count,
         'mean_health_fraction': sum(r['health'] / r['max_health'] if r['max_health'] else 0.0
                                     for r in records) / count,
+        'mean_health_change': sum(r['health'] - r['start_health'] for r in records) / count,
         'mean_steps': sum(r['steps'] for r in records) / count,
         'mean_frames': sum(r['frames'] for r in records) / count,
         'outcomes': dict(Counter(r['outcome'] for r in records)),
@@ -126,7 +129,7 @@ def format_report(result: dict) -> str:
     """Total line plus one line per room, worst success rate first."""
     successes = sum(r['success'] for r in result['records'])
     lines = [f"{result['specialist']}: success {successes}/{result['episodes']} = {result['success_rate']:.0%}  "
-             f"health {result['mean_health_fraction']:.2f}  steps {result['mean_steps']:.0f}"]
+             f"health change {result['mean_health_change']:+.2f} hearts  steps {result['mean_steps']:.0f}"]
     for room, stats in sorted(result['by_room'].items(), key=lambda item: (item[1]['success_rate'], item[0])):
         top = max(stats['endings'].items(), key=lambda item: item[1])[0]
         lines.append(f"  {room:12} {stats['success_rate']:5.0%}  {stats['episodes']:4}  {top}")

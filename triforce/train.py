@@ -39,7 +39,7 @@ from typing import Deque, Dict, Optional
 import torch
 
 from . import registry
-from .curriculum import CurriculumSpec
+from .curriculum import TRAJECTORIES_DIR, CurriculumSpec
 from .demo import collect_demo_batch, parse_demo_actions
 from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir
 from .metrics import MetricsLogger, format_summary
@@ -112,10 +112,12 @@ def parse_args(argv=None):
                         help="stop early once training success_rate >= this for --stop-patience iterations")
     parser.add_argument('--stop-patience', type=int, default=5)
     parser.add_argument('--curriculum', default=None,
-                        help="trajectories dir from triforce.explore: backward-curriculum starts (curriculum.py)")
-    parser.add_argument('--curriculum-fraction', type=float, default=CurriculumSpec.fraction,
-                        help="share of resets that start on a trajectory while any is incomplete")
-    parser.add_argument('--curriculum-threshold', type=float, default=CurriculumSpec.threshold)
+                        help="trajectories dir from triforce.explore: backward-curriculum starts (curriculum.py); "
+                             "default: the specialist's curriculum config")
+    parser.add_argument('--no-curriculum', action='store_true', help="ignore the specialist's curriculum config")
+    parser.add_argument('--curriculum-fraction', type=float, default=None,
+                        help="share of resets that start on a trajectory while any is incomplete (default: config)")
+    parser.add_argument('--curriculum-threshold', type=float, default=None, help="default: config")
     parser.add_argument('--events', default=None,
                         help="append events to this JSONL (the caller owns the stream and writes its final 'end'); "
                              "default: a new folder under --logs-dir with training.json and <specialist>.jsonl")
@@ -168,6 +170,20 @@ def open_events(args, specialist: str, run_id: str, run_dir: Path):
     return EventLog(log_dir / f'{specialist}.jsonl', **context), plan
 
 
+def curriculum_spec(args, config, out_dir: Path) -> Optional[CurriculumSpec]:
+    """The run's curriculum: --curriculum, else the specialist's ``curriculum`` config when enabled (and not
+    --no-curriculum).  Progress (``<run dir>/curriculum.json``) restarts with every training invocation."""
+    settings = config.curriculum
+    if args.no_curriculum or not (args.curriculum or settings.enabled):
+        return None
+    trajectories = args.curriculum or settings.trajectories or os.path.join(TRAJECTORIES_DIR, config.name)
+    state_path = out_dir / 'curriculum.json'
+    state_path.unlink(missing_ok=True)
+    fraction = settings.fraction if args.curriculum_fraction is None else args.curriculum_fraction
+    threshold = settings.threshold if args.curriculum_threshold is None else args.curriculum_threshold
+    return CurriculumSpec(trajectories, str(state_path), fraction=fraction, threshold=threshold)
+
+
 def main(argv=None, session=None) -> Path:
     """Runs training; returns the run directory.  ``session`` (an existing GameSession) is used by the
     in-process env when ``--parallel 1`` (tests share one emulator per process)."""
@@ -206,12 +222,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, session, eve
     """The training run proper; returns the train_end event fields."""
     # pylint: disable=too-many-locals, too-many-statements, too-many-arguments, too-many-positional-arguments
     network, optimizer_state, start_iteration, start_steps, source = initial_model(args, specialist, root)
-    curriculum = None
-    if args.curriculum:
-        state_path = out_dir / 'curriculum.json'
-        state_path.unlink(missing_ok=True)     # progress is per training invocation
-        curriculum = CurriculumSpec(args.curriculum, str(state_path), fraction=args.curriculum_fraction,
-                                    threshold=args.curriculum_threshold)
+    curriculum = curriculum_spec(args, load_specialist(specialist), out_dir)
     env_factory = ZeldaEnvFactory(specialist, start_state=args.start_state, curriculum=curriculum,
                                   **({} if args.capture_states else {'capture_dir': None}))
     in_process_env = env_factory(session) if args.parallel == 1 else None
@@ -243,7 +254,8 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, session, eve
     target_steps = start_steps + args.iterations * args.steps_per_update
     events.emit('start', target_iterations=start_iteration + args.iterations, target_steps=target_steps,
                 start_iteration=start_iteration, start_steps=start_steps, steps_per_update=args.steps_per_update,
-                parallel=args.parallel, device=args.device, curriculum=args.curriculum, source=source,
+                parallel=args.parallel, device=args.device,
+                curriculum=curriculum.trajectories if curriculum else None, source=source,
                 stop_success=args.stop_success, stop_patience=args.stop_patience, run_dir=str(out_dir),
                 pid=os.getpid())
 

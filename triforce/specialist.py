@@ -12,6 +12,8 @@ obs: {objective: on}
 ram_randomization: {hp: [0.5, max], bombs: [0, 8], keys: [0, 1]}
 fresh_rooms: true                         # pre-entry savestates: clear the room's kill history (full spawn)
 items: {bombs: off}                       # mask out items even when Link has them (bombs/boomerang/arrows)
+curriculum: {enabled: off}               # backward curriculum over trajectories/<name> (triforce.explore)
+one_room: off                             # on: every episode ends at its first room exit (else when it leaves rooms)
 max_steps: 2000
 warm_start: null
 ```
@@ -65,6 +67,16 @@ class ObsConfig(BaseModel):
     """obs: block."""
     model_config = ConfigDict(extra='forbid')
     objective: bool = True
+
+
+class CurriculumConfig(BaseModel):
+    """Backward curriculum over Go-Explore trajectories (``curriculum.py``); off unless enabled.  ``trajectories``
+    defaults to ``trajectories/<name>`` at the repo root (``python -m triforce.explore --specialist <name>``)."""
+    model_config = ConfigDict(extra='forbid')
+    enabled: bool = False
+    trajectories: Optional[str] = None
+    fraction: float = 0.5
+    threshold: float = 0.6
 
 
 class ItemsConfig(BaseModel):
@@ -132,6 +144,8 @@ class SpecialistConfig(BaseModel):
     ram_randomization: RamRandomization = Field(default_factory=RamRandomization)
     fresh_rooms: bool = True                     # pre-entry start states spawn the room's full monster count
     items: ItemsConfig = Field(default_factory=ItemsConfig)
+    curriculum: CurriculumConfig = Field(default_factory=CurriculumConfig)
+    one_room: bool = False                       # episodes end at the first correct room exit, even inside `rooms`
     max_steps: int = 2000
     warm_start: Optional[str] = None
     harvested_states: Optional[str] = None       # directory; default <integration dir>/harvested/<name>

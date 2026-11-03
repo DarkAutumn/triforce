@@ -157,6 +157,11 @@ def fmt_pct(value) -> str:
     return '–' if value is None else f'{value:.0%}'
 
 
+def fmt_hearts_change(value) -> str:
+    """-1.5 -> '-1.5 ♥' (hearts at exit minus hearts at entry)."""
+    return '–' if value is None else f'{value:+.1f} ♥'
+
+
 def fmt_clock(ts) -> str:
     """Unix seconds -> local HH:MM:SS."""
     return '' if ts is None else datetime.fromtimestamp(ts).strftime('%H:%M:%S')
@@ -667,7 +672,8 @@ def describe(event: dict) -> str:
     if kind == 'eval_start':
         return f"{get('episodes')} episodes"
     if kind == 'eval':
-        return f"success {fmt_pct(get('success_rate'))} over {get('episodes')} episodes · health {fmt_pct(get('health'))}"
+        return (f"success {fmt_pct(get('success_rate'))} over {get('episodes')} episodes · "
+                f"health {fmt_hearts_change(get('health_change'))}")
     if kind in ('end', 'specialist_end'):
         prefix = f"{get('specialist')}: " if kind == 'specialist_end' else ''
         text = f"{prefix}{get('status')}"
@@ -1468,7 +1474,7 @@ class DetailPane(QWidget):
         self.charts = {
             'success': LineChart('Success', (0.0, 1.0), fmt_pct),
             'reward': LineChart('Reward / episode'),
-            'health': LineChart('Health at exit', (0.0, 1.0), fmt_pct),
+            'health': LineChart('Health change (hearts: exit − entry)', fmt=fmt_hearts_change),
             'length': LineChart('Episode steps', fmt=lambda v: f'{v:.0f}'),
             'kl': LineChart('Approx KL', fmt=lambda v: f'{v:.3f}'),
             'sps': LineChart('Steps / second', fmt=lambda v: f'{v:.0f}'),
@@ -1538,8 +1544,9 @@ class DetailPane(QWidget):
         ], hlines)
         self.charts['reward'].set_data([{'label': 'total', 'color': C.accent, 'points': run.series('reward/total'),
                                          'area': True}])
-        self.charts['health'].set_data([{'label': 'health', 'color': C.ok, 'points': run.series('health_at_exit'),
-                                         'area': True}])
+        self.charts['health'].set_data([{'label': 'health change', 'color': C.ok,
+                                         'points': run.series('health_change'), 'area': True}],
+                                       [(0.0, C.faint, 'no change')])
         self.charts['length'].set_data([{'label': 'steps', 'color': C.warn, 'points': run.series('episode_steps'),
                                          'area': True}])
         self.charts['kl'].set_data([{'label': 'kl', 'color': C.eval, 'points': run.series('losses/approx_kl')}])
@@ -1552,7 +1559,8 @@ class DetailPane(QWidget):
             sections.append(('bars', 'Evaluation', [
                 ('success', ev.get('success_rate'), f"{fmt_pct(ev.get('success_rate'))} of {ev.get('episodes')}",
                  rate_color(ev.get('success_rate'))),
-                ('health', ev.get('health'), fmt_pct(ev.get('health')), C.ok)]))
+                ('health', ev.get('health'), f"{fmt_pct(ev.get('health'))} · {fmt_hearts_change(ev.get('health_change'))}",
+                 C.ok)]))
             by_room = ev.get('by_room') or {}
             if by_room:
                 sections.append(('bars', 'By room', [(room, value, fmt_pct(value), rate_color(value))

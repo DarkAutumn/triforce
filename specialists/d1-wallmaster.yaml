@@ -7,6 +7,7 @@ reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {hp: [0.5, max], full_hp: 0.5}
 items: {bombs: off}
+curriculum: {enabled: on}             # trajectories/d1-wallmaster (round 2: 18% -> 87%)
 max_steps: 2000
 warm_start: null
 notes: >-

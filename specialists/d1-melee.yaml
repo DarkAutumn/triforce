@@ -7,6 +7,7 @@ reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {hp: [0.5, max], full_hp: 0.5}
 items: {bombs: off}
+one_room: on                          # round 4: an episode is one room (was: until Link leaves the 9 rooms)
 max_steps: 3000
 warm_start: null
 notes: >-

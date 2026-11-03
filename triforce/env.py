@@ -71,7 +71,7 @@ class ZeldaEnv(gym.Env):
         if self.capture is not None:
             self.session.executor.capture_pre_entry = True
         self.critic = create_critic(self.config.reward_profile, self.config.reward.pbrs)
-        self.end_conditions = build_end_conditions(self.config.rooms, self.config.success)
+        self.end_conditions = build_end_conditions(self.config.rooms, self.config.success, self.config.one_room)
         self.builder = ObservationBuilder(objective=self.config.obs.objective)
         self.objectives: Optional[GameCompletion] = None
 
@@ -159,7 +159,8 @@ class ZeldaEnv(gym.Env):
         if ending is not None:
             outcome = classify_ending(ending, self.config.success, self.config.endings)
             apply_terminal_rewards(rewards, ending, outcome, terminated, state.link.health, state.link.max_health)
-            extra = {'ending': ending, 'outcome': outcome, 'start_state': state_label(self._episode_state)}
+            extra = {'ending': ending, 'outcome': outcome, 'start_state': state_label(self._episode_state),
+                     'start_health': self._start_health}
             if self._curriculum_tag is not None:
                 extra['curriculum'] = self.curriculum.record(self._curriculum_tag, outcome == SUCCESS)
             elif self.pool is not None:

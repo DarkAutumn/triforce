@@ -110,10 +110,10 @@ def test_episode_metrics_merge_across_workers():
     first, second = EpisodeTracker(), EpisodeTracker()
     first.step(move16, 0.5, info(16, rewards={'move-closer': 0.5}), False)
     first.step(sword_e, 20.0, info(10, 'damage', {'success': 20.0}, ending='exit-correct', outcome='success',
-                                   health=2.0, max_health=4.0), True)
+                                   health=2.0, max_health=4.0, start_health=1.5), True)
     first.step(wait4, 0.0, info(4), False)                                      # open episode, not counted
     second.step(move16, -20.0, info(12, 'wall', {'failure': -20.0}, ending='link-died', outcome='hard-failure',
-                                    health=0.0, max_health=3.0), True)
+                                    health=0.0, max_health=3.0, start_health=2.5), True)
 
     summary = first.take().merge(second.take()).summary()
     assert summary['episodes'] == 2 and summary['success_rate'] == 0.5
@@ -121,6 +121,7 @@ def test_episode_metrics_merge_across_workers():
     assert summary['reward/total'] == pytest.approx(0.25)                        # (20.5 - 20) / 2
     assert summary['reward/success'] == 10.0 and summary['reward/move-closer'] == 0.25
     assert summary['health_at_exit'] == pytest.approx(0.25)                      # (0.5 + 0) / 2
+    assert summary['health_change'] == pytest.approx(-1.0)                       # (+0.5 - 2.5) / 2
     assert summary['episode_frames'] == 19.0 and summary['episode_steps'] == 1.5
     assert summary['rollout/steps'] == 4 and summary['rollout/frames'] == 42
     assert summary['interrupt/none'] == 0.5 and summary['interrupt/damage'] == 0.25

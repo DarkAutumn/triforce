@@ -4,7 +4,7 @@ Each condition looks at a ``StateChange`` and returns an ending name or None.  E
 
 | ending | default class | meaning |
 |---|---|---|
-| ``exit-correct`` | success if listed in the specialist's ``success`` | left the family through an exit the objective wanted |
+| ``exit-correct`` | success if listed in the specialist's ``success`` | left the family (``one_room``: the room) through an exit the objective wanted |
 | ``enter-room:<level>:<room>`` | success if listed | entered that room (e.g. ``enter-room:2:0x0e``) |
 | ``triforce-collected`` | success if listed | picked up a triforce piece |
 | ``boss-dead-and-heart`` | success if listed | collected the heart container (it only appears once the boss is dead) |
@@ -130,12 +130,14 @@ class BossDeadAndHeart(ZeldaEndCondition):
 
 
 class RoomExit(ZeldaEndCondition):
-    """Room transitions.  Inside the family a correct exit continues the episode; leaving the family through a
-    correct exit is ``exit-correct``; any exit the objective didn't want is ``exit-wrong``.  Entering a room named
-    by an ``enter-room`` success kind ends the episode with that name."""
-    def __init__(self, rooms: Iterable[MapLocation], enter_rooms: Iterable[MapLocation] = ()):
+    """Room transitions.  Inside the family a correct exit continues the episode (unless ``one_room``: then every
+    correct exit ends it); leaving the family through a correct exit is ``exit-correct``; any exit the objective
+    didn't want is ``exit-wrong``.  Entering a room named by an ``enter-room`` success kind ends the episode with
+    that name."""
+    def __init__(self, rooms: Iterable[MapLocation], enter_rooms: Iterable[MapLocation] = (), one_room: bool = False):
         self.rooms = frozenset(rooms)
         self.enter_rooms = frozenset(enter_rooms)
+        self.one_room = one_room
 
     def check(self, state_change):
         prev, curr = state_change.previous, state_change.state
@@ -149,7 +151,7 @@ class RoomExit(ZeldaEndCondition):
         correct = location in prev.objectives.next_rooms
         if not correct:
             return EXIT_WRONG
-        if location in self.rooms:
+        if location in self.rooms and not self.one_room:
             return None
         return EXIT_CORRECT
 
@@ -190,9 +192,11 @@ class Timeout(ZeldaEndCondition):
         return None
 
 
-def build_end_conditions(rooms: Iterable[MapLocation], success: Iterable[str]) -> List[ZeldaEndCondition]:
+def build_end_conditions(rooms: Iterable[MapLocation], success: Iterable[str],
+                         one_room: bool = False) -> List[ZeldaEndCondition]:
     """The end conditions for a specialist, in priority order.  Triforce / heart-container conditions are only
-    checked for specialists that list them as success (otherwise those events are just rewards)."""
+    checked for specialists that list them as success (otherwise those events are just rewards).  ``one_room``
+    ends every episode at its first room exit (``SpecialistConfig.one_room``)."""
     success = list(success)
     enter_rooms = [parse_enter_room(k) for k in success if k.startswith(ENTER_ROOM_PREFIX)]
     conditions: List[ZeldaEndCondition] = [GameOver(), Wallmastered()]
@@ -200,5 +204,5 @@ def build_end_conditions(rooms: Iterable[MapLocation], success: Iterable[str]) -
         conditions.append(GainedTriforce())
     if BOSS_DEAD_AND_HEART in success:
         conditions.append(BossDeadAndHeart())
-    conditions += [RoomExit(rooms, enter_rooms), Timeout()]
+    conditions += [RoomExit(rooms, enter_rooms, one_room), Timeout()]
     return conditions

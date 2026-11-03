@@ -19,7 +19,8 @@ Events written by ``triforce.train`` (one specialist):
 
 - ``start``: target_steps, target_iterations, steps_per_update, parallel, device, curriculum, run_dir, pid.
 - ``progress``: after every PPO iteration (~4 s at 4,096 steps): iteration, iterations, steps, target_steps,
-  fraction, elapsed, sps, eta, and the iteration's headline metrics.
+  fraction, elapsed, sps, eta, and the iteration's headline metrics (``metrics``; ``health_change`` is the mean
+  hearts at exit minus hearts at entry, signed).
 - ``checkpoint``: iteration, steps, path.
 - ``early_stop``: iteration, steps, balanced_success_rate.
 - ``error``: message, traceback.
@@ -46,9 +47,9 @@ PLAN_FILE = 'training.json'
 SCHEMA_VERSION = 1
 
 # Metrics copied into progress events (when present).
-PROGRESS_METRICS = ('episodes', 'success_rate', 'balanced_success_rate', 'reward/total', 'health_at_exit',
-                    'episode_steps', 'curriculum/episodes', 'curriculum/success_rate', 'curriculum/point_fraction',
-                    'losses/approx_kl', 'charts/SPS')
+PROGRESS_METRICS = ('episodes', 'success_rate', 'balanced_success_rate', 'reward/total', 'health_change',
+                    'health_at_exit', 'episode_steps', 'curriculum/episodes', 'curriculum/success_rate',
+                    'curriculum/point_fraction', 'losses/approx_kl', 'charts/SPS')
 
 
 def logs_root(root: Optional[str | os.PathLike] = None) -> Path:
