@@ -10,5 +10,5 @@ items: {bombs: off}
 max_steps: 2000
 warm_start: null
 notes: >-
-  Route-generated pre-entry states cover 0x5e only; the 0x2e -> 0x1e crossing wasn't generated (the build was
-  stopped there, round 3). 0x1e ends on entering the Dodongo room.
+  Route-generated pre-entry states: 2_5es_2 (0x5e) and 2_1es_2 (0x1e, added after round 4). In 0x1e the N shutter
+  opens only once all 5 Red Goriyas are dead; the episode ends on entering the Dodongo room (milestone 1's end).
