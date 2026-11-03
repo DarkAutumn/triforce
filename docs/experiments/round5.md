@@ -164,3 +164,16 @@ fixed its weak room; the 95% early stop had stopped r8 with 0x4c at 75%.
 | full, from `start` | 0x63 19, 0x52 11, 0x44 10, Aquamentus 3 | 0x53 ×8, 0x44 ×7, 0x35 ×3 |
 
 (The full chain's seeds play out differently once an early specialist changes; this set had no run leave D1.)
+
+### r14/r15: d2-rope and d1-melee continued (stop at 99%)
+
+- **d2-rope r14** (from r9b, +2M steps): 92% (0x3e 75%, 0x4e 90%, 0x2e 90%) vs r9b 89%. Promoted.
+- **d1-melee r15** (from r5, +2M steps): 96% (0x53 78%, 0x74 85%), −0.12 hearts per room, vs r5 95%, −0.16.
+  Promoted. Unlike ow-octorok, 2M more steps didn't move its weak room (0x53, 5 Stalfos, key appears when all
+  are dead).
+
+| chain (20 runs) | reaches | result |
+|---|---|---|
+| full, from `start` | 0x63 20, 0x52 14, 0x44 13, Aquamentus 3, triforce 1, **D2 entrance 1** | 0/20 (first run from the start to reach D2) |
+| after D1, from `0_37c_2` | D2 11, 0x1e 1 | **1/20 reach the Dodongo room** |
+| D2, from `2_7ds_2` | 0x1e 3 | 1/20 |
