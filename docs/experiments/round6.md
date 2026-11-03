@@ -243,5 +243,31 @@ observation slot) and the only PBRS target; exits stay correct. A/B on stalfos-k
 | r25-skg-hearts | 98% | −0.14 (−0.13) | 0.06 / 0.03 / 0.02 | 98%, −0.58 | 24 |
 
 The objective did not raise pickups (half the drops vs two thirds) and the arm rushed exits (fewer kills, fewer
-drops). r25-skg-plain beats r22 (−0.09 vs −0.16 hearts; 0x53 −0.45 vs −0.69) and is promoted. Second test on
-d2-rope (0x4e leaves 0.40 hearts per episode) running as r27.
+drops). r25-skg-plain beats r22 (−0.09 vs −0.16 hearts; 0x53 −0.45 vs −0.69) and is promoted.
+
+Second test, d2-rope (arms from r20, 1M steps; D2 chain from `2_7ds_2`, 80 runs per arm, each arm's own config):
+
+| arm | eval | health real (total) | dropped / taken / left per episode | D2 chain: reach 0x1e | Dodongo room |
+|---|---|---|---|---|---|
+| r27-rope-plain | 92% | −0.35 (−0.29) | 0.52 / 0.25 / 0.21 | 20 | **16/80** |
+| r27-rope-hearts | 89% | −0.36 (−0.29) | 0.51 / 0.31 / 0.12 | 26 | 12/80 |
+
+Here the objective did what it says (hearts left behind halved; in 0x4e 0.45 → 0.05 per episode) and more runs
+got through the rope rooms, but health didn't improve and they died at 0x1e instead (12 deaths vs 3). **Dropped**
+after two tests (code removed). r27-rope-plain is promoted (same success as r20 within noise, −0.35 vs −0.46
+hearts).
+
+ow-moblin after the fixes (§9): r26 trained without its new trajectories (`explore --out` takes the trajectories
+root and appends the specialist; they landed in `trajectories/ow-moblin/ow-moblin`). r26b from r9a with them:
+r9a's habit is to leave Moblin rooms W (0x4d), and the new rooms are entered from the W edge, so its first move
+was an instant exit-wrong; it unlearned W and then stood at the edge (the direction head never picked E). r26c
+from ow-octorok r24 instead (zero-shot on ow-moblin's rooms: ow-octorok 36%, ow-zora 40%, r9a 16%; ow-octorok
+best on the mazes): a dip to ~10% while it relearned (action-kind entropy up to 0.96), then 97%.
+
+| room | r9a | r26c |
+|---|---|---|
+| 0x3d | 95%, −0.55 | 95%, −0.60 |
+| 0x4d | 38% (both entries) | 98% |
+| 0x5b / 0x5c / 0x5d | 0% | 97% / 97% / 98% |
+
+Promoted.

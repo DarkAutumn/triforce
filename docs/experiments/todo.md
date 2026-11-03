@@ -10,10 +10,10 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
   success), post-D1 → D2 entrance 27/40, D2 entrance → Dodongo room 7/40. What kills chains is still health
   drain: the D1 Goriya room (16 deaths of 32 arrivals), 0x53, post-D1 0x4c, D2 rope rooms 0x3e / 0x6d / 0x6e
   and the first D2 Goriya room (0x5e).
-- **Promoted now:** ow-zora / ow-leever-peahat / boss-aquamentus r23-more, stalfos-keese-gel r22-skg-plain,
-  goriya r21-goriya-chainhp, d2-rope r20-rope-plain, wallmaster r10 copy.
-- **r24-fairy** (training): ow-zora, ow-octorok, ow-moblin, ow-start on both routes' rooms. Then chains on both
-  routes (`--route milestone1-fairy`).
+- **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat /
+  boss-aquamentus r23-more, stalfos-keese-gel r25-skg-plain, goriya r21-goriya-chainhp, d2-rope r27-rope-plain,
+  wallmaster r10 copy. All overworld families now train on both routes' rooms (round 6 §9).
+- **Chains on both routes** with this set: round 6 §11 (running).
 - ~~Chain-matched hp~~ tested on goriya (within noise) and stalfos-keese-gel (worse); off everywhere. The option
   (`ram_randomization.chain_hp`) stays for a later retry.
 - ~~Pass-through damage penalty~~ tested twice in round 6 (overworld, d2-rope): no chain gain; dropped (code
@@ -23,10 +23,9 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 - ~~Refill hearts on the way~~ **Done (Lee's design): second route `milestone1-fairy`** after D1 (south road +
   fairy pond 0x39; `docs/route.md`, `docs/decisions.md`). Train the overworld families on both routes and evaluate
   both chains. Not done: a fairy stop before D1 (none on the way), D2 has none.
-- **Heart objective (next experiment):** agents leave many dropped hearts (round 6 §8: overworld 26 of 34, 0x53
-  half, 0x4e a third). When Link is below max hearts and a pickable heart is on the floor, make it the objective
-  (kind ITEM: a free one-hot slot, so no observation change) and the PBRS target; exits stay correct. A/B on
-  stalfos-keese-gel and d2-rope; keep it only if eval damage and the chains improve.
+- ~~Heart objective~~ (`collect_hearts`) tested on stalfos-keese-gel and d2-rope (round 6 §10): more pickups on
+  d2-rope but no chain gain; dropped (code removed). Hearts left behind are still measured by the heart tracker.
+- **The last D2 Goriya room (0x1e) and the first (0x5e)** now end most D2 runs that get past the rope rooms.
 - **Fight Goriyas without trading hits.** At 1 heart the goriya model turns passive (33% WAIT) and dies to contact
   (round 6 trace). Ideas: a demo/curriculum from damage-free Go-Explore paths (the explored paths lose 1.5–2.5
   hearts; select by health with more patience), shield blocking of boomerangs, a contact-damage penalty that grows
