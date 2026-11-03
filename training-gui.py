@@ -36,6 +36,11 @@ PLAN_FILE = 'training.json'
 LOGS_DIR_ENV = 'TRIFORCE_LOGS_DIR'
 POLL_MS = 500
 FRAME_MS = 33
+# Charts skip each run's first STARTUP_ITERATIONS PPO iterations ('skip startup').  Across the logs those are the
+# unstable ones: few finished episodes per iteration (e.g. 1-7 vs 30-100 later), so success/reward swing wildly
+# (r18: 0% and -44 reward at iterations 4-5, then 80%+) and blow up the y-axis.  Past ~10 it's the real learning
+# ramp.  Counted from the run's own start, so resumed runs skip their first 10 too.
+STARTUP_ITERATIONS = 10
 ANSI = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]')
 
 
@@ -358,6 +363,18 @@ class Run:
         return (self.start or {}).get('start_iteration') or 0
 
     @property
+    def first_iteration(self) -> int:
+        """Iteration count the run started from (0 fresh, N when resumed); its first progress event is this + 1."""
+        if self.start is not None:
+            return self.start.get('start_iteration') or 0
+        return (self.progress[0].get('iteration') or 1) - 1 if self.progress else 0
+
+    @property
+    def iterations_run(self) -> int:
+        """PPO iterations completed by this run (not counting what it resumed from)."""
+        return max(0, self.iteration - self.first_iteration)
+
+    @property
     def started_ts(self):
         return parse_time(self.entry.get('started')) or (self.events[0]['ts'] if self.events else None)
 
@@ -465,13 +482,15 @@ class Run:
                 return values[-1][1]
         return self.entry.get('train_balanced_last')
 
-    def series(self, key: str) -> list[tuple[float, float]]:
-        """(iteration, metric) points from progress events."""
+    def series(self, key: str, skip: int = 0) -> list[tuple[float, float]]:
+        """(iteration, metric) points from progress events, leaving out the run's first ``skip`` iterations."""
+        cutoff = self.first_iteration + skip
         points = []
         for event in self.progress:
+            iteration = event.get('iteration', len(points) + 1)
             value = (event.get('metrics') or {}).get(key)
-            if isinstance(value, (int, float)) and math.isfinite(value):
-                points.append((event.get('iteration', len(points) + 1), float(value)))
+            if iteration > cutoff and isinstance(value, (int, float)) and math.isfinite(value):
+                points.append((iteration, float(value)))
         return points
 
 
@@ -1306,17 +1325,31 @@ class LineChart(QWidget):
         self.fmt = fmt
         self.series: list[dict] = []
         self.hlines: list[tuple[float, QColor, str]] = []
+        self.overlay = ''
         self.setMinimumHeight(150)
 
-    def set_data(self, series: list[dict], hlines=()):
+    def set_data(self, series: list[dict], hlines=(), overlay: str = ''):
+        """``overlay``: when set, the chart is greyed out under this text (e.g. while ignoring startup)."""
         self.series = [s for s in series if s['points']]
         self.hlines = list(hlines)
+        self.overlay = overlay
         self.update()
 
     def paintEvent(self, _event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        self._paint_chart(p, rect)
+        if self.overlay:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(with_alpha(C.bg, 200))
+            p.drawRoundedRect(rect, 8, 8)
+            p.setFont(font(10, QFont.Weight.Bold))
+            p.setPen(C.muted)
+            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.overlay)
+
+    def _paint_chart(self, p: QPainter, rect: QRectF):
+        """Frame, title, legend, grid lines and series."""
         p.setPen(QPen(C.border, 1))
         p.setBrush(C.bg)
         p.drawRoundedRect(rect, 8, 8)
@@ -1551,6 +1584,7 @@ class DetailPane(QWidget):
         self.tabs.addTab(self.events, 'Events')
 
         self._key = None
+        self.skip_startup = True        # Window's 'skip startup' checkbox
         self._log_signature = None
 
     def refresh(self, model: Training, selection, force: bool = False):
@@ -1580,21 +1614,31 @@ class DetailPane(QWidget):
         hlines = [(stop, C.faint, f"early stop {fmt_pct(stop)}")] if stop else []
         if run.eval_rate() is not None:
             hlines.append((run.eval_rate(), C.eval, f"eval {fmt_pct(run.eval_rate())}"))
+        # Skip startup: leave the run's first STARTUP_ITERATIONS out of the charts.  Until training gets past them,
+        # grey the charts out over the raw points; a run that ended earlier just shows everything it has.
+        done = run.iterations_run
+        past = done >= STARTUP_ITERATIONS
+        skip = STARTUP_ITERATIONS if self.skip_startup and past else 0
+        overlay = (f"Ignoring startup…  {done}/{STARTUP_ITERATIONS}"
+                   if self.skip_startup and not past and status in ('starting', 'training') else '')
         self.charts['success'].set_data([
-            {'label': 'success', 'color': C.accent, 'points': run.series('success_rate'), 'width': 1.4, 'alpha': 150},
-            {'label': 'curriculum', 'color': C.warn, 'points': run.series('curriculum/success_rate'), 'width': 1.4},
-            {'label': 'balanced', 'color': C.ok, 'points': run.series('balanced_success_rate'), 'width': 2.4},
-        ], hlines)
-        self.charts['reward'].set_data([{'label': 'total', 'color': C.accent, 'points': run.series('reward/total'),
-                                         'area': True}])
+            {'label': 'success', 'color': C.accent, 'points': run.series('success_rate', skip), 'width': 1.4,
+             'alpha': 150},
+            {'label': 'curriculum', 'color': C.warn, 'points': run.series('curriculum/success_rate', skip),
+             'width': 1.4},
+            {'label': 'balanced', 'color': C.ok, 'points': run.series('balanced_success_rate', skip), 'width': 2.4},
+        ], hlines, overlay)
+        self.charts['reward'].set_data([{'label': 'total', 'color': C.accent,
+                                         'points': run.series('reward/total', skip), 'area': True}], (), overlay)
         self.charts['health'].set_data([{'label': 'health change', 'color': C.ok,
-                                         'points': run.series('health_change'), 'area': True}],
-                                       [(0.0, C.faint, 'no change')])
-        self.charts['length'].set_data([{'label': 'steps', 'color': C.warn, 'points': run.series('episode_steps'),
-                                         'area': True}])
-        self.charts['kl'].set_data([{'label': 'kl', 'color': C.eval, 'points': run.series('losses/approx_kl')}])
-        self.charts['sps'].set_data([{'label': 'sps', 'color': C.muted, 'points': run.series('charts/SPS'),
-                                      'area': True}])
+                                         'points': run.series('health_change', skip), 'area': True}],
+                                       [(0.0, C.faint, 'no change')], overlay)
+        self.charts['length'].set_data([{'label': 'steps', 'color': C.warn,
+                                         'points': run.series('episode_steps', skip), 'area': True}], (), overlay)
+        self.charts['kl'].set_data([{'label': 'kl', 'color': C.eval, 'points': run.series('losses/approx_kl', skip)}],
+                                   (), overlay)
+        self.charts['sps'].set_data([{'label': 'sps', 'color': C.muted, 'points': run.series('charts/SPS', skip),
+                                      'area': True}], (), overlay)
 
         sections = []
         if run.eval:
@@ -1749,6 +1793,12 @@ class Window(QMainWindow):
                        f"<span style='color:{C.muted.name()}'>&nbsp;&nbsp;training monitor</span>")
         top.addWidget(brand)
         top.addStretch(1)
+        self.skip_startup = QCheckBox('Skip startup')
+        self.skip_startup.setChecked(True)
+        self.skip_startup.setToolTip(f"Charts leave out each run's first {STARTUP_ITERATIONS} iterations "
+                                     "(few finished episodes, wild swings)")
+        self.skip_startup.toggled.connect(self._skip_startup_toggled)
+        top.addWidget(self.skip_startup)
         self.combo = QComboBox()
         self.combo.activated.connect(self._picked)
         top.addWidget(self.combo)
@@ -1832,6 +1882,10 @@ class Window(QMainWindow):
         if self.model is None or path != self.model.dir:
             self.follow.setChecked(path == (self.dirs[0] if self.dirs else None) and self.follow.isChecked())
             self.load(path)
+
+    def _skip_startup_toggled(self, checked: bool):
+        self.detail.skip_startup = checked
+        self.detail.refresh(self.model, self.selection, force=True)
 
     def _open(self):
         chosen = QFileDialog.getExistingDirectory(self, 'Training log folder', str(self.root))
