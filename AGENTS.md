@@ -70,7 +70,9 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
   `milestone1-fairy` (south road past the fairy pond after D1; `--route milestone1-fairy`); evaluate both.
 - **Trajectories (curriculum) must stay inside the family's rooms.** Re-explore (`python -m triforce.explore
   --specialist NAME --states ...`) whenever a family's rooms change; a trajectory that runs into another family's
-  room crashes training.
+  room crashes training. `--out` is the trajectories *root* (explore appends `<specialist>/<state>`): from the
+  worktree pass `--out /home/leculver/git/triforce2/trajectories`, not `.../trajectories/NAME` (round 6 r26 trained
+  without its new trajectories that way). Check `curriculum.json` in the run dir lists the states you expect.
 - `max_steps` sets how many episodes finish per iteration. A curriculum specialist whose failures are slow
   (fleeing, waiting) needs `max_steps` near its explored path length (Aquamentus: 2000 → 400 took it from 0% to 93%).
 - Continuing a trained model with `--stop-success 0.99` (`--train-args "--load <run dir> --stop-success 0.99"`)
