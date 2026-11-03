@@ -15,8 +15,8 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from PySide6.QtGui import QColor  # noqa: E402  pylint: disable=wrong-import-position
 from PySide6.QtWidgets import QApplication  # noqa: E402  pylint: disable=wrong-import-position
 
-from triforce.play_grid import FRAME_SHAPE, FramePacer, GameGrid  # noqa: E402  pylint: disable=wrong-import-position
-from triforce.runner import Route, Runner  # noqa: E402  pylint: disable=wrong-import-position
+from triforce.play_grid import FRAME_SHAPE, FramePacer, GameGrid, end_message  # noqa: E402  pylint: disable=wrong-import-position
+from triforce.runner import RoomRecord, Route, Runner, RunResult  # noqa: E402  pylint: disable=wrong-import-position
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -56,6 +56,21 @@ def test_main_refuses_cuda_without_a_gpu(monkeypatch):
         play_zelda.main(['2x1'])
     assert stop.value.code == 2
     assert QApplication.instance() is before
+
+
+def test_only_setup_errors_stop_a_cell():
+    def run(result, steps, last_outcome):
+        return RunResult('milestone1', 3, result=result, reason='why', steps=steps,
+                         rooms=[RoomRecord(0, 0, '0x77', False, 'ow-start', outcome=last_outcome)])
+
+    message, setup_error = end_message(1, 3, run('error', 0, 'error'))          # e.g. no promoted model
+    assert (message['outcome'], setup_error) == ('error', True)
+    message, setup_error = end_message(1, 3, run('error', 512, 'exit-wrong'))   # wandered into an untagged room
+    assert (message['outcome'], setup_error) == ('error', False)
+    message, setup_error = end_message(1, 3, run('failure', 90, 'death'))
+    assert message == {'cell': 1, 'event': 'end', 'seed': 3, 'result': 'failure', 'outcome': 'death',
+                       'reason': 'why'}
+    assert not setup_error
 
 
 def test_frame_pacer_paces_and_resyncs():
@@ -173,6 +188,9 @@ def test_game_grid_streams_frames_from_a_real_game(models_dir):
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason='no CUDA')
 def test_runner_runs_on_cuda(session, models_dir):
-    result = Runner(session=session, models_dir=models_dir, max_steps=40, device='cuda').run(
-        Route.load('milestone1'), seed=1)
+    try:
+        result = Runner(session=session, models_dir=models_dir, max_steps=40, device='cuda').run(
+            Route.load('milestone1'), seed=1)
+    finally:
+        session.set_disabled_kinds(())     # the runner leaves its specialist's disabled kinds on the shared session
     assert result.result in ('failure', 'success')

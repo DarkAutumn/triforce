@@ -66,6 +66,19 @@ class _Reporter:
                              'max_health': int(state.link.max_health)})
 
 
+def end_message(cell: int, seed: int, result) -> tuple[dict, bool]:
+    """The 'end' status message for a finished ``RunResult`` and whether it was a setup error.  ``outcome`` is the
+    last room's (milestone | death | stuck) or 'error' for any error.  An error before the first step (e.g. no
+    promoted model) is a setup error; one mid-game (e.g. wandering into an untagged room) is just another ending."""
+    if result.result == 'error':
+        outcome = 'error'
+    else:
+        outcome = result.rooms[-1].outcome if result.rooms else result.result
+    message = {'cell': cell, 'event': 'end', 'seed': seed, 'result': result.result, 'outcome': outcome,
+               'reason': result.reason}
+    return message, result.result == 'error' and result.steps == 0
+
+
 def play_cell(cell: int, cells: int, device: str, fps: float, models_dir, frame_buf, frame_no, status,
               stop) -> None:
     """Process target: plays seeds ``cell, cell + cells, ...`` until ``stop`` is set."""
@@ -75,7 +88,7 @@ def play_cell(cell: int, cells: int, device: str, fps: float, models_dir, frame_
     from .session import GameSession
 
     torch.set_num_threads(1)    # N processes × all-core torch threads oversubscribes the machine
-    session = GameSession()
+    session = GameSession(look_ahead=False)     # nothing is scored here; look-ahead frames would be shown and paced
     try:
         runner = Runner(session=session, models_dir=models_dir, renderer=_Reporter(cell, status), device=device)
         route = Route.load(ROUTE)
@@ -96,11 +109,10 @@ def play_cell(cell: int, cells: int, device: str, fps: float, models_dir, frame_
             seed = cell + k * cells
             status.put({'cell': cell, 'event': 'start', 'seed': seed})
             result = runner.run(route, seed)
-            outcome = result.rooms[-1].outcome if result.rooms else result.result
-            status.put({'cell': cell, 'event': 'end', 'seed': seed, 'result': result.result, 'outcome': outcome,
-                        'reason': result.reason})
-            if result.result == 'error':
-                stop.wait()
+            message, setup_error = end_message(cell, seed, result)
+            status.put(message)
+            if setup_error:
+                stop.wait()     # every seed would fail the same way at once; don't restart in a loop
                 return
             if stop.wait(RESULT_PAUSE):
                 return
