@@ -130,3 +130,18 @@ Same health-drain pattern: 0x6d −0.90, 0x6e −0.85, 0x5e (d2-goriya) −1.36,
 At the r11 eval distribution (`hp: [0.15, 0.5]`, half full): r11 32% (0x44 28%, 0x45 35%, mostly `wallmastered`)
 vs r10 72% (0x44 45%, 0x45 100%). 2M more steps at the narrower low-hp range broke 0x45 entirely. Not promoted;
 the config is back to `[0.15, max]`. r10 at chain-like hp is 45% in 0x44, which matches the chain's 0x44 deaths.
+
+### State at 5 am (all promoted models)
+
+Promoted: ow-start r3, ow-octorok r8, ow-zora r3c, d1-melee r5, d1-wallmaster r10, boss-aquamentus r7,
+ow-leever-peahat r3, ow-moblin r9a, d2-rope r9b, d2-goriya r6.
+
+| chain (20 runs) | reaches | where runs end |
+|---|---|---|
+| full, from `start` | 0x63 19, 0x52 14, 0x44 10, Aquamentus 2, triforce 2, 0x2d 2 | 0x44 ×8, 0x53 ×4, 0x43 ×2, 0x4c ×2 |
+| after D1, from `0_37c_2` (4 hearts) | 0x28 20, 0x2d 18, **D2 5** | 0x4c ×8, 0x2d ×3, 0x6d ×3, 0x3d ×2 |
+| D2, from `2_7ds_2` (4 hearts) | **Dodongo room 2** | 0x4e ×6, 0x5e ×6, 0x3e ×3 |
+
+Every segment works in some runs; no run does all of them yet. Rough per-segment rates: start → leave D1 10%,
+post-D1 → D2 25%, D2 → Dodongo 10%. The deaths are almost all health drain into a hard room (0x44, 0x53, 0x4c,
+0x4e/0x5e).
