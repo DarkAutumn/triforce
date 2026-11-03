@@ -132,3 +132,15 @@ fix is either less damage upstream or a way of fighting Goriyas without trading 
 
 Heart drops are not a way out: over 20 episodes per room, the 5-Stalfos rooms dropped hearts in 0 (0x53) and 8
 (0x74) episodes; 4 were picked up.
+
+Second chain-hp test, stalfos-keese-gel: two arms from r18, 1M steps each.
+
+| arm | eval | full chain (40): reach D1 Goriya room | Wallmaster room | Aquamentus | triforce | D2 entrance |
+|---|---|---|---|---|---|---|
+| r22-skg-plain | **98%** (0x53 93%, 0x33 93%), −0.16 hearts | **29** | **12** | **12** | **8** | 4 (+1 at 0x1e) |
+| r22-skg-chainhp | 97% (0x53 90%), −0.14 | 24 | 7 | 7 | 4 | 2 |
+
+Chain hp didn't help here either (fewer runs through the 5-Stalfos key room: 8 deaths vs 4). r22-skg-plain is
+promoted: one more million plain steps took the weak rooms to 93% and let 29 of 40 chains reach the D1 Goriya room
+(r19 chain: 24). **Chain-matched hp: no gain in two tests** (goriya within noise, stalfos-keese-gel worse); the
+option is off everywhere.
