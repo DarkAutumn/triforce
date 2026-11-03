@@ -124,3 +124,9 @@ its 3 chain fights as `stuck`.
 | d2-rope r9b, d2-goriya r6 | **2/20** | 0x4e ×6, 0x5e ×6, 0x3e ×3, 0x6e ×2, 0x2e ×1 |
 
 Same health-drain pattern: 0x6d −0.90, 0x6e −0.85, 0x5e (d2-goriya) −1.36, 0x4e −0.62, 0x3e −1.42 hearts.
+
+### r11: d1-wallmaster partial hp 0.5–1.5 hearts (continued from r10) — regressed
+
+At the r11 eval distribution (`hp: [0.15, 0.5]`, half full): r11 32% (0x44 28%, 0x45 35%, mostly `wallmastered`)
+vs r10 72% (0x44 45%, 0x45 100%). 2M more steps at the narrower low-hp range broke 0x45 entirely. Not promoted;
+the config is back to `[0.15, max]`. r10 at chain-like hp is 45% in 0x44, which matches the chain's 0x44 deaths.
