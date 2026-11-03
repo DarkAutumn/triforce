@@ -61,6 +61,9 @@ class RewardConfig(BaseModel):
     """reward: block."""
     model_config = ConfigDict(extra='forbid')
     pbrs: bool = True
+    # Extra penalty per heart lost, taken off a successful exit from a room Link only had to cross (objective MOVE
+    # at entry: no fight or pickup wanted).  0 = off.  Experiment (round 6): keep only if chains lose less health.
+    pass_through_damage: float = 0.0
 
 
 class ObsConfig(BaseModel):

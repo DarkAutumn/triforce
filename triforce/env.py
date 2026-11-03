@@ -23,9 +23,9 @@ from .critics import create_critic
 from .curriculum import BackwardCurriculum, CurriculumSpec
 from .emulator import GAME_DIR
 from .end_conditions import MAX_STEPS, build_end_conditions, classify_ending
-from .objectives import GameCompletion
+from .objectives import GameCompletion, ObjectiveKind
 from .observation import ObservationBuilder
-from .rewards import SUCCESS, StepRewards, apply_terminal_rewards
+from .rewards import SUCCESS, Penalty, StepRewards, apply_terminal_rewards
 from .session import GameSession
 from .specialist import SpecialistConfig, load_specialist
 from .start_states import SavestateCapture, StartStatePool, ram_randomization_values, state_label, \
@@ -123,6 +123,8 @@ class ZeldaEnv(gym.Env):
 
         self._episode_state = name
         self._start_health = state.link.health
+        # A room Link only has to cross (no fight or pickup wanted at entry): reward.pass_through_damage applies.
+        self._pass_through = state.objectives.kind == ObjectiveKind.MOVE
         self._done = False
         obs = self.builder.reset(state, self.session.mask)
         return obs, self._info(state, {'start_state': name})
@@ -159,6 +161,10 @@ class ZeldaEnv(gym.Env):
         if ending is not None:
             outcome = classify_ending(ending, self.config.success, self.config.endings)
             apply_terminal_rewards(rewards, ending, outcome, terminated, state.link.health, state.link.max_health)
+            lost = self._start_health - state.link.health
+            if outcome == SUCCESS and terminated and self._pass_through and lost > 0 \
+                    and self.config.reward.pass_through_damage:
+                rewards.add(Penalty('penalty-pass-through-damage', -self.config.reward.pass_through_damage * lost))
             extra = {'ending': ending, 'outcome': outcome, 'start_state': state_label(self._episode_state),
                      'start_health': self._start_health}
             if self._curriculum_tag is not None:
