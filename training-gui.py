@@ -5,9 +5,11 @@
 # ///
 """Live training watcher for the event logs written by ``triforce.train`` and ``scripts/train_round.py``.
 
-    uv run training-gui.py                          # newest folder under logs/, switches to new runs as they start
+    uv run training-gui.py                          # [currently running]: every live training (else the newest folder)
     uv run training-gui.py logs/261102_001_round3   # one log folder
     uv run training-gui.py /data/triforce-logs      # another logs root
+
+Picking a folder in the dropdown stops the automatic switching; picking [currently running] turns it back on.
 
 Reads ``training.json`` (the plan, rewritten atomically) and tails ``round.jsonl`` plus every ``<specialist>.jsonl``
 twice a second; see ``triforce/events.py`` for the format.  Self-contained (PEP 723 inline dependencies): it does
@@ -41,6 +43,8 @@ FRAME_MS = 33
 # (r18: 0% and -44 reward at iterations 4-5, then 80%+) and blow up the y-axis.  Past ~10 it's the real learning
 # ramp.  Counted from the run's own start, so resumed runs skip their first 10 too.
 STARTUP_ITERATIONS = 10
+LIVE_LABEL = '[currently running]'     # first dropdown entry: every folder with a live training
+LIVE_KEY = ''                          # its item data (folder items hold their path)
 ANSI = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]')
 
 
@@ -494,6 +498,30 @@ class Run:
         return points
 
 
+def plan_alive(plan: dict) -> bool | None:
+    """Is a 'running' plan's training process still there?  None when unknown (finished, other host)."""
+    if plan.get('status') != 'running':
+        return None
+    pid = plan.get('pid')
+    if not pid or plan.get('host') != socket.gethostname():
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return None
+    return True
+
+
+def plan_is_live(plan: dict) -> bool:
+    """A training is going on: the plan says running and its process isn't known to be dead (another host's
+    plan can't be checked, so it counts)."""
+    return plan.get('status') == 'running' and plan_alive(plan) is not False
+
+
 class Training:
     """A log folder: training.json + round.jsonl + one Run per specialist."""
 
@@ -560,20 +588,7 @@ class Training:
 
     def _alive(self):
         """Is the training process still there?  None when unknown (finished, other host)."""
-        if self.plan.get('status') != 'running':
-            return None
-        pid = self.plan.get('pid')
-        if not pid or self.plan.get('host') != socket.gethostname():
-            return None
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True
-        except OSError:
-            return None
-        return True
+        return plan_alive(self.plan)
 
     def status(self) -> str:
         status = self.plan.get('status') or 'pending'
@@ -759,6 +774,34 @@ def find_log_dirs(root: Path) -> list[Path]:
                       reverse=True)
     except OSError:
         return []
+
+
+class LiveScanner:
+    """Which log folders have a live training; re-reads only the training.json files that changed."""
+
+    def __init__(self):
+        self._plans: dict[Path, tuple[tuple, dict]] = {}
+
+    def live(self, dirs: list[Path]) -> list[Path]:
+        """The live ones among ``dirs``, in the same order.  An unreadable plan counts as not live."""
+        result = []
+        for log_dir in dirs:
+            path = log_dir / PLAN_FILE
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            signature = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+            cached = self._plans.get(log_dir)
+            if cached is None or cached[0] != signature:
+                try:
+                    plan = json.loads(path.read_text(encoding='utf-8'))
+                except (OSError, ValueError):
+                    continue
+                cached = self._plans[log_dir] = (signature, plan if isinstance(plan, dict) else {})
+            if plan_is_live(cached[1]):
+                result.append(log_dir)
+        return result
 
 
 # -------------------------------------------------------------------------------------------------------- painting
@@ -973,15 +1016,15 @@ class Clickable(QWidget):
 class Header(Clickable):
     """Plan name, status, timing and a segmented whole-plan bar."""
 
-    def __init__(self, window):
+    def __init__(self, view):
         super().__init__('round')
-        self.window = window
+        self.view = view
         self.setFixedHeight(138)
         self.shown = {}
 
     def step(self):
         """Eases each segment toward its run's progress (called every frame)."""
-        model = self.window.model
+        model = self.view.model
         if model is None:
             return
         now = time.time()
@@ -989,16 +1032,16 @@ class Header(Clickable):
             self.shown[run.index] = ease(self.shown.get(run.index, 0.0), run.fraction(now, status))
 
     def paintEvent(self, _event):
-        model = self.window.model
+        model = self.view.model
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.paint_card(p)
         if model is None or not model.plan:
             p.setPen(C.muted)
             p.setFont(font(11))
-            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.window.empty_text)
+            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.view.owner.empty_text)
             return
-        now, t = time.time(), self.window.t
+        now, t = time.time(), self.view.owner.t
         left, right = rect.left() + 18, rect.right() - 18
 
         p.setFont(font(17, QFont.Weight.Bold))
@@ -1073,9 +1116,9 @@ class RunRow(Clickable):
     """One specialist: status icon, name, phase, progress bar, numbers, success sparkline, eval pill."""
     HEIGHT = 56
 
-    def __init__(self, window, index: int):
+    def __init__(self, view, index: int):
         super().__init__(index)
-        self.window = window
+        self.view = view
         self.index = index
         self.shown = 0.0
         self.setFixedHeight(self.HEIGHT)
@@ -1085,14 +1128,14 @@ class RunRow(Clickable):
         self.shown = ease(self.shown, self.target())
 
     def animating(self) -> bool:
-        model = self.window.model
+        model = self.view.model
         if model is None or self.index >= len(model.runs):
             return False
         return model.runs[self.index].status(model.live) in ACTIVE or abs(self.shown - self.target()) > 0.001
 
     def target(self) -> float:
         """Bar fill: training progress, or episodes evaluated while evaluating."""
-        model = self.window.model
+        model = self.view.model
         run = model.runs[self.index]
         status = run.status(model.live)
         if status == 'evaluating':
@@ -1101,11 +1144,11 @@ class RunRow(Clickable):
         return run.fraction(time.time(), status)
 
     def paintEvent(self, _event):
-        model = self.window.model
+        model = self.view.model
         if model is None or self.index >= len(model.runs):
             return
         run = model.runs[self.index]
-        now, t = time.time(), self.window.t
+        now, t = time.time(), self.view.owner.t
         status = run.status(model.live)
         color = STATUS.get(status, (C.muted, ''))[0]
         p = QPainter(self)
@@ -1224,14 +1267,14 @@ class RunRow(Clickable):
 class ChainCard(Clickable):
     """eval-chain after the round: one block per chain run once results are in."""
 
-    def __init__(self, window):
+    def __init__(self, view):
         super().__init__('round')
-        self.window = window
+        self.view = view
         self.lines: list[tuple[str, QColor]] = []
         self.setFixedHeight(RunRow.HEIGHT)
 
     def refresh(self):
-        chain = self.window.model.chain() if self.window.model else None
+        chain = self.view.model.chain() if self.view.model else None
         lines = []
         if chain and chain['result']:
             result = chain['result']
@@ -1247,15 +1290,15 @@ class ChainCard(Clickable):
         self.setVisible(chain is not None)
 
     def animating(self) -> bool:
-        chain = self.window.model.chain() if self.window.model else None
+        chain = self.view.model.chain() if self.view.model else None
         return bool(chain) and chain['status'] == 'running'
 
     def paintEvent(self, _event):
-        model = self.window.model
+        model = self.view.model
         chain = model.chain() if model else None
         if chain is None:
             return
-        t, now = self.window.t, time.time()
+        t, now = self.view.owner.t, time.time()
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.paint_card(p)
@@ -1765,14 +1808,97 @@ class DetailPane(QWidget):
         self._log_path = signature[0]
 
 
-class Window(QMainWindow):
-    """Folder picker on top; plan + runs on the left; details on the right."""
+class FolderView(QWidget):
+    """One log folder in the left column: header, a row per run and the eval-chain card."""
 
-    def __init__(self, root: Path, initial, follow: bool):
+    def __init__(self, owner, model: 'Training | None'):
+        super().__init__()
+        self.owner = owner
+        self.model = model
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        self.header = Header(self)
+        self.header.clicked.connect(self._clicked)
+        layout.addWidget(self.header)
+        self.rows_layout = QVBoxLayout()
+        self.rows_layout.setSpacing(6)
+        layout.addLayout(self.rows_layout)
+        self.chain_card = ChainCard(self)
+        self.chain_card.clicked.connect(self._clicked)
+        self.chain_card.setVisible(False)
+        layout.addWidget(self.chain_card)
+        self.rows: list[RunRow] = []
+        self.rebuild_rows()
+
+    @property
+    def dir(self) -> Path | None:
+        return self.model.dir if self.model else None
+
+    def _clicked(self, key):
+        self.owner.select(self, key)
+
+    def rebuild_rows(self):
+        count = len(self.model.runs) if self.model else 0
+        while len(self.rows) > count:
+            row = self.rows.pop()
+            self.rows_layout.removeWidget(row)
+            row.deleteLater()
+        while len(self.rows) < count:
+            row = RunRow(self, len(self.rows))
+            row.clicked.connect(self._clicked)
+            self.rows_layout.addWidget(row)
+            self.rows.append(row)
+        for row in self.rows:
+            row.shown = 0.0
+
+    def poll(self, force: bool = False) -> bool:
+        """Reads new events; True if anything changed."""
+        if self.model is None:
+            self.header.update()
+            return False
+        changed = self.model.poll()
+        if len(self.rows) != len(self.model.runs):
+            self.rebuild_rows()
+        if changed or force:
+            self.chain_card.refresh()
+        return changed
+
+    def frame(self):
+        self.header.step()
+        self.header.update()
+        for row in self.rows:
+            if row.animating():
+                row.step()
+                row.update()
+        if self.chain_card.isVisible() and self.chain_card.animating():
+            self.chain_card.update()
+
+    def show_selection(self, key):
+        """Highlights ``key`` (a run index or 'round'); None when another folder holds the selection."""
+        for row in self.rows:
+            row.selected = row.index == key
+            row.update()
+        self.header.selected = key == 'round'
+        self.header.update()
+
+
+class Window(QMainWindow):
+    """Folder picker on top; one log folder, or every live one ([currently running]), on the left; details on
+    the right.  ``auto_live`` (set by picking [currently running], or at startup without a folder; cleared by
+    picking a folder) switches to [currently running] whenever a training is live and back to the newest folder
+    when none is."""
+
+    def __init__(self, root: Path, initial: Path | None):
         super().__init__()
         self.root = root
-        self.model = None
-        self.selection = None
+        self.views: list[FolderView] = []
+        self.auto_live = initial is None
+        self.live_mode = False
+        self.kept: list[Path] = []          # folders shown in this [currently running] session (live or finished)
+        self.live_dirs: list[Path] = []
+        self.scanner = LiveScanner()
+        self.selection: tuple[Path | None, object] | None = None    # (folder, run index | 'round')
         self.auto_selection = True
         self.t = 0.0
         self._t0 = time.monotonic()
@@ -1802,9 +1928,6 @@ class Window(QMainWindow):
         self.combo = QComboBox()
         self.combo.activated.connect(self._picked)
         top.addWidget(self.combo)
-        self.follow = QCheckBox('follow newest')
-        self.follow.setChecked(follow)
-        top.addWidget(self.follow)
         open_button = QPushButton('Open…')
         open_button.clicked.connect(self._open)
         top.addWidget(open_button)
@@ -1813,79 +1936,150 @@ class Window(QMainWindow):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         outer.addWidget(splitter, 1)
         left = QWidget()
-        self.left_layout = QVBoxLayout(left)
-        self.left_layout.setContentsMargins(0, 0, 6, 0)
-        self.left_layout.setSpacing(6)
-        self.header = Header(self)
-        self.header.clicked.connect(self._select)
-        self.left_layout.addWidget(self.header)
-        self.rows_layout = QVBoxLayout()
-        self.rows_layout.setSpacing(6)
-        self.left_layout.addLayout(self.rows_layout)
-        self.chain_card = ChainCard(self)
-        self.chain_card.clicked.connect(self._select)
-        self.chain_card.setVisible(False)
-        self.left_layout.addWidget(self.chain_card)
-        self.left_layout.addStretch(1)
+        self.views_layout = QVBoxLayout(left)
+        self.views_layout.setContentsMargins(0, 0, 6, 0)
+        self.views_layout.setSpacing(18)
+        self.views_layout.addStretch(1)
         splitter.addWidget(scrolling(left))
         self.detail = DetailPane()
         splitter.addWidget(self.detail)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 2)
         splitter.setSizes([860, 600])
-        self.rows: list[RunRow] = []
 
         self._scan()
         if initial is not None:
             self.load(initial)
-        elif self.dirs:
-            self.load(self.dirs[0])
+        else:
+            self._update_mode()
+        if not self.views:
+            self._show_dirs([])
 
         self.poll_timer = QTimer(self)
         self.poll_timer.timeout.connect(self.poll)
         self.poll_timer.start(POLL_MS)
         self.scan_timer = QTimer(self)
-        self.scan_timer.timeout.connect(self._scan_and_follow)
+        self.scan_timer.timeout.connect(self._scan_and_update)
         self.scan_timer.start(2000)
         self.frame_timer = QTimer(self)
         self.frame_timer.timeout.connect(self.frame)
         self.frame_timer.start(FRAME_MS)
 
-    # -- folders
+    # -- folders and modes
+
+    def _shown_dirs(self) -> list[Path]:
+        return [view.dir for view in self.views if view.dir is not None]
 
     def _scan(self):
+        """Lists the log folders (dropdown) and finds the live ones; [currently running] is greyed when none is."""
         dirs = find_log_dirs(self.root)
-        if self.model is not None and self.model.dir not in dirs:
-            dirs.append(self.model.dir)
-        if dirs != self.dirs:
+        if not self.live_mode:
+            dirs += [shown for shown in self._shown_dirs() if shown not in dirs]   # a folder outside root
+        self.live_dirs = self.scanner.live(dirs)
+        if dirs != self.dirs or self.combo.count() == 0:
             self.dirs = dirs
             self.combo.blockSignals(True)
             self.combo.clear()
+            self.combo.addItem(LIVE_LABEL, LIVE_KEY)
             for path in dirs:
                 self.combo.addItem(path.name, str(path))
-            self._sync_combo()
             self.combo.blockSignals(False)
+        self.combo.model().item(0).setEnabled(bool(self.live_dirs))
+        self._sync_combo()
 
     def _sync_combo(self):
-        if self.model is not None:
-            index = self.combo.findData(str(self.model.dir))
+        self.combo.blockSignals(True)
+        if self.live_mode:
+            self.combo.setCurrentIndex(0)
+        else:
+            shown = self._shown_dirs()
+            index = self.combo.findData(str(shown[0])) if shown else -1
             if index >= 0:
                 self.combo.setCurrentIndex(index)
+        self.combo.blockSignals(False)
 
-    def _scan_and_follow(self):
+    def _scan_and_update(self):
         self._scan()
-        if self.follow.isChecked() and self.dirs and (self.model is None or self.dirs[0].name > self.model.dir.name):
-            self.load(self.dirs[0])
+        self._update_mode()
+
+    def _update_mode(self):
+        """The auto rules: live trainings -> [currently running] (finished ones stay while any is live), none ->
+        the newest folder.  A folder the user picked stays put."""
+        if self.live_mode:
+            self.kept += [path for path in self.live_dirs if path not in self.kept]
+            if not self.live_dirs:
+                if self.dirs:
+                    self._enter_folder(self.dirs[0])
+                else:
+                    self.live_mode, self.kept = False, []
+                    self._show_dirs([])
+            else:
+                wanted = sorted(self.kept, key=lambda path: path.name, reverse=True)
+                if wanted != self._shown_dirs():
+                    self._show_dirs(wanted)
+        elif self.auto_live:
+            if self.live_dirs:
+                self._enter_live()
+            elif self.dirs and self._shown_dirs()[:1] != [self.dirs[0]]:
+                self._enter_folder(self.dirs[0])
+
+    def _enter_live(self):
+        self.live_mode = True
+        self.kept = list(self.live_dirs)
+        self._show_dirs(list(self.kept))
+        self._sync_combo()
+
+    def _enter_folder(self, path: Path):
+        self.live_mode = False
+        self.kept = []
+        self._show_dirs([path])
+        self._scan()
+
+    def load(self, log_dir: Path):
+        """Shows one log folder."""
+        self._enter_folder(log_dir)
+
+    def _show_dirs(self, dirs: list[Path]):
+        """Shows these folders top to bottom, reusing the views (and their state) of folders already shown."""
+        existing = {view.dir: view for view in self.views if view.dir is not None}
+        views = []
+        for path in dirs:
+            view = existing.get(path)
+            if view is None:
+                model = Training(path)
+                model.poll()
+                view = FolderView(self, model)
+            views.append(view)
+        if not views:
+            empty = next((view for view in self.views if view.model is None), None)
+            views = [empty or FolderView(self, None)]
+        for view in self.views:
+            self.views_layout.removeWidget(view)
+            if view not in views:
+                view.deleteLater()
+        for index, view in enumerate(views):
+            self.views_layout.insertWidget(index, view)
+        self.views = views
+        if self.selection is not None and self.selection[0] not in dirs:
+            self.selection = None
+            self.auto_selection = True
+        self.poll(force=True)
 
     def _picked(self, index: int):
-        path = Path(self.combo.itemData(index))
-        if self.model is None or path != self.model.dir:
-            self.follow.setChecked(path == (self.dirs[0] if self.dirs else None) and self.follow.isChecked())
+        data = self.combo.itemData(index)
+        if data == LIVE_KEY:
+            if not self.live_mode and self.live_dirs:
+                self.auto_live = True
+                self._enter_live()
+            return
+        path = Path(data)
+        if self.live_mode or self._shown_dirs()[:1] != [path]:
+            self.auto_live = False
             self.load(path)
 
     def _skip_startup_toggled(self, checked: bool):
         self.detail.skip_startup = checked
-        self.detail.refresh(self.model, self.selection, force=True)
+        self._refresh_detail(force=True)
 
     def _open(self):
         chosen = QFileDialog.getExistingDirectory(self, 'Training log folder', str(self.root))
@@ -1893,111 +2087,96 @@ class Window(QMainWindow):
             return
         path = Path(chosen)
         if (path / PLAN_FILE).is_file():
-            self.follow.setChecked(False)
+            self.auto_live = False
             self.load(path)
         else:
             self.root = path
             self.empty_text = f"no training logs under {path}"
-            self.follow.setChecked(True)
+            self.auto_live = True
+            self.live_mode, self.kept = False, []
+            self._show_dirs([])
             self._scan()
-            self._scan_and_follow()
+            self._update_mode()
 
-    def load(self, log_dir: Path):
-        """Switches to another log folder."""
-        self.model = Training(log_dir)
-        self.model.poll()
-        self.selection = None
-        self.auto_selection = True
-        self.header.shown = {}
-        self._rebuild_rows()
-        self._scan()
-        self._sync_combo()
-        self.poll(force=True)
+    # -- selection and updates
 
-    # -- updates
-
-    def _rebuild_rows(self):
-        count = len(self.model.runs) if self.model else 0
-        while len(self.rows) > count:
-            row = self.rows.pop()
-            self.rows_layout.removeWidget(row)
-            row.deleteLater()
-        while len(self.rows) < count:
-            row = RunRow(self, len(self.rows))
-            row.clicked.connect(self._select)
-            self.rows_layout.addWidget(row)
-            self.rows.append(row)
-        for row in self.rows:
-            row.shown = 0.0
-
-    def _select(self, key):
-        self.selection = key
-        active = self.model.active_index() if self.model else None
+    def select(self, view: FolderView, key):
+        """A click on a folder's header/chain card ('round') or one of its runs (index)."""
+        self.selection = (view.dir, key)
+        active = view.model.active_index() if view.model else None
         self.auto_selection = key == active or (key == 'round' and active is None)
         self._apply_selection()
 
+    def _selected_view(self) -> FolderView | None:
+        if self.selection is None:
+            return None
+        return next((view for view in self.views if view.dir == self.selection[0]), None)
+
+    def _refresh_detail(self, force: bool = False):
+        view = self._selected_view()
+        self.detail.refresh(view.model if view else None, self.selection[1] if view else None, force=force)
+
     def _apply_selection(self):
-        for row in self.rows:
-            row.selected = row.index == self.selection
-            row.update()
-        self.header.selected = self.selection == 'round'
-        self.header.update()
-        self.detail.refresh(self.model, self.selection)
+        for view in self.views:
+            selected = self.selection is not None and view.dir == self.selection[0]
+            view.show_selection(self.selection[1] if selected else None)
+        self._refresh_detail()
+
+    def _auto_select(self) -> bool:
+        """Selects the active run of the topmost folder that has one, else the topmost folder; True if changed."""
+        target = None
+        for view in self.views:
+            active = view.model.active_index() if view.model else None
+            if active is not None:
+                target = (view.dir, active)
+                break
+        if target is None and self.views:
+            target = (self.views[0].dir, 'round')
+        if target == self.selection:
+            return False
+        self.selection = target
+        return True
 
     def poll(self, force: bool = False):
-        if self.model is None:
-            self.header.update()
-            return
-        changed = self.model.poll()
-        if len(self.rows) != len(self.model.runs):
-            self._rebuild_rows()
-        if self.auto_selection:
-            active = self.model.active_index()
-            wanted = active if active is not None else 'round'
-            if wanted != self.selection:
-                self.selection = wanted
-                force = True
+        changed = any([view.poll(force) for view in self.views])   # a list: every view polls
+        if self.auto_selection and self._auto_select():
+            force = True
         if changed or force:
-            self.chain_card.refresh()
             self._apply_selection()
-            self.setWindowTitle(f"{self.model.fraction(time.time()):.0%} · {self.model.name} — Triforce training")
+            now = time.time()
+            models = [view.model for view in self.views if view.model is not None]
+            self.setWindowTitle(' · '.join(f"{model.fraction(now):.0%} {model.name}" for model in models)
+                                + ' — Triforce training' if models else 'Triforce training')
         else:
-            self.detail.refresh(self.model, self.selection)     # console log may still be growing
+            self._refresh_detail()      # console log may still be growing
 
     def frame(self):
         self.t = time.monotonic() - self._t0
-        self.header.step()
-        self.header.update()
-        for row in self.rows:
-            if row.animating():
-                row.step()
-                row.update()
-        if self.chain_card.isVisible() and self.chain_card.animating():
-            self.chain_card.update()
+        for view in self.views:
+            view.frame()
 
 
-def resolve(path_arg):
-    """(logs root, initial folder or None, follow)."""
+def resolve(path_arg) -> tuple[Path, Path | None]:
+    """(logs root, initial folder or None)."""
     if path_arg:
         path = Path(path_arg).expanduser().resolve()
         if (path / PLAN_FILE).is_file():
-            return path.parent, path, False
-        return path, None, True
+            return path.parent, path
+        return path, None
     root = os.environ.get(LOGS_DIR_ENV)
-    return (Path(root).expanduser().resolve() if root else Path(__file__).resolve().parent / 'logs'), None, True
+    return (Path(root).expanduser().resolve() if root else Path(__file__).resolve().parent / 'logs'), None
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('path', nargs='?', help=f"log folder (has {PLAN_FILE}) or logs root "
                                                 f"(default ${LOGS_DIR_ENV} or logs/ next to this script)")
-    parser.add_argument('--no-follow', action='store_true', help="stay on the chosen folder when a newer one appears")
     args = parser.parse_args(argv)
-    root, initial, follow = resolve(args.path)
+    root, initial = resolve(args.path)
     app = QApplication(sys.argv[:1])
     app.setApplicationName('Triforce training')
     apply_theme(app)
-    window = Window(root, initial, follow and not args.no_follow)
+    window = Window(root, initial)
     window.show()
     return app.exec()
 
