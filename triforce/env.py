@@ -124,7 +124,7 @@ class ZeldaEnv(gym.Env):
         return self._begin_episode(self.session.restore(snapshot), name)
 
     def _begin_episode(self, state: ZeldaGame, name: str):
-        self.objectives = GameCompletion(self._route, self._route_step, self.config.collect_hearts)
+        self.objectives = GameCompletion(self._route, self._route_step)
         self._attach_objectives(None, state)
         self.critic.clear()
         for condition in self.end_conditions:

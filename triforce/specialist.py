@@ -152,7 +152,6 @@ class SpecialistConfig(BaseModel):
     one_room: bool = False                       # episodes end at the first correct room exit, even inside `rooms`
     max_steps: int = 2000
     route: Optional[str] = None                  # routes.yaml route for objectives; default: from the start state
-    collect_hearts: bool = False                 # below max hearts, a dropped heart is the objective (ITEM) + PBRS
     warm_start: Optional[str] = None
     harvested_states: Optional[str] = None       # directory; default <integration dir>/harvested/<name>
     harvested_fraction: float = 0.5              # share of resets drawn from harvested states when any exist

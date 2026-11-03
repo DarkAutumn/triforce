@@ -346,30 +346,6 @@ def test_wavefront_has_no_lane_below_the_bottom_tree_line(session):
     assert wavefront.get(TileIndex(2, 16)) is None            # the pocket doesn't
 
 
-@pytest.mark.parametrize('hurt', [True, False])
-def test_collect_hearts_makes_a_dropped_heart_the_objective_below_full_health(session, hurt):
-    """collect_hearts: hurt, with a heart on the floor (written into slot 11 of the empty D1 entrance hall), the
-    objective is ITEM and the heart is the only PBRS target; the correct exit doesn't change.  At full health
-    nothing changes."""
-    env = make_env(session, 'stalfos-keese-gel', '1_73s_0', collect_hearts=True,
-                   ram_randomization=RamRandomization(hp=(0.3, 0.3)) if hurt else RamRandomization())
-    env.reset(seed=0)
-    slot = 11
-    for address, value in ((0x34F, 0x60), (0xAC, 0x22), (0x3A8, 0xC0), (0x70, 0x40), (0x84, 0x90)):  # item, heart
-        session.emu.write(address + slot, value)
-    state = session.apply_ram({})
-    heart_tiles = {tile for item in state.items for tile in item.link_overlap_tiles}
-    plain = env.objectives.get_current_objectives(None, state)
-    env.objectives.collect_hearts = False
-    without = env.objectives.get_current_objectives(None, state)
-    assert heart_tiles and plain.next_rooms == without.next_rooms == {MapLocation(1, 0x72, False)}
-    if hurt:
-        assert plain.kind == ObjectiveKind.ITEM and plain.pbrs_targets == heart_tiles
-    else:
-        assert (plain.kind, plain.pbrs_targets) == (without.kind, without.pbrs_targets)
-        assert plain.kind != ObjectiveKind.ITEM
-
-
 @pytest.mark.parametrize('one_room', [True, False])
 def test_one_room_episode_ends_at_the_first_correct_exit(session, one_room):
     """1_73e (2 keys) exits N through the locked door into 0x63, another stalfos-keese-gel room: one_room ends the
