@@ -5,8 +5,9 @@ success: [exit-correct]
 reward_profile: default
 reward: {pbrs: on}
 obs: {objective: on}
-ram_randomization: {hp: [0.5, max], full_hp: 0.5}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
 items: {bombs: off}
+one_room: on                          # round 5: per-room episodes (one-room eval of r3: 91% vs 83% family)
 max_steps: 3000
 warm_start: null
 notes: >-
