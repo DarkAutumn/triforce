@@ -144,3 +144,23 @@ def test_route_successors_follow_progress_and_alternates(game_map):
     assert game_map.route_next_rooms(loc(2, 0x7d)) == {loc(2, 0x6d), loc(2, 0x7e)}
     assert game_map.route_next_rooms(loc(0, 0x37)) == {D1_START, loc(0, 0x38)}
     assert game_map.route_next_rooms(loc(0, 0x0c)) == set()
+
+
+def test_spliced_route_keeps_its_base_outside_the_replaced_steps(game_map):
+    """milestone1-fairy = milestone1 with the overworld between 0x38 (from W) and 0x4c (from E) replaced."""
+    main, fairy = game_map.routes['milestone1'], game_map.routes['milestone1-fairy']
+    first = game_map.route_step_index('milestone1', loc(0, 0x38), 'W')
+    rejoin = game_map.route_step_index('milestone1', loc(0, 0x4c), 'E')
+    tail = len(main) - rejoin
+    assert fairy[:first] == main[:first] and fairy[-tail:] == main[rejoin:]
+    assert fairy[first]['exit'] == 'S' and any(step.get('waypoint') == 'fairy' for step in fairy[first:-tail])
+
+
+def test_route_successors_are_per_route(game_map):
+    fairy = 'milestone1-fairy'
+    assert game_map.route_next_rooms(loc(0, 0x38), fairy) == {loc(0, 0x37), loc(0, 0x48)}
+    assert game_map.route_next_rooms(loc(0, 0x49), fairy) == {loc(0, 0x39), loc(0, 0x59)}
+    assert game_map.route_next_rooms(loc(0, 0x59), fairy) == {loc(0, 0x49), loc(0, 0x5a)}
+    assert game_map.route_next_rooms(loc(0, 0x49)) == set()                       # off milestone1
+    assert game_map.route_next_rooms(loc(2, 0x7d), fairy) == {loc(2, 0x6d), loc(2, 0x7e)}   # alternates apply
+    assert game_map.routes_through(loc(0, 0x49), 'N') == [(fairy, game_map.route_step_index(fairy, loc(0, 0x49), 'N'))]

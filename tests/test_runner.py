@@ -3,12 +3,11 @@
 import json
 
 import pytest
-import yaml
 
 from triforce.actions import Action
-from triforce.game_map import GameMap
-from triforce.runner import ROUTES_PATH, Route, RunResult, RoomRecord, Runner, RunnerError, chain_summary, \
-    parse_location, write_jsonl
+from triforce.game_map import GameMap, load_routes
+from triforce.runner import Route, RunResult, RoomRecord, Runner, RunnerError, chain_summary, parse_location, \
+    write_jsonl
 from triforce.zelda_enums import MapLocation
 
 
@@ -21,13 +20,12 @@ def test_milestone_route_definition():
         Route.load('no-such-route')
 
 
-def test_every_route_room_has_a_specialist(session):
-    with open(ROUTES_PATH, 'r', encoding='utf-8') as f:
-        steps = yaml.safe_load(f)['milestone1']
+@pytest.mark.parametrize('route', sorted(load_routes()))
+def test_every_route_room_has_a_specialist(session, route):
     runner = Runner(session=session)
-    for step in steps:
+    for step in load_routes()[route]:
         location = MapLocation(step['level'], int(step['room'], 16), bool(step.get('in_cave')))
-        assert runner.specialist_for(location) == step['specialist']
+        assert runner.specialist_for(location) == step['specialist'], step
 
 
 def test_untagged_room_stops_with_clear_error(session, models_dir):

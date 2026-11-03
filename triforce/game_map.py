@@ -2,8 +2,8 @@
 
 Loads the room graph from triforce/game.yaml and provides structured access
 to room exits, enemies, treasure and specialist tags for pathfinding and objectives.
-Also loads the milestone route (triforce/routes.yaml) as a successor table used to
-break ties between equally short paths in favour of the canonical route.
+Also loads every route in triforce/routes.yaml (``load_routes``) as a successor table used to
+break ties between equally short paths in favour of that route.
 """
 
 import heapq
@@ -20,6 +20,41 @@ LOCKED_COST = 4
 ROUTE_CACHE_SIZE = 4096
 GAME_YAML = os.path.join(os.path.dirname(__file__), 'game.yaml')
 ROUTES_YAML = os.path.join(os.path.dirname(__file__), 'routes.yaml')
+DEFAULT_ROUTE = 'milestone1'
+
+
+def step_location(step: dict) -> MapLocation:
+    """A routes.yaml step's room."""
+    return MapLocation(step['level'], int(str(step['room']), 16), bool(step.get('in_cave', False)))
+
+
+def _find_step(steps: List[dict], spec: dict, start: int = 0) -> int:
+    for index in range(start, len(steps)):
+        if step_location(steps[index]) == step_location(spec) and steps[index]['entry'] == spec['entry']:
+            return index
+    raise ValueError(f"routes.yaml: no step {spec} after step {start}")
+
+
+def load_routes(path: str = None) -> Dict[str, List[dict]]:
+    """Every route in routes.yaml as its list of steps.  A route is either a list of steps or
+    ``{base, replace: {from, to}, steps}``: the base route with its steps from ``from`` up to (not including) ``to``
+    swapped for ``steps`` (both ends matched by level, room and entry)."""
+    with open(path or ROUTES_YAML, encoding='utf-8') as f:
+        data = yaml.safe_load(f)
+    routes = {name: value for name, value in data.items() if name != 'alternates' and isinstance(value, list)}
+    for name, value in data.items():
+        if isinstance(value, dict) and 'base' in value:
+            base = routes[value['base']]
+            first = _find_step(base, value['replace']['from'])
+            last = _find_step(base, value['replace']['to'], first)
+            routes[name] = base[:first] + list(value['steps']) + base[last:]
+    return routes
+
+
+def load_alternates(path: str = None) -> List[dict]:
+    """routes.yaml's equal-length alternates (``{replaces, with, note}``)."""
+    with open(path or ROUTES_YAML, encoding='utf-8') as f:
+        return yaml.safe_load(f).get('alternates') or []
 
 
 @dataclass
@@ -50,8 +85,10 @@ class GameMap:
 
     def __init__(self, rooms: Dict[MapLocation, GameRoom]):
         self._rooms = rooms
-        self.route_successors: Dict[MapLocation, Set[MapLocation]] = {}
-        self._route_ranks: Dict[MapLocation, Dict[MapLocation, int]] = {}
+        self.routes: Dict[str, List[dict]] = {}
+        # route -> (room -> rooms the route exits it toward, room -> main exit -> index of the first step taking it)
+        self._route_tables: Dict[str, Tuple[Dict[MapLocation, Set[MapLocation]],
+                                            Dict[MapLocation, Dict[MapLocation, int]]]] = {}
         self._route_cache: Dict[tuple, List[List[MapLocation]]] = {}
 
     def rooms_for_specialist(self, name: str) -> List[MapLocation]:
@@ -272,20 +309,37 @@ class GameMap:
 
         return all_paths
 
-    def route_next_rooms(self, location: MapLocation) -> Set[MapLocation]:
-        """Rooms the milestone route (incl. alternates) leaves `location` toward; empty if off-route."""
-        return self.route_successors.get(location, set())
+    def route_next_rooms(self, location: MapLocation, route: str = DEFAULT_ROUTE) -> Set[MapLocation]:
+        """Rooms `route` (incl. alternates) leaves `location` toward; empty if off-route."""
+        return self._route_tables[route][0].get(location, set())
 
-    def route_first(self, location: MapLocation, candidates: Set[MapLocation]) -> Set[MapLocation]:
+    def route_first(self, location: MapLocation, candidates: Set[MapLocation],
+                    route: str = DEFAULT_ROUTE) -> Set[MapLocation]:
         """Of `candidates`, the main-route exits of `location` taken earliest on the route, plus any candidate that
         isn't a main-route exit (alternates stay equal).  Dungeon 1's 0x73 is left W (0x72), E (0x74) and N on
         three visits: with no keys 0x72 and 0x74 tie on path length, and the route takes 0x72 first."""
-        ranks = self._route_ranks.get(location, {})
+        ranks = self._route_tables[route][1].get(location, {})
         ranked = [ranks[room] for room in candidates if room in ranks]
         if not ranked:
             return set(candidates)
         first = min(ranked)
         return {room for room in candidates if ranks.get(room, first) == first}
+
+    def route_step_index(self, route: str, location: MapLocation, entry: str) -> Optional[int]:
+        """Index of the first step of `route` in `location` entered from `entry` (N/S/E/W, cave, start)."""
+        for index, step in enumerate(self.routes[route]):
+            if step['entry'] == entry and step_location(step) == location:
+                return index
+        return None
+
+    def routes_through(self, location: MapLocation, entry: str) -> List[Tuple[str, int]]:
+        """(route, step index) for every route that enters `location` from `entry`."""
+        result = []
+        for name in self.routes:
+            index = self.route_step_index(name, location, entry)
+            if index is not None:
+                result.append((name, index))
+        return result
 
     @staticmethod
     def load(path: str = None, routes_path: str = None) -> 'GameMap':
@@ -315,30 +369,28 @@ class GameMap:
                                   treasure=treasure, bomb_walls=bomb_walls, specialist=entry.get('specialist'))
 
         game_map = GameMap(rooms)
-        game_map.route_successors, game_map._route_ranks = game_map._load_route_successors(routes_path or ROUTES_YAML)
+        game_map.routes = load_routes(routes_path)
+        alternates = load_alternates(routes_path)
+        game_map._route_tables = {name: game_map._route_table(steps, alternates)
+                                  for name, steps in game_map.routes.items()}
         return game_map
 
-    def _load_route_successors(self, path: str):
-        """(room -> rooms the route exits it toward) from routes.yaml's milestone1 + alternates, and (room -> main
-        route exit -> index of the first step taking it).
+    def _route_table(self, main_steps: List[dict], alternates: List[dict]):
+        """(room -> rooms the route exits it toward) from the route's steps + the alternates of rooms it visits,
+        and (room -> main route exit -> index of the first step taking it).
 
         An alternate `{replaces: [R], with: [A]}` also makes A a successor of every route room whose exit
         leads to R and that is adjacent to A (0x77 N->0x67 becomes 0x77 E->0x78 as well)."""
-        with open(path, encoding='utf-8') as f:
-            route = yaml.safe_load(f)
-
-        def loc_of(entry):
-            return MapLocation(entry['level'], int(str(entry['room']), 16), bool(entry.get('in_cave', False)))
-
+        visited = {step_location(step) for step in main_steps}
+        alternates = [alt for alt in alternates if all(step_location(r) in visited for r in alt['replaces'])]
         successors: Dict[MapLocation, Set[MapLocation]] = defaultdict(set)
         ranks: Dict[MapLocation, Dict[MapLocation, int]] = defaultdict(dict)
-        main_steps = list(route['milestone1'])
         steps = list(main_steps)
-        for alt in route.get('alternates') or []:
+        for alt in alternates:
             steps.extend(alt['with'])
 
         for index, step in enumerate(steps):
-            loc = loc_of(step)
+            loc = step_location(step)
             room = self._rooms.get(loc)
             exit_info = room.exits.get(step['exit']) if room else None
             if exit_info is not None:
@@ -346,9 +398,9 @@ class GameMap:
                 if index < len(main_steps):
                     ranks[loc].setdefault(exit_info.destination, index)
 
-        for alt in route.get('alternates') or []:
-            replaced = {loc_of(r) for r in alt['replaces']}
-            for alternate in (loc_of(w) for w in alt['with']):
+        for alt in alternates:
+            replaced = {step_location(r) for r in alt['replaces']}
+            for alternate in (step_location(w) for w in alt['with']):
                 for loc, nexts in list(successors.items()):
                     room = self._rooms[loc]
                     if nexts & replaced and alternate in room.get_neighbors():

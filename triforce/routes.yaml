@@ -48,16 +48,36 @@ milestone1:
 - {level: 2, room: '0x2e', specialist: d2-rope, entry: S, exit: N}
 - {level: 2, room: '0x1e', specialist: goriya, entry: S, exit: N}
 - {level: 2, room: '0x0e', specialist: boss-dodongo, entry: S, exit: terminal}
+# Second route after Dungeon 1 (Lee, round 6): south past the fairy pond (0x39 refills every heart), east along
+# the 0x5x row, north into 0x4d and on to D2 as milestone1 does. Same as milestone1 outside the replaced steps.
+# `waypoint: fairy`: the objective sends Link to the pond edge until his hearts are full, then out.
+milestone1-fairy:
+  base: milestone1
+  replace: {from: {level: 0, room: '0x38', entry: W}, to: {level: 0, room: '0x4c', entry: E}}
+  steps:
+  - {level: 0, room: '0x38', specialist: ow-zora, entry: W, exit: S}
+  - {level: 0, room: '0x48', specialist: ow-zora, entry: N, exit: S}
+  - {level: 0, room: '0x58', specialist: ow-octorok, entry: N, exit: E}
+  - {level: 0, room: '0x59', specialist: ow-zora, entry: W, exit: N}
+  - {level: 0, room: '0x49', specialist: ow-octorok, entry: S, exit: N}
+  - {level: 0, room: '0x39', specialist: ow-start, entry: S, exit: S, waypoint: fairy}
+  - {level: 0, room: '0x49', specialist: ow-octorok, entry: N, exit: S}
+  - {level: 0, room: '0x59', specialist: ow-zora, entry: N, exit: E}
+  - {level: 0, room: '0x5a', specialist: ow-zora, entry: W, exit: E}
+  - {level: 0, room: '0x5b', specialist: ow-moblin, entry: W, exit: E}
+  - {level: 0, room: '0x5c', specialist: ow-moblin, entry: W, exit: E}
+  - {level: 0, room: '0x5d', specialist: ow-moblin, entry: W, exit: N}
+  - {level: 0, room: '0x4d', specialist: ow-moblin, entry: S, exit: W}
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}
 - {replaces: [{level: 2, room: '0x6d'}], with: [{level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}], note: '0x7d E->0x7e N->0x6e instead of 0x7d N->0x6d E->0x6e'}
 families:
-  ow-start: ['(0, 0x77)', '(0, 0x77, cave)']
-  ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x58)', '(0, 0x67)', '(0, 0x68)', '(0, 0x78)']
+  ow-start: ['(0, 0x39)', '(0, 0x77)', '(0, 0x77, cave)']
+  ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x49)', '(0, 0x4c)', '(0, 0x58)', '(0, 0x67)', '(0, 0x68)', '(0, 0x78)']
   ow-leever-peahat: ['(0, 0x29)', '(0, 0x2a)', '(0, 0x2b)', '(0, 0x2c)']
-  ow-zora: ['(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x48)']
-  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)']
+  ow-zora: ['(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x48)', '(0, 0x59)', '(0, 0x5a)']
+  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)']
   stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)']
   goriya: ['(1, 0x23)', '(1, 0x44)', '(2, 0x1e)', '(2, 0x5e)']
   wallmaster: ['(1, 0x45)']

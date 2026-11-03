@@ -7,6 +7,7 @@ import pytest
 
 from triforce.emulator import GAME_DIR
 from triforce.entry_states import BASE_HEARTS, MANIFEST, audit_state, full_monster_counts, route_steps
+from triforce.game_map import DEFAULT_ROUTE
 from triforce.specialist import list_specialists, load_specialist
 
 CONFIGURED = sorted({path for name in list_specialists() for path in load_specialist(name).resolve_start_states()})
@@ -18,9 +19,9 @@ def manifest():
         return {entry['file']: entry for entry in json.load(file)}
 
 
-def _route_hearts(route_step: int) -> int:
+def _route_hearts(route_step: int, route: str) -> int:
     """Max hearts at a route step: 3 plus one heart container per boss room the route has crossed."""
-    return BASE_HEARTS + sum(1 for step in route_steps()
+    return BASE_HEARTS + sum(1 for step in route_steps(route)
                              if step.index < route_step and step.specialist.startswith('boss-'))
 
 
@@ -32,4 +33,4 @@ def test_configured_start_state_is_clean(session, manifest, path):
     assert row['full'], f"spawns {row['monsters_min']} of {row['full_count']} monsters"
     entry = manifest.get(os.path.basename(path))
     if entry is not None:
-        assert row['hearts'] == _route_hearts(entry['route_step'])
+        assert row['hearts'] == _route_hearts(entry['route_step'], entry.get('route', DEFAULT_ROUTE))

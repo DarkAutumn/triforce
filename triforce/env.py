@@ -25,13 +25,14 @@ from .critics import create_critic
 from .curriculum import BackwardCurriculum, CurriculumSpec
 from .emulator import GAME_DIR
 from .end_conditions import MAX_STEPS, build_end_conditions, classify_ending
+from .game_map import DEFAULT_ROUTE
 from .hearts import HeartTracker
-from .objectives import GameCompletion
+from .objectives import GameCompletion, start_route
 from .observation import ObservationBuilder
 from .rewards import SUCCESS, StepRewards, apply_terminal_rewards
 from .session import GameSession
 from .specialist import SpecialistConfig, load_specialist
-from .start_states import SavestateCapture, StartStatePool, ram_randomization_values, state_label, \
+from .start_states import SavestateCapture, StartStatePool, ram_randomization_values, state_entry, state_label, \
     verify_start_room
 from .zelda_enums import Direction
 from .zelda_game import ZeldaGame
@@ -83,6 +84,7 @@ class ZeldaEnv(gym.Env):
         self._start_health = 0.0
         self._done = True
         self._verified = set()
+        self._route, self._route_step = DEFAULT_ROUTE, None     # routes.yaml route of the episode (start_route)
 
     # --- gym API ---
     def reset(self, *, seed=None, options=None):
@@ -111,6 +113,7 @@ class ZeldaEnv(gym.Env):
         values = ram_randomization_values(spec, state.link.max_health, self.rng, chain)
         if values:
             state = self.session.apply_ram(values)
+        self._route, self._route_step = start_route(state.full_location, state_entry(name), self.rng, self.config.route)
         return self._begin_episode(state, name)
 
     def restore(self, snapshot: dict, name: str):
@@ -121,7 +124,7 @@ class ZeldaEnv(gym.Env):
         return self._begin_episode(self.session.restore(snapshot), name)
 
     def _begin_episode(self, state: ZeldaGame, name: str):
-        self.objectives = GameCompletion()
+        self.objectives = GameCompletion(self._route, self._route_step)
         self._attach_objectives(None, state)
         self.critic.clear()
         for condition in self.end_conditions:
@@ -209,7 +212,7 @@ class ZeldaEnv(gym.Env):
             'room': (state.level, state.location, state.in_cave),
             'health': state.link.health, 'max_health': state.link.max_health,
             'steps': self.session.steps, 'total_frames': self.session.total_frames,
-            'specialist': self.config.name,
+            'specialist': self.config.name, 'route': self._route,
         }
         info.update(extra)
         return info

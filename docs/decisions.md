@@ -112,3 +112,22 @@ Format: date — what changed — why — evidence.
   Goriya room was the chain's main death room while two models each learned Goriyas separately.
 - **Note:** with 0x33 tagged, D1 pathfinding can use its key again; the route-only exits and route order
   (`objectives._get_map_objective`, `GameMap.route_first`) keep the milestone route's objective unchanged.
+
+## 2026-11-03 — Second route after Dungeon 1 past the fairy pond (Lee)
+
+- **What:** `routes.yaml` route `milestone1-fairy`: milestone1 with the overworld between 0x38 and 0x4c replaced
+  by the south road plus a detour to the fairy pond 0x39 (`waypoint: fairy`). Objectives take a route:
+  `GameCompletion(route, step)`. Route successors and ranks are per route (`GameMap.route_next_rooms(loc,
+  route)`), and a waypoint is the target while it applies (between the triforces the route took before it and
+  the next one) until Link is in its room at full health. In the pond room the objective is TREASURE at the pond
+  edge with no correct exit.
+- **Which route an episode plays:** a chain run names it (`eval-chain --route`). A training reset takes it from the
+  start state's name (`<level>_<room><side>_<chain>` → room + entry, `start_states.state_entry`): the routes that
+  enter that room from that side, and their step (waypoints before it are done). Where they leave it the same way
+  the episode plays milestone1; where they don't (only 0x38 from W after D1), one at random, so ow-zora trains
+  both exits. Curriculum snapshots and unnamed states play milestone1. `SpecialistConfig.route` pins one.
+- **Why not a shortest-path detour:** the pond is 4 rooms off the shortest path, so Dijkstra alone never goes
+  there, and the old milestone1-only successor table even rejected the S exit of 0x38. The observation is
+  unchanged (no new objective kind), so every trained model keeps working.
+- **Data:** 0x39, 0x49, 0x59, 0x5a, 0x5b, 0x5c, 0x5d are tagged (families by enemy; the enemy-free pond room joins
+  `ow-start`). 0x5e and 0x6d were missing from game.yaml and were added with exits only (0x5d leads there).

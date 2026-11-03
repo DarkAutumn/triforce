@@ -12,16 +12,16 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
-import yaml
 
 from .actions import Action
-from .game_map import GameMap
+from .game_map import GameMap, load_routes
 from .hearts import HeartTracker
-from .objectives import GameCompletion
+from .objectives import GameCompletion, start_route
 from .observation import ObservationBuilder
 from .registry import load_model, promoted_checkpoint
 from .session import GameSession
 from .specialist import load_specialist
+from .start_states import state_entry
 from .zelda_enums import MapLocation
 
 ROUTES_PATH = __file__.rsplit('/', 1)[0] + '/routes.yaml'
@@ -48,11 +48,10 @@ class Route:
     def load(name: str, stop_at: Optional[MapLocation] = None, start_from: Optional[str] = None) -> 'Route':
         """Loads a route from routes.yaml.  ``stop_at`` replaces the terminal room and ``start_from`` (a savestate,
         e.g. a route entry state like ``0_37c_2``) the game start, for partial chain evals."""
-        with open(ROUTES_PATH, 'r', encoding='utf-8') as f:
-            routes = yaml.safe_load(f)
+        routes = load_routes(ROUTES_PATH)
         steps = routes.get(name)
-        if not isinstance(steps, list) or not steps:
-            raise RunnerError(f"Unknown route '{name}' (routes.yaml has {[k for k, v in routes.items() if isinstance(v, list)]})")
+        if not steps:
+            raise RunnerError(f"Unknown route '{name}' (routes.yaml has {sorted(routes)})")
         if steps[0].get('entry') != 'start':
             raise RunnerError(f"Route '{name}' must begin at the game start (entry: start)")
         terminals = [s for s in steps if s.get('exit') == 'terminal']
@@ -195,7 +194,8 @@ class Runner:
         # pylint: disable=too-many-branches,too-many-statements
         session = self.session
         state = session.load(route.start_state, fresh_room=True)    # a pre-entry --from state spawns its full room
-        objectives = GameCompletion()
+        _, step = start_route(state.full_location, state_entry(route.start_state), None, route.name)
+        objectives = GameCompletion(route.name, step)
         state.objectives = objectives.get_current_objectives(None, state)
 
         current: Optional[_Specialist] = None

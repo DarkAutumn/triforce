@@ -23,13 +23,17 @@ Level facts from LevelInfo (ROM): D1 start room $73, boss room $35, triforce roo
 | D1 | 0x73 W 0x72 E 0x73 E 0x74 W 0x73 N(key) 0x63 N 0x53 W 0x52 N(key) 0x42 E 0x43 E(key) 0x44 E 0x45 N(key) 0x35 E 0x36 → triforce |
 | D1 → OW | Picking up the triforce sets GameMode $12. `EndGameMode12` then sets CurLevel=0 and Link reappears at OW 0x37 (`Z_01 TakeItem`, `Z_05 EndGameMode12`). There is no walk out of D1. `0_37c` (mode 4) is this state, and v1's `dungeon1-dungeon2` scenario starts from it. |
 | OW → D2 | 0x37 E 0x38 N 0x28 E 0x29 E 0x2a E 0x2b E 0x2c E 0x2d S 0x3d S 0x4d W 0x4c N 0x3c → stairs |
+| OW → D2, `milestone1-fairy` | 0x37 E 0x38 S 0x48 S 0x58 E 0x59 N 0x49 N 0x39 (fairy pond: hearts refilled) S 0x49 S 0x59 E 0x5a E 0x5b E 0x5c E 0x5d N 0x4d W 0x4c N 0x3c → stairs |
 | D2 | 0x7d N 0x6d E 0x6e N 0x5e N 0x4e N 0x3e N 0x2e N 0x1e N 0x0e (milestone ends on entry) |
 
 **How the route was chosen**
 - **Start → D1.** BFS over v1's `game.yaml` gives two 6-room ties: via 0x67 or via 0x78. v1's `LeftOverworld1Area` allows both (`{77,78,67,68,58,48,38,37}`). The canonical route uses 0x67 and 0x78 is tagged as an alternate.
 - **D1 → D2.** BFS gives two 11-room ties:
   - North: 0x28…0x2d, 0x3d, 0x4d. This is canonical: it matches the design's `ow-leever-peahat` family and stays inside v1's `LeftOverworld2Area` box.
-  - South: 0x48, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x4d. Not tagged.
+  - South: 0x48, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x4d. Tagged in round 6 as part of `milestone1-fairy`
+    (Lee): the south road plus a 4-room detour 0x59 N 0x49 N 0x39 to the fairy pond, which refills every heart
+    (`Z_04 UpdatePondFairy`: Link at the pond edge, Y=$AD, $70 ≤ X < $81, is halted until the hearts are full).
+    `routes.yaml` defines it as milestone1 with the steps from 0x38 (from W) up to 0x4c (from E) replaced.
 - **D1 path.** This is v1's "locked-door branch" (`dungeon1-late-chain`: 0x43→0x44→0x45→0x35, `Dungeon1DidntGetKey`). It needs no bombs, and Link starts with 0 bombs (RAM `start`: `$658`=0).
 - **D2 path.** Two 8-room ties from 0x7d: via 0x6d or via 0x7e. The canonical route uses 0x6d and 0x7e is tagged as an alternate.
 

@@ -144,8 +144,14 @@ overall, per room and per start state; runner `RoomRecord`s carry `hearts_droppe
 
 ## Runner and CLI (`runner.py`, `run.py`, `cli.py`)
 
+- Routes (`triforce/routes.yaml`, `game_map.load_routes()`): `milestone1` and `milestone1-fairy` (milestone1 with
+  the post-D1 overworld replaced by the south road and the fairy pond; a spliced route is
+  `{base, replace: {from, to}, steps}`). `GameCompletion(route, step)` routes on one of them: only the route's
+  exits are correct on its rooms, and `waypoint:` steps are targets while they apply. Training episodes take the
+  route from the start state's name (`objectives.start_route`, `start_states.state_entry`); see
+  `docs/decisions.md` (second route) for the rule.
 - `Route.load(name, stop_at=None)` reads `triforce/routes.yaml`. A route starts at the `start` savestate and
-  ends on entering its `terminal` room (milestone1: level 2 room 0x0e); `stop_at` ends it earlier.
+  ends on entering its `terminal` room (both routes: level 2 room 0x0e); `stop_at` ends it earlier.
 - `Runner(session=None, models_dir=None, checkpoints=None, deterministic=False, max_steps=50000,
   renderer=None).run(route, seed) -> RunResult`. On each room entry: `game.yaml` tag → specialist → promoted
   checkpoint (cached). Untagged room or missing model → `result='error'` with the reason. Per-room outcomes:

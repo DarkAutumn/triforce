@@ -335,6 +335,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x39'
+  specialist: ow-start
   exits:
     S:
       level: 0
@@ -470,6 +471,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x49'
+  specialist: ow-octorok
   exits:
     N:
       level: 0
@@ -623,6 +625,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x59'
+  specialist: ow-zora
   exits:
     N:
       level: 0
@@ -642,6 +645,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x5a'
+  specialist: ow-zora
   exits:
     E:
       level: 0
@@ -658,6 +662,7 @@ rooms:
   treasure: key
 - level: 0
   location: '0x5b'
+  specialist: ow-moblin
   exits:
     N:
       level: 0
@@ -677,6 +682,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x5c'
+  specialist: ow-moblin
   exits:
     E:
       level: 0
@@ -692,6 +698,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x5d'
+  specialist: ow-moblin
   exits:
     N:
       level: 0
@@ -707,6 +714,27 @@ rooms:
       location: '0x5c'
   enemies:
     BlueMoblin: 4
+  treasure: null
+# 0x5e and 0x6d are not in the v1 data; added in round 6 when 0x5d joined milestone1-fairy.  Untagged, exits only
+# (overworld screen edges are two-way: the rooms whose exits lead here), enemies unknown.
+- level: 0
+  location: '0x5e'
+  exits:
+    W:
+      level: 0
+      location: '0x5d'
+  enemies: {}
+  treasure: null
+- level: 0
+  location: '0x6d'
+  exits:
+    N:
+      level: 0
+      location: '0x5d'
+    W:
+      level: 0
+      location: '0x6c'
+  enemies: {}
   treasure: null
 - level: 0
   location: '0x5f'
