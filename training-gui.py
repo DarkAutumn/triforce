@@ -301,7 +301,7 @@ class Run:
         """pending | starting | training | evaluating | ok | early | failed | interrupted | lost."""
         final = (self.end or {}).get('status')
         entry_status = self.entry.get('status')
-        if final is None and entry_status not in (None, 'pending', 'running'):
+        if final is None and entry_status not in (None, 'pending', 'running', 'evaluating'):
             final = entry_status
         if final is not None:
             if final == 'interrupted':
@@ -315,7 +315,7 @@ class Run:
             return 'pending'
         if live is False:
             return 'lost'
-        if self.eval_start is not None:
+        if self.eval_start is not None or entry_status == 'evaluating':
             return 'evaluating'
         if not self.progress and self.train_end is None and self.skipped is None:
             return 'starting'
@@ -563,9 +563,12 @@ class Training:
         return [run.status(self.live) for run in self.runs]
 
     def active_index(self):
-        for index, status in enumerate(self.statuses()):
-            if status in ACTIVE:
-                return index
+        """The run being trained (background evaluations run alongside it), else the first one evaluating."""
+        statuses = self.statuses()
+        for wanted in (('starting', 'training'), ACTIVE):
+            for index, status in enumerate(statuses):
+                if status in wanted:
+                    return index
         return None
 
     def fraction(self, now: float) -> float:
