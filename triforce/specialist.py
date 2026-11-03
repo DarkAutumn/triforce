@@ -101,18 +101,22 @@ class RamRandomization(BaseModel):
 
     ``full_hp`` (with ``hp``) is the share of resets that start at full health, the only state where the sword fires
     beams; the rest draw hp below full (no beams) within the ``hp`` bounds.  Without it, hp is uniform over the bounds
-    (full health only as often as any other value)."""
+    (full health only as often as any other value).
+
+    ``chain_hp`` (with ``hp``) is the share of resets whose hp comes from the hearts chain runs entered the start room
+    with (``chain_hp.py`` profile; rooms with too few chain visits keep the ``hp`` draw)."""
     model_config = ConfigDict(extra='forbid')
     hp: Optional[Tuple[HpBound, HpBound]] = None
     full_hp: Optional[float] = None
+    chain_hp: Optional[float] = None
     bombs: Optional[Tuple[int, int]] = None
     keys: Optional[Tuple[int, int]] = None
 
-    @field_validator('full_hp')
+    @field_validator('full_hp', 'chain_hp')
     @classmethod
     def _check_full_hp(cls, value):
         if value is not None and not 0.0 <= value <= 1.0:
-            raise ValueError(f"full_hp must be a probability in [0, 1], got {value}")
+            raise ValueError(f"full_hp/chain_hp must be a probability in [0, 1], got {value}")
         return value
 
     @field_validator('hp')

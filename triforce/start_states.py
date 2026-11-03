@@ -21,6 +21,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Deque, Dict, List, Optional, Sequence
 
+from .chain_hp import MIN_SAMPLES as MIN_CHAIN_SAMPLES
 from .emulator import GAME_DIR
 from .specialist import RamRandomization, SpecialistConfig, format_room
 from .state_change import StateChange
@@ -148,15 +149,21 @@ def _hearts_encoding(health_half_hearts: int, max_health: int) -> Dict[str, int]
     return {'hearts_and_containers': (containers << 4) | full, 'partial_hearts': 0x7F if half else 0}
 
 
-def ram_randomization_values(spec: RamRandomization, max_health: int, rng: random.Random) -> Dict[str, int]:
+def ram_randomization_values(spec: RamRandomization, max_health: int, rng: random.Random,
+                             chain_samples: Optional[List[float]] = None) -> Dict[str, int]:
     """RAM variable values for one reset.  hp is drawn in half hearts within [min, max] fraction of max hp (at least
-    half a heart); with ``full_hp``, that share of resets is full health (sword beams) and the rest stay below full."""
+    half a heart); with ``full_hp``, that share of resets is full health (sword beams) and the rest stay below full.
+    With ``chain_hp`` and at least ``chain_hp.MIN_SAMPLES`` ``chain_samples`` (hearts chain runs entered the start room
+    with), that share of resets takes one of those instead."""
     values: Dict[str, int] = {}
     if spec.hp is not None:
         lo, hi = (1.0 if v == 'max' else float(v) for v in spec.hp)
         total = 2 * max_health
         low, high = max(1, round(lo * total)), max(1, round(hi * total))
-        if spec.full_hp is not None and high >= total:
+        if spec.chain_hp and chain_samples and len(chain_samples) >= MIN_CHAIN_SAMPLES \
+                and rng.random() < spec.chain_hp:
+            half_hearts = min(max(1, round(2 * rng.choice(chain_samples))), total)
+        elif spec.full_hp is not None and high >= total:
             if rng.random() < spec.full_hp or low >= total:
                 half_hearts = total
             else:

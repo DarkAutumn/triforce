@@ -115,6 +115,10 @@ class ZeldaEnv(gymnasium.Env):
   last 10 episodes from the current stage succeed, until it reaches the room entry. Progress is shared by all
   workers through `<run dir>/curriculum.json`. Curriculum episodes are reported as `curriculum/*` and excluded
   from the room-entry metrics.
+- Chain-matched health (`chain_hp.py`): `python -m triforce.chain_hp <chain jsonl ...>` writes
+  `triforce/chain_hp.json`, the hearts Link entered each room with in chain runs. A specialist with
+  `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
+  resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw.
 - `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=20, parallel=1, seed=0,
   deterministic=False)` plays every seed start state N times in `ZeldaEnv` (episode i seeded `seed + i`) and
   returns success rate, outcomes/endings and per-room/per-state breakdowns; `python -m triforce.evaluate
@@ -133,6 +137,7 @@ class ZeldaEnv(gymnasium.Env):
   `exit-correct`, `exit-wrong`, `death`, `stuck` (specialist `max_steps` in one room), `milestone`.
 - `python -m triforce.run --route milestone1 [--seed N] [--render] [--stop-at L:0xRR] [--checkpoint S=PATH]`
   prints one line per room and appends a JSON line to `runs/runner.jsonl`.
-- `triforce eval-chain --route milestone1 --runs 20 [--parallel N]` → success rate and per-room failure
-  counts (`chain_summary`); `triforce promote <specialist> <run-id>`; `triforce list`;
+- `triforce eval-chain --route milestone1 --runs 20 [--parallel N] [--from STATE] [--stop-at L:0xRR]` → success
+  rate and per-room failure counts (`chain_summary`); `--from` starts mid-route at a route entry state (e.g.
+  `0_37c_2`, after Dungeon 1). `triforce promote <specialist> <run-id>`; `triforce list`;
   `triforce train|run|play|evaluate ...` forward to the module CLIs.

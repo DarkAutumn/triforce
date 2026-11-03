@@ -190,6 +190,20 @@ def test_full_hp_share_splits_resets_between_beams_and_no_beams(session):
         assert link.are_beams_available == link.is_health_full
 
 
+def test_chain_hp_share_draws_the_chain_arrival_hearts():
+    """chain_hp: that share of resets takes one of the room's chain arrival hearts; too few samples fall back."""
+    rng = random.Random(0)
+    spec = RamRandomization(hp=(0.5, 'max'), full_hp=0.5, chain_hp=0.5)
+
+    def hearts(values):
+        return (values['hearts_and_containers'] & 0x0F) + (0.5 if values['partial_hearts'] == 0x7F else 0.0)
+
+    draws = [ram_randomization_values(spec, 3, rng, chain_samples=[0.5] * 10) for _ in range(400)]
+    assert 0.4 < sum(hearts(v) == 0.5 for v in draws) / len(draws) < 0.6     # below the hp range: from the chain
+    sparse = [ram_randomization_values(spec, 3, rng, chain_samples=[0.5]) for _ in range(100)]
+    assert not any(hearts(v) == 0.5 for v in sparse)
+
+
 # --- savestate capture ---
 
 def test_entry_side_letters():

@@ -19,6 +19,7 @@ import gymnasium as gym
 import numpy as np
 
 from .actions import NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS, Action
+from .chain_hp import load_profile, room_key
 from .critics import create_critic
 from .curriculum import BackwardCurriculum, CurriculumSpec
 from .emulator import GAME_DIR
@@ -102,7 +103,10 @@ class ZeldaEnv(gym.Env):
             verify_start_room(name, state.full_location, self.config.rooms, self.config.name)
             self._verified.add(name)
 
-        values = ram_randomization_values(self.config.ram_randomization, state.link.max_health, self.rng)
+        spec = self.config.ram_randomization
+        chain = load_profile().get(room_key(state.full_location)) \
+            if spec.chain_hp and self._curriculum_tag is None else None      # room entries only, not trajectory starts
+        values = ram_randomization_values(spec, state.link.max_health, self.rng, chain)
         if values:
             state = self.session.apply_ram(values)
         return self._begin_episode(state, name)
