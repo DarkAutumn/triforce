@@ -76,12 +76,18 @@ def _int(value) -> int:
     return int(getattr(value, 'value', value))
 
 
+def enemy_health(state) -> int:
+    """Total health (obj_health high nibble) of the living enemies: drops with every damaging hit."""
+    return sum(enemy.health for enemy in state.enemies if not enemy.is_dying)
+
+
 def cell_key(state) -> tuple:
-    """Coarse summary of a state for the archive."""
+    """Coarse summary of a state for the archive.  Enemy health is in it so multi-hit enemies (bosses) leave a
+    trail of cells toward the kill instead of one cell per tile until they die."""
     link = state.link
     living = sum(1 for enemy in state.enemies if not enemy.is_dying)
     return (state.level, state.location, state.in_cave, link.tile.x // 2, link.tile.y // 2, int(link.health),
-            living, link.keys, _int(link.boomerang))
+            living, enemy_health(state), link.keys, _int(link.boomerang))
 
 
 def closeness(state) -> float:
@@ -92,11 +98,12 @@ def closeness(state) -> float:
 
 
 def progress_events(prev, curr) -> int:
-    """Room entered, enemy killed, key or boomerang gained in one step: selection favours cells further along."""
+    """Room entered, enemy damaged or killed, key or boomerang gained in one step: selection favours cells
+    further along."""
     if prev.full_location != curr.full_location:
         return 1
-    return (int(curr.room_kills > prev.room_kills) + int(curr.link.keys > prev.link.keys)
-            + int(_int(curr.link.boomerang) > _int(prev.link.boomerang)))
+    return (int(curr.room_kills > prev.room_kills) + int(enemy_health(curr) < enemy_health(prev))
+            + int(curr.link.keys > prev.link.keys) + int(_int(curr.link.boomerang) > _int(prev.link.boomerang)))
 
 
 def random_action(mask, rng: random.Random, previous: Optional[Action]) -> Action:
