@@ -255,13 +255,13 @@ def test_items_config_masks_bombs_even_when_link_has_them(session, bombs_on):
 
 
 @pytest.mark.parametrize('keys', [0, 1])
-def test_route_room_only_offers_the_route_exit(session, keys):
-    """0x43's route exit is the locked E door to 0x44.  Without a key the shortest path to the triforce goes N into
-    untagged 0x33; the objective must still only accept 0x44 (Link then has to find a key or fail in 0x43)."""
+def test_route_room_never_offers_untagged_0x33(session, keys):
+    """0x43's route exit is the locked E door to 0x44.  Without a key the old shortest path to the triforce went N
+    into untagged 0x33 (a key room) and the runner errored there; now it is never a correct exit."""
     env = make_env(session, 'd1-melee', '1_43w_0', ram_randomization=RamRandomization(keys=(keys, keys)))
     env.reset(seed=0)
     assert session.state.link.keys == keys
-    assert session.state.objectives.next_rooms == {MapLocation(1, 0x44, False)}
+    assert session.state.objectives.next_rooms == ({MapLocation(1, 0x44, False)} if keys else set())
 
 
 @pytest.mark.parametrize('one_room', [True, False])

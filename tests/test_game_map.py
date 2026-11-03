@@ -94,15 +94,24 @@ def test_next_rooms_without_keys_are_both_key_rooms(game_map):
 
 
 def test_collected_key_room_is_not_revisited(game_map):
-    collected = {loc(1, 0x72)}
-    assert game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=0, collected_keys=collected) == {loc(1, 0x74)}
+    collected = {loc(1, 0x72)}          # holding its key
+    assert game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected) == {loc(1, 0x74)}
+
+
+def test_paths_skip_untagged_key_rooms(game_map):
+    """Back from 0x74 with its key: Dungeon 1 needs every route key (0x73 N, 0x52 N, 0x43 E, 0x45 N).  Untagged
+    0x33 also holds a key and ties with 0x72 on path length, but the runner can't play it, so 0x72 comes first."""
+    collected = {loc(1, 0x74)}
+    assert game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected) == {loc(1, 0x72)}
 
 
 def test_opened_door_is_free(game_map):
+    """Both start-side keys taken, one in hand: Dungeon 1's 4 locked doors need it plus 0x53's and 0x45's keys,
+    which is only enough once 0x73 N is already open."""
     collected = {loc(1, 0x72), loc(1, 0x74)}
-    assert loc(1, 0x63) not in game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=0, collected_keys=collected)
+    assert loc(1, 0x63) not in game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected)
     opened = {(D1_START, 'N')}
-    assert loc(1, 0x63) in game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=0, collected_keys=collected,
+    assert loc(1, 0x63) in game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected,
                                                     opened_doors=opened)
 
 

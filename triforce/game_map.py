@@ -184,7 +184,9 @@ class GameMap:
         return key_bit, initial_mask
 
     def _dijkstra(self, start_state, end, key_bit, opened):
-        """Run Dijkstra over (room, keys_held, collected_mask) state space."""
+        """Run Dijkstra over (room, keys_held, collected_mask) state space.  Paths only pass through rooms tagged
+        with a specialist (the runner can't play the others): e.g. Dungeon 1's untagged key room 0x33 is not a
+        stand-in for 0x72's key."""
         cost_so_far = {start_state: 0}
         parents: Dict[Tuple, List[Tuple]] = defaultdict(list)
         counter = 0
@@ -208,6 +210,9 @@ class GameMap:
                 continue
 
             for exit_info in room.exits.values():
+                destination = self._rooms.get(exit_info.destination)
+                if exit_info.destination != end and destination is not None and not destination.specialist:
+                    continue
                 result = self._evaluate_exit(current, exit_info, cur_keys, collected, key_bit, opened)
                 if result is None:
                     continue
