@@ -49,7 +49,21 @@ the balanced training rate then sat at 0.60–0.72 with 25–33% deaths. One mod
 60–68%, against 0–85% for the old split models, but it is still below each old model in its own rooms (0x44 75%
 for `d1-wallmaster`, 0x5e/0x1e 80/85% for `d2-goriya`). r19 continues it.
 
-## 4. Pass-through damage penalty (r16)
+## 4. stalfos-keese-gel with the north Stalfos room (r18)
+
+r18 continues the `d1-melee` r15 weights with 0x33 added (stop at 99%, 2M steps, 10 workers). Both models evaluated
+under the new config (10 rooms, 34 states):
+
+| model | north Stalfos key room (0x33) | 5-Stalfos key room (0x53) | 3-Stalfos room (0x63) | 5-Stalfos key room (0x74) | Keese key room (0x72) | route rooms | all |
+|---|---|---|---|---|---|---|---|
+| `d1-melee` r15 | 0% (no-progress) | 92% | 100% | 92% | 90% | 96.9% | 88% |
+| r18 | **75%**, −0.53 hearts | 88% | 90% | 95% | 98% | 97.1% | **95%** |
+
+Same on the route, plus the new room. Promoted. Note the noise: r15's 0x53 was 78% in its own eval and 92% here
+(60 episodes per room, a different emulator RNG stream after code changes); differences under ~10% in one room are
+not meaningful.
+
+## 5. Pass-through damage penalty (r16)
 
 `reward.pass_through_damage: k`: when an episode starts in a room whose objective is MOVE (no fight or pickup
 wanted) and ends in success, the terminal reward loses k per heart lost since entry. r16 used k = 4 on
