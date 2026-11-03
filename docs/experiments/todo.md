@@ -6,18 +6,16 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Round 6 in progress** (`round6.md`): enemy-based families (`stalfos-keese-gel`, `goriya`, `wallmaster`),
-  states for D1's rooms toward the bow (0x33, 0x23, 0x22), pass-through damage penalty (inconclusive), chain-matched
-  hp (code done, not tried). Best chains so far (round 5): post-D1 → Dodongo room 1/20, D2 entrance → Dodongo
-  room 1–2/20; one run from the start reached D2. What kills chains is **health drain**: 0.2–1.4 hearts per room,
-  never healed.
-- **goriya**: r17 66% over all four Goriya rooms; r19 continues it (stop at 99%). Then promote (if it beats the old
-  split models per room, or at least overall) and rerun the chains.
-- **stalfos-keese-gel**: r18 adds the north Stalfos room (0x33) to the d1-melee r15 weights. Weak room: the
-  5-Stalfos key room (0x53, 78%, −0.56 hearts) did not improve with 2M more steps.
-- **wallmaster**: still the copied `d1-wallmaster` r10 (0x45 98%); retrain on 0x45 alone if the chain needs it.
-- **Chain-matched hp** (`ram_randomization.chain_hp`, `triforce/chain_hp.json`): try on stalfos-keese-gel /
-  goriya / d2-rope against the same model without it; promote by success and damage, then rerun chains.
+- **Round 6 in progress** (`round6.md`). Best chains (40 runs, r23): **full chain → Dodongo room 1/40** (first
+  success), post-D1 → D2 entrance 27/40, D2 entrance → Dodongo room 7/40. What kills chains is still health
+  drain: the D1 Goriya room (16 deaths of 32 arrivals), 0x53, post-D1 0x4c, D2 rope rooms 0x3e / 0x6d / 0x6e
+  and the first D2 Goriya room (0x5e).
+- **Promoted now:** ow-zora / ow-leever-peahat / boss-aquamentus r23-more, stalfos-keese-gel r22-skg-plain,
+  goriya r21-goriya-chainhp, d2-rope r20-rope-plain, wallmaster r10 copy.
+- **r24-fairy** (training): ow-zora, ow-octorok, ow-moblin, ow-start on both routes' rooms. Then chains on both
+  routes (`--route milestone1-fairy`).
+- ~~Chain-matched hp~~ tested on goriya (within noise) and stalfos-keese-gel (worse); off everywhere. The option
+  (`ram_randomization.chain_hp`) stays for a later retry.
 - ~~Pass-through damage penalty~~ tested twice in round 6 (overworld, d2-rope): no chain gain; dropped (code
   removed). A damage-avoidance idea for later would need a different form.
 - **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
