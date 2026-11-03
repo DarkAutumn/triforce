@@ -202,3 +202,46 @@ the overworld models take 8 of 34 and leave 26. The wallmaster model picks up ne
 health (total +0.63 vs real +0.32). Hearts are already worth a lot: success pays 20 × (0.5 + 0.5 × hp/max), so a
 heart at the exit adds 2.5–3.3, plus `reward-gained-health`. But PBRS never points at a heart: dropped items are
 added to the objective's `targets`, not to `pbrs_targets`, so the shaping always pulls toward the exit.
+
+## 9. Second route past the fairy pond (Lee): `milestone1-fairy`
+
+After D1: 0x38 S 0x48 S 0x58 E 0x59 N 0x49 N 0x39 (fairy pond) S 0x49 S 0x59 E 0x5a E 0x5b E 0x5c E 0x5d N
+0x4d W 0x4c, then as milestone1 (`docs/route.md`; mechanics in `docs/decisions.md`). 40 entry states built and
+audited (chains 0–2). Baseline chain with the old models (40 runs from `0_37c_2`): every run left 0x38 north
+(41 exit-wrong), so no run reached the pond. The overworld models followed the room, not the objective's exit
+bit, which they had never seen change there.
+
+**r24-fairy** (from the promoted models, `--stop-success 0.99`, 2M steps; ow-start early stop at 115k):
+
+| specialist | before (current yaml) | r24 | new rooms |
+|---|---|---|---|
+| ow-zora | 42%, −0.55 | **97%, −0.15** | 0x59 12% → 100%, 0x5a 0% → 98%; 0x38 (both routes) 68% → 94% |
+| ow-octorok | 77%, −0.17 | **98%, −0.09** | 0x49 43% → 98%, 0x58 from N 57% → 99%; 0x4c 83% → 92% |
+| ow-start | 70% | **98%** | pond 0x39 2% → 98%, +0.93 hearts per visit |
+| ow-moblin | 18% | 28% (stopped) | 0x5b / 0x5c / 0x5d 0% |
+
+Promoted: ow-zora, ow-octorok, ow-start r24-fairy. ow-moblin collapsed into 2000-step timeouts (1–4 episodes
+per iteration). Lee pointed at the cause: a Moblin room with two tree openings, one leading E and the other S.
+0x5b's east edge has two openings. The lower one opens into a pocket of 0x5c that only leads south, yet the
+objective counted every tile of that edge as the exit to 0x5c, and a wavefront-greedy walker from the west entry
+took exactly the lower one. Also, `Room.can_move` let Link's 2×2 top-left tile run along the off-map last row,
+so the wavefront joined every south opening under the bottom tree line and made the pocket look connected to
+0x5c's east exit. Fixes (`docs/decisions.md`): game.yaml exit `span` (0x5b E = rows 0–9) used by the objective,
+end conditions, critic and runner; no off-map lane. An audit of every overworld entry state on both routes
+found no other split edge. ow-moblin now has curriculum (12 new trajectories, 12–70 steps) and `max_steps` 600.
+r26 retrains it from r9a.
+
+## 10. Heart objective (`collect_hearts`)
+
+Option (off by default): below max hearts, a dropped heart on the floor makes the objective ITEM (a free
+observation slot) and the only PBRS target; exits stay correct. A/B on stalfos-keese-gel, both arms from r22,
+1M steps, each evaluated under its own config:
+
+| arm | eval | health real (total) | hearts dropped / taken / left per episode | 0x53 | steps |
+|---|---|---|---|---|---|
+| r25-skg-plain | 98% | −0.09 (−0.08) | 0.09 / 0.06 / 0.03 | 92%, −0.45 | 31 |
+| r25-skg-hearts | 98% | −0.14 (−0.13) | 0.06 / 0.03 / 0.02 | 98%, −0.58 | 24 |
+
+The objective did not raise pickups (half the drops vs two thirds) and the arm rushed exits (fewer kills, fewer
+drops). r25-skg-plain beats r22 (−0.09 vs −0.16 hearts; 0x53 −0.45 vs −0.69) and is promoted. Second test on
+d2-rope (0x4e leaves 0.40 hearts per episode) running as r27.
