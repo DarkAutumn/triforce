@@ -27,8 +27,9 @@ Events written by ``triforce.train`` (one specialist):
 - ``train_end``: status (completed | early_stop | interrupted | error), iterations, steps, wall_seconds, sps,
   checkpoint.
 
-Added by ``scripts/train_round.py``: ``eval_start`` and ``eval`` (specialist evaluation; it runs on a background
-thread while the next specialist trains, so these can arrive after the next stream's ``start``) and ``error``
+Added by ``scripts/train_round.py``: ``eval_start``, ``eval_progress`` (at most once a second: done, episodes,
+running success_rate) and ``eval`` (specialist evaluation; it runs on a background thread while the next specialist
+trains, so these can arrive after the next stream's ``start``) and ``error``
 (non-zero exit, failed evaluation).  The last line of every stream is ``end`` (status, plus a summary); nothing
 follows it.  A stream without ``end`` belongs to a run that is still going or was killed.
 """

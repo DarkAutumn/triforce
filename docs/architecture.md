@@ -95,7 +95,8 @@ class ZeldaEnv(gymnasium.Env):
   `logs/<yymmdd>_<NNN>_<what>/` (gitignored; `--logs-dir` / `$TRIFORCE_LOGS_DIR`). `training.json` lists every
   specialist run in order with its status and is rewritten atomically. `<specialist>.jsonl` is an append-only
   stream (`start`, one `progress` per PPO iteration with steps/target/fraction/sps/eta and headline metrics,
-  `checkpoint`, `early_stop`, `error`, `train_end`; the round driver adds `eval_start`, `eval`) whose last line
+  `checkpoint`, `early_stop`, `error`, `train_end`; the round driver adds `eval_start`, `eval_progress` (≤1/s:
+  done/episodes/running success_rate), `eval`) whose last line
   is `end`. `<specialist>.log` is its console output. `round.jsonl` / `round.log` cover the round (chain,
   errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes `end`.
 - `train --stop-success R [--stop-patience 5]` (`EarlyStop`) ends training once the start-state-balanced

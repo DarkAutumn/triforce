@@ -80,7 +80,8 @@ FINISHED = ('ok', 'early', 'completed', 'failed', 'interrupted', 'skipped')
 
 EVENT_COLORS = {
     'start': C.accent, 'progress': C.faint, 'checkpoint': C.muted, 'early_stop': C.ok, 'error': C.bad,
-    'train_end': C.accent, 'skipped': C.muted, 'eval_start': C.eval, 'eval': C.eval, 'end': C.ok,
+    'train_end': C.accent, 'skipped': C.muted, 'eval_start': C.eval, 'eval_progress': C.eval, 'eval': C.eval,
+    'end': C.ok,
     'specialist_start': C.accent, 'specialist_end': C.ok, 'chain_start': C.eval, 'chain': C.eval,
 }
 
@@ -259,7 +260,7 @@ class Run:
         """Forgets the stream (it was replaced)."""
         self.events: list[dict] = []
         self.start = self.early_stop = self.train_end = self.skipped = None
-        self.eval_start = self.eval = self.end = self.checkpoint = None
+        self.eval_start = self.eval_progress = self.eval = self.end = self.checkpoint = None
         self.progress: list[dict] = []
         self.errors: list[dict] = []
 
@@ -292,7 +293,8 @@ class Run:
             self.progress.append(event)
         elif kind == 'error':
             self.errors.append(event)
-        elif kind in ('start', 'early_stop', 'train_end', 'skipped', 'eval_start', 'eval', 'end', 'checkpoint'):
+        elif kind in ('start', 'early_stop', 'train_end', 'skipped', 'eval_start', 'eval_progress', 'eval', 'end',
+                      'checkpoint'):
             setattr(self, kind, event)
 
     # -- derived state
@@ -311,7 +313,8 @@ class Run:
                            or (self.end or {}).get('stopped_early'))
                 return 'early' if stopped else 'ok'
             return 'failed'
-        if self.start is None and entry_status != 'running' and self.skipped is None and not self.events:
+        if (self.start is None and entry_status not in ('running', 'evaluating') and self.skipped is None
+                and not self.events):
             return 'pending'
         if live is False:
             return 'lost'
@@ -440,6 +443,19 @@ class Run:
                 if value is not None:
                     return value
         return None
+
+    def eval_done(self) -> tuple[int, int]:
+        """(episodes finished, episodes total) of the evaluation so far."""
+        total = (self.eval_progress or self.eval_start or {}).get('episodes') or 0
+        return (self.eval_progress or {}).get('done') or 0, total
+
+    def eval_eta(self, now: float):
+        """Seconds of evaluation left at the pace so far (None before the first episode finishes)."""
+        done, total = self.eval_done()
+        if not done or self.eval_start is None:
+            return None
+        per_episode = (self.eval_progress['ts'] - self.eval_start['ts']) / done
+        return max(0.0, per_episode * (total - done) - (now - self.eval_progress['ts']))
 
     def train_success(self):
         """Last balanced success rate during training (raw rate when balanced isn't logged)."""
@@ -601,7 +617,11 @@ class Training:
                     return None
                 remaining += (run.target_steps - run.live_steps(now, status)) / rate + after_training
             elif status == 'evaluating':
-                remaining += max(0.0, after_training - (now - run.eval_start['ts']))
+                eta = run.eval_eta(now)
+                if eta is None:
+                    started = run.eval_start['ts'] if run.eval_start else now
+                    eta = max(0.0, after_training - (now - started))
+                remaining += eta
             elif status in ('pending', 'starting'):
                 if per_step is None:
                     active = self.active_index()
@@ -674,6 +694,8 @@ def describe(event: dict) -> str:
         return str(get('reason', ''))
     if kind == 'eval_start':
         return f"{get('episodes')} episodes"
+    if kind == 'eval_progress':
+        return f"{get('done')}/{get('episodes')} episodes · success {fmt_pct(get('success_rate'))}"
     if kind == 'eval':
         return (f"success {fmt_pct(get('success_rate'))} over {get('episodes')} episodes · "
                 f"health {fmt_hearts_change(get('health_change'))}")
@@ -1050,9 +1072,14 @@ class RunRow(Clickable):
         return model.runs[self.index].status(model.live) in ACTIVE or abs(self.shown - self.target()) > 0.001
 
     def target(self) -> float:
+        """Bar fill: training progress, or episodes evaluated while evaluating."""
         model = self.window.model
         run = model.runs[self.index]
-        return run.fraction(time.time(), run.status(model.live))
+        status = run.status(model.live)
+        if status == 'evaluating':
+            done, total = run.eval_done()
+            return done / total if total else 0.0
+        return run.fraction(time.time(), status)
 
     def paintEvent(self, _event):
         model = self.window.model
@@ -1089,14 +1116,16 @@ class RunRow(Clickable):
         bar = QRectF(rect.left() + 40 + name_w + 14, cy - 8, max(60.0, width - name_w - right_w - 70), 16)
         label = ''
         if status == 'evaluating':
-            label = 'evaluating'
+            done, total = run.eval_done()
+            label = f'eval {done}/{total}' if total else 'evaluating'
         elif status != 'pending':
             label = f'{self.shown:.0%}'
         hatch = 1.0 if status in ('early', 'failed', 'interrupted', 'lost') else None
         if status == 'starting':
             paint_bar(p, bar, 1.0, with_alpha(C.accent, 90), t, stripes=True, label='starting')
         else:
-            paint_bar(p, bar, self.shown, color, t, ticks=run.target_iterations if status != 'pending' else 0,
+            paint_bar(p, bar, self.shown, color, t,
+                      ticks=run.target_iterations if status not in ('pending', 'evaluating') else 0,
                       label=label, hatch_to=hatch, stripes=status == 'evaluating', shimmer=status == 'training')
 
         # numbers
@@ -1116,7 +1145,11 @@ class RunRow(Clickable):
             if points:
                 paint_sparkline(p, spark, points, rate_color(points[-1][1]))
             evaluation = run.eval_rate()
-            if evaluation is not None:
+            if evaluation is None and status == 'evaluating' and run.eval_progress:
+                running = run.eval_progress.get('success_rate')
+                paint_pill(p, rect.right() - 12, cy - 10, f"eval ~{fmt_pct(running)}", rate_color(running),
+                           8.5, right=True)
+            elif evaluation is not None:
                 paint_pill(p, rect.right() - 12, cy - 10, f"eval {fmt_pct(evaluation)}", rate_color(evaluation),
                            8.5, right=True)
             elif points:
@@ -1137,9 +1170,11 @@ class RunRow(Clickable):
         if status == 'training':
             return f"training · {iters}"
         if status == 'evaluating':
-            episodes = (run.eval_start or {}).get('episodes')
+            done, total = run.eval_done()
             since = now - run.eval_start['ts'] if run.eval_start else None
-            return f"eval {episodes} episodes · {fmt_duration(since)}"
+            if not total:
+                return 'eval starting'
+            return f"eval {done}/{total} episodes · {fmt_duration(since)}"
         if status == 'ok':
             return f"done · {iters} · {fmt_duration(duration)}"
         if status == 'early':
@@ -1156,6 +1191,11 @@ class RunRow(Clickable):
         if status == 'training':
             eta = run.eta(now)
             parts = [f"{sps:,.0f} sps" if sps else '', f"{fmt_duration(eta)} left" if eta is not None else '']
+            return ' · '.join(part for part in parts if part)
+        if status == 'evaluating' and run.eval_progress:
+            eta = run.eval_eta(now)
+            parts = [f"success {fmt_pct(run.eval_progress.get('success_rate'))}",
+                     f"{fmt_duration(eta)} left" if eta is not None else '']
             return ' · '.join(part for part in parts if part)
         if status in FINISHED and sps:
             return f"{sps:,.0f} sps"
@@ -1572,7 +1612,11 @@ class DetailPane(QWidget):
             if by_state:
                 sections.append(('grid', 'By start state', sorted(by_state.items())))
         elif run.eval_start:
-            sections.append(('text', 'Evaluation', [(f"running {run.eval_start.get('episodes')} episodes…", C.eval)]))
+            done, total = run.eval_done()
+            running = (run.eval_progress or {}).get('success_rate')
+            sections.append(('bars', 'Evaluation (running)', [
+                ('episodes', done / total if total else 0.0, f"{done}/{total}", C.eval),
+                ('success so far', running, fmt_pct(running), rate_color(running))]))
         problems = [(str(e.get('message', '')), C.bad) for e in run.errors]
         if run.end and run.end.get('message') and all(run.end['message'] != text for text, _ in problems):
             problems.append((run.end['message'], C.warn))
@@ -1629,7 +1673,8 @@ class DetailPane(QWidget):
         self.evaluation.set_sections(sections, 'no chain results yet')
         merged = [('round', event) for event in model.round_events]
         for run in model.runs:
-            merged += [(run.name, event) for event in run.events if event.get('event') != 'progress']
+            merged += [(run.name, event) for event in run.events
+                       if event.get('event') not in ('progress', 'eval_progress')]
         merged.sort(key=lambda item: item[1].get('ts', 0))
         self._set_events(merged)
 
