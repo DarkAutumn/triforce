@@ -22,6 +22,14 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
   removed). A damage-avoidance idea for later would need a different form.
 - **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
   (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
+- **Refill hearts on the way (route change; Lee's call).** Link enters Dungeon 1 with ~2.3 of 3 hearts and reaches
+  the D1 Goriya room with ~1.1; heart drops are rare (round 6). A fairy fountain on the overworld before D1 (and
+  before D2) refills everything; the triforce pickup already refills after D1. Needs the route, objectives and a
+  fountain specialist (or a scripted stop).
+- **Fight Goriyas without trading hits.** At 1 heart the goriya model turns passive (33% WAIT) and dies to contact
+  (round 6 trace). Ideas: a demo/curriculum from damage-free Go-Explore paths (the explored paths lose 1.5–2.5
+  hearts; select by health with more patience), shield blocking of boomerangs, a contact-damage penalty that grows
+  as hp falls.
 - **Bow route** (later): 0x43 N → 0x33 (key) → 0x23 (key) → 0x22 (push block, stairs to the bow cellar 0x7F).
   Needs a route/objective for the bow and a specialist for 0x22 and the cellar.
 - ~~Skip the optional boomerang in 0x44~~ **Rejected by Lee:** keep the boomerang.
