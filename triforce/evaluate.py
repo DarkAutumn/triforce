@@ -78,6 +78,7 @@ def _group(records: list[dict], key) -> dict:
         groups.setdefault(key(record), []).append(record)
     return {name: {'episodes': len(items),
                    'success_rate': sum(r['success'] for r in items) / len(items),
+                   'health_change': sum(r['health'] - r['start_health'] for r in items) / len(items),
                    'endings': dict(Counter(r['ending'] for r in items))}
             for name, items in sorted(groups.items())}
 
@@ -142,7 +143,8 @@ def format_report(result: dict) -> str:
              f"health change {result['mean_health_change']:+.2f} hearts  steps {result['mean_steps']:.0f}"]
     for room, stats in sorted(result['by_room'].items(), key=lambda item: (item[1]['success_rate'], item[0])):
         top = max(stats['endings'].items(), key=lambda item: item[1])[0]
-        lines.append(f"  {room:12} {stats['success_rate']:5.0%}  {stats['episodes']:4}  {top}")
+        lines.append(f"  {room:12} {stats['success_rate']:5.0%}  {stats['health_change']:+5.2f} hearts  "
+                     f"{stats['episodes']:4}  {top}")
     return '\n'.join(lines)
 
 
