@@ -13,7 +13,8 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 - **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat /
   boss-aquamentus r23-more, stalfos-keese-gel r25-skg-plain, goriya r21-goriya-chainhp, d2-rope r27-rope-plain,
   wallmaster r10 copy. All overworld families now train on both routes' rooms (round 6 §9).
-- **Chains on both routes** with this set: round 6 §11 (running).
+- **Chains on both routes** (round 6 §11): fairy route full chain 3/40, post-D1 2/40 (milestone1: 0 and 0).
+  Post-D1 the fairy route reaches D2 37/40 with 2.5 hearts (milestone1 27/40 with 1.7). Goriya rooms end most runs.
 - ~~Chain-matched hp~~ tested on goriya (within noise) and stalfos-keese-gel (worse); off everywhere. The option
   (`ram_randomization.chain_hp`) stays for a later retry.
 - ~~Pass-through damage penalty~~ tested twice in round 6 (overworld, d2-rope): no chain gain; dropped (code

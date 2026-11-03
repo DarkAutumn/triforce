@@ -271,3 +271,20 @@ best on the mazes): a dip to ~10% while it relearned (action-kind entropy up to 
 | 0x5b / 0x5c / 0x5d | 0% | 97% / 97% / 98% |
 
 Promoted.
+
+## 11. Chains on both routes
+
+Promoted set: overworld r24-fairy / r26c (ow-moblin) / r23 (ow-leever-peahat), stalfos-keese-gel r25, goriya r21,
+wallmaster r10, boss-aquamentus r23, d2-rope r27. 40 runs per segment:
+
+| segment | milestone1 | milestone1-fairy |
+|---|---|---|
+| full chain: reach D2 entrance (hearts there) | 5 (2.20) | 8 (3.06) |
+| full chain: Dodongo room | 0/40 | **3/40** |
+| post-D1 (`0_37c_2`): reach D2 entrance (hearts there) | 27 (1.69) | **37 (2.46)** |
+| post-D1: Dodongo room | 0/40 | **2/40** |
+| D2 (`2_7ds_2`, full hearts): Dodongo room | 7/40 | (same rooms) |
+
+Every pond visit refilled Link (40 of 40 post-D1, arriving with 3.2 hearts, leaving with 4.0). The fairy route is
+now the better road to D2. What ends runs: the D1 Goriya room (15 deaths of 28 arrivals) and 0x53 (5) in the full
+chain; in D2 the first Goriya room 0x5e (11 deaths post-D1 on the fairy route), then the rope rooms.
