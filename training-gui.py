@@ -2101,10 +2101,10 @@ class Window(QMainWindow):
     # -- selection and updates
 
     def select(self, view: FolderView, key):
-        """A click on a folder's header/chain card ('round') or one of its runs (index)."""
+        """A click on a folder's header/chain card ('round') or one of its runs (index).  Following the active run
+        resumes only when the click lands on what auto-selection would pick anyway."""
         self.selection = (view.dir, key)
-        active = view.model.active_index() if view.model else None
-        self.auto_selection = key == active or (key == 'round' and active is None)
+        self.auto_selection = self.selection == self._auto_target()
         self._apply_selection()
 
     def _selected_view(self) -> FolderView | None:
@@ -2122,16 +2122,17 @@ class Window(QMainWindow):
             view.show_selection(self.selection[1] if selected else None)
         self._refresh_detail()
 
-    def _auto_select(self) -> bool:
-        """Selects the active run of the topmost folder that has one, else the topmost folder; True if changed."""
-        target = None
+    def _auto_target(self) -> tuple[Path | None, object] | None:
+        """The active run of the topmost folder that has one, else the topmost folder."""
         for view in self.views:
             active = view.model.active_index() if view.model else None
             if active is not None:
-                target = (view.dir, active)
-                break
-        if target is None and self.views:
-            target = (self.views[0].dir, 'round')
+                return view.dir, active
+        return (self.views[0].dir, 'round') if self.views else None
+
+    def _auto_select(self) -> bool:
+        """Moves the selection to the auto target; True if it changed."""
+        target = self._auto_target()
         if target == self.selection:
             return False
         self.selection = target
