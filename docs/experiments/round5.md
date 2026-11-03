@@ -152,3 +152,15 @@ At the new hp distribution: r12 82% (0x5e 75%, 0x1e 90%, −0.85 hearts) vs r6 8
 hearts). Promoted on less damage (40 episodes; the success difference is noise). D2 chain from `2_7ds_2` with r12:
 still 2/20 reach the Dodongo room, but no run dies in a d2-goriya room any more (0x5e ×6 before); the deaths moved
 to d2-rope's 0x4e ×10, 0x3e ×6, 0x6e ×2.
+
+### r13: ow-octorok continued from r8 (stop at 99%)
+
+99% (0x4c 95%, was 75%), early stop after 1.75M more steps. Promoted. Longer training on a solved specialist
+fixed its weak room; the 95% early stop had stopped r8 with 0x4c at 75%.
+
+| chain (20 runs) | reaches | where runs end |
+|---|---|---|
+| after D1, from `0_37c_2` | 0x28 20, 0x2d 18, **D2 11** (was 5) | 0x6d ×6, 0x4c ×4, d2-rope 0x6e/0x4e ×4, moblin ×3 |
+| full, from `start` | 0x63 19, 0x52 11, 0x44 10, Aquamentus 3 | 0x53 ×8, 0x44 ×7, 0x35 ×3 |
+
+(The full chain's seeds play out differently once an early specialist changes; this set had no run leave D1.)
