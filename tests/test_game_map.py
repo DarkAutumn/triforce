@@ -11,6 +11,16 @@ def game_map():
     return GameMap.load()
 
 
+@pytest.fixture(scope='module')
+def route_keys_map():
+    """Dungeon 1 with only the milestone route's key rooms playable: the Stalfos and Goriya key rooms north of the
+    Gel map room (0x33, 0x23, toward the bow) untagged, as before they were trained."""
+    game_map = GameMap.load()
+    for room in (0x33, 0x23):
+        game_map[MapLocation(1, room, False)].specialist = None
+    return game_map
+
+
 def loc(level, room, cave=False):
     return MapLocation(level, room, cave)
 
@@ -37,7 +47,8 @@ def test_locked_doors_and_bomb_walls_load(game_map):
 def test_specialist_tags_load(game_map):
     assert game_map[START].specialist == 'ow-start'
     assert game_map[loc(0, 0x77, True)].specialist == 'ow-start'
-    assert set(game_map.rooms_for_specialist('d1-wallmaster')) == {loc(1, 0x44), loc(1, 0x45)}
+    assert set(game_map.rooms_for_specialist('goriya')) == {loc(1, 0x44), loc(1, 0x23), loc(2, 0x5e), loc(2, 0x1e)}
+    assert set(game_map.rooms_for_specialist('wallmaster')) == {loc(1, 0x45)}
     assert game_map[loc(0, 0x0c)].specialist is None
 
 
@@ -93,26 +104,26 @@ def test_next_rooms_without_keys_are_both_key_rooms(game_map):
     assert game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=0) == {loc(1, 0x72), loc(1, 0x74)}
 
 
-def test_collected_key_room_is_not_revisited(game_map):
+def test_collected_key_room_is_not_revisited(route_keys_map):
     collected = {loc(1, 0x72)}          # holding its key
-    assert game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected) == {loc(1, 0x74)}
+    assert route_keys_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected) == {loc(1, 0x74)}
 
 
-def test_paths_skip_untagged_key_rooms(game_map):
-    """Back from 0x74 with its key: Dungeon 1 needs every route key (0x73 N, 0x52 N, 0x43 E, 0x45 N).  Untagged
-    0x33 also holds a key and ties with 0x72 on path length, but the runner can't play it, so 0x72 comes first."""
+def test_paths_skip_untagged_key_rooms(route_keys_map):
+    """Back from 0x74 with its key: Dungeon 1 needs every route key (0x73 N, 0x52 N, 0x43 E, 0x45 N).  0x33 also
+    holds a key and ties with 0x72 on path length; untagged, the runner can't play it, so 0x72 comes first."""
     collected = {loc(1, 0x74)}
-    assert game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected) == {loc(1, 0x72)}
+    assert route_keys_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected) == {loc(1, 0x72)}
 
 
-def test_opened_door_is_free(game_map):
+def test_opened_door_is_free(route_keys_map):
     """Both start-side keys taken, one in hand: Dungeon 1's 4 locked doors need it plus 0x53's and 0x45's keys,
     which is only enough once 0x73 N is already open."""
     collected = {loc(1, 0x72), loc(1, 0x74)}
-    assert loc(1, 0x63) not in game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected)
+    assert loc(1, 0x63) not in route_keys_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected)
     opened = {(D1_START, 'N')}
-    assert loc(1, 0x63) in game_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected,
-                                                    opened_doors=opened)
+    assert loc(1, 0x63) in route_keys_map.find_next_rooms(D1_START, D1_TRIFORCE, keys=1, collected_keys=collected,
+                                                          opened_doors=opened)
 
 
 def test_route_cache_distinguishes_keys(game_map):

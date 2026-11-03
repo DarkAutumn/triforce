@@ -81,9 +81,9 @@ def test_same_seed_same_run(session, models_dir):
 def test_chain_summary_counts_failures_by_room():
     def run(result, room, outcome):
         r = RunResult('milestone1', 0, result=result)
-        r.rooms.append(RoomRecord(0, 1, room, False, 'd1-melee', outcome=outcome))
+        r.rooms.append(RoomRecord(0, 1, room, False, 'stalfos-keese-gel', outcome=outcome))
         return r
     summary = chain_summary([run('success', '0x0e', 'milestone'), run('failure', '0x44', 'death'),
                              run('failure', '0x44', 'death'), run('failure', '0x73', 'stuck')])
     assert summary['runs'] == 4 and summary['successes'] == 1 and summary['success_rate'] == 0.25
-    assert summary['failures'] == {'1:0x44 d1-melee death': 2, '1:0x73 d1-melee stuck': 1}
+    assert summary['failures'] == {'1:0x44 stalfos-keese-gel death': 2, '1:0x73 stalfos-keese-gel stuck': 1}

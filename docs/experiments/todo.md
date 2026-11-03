@@ -76,12 +76,17 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 - **Re-running a subset with the same `--round` overwrites `models/<round>-summary.json`** (round 3: the
   boss-aquamentus r3c run replaced the ow-zora / d1-wallmaster summary). Merge into the existing summary, or
   refuse to reuse a round ID.
+- **Mapper runs log JSONL and get their own GUI view (Lee, Nov 3; later, not urgent).** `entry_states build/path`
+  and `triforce.explore` print text only. Write event logs (`logs/<yymmdd>_<NNN>_<what>/`, like training):
+  per room/state attempts, iterations, cells, env steps, best progress, success/failure. Then teach
+  `training-gui.py` to recognize a mapper log folder and show it sensibly (likely a different view that opens for
+  that kind of folder: route steps as rows, per-attempt progress).
 
 ## Start states
 
 - Round 3 replaced the state set (`round3.md`): pre-entry, route-generated, route-true hearts and inventory. That
   resolved the round 2 items (1-step states, triforce 0 on post-D1 visits, 16-heart states, missing D2 states).
-- **No state for 0x1e or 0x0e** (route chain 2 stops at `2_2es`). d2-goriya trains on `2_5es_2` only.
+- **No state for 0x0e** (the Dodongo room; not needed for milestone 1). `2_1es_2` (0x1e) was added in round 5.
 - **Only chain 2 crosses Aquamentus**, so post-D1 rooms have one state each (`*_2`). More chains past 0x35 would
   give them spawn/health variety from different paths.
 - **`0_4ce` (ow-octorok, the 0x4d → 0x4c route entry) is still the weak state:** 65% in round 3 (deaths).

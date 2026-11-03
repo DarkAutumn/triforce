@@ -91,17 +91,18 @@ def chase_step(env):
 
 
 def test_spaces_and_reset_contract(session):
-    env = make_env(session, 'd1-melee', '1_73s_0')
+    env = make_env(session, 'stalfos-keese-gel', '1_73s_0')
     obs, info = env.reset(seed=1)
     assert env.observation_space.contains(obs)
     assert env.action_space.nvec.tolist() == [7, 8, 4]
-    assert STEP_INFO_KEYS <= set(info) and info['specialist'] == 'd1-melee' and info['room'] == (1, 0x73, False)
+    assert STEP_INFO_KEYS <= set(info) and info['specialist'] == 'stalfos-keese-gel'
+    assert info['room'] == (1, 0x73, False)
 
 
 def test_random_legal_episode_ends_classified(session):
-    """d1-melee from a start state with random legal actions: every episode ends with a classified outcome,
+    """stalfos-keese-gel from a start state with random legal actions: every episode ends with a classified outcome,
     every step returns valid observations and the info contract."""
-    env = make_env(session, 'd1-melee', '1_73s_0', max_steps=150)
+    env = make_env(session, 'stalfos-keese-gel', '1_73s_0', max_steps=150)
     rng = random.Random(3)
     obs, _ = env.reset(seed=3)
     outcomes = []
@@ -150,7 +151,7 @@ def test_wrong_exit_is_soft_failure(session):
 
 
 def test_death_is_hard_failure(session):
-    env = make_env(session, 'd1-wallmaster', '1_44w', ram_randomization=RamRandomization(hp=(0.01, 0.01)))   # rounds up to half a heart
+    env = make_env(session, 'goriya', '1_44w', ram_randomization=RamRandomization(hp=(0.01, 0.01)))   # rounds up to half a heart
     obs, _ = env.reset(seed=2)
     assert session.state.link.health == 0.5
     env.step(Action.parse('MOVE E 16').to_indices())
@@ -170,7 +171,7 @@ def test_unlisted_ending_raises(session):
 
 
 def test_max_steps_truncates_without_terminal_reward(session):
-    env = make_env(session, 'd1-melee', '1_73s_0', max_steps=3)
+    env = make_env(session, 'stalfos-keese-gel', '1_73s_0', max_steps=3)
     env.reset(seed=0)
     for _ in range(3):
         _, _, terminated, truncated, info = env.step(Action.parse('WAIT 8').to_indices())
@@ -182,7 +183,7 @@ def test_max_steps_truncates_without_terminal_reward(session):
 
 
 def test_masked_action_raises(session):
-    env = make_env(session, 'd1-melee', '1_73s_0')
+    env = make_env(session, 'stalfos-keese-gel', '1_73s_0')
     env.reset(seed=0)
     env.step(Action.parse('MOVE N 16').to_indices())        # off the S door tile, where weapons are masked anyway
     assert not session.mask.kind[ActionKind.SWORD]          # empty room: no weapons
@@ -191,7 +192,7 @@ def test_masked_action_raises(session):
 
 
 def test_close_keeps_borrowed_session(session):
-    env = make_env(session, 'd1-melee', '1_73s_0')
+    env = make_env(session, 'stalfos-keese-gel', '1_73s_0')
     env.reset(seed=0)
     env.close()
     session.load('1_73s_0')
@@ -200,7 +201,7 @@ def test_close_keeps_borrowed_session(session):
 
 def test_start_state_outside_rooms_is_rejected(session):
     from triforce.start_states import StartStateError   # pylint: disable=import-outside-toplevel
-    env = make_env(session, 'd1-melee', '1_44w')
+    env = make_env(session, 'stalfos-keese-gel', '1_44w')
     with pytest.raises(StartStateError, match='0x44'):
         env.reset(seed=0)
 
@@ -231,8 +232,8 @@ def test_sword_cave_objective_and_exit(session):
     assert (info['ending'], info['outcome']) == ('exit-correct', 'success')
 
 
-def test_triforce_pickup_is_success_for_d1_melee(session):
-    env = make_env(session, 'd1-melee', '1_36w')
+def test_triforce_pickup_is_success_in_the_triforce_room(session):
+    env = make_env(session, 'stalfos-keese-gel', '1_36w')
     env.reset(seed=0)
     assert session.state.objectives.kind == ObjectiveKind.TREASURE
     _, info = run_until_done(env, greedy_step, max_steps=100)[-1]
@@ -241,8 +242,8 @@ def test_triforce_pickup_is_success_for_d1_melee(session):
 
 @pytest.mark.parametrize('bombs_on', [True, False])
 def test_items_config_masks_bombs_even_when_link_has_them(session, bombs_on):
-    env = make_env(session, 'd1-wallmaster', '1_44w', ram_randomization=RamRandomization(bombs=(4, 4)),
-                   items=load_specialist('d1-wallmaster').items.model_copy(update={'bombs': bombs_on}))
+    env = make_env(session, 'goriya', '1_44w', ram_randomization=RamRandomization(bombs=(4, 4)),
+                   items=load_specialist('goriya').items.model_copy(update={'bombs': bombs_on}))
     env.reset(seed=0)
     for _ in range(10):         # off the door tile (items can't be used there) and the Goriyas out of their clouds
         obs = env.step(Action.parse('MOVE E 16').to_indices())[0]
@@ -254,19 +255,19 @@ def test_items_config_masks_bombs_even_when_link_has_them(session, bombs_on):
 
 
 @pytest.mark.parametrize('keys', [0, 1])
-def test_route_room_never_offers_untagged_0x33(session, keys):
-    """0x43's route exit is the locked E door to 0x44.  Without a key the old shortest path to the triforce went N
-    into untagged 0x33 (a key room) and the runner errored there; now it is never a correct exit."""
-    env = make_env(session, 'd1-melee', '1_43w_0', ram_randomization=RamRandomization(keys=(keys, keys)))
+def test_route_room_only_offers_its_route_exit(session, keys):
+    """0x43's route exit is the locked E door to 0x44.  Without a key the shortest path to the triforce goes N for
+    the Stalfos room's key (0x33, off the route); the objective still only accepts 0x44."""
+    env = make_env(session, 'stalfos-keese-gel', '1_43w_0', ram_randomization=RamRandomization(keys=(keys, keys)))
     env.reset(seed=0)
     assert session.state.link.keys == keys
-    assert session.state.objectives.next_rooms == ({MapLocation(1, 0x44, False)} if keys else set())
+    assert session.state.objectives.next_rooms == {MapLocation(1, 0x44, False)}
 
 
 def test_first_visit_to_0x73_follows_the_route_order(session):
     """Entering Dungeon 1 with no keys, 0x72 (W) and 0x74 (E) are equally short key detours; the route takes 0x72
     first, and a policy that went E first met a 0x73-from-E-needing-W case it never trained on (r4 chain)."""
-    env = make_env(session, 'd1-melee', '1_73s_0')
+    env = make_env(session, 'stalfos-keese-gel', '1_73s_0')
     env.reset(seed=0)
     assert session.state.link.keys == 0
     assert session.state.objectives.next_rooms == {MapLocation(1, 0x72, False)}
@@ -288,9 +289,9 @@ def test_enter_room_success_needs_the_objective(session):
 
 @pytest.mark.parametrize('one_room', [True, False])
 def test_one_room_episode_ends_at_the_first_correct_exit(session, one_room):
-    """1_73e (2 keys) exits N through the locked door into 0x63, another d1-melee room: one_room ends the episode
-    there as exit-correct, otherwise it continues."""
-    env = make_env(session, 'd1-melee', '1_73e', one_room=one_room)
+    """1_73e (2 keys) exits N through the locked door into 0x63, another stalfos-keese-gel room: one_room ends the
+    episode there as exit-correct, otherwise it continues."""
+    env = make_env(session, 'stalfos-keese-gel', '1_73e', one_room=one_room)
     env.reset(seed=0)
     results = []
     while not any(info['room'] == (1, 0x63, False) for _, info in results):

@@ -1,7 +1,7 @@
 """Specialist task configs: ``specialists/<name>.yaml`` (design §3.3).
 
 ```yaml
-name: d1-melee
+name: stalfos-keese-gel
 rooms: ['(1, 0x73)', '(0, 0x77, cave)']   # (level, room[, cave]); must be tagged `specialist: <name>` in game.yaml
 start_states: ['1_73*', '1_72e']          # savestate globs (integration dir); rooms are verified from RAM at load
 success: [exit-correct]                   # exit-correct | boss-dead-and-heart | triforce-collected | enter-room:<l>:<r>

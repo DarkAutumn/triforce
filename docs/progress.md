@@ -44,11 +44,8 @@ screenshots, RAM read/write, room-entry capture), and new savestates `0_77cave` 
 
 ## Known gaps
 
-- **Missing seed states:** `d2-goriya` has only `2_5en` (0x5e); 0x1e has none. `d2-rope` has none for 0x4e,
-  0x3e and 0x2e. Get them by playing with `triforce.play --capture`, or harvest them (§7.2) once the earlier
-  specialists work.
-- **`1_43w` has 0 keys**, so the objective sends Link north to off-route room 0x33. Adding key randomization to
-  `d1-melee` changes which exit is correct at 0x73, so it was left alone (EnvTask note).
+- **Seed states:** every route room has route-generated pre-entry states since round 3 (`docs/experiments/`);
+  the Dodongo room has none (milestone 1 only enters it).
 - **No position jitter** in RAM randomization.
 - **Fine positioning is hard with the duration set:** MOVE 4/8/16/32 frames moves about 6/11/22/44 px, and doorways
   need exact alignment (x = $78 or y = $8D). NES grid snapping helps. Watch the wall-interrupt rate and the

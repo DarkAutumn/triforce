@@ -98,7 +98,7 @@ def test_yaml_on_off_and_max_parse():
 def test_trainable_specialists_have_start_states():
     for name in list_specialists():
         config = load_specialist(name)
-        if config.trainable and name != 'd2-goriya':          # d2-goriya: seed states still missing (route.md)
+        if config.trainable:
             assert config.resolve_start_states(), name
 
 
@@ -142,7 +142,7 @@ def test_selector_samples_failing_states_more():
 
 def test_pool_mixes_harvested_states(tmp_path):
     shutil.copy(os.path.join(GAME_DIR, '1_73s_0.state'), tmp_path / 'h1.state')
-    config = load_specialist('d1-melee').model_copy(update={'harvested_states': str(tmp_path)})
+    config = load_specialist('stalfos-keese-gel').model_copy(update={'harvested_states': str(tmp_path)})
     pool = StartStatePool(config, random.Random(0))
     picks = [pool.next() for _ in range(400)]
     harvested = sum(p.endswith('h1.state') for p in picks)

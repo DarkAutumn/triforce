@@ -2,6 +2,7 @@
 
     python -m triforce.entry_states build [--chains 0,1] [--iterations 3000] [--patience 200] [--out DIR]
                                           [--start-step N --source STATE]
+    python -m triforce.entry_states path --source STATE --rooms 1:0x33,1:0x23,1:0x22 [--chain 2]
     python -m triforce.entry_states convert STATE_GLOB ...
     python -m triforce.entry_states audit [--specialist NAME ...] [--states GLOB ...] [--loads 9]
 
@@ -46,7 +47,7 @@ import yaml
 from .emulator import GAME_DIR, load_state_bytes, state_path
 from .explore import Explorer
 from .frame_skip import buttons_for
-from .game_map import ROUTES_YAML
+from .game_map import ROUTES_YAML, GameMap
 from .room_entry import LEVEL, MODE, ROOM, is_pre_entry, make_room_fresh, pending_room
 from .session import GameSession
 from .specialist import RamRandomization, SpecialistConfig, list_specialists, load_specialist
@@ -121,7 +122,8 @@ def refill_hearts(session: GameSession):
 
 def cross_room(session: GameSession, step: RouteStep, target: RouteStep, source: str, seed: int,
                iterations: int, patience: int, attempts: int = 3) -> tuple:
-    """Explores step's room from ``source`` until Link enters ``target``; returns (pre-entry bytes or None, stats)."""
+    """Explores step's room from ``source`` until Link enters ``target`` (whatever the objective wanted, so off-route
+    rooms work too); returns (pre-entry bytes or None, stats)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     stats = {'env_steps': 0, 'attempts': 0, 'seconds': 0.0}
     for attempt in range(attempts):
@@ -133,8 +135,8 @@ def cross_room(session: GameSession, step: RouteStep, target: RouteStep, source:
         stats['seconds'] += result.seconds
         if not result.success:
             continue
-        info, pre_entry = explorer.replay(result, capture_pre_entry=True)
-        if info.get('outcome') == 'success' and session.state.full_location == target.location and pre_entry:
+        _, pre_entry = explorer.replay(result, capture_pre_entry=True)
+        if session.state.full_location == target.location and pre_entry:
             stats.update(steps=len(result.actions), health=result.health, ending=result.ending)
             return pre_entry, stats
     return None, stats
@@ -209,6 +211,12 @@ def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_
     jobs = [(chain, out, iterations, patience, start_step, source) for chain in chain_ids]
     with mp.get_context('spawn').Pool(len(jobs)) as pool:
         manifest = [entry for part in pool.map(_build_worker, jobs) for entry in part]
+    _merge_manifest(out, manifest)
+    return manifest
+
+
+def _merge_manifest(out: str, manifest: List[dict]):
+    """Adds ``manifest`` to ``<out>/entry_states.json`` (a rebuilt file replaces its old entry)."""
     path = os.path.join(out, MANIFEST)
     old = []
     if os.path.exists(path):
@@ -218,6 +226,39 @@ def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_
     merged = [entry for entry in old if entry['file'] not in new_files] + manifest
     with open(path, 'w', encoding='utf-8') as file:
         json.dump(sorted(merged, key=lambda e: (e['chain'], e['route_step'], e['file'])), file, indent=1)
+
+
+def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iterations: int, patience: int,
+               log: Callable = print, session: Optional[GameSession] = None) -> List[dict]:
+    """Walks ``rooms`` in order from ``source`` (a state in the room before the first of them), writing each room's
+    entry state.  For rooms off the milestone route (e.g. Dungeon 1's north rooms toward the bow): Go-Explore only
+    has to enter the next room, whatever the objective wants.  Manifest entries get ``route_step: -1``."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+    session = session or GameSession()
+    game_map = GameMap.load()
+    random.seed(0)
+    current = session.load(source, fresh_room=True).full_location
+    manifest = []
+    for target in rooms:
+        tag = (game_map.get(target).specialist if game_map.get(target) else None) or 'none'
+        here_tag = (game_map.get(current).specialist if game_map.get(current) else None) or 'none'
+        exit_side = current.get_direction_to(target).name
+        step = RouteStep(-1, current.level, current.value, False, '?', exit_side, here_tag)
+        goal = RouteStep(-1, target.level, target.value, False, target.get_direction_to(current).name, '?', tag)
+        started = time.time()
+        pre_entry, stats = cross_room(session, step, goal, source, chain, iterations, patience)
+        label = f"[path] {current.level}:0x{current.value:02x} -> {goal.filename(chain)}"
+        if pre_entry is None:
+            log(f"{label}: FAILED after {stats['attempts']} attempts ({stats['env_steps']} env steps)")
+            break
+        path = os.path.join(out, goal.filename(chain))
+        write_entry_state(session, pre_entry, path, goal.location)
+        manifest.append({'file': os.path.basename(path), 'chain': chain, 'route_step': -1, 'from': source,
+                         'specialist': tag, 'level': goal.level, 'room': f"0x{goal.room:02x}", 'in_cave': False,
+                         'entry': goal.entry, 'exit': None, 'alternate': False, 'off_route': True, **stats})
+        log(f"{label}: {stats['steps']} steps, {stats['env_steps']} env steps, {time.time() - started:.0f}s")
+        source, current = path, target
+    _merge_manifest(out, manifest)
     return manifest
 
 
@@ -383,6 +424,13 @@ def main(argv=None):
     build_parser.add_argument('--out', default=GAME_DIR)
     build_parser.add_argument('--start-step', type=int, default=0, help="route step index to start from")
     build_parser.add_argument('--source', default='start', help="entry state of --start-step (default: 'start')")
+    path_parser = sub.add_parser('path', help="entry states for rooms off the route, entered in order from --source")
+    path_parser.add_argument('--source', required=True, help="a state in the room before the first of --rooms")
+    path_parser.add_argument('--rooms', required=True, help="comma-separated rooms, e.g. 1:0x33,1:0x23,1:0x22")
+    path_parser.add_argument('--chain', type=int, default=2, help="chain id in the file names (and explore seed)")
+    path_parser.add_argument('--iterations', type=int, default=3000)
+    path_parser.add_argument('--patience', type=int, default=200)
+    path_parser.add_argument('--out', default=GAME_DIR)
     audit_parser = sub.add_parser('audit', help="check start states (default: every specialist's)")
     audit_parser.add_argument('--specialist', action='append', default=None)
     audit_parser.add_argument('--states', action='append', default=None, help="savestate glob(s)")
@@ -391,6 +439,13 @@ def main(argv=None):
     convert_parser = sub.add_parser('convert', help="turn after-entry edge savestates into pre-entry ones")
     convert_parser.add_argument('states', nargs='+', help="savestate globs (files are replaced)")
     args = parser.parse_args(argv)
+
+    if args.command == 'path':
+        rooms = [MapLocation(int(level), int(room, 16), False)
+                 for level, room in (text.split(':') for text in args.rooms.split(','))]
+        manifest = build_path(args.source, rooms, args.chain, args.out, args.iterations, args.patience)
+        print(f"{len(manifest)} entry states in {args.out}")
+        return 0
 
     if args.command == 'build':
         manifest = build([int(c) for c in args.chains.split(',')], args.out, args.iterations, args.patience,

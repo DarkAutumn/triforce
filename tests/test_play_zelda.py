@@ -108,7 +108,7 @@ class FakeGrid:
         self.pixels[:] = (10, 200, 30)
         self.messages = [
             {'cell': 0, 'event': 'start', 'seed': 5},
-            {'cell': 0, 'event': 'room', 'specialist': 'd1-melee', 'level': 1, 'room': 0x73, 'health': 2.5,
+            {'cell': 0, 'event': 'room', 'specialist': 'stalfos-keese-gel', 'level': 1, 'room': 0x73, 'health': 2.5,
              'max_health': 3},
             {'cell': 0, 'event': 'end', 'seed': 5, 'result': 'failure', 'outcome': 'death', 'reason': 'died'},
         ]
@@ -142,7 +142,7 @@ def test_window_shows_frames_status_and_tally(qapp):  # pylint: disable=redefine
 
     assert first.grab().toImage().pixelColor(20, 20) == QColor(10, 200, 30)
     text = first.strip_text()
-    for part in ('#5', 'd1-melee', 'L1 0x73', '2.5/3'):
+    for part in ('#5', 'stalfos-keese-gel', 'L1 0x73', '2.5/3'):
         assert part in text
     assert first.outcome == 'death'
     assert second.image is None
