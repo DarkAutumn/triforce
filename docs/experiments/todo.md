@@ -4,22 +4,23 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 ## Next up
 
-- **Round 3 done** (`round3.md`): new pre-entry state set, plain-PPO baseline, curriculum for ow-zora,
-  d1-wallmaster and boss-aquamentus.
-- **Round 4: d1-melee, cheap route fixes then one-room episodes.**
-  - Make the curriculum a per-specialist config field: on for ow-zora and d1-wallmaster, off elsewhere.
-  - Promote ow-zora and d1-wallmaster (round 2 or round 3, whichever evaluates better).
-  - Fix 0x43 → 0x33 (see Runner / objectives below).
-  - One-room episodes: every episode ends at its first room exit. Today a d1-melee episode runs until Link leaves
-    the 9-room family. Traced "0x73" episodes are 4–9 rooms, with the deaths in 0x74/0x63 (Stalfos), and 90% per
-    room over 9 rooms is ~39%. Compare per room against round 3's d1-melee.
-  - **Last resort only:** split Dungeon 1 into enemy-based specialists (Stalfos 0x53/0x63/0x74, Keese
-    0x52/0x72, Gel 0x42/0x43). Do this only if one-room episodes and the other fixes fail.
+Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
+
+- **Rounds 3 and 4 done** (`round3.md`, `round4.md`). The r4c chain follows the whole Dungeon 1 route and reaches
+  Aquamentus; runs die of health drain in the Stalfos rooms (0x74, 0x53, 0x63) and in 0x44.
+- **Train at the hp the chain arrives with.** Training hp is 50–100% (1.5–3 hearts); the chain enters Stalfos rooms
+  with 0.5–1.5. Lower the floor (`hp: [0.15, max]`, ≥ half a heart) for d1-melee, then the other specialists.
 - **boss-aquamentus: 0% on the route's 3 hearts (round 3), plain PPO and curriculum alike.** Go-Explore finds the
   kill (6 sword hits from above, `round3.md`), but the policy runs from the boss: each hit taken costs 0.25–0.5,
   each hit dealt pays 0.25, and the kill itself pays nothing beyond the last hit. Round 1's 100% came from 16
-  hearts. Candidates: a boss-damage reward that outweighs the damage taken (or a kill reward for bosses), then
-  the curriculum again.
+  hearts. Next: `reward-boss-hit` (0.75 per hit on a boss, no combat decay) with the curriculum.
+- **Route states past `2_2es`** (0x1e, the Dodongo room 0x0e): extend route chain 2 (`entry_states build --chains
+  2 --start-step 41 --source 2_2es_2`).
+- **d2-rope 0x3e** is its weakest room (65% one-room, deaths).
+- **Last resort only:** split Dungeon 1 into enemy-based specialists (Stalfos 0x53/0x63/0x74, Keese 0x52/0x72,
+  Gel 0x42/0x43). One-room episodes made per-room d1-melee 94–95%, so this is not needed now.
+- **One-room episodes for the other multi-room specialists** (d2-rope, ow-octorok, ow-zora, ow-leever-peahat):
+  d1-melee trained 2.5–4× faster with them (round 4).
 
 ## Items
 
@@ -84,8 +85,10 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 ## Runner / objectives
 
-- **d1-melee leaves 0x43 north into untagged 0x33 and the objective calls it correct** (8 of 20 chain runs in
-  r2b ended `error`). The route wants 0x43 → E. Either restrict `next_rooms` to the route or tag 0x33.
+- Round 4 fixed 0x43 → 0x33 (route-only exits, pathfinding through tagged rooms only, route order on revisited
+  rooms; `round4.md`).
+- **The chain records no keys or route step per room.** Adding them to `RoomRecord` would have found the 0x72/0x33
+  key problem without a throwaway script.
 
 ## Rewards
 
