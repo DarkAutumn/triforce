@@ -54,6 +54,12 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
 - Throwaway scripts live in `/tmp`. A script that uses a spawn `multiprocessing` pool (e.g. `evaluate_specialist`
   with `parallel > 1`) must be a file with `if __name__ == '__main__':`, not stdin. A `/tmp` script imports the
   installed (main) `triforce`; set `PYTHONPATH` to the worktree to test worktree code.
+- **Entry states are saved mid-scroll** (pre-entry: the frame before the room entry, game mode `$12` = 4, scroll
+  complete; every transition mode is in `frame_skip.SCROLLING_MODES`). For one-off investigations (screenshots,
+  ASCII tile maps, objective/wavefront checks) never read the screen or the room's tile map from a raw
+  `emu.load_state` or during a transition: load through `GameSession.load` (its `gain_control` runs to the first
+  playable frame) and check `$12 == 5` before capturing. Round 6: a mid-scroll screenshot of 0x5c looked like a
+  different room.
 - Launch long jobs through the tool's async/background mode; `( cmd & )` from a shell call gets killed.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
