@@ -19,8 +19,8 @@ Live progress goes to an event stream (``events.py``): ``--events FILE`` appends
 (``scripts/train_round.py``); otherwise the run gets its own ``logs/<yymmdd>_<NNN>_<specialist>/`` folder with
 ``training.json`` and ``<specialist>.jsonl``, ending with an ``end`` event.
 
-Weights come from ``--load`` (a checkpoint file or run dir) or else the specialist's ``warm_start`` (a
-checkpoint path or another specialist's name, meaning its promoted checkpoint).  Loading a checkpoint of the
+Weights come from ``--load`` or else the specialist's ``warm_start``: a checkpoint file, a run dir, or a specialist
+name (its promoted checkpoint; ``--load <own name>`` continues the promoted model).  Loading a checkpoint of the
 same specialist also restores the optimizer state and the iteration/step counters; a different specialist's
 checkpoint only supplies weights.
 """
@@ -88,7 +88,8 @@ def parse_args(argv=None):
     """Command line."""
     parser = argparse.ArgumentParser(prog='python -m triforce.train', description=__doc__.split('\n\n')[0])
     parser.add_argument('--specialist', required=True, help="specialists/<name>.yaml")
-    parser.add_argument('--load', default=None, help="checkpoint file or run dir to start from")
+    parser.add_argument('--load', default=None,
+                        help="checkpoint file, run dir, or a specialist name (its promoted checkpoint) to start from")
     parser.add_argument('--parallel', type=int, default=1, help="env workers (1 = in-process)")
     parser.add_argument('--iterations', type=int, default=100, help="PPO iterations (rollout + update)")
     parser.add_argument('--steps-per-update', type=int, default=PPOConfig.target_steps)
@@ -143,7 +144,10 @@ def resolve_warm_start(value: str, root) -> Path:
 def initial_model(args, specialist: str, root):
     """(network, optimizer_state, start_iteration, start_steps, source)."""
     config = load_specialist(specialist)
-    source = args.load or (str(resolve_warm_start(config.warm_start, root)) if config.warm_start else None)
+    if args.load:
+        source = str(resolve_warm_start(args.load, root))
+    else:
+        source = str(resolve_warm_start(config.warm_start, root)) if config.warm_start else None
     if source is None:
         network = ZeldaPolicy(ObservationBuilder.observation_space(), ModelConfig(grid_encoder=args.grid_encoder))
         return network, None, 0, 0, None
