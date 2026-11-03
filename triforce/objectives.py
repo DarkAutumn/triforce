@@ -378,7 +378,7 @@ class _GameMapObjective(ObjectiveSelector):
                         targets.append(cave_tile)
                 continue
             if d in state.room.exits:
-                targets.extend(state.room.exits[d])
+                targets.extend(tiles_in_span(state.room.exits[d], exit_span(state.full_location, d), d))
             else:
                 # Door exists (from routing) but isn't in exits — likely locked.
                 # Add the Direction as a target so the wavefront can handle it
@@ -528,6 +528,37 @@ def shared_game_map() -> GameMap:
     if ObjectiveSelector._game_map is None:
         ObjectiveSelector._game_map = GameMap.load()
     return ObjectiveSelector._game_map
+
+
+def exit_span(location: MapLocation, direction: Direction) -> Optional[tuple]:
+    """game.yaml ``span`` of `location`'s exit in `direction` (``RoomExit.span``), or None."""
+    room = shared_game_map().get(location)
+    exit_info = room.exits.get(direction.name) if room is not None else None
+    return exit_info.span if exit_info is not None else None
+
+
+def _along_edge(tile, direction: Direction) -> int:
+    return tile.y if direction in (Direction.E, Direction.W) else tile.x
+
+
+def tiles_in_span(tiles, span: Optional[tuple], direction: Direction) -> list:
+    """The exit tiles inside `span` (all of them without one)."""
+    if span is None:
+        return list(tiles)
+    return [tile for tile in tiles if span[0] <= _along_edge(tile, direction) <= span[1]]
+
+
+def exit_is_correct(prev: ZeldaGame, location: MapLocation) -> bool:
+    """Whether leaving `prev`'s room into `location` is a correct exit: the objective wanted that room and, if
+    game.yaml limits the exit to a ``span`` (an edge whose openings lead into parts of the next room that don't
+    connect, e.g. 0x5b E), Link left through it."""
+    if location not in prev.objectives.next_rooms:
+        return False
+    direction = prev.full_location.get_direction_to(location)
+    if direction not in (Direction.N, Direction.S, Direction.E, Direction.W):
+        return True
+    span = exit_span(prev.full_location, direction)
+    return span is None or span[0] <= _along_edge(prev.link.tile, direction) <= span[1]
 
 
 def start_route(location: MapLocation, entry: Optional[str], rng: Optional[random.Random] = None,

@@ -1,9 +1,12 @@
 """GameMap: game.yaml loading, key-aware Dijkstra, route tie-breaking (ported from v1 tests/test_game_map.py)."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from triforce.game_map import GameMap
-from triforce.zelda_enums import MapLocation
+from triforce.objectives import exit_is_correct
+from triforce.zelda_enums import MapLocation, TileIndex
 
 
 @pytest.fixture(scope='module')
@@ -164,3 +167,12 @@ def test_route_successors_are_per_route(game_map):
     assert game_map.route_next_rooms(loc(0, 0x49)) == set()                       # off milestone1
     assert game_map.route_next_rooms(loc(2, 0x7d), fairy) == {loc(2, 0x6d), loc(2, 0x7e)}   # alternates apply
     assert game_map.routes_through(loc(0, 0x49), 'N') == [(fairy, game_map.route_step_index(fairy, loc(0, 0x49), 'N'))]
+
+
+@pytest.mark.parametrize('row, correct', [(3, True), (4, True), (15, False), (16, False)])
+def test_exit_span_only_counts_the_opening_that_connects(row, correct):
+    """0x5b's east edge has two openings; the lower one leads into a pocket of 0x5c that only opens S, so leaving
+    through it is a wrong exit even though the objective wants 0x5c (game.yaml `span`)."""
+    prev = SimpleNamespace(full_location=loc(0, 0x5b), objectives=SimpleNamespace(next_rooms={loc(0, 0x5c)}),
+                           link=SimpleNamespace(tile=TileIndex(30, row)))
+    assert exit_is_correct(prev, loc(0, 0x5c)) == correct

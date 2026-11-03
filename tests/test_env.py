@@ -11,7 +11,7 @@ from triforce.env import InvalidActionError, ZeldaEnv
 from triforce.objectives import ObjectiveKind
 from triforce.rewards import TERMINAL_FAILURE_PENALTY_VALUE, success_reward_value
 from triforce.specialist import RamRandomization, load_specialist
-from triforce.zelda_enums import ActionKind, Direction, MapLocation, SwordKind
+from triforce.zelda_enums import ActionKind, Direction, MapLocation, SwordKind, TileIndex
 
 STEP_INFO_KEYS = {'frames', 'interrupt', 'action', 'rewards', 'room', 'health', 'max_health', 'steps',
                   'total_frames', 'specialist', 'route'}
@@ -335,6 +335,15 @@ def test_fairy_route_heads_to_the_pond_then_east(session, state, wanted):
     _, info = env.reset(seed=0)
     assert info['route'] == 'milestone1-fairy'
     assert session.state.objectives.next_rooms == {MapLocation(0, wanted, False)}
+
+
+def test_wavefront_has_no_lane_below_the_bottom_tree_line(session):
+    """0x5c's lower-left pocket only opens S.  Link is 2 tiles tall, so the wavefront from the E exit must not reach
+    it along the off-map row under the bottom trees (before round 6 it did, and PBRS pulled Link into the trees)."""
+    state = session.load('0_5cw_0', fresh_room=True)
+    wavefront = state.room.calculate_wavefront_for_link(state.room.exits[Direction.E])
+    assert wavefront.get(state.link.tile) is not None        # the upper corridor reaches the E exit
+    assert wavefront.get(TileIndex(2, 16)) is None            # the pocket doesn't
 
 
 @pytest.mark.parametrize('hurt', [True, False])

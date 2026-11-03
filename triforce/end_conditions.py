@@ -19,6 +19,7 @@ nor in the specialist's/central failure table raises ``UnclassifiedEndingError``
 
 from typing import Dict, Iterable, List, Optional
 
+from .objectives import exit_is_correct
 from .rewards import HARD_FAILURE, OUTCOMES, SOFT_FAILURE, SUCCESS
 from .state_change import StateChange
 from .zelda_enums import MapLocation, ZeldaEnemyKind
@@ -145,7 +146,7 @@ class RoomExit(ZeldaEndCondition):
             return None
 
         location = curr.full_location
-        correct = location in prev.objectives.next_rooms
+        correct = exit_is_correct(prev, location)
         if not correct:
             return EXIT_WRONG
         if location in self.enter_rooms:
@@ -181,7 +182,7 @@ class Timeout(ZeldaEndCondition):
 
         if prev.full_location == curr.full_location:
             self._last_progress += 1
-        elif curr.full_location in prev.objectives.next_rooms and curr.full_location not in self._entered_rooms:
+        elif exit_is_correct(prev, curr.full_location) and curr.full_location not in self._entered_rooms:
             self._entered_rooms.add(curr.full_location)
             self._last_progress = 0
 

@@ -208,16 +208,21 @@ class Room:
 
         For horizontal movement, one tile is checked (at feet level).
         For vertical movement, two tiles are checked (both columns Link overlaps).
+        Link is 2×2 tiles, so his top-left tile is never on the last row or column: no horizontal move along the
+        last row (his feet would be below the map) and no vertical move along the last column.  Without this the
+        off-screen-is-walkable rule made a lane under the overworld's bottom tree line that joined every south
+        opening (round 6: 0x5c's lower pocket looked connected to its east exit).
         """
+        cols, rows = self.tiles.shape
         match direction:
             case Direction.E:
-                return self.is_tile_walkable(tc + 2, tr + 1)
+                return tr + 1 < rows and self.is_tile_walkable(tc + 2, tr + 1)
             case Direction.W:
-                return self.is_tile_walkable(tc - 1, tr + 1)
+                return tr + 1 < rows and self.is_tile_walkable(tc - 1, tr + 1)
             case Direction.S:
-                return self._check_vertical(tc, tr + 2)
+                return tc + 1 < cols and self._check_vertical(tc, tr + 2)
             case Direction.N:
-                return self._check_vertical(tc, tr)
+                return tc + 1 < cols and self._check_vertical(tc, tr)
 
     def _check_vertical(self, tc, tr):
         """For vertical movement, check both columns Link overlaps (Z_07.asm:2264-2275).
