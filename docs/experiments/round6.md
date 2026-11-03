@@ -47,7 +47,21 @@ curriculum: a trajectory's states must stay in the family's rooms).
 0x23 67%, 0x5e 65%, 0x1e 60%; −0.96 hearts per room). Every trajectory finished the curriculum by iteration ~100;
 the balanced training rate then sat at 0.60–0.72 with 25–33% deaths. One model now plays every Goriya room at
 60–68%, against 0–85% for the old split models, but it is still below each old model in its own rooms (0x44 75%
-for `d1-wallmaster`, 0x5e/0x1e 80/85% for `d2-goriya`). r19 continues it.
+for `d1-wallmaster`, 0x5e/0x1e 80/85% for `d2-goriya`).
+
+**r19** (r17 continued, +2M steps, stop at 99%): 72% (0x44 **78%**, 0x23 68%, 0x5e 70%, 0x1e 70%; −1.01 hearts).
+0x44 now beats the old `d1-wallmaster` model (75%); the D2 rooms are still below `d2-goriya`'s 80/85% (20 episodes
+each). Promoted, then 40-run chains with every promoted model:
+
+| chain (40 runs) | reaches | ends |
+|---|---|---|
+| full, from `start` | 0x63 34, 0x52 24, D1 Goriya room 24, Wallmaster room **11**, Aquamentus 11, triforce **8**, D2 entrance **5** | 0/40; D1 Goriya room ×13, 0x53 ×7, 0x74 ×6, Aquamentus ×3 |
+| after D1, from `0_37c_2` | D2 entrance 20 | 0/40; 0x6d ×7, D2 first Goriya room ×7, 0x4c ×6, Moblin rooms ×8 |
+| D2, from `2_7ds_2` | 0x1e 5, Dodongo room 1 | 1/40; 0x4e ×11, 0x2e ×10, 0x3e ×6, 0x5e ×5 |
+
+Round 5's best full chain (20 runs) reached the Wallmaster room in 3 and D2 in 1; with the `goriya` model 11/40
+pass the D1 Goriya room and 5/40 reach D2. In D2 the rope rooms now end most runs; the first Goriya room still
+costs 1.34 hearts.
 
 ## 4. stalfos-keese-gel with the north Stalfos room (r18)
 
