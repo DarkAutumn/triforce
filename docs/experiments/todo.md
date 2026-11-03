@@ -18,8 +18,8 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 - **wallmaster**: still the copied `d1-wallmaster` r10 (0x45 98%); retrain on 0x45 alone if the chain needs it.
 - **Chain-matched hp** (`ram_randomization.chain_hp`, `triforce/chain_hp.json`): try on stalfos-keese-gel /
   goriya / d2-rope against the same model without it; promote by success and damage, then rerun chains.
-- **Pass-through damage penalty, second test**: d2-rope (the biggest D2 drain), r14 continued with vs without
-  `pass_through_damage`; keep it only if the D2 chain improves.
+- ~~Pass-through damage penalty~~ tested twice in round 6 (overworld, d2-rope): no chain gain; dropped (code
+  removed). A damage-avoidance idea for later would need a different form.
 - **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
   (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
 - **Bow route** (later): 0x43 N → 0x33 (key) → 0x23 (key) → 0x22 (push block, stairs to the bow cellar 0x7F).

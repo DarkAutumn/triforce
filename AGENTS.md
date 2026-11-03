@@ -29,8 +29,8 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
   `hp: [0.15, max]`). The beam look-ahead must credit the firing step.
 - **Bombs are off for milestone 1** (`items: {bombs: off}`); bomb skill comes with the Dodongo work.
 - **The training GUI is for a colorblind user:** never red vs green. Good = blue, bad = red, purple in between.
-- Rewards that only cut damage in pass-through rooms (`reward.pass_through_damage`) are kept only if they help the
-  chain; a penalty like that could also discourage required bombing later.
+- A damage penalty for rooms Link only has to cross was tried twice (round 6) and dropped: it didn't help the
+  chains, and a penalty like that could also discourage required bombing later.
 - Deferred by Lee: mapper (explore / entry_states) JSONL logs with their own GUI view (todo.md, Driver section);
   the bow route in Dungeon 1 (rooms 0x33/0x23 train now; the bow room 0x22 has states but no specialist).
 

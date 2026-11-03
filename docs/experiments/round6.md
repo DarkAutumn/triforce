@@ -91,5 +91,17 @@ ow-leever-peahat and ow-moblin, trained from scratch like r9a (same config witho
 The penalty halved the damage in eval against the same config without it. In the post-D1 chain (40 runs from
 `0_37c_2`, only these two specialists swapped) it did not change the outcome: D2 reached 20/40 either way, the
 Moblin room's loss fell 0.65 → 0.27 hearts, the Leever rooms' did not fall, deaths moved around (Moblin rooms 8 → 5,
-Leever rooms 2 → 4). Not adopted yet: configs back to no penalty, the option stays (off by default) for one more
-test where the drain is larger (d2-rope).
+Leever rooms 2 → 4).
+
+Second test on d2-rope, which drains the most in Dungeon 2: two arms from r14, 1M steps each (6 workers, stop at
+99%), the only difference being `pass_through_damage: 4`. Both evaluated under the plain config, then the Dungeon 2
+chain (40 runs from `2_7ds_2`, only d2-rope swapped):
+
+| arm | eval | eval hearts per room | D2 chain: reach 0x1e | reach the Dodongo room |
+|---|---|---|---|---|
+| r20-rope-plain | 94% | −0.46 | 10/40 | 4/40 |
+| r20-rope-pt (k = 4) | 91% | −0.48 | 7/40 | 6/40 |
+
+No damage reduction in eval, no clear chain difference. **Dropped** (configs and code removed). The plain arm is a
+good d2-rope model anyway: 94% (0x4e 85%, 0x3e 90%, 0x2e 90%); promoted. With it the D2 chain reaches the Dodongo
+room in 4/40 (r14: 1/40).
