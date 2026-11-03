@@ -272,6 +272,20 @@ def test_first_visit_to_0x73_follows_the_route_order(session):
     assert session.state.objectives.next_rooms == {MapLocation(1, 0x72, False)}
 
 
+def test_enter_room_success_needs_the_objective(session):
+    """ow-octorok lists enter-room:1:0x73 (the D1 stairs in 0x37) as success.  After Dungeon 1 (0_37c_2: Link
+    just came out of those stairs with the triforce) the objective wants E, so walking back down is exit-wrong."""
+    env = make_env(session, 'ow-octorok', '0_37c_2')
+    env.reset(seed=0)
+    assert session.state.objectives.next_rooms == {MapLocation(0, 0x38, False)}
+    for action in ['MOVE S 16', 'MOVE S 16', 'MOVE N 16', 'MOVE N 16']:
+        *_, terminated, truncated, info = env.step(Action.parse(action).to_indices())
+        if terminated or truncated:
+            break
+    assert info['room'] == (1, 0x73, False)
+    assert (info['ending'], info['outcome']) == ('exit-wrong', 'soft-failure')
+
+
 @pytest.mark.parametrize('one_room', [True, False])
 def test_one_room_episode_ends_at_the_first_correct_exit(session, one_room):
     """1_73e (2 keys) exits N through the locked door into 0x63, another d1-melee room: one_room ends the episode

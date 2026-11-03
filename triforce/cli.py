@@ -22,10 +22,10 @@ def _eval_worker_run(args):
 
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
-               deterministic: bool = False, stop_at=None, first_seed: int = 0):
+               deterministic: bool = False, stop_at=None, first_seed: int = 0, start_from=None):
     """Runs the route ``runs`` times with seeds first_seed.. and returns (results, summary)."""
     from .runner import Route, Runner, chain_summary, parse_location  # pylint: disable=import-outside-toplevel
-    route = Route.load(route_name, parse_location(stop_at) if stop_at else None)
+    route = Route.load(route_name, parse_location(stop_at) if stop_at else None, start_from)
     seeds = list(range(first_seed, first_seed + runs))
     if parallel <= 1:
         runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic)
@@ -44,7 +44,7 @@ def _cmd_eval_chain(args):
     from .runner import write_jsonl  # pylint: disable=import-outside-toplevel
     overrides = dict(item.split('=', 1) for item in args.checkpoint)
     results, summary = eval_chain(args.route, args.runs, args.parallel, args.models_dir, overrides,
-                                  args.deterministic, args.stop_at, args.first_seed)
+                                  args.deterministic, args.stop_at, args.first_seed, args.start_from)
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     write_jsonl(args.output, results)
     print(json.dumps(summary, indent=2))
@@ -101,6 +101,8 @@ def main(argv=None):
     chain.add_argument('--first-seed', type=int, default=0)
     chain.add_argument('--deterministic', action='store_true')
     chain.add_argument('--stop-at', help="end the route on entering this room, e.g. 1:0x73")
+    chain.add_argument('--from', dest='start_from', help="start from this savestate instead of the game start, "
+                                                         "e.g. a route entry state like 0_37c_2")
     chain.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST=PATH')
     chain.add_argument('--output', default=os.path.join('runs', 'eval-chain.jsonl'))
 

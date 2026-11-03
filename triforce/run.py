@@ -56,13 +56,14 @@ def main(argv=None):
     parser.add_argument('--fps', type=float, default=0.0, help="with --render: decisions per second (0 = fast)")
     parser.add_argument('--deterministic', action='store_true', help="argmax actions instead of sampling")
     parser.add_argument('--stop-at', help="end the route on entering this room instead, e.g. 1:0x73")
+    parser.add_argument('--from', dest='start_from', help="start from this savestate (e.g. 0_37c_2), not the game start")
     parser.add_argument('--models-dir', default=None)
     parser.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST=PATH',
                         help="use this checkpoint instead of the promoted one")
     parser.add_argument('--output', default=os.path.join('runs', 'runner.jsonl'))
     args = parser.parse_args(argv)
 
-    route = Route.load(args.route, parse_location(args.stop_at) if args.stop_at else None)
+    route = Route.load(args.route, parse_location(args.stop_at) if args.stop_at else None, args.start_from)
     overrides = dict(item.split('=', 1) for item in args.checkpoint)
     renderer = PygameRenderer(args.fps) if args.render else None
     runner = Runner(models_dir=args.models_dir, checkpoints=overrides, deterministic=args.deterministic,

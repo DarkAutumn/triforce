@@ -133,7 +133,7 @@ class RoomExit(ZeldaEndCondition):
     """Room transitions.  Inside the family a correct exit continues the episode (unless ``one_room``: then every
     correct exit ends it); leaving the family through a correct exit is ``exit-correct``; any exit the objective
     didn't want is ``exit-wrong``.  Entering a room named by an ``enter-room`` success kind ends the episode with
-    that name."""
+    that name, but only when the objective wanted it (0x37 after Dungeon 1 wants E, not the D1 stairs again)."""
     def __init__(self, rooms: Iterable[MapLocation], enter_rooms: Iterable[MapLocation] = (), one_room: bool = False):
         self.rooms = frozenset(rooms)
         self.enter_rooms = frozenset(enter_rooms)
@@ -145,12 +145,11 @@ class RoomExit(ZeldaEndCondition):
             return None
 
         location = curr.full_location
-        if location in self.enter_rooms:
-            return enter_room_name(location)
-
         correct = location in prev.objectives.next_rooms
         if not correct:
             return EXIT_WRONG
+        if location in self.enter_rooms:
+            return enter_room_name(location)
         if location in self.rooms and not self.one_room:
             return None
         return EXIT_CORRECT

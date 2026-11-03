@@ -41,8 +41,9 @@ class Route:
     terminal: MapLocation
 
     @staticmethod
-    def load(name: str, stop_at: Optional[MapLocation] = None) -> 'Route':
-        """Loads a route from routes.yaml.  ``stop_at`` replaces the terminal room (for partial chain evals)."""
+    def load(name: str, stop_at: Optional[MapLocation] = None, start_from: Optional[str] = None) -> 'Route':
+        """Loads a route from routes.yaml.  ``stop_at`` replaces the terminal room and ``start_from`` (a savestate,
+        e.g. a route entry state like ``0_37c_2``) the game start, for partial chain evals."""
         with open(ROUTES_PATH, 'r', encoding='utf-8') as f:
             routes = yaml.safe_load(f)
         steps = routes.get(name)
@@ -55,7 +56,7 @@ class Route:
             raise RunnerError(f"Route '{name}' has no terminal room")
         last = terminals[-1] if terminals else steps[-1]
         terminal = stop_at or MapLocation(int(last['level']), int(str(last['room']), 16), bool(last.get('in_cave')))
-        return Route(name, 'start', terminal)
+        return Route(name, start_from or 'start', terminal)
 
 
 @dataclass
@@ -181,7 +182,7 @@ class Runner:
     def _run(self, route: Route, result: RunResult):
         # pylint: disable=too-many-branches,too-many-statements
         session = self.session
-        state = session.load(route.start_state)
+        state = session.load(route.start_state, fresh_room=True)    # a pre-entry --from state spawns its full room
         objectives = GameCompletion()
         state.objectives = objectives.get_current_objectives(None, state)
 
