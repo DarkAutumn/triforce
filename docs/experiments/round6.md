@@ -144,3 +144,31 @@ Chain hp didn't help here either (fewer runs through the 5-Stalfos key room: 8 d
 promoted: one more million plain steps took the weak rooms to 93% and let 29 of 40 chains reach the D1 Goriya room
 (r19 chain: 24). **Chain-matched hp: no gain in two tests** (goriya within noise, stalfos-keese-gel worse); the
 option is off everywhere.
+
+## 7. Train longer (r23) and the first full-chain success
+
+Chains with stalfos-keese-gel r22-plain, goriya r21-chainhp and d2-rope r20-plain promoted (40 runs each):
+the full chain reaches the D1 Goriya room 29/40, the D2 entrance 4/40, 0x1e once; post-D1 reaches the D2 entrance
+20/40; **the D2 segment reaches the Dodongo room 7/40** (r19 chain: 1/40; r20-rope-plain arm: 4/40).
+
+r23 continued four promoted models with `--stop-success 0.99` (up to 2M steps). Evaluated against the promoted
+models under the current yamls:
+
+| specialist | promoted before | r23-more | |
+|---|---|---|---|
+| ow-zora | r3c: 96%, −0.34 hearts | **98%, −0.13** (0x38 92% → 96%) | promoted |
+| boss-aquamentus | r7: 93%, +0.12 | **100%, +0.48** (384k steps, early stop) | promoted |
+| ow-leever-peahat | r3: 96%, −0.19 | **100%, −0.16** (0x2b 85% → 100%) | promoted |
+| wallmaster | r10 | early stop after 5 iterations: the same model | not promoted |
+
+Chains after the promotions (40 runs each; r22 chains in brackets):
+
+| segment | reach | success (Dodongo room) |
+|---|---|---|
+| full | D1 Goriya room 32 [29], Aquamentus 14 [12], triforce 9 [8], D2 entrance 8 [4], 0x1e 1 [1] | **1/40** [0] |
+| post-D1 (`0_37c_2`) | D2 entrance **27** [20], 0x1e 1 | 0 |
+| D2 (`2_7ds_2`) | 0x1e 11 [11] | 7/40 [7] |
+
+**First full-chain success:** one run went from the game start into the Dodongo room. Deaths, full chain: D1
+Goriya room 16 (of 32 that reached it), 0x53 7, Aquamentus 4, D2 rooms 7. Post-D1: 0x4c 8 (ow-octorok, arriving
+with 1.8 hearts), 0x6d 7, 0x6e 6, 0x5e 6, 0x4e 5. D2: 0x3e 11, 0x2e 5, 0x5e 4, 0x1e 4.
