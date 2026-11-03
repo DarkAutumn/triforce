@@ -25,6 +25,9 @@ from .zelda_enums import MapLocation
 
 ROUTES_PATH = __file__.rsplit('/', 1)[0] + '/routes.yaml'
 DEFAULT_MAX_STEPS = 50_000
+# Per-room budget: a specialist's max_steps is a training episode cap (boss-aquamentus: 400, to keep curriculum
+# episodes short); a chain room gets at least this many steps before it counts as stuck.
+MIN_ROOM_STEPS = 2000
 
 RoomKey = Tuple[int, int, bool]
 
@@ -225,9 +228,10 @@ class Runner:
             elif change is not None:
                 obs = current.builder.build(change, session.mask)
 
-            if record.steps >= current.config.max_steps:
+            room_steps = max(current.config.max_steps, MIN_ROOM_STEPS)
+            if record.steps >= room_steps:
                 record.outcome = 'stuck'
-                result.result, result.reason = 'failure', f"{current.name} exceeded {current.config.max_steps} steps"
+                result.result, result.reason = 'failure', f"{current.name} exceeded {room_steps} steps"
                 return
             if result.steps >= self.max_steps:
                 record.outcome = 'stuck'
