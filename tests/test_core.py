@@ -189,6 +189,31 @@ def test_beam_look_ahead_credits_firing_step(session):
     pytest.skip("never lined up a beam shot from this savestate")
 
 
+def test_without_look_ahead_a_beam_emulates_only_real_frames(session):
+    """look_ahead=False (watching games): firing beams runs no hidden simulated frames through the emulator."""
+    session.load('1_44w', randomize_rng=False, ram_overrides=full_health(session, 16))
+    leave_west_door(session)
+    assert session.mask.kind[ActionKind.BEAMS]
+    snap = session.snapshot()
+    emulated = []
+    session.emu.on_frame = lambda: emulated.append(1)
+    try:
+        counts = {}
+        for look_ahead in (True, False):
+            session.restore(snap)
+            session.look_ahead = look_ahead
+            emulated.clear()
+            start = session.emu.frame
+            session.act(Action(ActionKind.BEAMS, Direction.E))
+            counts[look_ahead] = (len(emulated), session.emu.frame - start)
+    finally:
+        session.emu.on_frame = None
+        session.look_ahead = True
+    hidden_on = counts[True][0] - counts[True][1]
+    assert hidden_on > 0, f"the beam shot never triggered a look-ahead: {counts}"
+    assert counts[False][0] == counts[False][1], f"look_ahead=False still emulated hidden frames: {counts}"
+
+
 def test_snapshot_restore_is_deterministic(session):
     session.load('1_44w', randomize_rng=False)
     snap = session.snapshot()

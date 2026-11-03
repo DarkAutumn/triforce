@@ -107,7 +107,9 @@ class StateChange:
     """Tracks the changes between two Zelda game states."""
     # pylint: disable=too-many-instance-attributes
     def __init__(self, emu, prev : ZeldaGame, curr : ZeldaGame, action : Action, option,
-                 ledger: FutureCreditLedger, ignore_health=0.0):
+                 ledger: FutureCreditLedger, ignore_health=0.0, look_ahead: bool = True):
+        """look_ahead=False skips simulating fired weapons forward: enemies_hit etc. then hold only what actually
+        happened this step (fine when nothing scores the step, e.g. watching games play)."""
         self.action : Action = action
         self.option = option                      # frame_skip.OptionResult
         self.frames : int = option.frames
@@ -140,7 +142,8 @@ class StateChange:
             ledger.discount(curr.frames, self.enemies_hit, self.enemies_stunned, self.items_gained)
 
             # 3. Run look-aheads for newly activated weapons, credit and record predictions
-            self._detect_future_damage(emu, prev, curr, ledger)
+            if look_ahead:
+                self._detect_future_damage(emu, prev, curr, ledger)
 
     def __str__(self):
         # return a multiline string with the most important information

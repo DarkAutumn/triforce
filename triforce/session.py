@@ -17,8 +17,11 @@ from .zelda_game import ZeldaGame
 
 class GameSession:
     """Loads states and executes actions, producing ``ZeldaGame`` / ``StateChange`` objects."""
-    def __init__(self, emulator: Optional[Emulator] = None):
+    def __init__(self, emulator: Optional[Emulator] = None, look_ahead: bool = True):
+        """look_ahead: simulate fired weapons forward to credit their hits to the firing step (``StateChange``).
+        Only rewards use it; watching games (``play_grid``) turns it off so no simulated frames are emulated."""
         self.emu = emulator or Emulator()
+        self.look_ahead = look_ahead
         self.executor = OptionExecutor(self.emu)
         self.ledger = FutureCreditLedger()
         self.state: Optional[ZeldaGame] = None
@@ -104,7 +107,7 @@ class GameSession:
         self.steps += 1
 
         curr = self._build_state()
-        change = StateChange(self.emu, prev, curr, action, result, self.ledger)
+        change = StateChange(self.emu, prev, curr, action, result, self.ledger, look_ahead=self.look_ahead)
         change.action_mask = self.mask
         self.state = curr
         return change

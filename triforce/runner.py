@@ -104,19 +104,20 @@ def write_jsonl(path: str, results: List[RunResult]):
 
 class _Specialist:
     """A loaded specialist: config, network and its own observation builder."""
-    def __init__(self, name: str, checkpoint_path):
+    def __init__(self, name: str, checkpoint_path, device: str = 'cpu'):
         self.name = name
         self.config = load_specialist(name)
         with torch.random.fork_rng():   # building the network draws init weights; keep seeded runs reproducible
             self.network, self.checkpoint = load_model(checkpoint_path)
         self.network.eval()
+        self.network.to(device)
         self.builder = ObservationBuilder(objective=self.config.obs.objective)
 
     def act(self, obs, deterministic: bool) -> Action:
         """Chooses an action for one observation."""
         with torch.no_grad():
             indices = self.network.get_action(obs, deterministic=deterministic)
-        return Action.from_indices(*np.asarray(indices).reshape(-1)[:3])
+        return Action.from_indices(*np.asarray(indices.cpu()).reshape(-1)[:3])
 
 
 class Runner:
@@ -124,10 +125,12 @@ class Runner:
     # pylint: disable=too-many-instance-attributes
     def __init__(self, session: Optional[GameSession] = None, models_dir=None,
                  checkpoints: Optional[Dict[str, str]] = None, deterministic: bool = False,
-                 max_steps: int = DEFAULT_MAX_STEPS, renderer=None, game_map: Optional[GameMap] = None):
+                 max_steps: int = DEFAULT_MAX_STEPS, renderer=None, game_map: Optional[GameMap] = None,
+                 device: str = 'cpu'):
         """
         checkpoints: specialist name → checkpoint path, overriding the registry's promoted model.
         renderer: optional object with ``show(session, specialist, action, change)`` (watching only).
+        device: torch device for the specialists' networks ('cpu' or 'cuda').
         """
         self._owns_session = session is None
         self.session = session or GameSession()
@@ -136,6 +139,7 @@ class Runner:
         self.deterministic = deterministic
         self.max_steps = max_steps
         self.renderer = renderer
+        self.device = device
         self.game_map = game_map or GameMap.load()
         self._specialists: Dict[str, _Specialist] = {}
 
@@ -156,7 +160,7 @@ class Runner:
     def _load(self, name: str) -> _Specialist:
         if name not in self._specialists:
             path = self.overrides.get(name) or promoted_checkpoint(name, self.models_dir)
-            self._specialists[name] = _Specialist(name, path)
+            self._specialists[name] = _Specialist(name, path, self.device)
         return self._specialists[name]
 
     def run(self, route: Route, seed: Optional[int] = None) -> RunResult:

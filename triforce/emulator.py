@@ -9,7 +9,7 @@ process (a stable-retro restriction).
 import gzip
 import json
 import os
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 import numpy as np
 import stable_retro as retro
@@ -74,6 +74,7 @@ class Emulator:
         self._info_frame = -1
         self._info = None
         self._no_buttons = np.zeros(NUM_BUTTONS, dtype=np.uint8)
+        self.on_frame: Optional[Callable[[], None]] = None     # called after every emulated frame (watching only)
 
     def close(self):
         """Releases the emulator."""
@@ -88,6 +89,8 @@ class Emulator:
         for _ in range(frames):
             self.em.step()
             self.frame += 1
+            if self.on_frame is not None:
+                self.on_frame()
 
     # --- save states ---
     def save_state(self) -> bytes:

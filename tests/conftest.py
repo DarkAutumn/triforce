@@ -3,7 +3,11 @@
 import pytest
 
 from triforce.events import LOGS_DIR_ENV
+from triforce.model import ModelConfig, ZeldaPolicy
+from triforce.observation import ObservationBuilder
+from triforce.registry import promote, save_checkpoint
 from triforce.session import GameSession
+from triforce.specialist import list_specialists
 
 
 @pytest.fixture(autouse=True)
@@ -20,6 +24,18 @@ def session():
     s = GameSession()
     yield s
     s.close()
+
+
+@pytest.fixture(scope='module')
+def models_dir(tmp_path_factory):
+    """Every specialist promoted to a small untrained network."""
+    root = tmp_path_factory.mktemp('models')
+    config = ModelConfig(hidden_dim=32, entity_d_model=32, entity_ff_dim=32, grid_out_dim=32)
+    for name in list_specialists():
+        network = ZeldaPolicy(ObservationBuilder.observation_space(), config)
+        save_checkpoint(name, 'untrained', network, root=root)
+        promote(name, 'untrained', root=root)
+    return root
 
 
 def full_health(game_session: GameSession, containers: int = 3):
