@@ -5,7 +5,7 @@ success: [exit-correct, triforce-collected]
 reward_profile: default
 reward: {pbrs: on}
 obs: {objective: on}
-ram_randomization: {hp: [0.5, max], full_hp: 0.5}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives in Stalfos rooms with 0.5-1.5 hearts (round 4)
 items: {bombs: off}
 one_room: on                          # round 4: an episode is one room (was: until Link leaves the 9 rooms)
 max_steps: 3000

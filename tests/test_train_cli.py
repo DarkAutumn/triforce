@@ -68,7 +68,7 @@ def test_early_stop_balances_start_states():
 def test_train_stops_early_and_writes_summary_and_events(session, tmp_path, logs_dir):
     run_dir = train.main(['--specialist', 'boss-aquamentus', '--parallel', '1', '--steps-per-update', '512',
                           '--iterations', '50', '--models-dir', str(tmp_path), '--run-id', 'early', '--seed', '1',
-                          '--stop-success', '0.0', '--stop-patience', '1'], session=session)
+                          '--stop-success', '0.0', '--stop-patience', '1', '--no-curriculum'], session=session)
     with open(run_dir / 'train_summary.json', encoding='utf-8') as file:
         summary = json.load(file)
     checkpoint = registry.load_checkpoint(run_dir)

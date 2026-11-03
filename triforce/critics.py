@@ -32,6 +32,13 @@ ATTACK_MISS_PENALTY = Penalty("penalty-attack-miss", -REWARD_MINIMUM)
 PENALTY_CAVE_ATTACK = Penalty("penalty-attack-cave", -REWARD_MAXIMUM)
 USED_BOMB_PENALTY = Penalty("penalty-bomb-used", -REWARD_SMALL)
 BOMB_HIT_REWARD = Reward("reward-bomb-hit", REWARD_MEDIUM)
+BOSS_HIT_REWARD = Reward("reward-boss-hit", REWARD_LARGE)
+BOSS_KINDS = frozenset({
+    ZeldaEnemyKind.Aquamentus, ZeldaEnemyKind.Dodongo, ZeldaEnemyKind.Dodongo2, ZeldaEnemyKind.Manhandla,
+    ZeldaEnemyKind.BlueGohma, ZeldaEnemyKind.RedGohma, ZeldaEnemyKind.Digdogger, ZeldaEnemyKind.Digdogger2,
+    ZeldaEnemyKind.Digdogger3, ZeldaEnemyKind.Gleeok, ZeldaEnemyKind.Gleeok2, ZeldaEnemyKind.Gleeok3,
+    ZeldaEnemyKind.Gleeok4, ZeldaEnemyKind.GleeokHead, ZeldaEnemyKind.Patra, ZeldaEnemyKind.Ganon})
+
 PENALTY_WRONG_LOCATION = Penalty("penalty-wrong-location", -REWARD_SMALL)
 FIGHTING_WALLMASTER_PENALTY = Penalty("penalty-fighting-wallmaster", -REWARD_TINY)
 MOVED_OFF_OF_WALLMASTER_REWARD = Reward("reward-moved-off-wallmaster", REWARD_TINY - REWARD_MINIMUM)
@@ -46,6 +53,11 @@ REWARD_PUSHED_BLOCK = Reward("reward-pushed-block", REWARD_LARGE)
 
 # Moves that don't use a weapon (no miss penalty; projectile blocks count).
 _NON_WEAPON_KINDS = (ActionKind.MOVE, ActionKind.WAIT)
+
+
+def _is_boss(prev, curr, index) -> bool:
+    enemy = prev.get_enemy_by_index(index) or curr.get_enemy_by_index(index)
+    return enemy is not None and enemy.id in BOSS_KINDS
 
 
 def _init_equipment_rewards():
@@ -279,7 +291,12 @@ class GameplayCritic:
         """Critiques attacks made by the player."""
         prev, curr = state_change.previous, state_change.state
         kind = state_change.action.kind
-        if state_change.hits and prev.link.are_beams_available \
+        boss_hits = sum(count for index, count in state_change.enemies_hit.items() if _is_boss(prev, curr, index))
+        if boss_hits:
+            # Bosses take several hits and every approach costs damage: each hit pays REWARD_LARGE, no combat decay.
+            rewards.add(BOSS_HIT_REWARD, boss_hits)
+
+        elif state_change.hits and prev.link.are_beams_available \
                              and curr.link.get_animation_state(ZeldaAnimationKind.BEAMS) != AnimationState.INACTIVE:
             decay = self._get_combat_decay(curr.full_location)
             rewards.add(Reward("reward-beam-hit", REWARD_MEDIUM * decay))
