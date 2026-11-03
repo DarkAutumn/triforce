@@ -1,0 +1,79 @@
+# Agent instructions (triforce2)
+
+Read this first, then `README.md` (setup, commands), `docs/architecture.md` (modules), and the newest
+`docs/experiments/round*.md` plus `docs/experiments/todo.md` "Next up" (where the work stands and what to try next).
+
+## Goal
+
+Specialist PPO models (one per room family) that carry the milestone-1 chain (`triforce/routes.yaml`) from the game
+start to the Dungeon 2 boss room (Dodongo, 2:0x0e; the milestone ends on entering it). Lee owns the direction; the
+standing invitation is to come up with ideas, test them, keep what helps, and log everything.
+
+## Lee's standing rules
+
+- **Commit after each finished item.** If an experiment makes no forward progress, ask whether to commit the code or
+  only update the experiment ledger.
+- **Log every experiment** in `docs/experiments/roundN.md` (setup, numbers, what was promoted, what wasn't and why)
+  and every idea or problem found along the way in `docs/experiments/todo.md`.
+- **Families are by enemy, not by dungeon** (`docs/specialists.md`, `docs/decisions.md` 2026-11-03): a Red Goriya
+  room needs the same skills anywhere. Current families: ow-start, ow-octorok, ow-zora, ow-leever-peahat, ow-moblin,
+  stalfos-keese-gel, goriya, wallmaster, boss-aquamentus, d2-rope, boss-dodongo (tag only).
+- **Start states** (`triforce/custom_integrations/Zelda-NES/`) must be clean pre-entry states: delete bad ones
+  rather than keep them (originals are backed up in the old triforce repo). No 16-heart states: max hearts follow
+  the route (3 through Dungeon 1, 4 after Aquamentus, +1 per later heart container). Boss rooms keep only the fight
+  entry. Build states with `python -m triforce.entry_states build|path` and check them with `... audit`.
+- **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
+  `hp: [0.15, max]`). The beam look-ahead must credit the firing step.
+- **Bombs are off for milestone 1** (`items: {bombs: off}`); bomb skill comes with the Dodongo work.
+- **The training GUI is for a colorblind user:** never red vs green. Good = blue, bad = red, purple in between.
+- Rewards that only cut damage in pass-through rooms (`reward.pass_through_damage`) are kept only if they help the
+  chain; a penalty like that could also discourage required bombing later.
+- Deferred by Lee: mapper (explore / entry_states) JSONL logs with their own GUI view (todo.md, Driver section);
+  the bow route in Dungeon 1 (rooms 0x33/0x23 train now; the bow room 0x22 has states but no specialist).
+
+## Environment
+
+- Repo `/home/leculver/git/triforce2`, venv `.venv/bin/python` (Python 3.12); RTX 4090, 20 cores.
+- Tests: `.venv/bin/python -m pytest -q` (about 280 tests, 2–10 minutes depending on load). Keep them green.
+- Training GUI: `uv run training-gui.py` (PEP 723 script; PySide6 isn't in the venv).
+- `logs/`, `models/`, `trajectories/` are gitignored. `models/<specialist>/<run-id>/` holds `ckpt.pt`,
+  `metrics.jsonl`, `eval.json`, `train.log`; `models/<specialist>/promoted` names the promoted run.
+  `triforce list` shows them.
+
+## Working rules learned the hard way
+
+- **Never change `triforce/` code or a running specialist's yaml in the main checkout while a training round is
+  running.** Training subprocesses and the background evaluation import the code fresh; a mid-round change broke two
+  evaluations (round 6). Code changes go in the worktree `../triforce2-dev` (branch `round4-dev`): fast-forward it
+  from `main` first, commit there, test there (`cd ../triforce2-dev && /home/leculver/git/triforce2/.venv/bin/python
+  -m pytest -q`), then `git merge round4-dev` into main once no round is running. The worktree needs the ROM
+  symlinked (`triforce/custom_integrations/Zelda-NES/rom.nes`).
+- Throwaway scripts live in `/tmp`. A script that uses a spawn `multiprocessing` pool (e.g. `evaluate_specialist`
+  with `parallel > 1`) must be a file with `if __name__ == '__main__':`, not stdin. A `/tmp` script imports the
+  installed (main) `triforce`; set `PYTHONPATH` to the worktree to test worktree code.
+- Launch long jobs through the tool's async/background mode; `( cmd & )` from a shell call gets killed.
+- **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
+  comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
+  that wins 3% more but takes twice the damage loses in a chain.
+- **Chain segments** (20–40 runs each): full `triforce eval-chain --runs 20 --parallel 10`; after Dungeon 1
+  `--from 0_37c_2`; Dungeon 2 `--from 2_7ds_2`. Per-room hp loss and deaths come from the chain jsonl
+  (`health_in`/`health_out`/`outcome` per room).
+- **Trajectories (curriculum) must stay inside the family's rooms.** Re-explore (`python -m triforce.explore
+  --specialist NAME --states ...`) whenever a family's rooms change; a trajectory that runs into another family's
+  room crashes training.
+- `max_steps` sets how many episodes finish per iteration. A curriculum specialist whose failures are slow
+  (fleeing, waiting) needs `max_steps` near its explored path length (Aquamentus: 2000 → 400 took it from 0% to 93%).
+- Continuing a trained model with `--stop-success 0.99` (`--train-args "--load <run dir> --stop-success 0.99"`)
+  often fixes the weak room the 95% early stop left behind.
+- Training at a narrow low-hp range alone can collapse a model (round 5, r11); keep the full-health share.
+
+## Running a round
+
+```bash
+.venv/bin/python scripts/train_round.py --round r20-name --specialists goriya,wallmaster --no-promote \
+    --chain-runs 0 --parallel 10 --eval-parallel 3 --train-args "--load $PWD/models/goriya/r19-goriya-more"
+```
+
+Event logs go to `logs/<yymmdd>_<NNN>_<round>/` (the GUI's input). Two rounds can run at once with
+`--parallel 8–12` each (20 cores). Then compare, `triforce promote <specialist> <run-id>`, run the chain segments,
+write the results into the round doc, commit.
