@@ -14,7 +14,7 @@ from triforce.specialist import RamRandomization, load_specialist
 from triforce.zelda_enums import ActionKind, Direction, MapLocation, SwordKind
 
 STEP_INFO_KEYS = {'frames', 'interrupt', 'action', 'rewards', 'room', 'health', 'max_health', 'steps',
-                  'total_frames', 'specialist'}
+                  'total_frames', 'specialist', 'route'}
 
 
 def make_env(session, specialist, start_state=None, **update):
@@ -114,6 +114,8 @@ def test_random_legal_episode_ends_classified(session):
         if terminated or truncated:
             assert info['outcome'] in ('success', 'hard-failure', 'soft-failure')
             assert truncated == (info['ending'] == 'max-steps')
+            hearts = info['hearts']
+            assert hearts['dropped'] == hearts['taken'] + hearts['left'] + hearts['expired']
             outcomes.append(info['outcome'])
             if len(outcomes) == 2:
                 break
@@ -285,6 +287,55 @@ def test_enter_room_success_needs_the_objective(session):
             break
     assert info['room'] == (1, 0x73, False)
     assert (info['ending'], info['outcome']) == ('exit-wrong', 'soft-failure')
+
+
+@pytest.mark.parametrize('route, wanted', [('milestone1', 0x28), ('milestone1-fairy', 0x48)])
+def test_after_dungeon_1_each_route_leaves_0x38_its_own_way(session, route, wanted):
+    """0x38 from W, just out of Dungeon 1: milestone1 goes N toward D2, milestone1-fairy S toward the fairy pond."""
+    env = make_env(session, 'ow-zora', '0_38w_2', route=route)
+    _, info = env.reset(seed=0)
+    assert info['route'] == route
+    assert session.state.objectives.next_rooms == {MapLocation(0, wanted, False)}
+
+
+def test_a_room_the_routes_leave_differently_trains_both(session):
+    """Without a pinned route, 0x38-from-W resets play either route; rooms where the routes agree play milestone1."""
+    env = make_env(session, 'ow-zora', '0_38w_2')
+    seen = set()
+    for seed in range(16):
+        _, info = env.reset(seed=seed)
+        seen.add((info['route'], frozenset(session.state.objectives.next_rooms)))
+    assert seen == {('milestone1', frozenset({MapLocation(0, 0x28, False)})),
+                    ('milestone1-fairy', frozenset({MapLocation(0, 0x48, False)}))}
+    _, info = make_env(session, 'ow-octorok', '0_37c_2').reset(seed=0)
+    assert info['route'] == 'milestone1'
+
+
+def test_fairy_pond_holds_the_exit_until_the_hearts_are_full(session):
+    """0x39 (milestone1-fairy's waypoint): below full hearts no exit is correct and the pond edge is the target;
+    walking N to it fills every heart (Z_04 UpdatePondFairy), and then S is the exit."""
+    env = make_env(session, 'ow-start', '0_39s_2', ram_randomization=RamRandomization(hp=(0.25, 0.25)))
+    _, info = env.reset(seed=0)
+    link = session.state.link
+    assert info['route'] == 'milestone1-fairy' and link.health < link.max_health
+    assert session.state.objectives.kind == ObjectiveKind.TREASURE and not session.state.objectives.next_rooms
+    for _ in range(12):
+        *_, terminated, truncated, info = env.step(Action.parse('MOVE N 8').to_indices())
+        assert not (terminated or truncated)
+        if session.state.link.health == session.state.link.max_health:
+            break
+    assert session.state.link.health == session.state.link.max_health
+    assert session.state.objectives.next_rooms == {MapLocation(0, 0x49, False)}
+
+
+@pytest.mark.parametrize('state, wanted', [('0_49s_2', 0x39), ('0_49n_2', 0x59)])
+def test_fairy_route_heads_to_the_pond_then_east(session, state, wanted):
+    """0x49 from S goes N to the pond; back from the pond (from N) the waypoint is done and the route goes S/E."""
+    env = make_env(session, 'ow-octorok', state)
+    _, info = env.reset(seed=0)
+    assert info['route'] == 'milestone1-fairy'
+    assert session.state.objectives.next_rooms == {MapLocation(0, wanted, False)}
+
 
 
 @pytest.mark.parametrize('one_room', [True, False])

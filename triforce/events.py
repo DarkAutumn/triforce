@@ -20,7 +20,9 @@ Events written by ``triforce.train`` (one specialist):
 - ``start``: target_steps, target_iterations, steps_per_update, parallel, device, curriculum, run_dir, pid.
 - ``progress``: after every PPO iteration (~4 s at 4,096 steps): iteration, iterations, steps, target_steps,
   fraction, elapsed, sps, eta, and the iteration's headline metrics (``metrics``; ``health_change`` is the mean
-  hearts at exit minus hearts at entry, signed).
+  hearts at exit minus hearts at entry, signed; ``health_change_total`` adds the hearts wasted by picking up dropped
+  hearts at full health; ``hearts/dropped``, ``hearts/taken``, ``hearts/left``, ``hearts/wasted`` are dropped
+  hearts per episode, see ``triforce/hearts.py``).
 - ``checkpoint``: iteration, steps, path.
 - ``early_stop``: iteration, steps, balanced_success_rate.
 - ``error``: message, traceback.
@@ -28,10 +30,11 @@ Events written by ``triforce.train`` (one specialist):
   checkpoint.
 
 Added by ``scripts/train_round.py``: ``eval_start``, ``eval_progress`` (at most once a second: done, episodes,
-running success_rate) and ``eval`` (specialist evaluation; it runs on a background thread while the next specialist
-trains, so these can arrive after the next stream's ``start``) and ``error``
-(non-zero exit, failed evaluation).  The last line of every stream is ``end`` (status, plus a summary); nothing
-follows it.  A stream without ``end`` belongs to a run that is still going or was killed.
+running success_rate) and ``eval`` (specialist evaluation: success_rate, episodes, health, health_change,
+health_change_total, hearts_dropped / hearts_taken / hearts_left per episode, by_room, by_state, path; it runs on a
+background thread while the next specialist trains, so these can arrive after the next stream's ``start``) and
+``error`` (non-zero exit, failed evaluation).  The last line of every stream is ``end`` (status, plus a summary);
+nothing follows it.  A stream without ``end`` belongs to a run that is still going or was killed.
 """
 
 import json
@@ -49,6 +52,7 @@ SCHEMA_VERSION = 1
 
 # Metrics copied into progress events (when present).
 PROGRESS_METRICS = ('episodes', 'success_rate', 'balanced_success_rate', 'reward/total', 'health_change',
+                    'health_change_total', 'hearts/dropped', 'hearts/taken', 'hearts/left', 'hearts/wasted',
                     'health_at_exit', 'episode_steps', 'curriculum/episodes', 'curriculum/success_rate',
                     'curriculum/point_fraction', 'losses/approx_kl', 'charts/SPS')
 

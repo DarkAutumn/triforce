@@ -47,7 +47,7 @@ import yaml
 from .emulator import GAME_DIR, load_state_bytes, state_path
 from .explore import Explorer
 from .frame_skip import buttons_for
-from .game_map import ROUTES_YAML, GameMap
+from .game_map import DEFAULT_ROUTE, GameMap, load_alternates, load_routes
 from .room_entry import LEVEL, MODE, ROOM, is_pre_entry, make_room_fresh, pending_room
 from .session import GameSession
 from .specialist import RamRandomization, SpecialistConfig, list_specialists, load_specialist
@@ -86,17 +86,15 @@ def _step(index: int, raw: dict) -> RouteStep:
                      raw['specialist'])
 
 
-def route_steps(route: str = 'milestone1') -> List[RouteStep]:
+def route_steps(route: str = DEFAULT_ROUTE) -> List[RouteStep]:
     """The route's room visits in order."""
-    with open(ROUTES_YAML, encoding='utf-8') as file:
-        return [_step(i, raw) for i, raw in enumerate(yaml.safe_load(file)[route])]
+    return [_step(i, raw) for i, raw in enumerate(load_routes()[route])]
 
 
 def alternate_steps(steps: List[RouteStep]) -> List[tuple]:
     """(index of the step it branches from, RouteStep) for each alternate room: the step before the replaced room.
     The alternate's own index is the replaced step's (same place on the route)."""
-    with open(ROUTES_YAML, encoding='utf-8') as file:
-        alternates = yaml.safe_load(file).get('alternates', [])
+    alternates = load_alternates()
     result = []
     for alt in alternates:
         replaced = alt['replaces'][0]
@@ -110,7 +108,7 @@ def step_config(step: RouteStep, source: str) -> SpecialistConfig:
     triforce)."""
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
-                            ram_randomization=RamRandomization(), fresh_rooms=True)
+                            ram_randomization=RamRandomization(), fresh_rooms=True, route=DEFAULT_ROUTE)
 
 
 def refill_hearts(session: GameSession):
@@ -228,11 +226,20 @@ def _merge_manifest(out: str, manifest: List[dict]):
         json.dump(sorted(merged, key=lambda e: (e['chain'], e['route_step'], e['file'])), file, indent=1)
 
 
+def path_route_fields(game_map: GameMap, route: Optional[str], level: int, room: int, entry: str) -> dict:
+    """Manifest fields for a path-built state: its step on ``route`` (``route_step``; -1 and ``off_route`` when the
+    route doesn't enter that room from that side, or no route is given)."""
+    index = game_map.route_step_index(route, MapLocation(level, room, False), entry) if route else None
+    fields = {'route': route} if route else {}
+    return {**fields, 'route_step': -1 if index is None else index, 'off_route': index is None}
+
+
 def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iterations: int, patience: int,
-               log: Callable = print, session: Optional[GameSession] = None) -> List[dict]:
+               log: Callable = print, session: Optional[GameSession] = None, route: Optional[str] = None) -> List[dict]:
     """Walks ``rooms`` in order from ``source`` (a state in the room before the first of them), writing each room's
-    entry state.  For rooms off the milestone route (e.g. Dungeon 1's north rooms toward the bow): Go-Explore only
-    has to enter the next room, whatever the objective wants.  Manifest entries get ``route_step: -1``."""
+    entry state.  Go-Explore only has to enter the next room, whatever the objective wants, so this works for rooms
+    off a route (e.g. Dungeon 1's north rooms toward the bow) and for a route the objective doesn't follow.  With
+    ``route``, manifest entries record their step on it (``path_route_fields``); otherwise ``route_step: -1``."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     session = session or GameSession()
     game_map = GameMap.load()
@@ -253,9 +260,10 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
             break
         path = os.path.join(out, goal.filename(chain))
         write_entry_state(session, pre_entry, path, goal.location)
-        manifest.append({'file': os.path.basename(path), 'chain': chain, 'route_step': -1, 'from': source,
+        manifest.append({'file': os.path.basename(path), 'chain': chain, 'from': source,
                          'specialist': tag, 'level': goal.level, 'room': f"0x{goal.room:02x}", 'in_cave': False,
-                         'entry': goal.entry, 'exit': None, 'alternate': False, 'off_route': True, **stats})
+                         'entry': goal.entry, 'exit': None, 'alternate': False,
+                         **path_route_fields(game_map, route, goal.level, goal.room, goal.entry), **stats})
         log(f"{label}: {stats['steps']} steps, {stats['env_steps']} env steps, {time.time() - started:.0f}s")
         source, current = path, target
     _merge_manifest(out, manifest)
@@ -431,6 +439,7 @@ def main(argv=None):
     path_parser.add_argument('--iterations', type=int, default=3000)
     path_parser.add_argument('--patience', type=int, default=200)
     path_parser.add_argument('--out', default=GAME_DIR)
+    path_parser.add_argument('--route', default=None, help="routes.yaml route the rooms belong to (manifest step)")
     audit_parser = sub.add_parser('audit', help="check start states (default: every specialist's)")
     audit_parser.add_argument('--specialist', action='append', default=None)
     audit_parser.add_argument('--states', action='append', default=None, help="savestate glob(s)")
@@ -443,7 +452,8 @@ def main(argv=None):
     if args.command == 'path':
         rooms = [MapLocation(int(level), int(room, 16), False)
                  for level, room in (text.split(':') for text in args.rooms.split(','))]
-        manifest = build_path(args.source, rooms, args.chain, args.out, args.iterations, args.patience)
+        manifest = build_path(args.source, rooms, args.chain, args.out, args.iterations, args.patience,
+                              route=args.route)
         print(f"{len(manifest)} entry states in {args.out}")
         return 0
 

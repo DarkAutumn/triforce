@@ -17,6 +17,7 @@ import glob
 import gzip
 import os
 import random
+import re
 from collections import deque
 from dataclasses import dataclass
 from typing import Deque, Dict, List, Optional, Sequence
@@ -130,6 +131,23 @@ def state_label(name: str) -> str:
     """A start state's short name: '…/0_38s.state' or '0_38s' -> '0_38s'."""
     base = os.path.basename(name)
     return base[:-len('.state')] if base.endswith('.state') else base
+
+
+_ENTRY_NAME = re.compile(r'^\d+_[0-9a-f]{2}(cave|c|n|s|e|w)_\d+$')
+
+
+def state_entry(name: str) -> Optional[str]:
+    """The routes.yaml ``entry`` an entry-state name encodes (``<level>_<room><side>_<chain>``: n/s/e/w, ``c`` = out
+    of a cave or dungeon stairs, ``cave`` = a cave interior, entered from S), 'start' for the game start, else None
+    (curriculum snapshots, harvested states)."""
+    label = state_label(name)
+    if label == 'start':
+        return 'start'
+    match = _ENTRY_NAME.match(label)
+    if match is None:
+        return None
+    side = match.group(1)
+    return {'cave': 'S', 'c': 'cave'}.get(side, side.upper())
 
 
 def verify_start_room(name: str, location: MapLocation, rooms: Sequence[MapLocation], specialist: str):

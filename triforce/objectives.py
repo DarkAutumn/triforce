@@ -1,25 +1,52 @@
 """Objectives: where Link should go next (room exits, cave, treasure, enemies).
 
 Ported from v1.  ``GameCompletion`` routes through the milestone: the sword first, then each triforce, using
-``GameMap`` Dijkstra over game.yaml (key-aware) with ties broken toward the canonical route in routes.yaml.
-Persistent RAM room flags (``room_state.room_flags``) seed which keys are already taken and which locked doors
-are already open, so a start state in the middle of a dungeon routes correctly.  The objective targets feed
+``GameMap`` Dijkstra over game.yaml (key-aware) with ties broken toward the route (routes.yaml; ``milestone1`` by
+default).  A route's ``waypoint:`` steps (the fairy pond on ``milestone1-fairy``) are visited first while they
+apply.  Persistent RAM room flags (``room_state.room_flags``) seed which keys are already taken and which locked
+doors are already open, so a start state in the middle of a dungeon routes correctly.  The objective targets feed
 the (unobserved) wavefront used only for PBRS rewards; ``next_rooms`` decides which exits are correct.
 """
 
+from dataclasses import dataclass
 from enum import Enum
 
 import inspect
 import random
 import sys
-from typing import Dict, Optional, Sequence, Set
+from typing import Dict, FrozenSet, List, Optional, Sequence, Set
 
-from .game_map import GameMap
+from .game_map import DEFAULT_ROUTE, GameMap, step_location
 from .room_state import room_flags
 from .zelda_game import ZeldaGame
 from .zelda_enums import Direction, MapLocation, SwordKind, TileIndex
 
 FLAG_ITEM_TAKEN = 0x10
+# Pond fairy (Z_04 UpdatePondFairy): Link at the pond edge, Y=$AD with $70 <= X < $81, is halted until every heart
+# is full.  Walking north from the south entry stops him there.
+FAIRY_POND_TILES = (TileIndex(14, 14), TileIndex(15, 14), TileIndex(16, 14))
+
+
+@dataclass(frozen=True)
+class Waypoint:
+    """A route stop off the shortest path (routes.yaml ``waypoint:``).  It applies while Link holds the triforce
+    pieces the route took before it and not the next one; 'fairy' is done once he is in its room at full health."""
+    step: int
+    location: MapLocation
+    kind: str
+    after: FrozenSet[int]
+    before: Optional[int]
+
+
+def route_waypoints(steps: List[dict]) -> List[Waypoint]:
+    """The waypoints of a route's steps, in route order."""
+    result = []
+    for index, step in enumerate(steps):
+        if step.get('waypoint'):
+            after = frozenset(s['level'] for s in steps[:index] if s['exit'] == 'triforce')
+            before = next((s['level'] for s in steps[index:] if s['exit'] == 'triforce'), None)
+            result.append(Waypoint(index, step_location(step), step['waypoint'], after, before))
+    return result
 
 _DIRECTION_DELTAS = [
     (Direction.E, (1, 0)),
@@ -90,8 +117,7 @@ class ObjectiveSelector:
 
     def __init__(self):
         self._rooms : Dict[RoomMemory] = {}
-        if ObjectiveSelector._game_map is None:
-            ObjectiveSelector._game_map = GameMap.load()
+        shared_game_map()
 
     def get_current_objectives(self, prev : Optional[ZeldaGame], state : ZeldaGame) -> Objective:
         """Get the current objectives for the agent."""
@@ -125,8 +151,11 @@ class ObjectiveSelector:
 class _GameMapObjective(ObjectiveSelector):
     """Base class for objectives that use GameMap for routing."""
 
-    def __init__(self):
+    def __init__(self, route: str = DEFAULT_ROUTE):
         super().__init__()
+        if route not in self._game_map.routes:
+            raise ValueError(f"Unknown route '{route}' (routes.yaml has {sorted(self._game_map.routes)})")
+        self._route = route
         self._last_route_key = None
         self._last_route_result = None
         self._collected_key_rooms: Set[MapLocation] = set()
@@ -322,13 +351,13 @@ class _GameMapObjective(ObjectiveSelector):
             self._last_route_result = ([], set())
             return [], set()
 
-        # On the canonical milestone route (routes.yaml) only the route's exits are correct: ties between equally
-        # short paths go to the route (to the exit it takes first when a room is visited more than once, e.g.
-        # 0x73 W before E), and a shorter off-route path is not offered at all.  Rooms off the route keep plain
-        # shortest-path routing.
-        route_next = self._game_map.route_next_rooms(state.full_location)
+        # On the route (routes.yaml) only the route's exits are correct: ties between equally short paths go to the
+        # route (to the exit it takes first when a room is visited more than once, e.g. 0x73 W before E), and a
+        # shorter off-route path is not offered at all.  Rooms off the route keep plain shortest-path routing.
+        route_next = self._game_map.route_next_rooms(state.full_location, self._route)
         if route_next:
-            next_rooms = self._game_map.route_first(state.full_location, (next_rooms & route_next) or set(route_next))
+            next_rooms = self._game_map.route_first(state.full_location, (next_rooms & route_next) or set(route_next),
+                                                    self._route)
 
         directions = [state.full_location.get_direction_to(r) for r in next_rooms]
         targets = []
@@ -406,7 +435,8 @@ class TreasureObjective(_GameMapObjective):
 
 
 class GameCompletion(_GameMapObjective):
-    """Routes the agent through the full game: swords first, then triforce pieces."""
+    """Routes the agent through the full game: swords first, then the route's waypoints while they apply, then
+    triforce pieces.  ``step`` is the route step the episode starts at: waypoints before it are already done."""
 
     # Sword upgrade priority: (current_sword, treasure_name, min_health)
     _SWORD_UPGRADES = [
@@ -415,8 +445,34 @@ class GameCompletion(_GameMapObjective):
         (SwordKind.WHITE, 'magic-sword', 13),
     ]
 
+    def __init__(self, route: str = DEFAULT_ROUTE, step: Optional[int] = None):
+        super().__init__(route)
+        self._waypoints = [w for w in route_waypoints(self._game_map.routes[route]) if step is None or w.step >= step]
+
+    def get_current_objectives(self, prev: Optional[ZeldaGame], state: ZeldaGame) -> Objective:
+        waypoint = self._active_waypoint(state)
+        if waypoint is not None and state.full_location == waypoint.location \
+                and state.link.health >= state.link.max_health:
+            self._waypoints.remove(waypoint)
+        return super().get_current_objectives(prev, state)
+
+    def _active_waypoint(self, state) -> Optional[Waypoint]:
+        for waypoint in self._waypoints:
+            if all(state.link.has_triforce(level) for level in waypoint.after) \
+                    and (waypoint.before is None or not state.link.has_triforce(waypoint.before)):
+                return waypoint
+        return None
+
+    def _get_room_objective(self, prev, state):
+        waypoint = self._active_waypoint(state)
+        if waypoint is not None and state.full_location == waypoint.location:
+            return ObjectiveKind.TREASURE, list(FAIRY_POND_TILES), []
+        return super()._get_room_objective(prev, state)
+
     def _get_target(self, state):
-        return self._get_sword_target(state) or self._get_triforce_target(state)
+        waypoint = self._active_waypoint(state)
+        return self._get_sword_target(state) or (waypoint.location if waypoint else None) \
+            or self._get_triforce_target(state)
 
     def _get_sword_target(self, state):
         """If a better sword is available and Link meets the health requirement, target it."""
@@ -457,6 +513,30 @@ class GameCompletion(_GameMapObjective):
     def _should_collect_treasure(self, state):
         target = self._get_target(state)
         return target is not None and state.full_location == target
+
+
+def shared_game_map() -> GameMap:
+    """The GameMap every objective routes on (game.yaml + routes.yaml, loaded once per process)."""
+    if ObjectiveSelector._game_map is None:
+        ObjectiveSelector._game_map = GameMap.load()
+    return ObjectiveSelector._game_map
+
+
+def start_route(location: MapLocation, entry: Optional[str], rng: Optional[random.Random] = None,
+                route: Optional[str] = None) -> tuple:
+    """(route, step) for an episode that starts in `location`, entered from `entry` (``start_states.state_entry``),
+    for ``GameCompletion(route, step)``.  With `route` given: its first step there (None if it has none).  Else the
+    routes entering that room from that side: if they all leave it the same way, the default route plays it;
+    if not (0x38 from W: N on milestone1, S on milestone1-fairy), one of them at random, so training covers both."""
+    game_map = shared_game_map()
+    if route is not None:
+        return route, game_map.route_step_index(route, location, entry) if entry else None
+    candidates = game_map.routes_through(location, entry) if entry else []
+    if not candidates:
+        return DEFAULT_ROUTE, None
+    if len({game_map.routes[name][index]['exit'] for name, index in candidates}) > 1:
+        return (rng or random).choice(candidates)
+    return next((c for c in candidates if c[0] == DEFAULT_ROUTE), candidates[0])
 
 
 DUAL_EXIT_CHANCE = 0.05

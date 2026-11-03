@@ -5,7 +5,8 @@ config's RAM randomization, and runs timed options through ``GameSession``.  Wit
 episodes instead start partway along an explored trajectory (``curriculum.py``); their final ``info`` carries
 ``curriculum`` and they don't feed the start-state pool.  Rewards come from the critic
 (``critics.py``) plus a terminal reward; endings come from ``end_conditions.py`` and are classified
-deny-by-default (an unlisted ending raises ``UnclassifiedEndingError``).
+deny-by-default (an unlisted ending raises ``UnclassifiedEndingError``).  The final ``info`` also carries
+``hearts``, the episode's dropped-heart summary (``hearts.HeartTracker``).
 
 Actions are ``(kind, direction, duration)`` head indices.  Heads that don't apply to the kind are ignored.  A
 masked (illegal) action raises ``InvalidActionError`` unless the env was built with ``strict_actions=False``,
@@ -24,12 +25,14 @@ from .critics import create_critic
 from .curriculum import BackwardCurriculum, CurriculumSpec
 from .emulator import GAME_DIR
 from .end_conditions import MAX_STEPS, build_end_conditions, classify_ending
-from .objectives import GameCompletion
+from .game_map import DEFAULT_ROUTE
+from .hearts import HeartTracker
+from .objectives import GameCompletion, start_route
 from .observation import ObservationBuilder
 from .rewards import SUCCESS, StepRewards, apply_terminal_rewards
 from .session import GameSession
 from .specialist import SpecialistConfig, load_specialist
-from .start_states import SavestateCapture, StartStatePool, ram_randomization_values, state_label, \
+from .start_states import SavestateCapture, StartStatePool, ram_randomization_values, state_entry, state_label, \
     verify_start_room
 from .zelda_enums import Direction
 from .zelda_game import ZeldaGame
@@ -81,6 +84,7 @@ class ZeldaEnv(gym.Env):
         self._start_health = 0.0
         self._done = True
         self._verified = set()
+        self._route, self._route_step = DEFAULT_ROUTE, None     # routes.yaml route of the episode (start_route)
 
     # --- gym API ---
     def reset(self, *, seed=None, options=None):
@@ -109,6 +113,7 @@ class ZeldaEnv(gym.Env):
         values = ram_randomization_values(spec, state.link.max_health, self.rng, chain)
         if values:
             state = self.session.apply_ram(values)
+        self._route, self._route_step = start_route(state.full_location, state_entry(name), self.rng, self.config.route)
         return self._begin_episode(state, name)
 
     def restore(self, snapshot: dict, name: str):
@@ -119,7 +124,7 @@ class ZeldaEnv(gym.Env):
         return self._begin_episode(self.session.restore(snapshot), name)
 
     def _begin_episode(self, state: ZeldaGame, name: str):
-        self.objectives = GameCompletion()
+        self.objectives = GameCompletion(self._route, self._route_step)
         self._attach_objectives(None, state)
         self.critic.clear()
         for condition in self.end_conditions:
@@ -127,6 +132,8 @@ class ZeldaEnv(gym.Env):
 
         self._episode_state = name
         self._start_health = state.link.health
+        self.hearts = HeartTracker()
+        self.hearts.reset(state)
         self._done = False
         obs = self.builder.reset(state, self.session.mask)
         return obs, self._info(state, {'start_state': name})
@@ -142,6 +149,7 @@ class ZeldaEnv(gym.Env):
                 raise InvalidActionError(f"{act} is masked; legal: {self.session.mask}")
 
         change = self.session.act(act)
+        self.hearts.update(change)
         self._attach_objectives(change.previous, change.state)
 
         rewards = StepRewards()
@@ -163,8 +171,9 @@ class ZeldaEnv(gym.Env):
         if ending is not None:
             outcome = classify_ending(ending, self.config.success, self.config.endings)
             apply_terminal_rewards(rewards, ending, outcome, terminated, state.link.health, state.link.max_health)
+            self.hearts.finish(state)
             extra = {'ending': ending, 'outcome': outcome, 'start_state': state_label(self._episode_state),
-                     'start_health': self._start_health}
+                     'start_health': self._start_health, 'hearts': self.hearts.summary()}
             if self._curriculum_tag is not None:
                 extra['curriculum'] = self.curriculum.record(self._curriculum_tag, outcome == SUCCESS)
             elif self.pool is not None:
@@ -203,7 +212,7 @@ class ZeldaEnv(gym.Env):
             'room': (state.level, state.location, state.in_cave),
             'health': state.link.health, 'max_health': state.link.max_health,
             'steps': self.session.steps, 'total_frames': self.session.total_frames,
-            'specialist': self.config.name,
+            'specialist': self.config.name, 'route': self._route,
         }
         info.update(extra)
         return info

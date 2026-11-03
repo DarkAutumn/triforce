@@ -15,7 +15,11 @@ flat metric dict logged per iteration:
 - ``reward/total`` and ``reward/<term>``: mean per completed episode, from ``info['rewards']``.
 - ``health_at_exit`` (hp / max_hp) and ``hearts_at_exit`` (``info['health']``) at episode end, and
   ``health_change``: hearts at exit minus hearts at the start (after reset-time hp randomization), so +1.5 means
-  Link left with 1.5 more hearts than he came in with and -1 means he lost a heart.
+  Link left with 1.5 more hearts than he came in with and -1 means he lost a heart.  ``health_change_total`` adds
+  the hearts wasted by picking up dropped hearts at (or near) full health (``info['hearts']``, ``hearts.py``): the
+  heart change Link would have had without the max-health cap.
+- ``hearts/dropped``, ``hearts/taken``, ``hearts/left`` (still on the floor at the episode's end) and
+  ``hearts/wasted``: dropped hearts per completed episode.
 - ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['frames']``).
 - ``interrupt/<reason>``: fraction of steps that ended with each ``info['interrupt']`` reason.
 - ``kind/<KIND>`` and ``duration/<KIND>/<frames>``: action-kind and per-kind duration histograms (fractions).
@@ -33,6 +37,7 @@ from collections import Counter
 from typing import Optional
 
 from .actions import DURATIONS, KINDS, TIMED_KINDS
+from .hearts import heart_change_total
 
 
 class RolloutMetrics:
@@ -50,6 +55,11 @@ class RolloutMetrics:
         self.health_fraction = 0.0
         self.hearts = 0.0
         self.health_change = 0.0
+        self.health_change_total = 0.0
+        self.hearts_dropped = 0
+        self.hearts_taken = 0
+        self.hearts_left = 0
+        self.hearts_wasted = 0.0
         self.episode_frames = 0
         self.episode_steps = 0
         self.interrupts = Counter()
@@ -88,6 +98,11 @@ class RolloutMetrics:
             result['health_at_exit'] = self.health_fraction / eps
             result['hearts_at_exit'] = self.hearts / eps
             result['health_change'] = self.health_change / eps
+            result['health_change_total'] = self.health_change_total / eps
+            result['hearts/dropped'] = self.hearts_dropped / eps
+            result['hearts/taken'] = self.hearts_taken / eps
+            result['hearts/left'] = self.hearts_left / eps
+            result['hearts/wasted'] = self.hearts_wasted / eps
             result['episode_frames'] = self.episode_frames / eps
             result['episode_steps'] = self.episode_steps / eps
         if self.curriculum_episodes:
@@ -162,7 +177,14 @@ class EpisodeTracker:
             health = float(info.get('health', 0.0))
             max_health = float(info.get('max_health', 0.0))
             metrics.hearts += health
-            metrics.health_change += health - float(info.get('start_health', health))
+            health_change = health - float(info.get('start_health', health))
+            hearts = info.get('hearts') or {}
+            metrics.health_change += health_change
+            metrics.health_change_total += heart_change_total(health_change, hearts)
+            metrics.hearts_dropped += hearts.get('dropped', 0)
+            metrics.hearts_taken += hearts.get('taken', 0)
+            metrics.hearts_left += hearts.get('left', 0)
+            metrics.hearts_wasted += hearts.get('wasted', 0.0)
             metrics.health_fraction += health / max_health if max_health > 0 else 0.0
             metrics.episode_frames += self._frames
             metrics.episode_steps += self._steps
