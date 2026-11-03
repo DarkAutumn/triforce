@@ -5,7 +5,7 @@ success: [exit-correct]
 reward_profile: default
 reward: {pbrs: on}
 obs: {objective: on}
-ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with 0.5-1.5 hearts (round 4/5)
+ram_randomization: {hp: [0.15, 0.5], full_hp: 0.5}   # partial resets at 0.5-1.5 hearts: the chain enters 0x44 with ~1.15 (round 5)
 items: {bombs: off}
 curriculum: {enabled: on}             # trajectories/d1-wallmaster (round 2: 18% -> 87%)
 one_room: on                          # round 5: 0x44 episodes end on entering 0x45 (0x44 is the chain's death room)
