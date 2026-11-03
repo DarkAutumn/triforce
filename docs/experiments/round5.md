@@ -100,3 +100,27 @@ The first runs kill Aquamentus, take the triforce and leave Dungeon 1. In the ch
 One-room eval: 88% (0x44 77%, 0x45 98%) vs r7 78% (0x44 62%, 0x45 95%). Promoted. The chain didn't move: 0x44
 still kills 8 of the 10 runs that reach it, at ~1 heart (the eval draws partial hp uniformly over 0.5–3 hearts).
 → r11: partial resets drawn from 0.5–1.5 hearts (`hp: [0.15, 0.5]`, half the resets still full).
+
+### r9a/r9b: ow-leever-peahat, ow-moblin, d2-rope with hp floor + one-room
+
+Each compared with its promoted round 3 model evaluated under the same (new) config:
+
+| specialist | r3 model | r9 model | promoted |
+|---|---|---|---|
+| ow-leever-peahat | 96%, −0.19 hearts, 16 steps | 99%, −0.39 hearts, 31 steps | r3 (half the damage; damage is what kills chains) |
+| ow-moblin | 92%, −0.38 hearts | 98%, −0.33 hearts | r9a |
+| d2-rope | 81% (0x3e 55%, 0x4e 70%), −0.64 hearts | 89% (0x3e 70%, 0x4e 85%), −0.52 hearts | r9b |
+
+### Runner room budget
+
+The runner's per-room budget is now `max(max_steps, 2000)`: boss-aquamentus's training cap of 400 had ended 2 of
+its 3 chain fights as `stuck`.
+
+### Dungeon 2 chain (`--from 2_7ds_2`, 4 hearts at the D2 entrance)
+
+| models | reach 0x0e (Dodongo room) | where runs end |
+|---|---|---|
+| d2-rope r3, d2-goriya r6 | 1/20 | 0x3e ×9, 0x4e ×7, 0x5e ×2, 0x1e ×1 |
+| d2-rope r9b, d2-goriya r6 | **2/20** | 0x4e ×6, 0x5e ×6, 0x3e ×3, 0x6e ×2, 0x2e ×1 |
+
+Same health-drain pattern: 0x6d −0.90, 0x6e −0.85, 0x5e (d2-goriya) −1.36, 0x4e −0.62, 0x3e −1.42 hearts.

@@ -6,21 +6,24 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Rounds 3 and 4 done** (`round3.md`, `round4.md`). The r4c chain follows the whole Dungeon 1 route and reaches
-  Aquamentus; runs die of health drain in the Stalfos rooms (0x74, 0x53, 0x63) and in 0x44.
-- **Train at the hp the chain arrives with.** Training hp is 50–100% (1.5–3 hearts); the chain enters Stalfos rooms
-  with 0.5–1.5. Lower the floor (`hp: [0.15, max]`, ≥ half a heart) for d1-melee, then the other specialists.
-- **boss-aquamentus: 0% on the route's 3 hearts (round 3), plain PPO and curriculum alike.** Go-Explore finds the
-  kill (6 sword hits from above, `round3.md`), but the policy runs from the boss: each hit taken costs 0.25–0.5,
-  each hit dealt pays 0.25, and the kill itself pays nothing beyond the last hit. Round 1's 100% came from 16
-  hearts. Next: `reward-boss-hit` (0.75 per hit on a boss, no combat decay) with the curriculum.
-- **Route states past `2_2es`** (0x1e, the Dodongo room 0x0e): extend route chain 2 (`entry_states build --chains
-  2 --start-step 41 --source 2_2es_2`).
-- **d2-rope 0x3e** is its weakest room (65% one-room, deaths).
+- **Rounds 3–5 done** (`round3.md`, `round4.md`, `round5.md`). Every specialist works in isolation now (Aquamentus
+  93%, d2-goriya with 0x1e 88%); the full chain reaches Aquamentus in 2–3 of 20 runs and has left Dungeon 1 twice;
+  from the D2 entrance 2 of 20 runs reach the Dodongo room. What kills chains is **health drain**: Link loses
+  0.2–1.4 hearts per room and never heals.
+- **Chain-matched hp.** Sample each specialist's reset hp from the hp the chain actually arrives with (per room,
+  from the chain jsonl `health_in`), instead of a uniform range. r11 tries a cruder version for d1-wallmaster.
+- **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
+  (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
+- **Damage-avoidance reward.** Terminal success already scales with hp at exit; per-hit penalties are 0.25 per
+  half heart. Try a larger lost-health penalty, or a terminal bonus on hp kept relative to entry (the new
+  `health_change`), for the transit rooms where fighting isn't required.
+- **Skip the optional boomerang in 0x44.** `docs/route.md`: the 0x44 boomerang is optional and E is open. The chain
+  arrives with ~1 heart and dies to the 3 Red Goriyas in 8 of 10 runs. A route variant that walks E needs the later
+  specialists (0x45, Aquamentus, D2) to cope without the boomerang (train some resets with it removed).
+- **d2-goriya one-room + hp floor**: 0x5e costs 1.36 hearts in the D2 chain.
+- **d1-wallmaster `1_44w_2` has no trajectory** (even with the enemy-health cell, 166k explore steps).
 - **Last resort only:** split Dungeon 1 into enemy-based specialists (Stalfos 0x53/0x63/0x74, Keese 0x52/0x72,
   Gel 0x42/0x43). One-room episodes made per-room d1-melee 94–95%, so this is not needed now.
-- **One-room episodes for the other multi-room specialists** (d2-rope, ow-octorok, ow-zora, ow-leever-peahat):
-  d1-melee trained 2.5–4× faster with them (round 4).
 
 ## Items
 
@@ -62,9 +65,9 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
   that, and d1-wallmaster `1_44w_2` is still unexplored: re-run it with the new cell.
 - **Training-time `balanced_success_rate` lags** when a specialist finishes few room-entry episodes per iteration
   (d1-melee: 26 states, 5–17 episodes per iteration). Consider a time-based window.
-- **Long episodes starve the curriculum.** boss-aquamentus finished 1–8 episodes per 4,096-step iteration (round
-  3), so a stage window of 10 episodes takes several iterations and stalled stages see few samples. Consider a
-  shorter `max_steps` for curriculum starts or more workers on the stalled stage.
+- **Long episodes starve the curriculum** (round 3; fixed for boss-aquamentus in round 5 with `max_steps: 400`,
+  0% → 93%). `max_steps` sets the episode rate; set it from the explored path length for any curriculum specialist
+  whose failures are slow (fleeing, waiting) rather than quick deaths.
 - **Single seed per configuration.** d1-wallmaster r2b (96%) vs r2c (87%) shows the run-to-run spread; repeat key
   comparisons over 2–3 seeds before acting on a few-point difference.
 
