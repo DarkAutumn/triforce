@@ -22,10 +22,13 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
   removed). A damage-avoidance idea for later would need a different form.
 - **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
   (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
-- **Refill hearts on the way (route change; Lee's call).** Link enters Dungeon 1 with ~2.3 of 3 hearts and reaches
-  the D1 Goriya room with ~1.1; heart drops are rare (round 6). A fairy fountain on the overworld before D1 (and
-  before D2) refills everything; the triforce pickup already refills after D1. Needs the route, objectives and a
-  fountain specialist (or a scripted stop).
+- ~~Refill hearts on the way~~ **Done (Lee's design): second route `milestone1-fairy`** after D1 (south road +
+  fairy pond 0x39; `docs/route.md`, `docs/decisions.md`). Train the overworld families on both routes and evaluate
+  both chains. Not done: a fairy stop before D1 (none on the way), D2 has none.
+- **Heart objective (next experiment):** agents leave many dropped hearts (round 6 §8: overworld 26 of 34, 0x53
+  half, 0x4e a third). When Link is below max hearts and a pickable heart is on the floor, make it the objective
+  (kind ITEM: a free one-hot slot, so no observation change) and the PBRS target; exits stay correct. A/B on
+  stalfos-keese-gel and d2-rope; keep it only if eval damage and the chains improve.
 - **Fight Goriyas without trading hits.** At 1 heart the goriya model turns passive (33% WAIT) and dies to contact
   (round 6 trace). Ideas: a demo/curriculum from damage-free Go-Explore paths (the explored paths lose 1.5–2.5
   hearts; select by health with more patience), shield blocking of boomerangs, a contact-damage penalty that grows

@@ -172,3 +172,33 @@ Chains after the promotions (40 runs each; r22 chains in brackets):
 **First full-chain success:** one run went from the game start into the Dodongo room. Deaths, full chain: D1
 Goriya room 16 (of 32 that reached it), 0x53 7, Aquamentus 4, D2 rooms 7. Post-D1: 0x4c 8 (ow-octorok, arriving
 with 1.8 hearts), 0x6d 7, 0x6e 6, 0x5e 6, 0x4e 5. D2: 0x3e 11, 0x2e 5, 0x5e 4, 0x1e 4.
+
+## 8. Heart tracking (Lee): do the agents pick up dropped hearts?
+
+New: `hearts.HeartTracker` follows every dropped heart (item 0x22 only; fairies, triforce and containers don't
+count) through a room visit: `dropped`, `taken` (by Link or his weapons; a vanished heart whose lifetime couldn't
+have run out), `healed` (real hearts: `min(1, max − hp)` per heart, `Z_01 TakeHearts`), `wasted` (taken − healed),
+`left` (on the floor when Link left or died), `expired`. Episodes report `health_change` (real) and
+`health_change_total` (real + wasted); eval, chain records, training metrics and the training GUI show both.
+
+Survey of the promoted models (evaluate, 20 episodes per start state; rooms with drops):
+
+| specialist | room | drops / episode | taken | left | health real (total) |
+|---|---|---|---|---|---|
+| stalfos-keese-gel | 1:0x53 | 0.45 | 0.22 | **0.22** | −0.69 (−0.62) |
+| stalfos-keese-gel | 1:0x74 | 0.18 | 0.05 | 0.13 | −0.38 |
+| stalfos-keese-gel | 1:0x33 | 0.33 | 0.28 | 0.05 | −0.48 |
+| goriya | 1:0x44 | 0.28 | 0.17 | 0.03 | −0.91 |
+| goriya | 2:0x1e | 0.90 | 0.55 | 0.05 | −0.93 |
+| wallmaster | 1:0x45 | 0.78 | 0.63 | 0 | +0.32 (+0.63) |
+| d2-rope | 2:0x4e | 1.25 | 0.65 | **0.40** | −0.38 (−0.23) |
+| d2-rope | 2:0x3e | 0.45 | 0.20 | 0.15 | −1.05 |
+| d2-rope | 2:0x2e | 0.95 | 0.50 | 0.05 | −0.75 (−0.57) |
+| ow-octorok | 0:0x4c | 0.12 | 0.02 | 0.10 | −0.45 |
+| ow-zora | 0:0x38 | 0.07 | 0 | 0.07 | −0.26 |
+
+Totals: dungeon models take 55–80% of the hearts that drop (the rest are left or time out during long fights);
+the overworld models take 8 of 34 and leave 26. The wallmaster model picks up nearly everything, often at full
+health (total +0.63 vs real +0.32). Hearts are already worth a lot: success pays 20 × (0.5 + 0.5 × hp/max), so a
+heart at the exit adds 2.5–3.3, plus `reward-gained-health`. But PBRS never points at a heart: dropped items are
+added to the objective's `targets`, not to `pbrs_targets`, so the shaping always pulls toward the exit.
