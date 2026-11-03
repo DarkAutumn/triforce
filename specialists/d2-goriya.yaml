@@ -7,6 +7,7 @@ reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {hp: [0.5, max], full_hp: 0.5}
 items: {bombs: off}
+curriculum: {enabled: on}             # trajectories/d2-goriya: 0x1e (5 Red Goriyas, kill-all shutter) explored in 77k steps
 max_steps: 2000
 warm_start: null
 notes: >-
