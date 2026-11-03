@@ -19,7 +19,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+gui = ["pyside6-essentials>=6.7"]
+dev = ["pytest", "pyside6-essentials>=6.7"]
 
 [project.scripts]
 triforce = "triforce.cli:main"

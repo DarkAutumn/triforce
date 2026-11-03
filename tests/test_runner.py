@@ -6,25 +6,9 @@ import pytest
 import yaml
 
 from triforce.game_map import GameMap
-from triforce.model import ModelConfig, ZeldaPolicy
-from triforce.observation import ObservationBuilder
-from triforce.registry import promote, save_checkpoint
 from triforce.runner import ROUTES_PATH, Route, RunResult, RoomRecord, Runner, RunnerError, chain_summary, \
     parse_location, write_jsonl
-from triforce.specialist import list_specialists
 from triforce.zelda_enums import MapLocation
-
-
-@pytest.fixture(scope='module')
-def models_dir(tmp_path_factory):
-    """Every specialist promoted to a small untrained network."""
-    root = tmp_path_factory.mktemp('models')
-    config = ModelConfig(hidden_dim=32, entity_d_model=32, entity_ff_dim=32, grid_out_dim=32)
-    for name in list_specialists():
-        network = ZeldaPolicy(ObservationBuilder.observation_space(), config)
-        save_checkpoint(name, 'untrained', network, root=root)
-        promote(name, 'untrained', root=root)
-    return root
 
 
 def test_milestone_route_definition():
