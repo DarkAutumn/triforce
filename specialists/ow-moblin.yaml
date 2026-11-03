@@ -3,7 +3,7 @@ rooms: ['(0, 0x3d)', '(0, 0x4d)']
 start_states: ['0_3d*_[0-9]', '0_4d*_[0-9]']
 success: [exit-correct]
 reward_profile: default
-reward: {pbrs: on, pass_through_damage: 4.0}   # experiment r16 (round 6)
+reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
 items: {bombs: off}
