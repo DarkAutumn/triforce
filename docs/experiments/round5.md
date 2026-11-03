@@ -145,3 +145,10 @@ ow-leever-peahat r3, ow-moblin r9a, d2-rope r9b, d2-goriya r6.
 Every segment works in some runs; no run does all of them yet. Rough per-segment rates: start → leave D1 10%,
 post-D1 → D2 25%, D2 → Dodongo 10%. The deaths are almost all health drain into a hard room (0x44, 0x53, 0x4c,
 0x4e/0x5e).
+
+### r12: d2-goriya hp floor (continued from r6)
+
+At the new hp distribution: r12 82% (0x5e 75%, 0x1e 90%, −0.85 hearts) vs r6 80% (0x5e 75%, 0x1e 85%, −1.05
+hearts). Promoted on less damage (40 episodes; the success difference is noise). D2 chain from `2_7ds_2` with r12:
+still 2/20 reach the Dodongo room, but no run dies in a d2-goriya room any more (0x5e ×6 before); the deaths moved
+to d2-rope's 0x4e ×10, 0x3e ×6, 0x6e ×2.
