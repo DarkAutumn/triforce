@@ -59,10 +59,13 @@ def load_alternates(path: str = None) -> List[dict]:
 
 @dataclass
 class RoomExit:
-    """An exit from a room to another room."""
+    """An exit from a room to another room.  ``span``: on an edge with several openings into parts of the next
+    room that don't connect, the (lo, hi) tile range along the edge (rows for E/W, columns for N/S) of Link's
+    top-left tile that the route may use; leaving elsewhere on that edge is a wrong exit."""
     direction: str
     destination: MapLocation
     locked: bool = False
+    span: Optional[Tuple[int, int]] = None
 
 
 @dataclass
@@ -359,7 +362,8 @@ class GameMap:
                 dest_cave = dest.get('in_cave', False)
                 dest_loc = MapLocation(dest['level'], int(dest['location'], 16), dest_cave)
                 locked = dest.get('locked', False)
-                exits[dir_str] = RoomExit(direction=dir_str, destination=dest_loc, locked=locked)
+                span = tuple(dest['span']) if dest.get('span') else None
+                exits[dir_str] = RoomExit(direction=dir_str, destination=dest_loc, locked=locked, span=span)
 
             enemies = entry.get('enemies') or {}
             treasure = entry.get('treasure')

@@ -131,3 +131,17 @@ Format: date — what changed — why — evidence.
   unchanged (no new objective kind), so every trained model keeps working.
 - **Data:** 0x39, 0x49, 0x59, 0x5a, 0x5b, 0x5c, 0x5d are tagged (families by enemy; the enemy-free pond room joins
   `ow-start`). 0x5e and 0x6d were missing from game.yaml and were added with exits only (0x5d leads there).
+
+## 2026-11-03 — Exit openings (`span`) and no off-map wavefront lane (found via Lee's 0x5b/0x5c report)
+
+- **What:** a game.yaml exit can carry `span: [lo, hi]`, the tile range along the edge (rows for E/W, columns for
+  N/S) of Link's top-left tile where leaving counts as that exit. The objective's exit targets keep only those
+  tiles, and `objectives.exit_is_correct` (end conditions, the progress tracker, the critic's correct-room
+  reward, the runner) treats leaving elsewhere on that edge as a wrong exit. Used once: 0x5b E is `[0, 9]`.
+- **Why:** 0x5b's east edge has two openings. The lower one opens into a pocket of 0x5c that only leads S, so a
+  model that took it "succeeded" in 0x5b and left the chain stuck in 0x5c. A wavefront-greedy walker took
+  exactly that opening from the west entry.
+- **Wavefront:** `Room.can_move` no longer lets Link's 2×2 top-left tile move along the last row or column
+  (feet or right half off the map counted as walkable). That lane ran under every overworld room's bottom tree
+  line and joined all south openings, so 0x5c's pocket looked connected to its E exit. An audit of every
+  overworld entry state on both routes found no other split entry edge.

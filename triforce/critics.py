@@ -11,6 +11,7 @@ from typing import Dict, Set, Tuple
 
 from .rewards import REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL, REWARD_TINY, \
     Penalty, Reward, StepRewards
+from .objectives import exit_is_correct
 from .room_state import RoomState, SecretTrigger, decode_room_state
 from .state_change import StateChange
 from .zelda_enums import ActionKind, AnimationState, SwordKind, ZeldaAnimationKind, ZeldaEnemyKind
@@ -357,7 +358,7 @@ class GameplayCritic:
         if prev == curr or state_change.gained_triforce:
             return
 
-        if curr in state_change.previous.objectives.next_rooms:
+        if exit_is_correct(state_change.previous, curr):
             if curr in self._correct_locations:
                 rewards.add(REWARD_REVIST_LOCATION)
             else:

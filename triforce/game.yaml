@@ -670,6 +670,9 @@ rooms:
     E:
       level: 0
       location: '0x5c'
+      # Two openings: rows 3-4 reach 0x5c's east exit; rows 15-16 open into a pocket of 0x5c that only leads S
+      # (round 6, Lee).  Only the upper one counts.
+      span: [0, 9]
     S:
       level: 0
       location: '0x6b'

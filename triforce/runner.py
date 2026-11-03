@@ -16,7 +16,7 @@ import torch
 from .actions import Action
 from .game_map import GameMap, load_routes
 from .hearts import HeartTracker
-from .objectives import GameCompletion, start_route
+from .objectives import GameCompletion, exit_is_correct, start_route
 from .observation import ObservationBuilder
 from .registry import load_model, promoted_checkpoint
 from .session import GameSession
@@ -210,7 +210,7 @@ class Runner:
                 correct = None
                 if record is not None:
                     record.health_out = state.link.health
-                    correct = change is not None and location in change.previous.objectives.next_rooms
+                    correct = change is not None and exit_is_correct(change.previous, location)
                     record.outcome = 'exit-correct' if correct else 'exit-wrong'
                     _store_hearts(record, hearts, state)
 
@@ -234,6 +234,7 @@ class Runner:
                 if current is None or current.name != name:
                     current = self._load(name)
                     session.set_disabled_kinds(current.config.items.disabled_kinds())
+                    objectives.collect_hearts = current.config.collect_hearts   # as the specialist trained
                     obs = current.builder.reset(state, session.mask)
                 elif change is not None:
                     obs = current.builder.build(change, session.mask)

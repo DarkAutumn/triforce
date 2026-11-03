@@ -19,7 +19,7 @@ from typing import Dict, FrozenSet, List, Optional, Sequence, Set
 from .game_map import DEFAULT_ROUTE, GameMap, step_location
 from .room_state import room_flags
 from .zelda_game import ZeldaGame
-from .zelda_enums import Direction, MapLocation, SwordKind, TileIndex
+from .zelda_enums import Direction, MapLocation, SwordKind, TileIndex, ZeldaItemKind
 
 FLAG_ITEM_TAKEN = 0x10
 # Pond fairy (Z_04 UpdatePondFairy): Link at the pond edge, Y=$AD with $70 <= X < $81, is halted until every heart
@@ -151,11 +151,13 @@ class ObjectiveSelector:
 class _GameMapObjective(ObjectiveSelector):
     """Base class for objectives that use GameMap for routing."""
 
-    def __init__(self, route: str = DEFAULT_ROUTE):
+    def __init__(self, route: str = DEFAULT_ROUTE, collect_hearts: bool = False):
         super().__init__()
         if route not in self._game_map.routes:
             raise ValueError(f"Unknown route '{route}' (routes.yaml has {sorted(self._game_map.routes)})")
         self._route = route
+        # Below max hearts, a dropped heart on the floor is the objective (ITEM) and the PBRS target.
+        self.collect_hearts = collect_hearts
         self._last_route_key = None
         self._last_route_result = None
         self._collected_key_rooms: Set[MapLocation] = set()
@@ -236,6 +238,12 @@ class _GameMapObjective(ObjectiveSelector):
             next_rooms.extend(rooms)
             pbrs_targets.update(exit_tiles)
 
+        if self.collect_hearts and state.link.health < state.link.max_health:
+            hearts = {tile for item in state.items if item.id == ZeldaItemKind.Heart
+                      for tile in item.link_overlap_tiles}
+            if hearts:
+                # Exits stay correct; only the kind and the shaping change (round 6: agents left half the hearts).
+                return Objective(ObjectiveKind.ITEM, set(tile_objectives), set(next_rooms), hearts)
         return Objective(kind, set(tile_objectives), set(next_rooms), pbrs_targets)
 
     def _get_room_objective(self, prev, state):
@@ -370,7 +378,7 @@ class _GameMapObjective(ObjectiveSelector):
                         targets.append(cave_tile)
                 continue
             if d in state.room.exits:
-                targets.extend(state.room.exits[d])
+                targets.extend(tiles_in_span(state.room.exits[d], exit_span(state.full_location, d), d))
             else:
                 # Door exists (from routing) but isn't in exits — likely locked.
                 # Add the Direction as a target so the wavefront can handle it
@@ -445,8 +453,8 @@ class GameCompletion(_GameMapObjective):
         (SwordKind.WHITE, 'magic-sword', 13),
     ]
 
-    def __init__(self, route: str = DEFAULT_ROUTE, step: Optional[int] = None):
-        super().__init__(route)
+    def __init__(self, route: str = DEFAULT_ROUTE, step: Optional[int] = None, collect_hearts: bool = False):
+        super().__init__(route, collect_hearts)
         self._waypoints = [w for w in route_waypoints(self._game_map.routes[route]) if step is None or w.step >= step]
 
     def get_current_objectives(self, prev: Optional[ZeldaGame], state: ZeldaGame) -> Objective:
@@ -520,6 +528,37 @@ def shared_game_map() -> GameMap:
     if ObjectiveSelector._game_map is None:
         ObjectiveSelector._game_map = GameMap.load()
     return ObjectiveSelector._game_map
+
+
+def exit_span(location: MapLocation, direction: Direction) -> Optional[tuple]:
+    """game.yaml ``span`` of `location`'s exit in `direction` (``RoomExit.span``), or None."""
+    room = shared_game_map().get(location)
+    exit_info = room.exits.get(direction.name) if room is not None else None
+    return exit_info.span if exit_info is not None else None
+
+
+def _along_edge(tile, direction: Direction) -> int:
+    return tile.y if direction in (Direction.E, Direction.W) else tile.x
+
+
+def tiles_in_span(tiles, span: Optional[tuple], direction: Direction) -> list:
+    """The exit tiles inside `span` (all of them without one)."""
+    if span is None:
+        return list(tiles)
+    return [tile for tile in tiles if span[0] <= _along_edge(tile, direction) <= span[1]]
+
+
+def exit_is_correct(prev: ZeldaGame, location: MapLocation) -> bool:
+    """Whether leaving `prev`'s room into `location` is a correct exit: the objective wanted that room and, if
+    game.yaml limits the exit to a ``span`` (an edge whose openings lead into parts of the next room that don't
+    connect, e.g. 0x5b E), Link left through it."""
+    if location not in prev.objectives.next_rooms:
+        return False
+    direction = prev.full_location.get_direction_to(location)
+    if direction not in (Direction.N, Direction.S, Direction.E, Direction.W):
+        return True
+    span = exit_span(prev.full_location, direction)
+    return span is None or span[0] <= _along_edge(prev.link.tile, direction) <= span[1]
 
 
 def start_route(location: MapLocation, entry: Optional[str], rng: Optional[random.Random] = None,
