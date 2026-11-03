@@ -30,6 +30,7 @@ import shlex
 import subprocess
 import sys
 import threading
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -212,9 +213,18 @@ def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
     run_dir = Path(record['run_dir'])
     events.emit('eval_start', checkpoint=record['checkpoint'], episodes_per_state=args.episodes_per_state,
                 episodes=args.episodes_per_state * record['seed_states'], parallel=args.eval_parallel)
+    progress = {'successes': 0, 'last': 0.0}
+
+    def on_episode(episode: dict, done: int, total: int):
+        progress['successes'] += bool(episode['success'])
+        now = time.monotonic()
+        if now - progress['last'] >= 1.0 or done == total:     # at most ~1 event/second
+            progress['last'] = now
+            events.emit('eval_progress', done=done, episodes=total, success_rate=progress['successes'] / done)
+
     try:
         result = evaluate_specialist(name, record['checkpoint'], args.episodes_per_state,
-                                     parallel=args.eval_parallel, seed=0)
+                                     parallel=args.eval_parallel, seed=0, on_episode=on_episode)
     except Exception as error:  # pylint: disable=broad-exception-caught
         record['status'] = 'eval-failed' if record['status'] == 'ok' else record['status']
         record['error'] = f"{type(error).__name__}: {error}"

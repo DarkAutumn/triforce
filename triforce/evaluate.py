@@ -16,7 +16,7 @@ import json
 import multiprocessing as mp
 from collections import Counter
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 import torch
@@ -84,8 +84,10 @@ def _group(records: list[dict], key) -> dict:
 
 def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes_per_state: int = 20,
                         parallel: int = 1, seed: int = 0, deterministic: bool = False,
-                        session: Optional[GameSession] = None) -> dict:
-    """Plays every seed start state `episodes_per_state` times and returns the summary dict (see module doc)."""
+                        session: Optional[GameSession] = None,
+                        on_episode: Optional[Callable[[dict, int, int], None]] = None) -> dict:
+    """Plays every seed start state `episodes_per_state` times and returns the summary dict (see module doc).
+    ``on_episode(record, done, total)`` is called as each episode finishes (completion order when parallel)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     config = load_specialist(specialist) if isinstance(specialist, str) else specialist
     states = sorted(state_label(p) for p in config.resolve_start_states())
@@ -98,13 +100,21 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         env = ZeldaEnv(config, session=session, capture_dir=None)
         network = _load_network(checkpoint)
         try:
-            records = [_play(env, network, state, s, deterministic) for state, s in jobs]
+            records = []
+            for state, s in jobs:
+                records.append(_play(env, network, state, s, deterministic))
+                if on_episode is not None:
+                    on_episode(records[-1], len(records), len(jobs))
         finally:
             env.close()
     else:
         ctx = mp.get_context('spawn')
         with ctx.Pool(parallel, _worker_init, (config, str(checkpoint), deterministic)) as pool:
-            records = pool.map(_worker_run, jobs)
+            records = []
+            for record in pool.imap_unordered(_worker_run, jobs):
+                records.append(record)
+                if on_episode is not None:
+                    on_episode(record, len(records), len(jobs))
     records.sort(key=lambda r: r['seed'])
 
     count = len(records)
