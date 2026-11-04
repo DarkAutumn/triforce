@@ -42,6 +42,11 @@ triforce promote <specialist> <run-id>
 triforce eval-chain --route milestone1 --runs 20
 ```
 
+Training GUI charts use the plotted history (respecting **skip startup**). Success ranges use 25-percentage-point
+bands enclosing every displayed success series and the early-stop/eval reference lines; any value below 25%
+restores the full 0–100% range. Health change encloses both real and total series with ±0.2 hearts of padding;
+the "no change" reference appears only when zero is within that range.
+
 `triforce.play` is the debugging tool: it drives the game through the same code path as training
 (frame skipping, interrupts, masks, look-ahead) and prints the room, entities, legal actions and an ASCII
 tile map. `--screenshot`, `--ram`, `--set`, `--save-state` and `--capture` help build and inspect savestates.

@@ -1420,11 +1420,11 @@ class ChainCard(Clickable):
 class LineChart(QWidget):
     """Small line chart: x = iteration."""
 
-    def __init__(self, title: str, fixed=None, fmt=lambda v: f'{v:.2f}', *, legend_below=False,
+    def __init__(self, title: str, fmt=lambda v: f'{v:.2f}', *, scale='auto', legend_below=False,
                  empty='no data yet'):
         super().__init__()
         self.title = title
-        self.fixed = fixed
+        self.scale = scale
         self.fmt = fmt
         self.legend_below = legend_below
         self.empty = empty
@@ -1441,6 +1441,28 @@ class LineChart(QWidget):
         self.hlines = list(hlines)
         self.overlay = overlay
         self.update()
+
+    def y_bounds(self) -> tuple[float, float]:
+        """Scale plotted values; health's zero reference must not expand its range."""
+        values = [pt[1] for series in self.series for pt in series['points']]
+        if self.scale != 'health':
+            values.extend(value for value, _, _ in self.hlines)
+        if not values:
+            return (-0.2, 0.2) if self.scale == 'health' else (0.0, 1.0)
+        low, high = min(values), max(values)
+        if self.scale == 'success':
+            if low < 0.25:
+                return 0.0, 1.0
+            low, high = math.floor(low * 4) / 4, math.ceil(high * 4) / 4
+            # A constant value on a quarter boundary still needs a nonzero band (100%: 75–100%).
+            if low == high:
+                high = min(1.0, high + 0.25)
+                low = high - 0.25
+            return low, high
+        if self.scale == 'health':
+            return low - 0.2, high + 0.2
+        pad = (high - low) * 0.1 or abs(high) * 0.1 or 1.0
+        return low - pad, high + pad
 
     def paintEvent(self, _event):
         p = QPainter(self)
@@ -1495,14 +1517,8 @@ class LineChart(QWidget):
             p.drawText(plot, Qt.AlignmentFlag.AlignCenter, self.empty)
             return
         xs = [pt[0] for s in self.series for pt in s['points']]
-        ys = [pt[1] for s in self.series for pt in s['points']] + [h[0] for h in self.hlines]
+        y0, y1 = self.y_bounds()
         x0, x1 = min(xs), max(xs)
-        if self.fixed:
-            y0, y1 = self.fixed
-        else:
-            y0, y1 = min(ys), max(ys)
-            pad = (y1 - y0) * 0.1 or abs(y1) * 0.1 or 1.0
-            y0, y1 = y0 - pad, y1 + pad
         xspan, yspan = (x1 - x0) or 1, (y1 - y0) or 1
 
         def at(px, py):
@@ -1521,6 +1537,8 @@ class LineChart(QWidget):
         p.drawText(QRectF(plot.left(), plot.bottom() + 3, 60, 14), Qt.AlignmentFlag.AlignLeft, f"it {x0:g}")
         p.drawText(QRectF(plot.right() - 60, plot.bottom() + 3, 60, 14), Qt.AlignmentFlag.AlignRight, f"it {x1:g}")
         for value, color, label in self.hlines:
+            if not y0 <= value <= y1:
+                continue
             y = at(x0, value).y()
             p.setPen(QPen(color, 1, Qt.PenStyle.DashLine))
             p.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y))
@@ -1672,9 +1690,9 @@ class DetailPane(QWidget):
         layout.addWidget(self.tabs, 1)
 
         self.charts = {
-            'success': LineChart('Success', (0.0, 1.0), fmt_pct),
+            'success': LineChart('Success', fmt_pct, scale='success'),
             'reward': LineChart('Reward / episode'),
-            'health': LineChart('Health change', fmt=fmt_hearts_change),
+            'health': LineChart('Health change', fmt=fmt_hearts_change, scale='health'),
             'length': LineChart('Episode steps', fmt=lambda v: f'{v:.0f}'),
             'kl': LineChart('Approx KL', fmt=lambda v: f'{v:.3f}'),
             'sps': LineChart('Steps / second', fmt=lambda v: f'{v:.0f}'),
@@ -1745,7 +1763,7 @@ class DetailPane(QWidget):
                            f"<br><span style='color:{C.faint.name()}'>{where}</span>")
         self.chart_stack.setCurrentIndex(0)
         stop = (run.start or {}).get('stop_success')
-        hlines = [(stop, C.faint, f"early stop {fmt_pct(stop)}")] if stop else []
+        hlines = [(stop, C.faint, f"early stop {fmt_pct(stop)}")] if stop is not None else []
         if run.eval_rate() is not None:
             hlines.append((run.eval_rate(), C.eval, f"eval {fmt_pct(run.eval_rate())}"))
         # Skip startup: leave the run's first STARTUP_ITERATIONS out of the charts.  Until training gets past them,
