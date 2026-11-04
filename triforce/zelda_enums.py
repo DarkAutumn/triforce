@@ -238,6 +238,7 @@ class ZeldaItemKind(Enum):
     Bombs : int = 0x00
     BlueRupee : int = 0x0f
     Rupee : int = 0x18
+    Clock : int = 0x21
     Heart : int = 0x22
     Fairy : int = 0x23
 

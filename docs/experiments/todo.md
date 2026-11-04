@@ -6,18 +6,18 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Where it stands:** round 6 done (`round6.md`, Summary at the top). Best chains (40 runs, to the Dodongo room):
-  full chain 1/40 (milestone1) and 2–3/40 (milestone1-fairy); fairy post-D1 8/40; D2 entrance 9/40. The full
-  chain's limit is Dungeon 1: the D1 Goriya room (0x44) kills 15 of the 28 runs that reach it, 0x53 five more.
-- **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat /
-  boss-aquamentus r23-more, stalfos-keese-gel r25-skg-plain, goriya r21-goriya-chainhp, d2-rope r28-d2,
+- **Where it stands:** round 7 active (`round7.md`); lingering, Aquamentus exit training and observation audit done.
+  Round-6 baseline best chains (40 runs, to Dodongo): full 1/40 (milestone1), 2–3/40 (milestone1-fairy), fairy
+  post-D1 8/40, D2 entrance 9/40. D1 Goriya 0x44 and Stalfos 0x53 remain the full-chain bottlenecks.
+- **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat r23-more,
+  boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r21-goriya-chainhp, d2-rope r28-d2,
   wallmaster r10 copy. Overworld families train on both routes' rooms; D2 rooms have 3 start states each.
 
 ### Work in this order
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; Aquamentus diagnosis and audit next.
+chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya blocking/corner behavior is next.
 
 1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
@@ -29,7 +29,7 @@ chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; 
    on this metric.
    - **Done, round 7 §1:** behavior-neutral shared tracker, seeded gameplay parity, 383 tests, CUDA training events,
      real wide/narrow GUI and historical-data checks. Tracked evals and all 120 baseline chains complete.
-2. **Aquamentus wanders after the kill (Lee).** Link kills Aquamentus, then walks left/right in 0x35 for a very long
+2. [x] **Aquamentus wanders after the kill (Lee).** Link kills Aquamentus, then walks left/right in 0x35 for a very long
    time before leaving; one run sat there "for ages" and only got unstuck by chance. Even with a good success rate
    something is wrong, and Lee says it's unrelated to shadow Link: check it, or penalize hanging out in the boss
    room once the boss is dead. Likely cause: `boss-aquamentus.yaml` succeeds on `boss-dead-and-heart` (the episode
@@ -39,8 +39,11 @@ chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; 
    metric). Fix options: success = exit-correct into 0x36 (with curriculum states after the kill), a lingering
    penalty once the boss is dead, or hand the room to stalfos-keese-gel once the boss is dead. Compare chain time
    and hearts at the triforce room.
-   - **Round 7 §2 diagnosis:** current model 60/60 to the heart but 59/60 through the exit; a reproduced seed
-     lingered 1,963 actions after pickup. Both full chains had two post-heart 2,000-action timeouts. Fix pending.
+   - **Round 7 §2 diagnosis:** old r23-more 60/60 to the heart but 59/60 through the exit; a reproduced seed
+     lingered 1,963 actions after pickup. Both full chains had two post-heart 2,000-action timeouts.
+   - **Done, round 7 §5:** promoted r30-exit and complete-visit curriculum. Exit-task eval 60/60; mean pickup-to-exit
+     11.1 actions (old 92.0), worst 77 (old 1,963), health +0.69 (old +0.61). Both full chains removed old post-heart
+     timeouts. Independent 20-run sweeps: full main/fairy 1/3, post-D1 main/fairy 0/4, D2 3; no execution errors.
 3. [x] **Observation audit (Lee: does Link get enough about enemies and the world, e.g. does he know an enemy is
    stunned?).** Do it before the next full retrain: observation changes invalidate every model, so bundle them.
    Already there (`observation.ENTITY_FEATURES`): per-slot type embedding, projectile, blockable (rock, arrow,
@@ -57,9 +60,9 @@ chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; 
      Link/monster boomerang position/phase and corrected harm semantics; compare a full retrain. No RNG, guessed
      universal owner, redundant stun/clock flags or incidental timer rescaling. This bundle is not yet implemented.
 4. **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
-   Link to block instead of face-tanking. v2 already has `critics.critique_block` (`reward-block-projectile`,
-   REWARD_MEDIUM × combat decay, on the onset of the ArrowDeflected sound via `Link.is_blocking`). First check that
-   it fires on Goriya boomerangs (count blocks per episode in goriya evals and a few traces), then A/B a stronger
+   Link to block instead of face-tanking. v2's old `critics.critique_block` rewarded ArrowDeflected sound onset;
+   round 7 replaces that incomplete signal with per-frame confirmed shield collisions and per-collision decay.
+   First count confirmed Goriya blocks per episode in evals and traces, then A/B a stronger
    block reward on goriya (0x44 is the chain's top death room). Caveat (Lee): the sound alone is wrong in rooms
    with Darknuts etc. (their shields clink too), so require a blockable projectile in the air near Link plus the
    clink. Lee also watched the stalemate: Link in the top-left corner not fighting while the Goriyas chase shadow
@@ -68,6 +71,9 @@ chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; 
    then consider a stronger penalty for quiet steps while enemies remain. Related, from round 6: at 1 heart the
    goriya model turns passive (33% WAIT) and dies to contact; other ideas are demos or curriculum from damage-free
    Go-Explore paths (select by health, more patience) and a contact-damage penalty that grows as hp falls.
+   - **Round 7 §6 prerequisite done:** natural Goriya trace credited only 1/7 real blocks before, 7/7 after at
+     identical seed/action positions. Executed-frame counts reach training/eval/chains. 447 tests and CUDA smoke
+     passed; schemas unchanged. Stronger-reward matched r31 comparison and corner-stalemate experiment still pending.
 5. **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
    hearts (round 6 §8: overworld 26 of 34). In v1, dropped items were among the wavefront's targets, and the
    wavefront is a multi-source BFS, so PBRS led to a heart whenever it was closer than the exit by walking distance
@@ -77,6 +83,8 @@ chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; 
    exits. This differs from the dropped `collect_hearts` (heart was the only target whenever Link was hurt, kind
    ITEM). A/B on stalfos-keese-gel, d2-rope and an overworld family; measure taken/left, real vs total heart
    change and the chain.
+   - **Control ready, round 7 §6:** optional `reward.nearby_items`, default off; real walker verified nearer
+     clock/heart pickup versus nearer exit, correct exits and actual healed/left counts. Training A/B still pending.
 6. **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
    an item pickup or a kill).** Today training ends `stuck` after 50 steps without moving and `no-progress` after
    2000 steps without a new correct room (`end_conditions.Timeout`, the same 50/2000 as v1's Timeout; the ~100-step
@@ -93,6 +101,8 @@ chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; 
      N of 100–200 steps, after measuring the longest no-progress gap inside successful episodes per family (item 1's
      metric). Training: a truncation (value bootstraps), not a hard failure. Runner: `stuck` after N steps without
      progress instead of the flat 2000.
+   - **Control ready, round 7 §6:** optional `no_progress_steps`, default null; live quiet-tail truncation
+     bootstraps without terminal penalty, runner uses per-visit tail and keeps global guard. Threshold trial pending.
 7. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
    milestone). Today 0x7e is an equal-length alternate with exit N and no key objective (`routes.yaml`

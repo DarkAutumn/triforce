@@ -184,6 +184,94 @@ def test_max_steps_truncates_without_terminal_reward(session):
         env.step(Action.parse('WAIT 8').to_indices())
 
 
+
+def test_no_room_progress_truncates_at_threshold_and_resets_shared_tracker(session):
+    env = make_env(session, 'stalfos-keese-gel', '1_73s_0', no_progress_steps=3, max_steps=100)
+    env.reset(seed=0)
+    tracker = env.linger
+    for step in range(1, 4):
+        _, _, terminated, truncated, info = env.step(Action.parse('WAIT 8').to_indices())
+        assert not terminated
+        assert truncated == (step == 3)
+        assert tracker.tail_steps == step
+    assert (info['ending'], info['outcome']) == ('no-room-progress', 'soft-failure')
+    assert info['linger']['tail_steps'] == info['linger']['steps'] == 3
+    assert not any(k.startswith(('reward-terminal', 'penalty-terminal')) for k in info['rewards'])
+    with pytest.raises(RuntimeError):
+        env.step(Action.parse('WAIT 8').to_indices())
+    env.reset(seed=0)
+    assert env.linger is tracker and tracker.tail_steps == 0
+    *_, terminated, truncated, _ = env.step(Action.parse('WAIT 8').to_indices())
+    assert not (terminated or truncated)
+
+
+def test_no_room_progress_disabled_preserves_position_timeout(session):
+    env = make_env(session, 'stalfos-keese-gel', '1_73s_0', max_steps=100)
+    env.reset(seed=0)
+    for step in range(1, 51):
+        *_, terminated, truncated, info = env.step(Action.parse('WAIT 8').to_indices())
+        assert not truncated
+        assert terminated == (step == 50)
+    assert (info['ending'], info['outcome']) == ('stuck', 'hard-failure')
+
+
+def test_no_room_progress_keeps_episode_cap(session):
+    env = make_env(session, 'stalfos-keese-gel', '1_73s_0', no_progress_steps=10, max_steps=2)
+    env.reset(seed=0)
+    env.step(Action.parse('WAIT 8').to_indices())
+    *_, terminated, truncated, info = env.step(Action.parse('WAIT 8').to_indices())
+    assert truncated and not terminated and info['ending'] == 'max-steps'
+
+
+@pytest.mark.parametrize('progress', ['hit', 'pickup', 'heart', 'healing', 'approach', 'exit'])
+def test_measured_ending_credits_threshold_action_before_check(progress):
+    from types import SimpleNamespace as NS
+    from triforce.end_conditions import NoRoomProgress, build_end_conditions, Timeout, classify_ending
+    from triforce.linger import LingerTracker
+
+    def state(tile=5, health=2, room=0x73):
+        return NS(level=1, location=room, in_cave=False, full_location=(1, room, False), game_over=False,
+                  objectives=NS(kind=ObjectiveKind.MOVE, next_rooms={0x63}, pbrs_targets={0}),
+                  pbrs_wavefront={t: t for t in range(10)}, room_kills=0, enemies=[],
+                  link=NS(tile=tile, keys=0, health=health, max_health=3))
+
+    tracker = LingerTracker()
+    prev = state()
+    tracker.reset(prev)
+    conditions = build_end_conditions([], [], linger=tracker, no_progress_steps=3)
+    condition = conditions[-1]
+    assert isinstance(condition, NoRoomProgress)
+    assert not any(isinstance(c, Timeout) for c in conditions)
+    assert isinstance(build_end_conditions([], [])[-1], Timeout)
+    with pytest.raises(ValueError, match='shared LingerTracker'):
+        build_end_conditions([], [], no_progress_steps=3)
+    with pytest.raises(ValueError, match='positive'):
+        build_end_conditions([], [], linger=tracker, no_progress_steps=0)
+
+    def update(curr, **fields):
+        change = NS(previous=prev, state=curr, frames=8, enemies_hit={}, items_gained=[],
+                    gained_triforce=False, health_gained=0)
+        change.__dict__.update(fields)
+        tracker.update(change, hearts_taken=int(progress == 'heart' and curr is not prev))
+        return condition.check(change)
+
+    assert update(prev) is None
+    assert update(prev) is None and tracker.tail_steps == 2
+    curr = state(tile=4 if progress == 'approach' else 5, health=3 if progress == 'healing' else 2,
+                 room=0x63 if progress == 'exit' else 0x73)
+    assert update(curr, enemies_hit={1: 1} if progress == 'hit' else {},
+                  items_gained=[1] if progress == 'pickup' else [],
+                  health_gained=1 if progress == 'healing' else 0) is None
+    assert tracker.tail_steps == 0
+    prev = curr
+    assert update(prev) is None
+    assert update(prev) is None
+    ending = update(prev)
+    assert ending == 'no-room-progress' and classify_ending(ending, []) == 'soft-failure'
+    condition.clear()
+    tracker.reset(curr)
+    assert update(prev) is None and tracker.tail_steps == 1
+
 def test_masked_action_raises(session):
     env = make_env(session, 'stalfos-keese-gel', '1_73s_0')
     env.reset(seed=0)

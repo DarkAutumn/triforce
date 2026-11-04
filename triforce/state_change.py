@@ -114,6 +114,7 @@ class StateChange:
         self.option = option                      # frame_skip.OptionResult
         self.frames : int = option.frames
         self.interrupt : Optional[str] = option.interrupt
+        self.projectile_blocks = option.projectile_blocks  # actual events only; never changed by look-ahead
         self.previous : ZeldaGame = prev
         self.state : ZeldaGame = curr
         self.action_mask : Optional[ActionMask] = None
@@ -168,6 +169,11 @@ class StateChange:
     def changed_location(self):
         """Returns True if the location changed."""
         return self.previous.full_location != self.state.full_location
+
+    @property
+    def blocks(self) -> int:
+        """Confirmed shield collisions during this option, including its uncontrollable frames."""
+        return len(self.projectile_blocks)
 
     @property
     def damage_dealt(self):

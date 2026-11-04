@@ -12,6 +12,7 @@ Each condition looks at a ``StateChange`` and returns an ending name or None.  E
 | ``death`` / ``wallmastered`` | hard failure | game over / dragged back to the dungeon entrance |
 | ``stuck`` / ``no-progress`` | hard failure | Link didn't move for 50 steps / no new correct room for 2000 steps |
 | ``max-steps`` | soft failure (truncation) | the env hit ``max_steps`` |
+| ``no-room-progress`` | soft failure (truncation) | configured number of actions without measured room progress |
 
 Success kinds are only successes for specialists that list them; any ending that is neither a listed success
 nor in the specialist's/central failure table raises ``UnclassifiedEndingError``.
@@ -19,6 +20,7 @@ nor in the specialist's/central failure table raises ``UnclassifiedEndingError``
 
 from typing import Dict, Iterable, List, Optional
 
+from .linger import LingerTracker
 from .objectives import exit_is_correct
 from .rewards import HARD_FAILURE, OUTCOMES, SOFT_FAILURE, SUCCESS
 from .state_change import StateChange
@@ -32,6 +34,7 @@ DEATH = 'death'
 WALLMASTERED = 'wallmastered'
 STUCK = 'stuck'
 NO_PROGRESS = 'no-progress'
+NO_ROOM_PROGRESS = 'no-room-progress'
 MAX_STEPS = 'max-steps'
 ENTER_ROOM_PREFIX = 'enter-room:'
 
@@ -41,6 +44,7 @@ SUCCESS_KINDS = (EXIT_CORRECT, TRIFORCE_COLLECTED, BOSS_DEAD_AND_HEART)
 DEFAULT_FAILURES: Dict[str, str] = {
     EXIT_WRONG: SOFT_FAILURE,
     MAX_STEPS: SOFT_FAILURE,
+    NO_ROOM_PROGRESS: SOFT_FAILURE,
     DEATH: HARD_FAILURE,
     WALLMASTERED: HARD_FAILURE,
     STUCK: HARD_FAILURE,
@@ -192,11 +196,32 @@ class Timeout(ZeldaEndCondition):
         return None
 
 
+class NoRoomProgress(ZeldaEndCondition):
+    """Read the shared tracker after this action's progress has been credited.
+
+    The consumer owns updating and resetting the tracker; this condition must never update it twice or
+    replace it at reset. Unlike the legacy Timeout, this ending is a bootstrapping truncation.
+    """
+    def __init__(self, linger: LingerTracker, no_progress_steps: int):
+        if linger is None:
+            raise ValueError('no_progress_steps requires a shared LingerTracker')
+        if no_progress_steps <= 0:
+            raise ValueError('no_progress_steps must be positive')
+        self.linger = linger
+        self.no_progress_steps = no_progress_steps
+
+    def check(self, state_change):
+        return NO_ROOM_PROGRESS if self.linger.tail_steps >= self.no_progress_steps else None
+
+
 def build_end_conditions(rooms: Iterable[MapLocation], success: Iterable[str],
-                         one_room: bool = False) -> List[ZeldaEndCondition]:
+                         one_room: bool = False, *, linger: Optional[LingerTracker] = None,
+                         no_progress_steps: Optional[int] = None) -> List[ZeldaEndCondition]:
     """The end conditions for a specialist, in priority order.  Triforce / heart-container conditions are only
     checked for specialists that list them as success (otherwise those events are just rewards).  ``one_room``
-    ends every episode at its first room exit (``SpecialistConfig.one_room``)."""
+    ends every episode at its first room exit (``SpecialistConfig.one_room``). When ``no_progress_steps`` is
+    enabled, a shared tracker is required, updated before checking and reset in place each episode; the measured
+    cutoff replaces Timeout. The consumer must truncate, rather than terminate, ``no-room-progress``."""
     success = list(success)
     enter_rooms = [parse_enter_room(k) for k in success if k.startswith(ENTER_ROOM_PREFIX)]
     conditions: List[ZeldaEndCondition] = [GameOver(), Wallmastered()]
@@ -204,5 +229,6 @@ def build_end_conditions(rooms: Iterable[MapLocation], success: Iterable[str],
         conditions.append(GainedTriforce())
     if BOSS_DEAD_AND_HEART in success:
         conditions.append(BossDeadAndHeart())
-    conditions += [RoomExit(rooms, enter_rooms, one_room), Timeout()]
+    timeout = Timeout() if no_progress_steps is None else NoRoomProgress(linger, no_progress_steps)
+    conditions += [RoomExit(rooms, enter_rooms, one_room), timeout]
     return conditions

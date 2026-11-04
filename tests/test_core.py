@@ -1,11 +1,16 @@
 """Emulator, object model, action schema, option executor and session behavior on real savestates."""
 
+from types import SimpleNamespace
+
+import numpy as np
 import pytest
 
 from triforce.actions import (ACTION_SCHEMA_VERSION, MASK_SIZE, Action, ActionMask, DIRECTIONS, DURATIONS,
                               compute_action_mask)
-from triforce.frame_skip import Interrupt
-from triforce.zelda_enums import ActionKind, AnimationState, Direction, SwordKind, ZeldaAnimationKind, ZeldaEnemyKind
+from triforce.frame_skip import Interrupt, OptionExecutor
+from triforce.projectile_blocks import ProjectileBlock, ShieldCollisionWatch
+from triforce.zelda_enums import (ActionKind, AnimationState, Direction, MapLocation, SwordKind,
+                                ZeldaAnimationKind, ZeldaEnemyKind)
 
 from .conftest import act_until, full_health, load_and_place
 
@@ -158,6 +163,254 @@ def test_wait_is_interrupted_in_combat(session):
             break
     assert reasons - {None}, "Goriyas never interrupted a WAIT"
     assert reasons <= set(Interrupt.ALL) | {None}
+
+
+def _shield_ram(kind=0x5C):
+    """Shield-eligible Link with one outgoing hostile shot, already within the collision box."""
+    ram = np.zeros(0x800, dtype=np.uint8)
+    for address, value in {0x10: 1, 0x12: 5, 0xEB: 0x44, 0x70: 128, 0x84: 144, 0x98: 1,
+                           0x66F: 0x22, 0x670: 255, 0x34F + 11: kind, 0xAC + 11: 0x17,
+                           0x70 + 11: 140, 0x84 + 11: 144, 0x98 + 11: 2,
+                           0x4BF + 11: 0xE1, 0x3D0 + 11: 2}.items():
+        ram[address] = value
+    ram[0x346:0x34A] = (24, 224, 80, 200)
+    return ram
+
+
+def _parry_frame(ram, kind=0x5C):
+    ram[0x604] = 1
+    ram[0x70 + 11] = 137
+    ram[0xAC + 11] = 0x20 if kind == 0x5C else 0x30
+    ram[0x3D0 + 11] = 3
+    ram[0x380 + 11] = ram[0x98]
+    ram[0x394 + 11] = 0
+    if kind == 0x55:
+        ram[0x34F + 11] = 0
+        ram[0xAC + 11] = 0
+
+
+@pytest.mark.parametrize('kind', [0x53, 0x55, 0x57, 0x5C])
+def test_shield_collision_types_use_request_and_signature(kind):
+    ram = _shield_ram(kind)
+    ram[0x676] = 1
+    before = ShieldCollisionWatch(ram.__getitem__)
+    _parry_frame(ram, kind)
+    assert ram[0x605] == 0  # the sound is delayed, but this collision is already confirmed
+    assert before.collisions(ram.__getitem__, 100) == (ProjectileBlock(100, 11, kind, MapLocation(1, 0x44, False)),)
+    repeated = ShieldCollisionWatch(ram.__getitem__)
+    ram[0x605] = 1
+    assert repeated.collisions(ram.__getitem__, 101) == ()
+
+
+@pytest.mark.parametrize('address,value', [(0x66C, 1), (0x4F0, 1), (0x3D, 1), (0x3D + 11, 1),
+                                         (0x512, 1), (0xAC, 0x10), (0xAC, 0x40), (0x98, 2),
+                                         (0x66F, 0x21), (0x670, 127), (0x604, 0), (0x12, 6)])
+def test_shield_collision_rejects_clock_stun_wrong_facing_damage_and_missing_request(address, value):
+    ram = _shield_ram()
+    before = ShieldCollisionWatch(ram.__getitem__)
+    _parry_frame(ram)
+    ram[address] = value
+    assert before.collisions(ram.__getitem__, 100) == ()
+
+
+@pytest.mark.parametrize('phase', [0, 0x10, 0x28, 0x30, 0x40, 0x50])
+def test_boomerang_disappearance_and_natural_return_are_not_blocks(phase):
+    ram = _shield_ram()
+    before = ShieldCollisionWatch(ram.__getitem__)
+    _parry_frame(ram)
+    ram[0xAC + 11] = phase
+    assert before.collisions(ram.__getitem__, 100) == ()
+
+
+def test_magic_shield_does_not_block_unshieldable_fireballs():
+    ram = _shield_ram(0x56)
+    ram[0x676] = 1
+    before = ShieldCollisionWatch(ram.__getitem__)
+    _parry_frame(ram, 0x56)
+    assert before.collisions(ram.__getitem__, 100) == ()
+
+
+def test_immune_clink_with_nearby_unchanged_projectile_is_not_a_block():
+    ram = _shield_ram()
+    before = ShieldCollisionWatch(ram.__getitem__)
+    ram[0x604] = ram[0x605] = 1
+    assert before.collisions(ram.__getitem__, 100) == ()
+
+
+@pytest.mark.parametrize('kind', [0x55, 0x57])
+def test_magic_shots_require_magic_shield(kind):
+    ram = _shield_ram(kind)
+    before = ShieldCollisionWatch(ram.__getitem__)
+    _parry_frame(ram, kind)
+    assert before.collisions(ram.__getitem__, 100) == ()
+
+
+@pytest.mark.parametrize('address,value', [(0x380 + 11, 2), (0x394 + 11, 2)])
+def test_fireball_disappearance_needs_collision_bounce_evidence(address, value):
+    ram = _shield_ram(0x55)
+    ram[0x676] = 1
+    before = ShieldCollisionWatch(ram.__getitem__)
+    _parry_frame(ram, 0x55)
+    ram[address] = value
+    assert before.collisions(ram.__getitem__, 100) == ()
+
+
+def test_shield_collision_uses_half_width_midpoint_and_strict_axis_thresholds():
+    ram = _shield_ram()
+    before = ShieldCollisionWatch(ram.__getitem__)
+    _parry_frame(ram)
+    ram[0x70 + 11], ram[0x84 + 11] = 140, 152  # midpoint distances 8 and 8, even though Euclidean >9
+    assert len(before.collisions(ram.__getitem__, 100)) == 1
+    ram[0x70 + 11] = 141  # half-width midpoint now exactly 9 away
+    assert before.collisions(ram.__getitem__, 100) == ()
+
+
+def test_unrelated_clink_does_not_credit_a_stationary_wall_spark_or_boundary_fireball():
+    ram = _shield_ram()
+    before = ShieldCollisionWatch(ram.__getitem__)
+    _parry_frame(ram)
+    ram[0x70 + 11] = 140  # blocked by a tile without moving; another actor supplied the clink
+    assert before.collisions(ram.__getitem__, 100) == ()
+
+    ram = _shield_ram(0x55)
+    ram[0x676] = 1
+    ram[0x70] = ram[0x70 + 11] = 16  # west-facing fireball outside the left bound: no Link check executes
+    before = ShieldCollisionWatch(ram.__getitem__)
+    _parry_frame(ram, 0x55)
+    ram[0x70 + 11] = 16
+    assert before.collisions(ram.__getitem__, 100) == ()
+
+
+def test_real_before_trace_credits_collision_even_when_sound_endpoints_are_silent():
+    # Captured before the fix: seed 0, WAIT 32 action 106, frame 2973 -> 2974 in 1:0x44.
+    # Both controllable endpoint sounds were silent; old critique_block paid nothing. Actual $604=1,
+    # slot 11 outgoing $17 -> spark $20, no clock/invincibility/stun/health loss, half-width midpoint (84,181)
+    # collides with Link's (88,189). This is real RAM evidence, not a fabricated sound-onset scenario.
+    ram = _shield_ram()
+    ram[0x70], ram[0x84], ram[0x98], ram[0x66F], ram[0x670] = 80, 181, 2, 33, 254
+    ram[0x70 + 11], ram[0x84 + 11], ram[0x98 + 11] = 77, 173, 1
+    before = ShieldCollisionWatch(ram.__getitem__)
+    ram[0x70 + 11], ram[0xAC + 11], ram[0x3D0 + 11], ram[0x604] = 80, 0x20, 3, 1
+    assert before.collisions(ram.__getitem__, 2974) == (ProjectileBlock(2974, 11, 0x5C, MapLocation(1, 0x44, False)),)
+
+
+class _ScriptedShieldEmulator:
+    """Deterministic RAM frames to exercise executor branches without relying on monster movement."""
+    def __init__(self, collision_frame, stunned_until=0):
+        self.ram = _shield_ram()
+        self.frame = 0
+        self.collision_frame = collision_frame
+        self.stunned_until = stunned_until
+        self.on_frame = None
+        self.buttons = []
+
+    def read(self, address):
+        return int(self.ram[address])
+
+    def set_value(self, name, value):
+        if name == 'link_direction':
+            self.ram[0x98] = value
+
+    def step(self, buttons=None, frames=1):
+        for _ in range(frames):
+            self.buttons.append(None if buttons is None else tuple(buttons))
+            self.frame += 1
+            self.ram[0xAC] = 0x40 if self.frame < self.stunned_until else 0
+            if self.frame == self.collision_frame:
+                _parry_frame(self.ram)
+            if self.on_frame:
+                self.on_frame()
+
+
+@pytest.mark.parametrize('duration', [4, 32])
+def test_executor_counts_every_collision_without_interrupting_or_replacing_callback(duration):
+    emu = _ScriptedShieldEmulator(collision_frame=2)
+    observed = []
+    callback = lambda: observed.append(emu.frame)
+    emu.on_frame = callback
+    state = SimpleNamespace(level=1, location=0x44, in_cave=False)
+    result = OptionExecutor(emu).execute(Action(ActionKind.WAIT, duration=duration), state)
+    assert result.frames == duration + 1 and result.control_frames == duration and result.interrupt is None
+    assert result.blocks == 1 and result.projectile_blocks[0].frame == 2
+    assert observed == list(range(1, duration + 2)) and emu.on_frame is callback
+    assert emu.buttons == [None] * result.frames
+
+
+def test_executor_counts_blocks_in_attack_settling_and_uncontrollable_frames():
+    state = SimpleNamespace(level=1, location=0x44, in_cave=False)
+    emu = _ScriptedShieldEmulator(collision_frame=3)
+    result = OptionExecutor(emu).execute(Action(ActionKind.SWORD, Direction.E), state)
+    assert (result.control_frames, result.frames, result.blocks) == (2, 3, 1)
+    assert emu.buttons[0][-1] == 1 and emu.buttons[1:] == [None, None]
+    emu = _ScriptedShieldEmulator(collision_frame=6, stunned_until=6)
+    result = OptionExecutor(emu).execute(Action(ActionKind.WAIT, duration=4), state)
+    assert (result.control_frames, result.frames, result.blocks) == (4, 7, 1)
+    assert result.projectile_blocks[0].frame == 6
+
+
+def _place_shield_projectile(session, slots=(11,)):
+    session.load('1_73s_0', randomize_rng=False)
+    session.act(Action.parse('MOVE N 16'))  # off the entry door, in playable mode before RAM placement
+    session.apply_ram({'link_x': 128, 'link_y': 144, 'link_direction': 1,
+                       'hearts_and_containers': 0x22, 'partial_hearts': 255})
+    for address in (0xAC, 0x3D, 0x4F0, 0x66C, 0x512):
+        session.emu.write(address, 0)
+    for slot in slots:
+        for base, value in {0x34F: 0x5C, 0xAC: 0x17, 0x70: 140, 0x84: 144, 0x98: 2, 0x4BF: 0xE1,
+                            0x3D0: 2, 0x3BC: 0xA0, 0x3A8: 0, 0x380: 0x51, 0x394: 0,
+                            0x28: 0, 0x3D: 0, 0x405: 0, 0x492: 0}.items():
+            session.emu.write(base + slot, value)
+    session.emu.write(0x34C, len(slots))
+    session.apply_ram({})
+
+
+def test_real_shield_block_can_coincide_with_a_heart_pickup(session):
+    _place_shield_projectile(session)
+    session.apply_ram({'hearts_and_containers': 0x21, 'partial_hearts': 255})
+    for base, value in {0x34F: 0x60, 0xAC: 0x22, 0x70: 128, 0x84: 144, 0x405: 0, 0x3A8: 0xC0}.items():
+        session.emu.write(base + 1, value)
+    session.apply_ram({})
+    change = session.act(Action.parse('WAIT 4'))
+    assert change.health_gained == 1 and change.health_lost == 0
+    assert change.blocks == 1
+
+
+@pytest.mark.parametrize('duration', [4, 32])
+def test_real_projectile_block_counts_are_independent_of_option_duration(session, duration):
+    _place_shield_projectile(session, slots=(10, 11))
+    start = session.emu.frame
+    change = session.act(Action(ActionKind.WAIT, duration=duration))
+    assert change.blocks == change.option.blocks == 2
+    assert {event.slot for event in change.projectile_blocks} == {10, 11}
+    assert all(start < event.frame <= start + change.frames for event in change.projectile_blocks)
+    assert change.health_lost == 0 and change.interrupt is None
+    assert session.act(Action.parse('WAIT 4')).blocks == 0
+
+
+def test_block_collection_preserves_real_seeded_timing_state_and_user_callback(session, monkeypatch):
+    _place_shield_projectile(session)
+    snapshot = session.snapshot()
+    observed = []
+    callback = lambda: observed.append(session.emu.frame)
+    session.emu.on_frame = callback
+    try:
+        active = session.act(Action.parse('WAIT 16'))
+        active_ram = session.emu.ram.copy()
+        active_screen = session.emu.get_screen().copy()
+        assert len(observed) == active.frames and session.emu.on_frame is callback
+        session.restore(snapshot)
+        observed.clear()
+        with monkeypatch.context() as patch:
+            patch.setattr(ShieldCollisionWatch, 'collisions', lambda self, read, frame: ())
+            unobserved = session.act(Action.parse('WAIT 16'))
+        assert len(observed) == unobserved.frames and session.emu.on_frame is callback
+        assert active.blocks == 1 and unobserved.blocks == 0
+        assert (active.frames, active.option.control_frames, active.interrupt) == \
+               (unobserved.frames, unobserved.option.control_frames, unobserved.interrupt)
+        assert np.array_equal(active_ram, session.emu.ram)
+        assert np.array_equal(active_screen, session.emu.get_screen())
+    finally:
+        session.emu.on_frame = None
 
 
 def test_push_block_opens(session):

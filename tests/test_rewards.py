@@ -1,17 +1,21 @@
 """Reward framework, terminal rewards, ending classification, and critic behavior on real savestates."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from triforce.actions import Action
-from triforce.critics import REWARD_OPENED_LOCKED_DOOR
+from triforce.critics import GameplayCritic, REWARD_OPENED_LOCKED_DOOR, create_critic
 from triforce.end_conditions import (DEFAULT_FAILURES, UnclassifiedEndingError, classify_ending, enter_room_name,
                                      parse_enter_room, validate_success_kind)
-from triforce.rewards import (HARD_FAILURE, REWARD_MAXIMUM, SOFT_FAILURE, SUCCESS, Penalty, Reward, StepRewards,
-                              apply_terminal_rewards, success_reward_value)
+from triforce.projectile_blocks import ProjectileBlock
+from triforce.rewards import (HARD_FAILURE, REWARD_MAXIMUM, REWARD_MEDIUM, SOFT_FAILURE, SUCCESS, Penalty,
+                              Reward, StepRewards, apply_terminal_rewards, success_reward_value)
 from triforce.specialist import RamRandomization, RewardConfig
-from triforce.zelda_enums import ActionKind, MapLocation
+from triforce.zelda_enums import ActionKind, Direction, MapLocation
 
 from .test_env import chase_action, greedy_step, make_env
+from .test_core import _place_shield_projectile
 
 
 # --- StepRewards ---
@@ -101,6 +105,95 @@ def test_enter_room_kinds_round_trip():
         with pytest.raises(ValueError):
             validate_success_kind(bad)
 
+
+
+def _block_change(events=(), kind=ActionKind.WAIT):
+    action = Action.parse('WAIT 4') if kind == ActionKind.WAIT else Action(kind, Direction.E)
+    return SimpleNamespace(projectile_blocks=events, blocks=len(events), action=action,
+                           previous=SimpleNamespace(link=SimpleNamespace(is_blocking=False)),
+                           state=SimpleNamespace(link=SimpleNamespace(is_blocking=False)), health_lost=0)
+
+
+@pytest.mark.parametrize('multiplier', [0.0, 1.0, 3.0])
+def test_block_reward_multiplier_scales_unchanged_base_without_sound_onset(multiplier):
+    event = ProjectileBlock(10, 11, 0x5C, MapLocation(1, 0x44, False))
+    critic = create_critic('default', pbrs=False, block_reward=multiplier)
+    rewards = StepRewards()
+    critic.critique_block(_block_change((event,)), rewards)
+    assert rewards.to_dict().get('reward-block-projectile', 0) == REWARD_MEDIUM * multiplier
+    assert critic._room_combat_counts[event.full_location] == 1
+    if multiplier:
+        assert rewards['reward-block-projectile'].count == 1
+
+
+def test_legacy_clink_without_collision_is_not_rewarded():
+    critic = create_critic('default', pbrs=False)
+    change = _block_change()
+    change.state.link.is_blocking = True  # Darknut/immunity or a delayed old clink is not a Link collision
+    rewards = StepRewards()
+    critic.critique_block(change, rewards)
+    assert rewards.to_dict() == {} and critic._room_combat_counts == {}
+
+
+def test_each_block_advances_decay_in_its_collision_room_not_the_option_end_room():
+    room, next_room = MapLocation(1, 0x44, False), MapLocation(1, 0x43, False)
+    events = (ProjectileBlock(10, 10, 0x5C, room), ProjectileBlock(10, 11, 0x5C, room),
+              ProjectileBlock(20, 11, 0x53, next_room))
+    critic = GameplayCritic(pbrs=False, block_reward=2.0)
+    critic._room_combat_counts[room] = 9  # next two decay factors are 0.5 and 0.25; new room remains 1.0
+    rewards = StepRewards()
+    change = _block_change(events)
+    change.state.full_location = next_room
+    critic.critique_block(change, rewards)
+    outcome = rewards['reward-block-projectile']
+    assert outcome.value == REWARD_MEDIUM * 2.0 * (0.5 + 0.25 + 1.0) and outcome.count == 3
+    assert critic._room_combat_counts == {room: 11, next_room: 1}
+    assert rewards.value == 1.0  # normal per-step clamping is unchanged
+
+
+def test_grouping_blocks_into_longer_options_does_not_change_decay_or_total_reward():
+    room = MapLocation(1, 0x44, False)
+    events = tuple(ProjectileBlock(frame, 11, 0x5C, room) for frame in range(12))
+
+    def total(groups):
+        critic = GameplayCritic(pbrs=False)
+        reward = 0.0
+        count = 0
+        for group in groups:
+            rewards = StepRewards()
+            critic.critique_block(_block_change(group), rewards)
+            reward += rewards['reward-block-projectile'].value
+            count += rewards['reward-block-projectile'].count
+        return reward, count, critic._room_combat_counts
+
+    assert total([events]) == total([(event,) for event in events])
+
+
+def test_gameplay_rewards_a_confirmed_block_during_a_weapon_option(monkeypatch):
+    critic = GameplayCritic(pbrs=False)
+    # Other critiques are unrelated to deciding whether a real per-frame block belongs to an attack option.
+    for name in ('critique_triforce', 'critique_attack', 'critique_item_usage', 'critique_equipment_pickup',
+                 'critique_puzzles', 'critique_location_change', 'critique_movement',
+                 'critique_health_change', 'critique_wallmaster'):
+        monkeypatch.setattr(critic, name, lambda change, rewards: None)
+    event = ProjectileBlock(10, 11, 0x5C, MapLocation(1, 0x44, False))
+    rewards = StepRewards()
+    critic.critique_gameplay(_block_change((event,), ActionKind.SWORD), rewards)
+    assert rewards['reward-block-projectile'].value == REWARD_MEDIUM
+
+
+def test_real_simultaneous_projectiles_each_earn_one_block_reward_and_not_again(session):
+    _place_shield_projectile(session, slots=(10, 11))
+    critic = GameplayCritic(pbrs=False)
+    change = session.act(Action.parse('WAIT 16'))
+    rewards = StepRewards()
+    critic.critique_block(change, rewards)
+    assert change.blocks == 2
+    assert rewards['reward-block-projectile'].value == 2 * REWARD_MEDIUM
+    assert rewards['reward-block-projectile'].count == 2
+    follow = StepRewards()
+    critic.critique_block(session.act(Action.parse('WAIT 4')), follow)
+    assert follow.to_dict() == {}
 
 # --- critics on the emulator ---
 

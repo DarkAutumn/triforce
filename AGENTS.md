@@ -8,7 +8,8 @@ stands and what to try next, in order).
 
 - Round 6 is complete (`docs/experiments/round6.md`); round 7 is in `docs/experiments/round7.md`.
 - Todo item 1 complete: shared lingering metrics and GUI, 383 tests, seeded parity, CUDA smoke and baseline chains.
-  Outputs `models/r29-linger-baseline/`. Audit complete; boomerang/config-loss bugs fixed. Next: r30 exit training.
+  Outputs `models/r29-linger-baseline/`. Audit complete; boomerang/config-loss bugs fixed. Aquamentus r30-exit
+  promoted: train the full kill/heart/exit visit. Next: Goriya block-reward and corner-stalemate experiments.
 - Lee resumed experiment mode: keep the omp todo updated, reconcile it with todo.md between experiments, log
   every result, check off completed backlog entries, commit each finished item and keep going through items 1–8.
 - **Uncommitted on purpose:** `play-zelda.py`, `triforce/play_grid.py`, `tests/test_play_zelda.py` in main's
