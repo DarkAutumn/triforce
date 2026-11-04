@@ -6,18 +6,18 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Where it stands:** round 7 active (`round7.md`); lingering, Aquamentus exit training and observation audit done.
-  Round-6 baseline best chains (40 runs, to Dodongo): full 1/40 (milestone1), 2–3/40 (milestone1-fairy), fairy
-  post-D1 8/40, D2 entrance 9/40. D1 Goriya 0x44 and Stalfos 0x53 remain the full-chain bottlenecks.
+- **Where it stands:** round 7 active (`round7.md`); items 1–4 and the worker-seed prerequisite complete.
+  With r31-block1, 40-run chains reach Dodongo: full main 2, full fairy 3, post-D1 main 2, post-D1 fairy 4, D2 11.
+  D1 Goriya 0x44 and Stalfos 0x53 remain full-chain bottlenecks; nearest-heart/exit shaping is next.
 - **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat r23-more,
-  boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r21-goriya-chainhp, d2-rope r28-d2,
+  boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1, d2-rope r28-d2,
   wallmaster r10 copy. Overworld families train on both routes' rooms; D2 rooms have 3 start states each.
 
 ### Work in this order
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya blocking/corner behavior is next.
+chain's death rooms, then the big ablation. Round 7 items 1–4 complete; nearest-heart/exit shaping is next.
 
 1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
@@ -59,7 +59,7 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
    - [ ] **Bundled observation trial before the from-scratch item 8 study:** versioned chase target coordinates,
      Link/monster boomerang position/phase and corrected harm semantics; compare a full retrain. No RNG, guessed
      universal owner, redundant stun/clock flags or incidental timer rescaling. This bundle is not yet implemented.
-4. **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
+4. [x] **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
    Link to block instead of face-tanking. v2's old `critics.critique_block` rewarded ArrowDeflected sound onset;
    round 7 replaces that incomplete signal with per-frame confirmed shield collisions and per-collision decay.
    First count confirmed Goriya blocks per episode in evals and traces, then A/B a stronger
@@ -73,17 +73,20 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
    Go-Explore paths (select by health, more patience) and a contact-damage penalty that grows as hp falls.
    - **Round 7 §6 prerequisite done:** natural Goriya trace credited only 1/7 real blocks before, 7/7 after at
      identical seed/action positions. Executed-frame counts reach training/eval/chains. 447 tests and CUDA smoke
-     passed; schemas unchanged. All r31 arms evaluated; frozen-team chains remain pending (round 7 §6).
+     passed; schemas unchanged. All r31 arms and 800 frozen-team chains completed without execution errors.
    - **Measured baseline:** 178/240 successes, −0.96 hearts, 45 confirmed blocks. Faithful 0x44 seed-62 replay
      has three living Goriyas throughout a 1,971-action quiet stretch; existing stall cost does not break it.
-     Stronger fight-only quiet cost is verified in dev; its r31 training arm has finished. Main stays frozen for chains.
+     Ordinary r31-block1 promoted for lowest evaluation damage and mixed but better full-main/D2 chains; stronger costs off.
    - **Distinct pickup problem:** 0x23 seed 5 kills all three Goriyas, then wanders for 1,902 quiet actions without
      the key. A fight-only penalty cannot address this; do not label it shadow-Link stalling or silently exclude
      the room from family evaluation.
    - [x] **Seed prerequisite, round 7 §7:** corrected CLI-to-PPO-to-worker policy/reset seeding in dev. Native
      no-curriculum rollouts reproduce exactly with the same seed, differ with another seed, and advance across
-     episodes/batches. CPU CLI, CUDA smoke and all 462 tests passed. Main merge waits for frozen-team chains.
+     episodes/batches. CPU CLI, CUDA smoke and all 462 tests passed; committed cf65aa2.
      Shared curriculum scheduling remains asynchronous; r31 is budget/config matched, not paired-seed causal evidence.
+   - **Remaining navigation problem, round 7 §6:** faithful r31 chain replays find no enemies during the final
+     1,000 stalled actions in D2 0x5e/0x1e (MOVE objective). Quiet-fight cost cannot fix post-kill exit pacing.
+     Preserve this distinction in later cutoff/curriculum work; do not call it shadow-Link fighting.
 5. **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
    hearts (round 6 §8: overworld 26 of 34). In v1, dropped items were among the wavefront's targets, and the
    wavefront is a multi-source BFS, so PBRS led to a heart whenever it was closer than the exit by walking distance

@@ -21,9 +21,10 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
 - Backlog item 2 complete: r30-exit trains kill → heart → east exit. Matched exit-task eval improved 59/60 →
   60/60; mean pickup-to-exit 92.0 → 11.1 actions, worst 1,963 → 77; health change +0.61 → +0.69 hearts.
   Both matched full chains removed the two old post-heart timeouts. Other families still limit the chain.
-- Worker-seed prerequisite fixed and verified in dev (§7): real rollout tensors repeat with the same seed,
+- Worker-seed prerequisite fixed and verified (§7): real rollout tensors repeat with the same seed,
   distinct workers/seeds differ, episode streams advance; CPU CLI/CUDA smoke and all 462 tests passed.
-  R31's four-policy frozen-team chains are running on unchanged main; seed/quiet-control merge waits for them.
+- Backlog item 4 complete: r31-block1 promoted after 800 frozen-team chains (§6). Ordinary reward has the lowest
+  evaluation damage; stronger block/quiet rewards stay disabled. Post-fight D2 navigation remains a measured problem.
 
 ## 1. Shared lingering metric
 
@@ -345,7 +346,7 @@ on frame 17 of `BEAMS E`, after its 16 control frames. No health loss; the unmoc
 with this native settling-frame regression; removed fake legacy-sound fields, a repeated positive-multiplier row
 and private-counter assertions. Reward suite: **25 passed in 2.55 seconds**. No live runtime code/YAML changed.
 
-### Completed cohort evaluation; chain selection pending
+### Completed cohort evaluation and frozen-team selection
 
 All three r31 arms finished 245 updates / 1,002,540 additional actions. Fixed seed-0 evaluation uses the canonical
 Goriya task/current detector, 20 episodes per start state (240 total), without enabling nearby-item shaping or
@@ -360,14 +361,41 @@ measured truncation. Evaluation outputs: `models/r31-block-evidence/{promoted,r3
 
 The quiet arm improves D1 0x44 versus ordinary (49/60 versus 43/60; −0.775 versus −0.942 hearts), but costs more
 health in D2 0x5e (−1.033 versus −0.700; 48/60 versus 51/60). Triple block also reaches 49/60 in 0x44 but falls
-to 42/60 in D2 0x1e versus ordinary's 49/60. More reward did not produce more measured blocks here. No arm has
-yet earned promotion: success, damage and quiet gaps must be weighed against frozen-team chains, not aggregate
-success alone. Section 7's seed flaw prevents attributing these differences solely to the reward coefficients.
+to 42/60 in D2 0x1e versus ordinary's 49/60. More reward did not produce more measured blocks here. Section 7's
+seed flaw prevents attributing these differences solely to the reward coefficients.
 
-Frozen-team comparison started after all training ended: each of the four Goriya policies, with every other
-promoted specialist pinned, 40 runs per segment (seed 0–39): both full routes, both post-D1 routes and D2 entrance.
-It changes neither promoted pointers nor canonical YAML. Main source stays frozen until these chains finish;
-seed correction is being verified separately in dev.
+Frozen-team comparison completed after all training ended: each of the four Goriya policies, with every other
+promoted specialist pinned, 40 runs per segment (seed 0–39). All **800 chains completed without execution errors**.
+Provenance/results: `models/r31-block-evidence/{team-pointers.json,comparison.json,*-summary.json,*.jsonl}`.
+
+| Policy | Full main / 40 | Full fairy / 40 | Post-D1 main / 40 | Post-D1 fairy / 40 | D2 / 40 |
+|---|---:|---:|---:|---:|---:|
+| Promoted r21 | 0 | 3 | 0 | 8 | 9 |
+| Ordinary block reward | 2 | 3 | 2 | 4 | 11 |
+| Triple block reward | 1 | 4 | 2 | 6 | 7 |
+| Ordinary + 0.05 quiet-fight cost | 2 | 2 | 0 | 6 | 13 |
+
+**Promoted r31-block1.** Lowest evaluation damage (−0.769 versus old −0.958 hearts), better evaluation success,
+two full-main successes versus zero, unchanged full-fairy successes and a modest D2 gain. The post-D1 fairy
+result regresses 8→4/40; these are mixed small-sample chain results, not a statistically established dominance.
+Ordinary is the conservative damage-first choice over triple/quiet, neither of which wins consistently.
+Keep block multiplier 1, additional quiet cost 0, nearby-item shaping off and measured truncation disabled.
+Per-run `eval.json` copies retain the measured cohort reports; no other model was promoted.
+
+All three new models reduce D1 0x44 deaths 15→13 of 28 visits at the same arrival health. Ordinary's longest
+quiet stretch there falls 1,950→27 actions in both full routes, but it does not eliminate D2 stalls: 0x5e reaches
+1,792 quiet actions post-D1 fairy and 0x1e reaches 1,207 in a successful full-main chain. Quiet's D2 segment
+also stalls for 1,820 actions despite its better standalone worst of 497. Do not equate aggregate eval with
+chain behavior, or describe every remaining stall as shadow-Link avoidance.
+
+Faithful native chain replays exactly match the saved room/health/time/outcome records:
+- Quiet policy, D2 seed 3, 0x1e: last 1,000 actions all MOVE objective with **zero enemies**, Link fixed at
+  (162,93); 996 MOVE and four WAIT actions. Additional living-enemy cost cannot address that post-fight failure.
+- Ordinary policy, post-D1 fairy seed 16, 0x5e: last 1,000 actions all MOVE objective with **zero enemies**,
+  all MOVE actions, largely pacing across y=93 instead of exiting. Not a shield-block stalemate.
+
+Raw replay traces: `models/r31-block-evidence/chain-stall-replays.json`. Post-fight navigation/curriculum and the
+measured-cutoff trial remain open; the quiet-fight lever is not silently broadened to penalize pickups or navigation.
 
 ## 7. Training seed integrity finding (r31 prerequisite)
 
