@@ -73,13 +73,17 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
    Go-Explore paths (select by health, more patience) and a contact-damage penalty that grows as hp falls.
    - **Round 7 §6 prerequisite done:** natural Goriya trace credited only 1/7 real blocks before, 7/7 after at
      identical seed/action positions. Executed-frame counts reach training/eval/chains. 447 tests and CUDA smoke
-     passed; schemas unchanged. Matched r31 block-multiplier arms are running; corner-penalty comparison remains pending.
+     passed; schemas unchanged. R31 block arms evaluated; quiet-fight comparison and frozen-team chains remain pending.
    - **Measured baseline:** 178/240 successes, −0.96 hearts, 45 confirmed blocks. Faithful 0x44 seed-62 replay
      has three living Goriyas throughout a 1,971-action quiet stretch; existing stall cost does not break it.
      Separate stronger fight-only quiet cost is prepared in dev, not merged into main during r31 training.
    - **Distinct pickup problem:** 0x23 seed 5 kills all three Goriyas, then wanders for 1,902 quiet actions without
      the key. A fight-only penalty cannot address this; do not label it shadow-Link stalling or silently exclude
      the room from family evaluation.
+   - **Seed prerequisite, round 7 §7:** `--seed` currently seeds parent Torch only; worker policy samplers and
+     initial env/game resets are unseeded. R31 is budget/config matched, not paired-seed causal evidence. Fix
+     propagation before later A/B trials; verify real no-curriculum rollouts, and document asynchronous curriculum
+     scheduling as a remaining reproducibility limit. Do not change runtime code until the live cohort finishes.
 5. **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
    hearts (round 6 §8: overworld 26 of 34). In v1, dropped items were among the wavefront's targets, and the
    wavefront is a multi-source BFS, so PBRS led to a heart whenever it was closer than the exit by walking distance

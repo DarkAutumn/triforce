@@ -341,3 +341,27 @@ on frame 17 of `BEAMS E`, after its 16 control frames. No health loss; the unmoc
 `reward-block-projectile=0.5` (alongside the ordinary attack-miss cost). Replaced the mocked action-routing test
 with this native settling-frame regression; removed fake legacy-sound fields, a repeated positive-multiplier row
 and private-counter assertions. Reward suite: **25 passed in 2.55 seconds**. No live runtime code/YAML changed.
+
+## 7. Training seed integrity finding (r31 prerequisite)
+
+The two completed arms both received `--seed 31`, but first-update episode/health metrics already differed.
+Code inspection finds that `train.main` seeds only parent Torch; spawned `_worker_loop` seeds neither its policy
+sampler nor environment, and `RolloutBuffer.collect` starts with bare `env.reset()`. `ZeldaEnv`'s private RNG and
+the game RNG are only seeded when reset receives an explicit seed. Thus the r31 runs match budget/configuration,
+not worker random streams. Do not attribute a policy difference solely to the reward coefficient.
+
+Fixed-seed evaluation remains valid: `_play` explicitly seeds Torch and resets the environment with each episode
+seed. Completed results: ordinary block arm 184/240, −0.77 hearts; triple block arm 182/240, −0.87 hearts. Triple
+helps D1's 0x44 in this comparison, while ordinary is better in both D2 rooms. Keep empirical policy selection
+separate from causal reward claims; wait for the quiet-fight arm and matched frozen-team chains before promotion.
+
+Fix seed propagation after the live cohort finishes, before later A/B trials. Seed each spawned policy sampler
+and initial environment reset by worker index, preserve advancing streams across subsequent episodes, and verify
+actual rollout reproducibility without curriculum. The existing shared asynchronous curriculum also depends on
+worker completion order; seeding alone will not promise bitwise-identical curriculum or GPU training.
+
+Reproduced before fixing, with curriculum and GPU nondeterminism removed: two fresh CPU CLI invocations, same
+checkpoint/config, seed 31, two workers, one 128-action update, explicit `1_44w_0`, no curriculum, CPU thread counts
+fixed to one. Run A completed no episode; B died after 43 actions/640 frames, losing three hearts. Action counts
+also differed (A: WAIT/MOVE/BEAMS/SWORD = 3/78/1/46; B: 6/77/2/43). Evidence preserved in
+`models/r31-block-evidence/seed-before.json`. This is a real seeded-gameplay failure, not merely differing timing.
