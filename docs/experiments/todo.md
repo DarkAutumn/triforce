@@ -131,6 +131,12 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
    - **Current-policy screening:** Goriya has 10/8 failed episodes reaching 100/200 quiet actions, versus none
      in current SKG/Rope/Moblin standalone baselines. Next matched trial: Goriya off/100/200, common uncut and
      actual-cutoff tasks plus config-preserving chains. No trial started or canonical cutoff enabled.
+   - **Required-shutter prerequisite corrected in dev (round 7 §13):** north tiles 0xa8–0xab were misclassified;
+     0x2e wrongly requested MOVE through its closed kill-all shutter. Live route-gated FIGHT now clears it;
+     optional 0x6e/0x6d combat stays optional. Four targeted and all 468 tests pass; natural last-Rope → open
+     shutter → north-exit smoke succeeds in 69 actions. Main merge waits for the Octorok cohort.
+   - **Terminal-health prerequisite found:** legacy room/run budget exits leave `health_out` at entry health
+     (native stuck-room trace 1.5 HP versus recorded 1.0). Fix/re-measure before model or cutoff health comparisons.
 7. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
    milestone). `game.yaml` already declares Rope ×5 and a key in 0x7e; generic FIGHT/TREASURE objectives apply.

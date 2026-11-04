@@ -24,7 +24,7 @@ SOUTH_DOOR_TILE = 0xf, 0x12
 DOOR_TILES = list(range(0x98, 0x9c)) + list(range(0x9c, 0xa0)) + \
              list(range(0xa0, 0xa4)) + list(range(0xa4, 0xa8))
              # west                      east
-BARRED_DOOR_TILES = list(range(0xac, 0xaf+1))
+BARRED_DOOR_TILES = list(range(0xa8, 0xb0))  # vertical a8-ab, horizontal ac-af
 TOP_CAVE_TILE = 0xf3
 BOTTOM_CAVE_TILE = 0x24
 CAVE_TILES = [TOP_CAVE_TILE, BOTTOM_CAVE_TILE]

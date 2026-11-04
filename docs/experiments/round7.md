@@ -601,6 +601,12 @@ using timeouts to mask this failure. All r32 candidate comparisons above still u
 Evidence: `rope-stall-replays.json`, `rope-stall-geometry.json`, `shutter-tile-audit.json` and playable PNG/state
 snapshots in the r32 evidence root. Source correction is isolated in dev; main stays frozen for Octorok.
 
+**Terminal-health warning discovered in the replay audit:** seed 10's stuck-room record says 1.0 HP out,
+but its executed trace/snapshot has 1.5 HP. Legacy room/run step-budget exits do not refresh `health_out`.
+Thus the recorded HP tables above include stale entry health for stuck visits; success counts remain valid,
+but health ranking must be remeasured after correction. Retain the original evidence; do not impute missing
+damage from pickups alone. This is another prerequisite before promotion/cutoff comparisons.
+
 ### Pickup-exposed overworld follow-up
 
 Added ow-octorok off/on arms, same promoted r24-fairy warm start and r32 seed/budget/workers/health setup,
@@ -735,4 +741,28 @@ Affected state-builder/exploration/entry suites: **158 passed in 44.60 seconds**
 runtime source, specialist YAML or promoted pointer changed. Integrated dev suite after both builder guards:
 **464 passed in 599.75 seconds**. The temporary native probe script was removed; JSON evidence remains.
 
+
+## 13. Required shutter combat corrected in dev
+
+The §9 native failure has two independent causes: north shutter tiles 0xa8–0xab were missing from the barred
+tile catalog, and null-treasure dungeon rooms never selected combat to clear a required shutter. Both are now
+corrected in dev without room-id exceptions or additional metadata. The selector checks the routed exits,
+requires all alternatives to be barred, then uses the existing decoded native living-monster/secret-trigger
+semantics. Block/money triggers and non-foes do not force fights. Open-route 0x6e and the irrelevant west
+shutter in 0x6d remain MOVE tasks with living Ropes.
+
+Permanent native regressions reproduced two failures before the fix (north classification and required FIGHT),
+with both optional-combat controls passing. After correction all four pass. Integrated dev suite:
+**468 passed in 120.21 seconds**. Observation/action schemas unchanged; no main runtime/YAML/state mutation.
+
+Actual gameplay smoke starts from the saved seed-10 stalled room: one live Rope, closed north shutter, two
+keys, 1.5 physical hearts. The corrected objective is FIGHT with finite walking distance 9. Go-Explore finds a
+69-action exact replay (7,075 exploratory actions) that physically kills the Rope, opens the shutter, changes
+to MOVE and exits north into 0x1e with `exit-correct`/success. No injected kill/key/door or synthetic policy
+result. This proves the objective/gate transition, not a learned-model performance gain. Evidence:
+`models/r33-cutoff-evidence/shutter-objective-smoke.json`.
+
+Source remains isolated in dev until Octorok's old-source cohort finishes. Re-evaluate old/new Rope policies
+under the corrected common objective before selecting a promotion; legacy timeout HP also needs correction
+as noted in §9. Temporary native investigation/smoke scripts are removed; their JSON/state/PNG evidence remains.
 

@@ -17,7 +17,7 @@ import sys
 from typing import Dict, FrozenSet, List, Optional, Sequence, Set
 
 from .game_map import DEFAULT_ROUTE, GameMap, step_location
-from .room_state import room_flags
+from .room_state import SecretTrigger, decode_room_state, room_flags
 from .zelda_game import ZeldaGame
 from .zelda_enums import Direction, MapLocation, SwordKind, TileIndex
 
@@ -25,6 +25,8 @@ FLAG_ITEM_TAKEN = 0x10
 # Pond fairy (Z_04 UpdatePondFairy): Link at the pond edge, Y=$AD with $70 <= X < $81, is halted until every heart
 # is full.  Walking north from the south entry stops him there.
 FAIRY_POND_TILES = (TileIndex(14, 14), TileIndex(15, 14), TileIndex(16, 14))
+_COMBAT_SHUTTER_TRIGGERS = frozenset((SecretTrigger.ALL_DEAD, SecretTrigger.RINGLEADER,
+                                    SecretTrigger.LAST_BOSS, SecretTrigger.ALL_DEAD_ITEM))
 
 
 @dataclass(frozen=True)
@@ -315,8 +317,8 @@ class _GameMapObjective(ObjectiveSelector):
                 kind = ObjectiveKind.TREASURE
                 tile_objectives.extend(state.treasure.link_overlap_tiles)
 
-        # If we know treasure exists but hasn't spawned, fight enemies to spawn it
-        elif room_memory.item is not None and state.enemies:
+        # Fight for pending treasure or a required exit's combat-gated shutter.
+        elif state.enemies and (room_memory.item is not None or self._shutter_requires_combat(state)):
             kind = ObjectiveKind.FIGHT
             tiles = self._get_enemy_tile_objectives(state)
             tile_objectives.extend(tiles)
@@ -324,6 +326,20 @@ class _GameMapObjective(ObjectiveSelector):
                 room_memory.item = None
 
         return kind, tile_objectives, []
+
+    def _shutter_requires_combat(self, state):
+        """Fight only when every routed exit is barred by a living-monster trigger."""
+        _, next_rooms = self._get_map_objective(state)
+        if not next_rooms:
+            return False
+        for room in next_rooms:
+            if room.level != state.level or room.in_cave != state.in_cave:
+                return False
+            direction = state.full_location.get_direction_to(room)
+            if direction == Direction.NONE or not state.is_door_barred(direction):
+                return False
+        decoded = decode_room_state(state)
+        return decoded.enemies_remaining > 0 and decoded.secret_trigger in _COMBAT_SHUTTER_TRIGGERS
 
     def _get_map_objective(self, state):
         """Route toward target using GameMap."""

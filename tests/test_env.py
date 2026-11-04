@@ -344,6 +344,23 @@ def test_items_config_masks_bombs_even_when_link_has_them(session, bombs_on):
     assert bool(ActionMask.from_flat(obs['action_mask']).kind[ActionKind.BOMB]) == bombs_on
 
 
+def test_route_shutter_requires_combat_without_a_room_treasure(session):
+    env = make_env(session, 'd2-rope', '2_2es_0')
+    env.reset(seed=0)
+    objective = session.state.objectives
+    assert objective.kind == ObjectiveKind.FIGHT
+    assert not objective.next_rooms
+
+
+@pytest.mark.parametrize(('start_state', 'next_room'), [('2_6ew_0', 0x5e), ('2_6ds_0', 0x6e)])
+def test_open_route_ignores_optional_combat(session, start_state, next_room):
+    env = make_env(session, 'd2-rope', start_state)
+    env.reset(seed=0)
+    objective = session.state.objectives
+    assert objective.kind == ObjectiveKind.MOVE
+    assert objective.next_rooms == {MapLocation(2, next_room, False)}
+
+
 @pytest.mark.parametrize('keys', [0, 1])
 def test_route_room_only_offers_its_route_exit(session, keys):
     """0x43's route exit is the locked E door to 0x44.  Without a key the shortest path to the triforce goes N for

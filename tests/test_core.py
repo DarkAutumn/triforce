@@ -67,6 +67,13 @@ def test_decodes_overworld_start(session):
     assert state.link.max_health == 3
 
 
+def test_north_shutter_is_barred_not_a_wall(session):
+    state = session.load('2_2es_0', randomize_rng=False, fresh_room=True)
+    assert state.is_door_barred(Direction.N)
+    assert not state.is_door_open(Direction.N)
+    assert not state.room.is_wall_intact(Direction.N, state.current_tiles)
+
+
 def test_boomerang_stays_active_on_return_until_caught(session):
     session.load('1_35s_0', randomize_rng=False, fresh_room=True)
     act_until(session, 'MOVE N 32', lambda c: session.emu.read(0x53) == 0)

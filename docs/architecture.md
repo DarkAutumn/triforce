@@ -61,6 +61,11 @@ class ObservationBuilder:
 
 When the objective block is on, the env attaches `state.objectives` (v1's `Objective`) before calling the builder.
 
+Dungeon objectives fight for pending treasure or when every routed exit is closed by a living-monster shutter
+trigger (all-dead, ringleader, last-boss or clear-to-drop). An unrelated shutter or an open route exit does not
+force combat. The shutter rule excludes block/money triggers and non-foe-only rooms. Live barred-door
+classification covers vertical tiles 0xa8–0xab and horizontal tiles 0xac–0xaf. Routing resumes after clearing.
+
 ## Specialist task and environment (`specialist.py`, `env.py`)
 
 `specialists/<name>.yaml` follows design §3.3; load with `specialist.load_specialist(name_or_path) -> SpecialistConfig`.
