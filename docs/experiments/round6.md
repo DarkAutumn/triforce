@@ -7,6 +7,40 @@ off-route Dungeon 1 rooms toward the bow. Also try a damage penalty for rooms Li
 Setup as in round 5 (2M-step budget, balanced 95% early stop, 20 sampled episodes per seed state, hp
 `[0.15, max]` with half the resets at full health). Chains are 20 runs unless noted.
 
+## Summary (where round 6 ended, Nov 3)
+
+Best chains (40 runs each, to the Dodongo room 2:0x0e):
+
+| segment | result |
+|---|---|
+| full chain, milestone1 | 1/40 (r23; the first ever) |
+| full chain, milestone1-fairy | 2–3/40 |
+| after D1 (`--from 0_37c_2`), milestone1-fairy | **8/40** |
+| D2 entrance at full hearts (`--from 2_7ds_2`) | 9/40 |
+
+- **Fairy route** (§9, §11): `milestone1-fairy` (Lee) goes south after D1, past the fairy pond 0x39, then east and
+  north into D2. It beats milestone1 after D1: 37/40 reach the D2 entrance with 2.5 hearts (milestone1: 27/40 with
+  1.7); every pond visit refilled to full. 40 new start states; ow-zora / ow-octorok / ow-start learned the new
+  rooms (97–98%; the pond 2% → 98%).
+- **The Moblin room Lee flagged** (§9): 0x5b's east edge has two openings and the lower one leads into a pocket of
+  0x5c that only exits south; leaving through it counted as success. game.yaml exit `span` limits it to the upper
+  opening. The wavefront also had an off-map lane under every overworld room's bottom tree line (fixed). ow-moblin
+  failed for a third reason (r9a's habit of leaving Moblin rooms west, fatal when entering from the west);
+  warm-started from ow-octorok it went 18% → 97%.
+- **Heart tracking** (§8): drops / taken / left / healed / wasted per room in training metrics, eval, chain
+  records and the GUI (real vs total heart change). Overworld models left 26 of 34 dropped hearts; dungeon models
+  take 55–80%. A "heart is the objective when hurt" option (`collect_hearts`) didn't help the chain (d2-rope:
+  12/80 vs 16/80) and was removed; Lee's v1-style variant (nearest of heart or exit) is still to try (todo.md).
+- **Dungeon 2** (§12): D2 rooms got 3 start states each (were 1). d2-rope r28 95% (was 90%), promoted; it lifted
+  the fairy post-D1 chain from 2/40 to 8/40. goriya r28 lost to r21 in the chain (D2 6/40 vs 9/40), r21 stays.
+- **Dropped after testing:** pass-through damage penalty (§5), chain-matched hp (§6), heart objective (§10).
+- **What limits the full chain:** the D1 Goriya room (0x44). Link arrives with ~1.1 hearts, it kills 15 of the 28
+  runs that reach it, and only 8 of 40 runs leave D1 alive. 0x53 kills 5 more.
+- **Promoted at the end:** ow-start / ow-zora / ow-octorok r24-fairy, ow-moblin r26c, ow-leever-peahat and
+  boss-aquamentus r23, stalfos-keese-gel r25, goriya r21, wallmaster r10 copy, d2-rope r28.
+- Lee's observations from watching `play-zelda.py` after the round (Aquamentus wandering after the kill, hearts
+  left behind, blocking, stuck runs, the boomerang question, D2's 0x7e key) are in todo.md "Next up", in order.
+
 ## 1. Families
 
 | family | rooms | was |

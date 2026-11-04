@@ -6,33 +6,116 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Round 6 done** (`round6.md`). Best chains (40 runs): full chain → Dodongo room 1/40 (milestone1, r23) and
-  2–3/40 (milestone1-fairy); **fairy post-D1 → Dodongo room 8/40**; D2 entrance → Dodongo room 9/40.
+- **Where it stands:** round 6 done (`round6.md`, Summary at the top). Best chains (40 runs, to the Dodongo room):
+  full chain 1/40 (milestone1) and 2–3/40 (milestone1-fairy); fairy post-D1 8/40; D2 entrance 9/40. The full
+  chain's limit is Dungeon 1: the D1 Goriya room (0x44) kills 15 of the 28 runs that reach it, 0x53 five more.
 - **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat /
   boss-aquamentus r23-more, stalfos-keese-gel r25-skg-plain, goriya r21-goriya-chainhp, d2-rope r28-d2,
   wallmaster r10 copy. Overworld families train on both routes' rooms; D2 rooms have 3 start states each.
-- **Next: the D1 Goriya room (0x44).** It kills 15 of the 28 full-chain runs that reach it (Link arrives with
-  ~1.1 hearts), and only 8 of 40 runs leave D1 alive. goriya r28 (2M more steps on 3× D2 states) did not beat r21
-  in the chain. Ideas below ("Fight Goriyas without trading hits"); also 0x53 (5 deaths).
+
+### Work in this order
+
+From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: clear bugs first, then what decides how the
+next full retrain looks, then reward/target changes aimed at the chain's death rooms, then the big ablation.
+Nothing here is started.
+
+1. **Aquamentus wanders after the kill (Lee).** Link kills Aquamentus, then walks left/right in 0x35 for a very long
+   time before leaving; one run sat there "for ages" and only got unstuck by chance. Even with a good success rate
+   something is wrong. Likely cause: `boss-aquamentus.yaml` succeeds on `boss-dead-and-heart` (the episode ends
+   when the heart container is taken), and its start states are all the fight entry, so walking out E into the
+   triforce room 0x36 afterwards is never trained. The runner then gives the room up to 2000 steps
+   (`runner.MIN_ROOM_STEPS`). Check: steps between the kill and the exit in chain records / a replay. Fix options:
+   success = exit-correct into 0x36 (with curriculum states after the kill), or hand the room to
+   stalfos-keese-gel once the boss is dead. Compare chain time and hearts at the triforce room.
+2. **Observation audit (Lee: does Link get enough about enemies and the world, e.g. does he know an enemy is
+   stunned?).** Do it before the next full retrain: observation changes invalidate every model, so bundle them.
+   Already there (`observation.ENTITY_FEATURES`): per-slot type embedding, projectile, blockable (rock, arrow,
+   boomerang; not the Zora fireball), hp, stun, invincibility, immunities, spawning, dying, active, item lifetime.
+   Check: `stun` is `min(timer / 16, 1)` and saturates, so a long boomerang stun reads 1.0 until its last 16 ticks
+   (find the real stun lengths in the disassembly and rescale); Link's own invincibility frames and shield state;
+   Link's boomerang in flight vs returning; which enemy threw a projectile; clock active; anything v1's observation
+   or the RAM catalog (`docs/ram-catalog.md`, entities) has that v2 lacks. Output: a list of proposed changes with
+   reasons; decide, then implement with a full retrain.
+3. **Goriya rooms: reward blocking (Lee).** v1 rewarded the shield-block sound, and that taught Link to block
+   instead of face-tanking. v2 already has `critics.critique_block` (`reward-block-projectile`, REWARD_MEDIUM ×
+   combat decay, on the onset of the ArrowDeflected sound via `Link.is_blocking`). First check that it fires on
+   Goriya boomerangs (count blocks per episode in goriya evals and a few traces), then A/B a stronger block reward on
+   goriya (0x44 is the chain's top death room). Caveat (Lee): the sound alone is wrong in rooms with Darknuts etc.
+   (their shields clink too), so require a blockable projectile in the air near Link plus the clink. Related, from
+   round 6: at 1 heart the goriya model turns passive (33% WAIT) and dies to contact; other ideas are demos or
+   curriculum from damage-free Go-Explore paths (select by health, more patience) and a contact-damage penalty
+   that grows as hp falls.
+4. **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
+   hearts (round 6 §8: overworld 26 of 34). In v1, dropped items were among the wavefront's targets, and the
+   wavefront is a multi-source BFS, so PBRS led to a heart whenever it was closer than the exit by walking distance
+   (not straight-line) and ignored it otherwise. v2 adds items to the objective's `targets` but not to
+   `pbrs_targets` (`objectives._GameMapObjective.get_current_objectives`), so shaping never points at a heart.
+   Try: hearts and the clock (Lee: "certain items like the clock and hearts") in `pbrs_targets` alongside the
+   exits. This differs from the dropped `collect_hearts` (heart was the only target whenever Link was hurt, kind
+   ITEM). A/B on stalfos-keese-gel, d2-rope and an overworld family; measure taken/left, real vs total heart
+   change and the chain.
+5. **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
+   an item pickup or a kill).** Today training ends `stuck` after 50 steps without moving and `no-progress` after
+   2000 steps without a new correct room (`end_conditions.Timeout`, the same 50/2000 as v1's Timeout; the ~100-step
+   rule isn't in v1's code, so define it fresh). A room-stalling penalty starts after 150 steps, and the runner
+   allows `max(max_steps, 2000)` steps per room. Worth trying.
+   - Pros: wandering episodes end early, so more episodes per iteration (the ow-moblin and Aquamentus `max_steps`
+     cuts both helped a lot); chains stop spending minutes and hearts in a room the model can't leave; cleaner
+     failure signal and a "stuck" count per room.
+   - Cons: some rooms need waiting (the fairy pond refill, shutters, Leevers and Zoras that can't always be hit,
+     Link hiding in a Goriya room's corner until they come; Lee: that's fine while enemies can still reach him).
+     "Progress" has to count more than kills and pickups (hits, damage dealt, a new best wavefront distance to the
+     objective, a door, key or treasure), or slow but correct approaches get cut. In the chain a cut is a failed run.
+   - Design: progress = kill, hit, item/treasure/key taken, new minimum objective distance, room exit. N of
+     100–200 steps, after measuring the longest no-progress gap inside successful episodes per family. Training:
+     a truncation (value bootstraps), not a hard failure. Runner: `stuck` after N steps without progress instead
+     of the flat 2000.
+6. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
+   → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
+   milestone). Today 0x7e is an equal-length alternate with exit N and no key objective (`routes.yaml`
+   alternates). Make it the step on both routes with a FIGHT/TREASURE key objective, retrain d2-rope (states
+   `2_7ew_0..2` exist), and rebuild the D2 states downstream so they carry the key.
+7. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
+   picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
+   back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?
+   - Arms: A = boomerang on; B = `items: {boomerang: off}` for every specialist that plays after D1: ow-octorok,
+     ow-zora, ow-leever-peahat, ow-moblin, ow-start (pond), d2-rope, goriya (D2 rooms). The overworld families
+     also play pre-D1 rooms, where Link has no boomerang anyway.
+   - Training: train both arms the same way. Preferred: from scratch with the same budget and seeds (a warm start
+     from today's boomerang-using models favours A). Cheaper first pass: both continue from the promoted models
+     with equal budgets.
+   - Evaluation: each specialist on its post-D1 states (success, real/total heart change, steps), then chains
+     with carry-over: `--from 0_37c_2` on both routes plus the D2 segment, at least 80 runs per arm.
+   - Needs: per-arm configs in the chain (the runner reads `specialists/<name>.yaml`; add a config override or a
+     specialists-dir option to `eval-chain`).
+   - Run it after items 1–6 settle (or as part of the full retrain item 2 may force), so it measures the setup we
+     keep. Expect about a day of GPU.
+
+### Other open items
+
+- **0x53 (5-Stalfos key room):** 5 deaths in the full chain after the D1 Goriya room's 15.
+- **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
+  (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
+- **Bow route** (later): 0x43 N → 0x33 (key) → 0x23 (key) → 0x22 (push block, stairs to the bow cellar 0x7F).
+  Needs a route/objective for the bow and a specialist for 0x22 and the cellar.
+- **play-zelda GUI** (uncommitted, Lee trying it; see AGENTS.md): `--games N` with best-hidden-game swaps on room
+  change / restart and a fade, fps in the window title, `--benchmark`. Offscreen 3x2 measurements: 6 games 55.8
+  fps per cell, 32 games 56.9 (every game still emulating at 60). The cap is the GUI's 16 ms tick (about 57 ticks
+  per second), not the game count: lower `TICK_MS` in `play-zelda.py` to reach 60. Each game opens its own CUDA
+  context, so a large `--games` next to a training run can run out of GPU memory (`--cpu` avoids it).
+
+### Tried and dropped, or rejected
+
 - ~~Chain-matched hp~~ tested on goriya (within noise) and stalfos-keese-gel (worse); off everywhere. The option
   (`ram_randomization.chain_hp`) stays for a later retry.
 - ~~Pass-through damage penalty~~ tested twice in round 6 (overworld, d2-rope): no chain gain; dropped (code
   removed). A damage-avoidance idea for later would need a different form.
-- **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
-  (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
-- ~~Refill hearts on the way~~ **Done (Lee's design): second route `milestone1-fairy`** after D1 (south road +
-  fairy pond 0x39; `docs/route.md`, `docs/decisions.md`). Train the overworld families on both routes and evaluate
-  both chains. Not done: a fairy stop before D1 (none on the way), D2 has none.
 - ~~Heart objective~~ (`collect_hearts`) tested on stalfos-keese-gel and d2-rope (round 6 §10): more pickups on
-  d2-rope but no chain gain; dropped (code removed). Hearts left behind are still measured by the heart tracker.
-- **The last D2 Goriya room (0x1e) and the first (0x5e)** now end most D2 runs that get past the rope rooms.
-- **Fight Goriyas without trading hits.** At 1 heart the goriya model turns passive (33% WAIT) and dies to contact
-  (round 6 trace). Ideas: a demo/curriculum from damage-free Go-Explore paths (the explored paths lose 1.5–2.5
-  hearts; select by health with more patience), shield blocking of boomerangs, a contact-damage penalty that grows
-  as hp falls.
-- **Bow route** (later): 0x43 N → 0x33 (key) → 0x23 (key) → 0x22 (push block, stairs to the bow cellar 0x7F).
-  Needs a route/objective for the bow and a specialist for 0x22 and the cellar.
-- ~~Skip the optional boomerang in 0x44~~ **Rejected by Lee:** keep the boomerang.
+  d2-rope but no chain gain; dropped (code removed). Item 4 above is a different rule (nearest of heart or exit).
+- ~~Refill hearts on the way~~ **done** as the second route `milestone1-fairy` (round 6 §9). No fairy stop exists
+  before D1, and D2 has none.
+- ~~Skip the optional boomerang pickup in 0x44~~ **Rejected by Lee:** keep the pickup. (Item 7 tests using it
+  after D1, a different question.)
 - ~~Split Dungeon 1 into one model per enemy type~~ **Rejected by Lee:** group models by the enemies in the room,
   but don't boil it down to one model per enemy type or per room (beyond what Lee asks for, e.g. `wallmaster`).
 
@@ -45,8 +128,9 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
   - Grant bombs at reset (`ram_randomization: {bombs: [n, 8]}`).
   - Add a bomb-into-Dodongo reward and a scarcity cost for bombs spent on other enemies.
   - Then decide which specialists get bombs back (bomb walls in later dungeons).
-- **Boomerang stays on.** Route states carry it from 0x44 onward: d1-wallmaster, Aquamentus, the triforce room and
-  everything after Dungeon 1. It stuns Wallmasters, Goriyas and Keese. Watch `kind/BOOMERANG` in training metrics.
+- **Boomerang stays on for now.** Route states carry it from 0x44 onward: the Wallmaster room, Aquamentus, the
+  triforce room and everything after Dungeon 1. It stuns Wallmasters, Goriyas and Keese. Whether it helps after D1
+  is "Next up" item 7. Watch `kind/BOOMERANG` in training metrics.
 
 ## Training methods (from "Training with Savestates and Branching", Nov 2, 2026)
 
@@ -97,10 +181,11 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 
 - Round 3 replaced the state set (`round3.md`): pre-entry, route-generated, route-true hearts and inventory. That
   resolved the round 2 items (1-step states, triforce 0 on post-D1 visits, 16-heart states, missing D2 states).
-- **No state for 0x0e** (the Dodongo room; not needed for milestone 1). `2_1es_2` (0x1e) was added in round 5.
-- **Only chain 2 crosses Aquamentus**, so post-D1 rooms have one state each (`*_2`). More chains past 0x35 would
-  give them spawn/health variety from different paths.
-- **`0_4ce` (ow-octorok, the 0x4d → 0x4c route entry) is still the weak state:** 65% in round 3 (deaths).
+- **No state for 0x0e** was the case until round 6: `2_0es_0..1` now exist (Dodongo room entries, for later).
+- **Post-D1 states:** the fairy route's rooms (0x48 … 0x4d from S), 0x38 from W, 0x4c from E and all of Dungeon 2
+  have chains 0–2 (round 6). milestone1's north road after D1 (0x28 … 0x2d, 0x3d, 0x4d from N, 0x3c) still has
+  only chain 2 (`*_2`), apart from `0_3cs_0..1`. More chains there would add spawn/health variety.
+- **`0_4ce` (ow-octorok, the 0x4d → 0x4c route entry) was the weak state** (65% in round 3; 0x4c 92% in round 6).
 
 ## Runner / objectives
 

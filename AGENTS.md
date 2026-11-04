@@ -1,7 +1,19 @@
 # Agent instructions (triforce2)
 
 Read this first, then `README.md` (setup, commands), `docs/architecture.md` (modules), and the newest
-`docs/experiments/round*.md` plus `docs/experiments/todo.md` "Next up" (where the work stands and what to try next).
+`docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/todo.md` "Next up" (where the work
+stands and what to try next, in order).
+
+## Where things stand (end of round 6, Nov 3)
+
+- Round 6 is logged and committed (`docs/experiments/round6.md`, Summary at the top). No jobs are running.
+- Next work is todo.md "Next up", items 1–7 in order (Lee's list from watching `play-zelda.py`). Nothing on it
+  has been started.
+- **Uncommitted on purpose:** `play-zelda.py`, `triforce/play_grid.py`, `tests/test_play_zelda.py` in main's
+  working tree (Lee is trying them; he said not to commit yet). They add `--games N` (more games than cells; a
+  cell's game is replaced by a better hidden one only when it enters a new room or starts its next run, with a
+  fade), an on-screen fps readout in the window title and `--benchmark SECONDS`. Tests pass. Leave them alone
+  unless Lee asks; don't sweep them into another commit (path-limited commits).
 
 ## Goal
 
@@ -20,7 +32,9 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
   enemy type or per room beyond what Lee asks for. Current families: ow-start, ow-octorok, ow-zora,
   ow-leever-peahat, ow-moblin, stalfos-keese-gel, goriya, wallmaster, boss-aquamentus, d2-rope, boss-dodongo (tag
   only).
-- Rejected ideas stay rejected (marked in `todo.md`), e.g. skipping the optional D1 boomerang.
+- Rejected ideas stay rejected (marked in `todo.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee does
+  want the separate experiment of training and evaluating everything after D1 with the boomerang usable vs masked:
+  todo.md "Next up" item 7.)
 - **Start states** (`triforce/custom_integrations/Zelda-NES/`) must be clean pre-entry states: delete bad ones
   rather than keep them (originals are backed up in the old triforce repo). No 16-heart states: max hearts follow
   the route (3 through Dungeon 1, 4 after Aquamentus, +1 per later heart container). Boss rooms keep only the fight
