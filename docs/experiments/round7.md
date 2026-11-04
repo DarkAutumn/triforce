@@ -274,6 +274,11 @@ The natural trace above provides the nonzero-block proof. No CUDA exhaustion; Le
 Configs preserved at `models/goriya/r31-block{1,3}/config.yaml`. Both continue the same r21-goriya-chainhp checkpoint,
 with current YAML health mix `[0.15,max]` / half full health, bombs off, the same curriculum, seed 31, 245 updates
 (about 1M additional actions) and no success early stop. Only the confirmed-block multiplier differs: 1 versus 3.
+Separate matched corner arm `models/goriya/r31-quiet005/config.yaml`: ordinary confirmed-block multiplier 1 plus
+0.05 additional quiet active-fight cost after the existing grace. Same seed, six workers, 245 updates and canonical
+main curriculum; no nearby-item shaping or measured truncation. The block arms run on main code `6421275`; this
+arm runs from immutable dev code `aa30a2f`, verified by 462 tests and faithful fight/post-fight replays. Do not merge
+source while the cohort runs. All checkpoints/logs are under main's normal model/log roots. No candidate promoted.
 Keep nearby-item shaping and measured cutoff off. Re-evaluate the old model on the corrected detector/current YAML;
 compare success, real/total health, confirmed blocks and successful/failing quiet-gap distributions per room, then
 both full chains and the relevant post-D1/D2 segments. A stronger block reward is not promoted merely for more blocks;

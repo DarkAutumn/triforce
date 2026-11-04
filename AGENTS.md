@@ -10,6 +10,10 @@ stands and what to try next, in order).
 - Todo item 1 complete: shared lingering metrics and GUI, 383 tests, seeded parity, CUDA smoke and baseline chains.
   Outputs `models/r29-linger-baseline/`. Audit complete; boomerang/config-loss bugs fixed. Aquamentus r30-exit
   promoted: train the full kill/heart/exit visit. Next: Goriya block-reward and corner-stalemate experiments.
+- R31 live: `r31-block1` and `r31-block3` train in main on code snapshot `6421275`; `r31-quiet005` trains from
+  `../triforce2-dev` code snapshot `aa30a2f` with explicit main curriculum/model/log paths. All are matched Goriya
+  continuations from r21, seed 31, 245 updates (~1M actions). Freeze runtime code and active YAML in both trees
+  until these runs finish; do not merge dev code mid-round. Latest dev full check: 462 passed.
 - Lee resumed experiment mode: keep the omp todo updated, reconcile it with todo.md between experiments, log
   every result, check off completed backlog entries, commit each finished item and keep going through items 1–8.
 - **Uncommitted on purpose:** `play-zelda.py`, `triforce/play_grid.py`, `tests/test_play_zelda.py` in main's
