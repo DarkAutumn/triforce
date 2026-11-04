@@ -629,19 +629,61 @@ pickup here. Success differences are one episode, not evidence of a robust succe
 Health columns are per-episode means; heart columns cohort totals. Both continuations reduce measured damage,
 off more than on, but require chain selection before replacing r24. Reports: `r32b-octorok-evidence/evaluations.json`.
 
-### Corrected-runtime selection now running
+### Completed corrected-runtime comparisons
 
 The original main-source freeze ended only after the Octorok training/evaluation jobs completed. Verified
 bootstrap/config transport, entry inventory guards, shutter objectives and terminal health were then merged
 from dev to main (`4cb8434`), with all 470 tests and native smokes passing. No model or canonical YAML changed.
 
-Two comparisons now pin that corrected runtime and unchanged teams/configs/states:
+Completed comparisons pin that corrected runtime and unchanged teams/configs/states:
 - Rope old/off/on: common 420-episode task per policy, then 80 D2 seeds 0–79 per policy; source checkout dev,
   explicit main model paths. Evidence/protocol: `r32-nearby-evidence/corrected-runtime/`.
 - Octorok old/off/on: both full and both post-D1 routes, 40 seeds 0–39 per segment, every other old promoted
   specialist pinned; source checkout main. Evidence/protocol: `r32b-octorok-evidence/chains/`.
+- Shaped Rope alone: both full and both post-D1 routes, 40 seeds 0–39 each, all other old promoted weights
+  pinned. Evidence: `r32-nearby-evidence/final-selection/rope-on/`.
 
-The corrected evaluations, not the legacy timeout-HP aggregates, decide selection. No r32 policy promoted yet.
+The corrected evaluations, not the legacy timeout-HP aggregates, decide selection. All 880 corrected-runtime
+chain executions completed without execution errors; route pairs/shared prefixes are not independent samples.
+
+| Rope policy | Eval successes /420 | Eval real ΔHP | Eval total ΔHP | D2 wins /80 | Rope real ΔHP/run | Rope total ΔHP/run | Taken | Left |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Old r28 | 394 | −0.305 | −0.248 | 27 | −1.881 | −1.638 | 82 | 66 |
+| R32 off | 394 | −0.349 | −0.301 | 28 | −1.656 | −1.475 | 50 | 64 |
+| R32 on | 388 | −0.336 | −0.295 | 35 | −1.663 | −1.494 | 66 | 95 |
+
+Eval health is per episode; D2 health sums all Rope visits per run, including failed runs, then averages over
+80 disjoint seeds. Taken/left are D2 cohort totals. Shaped Rope wins more D2 runs but does not improve pickup
+or standalone success/damage; off has essentially equal D2 damage. Corrected full chains reject a general
+Rope upgrade:
+
+| Isolated swap | Full main /40 | Full fairy /40 | Post-D1 main /40 | Post-D1 fairy /40 |
+|---|---:|---:|---:|---:|
+| None: promoted team | 2 | 3 | 1 | 2 |
+| Rope on | 0 | 1 | 2 | 4 |
+| Octorok off | 2 | 6 | 4 | 4 |
+| Octorok on | 1 | 3 | 2 | 4 |
+
+Octorok health below is that family's aggregate real/total ΔHP per run, not survivor-only or per-visit means:
+
+| Octorok policy | Full main real/total | Full fairy real/total | Post-D1 main real/total | Post-D1 fairy real/total |
+|---|---:|---:|---:|---:|
+| Old r24-fairy | −0.238 / −0.238 | −0.113 / −0.100 | −0.350 / −0.325 | −0.500 / −0.475 |
+| R32 off | −0.300 / −0.300 | −0.075 / −0.075 | −0.388 / −0.388 | −0.463 / −0.450 |
+| R32 on | −0.175 / −0.175 | −0.100 / −0.088 | −0.325 / −0.313 | −0.338 / −0.338 |
+
+Neither Octorok treatment establishes a heart-pickup benefit. The unshaped continuation has the better chain
+success counts but mixed chain damage; it now faces independent seeds 40–79 against the old team on all four
+segments before a promotion decision (`r32b-octorok-evidence/validation/`). No r32 promotion yet; nearby-item
+shaping remains off. Do not combine losing full-route Rope with Octorok to manufacture a new selection task.
+
+**Remaining corrected-runtime fight stall:** a native seed-15 replay exactly matches the complete saved shaped
+Rope D2 record. In 0x2e the last 1,000 actions all have FIGHT, finite wavefront distance 1–12, and a physically
+closed north shutter. Two one-HP Ropes stay at (32,127)/(208,116) throughout; clock is active in every sample.
+Link moves on 888 actions but uses 978 MOVE versus 11 SWORD choices, with a 2,942-action quiet tail. This is
+fighting failure against clock-frozen foes, not the repaired MOVE-through-shutter defect or evidence of
+shadow-Link chasing. Clock is already observed; log a clock-active combat curriculum idea rather than add a
+redundant flag or silently suppress clock pickup. Evidence: `corrected-runtime/fight-stall-replay.json`.
 
 
 

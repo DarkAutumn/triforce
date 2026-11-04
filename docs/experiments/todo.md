@@ -101,8 +101,9 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
      and 1,840 chain executions finished without errors (includes repeated paths). Disjoint D2 seeds reverse
      the initial ranking: shaped Rope leads combined success/health, but full chains remain mixed. Moblin has
      zero eval drops and its off arm harms the fairy chain. Octorok arms finished with sparse heart exposure and
-     no pickup gain. Prerequisite fixes through round 7 §14 are merged at 4cb8434 (470 tests); corrected-runtime
-     Rope/Octorok comparisons now run with unchanged source/YAML/states/pointers. No r32 promotion.
+     no pickup gain. Prerequisite fixes through round 7 §14 are merged at 4cb8434 (470 tests). All 880 corrected
+     runtime chains finished: shaped Rope improves D2 but regresses both full routes; keep old Rope. Octorok off
+     is validating on independent seeds 40–79 before selection; no r32 promotion, nearby shaping stays off.
 6. **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
    an item pickup or a kill).** Today training ends `stuck` after 50 steps without moving and `no-progress` after
    2000 steps without a new correct room (`end_conditions.Timeout`, the same 50/2000 as v1's Timeout; the ~100-step
@@ -136,10 +137,10 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
      0x2e wrongly requested MOVE through its closed kill-all shutter. Live route-gated FIGHT now clears it;
      optional 0x6e/0x6d combat stays optional. Four targeted and all 468 tests pass; natural last-Rope → open
      shutter → north-exit smoke succeeds in 69 actions. Merged into main at 4cb8434.
-   - **Terminal-health prerequisite corrected in dev (round 7 §14):** legacy room/run budgets left HP at entry
-     health. One finisher now captures live health on all finalized paths; death stays zero. Both native fairy
-     budget regressions and all 16 runner checks pass; separate smoke records actual healed HP. Old HP rankings
-     are being remeasured on corrected runtime before promotion. Merged 4cb8434; all 470 tests passed.
+   - **Terminal-health prerequisite complete, round 7 §14:** legacy room/run budgets left HP at entry health.
+     One finisher captures live health on every finalized path; death stays zero. Two native fairy regressions,
+     real healed-HP smoke, 16 runner checks and all 470 tests pass (merged 4cb8434). Old/off/on Rope reranking is
+     complete on corrected runtime (§9); raw historical HP is retained, not retroactively imputed.
 7. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
    milestone). `game.yaml` already declares Rope ×5 and a key in 0x7e; generic FIGHT/TREASURE objectives apply.
@@ -176,6 +177,10 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
   Fixed and proved through real/spawned CLI paths. Round 6's r20-pt, r21/r22-chainhp and r25/r27-heart treatment
   comparisons are not valid treatment evidence; model/chain measurements remain real. Explicit rejections remain.
 - **0x53 (5-Stalfos key room):** 5 deaths in the full chain after the D1 Goriya room's 15.
+- **Clock-active combat stall (round 7 §9):** faithful corrected-runtime Rope seed 15 has two frozen one-HP foes
+  and a closed required shutter, correct FIGHT with finite distances, but a 2,942-action quiet tail. Last 1,000
+  actions: 978 MOVE, 11 SWORD; foes never move. Clock is already observed. Consider native clock-active combat
+  curriculum when revisiting Rope; distinguish this from shadow-Link chasing and the repaired shutter objective.
 - **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
   (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
 - **Bow route** (later): 0x43 N → 0x33 (key) → 0x23 (key) → 0x22 (push block, stairs to the bow cellar 0x7F).
