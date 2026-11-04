@@ -25,9 +25,10 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
   distinct workers/seeds differ, episode streams advance; CPU CLI/CUDA smoke and all 462 tests passed.
 - Backlog item 4 complete: r31-block1 promoted after 800 frozen-team chains (§6). Ordinary reward has the lowest
   evaluation damage; stronger block/quiet rewards stay disabled. Post-fight D2 navigation remains a measured problem.
-- R32 nearby-item on/off training/evaluation is running on unchanged main (§9); do not change its source, YAML
-  or states. Verified dev prerequisites wait for that freeze: cutoff value bootstrap (§10), per-arm chain configs
-  (§11), and key-pickup/bomb guards for entry builders (§12). The D2 route/state migration is not started.
+- R32's original six arms and three baselines finished; frozen-team chains are running (§9). Moblin had no
+  evaluation heart drops, so an added Octorok pair is running to obtain a pickup-exposed overworld comparison.
+  Main source/YAML/states stay frozen. Verified dev prerequisites wait: cutoff bootstrap (§10), per-arm chain
+  configs (§11), key-pickup/bomb guards (§12). The D2 route/state migration is not started.
 
 ## 1. Shared lingering metric
 
@@ -492,6 +493,44 @@ common evaluation task, 20 episodes per start state, seed 0, three CPU workers. 
 real/total health, hearts taken/left and quiet gaps per room, then both full routes and relevant post-D1/D2 chains
 with pinned teams. Nearby-item PBRS changes the learning potential, not runner inputs or accepted exits. Shared
 asynchronous curriculum remains scheduling-dependent despite correct seed propagation. No r32 model promoted.
+
+### Completed original cohort evaluations; chains pending
+
+All six 245-update arms and three current-YAML baselines completed. Paired on/off evaluation records match
+initial state, seed and starting health in all 680 SKG, 420 Rope and 280 Moblin episodes. The treatment does
+not improve heart collection here; neither continued SKG/Rope arm beats its old model on damage.
+
+| Policy | Successes | Real ΔHP | Total ΔHP | Hearts dropped | Taken | Left | Worst quiet actions |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| SKG old | 667/680 | −0.094 | −0.076 | 60 | 38 | 17 | 420 |
+| SKG off | 661/680 | −0.121 | −0.107 | 48 | 27 | 20 | 179 |
+| SKG on | 668/680 | −0.122 | −0.109 | 41 | 20 | 19 | 457 |
+| Rope old | 397/420 | −0.286 | −0.225 | 181 | 87 | 73 | 129 |
+| Rope off | 394/420 | −0.321 | −0.269 | 168 | 76 | 82 | 118 |
+| Rope on | 391/420 | −0.326 | −0.289 | 154 | 56 | 87 | 258 |
+| Moblin old | 272/280 | −0.195 | −0.195 | 0 | 0 | 0 | 37 |
+| Moblin off | 271/280 | −0.166 | −0.166 | 0 | 0 | 0 | 38 |
+| Moblin on | 276/280 | −0.173 | −0.173 | 0 | 0 | 0 | 34 |
+
+Heart columns are cohort totals, health columns per-episode means. Moblin's higher success is not evidence
+of heart-seeking: none of these evaluations offers a dropped heart. The common PBRS code measures both old/new
+positions on the previous state's wavefront; inspection does not support a pickup-disappearance potential jump.
+Full reports: `models/r32-nearby-evidence/evaluations.json` and each run's `eval.json`.
+
+Six frozen team comparisons now run at 40 seeds per segment on both full routes, both post-D1 routes and D2:
+promoted baseline, all-off, all-on, and each family's isolated on swap against the all-off team. No source,
+canonical YAML, state or promotion mutation. This separates combined treatment from extra training and marginal
+family swaps; small differences and curriculum scheduling still limit causal conclusions.
+
+### Pickup-exposed overworld follow-up
+
+Added ow-octorok off/on arms, same promoted r24-fairy warm start and r32 seed/budget/workers/health setup,
+plus a current-YAML baseline. Runs remain `models/ow-octorok/r32-nearby-{off,on}`; separate evidence/protocol:
+`models/r32b-octorok-evidence/`. It shares unchanged main source with the frozen-team comparisons. Selection
+reason: the completed r29 full-chain artifacts contain four Octorok heart drops in 387 visits versus zero in
+46 Moblin visits (route pairs are not independent). This follow-up avoids calling the overworld heart question
+answered by a zero-opportunity evaluation. No Octorok or other r32 candidate is promoted yet.
+
 
 ## 10. Measured-cutoff bootstrap correction (dev prerequisite)
 
