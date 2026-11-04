@@ -288,3 +288,31 @@ wallmaster r10, boss-aquamentus r23, d2-rope r27. 40 runs per segment:
 Every pond visit refilled Link (40 of 40 post-D1, arriving with 3.2 hearts, leaving with 4.0). The fairy route is
 now the better road to D2. What ends runs: the D1 Goriya room (15 deaths of 28 arrivals) and 0x53 (5) in the full
 chain; in D2 the first Goriya room 0x5e (11 deaths post-D1 on the fairy route), then the rope rooms.
+
+## 12. Three chains of Dungeon 2 states (r28)
+
+D2 specialists had one start state per room (chain 2 only). New: chains 0 and 1 from `0_4ce_0/1` through D2
+(`entry_states build --start-step 33`; 22 states incl. `0_3cs` and `2_0es`, audited clean), and goriya
+trajectories for the new 0x5e and 0x1e states (0x1e needed 8000 Go-Explore iterations: all 5 Goriyas must die
+before the N shutter opens). r28 continued both D2 families for 2M steps on the 3× state set; evaluated against
+the promoted models on the same states:
+
+| specialist | promoted | r28 | notes |
+|---|---|---|---|
+| d2-rope | r27: 90%, −0.44 | **95%, −0.29** | up in every room; 0x3e takes more damage (−1.14 vs −0.77) |
+| goriya | r21: 74%, −0.96 | 69%, −0.89 | route rooms equal with less damage; off-route 0x23 77% → 57% |
+
+d2-rope r28 promoted. goriya decided by chain (40 runs each, d2-rope r28 in both):
+
+| goriya | D2 (`2_7ds_2`) → Dodongo room | fairy post-D1 (`0_37c_2`) → Dodongo room |
+|---|---|---|
+| r21 (kept) | **9/40** | **8/40** |
+| r28 | 6/40 | 3/40 |
+
+With d2-rope r28 the fairy route's post-D1 segment went from 2/40 to **8/40**. Full fairy-route chain with the
+final set: 2/40 (r27 set: 3/40; same seeds, the same 8 runs leave D1 in both). What limits the full chain is
+still Dungeon 1: the D1 Goriya room kills 15 of the 28 runs that reach it, 0x53 five more. In D2 the deaths
+spread over 0x1e, 0x3e, 0x4e, 0x5e and 0x2e.
+
+Promoted at the end of round 6: ow-start / ow-zora / ow-octorok r24-fairy, ow-moblin r26c, ow-leever-peahat
+and boss-aquamentus r23, stalfos-keese-gel r25, goriya r21, wallmaster r10 copy, d2-rope r28.

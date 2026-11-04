@@ -6,15 +6,14 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Round 6 in progress** (`round6.md`). Best chains (40 runs, r23): **full chain → Dodongo room 1/40** (first
-  success), post-D1 → D2 entrance 27/40, D2 entrance → Dodongo room 7/40. What kills chains is still health
-  drain: the D1 Goriya room (16 deaths of 32 arrivals), 0x53, post-D1 0x4c, D2 rope rooms 0x3e / 0x6d / 0x6e
-  and the first D2 Goriya room (0x5e).
+- **Round 6 done** (`round6.md`). Best chains (40 runs): full chain → Dodongo room 1/40 (milestone1, r23) and
+  2–3/40 (milestone1-fairy); **fairy post-D1 → Dodongo room 8/40**; D2 entrance → Dodongo room 9/40.
 - **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat /
-  boss-aquamentus r23-more, stalfos-keese-gel r25-skg-plain, goriya r21-goriya-chainhp, d2-rope r27-rope-plain,
-  wallmaster r10 copy. All overworld families now train on both routes' rooms (round 6 §9).
-- **Chains on both routes** (round 6 §11): fairy route full chain 3/40, post-D1 2/40 (milestone1: 0 and 0).
-  Post-D1 the fairy route reaches D2 37/40 with 2.5 hearts (milestone1 27/40 with 1.7). Goriya rooms end most runs.
+  boss-aquamentus r23-more, stalfos-keese-gel r25-skg-plain, goriya r21-goriya-chainhp, d2-rope r28-d2,
+  wallmaster r10 copy. Overworld families train on both routes' rooms; D2 rooms have 3 start states each.
+- **Next: the D1 Goriya room (0x44).** It kills 15 of the 28 full-chain runs that reach it (Link arrives with
+  ~1.1 hearts), and only 8 of 40 runs leave D1 alive. goriya r28 (2M more steps on 3× D2 states) did not beat r21
+  in the chain. Ideas below ("Fight Goriyas without trading hits"); also 0x53 (5 deaths).
 - ~~Chain-matched hp~~ tested on goriya (within noise) and stalfos-keese-gel (worse); off everywhere. The option
   (`ram_randomization.chain_hp`) stays for a later retry.
 - ~~Pass-through damage penalty~~ tested twice in round 6 (overworld, d2-rope): no chain gain; dropped (code
