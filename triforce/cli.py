@@ -9,11 +9,12 @@ import sys
 _WORKER = {}
 
 
-def _eval_worker_init(models_dir, overrides, deterministic):
+def _eval_worker_init(models_dir, overrides, deterministic, specialist_configs):
     import torch  # pylint: disable=import-outside-toplevel
     from .runner import Runner  # pylint: disable=import-outside-toplevel
     torch.set_num_threads(1)    # N processes × all-core torch threads oversubscribes the machine
-    _WORKER['runner'] = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic)
+    _WORKER['runner'] = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic,
+                               specialist_configs=specialist_configs)
 
 
 def _eval_worker_run(args):
@@ -22,29 +23,34 @@ def _eval_worker_run(args):
 
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
-               deterministic: bool = False, stop_at=None, first_seed: int = 0, start_from=None):
-    """Runs the route ``runs`` times with seeds first_seed.. and returns (results, summary)."""
+               deterministic: bool = False, stop_at=None, first_seed: int = 0, start_from=None,
+               specialist_configs=None):
+    """Runs the route with optional loaded specialist configs, preserving them in spawned workers."""
     from .runner import Route, Runner, chain_summary, parse_location  # pylint: disable=import-outside-toplevel
     route = Route.load(route_name, parse_location(stop_at) if stop_at else None, start_from)
     seeds = list(range(first_seed, first_seed + runs))
     if parallel <= 1:
-        runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic)
+        runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic,
+                        specialist_configs=specialist_configs)
         try:
             results = [runner.run(route, seed) for seed in seeds]
         finally:
             runner.close()
     else:
         ctx = mp.get_context('spawn')
-        with ctx.Pool(parallel, _eval_worker_init, (models_dir, overrides, deterministic)) as pool:
+        with ctx.Pool(parallel, _eval_worker_init, (models_dir, overrides, deterministic, specialist_configs)) as pool:
             results = pool.map(_eval_worker_run, [(route, seed) for seed in seeds])
     return results, chain_summary(results)
 
 
 def _cmd_eval_chain(args):
     from .runner import write_jsonl  # pylint: disable=import-outside-toplevel
+    from .specialist import load_specialist  # pylint: disable=import-outside-toplevel
+    configs = [load_specialist(path) for path in args.specialist_config]
     overrides = dict(item.split('=', 1) for item in args.checkpoint)
     results, summary = eval_chain(args.route, args.runs, args.parallel, args.models_dir, overrides,
-                                  args.deterministic, args.stop_at, args.first_seed, args.start_from)
+                                  args.deterministic, args.stop_at, args.first_seed, args.start_from,
+                                  specialist_configs={config.name: config for config in configs})
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     write_jsonl(args.output, results)
     print(json.dumps(summary, indent=2))
@@ -104,6 +110,8 @@ def main(argv=None):
     chain.add_argument('--from', dest='start_from', help="start from this savestate instead of the game start, "
                                                          "e.g. a route entry state like 0_37c_2")
     chain.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST=PATH')
+    chain.add_argument('--specialist-config', action='append', default=[], metavar='YAML',
+                       help="override specialist config, selected by config.name (repeatable YAML paths)")
     chain.add_argument('--output', default=os.path.join('runs', 'eval-chain.jsonl'))
 
     args = parser.parse_args(argv)

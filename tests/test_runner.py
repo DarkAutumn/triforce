@@ -3,12 +3,14 @@
 import json
 
 import pytest
+import torch
 
+from triforce import cli, registry
 from triforce.actions import Action
 from triforce.game_map import GameMap, load_routes
 from triforce.runner import Route, RunResult, RoomRecord, Runner, RunnerError, chain_summary, parse_location, \
     write_jsonl
-from triforce.zelda_enums import MapLocation
+from triforce.zelda_enums import ActionKind, MapLocation
 
 
 def test_milestone_route_definition():
@@ -145,3 +147,26 @@ def test_runner_room_exit_resets_visit_clock(session, models_dir):
     old, new = result.rooms
     assert old.in_cave and old.linger['tail_steps'] == 0
     assert not new.in_cave and new.steps == new.linger['steps'] == new.linger['tail_steps'] == 20
+
+
+def test_chain_cli_spawn_workers_preserve_supplied_specialist_config(models_dir, tmp_path):
+    name = 'stalfos-keese-gel'
+    network, _ = registry.load_model(models_dir / name / 'untrained')
+    with torch.no_grad():
+        network.kind_head.weight.zero_()
+        network.kind_head.bias.fill_(-100)
+        network.kind_head.bias[ActionKind.WAIT] = 100
+    root = tmp_path / 'wait-model'
+    registry.save_checkpoint(name, 'wait', network, root=root)
+    registry.promote(name, 'wait', root=root)
+    config = tmp_path / 'alternate.yaml'
+    config.write_text("name: stalfos-keese-gel\nrooms: ['(1, 0x73)']\nstart_states: ['1_73s_0']\n"
+                      "success: [exit-correct]\nno_progress_steps: 2\nmax_steps: 100\nitems: {bombs: off}\n")
+    output = tmp_path / 'chain.jsonl'
+    cli.main(['--models-dir', str(root), 'eval-chain', '--parallel', '2', '--runs', '2',
+              '--from', '1_73s_0', '--deterministic', '--specialist-config', str(config),
+              '--output', str(output)])
+    records = [json.loads(line) for line in output.read_text().splitlines()]
+    assert [record['steps'] for record in records] == [2, 2]
+    assert all(record['result'] == 'failure' and 'no-room-progress' in record['reason'] for record in records)
+    assert all(record['rooms'][-1]['linger']['tail_steps'] == 2 for record in records)

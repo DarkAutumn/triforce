@@ -206,7 +206,8 @@ Nearby-item shaping and the measured cutoff remain disabled in promoted configs 
 - `Route.load(name, stop_at=None)` reads `triforce/routes.yaml`. A route starts at the `start` savestate and
   ends on entering its `terminal` room (both routes: level 2 room 0x0e); `stop_at` ends it earlier.
 - `Runner(session=None, models_dir=None, checkpoints=None, deterministic=False, max_steps=50000,
-  renderer=None).run(route, seed) -> RunResult`. On each room entry: `game.yaml` tag → specialist → promoted
+  renderer=None, device='cpu', specialist_configs=None).run(route, seed) -> RunResult`. On each room entry:
+  `game.yaml` tag → specialist → promoted
   checkpoint (cached). Untagged room or missing model → `result='error'` with the reason. Per-room outcomes:
   `exit-correct`, `exit-wrong`, `death`, `stuck` (specialist `max_steps` in one room), `milestone`.
 - `python -m triforce.run --route milestone1 [--seed N] [--render] [--stop-at L:0xRR] [--checkpoint S=PATH]`
@@ -215,3 +216,8 @@ Nearby-item shaping and the measured cutoff remain disabled in promoted configs 
   rate and per-room failure counts (`chain_summary`); `--from` starts mid-route at a route entry state (e.g.
   `0_37c_2`, after Dungeon 1). `triforce promote <specialist> <run-id>`; `triforce list`;
   `triforce train|run|play|evaluate ...` forward to the module CLIs.
+- Chain config overrides: repeat `eval-chain --specialist-config /path/to/arm.yaml`. Each YAML's `name` selects
+  its family. `Runner` / `eval_chain(..., specialist_configs={name: loaded_config})` accept the same loaded
+  objects; spawned workers retain them instead of reloading canonical YAML. Runtime item masks, observations
+  and room/cutoff budgets use these configs. Route selection and carried inventory/health remain chain-owned.
+  Other families retain canonical configs; checkpoint overrides and promoted pointers are independent.

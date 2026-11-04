@@ -518,3 +518,37 @@ Integrated dev suite: **463 passed in 779.75 seconds** while r32 occupied the ma
 value-target regression passes, including legacy truncation/death and open-rollout controls. Temporary native
 smoke script removed; persisted JSON evidence retained. No r32 runtime source or canonical config changed.
 
+## 11. Per-arm chain configuration (dev prerequisite)
+
+Added repeatable `triforce eval-chain --specialist-config PATH.yaml`, keyed by each loaded config's family name.
+The loaded objects reach `Runner` in both direct and spawned execution; `_Specialist` no longer reloads a
+default config over an override. Programmatic callers use `specialist_configs={name: loaded_config}`.
+Canonical YAML, promoted pointers, route selection and carried health/inventory remain untouched. This supports
+the cutoff and later boomerang comparisons without mutating a live experiment's global config.
+
+Native smoke uses a valid temporary boomerang-biased neural policy in D2 0x5e. The first attempt correctly found
+boomerang masked in the south doorway; after two scripted northward moves, enabled config chooses BOOMERANG,
+disabled config chooses WAIT instead. The unchanged cutoff is honored too. Ordinary waiting runs with cutoff 2
+produce exactly matching native room/health/frame/outcome records through direct API, CLI parallel 1 and CLI
+parallel 2. Evidence: `models/r33-cutoff-evidence/config-override-smoke.json`. These are smoke policies, not
+trained candidates. The spawned real-game CLI regression passed (two runs, each stopped at two quiet actions).
+Integrated dev suite after config transport: **464 passed in 871.42 seconds**. Temporary neural checkpoints,
+YAML files and smoke script were removed; JSON evidence remains. This feature stays in dev until r32's source
+freeze ends; no canonical specialist config or promoted pointer was changed by these checks.
+
+## 12. D2 key-builder defect reproduced (before route migration)
+
+Native `cross_room` from clean `2_7ew_0` toward 0x6e, seed 0, 3,000 exploration iterations/200 patience/one
+attempt: accepted a 56-action path after 6,293 exploratory actions (68.6 seconds), ending `exit-wrong` at 1.5
+hearts. Link entered 0x6e with **zero keys and 0x7e's key still untaken**, playable mode 5. Source also had zero
+keys and an untaken key. This confirms the §8 acceptance hole through real gameplay; no bad state file was kept.
+Evidence: `models/r34-d2-key-evidence/builder-before.json`.
+
+Separate native prototype, same source/seed/search limits, with required source-room item-taken gate and bombs
+masked: accepted a 155-action **exit-correct** path after 14,886 exploratory actions (202.3 seconds), arriving at
+three hearts with **one key and 0x7e's pickup flag set**, playable mode 5. Evidence:
+`models/r34-d2-key-evidence/builder-prototype-after.json`. This validates the guard through real collection,
+not an injected inventory or metadata-only check. The repository builder is not yet edited and no permanent
+state was replaced. The permanent guard must check replay as well as exploration, preserve intended off-route
+destinations after required pickups, and precede the D2 suffix rebuild.
+

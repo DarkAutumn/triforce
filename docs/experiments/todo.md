@@ -145,8 +145,9 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
      with equal budgets.
    - Evaluation: each specialist on its post-D1 states (success, real/total heart change, steps), then chains
      with carry-over: `--from 0_37c_2` on both routes plus the D2 segment, at least 80 runs per arm.
-   - Needs: per-arm configs in the chain (the runner reads `specialists/<name>.yaml`; add a config override or a
-     specialists-dir option to `eval-chain`).
+   - **Per-arm chain config prerequisite implemented in dev, round 7 §11:** repeatable `--specialist-config YAML`
+     carries loaded family configs into direct/spawned chains. Native boomerang-mask/cutoff smoke and all
+     464 tests passed; main merge waits for the frozen r32 cohort.
    - Run it after items 1–7 settle (or as part of the full retrain item 3 may force), so it measures the setup we
      keep. Expect about a day of GPU.
 
