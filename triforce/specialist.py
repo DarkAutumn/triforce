@@ -61,6 +61,8 @@ class RewardConfig(BaseModel):
     """reward: block."""
     model_config = ConfigDict(extra='forbid')
     pbrs: bool = True
+    block_reward: float = Field(default=1.0, ge=0)
+    nearby_items: bool = False
 
 
 class ObsConfig(BaseModel):
@@ -151,6 +153,7 @@ class SpecialistConfig(BaseModel):
     curriculum: CurriculumConfig = Field(default_factory=CurriculumConfig)
     one_room: bool = False                       # episodes end at the first correct room exit, even inside `rooms`
     max_steps: int = 2000
+    no_progress_steps: Optional[int] = Field(default=None, gt=0)
     route: Optional[str] = None                  # routes.yaml route for objectives; default: from the start state
     warm_start: Optional[str] = None
     harvested_states: Optional[str] = None       # directory; default <integration dir>/harvested/<name>

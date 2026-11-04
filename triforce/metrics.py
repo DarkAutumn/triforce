@@ -82,6 +82,8 @@ class RolloutMetrics:
         self.linger_room_episodes = Counter()
         self.linger_room_sums = Counter()
         self.linger_room_worst = Counter()
+        self.block_episodes = self.blocks = 0
+        self.curriculum_block_episodes = self.curriculum_blocks = 0
 
     def merge(self, other: 'RolloutMetrics') -> 'RolloutMetrics':
         """Adds other's counts into self."""
@@ -148,6 +150,10 @@ class RolloutMetrics:
             result['curriculum/start_fraction'] = self.curriculum_start / eps
             result['curriculum/point_fraction'] = self.curriculum_point / eps
         for prefix in ('', 'curriculum_'):
+            count = getattr(self, f'{prefix}block_episodes')
+            if count:
+                result['curriculum/blocks' if prefix else 'blocks'] = getattr(self, f'{prefix}blocks') / count
+        for prefix in ('', 'curriculum_'):
             count = getattr(self, f'{prefix}linger_episodes')
             if count:
                 metric_prefix = 'curriculum/linger' if prefix else 'linger'
@@ -210,6 +216,10 @@ class EpisodeTracker:
 
         if done and info.get('linger'):
             metrics.record_linger(info['linger'], bool(info.get('curriculum')), info.get('linger_room'))
+        if done and 'blocks' in info:
+            prefix = 'curriculum_' if info.get('curriculum') else ''
+            setattr(metrics, f'{prefix}block_episodes', getattr(metrics, f'{prefix}block_episodes') + 1)
+            setattr(metrics, f'{prefix}blocks', getattr(metrics, f'{prefix}blocks') + info['blocks'])
 
         if done and info.get('curriculum'):
             curriculum = info['curriculum']

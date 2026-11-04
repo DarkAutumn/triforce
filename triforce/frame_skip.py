@@ -11,6 +11,7 @@ import numpy as np
 
 from .actions import Action
 from .emulator import BUTTON_INDEX, NUM_BUTTONS, Emulator
+from .projectile_blocks import ProjectileBlock, ShieldCollisionWatch
 from .room_entry import is_pre_entry
 from .zelda_enums import ActionKind, Direction, SelectedEquipmentKind
 
@@ -102,6 +103,12 @@ class OptionResult:
     frames: int
     interrupt: Optional[str] = None
     control_frames: int = 0         # frames spent executing the option itself (before uncontrollable skipping)
+    projectile_blocks: tuple[ProjectileBlock, ...] = ()  # actual collisions, including attack/settling frames
+
+    @property
+    def blocks(self) -> int:
+        """Number of confirmed shield collisions, independent of option duration or sound playback."""
+        return len(self.projectile_blocks)
 
 
 def _is_threat(obj_id: int) -> bool:
@@ -177,6 +184,7 @@ class OptionExecutor:
         self.just_exited_cave = False
         self.capture_pre_entry = False          # keep the last frame before each room entry (room_entry)
         self.last_pre_entry: Optional[bytes] = None
+        self._projectile_blocks: Optional[list[ProjectileBlock]] = None
 
     def reset(self):
         """Clears per-episode state."""
@@ -198,17 +206,31 @@ class OptionExecutor:
         self.last_pre_entry = None
         start = self.emu.frame
         location = (state.level, state.location, state.in_cave)
-        if action.kind in (ActionKind.MOVE, ActionKind.WAIT):
-            interrupt = self._run_timed(action, state)
-        else:
-            interrupt = None
-            self._run_attack(action)
+        self._projectile_blocks = []
+        try:
+            if action.kind in (ActionKind.MOVE, ActionKind.WAIT):
+                interrupt = self._run_timed(action, state)
+            else:
+                interrupt = None
+                self._run_attack(action)
 
-        control_frames = self.emu.frame - start
-        if interrupt != Interrupt.GAME_OVER and self.emu.read(ADDR_MODE) not in GAME_OVER_MODES:
-            self._skip_uncontrollable(location)
+            control_frames = self.emu.frame - start
+            if interrupt != Interrupt.GAME_OVER and self.emu.read(ADDR_MODE) not in GAME_OVER_MODES:
+                self._skip_uncontrollable(location)
 
-        return OptionResult(self.emu.frame - start, interrupt, control_frames)
+            return OptionResult(self.emu.frame - start, interrupt, control_frames, tuple(self._projectile_blocks))
+        finally:
+            self._projectile_blocks = None
+
+    def _step(self, buttons=None, frames: int = 1):
+        """Observe only this executor's real frames; leave Emulator.on_frame and look-ahead stepping alone."""
+        if self._projectile_blocks is None:
+            self.emu.step(buttons, frames)
+            return
+        for _ in range(frames):
+            before = ShieldCollisionWatch(self.emu.read)
+            self.emu.step(buttons, 1)
+            self._projectile_blocks.extend(before.collisions(self.emu.read, self.emu.frame))
 
     # --- timed options ---
     def _run_timed(self, action: Action, state) -> Optional[str]:
@@ -216,7 +238,7 @@ class OptionExecutor:
         pushing = is_move and state.is_push_block_direction(action.direction)
         if is_move and not pushing and not state.can_link_move(action.direction):
             # A move into a wall costs one frame, as in v1.
-            self.emu.step(buttons_for(action.direction), 1)
+            self._step(buttons_for(action.direction), 1)
             return Interrupt.WALL
 
         buttons = buttons_for(action.direction) if is_move else None
@@ -224,7 +246,7 @@ class OptionExecutor:
         start_near = before.near
         stalled = 0
         for _ in range(action.duration):
-            self.emu.step(buttons, 1)
+            self._step(buttons, 1)
             after = _FrameWatch(self.emu.ram)
             interrupt = detect_interrupt(before, after, start_near)
             if interrupt:
@@ -261,12 +283,12 @@ class OptionExecutor:
         self.emu.set_value('link_direction', facing.value)
 
         button = 'B' if item is not None else 'A'
-        self.emu.step(buttons_for(action.direction, button), 1)
+        self._step(buttons_for(action.direction, button), 1)
 
         # Poll until the animation finishes: the NES ignores input until link_status == 0 and the sword slot
         # is idle.  Items never touch the sword slot.
         for _ in range(MAX_ANIMATION_WAIT):
-            self.emu.step(None, 1)
+            self._step(None, 1)
             if self.emu.read(ADDR_LINK_STATUS) == 0 and self.emu.read(ADDR_SWORD_ANIMATION) == 0:
                 break
 
@@ -286,7 +308,7 @@ class OptionExecutor:
 
             in_cave = mode == MODE_CAVE
             if in_cave and not self.was_in_cave:
-                emu.step(None, CAVE_COOLDOWN)
+                self._step(None, CAVE_COOLDOWN)
                 self.was_in_cave = True
                 continue
 
@@ -294,7 +316,7 @@ class OptionExecutor:
                     or self._is_level_transition(start_location):
                 if self.capture_pre_entry and is_pre_entry(emu.read):
                     self.last_pre_entry = emu.save_state()
-                emu.step(None, 1)
+                self._step(None, 1)
                 continue
 
             break
@@ -305,7 +327,7 @@ class OptionExecutor:
         if prev_in_cave and not self.was_in_cave:
             self.just_exited_cave = True
 
-        emu.step(None, 1)
+        self._step(None, 1)
 
     def _is_level_transition(self, start_location) -> bool:
         if start_location is None:

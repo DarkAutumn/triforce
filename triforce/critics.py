@@ -52,7 +52,7 @@ REWARD_OPENED_LOCKED_DOOR = Reward("reward-opened-locked-door", REWARD_MEDIUM)
 REWARD_OPENED_BOMB_WALL = Reward("reward-opened-bomb-wall", REWARD_LARGE)
 REWARD_PUSHED_BLOCK = Reward("reward-pushed-block", REWARD_LARGE)
 
-# Moves that don't use a weapon (no miss penalty; projectile blocks count).
+# Moves that don't use a weapon (no miss penalty).
 _NON_WEAPON_KINDS = (ActionKind.MOVE, ActionKind.WAIT)
 
 
@@ -96,8 +96,9 @@ EQUIPMENT_REWARD_MAP = _init_equipment_rewards()
 
 class GameplayCritic:
     """The default reward profile.  ``pbrs`` switches potential-based movement shaping (reward.pbrs)."""
-    def __init__(self, pbrs: bool = True):
+    def __init__(self, pbrs: bool = True, *, block_reward: float = 1.0):
         self.pbrs = pbrs
+        self.block_reward = block_reward
         self._correct_locations = set()
         self._room_combat_counts = {}  # full_location -> combat event count
         self._room_steps = 0  # steps in current room (for stalling detection)
@@ -146,9 +147,8 @@ class GameplayCritic:
         self.critique_location_change(state_change, rewards)
         self.critique_movement(state_change, rewards)
 
-        # Blocking projectiles only happens when not using an item
-        if state_change.action.kind in _NON_WEAPON_KINDS:
-            self.critique_block(state_change, rewards)
+        # An attack option can include idle animation/settling frames that really shield a projectile.
+        self.critique_block(state_change, rewards)
 
         self.critique_health_change(state_change, rewards)
 
@@ -282,11 +282,13 @@ class GameplayCritic:
         return tile in objectives.targets or tile in objectives.pbrs_targets
 
     def critique_block(self, state_change : StateChange, rewards):
-        """Critiques blocking of projectiles."""
-        prev_link, curr_link = state_change.previous.link, state_change.state.link
-        if not prev_link.is_blocking and curr_link.is_blocking:
-            decay = self._get_combat_decay(state_change.state.full_location)
-            rewards.add(Reward("reward-block-projectile", REWARD_MEDIUM * decay))
+        """Reward each actual shield collision, not a sound onset or a predicted look-ahead event."""
+        if not state_change.projectile_blocks:
+            return
+        value = sum(REWARD_MEDIUM * self._get_combat_decay(event.full_location) * self.block_reward
+                    for event in state_change.projectile_blocks)
+        if value:
+            rewards.add(Reward("reward-block-projectile", value, state_change.blocks))
 
     def critique_attack(self, state_change : StateChange, rewards):
         """Critiques attacks made by the player."""
@@ -429,8 +431,8 @@ REWARD_PROFILES: Dict[str, type] = {
 }
 
 
-def create_critic(profile: str, pbrs: bool) -> GameplayCritic:
-    """Builds the critic for a specialist's reward_profile."""
+def create_critic(profile: str, pbrs: bool, *, block_reward: float = 1.0) -> GameplayCritic:
+    """Builds the critic for a specialist's reward_profile; block_reward scales actual shield-collision rewards."""
     if profile not in REWARD_PROFILES:
         raise ValueError(f"Unknown reward_profile {profile!r}; known: {sorted(REWARD_PROFILES)}")
-    return REWARD_PROFILES[profile](pbrs=pbrs)
+    return REWARD_PROFILES[profile](pbrs=pbrs, block_reward=block_reward)

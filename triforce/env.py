@@ -24,7 +24,7 @@ from .chain_hp import load_profile, room_key
 from .critics import create_critic
 from .curriculum import BackwardCurriculum, CurriculumSpec
 from .emulator import GAME_DIR
-from .end_conditions import MAX_STEPS, build_end_conditions, classify_ending
+from .end_conditions import MAX_STEPS, NO_ROOM_PROGRESS, build_end_conditions, classify_ending
 from .game_map import DEFAULT_ROUTE
 from .hearts import HeartTracker
 from .linger import LingerTracker
@@ -35,7 +35,7 @@ from .session import GameSession
 from .specialist import SpecialistConfig, load_specialist
 from .start_states import SavestateCapture, StartStatePool, ram_randomization_values, state_entry, state_label, \
     verify_start_room
-from .zelda_enums import Direction
+from .zelda_enums import Direction, ZeldaItemKind
 from .zelda_game import ZeldaGame
 
 _CARDINALS = (Direction.N, Direction.S, Direction.E, Direction.W)
@@ -69,14 +69,17 @@ class ZeldaEnv(gym.Env):
         self.start_state = start_state
         self.strict_actions = strict_actions
         self.rng = random.Random()
+        self.linger = LingerTracker()
 
         self.pool = StartStatePool(self.config, self.rng) if start_state is None else None
         self.curriculum = BackwardCurriculum(curriculum, self.rng) if curriculum and start_state is None else None
         self.capture = SavestateCapture(capture_dir) if capture_dir else None
         if self.capture is not None:
             self.session.executor.capture_pre_entry = True
-        self.critic = create_critic(self.config.reward_profile, self.config.reward.pbrs)
-        self.end_conditions = build_end_conditions(self.config.rooms, self.config.success, self.config.one_room)
+        self.critic = create_critic(self.config.reward_profile, self.config.reward.pbrs,
+                                    block_reward=self.config.reward.block_reward)
+        self.end_conditions = build_end_conditions(self.config.rooms, self.config.success, self.config.one_room,
+                                                   linger=self.linger, no_progress_steps=self.config.no_progress_steps)
         self.builder = ObservationBuilder(objective=self.config.obs.objective)
         self.objectives: Optional[GameCompletion] = None
 
@@ -135,8 +138,8 @@ class ZeldaEnv(gym.Env):
         self._start_health = state.link.health
         self.hearts = HeartTracker()
         self.hearts.reset(state)
-        self.linger = LingerTracker()
         self.linger.reset(state)
+        self._blocks = 0
         self._done = False
         obs = self.builder.reset(state, self.session.mask)
         return obs, self._info(state, {'start_state': name})
@@ -156,6 +159,7 @@ class ZeldaEnv(gym.Env):
         self.hearts.update(change)
         self._attach_objectives(change.previous, change.state)
         self.linger.update(change, self.hearts.taken - taken)
+        self._blocks += change.blocks
         rewards = StepRewards()
         self.critic.critique_gameplay(change, rewards)
 
@@ -165,7 +169,7 @@ class ZeldaEnv(gym.Env):
             if ending is not None:
                 break
 
-        truncated = False
+        truncated = ending == NO_ROOM_PROGRESS
         if ending is None and self.session.steps >= self.config.max_steps:
             ending, truncated = MAX_STEPS, True
         terminated = ending is not None and not truncated
@@ -178,7 +182,7 @@ class ZeldaEnv(gym.Env):
             self.hearts.finish(state)
             extra = {'ending': ending, 'outcome': outcome, 'start_state': state_label(self._episode_state),
                      'start_health': self._start_health, 'hearts': self.hearts.summary(),
-                     'linger': self.linger.summary(), 'linger_room': self.linger.start_room}
+                     'linger': self.linger.summary(), 'linger_room': self.linger.start_room, 'blocks': self._blocks}
             if self._curriculum_tag is not None:
                 extra['curriculum'] = self.curriculum.record(self._curriculum_tag, outcome == SUCCESS)
             elif self.pool is not None:
@@ -203,6 +207,10 @@ class ZeldaEnv(gym.Env):
     def _attach_objectives(self, prev: Optional[ZeldaGame], state: ZeldaGame):
         """Sets state.objectives (always: end conditions use next_rooms) and, with PBRS on, state.pbrs_wavefront."""
         objectives = self.objectives.get_current_objectives(prev, state)
+        if self.config.reward.nearby_items:
+            for item in state.items:
+                if item.id in (ZeldaItemKind.Heart, ZeldaItemKind.Clock):
+                    objectives.pbrs_targets.update(item.link_overlap_tiles)
         state.objectives = objectives
         if self.config.reward.pbrs and not state.game_over:
             locked_doors = None

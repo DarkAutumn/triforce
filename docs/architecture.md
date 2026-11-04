@@ -28,9 +28,9 @@ session through the `session` fixture in `tests/conftest.py`. Training uses subp
 |---|---|
 | `emulator.Emulator` | `step(buttons uint8[9] or None, frames)`, `frame` counter, `ram` (all blocks, cached per frame), `read(addr)`, `info` (data.json variables), `set_value(name, v)`, `save_state()/load_state(bytes)`, `get_screen()`. |
 | `actions` | `ACTION_SCHEMA_VERSION`; `ActionKind` (zelda_enums) = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action(kind, direction, duration)`, `Action.from_indices(k, d, u)`, `.to_indices()`, `Action.parse('MOVE N 16')`. `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`, `to_flat()` → bool[`MASK_SIZE`] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. `compute_action_mask(state)`. |
-| `frame_skip.OptionExecutor` | `execute(action, state) -> OptionResult(frames, interrupt, control_frames)`. Interrupt reasons in `frame_skip.Interrupt.ALL`. |
+| `frame_skip.OptionExecutor` | `execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks)`; `.blocks` counts confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. |
 | `session.GameSession` | `load(name|path|bytes, randomize_rng=True, ram_overrides=None) -> ZeldaGame`; `act(action) -> StateChange`; `.state`, `.mask`, `.total_frames`, `.steps`; `snapshot()/restore()`. |
-| `state_change.StateChange` | `previous`, `state`, `action`, `frames`, `interrupt`, `health_lost/gained`, `enemies_hit`, `enemies_stunned`, `items_gained`, `changed_location`, `gained_triforce`, `action_mask`. Look-ahead credit via `FutureCreditLedger`. |
+| `state_change.StateChange` | `previous`, `state`, `action`, `frames`, `interrupt`, `health_lost/gained`, `enemies_hit`, `enemies_stunned`, `items_gained`, `changed_location`, `gained_triforce`, `action_mask`, executed `projectile_blocks` / `.blocks`. Look-ahead credit via `FutureCreditLedger` does not add simulated blocks. |
 | `describe`, `play` | Text dumps and the interactive `python -m triforce.play` tool. |
 
 ## Observation (`observation.py`)
@@ -80,8 +80,9 @@ class ZeldaEnv(gymnasium.Env):
 `info` keys every step: `frames` (int, frames this step: used for frame-aware discounting), `interrupt`,
 `action` (str), `rewards` (dict name → value), `room` ((level, room, in_cave)), `health`, `max_health`,
 `steps`, `total_frames`, `specialist`. On the last step: `ending` (end-condition name) and `outcome`
-(`success` / `hard-failure` / `soft-failure`), `start_health`, `hearts` and `linger` (below), and `linger_room`
-(the episode's entry room). An end condition that is not classified raises.
+(the episode's entry room), plus `blocks` (confirmed shield collisions over the episode). An end condition that is
+not classified raises. Evaluation reports mean `blocks` overall/per room/per state; training separates `blocks`
+and `curriculum/blocks`; runner room records retain the visit's count. Historical absence is not a measured zero.
 
 ### Heart drops (`hearts.py`)
 
@@ -114,6 +115,24 @@ progress events and the GUI. Eval records retain raw summaries and report `linge
 and `linger_worst_{steps,frames}` maxima overall, per room and per start state. Older absent measurements remain
 absent, not zero. Multi-room env episodes reset their tail on each exit and retain the episode's worst gap;
 runner records always describe one visit.
+
+### Experimental reward and cutoff controls
+
+`reward.block_reward` (nonnegative, default 1) multiplies `REWARD_MEDIUM` for each confirmed shield collision,
+advancing combat decay separately at the collision's room. The detector checks consecutive executed RAM frames:
+projectile transition signature, shield eligibility/facing/proximity and this frame's `$604` parry request.
+Delayed `$605` audio, Darknut/immunity clinks, natural boomerang returns and unrelated disappearance are not enough.
+The executor does not replace the user's frame callback, change inputs/timing, or collect speculative look-ahead.
+
+`reward.nearby_items` (default false) adds heart/clock overlap tiles to the objective's PBRS targets alongside
+exits. Multi-source walking distance picks the nearer target; the task, accepted exits and observation schema do
+not change. This is not the old heart-only objective.
+
+`no_progress_steps` (positive or null, default null) replaces legacy positional/room timeout with the shared
+lingering tail. Training ends `no-room-progress` as a soft-failure **truncation**, bootstraps value and adds no
+terminal penalty; success/death keep precedence and the absolute episode cap remains enforced. Runner uses the same per-visit
+tail for `stuck` instead of the flat room budget, retaining the global run cap. It resets on every room exit.
+Nearby-item shaping and the measured cutoff remain disabled in promoted configs until their experiments.
 
 ## Learning (`model.py`, `ppo.py`, `train.py`, `registry.py`)
 

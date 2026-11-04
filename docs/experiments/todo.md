@@ -60,9 +60,9 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
      Link/monster boomerang position/phase and corrected harm semantics; compare a full retrain. No RNG, guessed
      universal owner, redundant stun/clock flags or incidental timer rescaling. This bundle is not yet implemented.
 4. **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
-   Link to block instead of face-tanking. v2 already has `critics.critique_block` (`reward-block-projectile`,
-   REWARD_MEDIUM × combat decay, on the onset of the ArrowDeflected sound via `Link.is_blocking`). First check that
-   it fires on Goriya boomerangs (count blocks per episode in goriya evals and a few traces), then A/B a stronger
+   Link to block instead of face-tanking. v2's old `critics.critique_block` rewarded ArrowDeflected sound onset;
+   round 7 replaces that incomplete signal with per-frame confirmed shield collisions and per-collision decay.
+   First count confirmed Goriya blocks per episode in evals and traces, then A/B a stronger
    block reward on goriya (0x44 is the chain's top death room). Caveat (Lee): the sound alone is wrong in rooms
    with Darknuts etc. (their shields clink too), so require a blockable projectile in the air near Link plus the
    clink. Lee also watched the stalemate: Link in the top-left corner not fighting while the Goriyas chase shadow
@@ -71,6 +71,9 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
    then consider a stronger penalty for quiet steps while enemies remain. Related, from round 6: at 1 heart the
    goriya model turns passive (33% WAIT) and dies to contact; other ideas are demos or curriculum from damage-free
    Go-Explore paths (select by health, more patience) and a contact-damage penalty that grows as hp falls.
+   - **Round 7 §6 prerequisite done:** natural Goriya trace credited only 1/7 real blocks before, 7/7 after at
+     identical seed/action positions. Executed-frame counts reach training/eval/chains. 447 tests and CUDA smoke
+     passed; schemas unchanged. Stronger-reward matched r31 comparison and corner-stalemate experiment still pending.
 5. **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
    hearts (round 6 §8: overworld 26 of 34). In v1, dropped items were among the wavefront's targets, and the
    wavefront is a multi-source BFS, so PBRS led to a heart whenever it was closer than the exit by walking distance
@@ -80,6 +83,8 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
    exits. This differs from the dropped `collect_hearts` (heart was the only target whenever Link was hurt, kind
    ITEM). A/B on stalfos-keese-gel, d2-rope and an overworld family; measure taken/left, real vs total heart
    change and the chain.
+   - **Control ready, round 7 §6:** optional `reward.nearby_items`, default off; real walker verified nearer
+     clock/heart pickup versus nearer exit, correct exits and actual healed/left counts. Training A/B still pending.
 6. **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
    an item pickup or a kill).** Today training ends `stuck` after 50 steps without moving and `no-progress` after
    2000 steps without a new correct room (`end_conditions.Timeout`, the same 50/2000 as v1's Timeout; the ~100-step
@@ -96,6 +101,8 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
      N of 100–200 steps, after measuring the longest no-progress gap inside successful episodes per family (item 1's
      metric). Training: a truncation (value bootstraps), not a hard failure. Runner: `stuck` after N steps without
      progress instead of the flat 2000.
+   - **Control ready, round 7 §6:** optional `no_progress_steps`, default null; live quiet-tail truncation
+     bootstraps without terminal penalty, runner uses per-visit tail and keeps global guard. Threshold trial pending.
 7. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
    milestone). Today 0x7e is an equal-length alternate with exit N and no key objective (`routes.yaml`

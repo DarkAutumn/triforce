@@ -226,3 +226,55 @@ current-team measurements, not evidence of an Aquamentus treatment effect. Raw c
 **Promoted r30-exit.** `boss-aquamentus.yaml` now succeeds on the correct exit, after the objective requires the
 kill and heart container. Replaced its default curriculum trajectories with the explored complete-visit paths.
 No observation-schema change, damage-penalty addition or special post-kill controller.
+
+## 6. Confirmed shield collisions and isolated experiment controls
+
+Before increasing the Goriya reward, reproduced its missing credit using naturally thrown boomerangs, not injected
+projectiles or a model evaluation. Protocol: fresh clean `1_44w`, RNG seeds 0–4; leave the doorway, place Link at
+(112,144) with three hearts, clock/invincibility off; up to 250 WAIT 32 actions per seed, facing opposite the closest
+outgoing Goriya boomerang via RAM. Inspect consecutive actually executed frames, with look-ahead disabled.
+
+The old trace found seven shield-eligible parry collisions but rewarded only one. Replaying after the fix found
+the same seven collisions at exactly the same seed/action pairs: `(0,106)`, `(0,121)`, `(0,122)`, `(1,65)`, `(3,18)`,
+`(3,67)`, `(4,218)`; all seven earned block rewards. Example: frame 2973→2974, slot 11 outgoing `$17`→spark `$20`,
+`$604=1` while `$605=0`; both controllable sound endpoints were silent. The sound-onset implementation missed it.
+Evidence: `models/r31-block-evidence/{before.json,before-summary.json,after.json}`.
+
+`projectile_blocks.py` now confirms projectile-specific collision signatures together with shield/facing/proximity
+and the current-frame parry request. It rejects immune/unrelated clinks, harmless returns, unsupported/magic-only
+shots without an eligible shield, stationary wall sparks and boundary fireball destruction. Actual executed
+frames only: no replacement of the user's callback, altered input duration or speculative look-ahead collection.
+Block events retain collision frame, slot, type and room; reward/decay counts each collision, including simultaneous
+shots and attack/settling/uncontrollable frames. A heart pickup in the collision frame does not erase the block.
+Episode, curriculum, evaluation and chain metrics retain confirmed counts; absent historical measurements stay absent.
+
+Two requested later experiments have complete, default-off controls so training arms can remain isolated:
+
+- `reward.nearby_items`: multi-source PBRS includes hearts/clocks alongside exits, without replacing the room task.
+  Live greedy walker: nearby clock then heart then correct exit, +0.10 shaping, one heart healed (2→3 hearts).
+  With a nearer exit: +0.05 shaping, correct exit at two hearts, distant heart left. This is runtime proof of the
+  control, not evidence that trained models improve; backlog item 5 remains pending.
+- `no_progress_steps`: positive shared quiet-tail cutoff, optional and disabled by default. Live WAIT actions 1/2
+  continued; action 3 truncated with `no-room-progress`, soft failure, 27 quiet frames and no terminal penalty.
+  Legacy timeouts remain when disabled; runner per-room cutoff retains the global guard. Backlog item 6 needs
+  family-specific successful-gap measurement and comparison before enabling any threshold.
+
+First integrated regressions exposed NumPy byte arithmetic and invalid WAIT constructions in new test fixtures;
+fixed integral modular arithmetic and valid actions. Removed an incidental serialized-emulator-clock comparison
+in favor of actual RAM/screen/timing/callback parity, and an unrelated exit-classification test pin. Full dev suite:
+**447 passed in 98.43 seconds**. No observation/action schema change.
+
+CUDA smoke with the triple-block config, warm-started from promoted r21-goriya-chainhp: two updates / 1,024 actual
+actions, five completed episodes (four successes), 10.7 seconds. Training emitted measured `blocks=0` for these
+five episodes; this proves the updated CUDA/metric path runs, not a nonzero-block reward or a model improvement.
+The natural trace above provides the nonzero-block proof. No CUDA exhaustion; Lee's player was left running.
+
+### r31 matched block-reward comparison
+
+Configs preserved at `models/goriya/r31-block{1,3}/config.yaml`. Both continue the same r21-goriya-chainhp checkpoint,
+with current YAML health mix `[0.15,max]` / half full health, bombs off, the same curriculum, seed 31, 245 updates
+(about 1M additional actions) and no success early stop. Only the confirmed-block multiplier differs: 1 versus 3.
+Keep nearby-item shaping and measured cutoff off. Re-evaluate the old model on the corrected detector/current YAML;
+compare success, real/total health, confirmed blocks and successful/failing quiet-gap distributions per room, then
+both full chains and the relevant post-D1/D2 segments. A stronger block reward is not promoted merely for more blocks;
+it must preserve health/success and avoid reward-producing stalemates. Evaluate the corner-stall lever separately.

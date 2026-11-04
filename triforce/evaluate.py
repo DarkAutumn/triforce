@@ -66,6 +66,8 @@ def _play(env: ZeldaEnv, network, state: str, episode_seed: int, deterministic: 
               'max_health': info['max_health'], 'hearts': info['hearts']}
     if info.get('linger') is not None:
         record['linger'] = info['linger']
+    if 'blocks' in info:
+        record['blocks'] = info['blocks']
     return record
 
 
@@ -104,6 +106,11 @@ def _linger_stats(records: list[dict]) -> dict:
     return result
 
 
+def _block_stats(records: list[dict]) -> dict:
+    measured = [record['blocks'] for record in records if 'blocks' in record]
+    return {'blocks': sum(measured) / len(measured)} if measured else {}
+
+
 def _group(records: list[dict], key) -> dict:
     groups = {}
     for record in records:
@@ -113,6 +120,7 @@ def _group(records: list[dict], key) -> dict:
                    'health_change': sum(r['health'] - r['start_health'] for r in items) / len(items),
                    **_heart_stats(items),
                    **_linger_stats(items),
+                   **_block_stats(items),
                    'endings': dict(Counter(r['ending'] for r in items))}
             for name, items in sorted(groups.items())}
 
@@ -164,6 +172,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         'mean_health_change_total': hearts['health_change_total'],
         **hearts,
         **_linger_stats(records),
+        **_block_stats(records),
         'mean_steps': sum(r['steps'] for r in records) / count,
         'mean_frames': sum(r['frames'] for r in records) / count,
         'outcomes': dict(Counter(r['outcome'] for r in records)),

@@ -86,6 +86,7 @@ class RoomRecord:
     hearts_left: int = 0
     hearts_expired: int = 0
     linger: dict = field(default_factory=dict)
+    blocks: int = 0
 
 
 @dataclass
@@ -245,12 +246,23 @@ class Runner:
             elif change is not None:
                 obs = current.builder.build(change, session.mask)
 
-            room_steps = max(current.config.max_steps, MIN_ROOM_STEPS)
-            if record.steps >= room_steps:
-                record.outcome = 'stuck'
-                _store_hearts(record, hearts, state)
-                result.result, result.reason = 'failure', f"{current.name} exceeded {room_steps} steps"
-                return
+            no_progress_steps = current.config.no_progress_steps
+            if no_progress_steps is not None:
+                if linger.tail_steps >= no_progress_steps:
+                    record.health_out = state.link.health
+                    record.outcome = 'stuck'
+                    _store_hearts(record, hearts, state)
+                    result.result = 'failure'
+                    result.reason = (f"{current.name} no-room-progress: {linger.tail_steps} quiet actions "
+                                     f"(limit {no_progress_steps}) in {_describe(location)}")
+                    return
+            else:
+                room_steps = max(current.config.max_steps, MIN_ROOM_STEPS)
+                if record.steps >= room_steps:
+                    record.outcome = 'stuck'
+                    _store_hearts(record, hearts, state)
+                    result.result, result.reason = 'failure', f"{current.name} exceeded {room_steps} steps"
+                    return
             if result.steps >= self.max_steps:
                 record.outcome = 'stuck'
                 _store_hearts(record, hearts, state)
@@ -269,6 +281,7 @@ class Runner:
             state.objectives = objectives.get_current_objectives(change.previous, state)
             linger.update(change, hearts.taken - taken)
             record.linger = linger.summary()
+            record.blocks += change.blocks
             record.steps += 1
             record.frames += change.frames
             result.steps += 1

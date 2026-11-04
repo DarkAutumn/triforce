@@ -87,3 +87,61 @@ def test_chain_summary_counts_failures_by_room():
                              run('failure', '0x44', 'death'), run('failure', '0x73', 'stuck')])
     assert summary['runs'] == 4 and summary['successes'] == 1 and summary['success_rate'] == 0.25
     assert summary['failures'] == {'1:0x44 stalfos-keese-gel death': 2, '1:0x73 stalfos-keese-gel stuck': 1}
+
+
+def test_runner_no_room_progress_threshold_replaces_flat_budget(session, models_dir, monkeypatch):
+    monkeypatch.setattr('triforce.runner.MIN_ROOM_STEPS', 2)
+    runner = Runner(session=session, models_dir=models_dir, max_steps=20)
+    specialist = runner._load('ow-start')
+    specialist.config = specialist.config.model_copy(update={'no_progress_steps': 4, 'max_steps': 1})
+    specialist.act = lambda obs, deterministic: Action.parse('WAIT 8')
+    tails = []
+
+    class Renderer:
+        def show(self, session, specialist, action, change):
+            tails.append(change.frames)
+
+    runner.renderer = Renderer()
+    result = runner.run(Route.load('milestone1'), seed=0)
+    assert len(tails) == result.steps == 4
+    assert result.result == 'failure' and result.rooms[-1].outcome == 'stuck'
+    assert 'no-room-progress' in result.reason and '4 quiet actions' in result.reason
+    assert result.rooms[-1].linger['tail_steps'] == 4
+    assert result.rooms[-1].linger['tail_frames'] == sum(tails)
+    assert chain_summary([result])['successes'] == 0
+
+
+@pytest.mark.parametrize('enabled', [False, True])
+def test_runner_no_room_progress_preserves_global_guard_and_disabled_budget(session, models_dir, monkeypatch,
+                                                                          enabled):
+    monkeypatch.setattr('triforce.runner.MIN_ROOM_STEPS', 3)
+    runner = Runner(session=session, models_dir=models_dir, max_steps=5)
+    specialist = runner._load('ow-start')
+    specialist.config = specialist.config.model_copy(update={'no_progress_steps': 20 if enabled else None,
+                                                            'max_steps': 1})
+    specialist.act = lambda obs, deterministic: Action.parse('WAIT 8')
+    result = runner.run(Route.load('milestone1'), seed=0)
+    assert result.result == 'failure' and result.rooms[-1].outcome == 'stuck'
+    assert result.steps == (5 if enabled else 3)
+    assert result.reason == ('run exceeded 5 steps' if enabled else 'ow-start exceeded 3 steps')
+    assert result.rooms[-1].linger['tail_steps'] == result.steps
+
+
+def test_runner_room_exit_resets_visit_clock(session, models_dir):
+    runner = Runner(session=session, models_dir=models_dir, max_steps=100)
+    specialist = runner._load('ow-start')
+    specialist.config = specialist.config.model_copy(update={'no_progress_steps': 20})
+
+    def act(obs, deterministic):
+        if session.state.in_cave:
+            return Action.parse('MOVE S 16')
+        return Action.parse('WAIT 8')
+
+    specialist.act = act
+    route = Route.load('milestone1', start_from='0_77cave_0')
+    result = runner.run(route, seed=0)
+    assert result.result == 'failure' and 'no-room-progress' in result.reason
+    assert len(result.rooms) == 2
+    old, new = result.rooms
+    assert old.in_cave and old.linger['tail_steps'] == 0
+    assert not new.in_cave and new.steps == new.linger['steps'] == new.linger['tail_steps'] == 20

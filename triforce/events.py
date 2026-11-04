@@ -58,6 +58,7 @@ PROGRESS_METRICS = ('episodes', 'success_rate', 'balanced_success_rate', 'reward
                     'health_change_total', 'hearts/dropped', 'hearts/taken', 'hearts/left', 'hearts/wasted',
                     'health_at_exit', 'episode_steps', 'curriculum/episodes', 'curriculum/success_rate',
                     'curriculum/point_fraction', 'losses/approx_kl', 'charts/SPS')
+PROGRESS_METRICS += ('blocks', 'curriculum/blocks')
 PROGRESS_METRICS += tuple(f'{prefix}/{key}' for prefix in ('linger', 'curriculum/linger')
                           for key in ('max_steps', 'max_frames', 'tail_steps', 'tail_frames',
                                       'worst_steps', 'worst_frames'))
