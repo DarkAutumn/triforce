@@ -67,6 +67,19 @@ chain's death rooms, then the big ablation. Round 7 items 1–7 complete; versio
      three containers/no boomerang/no triforce in post-D1 rooms; preserved the valid four-heart 0_3dc path and
      installed verified current 0_3dn_2 coverage. All 14 Moblin goal replays and 41 default-track route audits pass.
      D2 Goriya replacements and all 21 Rope tracks are now installed; the full trial freezes all 62 enabled tracks.
+   - [ ] **Temporal world snapshots (later; Lee, Nov 4).** Consider the current structured world observation
+     plus 1–4 previous observations, so motion/changes are explicit to the policy. Full world-history stacking
+     is not implemented: current inputs contain per-entity `vx/vy` estimated from the previous observation,
+     plus last-action/timing/interrupt history, not previous world snapshots. Account for variable elapsed
+     emulator frames and reset/mask history across episode/room changes and newly occupied object slots.
+   - [ ] **Enemy facing versus movement (later; Lee, Nov 4).** Facing is already supplied as per-entity
+     `facing_N/S/W/E`; observed movement is also supplied as `vx/vy`. Review their decoding/usefulness rather
+     than assuming direction is absent. Facing is not necessarily current motion (e.g. stun or knockback).
+   - [ ] **Distance plus unit direction from Link (later; Lee, Nov 4).** Lee's original Triforce supplied an
+     enemy's distance and normalized direction vector, doing that geometry outside the network. Current
+     inputs already include absolute `x/y` and Link-relative `dx/dy` scaled by room axes, but neither an explicit
+     scalar distance nor a unit-length direction vector. Compare that explicit representation; use a consistent
+     pixel metric and define the zero-distance case. These ideas are deferred, not added to frozen r36 inputs.
 4. [x] **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
    Link to block instead of face-tanking. v2's old `critics.critique_block` rewarded ArrowDeflected sound onset;
    round 7 replaces that incomplete signal with per-frame confirmed shield collisions and per-collision decay.
