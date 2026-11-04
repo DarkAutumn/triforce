@@ -98,8 +98,10 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
    change and the chain.
    - **Control ready, round 7 §6:** optional `reward.nearby_items`, default off; real walker verified nearer
      clock/heart pickup versus nearer exit, correct exits and actual healed/left counts. Original r32 evaluations
-     finished: on collects fewer hearts in SKG/Rope; Moblin has zero eval drops. Frozen-team chains and an added
-     pickup-exposed Octorok pair are running (round 7 §9). No r32 promotion; main source remains frozen.
+     and 1,840 chain executions finished without errors (includes repeated paths). Disjoint D2 seeds reverse
+     the initial ranking: shaped Rope leads combined success/health, but full chains remain mixed. Moblin has
+     zero eval drops and its off arm harms the fairy chain. Octorok training remains active; no r32 promotion.
+     Faithful replay found a required-shutter objective/classifier defect; fix it before cutoff training.
 6. **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
    an item pickup or a kill).** Today training ends `stuck` after 50 steps without moving and `no-progress` after
    2000 steps without a new correct room (`end_conditions.Timeout`, the same 50/2000 as v1's Timeout; the ~100-step

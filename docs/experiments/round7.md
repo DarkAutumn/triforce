@@ -25,8 +25,10 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
   distinct workers/seeds differ, episode streams advance; CPU CLI/CUDA smoke and all 462 tests passed.
 - Backlog item 4 complete: r31-block1 promoted after 800 frozen-team chains (§6). Ordinary reward has the lowest
   evaluation damage; stronger block/quiet rewards stay disabled. Post-fight D2 navigation remains a measured problem.
-- R32's original six arms and three baselines finished; frozen-team chains are running (§9). Moblin had no
-  evaluation heart drops, so an added Octorok pair is running to obtain a pickup-exposed overworld comparison.
+- R32's original six arms, three baselines and 1,200 frozen-team chains finished without execution errors (§9).
+  Follow-ups favor shaped Rope across 80 D2 seeds but full chains remain mixed; Octorok training is running.
+  No r32 promotion. Native stall replay found a required-shutter objective/classification defect (below).
+  Moblin had no evaluation heart drops and its off arm regresses on the fairy chain.
   Main source/YAML/states stay frozen. Verified dev prerequisites wait: cutoff bootstrap (§10), per-arm chain
   configs (§11), key-pickup/balance/bomb guards (§12). The D2 route/state migration is not started.
 
@@ -494,7 +496,7 @@ real/total health, hearts taken/left and quiet gaps per room, then both full rou
 with pinned teams. Nearby-item PBRS changes the learning potential, not runner inputs or accepted exits. Shared
 asynchronous curriculum remains scheduling-dependent despite correct seed propagation. No r32 model promoted.
 
-### Completed original cohort evaluations; chains pending
+### Completed original cohort evaluations
 
 All six 245-update arms and three current-YAML baselines completed. Paired on/off evaluation records match
 initial state, seed and starting health in all 680 SKG, 420 Rope and 280 Moblin episodes. The treatment does
@@ -517,10 +519,87 @@ of heart-seeking: none of these evaluations offers a dropped heart. The common P
 positions on the previous state's wavefront; inspection does not support a pickup-disappearance potential jump.
 Full reports: `models/r32-nearby-evidence/evaluations.json` and each run's `eval.json`.
 
-Six frozen team comparisons now run at 40 seeds per segment on both full routes, both post-D1 routes and D2:
-promoted baseline, all-off, all-on, and each family's isolated on swap against the all-off team. No source,
-canonical YAML, state or promotion mutation. This separates combined treatment from extra training and marginal
-family swaps; small differences and curriculum scheduling still limit causal conclusions.
+### Completed frozen-team chains
+
+All **1,200 chains completed without execution errors**: six pinned teams, 40 seeds (0–39) per segment, both
+full routes, both post-D1 routes and D2. No source, canonical YAML, state or promotion mutation. Each isolated
+on swap below starts from the all-off team, not the promoted team.
+
+| Team | Full main /40 | Full fairy /40 | Post-D1 main /40 | Post-D1 fairy /40 | D2 /40 |
+|---|---:|---:|---:|---:|---:|
+| Promoted | 2 | 3 | 2 | 4 | 11 |
+| All off | 2 | 2 | 2 | 5 | 16 |
+| All on | 1 | 0 | 2 | 5 | 11 |
+| Only SKG on | 1 | 2 | 2 | 5 | 16 |
+| Only Rope on | 1 | 1 | 0 | 3 | 11 |
+| Only Moblin on | 0 | 5 | 2 | 4 | 16 |
+
+Repeated D2 results for all-off/SKG-only-on/Moblin-only-on are the same evidence: those other two families do
+not play the D2 segment. Likewise SKG swaps do not affect post-D1 chains. Do not pool duplicated paths or the
+shared part of route pairs as independent samples. Full reports: `models/r32-nearby-evidence/comparison.json`.
+
+D2 therefore isolates the Rope policy. Its extra **unshaped** training improves physical chain health and
+collection, despite slightly worse standalone health. These health changes sum all Rope visits within a run,
+then average over all 40 runs; they are not per-visit means or survivor-only statistics.
+
+| Rope policy | Rope deaths | Real ΔHP/run | Total ΔHP/run | Hearts taken | Hearts left |
+|---|---:|---:|---:|---:|---:|
+| Old r28 | 18 | −2.288 | −2.113 | 29 | 34 |
+| R32 off | 6 | −1.400 | −1.138 | 40 | 27 |
+| R32 on | 15 | −1.925 | −1.775 | 25 | 47 |
+
+The paired old/off success transition has 12 new wins, seven lost wins and four shared wins; the aggregate
+chain gain is still small-sample evidence, not established dominance. Moblin off is unsuitable as a team-wide
+upgrade: post-D1 fairy Moblin deaths rise from two to thirteen, with per-visit real health −0.279 → −0.588.
+SKG on has more chain heart collection than off, unlike its standalone result; do not call the treatment
+uniformly ineffective based on the standalone cohort alone. Neither grouped team is selected for promotion.
+
+### Isolated candidates and independent-seed reversal
+
+Completed 360 isolated selection chains with old Moblin and other teammates pinned, then 120 D2 validation
+chains on disjoint seeds 40–79, and 160 isolated shaped-Rope full/post-D1 chains. All finished without execution
+errors. These are **1,840 chain executions** including the original cohort, not 1,840 independent observations;
+the repeated seed-0 Rope-off D2 segment is reproducibility/isolation evidence only.
+
+| Isolated candidate | Full main /40 | Full fairy /40 | Post-D1 main /40 | Post-D1 fairy /40 |
+|---|---:|---:|---:|---:|
+| Rope off, old SKG | 0 | 3 | 3 | 7 |
+| Rope off + SKG off | 0 | 3 | — | — |
+| Rope off + SKG on | 1 | 3 | — | — |
+| Rope on, old SKG | 1 | 1 | 3 | 7 |
+
+The new D2 seeds **reverse the initial Rope-arm ranking**. Combined health averages use disjoint seeds 0–79,
+sum all Rope visits per run and include failures. Do not select the off arm solely from the first 40 seeds.
+
+| Rope policy | New-seed wins /40 | Combined wins /80 | Real ΔHP/run | Total ΔHP/run | Hearts taken | Hearts left |
+|---|---:|---:|---:|---:|---:|---:|
+| Old r28 | 10 | 21 | −1.944 | −1.706 | 73 | 73 |
+| R32 off | 10 | 26 | −1.600 | −1.419 | 58 | 69 |
+| R32 on | 22 | 33 | −1.556 | −1.369 | 66 | 91 |
+
+Shaped Rope now leads D2 success and real/total health, but not aggregate heart pickup or both full routes.
+Keep old SKG/Moblin rather than adopting the inferior standalone-damage SKG arms or the harmful Moblin off
+continuation. No candidate is promoted before the remaining Octorok comparison and the objective defect below
+are resolved. Evidence: `selection/`, `validation/`, `selection-on/` under the r32 evidence root.
+
+### Faithful stall diagnosis before cutoff training
+
+Three native replays match every saved room/health/frame/outcome field in the original all-off D2 records:
+- Seed 18, 0x6e: optional combat, two active Ropes remain, north physically open, finite wavefront distances;
+  final 1,000 actions are MOVE objective and mainly pacing at y=93. This is navigation stalling.
+- Seed 8, 0x6e: the same open-exit MOVE task eventually succeeds after 978 actions, including a 953-action
+  quiet gap. A blanket 100/200 cutoff would discard this successful old-policy path.
+- Seed 10, 0x2e: one active Rope remains after seven kills, two keys, north **SHUTTER**, ALL_DEAD trigger,
+  physically closed, north absent from live exits. Yet the objective is MOVE toward N for the final 1,000 actions;
+  its wavefront has no reachable target. This is a required-combat objective omission, not merely slow navigation.
+
+Playable snapshot inspection also identifies a separate classifier error: closed north tile 0xa8 is excluded
+by `BARRED_DOOR_TILES` (old 0xac–0xaf), so the tile helper calls the shutter a wall and not barred. Native audit
+of 73 configured dungeon states finds vertical 0xa8 and horizontal 0xac closed shutters. Do not add a room-id
+exception or force optional fights in 0x6e/0x6d; correct live shutter classification and route-gated combat before
+using timeouts to mask this failure. All r32 candidate comparisons above still use unchanged old main source.
+Evidence: `rope-stall-replays.json`, `rope-stall-geometry.json`, `shutter-tile-audit.json` and playable PNG/state
+snapshots in the r32 evidence root. Source correction is isolated in dev; main stays frozen for Octorok.
 
 ### Pickup-exposed overworld follow-up
 
