@@ -184,6 +184,8 @@ class ZeldaEnv(gym.Env):
             extra = {'ending': ending, 'outcome': outcome, 'start_state': state_label(self._episode_state),
                      'start_health': self._start_health, 'hearts': self.hearts.summary(),
                      'linger': self.linger.summary(), 'linger_room': self.linger.start_room, 'blocks': self._blocks}
+            if ending == NO_ROOM_PROGRESS:
+                extra['bootstrap_truncation'] = True
             if self._curriculum_tag is not None:
                 extra['curriculum'] = self.curriculum.record(self._curriculum_tag, outcome == SUCCESS)
             elif self.pool is not None:

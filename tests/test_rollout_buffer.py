@@ -1,5 +1,7 @@
 """Rollout buffer: frame-aware GAE, storage layout, episode boundaries and resumption."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 import torch
@@ -100,6 +102,51 @@ def test_collect_layout_dones_frames_and_resume():
     with torch.no_grad():
         values = model.get_value({k: v[1, :7] for k, v in buffer.observation.items()})
     assert torch.allclose(values, buffer.logp_ent_val[1, :, 2], atol=1e-5)
+
+
+def test_opted_in_truncation_uses_final_value_and_stops_trace_across_reset():
+    class ValuePolicy(torch.nn.Module):
+        def get_value(self, obs):
+            return torch.as_tensor(obs['room_id'], dtype=torch.float32).reshape(-1)
+
+        def evaluate(self, obs, _mask):
+            return SimpleNamespace(actions=torch.zeros((1, 3), dtype=torch.long),
+                                   log_prob=torch.zeros(1), entropy=torch.zeros(1), value=self.get_value(obs))
+
+    class Episodes:
+        def __init__(self):
+            self.rng = np.random.default_rng(0)
+            self.episode = self.step_index = 0
+
+        def reset(self, *, seed=None):
+            self.episode += 1
+            return synthetic.random_observation(self.rng, room=self.episode), {}
+
+        def step(self, _action):
+            final_room, reward, frames, terminated, truncated, bootstrap = (
+                (7, 1, 16, False, True, True),
+                (4, 2, 8, False, False, False),
+                (9, 3, 4, False, True, True),
+                (11, 4, 32, False, True, False),
+                (13, 5, 8, True, False, False),
+                (12, 6, 8, False, False, False),
+            )[self.step_index]
+            self.step_index += 1
+            obs = synthetic.random_observation(self.rng, room=final_room)
+            return obs, reward, terminated, truncated, {'frames': frames, 'bootstrap_truncation': bootstrap}
+
+    buffer = RolloutBuffer(3, 1, synthetic.observation_space(), gamma=0.5, lam=0.8)
+    policy, env = ValuePolicy(), Episodes()
+    buffer.collect(0, policy, env)
+    boundary_target = 3 + 0.5 ** 0.5 * 9
+    assert buffer.returns[0].tolist() == pytest.approx([
+        1 + 0.5 ** 2 * 7,
+        2 + 0.5 * 4 + 0.5 * 0.8 * (boundary_target - 4),
+        boundary_target,
+    ])
+    buffer.collect(0, policy, env)
+    # Legacy time limits and true terminations do not bootstrap; an open rollout still does.
+    assert buffer.returns[0].tolist() == pytest.approx([4, 5, 6 + 0.5 * 12])
 
 
 def test_episode_metrics_merge_across_workers():

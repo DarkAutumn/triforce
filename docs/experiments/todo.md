@@ -115,14 +115,13 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
      N of 100–200 steps, after measuring the longest no-progress gap inside successful episodes per family (item 1's
      metric). Training: a truncation (value bootstraps), not a hard failure. Runner: `stuck` after N steps without
      progress instead of the flat 2000.
-   - **Partial control, round 7 §6/§8:** optional `no_progress_steps`, default null; live env truncation has no
-     terminal penalty, and runner cutoff works. PPO bootstrap is still missing; threshold training is blocked on it.
+   - **Control corrected in dev, round 7 §10:** `no_progress_steps` remains default null; measured truncations
+     now bootstrap final-state value without crossing resets. Native smoke and 463 tests passed; main merge waits for r32.
    - **Measured cutoff risk:** successful baseline chain rope visits include three quiet gaps ≥200 (worst 2,410).
      Standalone Goriya 0x23 would lose 12/46 successes at 200, versus 1/44 in 0x44. No blanket threshold yet.
-   - **Prerequisite defect found after r31 training:** PPO currently masks bootstrap on every truncation and
-     discards the final observation; env flags/no terminal penalty alone do not provide the promised value target.
-     Fix the measured-cutoff path before threshold training, preserving the existing max-step behavior; cover
-     final-state value, rollout-boundary truncation and isolation from the reset episode (round 7 §8).
+   - **Prerequisite defect corrected:** PPO had masked bootstrap on every truncation and discarded its final
+     observation. The measured-cutoff path now adds its discounted final value before reset, preserving legacy
+     max-step/death behavior and raw logged reward; regression covers batch edges and reset isolation.
    - **Expanded evidence:** independent r30 chain seeds expose successful quiet gaps of 670 actions (Stalfos),
      350 (Goriya) and 2,410 (Rope). No blanket 100–300 cutoff. Moblin's inspected successful maximum is 63;
      100 is a trial candidate, not a general safety guarantee. Route-paired visits are not independent samples.

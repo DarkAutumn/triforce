@@ -136,10 +136,11 @@ not change. This is not the old heart-only objective.
 
 `no_progress_steps` (positive or null, default null) replaces legacy positional/room timeout with the shared
 lingering tail. Training ends `no-room-progress` as a soft-failure **truncation** with no terminal penalty;
-success/death keep precedence and the absolute episode cap remains enforced. The required final-state value
-bootstrap is not yet implemented in `RolloutBuffer.collect`, which currently masks every truncation as terminal;
-threshold training must wait for that correction. Runner uses the per-visit tail for `stuck` instead of the flat
-room budget, retaining the global run cap. It resets on every room exit.
+success/death keep precedence and the absolute episode cap remains enforced. Its terminal info marks
+`bootstrap_truncation=True`: `RolloutBuffer.collect` adds `gamma**(frames/8) * V(final_observation)` to the
+learning reward before reset, while done flags still stop the GAE trace. Logged episode rewards stay unchanged.
+Legacy max-step truncations retain their existing nonbootstrapping behavior. Runner uses the per-visit tail for
+`stuck` instead of the flat room budget, retaining the global run cap; it resets on every room exit.
 Nearby-item shaping and the measured cutoff remain disabled in promoted configs until their experiments.
 
 ## Learning (`model.py`, `ppo.py`, `train.py`, `registry.py`)

@@ -490,3 +490,31 @@ real/total health, hearts taken/left and quiet gaps per room, then both full rou
 with pinned teams. Nearby-item PBRS changes the learning potential, not runner inputs or accepted exits. Shared
 asynchronous curriculum remains scheduling-dependent despite correct seed propagation. No r32 model promoted.
 
+## 10. Measured-cutoff bootstrap correction (dev prerequisite)
+
+Reproduced the §8 value-target gap with a permanent collector regression: a truncation inside a batch, another
+at its edge, distinct terminal/reset values, and a later batch containing a legacy time limit, true death and
+open continuation. Before fixing, targets `[1.0, 3.6, 3.0]` should have been approximately
+`[2.75, 6.145584, 9.363961]`. Env flags alone had not delivered the promised bootstrap.
+
+Dev now marks only `no-room-progress` with `info.bootstrap_truncation`; the collector adds the frame-discounted
+actual final-observation value before resetting. The done flag still cuts the GAE trace; it never substitutes
+the next episode's reset value. Legacy max-step/death behavior and raw logged reward are unchanged. No cutoff
+is enabled in canonical configs. Main remains frozen on r32's runtime; this correction is not merged mid-cohort.
+
+Real Zelda smoke: three WAIT 8 actions in `1_73s_0`, actual nine frames each, cutoff at action three. With a known
+constant critic value 10, gamma 0.9 and lambda 1, learning targets are `[7.007587, 7.889431, 8.882247]`, matching
+the frame-aware calculation; raw logged reward remains zero. The same three actions under the legacy max-step
+cap still produce `[0,0,0]`. Both are playable mode 5 after automatic reset. Evidence:
+`models/r33-cutoff-evidence/bootstrap-smoke.json`. This proves collector integration, not a trained model gain.
+
+Current r31-block1 standalone successful-gap exposure differs from the older baseline: 1:0x23 has 41 successes,
+worst 79 quiet actions; 1:0x44 has 43 successes, worst 901 (one would be cut at either 100 or 200); 2:0x1e has
+49 successes, worst 154 (two at 100, none at 200); 2:0x5e has 51 successes, worst 60. These retrospective counts
+do not establish a safe production threshold, and the saved full-main chain also has a 1,207-action successful
+gap. Re-measure whichever model is used for each trial, rather than treating historical thresholds as permanent.
+
+Integrated dev suite: **463 passed in 779.75 seconds** while r32 occupied the main training workers. The new
+value-target regression passes, including legacy truncation/death and open-rollout controls. Temporary native
+smoke script removed; persisted JSON evidence retained. No r32 runtime source or canonical config changed.
+

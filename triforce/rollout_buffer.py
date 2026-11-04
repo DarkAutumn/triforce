@@ -15,8 +15,9 @@ Frame-aware GAE (design §5.4).  Steps take different numbers of frames, so step
 frames uses ``gamma_t = gamma ** (f_t / FRAMES_PER_DISCOUNT)`` and ``lambda_t = lambda ** (f_t /
 FRAMES_PER_DISCOUNT)`` with ``FRAMES_PER_DISCOUNT = 8``.  Lambda is scaled the same way so the bias/variance
 trade-off spans a fixed amount of game time rather than a fixed number of decisions (a 32-frame MOVE
-should not keep 4× more of the trace than four 8-frame ones).  As in v1, truncation is treated as
-termination (no bootstrap through a time limit).
+should not keep 4× more of the trace than four 8-frame ones). Legacy time limits still mask bootstrap.
+Opted-in ``bootstrap_truncation`` transitions add the discounted final-observation value to the learning
+reward before reset; done flags still stop the trace from crossing into the next episode.
 """
 
 import numpy as np
@@ -140,6 +141,10 @@ class RolloutBuffer:
                     self.frames[env_index, t] = float(info['frames'])
                     if episode_tracker is not None:
                         episode_tracker.step(action, float(reward), info, terminated or truncated)
+                    if truncated and not terminated and info.get('bootstrap_truncation', False):
+                        final_value = float(network.get_value(obs)[0])
+                        self.rewards[env_index, t] += (
+                            self.gamma ** (float(info['frames']) / FRAMES_PER_DISCOUNT) * final_value)
 
                     done = 1.0 if (terminated or truncated) else 0.0
                     if done:

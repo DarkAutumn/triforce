@@ -2,11 +2,12 @@
 
 Kept from v1: shared-memory rollouts with one subprocess env per worker, KL early stop, KL rollback
 (weights *and* optimizer state restored when KL exceeds ``kl_rollback × target_kl``), checkpointable optimizer
-state, per-minibatch advantage normalization, truncation treated as termination, optional demo-regularization
+state, per-minibatch advantage normalization, legacy time-limit termination, optional demo-regularization
 (behavior-cloning loss on a fixed demo batch).
 
 Changed for v2: dict observations, factored (kind, direction, duration) actions, flat masks, frame-aware GAE
 (see ``rollout_buffer``), and ``train`` counts PPO *iterations* (one rollout + one optimization each).
+Opted-in no-progress truncations bootstrap their actual final observation without crossing episode resets.
 """
 
 import copy
