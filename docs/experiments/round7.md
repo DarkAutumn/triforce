@@ -251,7 +251,7 @@ Block events retain collision frame, slot, type and room; reward/decay counts ea
 shots and attack/settling/uncontrollable frames. A heart pickup in the collision frame does not erase the block.
 Episode, curriculum, evaluation and chain metrics retain confirmed counts; absent historical measurements stay absent.
 
-Two requested later experiments have complete, default-off controls so training arms can remain isolated:
+Two requested later experiments have default-off controls; the cutoff still needs the PPO correction found in §8:
 
 - `reward.nearby_items`: multi-source PBRS includes hearts/clocks alongside exits, without replacing the room task.
   Live greedy walker: nearby clock then heart then correct exit, +0.10 shaping, one heart healed (2→3 hearts).
@@ -415,3 +415,32 @@ was not killed. Shared asynchronous curriculum and resumed RNG continuation reta
 Integrated dev suite after the seed fix: **462 passed in 204.83 seconds**, including actual single-process and
 spawned two-worker gameplay reproducibility regressions. Temporary smoke scripts/checkpoints were removed;
 the recorded native-rollout evidence remains in the normal ignored model root.
+
+## 8. Later-experiment prerequisites found during the frozen-team comparison
+
+Read-only evidence review while r31 chains run; no source, state, model or configuration changed for this review.
+
+**Cutoff correctness:** the §6 live smoke proved env flags, no terminal penalty and runner cutoff, not PPO value
+bootstrapping. Current `RolloutBuffer.collect` combines terminated/truncated into one done flag, discards the
+terminal observation on reset, and `frame_aware_gae` masks its value. Thus the intended measured-cutoff target
+`reward + gamma**(frames/8) * V(final_observation)` is missing. Correct that path before any threshold training,
+stop the trace across reset, and preserve the existing max-step treatment. A bootstrap from the next episode's
+reset observation would also be wrong. Required regression boundaries: nonzero final value, truncation at the
+rollout edge, true termination and reset isolation. This is a source-backed finding, not a runtime reproduction.
+
+Expanded successful-gap evidence comes from completed r29 baselines and r30-exit full/post-D1/D2 JSONL artifacts,
+including `promoted-full-{main,fairy}.jsonl` seeds 40–59. Successful Stalfos/Keese/Gel visits reach 670 quiet
+actions, Goriya 350 in chains (1,274 standalone), and Rope 2,410. No uniform 100–300-action threshold preserves
+these measured successes. Moblin's inspected successful maximum is 63 actions/308 frames, making 100 a trial
+candidate, not a proven-safe setting. Pairwise main/fairy records often duplicate pre-divergence visits and must
+not be pooled as independent evidence. These are historical/current promoted teams, not the live r31 candidates.
+
+**D2 route/state integrity:** `game.yaml` already declares five Ropes and a key in 0x7e; generic FIGHT/TREASURE
+objectives already apply. The actual change is canonical routing through E then N, not inventing a key objective.
+`entry_states.cross_room` overrides success with target-room arrival, including `exit-wrong`; this cannot prove
+required key collection. `step_config` also omits item masks, defaulting bombs on. Before rebuilding the requested
+suffix, enforce correct required pickups/inventory and milestone bomb masking. Rebuild all three chains from
+0x7d, introduce `2_6es_*` instead of stale W-entry `2_6ew_*`, and validate the carried key counts/collection flags
+through Dodongo entry at four hearts. Refresh affected Rope and D2 Goriya curriculum tracks: matching filenames
+do not invalidate stored snapshots. No binary state inventories were measured in this review.
+

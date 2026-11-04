@@ -111,15 +111,26 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
      N of 100–200 steps, after measuring the longest no-progress gap inside successful episodes per family (item 1's
      metric). Training: a truncation (value bootstraps), not a hard failure. Runner: `stuck` after N steps without
      progress instead of the flat 2000.
-   - **Control ready, round 7 §6:** optional `no_progress_steps`, default null; live quiet-tail truncation
-     bootstraps without terminal penalty, runner uses per-visit tail and keeps global guard. Threshold trial pending.
+   - **Partial control, round 7 §6/§8:** optional `no_progress_steps`, default null; live env truncation has no
+     terminal penalty, and runner cutoff works. PPO bootstrap is still missing; threshold training is blocked on it.
    - **Measured cutoff risk:** successful baseline chain rope visits include three quiet gaps ≥200 (worst 2,410).
      Standalone Goriya 0x23 would lose 12/46 successes at 200, versus 1/44 in 0x44. No blanket threshold yet.
+   - **Prerequisite defect found after r31 training:** PPO currently masks bootstrap on every truncation and
+     discards the final observation; env flags/no terminal penalty alone do not provide the promised value target.
+     Fix the measured-cutoff path before threshold training, preserving the existing max-step behavior; cover
+     final-state value, rollout-boundary truncation and isolation from the reset episode (round 7 §8).
+   - **Expanded evidence:** independent r30 chain seeds expose successful quiet gaps of 670 actions (Stalfos),
+     350 (Goriya) and 2,410 (Rope). No blanket 100–300 cutoff. Moblin's inspected successful maximum is 63;
+     100 is a trial candidate, not a general safety guarantee. Route-paired visits are not independent samples.
 7. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
-   milestone). Today 0x7e is an equal-length alternate with exit N and no key objective (`routes.yaml`
-   alternates). Make it the step on both routes with a FIGHT/TREASURE key objective, retrain d2-rope (states
-   `2_7ew_0..2` exist), and rebuild the D2 states downstream so they carry the key.
+   milestone). `game.yaml` already declares Rope ×5 and a key in 0x7e; generic FIGHT/TREASURE objectives apply.
+   The route currently treats it only as an alternate. Make it canonical on both routes, retrain d2-rope, and
+   rebuild downstream states carrying the extra key, including S-entry 0x6e (`2_6es_0..2`).
+   - **Builder prerequisites (round 7 §8):** `cross_room` currently accepts arrival even via `exit-wrong`, so
+     destination alone cannot prove the key was collected. Enforce required pickup/inventory before accepting
+     canonical transitions; `step_config` also currently defaults bombs on. Rebuild/audit all three D2 suffixes,
+     retire stale W-entry 0x6e seeds and refresh affected Rope and D2 Goriya trajectories before curriculum use.
 8. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
    back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?
