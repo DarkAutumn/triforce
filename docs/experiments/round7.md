@@ -26,11 +26,11 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
 - Backlog item 4 complete: r31-block1 promoted after 800 frozen-team chains (§6). Ordinary reward has the lowest
   evaluation damage; stronger block/quiet rewards stay disabled. Post-fight D2 navigation remains a measured problem.
 - R32's original six arms, three baselines and 1,200 frozen-team chains finished without execution errors (§9).
-  Follow-ups favor shaped Rope across 80 D2 seeds but full chains remain mixed; Octorok training is running.
-  No r32 promotion. Native stall replay found a required-shutter objective/classification defect (below).
-  Moblin had no evaluation heart drops and its off arm regresses on the fairy chain.
-  Main source/YAML/states stay frozen. Verified dev prerequisites wait: cutoff bootstrap (§10), per-arm chain
-  configs (§11), key-pickup/balance/bomb guards (§12). The D2 route/state migration is not started.
+  Follow-ups total 1,840 old-runtime chain executions; all eight arms/four baselines, including Octorok, finished.
+  No r32 promotion. Native replay found required-shutter objective/classification and terminal-health defects.
+  All verified prerequisites through §14 are merged into main at `4cb8434`; **470 tests passed**. Corrected
+  runtime source/YAML/states/pointers now stay frozen for common-task Rope and Octorok chain selection (§9).
+  The D2 route/state migration is not started; measured cutoffs and nearby-item shaping remain disabled.
 
 ## 1. Shared lingering metric
 
@@ -615,6 +615,34 @@ plus a current-YAML baseline. Runs remain `models/ow-octorok/r32-nearby-{off,on}
 reason: the completed r29 full-chain artifacts contain four Octorok heart drops in 387 visits versus zero in
 46 Moblin visits (route pairs are not independent). This follow-up avoids calling the overworld heart question
 answered by a zero-opportunity evaluation. No Octorok or other r32 candidate is promoted yet.
+
+Both added Octorok arms and the old-model baseline completed. On/off records match initial state, seed and
+health in all 620 paired episodes. There is real but sparse heart exposure; shaping still does not increase
+pickup here. Success differences are one episode, not evidence of a robust success gain.
+
+| Octorok policy | Successes | Real ΔHP | Total ΔHP | Hearts dropped | Taken | Left | Worst quiet actions |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Old r24-fairy | 614/620 | −0.078 | −0.074 | 13 | 4 | 9 | 308 |
+| R32 off | 614/620 | −0.064 | −0.061 | 12 | 3 | 9 | 94 |
+| R32 on | 615/620 | −0.070 | −0.068 | 12 | 2 | 10 | 62 |
+
+Health columns are per-episode means; heart columns cohort totals. Both continuations reduce measured damage,
+off more than on, but require chain selection before replacing r24. Reports: `r32b-octorok-evidence/evaluations.json`.
+
+### Corrected-runtime selection now running
+
+The original main-source freeze ended only after the Octorok training/evaluation jobs completed. Verified
+bootstrap/config transport, entry inventory guards, shutter objectives and terminal health were then merged
+from dev to main (`4cb8434`), with all 470 tests and native smokes passing. No model or canonical YAML changed.
+
+Two comparisons now pin that corrected runtime and unchanged teams/configs/states:
+- Rope old/off/on: common 420-episode task per policy, then 80 D2 seeds 0–79 per policy; source checkout dev,
+  explicit main model paths. Evidence/protocol: `r32-nearby-evidence/corrected-runtime/`.
+- Octorok old/off/on: both full and both post-D1 routes, 40 seeds 0–39 per segment, every other old promoted
+  specialist pinned; source checkout main. Evidence/protocol: `r32b-octorok-evidence/chains/`.
+
+The corrected evaluations, not the legacy timeout-HP aggregates, decide selection. No r32 policy promoted yet.
+
 
 
 ## 10. Measured-cutoff bootstrap correction (dev prerequisite)

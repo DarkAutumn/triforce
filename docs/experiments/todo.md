@@ -8,7 +8,7 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 
 - **Where it stands:** round 7 active (`round7.md`); items 1–4 and the worker-seed prerequisite complete.
   With r31-block1, 40-run chains reach Dodongo: full main 2, full fairy 3, post-D1 main 2, post-D1 fairy 4, D2 11.
-  D1 Goriya 0x44 and Stalfos 0x53 remain full-chain bottlenecks; nearest-heart/exit shaping is next.
+  R32 all eight arms/four baselines finished; corrected-runtime Rope/Octorok selection is running. No r32 promotion.
 - **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat r23-more,
   boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1, d2-rope r28-d2,
   wallmaster r10 copy. Overworld families train on both routes' rooms; D2 rooms have 3 start states each.
@@ -17,7 +17,7 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Round 7 items 1–4 complete; nearest-heart/exit shaping is next.
+chain's death rooms, then the big ablation. Round 7 items 1–4 complete; nearest-heart/exit shaping is in selection.
 
 1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
@@ -100,8 +100,9 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
      clock/heart pickup versus nearer exit, correct exits and actual healed/left counts. Original r32 evaluations
      and 1,840 chain executions finished without errors (includes repeated paths). Disjoint D2 seeds reverse
      the initial ranking: shaped Rope leads combined success/health, but full chains remain mixed. Moblin has
-     zero eval drops and its off arm harms the fairy chain. Octorok training remains active; no r32 promotion.
-     Faithful replay found a required-shutter objective/classifier defect; fix it before cutoff training.
+     zero eval drops and its off arm harms the fairy chain. Octorok arms finished with sparse heart exposure and
+     no pickup gain. Prerequisite fixes through round 7 §14 are merged at 4cb8434 (470 tests); corrected-runtime
+     Rope/Octorok comparisons now run with unchanged source/YAML/states/pointers. No r32 promotion.
 6. **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
    an item pickup or a kill).** Today training ends `stuck` after 50 steps without moving and `no-progress` after
    2000 steps without a new correct room (`end_conditions.Timeout`, the same 50/2000 as v1's Timeout; the ~100-step
@@ -118,8 +119,8 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
      N of 100–200 steps, after measuring the longest no-progress gap inside successful episodes per family (item 1's
      metric). Training: a truncation (value bootstraps), not a hard failure. Runner: `stuck` after N steps without
      progress instead of the flat 2000.
-   - **Control corrected in dev, round 7 §10:** `no_progress_steps` remains default null; measured truncations
-     now bootstrap final-state value without crossing resets. Native smoke and 463 tests passed; main merge waits for r32.
+   - **Control merged, round 7 §10:** `no_progress_steps` remains default null; measured truncations now
+     bootstrap final-state value without crossing resets. Native smoke and integration verified; merged 4cb8434.
    - **Measured cutoff risk:** successful baseline chain rope visits include three quiet gaps ≥200 (worst 2,410).
      Standalone Goriya 0x23 would lose 12/46 successes at 200, versus 1/44 in 0x44. No blanket threshold yet.
    - **Prerequisite defect corrected:** PPO had masked bootstrap on every truncation and discarded its final
@@ -134,11 +135,11 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
    - **Required-shutter prerequisite corrected in dev (round 7 §13):** north tiles 0xa8–0xab were misclassified;
      0x2e wrongly requested MOVE through its closed kill-all shutter. Live route-gated FIGHT now clears it;
      optional 0x6e/0x6d combat stays optional. Four targeted and all 468 tests pass; natural last-Rope → open
-     shutter → north-exit smoke succeeds in 69 actions. Main merge waits for the Octorok cohort.
+     shutter → north-exit smoke succeeds in 69 actions. Merged into main at 4cb8434.
    - **Terminal-health prerequisite corrected in dev (round 7 §14):** legacy room/run budgets left HP at entry
      health. One finisher now captures live health on all finalized paths; death stays zero. Both native fairy
      budget regressions and all 16 runner checks pass; separate smoke records actual healed HP. Old HP rankings
-     need corrected-runtime remeasurement before promotion; main remains frozen.
+     are being remeasured on corrected runtime before promotion. Merged 4cb8434; all 470 tests passed.
 7. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
    milestone). `game.yaml` already declares Rope ×5 and a key in 0x7e; generic FIGHT/TREASURE objectives apply.
@@ -146,7 +147,7 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
    rebuild downstream states carrying the extra key, including S-entry 0x6e (`2_6es_0..2`).
    - **Pickup guard verified in dev (round 7 §12):** old builder physically accepted zero-key `exit-wrong` entry.
      Discovery/replay now require the source key's pickup flag; bombs are masked. All three native sources and
-     saved payloads carry the key; 158 affected tests pass. Main merge waits for r32. Route/state migration pending.
+     saved payloads carry the key; 158 affected tests pass. Merged 4cb8434. Route/state migration pending.
    - **Inventory balance guarded in dev:** existing chains 0/1 skip 0x4e/0x3e keys; chain 2 also spends one on a
      side door. Builder now preserves carried keys plus required pickup, allowing only the target door's cost;
      native conserved-key, locked-side-exit and key-pickup paths pass. Full suffix audits remain required. Retire
@@ -165,7 +166,7 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
      with carry-over: `--from 0_37c_2` on both routes plus the D2 segment, at least 80 runs per arm.
    - **Per-arm chain config prerequisite implemented in dev, round 7 §11:** repeatable `--specialist-config YAML`
      carries loaded family configs into direct/spawned chains. Native boomerang-mask/cutoff smoke and all
-     464 tests passed; main merge waits for the frozen r32 cohort.
+     464 tests passed at that step; merged into main at 4cb8434.
    - Run it after items 1–7 settle (or as part of the full retrain item 3 may force), so it measures the setup we
      keep. Expect about a day of GPU.
 
