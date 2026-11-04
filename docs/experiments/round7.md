@@ -560,6 +560,27 @@ Integrated dev suite: **463 passed in 779.75 seconds** while r32 occupied the ma
 value-target regression passes, including legacy truncation/death and open-rollout controls. Temporary native
 smoke script removed; persisted JSON evidence retained. No r32 runtime source or canonical config changed.
 
+### Current-policy threshold exposure for the next trial
+
+The completed current-YAML baselines refine the earlier historical screening. Counts below are retrospective
+episodes whose longest quiet stretch reaches the threshold, not live cutoff results or predicted retraining gains.
+
+| Family | Successes / failures | Successful ≥100 | Successful ≥200 | Failed ≥100 | Failed ≥200 |
+|---|---:|---:|---:|---:|---:|
+| Goriya r31-block1 | 184 / 56 | 3 | 1 | 10 | 8 |
+| Stalfos/Keese/Gel r25 | 667 / 13 | 3 | 1 | 0 | 0 |
+| Rope r28 | 397 / 23 | 1 | 0 | 0 | 0 |
+| Moblin r26c | 272 / 8 | 0 | 0 | 0 | 0 |
+
+Use Goriya off/100/200 for the next matched threshold study: it has observed failed-episode stall exposure,
+whereas a 100-action Moblin cutoff would not address any failure in this standalone sample. Full-chain successes
+still contain longer gaps, so these counts do not justify enabling a production cutoff. Compare trained weights
+on a common uncut task as well as their actual cutoff task, then pass each arm's config into frozen-team chains;
+otherwise altered episode denominators or dropping the runtime cutoff would confound selection. Study not started;
+r32 remains active. Evidence with per-room rows/source provenance:
+`models/r33-cutoff-evidence/current-baseline-cutoff-exposure.json`.
+
+
 ## 11. Per-arm chain configuration (dev prerequisite)
 
 Added repeatable `triforce eval-chain --specialist-config PATH.yaml`, keyed by each loaded config's family name.

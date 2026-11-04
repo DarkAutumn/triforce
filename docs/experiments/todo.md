@@ -126,6 +126,9 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
    - **Expanded evidence:** independent r30 chain seeds expose successful quiet gaps of 670 actions (Stalfos),
      350 (Goriya) and 2,410 (Rope). No blanket 100–300 cutoff. Moblin's inspected successful maximum is 63;
      100 is a trial candidate, not a general safety guarantee. Route-paired visits are not independent samples.
+   - **Current-policy screening:** Goriya has 10/8 failed episodes reaching 100/200 quiet actions, versus none
+     in current SKG/Rope/Moblin standalone baselines. Next matched trial: Goriya off/100/200, common uncut and
+     actual-cutoff tasks plus config-preserving chains. No trial started or canonical cutoff enabled.
 7. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
    milestone). `game.yaml` already declares Rope ×5 and a key in 0x7e; generic FIGHT/TREASURE objectives apply.
