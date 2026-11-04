@@ -1270,3 +1270,12 @@ Lee requests finishing this experiment, recording/committing its result and then
 departures and finite training/player stall escape (replacement eligible at N, reset at 2×N) are recorded in
 the backlog, not implemented mid-trial. Do not start the boomerang ablation or any next experiment before he resumes.
 
+GUI correction during the same trial: individual CLI invocations were sequential per arm but exposed only
+one-run folders. Added observational ten-specialist `TrainingPlan` views under standard main logs:
+`261104_010_r36-schema1-baseline` and `261104_011_r36-schema2-bundle`. Plans reference the real absolute
+event/console paths; no producer files, sources, task settings, checkpoints or running jobs change. A live
+view process discovers each next actual run and updates its plan atomically. Normal `uv run training-gui.py`
+now discovers both series in [currently running]. Rendered actual Qt windows offscreen for default-live and
+each arm: two ten-row plans, completed ow-start/current ow-octorok/future pending rows, real curves and console
+paths verified. Screenshots/status evidence: `gui-series-smoke/`; index: `gui-series.json` in the r36 root.
+
