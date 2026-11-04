@@ -218,10 +218,9 @@ class Runner:
             if record is None or (record.level, int(record.room, 16), record.in_cave) != _key(location):
                 correct = None
                 if record is not None:
-                    record.health_out = state.link.health
                     correct = change is not None and exit_is_correct(change.previous, location)
                     record.outcome = 'exit-correct' if correct else 'exit-wrong'
-                    _store_hearts(record, hearts, state)
+                    _finish_record(record, hearts, state)
 
                 if location == route.terminal:
                     result.result, result.reason = 'success', f"entered {_describe(location)}"
@@ -254,9 +253,8 @@ class Runner:
             no_progress_steps = current.config.no_progress_steps
             if no_progress_steps is not None:
                 if linger.tail_steps >= no_progress_steps:
-                    record.health_out = state.link.health
                     record.outcome = 'stuck'
-                    _store_hearts(record, hearts, state)
+                    _finish_record(record, hearts, state)
                     result.result = 'failure'
                     result.reason = (f"{current.name} no-room-progress: {linger.tail_steps} quiet actions "
                                      f"(limit {no_progress_steps}) in {_describe(location)}")
@@ -265,18 +263,18 @@ class Runner:
                 room_steps = max(current.config.max_steps, MIN_ROOM_STEPS)
                 if record.steps >= room_steps:
                     record.outcome = 'stuck'
-                    _store_hearts(record, hearts, state)
+                    _finish_record(record, hearts, state)
                     result.result, result.reason = 'failure', f"{current.name} exceeded {room_steps} steps"
                     return
             if result.steps >= self.max_steps:
                 record.outcome = 'stuck'
-                _store_hearts(record, hearts, state)
+                _finish_record(record, hearts, state)
                 result.result, result.reason = 'failure', f"run exceeded {self.max_steps} steps"
                 return
 
             action = current.act(obs, self.deterministic)
             if not session.mask.is_allowed(action):
-                _store_hearts(record, hearts, state)
+                _finish_record(record, hearts, state)
                 raise RunnerError(f"{current.name} chose masked action {action} (legal: {session.mask})")
 
             change = session.act(action)
@@ -297,8 +295,7 @@ class Runner:
 
             if state.game_over:
                 record.outcome = 'death'
-                record.health_out = 0.0
-                _store_hearts(record, hearts, state)
+                _finish_record(record, hearts, state)
                 result.result, result.reason = 'failure', f"died in {_describe(state.full_location)}"
                 return
 
@@ -309,8 +306,9 @@ class Runner:
                           max_health=state.link.max_health, outcome=outcome)
 
 
-def _store_hearts(record: RoomRecord, tracker: HeartTracker, state):
-    """Ends the record's heart tracking and copies the counts into it."""
+def _finish_record(record: RoomRecord, tracker: HeartTracker, state):
+    """Capture live ending health and finalize the room's dropped-heart counts."""
+    record.health_out = 0.0 if state.game_over else state.link.health
     tracker.finish(state)
     summary = tracker.summary()
     record.hearts_dropped, record.hearts_taken, record.hearts_left = (summary['dropped'], summary['taken'],

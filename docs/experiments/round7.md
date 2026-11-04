@@ -766,3 +766,24 @@ Source remains isolated in dev until Octorok's old-source cohort finishes. Re-ev
 under the corrected common objective before selecting a promotion; legacy timeout HP also needs correction
 as noted in §9. Temporary native investigation/smoke scripts are removed; their JSON/state/PNG evidence remains.
 
+## 14. Live terminal health on chain budgets
+
+Native replay established stale HP on a legacy stuck visit (§9). Both the room-step and global run-step limits
+finalized dropped-heart counts but left `RoomRecord.health_out` at the value initialized on entry. The measured
+cutoff already copied live health, so comparing it against the legacy budget could also bias health results.
+
+Dev now has one record-finishing path that captures live ending HP and heart counts for every finalized exit,
+timeout and action-error record. Death stays zero. All six callers migrate to `_finish_record`; the obsolete
+helper name and duplicated per-branch assignments are removed. Gameplay, limits and outcome reasons unchanged.
+
+The two permanent native regressions fail before the fix: the fairy heals Link from one to four hearts, but
+both budget paths record one. After correction all **16 runner checks pass**. Separate real Runner smoke uses
+legal north/wait actions at the fairy pond: each budget ends after 12 actions/313 frames in mode 5, recorded
+and physical ending HP both four, entry HP one. Only the initial hurt state is configured; healing is native.
+Evidence: `models/r33-cutoff-evidence/terminal-health-smoke.json`. Integrated dev suite:
+**470 passed in 113.57 seconds**.
+
+Old chain files are not retroactively rewritten: pickups alone cannot reconstruct unrecorded damage. Before
+promotion, compare old/off/on Rope on the common corrected objective/runtime and live terminal-health metrics.
+Main remains frozen for the active Octorok cohort. Temporary smoke source/state are removed; JSON remains.
+

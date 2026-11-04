@@ -10,6 +10,7 @@ from triforce.actions import Action
 from triforce.game_map import GameMap, load_routes
 from triforce.runner import Route, RunResult, RoomRecord, Runner, RunnerError, chain_summary, parse_location, \
     write_jsonl
+from triforce.start_states import write_savestate
 from triforce.zelda_enums import ActionKind, MapLocation
 
 
@@ -89,6 +90,26 @@ def test_chain_summary_counts_failures_by_room():
                              run('failure', '0x44', 'death'), run('failure', '0x73', 'stuck')])
     assert summary['runs'] == 4 and summary['successes'] == 1 and summary['success_rate'] == 0.25
     assert summary['failures'] == {'1:0x44 stalfos-keese-gel death': 2, '1:0x73 stalfos-keese-gel stuck': 1}
+
+
+@pytest.mark.parametrize('budget', ['room', 'run'])
+def test_step_budget_records_health_after_native_fairy_healing(session, models_dir, tmp_path, monkeypatch, budget):
+    session.load('0_39s_2', randomize_rng=False)
+    session.apply_ram({'hearts_and_containers': 0x30, 'partial_hearts': 0xFF})
+    source = tmp_path / '0_39s_2.state'
+    write_savestate(str(source), session.emu.save_state())
+    monkeypatch.setattr('triforce.runner.MIN_ROOM_STEPS', 12 if budget == 'room' else 100)
+    runner = Runner(session=session, models_dir=models_dir, max_steps=12 if budget == 'run' else 100)
+    specialist = runner._load('ow-start')
+    specialist.config = specialist.config.model_copy(update={
+        'no_progress_steps': None, 'max_steps': 12 if budget == 'room' else 100})
+    north, wait = Action.parse('MOVE N 8'), Action.parse('WAIT 8')
+    specialist.act = lambda obs, deterministic: north if session.mask.is_allowed(north) else wait
+    result = runner.run(Route.load('milestone1-fairy', start_from=str(source)), seed=0)
+    record = result.rooms[-1]
+    assert result.result == 'failure' and record.outcome == 'stuck' and result.steps == 12
+    assert session.state.link.health == session.state.link.max_health == 4
+    assert record.health_in == 1 and record.health_out == 4
 
 
 def test_runner_no_room_progress_threshold_replaces_flat_budget(session, models_dir, monkeypatch):

@@ -215,6 +215,8 @@ Nearby-item shaping and the measured cutoff remain disabled in promoted configs 
   `game.yaml` tag → specialist → promoted
   checkpoint (cached). Untagged room or missing model → `result='error'` with the reason. Per-room outcomes:
   `exit-correct`, `exit-wrong`, `death`, `stuck` (specialist `max_steps` in one room), `milestone`.
+  Finalizing a room captures live ending health together with dropped-heart counts, including room/run budgets
+  and measured cutoffs; death remains zero. `health_out` is never left at entry health on a timed-out visit.
 - `python -m triforce.run --route milestone1 [--seed N] [--render] [--stop-at L:0xRR] [--checkpoint S=PATH]`
   prints one line per room and appends a JSON line to `runs/runner.jsonl`.
 - `triforce eval-chain --route milestone1 --runs 20 [--parallel N] [--from STATE] [--stop-at L:0xRR]` → success
