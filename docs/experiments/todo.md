@@ -73,7 +73,13 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
    Go-Explore paths (select by health, more patience) and a contact-damage penalty that grows as hp falls.
    - **Round 7 §6 prerequisite done:** natural Goriya trace credited only 1/7 real blocks before, 7/7 after at
      identical seed/action positions. Executed-frame counts reach training/eval/chains. 447 tests and CUDA smoke
-     passed; schemas unchanged. Stronger-reward matched r31 comparison and corner-stalemate experiment still pending.
+     passed; schemas unchanged. Matched r31 block-multiplier arms are running; corner-penalty comparison remains pending.
+   - **Measured baseline:** 178/240 successes, −0.96 hearts, 45 confirmed blocks. Faithful 0x44 seed-62 replay
+     has three living Goriyas throughout a 1,971-action quiet stretch; existing stall cost does not break it.
+     Separate stronger fight-only quiet cost is prepared in dev, not merged into main during r31 training.
+   - **Distinct pickup problem:** 0x23 seed 5 kills all three Goriyas, then wanders for 1,902 quiet actions without
+     the key. A fight-only penalty cannot address this; do not label it shadow-Link stalling or silently exclude
+     the room from family evaluation.
 5. **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
    hearts (round 6 §8: overworld 26 of 34). In v1, dropped items were among the wavefront's targets, and the
    wavefront is a multi-source BFS, so PBRS led to a heart whenever it was closer than the exit by walking distance
@@ -103,6 +109,8 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
      progress instead of the flat 2000.
    - **Control ready, round 7 §6:** optional `no_progress_steps`, default null; live quiet-tail truncation
      bootstraps without terminal penalty, runner uses per-visit tail and keeps global guard. Threshold trial pending.
+   - **Measured cutoff risk:** successful baseline chain rope visits include three quiet gaps ≥200 (worst 2,410).
+     Standalone Goriya 0x23 would lose 12/46 successes at 200, versus 1/44 in 0x44. No blanket threshold yet.
 7. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
    milestone). Today 0x7e is an equal-length alternate with exit N and no key objective (`routes.yaml`

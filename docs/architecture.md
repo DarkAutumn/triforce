@@ -124,6 +124,12 @@ projectile transition signature, shield eligibility/facing/proximity and this fr
 Delayed `$605` audio, Darknut/immunity clinks, natural boomerang returns and unrelated disappearance are not enough.
 The executor does not replace the user's frame callback, change inputs/timing, or collect speculative look-ahead.
 
+`reward.quiet_enemy_penalty` (nonnegative, default 0) adds that cost per action after the shared quiet tail exceeds
+the existing room-stall grace, only while living targetable enemies remain. `critique_gameplay` requires the
+caller's measured `quiet_steps`; the env passes its already-updated tracker, without a second progress counter.
+Hits/pickups/real approach reset the shared tail; damage and round trips do not. No cost for post-fight pickup time
+or inactive/burrowed/dying enemies. This is separate from the existing room-stall ramp and remains default off.
+
 `reward.nearby_items` (default false) adds heart/clock overlap tiles to the objective's PBRS targets alongside
 exits. Multi-source walking distance picks the nearer target; the task, accepted exits and observation schema do
 not change. This is not the old heart-only objective.

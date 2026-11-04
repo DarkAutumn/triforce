@@ -77,7 +77,8 @@ class ZeldaEnv(gym.Env):
         if self.capture is not None:
             self.session.executor.capture_pre_entry = True
         self.critic = create_critic(self.config.reward_profile, self.config.reward.pbrs,
-                                    block_reward=self.config.reward.block_reward)
+                                    block_reward=self.config.reward.block_reward,
+                                    quiet_enemy_penalty=self.config.reward.quiet_enemy_penalty)
         self.end_conditions = build_end_conditions(self.config.rooms, self.config.success, self.config.one_room,
                                                    linger=self.linger, no_progress_steps=self.config.no_progress_steps)
         self.builder = ObservationBuilder(objective=self.config.obs.objective)
@@ -161,7 +162,7 @@ class ZeldaEnv(gym.Env):
         self.linger.update(change, self.hearts.taken - taken)
         self._blocks += change.blocks
         rewards = StepRewards()
-        self.critic.critique_gameplay(change, rewards)
+        self.critic.critique_gameplay(change, rewards, quiet_steps=self.linger.tail_steps)
 
         ending = None
         for condition in self.end_conditions:

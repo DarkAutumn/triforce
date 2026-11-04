@@ -178,7 +178,7 @@ def test_gameplay_rewards_a_confirmed_block_during_a_weapon_option(monkeypatch):
         monkeypatch.setattr(critic, name, lambda change, rewards: None)
     event = ProjectileBlock(10, 11, 0x5C, MapLocation(1, 0x44, False))
     rewards = StepRewards()
-    critic.critique_gameplay(_block_change((event,), ActionKind.SWORD), rewards)
+    critic.critique_gameplay(_block_change((event,), ActionKind.SWORD), rewards, quiet_steps=0)
     assert rewards['reward-block-projectile'].value == REWARD_MEDIUM
 
 

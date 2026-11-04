@@ -63,6 +63,7 @@ class RewardConfig(BaseModel):
     pbrs: bool = True
     block_reward: float = Field(default=1.0, ge=0)
     nearby_items: bool = False
+    quiet_enemy_penalty: float = Field(default=0.0, ge=0)
 
 
 class ObsConfig(BaseModel):

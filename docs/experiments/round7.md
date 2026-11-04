@@ -206,7 +206,7 @@ Matched full chains, 40 runs per route / seeds 0–39: the candidate reached Aqu
 with 10 exits and two low-health fight deaths instead of the old eight exits, two deaths and two post-heart
 timeouts. Successful candidate visits averaged 50.7 actions. Dodongo-room reaches were 0/40 on milestone1 and
 3/40 on milestone1-fairy; this does not establish a general chain-success improvement. The demonstrated gain is
-eliminating the post-heart stall without worsening the matched specialist health result or boss-kill timing.
+eliminating the post-heart stall with better matched specialist health and boss-kill timing within one action.
 
 After promotion, an independent full-chain sweep used seeds 40–59; post-D1 and D2 segments used seeds 0–19:
 
@@ -278,3 +278,55 @@ Keep nearby-item shaping and measured cutoff off. Re-evaluate the old model on t
 compare success, real/total health, confirmed blocks and successful/failing quiet-gap distributions per room, then
 both full chains and the relevant post-D1/D2 segments. A stronger block reward is not promoted merely for more blocks;
 it must preserve health/success and avoid reward-producing stalemates. Evaluate the corner-stall lever separately.
+
+### Current-detector baseline and faithful stall replays
+
+Promoted r21-goriya-chainhp re-evaluated on the corrected current code/YAML: 178/240 success, health −0.96 hearts,
+45 confirmed blocks (0.1875 per episode). Output: `models/r31-block-evidence/promoted-eval.json`.
+
+| Room | Episodes | Successes | Confirmed blocks | Mean health change |
+|---|---:|---:|---:|---:|
+| 1:0x44 | 60 | 44 | 15 | −0.908 |
+| 1:0x23 | 60 | 46 | 13 | −0.617 |
+| 2:0x5e | 60 | 45 | 7 | −1.083 |
+| 2:0x1e | 60 | 43 | 10 | −1.225 |
+
+All 240 episode outcome/time/health/heart records match the earlier baseline after excluding the new block field
+and lingering measurements. Of the lingering summaries, 239 match; seed 207 changes only longest quiet frames
+55→79, retaining six quiet actions and 60 actions/657 frames overall. Cause not isolated; use the current baseline
+for the r31 comparison rather than claiming every historical measurement is unchanged.
+
+Faithful sampled-policy replays, same entry state/RNG/torch seeds as measured failures:
+
+- `1_44w_0`, seed 62: 2,000-action timeout, 1,971-action quiet stretch. All 1,822 actions at quiet-tail ≥150 still
+  had three living Goriyas and FIGHT objective. Link stayed by the left wall; the Goriyas remained at x=208.
+  Quiet actions: WAIT 760, SWORD 694, MOVE 368. Existing stall cost totaled −27.47 during that interval, without
+  breaking the stalemate. This validates testing a stronger fight-only quiet penalty, not merely counting WAIT.
+- `1_23s_0`, seed 5: same 2,000-action timeout but no enemies remained during its 1,753 late quiet actions.
+  Objective was TREASURE; 1,751 MOVE actions failed to collect the key. This is a distinct post-fight pickup problem,
+  not evidence of shadow-Link avoidance and not something a fight-only penalty can fix.
+
+Raw per-action positions, chase target/flag, enemies, objective and costs: `models/r31-block-evidence/corner-replays.json`.
+
+Prepared an independent default-zero `reward.quiet_enemy_penalty` in the dev worktree: additional per-action cost
+after the existing 150-action grace, based on the shared actual-progress tail, only while targetable living enemies
+remain. Damage and round trips do not reset this grace; inactive/burrowed/dying enemies and post-fight pickup time
+do not trigger it. Main is unchanged while r31 trains.
+
+Live replay with coefficient 0.05 keeps the same sampled-policy trajectories: the 0x44 stalemate receives −91.05
+additional cost; the 0x23 post-fight wander receives zero additional cost. This proves gating/reward behavior,
+not that training improves. Output: `models/r31-block-evidence/corner-replays-quiet005.json`.
+
+### Successful-gap guard for the later truncation experiment
+
+Historical successful chain visits across the 120 tracked baseline runs: 656 stalfos-keese-gel visits had worst
+quiet gap 94 actions; 84 Goriya visits had worst 126, with none reaching 200. D2 rope had 263 successful visits,
+five reaching 100 and three reaching 200 (worst 2,410). A blanket 200 cutoff would discard real rope successes.
+Standalone Goriya also exposes a different distribution: 0x23 would lose 12/46 successful episodes at 200, versus
+1/44 in 0x44, 1/43 in 0x1e and 0/45 in 0x5e. Measure by family/room and compare training effects before enabling
+thresholds; current promoted configs retain no measured cutoff.
+
+Quiet-fight control verification after retaining Lee's newer GUI changes: **462 full-suite tests passed in
+231.79 seconds** under concurrent r31 training. The new real-emulator regression checks the exact grace boundary
+and removes targetable enemies without clearing the long quiet tail: the additional penalty stops after the fight.
+No model improvement is claimed from this control verification.
