@@ -6,18 +6,18 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Where it stands:** round 6 done (`round6.md`, Summary at the top). Best chains (40 runs, to the Dodongo room):
-  full chain 1/40 (milestone1) and 2–3/40 (milestone1-fairy); fairy post-D1 8/40; D2 entrance 9/40. The full
-  chain's limit is Dungeon 1: the D1 Goriya room (0x44) kills 15 of the 28 runs that reach it, 0x53 five more.
-- **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat /
-  boss-aquamentus r23-more, stalfos-keese-gel r25-skg-plain, goriya r21-goriya-chainhp, d2-rope r28-d2,
+- **Where it stands:** round 7 active (`round7.md`); lingering, Aquamentus exit training and observation audit done.
+  Round-6 baseline best chains (40 runs, to Dodongo): full 1/40 (milestone1), 2–3/40 (milestone1-fairy), fairy
+  post-D1 8/40, D2 entrance 9/40. D1 Goriya 0x44 and Stalfos 0x53 remain the full-chain bottlenecks.
+- **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat r23-more,
+  boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r21-goriya-chainhp, d2-rope r28-d2,
   wallmaster r10 copy. Overworld families train on both routes' rooms; D2 rooms have 3 start states each.
 
 ### Work in this order
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; Aquamentus diagnosis and audit next.
+chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya blocking/corner behavior is next.
 
 1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
@@ -29,7 +29,7 @@ chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; 
    on this metric.
    - **Done, round 7 §1:** behavior-neutral shared tracker, seeded gameplay parity, 383 tests, CUDA training events,
      real wide/narrow GUI and historical-data checks. Tracked evals and all 120 baseline chains complete.
-2. **Aquamentus wanders after the kill (Lee).** Link kills Aquamentus, then walks left/right in 0x35 for a very long
+2. [x] **Aquamentus wanders after the kill (Lee).** Link kills Aquamentus, then walks left/right in 0x35 for a very long
    time before leaving; one run sat there "for ages" and only got unstuck by chance. Even with a good success rate
    something is wrong, and Lee says it's unrelated to shadow Link: check it, or penalize hanging out in the boss
    room once the boss is dead. Likely cause: `boss-aquamentus.yaml` succeeds on `boss-dead-and-heart` (the episode
@@ -39,8 +39,11 @@ chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; 
    metric). Fix options: success = exit-correct into 0x36 (with curriculum states after the kill), a lingering
    penalty once the boss is dead, or hand the room to stalfos-keese-gel once the boss is dead. Compare chain time
    and hearts at the triforce room.
-   - **Round 7 §2 diagnosis:** current model 60/60 to the heart but 59/60 through the exit; a reproduced seed
-     lingered 1,963 actions after pickup. Both full chains had two post-heart 2,000-action timeouts. Fix pending.
+   - **Round 7 §2 diagnosis:** old r23-more 60/60 to the heart but 59/60 through the exit; a reproduced seed
+     lingered 1,963 actions after pickup. Both full chains had two post-heart 2,000-action timeouts.
+   - **Done, round 7 §5:** promoted r30-exit and complete-visit curriculum. Exit-task eval 60/60; mean pickup-to-exit
+     11.1 actions (old 92.0), worst 77 (old 1,963), health +0.69 (old +0.61). Both full chains removed old post-heart
+     timeouts. Independent 20-run sweeps: full main/fairy 1/3, post-D1 main/fairy 0/4, D2 3; no execution errors.
 3. [x] **Observation audit (Lee: does Link get enough about enemies and the world, e.g. does he know an enemy is
    stunned?).** Do it before the next full retrain: observation changes invalidate every model, so bundle them.
    Already there (`observation.ENTITY_FEATURES`): per-slot type embedding, projectile, blockable (rock, arrow,

@@ -3,7 +3,7 @@
 ## Summary
 
 Lee resumed experiment mode on Nov 3: keep the omp todo live, reconcile it with `todo.md` between experiments,
-run experiments, log every result and commit each finished item. No round-6 promoted model has changed yet.
+run experiments, log every result and commit each finished item. Aquamentus r30-exit is now promoted.
 
 - Backlog item 1 complete: behavior-neutral lingering measurement, seeded gameplay parity, training/eval/runner/GUI
   proof and tracked baseline results. Outputs: `models/r29-linger-baseline/`; no model promoted.
@@ -18,6 +18,9 @@ run experiments, log every result and commit each finished item. No round-6 prom
   Logs: `logs/261103_029_boss-aquamentus/`, `logs/261103_030_r29-linger-baseline/` and old r28-d2.
 - Lee's running player uses most VRAM. He authorizes killing `play-zelda.py` without asking **only if CUDA memory
   exhaustion crashes the experiment**. The CUDA smoke succeeded; the player was not killed.
+- Backlog item 2 complete: r30-exit trains kill → heart → east exit. Matched exit-task eval improved 59/60 →
+  60/60; mean pickup-to-exit 92.0 → 11.1 actions, worst 1,963 → 77; health change +0.61 → +0.69 hearts.
+  Both matched full chains removed the two old post-heart timeouts. Other families still limit the chain.
 
 ## 1. Shared lingering metric
 
@@ -180,3 +183,46 @@ Re-explored with the exit task: 3/3 successful replays, 42,957 env actions; path
 0x36 room is not a curriculum start. Use this separate directory for the candidate, not the old heart-ending paths.
 Compare against the corrected old-model exit-task baseline, then both full chains and the post-D1/D2 segments if
 promoted. Track boss-kill/heart/exit timing, health and quiet-gap distribution—not success alone.
+
+### Results and promotion
+
+Training stopped early after 50 additional PPO updates / 204,500 additional actions, 248.71 seconds. The checkpoint
+stores cumulative 633 updates / 2,590,136 actions; these are not the experiment's additional budget.
+
+Both models were evaluated on the exit task with the same current health distribution, 20 episodes per entry state
+(60 total), sampled policies and seeds 0 onward. The old baseline is `models/r29-linger-baseline/aquamentus-through-exit.json`;
+the candidate's records are `models/boss-aquamentus/r30-exit/eval.json`.
+
+| Exit-task measurement | r23-more | r30-exit |
+|---|---:|---:|
+| Successful exits | 59/60 | 60/60 |
+| Mean health change, hearts | +0.608 | +0.692 |
+| Mean boss-kill action | 27.15 | 27.95 |
+| Mean pickup-to-exit actions | 91.97 | 11.13 |
+| Worst pickup-to-exit actions | 1,963 | 77 |
+| Mean total actions | 125.78 | 46.88 |
+
+Matched full chains, 40 runs per route / seeds 0–39: the candidate reached Aquamentus 12 times on each route,
+with 10 exits and two low-health fight deaths instead of the old eight exits, two deaths and two post-heart
+timeouts. Successful candidate visits averaged 50.7 actions. Dodongo-room reaches were 0/40 on milestone1 and
+3/40 on milestone1-fairy; this does not establish a general chain-success improvement. The demonstrated gain is
+eliminating the post-heart stall without worsening the matched specialist health result or boss-kill timing.
+
+After promotion, an independent full-chain sweep used seeds 40–59; post-D1 and D2 segments used seeds 0–19:
+
+| Segment | Runs | Dodongo room reached |
+|---|---:|---:|
+| Full milestone1 | 20 | 1 |
+| Full milestone1-fairy | 20 | 3 |
+| Post-D1 milestone1 | 20 | 0 |
+| Post-D1 milestone1-fairy | 20 | 4 |
+| D2 entrance | 20 | 3 |
+
+No execution errors in the sweep. Five D1 Goriya deaths and three 0x53 deaths on each full route remain the first
+bottlenecks; D2 rope rooms and Goriyas limit the later segments. Post-D1/D2 skip Aquamentus, so their outcomes are
+current-team measurements, not evidence of an Aquamentus treatment effect. Raw chains and sweep summaries are in
+`models/boss-aquamentus/r30-exit/`.
+
+**Promoted r30-exit.** `boss-aquamentus.yaml` now succeeds on the correct exit, after the objective requires the
+kill and heart container. Replaced its default curriculum trajectories with the explored complete-visit paths.
+No observation-schema change, damage-penalty addition or special post-kill controller.
