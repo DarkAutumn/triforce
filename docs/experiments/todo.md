@@ -41,16 +41,21 @@ chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; 
    and hearts at the triforce room.
    - **Round 7 §2 diagnosis:** current model 60/60 to the heart but 59/60 through the exit; a reproduced seed
      lingered 1,963 actions after pickup. Both full chains had two post-heart 2,000-action timeouts. Fix pending.
-3. **Observation audit (Lee: does Link get enough about enemies and the world, e.g. does he know an enemy is
+3. [x] **Observation audit (Lee: does Link get enough about enemies and the world, e.g. does he know an enemy is
    stunned?).** Do it before the next full retrain: observation changes invalidate every model, so bundle them.
    Already there (`observation.ENTITY_FEATURES`): per-slot type embedding, projectile, blockable (rock, arrow,
    boomerang; not the Zora fireball), hp, stun, invincibility, immunities, spawning, dying, active, item lifetime.
-   Check: `stun` is `min(timer / 16, 1)` and saturates, so a long boomerang stun reads 1.0 until its last 16 ticks
-   (find the real stun lengths in the disassembly and rescale); Link's own invincibility frames and shield state;
+   Checked: ordinary boomerang stun is 16 long-timer ticks (one per 10 frames), so the existing `/16` spans it
+   correctly; no rescaling needed. Link's own invincibility frames and shield state;
    Link's boomerang in flight vs returning; which enemy threw a projectile; clock active; the monsters' chase
    target (`$60–$62`: Link or shadow Link), which tells where they are heading; anything v1's observation or the
    RAM catalog (`docs/ram-catalog.md`, entities) has that v2 lacks. Output: a list of proposed changes with reasons;
    decide, then implement with a full retrain.
+   - **Done, round 7 §3:** source-backed audit and live boomerang/stun probe. Returning boomerang animation bounds
+     had a real hex/decimal bug; fixed and regression-tested. Keep schema 1 for isolated experiments.
+   - [ ] **Bundled observation trial before the from-scratch item 8 study:** versioned chase target coordinates,
+     Link/monster boomerang position/phase and corrected harm semantics; compare a full retrain. No RNG, guessed
+     universal owner, redundant stun/clock flags or incidental timer rescaling. This bundle is not yet implemented.
 4. **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
    Link to block instead of face-tanking. v2 already has `critics.critique_block` (`reward-block-projectile`,
    REWARD_MEDIUM × combat decay, on the onset of the ArrowDeflected sound via `Link.is_blocking`). First check that

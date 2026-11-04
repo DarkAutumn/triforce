@@ -93,3 +93,43 @@ states, seeds 0–59, six workers. Output: `aquamentus-through-exit.json` in the
 Decision: train the same boss model through the required heart pickup and east exit, not a stronger penalty first.
 Observation audit runs before that training so any schema decision is explicit. No start states or model changed
 for diagnosis; no post-kill training states saved/promoted.
+
+## 3. Observation audit and returning-boomerang correction
+
+Read observation.py, Link/enemy/projectile decoding and the corresponding collision/weapon routines in the Zelda
+disassembly. Read-only scouts independently covered stun/collision and chase/weapon/owner semantics. The old archive
+could not be read by the archive tool (921 MB exceeds its 256 MB limit); streamed only its observation wrapper into
+`/tmp`. That archived wrapper is a pixel viewport/grayscale transform, not evidence of an additional structured
+feature list (`triforce_lib/zelda_observation_wrapper.py` L41–105).
+
+| Input/mechanic | Finding and decision | Evidence |
+|---|---|---|
+| Enemy boomerang stun | `$3D+i ← $10`, one tick per 10 frames: nominal 160 frames. Existing `/16` is correct; do not rescale. Dodongo's bomb stun is a different `$20` mechanism. | Z_01 L5914–5919; Z_07 L481–507; runtime injected timer decremented every 10 frames |
+| Damage invincibility | Link `$4F0 ← $18` (nominal 48 frames); ordinary enemies `$10` (32 frames), half-rate countdown. Existing `/32` does not clip these. Clock is already observed and separately controls protection. | Z_01 L6589–6605,L6687–6691; Z_07 L5782–5788,L1877–1884 |
+| Chase target | Actual refresh flag + target X/Y missing. Bundle actual `$60/$61/$62` with full-byte coordinate normalization; no RNG/timer initially. The ASM's last-frame comment contradicts executed instruction order. | Z_07 L1888–1951,L3788–3811 |
+| Link boomerang flight | Active alone omits position and tactical phase; bundle outbound/slow-outward/spark/slow-return/fast-return. `$80+` is bait, not boomerang. | Z_05 L2901–2948; Z_07 L3857–4280 |
+| Projectile harm | Stunned monsters and returning/bouncing projectiles currently can read hurts_on_touch. Bundle corrected harmful-state semantics and boomerang return phase; present/active remains separate. | observation.py L435–451; Z_01 L5613–5714; Z_07 L3857–4280 |
+| Projectile owner | Reciprocal `$42C` refs exist for Goriya boomerangs only. Owner relation is optional and must validate both slots/types; ordinary shots retain stale scratch data. No nearest-enemy guessed owner. | Z_04 L590–596,L11361–11391; Z_01 L4074–4086 |
+| Shield blocking | ArrowDeflected is also Darknut/immunity parry. Goriya blocking produces a spark, then return; return/catch alone is not a block. Use per-frame collision evidence before increasing rewards (item 4). | Z_01 L5707–5714,L5897–5912,L6312–6333; Z_07 L4265–4280 |
+
+**Schema decision:** keep schema 1 during the isolated Aquamentus/task/reward experiments. No speculative input
+changes or incidental timer rescalings now. The chase/phase/harm bundle needs a deliberately versioned full-retrain
+comparison, not loading existing weights under changed meanings; keep it recorded as a prerequisite to the later
+from-scratch boomerang study. Audit is complete; the proposed schema bundle is not implemented or claimed complete.
+
+### Return-state decoding bug: fixed before reward comparisons
+
+`Link.get_animation_state(BOOMERANG)` used **decimal 10–57** instead of hex `$10–$57`. Raw `$40–$57` return states
+therefore reported inactive, ending future-credit simulation before the weapon finished its flight.
+
+- Live probe through `GameSession.load/act`: after leaving the south doorway, threw east; all 63 observed return
+  frames were incorrectly INACTIVE. Initial attempted throws in the doorway correctly did not launch anything;
+  moving once was insufficient because the first move was interrupted by the door event.
+- Changed only the two bounds to `0x10` and `0x57`, leaving observation/action schemas and masks unchanged.
+- Same live probe afterwards: all 63 return frames ACTIVE, zero incorrectly inactive. Output is stored in
+  `models/r29-linger-baseline/boomerang-decode-probe.json` (post-fix trace).
+- Real-emulator regression failed before on the ACTIVE assertion, then passed after; it checks return → catch
+  and excludes bait from boomerang activity. Core/env/reward/tracker checks: 75 passed.
+
+This is a correctness fix, not evidence of a model/chain improvement. Re-evaluate old checkpoints under the corrected
+credit path and the experimental task before comparing continued models.

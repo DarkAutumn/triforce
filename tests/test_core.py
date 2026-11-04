@@ -5,7 +5,7 @@ import pytest
 from triforce.actions import (ACTION_SCHEMA_VERSION, MASK_SIZE, Action, ActionMask, DIRECTIONS, DURATIONS,
                               compute_action_mask)
 from triforce.frame_skip import Interrupt
-from triforce.zelda_enums import ActionKind, Direction, SwordKind, ZeldaEnemyKind
+from triforce.zelda_enums import ActionKind, AnimationState, Direction, SwordKind, ZeldaAnimationKind, ZeldaEnemyKind
 
 from .conftest import act_until, full_health, load_and_place
 
@@ -60,6 +60,18 @@ def test_decodes_overworld_start(session):
     assert (state.level, state.location) == (0, 0x77)
     assert state.link.sword == SwordKind.NONE
     assert state.link.max_health == 3
+
+
+def test_boomerang_stays_active_on_return_until_caught(session):
+    session.load('1_35s_0', randomize_rng=False, fresh_room=True)
+    act_until(session, 'MOVE N 32', lambda c: session.emu.read(0x53) == 0)
+    session.act(Action.parse('BOOMERANG E'))
+    change = act_until(session, 'WAIT 4', lambda c: 0x40 <= session.emu.read(0xBB) <= 0x57)[-1]
+    assert change.state.link.get_animation_state(ZeldaAnimationKind.BOOMERANG) == AnimationState.ACTIVE
+    change = act_until(session, 'WAIT 4', lambda c: session.emu.read(0xBB) == 0)[-1]
+    assert change.state.link.get_animation_state(ZeldaAnimationKind.BOOMERANG) == AnimationState.INACTIVE
+    bait = session.apply_ram({'bait_or_boomerang_animation': 0x80})
+    assert bait.link.get_animation_state(ZeldaAnimationKind.BOOMERANG) == AnimationState.INACTIVE
 
 
 # --- masks ---

@@ -55,8 +55,8 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
 ## Game mechanics that matter for training
 
 - **Monsters don't always chase Link; they often chase "shadow Link"** (Lee; `docs/ram-catalog.md` `$60–$62`,
-  `Z_07` ~L1893–1951). The chase target flips at random intervals between Link's position and, if Link's X hasn't
-  changed since the last frame, his position mirrored across the room (Link in the NW corner, target in the SE).
+  `Z_07` L1888–1951). The actual instruction order copies current Link X/Y before flipping to the alternate
+  mode, so normally it mirrors the current position even if Link moved (the ASM's "last frame" comment is wrong).
   So a Link who stands still in a corner can send the whole room to the opposite corner for a long time. Lee watched
   the goriya model do exactly that in the Red Goriya room: Link in the top left not fighting, the Goriyas chasing
   shadow Link in the bottom right, no hits either way, "for ages". In training the room-stalling penalty does fire
