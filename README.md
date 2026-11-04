@@ -42,8 +42,8 @@ triforce promote <specialist> <run-id>
 triforce eval-chain --route milestone1 --runs 20
 ```
 
-Training GUI charts use the plotted history (respecting **skip startup**). Success ranges use 25-percentage-point
-bands enclosing every displayed success series and the early-stop/eval reference lines; any value below 25%
+Training GUI charts use the plotted history (respecting **skip startup**). Success ranges use 10-percentage-point
+bands and ticks, enclosing every displayed success series and the early-stop/eval reference lines; any value below 25%
 restores the full 0–100% range. Health change encloses both real and total series with ±0.2 hearts of padding;
 the "no change" reference appears only when zero is within that range.
 

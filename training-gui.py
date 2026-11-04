@@ -1453,12 +1453,12 @@ class LineChart(QWidget):
         if self.scale == 'success':
             if low < 0.25:
                 return 0.0, 1.0
-            low, high = math.floor(low * 4) / 4, math.ceil(high * 4) / 4
-            # A constant value on a quarter boundary still needs a nonzero band (100%: 75–100%).
-            if low == high:
-                high = min(1.0, high + 0.25)
-                low = high - 0.25
-            return low, high
+            low_band, high_band = math.floor(low * 10), math.ceil(high * 10)
+            # Constant values still need a nonzero band (100%: 90–100%).
+            if low_band == high_band:
+                high_band = min(10, high_band + 1)
+                low_band = high_band - 1
+            return low_band / 10, high_band / 10
         if self.scale == 'health':
             return low - 0.2, high + 0.2
         pad = (high - low) * 0.1 or abs(high) * 0.1 or 1.0
@@ -1526,9 +1526,10 @@ class LineChart(QWidget):
                            plot.bottom() - (min(y1, max(y0, py)) - y0) / yspan * plot.height())
 
         p.setFont(font(8))
-        for i in range(5):
-            value = y0 + yspan * i / 4
-            y = plot.bottom() - plot.height() * i / 4
+        intervals = round(yspan * 10) if self.scale == 'success' else 4
+        for i in range(intervals + 1):
+            value = y0 + yspan * i / intervals
+            y = plot.bottom() - plot.height() * i / intervals
             p.setPen(QPen(with_alpha(C.border, 200), 1))
             p.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y))
             p.setPen(C.faint)
