@@ -895,3 +895,38 @@ Evaluate old weights under each actual cutoff; evaluate all new weights under th
 cutoff model under its actual task (20 episodes/state, seed 0, three workers). Then compare frozen-team full,
 post-D1 and D2 chains with loaded per-arm configs. Measure success, health, steps/frames and quiet streaks;
 never interpret early failed cutoffs as successful navigation or select on shorter episodes alone.
+
+The exact promoted-team uncut chain baseline reuses completed r32 records rather than re-running them: Octorok
+off's four 40-seed route segments and the first 40 corrected old-Rope D2 records. Team/source/task are unchanged;
+provenance is retained in `chains/old-off/comparison.json`. Old weights with actual 100/200 configs are running
+separately. After Octorok promotion, the default (no override) runner also reached D1 0x73 at full three hearts,
+91 actions/2,545 frames, seed 0. No user player process was killed.
+
+While this cohort runs, the upcoming D2 east-first route and three native conserved-key suffixes are prepared
+in **dev only**, not main. No D2 model training, main activation or schema changes before cutoff selection.
+Fresh trajectories wait for audited basename-addressable dev states; no alternate exploration loader is added.
+
+### Old weights under live cutoff configs
+
+All 400 actual-cutoff chains completed without execution errors (40 seeds ×5 segments ×2 limits), alongside
+the retained exact uncut baseline. Both thresholds shorten some runs but discard successful post-D1 fairy
+and D2 paths. No canonical threshold enabled; retrained-model selection remains pending.
+
+| Segment | Uncut wins /40 | 100 wins /40 | 200 wins /40 | Uncut mean actions | 100 mean actions | 200 mean actions |
+|---|---:|---:|---:|---:|---:|---:|
+| Full main | 2 | 2 | 2 | 798.875 | 613.400 | 628.400 |
+| Full fairy | 6 | 6 | 6 | 886.925 | 660.175 | 677.675 |
+| Post-D1 main | 4 | 4 | 4 | 339.125 | 339.125 | 339.125 |
+| Post-D1 fairy | 4 | 2 | 2 | 547.200 | 494.550 | 500.925 |
+| D2 | 14 | 11 | 12 | 771.650 | 599.875 | 627.725 |
+
+Means include failures; shorter time and less damage before an early failed cutoff are not a survival gain.
+Route pairs share prefixes. Config preservation is exercised natively: explicit `no-room-progress` reasons
+stop the room at 100/200 quiet actions. Full records: `chains/old-{off,100,200}/`.
+
+Lost-success seeds are post-D1 fairy 22/31 at both limits, D2 9/24 at both, plus D2 28 at 100. A native D2 seed-9
+200-cutoff replay exactly matches the complete saved result. Its last 200 actions are all MOVE objective/MOVE
+actions, zero living enemies, clock off, north OPEN and physically open, four hearts at cutoff, finite distance
+16 at the final action. Uncut eventually succeeds; this is post-fight navigation pacing, not waiting for a
+Goriya or shadow-Link chase. Evidence: `cutoff-loss-replay.json`. Do not misdiagnose the removed successes as
+all intrinsically failed fights or use the cutoff to conceal a required-shutter objective problem.

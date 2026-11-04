@@ -135,6 +135,10 @@ chain's death rooms, then the big ablation. Round 7 items 1–5 complete; matche
      in current SKG/Rope/Moblin standalone baselines. R33 Goriya off/100/200 training is active (round 7 §15):
      1,003,520 additional actions per arm from r31-block1, matched seed/budget/config, corrected bootstrap;
      common uncut/actual-cutoff evaluation and config-preserving chains. No canonical cutoff enabled.
+   - **Live old-policy risk measured (round 7 §15):** all 400 actual-cutoff chains complete without errors.
+     Both limits lose two post-D1 fairy successes; D2 loses three at 100/two at 200 (40 seeds each). Faithful
+     seed-9 replay has full HP, open north, no enemies and 200 MOVE actions: post-kill exit pacing, not chase
+     waiting. Do not select on shorter failed episodes or enable a blanket cutoff; retraining remains active.
    - **Required-shutter prerequisite corrected in dev (round 7 §13):** north tiles 0xa8–0xab were misclassified;
      0x2e wrongly requested MOVE through its closed kill-all shutter. Live route-gated FIGHT now clears it;
      optional 0x6e/0x6d combat stays optional. Four targeted and all 468 tests pass; natural last-Rope → open
@@ -156,6 +160,10 @@ chain's death rooms, then the big ablation. Round 7 items 1–5 complete; matche
      native conserved-key, locked-side-exit and key-pickup paths pass. Full suffix audits remain required. Retire
      stale W-entry 0x6e states, create missing 2_0es_2,
      and refresh affected Rope and D2 Goriya trajectories before curriculum use.
+   - **Isolated preparation during r33:** dev route is east-first; chains 0/1/2 and affected route consumers are
+     being prepared/audited without changing main. Canonical activation, refreshed curricula and Rope retraining
+     follow cutoff selection. Existing exploration expects installed state basenames; defer trajectory refresh
+     until audited dev states are installed, rather than invent an absolute-path/output convention.
 8. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
    back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?
