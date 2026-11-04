@@ -320,6 +320,12 @@ chain's death rooms, then the big ablation. Round 7 items 1–7 complete; versio
 
 ## Driver
 
+- [ ] **Harden long-lived launcher ownership/recovery (round 7 §21).** R36's baseline owner returned no output;
+  its launcher was gone and Aquamentus had saved an interrupted 37-update checkpoint after six full families.
+  Parent's temporary recovery validates/keeps full-budget families, preserves partial attempts and restarts
+  incomplete families fresh. Make the permanent driver retain reliable ownership/completion reporting;
+  never count an interrupted exit-zero checkpoint as a completed fixed-budget comparison.
+
 - **Keep training GUI logs in the standard main `logs/` root (Lee, Nov 4).** R36's isolated arm logs were put
   under `models/r36-observation-full-retrain-evidence/logs/schema1|schema2`. Those producer paths stay stable,
   but live ten-specialist series views now exist under standard `logs/` (round 7 §21), so normal GUI launch works.
