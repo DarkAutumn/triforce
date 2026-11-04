@@ -213,3 +213,54 @@ def test_objective_block(session):
     for key in off:
         if key != 'objective':
             assert np.array_equal(off[key], on[key])
+
+
+@pytest.mark.parametrize('value,phase', [(0x17, 'outbound'), (0x28, 'spark'), (0x37, 'slow_outward'),
+                                       (0x47, 'slow_return'), (0x57, 'fast_return')])
+def test_boomerang_animation_bits_preserve_tactical_phase(session, value, phase):
+    state = session.load('2_7ds_2', randomize_rng=False)
+    state = session.apply_ram({'bait_or_boomerang_animation': value})
+    obs = ObservationBuilder(objective=False).reset(state, session.mask)
+    phases = [L[f'boomerang_{name}'] for name in ('outbound', 'spark', 'slow_outward',
+                                               'slow_return', 'fast_return')]
+    assert obs['link'][L['boomerang_active']] == 1
+    assert obs['link'][L[f'boomerang_{phase}']] == 1
+    assert obs['link'][phases].sum() == 1
+
+
+def test_bait_does_not_expose_stale_boomerang_position(session):
+    builder, _ = _reset(session, '2_7ds_2')
+    _step(session, builder, 'MOVE N 16')
+    _step(session, builder, 'MOVE N 16')
+    _, flight = _step(session, builder, 'BOOMERANG E')
+    assert flight['link'][L['boomerang_active']] == 1
+    assert flight['link'][L['boomerang_x']] > 0
+    state = session.apply_ram({'bait_or_boomerang_animation': 0x80})
+    bait = builder.reset(state, session.mask)['link']
+    assert bait[L['boomerang_active']] == 0
+    assert bait[L['boomerang_x']] == bait[L['boomerang_y']] == 0
+    assert not bait[[L[f'boomerang_{name}'] for name in ('outbound', 'spark', 'slow_outward',
+                                                     'slow_return', 'fast_return')]].any()
+
+
+@pytest.mark.parametrize('kind,state_byte,stun,timer,harm', [
+    (0x06, 0, 0x10, 0, False),       # stunned Goriya remains present/active, but harmless
+    (0x5C, 0x10, 0, 0, True),       # outbound Goriya boomerang
+    (0x5C, 0x30, 0, 0, False),      # slow-outward is not return, but cannot hit Link
+    (0x5C, 0x50, 0, 0, False),      # fast-return boomerang
+    (0x53, 0x30, 0, 0, False),      # shield-bounced rock
+    (0x5B, 0x10, 0, 4, False),      # delayed arrow only draws/checks shooter
+    (0x55, 0x10, 0, 4, True),       # delayed fireball still checks collision
+    (0x49, 2, 0, 0, True),          # returning trap uses different state semantics
+])
+def test_contact_hazard_preserves_presence_and_kind_specific_gates(session, kind, state_byte, stun, timer, harm):
+    state = session.load('1_44w', randomize_rng=False)
+    # Decode a single native object-table boundary without advancing its next update.
+    ram = state.ram
+    ram[0x350], ram[0xAD], ram[0x406] = kind, state_byte, 0
+    ram[0x3E], ram[0x29], ram[0x66C] = stun, timer, 0
+    obs = ObservationBuilder(objective=False).reset(state, session.mask)
+    entity = obs['entity_features'][0]
+    assert obs['entity_types'][0] == kind
+    assert entity[E['presence']] == entity[E['active']] == 1
+    assert bool(entity[E['hurts_on_touch']]) is harm

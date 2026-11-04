@@ -12,6 +12,8 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 - **Promoted now:** ow-zora / ow-start r24-fairy, ow-octorok r32-nearby-off, ow-moblin r26c-moblin,
   ow-leever-peahat r23-more, boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1,
   d2-rope r35-east-curriculum, wallmaster r10 copy. Overworld families use both routes' rooms; D2 rooms have 3 states each.
+- **Lee's pause request (Nov 4):** finish the current r36 observation-bundle experiment, record and commit
+  its result, then pause. Do not start the boomerang study or the swordless-start fix before Lee resumes work.
 
 ### Work in this order
 
@@ -58,11 +60,13 @@ chain's death rooms, then the big ablation. Round 7 items 1–7 complete; versio
      had a real hex/decimal bug; fixed and regression-tested. Keep schema 1 for isolated experiments.
    - [ ] **Bundled observation trial before the from-scratch item 8 study:** versioned chase target coordinates,
      Link/monster boomerang position/phase and corrected harm semantics; compare a full retrain. No RNG, guessed
-     universal owner, redundant stun/clock flags or incidental timer rescaling. This bundle is not yet implemented.
+     universal owner, redundant stun/clock flags or incidental timer rescaling. Schema 2 is implemented/verified
+     in dev (§21): 485 tests, native five-phase parity, CUDA scratch and spawned checkpoint evaluation. Main
+     remains schema 1; complete matched-budget teams/evaluations/chains must settle before item 8.
    - **Full-study input prerequisite complete (§20):** retired six old Moblin curricula (297 snapshots) with
      three containers/no boomerang/no triforce in post-D1 rooms; preserved the valid four-heart 0_3dc path and
      installed verified current 0_3dn_2 coverage. All 14 Moblin goal replays and 41 default-track route audits pass.
-     One old D2 Goriya goal path is stale; the already verified replacement belongs to the pending D2 cutover.
+     D2 Goriya replacements and all 21 Rope tracks are now installed; the full trial freezes all 62 enabled tracks.
 4. [x] **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
    Link to block instead of face-tanking. v2's old `critics.critique_block` rewarded ArrowDeflected sound onset;
    round 7 replaces that incomplete signal with per-frame confirmed shield collisions and per-collision decay.
@@ -207,6 +211,11 @@ chain's death rooms, then the big ablation. Round 7 items 1–7 complete; versio
 
 ### Other open items
 
+- [ ] **Swordless departure from the starting area (Lee, Nov 4).** Lee observes runs where Link leaves without
+  taking the sword; these runs cannot win and waste training. Reduce how often this happens. His original
+  training failed immediately on leaving the starting area swordless; that is an acceptable option, not a
+  required implementation. Investigate the start specialist/task and chain behavior, then measure swordless
+  departures before/after the chosen fix. Do not mistake later fairy-pond visits for the initial starting area.
 - [x] **Alternate-YAML experiment integrity (round 7 §4):** train/evaluate discarded supplied YAML overrides.
   Fixed and proved through real/spawned CLI paths. Round 6's r20-pt, r21/r22-chainhp and r25/r27-heart treatment
   comparisons are not valid treatment evidence; model/chain measurements remain real. Explicit rejections remain.

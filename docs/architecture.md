@@ -61,6 +61,17 @@ class ObservationBuilder:
 
 When the objective block is on, the env attaches `state.objectives` (v1's `Objective`) before calling the builder.
 
+Observation schema 2 adds the shared chase target (`$61/$62`, both full-byte `/255`) and
+`chase_refresh_suppressed` (`$60 != 0`). The flag controls coordinate refresh, not a reliable Link/shadow
+identity; bait can replace the target independently. It also adds Link boomerang X/Y and five phase flags
+(outbound, spark, slow-outward, slow-return, fast-return); Goriya boomerang entities receive the same phases.
+Animation low bits do not change phase. Inactive/bait/unsupported phases have no boomerang coordinates/flags.
+`hurts_on_touch` is a contact hazard for an otherwise vulnerable Link, not a shield/proximity or next-frame
+damage prediction: stunned attackers and non-outbound projectiles are harmless; delayed arrows are not ready,
+but delayed fireballs remain hazardous. Returning traps keep their separate native contact semantics.
+Presence/active/targetability remain separate. Timer scales and simulation/rewards are unchanged; schema-1
+checkpoints are rejected rather than relabeled or loaded through a compatibility path.
+
 Dungeon objectives fight for pending treasure or when every routed exit is closed by a living-monster shutter
 trigger (all-dead, ringleader, last-boss or clear-to-drop). An unrelated shutter or an open route exit does not
 force combat. The shutter rule excludes block/money triggers and non-foe-only rooms. Live barred-door

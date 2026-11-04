@@ -1217,3 +1217,43 @@ now ends exit-wrong rather than boss-room entry (45/46 successes). This is alrea
 refreshed D2 paths from §18 (all six native current-goal replays pass); default D2 installation remains part
 of the compatible route/model cutover. Evidence: route audits, inventory/goal reports, current path and
 retired inputs under the r35 evidence root. Completed throwaway audit scripts are removed; runtime stays frozen.
+
+## 21. Versioned observation bundle and full-team comparison (r36, preparing)
+
+Items 1–7 are complete; implement the approved §3 bundle in dev only. Main stays on schema 1 with the
+promoted r35 team. Schema 2 adds three room features (refresh-suppression flag/full-byte chase X/Y), seven
+Link features (boomerang X/Y/five tactical phases), and five Goriya-boomerang entity phases. It corrects
+attacker-stun/projectile-major-state contact gates and distinguishes arrow delay from fireball delay.
+Slow-outward is not return; trap return remains hazardous. No guessed owner/RNG, duplicate clock/stun
+inputs, timer rescaling, reward changes, policy special cases or cross-schema checkpoint loading.
+
+Native evidence rechecked the actual ASM at `/home/leculver/work/git/zelda1-disassembly/src/`: chase
+`Z_07:1886–1952,3788–3811`; boomerang `Z_07:3858–4280`, launch `Z_05:2916–2959`; contact
+`Z_01:5598–5644`; delayed arrows/fireballs `Z_04:2098–2169,988–1080`. The chase flag suppresses refresh;
+it is not target identity, and reflected Y must not be clipped to the viewport.
+
+Verification: **485 tests passed in 116.08 seconds**. Five contact-boundary regressions fail on frozen
+schema 1 (stunned Goriya, slow-outward/returning boomerang, bounced rock, delayed arrow), then pass in dev.
+A native weapon probe observes all five phases across 94 identical pre/post emulator frames, including
+three spark frames during an option, using explicit test placement for the near-wall launch. RAM-decoding
+fixtures change the old stunned/returning hazard flags 1→0; bait no longer masquerades as a boomerang or
+exposes stale weapon coordinates. The schema-2 loader rejects the real promoted schema-1 checkpoint.
+CUDA scratch CLI/worker smoke completes two updates/1,024 actions with the new 854,112-parameter layout;
+serialized/spawned evaluation completes all 12 Goriya starts (0 successes, expected for this tiny smoke).
+Neither the smoke nor the schema change is promoted.
+
+Protocol: freeze schema-1 source at `83bd2bb` (`/tmp/triforce-r36-schema1`) before edits; freeze schema-2 source
+after verification. Both train all ten families from scratch, seed 36, eight workers/CUDA, exactly
+490×4,096 = 2,007,040 actions/family, no early stop/load/demos/harvesting/promotion. Preserve canonical
+YAMLs, including Aquamentus's 0.75 partial-HP floor, ordinary rewards, null measured cutoffs and bombs off.
+Both read the same frozen 62-track corpus across the six enabled curriculum families. Model/output roots
+are separate; no old-team fallback. This is one seed/config/action-budget matched full-team trial, not a
+training-seed robustness claim or a paired-frame experiment: dimensions and asynchronous curricula differ.
+
+After all twenty training runs: complete-family evaluations at seeds 0 and 10,000 (20 episodes/start each),
+both full/post-D1 routes and D2 (40 runs/block/segment, 80 combined). Pin every team's ten checkpoints and
+configs; require native first-east departure, 7e pickup before 6e and carried key at Dodongo, with strict
+prefix/all-three-key carry separate. Rank chain success, physical/total health, deaths/hearts/blocks and
+longest/tail quiet gaps. No post-D1 boomerang ablation until this comparison settles.
+Evidence/protocol root: `models/r36-observation-full-retrain-evidence/`; training has not launched yet.
+

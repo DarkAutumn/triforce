@@ -18,7 +18,7 @@ from .room_state import CAVE_FLAG_PAY, DOOR_DIRECTIONS, DOOR_KINDS, ITEM_COMPASS
 from .tiles import GRID_COLS, GRID_ROWS, NUM_TILE_CLASSES, build_grid
 from .zelda_enums import Direction, ZeldaEnemyKind
 
-OBS_SCHEMA_VERSION = 1
+OBS_SCHEMA_VERSION = 2
 
 NUM_ENTITY_SLOTS = 12           # NES object slots 1-$B, then the room item ("treasure")
 TREASURE_SLOT = 11
@@ -42,6 +42,11 @@ OBJ_INVINCIBILITY_TIMER, OBJ_INVINCIBILITY_MASK = 0x4F0, 0x4B2
 OBJ_SHOVE_DIR, OBJ_SHOVE_DISTANCE = 0xC0, 0xD3
 LINK_GRID_OFFSET, DOORWAY_DIR, LINK_PARALYZED = 0x394, 0x53, 0x512
 SLOT_SWORD, SLOT_BEAM, SLOT_BOOMERANG, SLOT_BOMB1, SLOT_BOMB2, SLOT_ARROW = 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE
+OBJ_TIMER = 0x28
+CHASE_REFRESH_SUPPRESSED, CHASE_X, CHASE_Y = 0x60, 0x61, 0x62
+_BOOMERANG_SLOT = 0x0F
+_BOOMERANG_FEATURES = ('boomerang_outbound', 'boomerang_spark', 'boomerang_slow_outward',
+                       'boomerang_slow_return', 'boomerang_fast_return')
 
 OBJ_DROPPED_ITEM = 0x60
 
@@ -81,6 +86,7 @@ ROOM_STATE_FEATURES = _names(
     [f'block_push_complete_{i}' for i in range(3)],
     ('enemies_remaining', 'enemies_unspawned', 'enemies_dying', 'all_dead', 'room_obj_count'),
     ('clock_active', 'has_map', 'has_compass', 'is_start_room', 'is_boss_room', 'is_triforce_room'),
+    ('chase_refresh_suppressed', 'chase_target_x', 'chase_target_y'),
 )
 
 LINK_FEATURES = _names(
@@ -98,6 +104,7 @@ LINK_FEATURES = _names(
      'potion_red', 'rod', 'raft', 'book', 'ring_blue', 'ring_red', 'ladder', 'magic_key', 'bracelet', 'letter',
      'boomerang', 'magic_boomerang', 'magic_shield'),
     [f'selected_{i}' for i in range(9)],
+    ('boomerang_x', 'boomerang_y'), _BOOMERANG_FEATURES,
 )
 
 ENTITY_FEATURES = (
@@ -106,7 +113,7 @@ ENTITY_FEATURES = (
     'hurts_on_touch', 'killable', 'projectile', 'blockable', 'spawning', 'dying', 'active',
     'is_item', 'item_lifetime', 'is_treasure', 'hidden', 'carried', 'is_tile_object',
     'immune_sword', 'immune_boomerang', 'immune_arrow', 'immune_bomb', 'immune_rod', 'immune_fire',
-)
+) + _BOOMERANG_FEATURES
 
 HISTORY_FEATURES = _names(
     ('has_last_action',),
@@ -133,6 +140,8 @@ _O = {n: i for i, n in enumerate(OBJECTIVE_FEATURES)}
 
 _E_FACING = _E['facing_N']
 _E_IMMUNE = _E['immune_sword']
+_L_BOOMERANG_PHASE = _L['boomerang_outbound']
+_E_BOOMERANG_PHASE = _E['boomerang_outbound']
 _ITEM_KIND_NAMES = {ITEM_KEY: 'key', ITEM_MAP: 'map', ITEM_COMPASS: 'compass', ITEM_HEART_CONTAINER: 'heart_container',
                     ITEM_TRIFORCE: 'triforce'}
 _TRIGGER_BASE = _R['trigger_none']
@@ -160,6 +169,12 @@ def _norm_y(y):
 
 def _clip(v, lo=-1.0, hi=1.0):
     return min(max(v, lo), hi)
+
+
+def _boomerang_phase(value: int) -> int:
+    """Native major states $1x–$5x; animation bits do not change phase. Zero/bait are absent."""
+    major = value >> 4
+    return major - 1 if 1 <= major <= 5 else -1
 
 
 def _entry_side_from_position(level: int, x: int, y: int) -> Optional[Direction]:
@@ -234,7 +249,7 @@ class ObservationBuilder:
 
         return {
             'room_id': np.array([room_index(*room_key)], dtype=np.int64),
-            'room_state': self._room_state(rs),
+            'room_state': self._room_state(rs, state.ram),
             'link': self._link(state),
             'entity_types': types,
             'entity_features': features,
@@ -259,7 +274,7 @@ class ObservationBuilder:
         return Direction.E if dx > 0 else Direction.W if dx < 0 else Direction.S if dy > 0 else Direction.N
 
     @staticmethod
-    def _room_state(rs: RoomState) -> np.ndarray:
+    def _room_state(rs: RoomState, ram) -> np.ndarray:
         # pylint: disable=too-many-branches
         v = np.zeros(ROOM_STATE_SIZE, dtype=np.float32)
         v[_R['in_cave']] = rs.in_cave
@@ -308,6 +323,10 @@ class ObservationBuilder:
         v[_R['is_start_room']] = rs.is_start_room
         v[_R['is_boss_room']] = rs.is_boss_room
         v[_R['is_triforce_room']] = rs.is_triforce_room
+        # Reflection can put the shared target outside the viewport; preserve both full bytes.
+        v[_R['chase_refresh_suppressed']] = bool(ram[CHASE_REFRESH_SUPPRESSED])
+        v[_R['chase_target_x']] = int(ram[CHASE_X]) / 255.0
+        v[_R['chase_target_y']] = int(ram[CHASE_Y]) / 255.0
         return v
 
     @staticmethod
@@ -351,7 +370,12 @@ class ObservationBuilder:
         v[_L['bomb_active']] = any(0x12 <= b <= 0x14 for b in bombs)
         v[_L['bomb_exploding']] = any(b in (0x13, 0x14) for b in bombs)
         v[_L['fire_active']] = any(b in (0x21, 0x22) for b in bombs)
-        v[_L['boomerang_active']] = ram[SLOT_BOOMERANG] != 0
+        phase = _boomerang_phase(int(ram[SLOT_BOOMERANG]))
+        v[_L['boomerang_active']] = phase >= 0
+        if phase >= 0:
+            v[_L['boomerang_x']] = _norm_x(int(ram[OBJ_X + _BOOMERANG_SLOT]))
+            v[_L['boomerang_y']] = _norm_y(int(ram[OBJ_Y + _BOOMERANG_SLOT]))
+            v[_L_BOOMERANG_PHASE + phase] = 1.0
         v[_L['arrow_active']] = ram[SLOT_ARROW] != 0
 
         bomb_max = info['bomb_max'] or 8
@@ -442,7 +466,15 @@ class ObservationBuilder:
             f[_E_FACING + 2] = bool(d & 2)
             f[_E_FACING + 3] = bool(d & 1)
             harmful = (monster and t not in _HARMLESS_LOW) or t in _TRAPS or t in _PROJECTILES
-            f[_E['hurts_on_touch']] = harmful and active and not dying and not clock
+            # Contact hazard for an otherwise vulnerable Link, not a proximity/shield prediction.
+            shot_ready = t not in _PROJECTILES or obj_state[i] & 0xF0 == 0x10
+            if t == 0x5B and ram[OBJ_TIMER + i + 1]:  # delayed arrows only draw/check their shooter
+                shot_ready = False
+            f[_E['hurts_on_touch']] = harmful and active and not dying and not clock and not stun[i] and shot_ready
+            if t == 0x5C:
+                phase = _boomerang_phase(obj_state[i])
+                if phase >= 0:
+                    f[_E_BOOMERANG_PHASE + phase] = 1.0
             f[_E['killable']] = t in _FOE_KINDS and t not in _BUBBLES
             f[_E['projectile']] = t in _PROJECTILES
             f[_E['blockable']] = t in _BLOCKABLE
