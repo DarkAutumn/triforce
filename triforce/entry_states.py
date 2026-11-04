@@ -48,9 +48,11 @@ from .emulator import GAME_DIR, load_state_bytes, state_path
 from .explore import Explorer
 from .frame_skip import buttons_for
 from .game_map import DEFAULT_ROUTE, GameMap, load_alternates, load_routes
+from .objectives import FLAG_ITEM_TAKEN, shared_game_map
 from .room_entry import LEVEL, MODE, ROOM, is_pre_entry, make_room_fresh, pending_room
+from .room_state import room_flags
 from .session import GameSession
-from .specialist import RamRandomization, SpecialistConfig, list_specialists, load_specialist
+from .specialist import ItemsConfig, RamRandomization, SpecialistConfig, list_specialists, load_specialist
 from .start_states import state_label, write_savestate
 from .zelda_enums import Direction, MapLocation
 
@@ -108,7 +110,8 @@ def step_config(step: RouteStep, source: str) -> SpecialistConfig:
     triforce)."""
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
-                            ram_randomization=RamRandomization(), fresh_rooms=True, route=DEFAULT_ROUTE)
+                            ram_randomization=RamRandomization(), items=ItemsConfig(bombs=False),
+                            fresh_rooms=True, route=DEFAULT_ROUTE)
 
 
 def refill_hearts(session: GameSession):
@@ -120,21 +123,31 @@ def refill_hearts(session: GameSession):
 
 def cross_room(session: GameSession, step: RouteStep, target: RouteStep, source: str, seed: int,
                iterations: int, patience: int, attempts: int = 3) -> tuple:
-    """Explores step's room from ``source`` until Link enters ``target`` (whatever the objective wanted, so off-route
-    rooms work too); returns (pre-entry bytes or None, stats)."""
+    """Explores until Link enters ``target``, including intended off-route destinations.
+
+    A key room's pickup must be complete before accepting its exit, both in exploration and replay.
+    Returns (pre-entry bytes or None, stats).
+    """
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     stats = {'env_steps': 0, 'attempts': 0, 'seconds': 0.0}
+    source_room = shared_game_map().get(step.location)
+    key_required = source_room is not None and source_room.treasure == 'key'
+    target_location = target.location
+
+    def accepted(state):
+        return state.full_location == target_location and (not key_required or (
+            state.level == step.level and bool(room_flags(state, step.room) & FLAG_ITEM_TAKEN)))
+
     for attempt in range(attempts):
         explorer = Explorer(step_config(step, source), session=session, seed=seed * 1000 + attempt)
-        result = explorer.explore(source, iterations, 25, patience,
-                                  accept=lambda state: state.full_location == target.location)
+        result = explorer.explore(source, iterations, 25, patience, accept=accepted)
         stats['env_steps'] += result.env_steps
         stats['attempts'] += 1
         stats['seconds'] += result.seconds
         if not result.success:
             continue
         _, pre_entry = explorer.replay(result, capture_pre_entry=True)
-        if session.state.full_location == target.location and pre_entry:
+        if accepted(session.state) and pre_entry:
             stats.update(steps=len(result.actions), health=result.health, ending=result.ending)
             return pre_entry, stats
     return None, stats

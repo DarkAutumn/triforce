@@ -130,10 +130,12 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
    milestone). `game.yaml` already declares Rope ×5 and a key in 0x7e; generic FIGHT/TREASURE objectives apply.
    The route currently treats it only as an alternate. Make it canonical on both routes, retrain d2-rope, and
    rebuild downstream states carrying the extra key, including S-entry 0x6e (`2_6es_0..2`).
-   - **Builder prerequisites (round 7 §8):** `cross_room` currently accepts arrival even via `exit-wrong`, so
-     destination alone cannot prove the key was collected. Enforce required pickup/inventory before accepting
-     canonical transitions; `step_config` also currently defaults bombs on. Rebuild/audit all three D2 suffixes,
-     retire stale W-entry 0x6e seeds and refresh affected Rope and D2 Goriya trajectories before curriculum use.
+   - **Pickup guard verified in dev (round 7 §12):** old builder physically accepted zero-key `exit-wrong` entry.
+     Discovery/replay now require the source key's pickup flag; bombs are masked. All three native sources and
+     saved payloads carry the key; 158 affected tests pass. Main merge waits for r32. Route/state migration pending.
+   - **Inventory audit:** existing chains 0/1 skip 0x4e/0x3e keys; chain 2 also spends one on a side door. Validate
+     counts as well as flags during the suffix rebuild; retire stale W-entry 0x6e states, create missing 2_0es_2,
+     and refresh affected Rope and D2 Goriya trajectories before curriculum use.
 8. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
    back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?

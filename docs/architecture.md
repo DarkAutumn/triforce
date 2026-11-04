@@ -221,3 +221,13 @@ Nearby-item shaping and the measured cutoff remain disabled in promoted configs 
   objects; spawned workers retain them instead of reloading canonical YAML. Runtime item masks, observations
   and room/cutoff budgets use these configs. Route selection and carried inventory/health remain chain-owned.
   Other families retain canonical configs; checkpoint overrides and promoted pointers are independent.
+
+## Entry states (`entry_states.py`)
+
+`build` follows route steps; `path` accepts explicit off-route destinations. Both use `cross_room`: arriving
+in the target is insufficient when the source room declares a key. The source room's persistent item-taken
+flag must be set in the same level, during exploration and again after exact replay, before returning the
+captured pre-entry bytes. This preserves off-route traversal without accepting premature key-room exits.
+`step_config` masks bombs for milestone-1 state generation. Route changes still require rebuilding and auditing
+downstream inventories and refreshing affected curriculum snapshots; old filenames alone do not prove progress.
+

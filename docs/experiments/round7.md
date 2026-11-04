@@ -25,6 +25,9 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
   distinct workers/seeds differ, episode streams advance; CPU CLI/CUDA smoke and all 462 tests passed.
 - Backlog item 4 complete: r31-block1 promoted after 800 frozen-team chains (§6). Ordinary reward has the lowest
   evaluation damage; stronger block/quiet rewards stay disabled. Post-fight D2 navigation remains a measured problem.
+- R32 nearby-item on/off training/evaluation is running on unchanged main (§9); do not change its source, YAML
+  or states. Verified dev prerequisites wait for that freeze: cutoff value bootstrap (§10), per-arm chain configs
+  (§11), and key-pickup/bomb guards for entry builders (§12). The D2 route/state migration is not started.
 
 ## 1. Shared lingering metric
 
@@ -548,7 +551,24 @@ Separate native prototype, same source/seed/search limits, with required source-
 masked: accepted a 155-action **exit-correct** path after 14,886 exploratory actions (202.3 seconds), arriving at
 three hearts with **one key and 0x7e's pickup flag set**, playable mode 5. Evidence:
 `models/r34-d2-key-evidence/builder-prototype-after.json`. This validates the guard through real collection,
-not an injected inventory or metadata-only check. The repository builder is not yet edited and no permanent
-state was replaced. The permanent guard must check replay as well as exploration, preserve intended off-route
-destinations after required pickups, and precede the D2 suffix rebuild.
+not an injected inventory or metadata-only check.
+
+Permanent dev builder now enforces the declared source-room key pickup during discovery **and exact replay**;
+its milestone step config masks bombs. Actual `cross_room` smoke succeeds for all three `2_7ew_0..2` sources:
+155/103/149-action paths, each entering 0x6e with one key and the pickup flag set. Reloading each captured
+pre-entry byte payload through `GameSession.load` preserves that inventory, four max hearts and playable mode 5.
+Evidence: `models/r34-d2-key-evidence/builder-after.json`. Affected entry/exploration/room-entry suites:
+**158 passed in 33.23 seconds**. The previously integrated full suite was 464; no new full-suite result is claimed
+for this subsequent guard. Slow natural exploration remains a throwaway smoke rather than a permanent search
+test. No permanent state was replaced, and no r32 runtime source was changed.
+
+Native inventory audit of all 29 existing numbered D2 files (through `GameSession.load`, mode 5): every file
+has four hearts, wooden sword/boomerang and exactly the D1 triforce piece. All 0x7d/0x7e entries have zero keys
+and an untaken 0x7e key. Chains 0/1 also reach 0x3e, 0x2e, 0x1e and Dodongo entry with **zero keys and both
+0x4e/0x3e pickup flags still unset**. Chain 2 instead has one key at 0x3e, two at 0x2e and one at 0x1e, with
+both earlier pickups set. Its 0x2e E-door-open bit is set at the later entry; the route's N door is not locked,
+while the side E door is. Thus room pickup flags alone do not prove the carried-key count the rebuilt route needs;
+the suffix rebuild must check inventory balance and reject unneeded side-door spending. No 2_0es_2 file exists.
+Full inventory, current locked doors and persistent room flags: `models/r34-d2-key-evidence/inventory-before.json`.
+No state was mutated by this audit.
 
