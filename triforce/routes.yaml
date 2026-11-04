@@ -39,9 +39,9 @@ milestone1:
 - {level: 0, room: '0x4d', specialist: ow-moblin, entry: N, exit: W}
 - {level: 0, room: '0x4c', specialist: ow-octorok, entry: E, exit: N}
 - {level: 0, room: '0x3c', specialist: ow-octorok, entry: S, exit: cave}
-- {level: 2, room: '0x7d', specialist: d2-rope, entry: S, exit: N}
-- {level: 2, room: '0x6d', specialist: d2-rope, entry: S, exit: E}
-- {level: 2, room: '0x6e', specialist: d2-rope, entry: W, exit: N}
+- {level: 2, room: '0x7d', specialist: d2-rope, entry: S, exit: E}
+- {level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}
+- {level: 2, room: '0x6e', specialist: d2-rope, entry: S, exit: N}
 - {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N}
 - {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
 - {level: 2, room: '0x3e', specialist: d2-rope, entry: S, exit: N}
@@ -71,7 +71,6 @@ milestone1-fairy:
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}
-- {replaces: [{level: 2, room: '0x6d'}], with: [{level: 2, room: '0x7e', specialist: d2-rope, entry: W, exit: N}], note: '0x7d E->0x7e N->0x6e instead of 0x7d N->0x6d E->0x6e'}
 families:
   ow-start: ['(0, 0x39)', '(0, 0x77)', '(0, 0x77, cave)']
   ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x49)', '(0, 0x4c)', '(0, 0x58)', '(0, 0x67)', '(0, 0x68)', '(0, 0x78)']

@@ -19,9 +19,12 @@ def manifest():
         return {entry['file']: entry for entry in json.load(file)}
 
 
-def _route_hearts(route_step: int, route: str) -> int:
-    """Max hearts at a route step: 3 plus one heart container per boss room the route has crossed."""
-    return BASE_HEARTS + sum(1 for step in route_steps(route)
+def _route_hearts(entry: dict) -> int:
+    """Max hearts after routed progress, including a completed off-route origin room."""
+    route_step = entry['route_step']
+    if route_step < 0 and 'from_step' in entry:
+        route_step = entry['from_step'] + 1
+    return BASE_HEARTS + sum(1 for step in route_steps(entry.get('route', DEFAULT_ROUTE))
                              if step.index < route_step and step.specialist.startswith('boss-'))
 
 
@@ -33,4 +36,4 @@ def test_configured_start_state_is_clean(session, manifest, path):
     assert row['full'], f"spawns {row['monsters_min']} of {row['full_count']} monsters"
     entry = manifest.get(os.path.basename(path))
     if entry is not None:
-        assert row['hearts'] == _route_hearts(entry['route_step'], entry.get('route', DEFAULT_ROUTE))
+        assert row['hearts'] == _route_hearts(entry)

@@ -144,7 +144,10 @@ def test_route_successors_follow_progress_and_alternates(game_map):
     assert game_map.route_next_rooms(loc(0, 0x77, True)) == {START}
     assert game_map.route_next_rooms(loc(0, 0x38)) == {loc(0, 0x37), loc(0, 0x28)}
     assert game_map.route_next_rooms(D1_START) == {loc(1, 0x72), loc(1, 0x74), loc(1, 0x63)}
-    assert game_map.route_next_rooms(loc(2, 0x7d)) == {loc(2, 0x6d), loc(2, 0x7e)}
+    assert game_map.route_next_rooms(loc(2, 0x7d)) == {loc(2, 0x7e)}
+    assert game_map.route_next_rooms(loc(2, 0x7e)) == {loc(2, 0x6e)}
+    assert game_map.route_step_index('milestone1', loc(2, 0x6e), 'S') is not None
+    assert game_map.route_step_index('milestone1', loc(2, 0x6e), 'W') is None
     assert game_map.route_next_rooms(loc(0, 0x37)) == {D1_START, loc(0, 0x38)}
     assert game_map.route_next_rooms(loc(0, 0x0c)) == set()
 
@@ -165,7 +168,10 @@ def test_route_successors_are_per_route(game_map):
     assert game_map.route_next_rooms(loc(0, 0x49), fairy) == {loc(0, 0x39), loc(0, 0x59)}
     assert game_map.route_next_rooms(loc(0, 0x59), fairy) == {loc(0, 0x49), loc(0, 0x5a)}
     assert game_map.route_next_rooms(loc(0, 0x49)) == set()                       # off milestone1
-    assert game_map.route_next_rooms(loc(2, 0x7d), fairy) == {loc(2, 0x6d), loc(2, 0x7e)}   # alternates apply
+    assert game_map.route_next_rooms(loc(2, 0x7d), fairy) == {loc(2, 0x7e)}
+    assert game_map.route_next_rooms(loc(2, 0x7e), fairy) == {loc(2, 0x6e)}
+    assert game_map.route_step_index(fairy, loc(2, 0x6e), 'S') is not None
+    assert game_map.route_step_index(fairy, loc(2, 0x6e), 'W') is None
     assert game_map.routes_through(loc(0, 0x49), 'N') == [(fairy, game_map.route_step_index(fairy, loc(0, 0x49), 'N'))]
 
 

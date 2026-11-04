@@ -1,6 +1,6 @@
 name: d2-rope
 rooms: ['(2, 0x7d)', '(2, 0x6d)', '(2, 0x6e)', '(2, 0x4e)', '(2, 0x3e)', '(2, 0x2e)', '(2, 0x7e)']
-start_states: ['2_7d*_[0-9]', '2_6d*_[0-9]', '2_6e*_[0-9]', '2_4e*_[0-9]', '2_3e*_[0-9]', '2_2e*_[0-9]', '2_7e*_[0-9]']
+start_states: ['2_7d*_[0-9]', '2_6d*_[0-9]', '2_6es_[0-9]', '2_4e*_[0-9]', '2_3e*_[0-9]', '2_2e*_[0-9]', '2_7e*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: on}
@@ -11,4 +11,4 @@ one_room: on                          # round 5: per-room episodes (one-room eva
 max_steps: 3000
 warm_start: null
 notes: >-
-  Route-generated pre-entry states (triforce/entry_states.py) cover 0x7d, 0x6d, 0x6e, 0x4e, 0x3e, 0x2e and 0x7e.
+  Route-generated pre-entry states (triforce/entry_states.py) cover 0x7d E -> key room 0x7e N -> 0x6e from S, then 0x4e, 0x3e and 0x2e. Off-route 0x6d remains in the Rope family with its existing states.

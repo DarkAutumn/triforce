@@ -352,7 +352,7 @@ def test_route_shutter_requires_combat_without_a_room_treasure(session):
     assert not objective.next_rooms
 
 
-@pytest.mark.parametrize(('start_state', 'next_room'), [('2_6ew_0', 0x5e), ('2_6ds_0', 0x6e)])
+@pytest.mark.parametrize(('start_state', 'next_room'), [('2_6es_0', 0x5e), ('2_6ds_0', 0x6e)])
 def test_open_route_ignores_optional_combat(session, start_state, next_room):
     env = make_env(session, 'd2-rope', start_state)
     env.reset(seed=0)

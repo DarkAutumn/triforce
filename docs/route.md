@@ -24,7 +24,7 @@ Level facts from LevelInfo (ROM): D1 start room $73, boss room $35, triforce roo
 | D1 → OW | Picking up the triforce sets GameMode $12. `EndGameMode12` then sets CurLevel=0 and Link reappears at OW 0x37 (`Z_01 TakeItem`, `Z_05 EndGameMode12`). There is no walk out of D1. `0_37c` (mode 4) is this state, and v1's `dungeon1-dungeon2` scenario starts from it. |
 | OW → D2 | 0x37 E 0x38 N 0x28 E 0x29 E 0x2a E 0x2b E 0x2c E 0x2d S 0x3d S 0x4d W 0x4c N 0x3c → stairs |
 | OW → D2, `milestone1-fairy` | 0x37 E 0x38 S 0x48 S 0x58 E 0x59 N 0x49 N 0x39 (fairy pond: hearts refilled) S 0x49 S 0x59 E 0x5a E 0x5b E 0x5c E 0x5d N 0x4d W 0x4c N 0x3c → stairs |
-| D2 | 0x7d N 0x6d E 0x6e N 0x5e N 0x4e N 0x3e N 0x2e N 0x1e N 0x0e (milestone ends on entry) |
+| D2 | 0x7d E 0x7e N 0x6e N 0x5e N 0x4e N 0x3e N 0x2e N 0x1e N 0x0e (milestone ends on entry) |
 
 **How the route was chosen**
 - **Start → D1.** BFS over v1's `game.yaml` gives two 6-room ties: via 0x67 or via 0x78. v1's `LeftOverworld1Area` allows both (`{77,78,67,68,58,48,38,37}`). The canonical route uses 0x67 and 0x78 is tagged as an alternate.
@@ -35,7 +35,7 @@ Level facts from LevelInfo (ROM): D1 start room $73, boss room $35, triforce roo
     (`Z_04 UpdatePondFairy`: Link at the pond edge, Y=$AD, $70 ≤ X < $81, is halted until the hearts are full).
     `routes.yaml` defines it as milestone1 with the steps from 0x38 (from W) up to 0x4c (from E) replaced.
 - **D1 path.** This is v1's "locked-door branch" (`dungeon1-late-chain`: 0x43→0x44→0x45→0x35, `Dungeon1DidntGetKey`). It needs no bombs, and Link starts with 0 bombs (RAM `start`: `$658`=0).
-- **D2 path.** Two 8-room ties from 0x7d: via 0x6d or via 0x7e. The canonical route uses 0x6d and 0x7e is tagged as an alternate.
+- **D2 path.** Two 8-room ties from 0x7d: via 0x6d or via 0x7e. The canonical route uses the eastern key room 0x7e, then enters 0x6e from S. 0x6d remains in the Rope enemy family, but is no longer a route alternate.
 
 **Corrections to v1 `game.yaml`** (applied in v2 `game.yaml`):
 - OW 0x3c cave target: 2:0x77 in_cave → **2:0x7d**. Source: LevelInfoUW2 StartRoomId; RAM `2_7dn` is in level 2, room $7D.
@@ -85,9 +85,9 @@ Entry is the side of the room Link enters from. Doors list only non-wall sides (
 | 33 | (0, 0x4d) | N | W | BlueMoblin×4 [ROM, v1, RAM `0_4de`] | — | — | — | — | `0_4ds`(S), `0_4de`, `0_4dn`(E), `0_4dw`. **No N-side state.** |
 | 34 | (0, 0x4c) | E | N | RedOctorok×3, BlueSlowOctorok×2 [ROM, v1, RAM `0_4ce`] | — | — | — | — | `0_4ce`(E), `0_4cn`(N) |
 | 35 | (0, 0x3c) | S | cave | RedSlowOctorok×1 [ROM, RAM `0_3cs`; v1 had Blue] | — | — | Enter the D2 stairs (attr B level 2). The doorway is tile $F3 in the `0_3cs` tile dump, so no item is needed. | — | `0_3cs`(S); `2_3cn` = mid-entry (level 2, mode $10) |
-| 36 | (2, 0x7d) | S | N | none [ROM, RAM `2_7dn`] | — | N:open S:open E:open | — | — | `2_7dn`(S) |
-| 37 | (2, 0x6d) | S | E | Rope×5 [ROM] | — | S:open W:shutter E:open | W shutter opens on kill-all (F=1); not needed. | — | **none** |
-| 38 | (2, 0x6e) | W | N | Rope×3 [ROM] | — | N:open S:open W:open E:key | E key door → compass room 0x6f; not needed. | — | **none** |
+| 36 | (2, 0x7d) | S | E | none [ROM, RAM `2_7dn`] | — | N:open S:open E:open | — | — | `2_7dn`(S) |
+| 37 | (2, 0x7e) | W | N | Rope×5 [ROM] | key (appears when all dead) | N:open W:open | Native route-state generation collects the key before leaving. | — | `2_7ew_[0-2]` |
+| 38 | (2, 0x6e) | S | N | Rope×3 [ROM] | — | N:open S:open W:open E:key | E key door → compass room 0x6f; not needed. | — | `2_6es_[0-2]` |
 | 39 | (2, 0x5e) | S | N | RedGoriya×5 [ROM] | — | N:open S:open E:key | Ringleader (F=2): killing the slot-1 Goriya kills the rest (`Z_05 CheckSecretTriggerRingleader`). N is open. | — | **none** |
 | 40 | (2, 0x4e) | S | N | Rope×5 [ROM] | key (appears when all dead; optional) | N:open S:shutter E:open | Enter from 0x5e, whose N door is open. The move uses the current room's door type (`Z_07 CalculateNextRoom`). The D1 analogue: entering 0x52 through its shutter is proven by `1_52e`. | — | **none** |
 | 41 | (2, 0x3e) | S | N | Moldorm×1 [ROM] | key (appears when all dead; optional) | N:open S:open E:open | — | — | **none** |
@@ -95,7 +95,7 @@ Entry is the side of the room Link enters from. Doors list only non-wall sides (
 | 43 | (2, 0x1e) | S | N | RedGoriya×5 [ROM] | bombs (appears when all dead) | N:shutter S:shutter E:bombable | **Kill all 5 to open the N shutter** (F=7). E bomb wall → old man 0x1f; not needed. | — | **none** |
 | 44 | (2, 0x0e) | S | terminal | Dodongo2×1 [ROM] (boss, out of scope) | heart-container | S:open W:shutter | The milestone ends when Link enters this room. | — | **none** |
 
-Alternates (equal length, tagged): (0, 0x78) BlueOctorok×4 [ROM, v1], states `0_78w`/`0_78n`/`0_78e`. (2, 0x7e) Rope×5, key appears when all dead [ROM], N:open W:open, no states.
+Alternate (equal length, tagged): (0, 0x78) BlueOctorok×4 [ROM, v1], states `0_78w`/`0_78n`/`0_78e`. D2 has no route alternate; the old western 0x6d branch remains a Rope-family training room.
 
 ## Puzzles on the route
 
@@ -131,13 +131,15 @@ The route collects 4 keys and opens 4 locked doors, leaving **zero spare keys**.
 
 **D2** (keys at entry: 0, RAM `2_7dn` `$66E`=0)
 - Locked doors on the canonical route: **none**. The key doors 0x2e E, 0x5e E and 0x6e E are all off-route.
-- Keys collectible on route (optional): 0x4e, 0x3e, plus 0x7e on the alternate.
+- Keys collectible on route: 0x7e, 0x4e and 0x3e. No route door consumes them. Native route-state generation requires each pickup and preserves the carried-key balance; gameplay can cross these rooms without collecting their keys.
 - Bombs are not required, but `2_7dn` holds 5.
 
-## Route rooms without savestates
+## Historical savestate gaps (original route survey)
+
+This list records the initial survey, not the current generated-state inventory. D2 now uses the eastern
+0x7e branch and S-entry 0x6e; native generation rebuilds every downstream pre-entry state through 0x0e.
 
 - (0, 0x77, cave)
-- (2, 0x6d)
 - (2, 0x6e)
 - (2, 0x5e)
 - (2, 0x4e)
@@ -145,7 +147,6 @@ The route collects 4 keys and opens 4 locked doors, leaving **zero spare keys**.
 - (2, 0x2e)
 - (2, 0x1e)
 - (2, 0x0e)
-- alternate (2, 0x7e)
 
 Missing entry sides:
 - 0x77 at the cave mouth with a sword
