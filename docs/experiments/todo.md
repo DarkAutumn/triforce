@@ -6,18 +6,18 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Where it stands:** round 7 active (`round7.md`); items 1–4 and the worker-seed prerequisite complete.
-  With r31-block1, 40-run chains reach Dodongo: full main 2, full fairy 3, post-D1 main 2, post-D1 fairy 4, D2 11.
-  R32 all eight arms/four baselines finished; corrected-runtime Rope/Octorok selection is running. No r32 promotion.
-- **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat r23-more,
-  boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1, d2-rope r28-d2,
-  wallmaster r10 copy. Overworld families train on both routes' rooms; D2 rooms have 3 start states each.
+- **Where it stands:** round 7 active (`round7.md`); items 1–5 and their prerequisites complete. Corrected-runtime
+  80-seed promoted-team chains reach Dodongo: full main 4, full fairy 8, post-D1 main 5, post-D1 fairy 11; D2 27/80.
+  Ordinary Octorok continuation promoted after disjoint-seed validation; nearby-item shaping stays disabled.
+- **Promoted now:** ow-zora / ow-start r24-fairy, ow-octorok r32-nearby-off, ow-moblin r26c-moblin,
+  ow-leever-peahat r23-more, boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1,
+  d2-rope r28-d2, wallmaster r10 copy. Overworld families use both routes' rooms; D2 rooms have 3 states each.
 
 ### Work in this order
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Round 7 items 1–4 complete; nearest-heart/exit shaping is in selection.
+chain's death rooms, then the big ablation. Round 7 items 1–5 complete; measured no-progress cutoffs are next.
 
 1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
@@ -87,7 +87,7 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
    - **Remaining navigation problem, round 7 §6:** faithful r31 chain replays find no enemies during the final
      1,000 stalled actions in D2 0x5e/0x1e (MOVE objective). Quiet-fight cost cannot fix post-kill exit pacing.
      Preserve this distinction in later cutoff/curriculum work; do not call it shadow-Link fighting.
-5. **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
+5. [x] **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
    hearts (round 6 §8: overworld 26 of 34). In v1, dropped items were among the wavefront's targets, and the
    wavefront is a multi-source BFS, so PBRS led to a heart whenever it was closer than the exit by walking distance
    (not straight-line) and ignored it otherwise. v2 adds items to the objective's `targets` but not to
@@ -96,14 +96,15 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
    exits. This differs from the dropped `collect_hearts` (heart was the only target whenever Link was hurt, kind
    ITEM). A/B on stalfos-keese-gel, d2-rope and an overworld family; measure taken/left, real vs total heart
    change and the chain.
-   - **Control ready, round 7 §6:** optional `reward.nearby_items`, default off; real walker verified nearer
+   - **Done, round 7 §9:** optional `reward.nearby_items`, default off; real walker verified nearer
      clock/heart pickup versus nearer exit, correct exits and actual healed/left counts. Original r32 evaluations
      and 1,840 chain executions finished without errors (includes repeated paths). Disjoint D2 seeds reverse
      the initial ranking: shaped Rope leads combined success/health, but full chains remain mixed. Moblin has
      zero eval drops and its off arm harms the fairy chain. Octorok arms finished with sparse heart exposure and
-     no pickup gain. Prerequisite fixes through round 7 §14 are merged at 4cb8434 (470 tests). All 880 corrected
-     runtime chains finished: shaped Rope improves D2 but regresses both full routes; keep old Rope. Octorok off
-     is validating on independent seeds 40–79 before selection; no r32 promotion, nearby shaping stays off.
+     no pickup gain. Prerequisite fixes through round 7 §14 merged at 4cb8434 (470 tests). All 1,200 corrected
+     runtime chains finished: shaped Rope improves D2 but regresses both full routes; keep old Rope/SKG/Moblin.
+     Ordinary Octorok off promoted after disjoint 80-seed comparisons improve combined success/physical health
+     on all four segments. No shaped model promoted; nearby shaping stays off. Matched cutoff trial next.
 6. **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
    an item pickup or a kill).** Today training ends `stuck` after 50 steps without moving and `no-progress` after
    2000 steps without a new correct room (`end_conditions.Timeout`, the same 50/2000 as v1's Timeout; the ~100-step

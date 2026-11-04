@@ -25,12 +25,12 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
   distinct workers/seeds differ, episode streams advance; CPU CLI/CUDA smoke and all 462 tests passed.
 - Backlog item 4 complete: r31-block1 promoted after 800 frozen-team chains (§6). Ordinary reward has the lowest
   evaluation damage; stronger block/quiet rewards stay disabled. Post-fight D2 navigation remains a measured problem.
-- R32's original six arms, three baselines and 1,200 frozen-team chains finished without execution errors (§9).
-  Follow-ups total 1,840 old-runtime chain executions; all eight arms/four baselines, including Octorok, finished.
-  No r32 promotion. Native replay found required-shutter objective/classification and terminal-health defects.
-  All verified prerequisites through §14 are merged into main at `4cb8434`; **470 tests passed**. Corrected
-  runtime source/YAML/states/pointers now stay frozen for common-task Rope and Octorok chain selection (§9).
-  The D2 route/state migration is not started; measured cutoffs and nearby-item shaping remain disabled.
+- Backlog item 5 complete: eight r32 arms/four baselines, 1,840 old-runtime and 1,200 corrected-runtime chain
+  executions (§9). Ordinary Octorok `r32-nearby-off` promoted after disjoint-seed validation; shaping stays off.
+- Shaped Rope improves D2 but regresses both full routes; keep old Rope/SKG/Moblin. Octorok's ordinary gain is
+  modest and consistent across the combined success/health comparisons, not evidence that item shaping works.
+- Native replay found required-shutter objective/classification and terminal-health defects. Prerequisites
+  through §14 merged at `4cb8434`; **470 tests passed**. Next: matched Goriya off/100/200 cutoff trial.
 
 ## 1. Shared lingering metric
 
@@ -672,10 +672,27 @@ Octorok health below is that family's aggregate real/total ΔHP per run, not sur
 | R32 off | −0.300 / −0.300 | −0.075 / −0.075 | −0.388 / −0.388 | −0.463 / −0.450 |
 | R32 on | −0.175 / −0.175 | −0.100 / −0.088 | −0.325 / −0.313 | −0.338 / −0.338 |
 
-Neither Octorok treatment establishes a heart-pickup benefit. The unshaped continuation has the better chain
-success counts but mixed chain damage; it now faces independent seeds 40–79 against the old team on all four
-segments before a promotion decision (`r32b-octorok-evidence/validation/`). No r32 promotion yet; nearby-item
-shaping remains off. Do not combine losing full-route Rope with Octorok to manufacture a new selection task.
+Neither Octorok treatment establishes a heart-pickup benefit. Independent old/off validation then completed
+320 chains on seeds 40–79, all without execution errors (`r32b-octorok-evidence/validation/`). Its new-seed wins
+are old/off 1/2 full main, 2/2 full fairy, 1/1 post-D1 main and 8/7 post-D1 fairy: small, mixed holdout changes,
+not an independently decisive win. Combined with the disjoint first cohort, the ordinary continuation has
+modestly higher success and lower physical Octorok damage on all four segments:
+
+| Policy | Full main wins /80 | Full fairy wins /80 | Post-D1 main wins /80 | Post-D1 fairy wins /80 |
+|---|---:|---:|---:|---:|
+| Old r24-fairy | 3 | 5 | 2 | 10 |
+| R32 off | 4 | 8 | 5 | 11 |
+
+| Policy | Full main real/total | Full fairy real/total | Post-D1 main real/total | Post-D1 fairy real/total |
+|---|---:|---:|---:|---:|
+| Old r24-fairy | −0.269 / −0.269 | −0.131 / −0.125 | −0.413 / −0.400 | −0.475 / −0.463 |
+| R32 off | −0.244 / −0.244 | −0.125 / −0.125 | −0.356 / −0.356 | −0.394 / −0.388 |
+
+Health is Octorok ΔHP per run, including failed runs. All other weights stay pinned. Route pairs/prefixes are
+correlated; this is a conservative model-selection decision, not a significance or causal-training claim.
+Promoted **ow-octorok/r32-nearby-off**; unchanged standalone success with lower damage supports the same
+choice. Keep old Rope/SKG/Moblin, no shaped model promoted, nearby-item PBRS remains disabled. No combined
+losing-Rope/Octorok team is selected. Persisted aggregate: `validation/combined.json`.
 
 **Remaining corrected-runtime fight stall:** a native seed-15 replay exactly matches the complete saved shaped
 Rope D2 record. In 0x2e the last 1,000 actions all have FIGHT, finite wavefront distance 1–12, and a physically
