@@ -1256,3 +1256,13 @@ now discovers both series in [currently running]. Rendered actual Qt windows off
 each arm: two ten-row plans, completed ow-start/current ow-octorok/future pending rows, real curves and console
 paths verified. Screenshots/status evidence: `gui-series-smoke/`; index: `gui-series.json` in the r36 root.
 
+Later baseline recovery: the arm owner's wake returned no output. Process inspection found no baseline
+orchestrator/trainer, while its completed-state record held six valid full-budget families. Aquamentus's
+log reports an interruption at 37 updates/151,552 actions; the saved summary is not a completed run. The
+launcher's termination cause is not established. Parent took direct ownership, preserving the partial
+attempt under `schema1/interrupted-attempts/boss-aquamentus-151552-steps-1793828410531669794/`.
+The recovery wrapper validates/keeps completed families and restarts only incomplete work from scratch.
+Fresh Aquamentus metadata confirms source null, zero starting counters, seed 36, 490×4,096 target, eight
+workers/CUDA and the same frozen curriculum. Observed its first real update at iteration 1/4,096 actions.
+Interrupted work is excluded from candidate budgets; no partial checkpoint is loaded. Bundle work is unchanged.
+
