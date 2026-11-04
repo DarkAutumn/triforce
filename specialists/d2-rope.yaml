@@ -7,6 +7,7 @@ reward: {pbrs: on}
 obs: {objective: on}
 ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
 items: {bombs: off}
+curriculum: {enabled: on}              # verified per-entry paths teach the east-first 0x7d exit (round 7)
 one_room: on                          # round 5: per-room episodes (one-room eval of r3: 91% vs 83% family)
 max_steps: 3000
 warm_start: null

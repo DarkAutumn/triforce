@@ -1115,7 +1115,7 @@ CUDA CLI smoke from r28: two updates / 1,024 actions, two workers, 848,672-param
 `cuda-curriculum-smoke/`; the smoke checkpoint and completed throwaway verification scripts are removed.
 This fix is committed in dev, not activated in main ahead of a compatible east-first model.
 
-## 19. Verified-curriculum east-first retrain (r35, active)
+## 19. Verified-curriculum east-first retrain (r35)
 
 R34 never departed east, despite objective observations already being on. Retry from the same r28-d2 checkpoint
 with the existing backward curriculum rather than hard-coding the entrance. Frozen runtime source `304fb45`,
@@ -1139,6 +1139,46 @@ smoked on old D2 seed 1000 (same 249-action death, no false requested-key succes
 The later full-retrain input audit started read-only while r35 trained against its frozen copy. It found
 route-incompatible legacy Moblin inputs; their isolated replacement is logged in §20 and does not alter the
 running Rope corpus, runtime source, task YAML, model pointer or D2 activation.
+
+R35 completed all 490 updates / 2,007,040 added actions (3,853.6 training seconds), no early stop. Its complete
+entry evaluation learns the required entrance while reducing damage and lingering; no reward shaping/cutoff added.
+
+| Checkpoint | Successes | Real hearts/episode | Total hearts/episode | 7d east exits | Worst quiet |
+|---|---:|---:|---:|---:|---:|
+| Old r28-d2 | 335/420 | −0.338 | −0.263 | 0/60 | 247 |
+| r35-east-curriculum | 400/420 | −0.205 | −0.137 | 60/60 | 136 |
+
+Current 60-episode rooms: 7d 60, 7e 55, 6e 59, off-route 6d 60, 4e 57, Moldorm 3e 53, 2e 56 successes.
+Every one of the 131 native D2 arrivals in the frozen-team chains departs east. All 34 Dodongo arrivals carry
+the requested 7e key; 33 also preserve the two optional 4e/3e keys. No execution errors across 200 new runs.
+
+| Segment | Old shortcut arrivals | R35 requested-key arrivals | All-three-key arrivals | D2 arrivals/east departures |
+|---|---:|---:|---:|---:|
+| Full main | 2/40 | 1/40 | 1/40 | 12/12 |
+| Full fairy | 4/40 | 3/40 | 3/40 | 12/12 |
+| Post-D1 main | 4/40 | 4/40 | 4/40 | 30/30 |
+| Post-D1 fairy | 2/40 | 7/40 | 6/40 | 37/37 |
+| D2 | 14/40 | 19/40 | 19/40 | 40/40 |
+
+| Segment | Old real Rope hearts/run | R35 real Rope hearts/run | Old total Rope hearts/run | R35 total Rope hearts/run | Old/R35 worst Rope quiet |
+|---|---:|---:|---:|---:|---:|
+| Full main | −0.050 | −0.225 | −0.050 | −0.225 | 446/86 |
+| Full fairy | −0.363 | −0.350 | −0.338 | −0.350 | 447/117 |
+| Post-D1 main | −0.625 | −0.450 | −0.625 | −0.450 | 111/129 |
+| Post-D1 fairy | −1.225 | −1.113 | −1.225 | −1.088 | 476/402 |
+| D2 | −2.138 | −1.025 | −1.925 | −0.713 | 1,496/174 |
+
+Old arrivals omit the requested key room; they are not successes on the new task. The extra full-main room
+costs health and its simple milestone count is one lower, while both post-D1 segments/D2 improve or tie and
+standalone damage is lower. Select R35 for the mandated route: it supports the native key carry that old/R34
+never did. Canonical Rope curriculum is enabled, with default teacher/data/model cutover next; no promotion
+is claimed before that cutover and its main-runtime smoke.
+
+Canonical default-path verification: all **471 tests passed in 111.98 seconds**. The real `triforce.train`
+CLI loaded r35 with the canonical Rope YAML/default trajectory root, two workers and CUDA, completing one
+512-action update. All 21 configured entry tracks appear in `curriculum.json`; curriculum success was 1.0,
+and five room-entry episodes completed successfully. This `/tmp` smoke checkpoint is not promoted.
+
 
 ## 20. Align default Moblin curriculum with post-D1 route inventory
 
