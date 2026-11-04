@@ -186,6 +186,7 @@ Recommended grid: 16×11 of 16-px squares (row r covers y=$40+16r), class = max-
 | `$3C` FluteTimer | freeze while flute plays | timer | both | no | ASM Z_07:UpdateMode5Play |
 | `$26` StunCycle | stun pacing | — | both | no | ASM Variables.inc |
 | `$4A`, `$4B`, `$4D` long timers | chase / edge-spawn / red-leever | timer | per type | no | ASM Variables.inc |
+| `$60` ChaseOtherTarget, `$61`/`$62` ChaseTargetX/Y | **where monsters chase** ("shadow Link", Lee). Each frame with `$60`=0 the target is Link's position. When the chase long-timer (`$4A`, reset to a random 0–7) runs out, `$60` flips; flipping to 1 while Link's X is unchanged since the last frame sets the target to Link's position XOR `$FF`, the mirror point across the room, otherwise it stays at his last position. Bait sets it to the bait (moblins, darknuts, vire, keese). A Link who stands still in a corner sends chasers to the opposite corner about half the time | position + bool | both | candidate (round 6 note): monsters' goal, explains corner stalemates | ASM Z_07 ~L1893–1951 (UpdateMode5Play), ~L3796 (food); Z_04 chase movement |
 | `$524` SpawnCycle, `$525` CurEdgeSpawnCell | monster spawn pacing / edge cell | categorical | both | no | ASM Variables.inc, Z_05 L3509 |
 
 ## 8. Misc

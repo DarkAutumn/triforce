@@ -15,37 +15,51 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 
 ### Work in this order
 
-From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: clear bugs first, then what decides how the
-next full retrain looks, then reward/target changes aimed at the chain's death rooms, then the big ablation.
-Nothing here is started.
+From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
+then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
+chain's death rooms, then the big ablation. Nothing here is started.
 
-1. **Aquamentus wanders after the kill (Lee).** Link kills Aquamentus, then walks left/right in 0x35 for a very long
+1. **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
+   without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
+   Progress = a kill, a hit on an enemy, an item/key/treasure taken, a new best wavefront distance to the
+   objective, leaving the room. Record per episode / per chain room: the longest no-progress streak and the steps
+   after the last progress; report per specialist and room (training metrics + progress events, `eval.json`
+   `by_room`, `RoomRecord`, a GUI chart). Note monsters can chase "shadow Link" (AGENTS.md, ram-catalog
+   `$60–$62`), so a still Link in a corner can produce long fights with no hits. Item 6 (cutting such runs) builds
+   on this metric.
+2. **Aquamentus wanders after the kill (Lee).** Link kills Aquamentus, then walks left/right in 0x35 for a very long
    time before leaving; one run sat there "for ages" and only got unstuck by chance. Even with a good success rate
-   something is wrong. Likely cause: `boss-aquamentus.yaml` succeeds on `boss-dead-and-heart` (the episode ends
-   when the heart container is taken), and its start states are all the fight entry, so walking out E into the
-   triforce room 0x36 afterwards is never trained. The runner then gives the room up to 2000 steps
-   (`runner.MIN_ROOM_STEPS`). Check: steps between the kill and the exit in chain records / a replay. Fix options:
-   success = exit-correct into 0x36 (with curriculum states after the kill), or hand the room to
-   stalfos-keese-gel once the boss is dead. Compare chain time and hearts at the triforce room.
-2. **Observation audit (Lee: does Link get enough about enemies and the world, e.g. does he know an enemy is
+   something is wrong, and Lee says it's unrelated to shadow Link: check it, or penalize hanging out in the boss
+   room once the boss is dead. Likely cause: `boss-aquamentus.yaml` succeeds on `boss-dead-and-heart` (the episode
+   ends when the heart container is taken), and its start states are all the fight entry, so walking out E into
+   the triforce room 0x36 afterwards is never trained. The runner then gives the room up to 2000 steps
+   (`runner.MIN_ROOM_STEPS`). Check: steps between the kill and the exit in chain records / a replay (item 1's
+   metric). Fix options: success = exit-correct into 0x36 (with curriculum states after the kill), a lingering
+   penalty once the boss is dead, or hand the room to stalfos-keese-gel once the boss is dead. Compare chain time
+   and hearts at the triforce room.
+3. **Observation audit (Lee: does Link get enough about enemies and the world, e.g. does he know an enemy is
    stunned?).** Do it before the next full retrain: observation changes invalidate every model, so bundle them.
    Already there (`observation.ENTITY_FEATURES`): per-slot type embedding, projectile, blockable (rock, arrow,
    boomerang; not the Zora fireball), hp, stun, invincibility, immunities, spawning, dying, active, item lifetime.
    Check: `stun` is `min(timer / 16, 1)` and saturates, so a long boomerang stun reads 1.0 until its last 16 ticks
    (find the real stun lengths in the disassembly and rescale); Link's own invincibility frames and shield state;
-   Link's boomerang in flight vs returning; which enemy threw a projectile; clock active; anything v1's observation
-   or the RAM catalog (`docs/ram-catalog.md`, entities) has that v2 lacks. Output: a list of proposed changes with
-   reasons; decide, then implement with a full retrain.
-3. **Goriya rooms: reward blocking (Lee).** v1 rewarded the shield-block sound, and that taught Link to block
-   instead of face-tanking. v2 already has `critics.critique_block` (`reward-block-projectile`, REWARD_MEDIUM ×
-   combat decay, on the onset of the ArrowDeflected sound via `Link.is_blocking`). First check that it fires on
-   Goriya boomerangs (count blocks per episode in goriya evals and a few traces), then A/B a stronger block reward on
-   goriya (0x44 is the chain's top death room). Caveat (Lee): the sound alone is wrong in rooms with Darknuts etc.
-   (their shields clink too), so require a blockable projectile in the air near Link plus the clink. Related, from
-   round 6: at 1 heart the goriya model turns passive (33% WAIT) and dies to contact; other ideas are demos or
-   curriculum from damage-free Go-Explore paths (select by health, more patience) and a contact-damage penalty
-   that grows as hp falls.
-4. **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
+   Link's boomerang in flight vs returning; which enemy threw a projectile; clock active; the monsters' chase
+   target (`$60–$62`: Link or shadow Link), which tells where they are heading; anything v1's observation or the
+   RAM catalog (`docs/ram-catalog.md`, entities) has that v2 lacks. Output: a list of proposed changes with reasons;
+   decide, then implement with a full retrain.
+4. **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
+   Link to block instead of face-tanking. v2 already has `critics.critique_block` (`reward-block-projectile`,
+   REWARD_MEDIUM × combat decay, on the onset of the ArrowDeflected sound via `Link.is_blocking`). First check that
+   it fires on Goriya boomerangs (count blocks per episode in goriya evals and a few traces), then A/B a stronger
+   block reward on goriya (0x44 is the chain's top death room). Caveat (Lee): the sound alone is wrong in rooms
+   with Darknuts etc. (their shields clink too), so require a blockable projectile in the air near Link plus the
+   clink. Lee also watched the stalemate: Link in the top-left corner not fighting while the Goriyas chase shadow
+   Link in the bottom right (AGENTS.md "Game mechanics"), no hits on either side, for ages. The stalling penalty
+   (−0.01 to −0.02 per step after 150 quiet steps) is apparently not enough to break it; measure it with item 1,
+   then consider a stronger penalty for quiet steps while enemies remain. Related, from round 6: at 1 heart the
+   goriya model turns passive (33% WAIT) and dies to contact; other ideas are demos or curriculum from damage-free
+   Go-Explore paths (select by health, more patience) and a contact-damage penalty that grows as hp falls.
+5. **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
    hearts (round 6 §8: overworld 26 of 34). In v1, dropped items were among the wavefront's targets, and the
    wavefront is a multi-source BFS, so PBRS led to a heart whenever it was closer than the exit by walking distance
    (not straight-line) and ignored it otherwise. v2 adds items to the objective's `targets` but not to
@@ -54,7 +68,7 @@ Nothing here is started.
    exits. This differs from the dropped `collect_hearts` (heart was the only target whenever Link was hurt, kind
    ITEM). A/B on stalfos-keese-gel, d2-rope and an overworld family; measure taken/left, real vs total heart
    change and the chain.
-5. **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
+6. **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
    an item pickup or a kill).** Today training ends `stuck` after 50 steps without moving and `no-progress` after
    2000 steps without a new correct room (`end_conditions.Timeout`, the same 50/2000 as v1's Timeout; the ~100-step
    rule isn't in v1's code, so define it fresh). A room-stalling penalty starts after 150 steps, and the runner
@@ -66,16 +80,16 @@ Nothing here is started.
      Link hiding in a Goriya room's corner until they come; Lee: that's fine while enemies can still reach him).
      "Progress" has to count more than kills and pickups (hits, damage dealt, a new best wavefront distance to the
      objective, a door, key or treasure), or slow but correct approaches get cut. In the chain a cut is a failed run.
-   - Design: progress = kill, hit, item/treasure/key taken, new minimum objective distance, room exit. N of
-     100–200 steps, after measuring the longest no-progress gap inside successful episodes per family. Training:
-     a truncation (value bootstraps), not a hard failure. Runner: `stuck` after N steps without progress instead
-     of the flat 2000.
-6. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
+   - Design: progress as in item 1 (kill, hit, item/treasure/key taken, new minimum objective distance, room exit).
+     N of 100–200 steps, after measuring the longest no-progress gap inside successful episodes per family (item 1's
+     metric). Training: a truncation (value bootstraps), not a hard failure. Runner: `stuck` after N steps without
+     progress instead of the flat 2000.
+7. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
    milestone). Today 0x7e is an equal-length alternate with exit N and no key objective (`routes.yaml`
    alternates). Make it the step on both routes with a FIGHT/TREASURE key objective, retrain d2-rope (states
    `2_7ew_0..2` exist), and rebuild the D2 states downstream so they carry the key.
-7. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
+8. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
    back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?
    - Arms: A = boomerang on; B = `items: {boomerang: off}` for every specialist that plays after D1: ow-octorok,
@@ -88,7 +102,7 @@ Nothing here is started.
      with carry-over: `--from 0_37c_2` on both routes plus the D2 segment, at least 80 runs per arm.
    - Needs: per-arm configs in the chain (the runner reads `specialists/<name>.yaml`; add a config override or a
      specialists-dir option to `eval-chain`).
-   - Run it after items 1–6 settle (or as part of the full retrain item 2 may force), so it measures the setup we
+   - Run it after items 1–7 settle (or as part of the full retrain item 3 may force), so it measures the setup we
      keep. Expect about a day of GPU.
 
 ### Other open items
@@ -130,7 +144,7 @@ Nothing here is started.
   - Then decide which specialists get bombs back (bomb walls in later dungeons).
 - **Boomerang stays on for now.** Route states carry it from 0x44 onward: the Wallmaster room, Aquamentus, the
   triforce room and everything after Dungeon 1. It stuns Wallmasters, Goriyas and Keese. Whether it helps after D1
-  is "Next up" item 7. Watch `kind/BOOMERANG` in training metrics.
+  is "Next up" item 8. Watch `kind/BOOMERANG` in training metrics.
 
 ## Training methods (from "Training with Savestates and Branching", Nov 2, 2026)
 

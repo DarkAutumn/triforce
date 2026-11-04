@@ -7,8 +7,8 @@ stands and what to try next, in order).
 ## Where things stand (end of round 6, Nov 3)
 
 - Round 6 is logged and committed (`docs/experiments/round6.md`, Summary at the top). No jobs are running.
-- Next work is todo.md "Next up", items 1–7 in order (Lee's list from watching `play-zelda.py`). Nothing on it
-  has been started.
+- Next work is todo.md "Next up", items 1–8 in order (Lee's list from watching `play-zelda.py`; item 1, tracking
+  how long Link lingers in a room, comes first). Nothing on it has been started.
 - **Uncommitted on purpose:** `play-zelda.py`, `triforce/play_grid.py`, `tests/test_play_zelda.py` in main's
   working tree (Lee is trying them; he said not to commit yet). They add `--games N` (more games than cells; a
   cell's game is replaced by a better hidden one only when it enters a new room or starts its next run, with a
@@ -34,7 +34,7 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
   only).
 - Rejected ideas stay rejected (marked in `todo.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee does
   want the separate experiment of training and evaluating everything after D1 with the boomerang usable vs masked:
-  todo.md "Next up" item 7.)
+  todo.md "Next up" item 8.)
 - **Start states** (`triforce/custom_integrations/Zelda-NES/`) must be clean pre-entry states: delete bad ones
   rather than keep them (originals are backed up in the old triforce repo). No 16-heart states: max hearts follow
   the route (3 through Dungeon 1, 4 after Aquamentus, +1 per later heart container). Boss rooms keep only the fight
@@ -47,6 +47,22 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
   chains, and a penalty like that could also discourage required bombing later.
 - Deferred by Lee: mapper (explore / entry_states) JSONL logs with their own GUI view (todo.md, Driver section);
   the bow route in Dungeon 1 (rooms 0x33/0x23 train now; the bow room 0x22 has states but no specialist).
+
+## Game mechanics that matter for training
+
+- **Monsters don't always chase Link; they often chase "shadow Link"** (Lee; `docs/ram-catalog.md` `$60–$62`,
+  `Z_07` ~L1893–1951). The chase target flips at random intervals between Link's position and, if Link's X hasn't
+  changed since the last frame, his position mirrored across the room (Link in the NW corner, target in the SE).
+  So a Link who stands still in a corner can send the whole room to the opposite corner for a long time. Lee watched
+  the goriya model do exactly that in the Red Goriya room: Link in the top left not fighting, the Goriyas chasing
+  shadow Link in the bottom right, no hits either way, "for ages". In training the room-stalling penalty does fire
+  then (after 150 steps without a kill, item or damage taken: −0.01 to −0.02 per step), but it may be too weak;
+  in a chain nothing stops it short of the runner's 2000-step room budget.
+- **Track how long Link lingers in a room, in every training run** (Lee, Nov 3). A long stretch without progress
+  (kill, hit, pickup, getting closer to the objective, leaving) is a problem to investigate and fix, even when the
+  success rate looks fine (Aquamentus: high success, yet Link walks back and forth after the kill). Until the
+  linger metric exists (todo.md "Next up" item 1), watch `episode_steps`, `reward/penalty-room-stalling`,
+  `ending/max-steps` and `ending/stuck` per specialist, and watch runs in `play-zelda.py`.
 
 ## Environment
 
