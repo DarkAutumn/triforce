@@ -10,10 +10,12 @@ Changed for v2: dict observations, factored (kind, direction, duration) actions,
 """
 
 import copy
+import random
 import time
 from dataclasses import asdict, dataclass
 from typing import Callable, Optional
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -90,7 +92,7 @@ class PPO:
 
     def train(self, network: nn.Module, make_env: Callable, iterations: int, n_envs: int = 1,
               make_network: Optional[Callable] = None, callback: Optional[Callable] = None,
-              start_steps: int = 0, observation_space=None) -> nn.Module:
+              start_steps: int = 0, observation_space=None, seed: Optional[int] = None) -> nn.Module:
         """Runs ``iterations`` rounds of (collect ``target_steps`` env steps, optimize).
 
         Args:
@@ -99,12 +101,19 @@ class PPO:
             make_network: picklable zero-arg factory that builds an identical network (workers only).
             callback: called with an ``IterationResult`` after each iteration; return False to stop.
             observation_space: the env's observation space (required when n_envs > 1).
+            seed: seeds training RNGs and the first env reset; worker i uses seed + i.
+                Later episodes advance their streams. Shared curriculum scheduling is still asynchronous.
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
         cfg = self.config
         steps_per_env = max(1, cfg.target_steps // n_envs)
         self.setup_optimizer(network)
         self.total_steps = start_steps
+        if seed is not None:
+            torch.manual_seed(seed)
+            seed = torch.initial_seed()
+            random.seed(seed)
+            np.random.seed(seed % (1 << 32))
 
         env = make_env() if n_envs == 1 else None
         if observation_space is None:
@@ -121,7 +130,7 @@ class PPO:
                 raise ValueError("make_network is required for n_envs > 1")
             from .ppo_worker import RolloutWorkerPool  # pylint: disable=import-outside-toplevel
             buffer.share_memory_()
-            pool = RolloutWorkerPool(n_envs, buffer, network, make_network, make_env)
+            pool = RolloutWorkerPool(n_envs, buffer, network, make_network, make_env, seed=seed)
 
         start = time.time()
         steps_this_run = 0
@@ -130,7 +139,7 @@ class PPO:
                 collect_start = time.time()
                 network.to('cpu')
                 if pool is None:
-                    buffer.collect(0, network, env, tracker)
+                    buffer.collect(0, network, env, tracker, seed=seed)
                     rollout = tracker.take()
                 else:
                     rollout = pool.collect(network)

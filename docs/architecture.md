@@ -124,14 +124,22 @@ projectile transition signature, shield eligibility/facing/proximity and this fr
 Delayed `$605` audio, Darknut/immunity clinks, natural boomerang returns and unrelated disappearance are not enough.
 The executor does not replace the user's frame callback, change inputs/timing, or collect speculative look-ahead.
 
+`reward.quiet_enemy_penalty` (nonnegative, default 0) adds that cost per action after the shared quiet tail exceeds
+the existing room-stall grace, only while living targetable enemies remain. `critique_gameplay` requires the
+caller's measured `quiet_steps`; the env passes its already-updated tracker, without a second progress counter.
+Hits/pickups/real approach reset the shared tail; damage and round trips do not. No cost for post-fight pickup time
+or inactive/burrowed/dying enemies. This is separate from the existing room-stall ramp and remains default off.
+
 `reward.nearby_items` (default false) adds heart/clock overlap tiles to the objective's PBRS targets alongside
 exits. Multi-source walking distance picks the nearer target; the task, accepted exits and observation schema do
 not change. This is not the old heart-only objective.
 
 `no_progress_steps` (positive or null, default null) replaces legacy positional/room timeout with the shared
-lingering tail. Training ends `no-room-progress` as a soft-failure **truncation**, bootstraps value and adds no
-terminal penalty; success/death keep precedence and the absolute episode cap remains enforced. Runner uses the same per-visit
-tail for `stuck` instead of the flat room budget, retaining the global run cap. It resets on every room exit.
+lingering tail. Training ends `no-room-progress` as a soft-failure **truncation** with no terminal penalty;
+success/death keep precedence and the absolute episode cap remains enforced. The required final-state value
+bootstrap is not yet implemented in `RolloutBuffer.collect`, which currently masks every truncation as terminal;
+threshold training must wait for that correction. Runner uses the per-visit tail for `stuck` instead of the flat
+room budget, retaining the global run cap. It resets on every room exit.
 Nearby-item shaping and the measured cutoff remain disabled in promoted configs until their experiments.
 
 ## Learning (`model.py`, `ppo.py`, `train.py`, `registry.py`)
@@ -145,6 +153,11 @@ Nearby-item shaping and the measured cutoff remain disabled in promoted configs 
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
   records iterations, steps, `stopped_early`, wall time and steps/sec.
+- `train --seed S` seeds model initialization and PPO RNGs, then each spawned worker's Python/NumPy/Torch
+  streams and first environment reset with `(S + worker_index) mod 2**64` (Torch normalizes signed seeds first).
+  In-process training uses S. Later episode resets and rollout batches advance those streams without reseeding.
+  Shared curriculum progress still depends on worker completion order; this is not a promise of bitwise-identical
+  curriculum or CUDA training, nor exact RNG continuation when resuming a checkpoint.
 - Live event logs (`events.py`, watched by `training-gui.py`): each training invocation gets
   `logs/<yymmdd>_<NNN>_<what>/` (gitignored; `--logs-dir` / `$TRIFORCE_LOGS_DIR`). `training.json` lists every
   specialist run in order with its status and is rewritten atomically. `<specialist>.jsonl` is an append-only

@@ -311,7 +311,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, session, eve
                   args.iterations, n_envs=args.parallel,
                   make_network=ModelFactory(ZeldaPolicy, None, network.config.to_dict()),
                   callback=on_iteration, start_steps=start_steps,
-                  observation_space=ObservationBuilder.observation_space())
+                  observation_space=ObservationBuilder.observation_space(), seed=args.seed)
     except KeyboardInterrupt:
         print("[train] interrupted; saving checkpoint")
         status = 'interrupted'

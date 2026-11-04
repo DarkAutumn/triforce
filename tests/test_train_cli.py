@@ -63,6 +63,27 @@ def test_train_workers_use_supplied_task_instead_of_reloading_its_name(tmp_path)
     assert metrics['episodes'] == 8
 
 
+@pytest.mark.parametrize('parallel', [1, 2])
+def test_seeded_training_repeats_gameplay(session, tmp_path, parallel):
+    config = tmp_path / 'seeded.yaml'
+    config.write_text("name: stalfos-keese-gel\nrooms: ['(1, 0x73)']\nstart_states: ['1_73s_0']\n"
+                      "success: [exit-correct]\nmax_steps: 8\nitems: {bombs: off}\n"
+                      "ram_randomization: {hp: [0.15, max], full_hp: 0.5}\n")
+    histories = []
+    for run_id in ('first', 'second'):
+        run = train.main(['--specialist', str(config), '--parallel', str(parallel), '--iterations', '2',
+                          '--steps-per-update', '64', '--no-curriculum', '--models-dir', str(tmp_path),
+                          '--run-id', run_id, '--seed', '31', '--device', 'cpu'],
+                         session=session if parallel == 1 else None)
+        records = read_jsonl(str(run / 'metrics.jsonl'))
+        histories.append([{key: value for key, value in record.items()
+                           if key.startswith(('kind/', 'duration/', 'interrupt/', 'ending/', 'reward/',
+                                              'health', 'linger/'))
+                           or key in ('episodes', 'episode_steps', 'episode_frames', 'success_rate')}
+                          for record in records])
+    assert histories[0] == histories[1]
+
+
 def test_early_stop_balances_start_states():
     """An oversampled failing state counts as one state; iterations with no entry episodes keep the streak."""
     early = train.EarlyStop(0.75, 2, window=4, min_episodes=2)

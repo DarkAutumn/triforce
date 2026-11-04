@@ -6,18 +6,18 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Where it stands:** round 7 active (`round7.md`); lingering, Aquamentus exit training and observation audit done.
-  Round-6 baseline best chains (40 runs, to Dodongo): full 1/40 (milestone1), 2–3/40 (milestone1-fairy), fairy
-  post-D1 8/40, D2 entrance 9/40. D1 Goriya 0x44 and Stalfos 0x53 remain the full-chain bottlenecks.
+- **Where it stands:** round 7 active (`round7.md`); items 1–4 and the worker-seed prerequisite complete.
+  With r31-block1, 40-run chains reach Dodongo: full main 2, full fairy 3, post-D1 main 2, post-D1 fairy 4, D2 11.
+  D1 Goriya 0x44 and Stalfos 0x53 remain full-chain bottlenecks; nearest-heart/exit shaping is next.
 - **Promoted now:** ow-zora / ow-octorok / ow-start r24-fairy, ow-moblin r26c-moblin, ow-leever-peahat r23-more,
-  boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r21-goriya-chainhp, d2-rope r28-d2,
+  boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1, d2-rope r28-d2,
   wallmaster r10 copy. Overworld families train on both routes' rooms; D2 rooms have 3 start states each.
 
 ### Work in this order
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya blocking/corner behavior is next.
+chain's death rooms, then the big ablation. Round 7 items 1–4 complete; nearest-heart/exit shaping is next.
 
 1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
@@ -59,7 +59,7 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
    - [ ] **Bundled observation trial before the from-scratch item 8 study:** versioned chase target coordinates,
      Link/monster boomerang position/phase and corrected harm semantics; compare a full retrain. No RNG, guessed
      universal owner, redundant stun/clock flags or incidental timer rescaling. This bundle is not yet implemented.
-4. **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
+4. [x] **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
    Link to block instead of face-tanking. v2's old `critics.critique_block` rewarded ArrowDeflected sound onset;
    round 7 replaces that incomplete signal with per-frame confirmed shield collisions and per-collision decay.
    First count confirmed Goriya blocks per episode in evals and traces, then A/B a stronger
@@ -73,7 +73,20 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
    Go-Explore paths (select by health, more patience) and a contact-damage penalty that grows as hp falls.
    - **Round 7 §6 prerequisite done:** natural Goriya trace credited only 1/7 real blocks before, 7/7 after at
      identical seed/action positions. Executed-frame counts reach training/eval/chains. 447 tests and CUDA smoke
-     passed; schemas unchanged. Stronger-reward matched r31 comparison and corner-stalemate experiment still pending.
+     passed; schemas unchanged. All r31 arms and 800 frozen-team chains completed without execution errors.
+   - **Measured baseline:** 178/240 successes, −0.96 hearts, 45 confirmed blocks. Faithful 0x44 seed-62 replay
+     has three living Goriyas throughout a 1,971-action quiet stretch; existing stall cost does not break it.
+     Ordinary r31-block1 promoted for lowest evaluation damage and mixed but better full-main/D2 chains; stronger costs off.
+   - **Distinct pickup problem:** 0x23 seed 5 kills all three Goriyas, then wanders for 1,902 quiet actions without
+     the key. A fight-only penalty cannot address this; do not label it shadow-Link stalling or silently exclude
+     the room from family evaluation.
+   - [x] **Seed prerequisite, round 7 §7:** corrected CLI-to-PPO-to-worker policy/reset seeding in dev. Native
+     no-curriculum rollouts reproduce exactly with the same seed, differ with another seed, and advance across
+     episodes/batches. CPU CLI, CUDA smoke and all 462 tests passed; committed cf65aa2.
+     Shared curriculum scheduling remains asynchronous; r31 is budget/config matched, not paired-seed causal evidence.
+   - **Remaining navigation problem, round 7 §6:** faithful r31 chain replays find no enemies during the final
+     1,000 stalled actions in D2 0x5e/0x1e (MOVE objective). Quiet-fight cost cannot fix post-kill exit pacing.
+     Preserve this distinction in later cutoff/curriculum work; do not call it shadow-Link fighting.
 5. **Hearts: aim at the nearer of heart or exit (Lee: "a big deal", v1 behaviour).** Agents leave many dropped
    hearts (round 6 §8: overworld 26 of 34). In v1, dropped items were among the wavefront's targets, and the
    wavefront is a multi-source BFS, so PBRS led to a heart whenever it was closer than the exit by walking distance
@@ -101,13 +114,26 @@ chain's death rooms, then the big ablation. Round 7 items 1–3 complete; Goriya
      N of 100–200 steps, after measuring the longest no-progress gap inside successful episodes per family (item 1's
      metric). Training: a truncation (value bootstraps), not a hard failure. Runner: `stuck` after N steps without
      progress instead of the flat 2000.
-   - **Control ready, round 7 §6:** optional `no_progress_steps`, default null; live quiet-tail truncation
-     bootstraps without terminal penalty, runner uses per-visit tail and keeps global guard. Threshold trial pending.
+   - **Partial control, round 7 §6/§8:** optional `no_progress_steps`, default null; live env truncation has no
+     terminal penalty, and runner cutoff works. PPO bootstrap is still missing; threshold training is blocked on it.
+   - **Measured cutoff risk:** successful baseline chain rope visits include three quiet gaps ≥200 (worst 2,410).
+     Standalone Goriya 0x23 would lose 12/46 successes at 200, versus 1/44 in 0x44. No blanket threshold yet.
+   - **Prerequisite defect found after r31 training:** PPO currently masks bootstrap on every truncation and
+     discards the final observation; env flags/no terminal penalty alone do not provide the promised value target.
+     Fix the measured-cutoff path before threshold training, preserving the existing max-step behavior; cover
+     final-state value, rollout-boundary truncation and isolation from the reset episode (round 7 §8).
+   - **Expanded evidence:** independent r30 chain seeds expose successful quiet gaps of 670 actions (Stalfos),
+     350 (Goriya) and 2,410 (Rope). No blanket 100–300 cutoff. Moblin's inspected successful maximum is 63;
+     100 is a trial candidate, not a general safety guarantee. Route-paired visits are not independent samples.
 7. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
-   milestone). Today 0x7e is an equal-length alternate with exit N and no key objective (`routes.yaml`
-   alternates). Make it the step on both routes with a FIGHT/TREASURE key objective, retrain d2-rope (states
-   `2_7ew_0..2` exist), and rebuild the D2 states downstream so they carry the key.
+   milestone). `game.yaml` already declares Rope ×5 and a key in 0x7e; generic FIGHT/TREASURE objectives apply.
+   The route currently treats it only as an alternate. Make it canonical on both routes, retrain d2-rope, and
+   rebuild downstream states carrying the extra key, including S-entry 0x6e (`2_6es_0..2`).
+   - **Builder prerequisites (round 7 §8):** `cross_room` currently accepts arrival even via `exit-wrong`, so
+     destination alone cannot prove the key was collected. Enforce required pickup/inventory before accepting
+     canonical transitions; `step_config` also currently defaults bombs on. Rebuild/audit all three D2 suffixes,
+     retire stale W-entry 0x6e seeds and refresh affected Rope and D2 Goriya trajectories before curriculum use.
 8. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
    back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?

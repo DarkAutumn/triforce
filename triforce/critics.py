@@ -96,9 +96,10 @@ EQUIPMENT_REWARD_MAP = _init_equipment_rewards()
 
 class GameplayCritic:
     """The default reward profile.  ``pbrs`` switches potential-based movement shaping (reward.pbrs)."""
-    def __init__(self, pbrs: bool = True, *, block_reward: float = 1.0):
+    def __init__(self, pbrs: bool = True, *, block_reward: float = 1.0, quiet_enemy_penalty: float = 0.0):
         self.pbrs = pbrs
         self.block_reward = block_reward
+        self.quiet_enemy_penalty = quiet_enemy_penalty
         self._correct_locations = set()
         self._room_combat_counts = {}  # full_location -> combat event count
         self._room_steps = 0  # steps in current room (for stalling detection)
@@ -129,7 +130,7 @@ class GameplayCritic:
             return 1.0
         return COMBAT_DECAY_RATE ** excess
 
-    def critique_gameplay(self, state_change : StateChange, rewards : StepRewards):
+    def critique_gameplay(self, state_change : StateChange, rewards : StepRewards, *, quiet_steps: int):
         """Critiques the gameplay by comparing the old and new states and the rewards obtained."""
         # triforce
         self.critique_triforce(state_change, rewards)
@@ -149,6 +150,11 @@ class GameplayCritic:
 
         # An attack option can include idle animation/settling frames that really shield a projectile.
         self.critique_block(state_change, rewards)
+
+        # The shared tracker counts real progress; taking damage or moving in circles cannot buy more grace.
+        if self.quiet_enemy_penalty and quiet_steps > ROOM_STEP_GRACE \
+                and any(enemy.is_active and enemy.health > 0 for enemy in state_change.state.enemies):
+            rewards.add(Penalty('penalty-quiet-enemies', -self.quiet_enemy_penalty))
 
         self.critique_health_change(state_change, rewards)
 
@@ -431,8 +437,9 @@ REWARD_PROFILES: Dict[str, type] = {
 }
 
 
-def create_critic(profile: str, pbrs: bool, *, block_reward: float = 1.0) -> GameplayCritic:
-    """Builds the critic for a specialist's reward_profile; block_reward scales actual shield-collision rewards."""
+def create_critic(profile: str, pbrs: bool, *, block_reward: float = 1.0,
+                  quiet_enemy_penalty: float = 0.0) -> GameplayCritic:
+    """Builds the configured gameplay critic; the caller supplies shared measured quiet steps each action."""
     if profile not in REWARD_PROFILES:
         raise ValueError(f"Unknown reward_profile {profile!r}; known: {sorted(REWARD_PROFILES)}")
-    return REWARD_PROFILES[profile](pbrs=pbrs, block_reward=block_reward)
+    return REWARD_PROFILES[profile](pbrs=pbrs, block_reward=block_reward, quiet_enemy_penalty=quiet_enemy_penalty)
