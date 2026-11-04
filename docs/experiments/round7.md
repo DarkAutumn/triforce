@@ -653,6 +653,7 @@ locked/off-route destinations. Native exploration and reload of captured pre-ent
 Every reloaded payload has route-correct maximum hearts (D2 four, D1 three) and mode 5. Evidence:
 `key-balance-{north,east,pickup,locked-pickup}-after.json`.
 Affected state-builder/exploration/entry suites: **158 passed in 44.60 seconds**. No permanent state, main
-runtime source, specialist YAML or promoted pointer changed. Integrated dev suite is running.
+runtime source, specialist YAML or promoted pointer changed. Integrated dev suite after both builder guards:
+**464 passed in 599.75 seconds**. The temporary native probe script was removed; JSON evidence remains.
 
 
