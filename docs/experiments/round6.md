@@ -38,8 +38,9 @@ Best chains (40 runs each, to the Dodongo room 2:0x0e):
   runs that reach it, and only 8 of 40 runs leave D1 alive. 0x53 kills 5 more.
 - **Promoted at the end:** ow-start / ow-zora / ow-octorok r24-fairy, ow-moblin r26c, ow-leever-peahat and
   boss-aquamentus r23, stalfos-keese-gel r25, goriya r21, wallmaster r10 copy, d2-rope r28.
-- Lee's observations from watching `play-zelda.py` after the round (Aquamentus wandering after the kill, hearts
-  left behind, blocking, stuck runs, the boomerang question, D2's 0x7e key) are in todo.md "Next up", in order.
+- Lee's observations from watching `play-zelda.py` after the round (Link lingering in rooms, monsters chasing
+  "shadow Link", Aquamentus wandering after the kill, hearts left behind, blocking, stuck runs, the boomerang
+  question, D2's 0x7e key) are in todo.md "Next up", in order, and the game mechanics in AGENTS.md.
 
 ## 1. Families
 
