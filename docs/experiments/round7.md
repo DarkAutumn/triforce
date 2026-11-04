@@ -38,6 +38,8 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
   carrying the required 7e key. Both routes/states/default curricula and the action-boundary fix are active in main.
 - Final canonical verification: **471 tests passed**, CUDA default-curriculum update completed; main's native
   promoted-team smoke reached Dodongo with three keys on two D2 seeds and the post-D1 fairy seed.
+- R36 observation-bundle comparison is active on frozen sources (§21); schema 2 is verified in dev, not main.
+  Lee requests recording/committing this experiment's result and then pausing; no next experiment starts.
 
 ## 1. Shared lingering metric
 
@@ -1217,3 +1219,31 @@ now ends exit-wrong rather than boss-room entry (45/46 successes). This is alrea
 refreshed D2 paths from §18 (all six native current-goal replays pass); default D2 installation remains part
 of the compatible route/model cutover. Evidence: route audits, inventory/goal reports, current path and
 retired inputs under the r35 evidence root. Completed throwaway audit scripts are removed; runtime stays frozen.
+
+## 21. Versioned observation full-team trial (r36, active)
+
+Schema 2 is implemented/verified only in dev (`4d35155`): shared chase refresh/coordinates, Link/Goriya
+boomerang phases/position and corrected contact-hazard states. Native before/after weapon execution is
+identical across 94 frames/all five phases; old stunned/returning hazard and bait flags are corrected.
+All 485 dev tests pass; CUDA scratch training and serialized/spawned evaluation complete. Main remains
+schema 1 with the promoted r35 team; old checkpoints are rejected by schema 2, not relabeled.
+
+Current comparison freezes schema 1 at `83bd2bb` (`/tmp/triforce-r36-schema1`) and schema 2 at `4d35155`
+(`/tmp/triforce-r36-schema2`). Both complete ten-family teams start from scratch, seed 36, eight workers/CUDA,
+490×4,096 = 2,007,040 actions/family, no early stop/load/promotion. Identical canonical task settings and
+the same frozen 62-track curriculum corpus (6,541 SHA-256 recorded files). Preserve Aquamentus's 0.75 HP
+floor, bombs off, ordinary rewards and null measured cutoffs. This is one matched training-seed pair,
+not a seed-robustness claim. Evaluate every start at seeds 0/10,000 (20 episodes/start/block), then both
+full/post-D1 routes plus D2 (40 runs/block, 80/segment/team), pinning all ten checkpoints/configs. Native
+7e pickup/carry guards distinguish real requested-route arrivals from shortcut milestone counts.
+
+First schema-1 ow-start optimization hit actual CUDA OOM before completing an update: 44 MiB requested,
+26.12 MiB free, no candidate checkpoint. Failed attempt preserved separately under `schema1/failed-oom/`.
+Under Lee's standing actual-OOM permission, stopped the dedicated `play-zelda.py 3x2 --games 64` process
+group; observed 19,311 MiB GPU memory free afterward. Retry is fresh with unchanged settings, not loaded
+partial weights. Full-team results are pending; no treatment/source/data changes mid-run.
+
+Protocol/evidence: `models/r36-observation-full-retrain-evidence/`. Lee's new swordless-start and finite
+training/player-stall requirements are recorded in `todo.md`, not implemented during this trial. Finish,
+record and commit this experiment, then pause; no boomerang ablation or other next experiment before he resumes.
+
