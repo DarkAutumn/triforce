@@ -133,3 +133,50 @@ therefore reported inactive, ending future-credit simulation before the weapon f
 
 This is a correctness fix, not evidence of a model/chain improvement. Re-evaluate old checkpoints under the corrected
 credit path and the experimental task before comparing continued models.
+
+## 4. Alternate-YAML CLI integrity fix (prerequisite to r30)
+
+The first CLI evaluation with `/tmp/boss-aquamentus-exit.yaml` still printed `boss-dead-and-heart` and 60/60 success,
+despite the file requesting only `exit-correct`. This was a real config-loss bug, not a valid exit-task baseline.
+
+- `evaluate.main` loaded the supplied file only to extract `config.name`, then reloaded the default specialist.
+- Training similarly discarded the file before `_train`, model/curriculum setup and `ZeldaEnvFactory`.
+- Fix: carry the loaded `SpecialistConfig` into evaluation and training workers; use its name only for registry
+  identity/log labeling. Worker factory explicitly accepts the config object, including spawn/pickle use.
+- Two real CLI regressions failed before: evaluation ran three default seed states instead of the single supplied
+  one; spawned training completed zero episodes instead of eight one-action episodes. Both pass after the fix.
+- Training/eval/PPO checks: 15 passed. Actual CLI smoke on the supplied exit config ran CUDA training with two
+  workers (256 actions, 3 successful completed episodes averaging 54 actions) and evaluated the old promoted model.
+- Full post-fix dev suite: 386 tests passed in 86.59 seconds.
+- Correct old-model baseline with max_steps 400: **57/60 correct exits (95%)**, mean 90 actions, +0.61 hearts;
+  mean longest quiet stretch 48 actions, worst 365. Stored as `models/r30-aquamentus-exit-old.json`.
+
+### Historical experiment implications
+
+`git log -S` shows name-only loading dates back to the initial/round-1 CLI implementation. `run.json` confirms the
+following arms supplied temporary YAML files, whose overrides the CLI discarded:
+
+| Arm | Supplied file |
+|---|---|
+| r20-rope-pt | `/tmp/d2-rope-pt.yaml` |
+| r21-goriya-chainhp | `/tmp/goriya-chainhp.yaml` |
+| r22-skg-chainhp | `/tmp/skg-chainhp.yaml` |
+| r25-skg-hearts | `/tmp/skg-hearts.yaml` |
+| r27-rope-hearts | `/tmp/rope-hearts.yaml` |
+
+Their measured model/chain scores remain real, but those comparisons **do not establish the requested treatment's
+effect**: the variant file was not used for training. Old main-YAML values cannot be recovered from these run files,
+so do not retrospectively invent exact treatment settings. Round 6 is annotated accordingly. Lee's explicit rejected
+ideas stay rejected; this audit is not authorization to reintroduce pass-through damage or heart-only objectives.
+
+## 5. Aquamentus exit training protocol (r30)
+
+Variant file preserved at `models/boss-aquamentus/r30-exit/config.yaml`: success `[exit-correct]`, otherwise current
+settings including max_steps 400 and hp `[0.75,max]`, half full health. Bombs off, schema 1 unchanged. Warm-start from
+promoted r23-more; stop at balanced 99%, at most 2M more actions. Keep the current promotion until comparison finishes.
+
+Re-explored with the exit task: 3/3 successful replays, 42,957 env actions; paths 109/91/91 actions, final health
+2.0/1.5/1.5. Files are under `trajectories/r30-exit/boss-aquamentus/`; snapshots are before each action, so the terminal
+0x36 room is not a curriculum start. Use this separate directory for the candidate, not the old heart-ending paths.
+Compare against the corrected old-model exit-task baseline, then both full chains and the post-D1/D2 segments if
+promoted. Track boss-kill/heart/exit timing, health and quiet-gap distribution—not success alone.

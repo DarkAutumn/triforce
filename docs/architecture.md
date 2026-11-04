@@ -63,7 +63,9 @@ When the objective block is on, the env attaches `state.objectives` (v1's `Objec
 
 ## Specialist task and environment (`specialist.py`, `env.py`)
 
-`specialists/<name>.yaml` follows design §3.3; load with `specialist.load_specialist(name) -> SpecialistConfig`.
+`specialists/<name>.yaml` follows design §3.3; load with `specialist.load_specialist(name_or_path) -> SpecialistConfig`.
+Training/evaluation CLIs preserve that loaded config through curriculum/model setup and spawned env workers.
+`config.name` labels checkpoints and logs; it must not be used to reload the default YAML and discard overrides.
 
 ```python
 class ZeldaEnv(gymnasium.Env):

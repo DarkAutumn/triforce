@@ -47,7 +47,7 @@ from .model import ModelConfig, ZeldaPolicy
 from .observation import ObservationBuilder
 from .ppo import PPO, IterationResult, PPOConfig
 from .ppo_worker import ModelFactory, ZeldaEnvFactory
-from .specialist import load_specialist
+from .specialist import SpecialistConfig, load_specialist
 
 
 class EarlyStop:
@@ -141,9 +141,8 @@ def resolve_warm_start(value: str, root) -> Path:
     return registry.promoted_checkpoint(value, root)
 
 
-def initial_model(args, specialist: str, root):
+def initial_model(args, config: SpecialistConfig, root):
     """(network, optimizer_state, start_iteration, start_steps, source)."""
-    config = load_specialist(specialist)
     if args.load:
         source = str(resolve_warm_start(args.load, root))
     else:
@@ -153,7 +152,7 @@ def initial_model(args, specialist: str, root):
         return network, None, 0, 0, None
 
     network, checkpoint = registry.load_model(source)
-    if args.load and checkpoint['specialist'] == specialist:
+    if args.load and checkpoint['specialist'] == config.name:
         return network, checkpoint.get('optimizer'), checkpoint['iterations'], checkpoint['steps'], source
     return network, None, 0, 0, source
 
@@ -225,9 +224,10 @@ def main(argv=None, session=None) -> Path:
 def _train(args, specialist: str, run_id: str, root, out_dir: Path, session, events: EventLog) -> dict:
     """The training run proper; returns the train_end event fields."""
     # pylint: disable=too-many-locals, too-many-statements, too-many-arguments, too-many-positional-arguments
-    network, optimizer_state, start_iteration, start_steps, source = initial_model(args, specialist, root)
-    curriculum = curriculum_spec(args, load_specialist(specialist), out_dir)
-    env_factory = ZeldaEnvFactory(specialist, start_state=args.start_state, curriculum=curriculum,
+    config = load_specialist(args.specialist)
+    network, optimizer_state, start_iteration, start_steps, source = initial_model(args, config, root)
+    curriculum = curriculum_spec(args, config, out_dir)
+    env_factory = ZeldaEnvFactory(config, start_state=args.start_state, curriculum=curriculum,
                                   **({} if args.capture_states else {'capture_dir': None}))
     in_process_env = env_factory(session) if args.parallel == 1 else None
 

@@ -217,7 +217,8 @@ def main(argv=None):
     parser.add_argument('--output', default=None, help="JSON output (default: <checkpoint dir>/eval.json)")
     args = parser.parse_args(argv)
 
-    name = load_specialist(args.specialist).name
+    config = load_specialist(args.specialist)
+    name = config.name
     if args.checkpoint:
         checkpoint = Path(args.checkpoint)
         checkpoint = checkpoint / registry.CHECKPOINT_NAME if checkpoint.is_dir() else checkpoint
@@ -228,7 +229,7 @@ def main(argv=None):
     if not checkpoint.is_file():
         raise FileNotFoundError(checkpoint)
 
-    result = evaluate_specialist(name, checkpoint, args.episodes_per_state, args.parallel, args.seed,
+    result = evaluate_specialist(config, checkpoint, args.episodes_per_state, args.parallel, args.seed,
                                  args.deterministic)
     output = Path(args.output) if args.output else checkpoint.parent / 'eval.json'
     output.parent.mkdir(parents=True, exist_ok=True)

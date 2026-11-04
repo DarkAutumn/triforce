@@ -116,6 +116,9 @@ chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; 
 
 ### Other open items
 
+- [x] **Alternate-YAML experiment integrity (round 7 §4):** train/evaluate discarded supplied YAML overrides.
+  Fixed and proved through real/spawned CLI paths. Round 6's r20-pt, r21/r22-chainhp and r25/r27-heart treatment
+  comparisons are not valid treatment evidence; model/chain measurements remain real. Explicit rejections remain.
 - **0x53 (5-Stalfos key room):** 5 deaths in the full chain after the D1 Goriya room's 15.
 - **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
   (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.

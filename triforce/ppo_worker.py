@@ -13,6 +13,7 @@ import torch
 import torch.multiprocessing as mp
 
 from .metrics import EpisodeTracker, RolloutMetrics
+from .specialist import SpecialistConfig
 
 
 class WorkerError(Exception):
@@ -21,7 +22,7 @@ class WorkerError(Exception):
 
 class ZeldaEnvFactory:
     """Picklable factory for ``env.ZeldaEnv`` in a worker process."""
-    def __init__(self, specialist: str, **kwargs):
+    def __init__(self, specialist: str | SpecialistConfig, **kwargs):
         self.specialist = specialist
         self.kwargs = kwargs
 

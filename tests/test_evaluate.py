@@ -1,10 +1,31 @@
 """``triforce.evaluate``: per-specialist evaluation over every seed start state."""
 
+import json
+import subprocess
+import sys
+
 from triforce.evaluate import _group, _linger_stats, evaluate_specialist, format_report
 from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.observation import ObservationBuilder
 from triforce.registry import save_checkpoint
 from triforce.specialist import load_specialist
+
+
+def test_evaluate_cli_uses_supplied_task_instead_of_reloading_its_name(tmp_path):
+    network = ZeldaPolicy(ObservationBuilder.observation_space(),
+                          ModelConfig(hidden_dim=32, entity_d_model=32, entity_ff_dim=32, grid_out_dim=32))
+    checkpoint = save_checkpoint('boss-aquamentus', 'alternate-task', network, root=tmp_path)
+    config = tmp_path / 'alternate.yaml'
+    config.write_text("name: boss-aquamentus\nrooms: ['(1, 0x35)']\nstart_states: ['1_35s_0']\n"
+                      "success: [exit-correct]\nmax_steps: 1\n")
+    output = tmp_path / 'eval.json'
+    subprocess.run([sys.executable, '-m', 'triforce.evaluate', '--specialist', str(config),
+                    '--checkpoint', str(checkpoint), '--episodes-per-state', '1', '--output', str(output)],
+                   check=True, capture_output=True, text=True)
+    result = json.loads(output.read_text())
+    assert result['episodes'] == 1
+    assert result['endings'] == {'max-steps': 1}
+    assert result['records'][0]['steps'] == 1
 
 
 def test_evaluate_specialist_covers_every_seed_state_reproducibly(session, tmp_path):

@@ -42,6 +42,13 @@ Best chains (40 runs each, to the Dodongo room 2:0x0e):
   "shadow Link", Aquamentus wandering after the kill, hearts left behind, blocking, stuck runs, the boomerang
   question, D2's 0x7e key) are in todo.md "Next up", in order, and the game mechanics in AGENTS.md.
 
+**Round 7 integrity correction:** the train/evaluate CLIs discarded alternate `--specialist /tmp/*.yaml` configs
+and reloaded the default specialist by name. Confirmed affected training arms: r20-rope-pt, r21-goriya-chainhp,
+r22-skg-chainhp, r25-skg-hearts and r27-rope-hearts (`run.json` records the temporary paths; round7.md §4).
+Their measured scores remain real, but these comparisons do not establish the named treatment's effect. No exact
+old main-YAML settings are recoverable from those run files. Lee's rejected ideas stay rejected; do not silently
+reintroduce them because of this finding. The CLI bug is fixed for subsequent experiments.
+
 ## 1. Families
 
 | family | rooms | was |

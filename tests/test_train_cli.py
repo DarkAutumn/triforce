@@ -50,6 +50,19 @@ def test_train_parallel_workers(tmp_path):
     assert sum(r['rollout/steps'] for r in records) == 256
 
 
+def test_train_workers_use_supplied_task_instead_of_reloading_its_name(tmp_path):
+    config = tmp_path / 'alternate.yaml'
+    config.write_text("name: boss-aquamentus\nrooms: ['(1, 0x35)']\nstart_states: ['1_35s_0']\n"
+                      "success: [exit-correct]\nmax_steps: 1\n")
+    run = train.main(['--specialist', str(config), '--parallel', '2', '--iterations', '1',
+                      '--steps-per-update', '8', '--no-curriculum', '--models-dir', str(tmp_path),
+                      '--run-id', 'alternate', '--seed', '7'])
+    metrics = read_jsonl(str(run / 'metrics.jsonl'))[-1]
+    assert metrics.get('ending/max-steps') == 1
+    assert metrics['episode_steps'] == 1
+    assert metrics['episodes'] == 8
+
+
 def test_early_stop_balances_start_states():
     """An oversampled failing state counts as one state; iterations with no entry episodes keep the streak."""
     early = train.EarlyStop(0.75, 2, window=4, min_episodes=2)
