@@ -30,7 +30,9 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
 - Shaped Rope improves D2 but regresses both full routes; keep old Rope/SKG/Moblin. Octorok's ordinary gain is
   modest and consistent across the combined success/health comparisons, not evidence that item shaping works.
 - Native replay found required-shutter objective/classification and terminal-health defects. Prerequisites
-  through §14 merged at `4cb8434`; **470 tests passed**. Next: matched Goriya off/100/200 cutoff trial.
+  through §14 merged at `4cb8434`; **470 tests passed**.
+- Backlog item 6 complete (§15): all three r33 arms, common/actual evaluations and 1,400 fresh chains finished.
+  No general chain gain; keep r31-block1 and canonical cutoffs null. D2 east-first data is prepared in dev (§16).
 
 ## 1. Shared lingering metric
 
@@ -930,3 +932,95 @@ actions, zero living enemies, clock off, north OPEN and physically open, four he
 16 at the final action. Uncut eventually succeeds; this is post-fight navigation pacing, not waiting for a
 Goriya or shadow-Link chase. Evidence: `cutoff-loss-replay.json`. Do not misdiagnose the removed successes as
 all intrinsically failed fights or use the cutoff to conceal a required-shutter objective problem.
+
+### Completed matched training and standalone evaluation
+
+All three 245-update arms and all eight common/actual baseline/candidate evaluations completed without errors.
+Each checkpoint stores 1,713 cumulative updates/7,014,488 actions; **1,003,520 actions are additional** in this
+trial. Training walls off/100/200: 4,323/4,195/4,259 seconds. No user player was killed or main runtime altered.
+
+| Policy / evaluation task | Wins /240 | Real ΔHP | Total ΔHP | Mean actions | Worst quiet actions |
+|---|---:|---:|---:|---:|---:|
+| Old r31 / uncut | 184 | −0.769 | −0.694 | 130.9 | 1,228 |
+| Old r31 / 100 | 183 | −0.740 | −0.665 | 91.2 | 100 |
+| Old r31 / 200 | 186 | −0.752 | −0.677 | 97.8 | 200 |
+| R33 off / uncut | 193 | −0.815 | −0.769 | 94.1 | 1,801 |
+| R33 100 / uncut | 189 | −0.819 | −0.763 | 83.7 | 406 |
+| R33 100 / actual 100 | 185 | −0.810 | −0.754 | 78.5 | 100 |
+| R33 200 / uncut | 197 | −0.729 | −0.673 | 94.6 | 1,665 |
+| R33 200 / actual 200 | 196 | −0.725 | −0.669 | 83.3 | 200 |
+
+Common/actual record tuples match start state, episode seed and initial health. Enabling this training control
+**replaces** legacy Timeout (including 50 stationary actions), not simply adding an earlier abort: old-weight
+100 rescues two old `stuck` episodes but loses three successes; 200 rescues three and loses one. This explains
+why old-weight actual 200 can score above old uncut; do not credit the difference to retraining.
+
+Per-room common-task comparison (successes /60; physical ΔHP per episode):
+
+| Room | Old r31 wins / ΔHP | R33 off wins / ΔHP | R33 100 wins / ΔHP | R33 200 wins / ΔHP |
+|---|---:|---:|---:|---:|
+| D1 0x23 | 41 / −0.817 | 46 / −0.725 | 41 / −0.633 | 44 / −0.783 |
+| D1 0x44 | 43 / −0.942 | 52 / −0.592 | 44 / −0.875 | 51 / −0.667 |
+| D2 0x1e | 49 / −0.617 | 49 / −0.808 | 47 / −0.975 | 50 / −0.792 |
+| D2 0x5e | 51 / −0.700 | 46 / −1.133 | 57 / −0.792 | 52 / −0.675 |
+
+200 leads combined standalone success/health, but off has the best D1 damage and regresses D2. Long uncut
+tails remain even after cutoff training. All trained-policy actual/common uncut chain comparisons are now
+complete; their general chain regression overrides standalone ranking. Keep r31-block1, no canonical cutoff
+enabled. Full reports: `evaluations.json`, each arm's eval JSON and `chains/`.
+
+
+### Completed chain selection; cutoffs remain disabled
+
+All **1,400 fresh chains** completed without execution errors: 400 old-weight actual-cutoff runs, 600 trained
+actual-task runs and 400 trained cutoff-policy/common-uncut runs. The unchanged baseline additionally reuses
+200 prior records. These are executions, not independent route-pair/prefix observations.
+
+| Goriya policy / runtime | Full main /40 | Full fairy /40 | Post-D1 main /40 | Post-D1 fairy /40 | D2 /40 | D2 Goriya real/total ΔHP per run |
+|---|---:|---:|---:|---:|---:|---:|
+| Old r31 / uncut | 2 | 6 | 4 | 4 | 14 | −1.038 / −0.988 |
+| R33 off / uncut | 1 | 2 | 3 | 4 | 14 | −1.638 / −1.638 |
+| R33 100 / uncut | 3 | 2 | 4 | 6 | 12 | −1.450 / −1.450 |
+| R33 100 / actual 100 | 3 | 2 | 4 | 6 | 11 | −1.475 / −1.475 |
+| R33 200 / uncut | 1 | 3 | 3 | 4 | 12 | −1.500 / −1.500 |
+| R33 200 / actual 200 | 1 | 3 | 3 | 4 | 12 | −1.500 / −1.500 |
+
+All other weights/configs stay pinned; health includes failed runs. No candidate improves both full routes
+and D2 survival/physical damage. 100's post-D1 fairy gain is mixed with full-fairy/D2 regression; 200's better
+standalone score is not a chain upgrade. Its runtime cutoff only shortens eventual failures in this cohort;
+100 additionally removes one new-model D2 success. No holdout promotion selection for inferior general teams.
+
+**Keep Goriya r31-block1 and `no_progress_steps: null`.** Record this trial result in the ledger only; the
+already-merged dormant control/bootstrap infrastructure is not new experiment code. No r33 model promoted.
+Lingering measurement remains mandatory; shorter failed episodes are not a solved navigation/fighting skill.
+
+## 16. Isolated D2 east-first preparation (before r34 training)
+
+Dev route now uses 0x7d E → 0x7e key → 0x6e from S for both routes, removing the old D2 alternate without
+changing enemy-family membership. Route consumers/tests/docs and Rope's S-entry state selector are updated
+in dev only. Main keeps the old route/states during r33 selection; no D2 model training has started.
+
+Native chains 0/1 completed all eight crossings from matching `2_7ds_0/1`, using existing `build_chain` at
+12,000 iterations/patience 500, no inventory injection. All 16 payloads pass nine-load audit: clean pre-entry,
+correct room, full enemy count, four-heart maximum; playable inspections are mode 5. Per-destination keys:
+0x7e 0, 0x6e 1, 0x5e 1, 0x4e 1, 0x3e 2, 0x2e 3, 0x1e 3, 0x0e 3. Persistent flags prove every required key pickup.
+
+All 24 suffix payloads are now audited and installed in dev. Chain 2 completed its remaining three crossings
+with native `path` after the initial 0x3e Moldorm/key search failed three attempts/197,562 actions; retry budget
+6,000/patience 200. It retains the same 0,1,1,1,2,3,3,3 key sequence, all pickup flags and four-heart maximum.
+Evidence roots: `/tmp/d2-east-chain{0,1,2}/` manifests/audits/inventory and native build/generation logs.
+
+Retired all three stale `2_6ew_*` states/manifest records; kept off-route 0x6d family/states with explicit origin
+step 35. Canonicalized relocated path metadata, not gameplay statistics: raw path ending `exit-wrong` on the
+terminal crossing stays recorded and is not called a policy success. Terminal chain 0/2 naturally carry four
+bombs; preserve native pickup, mask use with `items.bombs=False`, milestone ends without fighting the boss.
+
+Initial full suite: three off-route heart-audit failures, 467 passes. Native D2 hearts were correctly four;
+the test treated off-route step −1 as game-start progress. It now derives hearts from the completed routed
+origin when available; source provenance is supplied for retained 0x6d. After correction **470 passed in
+112.51 seconds**. No room-id exception or lowered-heart state.
+
+Fresh family-contained Rope/Goriya curricula for all three chains run under dev `trajectories/r34-east-key/`.
+Old Rope under the new YAML/states: 335/420 (80%), −0.34 real/−0.26 total hearts; empty 0x7d is **0/60**, always
+leaving the old north way. Do not activate the east-first main route under this old policy: retrain on frozen
+dev, then cut over route/data/model together after verification. Main states/trajectories/pointers unchanged.

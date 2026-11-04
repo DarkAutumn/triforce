@@ -6,7 +6,7 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Where it stands:** round 7 active (`round7.md`); items 1–5 and their prerequisites complete. Corrected-runtime
+- **Where it stands:** round 7 active (`round7.md`); items 1–6 and their prerequisites complete. Corrected-runtime
   80-seed promoted-team chains reach Dodongo: full main 4, full fairy 8, post-D1 main 5, post-D1 fairy 11; D2 27/80.
   Ordinary Octorok continuation promoted after disjoint-seed validation; nearby-item shaping stays disabled.
 - **Promoted now:** ow-zora / ow-start r24-fairy, ow-octorok r32-nearby-off, ow-moblin r26c-moblin,
@@ -17,7 +17,7 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Round 7 items 1–5 complete; matched Goriya cutoff training is active.
+chain's death rooms, then the big ablation. Round 7 items 1–6 complete; D2 east-first migration/retraining is next.
 
 1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
@@ -105,7 +105,7 @@ chain's death rooms, then the big ablation. Round 7 items 1–5 complete; matche
      runtime chains finished: shaped Rope improves D2 but regresses both full routes; keep old Rope/SKG/Moblin.
      Ordinary Octorok off promoted after disjoint 80-seed comparisons improve combined success/physical health
      on all four segments. No shaped model promoted; nearby shaping stays off. Matched cutoff trial next.
-6. **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
+6. [x] **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
    an item pickup or a kill).** Today training ends `stuck` after 50 steps without moving and `no-progress` after
    2000 steps without a new correct room (`end_conditions.Timeout`, the same 50/2000 as v1's Timeout; the ~100-step
    rule isn't in v1's code, so define it fresh). A room-stalling penalty starts after 150 steps, and the runner
@@ -138,7 +138,10 @@ chain's death rooms, then the big ablation. Round 7 items 1–5 complete; matche
    - **Live old-policy risk measured (round 7 §15):** all 400 actual-cutoff chains complete without errors.
      Both limits lose two post-D1 fairy successes; D2 loses three at 100/two at 200 (40 seeds each). Faithful
      seed-9 replay has full HP, open north, no enemies and 200 MOVE actions: post-kill exit pacing, not chase
-     waiting. Do not select on shorter failed episodes or enable a blanket cutoff; retraining remains active.
+     waiting. Do not select on shorter failed episodes or enable a blanket cutoff.
+   - **R33 complete, round 7 §15:** all three arms/eight evaluations and 1,400 fresh common/actual chains
+     finished without execution errors. 200's standalone gain does not carry into both full routes/D2; all
+     new models worsen D2 Goriya damage. Keep r31-block1, canonical cutoffs null; no r33 promotion.
    - **Required-shutter prerequisite corrected in dev (round 7 §13):** north tiles 0xa8–0xab were misclassified;
      0x2e wrongly requested MOVE through its closed kill-all shutter. Live route-gated FIGHT now clears it;
      optional 0x6e/0x6d combat stays optional. Four targeted and all 468 tests pass; natural last-Rope → open
@@ -160,10 +163,10 @@ chain's death rooms, then the big ablation. Round 7 items 1–5 complete; matche
      native conserved-key, locked-side-exit and key-pickup paths pass. Full suffix audits remain required. Retire
      stale W-entry 0x6e states, create missing 2_0es_2,
      and refresh affected Rope and D2 Goriya trajectories before curriculum use.
-   - **Isolated preparation during r33:** dev route is east-first; chains 0/1/2 and affected route consumers are
-     being prepared/audited without changing main. Canonical activation, refreshed curricula and Rope retraining
-     follow cutoff selection. Existing exploration expects installed state basenames; defer trajectory refresh
-     until audited dev states are installed, rather than invent an absolute-path/output convention.
+   - **Dev preparation complete, round 7 §16:** all 24 downstream payloads have native nine-load audit and
+     conserved keys; stale 2_6ew states/rows retired, 0x6d retained off-route with correct origin progress.
+     All 470 tests pass after fixing off-route heart-audit derivation. Rope/Goriya curricula are refreshing.
+     Old policy is 0/60 at newly eastbound 0x7d: keep main unchanged until dev retraining/selection finishes.
 8. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
    back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?
