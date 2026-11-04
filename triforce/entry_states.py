@@ -125,18 +125,24 @@ def cross_room(session: GameSession, step: RouteStep, target: RouteStep, source:
                iterations: int, patience: int, attempts: int = 3) -> tuple:
     """Explores until Link enters ``target``, including intended off-route destinations.
 
-    A key room's pickup must be complete before accepting its exit, both in exploration and replay.
-    Returns (pre-entry bytes or None, stats).
+    Require the source key pickup and carried-key balance, allowing only the target door's key cost.
+    Check discovery and replay. Returns (pre-entry bytes or None, stats).
     """
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     stats = {'env_steps': 0, 'attempts': 0, 'seconds': 0.0}
     source_room = shared_game_map().get(step.location)
     key_required = source_room is not None and source_room.treasure == 'key'
     target_location = target.location
+    initial = session.load(source, randomize_rng=False, fresh_room=True)
+    minimum_keys = initial.link.keys + int(key_required and not room_flags(initial, step.room) & FLAG_ITEM_TAKEN)
+    direction = step.location.get_direction_to(target_location)
+    if step.level == target.level and step.in_cave == target.in_cave and direction != Direction.NONE:
+        minimum_keys = max(0, minimum_keys - int(initial.is_door_locked(direction)))
 
     def accepted(state):
-        return state.full_location == target_location and (not key_required or (
-            state.level == step.level and bool(room_flags(state, step.room) & FLAG_ITEM_TAKEN)))
+        return (state.full_location == target_location and state.link.keys >= minimum_keys
+                and (not key_required or (
+                    state.level == step.level and bool(room_flags(state, step.room) & FLAG_ITEM_TAKEN))))
 
     for attempt in range(attempts):
         explorer = Explorer(step_config(step, source), session=session, seed=seed * 1000 + attempt)

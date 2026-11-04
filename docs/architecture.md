@@ -226,8 +226,10 @@ Nearby-item shaping and the measured cutoff remain disabled in promoted configs 
 
 `build` follows route steps; `path` accepts explicit off-route destinations. Both use `cross_room`: arriving
 in the target is insufficient when the source room declares a key. The source room's persistent item-taken
-flag must be set in the same level, during exploration and again after exact replay, before returning the
-captured pre-entry bytes. This preserves off-route traversal without accepting premature key-room exits.
+flag must be set in the same level. Carried keys must retain the source inventory plus its newly required key,
+minus the cost of the direct target door if initially locked; opening an unrelated side door is not an allowed
+cost. Discovery and exact replay both enforce these requirements before returning captured pre-entry bytes.
+This preserves intended off-route traversal without accepting premature key-room exits or depleted inventory.
 `step_config` masks bombs for milestone-1 state generation. Route changes still require rebuilding and auditing
 downstream inventories and refreshing affected curriculum snapshots; old filenames alone do not prove progress.
 

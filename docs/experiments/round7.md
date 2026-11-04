@@ -28,7 +28,7 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
 - R32's original six arms and three baselines finished; frozen-team chains are running (§9). Moblin had no
   evaluation heart drops, so an added Octorok pair is running to obtain a pickup-exposed overworld comparison.
   Main source/YAML/states stay frozen. Verified dev prerequisites wait: cutoff bootstrap (§10), per-arm chain
-  configs (§11), key-pickup/bomb guards (§12). The D2 route/state migration is not started.
+  configs (§11), key-pickup/balance/bomb guards (§12). The D2 route/state migration is not started.
 
 ## 1. Shared lingering metric
 
@@ -610,4 +610,28 @@ while the side E door is. Thus room pickup flags alone do not prove the carried-
 the suffix rebuild must check inventory balance and reject unneeded side-door spending. No 2_0es_2 file exists.
 Full inventory, current locked doors and persistent room flags: `models/r34-d2-key-evidence/inventory-before.json`.
 No state was mutated by this audit.
+
+### Carried-key balance guard
+
+Reproduced the inventory acceptance hole using the builder's actual predicate and existing native state files:
+source `2_2es_2` has two keys and an unlocked N exit, but the original predicate accepts `2_1es_2` with one key
+and 0x2e's side door opened. Both states load in playable mode 5. This is a predicate reproduction on real
+saved inventories, not a new before-fix exploratory trajectory. Evidence: `key-balance-before.json` in the §12 root.
+
+The dev guard now requires source keys + any newly required source-room key − the direct target door's initial
+key cost, in discovery and replay. It rejects the historical one-key candidate while preserving intended
+locked/off-route destinations. Native exploration and reload of captured pre-entry payloads prove:
+
+| Source → target | Actions | Keys before → after | Result |
+|---|---:|---:|---|
+| 2:0x2e → N 0x1e | 159 | 2 → 2 | Correct exit; rejects the old one-key candidate |
+| 2:0x2e → E 0x2f | 68 | 2 → 1 | Intended locked off-route exit still accepted |
+| 2:0x7e → N 0x6e | 155 | 0 → 1 | Required key physically collected |
+| 1:0x33 → N 0x23 | 121 | 1 → 1 | Off-route: collects the source key, spends one on the locked target door |
+
+Every reloaded payload has route-correct maximum hearts (D2 four, D1 three) and mode 5. Evidence:
+`key-balance-{north,east,pickup,locked-pickup}-after.json`.
+Affected state-builder/exploration/entry suites: **158 passed in 44.60 seconds**. No permanent state, main
+runtime source, specialist YAML or promoted pointer changed. Integrated dev suite is running.
+
 

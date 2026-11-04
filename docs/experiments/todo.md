@@ -134,8 +134,10 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
    - **Pickup guard verified in dev (round 7 §12):** old builder physically accepted zero-key `exit-wrong` entry.
      Discovery/replay now require the source key's pickup flag; bombs are masked. All three native sources and
      saved payloads carry the key; 158 affected tests pass. Main merge waits for r32. Route/state migration pending.
-   - **Inventory audit:** existing chains 0/1 skip 0x4e/0x3e keys; chain 2 also spends one on a side door. Validate
-     counts as well as flags during the suffix rebuild; retire stale W-entry 0x6e states, create missing 2_0es_2,
+   - **Inventory balance guarded in dev:** existing chains 0/1 skip 0x4e/0x3e keys; chain 2 also spends one on a
+     side door. Builder now preserves carried keys plus required pickup, allowing only the target door's cost;
+     native conserved-key, locked-side-exit and key-pickup paths pass. Full suffix audits remain required. Retire
+     stale W-entry 0x6e states, create missing 2_0es_2,
      and refresh affected Rope and D2 Goriya trajectories before curriculum use.
 8. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
