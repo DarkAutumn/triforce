@@ -335,3 +335,9 @@ Quiet-fight control verification after retaining Lee's newer GUI changes: **462 
 231.79 seconds** under concurrent r31 training. The new real-emulator regression checks the exact grace boundary
 and removes targetable enemies without clearing the long quiet tail: the additional penalty stops after the fight.
 No model improvement is claimed from this control verification.
+
+Additional real weapon-option reward proof: an injected outgoing hostile boomerang at x=180 hits Link's shield
+on frame 17 of `BEAMS E`, after its 16 control frames. No health loss; the unmocked full gameplay critic pays
+`reward-block-projectile=0.5` (alongside the ordinary attack-miss cost). Replaced the mocked action-routing test
+with this native settling-frame regression; removed fake legacy-sound fields, a repeated positive-multiplier row
+and private-counter assertions. Reward suite: **25 passed in 2.55 seconds**. No live runtime code/YAML changed.
