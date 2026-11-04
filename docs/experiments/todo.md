@@ -17,7 +17,7 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Round 7 items 1–6 complete; D2 east-first migration/retraining is next.
+chain's death rooms, then the big ablation. Round 7 items 1–6 complete; east-first Rope retraining continues in dev.
 
 1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
@@ -167,6 +167,18 @@ chain's death rooms, then the big ablation. Round 7 items 1–6 complete; D2 eas
      conserved keys; stale 2_6ew states/rows retired, 0x6d retained off-route with correct origin progress.
      All 470 tests pass after fixing off-route heart-audit derivation. Rope/Goriya curricula are refreshing.
      Old policy is 0/60 at newly eastbound 0x7d: keep main unchanged until dev retraining/selection finishes.
+   - **R34 completed, rejected (§17):** ab9bda5, r28 warm start, seed 34/eight workers, 2,007,040 extra actions,
+     unchanged reward/HP/bombs/one_room and no curriculum treatment. Still 0/60 at the eastbound entrance;
+     319/420 overall versus old 335/420. Main remains compatible/unchanged; retry with verified curriculum.
+     All 21 refreshed Rope and six D2 Goriya paths succeed; 18 affected Rope tracks/2,174 snapshots pass loader
+     and native-exit smoke. Retained Goriya scores 181/240; no Goriya model change in this Rope retrain.
+   - **Reset prerequisite fixed and verified in dev (§18):** all 3,303 raw snapshots are playable, but old
+     idle gain-control frames killed one live Goriya boundary. Controllable curriculum loads now preserve the
+     first action; ordinary pre-entry loads are unchanged. Native regression, all 27 loader/end-action tracks,
+     zero dead loaded boundaries, cave/default-run parity, CUDA smoke and 471 tests pass. Do not discard valid data.
+   - **Both common-task chain teams complete:** 400 runs, zero east-first prefixes/requested-key arrivals;
+     simple old/R34 Dodongo arrivals 2/1, 4/3, 4/3, 2/2, 14/10 on full main/fairy, post-D1 main/fairy and D2.
+     Those are old-shortcut arrivals, not support for the new route. R34 is not promoted; main is not activated.
 8. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
    back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?

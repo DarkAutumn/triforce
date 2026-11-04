@@ -33,6 +33,10 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
   through §14 merged at `4cb8434`; **470 tests passed**.
 - Backlog item 6 complete (§15): all three r33 arms, common/actual evaluations and 1,400 fresh chains finished.
   No general chain gain; keep r31-block1 and canonical cutoffs null. D2 east-first data is prepared in dev (§16).
+- D2 east-first states/paths are audited (§16–17), but r34 warm continuation still takes the old entrance:
+  0/60 east exits, zero requested-key arrivals in 400 matched chains. Not promoted; main remains compatible.
+- Curriculum action-boundary fix complete in dev (§18): native death avoided, all 3,303 saved frames and 27
+  loader/end-action paths verified, CUDA curriculum smoke and **471 tests passed**. Retry the route with curriculum.
 
 ## 1. Shared lingering metric
 
@@ -1024,3 +1028,89 @@ Fresh family-contained Rope/Goriya curricula for all three chains run under dev 
 Old Rope under the new YAML/states: 335/420 (80%), −0.34 real/−0.26 total hearts; empty 0x7d is **0/60**, always
 leaving the old north way. Do not activate the east-first main route under this old policy: retrain on frozen
 dev, then cut over route/data/model together after verification. Main states/trajectories/pointers unchanged.
+
+## 17. East-first Rope retraining (r34)
+
+Verified route/state/consumer preparation is committed in dev at `ab9bda5`; all 470 tests pass. Main remains
+on its old compatible route/state/model team until candidate selection. Source/YAML/states in dev now freeze
+for `models/d2-rope/r34-east-key`; protocol/evidence at `models/r34-east-key-evidence/` in main's model root.
+
+Warm-start r28-d2, seed 34, eight CPU env workers, CUDA; at most 490 updates ×4,096 = 2,007,040 additional
+actions, balanced-success stop 0.99. Same max_steps 3,000, one-room task, half full health/partial hp down to
+0.15, bombs off, ordinary PBRS, no nearby-item reward or measured cutoff. Rope curriculum remains disabled:
+this is the requested route/state retrain, not a simultaneous new curriculum-treatment trial. Background
+trajectory refresh uses only ignored dev outputs, not running training inputs or main default curricula.
+
+Common-task old Rope baseline already completed (335/420, empty entrance 0/60); candidate gets the identical
+20 episodes/state, seed 0 task after training. Then both full/post-D1 routes and D2 with pinned teams, explicit
+native 0x7e key-route/carry checks, before model/route/data cutover. No candidate promotion or main activation.
+
+Retained Goriya was also remeasured on the migrated state cohort: 181/240, −0.86 real/−0.81 total hearts,
+worst quiet 1,843. D1 records stay unchanged; D2 0x1e is 47/60, −0.82 hearts, and 0x5e 50/60, −0.85. This
+measures the new state cohort, not an isolated causal key-count effect. Keep its model unchanged for the
+requested Rope retrain; new D2 curricula are being refreshed for later bundled retraining.
+
+Rope trajectory refresh is complete for all 18 affected entry states: 12 chain-0/1 paths use 377,375 exploratory
+actions, six chain-2 paths 138,681. All exact native replays succeed; terminal snapshots are not curriculum
+starts. All 18 tracks / 2,174 snapshots also pass actual curriculum-stage reset and exact last-action native
+exit smoke. Temporary completed entry-state installation/build/audit scripts are removed; native payloads
+are committed and audit/inventory JSON is copied into the r34 evidence root.
+
+Goriya refresh completed 6/6 native replays: 318,918 exploratory actions for chains 0/1, 158,057 for chain 2.
+Default Rope curricula still use four obsolete seed labels; refresh also covers retained off-route 0x6d rather
+than keeping those old paths. All three 2_6ds paths succeed in 110/55/43 actions (21,662 exploratory actions).
+The replacement therefore covers all 21 configured Rope starts and the six affected D2 Goriya starts.
+
+**Native curriculum reset prerequisite found:** all 27 tracks / 3,303 raw snapshots are alive playable mode 5,
+but ordinary GameSession.load turns Goriya `2_1es_1/0100.state` into mode 17/death. Raw frame: one heart,
+x=120/y=93; exact restore plus the recorded MOVE W 4 survives at one heart. The loader advances two idle
+frames before the first choice (gain_control's initial step plus skip_uncontrollable's final step). Do not
+filter this valid snapshot or suppress the failure. Preserve controllable curriculum boundaries, while keeping
+normal pre-entry loading unchanged; fix after r34's frozen training/evaluation. A deterministic half-heart
+stone/shield-turn regression also reproduces: old load dies, immediate MOVE E 4 blocks once and survives.
+The permanent native regression now fails before the fix (health 0 rather than 0.5). The full raw/load audit
+finds exactly one fatal boundary among 3,303, not a failed exploration or bad entry state.
+
+Both completed 40-seed teams under the new route still bypass 0x7e entirely; all 400 runs have no execution errors:
+
+| Segment | Old R28 Dodongo | R34 Dodongo | East-prefix runs, either team | Requested-key arrivals, either team |
+|---|---:|---:|---:|---:|
+| Full main | 2/40 | 1/40 | 0/40 | 0/40 |
+| Full fairy | 4/40 | 3/40 | 0/40 | 0/40 |
+| Post-D1 main | 4/40 | 3/40 | 0/40 | 0/40 |
+| Post-D1 fairy | 2/40 | 2/40 | 0/40 | 0/40 |
+| D2 | 14/40 | 10/40 | 0/40 | 0/40 |
+
+Requested-key arrivals require the first D2 rooms 7d→7e→6e, native 7e pickup flag and added key at 6e, and
+that key still carried into 0e. Native per-visit inventory is recorded; all-three-key carry is separate.
+`models/r34-east-key-evidence/chains/{old,new}-0/` contains all records. Candidate selection used an immutable
+detached ab9bda5 worktree so the later curriculum fix could not alter its runtime; that temporary checkout is retired.
+
+R34 completed all 490 updates / 2,007,040 added actions (3,869.9 training seconds), no early stop. Its common
+entry evaluation is not a route success: the entrance is still 0/60 and other rooms regress. No promotion,
+no activation and no training-code treatment retained from this failed continuation. The requested route/data
+preparation stays isolated for the next attempt, using the verified backward curriculum from the same r28 start.
+
+| Checkpoint | Successes | Real hearts/episode | Total hearts/episode | 7d east exits | 3e successes | 7e successes |
+|---|---:|---:|---:|---:|---:|---:|
+| Old r28-d2 | 335/420 | −0.338 | −0.263 | 0/60 | 54/60 | 58/60 |
+| r34-east-key | 319/420 | −0.338 | −0.290 | 0/60 | 46/60 | 56/60 |
+
+## 18. Preserve controllable curriculum action boundaries
+
+`GameSession.load(..., controllable=True)` preserves a saved action boundary instead of running idle
+gain-control frames. Curriculum `ZeldaEnv.reset` selects it; ordinary room-entry loads, spawn/RAM randomization,
+fresh-room handling and all non-curriculum callers remain unchanged. A saved cave sets the executor's existing
+in-cave flag, preventing an extra entry cooldown. No observation/action schema change or input-specific filter.
+
+The native half-heart/approaching-stone regression fails before at reset health 0; after the fix the policy
+gets its first legal shield turn and survives/moves at half a heart. Full suite: **471 passed in 118.11 seconds**.
+All 21 Rope tracks / 2,382 snapshots and six D2 Goriya tracks / 921 snapshots pass family, playable-mode,
+four-heart maximum, actual curriculum-stage reset and exact last-action exit smoke. The comprehensive loaded
+boundary audit is **0 dead / 3,303**, versus 1 before. Native cave load/first action matches exact restoration
+(exit to OW, 103 frames), and the old D2 seed-1000 run remains byte-for-byte identical (249 actions).
+
+CUDA CLI smoke from r28: two updates / 1,024 actions, two workers, 848,672-parameter model; curriculum success
+0.818 then 1.0, all 21 expected track names present. Evidence under `models/r34-east-key-evidence/`, including
+`cuda-curriculum-smoke/`; the smoke checkpoint and completed throwaway verification scripts are removed.
+This fix is committed in dev, not activated in main ahead of a compatible east-first model.

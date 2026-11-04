@@ -29,7 +29,7 @@ session through the `session` fixture in `tests/conftest.py`. Training uses subp
 | `emulator.Emulator` | `step(buttons uint8[9] or None, frames)`, `frame` counter, `ram` (all blocks, cached per frame), `read(addr)`, `info` (data.json variables), `set_value(name, v)`, `save_state()/load_state(bytes)`, `get_screen()`. |
 | `actions` | `ACTION_SCHEMA_VERSION`; `ActionKind` (zelda_enums) = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW; `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action(kind, direction, duration)`, `Action.from_indices(k, d, u)`, `.to_indices()`, `Action.parse('MOVE N 16')`. `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`, `to_flat()` → bool[`MASK_SIZE`] = K + K·8 + K·4. A kind whose direction (or duration) row is all False doesn't use that head. `compute_action_mask(state)`. |
 | `frame_skip.OptionExecutor` | `execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks)`; `.blocks` counts confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. |
-| `session.GameSession` | `load(name|path|bytes, randomize_rng=True, ram_overrides=None) -> ZeldaGame`; `act(action) -> StateChange`; `.state`, `.mask`, `.total_frames`, `.steps`; `snapshot()/restore()`. |
+| `session.GameSession` | `load(name|path|bytes, randomize_rng=True, ram_overrides=None, fresh_room=False, *, controllable=False) -> ZeldaGame`; controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> StateChange`; `.state`, `.mask`, `.total_frames`, `.steps`; `snapshot()/restore()`. |
 | `state_change.StateChange` | `previous`, `state`, `action`, `frames`, `interrupt`, `health_lost/gained`, `enemies_hit`, `enemies_stunned`, `items_gained`, `changed_location`, `gained_triforce`, `action_mask`, executed `projectile_blocks` / `.blocks`. Look-ahead credit via `FutureCreditLedger` does not add simulated blocks. |
 | `describe`, `play` | Text dumps and the interactive `python -m triforce.play` tool. |
 
@@ -188,6 +188,9 @@ Nearby-item shaping and the measured cutoff remain disabled in promoted configs 
   last 10 episodes from the current stage succeed, until it reaches the room entry. Progress is shared by all
   workers through `<run dir>/curriculum.json`. Curriculum episodes are reported as `curriculum/*` and excluded
   from the room-entry metrics.
+  Saved curriculum frames are already controllable: resets use `GameSession.load(..., controllable=True)`
+  without idle input or a second cave-entry cooldown. RNG/HP randomization still applies. Ordinary entry-state
+  resets keep transition/fresh-room handling unchanged.
 - Chain-matched health (`chain_hp.py`): `python -m triforce.chain_hp <chain jsonl ...>` writes
   `triforce/chain_hp.json`, the hearts Link entered each room with in chain runs. A specialist with
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry

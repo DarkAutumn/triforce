@@ -1,16 +1,19 @@
 """ZeldaEnv end to end on real savestates: episodes, endings, outcomes, terminal rewards, info contract."""
 
+import json
 import random
 
 import numpy as np
 import pytest
 
 from triforce.actions import DIRECTIONS, DURATIONS, KINDS, Action, ActionMask
+from triforce.curriculum import CurriculumSpec
 from triforce.end_conditions import UnclassifiedEndingError
 from triforce.env import InvalidActionError, ZeldaEnv
 from triforce.objectives import ObjectiveKind
 from triforce.rewards import TERMINAL_FAILURE_PENALTY_VALUE, success_reward_value
 from triforce.specialist import RamRandomization, load_specialist
+from triforce.start_states import write_savestate
 from triforce.zelda_enums import ActionKind, Direction, MapLocation, SwordKind, TileIndex
 
 STEP_INFO_KEYS = {'frames', 'interrupt', 'action', 'rewards', 'room', 'health', 'max_health', 'steps',
@@ -464,3 +467,35 @@ def test_one_room_episode_ends_at_the_first_correct_exit(session, one_room):
         results.append((reward, info))
     info = results[-1][1]
     assert info.get('ending') == ('exit-correct' if one_room else None)
+
+
+def test_curriculum_reset_preserves_the_first_shield_turn(session, tmp_path):
+    """A saved half-heart frame is survivable only if loading leaves the first action to the policy."""
+    session.load('1_73s_0', randomize_rng=False)
+    session.act(Action.parse('MOVE N 16'))
+    track = tmp_path / 'trajectories' / '1_73s_0'
+    track.mkdir(parents=True)
+    write_savestate(str(track / '0000.state'), session.emu.save_state())
+    session.apply_ram({'link_x': 96, 'link_y': 144, 'link_direction': 4,
+                       'hearts_and_containers': 0x20, 'partial_hearts': 0x7F})
+    for address in (0xAC, 0x3D, 0x4F0, 0x66C, 0x512, 0x394, 0x3A8, 0x3F8, 0x56, 0x57):
+        session.emu.write(address, 0)
+    for base, value in {0x34F: 0x5C, 0xAC: 0x17, 0x70: 110, 0x84: 144, 0x98: 2, 0x4BF: 0xE1,
+                        0x3D0: 2, 0x3BC: 0xA0, 0x3A8: 0, 0x380: 0x51, 0x394: 0,
+                        0x28: 0, 0x3D: 0, 0x405: 0, 0x492: 0}.items():
+        session.emu.write(base + 11, value)
+    session.emu.write(0x34C, 1)
+    session.apply_ram({})
+    write_savestate(str(track / '0001.state'), session.emu.save_state())
+    (track / 'trajectory.json').write_text(json.dumps({'start_state': '1_73s_0', 'success': True}))
+    config = load_specialist('stalfos-keese-gel').model_copy(update={'ram_randomization': RamRandomization()})
+    curriculum = CurriculumSpec(str(track.parent), str(tmp_path / 'progress.json'), fraction=1.0)
+    env = ZeldaEnv(config, session=session, capture_dir=None, curriculum=curriculum)
+    try:
+        _, info = env.reset(seed=0)
+        assert info['health'] == 0.5 and not session.state.game_over
+        _, _, terminated, truncated, info = env.step(Action.parse('MOVE E 4').to_indices())
+        assert not terminated and not truncated
+        assert info['health'] == 0.5 and session.state.link.position.x > 96
+    finally:
+        env.close()

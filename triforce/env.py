@@ -107,7 +107,8 @@ class ZeldaEnv(gym.Env):
                 name, self._curriculum_tag = start
         name = name or self.pool.next()
         self.session.set_disabled_kinds(self.config.items.disabled_kinds())
-        state = self.session.load(name, fresh_room=self.config.fresh_rooms)
+        state = self.session.load(name, fresh_room=self.config.fresh_rooms,
+                                  controllable=self._curriculum_tag is not None)
         if name not in self._verified:
             verify_start_room(name, state.full_location, self.config.rooms, self.config.name)
             self._verified.add(name)

@@ -9,7 +9,7 @@ from typing import Optional
 
 from .actions import Action, ActionMask, compute_action_mask
 from .emulator import Emulator, load_state_bytes
-from .frame_skip import OptionExecutor, OptionResult
+from .frame_skip import ADDR_MODE, MODE_CAVE, OptionExecutor, OptionResult
 from .room_entry import is_pre_entry, make_room_fresh, pending_room, randomize_spawn
 from .state_change import FutureCreditLedger, StateChange
 from .zelda_game import ZeldaGame
@@ -40,12 +40,15 @@ class GameSession:
         """Releases the emulator."""
         self.emu.close()
 
-    def load(self, state, randomize_rng: bool = True, ram_overrides=None, fresh_room: bool = False) -> ZeldaGame:
+    def load(self, state, randomize_rng: bool = True, ram_overrides=None, fresh_room: bool = False,
+             *, controllable: bool = False) -> ZeldaGame:
         """Loads a savestate (name, path, or raw bytes), applies RAM overrides, and gains control of Link.
 
         randomize_rng: new RNG bytes, and for a pre-entry savestate (``room_entry``) a random SpawnCycle/edge cell,
             all drawn from the ``random`` module (seed it for reproducible loads).
         fresh_room: for a pre-entry savestate, clear the pending room's kill history so it spawns every monster.
+        controllable: the saved frame is already an action boundary (curriculum); don't advance it without
+            input. Normal entry states still run gain_control through their transition.
         """
         data = state if isinstance(state, bytes) else load_state_bytes(state)
         self.emu.load_state(data)
@@ -65,7 +68,10 @@ class GameSession:
         for name, value in (ram_overrides or {}).items():
             self.emu.set_value(name, value)
 
-        self.executor.gain_control()
+        if controllable:
+            self.executor.was_in_cave = self.emu.read(ADDR_MODE) == MODE_CAVE
+        else:
+            self.executor.gain_control()
         self.total_frames = 0
         self.steps = 0
         self.state = self._build_state()
