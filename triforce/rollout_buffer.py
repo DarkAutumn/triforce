@@ -105,14 +105,15 @@ class RolloutBuffer:
         obs[MASK_KEY] = self.masks[env_index, t]
         return obs
 
-    def collect(self, env_index: int, network, env, episode_tracker=None):
+    def collect(self, env_index: int, network, env, episode_tracker=None, *, seed=None):
         """Fills this env's slice with ``memory_length`` steps, then computes returns and advantages.
 
         ``episode_tracker`` (metrics.EpisodeTracker) sees every step for training metrics.
+        ``seed`` applies only to the initial reset, not later episodes or rollout batches.
         """
         # pylint: disable=too-many-locals
         if not bool(self.has_data[env_index]):
-            obs, _ = env.reset()
+            obs, _ = env.reset(seed=seed)
             if episode_tracker is not None:
                 episode_tracker.begin()
             done = 0.0

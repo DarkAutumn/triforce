@@ -21,6 +21,9 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
 - Backlog item 2 complete: r30-exit trains kill → heart → east exit. Matched exit-task eval improved 59/60 →
   60/60; mean pickup-to-exit 92.0 → 11.1 actions, worst 1,963 → 77; health change +0.61 → +0.69 hearts.
   Both matched full chains removed the two old post-heart timeouts. Other families still limit the chain.
+- Worker-seed prerequisite fixed and verified in dev (§7): real rollout tensors repeat with the same seed,
+  distinct workers/seeds differ, episode streams advance; CPU CLI/CUDA smoke and all 462 tests passed.
+  R31's four-policy frozen-team chains are running on unchanged main; seed/quiet-control merge waits for them.
 
 ## 1. Shared lingering metric
 
@@ -342,6 +345,30 @@ on frame 17 of `BEAMS E`, after its 16 control frames. No health loss; the unmoc
 with this native settling-frame regression; removed fake legacy-sound fields, a repeated positive-multiplier row
 and private-counter assertions. Reward suite: **25 passed in 2.55 seconds**. No live runtime code/YAML changed.
 
+### Completed cohort evaluation; chain selection pending
+
+All three r31 arms finished 245 updates / 1,002,540 additional actions. Fixed seed-0 evaluation uses the canonical
+Goriya task/current detector, 20 episodes per start state (240 total), without enabling nearby-item shaping or
+measured truncation. Evaluation outputs: `models/r31-block-evidence/{promoted,r31-block1,r31-block3,r31-quiet005}-eval.json`.
+
+| Policy | Successes / 240 | Real health change | Confirmed blocks | Mean longest quiet actions | Worst quiet actions |
+|---|---:|---:|---:|---:|---:|
+| Promoted r21 | 178 | −0.96 | 45 | 86.4 | 1,971 |
+| Ordinary block reward | 184 | −0.77 | 45 | 45.1 | 1,228 |
+| Triple block reward | 182 | −0.87 | 37 | 24.1 | 1,404 |
+| Ordinary + 0.05 quiet-fight cost | 189 | −0.85 | 45 | 22.4 | 497 |
+
+The quiet arm improves D1 0x44 versus ordinary (49/60 versus 43/60; −0.775 versus −0.942 hearts), but costs more
+health in D2 0x5e (−1.033 versus −0.700; 48/60 versus 51/60). Triple block also reaches 49/60 in 0x44 but falls
+to 42/60 in D2 0x1e versus ordinary's 49/60. More reward did not produce more measured blocks here. No arm has
+yet earned promotion: success, damage and quiet gaps must be weighed against frozen-team chains, not aggregate
+success alone. Section 7's seed flaw prevents attributing these differences solely to the reward coefficients.
+
+Frozen-team comparison started after all training ended: each of the four Goriya policies, with every other
+promoted specialist pinned, 40 runs per segment (seed 0–39): both full routes, both post-D1 routes and D2 entrance.
+It changes neither promoted pointers nor canonical YAML. Main source stays frozen until these chains finish;
+seed correction is being verified separately in dev.
+
 ## 7. Training seed integrity finding (r31 prerequisite)
 
 The two completed arms both received `--seed 31`, but first-update episode/health metrics already differed.
@@ -365,3 +392,26 @@ checkpoint/config, seed 31, two workers, one 128-action update, explicit `1_44w_
 fixed to one. Run A completed no episode; B died after 43 actions/640 frames, losing three hearts. Action counts
 also differed (A: WAIT/MOVE/BEAMS/SWORD = 3/78/1/46; B: 6/77/2/43). Evidence preserved in
 `models/r31-block-evidence/seed-before.json`. This is a real seeded-gameplay failure, not merely differing timing.
+
+After the cohort's training finished, corrected propagation in dev: CLI seed reaches `PPO.train`, which seeds
+training RNGs; each spawned worker seeds Python/NumPy/Torch and its first environment reset using its indexed
+stream. In-process collection also seeds its first reset. Later episode resets and rollout batches do not reseed.
+Torch-normalized unsigned seeds avoid overflow at the worker offset; NumPy receives its supported 32-bit seed.
+
+The new real-game CLI regression failed before the fix: repeated two-worker runs differed in episode counts,
+actions, reset health, frames, rewards and lingering. It now also covers in-process training with the shared emulator.
+
+Native worker-pool smoke (no curriculum, CPU, r21 Goriya weights, two workers, two 64-action batches each,
+eight-action episode cap): two seed-31 invocations match every observation/action/reward/frame/boundary/mask tensor;
+seed 32 differs. The workers' action streams differ, and both workers' reset hp fractions vary over 16 episodes,
+proving streams advance across episode and batch boundaries rather than replaying the first draw. Full digests and
+reset hp sequences: `models/r31-block-evidence/seed-after.json`.
+
+The original two fresh CLI invocations now both produce WAIT/MOVE/BEAMS/SWORD = 2/59/10/57 over 128 actions.
+CUDA smoke also passed: two updates / 256 actions, two completed successful episodes, mean health change −0.75
+hearts. This is path verification, not a candidate model or a claim of deterministic CUDA training. Lee's player
+was not killed. Shared asynchronous curriculum and resumed RNG continuation retain the limits stated above.
+
+Integrated dev suite after the seed fix: **462 passed in 204.83 seconds**, including actual single-process and
+spawned two-worker gameplay reproducibility regressions. Temporary smoke scripts/checkpoints were removed;
+the recorded native-rollout evidence remains in the normal ignored model root.

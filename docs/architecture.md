@@ -151,6 +151,11 @@ Nearby-item shaping and the measured cutoff remain disabled in promoted configs 
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
   records iterations, steps, `stopped_early`, wall time and steps/sec.
+- `train --seed S` seeds model initialization and PPO RNGs, then each spawned worker's Python/NumPy/Torch
+  streams and first environment reset with `(S + worker_index) mod 2**64` (Torch normalizes signed seeds first).
+  In-process training uses S. Later episode resets and rollout batches advance those streams without reseeding.
+  Shared curriculum progress still depends on worker completion order; this is not a promise of bitwise-identical
+  curriculum or CUDA training, nor exact RNG continuation when resuming a checkpoint.
 - Live event logs (`events.py`, watched by `training-gui.py`): each training invocation gets
   `logs/<yymmdd>_<NNN>_<what>/` (gitignored; `--logs-dir` / `$TRIFORCE_LOGS_DIR`). `training.json` lists every
   specialist run in order with its status and is rewritten atomically. `<specialist>.jsonl` is an append-only

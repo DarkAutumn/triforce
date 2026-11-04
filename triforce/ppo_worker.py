@@ -6,9 +6,11 @@ of the shared ``RolloutBuffer`` and reports its ``RolloutMetrics`` (raw counts) 
 main process at a second barrier.
 """
 
+import random
 import threading
 import traceback
 
+import numpy as np
 import torch
 import torch.multiprocessing as mp
 
@@ -42,13 +44,18 @@ class ModelFactory:
         return self.network_class(*self.args, **self.kwargs)
 
 
-def _worker_loop(env_index, shared_buffer, shared_weights, make_network, make_env, sync):
+def _worker_loop(env_index, shared_buffer, shared_weights, make_network, make_env, sync, seed):
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     torch.set_num_threads(1)
     weights_barrier, rollouts_barrier, close_flag, conn = sync
     env = None
     waiting_for_weights = True
     try:
+        if seed is not None:
+            seed = (seed + env_index) % (1 << 64)
+            random.seed(seed)
+            np.random.seed(seed % (1 << 32))
+            torch.manual_seed(seed)
         env = make_env()
         network = make_network()
         tracker = EpisodeTracker()
@@ -58,7 +65,7 @@ def _worker_loop(env_index, shared_buffer, shared_weights, make_network, make_en
             if close_flag.value:
                 break
             network.load_state_dict(shared_weights)
-            shared_buffer.collect(env_index, network, env, tracker)
+            shared_buffer.collect(env_index, network, env, tracker, seed=seed)
             conn.send(tracker.take())
             rollouts_barrier.wait()
             waiting_for_weights = True
@@ -83,7 +90,7 @@ def _worker_loop(env_index, shared_buffer, shared_weights, make_network, make_en
 class RolloutWorkerPool:
     """One subprocess per env, filling a shared-memory RolloutBuffer."""
 
-    def __init__(self, n_workers, shared_buffer, network, make_network, make_env):
+    def __init__(self, n_workers, shared_buffer, network, make_network, make_env, *, seed=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.n_workers = n_workers
         self.workers = []
@@ -98,7 +105,7 @@ class RolloutWorkerPool:
             parent, child = ctx.Pipe()
             process = ctx.Process(target=_worker_loop,
                                   args=(i, shared_buffer, self._shared_weights, make_network, make_env,
-                                        (self._weights_barrier, self._rollouts_barrier, self._close_flag, child)),
+                                        (self._weights_barrier, self._rollouts_barrier, self._close_flag, child), seed),
                                   daemon=True)
             process.start()
             child.close()
