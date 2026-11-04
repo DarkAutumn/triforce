@@ -1218,9 +1218,9 @@ refreshed D2 paths from §18 (all six native current-goal replays pass); default
 of the compatible route/model cutover. Evidence: route audits, inventory/goal reports, current path and
 retired inputs under the r35 evidence root. Completed throwaway audit scripts are removed; runtime stays frozen.
 
-## 21. Versioned observation bundle and full-team comparison (r36, preparing)
+## 21. Versioned observation bundle and full-team comparison (r36, active)
 
-Items 1–7 are complete; implement the approved §3 bundle in dev only. Main stays on schema 1 with the
+Items 1–7 are complete; the approved §3 bundle is implemented/verified in dev only. Main stays on schema 1 with the
 promoted r35 team. Schema 2 adds three room features (refresh-suppression flag/full-byte chase X/Y), seven
 Link features (boomerang X/Y/five tactical phases), and five Goriya-boomerang entity phases. It corrects
 attacker-stun/projectile-major-state contact gates and distinguishes arrow delay from fireball delay.
@@ -1242,8 +1242,8 @@ CUDA scratch CLI/worker smoke completes two updates/1,024 actions with the new 8
 serialized/spawned evaluation completes all 12 Goriya starts (0 successes, expected for this tiny smoke).
 Neither the smoke nor the schema change is promoted.
 
-Protocol: freeze schema-1 source at `83bd2bb` (`/tmp/triforce-r36-schema1`) before edits; freeze schema-2 source
-after verification. Both train all ten families from scratch, seed 36, eight workers/CUDA, exactly
+Protocol: schema-1 source is frozen at `83bd2bb` (`/tmp/triforce-r36-schema1`); verified schema-2 source at
+`4d35155` (`/tmp/triforce-r36-schema2`). Both train all ten families from scratch, seed 36, eight workers/CUDA, exactly
 490×4,096 = 2,007,040 actions/family, no early stop/load/demos/harvesting/promotion. Preserve canonical
 YAMLs, including Aquamentus's 0.75 partial-HP floor, ordinary rewards, null measured cutoffs and bombs off.
 Both read the same frozen 62-track corpus across the six enabled curriculum families. Model/output roots
@@ -1255,5 +1255,18 @@ both full/post-D1 routes and D2 (40 runs/block/segment, 80 combined). Pin every 
 configs; require native first-east departure, 7e pickup before 6e and carried key at Dodongo, with strict
 prefix/all-three-key carry separate. Rank chain success, physical/total health, deaths/hearts/blocks and
 longest/tail quiet gaps. No post-D1 boomerang ablation until this comparison settles.
-Evidence/protocol root: `models/r36-observation-full-retrain-evidence/`; training has not launched yet.
+Evidence/protocol root: `models/r36-observation-full-retrain-evidence/`. Execution is delegated to one owner
+per schema arm, with separate model/log roots; frozen code/config/data cannot change mid-run. Canonical
+YAMLs/routes/game/entry manifest match, and all 6,541 frozen corpus files have a SHA-256 manifest. The native
+key-carry helper smoke reaches Dodongo on existing-team D2 seed 1 with mandatory/all-three-key carry and no error.
+
+The first schema-1 ow-start optimization hit actual CUDA OOM before completing an update (44 MiB requested,
+26.12 MiB free); no candidate checkpoint. Preserve this failed attempt under `schema1/failed-oom/`, outside
+the fresh candidate runs. Under Lee's standing permission for an actual CUDA crash, stopped the dedicated
+`play-zelda.py 3x2 --games 64` process group; observed 19,311 MiB GPU memory free afterward. Schema 1 retries
+from scratch with unchanged seed/budget/workers/device, not from partial weights. No protocol treatment change.
+
+Lee requests finishing this experiment, recording/committing its result and then pausing. Swordless-start
+departures and finite training/player stall escape (replacement eligible at N, reset at 2×N) are recorded in
+the backlog, not implemented mid-trial. Do not start the boomerang ablation or any next experiment before he resumes.
 
