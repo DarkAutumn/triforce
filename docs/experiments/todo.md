@@ -59,6 +59,10 @@ chain's death rooms, then the big ablation. Round 7 items 1–6 complete; east-f
    - [ ] **Bundled observation trial before the from-scratch item 8 study:** versioned chase target coordinates,
      Link/monster boomerang position/phase and corrected harm semantics; compare a full retrain. No RNG, guessed
      universal owner, redundant stun/clock flags or incidental timer rescaling. This bundle is not yet implemented.
+   - **Full-study input prerequisite complete (§20):** retired six old Moblin curricula (297 snapshots) with
+     three containers/no boomerang/no triforce in post-D1 rooms; preserved the valid four-heart 0_3dc path and
+     installed verified current 0_3dn_2 coverage. All 14 Moblin goal replays and 41 default-track route audits pass.
+     One old D2 Goriya goal path is stale; the already verified replacement belongs to the pending D2 cutover.
 4. [x] **Goriya rooms: blocking, and the corner stalemate (Lee).** v1 rewarded the shield-block sound, and that taught
    Link to block instead of face-tanking. v2's old `critics.critique_block` rewarded ArrowDeflected sound onset;
    round 7 replaces that incomplete signal with per-frame confirmed shield collisions and per-collision decay.
@@ -165,7 +169,7 @@ chain's death rooms, then the big ablation. Round 7 items 1–6 complete; east-f
      and refresh affected Rope and D2 Goriya trajectories before curriculum use.
    - **Dev preparation complete, round 7 §16:** all 24 downstream payloads have native nine-load audit and
      conserved keys; stale 2_6ew states/rows retired, 0x6d retained off-route with correct origin progress.
-     All 470 tests pass after fixing off-route heart-audit derivation. Rope/Goriya curricula are refreshing.
+     Native preparation passed all 470 tests; refreshed paths and reset fix are verified below.
      Old policy is 0/60 at newly eastbound 0x7d: keep main unchanged until dev retraining/selection finishes.
    - **R34 completed, rejected (§17):** ab9bda5, r28 warm start, seed 34/eight workers, 2,007,040 extra actions,
      unchanged reward/HP/bombs/one_room and no curriculum treatment. Still 0/60 at the eastbound entrance;
@@ -179,6 +183,11 @@ chain's death rooms, then the big ablation. Round 7 items 1–6 complete; east-f
    - **Both common-task chain teams complete:** 400 runs, zero east-first prefixes/requested-key arrivals;
      simple old/R34 Dodongo arrivals 2/1, 4/3, 4/3, 2/2, 14/10 on full main/fairy, post-D1 main/fairy and D2.
      Those are old-shortcut arrivals, not support for the new route. R34 is not promoted; main is not activated.
+   - **R35 active (§19):** same r28 start, seed 35/eight workers/CUDA, same 2,007,040-action maximum, but the
+     verified backward curriculum supplies east-exit practice. Runtime frozen at 304fb45, teacher inputs copied
+     into the r35 evidence root (21 Rope starts). All other task/schema/reward/HP/bombs settings stay unchanged.
+     Native first-east departure, mandatory pickup before 6e and carried key at Dodongo select the model; strict
+     route prefix is separate so ordinary tagged-room backtracking is not falsely discarded. Main stays old.
 8. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
    back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?

@@ -1114,3 +1114,57 @@ CUDA CLI smoke from r28: two updates / 1,024 actions, two workers, 848,672-param
 0.818 then 1.0, all 21 expected track names present. Evidence under `models/r34-east-key-evidence/`, including
 `cuda-curriculum-smoke/`; the smoke checkpoint and completed throwaway verification scripts are removed.
 This fix is committed in dev, not activated in main ahead of a compatible east-first model.
+
+## 19. Verified-curriculum east-first retrain (r35, active)
+
+R34 never departed east, despite objective observations already being on. Retry from the same r28-d2 checkpoint
+with the existing backward curriculum rather than hard-coding the entrance. Frozen runtime source `304fb45`,
+seed 35, eight workers/CUDA, at most 490×4,096 = 2,007,040 additional actions, balanced 0.99 stop. Same schema 1,
+HP mix, bombs off, ordinary reward, one_room and 3,000-action cap. Curriculum fraction 0.5, threshold 0.6; all
+21 verified Rope tracks plus six refreshed D2 Goriya tracks are copied into the ignored r35 evidence root,
+not read from mutable default trajectory folders. Only Rope is trained; retained Goriya is unchanged.
+
+Checkpoint/config: `models/d2-rope/r35-east-curriculum/`. Protocol/data:
+`models/r35-east-curriculum-evidence/`. Main D2 route/states/Rope-and-D2-Goriya curricula/promoted pointer remain
+old until compatible native key-route behavior and matched full/post-D1 main/fairy plus D2 chains are verified. Old entry
+evaluation and baseline chains remain applicable: same cohort, config outside curriculum and non-curriculum
+execution, with native default-run parity proven in §18. No native step, observation or action-policy override.
+
+R35 key-route selection measures the first D2 departure east into 7e, native pickup/key balance before the
+first 6e entry, and carry into 0e. Backtracking after that first east departure is handled like the existing
+runner's tagged-room recovery; strict 7d→7e→6e prefix compliance is recorded separately. The already completed
+400 r34 chains also have zero east-first departures under this definition. The updated native harness is
+smoked on old D2 seed 1000 (same 249-action death, no false requested-key success).
+
+The later full-retrain input audit started read-only while r35 trained against its frozen copy. It found
+route-incompatible legacy Moblin inputs; their isolated replacement is logged in §20 and does not alter the
+running Rope corpus, runtime source, task YAML, model pointer or D2 activation.
+
+## 20. Align default Moblin curriculum with post-D1 route inventory
+
+Audit currently enabled defaults (Aquamentus, Goriya, Moblin, Zora, Wallmaster). Mode/family checks and an
+upper heart bound alone pass all inputs, but exact route-container checks expose six obsolete Moblin tracks:
+`0_3dn`, `0_3ds`, `0_4de`, `0_4dn`, `0_4ds`, `0_4dw`. Their 297 snapshots have three containers, no boomerang
+and no triforce; the current post-D1 cohort has four containers, wooden boomerang and one triforce. Those
+inputs would contaminate both the full-retrain baseline and the post-D1 usable-versus-masked comparison.
+
+Moved these six ignored directories out of the default loader into
+`models/r35-east-curriculum-evidence/retired-moblin-curricula/`, preserving their bytes/retirement manifest.
+Kept valid legacy `0_3dc`: its inventory exactly matches current `0_3dn_2` (wood sword/boomerang, four hearts,
+one triforce, no bow/arrows/ring/magic shield). No valid unrelated data deleted or repaired by RAM injection.
+
+Explored the actual current entrance `0_3dn_2`, seed 35: 318 iterations/5,723 exploratory actions, successful
+50-action native replay ending at three health/four containers. Installed its trajectory into default
+`trajectories/ow-moblin/`; 14 Moblin tracks now pass actual loader/reset and exact last-action current-goal smoke.
+No Moblin model retrained or promoted, and no running r35 Rope input changed.
+
+| Enabled-default audit | Tracks | Snapshots | Route-container mismatches |
+|---|---:|---:|---:|
+| Before | 46 | 4,225 | 297 |
+| After | 41 | 3,978 | 0 |
+
+The original all-family goal smoke also identifies one old D2 Goriya trajectory (`2_1es_2`) whose last action
+now ends exit-wrong rather than boss-room entry (45/46 successes). This is already superseded by the six
+refreshed D2 paths from §18 (all six native current-goal replays pass); default D2 installation remains part
+of the compatible route/model cutover. Evidence: route audits, inventory/goal reports, current path and
+retired inputs under the r35 evidence root. Completed throwaway audit scripts are removed; runtime stays frozen.
