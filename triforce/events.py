@@ -22,7 +22,9 @@ Events written by ``triforce.train`` (one specialist):
   fraction, elapsed, sps, eta, and the iteration's headline metrics (``metrics``; ``health_change`` is the mean
   hearts at exit minus hearts at entry, signed; ``health_change_total`` adds the hearts wasted by picking up dropped
   hearts at full health; ``hearts/dropped``, ``hearts/taken``, ``hearts/left``, ``hearts/wasted`` are dropped
-  hearts per episode, see ``triforce/hearts.py``).
+  hearts per episode, see ``triforce/hearts.py``; ``linger/max_steps``, ``linger/max_frames``,
+  ``linger/tail_steps``, ``linger/tail_frames`` are means and ``linger/worst_steps``, ``linger/worst_frames``
+  maxima over measured episodes, also under ``curriculum/linger/*``).
 - ``checkpoint``: iteration, steps, path.
 - ``early_stop``: iteration, steps, balanced_success_rate.
 - ``error``: message, traceback.
@@ -31,7 +33,8 @@ Events written by ``triforce.train`` (one specialist):
 
 Added by ``scripts/train_round.py``: ``eval_start``, ``eval_progress`` (at most once a second: done, episodes,
 running success_rate) and ``eval`` (specialist evaluation: success_rate, episodes, health, health_change,
-health_change_total, hearts_dropped / hearts_taken / hearts_left per episode, by_room, by_state, path; it runs on a
+health_change_total, hearts_dropped / hearts_taken / hearts_left per episode, flat ``linger_*`` means/maxima,
+by_room, by_state, by_room_linger, by_state_linger, path; it runs on a
 background thread while the next specialist trains, so these can arrive after the next stream's ``start``) and
 ``error`` (non-zero exit, failed evaluation).  The last line of every stream is ``end`` (status, plus a summary);
 nothing follows it.  A stream without ``end`` belongs to a run that is still going or was killed.
@@ -55,6 +58,9 @@ PROGRESS_METRICS = ('episodes', 'success_rate', 'balanced_success_rate', 'reward
                     'health_change_total', 'hearts/dropped', 'hearts/taken', 'hearts/left', 'hearts/wasted',
                     'health_at_exit', 'episode_steps', 'curriculum/episodes', 'curriculum/success_rate',
                     'curriculum/point_fraction', 'losses/approx_kl', 'charts/SPS')
+PROGRESS_METRICS += tuple(f'{prefix}/{key}' for prefix in ('linger', 'curriculum/linger')
+                          for key in ('max_steps', 'max_frames', 'tail_steps', 'tail_frames',
+                                      'worst_steps', 'worst_frames'))
 
 
 def logs_root(root: Optional[str | os.PathLike] = None) -> Path:

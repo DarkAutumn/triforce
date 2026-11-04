@@ -17,9 +17,9 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Nothing here is started.
+chain's death rooms, then the big ablation. Round 7 is active: item 1 complete; Aquamentus diagnosis and audit next.
 
-1. **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
+1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
    Progress = a kill, a hit on an enemy, an item/key/treasure taken, a new best wavefront distance to the
    objective, leaving the room. Record per episode / per chain room: the longest no-progress streak and the steps
@@ -27,6 +27,8 @@ chain's death rooms, then the big ablation. Nothing here is started.
    `by_room`, `RoomRecord`, a GUI chart). Note monsters can chase "shadow Link" (AGENTS.md, ram-catalog
    `$60–$62`), so a still Link in a corner can produce long fights with no hits. Item 6 (cutting such runs) builds
    on this metric.
+   - **Done, round 7 §1:** behavior-neutral shared tracker, seeded gameplay parity, 383 tests, CUDA training events,
+     real wide/narrow GUI and historical-data checks. Tracked evals and all 120 baseline chains complete.
 2. **Aquamentus wanders after the kill (Lee).** Link kills Aquamentus, then walks left/right in 0x35 for a very long
    time before leaving; one run sat there "for ages" and only got unstuck by chance. Even with a good success rate
    something is wrong, and Lee says it's unrelated to shadow Link: check it, or penalize hanging out in the boss
@@ -37,6 +39,8 @@ chain's death rooms, then the big ablation. Nothing here is started.
    metric). Fix options: success = exit-correct into 0x36 (with curriculum states after the kill), a lingering
    penalty once the boss is dead, or hand the room to stalfos-keese-gel once the boss is dead. Compare chain time
    and hearts at the triforce room.
+   - **Round 7 §2 diagnosis:** current model 60/60 to the heart but 59/60 through the exit; a reproduced seed
+     lingered 1,963 actions after pickup. Both full chains had two post-heart 2,000-action timeouts. Fix pending.
 3. **Observation audit (Lee: does Link get enough about enemies and the world, e.g. does he know an enemy is
    stunned?).** Do it before the next full retrain: observation changes invalidate every model, so bundle them.
    Already there (`observation.ENTITY_FEATURES`): per-slot type embedding, projectile, blockable (rock, arrow,

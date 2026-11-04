@@ -21,6 +21,9 @@ flat metric dict logged per iteration:
 - ``hearts/dropped``, ``hearts/taken``, ``hearts/left`` (still on the floor at the episode's end) and
   ``hearts/wasted``: dropped hearts per completed episode.
 - ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['frames']``).
+- ``linger/max_steps``, ``linger/max_frames``, ``linger/tail_steps``, ``linger/tail_frames``: means of the
+  longest quiet streak and time since last progress; ``linger/worst_steps`` / ``linger/worst_frames`` are
+  maxima across measured episodes. Curriculum starts use ``curriculum/linger/*``; absent data stays absent.
 - ``interrupt/<reason>``: fraction of steps that ended with each ``info['interrupt']`` reason.
 - ``kind/<KIND>`` and ``duration/<KIND>/<frames>``: action-kind and per-kind duration histograms (fractions).
 - ``rollout/steps``, ``rollout/frames``.
@@ -70,16 +73,49 @@ class RolloutMetrics:
         self.curriculum_start = 0.0
         self.curriculum_point = 0.0
         self.start_results = Counter()     # (start state label, success) -> episodes
+        self.linger_episodes = 0
+        self.linger_sums = Counter()
+        self.linger_worst = Counter()
+        self.curriculum_linger_episodes = 0
+        self.curriculum_linger_sums = Counter()
+        self.curriculum_linger_worst = Counter()
+        self.linger_room_episodes = Counter()
+        self.linger_room_sums = Counter()
+        self.linger_room_worst = Counter()
 
     def merge(self, other: 'RolloutMetrics') -> 'RolloutMetrics':
         """Adds other's counts into self."""
         for name, value in vars(other).items():
             mine = getattr(self, name)
-            if isinstance(mine, Counter):
+            if name in ('linger_worst', 'curriculum_linger_worst', 'linger_room_worst'):
+                for key, maximum in value.items():
+                    mine[key] = max(mine[key], maximum)
+            elif isinstance(mine, Counter):
                 mine.update(value)
             else:
                 setattr(self, name, mine + value)
         return self
+
+    def record_linger(self, linger: dict, curriculum: bool, room=None):
+        """Folds one measured episode into its room-entry or curriculum accumulator."""
+        prefix = 'curriculum_' if curriculum else ''
+        count_name = f'{prefix}linger_episodes'
+        setattr(self, count_name, getattr(self, count_name) + 1)
+        sums = getattr(self, f'{prefix}linger_sums')
+        worst = getattr(self, f'{prefix}linger_worst')
+        for key in ('max_steps', 'max_frames', 'tail_steps', 'tail_frames'):
+            sums[key] += linger[key]
+        for unit in ('steps', 'frames'):
+            worst[unit] = max(worst[unit], linger[f'max_{unit}'])
+        if not curriculum and room is not None:
+            level, location, in_cave = room
+            room_key = f'{level}:0x{location:02x}' + (':cave' if in_cave else '')
+            self.linger_room_episodes[room_key] += 1
+            for key in ('max_steps', 'max_frames', 'tail_steps', 'tail_frames'):
+                self.linger_room_sums[(room_key, key)] += linger[key]
+            for unit in ('steps', 'frames'):
+                key = (room_key, unit)
+                self.linger_room_worst[key] = max(self.linger_room_worst[key], linger[f'max_{unit}'])
 
     def summary(self) -> dict[str, float]:
         """Flat metric dict (see module docstring)."""
@@ -111,6 +147,18 @@ class RolloutMetrics:
             result['curriculum/success_rate'] = self.curriculum_successes / eps
             result['curriculum/start_fraction'] = self.curriculum_start / eps
             result['curriculum/point_fraction'] = self.curriculum_point / eps
+        for prefix in ('', 'curriculum_'):
+            count = getattr(self, f'{prefix}linger_episodes')
+            if count:
+                metric_prefix = 'curriculum/linger' if prefix else 'linger'
+                for key, total in getattr(self, f'{prefix}linger_sums').items():
+                    result[f'{metric_prefix}/{key}'] = total / count
+                for unit, maximum in getattr(self, f'{prefix}linger_worst').items():
+                    result[f'{metric_prefix}/worst_{unit}'] = float(maximum)
+        for (room, key), total in self.linger_room_sums.items():
+            result[f'linger/room/{room}/{key}'] = total / self.linger_room_episodes[room]
+        for (room, unit), maximum in self.linger_room_worst.items():
+            result[f'linger/room/{room}/worst_{unit}'] = float(maximum)
         if self.steps:
             for name, count in self.interrupts.items():
                 result[f'interrupt/{name}'] = count / self.steps
@@ -159,6 +207,9 @@ class EpisodeTracker:
         self._reward_total += reward
         for name, value in (info.get('rewards') or {}).items():
             self._rewards[name] += float(value)
+
+        if done and info.get('linger'):
+            metrics.record_linger(info['linger'], bool(info.get('curriculum')), info.get('linger_room'))
 
         if done and info.get('curriculum'):
             curriculum = info['curriculum']
@@ -235,7 +286,8 @@ def read_jsonl(path: str) -> list[dict]:
 def format_summary(metrics: dict[str, float], keys: Optional[list[str]] = None) -> str:
     """One-line human summary for the console."""
     keys = keys or ['episodes', 'success_rate', 'reward/total', 'health_change', 'episode_steps',
-                    'episode_frames', 'curriculum/success_rate', 'curriculum/point_fraction', 'entropy/kind',
+                    'episode_frames', 'linger/max_steps', 'linger/tail_steps', 'linger/worst_steps',
+                    'curriculum/success_rate', 'curriculum/point_fraction', 'entropy/kind',
                     'entropy/direction', 'entropy/duration', 'losses/approx_kl', 'charts/SPS']
     parts = []
     for key in keys:

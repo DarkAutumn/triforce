@@ -291,7 +291,8 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, session, eve
                     steps=state['steps'], target_steps=target_steps, fraction=round(fraction, 4),
                     elapsed=round(elapsed, 1), sps=round((state['steps'] - start_steps) / elapsed, 1),
                     eta=round(elapsed * (1 - fraction) / fraction, 1),
-                    metrics={k: metrics[k] for k in PROGRESS_METRICS if k in metrics})
+                    metrics={k: v for k, v in metrics.items() if k in PROGRESS_METRICS
+                             or k.startswith('linger/room/')})
         if result.iteration % args.save_every == 0:
             save()
         if stop:

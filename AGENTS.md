@@ -4,16 +4,20 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/todo.md` "Next up" (where the work
 stands and what to try next, in order).
 
-## Where things stand (end of round 6, Nov 3)
+## Where things stand (round 7 active, Nov 3)
 
-- Round 6 is logged and committed (`docs/experiments/round6.md`, Summary at the top). No jobs are running.
-- Next work is todo.md "Next up", items 1–8 in order (Lee's list from watching `play-zelda.py`; item 1, tracking
-  how long Link lingers in a room, comes first). Nothing on it has been started.
+- Round 6 is complete (`docs/experiments/round6.md`); round 7 is in `docs/experiments/round7.md`.
+- Todo item 1 complete: shared lingering metrics and GUI, 383 tests, seeded parity, CUDA smoke and baseline chains.
+  Outputs `models/r29-linger-baseline/`. Aquamentus's post-heart stall reproduced; observation audit active.
+- Lee resumed experiment mode: keep the omp todo updated, reconcile it with todo.md between experiments, log
+  every result, check off completed backlog entries, commit each finished item and keep going through items 1–8.
 - **Uncommitted on purpose:** `play-zelda.py`, `triforce/play_grid.py`, `tests/test_play_zelda.py` in main's
   working tree (Lee is trying them; he said not to commit yet). They add `--games N` (more games than cells; a
   cell's game is replaced by a better hidden one only when it enters a new room or starts its next run, with a
   fade), an on-screen fps readout in the window title and `--benchmark SECONDS`. Tests pass. Leave them alone
   unless Lee asks; don't sweep them into another commit (path-limited commits).
+- **VRAM (Lee, Nov 3):** leave his running `play-zelda.py` alone unless an experiment crashes from CUDA memory
+  exhaustion. If it does, kill the player without asking, then resume the experiment.
 
 ## Goal
 
@@ -60,9 +64,9 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
   in a chain nothing stops it short of the runner's 2000-step room budget.
 - **Track how long Link lingers in a room, in every training run** (Lee, Nov 3). A long stretch without progress
   (kill, hit, pickup, getting closer to the objective, leaving) is a problem to investigate and fix, even when the
-  success rate looks fine (Aquamentus: high success, yet Link walks back and forth after the kill). Until the
-  linger metric exists (todo.md "Next up" item 1), watch `episode_steps`, `reward/penalty-room-stalling`,
-  `ending/max-steps` and `ending/stuck` per specialist, and watch runs in `play-zelda.py`.
+  success rate looks fine (Aquamentus: high success, yet Link walks back and forth after the kill). Watch
+  `linger/max_steps`, `linger/tail_steps`, `linger/worst_steps` (and frames), eval's per-room summaries and chain
+  `RoomRecord.linger`, alongside success, health and selected replays. Metric semantics are in architecture.md.
 
 ## Environment
 

@@ -184,6 +184,17 @@ def fmt_drops(dropped, taken, left) -> str:
     return f"dropped {dropped:.2f} · taken {taken:.2f} · left {left:.2f} /ep"
 
 
+def fmt_linger(summary: dict) -> str:
+    """Evaluation no-progress streaks in action steps; older events have no measurements."""
+    values = []
+    for label, key in (('mean longest', 'linger_max_steps'), ('mean tail', 'linger_tail_steps'),
+                       ('worst longest', 'linger_worst_steps')):
+        value = summary.get(key)
+        text = f'{value:.1f}' if isinstance(value, (int, float)) and math.isfinite(value) else 'unavailable'
+        values.append(f'{label} {text}')
+    return ' · '.join(values) + ' steps'
+
+
 def fmt_clock(ts) -> str:
     """Unix seconds -> local HH:MM:SS."""
     return '' if ts is None else datetime.fromtimestamp(ts).strftime('%H:%M:%S')
@@ -1409,11 +1420,15 @@ class ChainCard(Clickable):
 class LineChart(QWidget):
     """Small line chart: x = iteration."""
 
-    def __init__(self, title: str, fixed=None, fmt=lambda v: f'{v:.2f}'):
+    def __init__(self, title: str, fixed=None, fmt=lambda v: f'{v:.2f}', *, legend_below=False,
+                 empty='no data yet'):
         super().__init__()
         self.title = title
         self.fixed = fixed
         self.fmt = fmt
+        self.legend_below = legend_below
+        self.empty = empty
+        self.legend_series: list[dict] = []
         self.series: list[dict] = []
         self.hlines: list[tuple[float, QColor, str]] = []
         self.overlay = ''
@@ -1421,6 +1436,7 @@ class LineChart(QWidget):
 
     def set_data(self, series: list[dict], hlines=(), overlay: str = ''):
         """``overlay``: when set, the chart is greyed out under this text (e.g. while ignoring startup)."""
+        self.legend_series = series
         self.series = [s for s in series if s['points']]
         self.hlines = list(hlines)
         self.overlay = overlay
@@ -1448,23 +1464,35 @@ class LineChart(QWidget):
         p.setPen(C.muted)
         title = self.title.upper()
         p.drawText(QPointF(rect.left() + 12, rect.top() + 20), title)
-        # legend: last values, right to left while they fit beside the title
-        limit = rect.left() + 12 + p.fontMetrics().horizontalAdvance(title) + 12
-        x = rect.right() - 10
-        p.setFont(font(8.5, QFont.Weight.DemiBold))
-        for series in reversed(self.series):
-            text = f"{series['label']} {self.fmt(series['points'][-1][1])}"
-            width = p.fontMetrics().horizontalAdvance(text)
-            if x - width < limit:
-                break
-            p.setPen(series['color'])
-            p.drawText(QPointF(x - width, rect.top() + 20), text)
-            x -= width + 14
-        plot = QRectF(rect.left() + 46, rect.top() + 32, rect.width() - 60, rect.height() - 52)
+        if self.legend_below:
+            # Dedicated rows keep the metric definitions visible even in narrow windows or historical logs.
+            p.setFont(font(8.5, QFont.Weight.DemiBold))
+            for i, series in enumerate(self.legend_series):
+                value = self.fmt(series['points'][-1][1]) if series['points'] else 'unavailable'
+                p.setPen(series['color'] if series['points'] else C.faint)
+                p.drawText(QPointF(rect.left() + 12, rect.top() + 39 + i * 18),
+                           f"{series['label']}: {value}")
+            legend_height = len(self.legend_series) * 18 + 4
+        else:
+            # Legend: last values, right to left while they fit beside the title.
+            limit = rect.left() + 12 + p.fontMetrics().horizontalAdvance(title) + 12
+            x = rect.right() - 10
+            p.setFont(font(8.5, QFont.Weight.DemiBold))
+            for series in reversed(self.series):
+                text = f"{series['label']} {self.fmt(series['points'][-1][1])}"
+                width = p.fontMetrics().horizontalAdvance(text)
+                if x - width < limit:
+                    break
+                p.setPen(series['color'])
+                p.drawText(QPointF(x - width, rect.top() + 20), text)
+                x -= width + 14
+            legend_height = 0
+        plot = QRectF(rect.left() + 46, rect.top() + 32 + legend_height,
+                      rect.width() - 60, rect.height() - 52 - legend_height)
         if not self.series or plot.width() < 20 or plot.height() < 20:
             p.setFont(font(9))
             p.setPen(C.faint)
-            p.drawText(plot, Qt.AlignmentFlag.AlignCenter, 'no data yet')
+            p.drawText(plot, Qt.AlignmentFlag.AlignCenter, self.empty)
             return
         xs = [pt[0] for s in self.series for pt in s['points']]
         ys = [pt[1] for s in self.series for pt in s['points']] + [h[0] for h in self.hlines]
@@ -1650,16 +1678,26 @@ class DetailPane(QWidget):
             'length': LineChart('Episode steps', fmt=lambda v: f'{v:.0f}'),
             'kl': LineChart('Approx KL', fmt=lambda v: f'{v:.3f}'),
             'sps': LineChart('Steps / second', fmt=lambda v: f'{v:.0f}'),
+            'linger': LineChart('No progress (action steps)', fmt=lambda v: f'{v:.0f}', legend_below=True,
+                                empty='unavailable (no lingering measurements)'),
         }
+        self.charts['linger'].setMinimumHeight(230)
+        self.charts['linger'].setToolTip(
+            'Completed room-entry episodes in each PPO iteration; curriculum starts are excluded.\n'
+            'Mean longest: average episode longest streak without progress.\n'
+            'Mean tail: average steps since the last progress at episode end.\n'
+            'Worst longest: largest episode streak in that iteration, not a run-wide maximum.\n'
+            'Progress: enemy kill or hit, pickup, new best objective distance, or room exit.\n'
+            'Units are agent action steps, not emulator frames or seconds.')
         grid_page = QWidget()
         grid = QGridLayout(grid_page)
         grid.setContentsMargins(10, 10, 10, 10)
         grid.setSpacing(10)
         for i, chart in enumerate(self.charts.values()):
-            grid.addWidget(chart, i // 2, i % 2)
+            grid.addWidget(chart, i // 2, i % 2, 1, 2 if chart is self.charts['linger'] else 1)
         self.summary = BarList()
         self.chart_stack = QStackedWidget()
-        self.chart_stack.addWidget(grid_page)
+        self.chart_stack.addWidget(scrolling(grid_page))
         self.chart_stack.addWidget(scrolling(self.summary))
         self.tabs.addTab(self.chart_stack, 'Charts')
 
@@ -1739,6 +1777,11 @@ class DetailPane(QWidget):
                                    (), overlay)
         self.charts['sps'].set_data([{'label': 'sps', 'color': C.muted, 'points': run.series('charts/SPS', skip),
                                       'area': True}], (), overlay)
+        self.charts['linger'].set_data([
+            {'label': 'mean longest / episode', 'color': C.warn, 'points': run.series('linger/max_steps', skip)},
+            {'label': 'mean final tail / episode', 'color': C.ok, 'points': run.series('linger/tail_steps', skip)},
+            {'label': 'worst longest / update', 'color': C.bad, 'points': run.series('linger/worst_steps', skip)},
+        ], (), overlay)
 
         sections = []
         if run.eval:
@@ -1753,10 +1796,19 @@ class DetailPane(QWidget):
                 rows.append(heart_drop_row('dropped hearts', ev['hearts_dropped'], ev['hearts_taken'],
                                            ev['hearts_left']))
             sections.append(('bars', 'Evaluation', rows))
+            sections.append(('text', 'No progress · evaluation (action steps)', [
+                (fmt_linger(ev), C.warn if ev.get('linger_max_steps') is not None else C.faint),
+                ('Longest = episode longest quiet streak; tail = quiet steps at episode end. '
+                 'Means are per episode; worst is the largest streak across evaluated episodes.', C.muted)]))
             by_room = ev.get('by_room') or {}
             if by_room:
                 sections.append(('bars', 'By room', [(room, value, fmt_pct(value), rate_color(value))
                                                      for room, value in sorted(by_room.items())]))
+                room_linger = ev.get('by_room_linger') or {}
+                sections.append(('text', 'No progress · by room (action steps)',
+                                 [(f'{room}: {fmt_linger(room_linger.get(room) or {})}',
+                                   C.warn if room_linger.get(room) else C.faint)
+                                  for room in sorted(by_room)]))
             by_state = ev.get('by_state') or {}
             if by_state:
                 sections.append(('grid', 'By start state', sorted(by_state.items())))
@@ -1788,7 +1840,7 @@ class DetailPane(QWidget):
                            f"&nbsp;&nbsp;<span style='color:{color.name()}; font-weight:700'>{label}</span>"
                            f"<br><span style='color:{C.faint.name()}'>{model.dir}</span>")
         self.chart_stack.setCurrentIndex(1)
-        evals, train, sps, wall = [], [], [], []
+        evals, train, sps, wall, linger = [], [], [], [], []
         speeds = [run.sps() or 0 for run in model.runs]
         walls = [((run.finished_ts or time.time()) - run.started_ts) if run.started_ts else 0 for run in model.runs]
         for run, speed, seconds in zip(model.runs, speeds, walls):
@@ -1799,6 +1851,8 @@ class DetailPane(QWidget):
             if ev.get('health_change') is not None:
                 text += f" · {fmt_hearts_pair(ev['health_change'], ev.get('health_change_total'))}"
             evals.append((run.name, value, text, rate_color(value)))
+            linger.append((f'{run.name}: {fmt_linger(ev)}',
+                           C.warn if ev.get('linger_max_steps') is not None else C.faint))
             value = run.train_success()
             real = run.last('health_change')
             hearts = '' if real is None else ' ' + fmt_hearts_pair(real, run.last('health_change_total'))
@@ -1807,7 +1861,9 @@ class DetailPane(QWidget):
                         f"{speed:,.0f}" if speed else '–', C.accent))
             wall.append((run.name, seconds / max(walls) if seconds and max(walls) else None,
                          fmt_duration(seconds) if seconds else '–', C.muted))
-        self.summary.set_sections([('bars', 'Eval success', evals), ('bars', 'Training success (last)', train),
+        self.summary.set_sections([('bars', 'Eval success', evals),
+                                   ('text', 'Eval no progress (action steps)', linger),
+                                   ('bars', 'Training success (last)', train),
                                    ('bars', 'Steps / second', sps), ('bars', 'Wall time', wall)])
 
         sections = []

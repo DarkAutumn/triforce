@@ -133,3 +133,56 @@ def test_episode_metrics_merge_across_workers():
     assert summary['kind/MOVE'] == 0.5 and summary['kind/SWORD'] == 0.25
     assert summary['duration/MOVE/16'] == 1.0 and summary['duration/WAIT/4'] == 1.0
     assert 'duration/SWORD/4' not in summary
+
+
+def test_linger_metrics_weighted_merge_curriculum_and_entry_rooms():
+    first, second = EpisodeTracker(), EpisodeTracker()
+
+    def episode(tracker, steps, frames, room=(1, 0x35, False), curriculum=False, done=True):
+        info = {'frames': 4, 'outcome': 'success', 'linger_room': room,
+                'linger': {'max_steps': steps, 'max_frames': frames, 'tail_steps': steps // 2,
+                           'tail_frames': frames // 2}}
+        if curriculum:
+            info['curriculum'] = {'index': 1, 'length': 10, 'point': 1}
+        tracker.step([0, 0, 0], 0.0, info, done)
+
+    episode(first, 10, 200)
+    episode(second, 30, 150)
+    episode(second, 20, 180, room=(0, 0x77, True))
+    episode(first, 90, 400, curriculum=True)
+    episode(second, 60, 500, curriculum=True)
+    episode(first, 1000, 10000, done=False)       # in-progress episode is not a completed measurement
+    summary = first.take().merge(second.take()).summary()
+    assert summary['linger/max_steps'] == 20
+    assert summary['linger/max_frames'] == pytest.approx(530 / 3)
+    assert summary['linger/tail_steps'] == 10
+    assert summary['linger/tail_frames'] == pytest.approx(265 / 3)
+    assert summary['linger/worst_steps'] == 30
+    assert summary['linger/worst_frames'] == 200
+    assert summary['curriculum/linger/max_steps'] == 75
+    assert summary['curriculum/linger/max_frames'] == 450
+    assert summary['curriculum/linger/tail_steps'] == 37.5
+    assert summary['curriculum/linger/tail_frames'] == 225
+    assert summary['curriculum/linger/worst_steps'] == 90
+    assert summary['curriculum/linger/worst_frames'] == 500
+    assert summary['linger/room/1:0x35/max_steps'] == 20
+    assert summary['linger/room/1:0x35/max_frames'] == 175
+    assert summary['linger/room/1:0x35/tail_steps'] == 10
+    assert summary['linger/room/1:0x35/tail_frames'] == 87.5
+    assert summary['linger/room/1:0x35/worst_steps'] == 30
+    assert summary['linger/room/1:0x35/worst_frames'] == 200
+    assert summary['linger/room/0:0x77:cave/max_steps'] == 20
+
+
+def test_linger_metrics_keep_historical_absence_and_measured_zero_distinct():
+    tracker = EpisodeTracker()
+    old = {'frames': 4, 'outcome': 'success'}
+    tracker.step([0, 0, 0], 0.0, old, True)
+    assert not any(key.startswith('linger/') for key in tracker.metrics.summary())
+    tracker.step([0, 0, 0], 0.0, {**old, 'linger': {'max_steps': 12, 'max_frames': 96,
+                                                 'tail_steps': 0, 'tail_frames': 0}}, True)
+    summary = tracker.take().summary()
+    assert summary['episodes'] == 2
+    assert summary['linger/max_steps'] == 12      # absent historical data does not dilute the mean
+    assert summary['linger/tail_steps'] == summary['linger/tail_frames'] == 0
+    assert not any(key.startswith('linger/room/') for key in summary)

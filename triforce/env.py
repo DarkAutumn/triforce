@@ -27,6 +27,7 @@ from .emulator import GAME_DIR
 from .end_conditions import MAX_STEPS, build_end_conditions, classify_ending
 from .game_map import DEFAULT_ROUTE
 from .hearts import HeartTracker
+from .linger import LingerTracker
 from .objectives import GameCompletion, start_route
 from .observation import ObservationBuilder
 from .rewards import SUCCESS, StepRewards, apply_terminal_rewards
@@ -134,6 +135,8 @@ class ZeldaEnv(gym.Env):
         self._start_health = state.link.health
         self.hearts = HeartTracker()
         self.hearts.reset(state)
+        self.linger = LingerTracker()
+        self.linger.reset(state)
         self._done = False
         obs = self.builder.reset(state, self.session.mask)
         return obs, self._info(state, {'start_state': name})
@@ -149,9 +152,10 @@ class ZeldaEnv(gym.Env):
                 raise InvalidActionError(f"{act} is masked; legal: {self.session.mask}")
 
         change = self.session.act(act)
+        taken = self.hearts.taken
         self.hearts.update(change)
         self._attach_objectives(change.previous, change.state)
-
+        self.linger.update(change, self.hearts.taken - taken)
         rewards = StepRewards()
         self.critic.critique_gameplay(change, rewards)
 
@@ -173,7 +177,8 @@ class ZeldaEnv(gym.Env):
             apply_terminal_rewards(rewards, ending, outcome, terminated, state.link.health, state.link.max_health)
             self.hearts.finish(state)
             extra = {'ending': ending, 'outcome': outcome, 'start_state': state_label(self._episode_state),
-                     'start_health': self._start_health, 'hearts': self.hearts.summary()}
+                     'start_health': self._start_health, 'hearts': self.hearts.summary(),
+                     'linger': self.linger.summary(), 'linger_room': self.linger.start_room}
             if self._curriculum_tag is not None:
                 extra['curriculum'] = self.curriculum.record(self._curriculum_tag, outcome == SUCCESS)
             elif self.pool is not None:

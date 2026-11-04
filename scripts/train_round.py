@@ -240,13 +240,20 @@ def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
                   eval_hearts_dropped=result['hearts_dropped'], eval_hearts_taken=result['hearts_taken'],
                   eval_hearts_left=result['hearts_left'],
                   eval_by_room={room: stats['success_rate'] for room, stats in result['by_room'].items()})
+    linger = {key: value for key, value in result.items() if key.startswith('linger_')}
+    linger_groups = {
+        f'{group}_linger': {name: {key: value for key, value in stats.items() if key.startswith('linger_')}
+                            for name, stats in result[group].items()
+                            if 'linger_max_steps' in stats}
+        for group in ('by_room', 'by_state')}
+    record.update({f'eval_{key}': value for key, value in {**linger, **linger_groups}.items()})
     events.emit('eval', success_rate=result['success_rate'], episodes=result['episodes'],
                 health=result['mean_health_fraction'], health_change=result['mean_health_change'],
                 health_change_total=result['mean_health_change_total'], hearts_dropped=result['hearts_dropped'],
                 hearts_taken=result['hearts_taken'], hearts_left=result['hearts_left'],
                 by_room=record['eval_by_room'],
                 by_state={state: stats['success_rate'] for state, stats in result['by_state'].items()},
-                path=str(run_dir / 'eval.json'))
+                path=str(run_dir / 'eval.json'), **linger, **linger_groups)
     events.emit('end', **end_fields(record))
     say(f"[round] {name}: eval success {result['success_rate']:.0%} over {result['episodes']} episodes")
     return record
@@ -254,9 +261,11 @@ def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
 
 def end_fields(record: dict) -> dict:
     """The summary a specialist's 'end' event and training.json entry carry."""
-    return {key: record.get(key) for key in ('status', 'iterations', 'steps', 'stopped_early', 'wall_seconds',
-                                             'steps_per_second', 'train_balanced_last', 'eval_success_rate',
-                                             'eval_episodes')}
+    return {**{key: record.get(key) for key in ('status', 'iterations', 'steps', 'stopped_early', 'wall_seconds',
+                                               'steps_per_second', 'train_balanced_last', 'eval_success_rate',
+                                               'eval_episodes')},
+            **{key: value for key, value in record.items() if key.startswith('eval_linger_')
+               or key in ('eval_by_room_linger', 'eval_by_state_linger')}}
 
 
 def _pct(value) -> str:

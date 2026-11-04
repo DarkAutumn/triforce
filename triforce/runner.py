@@ -16,6 +16,7 @@ import torch
 from .actions import Action
 from .game_map import GameMap, load_routes
 from .hearts import HeartTracker
+from .linger import LingerTracker
 from .objectives import GameCompletion, exit_is_correct, start_route
 from .observation import ObservationBuilder
 from .registry import load_model, promoted_checkpoint
@@ -84,6 +85,7 @@ class RoomRecord:
     hearts_wasted: float = 0.0
     hearts_left: int = 0
     hearts_expired: int = 0
+    linger: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -203,6 +205,7 @@ class Runner:
         obs = None
         change = None
         hearts = HeartTracker()
+        linger = LingerTracker()
 
         while True:
             location = state.full_location
@@ -231,6 +234,8 @@ class Runner:
                 record = self._new_record(len(result.rooms), location, name, state)
                 result.rooms.append(record)
                 hearts.reset(state)
+                linger.reset(state)
+                record.linger = linger.summary()
                 if current is None or current.name != name:
                     current = self._load(name)
                     session.set_disabled_kinds(current.config.items.disabled_kinds())
@@ -259,8 +264,11 @@ class Runner:
 
             change = session.act(action)
             state = change.state
+            taken = hearts.taken
             hearts.update(change)
             state.objectives = objectives.get_current_objectives(change.previous, state)
+            linger.update(change, hearts.taken - taken)
+            record.linger = linger.summary()
             record.steps += 1
             record.frames += change.frames
             result.steps += 1

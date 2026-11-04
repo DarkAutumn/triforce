@@ -1,6 +1,6 @@
 """``triforce.evaluate``: per-specialist evaluation over every seed start state."""
 
-from triforce.evaluate import evaluate_specialist
+from triforce.evaluate import _group, _linger_stats, evaluate_specialist, format_report
 from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.observation import ObservationBuilder
 from triforce.registry import save_checkpoint
@@ -27,6 +27,37 @@ def test_evaluate_specialist_covers_every_seed_state_reproducibly(session, tmp_p
     assert result['hearts_dropped'] == sum(r['hearts']['dropped'] for r in records) / 6
     assert result['mean_health_change_total'] == result['health_change_total'] >= result['mean_health_change']
     assert {'health_change_total', 'hearts_dropped', 'hearts_taken', 'hearts_left'} <= set(result['by_room']['1:0x35'])
+    assert all({'max_steps', 'max_frames', 'tail_steps', 'tail_frames', 'steps', 'frames',
+                'boss_kill_steps', 'boss_kill_frames', 'heart_container_steps', 'heart_container_frames'}
+               == set(r['linger']) for r in records)
+    assert result['linger_max_steps'] == sum(r['linger']['max_steps'] for r in records) / 6
+    assert result['linger_worst_steps'] == max(r['linger']['max_steps'] for r in records)
+    assert result['by_room']['1:0x35']['linger_max_steps'] == result['linger_max_steps']
+    assert all('linger_max_steps' in stats for stats in result['by_state'].values())
+    assert 'linger max/tail/worst' in format_report(result)
 
     again = evaluate_specialist(config, ckpt, episodes_per_state=2, session=session, seed=5)
     assert again['records'] == records
+
+
+def test_linger_evaluation_aggregates_only_measured_records():
+    base = {'health': 2, 'start_health': 3, 'success': True, 'ending': 'exit-correct'}
+    records = [{**base, 'start_state': 'a', 'room': 'room-a'},
+               {**base, 'start_state': 'a', 'room': 'room-a',
+                'linger': {'max_steps': 10, 'max_frames': 200, 'tail_steps': 0, 'tail_frames': 0}},
+               {**base, 'start_state': 'b', 'room': 'room-a',
+                'linger': {'max_steps': 30, 'max_frames': 100, 'tail_steps': 10, 'tail_frames': 50}},
+               {**base, 'start_state': 'c', 'room': 'room-b'}]
+    assert _linger_stats(records) == {'linger_max_steps': 20, 'linger_max_frames': 150,
+                                     'linger_tail_steps': 5, 'linger_tail_frames': 25,
+                                     'linger_worst_steps': 30, 'linger_worst_frames': 200}
+    rooms = _group(records, lambda r: r['room'])
+    states = _group(records, lambda r: r['start_state'])
+    assert rooms['room-a']['linger_max_steps'] == 20
+    assert rooms['room-a']['linger_worst_frames'] == 200
+    assert states['a']['linger_max_steps'] == 10
+    assert states['a']['linger_tail_steps'] == 0
+    assert states['b']['linger_max_steps'] == 30
+    assert not any(key.startswith('linger_') for key in rooms['room-b'])
+    assert not any(key.startswith('linger_') for key in states['c'])
+    assert _linger_stats([]) == _linger_stats([base]) == {}

@@ -78,8 +78,8 @@ class ZeldaEnv(gymnasium.Env):
 `info` keys every step: `frames` (int, frames this step: used for frame-aware discounting), `interrupt`,
 `action` (str), `rewards` (dict name → value), `room` ((level, room, in_cave)), `health`, `max_health`,
 `steps`, `total_frames`, `specialist`. On the last step: `ending` (end-condition name) and `outcome`
-(`success` / `hard-failure` / `soft-failure`), `start_health` and `hearts` (below). An end condition that is not
-classified raises.
+(`success` / `hard-failure` / `soft-failure`), `start_health`, `hearts` and `linger` (below), and `linger_room`
+(the episode's entry room). An end condition that is not classified raises.
 
 ### Heart drops (`hearts.py`)
 
@@ -94,6 +94,24 @@ health rose. A heart heals `min(1, max_health − health)`, so one picked up at 
 terminal `info['hearts']`; metrics log `health_change_total` and `hearts/{dropped,taken,left,wasted}` per
 episode; `evaluate` keeps it per episode and reports `mean_health_change_total` and `hearts_dropped/taken/left`
 overall, per room and per start state; runner `RoomRecord`s carry `hearts_dropped/taken/healed/wasted/left/expired`.
+
+### Lingering (`linger.py`)
+
+`LingerTracker.reset(state)` / `update(change, hearts_taken=0)` measures progress without changing gameplay.
+Progress is a hit/kill, pickup, healing (including pond refills), a new best walking distance to the objective,
+or leaving a room. Damage alone is not progress. A frozen wavefront prevents enemy movement and Link's round
+trips from manufacturing new best approaches; hits/kills/pickups and objective phase changes rebaseline it.
+Phase changes alone do not reset the quiet clock. A progress action's frames do not count toward the quiet
+interval it closes. `summary()` returns `max_steps/max_frames`, `tail_steps/tail_frames`, elapsed `steps/frames`,
+and nullable boss-kill / heart-container-pickup action/frame timestamps.
+
+Terminal env `info['linger']` and `RoomRecord.linger` carry the summary. Training `linger/{max,tail}_{steps,frames}`
+are means over completed room-entry episodes; `linger/worst_{steps,frames}` are maxima across the iteration's
+workers. `curriculum/linger/*` is separate; `linger/room/<room>/*` groups by episode entry room. These metrics reach
+progress events and the GUI. Eval records retain raw summaries and report `linger_{max,tail}_{steps,frames}` means
+and `linger_worst_{steps,frames}` maxima overall, per room and per start state. Older absent measurements remain
+absent, not zero. Multi-room env episodes reset their tail on each exit and retain the episode's worst gap;
+runner records always describe one visit.
 
 ## Learning (`model.py`, `ppo.py`, `train.py`, `registry.py`)
 

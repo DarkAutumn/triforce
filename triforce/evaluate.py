@@ -12,6 +12,8 @@ checkpoint defaults to the specialist's promoted model; results go to ``<checkpo
 Dropped hearts (``triforce/hearts.py``) are kept per episode (``records[i]['hearts']``); ``mean_health_change_total``
 adds the hearts wasted by picking them up at (or near) full health, and ``hearts_dropped`` / ``hearts_taken`` /
 ``hearts_left`` are means per episode (also per room and per start state).
+Lingering records retain longest quiet streak, terminal tail, visit time and boss/pickup milestones. Overall,
+room and start-state aggregates report mean longest/tail steps and frames plus the worst measured streak.
 """
 
 import argparse
@@ -58,10 +60,13 @@ def _play(env: ZeldaEnv, network, state: str, episode_seed: int, deterministic: 
         obs, _, terminated, truncated, info = env.step(np.asarray(action).reshape(-1)[:3])
         steps += 1
         frames += info['frames']
-    return {'start_state': state, 'room': list(reset_info['room']), 'seed': episode_seed,
-            'outcome': info['outcome'], 'ending': info['ending'], 'success': info['outcome'] == 'success',
-            'steps': steps, 'frames': frames, 'start_health': reset_info['health'], 'health': info['health'],
-            'max_health': info['max_health'], 'hearts': info['hearts']}
+    record = {'start_state': state, 'room': list(reset_info['room']), 'seed': episode_seed,
+              'outcome': info['outcome'], 'ending': info['ending'], 'success': info['outcome'] == 'success',
+              'steps': steps, 'frames': frames, 'start_health': reset_info['health'], 'health': info['health'],
+              'max_health': info['max_health'], 'hearts': info['hearts']}
+    if info.get('linger') is not None:
+        record['linger'] = info['linger']
+    return record
 
 
 def _worker_init(config: SpecialistConfig, checkpoint: str, deterministic: bool):
@@ -87,6 +92,18 @@ def _heart_stats(records: list[dict]) -> dict:
             'hearts_left': sum(h.get('left', 0) for h in hearts) / count}
 
 
+def _linger_stats(records: list[dict]) -> dict:
+    """Means and maxima over measured episodes only; historical absence is not a zero streak."""
+    measured = [r['linger'] for r in records if r.get('linger')]
+    if not measured:
+        return {}
+    result = {f'linger_{key}': sum(linger[key] for linger in measured) / len(measured)
+              for key in ('max_steps', 'max_frames', 'tail_steps', 'tail_frames')}
+    result.update({f'linger_worst_{unit}': max(linger[f'max_{unit}'] for linger in measured)
+                   for unit in ('steps', 'frames')})
+    return result
+
+
 def _group(records: list[dict], key) -> dict:
     groups = {}
     for record in records:
@@ -95,6 +112,7 @@ def _group(records: list[dict], key) -> dict:
                    'success_rate': sum(r['success'] for r in items) / len(items),
                    'health_change': sum(r['health'] - r['start_health'] for r in items) / len(items),
                    **_heart_stats(items),
+                   **_linger_stats(items),
                    'endings': dict(Counter(r['ending'] for r in items))}
             for name, items in sorted(groups.items())}
 
@@ -145,6 +163,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         'mean_health_change': sum(r['health'] - r['start_health'] for r in records) / count,
         'mean_health_change_total': hearts['health_change_total'],
         **hearts,
+        **_linger_stats(records),
         'mean_steps': sum(r['steps'] for r in records) / count,
         'mean_frames': sum(r['frames'] for r in records) / count,
         'outcomes': dict(Counter(r['outcome'] for r in records)),
@@ -161,17 +180,27 @@ def format_report(result: dict) -> str:
     successes = sum(r['success'] for r in result['records'])
     lines = [f"{result['specialist']}: success {successes}/{result['episodes']} = {result['success_rate']:.0%}  "
              f"health change {result['mean_health_change']:+.2f} (total {result['mean_health_change_total']:+.2f}) "
-             f"hearts  dropped/taken/left {_fmt_hearts(result)}  steps {result['mean_steps']:.0f}"]
+             f"hearts  dropped/taken/left {_fmt_hearts(result)}  steps {result['mean_steps']:.0f}"
+             f"{_fmt_linger(result)}"]
     for room, stats in sorted(result['by_room'].items(), key=lambda item: (item[1]['success_rate'], item[0])):
         top = max(stats['endings'].items(), key=lambda item: item[1])[0]
         lines.append(f"  {room:12} {stats['success_rate']:5.0%}  {stats['health_change']:+5.2f} "
                      f"({stats['health_change_total']:+5.2f}) hearts  {_fmt_hearts(stats)}  "
-                     f"{stats['episodes']:4}  {top}")
+                     f"{stats['episodes']:4}  {top}{_fmt_linger(stats)}")
     return '\n'.join(lines)
 
 
 def _fmt_hearts(stats: dict) -> str:
     return f"{stats['hearts_dropped']:.2f}/{stats['hearts_taken']:.2f}/{stats['hearts_left']:.2f}"
+
+
+def _fmt_linger(stats: dict) -> str:
+    if 'linger_max_steps' not in stats:
+        return ''
+    return (f"  linger max/tail/worst {stats['linger_max_steps']:.0f}/{stats['linger_tail_steps']:.0f}/"
+            f"{stats['linger_worst_steps']:.0f} steps "
+            f"({stats['linger_max_frames']:.0f}/{stats['linger_tail_frames']:.0f}/"
+            f"{stats['linger_worst_frames']:.0f} frames)")
 
 
 def main(argv=None):
