@@ -472,3 +472,21 @@ suffix, enforce correct required pickups/inventory and milestone bomb masking. R
 through Dodongo entry at four hearts. Refresh affected Rope and D2 Goriya curriculum tracks: matching filenames
 do not invalidate stored snapshots. No binary state inventories were measured in this review.
 
+## 9. Nearest-heart/clock-or-exit trial (r32)
+
+Started after r31 selection and the verified seed fix merged into main (`f5cc63b`). Families: stalfos-keese-gel,
+d2-rope and ow-moblin; each has `r32-nearby-off` and `r32-nearby-on`. Both arms continue the same promoted
+checkpoint for that family. Only `reward.nearby_items` differs; current health mix, task, max steps, item masks
+and curriculum settings remain unchanged. Bombs off; no measured cutoff or extra quiet-fight cost.
+
+Each arm: seed 32, four workers, 245 updates ×4,096 = 1,003,520 additional actions, CUDA, no success early stop.
+At most four train/eval jobs run at once. Config copies live in each run directory; source/seed/protocol snapshots
+at `models/r32-nearby-evidence/protocol.json`. Runtime main source, canonical specialist YAML and entry states
+stay frozen through all training and background evaluations. Lee's player has not been killed.
+
+All three old promoted checkpoints are re-evaluated under current canonical YAML; each new model uses the same
+common evaluation task, 20 episodes per start state, seed 0, three CPU workers. Selection must compare success,
+real/total health, hearts taken/left and quiet gaps per room, then both full routes and relevant post-D1/D2 chains
+with pinned teams. Nearby-item PBRS changes the learning potential, not runner inputs or accepted exits. Shared
+asynchronous curriculum remains scheduling-dependent despite correct seed propagation. No r32 model promoted.
+

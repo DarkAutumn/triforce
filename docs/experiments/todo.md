@@ -97,7 +97,8 @@ chain's death rooms, then the big ablation. Round 7 items 1–4 complete; neares
    ITEM). A/B on stalfos-keese-gel, d2-rope and an overworld family; measure taken/left, real vs total heart
    change and the chain.
    - **Control ready, round 7 §6:** optional `reward.nearby_items`, default off; real walker verified nearer
-     clock/heart pickup versus nearer exit, correct exits and actual healed/left counts. Training A/B still pending.
+     clock/heart pickup versus nearer exit, correct exits and actual healed/left counts. R32 on/off arms now running
+     on stalfos-keese-gel, d2-rope and ow-moblin (round 7 §9); matched current-YAML baselines/evaluations included.
 6. **Cut runs that stop making progress (Lee: in v1 a run was truncated after ~100 steps without progress, e.g.
    an item pickup or a kill).** Today training ends `stuck` after 50 steps without moving and `no-progress` after
    2000 steps without a new correct room (`end_conditions.Timeout`, the same 50/2000 as v1's Timeout; the ~100-step
