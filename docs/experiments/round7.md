@@ -32,11 +32,12 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
 - Native replay found required-shutter objective/classification and terminal-health defects. Prerequisites
   through §14 merged at `4cb8434`; **470 tests passed**.
 - Backlog item 6 complete (§15): all three r33 arms, common/actual evaluations and 1,400 fresh chains finished.
-  No general chain gain; keep r31-block1 and canonical cutoffs null. D2 east-first data is prepared in dev (§16).
-- D2 east-first states/paths are audited (§16–17), but r34 warm continuation still takes the old entrance:
-  0/60 east exits, zero requested-key arrivals in 400 matched chains. Not promoted; main remains compatible.
-- Curriculum action-boundary fix complete in dev (§18): native death avoided, all 3,303 saved frames and 27
-  loader/end-action paths verified, CUDA curriculum smoke and **471 tests passed**. Retry the route with curriculum.
+  No general chain gain; keep r31-block1 and canonical cutoffs null.
+- Backlog item 7 complete (§16–19): r34 continuation failed the east exit; verified-curriculum r35 learned it
+  (60/60 entrance exits, 400/420 room successes), promoted after 200 native chains with all 34 Dodongo arrivals
+  carrying the required 7e key. Both routes/states/default curricula and the action-boundary fix are active in main.
+- Final canonical verification: **471 tests passed**, CUDA default-curriculum update completed; main's native
+  promoted-team smoke reached Dodongo with three keys on two D2 seeds and the post-D1 fairy seed.
 
 ## 1. Shared lingering metric
 
@@ -1170,14 +1171,22 @@ the requested 7e key; 33 also preserve the two optional 4e/3e keys. No execution
 
 Old arrivals omit the requested key room; they are not successes on the new task. The extra full-main room
 costs health and its simple milestone count is one lower, while both post-D1 segments/D2 improve or tie and
-standalone damage is lower. Select R35 for the mandated route: it supports the native key carry that old/R34
-never did. Canonical Rope curriculum is enabled, with default teacher/data/model cutover next; no promotion
-is claimed before that cutover and its main-runtime smoke.
+standalone damage is lower. Selected and promoted R35 for the mandated route: it supports the native key carry
+that old/R34 never did. Source cutover `47788f7` activates both routes, all audited downstream states and the
+curriculum-boundary fix; canonical Rope curriculum is enabled.
 
 Canonical default-path verification: all **471 tests passed in 111.98 seconds**. The real `triforce.train`
 CLI loaded r35 with the canonical Rope YAML/default trajectory root, two workers and CUDA, completing one
 512-action update. All 21 configured entry tracks appear in `curriculum.json`; curriculum success was 1.0,
 and five room-entry episodes completed successfully. This `/tmp` smoke checkpoint is not promoted.
+
+Main cutover installed all 21 verified Rope tracks and the six refreshed D2 Goriya tracks, preserving retired
+default inputs under `models/r35-east-curriculum-evidence/retired-default-d2-curricula/`. Native smoke uses
+main imports, default YAMLs and promoted pointers, with no checkpoint/config overrides: D2 seeds 0–3 all
+depart east, seeds 1/2 enter Dodongo with three keys (517/543 actions); post-D1 fairy seed 0 also carries three
+keys through the milestone (1,036 actions). Post-D1 main seed 0 dies before D2. Six runs, no execution errors;
+every successful run satisfies the native required-key guard. Default Rope track names exactly match all 21
+configured entries. Evidence: `default-cutover.json` and `main-cutover-smoke.json` under the r35 evidence root.
 
 
 ## 20. Align default Moblin curriculum with post-D1 route inventory

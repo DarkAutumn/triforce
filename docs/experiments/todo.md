@@ -6,18 +6,18 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Where it stands:** round 7 active (`round7.md`); items 1–6 and their prerequisites complete. Corrected-runtime
-  80-seed promoted-team chains reach Dodongo: full main 4, full fairy 8, post-D1 main 5, post-D1 fairy 11; D2 27/80.
-  Ordinary Octorok continuation promoted after disjoint-seed validation; nearby-item shaping stays disabled.
+- **Where it stands:** round 7 active (`round7.md`); items 1–7 and their prerequisites complete. East-first D2
+  r35 team carries the required 7e key into Dodongo: full main/fairy 1/3, post-D1 main/fairy 4/7, D2 19 (40 each).
+  Route/states/default curricula and model cutover are verified in main. Next: versioned full observation trial.
 - **Promoted now:** ow-zora / ow-start r24-fairy, ow-octorok r32-nearby-off, ow-moblin r26c-moblin,
   ow-leever-peahat r23-more, boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1,
-  d2-rope r28-d2, wallmaster r10 copy. Overworld families use both routes' rooms; D2 rooms have 3 states each.
+  d2-rope r35-east-curriculum, wallmaster r10 copy. Overworld families use both routes' rooms; D2 rooms have 3 states each.
 
 ### Work in this order
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Round 7 items 1–6 complete; east-first Rope retraining continues in dev.
+chain's death rooms, then the big ablation. Round 7 items 1–7 complete; versioned observation comparison next.
 
 1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
@@ -154,7 +154,7 @@ chain's death rooms, then the big ablation. Round 7 items 1–6 complete; east-f
      One finisher captures live health on every finalized path; death stays zero. Two native fairy regressions,
      real healed-HP smoke, 16 runner checks and all 470 tests pass (merged 4cb8434). Old/off/on Rope reranking is
      complete on corrected runtime (§9); raw historical HP is retained, not retroactively imputed.
-7. **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
+7. [x] **D2: east first for the 0x7e key (Lee).** From the D2 entrance go 0x7d E → 0x7e (kill the ropes, take the key)
    → N 0x6e, instead of 0x7d N → 0x6d → E 0x6e. Slower, but the key is needed later in the dungeon (past the
    milestone). `game.yaml` already declares Rope ×5 and a key in 0x7e; generic FIGHT/TREASURE objectives apply.
    The route currently treats it only as an alternate. Make it canonical on both routes, retrain d2-rope, and
@@ -182,12 +182,12 @@ chain's death rooms, then the big ablation. Round 7 items 1–6 complete; east-f
      zero dead loaded boundaries, cave/default-run parity, CUDA smoke and 471 tests pass. Do not discard valid data.
    - **Both common-task chain teams complete:** 400 runs, zero east-first prefixes/requested-key arrivals;
      simple old/R34 Dodongo arrivals 2/1, 4/3, 4/3, 2/2, 14/10 on full main/fairy, post-D1 main/fairy and D2.
-     Those are old-shortcut arrivals, not support for the new route. R34 is not promoted; main is not activated.
-   - **R35 active (§19):** same r28 start, seed 35/eight workers/CUDA, same 2,007,040-action maximum, but the
-     verified backward curriculum supplies east-exit practice. Runtime frozen at 304fb45, teacher inputs copied
-     into the r35 evidence root (21 Rope starts). All other task/schema/reward/HP/bombs settings stay unchanged.
-     Native first-east departure, mandatory pickup before 6e and carried key at Dodongo select the model; strict
-     route prefix is separate so ordinary tagged-room backtracking is not falsely discarded. Main stays old.
+     Those are old-shortcut arrivals, not support for the new route. R34 was not promoted or activated.
+   - **R35 completed/promoted (§19):** same r28 start, seed 35/eight workers/CUDA, 2,007,040 added actions;
+     verified backward curriculum learned the eastbound entrance (60/60), overall 400/420, −0.205 real hearts
+     versus old 335/420/−0.338. All 131 native D2 arrivals depart east; all 34 Dodongo arrivals carry the 7e key.
+     Both routes, 24 audited suffix states, 21 Rope/six D2 Goriya curricula and the promoted pointer are active
+     in main at source 47788f7. Canonical CUDA training, six native main smoke runs and 471 tests pass.
 8. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
    back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?
