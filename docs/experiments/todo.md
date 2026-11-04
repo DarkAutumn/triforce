@@ -307,6 +307,11 @@ chain's death rooms, then the big ablation. Round 7 items 1–7 complete; versio
 
 ## Driver
 
+- **Keep training GUI logs in the standard main `logs/` root (Lee, Nov 4).** R36's isolated arm logs were put
+  under `models/r36-observation-full-retrain-evidence/logs/schema1|schema2`, requiring explicit GUI paths.
+  Keep those live paths stable for this trial; future experiments must use the normal `logs/` root, even
+  when code/model inputs are isolated. Preserve arm identification in the run/session metadata.
+
 - **Re-running a subset with the same `--round` overwrites `models/<round>-summary.json`** (round 3: the
   boss-aquamentus r3c run replaced the ow-zora / d1-wallmaster summary). Merge into the existing summary, or
   refuse to reuse a round ID.
