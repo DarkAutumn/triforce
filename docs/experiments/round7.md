@@ -874,3 +874,24 @@ Old chain files are not retroactively rewritten: pickups alone cannot reconstruc
 promotion, compare old/off/on Rope on the common corrected objective/runtime and live terminal-health metrics.
 Main remains frozen for the active Octorok cohort. Temporary smoke source/state are removed; JSON remains.
 
+
+## 15. Matched Goriya no-progress cutoff trial (r33)
+
+Started after final r32 selection and ordinary Octorok promotion. Main runtime is `ed2d8b1` (source correction
+`4cb8434`); pinned teams include Octorok r32-nearby-off and Goriya r31-block1. Evidence/protocol and pointer
+snapshot: `models/r33-cutoff-evidence/`. All canonical cutoffs remain null; nearby-item shaping stays off.
+
+Three arms continue the identical r31-block1 weights/optimizer: `goriya/r33-cutoff-{off,100,200}`. Only
+`no_progress_steps` differs. Each has seed 33, four workers, 245 updates ×4,096 = 1,003,520 additional actions,
+CUDA, unchanged curriculum/full-and-partial-health mix/bomb mask, no success early stop. At most three
+train/eval jobs run together. Main source, canonical YAML, entry states and promotion pointers stay frozen.
+
+Fresh corrected-runtime uncut baseline completed: 184/240 successes, −0.77 real/−0.69 total hearts. Its successful
+episode quiet-gap exposure is unchanged from §10: 0x23 worst 79, 0x44 worst 901, 0x1e worst 154, 0x5e worst 60.
+Thus 100 exposes three old successful episodes and 200 one, versus ten/eight failed episodes respectively;
+these are risk counts, not predictions of live cutoff performance. Baseline JSON: `corrected-goriya-baseline.json`.
+
+Evaluate old weights under each actual cutoff; evaluate all new weights under the same uncut task and each
+cutoff model under its actual task (20 episodes/state, seed 0, three workers). Then compare frozen-team full,
+post-D1 and D2 chains with loaded per-arm configs. Measure success, health, steps/frames and quiet streaks;
+never interpret early failed cutoffs as successful navigation or select on shorter episodes alone.

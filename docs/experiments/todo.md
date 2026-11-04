@@ -17,7 +17,7 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Round 7 items 1–5 complete; measured no-progress cutoffs are next.
+chain's death rooms, then the big ablation. Round 7 items 1–5 complete; matched Goriya cutoff training is active.
 
 1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
@@ -132,8 +132,9 @@ chain's death rooms, then the big ablation. Round 7 items 1–5 complete; measur
      350 (Goriya) and 2,410 (Rope). No blanket 100–300 cutoff. Moblin's inspected successful maximum is 63;
      100 is a trial candidate, not a general safety guarantee. Route-paired visits are not independent samples.
    - **Current-policy screening:** Goriya has 10/8 failed episodes reaching 100/200 quiet actions, versus none
-     in current SKG/Rope/Moblin standalone baselines. Next matched trial: Goriya off/100/200, common uncut and
-     actual-cutoff tasks plus config-preserving chains. No trial started or canonical cutoff enabled.
+     in current SKG/Rope/Moblin standalone baselines. R33 Goriya off/100/200 training is active (round 7 §15):
+     1,003,520 additional actions per arm from r31-block1, matched seed/budget/config, corrected bootstrap;
+     common uncut/actual-cutoff evaluation and config-preserving chains. No canonical cutoff enabled.
    - **Required-shutter prerequisite corrected in dev (round 7 §13):** north tiles 0xa8–0xab were misclassified;
      0x2e wrongly requested MOVE through its closed kill-all shutter. Live route-gated FIGHT now clears it;
      optional 0x6e/0x6d combat stays optional. Four targeted and all 468 tests pass; natural last-Rope → open
