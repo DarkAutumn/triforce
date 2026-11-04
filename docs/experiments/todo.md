@@ -218,10 +218,19 @@ chain's death rooms, then the big ablation. Round 7 items 1–7 complete; versio
   Fixed and proved through real/spawned CLI paths. Round 6's r20-pt, r21/r22-chainhp and r25/r27-heart treatment
   comparisons are not valid treatment evidence; model/chain measurements remain real. Explicit rejections remain.
 - **0x53 (5-Stalfos key room):** 5 deaths in the full chain after the D1 Goriya room's 15.
-- **Clock-active combat stall (round 7 §9):** faithful corrected-runtime Rope seed 15 has two frozen one-HP foes
-  and a closed required shutter, correct FIGHT with finite distances, but a 2,942-action quiet tail. Last 1,000
-  actions: 978 MOVE, 11 SWORD; foes never move. Clock is already observed. Consider native clock-active combat
-  curriculum when revisiting Rope; distinguish this from shadow-Link chasing and the repaired shutter objective.
+- [ ] **Finite stall escape in training and `play-zelda.py` (Lee, Nov 4; round 7 §9).** Lee still observes
+  half-heart/clock/stunned-enemy Goriya runs attacking while standing still indefinitely. Required:
+  - **Training:** a finite no-progress timeout that stops such runs. It may be a while; endless attack loops
+    must not survive merely because Link keeps selecting attacks. Choose/measure a suitable threshold.
+  - **Player at N steps:** if no room progress (no damage taken or dealt), give that screen the same opportunity
+    to be replaced by another game as a room transition. Eligibility, not an unconditional forced swap.
+  - **Player at 2×N steps:** reset the stalled run, including runs with no replacement candidate. Track room-local
+    policy steps, not GUI redraw ticks; actual damage in either direction counts, not the attack command itself.
+  - Existing `LingerTracker` deliberately does not count damage taken as progress; do not blindly reuse that
+    definition for the requested player counter. Preserve the existing replacement/fade path.
+  - Earlier native Rope seed 15 also had clock-frozen one-HP foes, a closed required shutter and a 2,942-action
+    quiet tail (last 1,000: 978 MOVE/11 SWORD). Clock is observed; this is not shadow-Link chasing or the repaired
+    shutter objective. Implement only after the current experiment and Lee's requested pause/resumption.
 - **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
   (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
 - **Bow route** (later): 0x43 N → 0x33 (key) → 0x23 (key) → 0x22 (push block, stairs to the bow cellar 0x7F).
