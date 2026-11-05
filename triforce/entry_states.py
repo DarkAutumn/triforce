@@ -381,6 +381,7 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
     steps = [_manifest_step(out, source)]
     manifest: List[dict] = []
     retries = [0] * len(rooms)
+    os.makedirs(out, exist_ok=True)
     i = 0
     while i < len(rooms):
         target, current = rooms[i], currents[i]
@@ -405,7 +406,6 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
             log(f"{label}: FAILED after {stats['attempts']} attempts ({stats['env_steps']} env steps)")
             break
         path = os.path.join(out, goal.filename(chain))
-        os.makedirs(out, exist_ok=True)
         write_entry_state(game, pre_entry, path, goal.location)
         fields = path_route_fields(route, goal.level, goal.room, goal.entry)
         if fields['off_route'] and steps[i] is not None:
@@ -475,9 +475,9 @@ def audit(paths: List[str], loads: int = 9, states_dir: str = STATES_DIR) -> Lis
 
 def audit_problems(row: dict) -> List[str]:
     """A row's problems.  Saving after entry only matters in a room that spawns monsters (the game-start base
-    state, for one, has no room entry before it)."""
+    state, for one, has no room entry before it; a room game.yaml has no monster count for is not flagged)."""
     return [p for p, bad in (('MISNAMED', not row['named_room_matches']),
-                             ('POST-ENTRY', not row['pre_entry'] and row['full_count'] > 0),
+                             ('POST-ENTRY', not row['pre_entry'] and (row['full_count'] or 0) > 0),
                              ('SHORT', not row['full'])) if bad]
 
 
