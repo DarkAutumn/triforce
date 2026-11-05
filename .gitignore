@@ -11,3 +11,6 @@ triforce.egg-info/
 triforce/custom_integrations/Zelda-NES/*.yaml
 trajectories/
 logs/
+target/
+triforce/_native*.so
+/roms/
