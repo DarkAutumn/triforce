@@ -118,6 +118,10 @@ impl<N: Nes> Session<N> {
         self.executor.capture_pre_entry = on;
     }
 
+    pub fn capture_pre_entry(&self) -> bool {
+        self.executor.capture_pre_entry
+    }
+
     pub fn last_pre_entry(&self) -> Option<&SessionSnapshot<N::State>> {
         self.executor.last_pre_entry.as_ref()
     }
@@ -190,6 +194,15 @@ impl<N: Nes> Session<N> {
         for &(var, value) in values {
             self.machine.set_var(var, value);
         }
+        self.rebuild();
+        self.state()
+    }
+
+    /// Holds the raw controller byte for `frames` real frames, bypassing the option executor (menus,
+    /// debugging, movie playback), then rebuilds the state and mask. Frames count toward `frame()` and reach
+    /// the frame sink; `total_frames`, `steps` and the executor flags are unchanged.
+    pub fn press(&mut self, buttons: u8, frames: u32) -> &Arc<GameView> {
+        self.machine.step(buttons, frames);
         self.rebuild();
         self.state()
     }

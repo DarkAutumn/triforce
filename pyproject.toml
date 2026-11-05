@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
 
 [project]
 name = "triforce"
@@ -8,12 +8,9 @@ version = "2.0.0"
 description = "Specialist PPO agents that play The Legend of Zelda (NES) from structured RAM state"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "stable-retro>=1.0.1",
     "numpy",
     "torch",
     "gymnasium",
-    "pyyaml",
-    "pydantic>=2",
     "tensorboard",
     "pillow",
 ]
@@ -25,11 +22,11 @@ dev = ["pytest", "pyside6-essentials>=6.7"]
 [project.scripts]
 triforce = "triforce.cli:main"
 
-[tool.setuptools.packages.find]
-include = ["triforce*"]
-
-[tool.setuptools.package-data]
-triforce = ["*.yaml", "*.txt", "custom_integrations/Zelda-NES/*"]
+[tool.maturin]
+python-source = "."
+module-name = "triforce._native"
+manifest-path = "crates/triforce-py/Cargo.toml"
+features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -595,7 +595,7 @@ pub fn fnmatch(pattern: &[u8], name: &[u8]) -> bool {
 
 /// `specialists/`, `triforce/game.yaml`, `triforce/routes.yaml`, `triforce/chain_hp.json`, states and
 /// trajectories, loaded once and cross-checked.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct GameData {
     pub root: PathBuf,
     pub map: Arc<GameMap>,

@@ -97,6 +97,8 @@ pub struct GameMap {
     rooms: IndexMap<MapLocation, GameRoom>,
     /// Routes in routes.yaml order (plain lists first, then spliced routes).
     pub routes: IndexMap<String, Vec<RouteStep>>,
+    /// routes.yaml `alternates`, in file order.
+    pub alternates: Vec<Alternate>,
     route_tables: HashMap<String, RouteTable>,
 }
 
@@ -329,6 +331,7 @@ impl GameMap {
         let mut map = GameMap {
             rooms,
             routes,
+            alternates: Vec::new(),
             route_tables: HashMap::new(),
         };
         let tables = map
@@ -337,6 +340,7 @@ impl GameMap {
             .map(|(name, steps)| (name.clone(), map.route_table(steps, &alternates)))
             .collect();
         map.route_tables = tables;
+        map.alternates = alternates;
         Ok(map)
     }
 

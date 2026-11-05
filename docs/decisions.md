@@ -357,3 +357,67 @@ Format: date — what changed — why — evidence.
   40 steps with `max_steps` 12, so several auto-resets); pooled chain runs equal direct runs; frames are
   published for exactly the real frames of each step while beams run the look-ahead; a recorded Goriya episode
   with beam look-ahead replays on the oracle from its origin state to identical RAM and PRG-RAM.
+
+## 2026-11-05 — `triforce._native`: the PyO3 module (plan step 15)
+
+- **What:** `crates/triforce-py` (lib `_native`, cdylib + rlib) on PyO3 0.30 and `numpy` 0.30 with
+  `abi3-py312`; `pyproject.toml` builds with maturin (`python-source = "."`, `module-name = "triforce._native"`,
+  `features = ["pyo3/extension-module"]`), dependencies `numpy torch gymnasium tensorboard pillow`. maturin 1.16
+  was installed into `.venv` with `uv pip`; `stable-retro`, `pydantic` and `pyyaml` stay installed there until
+  the step-16 cutover deletes their importers. Departures from the draft:
+  - **Locations.** The repo root is the parent of the directory `_native` was loaded from. The ROM is
+    `$TRIFORCE_ROM`, else `<root>/roms/zelda.nes`, validated once per process (`RomError`). Start states are
+    `TFZSTATE` files under `$TRIFORCE_STATES_DIR`, else `triforce/states` once it exists (step 16), else the
+    legacy integration directory; every constructor also takes `states_dir=` (tests use a tmp dir). Bare names
+    resolve as `emulator.state_path` did. `paths()` reports what is in use.
+  - **Game.** `Game(seed=0, render=False, states_dir=None, look_ahead=True)`. `load` takes a name, a path,
+    `TFZSTATE` bytes or a `Snapshot`, plus `seed=` to reseed its ChaCha8 load randomization. Added beyond the
+    draft: `play_movie(path)` (a `TFMOVIE` with its `base` chain, on the current machine: the base state for
+    step 17 and the tests), `save_state()` (bytes), `legal`, `is_allowed`, `set_disabled_kinds`,
+    `render_grid()`, `look_ahead`. `press` takes `'UP+A'`, `['UP', 'A']` or a controller byte and runs through
+    the new `Session::press` (counted frames, frame sink). `ram()` is a uint8 array; `describe_change` is a
+    static method taking a `Change`. `GameState` exposes scalars plus `link`/`enemies`/`items`/`projectiles`/
+    `treasure` as dicts (frozen copies, not live objects); `Change` exposes the step-12 fields, `enemies_hit` as
+    `(slot, damage)` pairs. `describe.py` is ported into the crate (text identical in shape, Python enum names).
+  - **Snapshot** pickles as `u64 total_frames, u64 steps` + the `TFZSTATE` file; `Snapshot.state_file()` gives
+    the bare file (pre-entry captures for `entry_states`).
+  - **SpecialistConfig.** Built from keyword fields (`SpecialistConfig(name=..., rooms=[(1, 0x73)], ...)`, what
+    `entry_states.step_config` does), `load`, `names`, `replace(**fields)` (re-validated through
+    `from_json`), `to_dict`, `disabled_kinds()`, `rooms` as `(level, room, in_cave)`; every other field through
+    `__getattr__`, nested blocks as `types.SimpleNamespace` (`config.curriculum.enabled` keeps working).
+    Pickles via JSON. `GameData` gained `Clone` for per-`states_dir` copies.
+  - **Tasks.** `TrainTask(config, run_dir, start_state=None, curriculum=None, capture_dir=None, states_dir=None,
+    room_events=False)` with `curriculum` a `CurriculumSpec(trajectories, state_path=None, fraction, stages,
+    window, threshold)` (state path defaults to `<run_dir>/curriculum.json`). `EvalTask(config, jobs)` with
+    `jobs` a list of `(start_state, seed)`. `ChainTask(configs, route, seeds, stop_at=None, start_from=None,
+    max_steps=50000, missing=None, states_dir=None)`: `configs` (names or configs) are the specialists that have
+    policies, in policy-index order; `missing` maps specialists without models to the `error` reason; any other
+    specialist a run needs also ends it as `error`.
+  - **EnvPool.** `EnvPool(task, num_envs, threads=None, seed=0, fps=0.0)` (`threads` defaults to
+    `min(num_envs, cpus)`). `make_buffers(rows=None)` returns `{'obs': {key: array}, 'final_obs': {...}, <the
+    pool's scalar columns>, 'mask': obs['action_mask']}`; the chain's specialist is the pool's generic `policy`
+    column (not `specialist`), and `finished` marks envs whose job list ran out. `recv(out, min_ready=None,
+    timeout=None)` waits in 50 ms GIL-released slices (checking signals between them), then copies rows with
+    the GIL released. `poll_events()` returns dicts with `env` and `type`: `episode` (`info`), `eval`
+    (`record`), `run` (`result`), `room` (flat fields) and `movie` (`origin`, `buttons`, `pokes`). Eval records
+    arrive in completion order; `evaluate.py` sorts by seed. Also `set_fps`, `set_record`, `frame_counter`,
+    `frame(env, since=0, out=None)`, `curriculum_progress()`, `active`, `policies`, context manager.
+  - **Errors.** `EnvError` variants map to their classes; `EnvError::State` (any unreadable state, also a
+    missing file reached through an env) is `StateFormatError`; a missing file in `Game.load` is `OSError`;
+    `ZeldaError` is `RuntimeError`; pool misuse is `ValueError`; an env's error from a pool keeps its class with
+    an `env N:` prefix.
+  - **Explore.** `Explorer(config, seed=0, states_dir=None)` with `explore`/`write`/`replay` (`replay` returns
+    the final info and a `Snapshot`), `AcceptSpec(target, min_keys=0, item_taken_room=None)`, `ExploreResult`.
+    `explore_states(...)` runs states on threads with a fresh explorer per state (seeded with `seed`), so results
+    don't depend on `parallel`; Python reused one explorer per worker process, so its results did.
+  - **Routes.** `route_steps(route)` (dicts with the tagged specialist filled in), `route_alternates()` (needs
+    the new `GameMap::alternates`), `routes()`, `families()`, `specialist_for(location)`.
+  - **Constants** also include `ROOM_VOCAB`, `ENTITY_VOCAB`, `NUM_TILE_CLASSES`, `NUM_ENTITY_SLOTS`, `OUTCOMES`,
+    `ACTION_KINDS`, `DIRECTIONS`, `DURATIONS`, `SCALAR_COLUMNS`; `INTERRUPTS[code]` names the batch's interrupt
+    codes (0 = none).
+- **Evidence:** `.venv/bin/python -m pytest -q tests/native`: 36 tests on zcore and the corpus movie
+  `power_on_to_start` (states made in a tmp dir); among them a train pool's lockstep rows identical with 1 and
+  4 threads over 60 rounds with auto-resets, eval records for every job, chain runs ending `error` for missing
+  models, per-env render toggling, pickled snapshots replaying to identical RAM, render on/off giving identical
+  emulation, legacy gzip states rejected with `StateFormatError`. `cargo test -p triforce-py`: store and
+  describe unit tests. Raw zcore speed at this point (Z1) is about 490 frames/s per core, release build.
