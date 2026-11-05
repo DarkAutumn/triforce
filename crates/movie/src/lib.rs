@@ -413,4 +413,196 @@ mod tests {
         assert_eq!(Golden::decode(&g.encode()).unwrap(), g);
         assert_eq!(g.domains(), vec![Domain::Ram, Domain::Pixels]);
     }
+
+    /// A movie with inputs `inputs` and one poke per `(frame, addr)`.
+    fn movie_with(inputs: &[u8], pokes: &[(u32, u16)]) -> Movie {
+        let mut m = Movie::new([3; 20], serde_json::json!({"name": "m"}));
+        m.inputs = inputs.to_vec();
+        m.pokes = pokes.iter().map(|&(frame, addr)| Poke { frame, addr, value: 0x5A }).collect();
+        m
+    }
+
+    /// Offset of the run count in an encoded movie (magic, version, flags, ROM SHA-1, frames).
+    const RUNS_AT: usize = 8 + 2 + 2 + 20 + 4;
+
+    fn decode_err(buf: &[u8]) -> String {
+        format!("{:#}", Movie::decode(buf).expect_err("refused"))
+    }
+
+    #[test]
+    fn run_length_round_trips_at_its_boundaries() {
+        let alternating: Vec<u8> = (0..1000).map(|k| (k % 2) as u8).collect();
+        let cases: [(&[u8], u32); 5] = [
+            (&[], 0),
+            (&[0x80], 1),
+            (&[0; 100_000], 1),
+            (&alternating, 1000),
+            (&[1, 1, 2, 2, 2, 1], 3),
+        ];
+        for (inputs, runs) in cases {
+            let enc = movie_with(inputs, &[]).encode();
+            let count = u32::from_le_bytes(enc[RUNS_AT..RUNS_AT + 4].try_into().unwrap());
+            assert_eq!(count, runs, "{} frames", inputs.len());
+            assert_eq!(Movie::decode(&enc).unwrap().inputs, inputs);
+        }
+        // Pokes at frame 0 and at frame == frames (after the last input) are both in range.
+        let m = movie_with(&[0, 0], &[(0, 0x00), (2, 0x7FFF)]);
+        assert_eq!(Movie::decode(&m.encode()).unwrap(), m);
+    }
+
+    #[test]
+    fn movie_decode_names_what_is_wrong() {
+        let good = movie_with(&[1, 1, 2], &[(1, 0x10)]).encode();
+        let mut bad = good.clone();
+        bad[0] = b'X';
+        assert!(decode_err(&bad).contains("not a TFMOVIE"));
+        let mut bad = good.clone();
+        bad[8] = 2;
+        assert!(decode_err(&bad).contains("version 2"));
+        for len in 0..good.len() {
+            assert!(decode_err(&good[..len]).contains("truncated"), "cut at {len}");
+        }
+        let mut bad = good.clone();
+        bad.push(b' ');
+        assert!(decode_err(&bad).contains("trailing"));
+
+        // Runs: two runs, (1, 2) then (2, 1); the first run's count is at RUNS_AT + 5.
+        let mut bad = good.clone();
+        bad[RUNS_AT + 5] = 3;
+        assert!(decode_err(&bad).contains("exceed the frame count"));
+        let mut bad = good.clone();
+        bad[RUNS_AT + 5] = 1;
+        assert!(decode_err(&bad).contains("cover 2 of 3"));
+
+        // The poke follows the runs and their count: frame (4), addr (2), value (1).
+        let poke_at = RUNS_AT + 4 + 2 * 5 + 4;
+        for (addr, ok) in [(0x07FFu16, true), (0x0800, false), (0x5FFF, false), (0x6000, true), (0x8000, false)] {
+            let mut buf = good.clone();
+            buf[poke_at + 4..poke_at + 6].copy_from_slice(&addr.to_le_bytes());
+            match Movie::decode(&buf) {
+                Ok(m) => assert!(ok && m.pokes[0].addr == addr, "${addr:04X}"),
+                Err(e) => assert!(!ok && format!("{e}").contains("not allowed"), "${addr:04X}: {e}"),
+            }
+        }
+        let mut bad = good.clone();
+        bad[poke_at..poke_at + 4].copy_from_slice(&4u32.to_le_bytes());
+        assert!(decode_err(&bad).contains("out of order/range"), "poke past the end");
+        let unordered = movie_with(&[0, 0], &[(2, 0x10), (1, 0x10)]).encode();
+        assert!(decode_err(&unordered).contains("out of order/range"));
+
+        let mut bad = good.clone();
+        let meta_at = bad.len() - serde_json::to_vec(&serde_json::json!({"name": "m"})).unwrap().len();
+        bad[meta_at] = b'[';
+        assert!(decode_err(&bad).contains("not JSON"));
+    }
+
+    /// Counts are read before the data they describe: a corrupt count must be refused as a
+    /// truncated file rather than reserve memory for it.
+    #[test]
+    fn corrupt_counts_are_refused_without_allocating_for_them() {
+        let mut huge = movie_with(&[], &[]).encode();
+        huge[RUNS_AT - 4..RUNS_AT].copy_from_slice(&u32::MAX.to_le_bytes()); // frames, no runs
+        assert!(decode_err(&huge).contains("cover 0 of 4294967295"));
+        let mut huge = movie_with(&[], &[]).encode();
+        huge[RUNS_AT..RUNS_AT + 4].copy_from_slice(&u32::MAX.to_le_bytes()); // runs
+        assert!(decode_err(&huge).contains("truncated"));
+        let mut huge = movie_with(&[], &[]).encode();
+        huge[RUNS_AT + 4..RUNS_AT + 8].copy_from_slice(&u32::MAX.to_le_bytes()); // pokes
+        assert!(decode_err(&huge).contains("truncated"));
+
+        let g = Golden { domain_mask: LADDER_MASK, movie_hash: [0; 32], records: vec![] };
+        let mut huge = g.encode();
+        let n = huge.len();
+        huge[n - 4..].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(format!("{:#}", Golden::decode(&huge).unwrap_err()).contains("truncated"));
+    }
+
+    #[test]
+    fn golden_decode_names_what_is_wrong() {
+        let g = Golden { domain_mask: Domain::Cpu.bit() | Domain::Apu.bit(), movie_hash: [9; 32], records: vec![vec![1, 2]; 3] };
+        let good = g.encode();
+        let err = |buf: &[u8]| format!("{:#}", Golden::decode(buf).unwrap_err());
+        let mut bad = good.clone();
+        bad[..8].copy_from_slice(MOVIE_MAGIC);
+        assert!(err(&bad).contains("not a TFGOLDEN"));
+        let mut bad = good.clone();
+        bad[8] = 9;
+        assert!(err(&bad).contains("version 9"));
+        let mut bad = good.clone();
+        bad[11] = 0x08; // bit 11: no such domain
+        assert!(err(&bad).contains("unknown domain bits"));
+        let mut bad = good.clone();
+        bad[10..12].fill(0); // no domains: records of nothing, any count would "fit"
+        assert!(err(&bad).contains("no digest domains"));
+        for len in 0..good.len() {
+            assert!(err(&good[..len]).contains("truncated"), "cut at {len}");
+        }
+        let mut bad = good;
+        bad.extend_from_slice(&[0; 8]);
+        assert!(err(&bad).contains("trailing"));
+        assert_eq!(Domain::in_mask(LADDER_MASK).collect::<Vec<_>>(), ALL_DOMAINS);
+    }
+
+    /// Records every call so the order of pokes and frames can be checked.
+    #[derive(Default)]
+    struct Recorder(Vec<String>);
+
+    impl Playback for Recorder {
+        fn run_frame(&mut self, buttons: u8) {
+            self.0.push(format!("frame {buttons}"));
+        }
+        fn poke(&mut self, addr: u16, value: u8) {
+            self.0.push(format!("poke {addr:04X}={value}"));
+        }
+    }
+
+    /// `play` runs the base chain first, applies a frame-`k` poke before input `k`, and applies
+    /// pokes tagged after the last input at the end; a base for another ROM is refused.
+    #[test]
+    fn play_orders_base_pokes_and_frames() {
+        let dir = std::env::temp_dir().join(format!("movie-play-{}", std::process::id()));
+        let mut root = movie_with(&[1], &[(0, 0x01)]);
+        root.meta = serde_json::json!({"name": "root"});
+        root.save(&dir.join("root.tfmovie")).unwrap();
+        let mut mid = movie_with(&[2], &[]);
+        mid.meta = serde_json::json!({"name": "mid", "base": "root"});
+        mid.save(&dir.join("mid.tfmovie")).unwrap();
+        let mut top = movie_with(&[3, 4], &[(1, 0x02), (1, 0x03), (2, 0x04)]);
+        top.meta = serde_json::json!({"name": "top", "base": "mid"});
+
+        let mut r = Recorder::default();
+        play(&mut r, &top, &dir).unwrap();
+        let expected = [
+            "poke 0001=90", "frame 1", "frame 2", "frame 3", "poke 0002=90", "poke 0003=90", "frame 4",
+            "poke 0004=90",
+        ];
+        assert_eq!(r.0, expected);
+
+        let mut r = Recorder::default();
+        play_base(&mut r, &top, &dir).unwrap();
+        assert_eq!(r.0, expected[..3]);
+
+        top.rom_sha1 = [4; 20];
+        let err = play(&mut Recorder::default(), &top, &dir).unwrap_err();
+        assert!(format!("{err:#}").contains("different ROM"), "{err:#}");
+        top.meta["base"] = serde_json::json!("missing");
+        assert!(play(&mut Recorder::default(), &top, &dir).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn number_parsers_accept_the_script_forms() {
+        for s in ["0x6000", "$6000", "6000", " 6000 "] {
+            assert_eq!(parse_hex_u16(s).unwrap(), 0x6000, "{s:?}");
+        }
+        for s in ["0x10000", "", "0xG", "-1"] {
+            assert!(parse_hex_u16(s).is_err(), "{s:?}");
+        }
+        for (s, v) in [("255", 255), ("0xff", 255), ("$0A", 10), ("10", 10)] {
+            assert_eq!(parse_num_u8(s).unwrap(), v, "{s:?}");
+        }
+        for s in ["256", "0x100", "ten", "-1", ""] {
+            assert!(parse_num_u8(s).is_err(), "{s:?}");
+        }
+    }
 }

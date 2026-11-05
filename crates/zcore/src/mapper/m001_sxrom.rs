@@ -322,4 +322,133 @@ mod tests {
 
         assert_eq!(before, sample(&mapper, &cart));
     }
+
+    /// The lockout lasts exactly two CPU cycles: one clock after a write is still too soon, two
+    /// is enough.
+    #[test]
+    fn the_write_lockout_lasts_exactly_two_cycles() {
+        let (mut mapper, mut cart) = mmc1();
+        // With one clock after each write every other write is dropped: writes 0, 2, 4, 6, 8 give
+        // bits 1, 0, 0, 0, 0 (bank 1). Were all accepted, writes 0-4 would latch 3 and 5-9 latch 0.
+        for val in [1, 1, 0, 0, 0, 0, 0, 0, 0, 0] {
+            write(&mut mapper, &mut cart, 0xE000, val);
+            mapper.clock();
+        }
+        assert_eq!(prg_peek(&mapper, &cart, 0x8000), 16, "bank 1");
+    }
+
+    /// A bit-7 write mid-sequence discards the bits shifted so far, so the next five writes latch
+    /// a clean value.
+    #[test]
+    fn bit_7_discards_a_partial_sequence() {
+        let (mut mapper, mut cart) = mmc1();
+        for _ in 0..3 {
+            write(&mut mapper, &mut cart, 0xE000, 1);
+            mapper.clock();
+            mapper.clock();
+        }
+        write(&mut mapper, &mut cart, 0xE000, 0x80);
+        mapper.clock();
+        mapper.clock();
+        serial_write(&mut mapper, &mut cart, 0xE000, 2);
+        assert_eq!(
+            prg_peek(&mapper, &cart, 0x8000),
+            2 * 16,
+            "not 0b1_0111 shifted in"
+        );
+    }
+
+    /// Only the fifth write's address selects the register; the first four may go anywhere in
+    /// $8000-$FFFF.
+    #[test]
+    fn the_fifth_writes_address_picks_the_register() {
+        let (mut mapper, mut cart) = mmc1();
+        for (bit, addr) in [0x8000u16, 0xA000, 0xC000, 0x9FFF, 0xFFFF]
+            .into_iter()
+            .enumerate()
+        {
+            write(&mut mapper, &mut cart, addr, (6 >> bit) & 1);
+            mapper.clock();
+            mapper.clock();
+        }
+        assert_eq!(
+            prg_peek(&mapper, &cart, 0x8000),
+            6 * 16,
+            "latched into PRG ($E000-$FFFF)"
+        );
+        assert_eq!(
+            chr_peek(&mapper, &cart, 0x0000),
+            0x80,
+            "CHR bank 0 untouched"
+        );
+
+        serial_write(&mut mapper, &mut cart, 0xBFFF, 0b10001); // CHR bank 0 = 17 (wraps to 1)
+        serial_write(&mut mapper, &mut cart, 0x9FFF, 0b10000); // control: 4K CHR, 32K PRG
+        assert_eq!(
+            chr_peek(&mapper, &cart, 0x0000),
+            0x80 | 4,
+            "$BFFF is CHR bank 0"
+        );
+        assert_eq!(prg_peek(&mapper, &cart, 0x8000), 6 * 16, "32K mode, bank 6");
+        assert_eq!(prg_peek(&mapper, &cart, 0xC000), 7 * 16);
+    }
+
+    /// Control mirroring value 1 is one-screen from the upper CIRAM bank: all four nametables
+    /// read the same bank, distinct from the lower one.
+    #[test]
+    fn control_mirroring_1_is_one_screen_upper() {
+        let (mut mapper, mut cart) = mmc1();
+        control(&mut mapper, &mut cart, 0b00000);
+        cart.memory.chr_write(0x2000, 0x33);
+        control(&mut mapper, &mut cart, 0b00001);
+        cart.memory.chr_write(0x2C00, 0x44);
+        for nt in [0x2000, 0x2400, 0x2800, 0x2C00] {
+            assert_eq!(
+                chr_peek(&mapper, &cart, nt),
+                0x44,
+                "one-screen B at ${nt:04X}"
+            );
+        }
+        control(&mut mapper, &mut cart, 0b00000);
+        assert_eq!(
+            chr_peek(&mapper, &cart, 0x2400),
+            0x33,
+            "the lower bank kept its byte"
+        );
+    }
+
+    /// Both resets return to PRG mode 3 and empty the shift register; only a hard reset (power
+    /// cycle) also re-enables PRG-RAM and clears the write lockout.
+    #[test]
+    fn soft_reset_keeps_prg_ram_disabled_hard_reset_does_not() {
+        let (mut mapper, mut cart) = mmc1();
+        control(&mut mapper, &mut cart, 0b00000);
+        serial_write(&mut mapper, &mut cart, 0xE000, 0x10);
+        write(&mut mapper, &mut cart, 0xE000, 1); // a pending bit and an armed lockout
+        let Mapper::Sxrom(sxrom) = &mut mapper else {
+            panic!("an SxROM board")
+        };
+
+        sxrom.mmc1.reset(ResetKind::Soft);
+        assert_eq!((sxrom.mmc1.shift_count, sxrom.mmc1.write_buffer), (0, 0));
+        assert!(sxrom.mmc1.prg_mode && sxrom.mmc1.prg_bank_select, "mode 3");
+        assert!(
+            !sxrom.mmc1.prg_ram_enabled(),
+            "soft reset keeps PRG-RAM off"
+        );
+        assert_ne!(
+            sxrom.mmc1.write_just_occurred, 0,
+            "soft reset keeps the lockout"
+        );
+
+        sxrom.mmc1.reset(ResetKind::Hard);
+        assert!(
+            sxrom.mmc1.prg_ram_enabled(),
+            "power cycle re-enables PRG-RAM"
+        );
+        assert_eq!(sxrom.mmc1.write_just_occurred, 0);
+        mapper.update_banks(&mut cart.memory);
+        assert_eq!(prg_peek(&mapper, &cart, 0x6000), 0x5A);
+        assert_eq!(prg_peek(&mapper, &cart, 0xC000), 7 * 16, "last bank fixed");
+    }
 }

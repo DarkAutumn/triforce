@@ -726,4 +726,198 @@ mod tests {
             );
         }
     }
+
+    /// An iNES image: header bytes 4-7 as given, bytes 8-15 zero, then `prg` 16K banks of PRG-ROM
+    /// (bank `n` filled with `n`) and `chr` 8K banks of CHR-ROM (filled with `0xC0 | n`).
+    fn ines(prg: u8, chr: u8, flags6: u8, flags7: u8) -> Vec<u8> {
+        let mut rom = vec![0x4E, 0x45, 0x53, 0x1A, prg, chr, flags6, flags7];
+        rom.resize(16, 0);
+        for bank in 0..prg {
+            rom.resize(rom.len() + PRG_ROM_BANK_SIZE, bank);
+        }
+        for bank in 0..chr {
+            rom.resize(rom.len() + CHR_ROM_BANK_SIZE, 0xC0 | bank);
+        }
+        rom
+    }
+
+    /// The header byte a refusal names.
+    fn refused_byte(rom: &[u8]) -> u8 {
+        match Cart::from_rom("test.nes", &mut &rom[..]) {
+            Err(Error::InvalidHeader { byte, .. }) => byte,
+            Err(err) => panic!("expected an invalid header, got {err}"),
+            Ok(cart) => panic!("expected a refusal, loaded {cart}"),
+        }
+    }
+
+    /// A file too short for a header, or without the `NES\x1a` signature, is refused at byte 0.
+    #[test]
+    fn a_missing_header_or_signature_is_refused_at_byte_0() {
+        assert_eq!(refused_byte(b"NES\x1a\x01\x01"), 0, "short header");
+        let mut rom = ines(1, 1, 0, 0);
+        rom[3] = 0x1B;
+        assert_eq!(refused_byte(&rom), 0, "bad signature");
+    }
+
+    /// Byte 7 with bits 2-3 = 1 is the `DiskDude!` signature (garbage in bytes 7-15), and 3 is
+    /// no known format: both are refused rather than read as a mapper high nibble.
+    #[test]
+    fn corrupt_byte_7_formats_are_refused() {
+        for flags7 in [0x04, 0x0C, 0x44] {
+            assert_eq!(
+                refused_byte(&ines(1, 1, 0, flags7)),
+                7,
+                "byte 7 = {flags7:#04X}"
+            );
+        }
+    }
+
+    /// A trainer would shift every later byte by 512, and four-screen needs VRAM no zcore cart
+    /// has: both are refused at byte 6 rather than misloaded.
+    #[test]
+    fn trainers_and_four_screen_carts_are_refused() {
+        let trainer = refused_byte(&ines(1, 1, 0x04, 0));
+        assert_eq!(trainer, 6, "trainer");
+        let four_screen =
+            Cart::from_rom("test.nes", &mut &ines(1, 1, 0x08, 0)[..]).expect_err("four-screen");
+        assert!(
+            four_screen.to_string().contains("four-screen"),
+            "{four_screen}"
+        );
+    }
+
+    /// PRG and CHR shorter than the header promises name the size byte that lied.
+    #[test]
+    fn truncated_prg_and_chr_name_their_size_byte() {
+        let rom = ines(2, 1, 0, 0);
+        assert_eq!(
+            refused_byte(&rom[..16 + PRG_ROM_BANK_SIZE]),
+            4,
+            "PRG cut short"
+        );
+        assert_eq!(refused_byte(&rom[..rom.len() - 1]), 5, "CHR cut short");
+    }
+
+    /// PRG-ROM is mirrored up to the 128K image, so it must be a power of two no larger than it;
+    /// CHR-ROM is at most 8K.
+    #[test]
+    fn rom_sizes_the_image_cannot_hold_are_refused() {
+        assert_eq!(refused_byte(&ines(3, 1, 0, 0)), 4, "three PRG banks");
+        assert_eq!(refused_byte(&ines(16, 1, 0, 0)), 4, "256K of PRG");
+        assert_eq!(refused_byte(&ines(1, 2, 0, 0)), 5, "16K of CHR");
+    }
+
+    /// A loaded cart reports the file's PRG/CHR bytes exactly, and mirroring and battery from
+    /// byte 6; a smaller PRG-ROM is mirrored through the whole image.
+    #[test]
+    fn a_loaded_cart_reports_its_file_contents_and_flags() {
+        let cart = Cart::from_rom("test.nes", &mut &ines(2, 1, 0x13, 0)[..]).expect("loads");
+        assert_eq!(cart.mapper_num(), 1);
+        assert!(cart.is_ines() && !cart.is_nes2());
+        assert_eq!(cart.mirroring(), Mirroring::Vertical);
+        assert!(cart.battery_backed());
+        assert_eq!(cart.prg_rom().len(), 2 * PRG_ROM_BANK_SIZE);
+        assert_eq!(cart.prg_rom()[PRG_ROM_BANK_SIZE], 1, "second bank");
+        assert_eq!(cart.prg_rom[2 * PRG_ROM_BANK_SIZE], 0, "mirrored image");
+        assert_eq!(cart.chr_rom(), &[0xC0; CHR_ROM_BANK_SIZE][..]);
+
+        let cart = Cart::from_rom("test.nes", &mut &ines(1, 0, 0x00, 0)[..]).expect("loads");
+        assert_eq!(cart.mirroring(), Mirroring::Horizontal);
+        assert!(!cart.battery_backed());
+        assert!(cart.chr_rom().is_empty(), "CHR-RAM cart");
+    }
+
+    /// The mapper number takes its low nibble from byte 6, its high nibble from byte 7 and, in
+    /// NES 2.0, bits 8-11 from byte 8: mapper 257 must not alias to 1.
+    #[test]
+    fn mapper_numbers_use_every_nibble_the_format_defines() {
+        let err = Cart::from_rom("test.nes", &mut &ines(1, 1, 0x40, 0)[..]).expect_err("MMC3");
+        assert!(
+            matches!(err, Error::InvalidMapper(mapper::Error::Unimplemented(4))),
+            "{err}"
+        );
+        assert!(std::error::Error::source(&err).is_some());
+        let err = Cart::from_rom("test.nes", &mut &ines(1, 1, 0x00, 0x10)[..]).expect_err("16");
+        assert!(
+            matches!(err, Error::InvalidMapper(mapper::Error::Unimplemented(16))),
+            "{err}"
+        );
+
+        let mut rom = ines(1, 1, 0x10, 0x08);
+        rom[8] = 0x51; // submapper 5, mapper bit 8
+        let header = NesHeader::load(&mut &rom[..]).expect("NES 2.0 header");
+        assert_eq!(header.variant, NesVariant::Nes2);
+        assert_eq!((header.mapper_num, header.submapper_num), (0x101, 5));
+        let err = Cart::from_rom("test.nes", &mut &rom[..]).expect_err("mapper 257");
+        assert!(
+            matches!(
+                err,
+                Error::InvalidMapper(mapper::Error::Unimplemented(0x101))
+            ),
+            "{err}"
+        );
+    }
+
+    /// NES 2.0 byte 9 extends both ROM sizes, so a PRG count of 0x101 banks is not one bank.
+    #[test]
+    fn nes2_byte_9_extends_the_rom_sizes() {
+        let mut rom = ines(1, 1, 0x10, 0x08);
+        rom[9] = 0x21;
+        let header = NesHeader::load(&mut &rom[..]).expect("NES 2.0 header");
+        assert_eq!((header.prg_rom_banks, header.chr_rom_banks), (0x101, 0x201));
+        assert_eq!(
+            refused_byte(&rom),
+            4,
+            "the PRG the header asks for is not in the file"
+        );
+    }
+
+    /// Byte 11 (CHR-RAM/NVRAM shifts) is checked like byte 10: `0xF` is reserved, and only a
+    /// CHR-RAM cart's declared size counts against the 8K of CHR.
+    #[test]
+    fn nes2_chr_ram_size_is_validated() {
+        let mut rom = ines(1, 0, 0x10, 0x08);
+        for (byte11, refused_at) in [(0x0F, Some(11)), (0xF0, Some(11)), (0x08, Some(5))] {
+            rom[11] = byte11;
+            assert_eq!(
+                Cart::from_rom("test.nes", &mut &rom[..])
+                    .err()
+                    .map(|err| match err {
+                        Error::InvalidHeader { byte, .. } => byte,
+                        err => panic!("{err}"),
+                    }),
+                refused_at,
+                "byte 11 = {byte11:#04X}"
+            );
+        }
+        rom[11] = 0x07; // 8K of CHR-RAM
+        let cart = Cart::from_rom("test.nes", &mut &rom[..]).expect("8K of CHR-RAM loads");
+        assert!(cart.is_nes2());
+    }
+
+    /// With bits 2-3 of byte 7 clear, nonzero bytes 12-15 mean iNES 0.7 (bytes 8-15 may hold
+    /// junk), not iNES; the cart still loads from bytes 4-7.
+    #[test]
+    fn junk_in_bytes_12_to_15_reads_as_ines_0_7() {
+        let mut rom = ines(1, 1, 0x10, 0);
+        rom[12..16].copy_from_slice(b"Dude");
+        let header = NesHeader::load(&mut &rom[..]).expect("iNES 0.7 header");
+        assert_eq!(header.variant, NesVariant::INes07);
+        assert_eq!(header.mapper_num, 1);
+        assert!(Cart::from_rom("test.nes", &mut &rom[..]).is_ok());
+    }
+
+    /// A missing file is an I/O error carrying its cause, not a header error.
+    #[test]
+    fn a_missing_file_is_an_io_error() {
+        let path = std::env::temp_dir().join("zcore-no-such-rom.nes");
+        for err in [
+            Cart::from_path(&path).expect_err("no file"),
+            NesHeader::from_path(&path).expect_err("no file"),
+        ] {
+            assert!(matches!(err, Error::Io { .. }), "{err}");
+            assert!(std::error::Error::source(&err).is_some());
+            assert!(err.to_string().contains("zcore-no-such-rom.nes"), "{err}");
+        }
+    }
 }

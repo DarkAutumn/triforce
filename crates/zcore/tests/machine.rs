@@ -173,6 +173,56 @@ fn poke_outside_ram_panics() {
     ZCore::power_on(rom).poke(0x2000, 0);
 }
 
+/// Poke reaches the last byte of work RAM and both ends of PRG-RAM; the first byte past either
+/// window panics (the RAM mirrors at $0800-$1FFF are not pokeable).
+#[test]
+fn poke_reaches_both_window_edges() {
+    let Some(rom) = rom() else { return };
+    let mut nes = ZCore::power_on(rom);
+    nes.poke(0x0000, 0x11);
+    nes.poke(0x07FF, 0x22);
+    nes.poke(0x6000, 0x33);
+    nes.poke(0x7FFF, 0x44);
+    assert_eq!((nes.ram()[0], nes.ram()[0x7FF]), (0x11, 0x22));
+    assert_eq!((nes.prg_ram()[0], nes.prg_ram()[0x1FFF]), (0x33, 0x44));
+    for addr in [0x0800u16, 0x5FFF, 0x8000] {
+        let rom = nes.rom().clone();
+        let refused = std::panic::catch_unwind(move || ZCore::power_on(rom).poke(addr, 0));
+        assert!(refused.is_err(), "${addr:04X} accepted");
+    }
+}
+
+/// After a restore there is no frame to show until one is rendered, even if the console had
+/// just drawn one; a frame run without rendering keeps reporting none. The cycle count follows
+/// the snapshot (back in time on restore) and otherwise only grows.
+#[test]
+fn restore_drops_the_frame_and_rewinds_the_cycle_count() {
+    let Some(rom) = rom() else { return };
+    let mut nes = ZCore::power_on(rom);
+    let mut rgb = vec![0u8; 256 * 240 * 3];
+    let rgb: &mut [u8; 256 * 240 * 3] = (&mut rgb[..]).try_into().unwrap();
+    assert!(nes.pixels().is_none() && !nes.rgb(rgb), "nothing drawn at power-on");
+    nes.run_frame(0, true);
+    let snap = nes.snapshot();
+    let (frame, cycles) = (nes.frame(), nes.cycles());
+    let mut last = cycles;
+    for _ in 0..30 {
+        nes.run_frame(0, true);
+        assert!(nes.cycles() > last, "cycles only grow");
+        last = nes.cycles();
+    }
+    assert!(nes.pixels().is_some());
+
+    nes.restore(&snap);
+    assert_eq!((nes.frame(), nes.cycles()), (frame, cycles));
+    assert!(nes.pixels().is_none() && !nes.rgb(rgb), "no frame after restore");
+    nes.run_frame(0, false);
+    assert!(nes.pixels().is_none(), "a non-rendered frame shows nothing");
+    nes.run_frame(0, true);
+    assert!(nes.pixels().is_some() && nes.rgb(rgb));
+    assert_eq!(nes.frame(), frame + 2);
+}
+
 /// The whole machine state, as bytes (`MachineState` has no `PartialEq`).
 fn state_bytes(nes: &ZCore) -> Vec<u8> {
     postcard::to_allocvec(&nes.snapshot()).unwrap()

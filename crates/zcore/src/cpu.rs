@@ -950,4 +950,145 @@ mod tests {
         assert!(bus.apu.dmc.irq_pending && bus.apu.peek_status() & 0x80 != 0);
         assert_eq!(bus.apu.dmc.bytes_remaining, 0);
     }
+
+    /// A bus with an empty NROM cart and `program` at $0200, run to its end after `setup` has
+    /// set registers and memory. No branches, so "PC past the end" is the end.
+    fn run(program: &[u8], setup: impl FnOnce(&mut super::Bus)) -> super::Bus {
+        use super::*;
+        let mut bus = Bus::default();
+        let mut cart = Cart::empty();
+        cart.mapper = Nrom::load(&mut cart).unwrap();
+        bus.load_cart(cart);
+        bus.reset(ResetKind::Hard);
+        for (addr, &val) in (0x0200u16..).zip(program) {
+            bus.cpu_bus_write(addr, val);
+        }
+        bus.cpu.pc = 0x0200;
+        setup(&mut bus);
+        let end = 0x0200 + program.len() as u16;
+        while bus.cpu.pc < end {
+            bus.clock_instr();
+        }
+        bus
+    }
+
+    /// The NES 6502 has no BCD: ADC and SBC (and the unofficial SBC $EB) add in binary with the
+    /// decimal flag set, and carry, overflow, zero and negative follow signed/unsigned overflow.
+    #[test]
+    fn adc_and_sbc_are_binary_with_carry_and_overflow() {
+        use super::*;
+        let nzcv = Status::N | Status::Z | Status::C | Status::V;
+        #[rustfmt::skip]
+        let cases = [
+            // opcode, A, operand, carry in, result, flags
+            (0x69, 0x50, 0x50, false, 0xA0, Status::V | Status::N),
+            (0x69, 0xFF, 0x01, false, 0x00, Status::C | Status::Z),
+            (0x69, 0x80, 0x80, false, 0x00, Status::C | Status::V | Status::Z),
+            (0x69, 0x7F, 0x00, true,  0x80, Status::V | Status::N),
+            (0x69, 0x09, 0x01, false, 0x0A, Status::empty()), // BCD would give $10
+            (0xE9, 0x50, 0xF0, true,  0x60, Status::empty()),
+            (0xE9, 0x50, 0xB0, true,  0xA0, Status::V | Status::N),
+            (0xE9, 0x00, 0x01, true,  0xFF, Status::N),
+            (0xE9, 0x10, 0x01, false, 0x0E, Status::C), // borrow in
+            (0xE9, 0x80, 0x01, true,  0x7F, Status::C | Status::V),
+            (0xEB, 0x80, 0x01, true,  0x7F, Status::C | Status::V),
+        ];
+        for (opcode, a, operand, carry, result, flags) in cases {
+            let bus = run(&[opcode, operand], |bus| {
+                bus.cpu.acc = a;
+                bus.cpu.status.set(Status::D, true);
+                bus.cpu.status.set(Status::C, carry);
+            });
+            let case = format!("${opcode:02X} A=${a:02X} #${operand:02X} C={carry}");
+            assert_eq!(bus.cpu.acc, result, "{case}");
+            assert_eq!(bus.cpu.status & nzcv, flags, "{case}");
+            assert!(bus.cpu.status.contains(Status::D), "{case}: D untouched");
+        }
+    }
+
+    /// The stable unofficial read-modify-write and immediate opcodes, each against the official
+    /// pair it fuses.
+    #[test]
+    fn unofficial_opcodes_fuse_their_official_pairs() {
+        use super::*;
+        let zp = |val: u8, a: u8, x: u8, carry: bool| {
+            move |bus: &mut Bus| {
+                bus.cpu_bus_write(0x80, val);
+                bus.cpu.acc = a;
+                bus.cpu.x = x;
+                bus.cpu.status.set(Status::C, carry);
+            }
+        };
+        let c = |bus: &Bus| bus.cpu.status.contains(Status::C);
+
+        let b = run(&[0xA7, 0x80], zp(0x8F, 0, 0, false)); // LAX: LDA + TAX
+        assert_eq!((b.cpu.acc, b.cpu.x), (0x8F, 0x8F), "LAX");
+        assert!(b.cpu.status.contains(Status::N), "LAX sets N");
+
+        let b = run(&[0x87, 0x80], zp(0, 0xF0, 0x3C, false)); // SAX: store A & X
+        assert_eq!(b.peek(0x80), 0x30, "SAX");
+
+        let b = run(&[0xC7, 0x80], zp(0x41, 0x40, 0, false)); // DCP: DEC + CMP
+        assert_eq!(b.peek(0x80), 0x40, "DCP decrements");
+        assert!(b.cpu.status.contains(Status::Z) && c(&b), "DCP compares equal");
+
+        let b = run(&[0xE7, 0x80], zp(0x0F, 0x20, 0, true)); // ISB: INC + SBC
+        assert_eq!((b.peek(0x80), b.cpu.acc, c(&b)), (0x10, 0x10, true), "ISB");
+
+        let b = run(&[0x07, 0x80], zp(0x81, 0x01, 0, false)); // SLO: ASL + ORA
+        assert_eq!((b.peek(0x80), b.cpu.acc, c(&b)), (0x02, 0x03, true), "SLO");
+
+        let b = run(&[0x27, 0x80], zp(0x81, 0xFF, 0, false)); // RLA: ROL + AND
+        assert_eq!((b.peek(0x80), b.cpu.acc, c(&b)), (0x02, 0x02, true), "RLA");
+
+        let b = run(&[0x47, 0x80], zp(0x03, 0x0F, 0, false)); // SRE: LSR + EOR
+        assert_eq!((b.peek(0x80), b.cpu.acc, c(&b)), (0x01, 0x0E, true), "SRE");
+
+        // RRA: ROR (carry out 1) + ADC with that carry.
+        let b = run(&[0x67, 0x80], zp(0x03, 0x10, 0, false));
+        assert_eq!((b.peek(0x80), b.cpu.acc, c(&b)), (0x01, 0x12, false), "RRA");
+
+        let b = run(&[0x0B, 0x80], zp(0, 0xFF, 0, false)); // ANC: AND, C = bit 7
+        assert_eq!((b.cpu.acc, c(&b)), (0x80, true), "ANC");
+
+        let b = run(&[0x4B, 0x03], zp(0, 0xFF, 0, false)); // ALR: AND + LSR
+        assert_eq!((b.cpu.acc, c(&b)), (0x01, true), "ALR");
+
+        // ARR: AND + ROR, C from bit 6 and V from bit 6 ^ bit 5 of the result.
+        let b = run(&[0x6B, 0xFF], zp(0, 0xC0, 0, true));
+        assert_eq!((b.cpu.acc, c(&b)), (0xE0, true), "ARR");
+        assert!(!b.cpu.status.contains(Status::V), "ARR V = 1 ^ 1");
+        let b = run(&[0x6B, 0xFF], zp(0, 0x40, 0, false));
+        assert_eq!((b.cpu.acc, c(&b)), (0x20, false), "ARR");
+        assert!(b.cpu.status.contains(Status::V), "ARR V = 0 ^ 1");
+
+        let b = run(&[0xCB, 0x02], zp(0, 0x0F, 0x06, false)); // AXS: X = (A & X) - imm
+        assert_eq!((b.cpu.x, b.cpu.acc, c(&b)), (0x04, 0x0F, true), "AXS");
+        let b = run(&[0xCB, 0x07], zp(0, 0x0F, 0x06, true));
+        assert_eq!((b.cpu.x, c(&b)), (0xFF, false), "AXS borrows without carry in");
+
+        // LAS: A, X and SP all get memory & SP.
+        let b = run(&[0xBB, 0x80, 0x00], |bus: &mut Bus| {
+            bus.cpu_bus_write(0x80, 0x0F);
+            bus.cpu.sp = 0xFD;
+            bus.cpu.y = 0;
+        });
+        assert_eq!((b.cpu.acc, b.cpu.x, b.cpu.sp), (0x0D, 0x0D, 0x0D), "LAS");
+    }
+
+    /// A jam opcode holds the CPU on itself: cycles keep passing, but PC and the registers stay.
+    #[test]
+    fn a_jam_opcode_holds_the_cpu_in_place() {
+        let mut bus = run(&[], |_| ());
+        bus.cpu_bus_write(0x0300, 0x02);
+        bus.cpu.pc = 0x0300;
+        bus.cpu.acc = 0x42;
+        let before = bus.cpu.cycle;
+        for _ in 0..10 {
+            bus.clock_instr();
+        }
+        assert_eq!(bus.cpu.pc, 0x0300, "still on the jam");
+        assert_eq!(bus.cpu.acc, 0x42);
+        assert!(bus.cpu.cycle - before >= 10, "time passes");
+    }
 }
