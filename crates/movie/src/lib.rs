@@ -85,9 +85,6 @@ impl<'a> Reader<'a> {
         self.pos += n;
         Ok(s)
     }
-    fn u8(&mut self) -> Result<u8> {
-        Ok(self.take(1)?[0])
-    }
     fn u16(&mut self) -> Result<u16> {
         Ok(u16::from_le_bytes(self.take(2)?.try_into().unwrap()))
     }
@@ -175,20 +172,27 @@ impl Movie {
         r.u16()?;
         let rom_sha1: [u8; 20] = r.take(20)?.try_into().unwrap();
         let frames = r.u32()? as usize;
-        let run_count = r.u32()?;
-        let mut inputs = Vec::with_capacity(frames);
-        for _ in 0..run_count {
-            let v = r.u8()?;
-            let n = r.u32()? as usize;
-            ensure!(inputs.len() + n <= frames, "button runs exceed the frame count");
-            inputs.resize(inputs.len() + n, v);
+        // Each count is checked against the bytes (or frames) it describes before anything is
+        // allocated for it, so a corrupt count is an error rather than a huge reservation.
+        let run_count = r.u32()? as usize;
+        let (runs, _) = r.take(run_count * 5)?.as_chunks::<5>();
+        let run_len = |&[_, n @ ..]: &[u8; 5]| u32::from_le_bytes(n) as usize;
+        let mut covered = 0usize;
+        for run in runs {
+            covered += run_len(run);
+            ensure!(covered <= frames, "button runs exceed the frame count");
         }
-        ensure!(inputs.len() == frames, "button runs cover {} of {frames} frames", inputs.len());
-        let poke_count = r.u32()?;
-        let mut pokes = Vec::with_capacity(poke_count as usize);
+        ensure!(covered == frames, "button runs cover {covered} of {frames} frames");
+        let mut inputs = Vec::with_capacity(frames);
+        for run in runs {
+            inputs.resize(inputs.len() + run_len(run), run[0]);
+        }
+        let poke_count = r.u32()? as usize;
+        let (poke_bytes, _) = r.take(poke_count * 7)?.as_chunks::<7>();
+        let mut pokes = Vec::with_capacity(poke_count);
         let mut last = 0u32;
-        for _ in 0..poke_count {
-            let p = Poke { frame: r.u32()?, addr: r.u16()?, value: r.u8()? };
+        for &[f0, f1, f2, f3, a0, a1, value] in poke_bytes {
+            let p = Poke { frame: u32::from_le_bytes([f0, f1, f2, f3]), addr: u16::from_le_bytes([a0, a1]), value };
             ensure!(poke_addr_allowed(p.addr), "poke address ${:04X} not allowed", p.addr);
             ensure!(p.frame >= last && p.frame as usize <= frames, "poke frame {} out of order/range", p.frame);
             last = p.frame;
@@ -322,17 +326,16 @@ impl Golden {
         ensure!(version == 1, "unsupported TFGOLDEN version {version}");
         let domain_mask = r.u16()?;
         ensure!(domain_mask & !LADDER_MASK == 0, "unknown domain bits {domain_mask:#x}");
+        ensure!(domain_mask != 0, "golden has no digest domains");
         let movie_hash: [u8; 32] = r.take(32)?.try_into().unwrap();
         let count = r.u32()? as usize;
         let per = Domain::in_mask(domain_mask).count();
-        let mut records = Vec::with_capacity(count);
-        for _ in 0..count {
-            let mut rec = Vec::with_capacity(per);
-            for _ in 0..per {
-                rec.push(u64::from_le_bytes(r.take(8)?.try_into().unwrap()));
-            }
-            records.push(rec);
-        }
+        // Read the records' bytes before allocating for them, so a corrupt count is refused.
+        let data = r.take(count * per * 8)?;
+        let records = data
+            .chunks_exact(per * 8)
+            .map(|rec| rec.as_chunks::<8>().0.iter().map(|&d| u64::from_le_bytes(d)).collect())
+            .collect();
         ensure!(r.pos == buf.len(), "trailing bytes after golden records");
         Ok(Golden { domain_mask, movie_hash, records })
     }
