@@ -293,7 +293,7 @@ def record_room(index: int) -> str:
         out['reward_term_value'] = np.array(term_value, dtype=np.float64)
         out['interrupts'] = np.array(INTERRUPTS)
         os.makedirs(OUT, exist_ok=True)
-        np.savez_compressed(os.path.join(OUT, f"{name}.npz"), **out)
+        np.savez_compressed(os.path.join(OUT, f"{name}.npz"), **{k: np.ascontiguousarray(v) for k, v in out.items()})
         steps = len(rows['frames'])
         endings = [e for e in rows['ending'] if e]
         return f"{name}: entry {entry_frame}, {steps} steps, {sum(rows['frames'])} frames, " \

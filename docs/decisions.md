@@ -169,3 +169,57 @@ Format: date — what changed — why — evidence.
 - **Evidence:** `tf corpus check` passes (all 22 `power-on-to-d2` movies end at level 2 room 0x0e when
   replayed); `tf golden` is byte-identical across runs and with instruction tracing on; a chain recorded with
   Python matches `tf movie rebase` of the power-on recording byte for byte (inputs, pokes, metadata).
+
+## 2026-11-05 — `zelda` crate: game model and session ported from Python, checked by env parity fixtures
+
+- **What:** `crates/zelda` ports the game model one module at a time (`vars`, `tables`, `enums`, `game`,
+  `room`, `room_state`, `tiles`, `actions`, `executor`, `blocks`, `change` + `ledger`, `room_entry`,
+  `game_map`, `objectives`, `hearts`, `linger`, `session`) over the `zelda::Nes` trait. Departures from the
+  draft API and the Python shape:
+  - `Session::load` takes an `N::State` plus `LoadOptions`; like `GameSession.load` it resets the executor's
+    cave flags (a curriculum `controllable` load sets `was_in_cave` from the mode). Exact resumption,
+    flags included, goes through `SessionSnapshot`/`restore`. A `TFZSTATE`'s executor flags belong to
+    `restore`, not `load`.
+  - `GameView` copies the 10,240-byte RAM image once per state and decodes Link, enemies, items and
+    projectiles eagerly; the room model and bomb walls are decoded on first use. Setters of `ZeldaGame`/`Link`
+    are not ported; writes go through `Session::apply_ram`.
+  - The session's frame counter is monotonic and not part of a snapshot. Only frame differences are used
+    (ledger expiry, item timers), and the ledger is cleared on every load and restore.
+  - `Change::action_mask` is the mask of the resulting state, as `GameSession.act` sets it (only `__str__` read
+    it).
+  - Not ported: `zelda_game_data.txt`'s `[memory]` (duplicates `data.json`) and `[rooms]` (unused), the
+    unused `RoomMemory.exits/locked/barred`, the room/wavefront LRU caches and the `GameMap` route cache (pure
+    functions; caches only saved time), and the dead `ReachLocation`, `TreasureObjective`, `RoomWalk`,
+    `OBJECTIVES`. `_get_map_objective`'s last-route cache is kept because it changes results: the cached exit
+    targets survive door and tile changes until the route key changes.
+  - The wavefront is a FIFO breadth-first search. Python's heap pops in the same distance order, so every
+    distance is identical.
+  - `can_link_move` with a diagonal `doorway_dir` would raise `KeyError` in Python; Rust treats it as
+    blocking. No fixture reaches it.
+- **Randomness:** `randomize_rng` (12 bytes, 1–255), the pre-entry spawn cycle (0–8) and overworld edge cell
+  (`EDGE_CELLS`), and `start_route`'s choice between routes draw from a caller-provided `rand::Rng`
+  (`ChaCha8Rng` in the pool). Python's `random` streams are not reproduced, so seeded Python and Rust loads
+  differ. Fixtures and parity use `randomize_rng=False`.
+- **Parity fixtures:** `scripts/record_env_parity.py` writes `crates/env/tests/fixtures/parity/<room>.npz` for
+  14 rooms (0x77 start and cave, 0x67, 0x38, 1:0x73/72/74/44/45/35/36, 2:0x7d/5e from
+  `chain-milestone1-97`, 0x39 from `chain-milestone1-fairy-0`). At the last pre-entry frame before Link first
+  controls the room (the base position for the start room), it stores the oracle state, loads it with
+  `GameSession.load(randomize_rng=False, fresh_room=True)` and plays 200 `ZeldaEnv(strict_actions=True)`
+  steps: 40 scripted (`scripts/parity_actions.toml`; a masked one is replaced by a random legal action), then
+  `random.Random(1000 + index)` legal actions. When an episode ends before step 200, the next episode starts
+  from the same position with `env.restore` (`episode_start`); a game over ends the fixture. Because
+  `ZeldaEnv.restore` keeps the route `reset` last chose (`milestone1`, step None on a fresh env), the
+  recorder sets the route and step with `start_route(location, entry, route)` from the movie's route. The
+  fixture stores both, and the env port must use them.
+- **Evidence:** `cargo test -p zelda`: 58 unit tests (ported `test_hearts`, `test_linger`, `test_game_map`,
+  the action schema, the shield-collision unit tests and the scripted-shield executor tests of `test_core`
+  on a scripted `Nes` double) plus two oracle tests. `oracle_game.rs` ports the `test_core`,
+  `test_room_state` and `test_room_entry` emulator tests onto the fixtures' entry states (`1_44w` → `1_44`,
+  `1_72e` → `1_72`, …); a constructed "remembered as cleared" 0x72 replaces `0_48s`. `parity.rs` matches all
+  14 fixtures (2,441 steps) with no differences and an empty `crates/zelda/tests/parity_exceptions.toml`.
+  It compares frames, interrupts, control frames, blocks, change fields, masks, per-step RAM, the tile grid,
+  objective kind and next rooms, the PBRS wavefront, linger and heart counts. The recorded chains had no
+  confirmed shield block, so blocks are covered by the unit tests and the ported real-RAM block tests on
+  `1_73`. Not ported, because no FCEUmm state exists for them yet (step 17 regenerates states): the
+  `2_2es`, `1_22e`, `0_5fs`, `2_7dn`, `1_36w_2`, `1_42e` room-state cases and the bomb-wall test.
+  `test_nearby_items` needs the env crate.
