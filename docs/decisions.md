@@ -145,3 +145,27 @@ Format: date — what changed — why — evidence.
   (feet or right half off the map counted as walkable). That lane ran under every overworld room's bottom tree
   line and joined all south openings, so 0x5c's pocket looked connected to its E exit. An audit of every
   overworld entry state on both routes found no other split entry edge.
+
+## 2026-11-05 — FCEUmm oracle, movies from a registered-game base, corpus contents (Rust port)
+
+- **What:** emulator fidelity is checked against upstream FCEUmm (`../libretro-fceumm` e0f3086) built by
+  `oracle/fceumm/build.sh` into a dev-only `libtforacle.so` (instruction-hook patch, minimal libretro
+  frontend: NTSC, no overscan crop, `fceumm_up_down_allowed=enabled` so a movie's controller byte reaches the
+  game unchanged, battery PRG-RAM zero-filled before the first frame). Movies (`TFMOVIE` v1) carry a `base`:
+  every movie but `power_on_to_start` starts from the end of that movie (first gameplay frame after
+  registering LINK, mode 5, room 0x77), so nothing replays the title and registration screens per run (Lee).
+  `OracleEmulator` caches the base state on disk; `tf` backends play the base once per process.
+- **Why:** FCEUmm is the emulator the models were trained on (stable-retro wraps it), and a power-on movie is
+  the only artifact every emulator can replay. The base keeps every run starting from the same registered
+  game without repeating the menus.
+- **Corpus:** 63 movies, 1,361,193 frames: 7 scripted (`power_on_to_start`, `title_idle_3600`,
+  `file_select_register_erase`, `sword_cave_in_out`, `die_continue`, `pause_spam`, `item_switch_spam`),
+  5 × 30,000-frame random-input movies, and 51 agent chains recorded on the oracle with the promoted
+  specialists (400 runs over `milestone1`/`milestone1-fairy` seeds 0–199: 22 reach the Dungeon 2 boss room;
+  all 22 are kept, plus one failure per distinct (last room, reason) and the longest remaining runs). The
+  planned scripted `screen_transitions_ow`, `take_damage_octorok` and `transition_under_fire` were dropped:
+  every agent chain crosses dozens of screens, takes hits and changes rooms under fire, and scripting them
+  around live enemies was brittle.
+- **Evidence:** `tf corpus check` passes (all 22 `power-on-to-d2` movies end at level 2 room 0x0e when
+  replayed); `tf golden` is byte-identical across runs and with instruction tracing on; a chain recorded with
+  Python matches `tf movie rebase` of the power-on recording byte for byte (inputs, pokes, metadata).

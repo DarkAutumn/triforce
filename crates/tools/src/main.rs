@@ -6,6 +6,7 @@ mod formats;
 mod oracle;
 mod rom;
 mod script;
+mod tetanes;
 
 use anyhow::{Context, Result, bail, ensure};
 use backend::{Backend, apply_pokes, first_divergence, golden_of};
@@ -117,10 +118,10 @@ enum MovieCmd {
         #[arg(short, long)]
         out: PathBuf,
     },
-    /// Record random holds after a prefix movie.
+    /// Record random holds starting from the end of a base corpus movie.
     Random {
-        #[arg(long)]
-        prefix: PathBuf,
+        #[arg(long, default_value = "power_on_to_start")]
+        base: String,
         #[arg(long)]
         seed: u64,
         #[arg(long)]
@@ -130,6 +131,14 @@ enum MovieCmd {
     },
     /// Print movie information.
     Info { movie: PathBuf },
+    /// Strip a base movie's frames from the front of a power-on movie and mark it `base`.
+    Rebase {
+        movie: PathBuf,
+        #[arg(long, default_value = "power_on_to_start")]
+        base: String,
+        #[arg(short, long)]
+        out: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -143,7 +152,8 @@ enum CorpusCmd {
 pub fn make_backend(name: &str, rom: &rom::RomInfo) -> Result<Box<dyn Backend>> {
     match name {
         "fceumm" | "oracle" => Ok(Box::new(oracle::Oracle::open(&rom.path)?)),
-        _ => bail!("unknown backend {name:?} (available: fceumm)"),
+        "tetanes" => Ok(Box::new(tetanes::Tetanes::open(&rom.bytes)?)),
+        _ => bail!("unknown backend {name:?} (available: fceumm, tetanes)"),
     }
 }
 
@@ -227,13 +237,11 @@ fn movie_cmd(cmd: MovieCmd, rom: &rom::RomInfo) -> Result<i32> {
                 rom.payload_sha1,
                 serde_json::json!({"name": name, "tags": [], "source": {"script": path.file_name().unwrap().to_string_lossy()}}),
             );
-            if let Some(script::Directive::Prefix(p)) = directives.first().cloned() {
-                let prefix = Movie::load(&corpus::movie_path(&p))?;
-                check_movie_rom(&prefix, rom, &path)?;
-                script::play_prefix(&mut b, &prefix);
-                movie.inputs = prefix.inputs;
-                movie.pokes = prefix.pokes;
-                movie.meta["source"]["prefix"] = serde_json::json!(p);
+            if let Some(script::Directive::Base(p)) = directives.first().cloned() {
+                let base = Movie::load(&corpus::movie_path(&p))?;
+                check_movie_rom(&base, rom, &path)?;
+                backend::play_movie(&mut b, &base)?;
+                movie.meta["base"] = serde_json::json!(p);
                 directives.remove(0);
             }
             script::record(&mut b, &mut movie, &directives)?;
@@ -241,18 +249,16 @@ fn movie_cmd(cmd: MovieCmd, rom: &rom::RomInfo) -> Result<i32> {
             println!("{}: {} frames, {} pokes", out.display(), movie.inputs.len(), movie.pokes.len());
             Ok(0)
         }
-        MovieCmd::Random { prefix, seed, frames, out } => {
-            let p = Movie::load(&prefix)?;
-            check_movie_rom(&p, rom, &prefix)?;
+        MovieCmd::Random { base, seed, frames, out } => {
+            let p = Movie::load(&corpus::movie_path(&base))?;
+            check_movie_rom(&p, rom, &corpus::movie_path(&base))?;
             let mut b = oracle::Oracle::open(&rom.path)?;
-            script::play_prefix(&mut b, &p);
+            backend::play_movie(&mut b, &p)?;
             let name = out.file_stem().unwrap().to_string_lossy().into_owned();
             let mut movie = Movie::new(
                 rom.payload_sha1,
-                serde_json::json!({"name": name, "tags": ["random"], "source": {"prefix": p.name(), "seed": seed}}),
+                serde_json::json!({"name": name, "base": base, "tags": ["random"], "source": {"seed": seed}}),
             );
-            movie.inputs = p.inputs.clone();
-            movie.pokes = p.pokes.clone();
             let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
             let end = movie.inputs.len() + frames;
             while movie.inputs.len() < end {
@@ -276,6 +282,29 @@ fn movie_cmd(cmd: MovieCmd, rom: &rom::RomInfo) -> Result<i32> {
             println!("pokes:  {}", m.pokes.len());
             println!("rom:    {}", rom::hex(&m.rom_sha1));
             println!("meta:   {}", m.meta);
+            Ok(0)
+        }
+        MovieCmd::Rebase { movie: path, base, out } => {
+            let m = Movie::load(&path)?;
+            ensure!(m.base().is_none(), "{} already has base {:?}", path.display(), m.base());
+            let b = Movie::load(&corpus::movie_path(&base))?;
+            ensure!(b.base().is_none(), "base {base} must start from power-on");
+            let n = b.inputs.len();
+            ensure!(m.inputs.len() >= n && m.inputs[..n] == b.inputs[..], "{} does not start with {base}", path.display());
+            let prefix_pokes: Vec<_> = m.pokes.iter().filter(|p| (p.frame as usize) < n).copied().collect();
+            let base_pokes: Vec<_> = b.pokes.iter().filter(|p| (p.frame as usize) < n).copied().collect();
+            ensure!(prefix_pokes == base_pokes, "{} pokes differ from {base} inside the base", path.display());
+            let mut r = m.clone();
+            r.inputs.drain(..n);
+            r.pokes = m
+                .pokes
+                .iter()
+                .filter(|p| p.frame as usize >= n)
+                .map(|p| formats::Poke { frame: p.frame - n as u32, ..*p })
+                .collect();
+            r.meta["base"] = serde_json::json!(base);
+            r.save(&out)?;
+            println!("{}: {} frames after {base}", out.display(), r.inputs.len());
             Ok(0)
         }
     }
@@ -323,6 +352,8 @@ fn trace_diff(rom: &rom::RomInfo, movie_path: &Path, frame: usize, backend: &str
     ensure!(frame <= movie.inputs.len(), "movie has only {} frames", movie.inputs.len());
     let mut o = oracle::Oracle::open(&rom.path)?;
     let mut b = make_backend(backend, rom)?;
+    backend::play_base(&mut o, &movie)?;
+    backend::play_base(b.as_mut(), &movie)?;
     let index = movie.poke_index();
     let (mut no, mut nb) = (0, 0);
     for k in 0..frame - 1 {
@@ -383,7 +414,7 @@ fn trace_diff(rom: &rom::RomInfo, movie_path: &Path, frame: usize, backend: &str
 fn bench(rom: &rom::RomInfo, backend: &str, frames: usize) -> Result<i32> {
     let movie = Movie::load(&corpus::movie_path("power_on_to_start"))?;
     let mut b = make_backend(backend, rom)?;
-    script::play_prefix(b.as_mut(), &movie);
+    backend::play_movie(b.as_mut(), &movie)?;
     let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(1);
     let t = std::time::Instant::now();
     for _ in 0..frames {

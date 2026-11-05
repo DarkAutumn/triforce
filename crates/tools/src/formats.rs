@@ -1,9 +1,14 @@
 //! Portable artifact formats: `TFMOVIE` v1 input movies and `TFGOLDEN` v1 per-frame digests.
 //!
+//! A movie starts from power-on, or — when its metadata names a `base` corpus movie (normally
+//! `power_on_to_start`, which ends on the first gameplay frame after registering LINK) — from the
+//! state at the end of that base. Every backend reaches the base state by playing the base movie
+//! once; nothing replays the title and registration screens per movie.
+//!
 //! Frame numbering: a movie has `frames` inputs, indexed `0..frames`. A poke tagged `frame = k` is
-//! applied after input `k - 1` has run and before input `k` runs (`k = 0`: right after power-on).
-//! Golden record 0 is the state after power-on, before any poke or input; record `k` (`k >= 1`) is
-//! the state after input `k - 1` has run.
+//! applied after input `k - 1` has run and before input `k` runs (`k = 0`: right at the start).
+//! Golden record 0 is the starting state, before any poke or input; record `k` (`k >= 1`) is the
+//! state after input `k - 1` has run.
 
 use anyhow::{Context, Result, bail, ensure};
 use std::io::{Read, Write};
@@ -63,6 +68,11 @@ impl Movie {
 
     pub fn name(&self) -> &str {
         self.meta.get("name").and_then(|v| v.as_str()).unwrap_or("")
+    }
+
+    /// The corpus movie this one starts after (`meta.base`), if any.
+    pub fn base(&self) -> Option<&str> {
+        self.meta.get("base").and_then(|v| v.as_str())
     }
 
     pub fn tags(&self) -> Vec<String> {

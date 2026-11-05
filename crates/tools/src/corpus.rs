@@ -269,12 +269,10 @@ pub fn check(rom: &RomInfo) -> Result<i32> {
         println!("FAIL: no {D2_TAG} movie");
         ok = false;
     }
-    for e in d2 {
-        let jobs = vec![os(&[&"--rom", &rom.path, &"end-room", &corpus_dir().join(&e.file)])];
-        let codes = fan_out(jobs, 1)?;
-        if codes[0] != 0 {
-            ok = false;
-        }
+    let jobs = d2.iter().map(|e| os(&[&"--rom", &rom.path, &"end-room", &corpus_dir().join(&e.file)])).collect();
+    let parallel = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    if fan_out(jobs, parallel)?.iter().any(|&c| c != 0) {
+        ok = false;
     }
     println!("{}", if ok { "corpus check passed" } else { "corpus check FAILED" });
     Ok(if ok { 0 } else { 1 })
@@ -283,7 +281,7 @@ pub fn check(rom: &RomInfo) -> Result<i32> {
 /// Replay a movie in the oracle and require level 2, room 0x0E at the end.
 pub fn end_room(b: &mut dyn Backend, movie_path: &Path) -> Result<i32> {
     let mv = Movie::load(movie_path)?;
-    crate::script::play_prefix(b, &mv);
+    crate::backend::play_movie(b, &mv)?;
     let ram = b.ram();
     let (level, room) = (ram[0x10], ram[0xEB]);
     let ok = level == 2 && room == 0x0E;

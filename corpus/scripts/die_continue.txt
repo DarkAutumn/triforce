@@ -1,0 +1,11 @@
+# Walk into 0x67, stand still until the Octoroks kill Link, choose CONTINUE.
+base: power_on_to_start
+tags: short, scripted
+UP 90
+- 56
+assert ram[0xEB] == 0x67
+UP 34
+- 1345
+START 2
+- 272
+assert ram[0x12] == 0x05

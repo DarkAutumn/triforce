@@ -69,8 +69,34 @@ pub fn digests(b: &mut dyn Backend, mask: u16, record0: bool, buf: &mut Vec<u8>)
     Ok(out)
 }
 
-/// Replay `movie` on `b`, calling `each(k, &digests)` for records `0..=frames`. Stops early when `each`
-/// returns false. `limit` caps the number of input frames run.
+/// Bring a freshly powered-on `b` to `movie`'s starting state: play its base movie (recursively),
+/// or nothing for a power-on movie.
+pub fn play_base(b: &mut dyn Backend, movie: &Movie) -> Result<()> {
+    if let Some(name) = movie.base() {
+        let base = Movie::load(&crate::corpus::movie_path(name))?;
+        anyhow::ensure!(base.rom_sha1 == movie.rom_sha1, "base movie {name} is for a different ROM");
+        play_movie(b, &base)?;
+    }
+    Ok(())
+}
+
+/// Play `movie` (base included) on a freshly powered-on `b`, including pokes tagged after its last
+/// frame.
+pub fn play_movie(b: &mut dyn Backend, movie: &Movie) -> Result<()> {
+    play_base(b, movie)?;
+    let index = movie.poke_index();
+    let mut next = 0;
+    for (k, &x) in movie.inputs.iter().enumerate() {
+        apply_pokes(b, movie, &index, &mut next, k);
+        b.run_frame(x);
+    }
+    apply_pokes(b, movie, &index, &mut next, movie.inputs.len());
+    Ok(())
+}
+
+/// Replay `movie` on a freshly powered-on `b`, calling `each(k, &digests)` for records `0..=frames`
+/// (record 0 is the movie's starting state: power-on, or the end of its base). Stops early when
+/// `each` returns false. `limit` caps the number of input frames run.
 pub fn replay(
     b: &mut dyn Backend,
     movie: &Movie,
@@ -78,6 +104,7 @@ pub fn replay(
     limit: Option<usize>,
     mut each: impl FnMut(usize, &[u64]) -> bool,
 ) -> Result<()> {
+    play_base(b, movie)?;
     let mut buf = Vec::with_capacity(256 * 240);
     let d0 = digests(b, mask, true, &mut buf)?;
     if !each(0, &d0) {

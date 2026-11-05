@@ -4,7 +4,7 @@
         .venv/bin/python scripts/record_corpus.py chain --route milestone1 --seed 0 --out /tmp/c
     ... record_corpus.py sweep --route milestone1 --seeds 0..399 --parallel 16 --out corpus/movies
 
-Each run powers on the oracle, plays corpus/movies/power_on_to_start.tfmovie, writes that position as a
+Each run powers on the oracle, starts from the cached power_on_to_start base state, writes that position as a
 temporary ``start.state`` and runs the route with ``Runner``.  The movie ``chain-<route>-<seed>.tfmovie``
 is tagged ``agent``, the route, and ``power-on-to-d2`` when the run succeeds.
 """
@@ -33,7 +33,7 @@ def record_chain(route: str, seed: int, out: str, device: str = 'cpu') -> dict:
     torch.set_num_threads(1)
     emu = OracleEmulator()
     try:
-        emu.play_movie(os.path.join(CORPUS, 'movies', 'power_on_to_start.tfmovie'))
+        emu.start_from_base('power_on_to_start')
         assert (emu.read(0x12), emu.read(0x10), emu.read(0xEB)) == (5, 0, 0x77), "power_on_to_start ended elsewhere"
         with tempfile.TemporaryDirectory() as tmp:
             start = os.path.join(tmp, 'start.state')

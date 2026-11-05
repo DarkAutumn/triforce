@@ -1,0 +1,15 @@
+# Walk into the 0x77 cave, take the sword and walk back out.
+base: power_on_to_start
+tags: short, scripted
+UP 36
+LEFT 42
+UP 12
+- 182
+RIGHT 158
+UP 176
+assert ram[0x657] == 0x01
+- 30
+DOWN 166
+- 60
+assert ram[0x12] == 0x05
+assert ram[0xEB] == 0x77

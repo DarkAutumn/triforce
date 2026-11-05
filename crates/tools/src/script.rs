@@ -6,11 +6,13 @@
 //! - `until ram[ADDR] == VALUE BUTTONS max N` — hold BUTTONS until the condition holds (checked
 //!   after each frame), failing after N frames.
 //! - `tags: a, b` — movie tags.
+//! - `base: NAME` (first directive only) — start from the end of corpus movie NAME (normally
+//!   `power_on_to_start`); the recorded movie holds only what follows it.
 //!
 //! The recorded movie contains only frames and pokes; asserts and conditions are verified while
 //! recording.
 
-use crate::backend::{Backend, apply_pokes};
+use crate::backend::Backend;
 use crate::formats::{Movie, parse_hex_u16, parse_num_u8, poke_addr_allowed};
 use anyhow::{Context, Result, bail, ensure};
 
@@ -21,8 +23,8 @@ pub enum Directive {
     Assert { addr: u16, value: u8 },
     Until { addr: u16, value: u8, buttons: u8, max: u32 },
     Tags(Vec<String>),
-    /// `prefix: NAME` (first line only): start from corpus movie NAME.
-    Prefix(String),
+    /// `base: NAME` (first line only): start from the end of corpus movie NAME.
+    Base(String),
 }
 
 pub fn parse_buttons(s: &str) -> Result<u8> {
@@ -70,8 +72,8 @@ pub fn parse(text: &str) -> Result<Vec<Directive>> {
 }
 
 fn parse_line(line: &str) -> Result<Directive> {
-    if let Some(rest) = line.strip_prefix("prefix:") {
-        return Ok(Directive::Prefix(rest.trim().to_owned()));
+    if let Some(rest) = line.strip_prefix("base:") {
+        return Ok(Directive::Base(rest.trim().to_owned()));
     }
     if let Some(rest) = line.strip_prefix("tags:") {
         return Ok(Directive::Tags(rest.split(',').map(|t| t.trim().to_owned()).filter(|t| !t.is_empty()).collect()));
@@ -135,7 +137,7 @@ pub fn record(b: &mut dyn Backend, movie: &mut Movie, directives: &[Directive]) 
             Directive::Tags(t) => {
                 movie.meta["tags"] = serde_json::json!(t);
             }
-            Directive::Prefix(_) => bail!("prefix: must be the first directive"),
+            Directive::Base(_) => bail!("base: must be the first directive"),
         }
     }
     Ok(())
@@ -151,16 +153,6 @@ pub fn step(b: &mut dyn Backend, movie: &mut Movie, buttons: u8) {
     }
     b.run_frame(buttons);
     movie.inputs.push(buttons);
-}
-
-/// Play `movie` on a freshly powered-on `b` (prefix for appending).
-pub fn play_prefix(b: &mut dyn Backend, movie: &Movie) {
-    let index = movie.poke_index();
-    let mut next = 0;
-    for (k, &x) in movie.inputs.iter().enumerate() {
-        apply_pokes(b, movie, &index, &mut next, k);
-        b.run_frame(x);
-    }
 }
 
 #[cfg(test)]

@@ -2,9 +2,12 @@
 
 Implements the parts of ``triforce.emulator.Emulator`` the Python stack uses, on top of
 ``target/oracle/libtforacle.so`` (``oracle/fceumm/build.sh``).  Every frame's controller byte and every RAM
-write is recorded so the run can be saved as a TFMOVIE that replays from power-on.  ``save_state`` embeds
-the movie position; ``load_state`` truncates the movie back to it, so look-ahead and explore restores never
-leak into a movie.  One oracle per process (FCEUmm state is global).
+write is recorded so the run can be saved as a TFMOVIE.  Recordings normally start from the base state
+(``start_from_base``: the end of ``corpus/movies/power_on_to_start.tfmovie``, the first gameplay frame after
+registering LINK), which is cached on disk so the title/registration screens are emulated once, not per run;
+the movie then names that base.  ``save_state`` embeds the movie position; ``load_state`` truncates the movie
+back to it, so look-ahead and explore restores never leak into a movie.  One oracle per process (FCEUmm state
+is global).
 """
 
 import ctypes
@@ -70,6 +73,7 @@ class OracleEmulator:
         self.frame = 0
         self.inputs = bytearray()
         self.pokes = []
+        self.base: Optional[str] = None
         self.on_frame: Optional[Callable[[], None]] = None
         self._info_frame = -1
         self._info = None
@@ -162,13 +166,54 @@ class OracleEmulator:
         raise NotImplementedError("OracleEmulator does not render")
 
     # --- movies ---
+    def _raw_state(self) -> bytes:
+        size = self._lib.tfo_state_size()
+        buf = (ctypes.c_uint8 * size)()
+        if self._lib.tfo_save_state(buf, ctypes.c_size_t(size)) != 0:
+            raise RuntimeError("tfo_save_state failed")
+        return bytes(buf)
+
+    def start_from_base(self, name: str = 'power_on_to_start'):
+        """Moves a freshly powered-on oracle to the end of base movie ``name`` and starts recording from there.
+
+        The base state is cached under target/oracle/ keyed by the base movie and oracle library hashes."""
+        if self.inputs or self.pokes or self.base:
+            raise RuntimeError("start_from_base needs a freshly powered-on oracle")
+        movie = os.path.join(CORPUS, 'movies', f'{name}.tfmovie')
+        key = hashlib.sha1()
+        for path in (movie, LIBRARY):
+            with open(path, 'rb') as f:
+                key.update(f.read())
+        cache = os.path.join(ROOT, 'target', 'oracle', f'base-{name}-{key.hexdigest()[:16]}.state')
+        if os.path.exists(cache):
+            with open(cache, 'rb') as f:
+                body = f.read()
+            buf = (ctypes.c_uint8 * len(body)).from_buffer_copy(body)
+            if self._lib.tfo_load_state(buf, ctypes.c_size_t(len(body))) != 0:
+                raise RuntimeError("tfo_load_state failed")
+        else:
+            self.play_movie(movie)
+            tmp = f"{cache}.{os.getpid()}.tmp"
+            with open(tmp, 'wb') as f:
+                f.write(self._raw_state())
+            os.replace(tmp, cache)
+        self.inputs = bytearray()
+        self.pokes = []
+        self.frame = 0
+        self._info_frame = -1
+        self.base = name
+
     def play_movie(self, path: str):
-        """Replays a TFMOVIE (e.g. power_on_to_start) from the current position (normally power-on)."""
+        """Replays a TFMOVIE on a freshly powered-on oracle (starting from its base, if it names one), recording
+        it as this emulator's movie."""
         with open(path, 'rb') as f:
-            sha, inputs, pokes, _ = tfmovie.decode(f.read())
+            sha, inputs, pokes, meta = tfmovie.decode(f.read())
         if sha != self.rom_sha1:
             raise ValueError(f"{path} was recorded for a different ROM")
-        base = len(self.inputs)
+        if meta.get('base'):
+            self.start_from_base(meta['base'])
+        elif self.inputs or self.pokes or self.base:
+            raise RuntimeError("play_movie needs a freshly powered-on oracle")
         p = 0
         for k, value in enumerate(inputs):
             while p < len(pokes) and pokes[p][0] == k:
@@ -178,9 +223,10 @@ class OracleEmulator:
         while p < len(pokes):
             self.write(pokes[p][1], pokes[p][2])
             p += 1
-        assert len(self.inputs) == base + len(inputs)
 
     def save_movie(self, path: str, name: str, tags, source: dict):
-        """Writes the recorded movie."""
+        """Writes the recorded movie (relative to ``self.base`` when recording started from a base)."""
         meta = {'name': name, 'tags': list(tags), 'source': source}
+        if self.base:
+            meta['base'] = self.base
         tfmovie.write(path, self.rom_sha1, bytes(self.inputs), self.pokes, meta)
