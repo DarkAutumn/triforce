@@ -175,7 +175,7 @@ impl Bus {
         let mut ran = span;
 
         // FQ-09: FCEUmm's short odd frame with rendering off: the clock reaching 339 ends the
-        // line (`Bus::ppu_clock`).
+        // line (`Bus::ppu_clock`); FQ-01: not in the dead frames.
         let ppu = &self.ppu;
         let skip = !ppu.mask_rendering_enabled
             && ppu.is_prerender_scanline

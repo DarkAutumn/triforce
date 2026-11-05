@@ -81,24 +81,19 @@ impl Apu {
         }
     }
 
-    /// Clocks the APU one CPU cycle, doing the real work only when something could change.
-    ///
-    /// `deadline` is the caller's copy of [`Apu::next_clock`]: until `master_clock` reaches it
-    /// nothing but the two cycle counters moves, so that is all a cycle costs. Anything that
-    /// changes the APU from outside (a register access, a sync, a reset) must set it to 0.
+    /// Counts one CPU cycle. That is all a cycle costs until `master_clock` reaches
+    /// [`Apu::next_clock`], when [`Apu::clock_due`] has work to do: the caller keeps that
+    /// deadline, and anything that changes the APU from outside (a register access, a sync, a
+    /// reset) has to bring it forward.
     #[inline(always)]
-    pub fn clock_lazy(&mut self, deadline: &mut u32) {
+    pub const fn tick(&mut self) {
         self.cpu_cycle = self.cpu_cycle.wrapping_add(1);
         self.master_clock += 1;
-        if self.master_clock >= *deadline {
-            self.clock_due();
-            *deadline = self.next_clock();
-        }
     }
 
     /// The work of a cycle on which the frame counter or a length counter may move.
-    #[inline(never)]
-    fn clock_due(&mut self) {
+    #[inline(always)]
+    pub fn clock_due(&mut self) {
         if self.master_clock == Self::CYCLE_SIZE - 1 {
             self.clock_sync();
         } else if self.should_clock() {
@@ -106,7 +101,7 @@ impl Apu {
         }
     }
 
-    /// The `master_clock` from which [`Apu::clock_lazy`] has work to do: the next cycle while a
+    /// The `master_clock` from which [`Apu::clock_due`] has work to do: the next cycle while a
     /// register write or a frame counter block is pending, else the cycle before the frame
     /// counter's next step (`FrameCounter::should_clock`) or the end of the cycle block.
     #[must_use]

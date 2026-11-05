@@ -422,7 +422,18 @@ impl Bus {
     #[inline(always)]
     pub(crate) fn end_cycle(&mut self, increment: u8) {
         self.cpu.master_clock = self.cpu.master_clock.wrapping_add(u32::from(increment));
-        self.handle_interrupts();
+        if !self.irq_quiet {
+            self.handle_interrupts();
+        }
+    }
+
+    /// Whether [`Bus::handle_interrupts`] would leave everything as it is: no interrupt input
+    /// high and no interrupt flag up (the DMA bits are not its business).
+    #[inline(always)]
+    fn interrupts_quiet(&self) -> bool {
+        !self.apu.irq_pending()
+            && !self.ppu.nmi_pending
+            && self.cpu.irq_flags.bits() & 0x1F == 0
     }
 
     /// Catches the PPU up to where per-CPU-cycle clocking would have it now.
@@ -677,15 +688,18 @@ impl Bus {
         self.cpu.master_clock = self.cpu.master_clock.saturating_sub(self.ppu.master_clock);
         self.ppu.master_clock = 0;
         self.apu.clock_sync();
-        self.apu_deadline = 0;
+        self.tick_deadline = 0;
+        self.irq_quiet = false;
         self.ppu_deadline = self.ppu.next_event_clock();
     }
 
     /// Runs instructions until the frame counter advances (FQ-08), then synchronizes.
     pub fn clock_frame(&mut self) {
-        // The PPU is caught up between frames; anything may have changed it, or the APU, since.
+        // The PPU is caught up between frames; anything may have changed it, the APU or the
+        // interrupt state since.
         self.ppu_deadline = self.ppu.next_event_clock();
-        self.apu_deadline = 0;
+        self.tick_deadline = 0;
+        self.irq_quiet = false;
         let frame = self.ppu.frame_number();
         while frame == self.ppu.frame_number() {
             self.step_instr();
@@ -696,7 +710,8 @@ impl Bus {
     /// Runs the CPU one instruction, leaving the PPU caught up with it.
     pub fn clock_instr(&mut self) {
         self.ppu_deadline = self.ppu.next_event_clock();
-        self.apu_deadline = 0;
+        self.tick_deadline = 0;
+        self.irq_quiet = false;
         self.step_instr();
         self.ppu_sync();
     }
@@ -755,6 +770,9 @@ impl Bus {
                 self.ppu_sync();
             }
         }
+        if !self.irq_quiet {
+            self.irq_quiet = self.interrupts_quiet();
+        }
     }
 
     /// FQ-05, FQ-04: services FCEUmm's NMI request; see
@@ -768,6 +786,7 @@ impl Bus {
         }
         self.ppu.fceu_nmi = 0;
         self.cpu.irq_flags.insert(IrqFlags::NMI);
+        self.irq_quiet = false;
         self.irq();
     }
 }

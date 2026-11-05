@@ -131,6 +131,13 @@ impl Mapper {
             m.clock();
         }
     }
+
+    /// Whether [`Mapper::clock`] has anything to count down; while not, a cycle may skip it.
+    #[inline(always)]
+    #[must_use]
+    pub const fn clocking(&self) -> bool {
+        matches!(self, Self::Sxrom(m) if m.mmc1.write_just_occurred > 0)
+    }
 }
 
 impl Default for Mapper {

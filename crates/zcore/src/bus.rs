@@ -80,10 +80,15 @@ pub struct Bus {
     pub(crate) instr_start_clock: u32,
     /// Whether `status_at_instr` has been taken for the current instruction yet.
     pub(crate) status_latched: bool,
-    /// [`Apu::next_clock`]: the APU's `master_clock` from which a cycle has work to do. Zero
-    /// (work on the next cycle, which recomputes it) after anything that changes the APU from
-    /// outside its cycle.
-    pub(crate) apu_deadline: u32,
+    /// The APU's `master_clock` from which a CPU cycle has board or APU work to do
+    /// ([`Apu::next_clock`], or every cycle while the board counts down a write). Zero (work on
+    /// the next cycle, which recomputes it) after anything that changes either from outside its
+    /// cycle.
+    pub(crate) tick_deadline: u32,
+    /// Whether the interrupt inputs are all low and no interrupt flag is up, so a cycle's
+    /// interrupt polling ([`Bus::handle_interrupts`]) would change nothing and is skipped. Cleared
+    /// wherever an input can rise; set again between instructions once all is quiet.
+    pub(crate) irq_quiet: bool,
 }
 
 impl Deref for Bus {
@@ -132,7 +137,8 @@ impl Bus {
             ppu_deadline: 0,
             instr_start_clock: 0,
             status_latched: true,
-            apu_deadline: 0,
+            tick_deadline: 0,
+            irq_quiet: false,
         }
     }
 
@@ -187,7 +193,8 @@ impl Bus {
     pub fn reset(&mut self, kind: ResetKind) {
         self.frame.fill(0);
         self.state.reset_components(kind);
-        self.apu_deadline = 0;
+        self.tick_deadline = 0;
+        self.irq_quiet = false;
         // Read straight off the bus so the components are not clocked during the reset itself.
         let lo = self.cpu_bus_read(Cpu::RESET_VECTOR);
         let hi = self.cpu_bus_read(Cpu::RESET_VECTOR + 1);
@@ -341,11 +348,30 @@ impl Bus {
     }
 
     /// Clocks everything the CPU's cycle drives: the board and the APU (the PPU catches up on its
-    /// own, see [`Bus::ppu_sync`]).
+    /// own, see [`Bus::ppu_sync`]). Until `tick_deadline` only the APU's cycle counters move.
     #[inline(always)]
     pub fn cpu_clock(&mut self) {
-        self.state.mapper.clock();
-        self.state.apu.clock_lazy(&mut self.apu_deadline);
+        self.state.apu.tick();
+        if self.state.apu.master_clock >= self.tick_deadline {
+            self.cpu_clock_due();
+        }
+    }
+
+    /// A cycle on which the board or the APU has work: the board's write countdown, then the
+    /// APU's frame counter and length counters.
+    #[inline(never)]
+    fn cpu_clock_due(&mut self) {
+        let State { mapper, apu, .. } = &mut self.state;
+        mapper.clock();
+        apu.clock_due();
+        self.tick_deadline = if mapper.clocking() {
+            0
+        } else {
+            apu.next_clock()
+        };
+        if apu.irq_pending() {
+            self.irq_quiet = false;
+        }
     }
 }
 
@@ -364,7 +390,8 @@ impl Bus {
         } else {
             match addr {
                 0x4015 => {
-                    self.apu_deadline = 0;
+                    self.tick_deadline = 0;
+                    self.irq_quiet = false;
                     self.apu.read_status()
                 }
                 0x4016 => self.input_read(Player::One),
@@ -419,8 +446,10 @@ impl Bus {
             self.wram[usize::from(addr & 0x07FF)] = val;
         } else if addr >= 0x4100 {
             if addr >= 0x8000 {
-                // A board register: banking and mirroring change what the PPU fetches.
+                // A board register: banking and mirroring change what the PPU fetches, and the
+                // board counts the cycles after a write.
                 self.ppu_sync();
+                self.tick_deadline = 0;
             }
             // Data store first, then let the board act on any register the write hit.
             // Destructured so both fields can be borrowed at once.
@@ -432,7 +461,8 @@ impl Bus {
         } else {
             match addr {
                 0x4000..=0x4013 | 0x4015 | 0x4017 => {
-                    self.apu_deadline = 0;
+                    self.tick_deadline = 0;
+                    self.irq_quiet = false;
                     self.apu.write(addr, val);
                 }
                 0x4016 => self.input.write(val),

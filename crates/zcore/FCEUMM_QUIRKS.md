@@ -41,8 +41,8 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 - **Affects:** boot only (Zelda's reset code waits for two VBlanks; with FQ-01 it starts two frames later).
   Changes RAM at the end of `power_on_to_start`'s registration, so every based movie's starting state.
 - **Implemented:** `Ppu::dead_frames` (field), `Ppu::reset` (set to 2), `Ppu::start_vblank` (no VBlank
-  while non-zero), `Bus::fceumm_events` (count down at the frame boundary), `Bus::ppu_clock` (FQ-09 skip
-  gated on it).
+  while non-zero), `Bus::fceumm_events` (count down at the frame boundary), `Bus::ppu_clock` and
+  `Bus::idle_span` (FQ-09 skip gated on it).
 - **Removal:** delete `dead_frames` and its uses; VBlank rises in frame 1. Regenerate the base state
   (`power_on_to_start` RAM changes). TetaNES `ppu_vbl_nmi` ROMs already pass without it.
 
@@ -72,9 +72,10 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   read and are seen at once.
 - **Affects:** per-frame timing and RAM (boot VBlank waits; the sprite 0 "wait for clear" loop at the
   end of VBlank).
-- **Implemented:** `Ppu::status_at_instr` (field, bits 5-7), `Bus::clock_instr` (snapshot at
-  instruction start), `Ppu::read_status` (VBlank from the snapshot, cleared only if seen; bits 5/6 as
-  live | snapshot), `Bus::write_ctrl` (FQ-04 uses the snapshot).
+- **Implemented:** `Ppu::status_at_instr` (field, bits 5-7), `Bus::step_instr` / `Bus::ppu_sync_to`
+  (snapshot as of the instruction's start, taken at its first PPU catch-up), `Ppu::read_status`
+  (VBlank from the snapshot, cleared only if seen; bits 5/6 as live | snapshot), `Bus::write_ctrl`
+  (FQ-04 uses the snapshot).
 - **Removal:** delete `status_at_instr` and read the live flags in `Ppu::read_status`; `02-vbl_set_time`,
   `03-vbl_clear_time` and `09-timing` pass again.
 
@@ -104,8 +105,9 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 - **Affects:** per-frame timing and RAM (NMI entry is 2-6 cycles later than hardware, so every
   NMI-relative cycle count shifts: sprite-0 polls, frame-boundary placement of main-loop code).
 - **Implemented:** `Ppu::start_vblank` (no `nmi_pending` in compat), `Bus::fceumm_events` (request at
-  line 241 dot 13), `Ppu::fceu_nmi` (value 1), `Bus::clock_instr` / `Bus::fceumm_nmi` (take it before
-  the instruction).
+  line 241 dot 13), `Ppu::fceu_nmi` (value 1), `Ppu::next_event_clock` (the CPU catches the PPU up
+  when the request dot may be due), `Bus::step_instr` / `Bus::fceumm_nmi` (take it before the
+  instruction).
 - **Removal:** delete the compat request and service path; `05-nmi_timing` passes again.
 
 ## FQ-06 — 0-cycle CPU reset
@@ -142,7 +144,8 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 - **Affects:** frame boundary only: which instructions count toward which frame, and therefore when
   movie inputs and pokes apply. Matters while Zelda's main loop runs outside NMI (boot, loading).
 - **Implemented:** `Bus::end_scanline` (no increment in compat), `Bus::fceumm_events` (increment at
-  line 240 dot 1), `Bus::ppu_clock` (calls it).
+  line 240 dot 1), `Bus::ppu_clock` and `Bus::idle_span` (call it), `Ppu::next_event_clock` (the CPU
+  catches the PPU up when the boundary may be due).
 - **Removal:** increment on entering line 240 again. No test ROM; corpus ladder self-diffs re-baselined.
 
 ## FQ-09 — Odd-frame dot skip even when rendering is off
@@ -154,8 +157,8 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   (`src/ppu.c:1262-1263`).
 - **Affects:** per-frame timing (frames are one dot shorter every other frame during boot and screen
   transitions with rendering off).
-- **Implemented:** `Bus::ppu_clock` (the branch when rendering is off; parity from
-  `Ppu::frame_is_odd` matches FCEUmm's `kook` given FQ-01).
+- **Implemented:** `Bus::ppu_clock` and `Bus::idle_span` (the branch when rendering is off; parity
+  from `Ppu::frame_is_odd` matches FCEUmm's `kook` given FQ-01).
 - **Removal:** delete the branch; `09` and `10` pass again.
 
 ## FQ-10 — 512-cycle OAM DMA, run inside `STA $4014`
@@ -167,7 +170,7 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   (`src/ppu.c:374-380`, `src/x6502.c:74-82`): 512 cycles, no halt or alignment cycle, counted toward the
   `STA` itself (so they reach FQ-12's DMC timer at the next instruction's hook).
 - **Affects:** per-frame timing (every frame's NMI handler: 1-2 cycles, and DMC fetch placement).
-- **Implemented:** `Bus::clock_instr` (runs the DMA after the `STA`), `Bus::read` (a halted read runs
+- **Implemented:** `Bus::step_instr` (runs the DMA after the `STA`), `Bus::read` (a halted read runs
   it), `Bus::handle_dma_fceumm`.
 - **Removal:** delete the compat paths; `sprdma_and_dmc_dma` passes again.
 
@@ -193,8 +196,9 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   bits. `$4010/$4012/$4013/$4015` per `Write_DMCRegs`/`StatusWrite` (`src/sound.c:303-370`).
 - **Affects:** per-frame timing while samples play (Zelda plays DMC sound effects).
 - **Implemented:** `FceuDmc` in `apu/dmc.rs` (state, `write`, `hook`), `Apu::write` (register writes),
-  `Bus::clock_instr` (hook before the opcode fetch). The hardware sample reader was deleted with audio
-  at Z4 (it fed only sound and the DMA requests FQ-12 dropped).
+  `Bus::step_instr` (the hook, with the instruction's start cycle; it runs just after the opcode fetch
+  on the fetched opcode, which touches nothing it reads). The hardware sample reader was deleted with
+  audio at Z4 (it fed only sound and the DMA requests FQ-12 dropped).
 - **Removal:** delete `FceuDmc`; restore the hardware reader (`Dmc` timer, buffer, `load_buffer`, DMA
   requests and IRQ, from Z3's `apu/dmc.rs`) and the CPU's DMC DMA; `dmc_dma_during_read4` and
   `dmc_basics` pass again.
