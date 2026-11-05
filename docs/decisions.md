@@ -223,3 +223,52 @@ Format: date — what changed — why — evidence.
   `1_73`. Not ported, because no FCEUmm state exists for them yet (step 17 regenerates states): the
   `2_2es`, `1_22e`, `0_5fs`, `2_7dn`, `1_36w_2`, `1_42e` room-state cases and the bomb-wall test.
   `test_nearby_items` needs the env crate.
+
+## 2026-11-05 — `env` crate: configs, rewards, observations, envs, chain and explore ported from Python
+
+- **What:** `crates/env` ports `specialist.py` + game data (`config`), `rewards.py`, `critics.py` (`critic`),
+  `end_conditions.py`, `observation.py`, `start_states.py`, `curriculum.py`, `env.py` (`specialist_env`),
+  `Runner._run` (`chain`) and `explore.py` over the `zelda` session. Term names, order and clamps, ending
+  classification, observation schema v1 (feature names, sizes and float arithmetic) are Python's. Departures:
+  - **Config.** `serde_yaml_ng` with `deny_unknown_fields`, Python's keys, defaults and validators, plus
+    `curriculum.fraction`, `curriculum.threshold`, `harvested_fraction` in [0, 1] and `route` naming a
+    routes.yaml route. Errors are `ConfigError` naming the file and key. `GameData::load` reads game.yaml,
+    routes.yaml (with its `families`), `chain_hp.json` and every `specialists/*.yaml` once and cross-checks
+    them: configs = game.yaml `specialist:` tags = families, every route step's room is tagged, and a step's
+    `specialist:` equals the tag. `reward_profile` is still checked when the critic is built, as in Python.
+  - **YAML booleans.** `specialists/*.yaml` now say `true`/`false` instead of `on`/`off` (YAML 1.2 reads
+    `on` as a string); `pytest tests/test_specialist.py` still passes (39). The Rust parser also accepts
+    PyYAML's `on`/`off`/`yes`/`no` words, so hand-written `{bombs: off}` keeps loading.
+  - **States are opaque.** A `StateStore` trait loads named or path states and writes captures and
+    trajectory states (`SessionSnapshot`, so a future TFZSTATE writer can keep the executor flags). Tests use
+    a gzip store over the legacy states: their bodies are FCEUmm savestates and load into the oracle as they
+    are (`1_44w_0` → level 1, room 0x44, mode 4).
+  - **Randomness.** Every draw (load RNG bytes and spawn, start-state selection, RAM randomization,
+    `start_route`, curriculum, explore) comes from a caller-seeded `ChaCha8Rng`; Python's `random` streams
+    are not reproduced. Weighted draws walk cumulative weights; Python's `round` (half to even) is kept.
+  - **Curriculum.** Progress lives in one `Arc<parking_lot::Mutex<Curriculum>>` per run instead of a file
+    re-read under `flock` by every worker process; it is rewritten atomically to the same `curriculum.json`
+    schema (indent 1) whenever an attempt counts, and an existing file is resumed.
+  - **SpecialistEnv.** Owns its session (there is no borrowed-session `close`); `EnvOptions` replaces the
+    constructor arguments (`lenient_actions` = `strict_actions=False`; `explicit_starts` skips the start-state
+    pool, which the explorer never uses, so a specialist without start states can be explored). Infos are a
+    typed `StepInfo`/`TerminalInfo` with `to_json()` producing Python's dict. New terminal keys:
+    `episode_steps`, `episode_frames`, `reward_total` and per-term episode totals under `episode_rewards`
+    (the plan's draft named them `rewards`, but `rewards` already holds the step's terms in every info).
+  - **Critic and PBRS.** The previous state's objective and wavefront are passed explicitly instead of being
+    read from attributes attached to the state objects.
+  - **ChainEnv.** Owns no models: `reset`/`step` return `Act { specialist, obs, new_room }` or
+    `Done(RunResult)`, and the caller chooses the action. `fail(reason)` ends a run as `error` (a specialist
+    without a promoted model, as `FileNotFoundError` did); a missing start state and a masked action end it as
+    `error` the same way `run()` caught `RunnerError`. One observation builder is rebuilt on every
+    specialist switch and continued otherwise, as the per-specialist builders behaved. `min_room_steps`
+    (default 2000) is a field so tests can lower it.
+  - **Explorer.** `AcceptSpec { target, min_keys, item_taken_room }` replaces the `accepted` closure of
+    `entry_states.cross_room`.
+- **Evidence:** `cargo test -p env`, 94 tests: 23 unit tests; `tests/parity.rs` replays all 14 fixtures (2,441 steps,
+  ~1.5M compared values: observations, masks, rewards and reward terms, terminated/truncated, endings,
+  outcomes, linger and every key of the Python terminal info) with no differences and an empty
+  `crates/env/tests/parity_exceptions.toml`; `tests/pure.rs` ports the pure parts of `test_rewards`,
+  `test_curriculum` and `test_specialist`; `tests/chain_explore.rs` ports `test_runner` (scripted policies in
+  place of networks) and `test_explore`; `tests/oracle_env.rs` ports the game parts of `test_env`,
+  `test_nearby_items`, `test_rewards` and `test_specialist` on the legacy states.

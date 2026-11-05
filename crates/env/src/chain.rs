@@ -1,0 +1,650 @@
+//! Plays a route end to end with the room-tagged specialists (`triforce/runner.py`, `Runner._run`).
+//!
+//! On every room entry the room's game.yaml `specialist:` tag picks who acts; specialists switch only on room
+//! transitions.  The env owns no models: [`ChainEnv::reset`] and [`ChainEnv::step`] return
+//! [`ChainStatus::Act`] with the acting specialist and its observation, and the caller supplies the action
+//! (batched inference lives above this crate).  A run ends with a [`RunResult`]: success on entering the route's
+//! terminal room (a `milestone` record with specialist `-`), failure on death, a wrong exit into an untagged
+//! room, the per-room budget (`no_progress_steps` quiet actions, else `max(max_steps, 2000)` steps) or the run
+//! cap; error on an unknown/untagged room the route needed, a masked action, a missing state or
+//! [`ChainEnv::fail`] (e.g. no promoted model).
+
+use crate::config::{GameData, SpecialistConfig};
+use crate::error::EnvError;
+use crate::observation::{Observation, ObservationBuilder};
+use crate::specialist_env::linger_json;
+use crate::start_states::{StateStore, state_entry};
+use rand_chacha::ChaCha8Rng;
+use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::sync::Arc;
+use zelda::game::GameView;
+use zelda::game_map::GameMap;
+use zelda::hearts::{HeartTracker, HeartView};
+use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linger_wavefront};
+use zelda::objectives::{GameCompletion, Objective, exit_is_correct, start_route};
+use zelda::{Action, Change, LoadOptions, MapLocation, Nes, Session};
+
+/// Default run cap.
+pub const DEFAULT_MAX_STEPS: u64 = 50_000;
+/// A chain room gets at least this many steps before it counts as stuck.
+pub const MIN_ROOM_STEPS: u64 = 2000;
+
+/// Where a route starts and which room ends it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Route {
+    pub name: String,
+    pub start_state: String,
+    pub terminal: MapLocation,
+}
+
+impl Route {
+    /// A routes.yaml route; `stop_at` replaces the terminal room and `start_from` (a state such as `0_37c_2`) the
+    /// game start, for partial chain evals.
+    pub fn load(
+        map: &GameMap,
+        name: &str,
+        stop_at: Option<MapLocation>,
+        start_from: Option<&str>,
+    ) -> Result<Route, String> {
+        let Some(steps) = map.routes.get(name).filter(|s| !s.is_empty()) else {
+            let mut known: Vec<&String> = map.routes.keys().collect();
+            known.sort();
+            return Err(format!(
+                "Unknown route '{name}' (routes.yaml has {known:?})"
+            ));
+        };
+        if steps[0].entry != "start" {
+            return Err(format!(
+                "Route '{name}' must begin at the game start (entry: start)"
+            ));
+        }
+        let last = steps.iter().rev().find(|s| s.exit == "terminal");
+        if stop_at.is_none() && last.is_none() {
+            return Err(format!("Route '{name}' has no terminal room"));
+        }
+        let last = last.unwrap_or(&steps[steps.len() - 1]);
+        Ok(Route {
+            name: name.to_owned(),
+            start_state: start_from.unwrap_or("start").to_owned(),
+            terminal: stop_at.unwrap_or(last.location()),
+        })
+    }
+}
+
+/// One visit to one room.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RoomRecord {
+    pub index: usize,
+    pub level: u8,
+    /// '0x44'.
+    pub room: String,
+    pub in_cave: bool,
+    pub specialist: String,
+    pub steps: u64,
+    pub frames: u64,
+    pub health_in: f64,
+    pub health_out: f64,
+    pub max_health: i32,
+    /// in-progress, exit-correct, exit-wrong, death, stuck, milestone, error.
+    pub outcome: String,
+    pub hearts_dropped: u32,
+    pub hearts_taken: u32,
+    pub hearts_healed: f64,
+    pub hearts_wasted: f64,
+    pub hearts_left: u32,
+    pub hearts_expired: u32,
+    /// None until the visit starts tracking (the milestone record has none: `{}`).
+    pub linger: Option<LingerSummary>,
+    pub blocks: u32,
+}
+
+impl RoomRecord {
+    fn new(
+        index: usize,
+        location: MapLocation,
+        specialist: &str,
+        state: &GameView,
+        outcome: &str,
+    ) -> Self {
+        RoomRecord {
+            index,
+            level: location.level,
+            room: format!("0x{:02x}", location.value),
+            in_cave: location.in_cave,
+            specialist: specialist.to_owned(),
+            steps: 0,
+            frames: 0,
+            health_in: state.health(),
+            health_out: state.health(),
+            max_health: state.max_health(),
+            outcome: outcome.to_owned(),
+            hearts_dropped: 0,
+            hearts_taken: 0,
+            hearts_healed: 0.0,
+            hearts_wasted: 0.0,
+            hearts_left: 0,
+            hearts_expired: 0,
+            linger: None,
+            blocks: 0,
+        }
+    }
+
+    pub fn location(&self) -> MapLocation {
+        let room = u8::from_str_radix(&self.room[2..], 16).expect("record room");
+        MapLocation::new(self.level, room, self.in_cave)
+    }
+
+    /// `asdict(RoomRecord)`.
+    pub fn to_json(&self) -> Value {
+        json!({
+            "index": self.index, "level": self.level, "room": self.room, "in_cave": self.in_cave,
+            "specialist": self.specialist, "steps": self.steps, "frames": self.frames,
+            "health_in": self.health_in, "health_out": self.health_out, "max_health": self.max_health,
+            "outcome": self.outcome, "hearts_dropped": self.hearts_dropped, "hearts_taken": self.hearts_taken,
+            "hearts_healed": self.hearts_healed, "hearts_wasted": self.hearts_wasted,
+            "hearts_left": self.hearts_left, "hearts_expired": self.hearts_expired,
+            "linger": self.linger.as_ref().map_or_else(|| json!({}), linger_json),
+            "blocks": self.blocks,
+        })
+    }
+}
+
+/// Everything one run produced.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RunResult {
+    pub route: String,
+    pub seed: Option<u64>,
+    /// in-progress, success, failure, error.
+    pub result: String,
+    pub reason: String,
+    pub steps: u64,
+    pub frames: u64,
+    pub rooms: Vec<RoomRecord>,
+}
+
+impl RunResult {
+    /// The room the run ended in, if it didn't succeed.
+    pub fn failed_room(&self) -> Option<&RoomRecord> {
+        if self.result != "success" {
+            self.rooms.last()
+        } else {
+            None
+        }
+    }
+
+    /// `asdict(RunResult)`.
+    pub fn to_json(&self) -> Value {
+        json!({
+            "route": self.route, "seed": self.seed, "result": self.result, "reason": self.reason,
+            "steps": self.steps, "frames": self.frames,
+            "rooms": self.rooms.iter().map(RoomRecord::to_json).collect::<Vec<_>>(),
+        })
+    }
+}
+
+/// What the chain needs next.
+#[derive(Clone, Debug)]
+pub enum ChainStatus {
+    /// `specialist` acts on `obs`; `new_room` is set on the first action of a room visit.
+    Act {
+        specialist: Arc<str>,
+        obs: Box<Observation>,
+        new_room: bool,
+    },
+    /// The run ended.
+    Done(RunResult),
+}
+
+/// "(level 1, room 0x44)" / "(level 0, room 0x77, cave)".
+pub fn describe(location: MapLocation) -> String {
+    format!(
+        "(level {}, room 0x{:02x}{})",
+        location.level,
+        location.value,
+        if location.in_cave { ", cave" } else { "" }
+    )
+}
+
+struct Acting {
+    name: Arc<str>,
+    config: Arc<SpecialistConfig>,
+}
+
+/// One chain run at a time over a session (`Runner`).
+pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
+    pub data: Arc<GameData>,
+    session: Session<N>,
+    store: St,
+    /// Specialist configs replacing the canonical YAML at runtime.
+    pub configs: HashMap<String, Arc<SpecialistConfig>>,
+    pub route: Route,
+    /// Run cap (`DEFAULT_MAX_STEPS`).
+    pub max_steps: u64,
+    /// Floor of the per-room step budget (`MIN_ROOM_STEPS`).
+    pub min_room_steps: u64,
+    result: Option<RunResult>,
+    objectives: Option<GameCompletion>,
+    objective: Option<Objective>,
+    current: Option<Acting>,
+    change: Option<Change>,
+    prev_objective: Option<Objective>,
+    hearts: HeartTracker,
+    linger: LingerTracker,
+    builder: ObservationBuilder,
+}
+
+impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
+    pub fn new(data: Arc<GameData>, nes: N, store: St, route: Route) -> Self {
+        ChainEnv {
+            session: Session::new(nes, data.map.clone()),
+            data,
+            store,
+            configs: HashMap::new(),
+            route,
+            max_steps: DEFAULT_MAX_STEPS,
+            min_room_steps: MIN_ROOM_STEPS,
+            result: None,
+            objectives: None,
+            objective: None,
+            current: None,
+            change: None,
+            prev_objective: None,
+            hearts: HeartTracker::default(),
+            linger: LingerTracker::default(),
+            builder: ObservationBuilder::new(true),
+        }
+    }
+
+    pub fn session(&self) -> &Session<N> {
+        &self.session
+    }
+
+    pub fn session_mut(&mut self) -> &mut Session<N> {
+        &mut self.session
+    }
+
+    pub fn into_parts(self) -> (Session<N>, St) {
+        (self.session, self.store)
+    }
+
+    /// The run so far (None before the first reset).
+    pub fn result(&self) -> Option<&RunResult> {
+        self.result.as_ref()
+    }
+
+    /// The specialist acting now.
+    pub fn specialist(&self) -> Option<&str> {
+        self.current.as_ref().map(|c| &*c.name)
+    }
+
+    /// Starts a run from the route's start state; `rng` draws the load's RNG bytes and spawn.
+    pub fn reset(
+        &mut self,
+        seed: Option<u64>,
+        rng: &mut ChaCha8Rng,
+    ) -> Result<ChainStatus, EnvError> {
+        self.result = Some(RunResult {
+            route: self.route.name.clone(),
+            seed,
+            result: "in-progress".into(),
+            reason: String::new(),
+            steps: 0,
+            frames: 0,
+            rooms: Vec::new(),
+        });
+        self.current = None;
+        self.change = None;
+        self.prev_objective = None;
+        let machine = match self.store.load(&self.route.start_state) {
+            Ok(m) => m,
+            Err(EnvError::State(reason)) => return Ok(self.error(reason)),
+            Err(e) => return Err(e),
+        };
+        let opts = LoadOptions {
+            randomize_rng: true,
+            fresh_room: true,
+            ..Default::default()
+        };
+        let state = self.session.load(&machine, &opts, rng)?.clone();
+        let (route, step) = start_route(
+            &self.data.map,
+            state.full_location(),
+            state_entry(&self.route.start_state),
+            rng,
+            Some(&self.route.name),
+        );
+        let mut gc = match GameCompletion::new(self.data.map.clone(), &route, step) {
+            Ok(gc) => gc,
+            Err(reason) => return Ok(self.error(reason)),
+        };
+        self.objective = Some(gc.objectives(None, &state));
+        self.objectives = Some(gc);
+        Ok(self.advance())
+    }
+
+    /// Executes the acting specialist's action.
+    pub fn step(&mut self, action: Action) -> Result<ChainStatus, EnvError> {
+        let result = self.result.as_ref().ok_or(EnvError::EpisodeFinished)?;
+        if result.result != "in-progress" {
+            return Err(EnvError::EpisodeFinished);
+        }
+        if !self.session.mask().is_allowed(&action) {
+            let state = self.session.state().clone();
+            self.finish_record(&state);
+            let name = self.current.as_ref().map_or("?", |c| &*c.name).to_owned();
+            let reason = format!(
+                "{name} chose masked action {action} (legal: {})",
+                self.session.mask()
+            );
+            return Ok(self.error(reason));
+        }
+        let change = self.session.act(action)?;
+        let state = change.state.clone();
+        let taken = self.hearts.taken;
+        self.hearts.update(&HeartView::of(&state), change.frames);
+        let prev_objective = self.objective.take().expect("run started");
+        let objective = self
+            .objectives
+            .as_mut()
+            .expect("run started")
+            .objectives(Some(&change.previous), &state);
+        self.linger.update(
+            &LingerState::of(&change.previous, &prev_objective),
+            &LingerState::of(&state, &objective),
+            &LingerStep::of(&change),
+            self.hearts.taken - taken,
+            || linger_wavefront(&state, &objective, None),
+        );
+        let summary = self.linger.summary();
+        let result = self.result.as_mut().unwrap();
+        let record = result.rooms.last_mut().expect("room record");
+        record.linger = Some(summary);
+        record.blocks += change.blocks() as u32;
+        record.steps += 1;
+        record.frames += change.frames as u64;
+        result.steps += 1;
+        result.frames += change.frames as u64;
+        self.objective = Some(objective);
+        self.prev_objective = Some(prev_objective);
+        self.change = Some(change);
+        if state.game_over() {
+            let result = self.result.as_mut().unwrap();
+            result.rooms.last_mut().unwrap().outcome = "death".into();
+            self.finish_record(&state);
+            let result = self.result.as_mut().unwrap();
+            result.result = "failure".into();
+            result.reason = format!("died in {}", describe(state.full_location()));
+            return Ok(ChainStatus::Done(result.clone()));
+        }
+        Ok(self.advance())
+    }
+
+    /// Ends the run with `result = 'error'` (e.g. the acting specialist has no promoted model).
+    pub fn fail(&mut self, reason: String) -> RunResult {
+        match self.error(reason) {
+            ChainStatus::Done(r) => r,
+            ChainStatus::Act { .. } => unreachable!(),
+        }
+    }
+
+    fn error(&mut self, reason: String) -> ChainStatus {
+        let result = self.result.as_mut().expect("run started");
+        result.result = "error".into();
+        result.reason = reason;
+        if let Some(last) = result.rooms.last_mut()
+            && last.outcome == "in-progress"
+        {
+            last.outcome = "error".into();
+        }
+        ChainStatus::Done(result.clone())
+    }
+
+    /// Live ending health and the room's dropped-heart counts (`_finish_record`).
+    fn finish_record(&mut self, state: &GameView) {
+        self.hearts.finish(Some(&HeartView::of(state)));
+        let h = self.hearts.summary();
+        let record = self
+            .result
+            .as_mut()
+            .unwrap()
+            .rooms
+            .last_mut()
+            .expect("room record");
+        record.health_out = if state.game_over() {
+            0.0
+        } else {
+            state.health()
+        };
+        record.hearts_dropped = h.dropped;
+        record.hearts_taken = h.taken;
+        record.hearts_left = h.left;
+        record.hearts_healed = h.healed;
+        record.hearts_wasted = h.wasted;
+        record.hearts_expired = h.expired;
+    }
+
+    fn config_for(&self, name: &str) -> Result<Arc<SpecialistConfig>, String> {
+        if let Some(c) = self.configs.get(name) {
+            return Ok(c.clone());
+        }
+        self.data.specialist(name).map_err(|e| e.0)
+    }
+
+    /// The top of `Runner._run`'s loop: room bookkeeping, the observation and the budgets.
+    fn advance(&mut self) -> ChainStatus {
+        self.room_entry()
+            .unwrap_or_else(|reason| self.error(reason))
+    }
+
+    fn room_entry(&mut self) -> Result<ChainStatus, String> {
+        let state = self.session.state().clone();
+        let location = state.full_location();
+        let map = self.data.map.clone();
+        let objective = self.objective.clone().expect("objective");
+        let record_location = self
+            .result
+            .as_ref()
+            .unwrap()
+            .rooms
+            .last()
+            .map(RoomRecord::location);
+        let mut new_room = false;
+        let obs;
+        if record_location != Some(location) {
+            new_room = true;
+            let mut correct = None;
+            if record_location.is_some() {
+                let ok = match (&self.change, &self.prev_objective) {
+                    (Some(change), Some(prev)) => {
+                        exit_is_correct(&map, &change.previous, prev, location)
+                    }
+                    _ => false,
+                };
+                correct = Some(ok);
+                let record = self.result.as_mut().unwrap().rooms.last_mut().unwrap();
+                record.outcome = if ok { "exit-correct" } else { "exit-wrong" }.into();
+                self.finish_record(&state);
+            }
+            let result = self.result.as_mut().unwrap();
+            if location == self.route.terminal {
+                result.result = "success".into();
+                result.reason = format!("entered {}", describe(location));
+                let index = result.rooms.len();
+                result
+                    .rooms
+                    .push(RoomRecord::new(index, location, "-", &state, "milestone"));
+                return Ok(ChainStatus::Done(result.clone()));
+            }
+            let room = map.get(location);
+            if correct == Some(false) && room.and_then(|r| r.specialist.as_ref()).is_none() {
+                let from = result.rooms.last().unwrap().specialist.clone();
+                result.result = "failure".into();
+                result.reason =
+                    format!("{from} left the route into untagged {}", describe(location));
+                return Ok(ChainStatus::Done(result.clone()));
+            }
+            let Some(room) = room else {
+                return Err(format!("Room {} is not in game.yaml", describe(location)));
+            };
+            let Some(name) = room.specialist.clone() else {
+                return Err(format!(
+                    "Room {} has no specialist: tag in game.yaml",
+                    describe(location)
+                ));
+            };
+            let index = result.rooms.len();
+            result.rooms.push(RoomRecord::new(
+                index,
+                location,
+                &name,
+                &state,
+                "in-progress",
+            ));
+            self.hearts.reset(&HeartView::of(&state));
+            self.linger.reset(&LingerState::of(&state, &objective), || {
+                linger_wavefront(&state, &objective, None)
+            });
+            let summary = self.linger.summary();
+            self.result
+                .as_mut()
+                .unwrap()
+                .rooms
+                .last_mut()
+                .unwrap()
+                .linger = Some(summary);
+            let switch = self.current.as_ref().is_none_or(|c| *c.name != *name);
+            if switch {
+                let config = self.config_for(&name)?;
+                self.session
+                    .set_disabled_kinds(&config.items.disabled_kinds());
+                self.builder = ObservationBuilder::new(config.obs.objective);
+                self.current = Some(Acting {
+                    name: Arc::from(name.as_str()),
+                    config,
+                });
+                obs = self.builder.reset(&state, &objective, self.session.mask());
+            } else {
+                obs = self.build_obs(&objective);
+            }
+        } else {
+            obs = self.build_obs(&objective);
+        }
+
+        let current = self.current.as_ref().expect("acting specialist");
+        let (name, config) = (current.name.clone(), current.config.clone());
+        let result = self.result.as_ref().unwrap();
+        let steps = result.rooms.last().unwrap().steps;
+        let stuck = if let Some(n) = config.no_progress_steps {
+            let tail = self.linger.tail_steps();
+            (tail as i64 >= n).then(|| {
+                format!(
+                    "{name} no-room-progress: {tail} quiet actions (limit {n}) in {}",
+                    describe(location)
+                )
+            })
+        } else {
+            let room_steps = (config.max_steps as u64).max(self.min_room_steps);
+            (steps >= room_steps).then(|| format!("{name} exceeded {room_steps} steps"))
+        };
+        let stuck = stuck.or_else(|| {
+            (result.steps >= self.max_steps)
+                .then(|| format!("run exceeded {} steps", self.max_steps))
+        });
+        if let Some(reason) = stuck {
+            self.result
+                .as_mut()
+                .unwrap()
+                .rooms
+                .last_mut()
+                .unwrap()
+                .outcome = "stuck".into();
+            self.finish_record(&state);
+            let result = self.result.as_mut().unwrap();
+            result.result = "failure".into();
+            result.reason = reason;
+            return Ok(ChainStatus::Done(result.clone()));
+        }
+        Ok(ChainStatus::Act {
+            specialist: name,
+            obs: Box::new(obs),
+            new_room,
+        })
+    }
+
+    fn build_obs(&mut self, objective: &Objective) -> Observation {
+        match &self.change {
+            Some(change) => self.builder.build(change, objective, self.session.mask()),
+            // Same specialist, no step yet: only reachable at reset, where the switch branch runs instead.
+            None => {
+                let state = self.session.state().clone();
+                self.builder.reset(&state, objective, self.session.mask())
+            }
+        }
+    }
+}
+
+/// The milestone metric and a per-room failure breakdown (`chain_summary`).
+pub fn chain_summary(results: &[RunResult]) -> Value {
+    let runs = results.len();
+    let successes = results.iter().filter(|r| r.result == "success").count();
+    let mut failures: Vec<(String, usize)> = Vec::new();
+    for r in results {
+        if let Some(room) = r.failed_room() {
+            let key = format!(
+                "{}:{}{} {} {}",
+                room.level,
+                room.room,
+                if room.in_cave { ":cave" } else { "" },
+                room.specialist,
+                room.outcome
+            );
+            match failures.iter_mut().find(|(k, _)| *k == key) {
+                Some((_, n)) => *n += 1,
+                None => failures.push((key, 1)),
+            }
+        }
+    }
+    failures.sort_by_key(|f| std::cmp::Reverse(f.1));
+    let mut errors: Vec<&str> = results
+        .iter()
+        .filter(|r| r.result == "error")
+        .map(|r| r.reason.as_str())
+        .collect();
+    errors.sort();
+    errors.dedup();
+    json!({
+        "runs": runs,
+        "successes": successes,
+        "success_rate": if runs > 0 { successes as f64 / runs as f64 } else { 0.0 },
+        "failures": failures.into_iter().map(|(k, v)| (k, json!(v))).collect::<serde_json::Map<_, _>>(),
+        "errors": errors,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn routes_load() {
+        let map = GameMap::builtin();
+        let r = Route::load(&map, "milestone1", None, None).unwrap();
+        assert_eq!(r.terminal, MapLocation::new(2, 0x0e, false));
+        assert_eq!(r.start_state, "start");
+        let r = Route::load(
+            &map,
+            "milestone1",
+            Some(MapLocation::new(1, 0x44, false)),
+            Some("0_37c_2"),
+        )
+        .unwrap();
+        assert_eq!(r.terminal, MapLocation::new(1, 0x44, false));
+        assert_eq!(r.start_state, "0_37c_2");
+        assert!(Route::load(&map, "nowhere", None, None).is_err());
+        assert_eq!(
+            describe(MapLocation::new(0, 0x77, true)),
+            "(level 0, room 0x77, cave)"
+        );
+    }
+}

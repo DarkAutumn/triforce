@@ -6,3 +6,18 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+indexmap = { version = "2.14.2", features = ["serde"] }
+parking_lot = "0.12.5"
+rand = "0.10.3"
+rand_chacha = "0.10.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+serde_yaml_ng = "0.10"
+zelda = { path = "../zelda" }
+
+[dev-dependencies]
+flate2 = "1.1.10"
+oracle = { path = "../oracle" }
+tempfile = "3.27.0"
+toml = "1.2.0"
+zip = { version = "2", default-features = false, features = ["deflate"] }

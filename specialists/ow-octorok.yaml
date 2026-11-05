@@ -4,11 +4,11 @@ start_states: ['0_67*_[0-9]', '0_68*_[0-9]', '0_58*_[0-9]', '0_37*_[0-9]', '0_4c
                '0_49*_[0-9]']
 success: [exit-correct, enter-room:1:0x73, enter-room:2:0x7d]
 reward_profile: default
-reward: {pbrs: on}
-obs: {objective: on}
+reward: {pbrs: true}
+obs: {objective: true}
 ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
-items: {bombs: off}
-one_room: on                          # round 5: per-room episodes (d1-melee trained 2.5-4x faster with them)
+items: {bombs: false}
+one_room: true                          # round 5: per-room episodes (d1-melee trained 2.5-4x faster with them)
 max_steps: 2000
 warm_start: null
 notes: >-
