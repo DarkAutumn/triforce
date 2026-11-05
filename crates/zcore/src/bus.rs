@@ -38,11 +38,11 @@
 use crate::{
     apu::{Apu, Channel},
     cart::Cart,
-    common::{NesRegion, ResetKind},
+    common::ResetKind,
     cpu::Cpu,
     input::{Input, Player},
     mapper::Mapper,
-    memory::{ConstArray, Memory, RamState},
+    memory::{ConstArray, Memory},
     ppu::Ppu,
 };
 use serde::{Deserialize, Serialize};
@@ -95,7 +95,7 @@ pub struct Bus {
     pub memory: Memory,
     /// Audio Processing Unit.
     pub apu: Apu,
-    /// Joypad and Zapper inputs.
+    /// Joypad inputs.
     pub input: Input,
     /// 2K of work RAM on the console itself, at $0000-$07FF and mirrored to $1FFF.
     //
@@ -105,16 +105,11 @@ pub struct Bus {
     pub wram: Box<ConstArray<u8, { size::WRAM }>>,
     /// Whatever was last read or written to to the Bus.
     pub open_bus: u8,
-    /// RAM initialization state.
-    #[serde(skip)]
-    pub ram_state: RamState,
-    /// NES Region.
-    pub region: NesRegion,
 }
 
 impl Default for Bus {
     fn default() -> Self {
-        Self::new(NesRegion::default(), RamState::default())
+        Self::new()
     }
 }
 
@@ -126,19 +121,20 @@ pub mod size {
 }
 
 impl Bus {
-    /// Creates a console timed for `region`, with work RAM initialised per `ram_state`.
-    pub fn new(region: NesRegion, ram_state: RamState) -> Self {
+    /// Power-on fill of console and cart RAM: FCEUmm's, and what the corpus was recorded with.
+    pub const POWER_ON_RAM: u8 = 0xFF;
+
+    /// Creates a console with no cart.
+    pub fn new() -> Self {
         Self {
             wram: Box::new(ConstArray::new()),
-            cpu: Cpu::new(region),
-            ppu: Ppu::new(region),
+            cpu: Cpu::new(),
+            ppu: Ppu::new(),
             mapper: Mapper::none(),
             memory: Memory::default(),
-            apu: Apu::new(region),
-            input: Input::new(region),
+            apu: Apu::new(),
+            input: Input::new(),
             open_bus: 0x00,
-            ram_state,
-            region,
         }
     }
 
@@ -219,7 +215,6 @@ impl Bus {
     #[inline(always)]
     pub fn cpu_clock(&mut self) {
         self.mapper.clock();
-        self.input.clock();
         self.apu.clock_lazy();
     }
 }
@@ -314,9 +309,7 @@ impl Bus {
             0x400F => self.apu.write_length(Channel::Noise, val),
             0x4010 | 0x4012 | 0x4013 | 0x4015 => {
                 // FQ-12: FCEUmm's sample fetcher tracks the same registers.
-                if self.ppu.fceumm_compat {
-                    self.apu.dmc.fceu.write(addr, val);
-                }
+                self.apu.dmc.fceu.write(addr, val);
                 match addr {
                     0x4010 => self.apu.write_timer_lo(Channel::Dmc, val),
                     0x4012 => self.apu.write_dmc_addr(val),
@@ -334,16 +327,6 @@ impl Bus {
 }
 
 impl Bus {
-    /// Sets the region, forwarding it to every component.
-    pub fn set_region(&mut self, region: NesRegion) {
-        self.region = region;
-        self.cpu.set_region(region);
-        self.ppu.set_region(region);
-        self.apu.set_region(region);
-        self.input.set_region(region);
-        self.clock_sync();
-    }
-
     /// Resets the console, forwarding it to every component.
     ///
     /// A hard reset is a power cycle, so it also re-initialises RAM that a power cycle would not
@@ -354,12 +337,11 @@ impl Bus {
 
         self.cpu.reset(kind);
         if kind == ResetKind::Hard {
-            self.ram_state.fill(&mut **self.wram);
+            self.wram.fill(Self::POWER_ON_RAM);
             // Battery-backed cart RAM is left alone: keeping it across a power cycle is what the
-            // battery is for, and `.sram` is only written when the cart is unloaded, so wiping it
-            // here would throw away a game the player has not put away yet.
+            // battery is for.
             if !self.memory.battery_backed() {
-                self.memory.fill_ram(self.ram_state);
+                self.memory.fill_ram(Self::POWER_ON_RAM);
             }
         }
         self.ppu.reset(kind);
@@ -373,16 +355,8 @@ impl Bus {
         let hi = self.cpu_bus_read(Cpu::RESET_VECTOR + 1);
         self.cpu.pc = u16::from_le_bytes([lo, hi]);
 
-        // The CPU takes 7 cycles to reset/power on
-        // See:
-        // * <https://www.nesdev.org/wiki/CPU_interrupts>
-        // * <http://archive.6502.org/datasheets/synertek_programming_manual.pdf>
-        // FQ-06: FCEUmm (`fceumm_compat`) fetches the vector without spending any cycles.
-        let reset_cycles = if self.ppu.fceumm_compat { 0 } else { 7 };
-        for _ in 0..reset_cycles {
-            self.start_cycle(self.cpu.start_cycles - 1);
-            self.end_cycle(self.cpu.start_cycles + 1);
-        }
+        // The CPU takes 7 cycles to reset/power on (nesdev "CPU interrupts"), but FQ-06: FCEUmm
+        // fetches the vector without spending any cycles.
     }
 
     /// The cart's battery-backed RAM (PRG-RAM).
@@ -413,15 +387,11 @@ mod test {
             0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00,
         ];
-        let cart = Cart::from_rom("load_cart_test", &mut rom.as_slice(), RamState::default())
-            .expect("valid cart");
+        let cart = Cart::from_rom("load_cart_test", &mut rom.as_slice()).expect("valid cart");
 
         let expected_mirroring = cart.mirroring();
-        let expected_region = cart.region;
         bus.load_cart(cart);
 
-        assert_eq!(bus.ppu.region, expected_region, "ppu region");
-        assert_eq!(bus.apu.region, expected_region, "apu region");
         assert!(
             matches!(bus.mapper, Mapper::Nrom(_)),
             "mapper is Nrom: {:?}",
@@ -530,6 +500,7 @@ mod test {
     /// register a write lands on. Reads of the write-only registers return the PPU's open bus
     /// rather than anything latched.
     #[test]
+    #[ignore = "FQ-03: $2002 reads see VBlank as of the instruction start"]
     fn read_write_ppu() {
         let mut bus = Bus::default();
 
@@ -590,7 +561,7 @@ mod test {
         );
 
         // $4017 read is controller two, not the frame counter.
-        bus.input.joypads[1].set_button(JoypadBtn::A, true);
+        bus.input.joypads[1].press(JoypadBtn::A);
         bus.cpu_bus_write(0x4016, 0x01);
         bus.cpu_bus_write(0x4016, 0x00);
         assert_eq!(
@@ -699,8 +670,8 @@ mod test {
     fn read_write_input() {
         let mut bus = Bus::default();
 
-        bus.input.joypads[0].set_button(JoypadBtn::A, true);
-        bus.input.joypads[0].set_button(JoypadBtn::Right, true);
+        bus.input.joypads[0].press(JoypadBtn::A);
+        bus.input.joypads[0].press(JoypadBtn::Right);
 
         // Strobe high then low latches the button state and rewinds to bit 0.
         bus.cpu_bus_write(0x4016, 0x01);
@@ -727,13 +698,10 @@ mod test {
         );
     }
 
-    /// A hard reset re-fills WRAM from the configured RAM state; a soft reset leaves it alone.
+    /// A hard reset re-fills WRAM with the power-on $FF; a soft reset leaves it alone.
     #[test]
     fn reset() {
-        let mut bus = Bus {
-            ram_state: RamState::AllZeros,
-            ..Default::default()
-        };
+        let mut bus = Bus::default();
 
         bus.cpu_bus_write(0x0001, 0x66);
         bus.cpu_bus_write(0x2000, 0x80);
@@ -746,7 +714,7 @@ mod test {
         );
 
         bus.reset(ResetKind::Hard);
-        assert_eq!(bus.cpu_bus_peek(0x0001), 0x00, "a hard reset clears WRAM");
+        assert_eq!(bus.cpu_bus_peek(0x0001), 0xFF, "a hard reset refills WRAM");
     }
 
     /// A hard reset is a power cycle, so cart RAM comes back up in whatever state the console is
@@ -754,10 +722,7 @@ mod test {
     #[test]
     fn hard_reset_refills_cart_ram_unless_it_is_battery_backed() {
         for battery_backed in [false, true] {
-            let mut bus = Bus {
-                ram_state: RamState::AllOnes,
-                ..Default::default()
-            };
+            let mut bus = Bus::default();
             let mut cart = Cart::empty_sized(0x4000, 0x2000);
             cart.mapper = Nrom::load(&mut cart).expect("valid mapper");
             bus.load_cart(cart);

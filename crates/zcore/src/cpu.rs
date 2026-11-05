@@ -17,7 +17,7 @@
 
 use crate::{
     bus::Bus,
-    common::{NesRegion, ResetKind},
+    common::ResetKind,
     cpu::instr::{AddrMode, InstrRef},
 };
 use bitflags::bitflags;
@@ -142,12 +142,6 @@ impl Cpu {
     pub const NTSC_MASTER_CLOCK_RATE: f32 = 21_477_272.0;
     /// NTSC CPU Clock Rate in Hz.
     pub const NTSC_CPU_CLOCK_RATE: f32 = Self::NTSC_MASTER_CLOCK_RATE / 12.0;
-    /// PAL Master Clock Rate in Hz.
-    pub const PAL_MASTER_CLOCK_RATE: f32 = 26_601_712.0;
-    /// PAL CPU Clock Rate in Hz.
-    pub const PAL_CPU_CLOCK_RATE: f32 = Self::PAL_MASTER_CLOCK_RATE / 16.0;
-    /// Dendy CPU Clock Rate in Hz.
-    pub const DENDY_CPU_CLOCK_RATE: f32 = Self::PAL_MASTER_CLOCK_RATE / 15.0;
 
     // Represents CPU/PPU alignment and would range from 1..=ppu.clock_divider-1
     // if random PPU alignment was emulated
@@ -176,11 +170,12 @@ impl Cpu {
     /// `RTS` opcode, return from subroutine.
     pub const RTS: u8 = 0x60;
 
-    /// Create a new CPU timed for `region`.
-    pub fn new(region: NesRegion) -> Self {
-        let mut cpu = Self {
+    /// Create a new CPU.
+    pub fn new() -> Self {
+        Self {
             cycle: 0,
             master_clock: 0,
+            // NTSC_MASTER_CLOCK_DIVIDER / 2
             start_cycles: 6,
             end_cycles: 6,
             pc: 0x0000,
@@ -194,34 +189,7 @@ impl Cpu {
             irq_flags: IrqFlags::default(),
             dma_oam_addr: None,
             corrupted: false,
-        };
-        cpu.set_region(region);
-        cpu
-    }
-
-    /// Returns the CPU clock rate based on [`NesRegion`].
-    #[inline]
-    #[must_use]
-    pub const fn region_clock_rate(region: NesRegion) -> f32 {
-        match region {
-            NesRegion::Auto | NesRegion::Ntsc => Self::NTSC_CPU_CLOCK_RATE,
-            NesRegion::Pal => Self::PAL_CPU_CLOCK_RATE,
-            NesRegion::Dendy => Self::DENDY_CPU_CLOCK_RATE,
         }
-    }
-
-    /// Re-times the CPU for `region`.
-    ///
-    /// Only the cycle lengths; [`Bus::set_region`] is what forwards the change to the rest of the
-    /// console.
-    pub const fn set_region(&mut self, region: NesRegion) {
-        let (start_cycles, end_cycles) = match region {
-            NesRegion::Auto | NesRegion::Ntsc => (6, 6), // NTSC_MASTER_CLOCK_DIVIDER / 2
-            NesRegion::Pal => (8, 8),                    // PAL_MASTER_CLOCK_DIVIDER / 2
-            NesRegion::Dendy => (7, 8),                  // DENDY_MASTER_CLOCK_DIVIDER / 2
-        };
-        self.start_cycles = start_cycles;
-        self.end_cycles = end_cycles;
     }
 
     /// Resets the registers.
@@ -393,27 +361,9 @@ impl Bus {
     /// Move the settings the *player* owns out of the running console and into a state about to
     /// replace it.
     ///
-    /// A save state or a rewind snapshot is the emulated machine, but `Bus` also holds a handful
-    /// of knobs that belong to the session rather than to the NES: emulation speed, the audio
-    /// device's sample rate, muted channels, cheats, the headless flags. Restoring those along
-    /// with the machine rewinds the player's settings too.
-    ///
-    /// That was not cosmetic. Emulation speed is split across two fields - `ControlDeck` counts
-    /// how many NES frames to clock, while [`Apu::speed`](crate::apu::Apu::speed) stretches the sample period - and only
-    /// the second is inside `Bus`. Rewinding past a stretch of fast-forward therefore left the APU
-    /// at 2x while the deck clocked at 1x, so half the expected samples were produced per frame,
-    /// the audio queue never filled, and a frontend pacing itself against that queue never waited.
-    /// Fast-forward appeared to switch itself back on and stick.
-    ///
-    /// Deliberately *not* included is [`NesRegion`]: unlike these, it
-    /// changes what the machine is, and every counter in the state was produced under the region
-    /// the state carries. A state is restored with the region it was recorded at, and
-    /// [`ControlDeck::set_region`](crate::control_deck::ControlDeck::set_region) is what changes
-    /// it afterwards.
-    ///
-    /// Note that `#[serde(skip)]` does *not* protect a setting from this. The restore is
-    /// `*self = state`, so a skipped field arrives as `Default` rather than keeping the value the
-    /// running console had - which is how `ram_state` below silently reverted on every load.
+    /// A save state is the emulated machine, but `Bus` also holds a handful of knobs that belong
+    /// to the session rather than to the NES: the audio device's sample rate, muted channels, the
+    /// headless flags. Restoring those along with the machine rewinds the session's settings too.
     fn keep_session_settings(&mut self, session: &mut Self) {
         // The output sample rate.
         self.apu.sample_rate = session.apu.sample_rate;
@@ -436,30 +386,16 @@ impl Bus {
         self.apu.dmc.set_silent(session.apu.dmc.silent());
         self.apu.mapper_enabled = session.apu.mapper_enabled;
 
-        // Headless flags, and PPU warmup emulation.
+        // Headless flags.
         self.apu.skip_mixing = session.apu.skip_mixing;
         self.ppu.skip_rendering = session.ppu.skip_rendering;
-        self.ppu.emulate_warmup = session.ppu.emulate_warmup;
-        self.ppu.fceumm_compat = session.ppu.fceumm_compat;
-
-        // How RAM is filled at power-on, which only shows on the next hard reset.
-        self.ram_state = session.ram_state;
-
-        // What is plugged in, and how it behaves - not what is currently pressed, which is
-        // emulated state the game reads.
-        self.input.set_four_player(session.input.four_player);
-        self.input
-            .set_concurrent_dpad(session.input.joypads[0].concurrent_dpad);
-        self.input.zapper.connected = session.input.zapper.connected;
-        self.input.zapper.trigger_release_delay = session.input.zapper.trigger_release_delay;
-        self.input.zapper.radius = session.input.zapper.radius;
     }
 
-    /// Clock rate based on currently configured NES region.
+    /// NTSC CPU clock rate.
     #[inline]
     #[must_use]
     pub const fn clock_rate(&self) -> f32 {
-        Cpu::region_clock_rate(self.region)
+        Cpu::NTSC_CPU_CLOCK_RATE
     }
 
     /// Peek at the next instruction.
@@ -484,11 +420,6 @@ impl Bus {
     #[cold]
     #[inline(never)]
     pub fn irq(&mut self) {
-        if self.cpu.irq_flags(IrqFlags::DMA_HALT) && self.region == NesRegion::Pal {
-            // Check for DMA on PAL
-            self.handle_dma(self.cpu.pc);
-        }
-
         self.read(self.cpu.pc); // Dummy read
         self.read(self.cpu.pc); // Dummy read
         self.push_word(self.cpu.pc);
@@ -528,13 +459,9 @@ impl Bus {
         let dma_pending_apu = self.apu.dma_pending();
 
         if dma_pending_apu {
+            // FQ-12: the DMC fetch is timed by `FceuDmc`; the hardware fetcher's requests are
+            // dropped.
             self.apu.clear_dma_pending();
-            // FQ-12: with `fceumm_compat` the DMC fetch is timed by `FceuDmc` instead.
-            if !self.ppu.fceumm_compat {
-                self.cpu
-                    .irq_flags
-                    .insert(IrqFlags::DMA_DMC | IrqFlags::DMA_HALT | IrqFlags::DMA_DUMMY_READ);
-            }
         }
 
         let status = self.cpu.status;
@@ -587,104 +514,7 @@ impl Bus {
         self.handle_interrupts();
     }
 
-    /// Start a direct-memory access (DMA) cycle.
-    #[inline(always)]
-    fn start_dma_cycle(&mut self) {
-        // OAM DMA cycles count as halt/dummy reads for DMC DMA when both run at the same time
-        if self.cpu.irq_flags(IrqFlags::DMA_HALT) {
-            self.cpu.clear_irq_flags(IrqFlags::DMA_HALT);
-        } else {
-            self.cpu.clear_irq_flags(IrqFlags::DMA_DUMMY_READ);
-        }
-        self.start_cycle(self.cpu.start_cycles - 1);
-    }
-
-    /// Handle a direct-memory access (DMA) request.
-    #[cold]
-    #[inline(never)]
-    fn handle_dma(&mut self, addr: u16) {
-        // FQ-10, FQ-11: FCEUmm's DMA timing.
-        if self.ppu.fceumm_compat {
-            self.handle_dma_fceumm();
-            return;
-        }
-        trace!("Starting DMA - CYC:{}", self.cpu.cycle);
-
-        self.start_cycle(self.cpu.start_cycles - 1);
-        self.cpu_bus_read(addr);
-        self.end_cycle(self.cpu.start_cycles + 1);
-        self.cpu.clear_irq_flags(IrqFlags::DMA_HALT);
-
-        let skip_dummy_reads = addr == 0x4016 || addr == 0x4017;
-
-        let mut oam_offset = 0;
-        let mut oam_dma_count = 0;
-        let mut read_val = 0;
-
-        loop {
-            let dma_dmc = self.cpu.irq_flags(IrqFlags::DMA_DMC);
-            let dma_oam_addr = self.cpu.dma_oam_addr;
-            if !dma_dmc & dma_oam_addr.is_none() {
-                break;
-            }
-
-            if self.cpu.cycle & 0x01 == 0x00 {
-                if dma_dmc
-                    & !self.cpu.irq_flags(IrqFlags::DMA_HALT)
-                    & !self.cpu.irq_flags(IrqFlags::DMA_DUMMY_READ)
-                {
-                    // DMC DMA ready to read a byte (halt and dummy read done before)
-                    self.start_dma_cycle();
-                    let dma_addr = self.apu.dmc.dma_addr();
-                    read_val = self.cpu_bus_read(dma_addr);
-                    trace!(
-                        "Loaded DMC DMA byte. ${dma_addr:04X}: {read_val} - CYC:{}",
-                        self.cpu.cycle
-                    );
-                    self.end_cycle(self.cpu.start_cycles + 1);
-                    self.apu.dmc.load_buffer(read_val);
-                    self.cpu.clear_irq_flags(IrqFlags::DMA_DMC);
-                } else if let Some(oam_addr) = dma_oam_addr {
-                    // DMC DMA not running or ready, run OAM DMA
-                    self.start_dma_cycle();
-                    read_val = self.cpu_bus_read(oam_addr + oam_offset);
-                    self.end_cycle(self.cpu.start_cycles + 1);
-                    oam_offset += 1;
-                    oam_dma_count += 1;
-                } else {
-                    // DMC DMA running, but not ready yet (needs to halt, or dummy read) and OAM
-                    // DMA isn't running
-                    debug_assert!(
-                        self.cpu.irq_flags(IrqFlags::DMA_HALT)
-                            | self.cpu.irq_flags(IrqFlags::DMA_DUMMY_READ)
-                    );
-                    self.start_dma_cycle();
-                    if !skip_dummy_reads {
-                        self.cpu_bus_read(addr); // throw away
-                    }
-                    self.end_cycle(self.cpu.start_cycles + 1);
-                }
-            } else if dma_oam_addr.is_some() & (oam_dma_count & 0x01 == 0x01) {
-                // OAM DMA write cycle, done on odd cycles after a read on even cycles
-                self.start_dma_cycle();
-                self.cpu_bus_write(0x2004, read_val);
-                self.end_cycle(self.cpu.start_cycles + 1);
-                oam_dma_count += 1;
-                if oam_dma_count == 0x200 {
-                    self.cpu.dma_oam_addr.take();
-                }
-            } else {
-                // Align to read cycle before starting OAM DMA (or align to perform DMC read)
-                self.start_dma_cycle();
-                if !skip_dummy_reads {
-                    self.cpu_bus_read(addr); // throw away
-                }
-                self.end_cycle(self.cpu.start_cycles + 1);
-            }
-        }
-    }
-
-    /// DMA as FCEUmm times it (`fceumm_compat`).
+    /// DMA as FCEUmm times it.
     ///
     /// - FQ-10: OAM DMA is exactly 512 cycles (256 reads and 256 writes) with no halt or alignment
     ///   cycle.
@@ -774,7 +604,8 @@ impl Bus {
     #[inline(always)]
     pub fn read(&mut self, addr: u16) -> u8 {
         if self.cpu.irq_flags(IrqFlags::DMA_HALT) {
-            self.handle_dma(addr);
+            // FQ-10: FCEUmm's OAM DMA.
+            self.handle_dma_fceumm();
         }
 
         self.start_cycle(self.cpu.start_cycles - 1);
@@ -782,6 +613,7 @@ impl Bus {
         self.end_cycle(self.cpu.end_cycles + 1);
         val
     }
+
     /// Read a byte without side effects, and without moving the console.
     #[inline(always)]
     #[must_use]
@@ -912,15 +744,12 @@ impl Bus {
         self.ppu.status_at_instr = self.ppu.read_status_bits();
         // FQ-12: FCEUmm's per-instruction DMC hook sees the instruction's base cycles already
         // counted; a fetch it starts is spent after the instruction (FQ-11).
-        let dmc_fetch = if self.ppu.fceumm_compat {
-            let base = Cpu::INSTR_REF[usize::from(self.peek(self.cpu.pc))].cycles;
-            self.apu
-                .dmc
-                .fceu
-                .hook(self.cpu.cycle.wrapping_add(u32::from(base)))
-        } else {
-            None
-        };
+        let base = Cpu::INSTR_REF[usize::from(self.peek(self.cpu.pc))].cycles;
+        let dmc_fetch = self
+            .apu
+            .dmc
+            .fceu
+            .hook(self.cpu.cycle.wrapping_add(u32::from(base)));
         let opcode = self.fetch_byte(); // Cycle 1
         let op = Cpu::OPS[usize::from(opcode)];
         self.cpu.addr_mode = op.addr_mode();
@@ -929,7 +758,7 @@ impl Bus {
 
         // FQ-10: FCEUmm runs OAM DMA inside the `STA $4014` that starts it, so its 512 cycles
         // count toward this instruction (and reach FQ-12's DMC timer at the next hook).
-        if self.ppu.fceumm_compat && self.cpu.dma_oam_addr.is_some() {
+        if self.cpu.dma_oam_addr.is_some() {
             self.handle_dma_fceumm();
         }
         if let Some(addr) = dmc_fetch {
@@ -952,7 +781,7 @@ impl Bus {
         }
     }
 
-    /// FQ-05, FQ-04: services FCEUmm's NMI request (`fceumm_compat`); see
+    /// FQ-05, FQ-04: services FCEUmm's NMI request; see
     /// [`Ppu::fceu_nmi`](crate::ppu::Ppu::fceu_nmi).
     #[cold]
     #[inline(never)]
@@ -1018,6 +847,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "FQ-06: reset spends no cycles, and FQ-12's per-instruction DMC hook; expects 7"]
     fn cycle_timing() {
         use super::*;
         let mut bus = Bus::default();

@@ -4,8 +4,8 @@ zcore reproduces FCEUmm (libretro `fceumm`, commit `e0f3086a8104f8fbbe49a2615b10
 emulator the promoted models were trained on through stable-retro) instead of the hardware wherever the
 two differ and the difference shows in the corpus. Every such behaviour is a numbered quirk:
 
-- it sits behind `Config::fceumm_compat` (TetaNES branch `bugs`; hard-wired on in zcore until step 18 of
-  the port plan removes it);
+- it was added behind `Config::fceumm_compat` (TetaNES branch `bugs`); zcore hard-wired it on at ladder
+  stage Z3 and deleted the hardware paths, until step 18 of the port plan restores them;
 - its ID appears in a code comment at every place it is implemented, in the commit message that adds it,
   and here;
 - it is never a `fix:` commit (`fix:` means TetaNES was wrong about the hardware).
@@ -13,8 +13,8 @@ two differ and the difference shows in the corpus. Every such behaviour is a num
 Step 18 of the port plan ("Retire the FCEUmm oracle and FCEUmm quirks") restores the hardware behaviour
 for each entry, one at a time, and keeps it unless the promoted models get worse. FCEUmm file/line
 citations are for the pinned commit (upstream numbering, before `oracle/fceumm/patches/`). Implementation
-paths are in `../tetanes/tetanes-core/src` on branch `bugs` until zcore is imported (plan step 9), then
-the same functions under `crates/zcore/src`.
+sites are the named functions under `crates/zcore/src`; the tests are `src/fceumm_compat_tests.rs`, and
+every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs`.
 
 | ID | Quirk | Affects |
 |---|---|---|
@@ -55,7 +55,7 @@ the same functions under `crates/zcore/src`.
   run chunks (`src/ppu.c:1211-1212`), so no read can land on the set edge.
 - **Affects:** per-frame timing and RAM: Zelda's boot VBlank wait loop hit the race in stock TetaNES and
   ran a frame late.
-- **Implemented:** `Ppu::read_status` (compat path returns before the race), `Ppu::read_status_fceumm`.
+- **Implemented:** `Ppu::read_status` (FCEUmm's read; the hardware race check was deleted at Z3).
 - **Removal:** drop the compat branch so the race check in `Ppu::read_status` runs again; `06-suppression`
   passes again.
 
@@ -73,8 +73,8 @@ the same functions under `crates/zcore/src`.
 - **Affects:** per-frame timing and RAM (boot VBlank waits; the sprite 0 "wait for clear" loop at the
   end of VBlank).
 - **Implemented:** `Ppu::status_at_instr` (field, bits 5-7), `Bus::clock_instr` (snapshot at
-  instruction start), `Ppu::read_status_fceumm` (VBlank from the snapshot, cleared only if seen; bits 5/6
-  as live | snapshot), `Bus::write_ctrl` (FQ-04 uses the snapshot).
+  instruction start), `Ppu::read_status` (VBlank from the snapshot, cleared only if seen; bits 5/6 as
+  live | snapshot), `Bus::write_ctrl` (FQ-04 uses the snapshot).
 - **Removal:** delete `status_at_instr` and read the live flags in `Ppu::read_status`; `02-vbl_set_time`,
   `03-vbl_clear_time` and `09-timing` pass again.
 
@@ -88,8 +88,8 @@ the same functions under `crates/zcore/src`.
   a 0→1 enable while `PPU_status` bit 7 is set and never cancels (`src/ppu.c:270-280`); `FCEU_IQNMI2`
   becomes `FCEU_IQNMI` one instruction later (`src/x6502.c:348-350`, `413-415`).
 - **Affects:** per-frame timing and RAM (when the NMI handler starts).
-- **Implemented:** `Ppu::fceu_nmi` (value 2), `Bus::write_ctrl` (compat branch), `Ppu::read_status_fceumm`
-  (no NMI cancel), `Bus::fceumm_nmi`.
+- **Implemented:** `Ppu::fceu_nmi` (value 2), `Bus::write_ctrl`, `Ppu::read_status` (no NMI cancel),
+  `Bus::fceumm_nmi`.
 - **Removal:** delete the compat branches; `nmi_pending` and TetaNES' edge detector handle NMI again;
   `04`, `06`, `07`, `08` pass again.
 
@@ -166,8 +166,8 @@ the same functions under `crates/zcore/src`.
   (`src/ppu.c:374-380`, `src/x6502.c:74-82`): 512 cycles, no halt or alignment cycle, counted toward the
   `STA` itself (so they reach FQ-12's DMC timer at the next instruction's hook).
 - **Affects:** per-frame timing (every frame's NMI handler: 1-2 cycles, and DMC fetch placement).
-- **Implemented:** `Bus::clock_instr` (runs the DMA after the `STA` in compat), `Bus::handle_dma`
-  (compat dispatch), `Bus::handle_dma_fceumm`.
+- **Implemented:** `Bus::clock_instr` (runs the DMA after the `STA`), `Bus::read` (a halted read runs
+  it), `Bus::handle_dma_fceumm`.
 - **Removal:** delete the compat paths; `sprdma_and_dmc_dma` passes again.
 
 ## FQ-11 — 4-read DMC DMA

@@ -7,7 +7,7 @@
 // see the module docs on `apu`.
 #![allow(missing_docs)]
 
-use crate::common::{NesRegion, ResetKind};
+use crate::common::ResetKind;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
@@ -16,7 +16,6 @@ use tracing::trace;
 /// See: <https://www.nesdev.org/wiki/APU_Frame_Counter>
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct FrameCounter {
-    pub region: NesRegion,
     pub step_cycles: [u32; 6],
     pub step: usize,
     pub mode: u8,
@@ -40,8 +39,6 @@ pub enum FrameType {
 impl FrameCounter {
     const STEP4_CYCLES_NTSC: [u32; 6] = [7457, 14913, 22371, 29828, 29829, 29830];
     const STEP5_CYCLES_NTSC: [u32; 6] = [7457, 14913, 22371, 29829, 37281, 37282];
-    const STEP4_CYCLES_PAL: [u32; 6] = [8313, 16627, 24939, 33252, 33253, 33254];
-    const STEP5_CYCLES_PAL: [u32; 6] = [8313, 16627, 24939, 33253, 41565, 41566];
 
     const FRAME_TYPE: [FrameType; 6] = [
         FrameType::Quarter,
@@ -52,11 +49,10 @@ impl FrameCounter {
         FrameType::None,
     ];
 
-    pub const fn new(region: NesRegion) -> Self {
+    pub const fn new() -> Self {
         let mode = 0;
-        let step_cycles = Self::step_cycles(mode, region);
+        let step_cycles = Self::step_cycles(mode);
         Self {
-            region,
             step_cycles,
             step: 0,
             mode,
@@ -69,17 +65,11 @@ impl FrameCounter {
         }
     }
 
-    pub const fn set_region(&mut self, region: NesRegion) {
-        self.region = region;
-        self.step_cycles = Self::step_cycles(self.mode, region);
-    }
-
-    const fn step_cycles(mode: u8, region: NesRegion) -> [u32; 6] {
-        match (mode, region) {
-            (0, NesRegion::Auto | NesRegion::Ntsc | NesRegion::Dendy) => Self::STEP4_CYCLES_NTSC,
-            (0, NesRegion::Pal) => Self::STEP4_CYCLES_PAL,
-            (_, NesRegion::Auto | NesRegion::Ntsc | NesRegion::Dendy) => Self::STEP5_CYCLES_NTSC,
-            (_, NesRegion::Pal) => Self::STEP5_CYCLES_PAL,
+    const fn step_cycles(mode: u8) -> [u32; 6] {
+        if mode == 0 {
+            Self::STEP4_CYCLES_NTSC
+        } else {
+            Self::STEP5_CYCLES_NTSC
         }
     }
 
@@ -158,7 +148,7 @@ impl FrameCounter {
             self.write_delay -= 1;
             if self.write_delay == 0 {
                 self.mode = if val & 0x80 == 0x80 { 1 } else { 0 };
-                self.step_cycles = Self::step_cycles(self.mode, self.region);
+                self.step_cycles = Self::step_cycles(self.mode);
                 self.step = 0;
                 self.cycle = 0;
                 self.write_buffer = None;
@@ -180,7 +170,7 @@ impl FrameCounter {
         self.cycle = 0;
         if kind == ResetKind::Hard {
             self.mode = 0;
-            self.step_cycles = Self::step_cycles(self.mode, self.region);
+            self.step_cycles = Self::step_cycles(self.mode);
             // After reset, APU acts as if $4017 was written 9-12 clocks before first instruction,
             // Reset acts as if $00 was written to $4017
             self.write(0x00, 0);

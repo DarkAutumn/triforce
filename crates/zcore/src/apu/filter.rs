@@ -7,7 +7,6 @@
 // see the module docs on `apu`.
 #![allow(missing_docs)]
 
-use crate::common::NesRegion;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::TAU;
 
@@ -95,7 +94,6 @@ impl HighPass {
 /// rather than by filtering afterwards.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FilterChain {
-    pub region: NesRegion,
     /// First-order high-pass at 90 Hz.
     pub high_pass_90: HighPass,
     /// First-order high-pass at 440 Hz.
@@ -114,12 +112,11 @@ impl FilterChain {
     /// how loud it is is not this change's business.
     pub const OUTPUT_GAIN: f32 = 0.4715;
 
-    pub fn new(region: NesRegion, output_rate: f32) -> Self {
+    pub fn new(output_rate: f32) -> Self {
         // TODO: Support famicom filter selection
         // // first-order high-pass filter at 37 Hz
         // HighPass::new(output_rate, 37.0),
         Self {
-            region,
             high_pass_90: HighPass::new(output_rate, 90.0),
             high_pass_440: HighPass::new(output_rate, 440.0),
             low_pass_14k: LowPass::new(output_rate, 14_000.0),
@@ -145,7 +142,7 @@ mod tests {
     /// the console's output rides on a large one.
     #[test]
     fn the_high_pass_stages_reject_dc() {
-        let mut chain = FilterChain::new(NesRegion::Ntsc, 44_100.0);
+        let mut chain = FilterChain::new(44_100.0);
         let mut samples = [0.25f32; 200_000];
         chain.filter(&mut samples);
         let settled = samples[samples.len() - 1];
@@ -159,7 +156,7 @@ mod tests {
     /// assist, and the high-pass tails run down through that range after every note.
     #[test]
     fn decaying_to_silence_leaves_no_denormals() {
-        let mut chain = FilterChain::new(NesRegion::Ntsc, 44_100.0);
+        let mut chain = FilterChain::new(44_100.0);
         let mut samples = [0.25f32; 4_000];
         chain.filter(&mut samples);
         let mut silence = [0.0f32; 200_000];

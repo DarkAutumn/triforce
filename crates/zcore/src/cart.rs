@@ -10,9 +10,8 @@
 //! the tier this belongs to and why.
 
 use crate::{
-    common::NesRegion,
+    bus::Bus,
     mapper::{self, Mapper},
-    memory::RamState,
     memory::{Memory, MemoryLayout, Src},
     ppu::Mirroring,
 };
@@ -81,10 +80,6 @@ pub struct Cart {
     pub name: String,
     /// The iNES/NES 2.0 header it was built from.
     pub header: NesHeader,
-    /// The region the cart runs in.
-    pub region: NesRegion,
-    /// How the cart's RAM was initialised at power-on.
-    pub ram_state: RamState,
     /// The board serving this cart.
     pub mapper: Mapper,
     /// All of the cart's memory, and the page tables that address it.
@@ -121,17 +116,8 @@ impl Cart {
         Self {
             name: "Empty Cart".to_string(),
             header: NesHeader::default(),
-            region: NesRegion::default(),
-            ram_state: RamState::default(),
             mapper: Mapper::none(),
-            memory: Self::build_memory(
-                prg_rom_size,
-                0,
-                chr_rom_size,
-                chr_ram_size,
-                false,
-                RamState::default(),
-            ),
+            memory: Self::build_memory(prg_rom_size, 0, chr_rom_size, chr_ram_size, false),
             chr_rom_size,
             chr_ram_size,
             prg_rom_size,
@@ -146,7 +132,6 @@ impl Cart {
         chr_rom_size: usize,
         chr_ram_size: usize,
         four_screen: bool,
-        ram_state: RamState,
     ) -> Memory {
         let mut memory = Memory::new(MemoryLayout {
             prg_rom: prg_rom_size,
@@ -161,7 +146,7 @@ impl Cart {
             chr_writable: chr_rom_size == 0,
             ciram: if four_screen { 4 * 1024 } else { 2 * 1024 },
         });
-        memory.fill_ram(ram_state);
+        memory.fill_ram(Bus::POWER_ON_RAM);
         memory
     }
 
@@ -171,19 +156,9 @@ impl Cart {
     ///
     /// If the NES header is corrupted, the ROM file cannot be read, or the data does not match
     /// the header, then an error is returned.
-    pub fn from_path<P: AsRef<Path>>(path: P, ram_state: RamState) -> Result<Self> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
-        Self::from_rom(path.to_string_lossy(), &mut Self::open(path)?, ram_state)
-    }
-
-    /// Load a cart from a path *without* selecting a board. See [`Cart::from_rom_unmapped`].
-    ///
-    /// # Errors
-    ///
-    /// If the ROM cannot be read, its header is invalid, or the data does not match the header.
-    pub fn from_path_unmapped<P: AsRef<Path>>(path: P, ram_state: RamState) -> Result<Self> {
-        let path = path.as_ref();
-        Self::from_rom_unmapped(path.to_string_lossy(), &mut Self::open(path)?, ram_state)
+        Self::from_rom(path.to_string_lossy(), &mut Self::open(path)?)
     }
 
     fn open(path: &Path) -> Result<BufReader<File>> {
@@ -200,10 +175,10 @@ impl Cart {
     ///
     /// ```no_run
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use zcore::{cart::Cart, memory::RamState};
+    /// use zcore::cart::Cart;
     ///
     /// let rom = std::fs::read("some_awesome_game.nes")?;
-    /// let cart = Cart::from_rom("some_awesome_game", &mut rom.as_slice(), RamState::Random)?;
+    /// let cart = Cart::from_rom("some_awesome_game", &mut rom.as_slice())?;
     ///
     /// println!("mapper {}", cart.mapper_num());
     /// println!("{} PRG-ROM bytes, battery: {}", cart.prg_rom().len(), cart.battery_backed());
@@ -215,12 +190,12 @@ impl Cart {
     ///
     /// If the NES header is invalid, the ROM data does not match the header, or no board
     /// implements the cart's mapper, then an error is returned.
-    pub fn from_rom<S, F>(name: S, rom_data: &mut F, ram_state: RamState) -> Result<Self>
+    pub fn from_rom<S, F>(name: S, rom_data: &mut F) -> Result<Self>
     where
         S: ToString,
         F: Read,
     {
-        let mut cart = Self::from_rom_unmapped(name, rom_data, ram_state)?;
+        let mut cart = Self::from_rom_unmapped(name, rom_data)?;
         // Which board each mapper number selects lives with the boards, in `Mapper::from_cart`.
         cart.mapper = Mapper::from_cart(&mut cart)?;
         info!("loaded ROM `{cart}`");
@@ -236,11 +211,7 @@ impl Cart {
     /// # Errors
     ///
     /// If the NES header is invalid, or the ROM data does not match the header.
-    pub fn from_rom_unmapped<S, F>(
-        name: S,
-        mut rom_data: &mut F,
-        ram_state: RamState,
-    ) -> Result<Self>
+    pub fn from_rom_unmapped<S, F>(name: S, mut rom_data: &mut F) -> Result<Self>
     where
         S: ToString,
         F: Read,
@@ -297,11 +268,6 @@ impl Cart {
         };
 
         let crc32 = Self::rom_crc32(&prg_rom, &chr_rom);
-        let region = match header.tv_mode {
-            1 if matches!(header.variant, NesVariant::INes | NesVariant::Nes2) => NesRegion::Pal,
-            3 if matches!(header.variant, NesVariant::INes | NesVariant::Nes2) => NesRegion::Dendy,
-            _ => NesRegion::default(),
-        };
 
         let mut memory = Self::build_memory(
             prg_rom_size,
@@ -309,7 +275,6 @@ impl Cart {
             chr_rom_size,
             chr_ram_size,
             header.flags & 0x08 == 0x08,
-            ram_state,
         );
         memory.region_mut(Src::PrgRom)[..prg_rom_size].copy_from_slice(&prg_rom);
         if chr_rom_size > 0 {
@@ -320,8 +285,6 @@ impl Cart {
         let mut cart = Self {
             name,
             header,
-            region,
-            ram_state,
             mapper: Mapper::none(),
             memory,
             chr_rom_size,
@@ -463,11 +426,6 @@ impl Cart {
             }
         }
         !crc
-    }
-
-    /// Sets the region this cart runs in.
-    pub const fn set_region(&mut self, region: NesRegion) {
-        self.region = region;
     }
 }
 
@@ -783,12 +741,8 @@ mod tests {
         ];
 
         for (byte, expected) in cases {
-            let cart = Cart::from_rom(
-                "test.nes",
-                &mut nes2_rom(byte).as_slice(),
-                RamState::AllZeros,
-            )
-            .unwrap_or_else(|err| panic!("byte 10 = {byte:#04X} should load: {err}"));
+            let cart = Cart::from_rom("test.nes", &mut nes2_rom(byte).as_slice())
+                .unwrap_or_else(|err| panic!("byte 10 = {byte:#04X} should load: {err}"));
             assert_eq!(cart.prg_ram_size, expected, "byte 10 = {byte:#04X}",);
         }
     }
@@ -797,12 +751,8 @@ mod tests {
     #[test]
     fn nes2_rejects_the_reserved_ram_shift() {
         for byte in [0x0F, 0xF0] {
-            let err = Cart::from_rom(
-                "test.nes",
-                &mut nes2_rom(byte).as_slice(),
-                RamState::AllZeros,
-            )
-            .expect_err("reserved shift should be rejected");
+            let err = Cart::from_rom("test.nes", &mut nes2_rom(byte).as_slice())
+                .expect_err("reserved shift should be rejected");
             assert!(
                 matches!(err, Error::InvalidHeader { byte: 10, .. }),
                 "byte 10 = {byte:#04X} gave {err}"

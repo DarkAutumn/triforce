@@ -1,15 +1,14 @@
-//! Tests for `Config::fceumm_compat` (quirks FQ-01..FQ-11). Each asserts the compat-on behaviour and,
-//! where it differs, that the default (hardware) behaviour is unchanged.
+//! Tests for the FCEUmm quirks (FQ-01..FQ-12), which zcore always reproduces. Each asserts the
+//! FCEUmm behaviour; the hardware behaviour each replaces is in `FCEUMM_QUIRKS.md`.
 
 use crate::{bus::Bus, cart::Cart, common::ResetKind, cpu::IrqFlags, mapper::Nrom};
 
 /// An NROM console spinning on `JMP $0000` in work RAM.
-fn console(compat: bool) -> Bus {
+fn console() -> Bus {
     let mut bus = Bus::default();
     let mut cart = Cart::empty();
     cart.mapper = Nrom::load(&mut cart).unwrap();
     bus.load_cart(cart);
-    bus.ppu.fceumm_compat = compat;
     bus.reset(ResetKind::Hard);
     for (addr, val) in [(0x0000u16, 0x4Cu8), (0x0001, 0x00), (0x0002, 0x00)] {
         bus.cpu_bus_write(addr, val);
@@ -31,33 +30,25 @@ fn ppu_dots_to_next_frame(bus: &mut Bus) -> u32 {
 
 #[test]
 fn fq06_reset_spends_no_cycles() {
-    assert_eq!(console(true).cpu.cycle, 0);
-    assert_eq!(console(false).cpu.cycle, 7);
+    assert_eq!(console().cpu.cycle, 0);
 }
 
 #[test]
 fn fq07_ppu_starts_on_the_post_render_line() {
-    let bus = console(true);
+    let bus = console();
     assert_eq!((bus.ppu.scanline, bus.ppu.cycle), (240, 2));
-    let bus = console(false);
-    // Hardware: line 0, a few dots in after the 7 reset cycles.
-    assert_eq!(bus.ppu.scanline, 0);
-    assert!(bus.ppu.cycle < 30, "{}", bus.ppu.cycle);
 }
 
 #[test]
 fn fq08_frame_ends_one_dot_into_line_240() {
-    let mut bus = console(true);
+    let mut bus = console();
     ppu_dots_to_next_frame(&mut bus);
     assert_eq!((bus.ppu.scanline, bus.ppu.cycle), (240, 1));
-    let mut bus = console(false);
-    ppu_dots_to_next_frame(&mut bus);
-    assert_eq!((bus.ppu.scanline, bus.ppu.cycle), (240, 0));
 }
 
 #[test]
 fn fq01_no_vblank_in_the_two_frames_after_reset() {
-    let mut bus = console(true);
+    let mut bus = console();
     let mut seen = [false; 3];
     for seen in &mut seen {
         let start = bus.ppu.frame_number();
@@ -67,47 +58,22 @@ fn fq01_no_vblank_in_the_two_frames_after_reset() {
         }
     }
     assert_eq!(seen, [false, false, true]);
-
-    let mut bus = console(false);
-    let start = bus.ppu.frame_number();
-    let mut seen = false;
-    while bus.ppu.frame_number() == start {
-        bus.ppu_clock();
-        seen |= bus.ppu.status_in_vblank;
-    }
-    // Hardware: line 0 to 240 has no VBlank, but the next frame does.
-    assert!(!seen);
-    let start = bus.ppu.frame_number();
-    while bus.ppu.frame_number() == start {
-        bus.ppu_clock();
-        seen |= bus.ppu.status_in_vblank;
-    }
-    assert!(seen);
 }
 
 #[test]
 fn fq09_odd_frames_drop_a_dot_with_rendering_off() {
-    let mut bus = console(true);
+    let mut bus = console();
     for _ in 0..3 {
         ppu_dots_to_next_frame(&mut bus);
     }
     let lens: Vec<u32> = (0..4).map(|_| ppu_dots_to_next_frame(&mut bus)).collect();
     assert_eq!(lens.iter().sum::<u32>(), 4 * 89_342 - 2, "{lens:?}");
     assert!(lens.contains(&89_341) && lens.contains(&89_342), "{lens:?}");
-
-    let mut bus = console(false);
-    ppu_dots_to_next_frame(&mut bus);
-    let lens: Vec<u32> = (0..4).map(|_| ppu_dots_to_next_frame(&mut bus)).collect();
-    assert_eq!(
-        lens,
-        vec![89_342; 4],
-        "rendering is off: hardware never skips"
-    );
 }
 
 #[test]
 fn fq05_nmi_requested_12_dots_after_vblank() {
-    let mut bus = console(true);
+    let mut bus = console();
     for _ in 0..2 {
         ppu_dots_to_next_frame(&mut bus);
     }
@@ -119,7 +85,7 @@ fn fq05_nmi_requested_12_dots_after_vblank() {
     assert!(!bus.ppu.nmi_pending, "the hardware NMI line is not used");
 
     // Taken at the end of the instruction during which it was requested.
-    let mut bus = console(true);
+    let mut bus = console();
     for _ in 0..2 {
         let start = bus.ppu.frame_number();
         while bus.ppu.frame_number() == start {
@@ -143,7 +109,7 @@ fn fq05_nmi_requested_12_dots_after_vblank() {
 
 #[test]
 fn fq03_status_read_sees_flags_as_of_the_instruction_start() {
-    let mut bus = console(true);
+    let mut bus = console();
     // Raised during the reading instruction: the read misses it and leaves it set.
     bus.ppu.status_in_vblank = true;
     bus.ppu.status_at_instr = 0;
@@ -165,27 +131,18 @@ fn fq03_status_read_sees_flags_as_of_the_instruction_start() {
 
 #[test]
 fn fq02_fq04_status_read_neither_suppresses_vblank_nor_cancels_nmi() {
-    let mut bus = console(true);
+    let mut bus = console();
     bus.ppu.scanline = bus.ppu.vblank_scanline;
     bus.ppu.cycle = 0;
     bus.ppu.fceu_nmi = 1;
     bus.ppu.read_status();
     assert!(!bus.ppu.prevent_vbl, "FQ-02: no suppression race");
     assert_eq!(bus.ppu.fceu_nmi, 1, "FQ-04: a read never cancels an NMI");
-
-    let mut bus = console(false);
-    bus.ppu.scanline = bus.ppu.vblank_scanline;
-    bus.ppu.cycle = 0;
-    bus.ppu.read_status();
-    assert!(
-        bus.ppu.prevent_vbl,
-        "hardware: reading on the edge suppresses VBlank"
-    );
 }
 
 #[test]
 fn fq04_enabling_nmi_during_vblank_delays_one_instruction() {
-    let mut bus = console(true);
+    let mut bus = console();
     bus.ppu.status_at_instr = 0x80;
     bus.write_ctrl(0x80);
     assert_eq!(bus.ppu.fceu_nmi, 2);
@@ -196,7 +153,7 @@ fn fq04_enabling_nmi_during_vblank_delays_one_instruction() {
     assert_eq!(bus.cpu.sp, sp.wrapping_sub(3), "then the NMI is taken");
 
     // Disabling never cancels a requested NMI.
-    let mut bus = console(true);
+    let mut bus = console();
     bus.ppu.fceu_nmi = 1;
     bus.write_ctrl(0x00);
     assert_eq!(bus.ppu.fceu_nmi, 1);
@@ -204,7 +161,7 @@ fn fq04_enabling_nmi_during_vblank_delays_one_instruction() {
 
 #[test]
 fn fq10_oam_dma_takes_512_cycles() {
-    let mut bus = console(true);
+    let mut bus = console();
     // STA $4014; NOP at $0010.
     for (addr, val) in [
         (0x0010u16, 0x8Du8),
@@ -257,7 +214,7 @@ fn start_dmc(bus: &mut Bus) {
 
 #[test]
 fn fq11_dmc_fetch_takes_four_cycles() {
-    let mut bus = console(true);
+    let mut bus = console();
     start_dmc(&mut bus);
     let steps = nop_steps(&mut bus, 1);
     assert_eq!(
@@ -269,7 +226,7 @@ fn fq11_dmc_fetch_takes_four_cycles() {
 
 #[test]
 fn fq12_dmc_fetches_once_per_eight_timer_periods() {
-    let mut bus = console(true);
+    let mut bus = console();
     start_dmc(&mut bus);
     let steps = nop_steps(&mut bus, 2000);
     let mut at = Vec::new();

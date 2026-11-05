@@ -5,8 +5,8 @@ use crate::formats::Domain;
 use anyhow::{Context, Result};
 use std::cell::RefCell;
 use zcore::control_deck::{Config, ControlDeck, HeadlessMode};
-use zcore::input::{JoypadBtnState, Player};
-use zcore::memory::{RamState, Src};
+use zcore::input::Player;
+use zcore::memory::Src;
 use zcore::video::VideoFilter;
 
 pub struct Zcore {
@@ -16,11 +16,8 @@ pub struct Zcore {
 impl Zcore {
     pub fn open(rom: &[u8]) -> Result<Zcore> {
         let mut cfg = Config::default();
-        cfg.ram_state = RamState::AllOnes;
         cfg.filter = VideoFilter::Pixellate;
         cfg.headless_mode = HeadlessMode::NO_AUDIO;
-        cfg.concurrent_dpad = true;
-        cfg.fceumm_compat = true;
         let mut deck = ControlDeck::with_config(cfg);
         deck.load_rom("zelda.nes", &mut &rom[..]).context("zcore load_rom")?;
         // Power-on spec (TFMOVIE v1): an empty, zero-filled battery, as the oracle does.
@@ -30,7 +27,7 @@ impl Zcore {
     }
 
     fn set_buttons(&mut self, buttons: u8) {
-        self.deck.joypad_mut(Player::One).buttons = JoypadBtnState::from_bits_truncate(buttons as u16);
+        self.deck.joypad_mut(Player::One).buttons = buttons;
     }
 
     fn row(bus: &zcore::bus::Bus) -> TraceRow {

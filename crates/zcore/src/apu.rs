@@ -20,7 +20,7 @@ use crate::{
         pulse::{OutputFreq, Pulse, PulseChannel},
         triangle::Triangle,
     },
-    common::{NesRegion, ResetKind},
+    common::ResetKind,
     cpu::Cpu,
 };
 use serde::{Deserialize, Serialize};
@@ -134,13 +134,11 @@ pub struct Apu {
     ///
     /// See [`Apu::set_sample_ratio`].
     pub sample_ratio: f32,
-    /// CPU clock rate for the current region, in Hz.
+    /// NTSC CPU clock rate, in Hz.
     pub clock_rate: f32,
     /// Whether the synthesiser's rate is stale and must be retuned at the next block boundary.
     #[serde(skip)]
     pub rate_dirty: bool,
-    /// The region the APU is timed for.
-    pub region: NesRegion,
     /// Whether cartridge expansion audio is mixed in.
     pub mapper_enabled: bool,
     /// Whether mixing is skipped entirely, as in headless runs.
@@ -151,7 +149,7 @@ pub struct Apu {
 
 impl Default for Apu {
     fn default() -> Self {
-        Self::new(NesRegion::default())
+        Self::new()
     }
 }
 
@@ -170,22 +168,21 @@ impl Apu {
     pub const CYCLE_SIZE: u32 = 10_000;
 
     /// Create a new APU instance.
-    pub fn new(region: NesRegion) -> Self {
-        let clock_rate = Cpu::region_clock_rate(region);
+    pub fn new() -> Self {
+        let clock_rate = Cpu::NTSC_CPU_CLOCK_RATE;
         let sample_rate = Self::DEFAULT_SAMPLE_RATE;
         Self {
-            frame_counter: FrameCounter::new(region),
+            frame_counter: FrameCounter::new(),
             master_clock: 0,
             cpu_cycle: 0,
             clock: 0,
             clock_rate,
-            region,
             pulse1: Pulse::new(PulseChannel::One, OutputFreq::Default),
             pulse2: Pulse::new(PulseChannel::Two, OutputFreq::Default),
             triangle: Triangle::new(),
-            noise: Noise::new(region),
-            dmc: Dmc::new(region),
-            filter_chain: FilterChain::new(region, sample_rate),
+            noise: Noise::new(),
+            dmc: Dmc::new(),
+            filter_chain: FilterChain::new(sample_rate),
             synth: Self::default_synth(),
             mix_clock: 0,
             mixed_level: 0.0,
@@ -201,12 +198,9 @@ impl Apu {
         }
     }
 
-    /// A synthesiser for the default region and rate, which is how a loaded save state gets one.
+    /// A synthesiser for the default rate, which is how a loaded save state gets one.
     pub fn default_synth() -> BandLimited {
-        Self::new_synth(
-            Cpu::region_clock_rate(NesRegion::default()),
-            Self::DEFAULT_SAMPLE_RATE,
-        )
+        Self::new_synth(Cpu::NTSC_CPU_CLOCK_RATE, Self::DEFAULT_SAMPLE_RATE)
     }
 
     fn new_synth(clock_rate: f32, sample_rate: f32) -> BandLimited {
@@ -304,7 +298,7 @@ impl Apu {
     #[inline]
     pub fn set_sample_rate(&mut self, sample_rate: f32) {
         self.sample_rate = sample_rate;
-        self.filter_chain = FilterChain::new(self.region, self.sample_rate / self.speed);
+        self.filter_chain = FilterChain::new(self.sample_rate / self.speed);
         self.synth = Self::new_synth(self.clock_rate, self.sample_rate / self.speed);
         self.rate_dirty = false;
     }
@@ -312,7 +306,7 @@ impl Apu {
     /// Set the frame speed of the APU, which affects the sampling rate.
     pub fn set_frame_speed(&mut self, speed: f32) {
         self.speed = speed;
-        self.filter_chain = FilterChain::new(self.region, self.sample_rate / self.speed);
+        self.filter_chain = FilterChain::new(self.sample_rate / self.speed);
         self.rate_dirty = true;
     }
 
@@ -690,20 +684,6 @@ impl Apu {
     #[inline(always)]
     pub const fn clear_dma_pending(&mut self) {
         self.dmc.dma_pending = false;
-    }
-
-    /// Sets the region, which re-times the frame counter, the noise and DMC period tables and the
-    /// filter chain.
-    pub fn set_region(&mut self, region: NesRegion) {
-        if self.region != region {
-            self.region = region;
-            self.clock_rate = Cpu::region_clock_rate(region);
-            self.filter_chain = FilterChain::new(region, self.sample_rate / self.speed);
-            self.synth = Self::new_synth(self.clock_rate, self.sample_rate / self.speed);
-            self.frame_counter.set_region(region);
-            self.noise.set_region(region);
-            self.dmc.set_region(region);
-        }
     }
     /// Resets the APU.
     pub fn reset(&mut self, kind: ResetKind) {

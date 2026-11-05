@@ -7,10 +7,7 @@
 // see the module docs on `apu`.
 #![allow(missing_docs)]
 
-use crate::{
-    apu::timer::Timer,
-    common::{NesRegion, ResetKind},
-};
+use crate::{apu::timer::Timer, common::ResetKind};
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
@@ -20,7 +17,6 @@ use tracing::trace;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[must_use]
 pub struct Dmc {
-    pub region: NesRegion,
     pub timer: Timer,
     pub force_silent: bool,
     pub irq_enabled: bool,
@@ -46,7 +42,7 @@ pub struct Dmc {
 
 impl Default for Dmc {
     fn default() -> Self {
-        Self::new(NesRegion::default())
+        Self::new()
     }
 }
 
@@ -54,14 +50,10 @@ impl Dmc {
     const PERIOD_TABLE_NTSC: [u16; 16] = [
         428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
     ];
-    const PERIOD_TABLE_PAL: [u16; 16] = [
-        398, 354, 316, 298, 276, 236, 210, 198, 176, 148, 132, 118, 98, 78, 66, 50,
-    ];
 
-    pub const fn new(region: NesRegion) -> Self {
+    pub const fn new() -> Self {
         Self {
-            region,
-            timer: Timer::preload(Self::period(region, 0)),
+            timer: Timer::preload(Self::period(0)),
             force_silent: false,
             irq_enabled: false,
             irq_pending: false,
@@ -142,21 +134,15 @@ impl Dmc {
         }
     }
 
-    const fn period(region: NesRegion, val: u8) -> u16 {
-        let index = (val & 0x0F) as usize;
-        match region {
-            NesRegion::Auto | NesRegion::Ntsc | NesRegion::Dendy => {
-                Self::PERIOD_TABLE_NTSC[index] - 1
-            }
-            NesRegion::Pal => Self::PERIOD_TABLE_PAL[index] - 1,
-        }
+    const fn period(val: u8) -> u16 {
+        Self::PERIOD_TABLE_NTSC[(val & 0x0F) as usize] - 1
     }
 
     /// $4010 DMC timer
     pub const fn write_timer(&mut self, val: u8) {
         self.irq_enabled = val & 0x80 == 0x80;
         self.loops = val & 0x40 == 0x40;
-        self.timer.period = Self::period(self.region, val);
+        self.timer.period = Self::period(val);
         if !self.irq_enabled {
             self.irq_pending = false;
         }
@@ -268,13 +254,9 @@ impl Dmc {
         }
     }
 
-    pub const fn set_region(&mut self, region: NesRegion) {
-        self.region = region;
-        self.timer.period = Self::period(region, 0);
-    }
     pub const fn reset(&mut self, kind: ResetKind) {
         self.timer.reset(kind);
-        self.timer.period = Self::period(self.region, 0);
+        self.timer.period = Self::period(0);
         self.timer.reload();
         self.timer.cycle += 1; // FIXME: Startup timing is slightly wrong, DMA tests fail with the
         // default

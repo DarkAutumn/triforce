@@ -6,17 +6,12 @@
 //! field order alone decides which of them share the dot loop's cache line - the draw thresholds
 //! are wanted per pixel, `mask_emphasis` once a frame. What the register *does* stays here, in an
 //! `impl Ppu` block, the same way a CPU-bus access lives with the state it reads.
-//!
-//! Region lives on [`Ppu::region`]; there is no second copy of it here.
 
 // The PPU's internal register and fetch state, whose meaning is the hardware's rather than this
 // crate's. Public for embedders and debuggers, not a stable surface - see the module docs on `ppu`.
 #![allow(missing_docs)]
 
-use crate::{
-    common::{NesRegion, ResetKind},
-    ppu::Ppu,
-};
+use crate::{common::ResetKind, ppu::Ppu};
 use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
 
@@ -114,25 +109,9 @@ impl Ppu {
 
     pub fn update_emphasis(&mut self) {
         self.mask_emphasis = u16::from(
-            match self.region {
-                NesRegion::Auto | NesRegion::Ntsc => self.mask_bits.intersection(
-                    Bits::EMPHASIZE_RED | Bits::EMPHASIZE_GREEN | Bits::EMPHASIZE_BLUE,
-                ),
-                NesRegion::Pal | NesRegion::Dendy => {
-                    // Red/Green are swapped for PAL/Dendy
-                    let mut emphasis = self.mask_bits.intersection(Bits::EMPHASIZE_BLUE);
-                    emphasis.set(
-                        Bits::EMPHASIZE_GREEN,
-                        self.mask_bits.contains(Bits::EMPHASIZE_RED),
-                    );
-                    emphasis.set(
-                        Bits::EMPHASIZE_RED,
-                        self.mask_bits.contains(Bits::EMPHASIZE_GREEN),
-                    );
-                    emphasis
-                }
-            }
-            .bits(),
+            self.mask_bits
+                .intersection(Bits::EMPHASIZE_RED | Bits::EMPHASIZE_GREEN | Bits::EMPHASIZE_BLUE)
+                .bits(),
         ) << 1;
     }
 

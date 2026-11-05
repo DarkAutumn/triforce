@@ -4,8 +4,8 @@
 
 use crate::{
     control_deck::{Config, ControlDeck, HeadlessMode},
-    input::{JoypadBtnState, Player},
-    memory::{RamState, Src},
+    input::Player,
+    memory::Src,
     video::VideoFilter,
 };
 use std::sync::Arc;
@@ -94,11 +94,8 @@ impl ZCore {
     /// Power on: CPU RAM $FF, battery PRG-RAM zeroed, no frame run yet.
     pub fn power_on(rom: Arc<Rom>) -> Self {
         let mut cfg = Config::default();
-        cfg.ram_state = RamState::AllOnes;
         cfg.filter = VideoFilter::Pixellate;
         cfg.headless_mode = HeadlessMode::NO_AUDIO;
-        cfg.concurrent_dpad = true;
-        cfg.fceumm_compat = true;
         let mut deck = ControlDeck::with_config(cfg);
         deck.load_rom("zelda.nes", &mut &rom.bytes[..])
             .expect("a validated Zelda ROM loads");
@@ -122,8 +119,7 @@ impl ZCore {
     /// Left, Right). With `render` false no pixel is produced; emulation is identical either way.
     pub fn run_frame(&mut self, buttons: u8, render: bool) {
         self.deck.bus_mut().ppu.skip_rendering = !render;
-        self.deck.joypad_mut(Player::One).buttons =
-            JoypadBtnState::from_bits_truncate(u16::from(buttons));
+        self.deck.joypad_mut(Player::One).buttons = buttons;
         self.deck.clock_frame().expect("zcore clock_frame");
         self.frame += 1;
         self.rendered = render;

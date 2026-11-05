@@ -9,7 +9,7 @@
 
 use crate::{
     apu::{Channel, envelope::Envelope, length_counter::LengthCounter, timer::Timer},
-    common::{NesRegion, ResetKind},
+    common::ResetKind,
 };
 use serde::{Deserialize, Serialize};
 
@@ -28,7 +28,6 @@ pub enum ShiftMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[must_use]
 pub struct Noise {
-    pub region: NesRegion,
     pub timer: Timer,
     pub shift: u16,
     pub shift_mode: ShiftMode,
@@ -39,7 +38,7 @@ pub struct Noise {
 
 impl Default for Noise {
     fn default() -> Self {
-        Self::new(NesRegion::default())
+        Self::new()
     }
 }
 
@@ -47,14 +46,10 @@ impl Noise {
     const PERIOD_TABLE_NTSC: [u16; 16] = [
         4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
     ];
-    const PERIOD_TABLE_PAL: [u16; 16] = [
-        4, 8, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778,
-    ];
 
-    pub const fn new(region: NesRegion) -> Self {
+    pub const fn new() -> Self {
         Self {
-            region,
-            timer: Timer::new(Self::period(region, 0)),
+            timer: Timer::new(Self::period(0)),
             shift: 1, // defaults to 1 on power up
             shift_mode: ShiftMode::Zero,
             length: LengthCounter::new(Channel::Noise),
@@ -77,14 +72,8 @@ impl Noise {
         self.force_silent = silent;
     }
 
-    const fn period(region: NesRegion, val: u8) -> u16 {
-        let index = (val & 0x0F) as usize;
-        match region {
-            NesRegion::Auto | NesRegion::Ntsc | NesRegion::Dendy => {
-                Self::PERIOD_TABLE_NTSC[index] - 1
-            }
-            NesRegion::Pal => Self::PERIOD_TABLE_PAL[index] - 1,
-        }
+    const fn period(val: u8) -> u16 {
+        Self::PERIOD_TABLE_NTSC[(val & 0x0F) as usize] - 1
     }
 
     pub const fn clock_quarter_frame(&mut self) {
@@ -104,7 +93,7 @@ impl Noise {
 
     /// $400E Noise timer
     pub const fn write_timer(&mut self, val: u8) {
-        self.timer.period = Self::period(self.region, val);
+        self.timer.period = Self::period(val);
         self.shift_mode = if (val & 0x80) == 0x80 {
             ShiftMode::One
         } else {
@@ -179,12 +168,9 @@ impl Noise {
         self.shift >>= 1;
         self.shift |= feedback << 14;
     }
-    pub const fn set_region(&mut self, region: NesRegion) {
-        self.region = region;
-    }
     pub fn reset(&mut self, kind: ResetKind) {
         self.timer.reset(kind);
-        self.timer.period = Self::period(self.region, 0);
+        self.timer.period = Self::period(0);
         self.length.reset(kind);
         self.envelope.reset(kind);
         self.shift = 1;

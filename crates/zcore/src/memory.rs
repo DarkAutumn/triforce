@@ -19,8 +19,8 @@
 //! Nametable mirroring is expressed as page entries pointing into the CIRAM region rather than as
 //! an address-munging function.
 //!
-//! Alongside the arena this module holds the small memory primitives the rest of the emulator
-//! shares: [`ConstArray`] for plain byte storage, and [`RamState`] for power-on fill.
+//! Alongside the arena this module holds [`ConstArray`], the plain byte storage the rest of the
+//! emulator shares.
 //!
 //! # Stability
 //!
@@ -33,7 +33,6 @@
 //! tier this belongs to and why.
 
 use crate::ppu::Mirroring;
-use rand::Rng;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{SeqAccess, Visitor},
@@ -43,7 +42,6 @@ use std::{
     fmt,
     marker::PhantomData,
     ops::{Deref, DerefMut, Index, IndexMut, Range, RangeInclusive},
-    str::FromStr,
 };
 
 /// Address bits translated within a single page. 1 KiB granularity.
@@ -591,10 +589,10 @@ impl Memory {
 
     /// Fill the cart's RAM as if the console had just been powered on: PRG-RAM, and CHR when the
     /// cart provides CHR-RAM rather than CHR-ROM.
-    pub fn fill_ram(&mut self, state: RamState) {
-        state.fill(self.region_mut(Src::PrgRam));
+    pub fn fill_ram(&mut self, val: u8) {
+        self.region_mut(Src::PrgRam).fill(val);
         if self.chr_writable {
-            state.fill(self.region_mut(Src::Chr));
+            self.region_mut(Src::Chr).fill(val);
         }
     }
 
@@ -862,86 +860,6 @@ where
         deserializer
             .deserialize_tuple(N, ArrayVisitor(PhantomData))
             .map(|data| Self { data })
-    }
-}
-
-/// RAM in a given state on startup.
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[must_use]
-pub enum RamState {
-    /// Every byte zero, which is what most emulators do.
-    #[default]
-    AllZeros,
-    /// Every byte $FF.
-    AllOnes,
-    /// Pseudo-random bytes, closest to a real console's power-on state.
-    Random,
-}
-
-impl RamState {
-    /// Return `RamState` options as a slice.
-    pub const fn as_slice() -> &'static [Self] {
-        &[Self::AllZeros, Self::AllOnes, Self::Random]
-    }
-
-    /// Return `RamState` as a `str`.
-    #[must_use]
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::AllZeros => "all-zeros",
-            Self::AllOnes => "all-ones",
-            Self::Random => "random",
-        }
-    }
-
-    /// Fills data slice based on `RamState`.
-    pub fn fill(&self, data: &mut [u8]) {
-        match self {
-            RamState::AllZeros => data.fill(0x00),
-            RamState::AllOnes => data.fill(0xFF),
-            RamState::Random => {
-                rand::rng().fill_bytes(data);
-            }
-        }
-    }
-}
-
-impl From<usize> for RamState {
-    fn from(value: usize) -> Self {
-        match value {
-            0 => Self::AllZeros,
-            1 => Self::AllOnes,
-            _ => Self::Random,
-        }
-    }
-}
-
-impl AsRef<str> for RamState {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl std::fmt::Display for RamState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            Self::AllZeros => "All $00",
-            Self::AllOnes => "All $FF",
-            Self::Random => "Random",
-        };
-        write!(f, "{s}")
-    }
-}
-
-impl FromStr for RamState {
-    type Err = &'static str;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "all-zeros" => Ok(Self::AllZeros),
-            "all-ones" => Ok(Self::AllOnes),
-            "random" => Ok(Self::Random),
-            _ => Err("invalid RamState value. valid options: `all-zeros`, `all-ones`, or `random`"),
-        }
     }
 }
 
