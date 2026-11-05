@@ -467,7 +467,8 @@ pub(crate) mod tests {
         ntsc_torture, // Tests PPU NTSC signal artifacts
         oam_read,     // Tests OAM reading ($2004)
         oam_stress,   // Stresses OAM ($2003) reads and writes ($2004)
-        open_bus,     // Tests PPU open bus behavior
+        #[ignore = "FQ-13: the PPU I/O latch never decays"]
+        open_bus, // Tests PPU open bus behavior
         palette,      // Tests simple scanline palette changes
         palette_ram,  // Tests palette RAM access
         #[ignore = "FQ-03: PPUSTATUS seen at instruction boundaries"]

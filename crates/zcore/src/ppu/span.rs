@@ -386,8 +386,8 @@ impl Bus {
             self.ppu.scroll.copy_x();
             self.ppu.spr_cover = ConstArray::new();
         }
-        // OAMADDR is held at $00 throughout.
-        self.ppu.write_oamaddr(0x00);
+        // OAMADDR is held at $00 throughout (an internal reset: the I/O latch is untouched).
+        self.ppu.oamaddr = 0x00;
         if self.ppu.is_prerender_scanline {
             // The pre-render line reloads Y from `t` part way through (280-304).
             for dot in from..=to {

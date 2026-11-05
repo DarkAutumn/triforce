@@ -790,7 +790,7 @@ impl Ppu {
         self.set_spr_overflow(false);
         self.reset_in_vblank();
         self.nmi_pending = false;
-        self.open_bus = 0; // Clear open bus every frame
+        // FQ-13: the I/O latch (`open_bus`) never decays; FCEUmm's `PPUGenLatch` keeps its value.
     }
 
     /// One dot of sprite evaluation (dots 65-256): odd dots read OAM, even dots write secondary
@@ -1173,12 +1173,13 @@ impl Ppu {
     ///   instruction survives it.
     /// - FQ-04: the read never cancels an NMI.
     /// - FQ-02: there is no read-before-VBlank suppression race.
+    /// - FQ-13: the returned byte (status bits over the latch's low five) becomes the I/O latch.
     pub fn read_status(&mut self) -> u8 {
         // Bits 5/6: a set during the instruction shows at once, a clear only from the next one.
         let status = (self.status_at_instr & 0x80)
             | ((self.read_status_bits() | self.status_at_instr) & 0x60)
             | (self.open_bus & 0x1F);
-        self.open_bus |= status & 0xE0;
+        self.open_bus = status; // FQ-13
         if self.status_at_instr & 0x80 != 0 {
             self.reset_in_vblank();
             self.status_at_instr &= !0x80;
@@ -1543,8 +1544,8 @@ impl Bus {
     // https://wiki.nesdev.org/w/index.php/PPU_OAM
     #[inline]
     fn spr_fetch_cycle(&mut self) {
-        // OAMADDR set to $00 on prerender and visible scanlines
-        self.ppu.write_oamaddr(0x00);
+        // OAMADDR is held at $00 (an internal reset: the CPU-facing I/O latch is untouched).
+        self.ppu.oamaddr = 0x00;
 
         match self.ppu.cycle & 0x07 {
             // Garbage NT sprite fetch (257, 265, 273, etc.)

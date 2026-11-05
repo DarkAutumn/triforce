@@ -30,6 +30,7 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 | FQ-10 | 512-cycle OAM DMA, run inside `STA $4014` | per-frame timing |
 | FQ-11 | 4-read DMC DMA | per-frame timing |
 | FQ-12 | DMC fetch timed by FCEUmm's per-instruction sound hook | per-frame timing |
+| FQ-13 | The PPU I/O latch never decays | CPU registers after $2002/open-bus reads (masked by the game: no RAM effect in the corpus) |
 
 ## FQ-01 — Two dead PPU frames after reset
 
@@ -203,6 +204,26 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   requests and IRQ, from Z3's `apu/dmc.rs`) and the CPU's DMC DMA; `dmc_dma_during_read4` and
   `dmc_basics` pass again.
 
+## FQ-13 — The PPU I/O latch never decays
+
+- **Hardware:** the PPU's CPU-facing data latch ("open bus", read back in $2002 bits 0-4 and from the
+  write-only registers) is a capacitor that decays to 0 within roughly 600 ms without a refresh. nesdev
+  "PPU registers" ("Open bus"); `ppu_open_bus`. TetaNES approximated the decay by clearing the latch at the
+  end of every VBlank.
+- **FCEUmm:** `PPUGenLatch` (`src/ppu.c:108`) is set by every register write (`B2000`-`B2007`,
+  `src/ppu.c:270-355`), by $2002 reads (`A2002`, `src/ppu.c:189-203`) and non-palette $2007 reads, and is
+  cleared only by `FCEUPPU_Reset` (`src/ppu.c:1166`); it never decays.
+- **Affects:** the low five bits of every $2002 read, hence A and the flags right after Zelda's
+  `LDA $2002` polls (e.g. `$E573`): `tf trace-diff` diverged there until this quirk. Zelda masks those
+  bits, so no RAM or digest domain changes in the corpus.
+- **Implemented:** `Ppu::stop_vblank` (no latch clear). Found together with two TetaNES hardware bugs
+  fixed in the same commit, which are not quirks: the PPU's internal OAMADDR reset during the sprite
+  fetches (`Bus::spr_fetch_cycle`, `Bus::sprite_fetch_dots`) wrote through `write_oamaddr` and so cleared
+  the latch on every rendered line; and a $2002 read OR-ed the status bits into the latch instead of
+  driving them (`Ppu::read_status`).
+- **Removal:** clear the latch at the end of VBlank again in `Ppu::stop_vblank` (or model the decay
+  time); the `open_bus` test ROM (`src/common.rs`) passes again.
+
 ## Not quirks
 
 - **OAM digest masking (comparison tool only).** FCEUmm stores all 8 bits of each sprite's attribute byte;
@@ -211,3 +232,14 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   involved; it disappears with the oracle in step 18c.
 - **Zero-filled battery PRG-RAM at power-on.** Part of the TFMOVIE v1 power-on spec (an empty battery
   file), applied by each backend's harness, not by emulation code.
+
+## Known differences not reproduced
+
+Seen in `tf trace-diff` (CPU registers between instructions) but invisible in every digest domain, so not
+reproduced:
+
+- **Sprite overflow flag.** zcore evaluates sprites like the hardware, including the diagonal OAM scan that
+  sets $2002 bit 5 spuriously; FCEUmm sets it only when a line has more than eight sprites
+  (`src/ppu.c:888`, `953`, `959`). Example: `chain-milestone1-62` frame 12000, `LDX $2002` at bank 6
+  `$A0F6` reads `$A0` on zcore and `$80` on FCEUmm. Zelda ignores the bit (no RAM, CHR, nametable, OAM or
+  pixel difference over the corpus).
