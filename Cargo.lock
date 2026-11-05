@@ -483,6 +483,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "movie"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "serde_json",
+]
+
+[[package]]
 name = "moxcms"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -954,6 +963,7 @@ dependencies = [
  "anyhow",
  "blake3",
  "clap",
+ "movie",
  "oracle",
  "rand",
  "rand_chacha",
@@ -1023,6 +1033,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
+ "sha1_smol",
  "thiserror",
  "tracing",
  "tracing-subscriber",
@@ -1033,6 +1044,7 @@ name = "zelda"
 version = "0.1.0"
 dependencies = [
  "indexmap",
+ "movie",
  "oracle",
  "rand",
  "rand_chacha",
@@ -1040,6 +1052,7 @@ dependencies = [
  "serde_json",
  "serde_yaml_ng",
  "toml",
+ "zcore",
  "zip",
 ]
 

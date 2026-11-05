@@ -2,7 +2,7 @@
 
 mod backend;
 mod corpus;
-mod formats;
+use movie as formats;
 mod ladder;
 mod oracle;
 mod palette;

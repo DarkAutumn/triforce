@@ -1,4 +1,5 @@
 //! Portable artifact formats: `TFMOVIE` v1 input movies and `TFGOLDEN` v1 per-frame digests.
+//! Shared by the `tf` tools, tests that replay corpus movies and the pool's movie recording.
 //!
 //! A movie starts from power-on, or — when its metadata names a `base` corpus movie (normally
 //! `power_on_to_start`, which ends on the first gameplay frame after registering LINK) — from the
@@ -26,6 +27,40 @@ pub struct Poke {
 
 pub fn poke_addr_allowed(addr: u16) -> bool {
     addr < 0x0800 || (0x6000..0x8000).contains(&addr)
+}
+
+/// A machine a movie can be played on.
+pub trait Playback {
+    fn run_frame(&mut self, buttons: u8);
+    fn poke(&mut self, addr: u16, value: u8);
+}
+
+/// Play `movie` on a freshly powered-on machine: its `base` chain first (loaded from `movies_dir`,
+/// `<name>.tfmovie`), then its inputs and pokes, including pokes tagged after the last frame.
+pub fn play(p: &mut dyn Playback, movie: &Movie, movies_dir: &Path) -> Result<()> {
+    play_base(p, movie, movies_dir)?;
+    let mut pokes = movie.pokes.iter().peekable();
+    for (k, &x) in movie.inputs.iter().enumerate() {
+        while let Some(q) = pokes.next_if(|q| q.frame as usize <= k) {
+            p.poke(q.addr, q.value);
+        }
+        p.run_frame(x);
+    }
+    for q in pokes {
+        p.poke(q.addr, q.value);
+    }
+    Ok(())
+}
+
+/// Bring a freshly powered-on machine to `movie`'s starting state: play its base (recursively), or
+/// nothing for a power-on movie.
+pub fn play_base(p: &mut dyn Playback, movie: &Movie, movies_dir: &Path) -> Result<()> {
+    if let Some(name) = movie.base() {
+        let base = Movie::load(&movies_dir.join(format!("{name}.tfmovie")))?;
+        ensure!(base.rom_sha1 == movie.rom_sha1, "base movie {name} is for a different ROM");
+        play(p, &base, movies_dir)?;
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, PartialEq)]

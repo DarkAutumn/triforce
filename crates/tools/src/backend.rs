@@ -86,29 +86,27 @@ pub fn digests(
     Ok(out)
 }
 
+struct Play<'a>(&'a mut dyn Backend);
+
+impl movie::Playback for Play<'_> {
+    fn run_frame(&mut self, buttons: u8) {
+        self.0.run_frame(buttons);
+    }
+    fn poke(&mut self, addr: u16, value: u8) {
+        self.0.poke(addr, value);
+    }
+}
+
 /// Bring a freshly powered-on `b` to `movie`'s starting state: play its base movie (recursively),
 /// or nothing for a power-on movie.
 pub fn play_base(b: &mut dyn Backend, movie: &Movie) -> Result<()> {
-    if let Some(name) = movie.base() {
-        let base = Movie::load(&crate::corpus::movie_path(name))?;
-        anyhow::ensure!(base.rom_sha1 == movie.rom_sha1, "base movie {name} is for a different ROM");
-        play_movie(b, &base)?;
-    }
-    Ok(())
+    movie::play_base(&mut Play(b), movie, &crate::corpus::corpus_dir().join("movies"))
 }
 
 /// Play `movie` (base included) on a freshly powered-on `b`, including pokes tagged after its last
 /// frame.
 pub fn play_movie(b: &mut dyn Backend, movie: &Movie) -> Result<()> {
-    play_base(b, movie)?;
-    let index = movie.poke_index();
-    let mut next = 0;
-    for (k, &x) in movie.inputs.iter().enumerate() {
-        apply_pokes(b, movie, &index, &mut next, k);
-        b.run_frame(x);
-    }
-    apply_pokes(b, movie, &index, &mut next, movie.inputs.len());
-    Ok(())
+    movie::play(&mut Play(b), movie, &crate::corpus::corpus_dir().join("movies"))
 }
 
 /// Replay `movie` on a freshly powered-on `b`, calling `each(k, &digests)` for records `0..=frames`

@@ -35,3 +35,32 @@ pub trait Nes {
         }
     }
 }
+
+#[cfg(feature = "zcore")]
+impl Nes for zcore::ZCore {
+    type State = zcore::MachineState;
+
+    fn run_frame(&mut self, buttons: u8, render: bool) {
+        zcore::ZCore::run_frame(self, buttons, render);
+    }
+
+    fn ram(&self) -> &[u8; 0x800] {
+        zcore::ZCore::ram(self)
+    }
+
+    fn prg_ram(&self) -> &[u8; 0x2000] {
+        zcore::ZCore::prg_ram(self)
+    }
+
+    fn poke(&mut self, addr: u16, value: u8) {
+        zcore::ZCore::poke(self, addr, value);
+    }
+
+    fn snapshot(&self) -> Self::State {
+        zcore::ZCore::snapshot(self)
+    }
+
+    fn restore(&mut self, state: &Self::State) {
+        zcore::ZCore::restore(self, state);
+    }
+}
