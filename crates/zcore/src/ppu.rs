@@ -800,16 +800,6 @@ impl Ppu {
         self.oam_eval_dots(cycle, cycle);
     }
 
-    /// Bit `i` set when OAM entry `i`'s Y byte puts it on `scanline` - the test sprite evaluation
-    /// makes of each entry it reads with the OAM address aligned.
-    #[inline]
-    fn y_in_range_mask(&self, scanline: u16, height: u16) -> u64 {
-        (0..64).fold(0, |mask, i| {
-            let y = u16::from(self.oamdata[i << 2]);
-            mask | (u64::from(scanline.wrapping_sub(y) < height) << i)
-        })
-    }
-
     /// Sprite evaluation over dots `from..=to` (within 65-256), the state held in locals for the
     /// run and stored once at the end.
     #[inline(always)]
@@ -901,10 +891,27 @@ impl Ppu {
             even_dot!();
             dot += 1;
         }
-        let mut y_in_range = None;
         while dot < to {
-            if !oam_eval_done
-                && !spr_in_range
+            let pairs = (to - dot + 1) / 2;
+            if oam_eval_done {
+                // Done: each pair reads OAM, steps the address and, past eight sprites, reloads
+                // the fetch from secondary OAM. A run of them leaves the last read and the address.
+                let last_read = if pairs == 1 {
+                    oamaddr
+                } else {
+                    (((oamaddr_hi + pairs as u8 - 1) & 0x3F) << 2) | (oamaddr_lo & 0x03)
+                };
+                oam_fetch = if secondary_oamaddr >= 0x20 {
+                    self.secondary_oamdata[usize::from(secondary_oamaddr) & 0x1F]
+                } else {
+                    self.oamdata[usize::from(last_read)]
+                };
+                oamaddr_hi = (oamaddr_hi + pairs as u8) & 0x3F;
+                oamaddr = (oamaddr_hi << 2) | (oamaddr_lo & 0x03);
+                dot += 2 * pairs;
+                break;
+            }
+            if !spr_in_range
                 && secondary_oamaddr < 0x20
                 && oamaddr_lo == 0
                 && oamaddr == oamaddr_hi << 2
@@ -912,12 +919,15 @@ impl Ppu {
                 // Scanning: a sprite out of range costs a pair that reads its Y, writes it to
                 // the same secondary OAM slot and steps to the next sprite. A run of them leaves
                 // only the last Y and the address.
-                let mask =
-                    *y_in_range.get_or_insert_with(|| self.y_in_range_mask(scanline, height));
-                let run = (mask >> oamaddr_hi)
-                    .trailing_zeros()
-                    .min(u32::from((to - dot + 1) / 2))
-                    .min(64 - u32::from(oamaddr_hi)) as u8;
+                let max = pairs.min(64 - u16::from(oamaddr_hi)) as u8;
+                let mut run = 0;
+                while run < max {
+                    let y = u16::from(self.oamdata[usize::from(oamaddr_hi + run) << 2]);
+                    if scanline.wrapping_sub(y) < height {
+                        break;
+                    }
+                    run += 1;
+                }
                 if run > 0 {
                     oam_fetch = self.oamdata[usize::from(oamaddr_hi + run - 1) << 2];
                     self.secondary_oamdata[usize::from(secondary_oamaddr) & 0x1F] = oam_fetch;
