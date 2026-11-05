@@ -1,10 +1,12 @@
 """Many live games at once for ``play-zelda.py``: one spawned process per game (stable-retro allows one emulator
 per process), each playing route ``milestone1`` with the promoted specialists at a paced frame rate.
 
-Every emulated frame is copied into a shared buffer the GUI reads; room/health changes and run results go through
-one shared status queue as dicts with ``cell`` and ``event`` (``start``, ``room``, ``end``, ``crash``).  After a
-run ends the cell shows its result for ``RESULT_PAUSE`` seconds and plays the next seed (``cell + k * cells``); a
-configuration error (e.g. a missing promoted model) stops the cell instead of retrying in a loop.
+A game copies its emulated frames into a shared buffer only while the GUI shows it (``GameGrid.show``); hidden
+games keep playing at the same pace.  Room/health changes and run results go through one shared status queue as
+dicts with ``game`` and ``event`` (``start``, ``room``, ``end``, ``crash``); ``room`` carries ``rooms``, the rooms
+entered so far in the run.  After a run ends the game keeps its result for ``RESULT_PAUSE`` seconds and plays the
+next seed (``game + k * games``); a configuration error (e.g. a missing promoted model) stops the game instead of
+retrying in a loop.
 """
 
 import multiprocessing as mp
@@ -49,24 +51,35 @@ class FramePacer:
 
 
 class _Reporter:
-    """The Runner's renderer hook: reports the specialist, room and health whenever one of them changes."""
+    """The Runner's renderer hook: reports the specialist, room, rooms entered and health whenever one changes."""
 
-    def __init__(self, cell: int, status):
-        self.cell = cell
+    def __init__(self, game: int, status):
+        self.game = game
         self.status = status
         self._last = None
+        self._location = None
+        self.rooms = 0
+
+    def start_run(self):
+        """Forgets the previous run's progress."""
+        self._last = self._location = None
+        self.rooms = 0
 
     def show(self, session, specialist, action, change):  # pylint: disable=unused-argument
         state = change.state
+        location = (state.level, state.location, state.in_cave)
+        if location != self._location:
+            self._location = location
+            self.rooms += 1
         info = (specialist, state.level, state.location, state.link.health, state.link.max_health)
         if info != self._last:
             self._last = info
-            self.status.put({'cell': self.cell, 'event': 'room', 'specialist': specialist, 'level': state.level,
-                             'room': state.location, 'health': float(state.link.health),
+            self.status.put({'game': self.game, 'event': 'room', 'specialist': specialist, 'level': state.level,
+                             'room': state.location, 'rooms': self.rooms, 'health': float(state.link.health),
                              'max_health': int(state.link.max_health)})
 
 
-def end_message(cell: int, seed: int, result) -> tuple[dict, bool]:
+def end_message(game: int, seed: int, result) -> tuple[dict, bool]:
     """The 'end' status message for a finished ``RunResult`` and whether it was a setup error.  ``outcome`` is the
     last room's (milestone | death | stuck) or 'error' for any error.  An error before the first step (e.g. no
     promoted model) is a setup error; one mid-game (e.g. wandering into an untagged room) is just another ending."""
@@ -74,14 +87,15 @@ def end_message(cell: int, seed: int, result) -> tuple[dict, bool]:
         outcome = 'error'
     else:
         outcome = result.rooms[-1].outcome if result.rooms else result.result
-    message = {'cell': cell, 'event': 'end', 'seed': seed, 'result': result.result, 'outcome': outcome,
+    message = {'game': game, 'event': 'end', 'seed': seed, 'result': result.result, 'outcome': outcome,
                'reason': result.reason}
     return message, result.result == 'error' and result.steps == 0
 
 
-def play_cell(cell: int, cells: int, device: str, fps: float, models_dir, frame_buf, frame_no, status,
-              stop) -> None:
-    """Process target: plays seeds ``cell, cell + cells, ...`` until ``stop`` is set."""
+def play_game(game: int, games: int, device: str, fps: float, models_dir, frame_buf, copied, emulated, shown,
+              status, stop) -> None:
+    """Process target: plays seeds ``game, game + games, ...`` until ``stop`` is set.  ``emulated`` counts every
+    frame; while ``shown`` is set each frame is also copied into ``frame_buf`` and counted in ``copied``."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
     import torch
     from .runner import Route, Runner
@@ -90,7 +104,8 @@ def play_cell(cell: int, cells: int, device: str, fps: float, models_dir, frame_
     torch.set_num_threads(1)    # N processes × all-core torch threads oversubscribes the machine
     session = GameSession(look_ahead=False)     # nothing is scored here; look-ahead frames would be shown and paced
     try:
-        runner = Runner(session=session, models_dir=models_dir, renderer=_Reporter(cell, status), device=device)
+        reporter = _Reporter(game, status)
+        runner = Runner(session=session, models_dir=models_dir, renderer=reporter, device=device)
         route = Route.load(ROUTE)
         pacer = FramePacer(fps)
         screen = np.frombuffer(frame_buf.get_obj(), dtype=np.uint8)
@@ -98,18 +113,21 @@ def play_cell(cell: int, cells: int, device: str, fps: float, models_dir, frame_
         def on_frame():
             if stop.is_set():
                 raise StopPlaying
-            with frame_buf.get_lock():
-                screen[:] = session.emu.get_screen().reshape(-1)
-            frame_no.value += 1
+            emulated.value += 1
+            if shown.value:
+                with frame_buf.get_lock():
+                    screen[:] = session.emu.get_screen().reshape(-1)
+                copied.value += 1
             pacer.wait()
 
         session.emu.on_frame = on_frame
         k = 0
         while True:
-            seed = cell + k * cells
-            status.put({'cell': cell, 'event': 'start', 'seed': seed})
+            seed = game + k * games
+            reporter.start_run()
+            status.put({'game': game, 'event': 'start', 'seed': seed})
             result = runner.run(route, seed)
-            message, setup_error = end_message(cell, seed, result)
+            message, setup_error = end_message(game, seed, result)
             status.put(message)
             if setup_error:
                 stop.wait()     # every seed would fail the same way at once; don't restart in a loop
@@ -120,38 +138,53 @@ def play_cell(cell: int, cells: int, device: str, fps: float, models_dir, frame_
     except StopPlaying:
         return
     except Exception as err:  # pylint: disable=broad-exception-caught
-        status.put({'cell': cell, 'event': 'crash', 'reason': f"{type(err).__name__}: {err}"})
+        status.put({'game': game, 'event': 'crash', 'reason': f"{type(err).__name__}: {err}"})
     finally:
         session.close()
 
 
 class GameGrid:
-    """Parent side: starts one game process per cell and exposes their latest frames and status messages."""
+    """Parent side: starts one process per game, exposes the shown games' latest frames and every status message.
+    The first ``shown`` games start shown (default: all)."""
 
-    def __init__(self, cells: int, device: str, fps: float, models_dir=None):
+    def __init__(self, games: int, device: str, fps: float, models_dir=None, shown: Optional[int] = None):
+        # pylint: disable=too-many-arguments, too-many-positional-arguments
         ctx = mp.get_context('spawn')
-        self.cells = cells
-        self._buffers = [ctx.Array('B', FRAME_BYTES) for _ in range(cells)]
-        self._counters = [ctx.Value('q', 0, lock=False) for _ in range(cells)]
+        self.games = games
+        shown = games if shown is None else shown
+        self._buffers = [ctx.Array('B', FRAME_BYTES) for _ in range(games)]
+        self._copied = [ctx.Value('q', 0, lock=False) for _ in range(games)]
+        self._emulated = [ctx.Value('q', 0, lock=False) for _ in range(games)]
+        self._shown = [ctx.Value('b', int(game < shown), lock=False) for game in range(games)]
         self._status = ctx.Queue()
         self._stop = ctx.Event()
         self._processes = [
-            ctx.Process(target=play_cell, name=f'play_grid-{cell}', daemon=True,
-                        args=(cell, cells, device, fps, None if models_dir is None else str(models_dir),
-                              self._buffers[cell], self._counters[cell], self._status, self._stop))
-            for cell in range(cells)]
+            ctx.Process(target=play_game, name=f'play_grid-{game}', daemon=True,
+                        args=(game, games, device, fps, None if models_dir is None else str(models_dir),
+                              self._buffers[game], self._copied[game], self._emulated[game], self._shown[game],
+                              self._status, self._stop))
+            for game in range(games)]
         self._stopped = False
 
     def start(self) -> None:
         for process in self._processes:
             process.start()
 
-    def frame(self, cell: int, since: int) -> Optional[tuple[int, np.ndarray]]:
-        """(frame number, RGB copy) of a cell's latest frame, or None when it is still frame ``since``."""
-        number = self._counters[cell].value
+    def show(self, game: int, shown: bool) -> int:
+        """Starts or stops copying a game's frames; returns its copied-frame count (a later frame is fresh)."""
+        self._shown[game].value = int(shown)
+        return self._copied[game].value
+
+    def emulated_frames(self) -> list[int]:
+        """Frames each game has emulated so far (shown or not)."""
+        return [counter.value for counter in self._emulated]
+
+    def frame(self, game: int, since: int) -> Optional[tuple[int, np.ndarray]]:
+        """(frame number, RGB copy) of a shown game's latest frame, or None when it is still frame ``since``."""
+        number = self._copied[game].value
         if number == since:
             return None
-        buffer = self._buffers[cell]
+        buffer = self._buffers[game]
         with buffer.get_lock():
             pixels = np.frombuffer(buffer.get_obj(), dtype=np.uint8).reshape(FRAME_SHAPE).copy()
         return number, pixels

@@ -38,15 +38,16 @@ def qapp():
 
 def test_parse_args_grid_scale_and_device():
     args = play_zelda.parse_args([])
-    assert (args.grid, args.scale, args.device, args.fps) == ((4, 3), 3, 'cuda', 60.0)
-    args = play_zelda.parse_args(['3x2', '--scale', '2', '--cpu'])
-    assert (args.grid, args.scale, args.device) == ((3, 2), 2, 'cpu')
+    assert (args.grid, args.scale, args.device, args.fps, args.games) == ((4, 3), 3, 'cuda', 60.0, 12)
+    args = play_zelda.parse_args(['3x2', '--scale', '2', '--cpu', '--games', '64'])
+    assert (args.grid, args.scale, args.device, args.games) == ((3, 2), 2, 'cpu', 64)
     assert play_zelda.parse_grid('8X12') == (8, 12)
     for bad in ('0x3', 'x3', '4*3', ''):
         with pytest.raises(argparse.ArgumentTypeError):
             play_zelda.parse_grid(bad)
-    with pytest.raises(SystemExit):
-        play_zelda.parse_args(['--scale', '0'])
+    for bad in (['--scale', '0'], ['3x2', '--games', '5']):
+        with pytest.raises(SystemExit):
+            play_zelda.parse_args(bad)
 
 
 def test_main_refuses_cuda_without_a_gpu(monkeypatch):
@@ -68,7 +69,7 @@ def test_only_setup_errors_stop_a_cell():
     message, setup_error = end_message(1, 3, run('error', 512, 'exit-wrong'))   # wandered into an untagged room
     assert (message['outcome'], setup_error) == ('error', False)
     message, setup_error = end_message(1, 3, run('failure', 90, 'death'))
-    assert message == {'cell': 1, 'event': 'end', 'seed': 3, 'result': 'failure', 'outcome': 'death',
+    assert message == {'game': 1, 'event': 'end', 'seed': 3, 'result': 'failure', 'outcome': 'death',
                        'reason': 'why'}
     assert not setup_error
 
@@ -99,25 +100,30 @@ def test_frame_pacer_paces_and_resyncs():
 class FakeGrid:
     """The GameGrid interface with canned frames and status messages."""
 
-    def __init__(self):
-        self.cells = 2
+    def __init__(self, games=2, messages=None):
+        self.games = games
+        self.shown = set()
         self.started = False
         self.stops = 0
         self.polls = 0
         self.pixels = np.zeros(FRAME_SHAPE, dtype=np.uint8)
         self.pixels[:] = (10, 200, 30)
-        self.messages = [
-            {'cell': 0, 'event': 'start', 'seed': 5},
-            {'cell': 0, 'event': 'room', 'specialist': 'stalfos-keese-gel', 'level': 1, 'room': 0x73, 'health': 2.5,
-             'max_health': 3},
-            {'cell': 0, 'event': 'end', 'seed': 5, 'result': 'failure', 'outcome': 'death', 'reason': 'died'},
+        self.messages = messages if messages is not None else [
+            {'game': 0, 'event': 'start', 'seed': 5},
+            {'game': 0, 'event': 'room', 'specialist': 'stalfos-keese-gel', 'level': 1, 'room': 0x73, 'rooms': 9,
+             'health': 2.5, 'max_health': 3},
+            {'game': 0, 'event': 'end', 'seed': 5, 'result': 'failure', 'outcome': 'death', 'reason': 'died'},
         ]
 
     def start(self):
         self.started = True
 
-    def frame(self, cell, since):
-        if cell == 0 and since != 1:
+    def show(self, game, shown):
+        (self.shown.add if shown else self.shown.discard)(game)
+        return 0
+
+    def frame(self, game, since):
+        if game == 0 and since != 1:
             return 1, self.pixels.copy()
         return None
 
@@ -144,7 +150,7 @@ def test_window_shows_frames_status_and_tally(qapp):  # pylint: disable=redefine
     text = first.strip_text()
     for part in ('#5', 'stalfos-keese-gel', 'L1 0x73', '2.5/3'):
         assert part in text
-    assert first.outcome == 'death'
+    assert first.state.outcome == 'death'
     assert second.image is None
     assert '1 deaths' in window.windowTitle()
 
@@ -155,6 +161,51 @@ def test_window_shows_frames_status_and_tally(qapp):  # pylint: disable=redefine
     polls = fake.polls
     window.tick()       # a late tick (e.g. Ctrl-C mid-tick) must not touch the grid or queue repaints
     assert fake.polls == polls
+
+
+def _room(game, rooms, health):
+    return {'game': game, 'event': 'room', 'specialist': 'ow-zora', 'level': 0, 'room': 0x38, 'rooms': rooms,
+            'health': health, 'max_health': 3}
+
+
+def test_a_cell_changes_game_only_when_its_game_enters_a_room_or_restarts(qapp):  # pylint: disable=redefined-outer-name, unused-argument
+    """4 games, 2 cells.  A hidden game that is further along (rooms entered, then hearts) takes a cell only when the
+    cell's game enters a new room or starts its next run (after its result showed), never mid-room.  The cell fades
+    out (old game still copying), switches at black, fades in; the other cell keeps its game."""
+    clock = {'now': 0.0}
+    fake = FakeGrid(games=4, messages=[_room(0, 1, 3.0), _room(1, 3, 1.0)])
+    window = play_zelda.Window(fake, cols=2, rows=1, scale=1)
+    window.clock = lambda: clock['now']
+    window.start()
+    window.tick()
+    assert window.shown == [0, 1] and fake.shown == {0, 1}    # nobody hidden is ahead yet
+
+    fake.messages = [_room(2, 5, 2.0), _room(3, 3, 0.5), _room(0, 1, 2.5)]     # game 0 is hit, same room
+    window.tick()
+    assert window.shown == [0, 1] and window.swaps == 0
+
+    fake.messages = [_room(0, 2, 2.5)]                                          # game 0 enters its next room
+    window.tick()
+    cell = window.views[0]
+    assert window.shown == [2, 1] and fake.shown == {0, 1, 2}
+    assert cell.game == 0 and cell.fading
+    clock['now'] = play_zelda.FADE_SECONDS / 2
+    window.tick()
+    assert cell.game == 0 and 0 < cell.fade_alpha() < 255
+    clock['now'] = play_zelda.FADE_SECONDS
+    window.tick()
+    assert cell.game == 2 and cell.state is window.states[2] and fake.shown == {1, 2}
+    clock['now'] = 2 * play_zelda.FADE_SECONDS
+    window.tick()
+    assert not cell.fading and cell.fade_alpha() == 0
+
+    fake.messages = [{'game': 1, 'event': 'end', 'seed': 1, 'result': 'failure', 'outcome': 'death', 'reason': ''}]
+    window.tick()
+    assert window.shown == [2, 1]                               # its DIED banner shows first
+    fake.messages = [{'game': 1, 'event': 'start', 'seed': 5}]
+    window.tick()
+    assert window.shown == [2, 3] and window.swaps == 2         # game 3 (3 rooms) is ahead of game 0 (2 rooms)
+    window.shutdown()
 
 
 def test_game_grid_streams_frames_from_a_real_game(models_dir):
