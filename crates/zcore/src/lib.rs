@@ -34,7 +34,7 @@ pub mod prelude {
         control_deck::{Config, ControlDeck, HeadlessMode},
         cpu::Cpu,
         input::{FourPlayer, Input, Player},
-        mapper::{Map, Mapper, MapperRevision},
+        mapper::{Map, Mapper},
         memory::RamState,
         ppu::{Mirroring, Ppu},
         video::Frame,
@@ -54,7 +54,7 @@ mod tests {
         },
         bus::{self, Bus},
         cpu::{IrqFlags, Status, instr::AddrMode},
-        mapper::{BOARD_LAYOUTS, MapperOps},
+        mapper::Mapper,
         memory::ConstArray,
         memory::Memory,
         ppu::{PaletteRam, frame::Frame as PpuFrame, mask, scroll::Scroll, sprite::Sprite},
@@ -136,7 +136,6 @@ mod tests {
         print_struct_layout!(
             Bus,
             cpu: Cpu,
-            mapper_ops: MapperOps,
             mapper: Mapper,
             memory: Memory,
             wram: Box<ConstArray<u8, { bus::size::WRAM }>>,
@@ -255,11 +254,6 @@ mod tests {
             skip_mixing: bool,
         );
 
-        // Board sizes come from `mapper.rs`'s `boards!` table, so a new board appears here
-        // without being added to a second list that would otherwise silently go stale.
         println!("Mapper enum: {} bytes", size_of::<Mapper>());
-        for (board, size) in BOARD_LAYOUTS {
-            println!("  {board:<15}: size {size:4}");
-        }
     }
 }

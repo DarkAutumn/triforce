@@ -64,16 +64,6 @@
     ]
   },
   {
-    "name": "dummy_reads",
-    "audio": false,
-    "frames": [
-      {
-        "number": 48,
-        "hash": 1419558795669194341
-      }
-    ]
-  },
-  {
     "name": "dummy_writes_oam",
     "audio": false,
     "frames": [

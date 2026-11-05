@@ -11,7 +11,7 @@ use crate::{
     cart::{self, Cart},
     common::{NesRegion, ResetKind},
     input::{FourPlayer, Joypad, Player},
-    mapper::{self, Bf909Revision, Mapper, MapperRevision, Mmc3Revision},
+    mapper,
     memory::RamState,
     ppu,
     video::{Frame, Video, VideoFilter},
@@ -59,27 +59,6 @@ bitflags! {
     }
 }
 
-/// Set of desired mapper revisions to use when loading a ROM matching the available mapper types.
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[must_use]
-#[non_exhaustive]
-pub struct MapperRevisionsConfig {
-    /// MMC3 mapper revision.
-    pub mmc3: Mmc3Revision,
-    /// BF909 mapper revision.
-    pub bf909: Bf909Revision,
-}
-
-impl MapperRevisionsConfig {
-    /// Set the desired mapper revision to use when loading a ROM matching the available mapper types.
-    pub const fn set(&mut self, rev: MapperRevision) {
-        match rev {
-            MapperRevision::Mmc3(rev) => self.mmc3 = rev,
-            MapperRevision::Bf909(rev) => self.bf909 = rev,
-        }
-    }
-}
-
 /// Control deck configuration settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -102,8 +81,6 @@ pub struct Config {
     pub channels_enabled: [bool; Apu::MAX_CHANNEL_COUNT],
     /// Headless mode.
     pub headless_mode: HeadlessMode,
-    /// Which mapper revisions to emulate for any ROM loaded that uses this mapper.
-    pub mapper_revisions: MapperRevisionsConfig,
     /// Whether to emulate PPU warmup where writes to certain registers are ignored. Can result in
     /// some games not working correctly.
     ///
@@ -135,7 +112,6 @@ impl Default for Config {
             concurrent_dpad: false,
             channels_enabled: [true; Apu::MAX_CHANNEL_COUNT],
             headless_mode: HeadlessMode::empty(),
-            mapper_revisions: MapperRevisionsConfig::default(),
             emulate_ppu_warmup: false,
             clear_audio_on_clock: true,
             fceumm_compat: false,
@@ -170,8 +146,6 @@ pub struct ControlDeck {
     clear_audio_on_clock: bool,
     /// The currently loaded ROM [`Cart`], if any.
     loaded_rom: Option<LoadedRom>,
-    /// Mapper revisions to emulate for any ROM loaded that matches the given mappers.
-    mapper_revisions: MapperRevisionsConfig,
     /// Whether to auto-detect the region based on the loaded Cart.
     auto_detect_region: bool,
     /// The console: CPU, PPU, APU, input and the cart's board.
@@ -217,7 +191,6 @@ impl ControlDeck {
             video_frame_stale: true,
             clear_audio_on_clock: cfg.clear_audio_on_clock,
             loaded_rom: None,
-            mapper_revisions: cfg.mapper_revisions,
             auto_detect_region: cfg.region.is_auto(),
             bus,
         }
@@ -251,7 +224,6 @@ impl ControlDeck {
         }
         self.bus.load_cart(cart);
         self.loaded_rom = Some(loaded_rom.clone());
-        self.update_mapper_revisions();
         self.reset(ResetKind::Hard);
         Ok(loaded_rom)
     }
@@ -275,36 +247,10 @@ impl ControlDeck {
         // Page tables are derived state and aren't serialized, so rebuild them from the restored
         // mapper registers.
         self.bus.rebuild_mapper_state();
-        // A board revision is the player's choice, not the machine's - the state carries whichever
-        // one was selected when it was recorded, and restoring that would change IRQ timing
-        // underneath a running game.
-        self.update_mapper_revisions();
         // The console this deck was showing is gone; anything cached from it describes a machine
         // that is no longer here.
         self.video_frame_stale = true;
         Ok(())
-    }
-
-    /// Set the [`MapperRevision`] to emulate for the any ROM loaded that uses this mapper.
-    #[inline]
-    pub const fn set_mapper_revision(&mut self, rev: MapperRevision) {
-        self.mapper_revisions.set(rev);
-        self.update_mapper_revisions();
-    }
-
-    /// Internal method to update the loaded ROM mapper revision when `mapper_revisions` is
-    /// updated.
-    const fn update_mapper_revisions(&mut self) {
-        match &mut self.bus.mapper {
-            Mapper::Txrom(mapper) => {
-                mapper.set_revision(self.mapper_revisions.mmc3);
-            }
-            Mapper::Bf909x(mapper) => {
-                mapper.set_revision(self.mapper_revisions.bf909);
-            }
-            // Remaining mappers all have more concrete detection via ROM headers
-            _ => (),
-        }
     }
 
     /// Set the headless mode which can increase performance when the frame and audio outputs are
@@ -768,36 +714,6 @@ mod tests {
         assert!(
             deck.joypad_mut(Player::One).button(JoypadBtn::A.into()),
             "the state recorded A held, so the restored console has it held"
-        );
-    }
-
-    /// A board revision is the player's choice, not the machine's. A state recorded under another
-    /// one must not put it back and change IRQ timing underneath a running game.
-    #[test]
-    fn restoring_a_state_keeps_the_selected_mapper_revision() {
-        let mut deck = ControlDeck::with_config(Config {
-            ram_state: RamState::AllZeros,
-            ..Default::default()
-        });
-        let path = "test_roms/mapper/m004_txrom/rev_b.nes";
-        let mut rom = File::open(path).expect("test rom exists");
-        deck.load_rom(path, &mut rom).expect("test rom loads");
-
-        let revision = |deck: &ControlDeck| match &deck.bus().mapper {
-            Mapper::Txrom(board) => board.mmc3.revision,
-            _ => panic!("expected an MMC3 board"),
-        };
-
-        deck.set_mapper_revision(MapperRevision::Mmc3(Mmc3Revision::A));
-        let recorded_under_a = deck.bus().clone();
-        assert_eq!(revision(&deck), Mmc3Revision::A);
-
-        deck.set_mapper_revision(MapperRevision::Mmc3(Mmc3Revision::BC));
-        deck.load_bus(recorded_under_a).expect("restores");
-        assert_eq!(
-            revision(&deck),
-            Mmc3Revision::BC,
-            "the state carries A, but BC is what the player has selected now"
         );
     }
 

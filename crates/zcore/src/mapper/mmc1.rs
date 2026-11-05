@@ -1,4 +1,4 @@
-//! mmc1.
+//! The MMC1 chip (revisions B and C, the one Zelda's SNROM board carries).
 
 // Board register state, whose meaning is the mapper hardware's rather than this crate's. See the
 // module docs on `mapper` for what a board is.
@@ -7,22 +7,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{common::ResetKind, ppu::Mirroring};
 
-/// MMC1 Revision.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[must_use]
-pub enum Revision {
-    /// MMC1 Revision A
-    A,
-    /// MMC1 Revisions B & C
-    #[default]
-    BC,
-}
-
 /// The `MMC1` chip.
 #[derive(Clone, Serialize, Deserialize)]
 #[must_use]
 pub struct Mmc1 {
-    pub revision: Revision,
     pub write_just_occurred: u8,
     pub write_buffer: u8,       // $8000-$FFFF - 5 bit shift register
     pub shift_count: u8,        // How many times write_buffer has shifted
@@ -31,7 +19,6 @@ pub struct Mmc1 {
     pub prg_mode: bool,         // $8000-$9FFF bit 3
     pub prg_bank_select: bool,  // $8000-$9FFF bit 2
     pub mirroring: Mirroring,   // $8000-$9FFF bits 0-1
-    pub last_chr_reg: u16,      // Last chr register written to
     pub chr0: u8,               // $A000-$BFFF
     pub chr1: u8,               // $C000-$DFFF
     pub prg: u8,                // $E000-$FFFF bits 0-3
@@ -48,18 +35,16 @@ impl Mmc1 {
     const PRG_BANK_MASK: u8 = 0x0F;
     const PRG_RAM_DISABLED: u8 = 0x10; // 0b10000
 
-    pub fn new(revision: Revision) -> Self {
+    pub const fn new() -> Self {
         Self {
-            revision,
             write_just_occurred: 0x00,
             write_buffer: 0x00,
             shift_count: 0,
-            prg_ram_disabled: revision == Revision::A,
+            prg_ram_disabled: false,
             chr_mode: false,
             prg_mode: true,
             prg_bank_select: true,
             mirroring: Mirroring::SingleScreenA,
-            last_chr_reg: 0xA000,
             chr0: 0x00,
             chr1: 0x00,
             prg: 0x00,
@@ -162,11 +147,9 @@ impl Mmc1 {
                 self.chr_mode = (val & Self::CHR_MODE_MASK) != 0;
             }
             0xA000 => {
-                self.last_chr_reg = addr;
                 self.chr0 = val & Self::CHR_BANK_MASK;
             }
             0xC000 => {
-                self.last_chr_reg = addr;
                 self.chr1 = val & Self::CHR_BANK_MASK;
             }
             0xE000 => {
@@ -178,13 +161,10 @@ impl Mmc1 {
     }
 
     #[inline(always)]
-    pub fn prg_ram_enabled(&self) -> bool {
-        self.revision == Revision::A || !self.prg_ram_disabled
+    pub const fn prg_ram_enabled(&self) -> bool {
+        !self.prg_ram_disabled
     }
 
-    pub const fn set_revision(&mut self, revision: Revision) {
-        self.revision = revision;
-    }
     pub fn reset(&mut self, kind: ResetKind) {
         self.reset_buffer();
         self.prg_mode = true;
@@ -204,7 +184,6 @@ impl Mmc1 {
 impl std::fmt::Debug for Mmc1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Mmc1")
-            .field("revision", &self.revision)
             .field("write_just_occurred", &self.write_just_occurred)
             .field("write_buffer", &format_args!("0b{:08b}", self.write_buffer))
             .field("shift_count", &self.shift_count)
@@ -213,7 +192,6 @@ impl std::fmt::Debug for Mmc1 {
             .field("prg_mode", &self.prg_mode)
             .field("prg_bank_select", &self.prg_bank_select)
             .field("mirroring", &self.mirroring)
-            .field("last_chr_reg", &self.last_chr_reg)
             .field("chr0", &format_args!("${:02X}", self.chr0))
             .field("chr1", &format_args!("${:02X}", self.chr1))
             .field("prg", &format_args!("${:02X}", self.prg))

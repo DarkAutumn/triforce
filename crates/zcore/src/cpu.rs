@@ -19,7 +19,6 @@ use crate::{
     bus::Bus,
     common::{NesRegion, ResetKind},
     cpu::instr::{AddrMode, InstrRef},
-    mapper::MapperOps,
 };
 use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
@@ -524,9 +523,6 @@ impl Bus {
     /// Handle CPU interrupt requests, if any are pending.
     #[inline(always)]
     fn handle_interrupts(&mut self) {
-        let mapper_ops = self.mapper_ops;
-        let irq_pending_mapper = mapper_ops.intersects(MapperOps::IRQ) && self.mapper.irq_pending();
-        let dma_pending_mapper = mapper_ops.intersects(MapperOps::DMA) && self.mapper.dma_pending();
         let nmi_pending = self.ppu.nmi_pending;
         let irq_pending_apu = self.apu.irq_pending();
         let dma_pending_apu = self.apu.dma_pending();
@@ -539,11 +535,6 @@ impl Bus {
                     .irq_flags
                     .insert(IrqFlags::DMA_DMC | IrqFlags::DMA_HALT | IrqFlags::DMA_DUMMY_READ);
             }
-        } else if dma_pending_mapper {
-            self.mapper.clear_dma_pending();
-            self.cpu
-                .irq_flags
-                .insert(IrqFlags::DMA_DMC | IrqFlags::DMA_HALT | IrqFlags::DMA_DUMMY_READ);
         }
 
         let status = self.cpu.status;
@@ -569,16 +560,12 @@ impl Bus {
         // The IRQ status at the end of the second-to-last cycle is what matters,
         // so keep the second-to-last status.
         flags.set(IrqFlags::PREV_RUN_IRQ, flags.contains(IrqFlags::RUN_IRQ));
-        let run_irq = (irq_pending_mapper | irq_pending_apu) & !status.intersects(Status::I);
+        let run_irq = irq_pending_apu & !status.intersects(Status::I);
         flags.set(IrqFlags::RUN_IRQ, run_irq);
 
         #[cfg(feature = "trace")]
         if !flags.contains(IrqFlags::PREV_NMI_PENDING) && flags.contains(IrqFlags::RUN_IRQ) {
-            trace!(
-                "IRQ: {} - CYC:{}",
-                irq_pending_mapper | irq_pending_apu,
-                self.cpu.cycle
-            );
+            trace!("IRQ: {} - CYC:{}", irq_pending_apu, self.cpu.cycle);
         }
     }
 

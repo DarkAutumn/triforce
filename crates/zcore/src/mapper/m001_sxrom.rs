@@ -9,20 +9,17 @@
 use crate::{
     cart::Cart,
     common::ResetKind,
-    mapper::{self, Map, Mapper, MapperOps, Mmc1, Mmc1Revision},
+    mapper::{self, Map, Mapper, Mmc1},
     memory::{Memory, Src},
     ppu::Mirroring,
 };
 use serde::{Deserialize, Serialize};
 
-/// `SxROM`/`MMC1` (Mapper 001).
+/// `SxROM`/`MMC1` (Mapper 001), MMC1B/C, up to 256K of PRG-ROM.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[must_use]
 pub struct Sxrom {
     pub mmc1: Mmc1,
-    pub submapper_num: u8,
-    /// 512K carts use a CHR register bit as the high PRG bank bit.
-    pub prg_select: bool,
 }
 
 impl Sxrom {
@@ -30,44 +27,27 @@ impl Sxrom {
     const PRG_WINDOW: usize = 16 * 1024;
     const CHR_WINDOW: usize = 4 * 1024;
     const PRG_BANK_MASK: u8 = 0x0F;
-    const PRG_BANK_SELECT_MASK: u8 = 0x10;
 
     // PPU $0000..=$0FFF 4K CHR Bank Switchable, or 8K across both in 8K mode
     // PPU $1000..=$1FFF 4K CHR Bank Switchable
     // CPU $6000..=$7FFF 8K PRG-RAM, write-protectable
     // CPU $8000..=$BFFF 16K PRG-ROM, switchable or fixed to first depending on mode
     // CPU $C000..=$FFFF 16K PRG-ROM, fixed to last or switchable depending on mode
-    pub fn load(cart: &mut Cart, revision: Mmc1Revision) -> Result<Mapper, mapper::Error> {
-        let mut sxrom = Self {
-            mmc1: Mmc1::new(revision),
-            submapper_num: cart.submapper_num(),
-            prg_select: cart.prg_rom_size == 0x80000,
-        };
+    pub fn load(cart: &mut Cart) -> Result<Mapper, mapper::Error> {
+        let mut sxrom = Self { mmc1: Mmc1::new() };
         sxrom.update_banks(&mut cart.memory);
         Ok(sxrom.into())
+    }
+
+    /// Clock the board once per CPU cycle: the busy-cycle counter that ignores rapid consecutive
+    /// writes. MMC1 has no IRQ.
+    #[inline(always)]
+    pub const fn clock(&mut self) {
+        self.mmc1.clock();
     }
 }
 
 impl Map for Sxrom {
-    fn registers(&self, out: &mut Vec<(&'static str, u32)>) {
-        out.push(("PRG", u32::from(self.mmc1.prg)));
-        out.push(("CHR 0", u32::from(self.mmc1.chr0)));
-        out.push(("CHR 1", u32::from(self.mmc1.chr1)));
-        out.push(("PRG mode 16K", u32::from(self.mmc1.prg_mode)));
-        out.push(("PRG bank select", u32::from(self.mmc1.prg_bank_select)));
-        out.push(("CHR mode 4K", u32::from(self.mmc1.chr_mode)));
-        out.push(("PRG-RAM disabled", u32::from(self.mmc1.prg_ram_disabled)));
-        // The 5-bit serial register a game is part-way through filling, which is what to look at
-        // when a bank write appears not to have taken effect.
-        out.push(("Shift register", u32::from(self.mmc1.write_buffer)));
-        out.push(("Shift count", u32::from(self.mmc1.shift_count)));
-    }
-    fn mapper_ops(&self) -> MapperOps {
-        // The busy-cycle counter that ignores rapid consecutive writes needs a per-cycle clock;
-        // MMC1 has no IRQ.
-        MapperOps::CLOCKED
-    }
-
     fn mirroring(&self) -> Mirroring {
         self.mmc1.mirroring
     }
@@ -81,51 +61,24 @@ impl Map for Sxrom {
 
     fn update_banks(&mut self, memory: &mut Memory) {
         let mmc1 = &self.mmc1;
-        // In 4K CHR mode the second CHR register supplies the extra PRG bank bit once it has been
-        // the most recently written one.
-        let extra_reg = if mmc1.last_chr_reg == 0xC000 && mmc1.chr_mode {
-            mmc1.chr1
-        } else {
-            mmc1.chr0
-        };
-        let prg_high = if self.prg_select {
-            extra_reg & Self::PRG_BANK_SELECT_MASK
-        } else {
-            0x00
-        };
-
-        if self.submapper_num == 5 {
-            // SUROM variants with fixed 32K PRG.
-            memory.map_prg(0x8000, Self::PRG_WINDOW, 0, Src::PrgRom);
-            memory.map_prg(0xC000, Self::PRG_WINDOW, 1, Src::PrgRom);
-        } else if mmc1.prg_mode {
+        if mmc1.prg_mode {
             if mmc1.prg_bank_select {
-                // $8000 switchable, $C000 fixed to the last bank of the 256K half.
-                memory.map_prg(
-                    0x8000,
-                    Self::PRG_WINDOW,
-                    i32::from(mmc1.prg | prg_high),
-                    Src::PrgRom,
-                );
+                // $8000 switchable, $C000 fixed to the last bank.
+                memory.map_prg(0x8000, Self::PRG_WINDOW, i32::from(mmc1.prg), Src::PrgRom);
                 memory.map_prg(
                     0xC000,
                     Self::PRG_WINDOW,
-                    i32::from(Self::PRG_BANK_MASK | prg_high),
+                    i32::from(Self::PRG_BANK_MASK),
                     Src::PrgRom,
                 );
             } else {
-                // $8000 fixed to the first bank of the half, $C000 switchable.
-                memory.map_prg(0x8000, Self::PRG_WINDOW, i32::from(prg_high), Src::PrgRom);
-                memory.map_prg(
-                    0xC000,
-                    Self::PRG_WINDOW,
-                    i32::from(mmc1.prg | prg_high),
-                    Src::PrgRom,
-                );
+                // $8000 fixed to the first bank, $C000 switchable.
+                memory.map_prg(0x8000, Self::PRG_WINDOW, 0, Src::PrgRom);
+                memory.map_prg(0xC000, Self::PRG_WINDOW, i32::from(mmc1.prg), Src::PrgRom);
             }
         } else {
             // 32K mode ignores the low bank bit.
-            let bank = i32::from((mmc1.prg & 0xFE) | prg_high);
+            let bank = i32::from(mmc1.prg & 0xFE);
             memory.map_prg(0x8000, Self::PRG_WINDOW, bank, Src::PrgRom);
             memory.map_prg(0xC000, Self::PRG_WINDOW, bank + 1, Src::PrgRom);
         }
@@ -150,10 +103,6 @@ impl Map for Sxrom {
         memory.set_mirroring(mmc1.mirroring);
     }
 
-    fn clock(&mut self) {
-        self.mmc1.clock();
-    }
-
     fn reset(&mut self, kind: ResetKind) {
         self.mmc1.reset(kind);
     }
@@ -165,14 +114,10 @@ mod tests {
     use crate::mapper::test_utils::{chr_peek, page_indexed_cart, prg_peek, write};
 
     /// 128K PRG-ROM (8 16K banks), 8K PRG-RAM, 64K CHR-ROM (16 4K banks).
-    fn load(revision: Mmc1Revision) -> (Mapper, Cart) {
-        let mut cart = page_indexed_cart(128 * 1024, 8 * 1024, 64 * 1024);
-        let mapper = Sxrom::load(&mut cart, revision).expect("valid mapper");
-        (mapper, cart)
-    }
-
     fn mmc1() -> (Mapper, Cart) {
-        load(Mmc1Revision::BC)
+        let mut cart = page_indexed_cart(128 * 1024, 8 * 1024, 64 * 1024);
+        let mapper = Sxrom::load(&mut cart).expect("valid mapper");
+        (mapper, cart)
     }
 
     /// Feeds a register through the serial port: five writes of one bit each, LSB first.
@@ -332,9 +277,9 @@ mod tests {
     }
 
     /// Bit 4 of the PRG register disables PRG-RAM, which must read as open bus rather than as
-    /// stale contents. MMC1A has no such line and ignores the bit.
+    /// stale contents.
     #[test]
-    fn prg_ram_disable_is_honoured_except_on_mmc1a() {
+    fn prg_ram_disable_is_honoured() {
         let (mut mapper, mut cart) = mmc1();
         assert_eq!(
             prg_peek(&mapper, &cart, 0x6000),
@@ -347,14 +292,6 @@ mod tests {
 
         serial_write(&mut mapper, &mut cart, 0xE000, 0x00);
         assert_eq!(prg_peek(&mapper, &cart, 0x6000), 0x5A, "re-enabled");
-
-        let (mut mapper, mut cart) = load(Mmc1Revision::A);
-        serial_write(&mut mapper, &mut cart, 0xE000, 0x10);
-        assert_eq!(
-            prg_peek(&mapper, &cart, 0x6000),
-            0x5A,
-            "MMC1A has no PRG-RAM enable line"
-        );
     }
 
     /// `update_banks` must rebuild every window from the registers alone, which is what

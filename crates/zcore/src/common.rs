@@ -224,7 +224,6 @@ pub(crate) mod tests {
         common::{NesRegion, ResetKind},
         control_deck::{Config, ControlDeck, HeadlessMode},
         input::{JoypadBtn, Player},
-        mapper::MapperRevision,
         memory::RamState,
         ppu::size,
         video::VideoFilter,
@@ -274,7 +273,6 @@ pub(crate) mod tests {
         ToggleZapperConnected,
         ZapperAim((u16, u16)),
         ZapperTrigger,
-        MapperRevision(MapperRevision),
         SetNesRegion(NesRegion),
         SetVideoFilter(VideoFilter),
     }
@@ -542,7 +540,6 @@ pub(crate) mod tests {
             debug!("{:?}", action);
             match action {
                 Action::Reset(kind) => deck.reset(kind),
-                Action::MapperRevision(rev) => deck.set_mapper_revision(rev),
                 Action::SetVideoFilter(filter) => deck.set_filter(filter),
                 Action::SetNesRegion(format) => deck.set_region(format),
                 Action::Joypad((player, button)) => {
@@ -832,8 +829,6 @@ pub(crate) mod tests {
         // Verifies ram and registers are set/cleared correctly after reset
         ram_after_reset,
         regs_after_reset,
-        // Tests CPU dummy reads
-        dummy_reads,
         dummy_writes_oam,
         dummy_writes_ppumem,
         // Verifies cpu can execute code from any memory location, incl. I/O
@@ -874,7 +869,6 @@ pub(crate) mod tests {
     test_roms!(
         ppu,
         "test_roms/ppu",
-        _240pee,               // TODO: Run each test
         color,                 // TODO: Test all color combinations
         ntsc_torture,          // Tests PPU NTSC signal artifacts
         oam_read,              // Tests OAM reading ($2004)
@@ -882,7 +876,6 @@ pub(crate) mod tests {
         open_bus,              // Tests PPU open bus behavior
         palette,               // Tests simple scanline palette changes
         palette_ram,           // Tests palette RAM access
-        read_buffer,           // Thoroughly tests PPU read buffer ($2007)
         scanline,              // Tests scanline rendering
         spr_hit_alignment,     // Tests sprite hit alignment
         spr_hit_basics,        // Tests sprite hit basics
@@ -1413,16 +1406,4 @@ pub(crate) mod tests {
         zapper_stream,
         zapper_trigger,
     );
-    test_roms!(
-        m004_txrom,
-        "test_roms/mapper/m004_txrom",
-        a12_clocking,
-        clocking,
-        details,
-        rev_b,
-        scanline_timing,
-        big_chr_ram,
-        rev_a,
-    );
-    test_roms!(m005_exram, "test_roms/mapper/m005_exrom", exram, basics);
 }

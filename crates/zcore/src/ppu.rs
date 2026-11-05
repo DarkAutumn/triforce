@@ -21,7 +21,6 @@
 use crate::{
     bus::Bus,
     common::{NesRegion, ResetKind},
-    mapper::MapperOps,
     memory::ConstArray,
     ppu::frame::Frame,
 };
@@ -1472,37 +1471,12 @@ impl Bus {
     /// Read a byte from CHR-ROM/RAM/CIRAM at a given address.
     #[inline(always)]
     pub(crate) fn chr_read(&mut self, addr: u16) -> u8 {
-        let served = if self.mapper_ops.intersects(MapperOps::SERVES_CHR_READS) {
-            let Self { mapper, memory, .. } = self;
-            mapper.chr_read(memory, addr)
-        } else {
-            None
-        };
-        let val = served.unwrap_or_else(|| self.memory.chr_peek(addr));
-        // After the fetch: MMC2/MMC4 flip their CHR latch on certain addresses and the byte being
-        // read must come from the pre-flip bank. MMC3's A12 counter does not affect the data, so
-        // it is unaffected by the ordering.
-        if self.mapper_ops.intersects(MapperOps::WATCHES_PPU_BUS) {
-            let Self { mapper, memory, .. } = self;
-            mapper.ppu_bus_addr(memory, addr);
-        }
-        val
+        self.memory.chr_peek(addr)
     }
 
     /// Peek a byte from CHR-ROM/RAM/CIRAM at a given address.
-    ///
-    /// The routing a debugger wants, with none of a fetch's side effects: the board gets first
-    /// refusal, and anything it does not serve itself comes from the page tables. Going straight
-    /// to [`Memory::chr_peek`](crate::memory::Memory::chr_peek) sees only the page tables, so the
-    /// fetches a board synthesises - MMC5's, mostly - read back as whatever happens to be banked
-    /// at that address instead.
     #[inline(always)]
     pub fn chr_peek(&self, addr: u16) -> u8 {
-        if self.mapper_ops.intersects(MapperOps::SERVES_CHR_READS)
-            && let Some(val) = self.mapper.chr_peek(&self.memory, addr)
-        {
-            return val;
-        }
         self.memory.chr_peek(addr)
     }
 
@@ -1515,8 +1489,8 @@ impl Bus {
     /// Route a read on the PPU bus: pattern tables and nametables through the board, palette RAM
     /// on the PPU itself.
     ///
-    /// Has side effects - it latches the PPU's open bus, and can move an MMC2 CHR latch or an MMC3
-    /// A12 counter. [`Bus::ppu_bus_peek`] observes without them.
+    /// Has a side effect - it latches the PPU's open bus. [`Bus::ppu_bus_peek`] observes without
+    /// it.
     #[inline]
     pub(crate) fn ppu_bus_read(&mut self, addr: u16) -> u8 {
         self.ppu.open_bus = match addr {
@@ -1851,12 +1825,7 @@ impl Bus {
         }
 
         self.ppu.clock_mask();
-        if self.ppu.scroll.delayed_update()
-            && (!self.ppu.mask_rendering_enabled || self.ppu.scanline > scanline::VISIBLE_END)
-        {
-            // MMC3 clocks using A12
-            self.notify_ppu_bus(self.ppu.scroll.addr());
-        }
+        self.ppu.scroll.delayed_update();
 
         // The pixel and the shift registers both want the visible dots, so the range is tested
         // once for the two of them rather than once each.
@@ -1934,8 +1903,6 @@ impl Bus {
         // for reading pre-palette data in $0000 - $3EFF
         let prev_open_bus = self.ppu.open_bus;
         let val = self.ppu_bus_read(addr);
-        // MMC3 clocks using A12
-        self.notify_ppu_bus(self.ppu.scroll.addr());
         self.ppu.open_bus = if addr < addr::PALETTE_START {
             let buffer = self.ppu.vram_buffer;
             self.ppu.vram_buffer = val;
@@ -1982,8 +1949,6 @@ impl Bus {
         );
         self.ppu.increment_vram_addr();
         self.ppu_bus_write(addr, val);
-        // MMC3 clocks using A12
-        self.notify_ppu_bus(self.ppu.scroll.addr());
     }
 
     // $2000 | RW  | PPUCTRL
@@ -2019,8 +1984,6 @@ impl Bus {
         let was_enabled = self.ppu.ctrl_nmi_enabled;
         self.ppu.write_ctrl(val);
         self.ppu.scroll.write_nametable_select(val);
-        // MMC5 tracks changes to PPUCTRL
-        self.mapper.ppu_write(0x2000, val);
         if self.ppu.fceumm_compat {
             // FQ-04: enabling NMI while VBlank is up requests a delayed NMI; disabling never
             // cancels one already requested.
@@ -2067,18 +2030,13 @@ impl Bus {
         let through = self.ppu.rendered_through();
         self.ppu.apply_color_bits(through);
         self.ppu.write_mask(val);
-        // MMC5 tracks changes to PPUMASK
-        self.mapper.ppu_write(0x2001, val);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        cart::Cart,
-        mapper::{Mmc1Revision, Sxrom},
-    };
+    use crate::{cart::Cart, mapper::Sxrom};
 
     /// A sprite at X=248 covers pixels 248-255; the last one is dot 256 and must be drawn.
     #[test]
@@ -2262,7 +2220,7 @@ mod tests {
     fn vram_vertical_mirror() {
         let mut bus = Bus::default();
         let mut cart = Cart::default();
-        cart.mapper = Sxrom::load(&mut cart, Mmc1Revision::BC).unwrap();
+        cart.mapper = Sxrom::load(&mut cart).unwrap();
         // Set vertical mirroring mode via 5 writes
         let mut val = 0b00_00_00_01_00;
         for _ in 0..5 {

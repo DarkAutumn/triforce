@@ -41,7 +41,7 @@ use crate::{
     common::{NesRegion, ResetKind},
     cpu::Cpu,
     input::{Input, Player},
-    mapper::{Mapper, MapperOps},
+    mapper::Mapper,
     memory::{ConstArray, Memory, RamState},
     ppu::Ppu,
 };
@@ -84,16 +84,6 @@ pub struct Bus {
     /// Central Processing Unit registers and cycle counters. What the CPU *does* is an
     /// `impl Bus` block in [`cpu`](crate::cpu), since every access moves the whole console.
     pub cpu: Cpu,
-    /// Which of the loaded board's optional hooks apply: a per-cycle clock, IRQ or DMA, audio,
-    /// watching every PPU bus address, or serving reads itself rather than from page tables.
-    ///
-    /// *Derived* from [`Map::mapper_ops`](crate::mapper::Map::mapper_ops) and not serialized;
-    /// writing it from outside desynchronizes dispatch from the board that is loaded.
-    //
-    // Cached so the hot paths gate each hook on a bit test instead of dispatching into every
-    // board unconditionally. Recomputed in `load_mapper` and `rebuild_mapper_state`.
-    #[serde(skip)]
-    pub mapper_ops: MapperOps,
     /// Picture Processing Unit.
     pub ppu: Ppu,
     /// The cartridge's board.
@@ -144,7 +134,6 @@ impl Bus {
             ppu: Ppu::new(region),
             mapper: Mapper::none(),
             memory: Memory::default(),
-            mapper_ops: MapperOps::empty(),
             apu: Apu::new(region),
             input: Input::new(region),
             open_bus: 0x00,
@@ -167,31 +156,11 @@ impl Bus {
     /// Copies the PPU's address space - `$0000-$2FFF`, banked and mirrored as it is right now -
     /// into `dst`.
     ///
-    /// Page tables and any reads the board synthesises are resolved here, so the copy is what the
-    /// PPU would fetch and the caller needs no knowledge of the board. Side-effect free: it will
-    /// not move an MMC2 CHR latch or an MMC3 A12 counter.
+    /// Page tables are resolved here, so the copy is what the PPU would fetch. Side-effect free.
     pub fn copy_ppu_bus(&self, dst: &mut [u8]) {
         for (addr, byte) in dst.iter_mut().enumerate().take(0x3000) {
             *byte = self.chr_peek(addr as u16);
         }
-    }
-
-    /// Copies the pattern tables, `$0000-$1FFF`, as the board maps them for a sprite fetch.
-    ///
-    /// Reports `false` where the board maps one CHR set, and leaves `dst` untouched because
-    /// [`Bus::copy_ppu_bus`] already holds those bytes. See
-    /// [`crate::mapper::Map::chr_peek_spr`] for the boards this exists for.
-    pub fn copy_spr_pattern_tables(&self, dst: &mut [u8]) -> bool {
-        if self.mapper.chr_peek_spr(&self.memory, 0).is_none() {
-            return false;
-        }
-        for (addr, byte) in dst.iter_mut().enumerate().take(0x2000) {
-            *byte = self
-                .mapper
-                .chr_peek_spr(&self.memory, addr as u16)
-                .unwrap_or_else(|| self.chr_peek(addr as u16));
-        }
-        true
     }
 
     /// The console's 2K of work RAM.
@@ -247,20 +216,9 @@ impl Bus {
     }
 
     /// Clocks everything the CPU's cycle drives: the board, the APU, input and the PPU.
-    // `inline(always)` rather than a hint: with only `#[inline]` the `MapperOps` bit tests below
-    // push this just over LLVM's automatic inlining threshold, so it stops being inlined into
-    // `Cpu::start_cycle` and each free bit test becomes a real out-of-line call every CPU cycle.
     #[inline(always)]
     pub fn cpu_clock(&mut self) {
-        let ops = self.mapper_ops;
-        if ops.intersects(MapperOps::CLOCKED) {
-            self.mapper.clock();
-        }
-        // Only a board with audio records anything: the buffer it writes into stays all zeroes
-        // otherwise, which is what the mixer wants to add.
-        if ops.intersects(MapperOps::AUDIO) {
-            self.apu.add_mapper_output(self.mapper.output());
-        }
+        self.mapper.clock();
         self.input.clock();
         self.apu.clock_lazy();
     }
@@ -278,12 +236,7 @@ impl Bus {
         };
         self.open_bus = match addr {
             0x0000..=0x07FF => self.wram[usize::from(addr)],
-            0x4100..=0xFFFF => self
-                .mapper_ops
-                .intersects(MapperOps::SERVES_PRG_READS)
-                .then(|| self.mapper.prg_read(addr))
-                .flatten()
-                .unwrap_or_else(|| self.memory.prg_peek(addr)),
+            0x4100..=0xFFFF => self.memory.prg_peek(addr),
             0x2002 => self.ppu.read_status(),
             0x2004 => self.ppu.read_oamdata(),
             0x2007 => self.read_data(),
@@ -306,12 +259,7 @@ impl Bus {
         };
         match addr {
             0x0000..=0x07FF => self.wram[usize::from(addr)],
-            0x4100..=0xFFFF => self
-                .mapper_ops
-                .intersects(MapperOps::SERVES_PRG_READS)
-                .then(|| self.mapper.prg_peek(addr))
-                .flatten()
-                .unwrap_or_else(|| self.memory.prg_peek(addr)),
+            0x4100..=0xFFFF => self.memory.prg_peek(addr),
             0x2002 => self.ppu.peek_status(),
             0x2004 => self.ppu.peek_oamdata(),
             0x2007 => self.peek_data(),
@@ -391,10 +339,6 @@ impl Bus {
         self.region = region;
         self.cpu.set_region(region);
         self.ppu.set_region(region);
-        // The board owns the tree's only other region-dependent timing: MMC5's expansion audio
-        // clocks its half-frame counter off the CPU clock rate, and its DMC channel off the
-        // region rate table, exactly as the APU's does.
-        self.mapper.set_region(region);
         self.apu.set_region(region);
         self.input.set_region(region);
         self.clock_sync();
@@ -441,40 +385,23 @@ impl Bus {
         }
     }
 
-    /// The cart's whole battery as one slice, with any board-held state brought up to date.
-    ///
-    /// PRG-RAM first, then whatever the board stages in
-    /// [`Src::BatteryExt`](crate::memory::Src::BatteryExt) - so this is what a `.srm` holds, and
-    /// for the overwhelming majority of boards it is PRG-RAM exactly, which is what other
-    /// emulators write too.
+    /// The cart's battery-backed RAM (PRG-RAM).
     pub fn sram(&mut self) -> &[u8] {
-        let Self { mapper, memory, .. } = self;
-        mapper.sync_battery(memory);
-        memory.sram()
+        self.memory.sram()
     }
 
     /// Replaces battery-backed cart RAM with raw bytes, as [`Bus::sram`] hands them out.
-    ///
-    /// For a frontend that keeps the battery in its own format and hands it back unwrapped.
     pub fn set_sram(&mut self, data: &[u8]) {
-        let Self { mapper, memory, .. } = self;
-        let sram = memory.sram_mut();
+        let sram = self.memory.sram_mut();
         let len = sram.len().min(data.len());
         sram[..len].copy_from_slice(&data[..len]);
-        // Whatever the board keeps outside PRG-RAM has to be told the bytes changed under it.
-        mapper.restore_battery(memory);
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        apu::noise::ShiftMode,
-        input::JoypadBtn,
-        mapper::{Cnrom, Nrom},
-        memory::Src,
-    };
+    use crate::{apu::noise::ShiftMode, input::JoypadBtn, mapper::Nrom, memory::Src};
 
     #[test]
     fn load_cart_values() {
@@ -506,9 +433,9 @@ mod test {
     #[test]
     fn load_cart_chr_rom() {
         let mut bus = Bus::default();
-        // Cnrom doesn't provide CHR-RAM
+        // A non-zero CHR-ROM size gives CHR-ROM rather than CHR-RAM.
         let mut cart = Cart::empty_sized(0x4000, 0x2000);
-        cart.mapper = Cnrom::load(&mut cart).unwrap();
+        cart.mapper = Nrom::load(&mut cart).unwrap();
         cart.memory.region_mut(Src::Chr).fill(0x66);
         bus.load_cart(cart);
 
@@ -798,35 +725,6 @@ mod test {
             0x00,
             "controller two is idle"
         );
-    }
-
-    /// Everything from $4100 up is the cartridge: the write goes to memory first and then to the
-    /// board, and reads come back through the page table.
-    #[test]
-    fn read_write_mapper() {
-        let mut bus = Bus::default();
-        // 16K of CHR-ROM, i.e. two 8K banks, so a bank switch is visible.
-        let mut cart = Cart::empty_sized(0x8000, 0x4000);
-        cart.mapper = Cnrom::load(&mut cart).expect("valid mapper");
-        cart.memory.region_mut(Src::Chr).fill(0x11);
-        cart.memory.region_mut(Src::Chr)[0x2000..].fill(0x22);
-        bus.load_cart(cart);
-
-        let read_chr = |bus: &mut Bus| {
-            bus.cpu_bus_write(0x2006, 0x00);
-            bus.cpu_bus_write(0x2006, 0x00);
-            bus.cpu_bus_read(0x2007); // discard the buffered read
-            bus.cpu_bus_read(0x2007)
-        };
-        assert_eq!(read_chr(&mut bus), 0x11, "CHR bank 0");
-
-        // CNROM takes its bank from any write to $8000-$FFFF.
-        bus.cpu_bus_write(0x8000, 0x01);
-        assert_eq!(read_chr(&mut bus), 0x22, "the write reached the board");
-
-        // Below $4100 is not the cartridge, so it must not reach the board.
-        bus.cpu_bus_write(0x4000, 0x00);
-        assert_eq!(read_chr(&mut bus), 0x22, "$4000 is the APU, not the mapper");
     }
 
     /// A hard reset re-fills WRAM from the configured RAM state; a soft reset leaves it alone.
