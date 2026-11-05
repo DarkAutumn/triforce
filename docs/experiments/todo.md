@@ -224,6 +224,13 @@ chain's death rooms, then the big ablation. Round 7 items 1–7 complete; versio
 
 ### Other open items
 
+- [ ] **Rust port: restore main's watch mode on the native pool.** Main's `play-zelda.py --games N` (more games
+  than cells; a cell switches to a better hidden game only on a new room or a new run, with a fade), the fps
+  readout in the window title and `--benchmark SECONDS` (main commit `8cc3012`) were written against the old
+  process-pool `GameGrid`; the merged `play_grid.GameGrid` is one native chain pool. Re-implement them there
+  (`show`/`frame` per game, `set_render` only for shown games) and keep `tests/test_play_zelda.py` covering them.
+- [ ] **Rust port: finish plan step 17** (`round8.md` "Open"): chain-2 fairy 0x5c dead-end entry, ow-moblin
+  explore/eval, `entry_states audit`, manifest command backfill.
 - [ ] **Swordless departure from the starting area (Lee, Nov 4).** Lee observes runs where Link leaves without
   taking the sword; these runs cannot win and waste training. Reduce how often this happens. His original
   training failed immediately on leaving the starting area swordless; that is an acceptable option, not a

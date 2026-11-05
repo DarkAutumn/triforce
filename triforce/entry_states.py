@@ -32,9 +32,12 @@ their monsters in later from the screen edges (RNG-driven), so they show one lay
 """
 
 import argparse
+import fcntl
 import glob
 import json
 import os
+import shlex
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -209,7 +212,9 @@ def cross_room(step: RouteStep, target: RouteStep, source: str, seed: int, itera
     stats = {'env_steps': 0, 'attempts': 0, 'seconds': 0.0}
     rooms = game_rooms() if rooms is None else rooms
     source_room = rooms.get((step.level, step.room, step.in_cave))
-    key_required = source_room is not None and source_room['treasure'] == 'key'
+    # Only dungeon rooms hold keys as room treasure. game.yaml also lists 'key' for overworld 0x5a (its room-item
+    # byte), which no exploration can satisfy: the milestone1-fairy build stopped there.
+    key_required = step.level != 0 and source_room is not None and source_room['treasure'] == 'key'
     initial = Game(seed=0, states_dir=str(states_dir)).load(source, randomize_rng=False, fresh_room=True)
     minimum_keys = initial.keys + int(key_required and not room_flags(initial, step.room) & FLAG_ITEM_TAKEN)
     direction = step.location.get_direction_to(target.location)
@@ -292,9 +297,10 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
 
 
 def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_step: int = 0,
-          source: str = START_STATE, states_dir: str = STATES_DIR) -> List[dict]:
+          source: str = START_STATE, states_dir: str = STATES_DIR, command: Optional[str] = None) -> List[dict]:
     """Runs one route chain per id (one thread each; exploration runs natively without the GIL) and merges them
-    into ``entry_states.json`` (a rebuilt file replaces its old entry)."""
+    into ``entry_states.json`` (a rebuilt file replaces its old entry; ``command``, the invocation, is recorded in
+    each entry)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def run(chain):
         return build_chain(chain, out, iterations, patience, log=lambda text: print(text, flush=True),
@@ -302,21 +308,28 @@ def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_
 
     with ThreadPoolExecutor(max_workers=len(chain_ids)) as pool:
         manifest = [entry for part in pool.map(run, chain_ids) for entry in part]
-    _merge_manifest(out, manifest)
+    _merge_manifest(out, manifest, command)
     return manifest
 
 
-def _merge_manifest(out: str, manifest: List[dict]):
-    """Adds ``manifest`` to ``<out>/entry_states.json`` (a rebuilt file replaces its old entry)."""
+def _merge_manifest(out: str, manifest: List[dict], command: Optional[str] = None):
+    """Adds ``manifest`` to ``<out>/entry_states.json`` (a rebuilt file replaces its old entry), with ``command``
+    stamped on each new entry when given.  Holds an exclusive lock on ``<out>/entry_states.json.lock`` so
+    concurrent ``build``/``path`` runs into one directory don't lose each other's entries."""
+    if command is not None:
+        for entry in manifest:
+            entry['command'] = command
     path = os.path.join(out, MANIFEST)
-    old = []
-    if os.path.exists(path):
-        with open(path, encoding='utf-8') as file:
-            old = json.load(file)
-    new_files = {entry['file'] for entry in manifest}
-    merged = [entry for entry in old if entry['file'] not in new_files] + manifest
-    with open(path, 'w', encoding='utf-8') as file:
-        json.dump(sorted(merged, key=lambda e: (e['chain'], e['route_step'], e['file'])), file, indent=1)
+    with open(path + '.lock', 'w', encoding='utf-8') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        old = []
+        if os.path.exists(path):
+            with open(path, encoding='utf-8') as file:
+                old = json.load(file)
+        new_files = {entry['file'] for entry in manifest}
+        merged = [entry for entry in old if entry['file'] not in new_files] + manifest
+        with open(path, 'w', encoding='utf-8') as file:
+            json.dump(sorted(merged, key=lambda e: (e['chain'], e['route_step'], e['file'])), file, indent=1)
 
 
 def route_step_index(route: str, location: MapLocation, entry: str) -> Optional[int]:
@@ -333,7 +346,8 @@ def path_route_fields(route: Optional[str], level: int, room: int, entry: str) -
 
 
 def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iterations: int, patience: int,
-               log: Callable = print, route: Optional[str] = None, states_dir: str = STATES_DIR) -> List[dict]:
+               log: Callable = print, route: Optional[str] = None, states_dir: str = STATES_DIR,
+               command: Optional[str] = None) -> List[dict]:
     """Walks ``rooms`` in order from ``source`` (a state in the room before the first of them), writing each room's
     entry state.  Go-Explore only has to enter the next room, whatever the objective wants, so this works for rooms
     off a route (e.g. Dungeon 1's north rooms toward the bow) and for a route the objective doesn't follow.  With
@@ -364,7 +378,7 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
                          **path_route_fields(route, goal.level, goal.room, goal.entry), **stats})
         log(f"{label}: {stats['steps']} steps, {stats['env_steps']} env steps, {time.time() - started:.0f}s")
         source, current = path, target
-    _merge_manifest(out, manifest)
+    _merge_manifest(out, manifest, command)
     return manifest
 
 
@@ -467,6 +481,7 @@ def main(argv=None):
     audit_parser.add_argument('--output', default=None, help="also write the rows as JSON")
     args = parser.parse_args(argv)
     states_dir = str(STATES_DIR)
+    command = shlex.join(['python', '-m', 'triforce.entry_states', *(sys.argv[1:] if argv is None else argv)])
 
     if args.command == 'start':
         print(f"wrote {write_start_state(args.out)}")
@@ -476,13 +491,13 @@ def main(argv=None):
         rooms = [MapLocation(int(level), int(room, 16), False)
                  for level, room in (text.split(':') for text in args.rooms.split(','))]
         manifest = build_path(args.source, rooms, args.chain, args.out, args.iterations, args.patience,
-                              route=args.route, states_dir=states_dir)
+                              route=args.route, states_dir=states_dir, command=command)
         print(f"{len(manifest)} entry states in {args.out}")
         return 0
 
     if args.command == 'build':
         manifest = build([int(c) for c in args.chains.split(',')], args.out, args.iterations, args.patience,
-                         args.start_step, args.source, states_dir=states_dir)
+                         args.start_step, args.source, states_dir=states_dir, command=command)
         print(f"{len(manifest)} entry states in {args.out}")
         return 0
 

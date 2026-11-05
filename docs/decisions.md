@@ -493,3 +493,14 @@ Format: date — what changed — why — evidence.
   dev-dependency for it; `env` and `pool` dropped `oracle` and `flate2`. Goes with the oracle in step 18c.
 - **Evidence:** `CARGO_TARGET_DIR=target/agent-tests2 cargo test --release -p zelda --features zcore -p env -p pool`
   all green, including `pure::trainable_specialists_have_start_states`.
+
+## 2026-11-05 — Entry-state builder fixes during regeneration (plan step 17)
+
+- **Key guard only in dungeons.** `cross_room` required a room's 'key' treasure to be taken before leaving it;
+  game.yaml also lists 'key' for overworld 0x5a (its room-item byte), so every `milestone1-fairy` build stopped
+  there. The guard now applies to `level != 0` only.
+- **Manifest.** Concurrent `build`/`path` runs into one directory lock `entry_states.json` while merging; new
+  entries record the exact `python -m triforce.entry_states ...` command (plan step 17.9).
+- **FQ-13 and two TetaNES fixes** (open-bus latch) landed in zcore before regeneration; see
+  `crates/zcore/FCEUMM_QUIRKS.md` and `UPSTREAM.md`.
+- Results so far and the open chain-2 0x5c dead-end entry: `docs/experiments/round8.md`.
