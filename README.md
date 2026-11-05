@@ -34,8 +34,8 @@ The ROM isn't checked in. Put an uncompressed *Legend of Zelda (U)* ROM at `roms
 ## Use
 
 ```bash
-cargo test --workspace                                          # Rust tests
-.venv/bin/python -m pytest -q                                   # Python tests
+cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 min; see "Testing")
+.venv/bin/python -m pytest -q                                   # Python tests (~1 min)
 .venv/bin/python -m pytest -q -m e2e                           # only the end-to-end tests (untrained nets, seconds)
 .venv/bin/python -m triforce.play --state 1_44w_0               # load a savestate and look at the room
 .venv/bin/python -m triforce.play "MOVE E 16" "SWORD E"         # act; the session persists between calls
@@ -80,3 +80,21 @@ will diverge: check that the divergence is the intended one (`tf trace MOVIE --f
 `diff` the outputs), then regenerate the goldens, including the committed ones
 (`tf ladder-golden --short -o corpus/golden`), and commit those with the change. A re-recorded movie makes its
 golden stale (`ladder-diff` says so); regenerate it the same way.
+
+## Testing
+
+Two suites, both about a minute: `cargo test --release --workspace --features zelda/zcore` and
+`.venv/bin/python -m pytest -q`. Nothing trains a model from scratch; pipeline tests use untrained networks.
+
+| Layer | Where | What it guards |
+|---|---|---|
+| Emulator | `crates/zcore` unit tests, the TetaNES test ROMs (`src/common.rs`, `test_roms/`), `tests/machine.rs` | CPU (official and unofficial opcodes), PPU/APU timing, MMC1, iNES parsing, the `ZCore` API (render toggle, snapshot/restore, state files, the pinned power-on state), shipped states load |
+| Emulator regression | `tf ladder-diff` (above), `crates/tools/tests/cli.rs` | every corpus frame unchanged; the `tf` CLI end to end |
+| Formats | `crates/movie` | `TFMOVIE`/`TFGOLDEN` round trips and refusals |
+| Game model | `crates/zelda` (unit tests, `tests/game.rs`, `game_view.rs`, `objectives.rs`) | RAM decoding, masks, the option executor and its interrupts, look-ahead credit, room entry, objectives, hearts, linger |
+| Env | `crates/env` (unit tests, `tests/*.rs`) | configs, every reward/penalty term, end-condition precedence, observations, curriculum, chains, explorer |
+| Pool | `crates/pool` | lockstep determinism across thread counts, auto-reset, render toggle, pacing, failures, eval/chain adapters |
+| Python | `tests/` (`tests/native` for `triforce._native`) | PPO/buffer/metrics, CLIs (train, evaluate, eval-chain, run, play, entry_states, explore), watch grid, registry, the native wrapper's errors and pickling; `-m e2e` runs the end-to-end pipelines |
+
+Coverage (`cargo llvm-cov --release --workspace --features zelda/zcore --summary-only`,
+`pytest --cov=triforce`) guides where behaviour is untested; it is not a target.
