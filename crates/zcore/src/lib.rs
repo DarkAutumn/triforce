@@ -35,6 +35,3 @@ pub mod state_file;
 pub use cpu::{TraceHook, TraceRow};
 pub use machine::{MachineState, Rom, RomError, ZCore};
 pub use state_file::StateFormatError;
-
-#[cfg(test)]
-mod fceumm_compat_tests;

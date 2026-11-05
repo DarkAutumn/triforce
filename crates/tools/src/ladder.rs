@@ -31,7 +31,6 @@ macro_rules! ladder_domains {
                     p.oamaddr,
                     p.vram_buffer,
                     p.open_bus,
-                    p.dead_frames,
                 ]);
                 true
             }

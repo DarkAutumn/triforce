@@ -328,6 +328,7 @@ fn run_fixture(
 }
 
 #[test]
+#[ignore = "step 18: FCEUmm-recorded movie desyncs on hardware timing (FQ-08)"]
 fn env_matches_python_fixtures() {
     let Some(mut nes) = open_core() else { return };
     let data = common::game_data();

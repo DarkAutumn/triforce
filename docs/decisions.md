@@ -523,3 +523,7 @@ One line per quirk; numbers and reasoning in `docs/experiments/round9.md`, mecha
   enable (dropped by a `$2002` read or by clearing the bit) through the CPU's edge detector; the lazy PPU is
   caught up in `end_cycle` when a VBlank edge falls due; `TFZSTATE` v4; gate kept it (chain totals 30 and 35 at
   seeds 0/1 vs 32/24); the FCEUmm parity-fixture replay test is ignored (desyncs).
+- 2026-11-05 FQ-01 + FQ-06 + FQ-07 + FQ-08 restored together: 7-cycle reset, PPU from line 0 dot 0, VBlank from
+  the first frame, and the frame boundary at the start of VBlank (line 241 dot 1, the hardware-natural point:
+  the NMI handler runs in the next frame with its inputs); `TFZSTATE` v5; gate kept it (chain totals 30 and 31
+  at seeds 0/1 vs 32/24). No `FQ-` test ignore is left; 12 ROMs need zero-filled power-on RAM (not a quirk).

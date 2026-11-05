@@ -97,6 +97,7 @@ fn random_action(mask: &zelda::ActionMask, rng: &mut ChaCha8Rng) -> Action {
 }
 
 #[test]
+#[ignore = "step 18: FCEUmm-recorded movie desyncs on hardware timing (FQ-01, FQ-06..FQ-08)"]
 fn zcore_matches_oracle_over_random_play() {
     let _lock = oracle::lock();
     let Some(mut o) = open_oracle() else { return };

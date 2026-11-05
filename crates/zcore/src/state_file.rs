@@ -19,8 +19,9 @@ use crate::machine::{MachineState, Rom};
 /// File magic.
 pub const MAGIC: &[u8; 8] = b"TFZSTATE";
 /// Current format version (2: the PPU I/O latch decay, FQ-13; 3: the hardware DMC reader,
-/// FQ-11/FQ-12; 4: no instruction-start PPUSTATUS snapshot or FCEUmm NMI request, FQ-03..FQ-05).
-pub const VERSION: u16 = 4;
+/// FQ-11/FQ-12; 4: no instruction-start PPUSTATUS snapshot or FCEUmm NMI request, FQ-03..FQ-05;
+/// 5: no dead frames after reset, FQ-01).
+pub const VERSION: u16 = 5;
 const HEADER: usize = 8 + 2 + 20 + 1 + 4;
 
 /// A state file that can't be loaded for this ROM and build.
@@ -199,6 +200,7 @@ mod v1 {
         nmi_pending: bool,
         vram_buffer: u8,
         prevent_vbl: bool,
+        #[dropped]
         dead_frames: u8,
         #[dropped]
         status_at_instr: u8,

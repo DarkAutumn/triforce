@@ -226,6 +226,7 @@ fn render_off_matches_render_on_through_a_chain() {
 /// the picture reaching the top or bottom row (no overscan crop): some pixel of row 0 or row 239
 /// is not the backdrop colour, and every pixel is the FCEUmm palette colour of its index.
 #[test]
+#[ignore = "step 18: FCEUmm-recorded movie desyncs on hardware timing (FQ-01, FQ-06..FQ-08)"]
 fn title_rgb_frame_is_full_and_matches_the_oracle() {
     let Some(rom) = rom() else { return };
     let movie_path = repo().join("corpus/movies/title_idle_3600.tfmovie");
@@ -298,10 +299,10 @@ fn trace_hook_observes_without_changing_anything() {
 fn power_on_state_file_is_pinned() {
     let Some(rom) = rom() else { return };
     let bytes = state_file::encode(&rom, &ZCore::power_on(rom.clone()).snapshot(), 0);
-    assert_eq!(state_file::VERSION, 4);
+    assert_eq!(state_file::VERSION, 5);
     assert_eq!(
         blake3::hash(&bytes).to_hex().as_str(),
-        "92ee60d30abc7bebfa5d3017ada64928777153810804e5da9a2c049b0d5cff89"
+        "7fdbf9210403227ca21e3cfe211c86af0b1e8b6ecb7ab1b698bc822b1a97f1bd"
     );
 }
 

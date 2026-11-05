@@ -451,7 +451,6 @@ mod tests {
     /// Stopping is between instructions and nothing else, so a run broken in the middle ends up
     /// exactly where an unbroken one does.
     #[test]
-    #[ignore = "FQ-08/FQ-10: stopping mid-frame splits FCEUmm's in-instruction OAM DMA; not bisected"]
     fn stopping_and_resuming_leaves_the_same_console_as_running_through() {
         let target = pc_after(100);
 

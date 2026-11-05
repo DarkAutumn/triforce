@@ -223,7 +223,7 @@ pub struct Ppu {
     /// Sprite overflow count (> 8 on a scanline).
     pub overflow_count: u8,
 
-    /// Frames run since power-on (FQ-08: counted at dot 1 of line 240).
+    /// Frames run since power-on, counted when VBlank starts (line 241, dot 1).
     pub frame_count: u32,
     /// How much of the frame being drawn has had greyscale and colour emphasis applied.
     //
@@ -261,9 +261,6 @@ pub struct Ppu {
     pub vram_buffer: u8,
     /// Prevents VBL from being triggered this frame.
     pub prevent_vbl: bool,
-    /// FQ-01: frames left in which VBlank never sets - FCEUmm's `ppudead`, two frames after
-    /// every reset in which its CPU runs a whole frame without VBlank.
-    pub dead_frames: u8,
     /// The frame each I/O latch bit was last refreshed (driven by a register access), indexed by
     /// bit: a bit left alone for [`Ppu::OPEN_BUS_DECAY_FRAMES`] has decayed to 0.
     pub open_bus_refreshed: [u32; 8],
@@ -503,7 +500,6 @@ impl Ppu {
             frame_count: 0,
             color_bits_applied: 0,
 
-            dead_frames: 0,
             open_bus_refreshed: [0; 8],
         };
 
@@ -569,9 +565,9 @@ impl Ppu {
         self.open_bus_refreshed = [self.frame_count; 8];
     }
 
-    /// The master clock by which the PPU must be caught up for the CPU to see its next
-    /// frame-boundary (FQ-08, line 240 dot 1) or VBlank edge (line 241 and the pre-render line,
-    /// dot 1: /NMI rises and falls with them).
+    /// The master clock by which the PPU must be caught up for the CPU to see its next VBlank
+    /// edge (dot 1 of line 241 and of the pre-render line): /NMI rises and falls with them, and
+    /// the frame ends with the first.
     ///
     /// Counts dots from the current one assuming the odd-frame skip happens on the way,
     /// so it is never late; when it does not, the catch-up comes a dot early and this is asked
@@ -588,10 +584,9 @@ impl Ppu {
                 d => d,
             }
         };
-        let frame_end = dots_to(self.vblank_scanline - 1, 1);
         let vblank_start = dots_to(self.vblank_scanline, cycle::VBLANK);
         let vblank_end = dots_to(self.prerender_scanline, cycle::VBLANK);
-        let dots = frame_end.min(vblank_start).min(vblank_end) - 1;
+        let dots = vblank_start.min(vblank_end) - 1;
         self.master_clock + dots * u32::from(self.clock_divider)
     }
 
@@ -811,10 +806,11 @@ impl Ppu {
         }
     }
 
-    /// VBlank rises at dot 1 of line 241 and with it /NMI, if enabled (nesdev "NMI").
+    /// VBlank rises at dot 1 of line 241 and with it /NMI, if enabled (nesdev "NMI"). The frame
+    /// ends here: every line drawn, and the NMI handler runs in the next one.
     fn start_vblank(&mut self) {
-        // FQ-01: no VBlank in FCEUmm's dead frames after a reset.
-        if !self.prevent_vbl && self.dead_frames == 0 {
+        self.frame_count = self.frame_count.wrapping_add(1);
+        if !self.prevent_vbl {
             self.set_in_vblank(true);
             self.nmi_pending = self.ctrl_nmi_enabled;
         }
@@ -1339,16 +1335,10 @@ impl Ppu {
     pub fn reset(&mut self, kind: ResetKind) {
         self.master_clock = 0;
         self.cycle = 0;
-        // FQ-07: FCEUmm's frame starts at its frame boundary on the post-render line (dot 1
-        // here, FQ-08), with the PPU a dot ahead of where the CPU's cycle count puts it
-        // (measured: starting at dot 2 reproduces FCEUmm's instruction timing frame for
-        // frame). After a reset its CPU runs from scanline 240, a whole frame before the PPU
-        // completes its first.
-        self.cycle = 2;
-        self.scanline = self.vblank_scanline - 1;
-        self.is_visible_scanline = false;
+        self.scanline = 0;
+        self.is_visible_scanline = true;
         self.is_prerender_scanline = false;
-        self.is_render_scanline = false;
+        self.is_render_scanline = true;
         self.open_bus = 0x00;
         self.open_bus_refreshed = [0; 8];
 
@@ -1377,8 +1367,6 @@ impl Ppu {
         self.sprites = [Sprite::new(); 8];
         self.spr_cover = ConstArray::new();
         self.prevent_vbl = false;
-        // FQ-01: FCEUmm's two dead frames after every reset.
-        self.dead_frames = 2;
         self.frame_count = 0;
     }
 }
@@ -1658,13 +1646,12 @@ impl Bus {
         // === POST-RENDER (240/261) ===
         match self.ppu.scanline {
             s if s == self.ppu.vblank_scanline - 1 => {
-                // Every visible scanline is done, and this is where the frame counter advances -
-                // so it is the last point before a consumer can ask for the buffer. The mark stays
-                // at the end of the buffer through vblank, so a $2001 write there finds nothing
+                // Every visible scanline is done, so a consumer can ask for the buffer from here
+                // (the frame counter advances a line later, with VBlank). The mark stays at the
+                // end of the buffer through vblank, so a $2001 write there finds nothing
                 // outstanding rather than folding the bits into the finished frame a second time.
                 let (ppu, frame) = self.ppu_and_frame();
                 ppu.apply_color_bits(size::FRAME, frame);
-                // FQ-08: FCEUmm's frame ends one dot later (`Bus::fceumm_events`).
             }
             s if s == self.ppu.prerender_scanline => {
                 // No sprite evaluation happens on the pre-render line, so its sprite fetches
@@ -1700,11 +1687,6 @@ impl Bus {
         }
 
         self.ppu.cycle += 1;
-
-        // FQ-08: FCEUmm's frame boundary.
-        if self.ppu.cycle == 1 {
-            self.fceumm_events();
-        }
 
         // === RENDER LINE (scanlins 0-239, 261) ===
         if self.ppu.mask_rendering_enabled && self.ppu.is_render_scanline {
@@ -1742,20 +1724,6 @@ impl Bus {
             } else if self.ppu.is_prerender_scanline {
                 self.ppu.stop_vblank();
             }
-        }
-    }
-
-    /// FQ-08: FCEUmm's frame ends one dot into the post-render line, 341 dots before VBlank
-    /// rises (FQ-01: the dead frames after a reset count down with it).
-    ///
-    /// Measured against FCEUmm on the whole corpus with FQ-07's start position: every frame
-    /// boundary lands on the same instruction.
-    #[cold]
-    #[inline(never)]
-    fn fceumm_events(&mut self) {
-        if self.ppu.cycle == 1 && self.ppu.scanline == self.ppu.vblank_scanline - 1 {
-            self.ppu.frame_count = self.ppu.frame_count.wrapping_add(1);
-            self.ppu.dead_frames = self.ppu.dead_frames.saturating_sub(1);
         }
     }
 
@@ -2146,6 +2114,27 @@ mod tests {
         let status = bus.ppu.read_status();
         assert_eq!(status >> 7, 1);
         assert_eq!(bus.ppu.read_status_bits() >> 7, 0);
+    }
+
+    /// A frame ends when VBlank starts: line 241, dot 1, with the frame drawn and the NMI handler
+    /// still to run. Both the dot loop and the span catch-up land on it.
+    #[test]
+    fn frame_ends_when_vblank_starts() {
+        let mut bus = Bus::default();
+        for _ in 0..3 {
+            let frame = bus.ppu.frame_number();
+            while bus.ppu.frame_number() == frame {
+                bus.ppu_clock();
+            }
+            assert_eq!((bus.ppu.scanline, bus.ppu.cycle), (241, 1));
+        }
+        let frame = bus.ppu.frame_number();
+        let mut clock = bus.ppu.master_clock;
+        while bus.ppu.frame_number() == frame {
+            clock += 4;
+            bus.ppu_clock_to(clock);
+        }
+        assert_eq!((bus.ppu.scanline, bus.ppu.cycle), (241, 1));
     }
 
     #[test]

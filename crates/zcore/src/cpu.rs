@@ -420,8 +420,8 @@ impl Bus {
 
     /// End a CPU cycle.
     ///
-    /// The NMI edge detector polls /NMI here, so the PPU is caught up first if a VBlank edge (or
-    /// the frame boundary) may have come during the cycle.
+    /// The NMI edge detector polls /NMI here, so the PPU is caught up first if a VBlank edge (one
+    /// is also the frame boundary) may have come during the cycle.
     #[inline(always)]
     pub(crate) fn end_cycle(&mut self, increment: u8) {
         self.cpu.master_clock = self.cpu.master_clock.wrapping_add(u32::from(increment));
@@ -445,7 +445,7 @@ impl Bus {
     /// Catches the PPU up to where per-CPU-cycle clocking would have it now.
     ///
     /// Called before anything that observes or changes what the PPU does - a `$2000-$3FFF`
-    /// access, a board register write, a frame-boundary or VBlank-edge dot falling due, a trace
+    /// access, a board register write, a VBlank-edge dot falling due, a trace
     /// row - so it sees and changes the same dots it would have clocked one CPU cycle at a time.
     #[inline(always)]
     pub(crate) fn ppu_sync(&mut self) {
@@ -462,9 +462,9 @@ impl Bus {
         self.set_ppu_deadline();
     }
 
-    /// Sets [`Bus::ppu_deadline`] from the PPU's next frame-boundary or VBlank-edge dot.
+    /// Sets [`Bus::ppu_deadline`] from the PPU's next VBlank-edge dot.
     #[inline(always)]
-    fn set_ppu_deadline(&mut self) {
+    pub(crate) fn set_ppu_deadline(&mut self) {
         self.ppu_deadline = self.ppu.next_event_clock() + Cpu::PPU_OFFSET;
     }
 
@@ -742,7 +742,7 @@ impl Bus {
         self.set_ppu_deadline();
     }
 
-    /// Runs instructions until the frame counter advances (FQ-08), then synchronizes.
+    /// Runs instructions until the frame counter advances (VBlank starts), then synchronizes.
     pub fn clock_frame(&mut self) {
         // The PPU is caught up between frames; anything may have changed it, the APU or the
         // interrupt state since.
@@ -843,7 +843,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "FQ-06: reset spends no cycles; expects 7"]
     fn cycle_timing() {
         use super::*;
         let mut bus = Bus::default();

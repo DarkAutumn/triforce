@@ -182,11 +182,9 @@ impl Bus {
         let from = self.ppu.cycle + 1;
         let to = self.ppu.cycle + span;
 
-        // The FQ-08 frame boundary and the vblank edges, in dot order. Nothing else here reads
-        // what they change.
+        // The vblank edges. Nothing else here reads what they change.
         if from == cycle::VBLANK {
             self.ppu.cycle = cycle::VBLANK;
-            self.fceumm_events();
             if self.ppu.scanline == self.ppu.vblank_scanline {
                 self.ppu.start_vblank();
             } else if self.ppu.is_prerender_scanline {

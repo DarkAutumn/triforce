@@ -421,16 +421,12 @@ pub(crate) mod tests {
         // Verifies cpu can execute code from any memory location, incl. I/O
         exec_space_apu,
         exec_space_ppuio,
-        // Snapshot frames line up again without FQ-01's dead frames (hardware $2002 timing
-        // with FCEUmm's boot puts the result a frame later).
-        #[ignore = "FQ-01: FCEUmm's dead frames after reset shift the snapshot frame"]
         flag_concurrency,
         // Tests CPU several instruction combinations
         instr_abs,
         instr_abs_xy,
         instr_basics,
         instr_branches,
-        #[ignore = "FQ-01: FCEUmm's dead frames after reset shift the snapshot frame"]
         instr_brk,
         instr_imm,
         instr_imp,
@@ -442,10 +438,9 @@ pub(crate) mod tests {
         instr_rts,
         instr_special,
         instr_stack,
-        #[ignore = "FQ-01..FQ-08: remaining FCEUmm timing; not bisected"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         instr_timing,
         instr_zp,
-        #[ignore = "FQ-01: FCEUmm's dead frames after reset shift the snapshot frame"]
         instr_zp_xy,
         // Tests IRQ/NMI timings
         int_branch_delays_irq,
@@ -453,7 +448,6 @@ pub(crate) mod tests {
         int_irq_and_dma,
         int_nmi_and_brk,
         int_nmi_and_irq,
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot timing; not bisected"]
         overclock,
         // Tests cycle stealing behavior of DMC DMA while running sprite DMAs
         sprdma_and_dmc_dma,
@@ -493,7 +487,6 @@ pub(crate) mod tests {
         vbl_nmi_clear_timing, // Tests vblank NMI clear timing
         vbl_nmi_control,      // Tests vblank NMI control
         vbl_nmi_disable, // Tests vblank NMI disable
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot timing; not bisected"]
         vbl_nmi_even_odd_frames, // Tests vblank NMI on even/odd frames
         // Passes: the ROM reports code 0 and prints "10-even_odd_timing / Passed". Asserted on
         // that $6000 status code rather than a frame hash, so a regression says which sub-test
@@ -503,10 +496,8 @@ pub(crate) mod tests {
         vbl_nmi_off_timing, // Tests vblank NMI off timing
         vbl_nmi_on_timing, // Tests vblank NMI on timing
         vbl_nmi_set_time, // Tests vblank NMI set timing
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot timing; not bisected"]
         vbl_nmi_suppression, // Tests vblank NMI suppression
         vbl_nmi_timing, // Tests vblank NMI timing
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot timing; not bisected"]
         vbl_timing, // Tests vblank timing
         vram_access, // Tests video RAM access
     );
@@ -603,14 +594,14 @@ pub(crate) mod tests {
         // 6) Clearing enable bit in $4015 should clear length counter
         // 7) When disabled via $4015, length shouldn't allow reloading
         // 8) Halt bit should suspend length clocking
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot alignment shifts APU frame timing; not bisected"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_ctr,
         // Tests all length table entries.
         // 1) Passed
         // 2) Failed. Prints four bytes $II $ee $cc $02 that indicate the length
         // load value written (ll), the value that the emulator uses ($ee), and the
         // correct value ($cc).
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot alignment shifts APU frame timing; not bisected"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_table,
         // Tests basic operation of frame irq flag.
         // 1) Tests passed
@@ -620,7 +611,7 @@ pub(crate) mod tests {
         // 5) Reading flag clears it
         // 6) Writing $00 or $80 to $4017 doesn't affect flag
         // 7) Writing $40 or $c0 to $4017 clears flag
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot alignment shifts APU frame timing; not bisected"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         irq_flag,
         // Clock Jitter
         // ------------
@@ -643,7 +634,7 @@ pub(crate) mod tests {
         // 3) Frame irq is set too late
         // 4) Even jitter not handled properly
         // 5) Odd jitter not handled properly
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot alignment shifts APU frame timing; not bisected"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         clock_jitter,
         // Mode 0 Timing
         // -------------
@@ -682,7 +673,7 @@ pub(crate) mod tests {
         // 5) Second length is clocked too late
         // 6) Third length is clocked too soon
         // 7) Third length is clocked too late
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot alignment shifts APU frame timing; not bisected"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_timing_mode0,
         // Mode 1 Timing
         // -------------
@@ -718,7 +709,7 @@ pub(crate) mod tests {
         // 5) Second length is clocked too late
         // 6) Third length is clocked too soon
         // 7) Third length is clocked too late
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot alignment shifts APU frame timing; not bisected"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_timing_mode1,
         // Frame interrupt flag is set three times in a row 29831 clocks after
         // writing $4017 with $00.
@@ -727,7 +718,7 @@ pub(crate) mod tests {
         // 3) Flag first set too late
         // 4) Flag last set too soon
         // 5) Flag last set too late
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot alignment shifts APU frame timing; not bisected"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         irq_flag_timing,
         // IRQ handler is invoked at minimum 29833 clocks after writing $00 to
         // $4017.
@@ -735,7 +726,7 @@ pub(crate) mod tests {
         // 2) Too soon
         // 3) Too late
         // 4) Never occurred
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot alignment shifts APU frame timing; not bisected"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         irq_timing,
         // After reset or power-up, APU acts as if $4017 were written with $00 from
         // 9 to 12 clocks before first instruction begins.
@@ -743,7 +734,7 @@ pub(crate) mod tests {
         // 2) $4015 didn't read back as $00 at power-up
         // 3) Fourth step occurs too soon
         // 4) Fourth step occurs too late
-        #[ignore = "FQ-06: 0-cycle reset"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         reset_timing,
         // Changes to length counter halt occur after clocking length, not before.
         // 1) Passed tests
@@ -751,7 +742,7 @@ pub(crate) mod tests {
         // 3) Length should be clocked when halted at 14915
         // 4) Length should be clocked when unhalted at 14914
         // 5) Length shouldn't be clocked when unhalted at 14915
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot alignment shifts APU frame timing; not bisected"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_halt_timing,
         // Write to length counter reload should be ignored when made during length
         // counter clocking and the length counter is not zero.
@@ -760,7 +751,7 @@ pub(crate) mod tests {
         // 3) Reload just after length clock should work normally
         // 4) Reload during length clock when ctr = 0 should work normally
         // 5) Reload during length clock when ctr > 0 should be ignored
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot alignment shifts APU frame timing; not bisected"]
+        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_reload_timing,
         // Verifies timing of length counter clocks in both modes
         // 2) First length of mode 0 is too soon
@@ -820,7 +811,6 @@ pub(crate) mod tests {
 
         // 2) Frame IRQ flag should be set later after power/reset
         // 3) Frame IRQ flag should be set sooner after power/reset
-        #[ignore = "FQ-06: 0-cycle reset"]
         reset_4017_timing,
         // At power, $4017 = $00.
         // At reset, $4017 mode is unchanged, but IRQ inhibit
@@ -828,7 +818,6 @@ pub(crate) mod tests {
 
         // 2) At power, $4017 should be written with $00
         // 3) At reset, $4017 should should be rewritten with last value written
-        #[ignore = "FQ-06: 0-cycle reset"]
         reset_4017_written,
         // At power and reset, IRQ flag is clear.
 
@@ -850,12 +839,10 @@ pub(crate) mod tests {
         //
         // See: <https://forums.nesdev.org/viewtopic.php?f=3&t=11174>
         test_1,
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot with hardware VBlank/NMI timing; not bisected"]
         test_2,
         test_3,
         test_4,
         test_5,
-        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot with hardware VBlank/NMI timing; not bisected"]
         test_6,
         test_7,
         test_8,

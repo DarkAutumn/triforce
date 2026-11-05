@@ -58,9 +58,9 @@ impl Backend for Zcore {
     }
 
     fn overshoot_dots(&self) -> Option<f64> {
-        // Frame boundary at line 240 dot 1 (FQ-08).
+        // The frame boundary is the start of VBlank, line 241 dot 1.
         let ppu = &self.nes.bus().ppu;
-        Some((i64::from(ppu.scanline) * 341 + i64::from(ppu.cycle) - (240 * 341 + 1)) as f64)
+        Some((i64::from(ppu.scanline) * 341 + i64::from(ppu.cycle) - (241 * 341 + 1)) as f64)
     }
 
     fn trace_frame(&mut self, buttons: u8) -> Vec<TraceRow> {

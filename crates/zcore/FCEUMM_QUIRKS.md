@@ -13,19 +13,20 @@ two differ and the difference shows in the corpus. Every such behaviour is a num
 Step 18 of the port plan ("Retire the FCEUmm oracle and FCEUmm quirks") restores the hardware behaviour
 for each entry, one at a time, and keeps it unless the promoted models get worse. FCEUmm file/line
 citations are for the pinned commit (upstream numbering, before `oracle/fceumm/patches/`). Implementation
-sites are the named functions under `crates/zcore/src`; the tests are `src/fceumm_compat_tests.rs`, and
-every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs`.
+sites are the named functions under `crates/zcore/src`; the tests were `src/fceumm_compat_tests.rs`
+(deleted with the last quirk), and every test ROM the quirks broke was `#[ignore]`d with its FQ ID in
+`src/common.rs`.
 
 | ID | Quirk | Affects |
 |---|---|---|
-| FQ-01 | Two dead PPU frames after reset | boot only |
+| FQ-01 | Two dead PPU frames after reset (**restored to hardware**) | boot only |
 | FQ-02 | No $2002 read-before-VBlank suppression race (**restored to hardware**) | per-frame timing, RAM |
 | FQ-03 | PPUSTATUS flags visible only at instruction boundaries (**restored to hardware**) | per-frame timing, RAM |
 | FQ-04 | A $2002 read never cancels an NMI; enabling NMI during VBlank gives a delayed NMI (**restored to hardware**) | per-frame timing, RAM |
 | FQ-05 | NMI requested 12 dots after VBlank, taken at the next instruction start (**restored to hardware**) | per-frame timing, RAM |
-| FQ-06 | 0-cycle CPU reset | boot only |
-| FQ-07 | PPU starts at scanline 240, one dot ahead | boot, then CPU/PPU phase for the whole run |
-| FQ-08 | Frame boundary at dot 1 of line 240 | frame boundary (when inputs and pokes apply) |
+| FQ-06 | 0-cycle CPU reset (**restored to hardware**) | boot only |
+| FQ-07 | PPU starts at scanline 240, one dot ahead (**restored to hardware**) | boot, then CPU/PPU phase for the whole run |
+| FQ-08 | Frame boundary at dot 1 of line 240 (**now the start of VBlank**) | frame boundary (when inputs and pokes apply) |
 | FQ-09 | Odd-frame dot skip even when rendering is off (**restored to hardware**) | per-frame timing |
 | FQ-10 | 512-cycle OAM DMA, run inside `STA $4014` (**restored to hardware**) | per-frame timing |
 | FQ-11 | 4-read DMC DMA (**restored to hardware**) | per-frame timing |
@@ -33,6 +34,12 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 | FQ-13 | The PPU I/O latch never decays (**restored to hardware**) | CPU registers after $2002/open-bus reads (masked by the game: no RAM effect in the corpus) |
 
 ## FQ-01 — Two dead PPU frames after reset
+
+**Restored to hardware** with FQ-06, FQ-07 and FQ-08 in `zcore: restore hardware boot timing; frame
+boundary at VBlank start (FQ-01, FQ-06..FQ-08 removed)` (plan step 18a, `docs/experiments/round9.md`):
+`dead_frames` deleted (`TFZSTATE` v5), VBlank rises from the first frame. `flag_concurrency`, `instr_brk`,
+`instr_zp_xy` pass again (their snapshot frames, which hardware `$2002` timing had moved, line up).
+The base state (`power_on_to_start`) changes: step 18b regenerates it.
 
 - **Hardware:** VBlank is raised from the first frame after power-on/reset; only some register writes are
   ignored during the ~29,658-cycle warm-up. nesdev "PPU power up state"; blargg `ppu_vbl_nmi`.
@@ -131,6 +138,9 @@ the cycle per-cycle clocking would have seen it. `05-nmi_timing` and `dpcmletter
 
 ## FQ-06 — 0-cycle CPU reset
 
+**Restored to hardware** with FQ-01, FQ-07 and FQ-08 (same commit): `Bus::reset` runs the 7 cycles,
+the PPU and APU clocked with them. `cycle_timing`, `reset_4017_timing`, `reset_4017_written` pass.
+
 - **Hardware:** reset/power-on takes 7 cycles (an interrupt sequence with the writes suppressed) before
   the first instruction. nesdev "CPU interrupts", "CPU power up state"; `cpu_reset`.
 - **FCEUmm:** `X6502_Reset` only sets `FCEU_IQRESET` (`src/x6502.c:352-354`); the run loop loads the
@@ -142,6 +152,12 @@ the cycle per-cycle clocking would have seen it. `05-nmi_timing` and `dpcmletter
 - **Removal:** always run the 7 reset cycles; `cpu_reset` passes; re-measure FQ-07.
 
 ## FQ-07 — PPU starts at scanline 240, one dot ahead
+
+**Restored to hardware** with FQ-01, FQ-06 and FQ-08 (same commit): `Ppu::reset` starts at line 0 dot 0
+(TetaNES' power-on phase). With FQ-06 and FQ-01: `vbl_nmi_suppression`, `vbl_nmi_even_odd_frames`,
+`vbl_timing`, `overclock`, `test_2`, `test_6` pass. FQ-07 and FQ-08 are entangled: FQ-07 put the PPU at
+FCEUmm's frame boundary, so moving the boundary alone made the first frame 340 dots long and shifted six
+more snapshot frames.
 
 - **Hardware:** the PPU starts at the top of the frame and the CPU/PPU clock alignment is one of four
   phases chosen at power-on. nesdev "PPU power up state", "CPU ALL"; TetaNES starts at line 0 dot 0.
@@ -155,6 +171,14 @@ the cycle per-cycle clocking would have seen it. `05-nmi_timing` and `dpcmletter
 - **Removal:** start at line 0 dot 0 again; regenerate the base state.
 
 ## FQ-08 — Frame boundary at dot 1 of line 240
+
+**Replaced** in the same commit by the hardware-natural boundary, **the start of VBlank (line 241, dot
+1)**: `Ppu::start_vblank` counts the frame, so `run_frame` returns with every line drawn and VBlank and
+/NMI just raised, and the whole NMI handler (joypad reads, OAM DMA, game logic) runs in the next frame,
+with that frame's inputs and after its pokes. `Ppu::next_event_clock` names only the two VBlank edges;
+`fceumm_events` is deleted. TetaNES ended the frame on entering line 240; VBlank start is used instead
+because it is a hardware event (the NMI) rather than a rendering one, and nothing the CPU sees happens
+between the two except the last post-render line.
 
 - **Hardware:** no frame boundary exists; it is the emulator's convention for "one frame". TetaNES ends a
   frame when the PPU enters line 240 (dot 0).
@@ -267,6 +291,11 @@ removed)`: `Dmc` (timer, reader, IRQ) and `Bus::handle_dma`.
   involved; it disappears with the oracle in step 18c.
 - **Zero-filled battery PRG-RAM at power-on.** Part of the TFMOVIE v1 power-on spec (an empty battery
   file), applied by each backend's harness, not by emulation code.
+- **Power-on RAM filled with $FF** (`State::POWER_ON_RAM`: work RAM, PRG-RAM, CHR-RAM). FCEUmm's fill and
+  the corpus', and as valid as any for the hardware, whose RAM powers on unspecified. Twelve test ROM
+  snapshots (`instr_timing` and eleven blargg 2005 APU ROMs) were recorded by TetaNES with zero-filled
+  RAM: with every FQ quirk gone they pass with a $00 fill and differ with $FF (the APU ROMs still print
+  their pass code `$01`, on a different background). They are `#[ignore]`d as power-on RAM, not as quirks.
 
 ## Known differences not reproduced
 

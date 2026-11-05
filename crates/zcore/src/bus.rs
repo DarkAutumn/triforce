@@ -73,7 +73,8 @@ pub struct Bus {
     pub(crate) trace: Option<TraceHook>,
     /// The PPU runs behind the CPU and is caught up only when something can observe it (see
     /// [`Bus::ppu_sync`]). CPU master clock at which it must be caught up, checked every cycle,
-    /// because a frame-boundary or VBlank-edge dot may be due. Recomputed on every catch-up.
+    /// because a VBlank-edge dot (one is the frame boundary) may be due. Recomputed on every
+    /// catch-up.
     pub(crate) ppu_deadline: u32,
     /// The APU's `master_clock` from which a CPU cycle has board or APU work to do
     /// ([`Apu::next_clock`], or every cycle while the board counts down a write). Zero (work on
@@ -192,8 +193,13 @@ impl Bus {
         let lo = self.cpu_bus_read(Cpu::RESET_VECTOR);
         let hi = self.cpu_bus_read(Cpu::RESET_VECTOR + 1);
         self.cpu.pc = u16::from_le_bytes([lo, hi]);
-        // The CPU takes 7 cycles to reset/power on (nesdev "CPU interrupts"), but FQ-06: FCEUmm
-        // fetches the vector without spending any cycles.
+        // The CPU takes 7 cycles to reset/power on (an interrupt sequence with the writes
+        // suppressed; nesdev "CPU interrupts"), the PPU and APU running alongside.
+        self.set_ppu_deadline();
+        for _ in 0..7 {
+            self.start_cycle(self.cpu.start_cycles - 1);
+            self.end_cycle(self.cpu.start_cycles + 1);
+        }
     }
 }
 

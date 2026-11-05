@@ -230,3 +230,62 @@ deadline compare in `end_cycle` costs ~2-4%).
 in success and health, so the seed-1 run was made: ow-zora 96.5% / −0.184 and d2-rope 94.0% / −0.279 there, i.e.
 within the baselines' range in success; nothing is worse than both baselines in both runs. Chain totals 30 and
 35 (baselines 32/24, floor 12).
+
+## FQ-01, FQ-06, FQ-07 + FQ-08: hardware boot timing; the frame ends when VBlank starts
+
+**Change (one step).** Boot: `Bus::reset` spends the CPU's 7 reset cycles (FQ-06), the PPU starts at line 0
+dot 0 (FQ-07) and VBlank rises from the first frame (FQ-01: `dead_frames` deleted, `TFZSTATE` v5). Frame
+boundary (FQ-08): the frame counter advances in `Ppu::start_vblank`, at **the start of VBlank (line 241, dot
+1)**, the hardware-natural point: `run_frame` returns with every line drawn and VBlank and /NMI just raised, and
+the NMI handler (joypad reads, OAM DMA, game logic) runs in the next frame, after that frame's inputs and pokes
+are applied. TetaNES ended a frame on entering line 240, FCEUmm one dot later; VBlank start is a hardware event
+(the NMI), and between it and line 240 the CPU sees only the idle post-render line. With the boundary on a VBlank
+edge the lazy PPU has two events left (`Ppu::next_event_clock`), and `fceumm_events` is gone.
+
+**Why together:** FQ-07 placed the PPU at FCEUmm's frame boundary; moving the boundary alone (tried first) made
+the first frame 340 dots long and failed six more snapshot ROMs (`dummy_writes_ppumem`, `instr_ind_y`,
+`regs_after_reset`, `scanline`, `spr_overflow_obscure`, `vbl_nmi_clear_timing`) that pass with all four. The
+gate's start states are mid-game, so the boot quirks cannot show in it: this gate measures FQ-08; FQ-01/06/07's
+real test is step 18b.
+
+**Tests:** un-ignored and passing: `flag_concurrency`, `instr_brk`, `instr_zp_xy`, `overclock`,
+`vbl_nmi_even_odd_frames`, `vbl_nmi_suppression`, `vbl_timing`, `test_2`, `test_6`, `reset_4017_timing`,
+`reset_4017_written`, and the unit tests `cycle_timing` and
+`stopping_and_resuming_leaves_the_same_console_as_running_through`; a new `frame_ends_when_vblank_starts`. The
+FCEUmm compat tests are all gone (`fceumm_compat_tests.rs` deleted). **No `FQ-` ignore is left.** Twelve ROMs
+stay ignored for another reason: `instr_timing` and eleven blargg 2005 APU ROMs (`len_ctr`, `len_table`,
+`irq_flag`, `clock_jitter`, `len_timing_mode0/1`, `irq_flag_timing`, `irq_timing`, `reset_timing`,
+`len_halt_timing`, `len_reload_timing`) were snapshotted by TetaNES with zero-filled power-on RAM; with every
+quirk gone all twelve pass with `State::POWER_ON_RAM = $00` and differ with zcore's $FF (FCEUmm's fill, which the
+corpus needs), so they are labelled power-on RAM (`FCEUMM_QUIRKS.md` "Not quirks"). **Movie replay:** ignored as
+FCEUmm-recorded desyncs: `zcore` `title_rgb_frame_is_full_and_matches_the_oracle` (frame 600 vs the oracle
+golden), `zelda` `zcore_matches_oracle_over_random_play` (base-state RAM after `power_on_to_start` differs), `env`
+`env_matches_python_fixtures` (`0_38` step 2 takes a different path). Every other zcore, zelda, env and pool test
+passes. Gate build: every quirk restored. `tf bench` 2,459-2,564 / 4,683-4,976.
+
+| Specialist | Old | Baseline s0 | Baseline s1 | Boot+FQ-08 s0 | Boot+FQ-08 s1 |
+|---|---:|---:|---:|---:|---:|
+| boss-aquamentus | 100.0% | 100.0% / +0.592 | 98.3% / +0.575 | 100.0% / +0.650 | 98.3% / +0.400 |
+| d2-rope | 95.2% | 94.0% / −0.254 | 93.6% / −0.231 | 94.0% / −0.260 | 94.8% / −0.217 |
+| goriya | 76.7% | 78.3% / −0.758 | 77.9% / −0.725 | 78.8% / −0.738 | 77.1% / −0.688 |
+| ow-leever-peahat | 100.0% | 97.1% / −0.325 | 96.2% / −0.296 | 96.7% / −0.354 | 95.8% / −0.304 |
+| ow-moblin | 97.1% | 95.3% / −0.215 | 96.4% / −0.236 | 95.3% / −0.237 | 96.4% / −0.207 |
+| ow-octorok | 99.0% | 98.3% / −0.073 | 98.2% / −0.066 | 98.2% / −0.066 | 98.2% / −0.070 |
+| ow-start | 98.5% | 100.0% / +0.278 | 100.0% / +0.287 | 100.0% / +0.278 | 99.5% / +0.287 |
+| ow-zora | 97.4% | 95.4% / −0.191 | 95.4% / −0.206 | 95.9% / −0.211 | 96.3% / −0.210 |
+| stalfos-keese-gel | — | 96.8% / −0.035 | 95.7% / −0.041 | 95.8% / −0.051 | 96.4% / −0.044 |
+| wallmaster | 87.5% | 98.3% / +0.167 | 100.0% / +0.208 | 100.0% / +0.233 | 100.0% / +0.192 |
+
+| Segment | Baseline s0 | Baseline s1 | Boot+FQ-08 s0 | Boot+FQ-08 s1 |
+|---|---:|---:|---:|---:|
+| Full milestone1 | 1/40 | 1/40 | 1/40 | 0/40 |
+| Full milestone1-fairy | 3/40 | 2/40 | 2/40 | 4/40 |
+| Post-D1 main | 7/40 | 3/40 | 4/40 | 3/40 |
+| Post-D1 fairy | 6/40 | 6/40 | 6/40 | 8/40 |
+| D2 | 15/40 | 12/40 | 17/40 | 16/40 |
+| **Total** | 32 | 24 | 30 | 31 |
+
+**Decision: keep.** At seed 0 ow-leever-peahat (−0.354) and stalfos-keese-gel (−0.051) took more damage than
+both baselines with success inside their range; at seed 1 both are back in range (−0.304, −0.044) and
+boss-aquamentus' health dips instead (+0.400 over 60 episodes, +0.650 at seed 0). Nothing is worse than both
+baselines in both runs; chain totals 30 and 31 (baselines 32/24, floor 12).
