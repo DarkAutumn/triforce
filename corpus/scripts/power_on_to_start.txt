@@ -1,0 +1,89 @@
+# Power on, register LINK in slot 1 and start the game; ends on the first gameplay frame.
+tags: short, scripted
+- 120
+assert ram[0x12] == 0           # title/demo
+START 1
+- 30
+assert ram[0x12] == 1           # file select, cursor on REGISTER YOUR NAME
+START 2
+- 29
+assert ram[0x12] == 0x0E        # register
+# L
+DOWN 2
+- 8
+A 2
+- 8
+# I
+UP 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+A 2
+- 8
+# N
+DOWN 2
+- 8
+LEFT 2
+- 8
+LEFT 2
+- 8
+LEFT 2
+- 8
+LEFT 2
+- 8
+LEFT 2
+- 8
+LEFT 2
+- 8
+A 2
+- 8
+# K
+UP 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+RIGHT 2
+- 8
+A 2
+- 8
+# cursor to REGISTER END
+SELECT 2
+- 8
+SELECT 2
+- 8
+SELECT 2
+- 8
+START 2
+- 38
+assert ram[0x12] == 1           # file select
+START 2
+- 8
+until ram[0x12] == 5 - max 600
+assert ram[0x10] == 0
+assert ram[0xEB] == 0x77

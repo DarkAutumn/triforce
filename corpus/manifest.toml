@@ -1,0 +1,8 @@
+[[movie]]
+name = "power_on_to_start"
+file = "movies/power_on_to_start.tfmovie"
+tags = [
+    "short",
+    "scripted",
+]
+frames = 662
