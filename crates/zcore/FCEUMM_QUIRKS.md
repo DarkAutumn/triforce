@@ -19,10 +19,10 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 | ID | Quirk | Affects |
 |---|---|---|
 | FQ-01 | Two dead PPU frames after reset | boot only |
-| FQ-02 | No $2002 read-before-VBlank suppression race | per-frame timing, RAM |
-| FQ-03 | PPUSTATUS flags visible only at instruction boundaries | per-frame timing, RAM |
-| FQ-04 | A $2002 read never cancels an NMI; enabling NMI during VBlank gives a delayed NMI | per-frame timing, RAM |
-| FQ-05 | NMI requested 12 dots after VBlank, taken at the next instruction start | per-frame timing, RAM |
+| FQ-02 | No $2002 read-before-VBlank suppression race (**restored to hardware**) | per-frame timing, RAM |
+| FQ-03 | PPUSTATUS flags visible only at instruction boundaries (**restored to hardware**) | per-frame timing, RAM |
+| FQ-04 | A $2002 read never cancels an NMI; enabling NMI during VBlank gives a delayed NMI (**restored to hardware**) | per-frame timing, RAM |
+| FQ-05 | NMI requested 12 dots after VBlank, taken at the next instruction start (**restored to hardware**) | per-frame timing, RAM |
 | FQ-06 | 0-cycle CPU reset | boot only |
 | FQ-07 | PPU starts at scanline 240, one dot ahead | boot, then CPU/PPU phase for the whole run |
 | FQ-08 | Frame boundary at dot 1 of line 240 | frame boundary (when inputs and pokes apply) |
@@ -49,6 +49,10 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 
 ## FQ-02 — No $2002 read-before-VBlank suppression race
 
+**Restored to hardware** with FQ-03, FQ-04 and FQ-05 in `zcore: restore hardware VBlank flag and NMI
+timing (FQ-02..FQ-05 removed)` (plan step 18a, `docs/experiments/round9.md`): `Ppu::read_status` sets
+`prevent_vbl` on a read at line 241 dot 0.
+
 - **Hardware:** reading $2002 one PPU clock before VBlank sets returns clear and suppresses both the flag
   and the NMI for that frame. nesdev "PPU frame timing" ("VBL flag timing"); `ppu_vbl_nmi`
   `06-suppression`.
@@ -61,6 +65,10 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   passes again.
 
 ## FQ-03 — PPUSTATUS flags visible only at instruction boundaries
+
+**Restored to hardware** with FQ-02, FQ-04 and FQ-05 (same commit): `Ppu::read_status` reads and clears
+the live flags; the `status_at_instr` snapshot and its catch-up stop at the instruction start are gone
+(`TFZSTATE` v4). `02-vbl_set_time`, `scanline`, `spr_hit_timing_basics`, `spr_overflow_timing` pass.
 
 - **Hardware:** VBlank rises at dot 1 of line 241; VBlank, sprite 0 hit and overflow fall at dot 1 of
   line 261; a $2002 read sees each change if its read cycle comes after the edge, even part way through
@@ -82,6 +90,10 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 
 ## FQ-04 — A $2002 read never cancels an NMI; enabling NMI during VBlank gives a delayed NMI
 
+**Restored to hardware** with FQ-02, FQ-03 and FQ-05 (same commit): `Bus::write_ctrl` sets /NMI to
+VBlank AND enable, `Ppu::read_status` drops it. `04`, `07`, `08`, `int_nmi_and_brk`, `int_nmi_and_irq`
+pass; `06-suppression` still fails on the boot quirks.
+
 - **Hardware:** reading $2002 at or just after the VBlank edge suppresses that frame's NMI; setting
   $2000 bit 7 while the flag is up raises an NMI after the next instruction boundary; clearing bit 7 near
   the edge cancels a pending NMI. nesdev "NMI"; `ppu_vbl_nmi` `04-nmi_control`, `06-suppression`,
@@ -96,6 +108,12 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   `04`, `06`, `07`, `08` pass again.
 
 ## FQ-05 — NMI requested 12 dots after VBlank, taken at the next instruction start
+
+**Restored to hardware** with FQ-02, FQ-03 and FQ-04 (same commit): `Ppu::start_vblank` raises
+`nmi_pending`, the CPU's edge detector (`Bus::handle_interrupts`) takes it after the instruction whose
+second-to-last cycle saw it. The PPU stays lazy: `Ppu::next_event_clock` now names both VBlank edges
+(plus FQ-08's boundary) and `Bus::end_cycle` catches the PPU up when one falls due, so /NMI is polled on
+the cycle per-cycle clocking would have seen it. `05-nmi_timing` and `dpcmletterbox` pass.
 
 - **Hardware:** /NMI goes low with the VBlank flag at dot 1 of line 241; the CPU takes it after the
   instruction in progress, polling on the second-to-last cycle. nesdev "NMI", "CPU interrupts";

@@ -254,7 +254,7 @@ pub struct Ppu {
     pub oamdata: ConstArray<u8, 256>,
 
     // === 776 ===
-    /// NMI pending.
+    /// The PPU's /NMI output: VBlank is up with NMI enabled (the CPU edge-detects it).
     pub nmi_pending: bool,
 
     /// $2007 PPUDATA buffer.
@@ -264,14 +264,6 @@ pub struct Ppu {
     /// FQ-01: frames left in which VBlank never sets - FCEUmm's `ppudead`, two frames after
     /// every reset in which its CPU runs a whole frame without VBlank.
     pub dead_frames: u8,
-    /// FQ-03: PPUSTATUS bits 5-7 as they stood when the current CPU instruction began. FCEUmm
-    /// raises and clears VBlank, and clears sprite 0 hit and overflow at the end of VBlank,
-    /// between instructions, so a $2002 read sees those changes only from the next instruction
-    /// on. (A sprite 0 hit or overflow raised during rendering is seen at once.)
-    pub status_at_instr: u8,
-    /// FQ-04/FQ-05: FCEUmm's NMI request. 1 = take the NMI before the next instruction (FQ-05),
-    /// 2 = after one more instruction (FQ-04: NMI enabled through $2000 while VBlank is up).
-    pub fceu_nmi: u8,
     /// The frame each I/O latch bit was last refreshed (driven by a register access), indexed by
     /// bit: a bit left alone for [`Ppu::OPEN_BUS_DECAY_FRAMES`] has decayed to 0.
     pub open_bus_refreshed: [u32; 8],
@@ -512,8 +504,6 @@ impl Ppu {
             color_bits_applied: 0,
 
             dead_frames: 0,
-            status_at_instr: 0,
-            fceu_nmi: 0,
             open_bus_refreshed: [0; 8],
         };
 
@@ -580,7 +570,8 @@ impl Ppu {
     }
 
     /// The master clock by which the PPU must be caught up for the CPU to see its next
-    /// frame-boundary (FQ-08, line 240 dot 1) or NMI-request (FQ-05, line 241 dot 13) dot.
+    /// frame-boundary (FQ-08, line 240 dot 1) or VBlank edge (line 241 and the pre-render line,
+    /// dot 1: /NMI rises and falls with them).
     ///
     /// Counts dots from the current one assuming the odd-frame skip happens on the way,
     /// so it is never late; when it does not, the catch-up comes a dot early and this is asked
@@ -598,8 +589,9 @@ impl Ppu {
             }
         };
         let frame_end = dots_to(self.vblank_scanline - 1, 1);
-        let nmi = dots_to(self.vblank_scanline, 13);
-        let dots = frame_end.min(nmi) - 1;
+        let vblank_start = dots_to(self.vblank_scanline, cycle::VBLANK);
+        let vblank_end = dots_to(self.prerender_scanline, cycle::VBLANK);
+        let dots = frame_end.min(vblank_start).min(vblank_end) - 1;
         self.master_clock + dots * u32::from(self.clock_divider)
     }
 
@@ -819,11 +811,12 @@ impl Ppu {
         }
     }
 
+    /// VBlank rises at dot 1 of line 241 and with it /NMI, if enabled (nesdev "NMI").
     fn start_vblank(&mut self) {
         // FQ-01: no VBlank in FCEUmm's dead frames after a reset.
         if !self.prevent_vbl && self.dead_frames == 0 {
             self.set_in_vblank(true);
-            // FQ-05: FCEUmm requests the NMI 12 dots later (see `Bus::fceumm_events`).
+            self.nmi_pending = self.ctrl_nmi_enabled;
         }
         self.prevent_vbl = false;
     }
@@ -1209,24 +1202,20 @@ impl Ppu {
     /// Reads $2002 PPUSTATUS, which clears the VBlank flag and resets the address latch as a side
     /// effect. Use [`Ppu::peek_status`] to look without disturbing it.
     ///
-    /// As FCEUmm does it:
-    /// - FQ-03: VBlank is raised and cleared between instructions, so the read sees the flag as of
-    ///   the start of the reading instruction and clears only that; a VBlank raised during the
-    ///   instruction survives it.
-    /// - FQ-04: the read never cancels an NMI.
-    /// - FQ-02: there is no read-before-VBlank suppression race.
+    /// The flags read as they stand at the read's PPU dot. Clearing VBlank releases /NMI, so a
+    /// read on or just after the dot VBlank rises suppresses that frame's NMI; reading one dot
+    /// before (line 241, dot 0) returns it clear and keeps it from rising this frame (nesdev
+    /// "PPU frame timing", "NMI").
     ///
     /// Bits 5-7 are driven onto the I/O latch (refreshing it); bits 0-4 read the latch.
     pub fn read_status(&mut self) -> u8 {
-        // Bits 5/6: a set during the instruction shows at once, a clear only from the next one.
-        let bits = (self.status_at_instr & 0x80)
-            | ((self.read_status_bits() | self.status_at_instr) & 0x60);
-        let status = self.drive_open_bus(0xE0, bits);
-        if self.status_at_instr & 0x80 != 0 {
-            self.reset_in_vblank();
-            self.status_at_instr &= !0x80;
-        }
+        let status = self.drive_open_bus(0xE0, self.read_status_bits());
+        self.reset_in_vblank();
+        self.nmi_pending = false;
         self.scroll.reset_latch();
+        if self.scanline == self.vblank_scanline && self.cycle == cycle::START {
+            self.prevent_vbl = true;
+        }
         status
     }
 
@@ -1712,8 +1701,8 @@ impl Bus {
 
         self.ppu.cycle += 1;
 
-        // FQ-08, FQ-05: FCEUmm's frame boundary and NMI request.
-        if self.ppu.cycle == 1 || self.ppu.cycle == 13 {
+        // FQ-08: FCEUmm's frame boundary.
+        if self.ppu.cycle == 1 {
             self.fceumm_events();
         }
 
@@ -1756,28 +1745,17 @@ impl Bus {
         }
     }
 
-    /// Events FCEUmm (`fceumm_compat`) places at fixed points of its frame:
-    ///
-    /// - FQ-08: the frame ends one dot into the post-render line, 341 dots before VBlank rises
-    ///   (FQ-01: the dead frames after a reset count down with it).
-    /// - FQ-05: 12 dots after VBlank rises the NMI is requested if enabled then, to be taken at
-    ///   the next instruction boundary.
+    /// FQ-08: FCEUmm's frame ends one dot into the post-render line, 341 dots before VBlank
+    /// rises (FQ-01: the dead frames after a reset count down with it).
     ///
     /// Measured against FCEUmm on the whole corpus with FQ-07's start position: every frame
-    /// boundary, NMI entry and VBlank poll lands on the same instruction.
+    /// boundary lands on the same instruction.
     #[cold]
     #[inline(never)]
     fn fceumm_events(&mut self) {
-        let (scanline, cycle) = (self.ppu.scanline, self.ppu.cycle);
-        if cycle == 1 && scanline == self.ppu.vblank_scanline - 1 {
+        if self.ppu.cycle == 1 && self.ppu.scanline == self.ppu.vblank_scanline - 1 {
             self.ppu.frame_count = self.ppu.frame_count.wrapping_add(1);
             self.ppu.dead_frames = self.ppu.dead_frames.saturating_sub(1);
-        } else if cycle == 13
-            && scanline == self.ppu.vblank_scanline
-            && self.ppu.dead_frames == 0
-            && self.ppu.ctrl_nmi_enabled
-        {
-            self.ppu.fceu_nmi = 1;
         }
     }
 
@@ -1854,15 +1832,17 @@ impl Bus {
     //       |   7 | VBlank Switch, 1 = generate interrupts on VBlank
     /// Writes $2000 PPUCTRL: nametable select, VRAM increment, pattern table selects, sprite size
     /// and NMI enable.
+    ///
+    /// /NMI is VBlank AND the enable bit: setting the bit while VBlank is up raises it (an NMI
+    /// after the next instruction boundary, and another each time it is toggled), clearing it
+    /// drops it, cancelling an NMI whose edge the CPU has not seen yet (nesdev "NMI").
     pub fn write_ctrl(&mut self, val: u8) {
         self.ppu.write_open_bus(val);
-        let was_enabled = self.ppu.ctrl_nmi_enabled;
         self.ppu.write_ctrl(val);
         self.ppu.scroll.write_nametable_select(val);
-        // FQ-04: enabling NMI while VBlank is up requests a delayed NMI; disabling never cancels
-        // one already requested.
-        if !was_enabled && self.ppu.ctrl_nmi_enabled && self.ppu.status_at_instr & 0x80 != 0 {
-            self.ppu.fceu_nmi = 2;
+        self.ppu.nmi_pending = self.ppu.ctrl_nmi_enabled && self.ppu.status_in_vblank;
+        if self.ppu.nmi_pending {
+            self.irq_quiet = false;
         }
     }
 
@@ -2159,7 +2139,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "FQ-03: $2002 reads see VBlank as of the instruction start"]
     fn read_status_resets_vblank() {
         let mut bus = Bus::default();
         bus.ppu.set_in_vblank(true);

@@ -19,8 +19,8 @@ use crate::machine::{MachineState, Rom};
 /// File magic.
 pub const MAGIC: &[u8; 8] = b"TFZSTATE";
 /// Current format version (2: the PPU I/O latch decay, FQ-13; 3: the hardware DMC reader,
-/// FQ-11/FQ-12).
-pub const VERSION: u16 = 3;
+/// FQ-11/FQ-12; 4: no instruction-start PPUSTATUS snapshot or FCEUmm NMI request, FQ-03..FQ-05).
+pub const VERSION: u16 = 4;
 const HEADER: usize = 8 + 2 + 20 + 1 + 4;
 
 /// A state file that can't be loaded for this ROM and build.
@@ -114,24 +114,31 @@ mod v1 {
     };
     use serde::Deserialize;
 
-    /// A v1 struct: `kept` fields carry over to the current type unchanged, `dropped` ones (after
-    /// them in v1's order) no longer exist.
+    /// A v1 struct, its fields in v1's order: those marked `#[dropped]` no longer exist, the
+    /// others carry over to the current type unchanged.
     macro_rules! v1_struct {
-        ($name:ident => $cur:ty { $($f:ident: $t:ty,)* } dropped { $($d:ident: $dt:ty,)* }) => {
+        ($name:ident => $cur:ty { $($(#[$dropped:ident])? $f:ident: $t:ty,)* }) => {
             #[derive(Deserialize)]
             #[allow(dead_code)]
             pub(super) struct $name {
                 $($f: $t,)*
-                $($d: $dt,)*
             }
 
             impl $name {
                 /// Copies the kept fields over `cur`.
                 fn apply(self, cur: &mut $cur) {
-                    $(cur.$f = self.$f;)*
+                    $(v1_field!(self, cur, $f $(, $dropped)?);)*
                 }
             }
         };
+    }
+
+    /// One field of [`v1_struct`]'s `apply`.
+    macro_rules! v1_field {
+        ($v1:ident, $cur:ident, $f:ident) => {
+            $cur.$f = $v1.$f;
+        };
+        ($v1:ident, $cur:ident, $f:ident, dropped) => {};
     }
 
     v1_struct!(Ppu => ppu::Ppu {
@@ -193,9 +200,11 @@ mod v1 {
         vram_buffer: u8,
         prevent_vbl: bool,
         dead_frames: u8,
+        #[dropped]
         status_at_instr: u8,
+        #[dropped]
         fceu_nmi: u8,
-    } dropped {});
+    });
 
     impl Ppu {
         fn into_current(self) -> ppu::Ppu {

@@ -519,3 +519,7 @@ One line per quirk; numbers and reasoning in `docs/experiments/round9.md`, mecha
   timing); gate kept it (chain total 28 vs 32/24).
 - 2026-11-05 FQ-11 + FQ-12 restored together: the hardware DMC timer/reader, its DMA (3-4 cycles, merged with OAM
   DMA) and IRQ; `TFZSTATE` v3; gate kept it (chain total 32 vs 32/24).
+- 2026-11-05 FQ-02..FQ-05 restored together: live `$2002` flags with the read-before-VBlank race, /NMI = VBlank AND
+  enable (dropped by a `$2002` read or by clearing the bit) through the CPU's edge detector; the lazy PPU is
+  caught up in `end_cycle` when a VBlank edge falls due; `TFZSTATE` v4; gate kept it (chain totals 30 and 35 at
+  seeds 0/1 vs 32/24); the FCEUmm parity-fixture replay test is ignored (desyncs).

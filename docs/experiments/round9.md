@@ -175,3 +175,58 @@ no per-instruction hook).
 
 **Decision: keep.** Chain total 32, equal to the better baseline. goriya's success (75.8%) is again under both
 baselines with better health (−0.683); every other specialist is within or at the edge of the baselines.
+
+## FQ-02..FQ-05: the VBlank flag and NMI timing
+
+**Change (one step).** `$2002` reads see and clear the live flags at their PPU dot (FQ-03: no instruction-start
+snapshot), a read at line 241 dot 0 keeps VBlank from rising that frame (FQ-02), /NMI is VBlank AND the `$2000`
+enable bit: raised with VBlank at line 241 dot 1, dropped by a `$2002` read or by clearing the bit, raised again
+by setting it during VBlank (FQ-04), and the CPU's edge detector takes it after the instruction whose
+second-to-last cycle saw it (FQ-05; FCEUmm requested it 12 dots late and took it at the next instruction start).
+The PPU stays lazy: `Ppu::next_event_clock` names both VBlank edges (and FQ-08's frame boundary), and
+`Bus::end_cycle` catches the PPU up when one falls due, so /NMI is polled on the cycle per-cycle clocking would
+have seen it. `fceu_nmi`, `fceumm_nmi`, `status_at_instr` and the snapshot's catch-up stop are deleted;
+`TFZSTATE` v4 (v1 drops the two fields; `state_file::v1`'s macro now takes `#[dropped]` fields anywhere).
+
+**Why together:** FQ-02/03 alone (hardware `$2002` reads with FCEUmm's NMI) failed five ROMs that pass on both
+the FCEUmm build and hardware (`instr_brk`, `instr_zp_xy`, `flag_concurrency`, `test_2`, `test_6`); FQ-04's
+delayed NMI was defined on FQ-03's snapshot. With all four, three of those still fail: their snapshot frames
+line up only without FQ-01's dead frames (checked by removing FQ-01 too: they pass), and `test_2`/`test_6` need
+FQ-06/07 as well. They are ignored under FQ-01 and FQ-01/06/07 until those are restored.
+
+**Tests:** un-ignored and passing: `vbl_nmi_set_time`, `vbl_nmi_disable`, `vbl_nmi_on_timing`,
+`vbl_nmi_off_timing`, `vbl_nmi_timing`, `vbl_nmi_even_odd_timing`, `int_nmi_and_brk`, `int_nmi_and_irq`,
+`scanline`, `spr_hit_timing_basics`, `spr_hit_timing_order` (re-checked: passes again), `spr_overflow_timing`,
+`dpcmletterbox`, and the unit tests `read_write_ppu`, `read_status_resets_vblank`. Still failing (boot quirks):
+`vbl_nmi_suppression`, `vbl_nmi_even_odd_frames`, `vbl_timing`, `overclock`. The FCEUmm compat tests for FQ-02..05
+are deleted. **Movie replay:** `zelda` `session_matches_python_fixtures` (the FCEUmm-recorded parity fixtures)
+desyncs in one fixture (`0_39_fairy` step 35, RAM) and is ignored; every other zelda, env and pool test passes.
+Gate build: FQ-13, 09..12, 02..05. `tf bench` 2,436-2,592 / 4,738-4,943 (before 2,566 / 5,089: the per-cycle
+deadline compare in `end_cycle` costs ~2-4%).
+
+| Specialist | Old | Baseline s0 | Baseline s1 | FQ-02-05 s0 | FQ-02-05 s1 |
+|---|---:|---:|---:|---:|---:|
+| boss-aquamentus | 100.0% | 100.0% / +0.592 | 98.3% / +0.575 | 100.0% / +0.600 | 100.0% / +0.592 |
+| d2-rope | 95.2% | 94.0% / −0.254 | 93.6% / −0.231 | 93.1% / −0.257 | 94.0% / −0.279 |
+| goriya | 76.7% | 78.3% / −0.758 | 77.9% / −0.725 | 80.0% / −0.704 | 76.2% / −0.767 |
+| ow-leever-peahat | 100.0% | 97.1% / −0.325 | 96.2% / −0.296 | 97.5% / −0.319 | 97.1% / −0.304 |
+| ow-moblin | 97.1% | 95.3% / −0.215 | 96.4% / −0.236 | 97.2% / −0.192 | 96.1% / −0.239 |
+| ow-octorok | 99.0% | 98.3% / −0.073 | 98.2% / −0.066 | 97.9% / −0.075 | 98.3% / −0.077 |
+| ow-start | 98.5% | 100.0% / +0.278 | 100.0% / +0.287 | 100.0% / +0.278 | 99.5% / +0.287 |
+| ow-zora | 97.4% | 95.4% / −0.191 | 95.4% / −0.206 | 94.8% / −0.220 | 96.5% / −0.184 |
+| stalfos-keese-gel | — | 96.8% / −0.035 | 95.7% / −0.041 | 96.4% / −0.035 | 96.1% / −0.030 |
+| wallmaster | 87.5% | 98.3% / +0.167 | 100.0% / +0.208 | 100.0% / +0.258 | 100.0% / +0.258 |
+
+| Segment | Baseline s0 | Baseline s1 | FQ-02-05 s0 | FQ-02-05 s1 |
+|---|---:|---:|---:|---:|
+| Full milestone1 | 1/40 | 1/40 | 2/40 | 1/40 |
+| Full milestone1-fairy | 3/40 | 2/40 | 3/40 | 3/40 |
+| Post-D1 main | 7/40 | 3/40 | 3/40 | 2/40 |
+| Post-D1 fairy | 6/40 | 6/40 | 5/40 | 10/40 |
+| D2 | 15/40 | 12/40 | 17/40 | 19/40 |
+| **Total** | 32 | 24 | 30 | 35 |
+
+**Decision: keep.** At seed 0 ow-zora (94.8%, −0.220) and d2-rope (93.1%, −0.257) were a hair below both baselines
+in success and health, so the seed-1 run was made: ow-zora 96.5% / −0.184 and d2-rope 94.0% / −0.279 there, i.e.
+within the baselines' range in success; nothing is worse than both baselines in both runs. Chain totals 30 and
+35 (baselines 32/24, floor 12).

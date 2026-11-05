@@ -421,12 +421,16 @@ pub(crate) mod tests {
         // Verifies cpu can execute code from any memory location, incl. I/O
         exec_space_apu,
         exec_space_ppuio,
+        // Snapshot frames line up again without FQ-01's dead frames (hardware $2002 timing
+        // with FCEUmm's boot puts the result a frame later).
+        #[ignore = "FQ-01: FCEUmm's dead frames after reset shift the snapshot frame"]
         flag_concurrency,
         // Tests CPU several instruction combinations
         instr_abs,
         instr_abs_xy,
         instr_basics,
         instr_branches,
+        #[ignore = "FQ-01: FCEUmm's dead frames after reset shift the snapshot frame"]
         instr_brk,
         instr_imm,
         instr_imp,
@@ -441,16 +445,15 @@ pub(crate) mod tests {
         #[ignore = "FQ-01..FQ-08: remaining FCEUmm timing; not bisected"]
         instr_timing,
         instr_zp,
+        #[ignore = "FQ-01: FCEUmm's dead frames after reset shift the snapshot frame"]
         instr_zp_xy,
         // Tests IRQ/NMI timings
         int_branch_delays_irq,
         int_cli_latency,
         int_irq_and_dma,
-        #[ignore = "FQ-04/FQ-05: FCEUmm NMI timing"]
         int_nmi_and_brk,
-        #[ignore = "FQ-04/FQ-05: FCEUmm NMI timing"]
         int_nmi_and_irq,
-        #[ignore = "FQ-01/FQ-05/FQ-06: FCEUmm boot and NMI timing; not bisected"]
+        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot timing; not bisected"]
         overclock,
         // Tests cycle stealing behavior of DMC DMA while running sprite DMAs
         sprdma_and_dmc_dma,
@@ -467,7 +470,6 @@ pub(crate) mod tests {
         open_bus,     // Tests PPU open bus behavior
         palette,      // Tests simple scanline palette changes
         palette_ram,  // Tests palette RAM access
-        #[ignore = "FQ-03: PPUSTATUS seen at instruction boundaries"]
         scanline, // Tests scanline rendering
         spr_hit_alignment, // Tests sprite hit alignment
         spr_hit_basics, // Tests sprite hit basics
@@ -478,44 +480,33 @@ pub(crate) mod tests {
         spr_hit_left_clip, // Tests sprite hit with left edge clipped
         spr_hit_right_edge, // Tests sprite hit right edge
         spr_hit_screen_bottom, // Tests sprite hit bottom
-        #[ignore = "FQ-03: PPUSTATUS seen at instruction boundaries"]
         spr_hit_timing_basics, // Tests sprite hit timing
-        // Passes on FCEUmm timing and passed on TetaNES' hardware timing (Z2); fails on hardware
-        // OAM DMA with FCEUmm's VBlank/NMI timing (not bisected further).
-        #[ignore = "FQ-03..FQ-05: FCEUmm VBlank/NMI timing with hardware OAM DMA"]
         spr_hit_timing_order, // Tests sprite hit order
         spr_overflow_basics, // Tests sprite overflow basics
         spr_overflow_details, // Tests more thorough sprite overflow
         spr_overflow_emulator,
         spr_overflow_obscure, // Tests obscure sprite overflow cases
-        #[ignore = "FQ-03: PPUSTATUS seen at instruction boundaries"]
         spr_overflow_timing, // Tests sprite overflow timing
         sprite_ram,           // Tests sprite ram
         tv,                   // Tests NTSC color and NTSC/PAL aspect ratio
         vbl_nmi_basics,       // Tests vblank NMI basics
         vbl_nmi_clear_timing, // Tests vblank NMI clear timing
         vbl_nmi_control,      // Tests vblank NMI control
-        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_disable, // Tests vblank NMI disable
-        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
+        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot timing; not bisected"]
         vbl_nmi_even_odd_frames, // Tests vblank NMI on even/odd frames
         // Passes: the ROM reports code 0 and prints "10-even_odd_timing / Passed". Asserted on
         // that $6000 status code rather than a frame hash, so a regression says which sub-test
         // failed instead of only that some pixel moved.
-        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_even_odd_timing, // Tests vblank NMI even/odd frame timing
         vbl_nmi_frame_basics,    // Tests vblank NMI frame basics
-        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_off_timing, // Tests vblank NMI off timing
-        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_on_timing, // Tests vblank NMI on timing
-        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_set_time, // Tests vblank NMI set timing
-        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
+        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot timing; not bisected"]
         vbl_nmi_suppression, // Tests vblank NMI suppression
-        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_timing, // Tests vblank NMI timing
-        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
+        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot timing; not bisected"]
         vbl_timing, // Tests vblank timing
         vram_access, // Tests video RAM access
     );
@@ -561,7 +552,6 @@ pub(crate) mod tests {
         // This NES program demonstrates abusing the NTSC NES's sampled sound
         // playback hardware as a scanline timer to split the screen twice
         // without needing to use a mapper-generated IRQ.
-        #[ignore = "FQ-01..FQ-08: remaining FCEUmm timing; not bisected"]
         dpcmletterbox,
         // Blargg's APU tests
         //
@@ -860,10 +850,12 @@ pub(crate) mod tests {
         //
         // See: <https://forums.nesdev.org/viewtopic.php?f=3&t=11174>
         test_1,
+        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot with hardware VBlank/NMI timing; not bisected"]
         test_2,
         test_3,
         test_4,
         test_5,
+        #[ignore = "FQ-01/FQ-06/FQ-07: FCEUmm boot with hardware VBlank/NMI timing; not bisected"]
         test_6,
         test_7,
         test_8,

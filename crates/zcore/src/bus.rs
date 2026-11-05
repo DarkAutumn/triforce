@@ -72,14 +72,9 @@ pub struct Bus {
     /// Called before every instruction when set; see [`TraceHook`].
     pub(crate) trace: Option<TraceHook>,
     /// The PPU runs behind the CPU and is caught up only when something can observe it (see
-    /// [`Bus::ppu_sync`]). Master clock at which it must be caught up between instructions,
-    /// because a frame-boundary or NMI-request dot may be due. Recomputed on every catch-up.
+    /// [`Bus::ppu_sync`]). CPU master clock at which it must be caught up, checked every cycle,
+    /// because a frame-boundary or VBlank-edge dot may be due. Recomputed on every catch-up.
     pub(crate) ppu_deadline: u32,
-    /// PPU catch-up target at the start of the current instruction: where FQ-03's
-    /// `status_at_instr` snapshot is taken.
-    pub(crate) instr_start_clock: u32,
-    /// Whether `status_at_instr` has been taken for the current instruction yet.
-    pub(crate) status_latched: bool,
     /// The APU's `master_clock` from which a CPU cycle has board or APU work to do
     /// ([`Apu::next_clock`], or every cycle while the board counts down a write). Zero (work on
     /// the next cycle, which recomputes it) after anything that changes either from outside its
@@ -135,8 +130,6 @@ impl Bus {
             render: true,
             trace: None,
             ppu_deadline: 0,
-            instr_start_clock: 0,
-            status_latched: true,
             tick_deadline: 0,
             irq_quiet: false,
         }
@@ -623,7 +616,6 @@ mod test {
     /// register a write lands on. Reads of the write-only registers return the PPU's open bus
     /// rather than anything latched.
     #[test]
-    #[ignore = "FQ-03: $2002 reads see VBlank as of the instruction start"]
     fn read_write_ppu() {
         let mut bus = Bus::default();
 

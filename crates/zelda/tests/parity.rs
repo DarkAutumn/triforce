@@ -357,6 +357,7 @@ fn run_fixture(
 }
 
 #[test]
+#[ignore = "step 18: FCEUmm-recorded movie desyncs on hardware timing (FQ-02..FQ-05)"]
 fn session_matches_python_fixtures() {
     let Some(mut nes) = open_core() else { return };
     let map = Arc::new(GameMap::builtin());

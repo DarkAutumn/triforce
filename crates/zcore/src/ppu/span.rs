@@ -182,8 +182,8 @@ impl Bus {
         let from = self.ppu.cycle + 1;
         let to = self.ppu.cycle + span;
 
-        // FQ-08/FQ-05 events and the vblank edges, in dot order. Nothing else here reads what
-        // they change.
+        // The FQ-08 frame boundary and the vblank edges, in dot order. Nothing else here reads
+        // what they change.
         if from == cycle::VBLANK {
             self.ppu.cycle = cycle::VBLANK;
             self.fceumm_events();
@@ -192,10 +192,6 @@ impl Bus {
             } else if self.ppu.is_prerender_scanline {
                 self.ppu.stop_vblank();
             }
-        }
-        if from <= 13 && to >= 13 {
-            self.ppu.cycle = 13;
-            self.fceumm_events();
         }
 
         // Pixels: with rendering off a visible line shows the backdrop, or the palette entry `v`
