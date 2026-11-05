@@ -525,6 +525,16 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 [[package]]
 name = "pool"
 version = "0.1.0"
+dependencies = [
+ "env",
+ "flate2",
+ "oracle",
+ "parking_lot",
+ "rand",
+ "rand_chacha",
+ "serde_json",
+ "zelda",
+]
 
 [[package]]
 name = "ppv-lite86"

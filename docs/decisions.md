@@ -292,3 +292,68 @@ Format: date — what changed — why — evidence.
   (`& 0xE3`); battery PRG-RAM starts zeroed.
 - **Evidence:** `tf diff --all --backend tetanes` → `0 of 63 movies diverge`; `cargo test -p
   tetanes-core` (stable, `RUSTFLAGS=""`) 553 + 16 passed.
+
+## 2026-11-05 — `pool` crate: threaded env pool and Zelda adapters (plan step 14)
+
+- **What:** `crates/pool` has a generic core (`Pool<E: PoolEnv>`; nothing about Zelda) and, behind the default
+  `zelda` feature, adapters from `env::SpecialistEnv`/`env::ChainEnv` over any `zelda::Nes`. Departures from
+  the draft:
+  - **Env trait.** `PoolEnv { layout, reset, step }`: `reset` writes the first observation and returns the acting
+    `policy` (or `None`: the env's job list ran out, it is finished); `step` writes the next observation and
+    returns reward, frames, interrupt code, terminated/truncated/bootstrap and policy. Envs are built on the
+    caller's thread by a factory that gets `EnvInit { index, rng, control }`; env `i` lives on thread
+    `i % threads`.
+  - **Same-row auto-reset.** After a terminal step the env resets at once: the row's `obs` is the next
+    episode's first observation, `final_obs`/`final_valid` keep the terminal one (gymnasium's same-step reset,
+    matching `RolloutBuffer.collect`, which stores the reset observation and uses the terminal one only for the
+    bootstrap value). No step is spent on a reset.
+  - **Buffers.** Caller-owned `Batch` of C-contiguous columns: one per observation key (`[rows, *shape]`,
+    int64/float32/bool) for `obs` and `final_obs`, plus `env_ids`, `reward` (f32), `frames`, `interrupt`,
+    `terminated`, `truncated`, `bootstrap`, `final_valid`, `policy`, `finished`. The mask is the `action_mask`
+    observation key, not a separate column. The chain's specialist is the generic `policy` column (index into the
+    chain env's policy list). Rows are written in ascending env id; with more ready envs than rows the oldest are
+    taken.
+  - **recv/wait.** `recv(out, min_ready, timeout)` waits for `min(min_ready, rows, ready + running)` rows, so
+    finished or failed envs and envs still awaiting `send` can't deadlock it; a timeout returns what is ready
+    (maybe 0). `wait(min_ready, timeout)` blocks without copying, for the PyO3 layer's release-the-GIL loop
+    with signal checks. Every method takes `&self` (one `recv` at a time), so `frame`, `set_render` and
+    `poll_events` work while another thread blocks in `recv`; `close()` wakes it with `Closed`.
+  - **Failures.** An env error or panic (caught on the worker) takes that env out and is returned once by the
+    next `recv`/`wait` as `PoolError::Env { env, error }` (typed, so the PyO3 layer maps `EnvError` variants to
+    exception classes) or `PoolError::Panic`; the other envs keep going.
+  - **Seeding.** Env `i`'s generator is `ChaCha8Rng::seed_from_u64(seed)` on stream `i`. Lockstep runs are
+    reproducible across thread counts. Eval jobs and chain seeds come from a shared `Jobs` queue (an env takes
+    the next job when it resets), so which env plays a job depends on timing, but each job reseeds from its own
+    seed.
+  - **Rendering.** `zelda::Nes` has no RGB method and the zelda crate stays untouched: envs run on `PoolNes<N>`,
+    which renders a frame only while the pool's per-env flag is set (read as each frame starts, so
+    `set_render` takes effect from the next frame). The session renders every real frame; look-ahead frames
+    (`run_frame(_, false)`) never render. The session's frame sink (real frames only) publishes rendered frames
+    into the env's double buffer through an `RgbFn<N>` (zcore will pass `ZCore::rgb`) and paces.
+  - **Pacing** sleeps the env's worker per real frame (`FramePacer` semantics), so an env holds its rate only
+    with a thread to itself (`threads == num_envs`, as `GameGrid` plans). Closing the pool stops pacing sleeps
+    (threads are unparked), so shutdown doesn't wait out a paced step.
+  - **Recording.** `set_record(env, on)` takes effect at the env's next episode. `PoolNes` logs every real
+    frame's buttons and every poke; restoring one of the log's own snapshots (look-ahead) truncates it, the
+    `OracleEmulator.load_state` rule, and loading a start state begins a new log. `PoolStore` tags loaded states
+    with their name, the log's `origin`. The log arrives as `ZeldaEvent::Movie(InputLog)`; building the
+    `TFMOVIE` (the origin state's power-on prefix) is the writer's job.
+  - **Events.** `ZeldaEvent::{Episode(StepInfo), Eval(EvalRecord), Run(RunResult), Room(RoomEvent),
+    Movie(InputLog)}` with the env id. Room events (play_grid's `room` message: specialist, level, room,
+    health, max health, on change) are on for chains and opt-in for training/eval; each episode reports its first
+    room.
+  - **Chains.** A specialist without a model is listed in the env's `missing` map (specialist → reason) and its
+    run ends as `error` with that reason via `ChainEnv::fail`, in Rust, so the pool never hands Python a row it
+    can't act on. Chain rows have reward 0, `terminated` at the run's end and no interrupt code (`ChainEnv` keeps
+    its last change private).
+  - **`TaskEnv`** (`Train`/`Eval`/`Chain`) lets one concrete pool type serve every task.
+- **Evidence:** `CARGO_TARGET_DIR=target/agent-pool cargo test -p pool`: 25 tests. Fake-env tests: lockstep
+  buffers and events identical with 1, 3 and 8 threads (with timing jitter); `recv(min_ready=1)` returns the
+  fast env in < 300 ms while another takes 600 ms; auto-reset rows; `set_render` turned on and off mid-step
+  takes effect at the next frame; `frame(env, since)` returns only newer frames; 60 frames at 100 fps take 0.5–3
+  s; `close()` mid-step at 10 fps returns in < 2 s and wakes a blocked `recv`; a panic and an error fail only
+  their env; finished envs leave the pool. Oracle tests: a pooled `TrainEnv` matches the same `SpecialistEnv`
+  played directly row for row (observations, final observations, rewards, frames, interrupts, endings over
+  40 steps with `max_steps` 12, so several auto-resets); pooled chain runs equal direct runs; frames are
+  published for exactly the real frames of each step while beams run the look-ahead; a recorded Goriya episode
+  with beam look-ahead replays on the oracle from its origin state to identical RAM and PRG-RAM.
