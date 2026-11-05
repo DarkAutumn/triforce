@@ -187,8 +187,9 @@ class ListPool:
         row.update(obs=obs, reward=reward, frames=frames)
         return row
 
-    def recv(self, out, min_ready=None):
-        """Writes ready envs' rows (every env's reset on the first call) and returns how many."""
+    def recv(self, out, min_ready=None, timeout=None):
+        """Writes ready envs' rows (every env's reset on the first call) and returns how many (``timeout`` is
+        ignored: sent envs are ready at once)."""
         if not self._started:
             self._started = True
             for i in range(self.num_envs):

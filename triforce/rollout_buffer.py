@@ -97,22 +97,24 @@ class RolloutBuffer:
         self.frames = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.returns = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.advantages = torch.zeros(n_envs, memory_length, dtype=torch.float32)
+        # numpy views of the same memory: cheap per-row stores while collecting
+        self._np = {'obs': {key: value.numpy() for key, value in self.observation.items()},
+                    'masks': self.masks.numpy(), 'dones': self.dones.numpy(), 'actions': self.actions.numpy(),
+                    'logp_ent_val': self.logp_ent_val.numpy()}
 
     def store_obs(self, envs, steps, obs: dict, dones):
-        """Stores env ``envs[k]``'s observation at step ``steps[k]`` (``obs``: per-key ``[k, *shape]`` arrays or
-        tensors including ``action_mask``) and whether it starts a new episode."""
-        envs, steps = torch.as_tensor(envs), torch.as_tensor(steps)
-        for key, storage in self.observation.items():
-            storage[envs, steps] = torch.as_tensor(obs[key]).reshape(len(envs), *storage.shape[2:])
-        self.masks[envs, steps] = torch.as_tensor(obs[MASK_KEY]).bool()
-        self.dones[envs, steps] = torch.as_tensor(np.asarray(dones, dtype=np.float32))
+        """Stores env ``envs[k]``'s observation at step ``steps[k]`` (``obs``: per-key ``[k, *shape]`` arrays
+        including ``action_mask``) and whether it starts a new episode."""
+        for key, storage in self._np['obs'].items():
+            storage[envs, steps] = np.asarray(obs[key]).reshape(len(envs), *storage.shape[2:])
+        self._np['masks'][envs, steps] = obs[MASK_KEY]
+        self._np['dones'][envs, steps] = dones
 
     def store_policy(self, envs, steps, actions, logp_ent_val):
         """Stores the actions env ``envs[k]`` took at step ``steps[k]`` with their ``[k, 3]`` log-prob, entropy
         and value."""
-        envs, steps = torch.as_tensor(envs), torch.as_tensor(steps)
-        self.actions[envs, steps] = torch.as_tensor(actions)
-        self.logp_ent_val[envs, steps] = torch.as_tensor(logp_ent_val)
+        self._np['actions'][envs, steps] = actions
+        self._np['logp_ent_val'][envs, steps] = logp_ent_val
 
     def store_results(self, rewards, frames):
         """Stores every step's ``[n, T]`` learning rewards (bootstrap already added) and elapsed frames."""

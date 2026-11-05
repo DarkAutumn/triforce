@@ -68,69 +68,104 @@ class IterationResult:
     stats: dict               # optimization stats + entropy per head + steps/sec
 
 
+def _flat_layout(spec: dict) -> tuple[dict, int]:
+    """Byte offsets of ``spec`` (name → (shape, numpy dtype)) packed into one buffer, 64-byte aligned."""
+    layout, offset = {}, 0
+    for name, (shape, dtype) in spec.items():
+        nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
+        layout[name] = (offset, nbytes, tuple(shape), torch.from_numpy(np.empty(0, dtype)).dtype)
+        offset += -(-nbytes // 64) * 64
+    return layout, offset
+
+
+def _flat_views(flat: torch.Tensor, layout: dict) -> dict:
+    """Typed tensor views into the byte buffer ``flat``."""
+    return {name: flat[offset:offset + nbytes].view(dtype).view(shape)
+            for name, (offset, nbytes, shape, dtype) in layout.items()}
+
+
 class RolloutPolicy:
     """The rollout forward pass over a fixed batch of one row per env.
 
-    Holds its own eval-mode copy of the network on ``device`` (``load`` refreshes the weights in place) and host
-    staging tensors (``obs`` per key including ``action_mask``, ``noise``) that the collector writes ready envs'
-    rows into.  Every call evaluates all ``n`` rows, so a row's outputs depend only on its own observation and
-    noise, not on which other envs are waiting.  On CUDA the forward is captured once as a CUDA graph and replayed:
-    one pinned host→device copy of the staging, one device→host copy of the outputs, one sync per call.
+    Holds its own eval-mode copy of the network on ``device`` (``load`` refreshes the weights in place), host
+    staging arrays (``obs`` per key including ``action_mask``, ``noise``; numpy views of one pinned buffer) that hold
+    each env's latest observation, and the outputs (``actions``, ``logp_ent_val``).  Every forward evaluates all
+    ``n`` rows, so a row's outputs depend only on its own observation and noise, not on which other envs are
+    waiting.  On CUDA the forward is captured once as a CUDA graph whose first and last nodes copy the staging in
+    and the outputs out (one transfer each way); ``launch`` queues it and ``wait`` blocks until the outputs are on
+    the host, so the caller can do bookkeeping in between.
     """
+    # pylint: disable=too-many-instance-attributes
+
+    _NOISE = '_noise'
 
     def __init__(self, network: nn.Module, observation: dict, device):
-        """``observation``: per-key ``[n, *shape]`` arrays (the pool's ``obs`` rows) giving shapes and dtypes."""
+        """``observation``: per-key ``[n, *shape]`` arrays (the pool's ``obs`` rows): shapes, dtypes and the
+        initial staged rows."""
         self.device = torch.device(device)
         self.network = copy.deepcopy(network).to(self.device).eval()
-        pin = self.device.type == 'cuda'
-        self.obs = {key: torch.from_numpy(np.array(value)).pin_memory() if pin else torch.from_numpy(np.array(value))
-                    for key, value in observation.items()}
-        n = len(self.obs[MASK_KEY])
-        self.noise = torch.zeros((n, NOISE_SIZE), pin_memory=pin)
-        self.actions = torch.zeros((n, 3), dtype=torch.int64, pin_memory=pin)
-        self.logp_ent_val = torch.zeros((n, 3), pin_memory=pin)
+        n = len(observation[MASK_KEY])
+        inputs = {key: (np.shape(value), np.asarray(value).dtype) for key, value in observation.items()}
+        inputs[self._NOISE] = ((n, NOISE_SIZE), np.float32)
+        in_layout, in_bytes = _flat_layout(inputs)
+        out_layout, out_bytes = _flat_layout({'actions': ((n, 3), np.int64), 'logp_ent_val': ((n, 3), np.float32)})
+        cuda = self.device.type == 'cuda'
+        self._host_in = torch.zeros(in_bytes, dtype=torch.uint8, pin_memory=cuda)
+        self._host_out = torch.zeros(out_bytes, dtype=torch.uint8, pin_memory=cuda)
+        host_in, host_out = _flat_views(self._host_in, in_layout), _flat_views(self._host_out, out_layout)
+        self.obs = {key: host_in[key].numpy() for key in observation}
+        for key, value in observation.items():
+            self.obs[key][...] = value
+        self.noise = host_in[self._NOISE].numpy()
+        self.actions, self.logp_ent_val = host_out['actions'].numpy(), host_out['logp_ent_val'].numpy()
         self._graph = None
-        if pin:
-            self._capture()
+        if cuda:
+            self._device_in, self._device_out = self._host_in.to(self.device), self._host_out.to(self.device)
+            self._done = torch.cuda.Event()
+            self._capture(_flat_views(self._device_in, in_layout), _flat_views(self._device_out, out_layout))
+        else:
+            self._views = (host_in, host_out)
 
-    def _forward(self, obs, noise):
-        out = self.network.evaluate({k: v for k, v in obs.items() if k != MASK_KEY}, obs[MASK_KEY], noise=noise)
-        return out.actions, torch.stack([out.log_prob, out.entropy, out.value], dim=-1)
+    @torch.no_grad()
+    def _forward(self, inputs: dict, outputs: dict):
+        obs = {key: value for key, value in inputs.items() if key not in (MASK_KEY, self._NOISE)}
+        out = self.network.evaluate(obs, inputs[MASK_KEY], noise=inputs[self._NOISE])
+        outputs['actions'].copy_(out.actions)
+        outputs['logp_ent_val'].copy_(torch.stack([out.log_prob, out.entropy, out.value], dim=-1))
 
-    def _capture(self):
-        self._device_obs = {key: value.to(self.device) for key, value in self.obs.items()}
-        self._device_noise = self.noise.to(self.device)
+    def _capture(self, inputs: dict, outputs: dict):
+        def step():
+            self._device_in.copy_(self._host_in, non_blocking=True)
+            self._forward(inputs, outputs)
+            self._host_out.copy_(self._device_out, non_blocking=True)
+
         stream = torch.cuda.Stream(self.device)
         stream.wait_stream(torch.cuda.current_stream(self.device))
-        with torch.no_grad():
-            with torch.cuda.stream(stream):          # warm up kernels/allocations off the capture stream
-                for _ in range(3):
-                    self._forward(self._device_obs, self._device_noise)
-            torch.cuda.current_stream(self.device).wait_stream(stream)
-            self._graph = torch.cuda.CUDAGraph()
-            with torch.cuda.graph(self._graph):
-                self._device_out = self._forward(self._device_obs, self._device_noise)
+        with torch.cuda.stream(stream):              # warm up kernels/allocations off the capture stream
+            for _ in range(3):
+                step()
+        torch.cuda.current_stream(self.device).wait_stream(stream)
+        self._graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self._graph):
+            step()
 
     def load(self, network: nn.Module):
         """Copies ``network``'s weights into the rollout copy (in place, so the captured graph sees them)."""
         self.network.load_state_dict(network.state_dict())
 
-    @torch.no_grad()
-    def __call__(self) -> tuple[np.ndarray, np.ndarray]:
-        """(actions ``[n, 3]`` int64, ``[n, 3]`` log-prob/entropy/value) for every staged row."""
+    def launch(self):
+        """Starts evaluating every staged row (on CPU: evaluates them)."""
         if self._graph is None:
-            actions, logp_ent_val = self._forward(self.obs, self.noise)
-            self.actions.copy_(actions)
-            self.logp_ent_val.copy_(logp_ent_val)
+            self._forward(*self._views)
         else:
-            for key, value in self.obs.items():
-                self._device_obs[key].copy_(value, non_blocking=True)
-            self._device_noise.copy_(self.noise, non_blocking=True)
             self._graph.replay()
-            self.actions.copy_(self._device_out[0], non_blocking=True)
-            self.logp_ent_val.copy_(self._device_out[1], non_blocking=True)
-            torch.cuda.current_stream(self.device).synchronize()
-        return self.actions.numpy(), self.logp_ent_val.numpy()
+            self._done.record()
+
+    def wait(self) -> tuple[np.ndarray, np.ndarray]:
+        """(actions ``[n, 3]`` int64, ``[n, 3]`` log-prob/entropy/value) of the last ``launch``."""
+        if self._graph is not None:
+            self._done.synchronize()
+        return self.actions, self.logp_ent_val
 
     @torch.no_grad()
     def value(self, obs: dict) -> np.ndarray:
@@ -158,6 +193,8 @@ class Collector:
         count = self.pool.recv(self.rows, min_ready=self.n_envs)
         if count != self.n_envs or not np.array_equal(self.rows['env_ids'], np.arange(self.n_envs)):
             raise RuntimeError(f"first recv returned {count} of {self.n_envs} envs: {self.rows['env_ids']}")
+        # each env's latest observation (the policy's staging once there is a policy)
+        self.current = {key: np.array(value) for key, value in self.rows['obs'].items()}
         self.dones = np.zeros(self.n_envs, dtype=np.float32)
         if seed is None:
             seed = int(torch.randint(0, 2 ** 62, ()))
@@ -166,8 +203,8 @@ class Collector:
 
     def _policy(self, network: nn.Module, device) -> RolloutPolicy:
         if self.policy is None or self.policy.device != torch.device(device):
-            current = None if self.policy is None else self.policy.obs
-            self.policy = RolloutPolicy(network, current or self.rows['obs'], device)
+            self.policy = RolloutPolicy(network, self.current, device)
+            self.current = self.policy.obs
         else:
             self.policy.load(network)
         return self.policy
@@ -178,27 +215,28 @@ class Collector:
         buffer, rows, n, length = self.buffer, self.rows, self.n_envs, self.buffer.memory_length
         policy = self._policy(network, device)
         staged = policy.obs
-        noise = gumbel_noise((n, length, NOISE_SIZE), self.generator)
+        noise = gumbel_noise((n, length, NOISE_SIZE), self.generator).numpy()
         rewards = np.zeros((n, length), dtype=np.float32)
         frames = np.zeros((n, length), dtype=np.int64)
         interrupts = np.zeros((n, length), dtype=np.int64)
         counts = np.zeros(n, dtype=np.int64)
         bootstraps, events = [], []
 
-        everyone = np.arange(n)
-        buffer.store_obs(everyone, counts, staged, self.dones)
-        ready, outstanding = everyone, 0
+        ready, outstanding = np.arange(n), 0
         while True:
             if len(ready):
                 steps = counts[ready]
-                masks = staged[MASK_KEY][ready, :NUM_KINDS].numpy()
-                if not masks.any(axis=1).all():
-                    bad = int(ready[np.flatnonzero(~masks.any(axis=1))[0]])
+                kinds = staged[MASK_KEY][ready, :NUM_KINDS].any(axis=1)
+                if not kinds.all():
+                    bad = int(ready[np.flatnonzero(~kinds)[0]])
                     raise ValueError(f"Empty kind mask for env {bad}: {staged[MASK_KEY][bad].tolist()}")
                 policy.noise[ready] = noise[ready, steps]
-                actions, logp_ent_val = policy()
-                buffer.store_policy(ready, steps, actions[ready], logp_ent_val[ready])
-                self.pool.send(ready, actions[ready])
+                policy.launch()
+                buffer.store_obs(ready, steps, {k: v[ready] for k, v in staged.items()}, self.dones[ready])
+                actions, logp_ent_val = policy.wait()
+                actions = actions[ready]
+                buffer.store_policy(ready, steps, actions, logp_ent_val[ready])
+                self.pool.send(ready, actions)
                 outstanding += len(ready)
             if not outstanding:
                 break
@@ -214,15 +252,16 @@ class Collector:
             if len(bootstrap):
                 bootstraps.append((ids[bootstrap], steps[bootstrap],
                                    {key: value[bootstrap].copy() for key, value in rows['final_obs'].items()}))
-            dones = (rows['terminated'][:count] | rows['truncated'][:count]).astype(np.float32)
-            self.dones[ids] = dones
+            self.dones[ids] = rows['terminated'][:count] | rows['truncated'][:count]
             counts[ids] += 1
-            ids_tensor = torch.from_numpy(ids)
             for key, value in staged.items():
-                value[ids_tensor] = torch.from_numpy(rows['obs'][key][:count])
-            buffer.store_obs(ids, counts[ids], {key: value[ids_tensor] for key, value in staged.items()}, dones)
+                value[ids] = rows['obs'][key][:count]
             events += [e for e in self.pool.poll_events() if e['type'] == 'episode']
             ready = ids[counts[ids] < length]
+            parked = ids[counts[ids] == length]
+            if len(parked):         # the observation each env resumes from next rollout
+                buffer.store_obs(parked, counts[parked], {k: v[parked] for k, v in staged.items()},
+                                 self.dones[parked])
 
         if bootstraps:
             envs = np.concatenate([b[0] for b in bootstraps])
