@@ -1,0 +1,115 @@
+# Scripted first actions per env parity fixture (scripts/record_env_parity.py).  Action.parse syntax:
+# 'MOVE N 16', 'WAIT 8', 'SWORD E', 'BEAMS W', 'BOOMERANG NW'.  At most the first 40 are used; a scripted
+# action the current mask forbids is replaced by a random legal one (and the replacement is recorded).
+
+[rooms]
+# Start room: walk up-left to the sword cave, bump walls on the way.
+0_77_start = [
+    "MOVE N 16", "MOVE N 16", "MOVE W 32", "MOVE W 32", "MOVE N 8", "WAIT 4", "MOVE W 16", "MOVE N 16",
+    "MOVE N 32", "MOVE E 4", "MOVE W 4", "MOVE N 8", "MOVE N 8", "MOVE S 4", "MOVE N 16", "WAIT 16",
+    "MOVE W 8", "MOVE N 16", "MOVE E 8", "MOVE N 8", "MOVE W 8", "MOVE N 32", "MOVE S 16", "MOVE W 16",
+    "MOVE N 16", "WAIT 8", "MOVE N 8", "MOVE W 4", "MOVE N 4", "MOVE N 4", "MOVE E 16", "MOVE S 32",
+    "MOVE W 32", "MOVE N 32", "MOVE N 32", "WAIT 32", "MOVE E 8", "MOVE S 8", "MOVE N 16", "MOVE W 8",
+]
+# Sword cave: walk to the old man (blocked at his line), take the sword, leave.
+0_77_cave = [
+    "MOVE N 16", "MOVE N 16", "MOVE N 16", "MOVE N 16", "MOVE N 8", "MOVE N 8", "WAIT 16", "MOVE W 8",
+    "MOVE N 8", "MOVE E 8", "MOVE N 8", "MOVE N 4", "WAIT 32", "WAIT 32", "SWORD N", "SWORD S",
+    "MOVE S 16", "MOVE S 16", "MOVE S 16", "MOVE S 16", "MOVE S 32", "MOVE S 32", "WAIT 4", "MOVE S 8",
+    "MOVE S 8", "MOVE S 8", "MOVE S 8", "MOVE S 8", "MOVE S 8", "MOVE S 8", "MOVE S 8", "MOVE S 8",
+    "MOVE S 8", "MOVE S 8", "MOVE S 8", "MOVE S 8", "MOVE S 8", "MOVE S 8", "MOVE S 8", "MOVE S 8",
+]
+# Octoroks: fight in place, then move.
+0_67 = [
+    "WAIT 8", "SWORD N", "BEAMS N", "MOVE N 16", "SWORD E", "BEAMS E", "MOVE E 16", "SWORD W",
+    "MOVE W 8", "WAIT 16", "BEAMS W", "SWORD S", "MOVE S 8", "MOVE N 32", "BEAMS N", "SWORD N",
+    "MOVE E 32", "BEAMS E", "WAIT 32", "MOVE N 16", "SWORD N", "MOVE W 16", "SWORD W", "BEAMS S",
+    "MOVE S 16", "SWORD E", "MOVE E 8", "MOVE E 8", "WAIT 4", "BEAMS N", "MOVE N 8", "SWORD N",
+    "MOVE W 4", "MOVE E 4", "BEAMS W", "SWORD S", "MOVE N 16", "MOVE E 16", "SWORD E", "WAIT 8",
+]
+# Zora room: Zora fireballs come at Link (shield blocks), walk the shore.
+0_38 = [
+    "WAIT 16", "WAIT 16", "MOVE N 16", "SWORD N", "WAIT 32", "MOVE W 16", "SWORD W", "WAIT 32",
+    "MOVE N 8", "BEAMS N", "WAIT 16", "MOVE E 16", "WAIT 32", "SWORD E", "MOVE N 16", "WAIT 32",
+    "MOVE W 32", "WAIT 8", "SWORD N", "MOVE N 8", "WAIT 32", "MOVE W 16", "BEAMS W", "WAIT 16",
+    "MOVE S 8", "WAIT 32", "SWORD S", "MOVE W 16", "WAIT 32", "MOVE N 16", "SWORD N", "WAIT 32",
+    "MOVE W 8", "WAIT 16", "MOVE N 8", "MOVE W 8", "WAIT 32", "SWORD W", "MOVE N 32", "WAIT 8",
+]
+# D1 entrance: doors, keese.
+1_73 = [
+    "MOVE N 16", "SWORD N", "MOVE W 32", "SWORD W", "MOVE W 32", "WAIT 8", "SWORD N", "MOVE N 16",
+    "SWORD E", "MOVE E 32", "MOVE E 32", "SWORD E", "WAIT 16", "MOVE N 32", "SWORD N", "MOVE S 16",
+    "MOVE W 16", "SWORD W", "SWORD N", "WAIT 8", "MOVE E 16", "SWORD S", "MOVE N 8", "SWORD N",
+    "MOVE W 8", "MOVE N 8", "SWORD W", "WAIT 4", "MOVE E 4", "SWORD E", "MOVE S 32", "SWORD S",
+    "MOVE N 16", "SWORD N", "MOVE W 16", "SWORD W", "MOVE E 32", "SWORD E", "WAIT 32", "MOVE N 32",
+]
+# Stalfos rooms: swing toward enemies, walk around.
+1_72 = [
+    "SWORD W", "WAIT 8", "SWORD W", "MOVE W 16", "SWORD W", "SWORD N", "MOVE N 16", "SWORD N",
+    "SWORD S", "MOVE S 16", "SWORD S", "WAIT 16", "SWORD W", "MOVE W 16", "SWORD E", "MOVE E 8",
+    "SWORD N", "MOVE N 8", "SWORD W", "WAIT 8", "SWORD S", "MOVE S 8", "SWORD E", "MOVE E 16",
+    "SWORD W", "MOVE W 32", "SWORD N", "MOVE N 32", "SWORD S", "MOVE S 32", "SWORD E", "MOVE E 32",
+    "WAIT 4", "SWORD W", "MOVE W 4", "SWORD N", "MOVE N 4", "SWORD S", "MOVE S 4", "SWORD E",
+]
+1_74 = [
+    "SWORD E", "WAIT 8", "SWORD E", "MOVE E 16", "SWORD E", "SWORD N", "MOVE N 16", "SWORD N",
+    "SWORD S", "MOVE S 16", "SWORD S", "WAIT 16", "SWORD E", "MOVE E 16", "SWORD W", "MOVE W 8",
+    "SWORD N", "MOVE N 8", "SWORD E", "WAIT 8", "SWORD S", "MOVE S 8", "SWORD W", "MOVE W 16",
+    "SWORD E", "MOVE E 32", "SWORD N", "MOVE N 32", "SWORD S", "MOVE S 32", "SWORD W", "MOVE W 32",
+    "WAIT 4", "SWORD E", "MOVE E 4", "SWORD N", "MOVE N 4", "SWORD S", "MOVE S 4", "SWORD W",
+]
+# Goriyas: their boomerangs are blockable; wait facing them, then fight.
+1_44 = [
+    "WAIT 16", "SWORD E", "WAIT 16", "MOVE E 8", "SWORD E", "WAIT 32", "SWORD N", "MOVE N 8",
+    "SWORD N", "WAIT 16", "MOVE E 16", "SWORD E", "SWORD S", "MOVE S 8", "SWORD S", "WAIT 32",
+    "SWORD E", "MOVE E 16", "SWORD N", "MOVE N 16", "WAIT 16", "SWORD W", "MOVE W 8", "SWORD E",
+    "WAIT 8", "SWORD S", "MOVE S 16", "SWORD E", "MOVE E 8", "WAIT 32", "SWORD N", "SWORD E",
+    "MOVE E 32", "SWORD E", "WAIT 16", "MOVE N 16", "SWORD N", "MOVE S 32", "SWORD S", "WAIT 8",
+]
+# Wallmasters come out of the walls.
+1_45 = [
+    "MOVE E 16", "SWORD E", "MOVE N 16", "SWORD N", "WAIT 32", "SWORD W", "MOVE E 16", "SWORD S",
+    "MOVE N 32", "SWORD N", "WAIT 16", "SWORD E", "MOVE E 16", "SWORD N", "MOVE N 16", "WAIT 32",
+    "SWORD W", "MOVE W 16", "SWORD S", "MOVE S 8", "SWORD E", "MOVE N 8", "WAIT 16", "SWORD N",
+    "MOVE N 16", "SWORD W", "MOVE E 8", "SWORD E", "WAIT 32", "MOVE N 16", "SWORD N", "MOVE W 4",
+    "SWORD S", "MOVE S 16", "SWORD E", "MOVE E 32", "SWORD N", "MOVE N 32", "WAIT 8", "SWORD W",
+]
+# Aquamentus: approach and swing east, dodge north/south.
+1_35 = [
+    "MOVE N 16", "MOVE E 32", "SWORD E", "BEAMS E", "MOVE E 16", "SWORD E", "BEAMS E", "MOVE N 16",
+    "SWORD E", "MOVE S 16", "SWORD E", "BEAMS E", "MOVE E 16", "SWORD E", "WAIT 8", "SWORD E",
+    "MOVE N 8", "SWORD E", "MOVE S 8", "SWORD E", "BEAMS E", "MOVE E 8", "SWORD E", "MOVE N 16",
+    "SWORD E", "MOVE S 16", "SWORD E", "BEAMS E", "WAIT 16", "SWORD E", "MOVE E 8", "SWORD E",
+    "MOVE N 8", "SWORD E", "MOVE S 8", "SWORD E", "BEAMS E", "MOVE E 32", "SWORD E", "WAIT 8",
+]
+# Triforce room: walk to the triforce.
+1_36 = [
+    "MOVE E 16", "MOVE E 16", "MOVE N 8", "MOVE E 16", "WAIT 8", "MOVE E 16", "MOVE N 8", "MOVE E 16",
+    "MOVE N 16", "MOVE E 8", "MOVE N 8", "MOVE E 8", "MOVE S 8", "MOVE E 8", "MOVE N 16", "MOVE E 8",
+    "WAIT 16", "MOVE E 16", "MOVE N 16", "MOVE W 8", "MOVE N 8", "MOVE E 8", "MOVE N 8", "MOVE E 4",
+    "MOVE N 4", "MOVE E 4", "MOVE N 4", "WAIT 32", "MOVE E 16", "MOVE N 16", "MOVE E 16", "MOVE N 16",
+    "MOVE S 16", "MOVE W 16", "MOVE S 16", "MOVE E 32", "MOVE N 32", "MOVE E 32", "MOVE N 32", "WAIT 4",
+]
+# D2 entrance: ropes; the boomerang is usable after D1.
+2_7d = [
+    "WAIT 8", "SWORD N", "BOOMERANG N", "MOVE N 16", "SWORD E", "BOOMERANG NE", "MOVE E 16", "SWORD W",
+    "BOOMERANG W", "MOVE W 16", "WAIT 16", "SWORD N", "BOOMERANG NW", "MOVE N 16", "SWORD E", "MOVE E 32",
+    "BOOMERANG E", "WAIT 8", "SWORD S", "MOVE S 8", "BOOMERANG SE", "SWORD N", "MOVE N 8", "BOOMERANG SW",
+    "SWORD W", "MOVE W 8", "WAIT 32", "BOOMERANG N", "SWORD E", "MOVE E 8", "SWORD N", "MOVE N 32",
+    "BOOMERANG S", "MOVE S 16", "SWORD S", "WAIT 16", "BOOMERANG E", "MOVE E 16", "SWORD E", "WAIT 4",
+]
+2_5e = [
+    "WAIT 16", "BOOMERANG N", "SWORD N", "MOVE N 16", "BOOMERANG NE", "SWORD E", "WAIT 16", "MOVE E 16",
+    "BOOMERANG E", "SWORD N", "MOVE N 8", "WAIT 32", "BOOMERANG NW", "SWORD W", "MOVE W 16", "SWORD S",
+    "BOOMERANG S", "MOVE S 8", "WAIT 16", "SWORD N", "MOVE N 16", "BOOMERANG N", "SWORD E", "MOVE E 8",
+    "WAIT 8", "BOOMERANG SW", "SWORD W", "MOVE W 8", "SWORD N", "MOVE N 32", "BOOMERANG SE", "WAIT 16",
+    "SWORD S", "MOVE S 16", "BOOMERANG W", "SWORD E", "MOVE E 32", "WAIT 4", "SWORD N", "MOVE N 16",
+]
+# Fairy pond room (milestone1-fairy waypoint): walk north to the pond edge, wait, leave south.
+0_39_fairy = [
+    "MOVE N 16", "MOVE N 16", "MOVE N 16", "MOVE W 8", "MOVE N 16", "MOVE E 8", "MOVE N 8", "WAIT 32",
+    "WAIT 32", "WAIT 32", "WAIT 32", "MOVE N 8", "WAIT 32", "WAIT 32", "MOVE W 4", "MOVE N 4",
+    "WAIT 32", "WAIT 32", "MOVE E 4", "WAIT 32", "MOVE S 16", "MOVE S 16", "MOVE S 16", "MOVE S 16",
+    "MOVE S 32", "MOVE N 32", "WAIT 16", "SWORD N", "MOVE N 16", "SWORD W", "MOVE W 16", "WAIT 32",
+    "MOVE S 32", "MOVE S 32", "MOVE E 16", "SWORD E", "MOVE S 16", "WAIT 8", "MOVE S 8", "MOVE S 8",
+]
