@@ -71,10 +71,10 @@ impl Rom {
     }
 }
 
-/// A complete, restorable machine state.
-#[derive(Clone)]
+/// A complete, restorable machine state (the ROM is not part of it).
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct MachineState {
-    deck: crate::bus::Bus,
+    bus: crate::bus::Bus,
     frame: u64,
 }
 
@@ -164,12 +164,13 @@ impl ZCore {
 
     /// A complete copy of the machine state.
     pub fn snapshot(&self) -> MachineState {
-        MachineState { deck: self.deck.bus().clone(), frame: self.frame }
+        MachineState { bus: self.deck.bus().clone(), frame: self.frame }
     }
 
-    /// Return to a [`ZCore::snapshot`]. The next frame must be rendered before `pixels` is valid.
+    /// Return to a [`ZCore::snapshot`] (or a decoded state file). The next frame must be rendered
+    /// before `pixels` is valid.
     pub fn restore(&mut self, state: &MachineState) {
-        *self.deck.bus_mut() = state.deck.clone();
+        self.deck.load_bus(state.bus.clone()).expect("a state for this ROM");
         self.frame = state.frame;
         self.rendered = false;
     }

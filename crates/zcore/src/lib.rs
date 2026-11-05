@@ -29,7 +29,9 @@ pub mod sys;
 pub mod video;
 
 pub mod machine;
+pub mod state_file;
 pub use machine::{MachineState, Rom, RomError, ZCore};
+pub use state_file::StateFormatError;
 
 pub mod prelude {
     //! The prelude re-exports all the common structs/enums used for basic NES emulation.
