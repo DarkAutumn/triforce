@@ -1,36 +1,26 @@
 //! NES cartridge implementation.
 //!
-//! # Stability
-//!
-//! [`Cart`]'s accessors are not field reads: [`Cart::mirroring`] decodes header flag bits,
-//! [`Cart::mapper_num`] and [`Cart::submapper_num`] prefer the game database's answer over the
-//! header's, and [`Cart::prg_rom`] and [`Cart::chr_rom`] trim the padding [`Memory`] added to
-//! reach a whole page. Reading the header or memory directly gets a different answer from the
-//! one the `ControlDeck` is running on. See the crate-level [stability](crate#stability) note for
-//! the tier this belongs to and why.
+//! A [`Cart`] is what loading an iNES file yields: the header, the board, the RAM regions
+//! ([`Memory`]) and the PRG-ROM image, mirrored up to [`PRG_ROM_SIZE`] and shared through an
+//! `Arc` (it is not part of the emulated state).
 
 use crate::{
-    bus::Bus,
+    bus::State,
     mapper::{self, Mapper},
-    memory::{Memory, MemoryLayout, Src},
+    memory::{CHR_SIZE, Memory, PRG_RAM_SIZE, PRG_ROM_SIZE, PrgRom, Src},
     ppu::Mirroring,
 };
 use std::{
     fs::File,
     io::{BufReader, Read},
     path::Path,
+    sync::Arc,
 };
 use thiserror::Error;
-use tracing::{debug, info, warn};
-
-/// Default CHR-RAM provided when a cart has no CHR-ROM.
-const DEFAULT_CHR_RAM_SIZE: usize = 8 * 1024;
-/// Default PRG-RAM provided when a header declares none (SxROM's 8K window).
-const DEFAULT_PRG_RAM_SIZE: usize = 8 * 1024;
+use tracing::{debug, info};
 
 const PRG_ROM_BANK_SIZE: usize = 0x4000;
 const CHR_ROM_BANK_SIZE: usize = 0x2000;
-
 /// A `Result` from loading a cartridge.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -82,16 +72,14 @@ pub struct Cart {
     pub header: NesHeader,
     /// The board serving this cart.
     pub mapper: Mapper,
-    /// All of the cart's memory, and the page tables that address it.
+    /// The cart's PRG-RAM, CHR and CIRAM, and the page tables that address them.
     pub memory: Memory,
+    /// The cart's PRG-ROM, mirrored up to [`PRG_ROM_SIZE`].
+    pub prg_rom: Arc<PrgRom>,
     /// Bytes of CHR-ROM; 0 for a cart with CHR-RAM instead.
     pub chr_rom_size: usize,
-    /// Bytes of CHR-RAM; 0 for a cart with CHR-ROM instead.
-    pub chr_ram_size: usize,
-    /// Bytes of PRG-ROM.
+    /// Bytes of PRG-ROM in the file.
     pub prg_rom_size: usize,
-    /// Bytes of PRG-RAM, battery-backed or not.
-    pub prg_ram_size: usize,
 }
 
 impl Default for Cart {
@@ -108,46 +96,37 @@ impl Cart {
 
     /// An empty `Cart` with the given ROM sizes. A `chr_rom_size` of zero yields CHR-RAM instead.
     pub fn empty_sized(prg_rom_size: usize, chr_rom_size: usize) -> Self {
-        let chr_ram_size = if chr_rom_size == 0 {
-            DEFAULT_CHR_RAM_SIZE
-        } else {
-            0
-        };
         Self {
             name: "Empty Cart".to_string(),
             header: NesHeader::default(),
             mapper: Mapper::none(),
-            memory: Self::build_memory(prg_rom_size, 0, chr_rom_size, chr_ram_size, false),
+            memory: Self::build_memory(chr_rom_size == 0),
+            prg_rom: Self::prg_image(&vec![0; prg_rom_size]).expect("a valid PRG-ROM size"),
             chr_rom_size,
-            chr_ram_size,
             prg_rom_size,
-            prg_ram_size: 0,
         }
     }
 
-    /// Allocate page-table memory sized for a cart.
-    fn build_memory(
-        prg_rom_size: usize,
-        prg_ram_size: usize,
-        chr_rom_size: usize,
-        chr_ram_size: usize,
-        four_screen: bool,
-    ) -> Memory {
-        let mut memory = Memory::new(MemoryLayout {
-            prg_rom: prg_rom_size,
-            prg_ram: prg_ram_size.max(DEFAULT_PRG_RAM_SIZE),
-            // `chr_ram_size` is only non-zero when there is no CHR-ROM, so exactly one of the two
-            // backs the CHR region.
-            chr: if chr_rom_size > 0 {
-                chr_rom_size
-            } else {
-                chr_ram_size.max(DEFAULT_CHR_RAM_SIZE)
-            },
-            chr_writable: chr_rom_size == 0,
-            ciram: if four_screen { 4 * 1024 } else { 2 * 1024 },
-        });
-        memory.fill_ram(Bus::POWER_ON_RAM);
+    /// Memory as a cart powers on: PRG-RAM (and CHR-RAM) filled with [`State::POWER_ON_RAM`].
+    fn build_memory(chr_writable: bool) -> Memory {
+        let mut memory = Memory::new(chr_writable);
+        memory.fill_ram(State::POWER_ON_RAM);
         memory
+    }
+
+    /// The [`PRG_ROM_SIZE`] image of a PRG-ROM, mirrored (all zero for an empty one). `None`
+    /// unless its size is a power of two no larger than the image, which is what keeps every bank
+    /// number reading the bytes it would in the ROM itself.
+    fn prg_image(prg_rom: &[u8]) -> Option<Arc<PrgRom>> {
+        let image = match prg_rom.len() {
+            0 => vec![0; PRG_ROM_SIZE],
+            len if len.is_power_of_two() && len <= PRG_ROM_SIZE => {
+                prg_rom.repeat(PRG_ROM_SIZE / len)
+            }
+            _ => return None,
+        };
+        let image: Box<PrgRom> = image.into_boxed_slice().try_into().ok()?;
+        Some(Arc::from(image))
     }
 
     /// Load `Cart` from a ROM path.
@@ -220,9 +199,6 @@ impl Cart {
         let header = NesHeader::load(&mut rom_data)?;
         debug!("{header:?}");
 
-        // Read into exactly-sized buffers first: the CRC lookup that picks the board needs the ROM
-        // contents, and the board decides how much PRG-RAM to allocate, so the arena cannot be
-        // built until afterwards.
         let prg_rom_size = (header.prg_rom_banks as usize) * PRG_ROM_BANK_SIZE;
         let mut prg_rom = vec![0u8; prg_rom_size];
         rom_data.read_exact(&mut prg_rom).map_err(|err| {
@@ -239,64 +215,74 @@ impl Cart {
                 Error::io(err, "failed to read prg-rom")
             }
         })?;
+        let prg_rom = Self::prg_image(&prg_rom).ok_or_else(|| Error::InvalidHeader {
+            byte: 4,
+            value: header.prg_rom_banks as u8,
+            message: format!("PRG-ROM must be a power of two up to {PRG_ROM_SIZE} bytes"),
+        })?;
 
         let prg_ram_size = Self::calculate_ram_size(header.prg_ram_shift, 10)?;
-
-        let chr_rom_size = (header.chr_rom_banks as usize) * CHR_ROM_BANK_SIZE;
-        let mut chr_rom = vec![0u8; chr_rom_size];
-        if chr_rom_size > 0 {
-            rom_data.read_exact(&mut chr_rom).map_err(|err| {
-                if let std::io::ErrorKind::UnexpectedEof = err.kind() {
-                    Error::InvalidHeader {
-                        byte: 5,
-                        value: header.chr_rom_banks as u8,
-                        message: format!(
-                            "expected `{}` chr-rom banks ({prg_rom_size} total bytes)",
-                            header.chr_rom_banks
-                        ),
-                    }
-                } else {
-                    Error::io(err, "failed to read chr-rom")
-                }
-            })?;
+        if prg_ram_size > PRG_RAM_SIZE {
+            return Err(Error::InvalidHeader {
+                byte: 10,
+                value: header.prg_ram_shift,
+                message: format!("PRG-RAM is at most {PRG_RAM_SIZE} bytes"),
+            });
         }
 
+        let chr_rom_size = (header.chr_rom_banks as usize) * CHR_ROM_BANK_SIZE;
         let chr_ram_size = if chr_rom_size > 0 {
             0
         } else {
             Self::calculate_ram_size(header.chr_ram_shift, 11)?
         };
-
-        let crc32 = Self::rom_crc32(&prg_rom, &chr_rom);
-
-        let mut memory = Self::build_memory(
-            prg_rom_size,
-            prg_ram_size,
-            chr_rom_size,
-            chr_ram_size,
-            header.flags & 0x08 == 0x08,
-        );
-        memory.region_mut(Src::PrgRom)[..prg_rom_size].copy_from_slice(&prg_rom);
-        if chr_rom_size > 0 {
-            memory.region_mut(Src::Chr)[..chr_rom_size].copy_from_slice(&chr_rom);
+        if chr_rom_size.max(chr_ram_size) > CHR_SIZE {
+            return Err(Error::InvalidHeader {
+                byte: 5,
+                value: header.chr_rom_banks as u8,
+                message: format!("CHR is at most {CHR_SIZE} bytes"),
+            });
         }
-        memory.set_rom_crc32(crc32);
+        if header.flags & 0x08 == 0x08 {
+            return Err(Error::InvalidHeader {
+                byte: 6,
+                value: header.flags,
+                message: "four-screen carts are not supported".to_string(),
+            });
+        }
+
+        let mut memory = Self::build_memory(chr_rom_size == 0);
+        if chr_rom_size > 0 {
+            rom_data
+                .read_exact(&mut memory.region_mut(Src::Chr)[..chr_rom_size])
+                .map_err(|err| {
+                    if let std::io::ErrorKind::UnexpectedEof = err.kind() {
+                        Error::InvalidHeader {
+                            byte: 5,
+                            value: header.chr_rom_banks as u8,
+                            message: format!(
+                                "expected `{}` chr-rom banks ({chr_rom_size} total bytes)",
+                                header.chr_rom_banks
+                            ),
+                        }
+                    } else {
+                        Error::io(err, "failed to read chr-rom")
+                    }
+                })?;
+        }
 
         let mut cart = Self {
             name,
             header,
             mapper: Mapper::none(),
             memory,
+            prg_rom,
             chr_rom_size,
-            chr_ram_size,
             prg_rom_size,
-            prg_ram_size,
         };
         // Header mirroring is the default for every board; only boards that override it - either
         // hard-wired or via a register - touch it again.
         cart.memory.set_mirroring(cart.mirroring());
-        // The arena outlives the `Cart` - `Bus::load_cart` keeps only it and the board - so what
-        // the console still needs to know about the cart travels with it.
         cart.memory.set_battery_backed(cart.battery_backed());
         Ok(cart)
     }
@@ -330,15 +316,11 @@ impl Cart {
     }
 
     /// Returns hardware configured `Mirroring`.
-    pub fn mirroring(&self) -> Mirroring {
-        if self.header.flags & 0x08 == 0x08 {
-            Mirroring::FourScreen
+    pub const fn mirroring(&self) -> Mirroring {
+        if self.header.flags & 0x01 == 0 {
+            Mirroring::Horizontal
         } else {
-            match self.header.flags & 0x01 {
-                0 => Mirroring::Horizontal,
-                1 => Mirroring::Vertical,
-                _ => unreachable!("impossible mirroring"),
-            }
+            Mirroring::Vertical
         }
     }
 
@@ -355,27 +337,15 @@ impl Cart {
     }
 
     /// The cart's PRG-ROM, exactly as the file contained it.
-    ///
-    /// [`Cart::memory`] pads each region out to whole pages, so this trims that padding back off
-    /// for the callers that need the ROM itself - CRC lookups and the debugger.
     #[must_use]
     pub fn prg_rom(&self) -> &[u8] {
-        &self.memory.region_ref(Src::PrgRom)[..self.prg_rom_size]
+        &self.prg_rom[..self.prg_rom_size]
     }
 
     /// The cart's CHR-ROM, exactly as the file contained it. Empty for a CHR-RAM cart.
     #[must_use]
     pub fn chr_rom(&self) -> &[u8] {
         &self.memory.region_ref(Src::Chr)[..self.chr_rom_size]
-    }
-
-    /// Size of the cart's CHR region, or zero when no board is loaded.
-    pub fn chr_size(&self) -> usize {
-        if self.mapper.is_none() {
-            0
-        } else {
-            self.memory.region_ref(Src::Chr).len()
-        }
     }
 
     /// Total RAM a NES 2.0 size byte asks for, volatile plus battery-backed.
@@ -386,9 +356,7 @@ impl Cart {
     /// `64 << 0x70`, which overflowed and was reported as a corrupt header, so **every NES 2.0
     /// cart with a battery save was rejected outright**.
     ///
-    /// The two are summed because `Memory` gives a board one region per kind rather than one per
-    /// volatility. No ROM in a 2722-cart library declares both halves - none is even NES 2.0 - so
-    /// this is the conservative reading rather than a tested one.
+    /// The two are summed because a cart has one region per kind rather than one per volatility.
     fn calculate_ram_size(byte: u8, header_byte: u8) -> Result<usize> {
         let shift_size = |shift: u8| {
             // `0xF` is reserved rather than a size, and is rejected while parsing the header.
@@ -412,34 +380,17 @@ impl Cart {
 
         Ok(volatile + non_volatile)
     }
-
-    /// CRC32 of the ROM itself: PRG-ROM, plus CHR-ROM when the cart has any.
-    ///
-    /// It identifies the game: [`Cart::memory`] carries it so that a save state - which holds no
-    /// ROM of its own - can be refused when it belongs to another game.
-    fn rom_crc32(prg_rom: &[u8], chr_rom: &[u8]) -> u32 {
-        let mut crc = 0xFFFF_FFFFu32;
-        for &byte in prg_rom.iter().chain(chr_rom) {
-            crc ^= u32::from(byte);
-            for _ in 0..8 {
-                crc = (crc >> 1) ^ (0xEDB8_8320 & (crc & 1).wrapping_neg());
-            }
-        }
-        !crc
-    }
 }
 
 impl std::fmt::Display for Cart {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(
             f,
-            "{} - mapper {}, CHR-ROM: {}K, CHR-RAM: {}K, PRG-ROM: {}K, PRG-RAM: {}K, Mirroring: {:?}, Battery: {}",
+            "{} - mapper {}, CHR-ROM: {}K, PRG-ROM: {}K, Mirroring: {:?}, Battery: {}",
             self.name,
             self.mapper_num(),
             self.chr_rom_size / 0x0400,
-            self.chr_ram_size / 0x0400,
             self.prg_rom_size / 0x0400,
-            self.prg_ram_size / 0x0400,
             self.mirroring(),
             self.battery_backed(),
         )
@@ -593,13 +544,6 @@ impl NesHeader {
                     message: "invalid chr-ram size in header".to_string(),
                 });
             }
-            if chr_ram_shift & 0xF0 != 0 {
-                // The high nibble alone, not `0xF0`, which the reserved-value check just above
-                // already rejects. A `.sram` holds `Memory::sram` - PRG-RAM plus whatever the
-                // board stages after it - and CHR-RAM is in neither, so a battery on it is not
-                // persisted. Letting the cart run and saying so beats refusing to load it.
-                warn!("battery-backed chr-ram is not persisted between sessions");
-            }
             NesVariant::Nes2
         } else if header[7] & 0x0C == 0x04 {
             // If D2..D3 of flag 7 == 1, then archaic iNES (supports bytes 0-7)
@@ -728,22 +672,21 @@ mod tests {
 
     /// Header byte 10 is two nibbles - PRG-RAM low, battery-backed PRG-NVRAM high - and each has
     /// to be shifted on its own. Reading the byte whole asks for `64 << 0x70` on a cart with an
-    /// 8 KiB battery save, which overflows and reads as a corrupt header, rejecting every NES 2.0
-    /// cart that has a save.
+    /// 8 KiB battery save, which overflows and reads as a corrupt header. zcore carts have at most
+    /// 8 KiB, so a larger declaration is refused.
     #[test]
     fn nes2_prg_nvram_is_the_high_nibble_of_byte_10() {
-        let cases = [
-            (0x00, 0),           // neither
-            (0x07, 8 * 1024),    // 8K volatile PRG-RAM
-            (0x70, 8 * 1024),    // 8K battery-backed, the high nibble on its own
-            (0x77, 16 * 1024),   // both, summed
-            (0x0E, 1024 * 1024), // the largest shift that is not the reserved value
-        ];
-
-        for (byte, expected) in cases {
-            let cart = Cart::from_rom("test.nes", &mut nes2_rom(byte).as_slice())
+        for byte in [0x00, 0x07, 0x70] {
+            let _cart = Cart::from_rom("test.nes", &mut nes2_rom(byte).as_slice())
                 .unwrap_or_else(|err| panic!("byte 10 = {byte:#04X} should load: {err}"));
-            assert_eq!(cart.prg_ram_size, expected, "byte 10 = {byte:#04X}",);
+        }
+        for byte in [0x77, 0x0E] {
+            let err = Cart::from_rom("test.nes", &mut nes2_rom(byte).as_slice())
+                .expect_err("more than 8 KiB of PRG-RAM");
+            assert!(
+                matches!(err, Error::InvalidHeader { byte: 10, .. }),
+                "byte 10 = {byte:#04X} gave {err}"
+            );
         }
     }
 

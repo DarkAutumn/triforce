@@ -2,9 +2,11 @@
 //!
 //! <https://wiki.nesdev.org/w/index.php/CPU_memory_map>
 //!
-//! [`Bus`] owns the console: the CPU, PPU, APU, input and the cartridge's board, plus the work RAM
-//! and open-bus state it routes with. It is also the unit of emulated state - the whole of what a
-//! save state, a rewind frame and a run-ahead snapshot contain, and nothing else.
+//! [`State`] is the whole emulated console - the CPU, PPU, APU, input, the cartridge's board and
+//! RAM, the work RAM and open bus - in fixed arrays, so it is `Copy` and a snapshot is a memcpy
+//! (ladder stage Z5). [`Bus`] is a running console: a `State` plus what is not emulated state -
+//! the PRG-ROM it reads (shared, immutable) and the frame buffer pixels go to. `Bus` derefs to
+//! its `State`, so the emulation code reads `self.cpu`, `self.ppu`, ... either way.
 //!
 //! Behavior that needs more than one component lives in an `impl Bus` block in the file that owns
 //! the state it reads: the CPU's in [`cpu`](crate::cpu), the instruction set's in
@@ -20,20 +22,12 @@
 //! | PPU address space | [`Bus::ppu_bus_peek`] | |
 //! | cartridge, through the page tables | [`Bus::chr_peek`] | |
 //!
-//! [`Bus::copy_ppu_bus`] copies `$0000-$2FFF` as currently banked, for reading CHR off-thread.
-//! [`Bus::poke`] is the write with no side effects, storing into RAM alone, for a debugger to
-//! change state with.
+//! [`Bus::poke`] is the write with no side effects, storing into RAM alone.
 //!
 //! # Stability
 //!
-//! [`Bus`]'s fields are the emulation's internal wiring - the components it routes to, and the
-//! open-bus and region state it routes with. They are public so that embedders and debuggers can
-//! reach the component tree, but they track the implementation rather than the crate version, and
-//! a release may add, rename or retype any of them. The stable entry point is
-//! [`ControlDeck`](crate::control_deck::ControlDeck), which reaches the whole component tree
-//! through [`ControlDeck::bus`](crate::control_deck::ControlDeck::bus) and
-//! [`bus_mut`](crate::control_deck::ControlDeck::bus_mut). See the crate-level
-//! [stability](crate#stability) note for the tier this belongs to and why.
+//! [`State`]'s fields are the emulation's internal wiring. They are public so that tools can
+//! digest machine state, but they track the implementation rather than any stable surface.
 
 use crate::{
     apu::Apu,
@@ -42,13 +36,149 @@ use crate::{
     cpu::Cpu,
     input::{Input, Player},
     mapper::Mapper,
-    memory::{ConstArray, Memory},
-    ppu::Ppu,
+    memory::{ConstArray, Memory, PRG_ROM_SIZE, PrgRom},
+    ppu::{self, Ppu},
 };
 use serde::{Deserialize, Serialize};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::{Arc, LazyLock},
+};
 use tracing::trace;
 
-/// NES Bus
+/// A pixel frame: one palette index (plus emphasis bits) per pixel, row-major.
+pub type FrameBuffer = [u16; ppu::size::FRAME];
+
+/// The PRG-ROM of a console with no cart: all zeroes.
+static NO_PRG_ROM: LazyLock<Arc<PrgRom>> = LazyLock::new(|| {
+    vec![0; PRG_ROM_SIZE]
+        .into_boxed_slice()
+        .try_into()
+        .map(|rom: Box<PrgRom>| Arc::from(rom))
+        .expect("PRG_ROM_SIZE bytes")
+});
+
+/// A running console: the emulated [`State`], the PRG-ROM it reads, and the frame its PPU draws.
+#[must_use]
+pub struct Bus {
+    /// Everything emulated.
+    pub state: State,
+    /// The cart's PRG-ROM, shared and immutable.
+    prg_rom: Arc<PrgRom>,
+    /// Where the PPU draws, when `render` is set.
+    frame: Box<FrameBuffer>,
+    /// Whether the PPU draws pixels. Off, it does every bit of the same work except storing them,
+    /// so the emulated state is identical either way.
+    pub render: bool,
+}
+
+impl Deref for Bus {
+    type Target = State;
+
+    #[inline(always)]
+    fn deref(&self) -> &State {
+        &self.state
+    }
+}
+
+impl DerefMut for Bus {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut State {
+        &mut self.state
+    }
+}
+
+impl std::fmt::Debug for Bus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Bus")
+            .field("state", &self.state)
+            .field("render", &self.render)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Default for Bus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Bus {
+    /// Creates a console with no cart, drawing pixels.
+    pub fn new() -> Self {
+        Self {
+            state: State::new(),
+            prg_rom: NO_PRG_ROM.clone(),
+            frame: vec![0; ppu::size::FRAME]
+                .into_boxed_slice()
+                .try_into()
+                .expect("FRAME pixels"),
+            render: true,
+        }
+    }
+
+    /// Installs a cart: its PRG-ROM, its board and every memory region it came with.
+    pub fn load_cart(&mut self, cart: Cart) {
+        self.prg_rom = cart.prg_rom;
+        self.state.memory = cart.memory;
+        self.state.mapper = cart.mapper;
+    }
+
+    /// Removes the cart, leaving the console with no board.
+    pub fn unload_cart(&mut self) {
+        self.prg_rom = NO_PRG_ROM.clone();
+        self.state.mapper = Mapper::default();
+    }
+
+    /// The PRG-ROM image this console reads at `$8000-$FFFF`.
+    pub fn prg_rom(&self) -> &Arc<PrgRom> {
+        &self.prg_rom
+    }
+
+    /// Share another holder's copy of the same PRG-ROM image.
+    pub fn set_prg_rom(&mut self, prg_rom: Arc<PrgRom>) {
+        debug_assert!(prg_rom[..] == self.prg_rom[..], "the same PRG-ROM");
+        self.prg_rom = prg_rom;
+    }
+
+    /// The last frame drawn (pixels of frames run with `render` off are not updated).
+    #[must_use]
+    pub fn frame(&self) -> &FrameBuffer {
+        &self.frame
+    }
+
+    /// A CPU-space byte at or above `$4020`: PRG-ROM through the page tables, or cart RAM.
+    #[inline(always)]
+    pub(crate) fn prg_peek(&self, addr: u16) -> u8 {
+        if addr >= 0x8000 {
+            self.prg_rom[self.state.memory.rom_index(addr)]
+        } else {
+            self.state.memory.prg_peek(addr)
+        }
+    }
+
+    /// The frame buffer, when this frame is being drawn, alongside the PPU state.
+    #[inline(always)]
+    pub(crate) fn ppu_and_frame(&mut self) -> (&mut Ppu, Option<&mut FrameBuffer>) {
+        let frame = self.render.then_some(&mut *self.frame);
+        (&mut self.state.ppu, frame)
+    }
+
+    /// Resets the console, forwarding it to every component, and clears the frame buffer.
+    pub fn reset(&mut self, kind: ResetKind) {
+        trace!("{kind:?} RESET");
+        self.frame.fill(0);
+        self.state.reset_components(kind);
+        // Read straight off the bus so the components are not clocked during the reset itself.
+        let lo = self.cpu_bus_read(Cpu::RESET_VECTOR);
+        let hi = self.cpu_bus_read(Cpu::RESET_VECTOR + 1);
+        self.cpu.pc = u16::from_le_bytes([lo, hi]);
+        // The CPU takes 7 cycles to reset/power on (nesdev "CPU interrupts"), but FQ-06: FCEUmm
+        // fetches the vector without spending any cycles.
+    }
+}
+
+/// The whole emulated console, `Copy`.
 ///
 /// <https://wiki.nesdev.org/w/index.php/CPU_memory_map>
 ///
@@ -77,37 +207,30 @@ use tracing::trace;
 /// |- - - - - - - - -| $0100 |                 |
 /// | Zero Page       |       |                 |
 /// |-----------------| $0000 |-----------------|
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[must_use]
 #[repr(C)]
-pub struct Bus {
+pub struct State {
     /// Central Processing Unit registers and cycle counters. What the CPU *does* is an
     /// `impl Bus` block in [`cpu`](crate::cpu), since every access moves the whole console.
     pub cpu: Cpu,
     /// Picture Processing Unit.
     pub ppu: Ppu,
     /// The cartridge's board.
-    //
-    // Ordered after `ppu`: the PPU is the heaviest user (CHR and CIRAM fetches are the hot path),
-    // but the CPU reaches PRG through it too.
     pub mapper: Mapper,
-    /// Page-table addressed cartridge memory - every region a cart has.
+    /// Page-table addressed cartridge memory and CIRAM.
     pub memory: Memory,
     /// Audio Processing Unit.
     pub apu: Apu,
     /// Joypad inputs.
     pub input: Input,
     /// 2K of work RAM on the console itself, at $0000-$07FF and mirrored to $1FFF.
-    //
-    // Measured un-boxed (embedded directly in `Bus`): ~1.2% slower on the bench corpus, not
-    // faster, despite removing a pointer chase - inlining it grows `Bus`'s footprint enough to
-    // outweigh that. Keep it boxed.
-    pub wram: Box<ConstArray<u8, { size::WRAM }>>,
+    pub wram: ConstArray<u8, { size::WRAM }>,
     /// Whatever was last read or written to to the Bus.
     pub open_bus: u8,
 }
 
-impl Default for Bus {
+impl Default for State {
     fn default() -> Self {
         Self::new()
     }
@@ -120,14 +243,14 @@ pub mod size {
     pub const WRAM: usize = 0x800;
 }
 
-impl Bus {
+impl State {
     /// Power-on fill of console and cart RAM: FCEUmm's, and what the corpus was recorded with.
     pub const POWER_ON_RAM: u8 = 0xFF;
 
-    /// Creates a console with no cart.
+    /// A console with no cart.
     pub fn new() -> Self {
         Self {
-            wram: Box::new(ConstArray::new()),
+            wram: ConstArray::new(),
             cpu: Cpu::new(),
             ppu: Ppu::new(),
             mapper: Mapper::none(),
@@ -138,27 +261,26 @@ impl Bus {
         }
     }
 
-    /// Installs a cart: its board and every memory region it came with.
-    pub fn load_cart(&mut self, cart: Cart) {
-        self.memory = cart.memory;
-        self.load_mapper(cart.mapper);
-    }
-
-    /// Removes the cart, leaving the console with no board.
-    pub fn unload_cart(&mut self) {
-        self.load_mapper(Mapper::default());
-    }
-
-    /// Copies the PPU's address space - `$0000-$2FFF`, banked and mirrored as it is right now -
-    /// into `dst`.
-    ///
-    /// Page tables are resolved here, so the copy is what the PPU would fetch. Side-effect free.
-    pub fn copy_ppu_bus(&self, dst: &mut [u8]) {
-        for (addr, byte) in dst.iter_mut().enumerate().take(0x3000) {
-            *byte = self.chr_peek(addr as u16);
+    /// Resets every component. A hard reset is a power cycle, so it also re-initialises RAM that a
+    /// power cycle would not preserve: the console's work RAM, and the cart's unless a battery is
+    /// keeping it.
+    fn reset_components(&mut self, kind: ResetKind) {
+        self.cpu.reset(kind);
+        if kind == ResetKind::Hard {
+            self.wram.fill(Self::POWER_ON_RAM);
+            if !self.memory.battery_backed() {
+                self.memory.fill_ram(Self::POWER_ON_RAM);
+            }
         }
+        self.ppu.reset(kind);
+        self.mapper.reset(kind);
+        // Reset can change banking, and the board cannot reach `Memory` from `reset`.
+        self.rebuild_mapper_state();
+        self.apu.reset(kind);
     }
+}
 
+impl Bus {
     /// The console's 2K of work RAM.
     #[must_use]
     #[inline]
@@ -219,7 +341,7 @@ impl Bus {
         };
         self.open_bus = match addr {
             0x0000..=0x07FF => self.wram[usize::from(addr)],
-            0x4100..=0xFFFF => self.memory.prg_peek(addr),
+            0x4100..=0xFFFF => self.prg_peek(addr),
             0x2002 => self.ppu.read_status(),
             0x2004 => self.ppu.read_oamdata(),
             0x2007 => self.read_data(),
@@ -242,7 +364,7 @@ impl Bus {
         };
         match addr {
             0x0000..=0x07FF => self.wram[usize::from(addr)],
-            0x4100..=0xFFFF => self.memory.prg_peek(addr),
+            0x4100..=0xFFFF => self.prg_peek(addr),
             0x2002 => self.ppu.peek_status(),
             0x2004 => self.ppu.peek_oamdata(),
             0x2007 => self.peek_data(),
@@ -269,7 +391,7 @@ impl Bus {
             0x4100..=0xFFFF => {
                 // Data store first, then let the board act on any register the write hit.
                 // Destructured so both fields can be borrowed at once.
-                let Self { mapper, memory, .. } = self;
+                let State { mapper, memory, .. } = &mut self.state;
                 memory.prg_write(addr, val);
                 mapper.write_register(memory, addr, val);
             }
@@ -286,52 +408,6 @@ impl Bus {
             0x4014 => (), // DMA handled by CPU
             _ => (),
         }
-    }
-}
-
-impl Bus {
-    /// Resets the console, forwarding it to every component.
-    ///
-    /// A hard reset is a power cycle, so it also re-initialises RAM that a power cycle would not
-    /// preserve: the console's work RAM, and the cart's unless a battery is keeping it. The CPU
-    /// takes seven cycles to reset, and running them clocks the rest of the console.
-    pub fn reset(&mut self, kind: ResetKind) {
-        trace!("{kind:?} RESET");
-
-        self.cpu.reset(kind);
-        if kind == ResetKind::Hard {
-            self.wram.fill(Self::POWER_ON_RAM);
-            // Battery-backed cart RAM is left alone: keeping it across a power cycle is what the
-            // battery is for.
-            if !self.memory.battery_backed() {
-                self.memory.fill_ram(Self::POWER_ON_RAM);
-            }
-        }
-        self.ppu.reset(kind);
-        self.mapper.reset(kind);
-        // Reset can change banking, and the board cannot reach `Memory` from `reset`.
-        self.rebuild_mapper_state();
-        self.apu.reset(kind);
-
-        // Read straight off the bus so the components are not clocked during the reset itself.
-        let lo = self.cpu_bus_read(Cpu::RESET_VECTOR);
-        let hi = self.cpu_bus_read(Cpu::RESET_VECTOR + 1);
-        self.cpu.pc = u16::from_le_bytes([lo, hi]);
-
-        // The CPU takes 7 cycles to reset/power on (nesdev "CPU interrupts"), but FQ-06: FCEUmm
-        // fetches the vector without spending any cycles.
-    }
-
-    /// The cart's battery-backed RAM (PRG-RAM).
-    pub fn sram(&mut self) -> &[u8] {
-        self.memory.sram()
-    }
-
-    /// Replaces battery-backed cart RAM with raw bytes, as [`Bus::sram`] hands them out.
-    pub fn set_sram(&mut self, data: &[u8]) {
-        let sram = self.memory.sram_mut();
-        let len = sram.len().min(data.len());
-        sram[..len].copy_from_slice(&data[..len]);
     }
 }
 

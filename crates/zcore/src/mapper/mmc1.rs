@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{common::ResetKind, ppu::Mirroring};
 
 /// The `MMC1` chip.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 #[must_use]
 pub struct Mmc1 {
     pub write_just_occurred: u8,

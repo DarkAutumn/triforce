@@ -1241,32 +1241,32 @@ impl Bus {
     /// TAX: Transfer A to X
     #[inline(always)]
     pub fn tax(&mut self) {
-        self.cpu.set_x(self.cpu.acc);
+        self.state.cpu.set_x(self.state.cpu.acc);
     }
     /// TAY: Transfer A to Y
     #[inline(always)]
     pub fn tay(&mut self) {
-        self.cpu.set_y(self.cpu.acc);
+        self.state.cpu.set_y(self.state.cpu.acc);
     }
     /// TSX: Transfer Stack Pointer to X
     #[inline(always)]
     pub fn tsx(&mut self) {
-        self.cpu.set_x(self.cpu.sp);
+        self.state.cpu.set_x(self.state.cpu.sp);
     }
     /// TXA: Transfer X to A
     #[inline(always)]
     pub fn txa(&mut self) {
-        self.cpu.set_acc(self.cpu.x);
+        self.state.cpu.set_acc(self.state.cpu.x);
     }
     /// TXS: Transfer X to Stack Pointer
     #[inline(always)]
     pub const fn txs(&mut self) {
-        self.cpu.set_sp(self.cpu.x);
+        self.state.cpu.set_sp(self.state.cpu.x);
     }
     /// TYA: Transfer Y to A
     #[inline(always)]
     pub fn tya(&mut self) {
-        self.cpu.set_acc(self.cpu.y);
+        self.state.cpu.set_acc(self.state.cpu.y);
     }
 
     // Arithmetic opcodes
@@ -1322,24 +1322,24 @@ impl Bus {
     /// INX: Increment X by One
     #[inline(always)]
     pub fn inx(&mut self) {
-        self.cpu.set_x(self.cpu.x.wrapping_add(1));
+        self.state.cpu.set_x(self.state.cpu.x.wrapping_add(1));
     }
     /// INY: Increment Y by One
     #[inline(always)]
     pub fn iny(&mut self) {
-        self.cpu.set_y(self.cpu.y.wrapping_add(1));
+        self.state.cpu.set_y(self.state.cpu.y.wrapping_add(1));
     }
 
     /// DEX: Decrement X by One
     #[inline(always)]
     pub fn dex(&mut self) {
-        self.cpu.set_x(self.cpu.x.wrapping_sub(1));
+        self.state.cpu.set_x(self.state.cpu.x.wrapping_sub(1));
     }
 
     /// DEY: Decrement Y by One
     #[inline(always)]
     pub fn dey(&mut self) {
-        self.cpu.set_y(self.cpu.y.wrapping_sub(1));
+        self.state.cpu.set_y(self.state.cpu.y.wrapping_sub(1));
     }
 
     // Bitwise opcodes
@@ -1348,19 +1348,19 @@ impl Bus {
     #[inline(always)]
     pub fn and(&mut self) {
         let val = self.read_operand();
-        self.cpu.set_acc(self.cpu.acc & val);
+        self.state.cpu.set_acc(self.state.cpu.acc & val);
     }
     /// EOR: "Exclusive-Or" M with A
     #[inline(always)]
     pub fn eor(&mut self) {
         let val = self.read_operand();
-        self.cpu.set_acc(self.cpu.acc ^ val);
+        self.state.cpu.set_acc(self.state.cpu.acc ^ val);
     }
     /// ORA: "OR" M with A
     #[inline(always)]
     pub fn ora(&mut self) {
         let val = self.read_operand();
-        self.cpu.set_acc(self.cpu.acc | val);
+        self.state.cpu.set_acc(self.state.cpu.acc | val);
     }
 
     /// ASL: Shift Left One Bit (A)
@@ -1465,7 +1465,7 @@ impl Bus {
     #[inline(always)]
     pub fn bit(&mut self) {
         let val = self.read_operand();
-        self.cpu.status.set(Status::Z, (self.cpu.acc & val) == 0);
+        self.state.cpu.status.set(Status::Z, (self.state.cpu.acc & val) == 0);
         self.cpu.status.set(Status::N, (val & 0x80) > 0);
         self.cpu.status.set(Status::V, (val & 0x40) > 0);
     }
@@ -1548,7 +1548,7 @@ impl Bus {
     /// ```
     #[inline(always)]
     pub const fn jmpa(&mut self) {
-        self.cpu.pc = self.cpu.operand;
+        self.state.cpu.pc = self.state.cpu.operand;
     }
     /// JMP: Jump to Location (indirect)
     /// ```text
@@ -1765,7 +1765,7 @@ impl Bus {
     pub fn pla(&mut self) {
         self.read(Cpu::SP_BASE | u16::from(self.cpu.sp)); // Dummy read
         self.cpu.acc = self.pop_byte(); // Cycle 4
-        self.cpu.set_zn_status(self.cpu.acc);
+        self.state.cpu.set_zn_status(self.state.cpu.acc);
     }
 
     // System opcodes
@@ -1880,7 +1880,7 @@ impl Bus {
     pub fn atx(&mut self) {
         let val = self.read_operand();
         self.cpu.set_acc(val); // LDA
-        self.cpu.set_x(self.cpu.acc); // TAX
+        self.state.cpu.set_x(self.state.cpu.acc); // TAX
     }
 
     /// AXS: A & X into X
@@ -1889,9 +1889,8 @@ impl Bus {
         let val = self.read_operand();
         // CMP & DEX
         let res = (self.cpu.acc & self.cpu.x).wrapping_sub(val);
-        self.cpu
-            .status
-            .set(Status::C, (self.cpu.acc & self.cpu.x) >= val);
+        let cpu = &mut self.state.cpu;
+        cpu.status.set(Status::C, (cpu.acc & cpu.x) >= val);
         self.cpu.set_x(res);
     }
 
@@ -1899,9 +1898,9 @@ impl Bus {
     #[inline(always)]
     pub fn las(&mut self) {
         let val = self.read_operand();
-        self.cpu.set_acc(val & self.cpu.sp);
-        self.cpu.set_x(self.cpu.acc);
-        self.cpu.set_sp(self.cpu.acc);
+        self.state.cpu.set_acc(val & self.state.cpu.sp);
+        self.state.cpu.set_x(self.state.cpu.acc);
+        self.state.cpu.set_sp(self.state.cpu.acc);
     }
 
     /// LAX: Shortcut for LDA then TAX
@@ -1982,7 +1981,7 @@ impl Bus {
     #[inline(always)]
     pub fn xaa(&mut self) {
         let val = self.read_operand();
-        self.cpu.set_acc((self.cpu.acc | 0xEE) & self.cpu.x & val);
+        self.state.cpu.set_acc((self.state.cpu.acc | 0xEE) & self.state.cpu.x & val);
     }
 
     /// RRA: Shortcut for ROR then ADC
@@ -2003,7 +2002,7 @@ impl Bus {
     pub fn tas(&mut self) {
         self.shaa();
         // TXS
-        self.cpu.set_sp(self.cpu.x & self.cpu.acc);
+        self.state.cpu.set_sp(self.state.cpu.x & self.state.cpu.acc);
     }
 
     /// ARR: Shortcut for AND #imm then ROR, but sets flags differently
@@ -2012,11 +2011,12 @@ impl Bus {
     pub fn arr(&mut self) {
         let val = self.read_operand();
         let carry = self.cpu.status_bit(Status::C);
-        self.cpu.set_acc(((self.cpu.acc & val) >> 1) | (carry << 7));
-        self.cpu.status.set(Status::C, (self.cpu.acc & 0x40) > 0);
-        self.cpu.status.set(
+        let cpu = &mut self.state.cpu;
+        cpu.set_acc(((cpu.acc & val) >> 1) | (carry << 7));
+        cpu.status.set(Status::C, (cpu.acc & 0x40) > 0);
+        cpu.status.set(
             Status::V,
-            (self.cpu.status_bit(Status::C) ^ (self.cpu.acc >> 5) & 0x01) > 0,
+            (cpu.status_bit(Status::C) ^ (cpu.acc >> 5) & 0x01) > 0,
         );
     }
 
@@ -2029,7 +2029,7 @@ impl Bus {
         self.write(addr, val); // Dummy write
         let shifted_val = self.lsr(val);
         // EOR
-        self.cpu.set_acc(self.cpu.acc ^ shifted_val);
+        self.state.cpu.set_acc(self.state.cpu.acc ^ shifted_val);
         self.write(addr, shifted_val);
     }
 
@@ -2037,9 +2037,9 @@ impl Bus {
     #[inline(always)]
     pub fn alr(&mut self) {
         let val = self.read_operand();
-        self.cpu.set_acc(self.cpu.acc & val);
-        self.cpu.status.set(Status::C, (self.cpu.acc & 0x01) > 0);
-        self.cpu.set_acc(self.cpu.acc >> 1);
+        self.state.cpu.set_acc(self.state.cpu.acc & val);
+        self.state.cpu.status.set(Status::C, (self.state.cpu.acc & 0x01) > 0);
+        self.state.cpu.set_acc(self.state.cpu.acc >> 1);
     }
 
     /// RLA: Shortcut for ROL then AND
@@ -2051,7 +2051,7 @@ impl Bus {
         self.write(addr, val); // Dummy write
         let shifted_val = self.rol(val);
         // AND
-        self.cpu.set_acc(self.cpu.acc & shifted_val);
+        self.state.cpu.set_acc(self.state.cpu.acc & shifted_val);
         self.write(addr, shifted_val);
     }
 
@@ -2059,10 +2059,9 @@ impl Bus {
     #[inline(always)]
     pub fn anc(&mut self) {
         let val = self.read_operand();
-        self.cpu.set_acc(self.cpu.acc & val);
-        self.cpu
-            .status
-            .set(Status::C, self.cpu.status.contains(Status::N));
+        let cpu = &mut self.state.cpu;
+        cpu.set_acc(cpu.acc & val);
+        cpu.status.set(Status::C, cpu.status.contains(Status::N));
     }
 
     /// SLO: Shortcut for ASL then ORA
@@ -2074,7 +2073,7 @@ impl Bus {
         self.write(addr, val); // Dummy write
         let shifted_val = self.asl(val);
         // ORA
-        self.cpu.set_acc(self.cpu.acc | shifted_val);
+        self.state.cpu.set_acc(self.state.cpu.acc | shifted_val);
         self.write(addr, shifted_val);
     }
 }

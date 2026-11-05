@@ -6,7 +6,7 @@
 //! [`Memory`]'s page tables; reads never reach the board. NROM exists only under `#[cfg(test)]`, for
 //! the CPU/PPU/APU test ROMs.
 
-use crate::{bus::Bus, cart::Cart, common::ResetKind, memory::Memory, ppu::Mirroring};
+use crate::{bus::State, cart::Cart, common::ResetKind, memory::Memory, ppu::Mirroring};
 use serde::{Deserialize, Serialize};
 
 pub mod m001_sxrom;
@@ -31,7 +31,7 @@ pub enum Error {
 }
 
 /// The cartridge board.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[must_use]
 pub enum Mapper {
     /// No board, i.e. no cart loaded.
@@ -130,18 +130,9 @@ impl Default for Mapper {
     }
 }
 
-/// Installing a board and keeping the state derived from it in step.
-impl Bus {
-    /// Install a board, replacing whatever cart was loaded.
-    #[inline]
-    pub fn load_mapper(&mut self, mapper: Mapper) {
-        self.mapper = mapper;
-    }
-
-    /// Rebuild the page tables from the mapper's register state.
-    ///
-    /// Required after loading a save state: page tables are derived state and are not serialized,
-    /// so without this a restored state would have every page unmapped.
+/// Keeping the state derived from the board in step.
+impl State {
+    /// Rebuild the page tables from the mapper's register state (after a reset).
     pub fn rebuild_mapper_state(&mut self) {
         let Self { mapper, memory, .. } = self;
         mapper.update_banks(memory);
@@ -189,33 +180,25 @@ pub(crate) mod test_utils {
     use super::*;
     use crate::{
         cart::Cart,
-        memory::{MemoryLayout, PAGE_SIZE, Src},
+        memory::{PAGE_SIZE, PRG_ROM_SIZE, PrgRom, Src},
     };
+    use std::sync::Arc;
 
-    /// A `Cart` with page-indexed contents: PRG-ROM page `n` is filled with `n`, CHR page `n` with
-    /// `0x80 | n`, so PRG and CHR reads can never be mistaken for each other.
+    /// A `Cart` with page-indexed contents: PRG-ROM page `n` is filled with `n` (mirrored up to the
+    /// image size), CHR page `n` with `0x80 | n`, so PRG and CHR reads can never be mistaken for
+    /// each other.
     ///
-    /// Sizes are in bytes. A `chr` of 0 gives 8K of CHR-RAM instead of CHR-ROM. Keep regions under
-    /// 128K: page indices are written as bytes and the CHR tag costs the top bit.
-    pub fn page_indexed_cart(prg_rom: usize, prg_ram: usize, chr: usize) -> Cart {
-        let chr_writable = chr == 0;
-        let chr_size = if chr_writable { 8 * 1024 } else { chr };
+    /// Sizes are in bytes. A `chr` of 0 gives 8K of CHR-RAM instead of 8K of CHR-ROM.
+    pub fn page_indexed_cart(prg_rom: usize, chr: usize) -> Cart {
         let mut cart = Cart::empty_sized(prg_rom, chr);
-        cart.memory = Memory::new(MemoryLayout {
-            prg_rom,
-            prg_ram,
-            chr: chr_size,
-            chr_writable,
-            ciram: 2 * 1024,
-        });
-        for (page, data) in cart
-            .memory
-            .region_mut(Src::PrgRom)
-            .chunks_mut(PAGE_SIZE)
-            .enumerate()
-        {
-            data.fill(page as u8);
+        let mut image: Box<PrgRom> = vec![0; PRG_ROM_SIZE]
+            .into_boxed_slice()
+            .try_into()
+            .expect("PRG_ROM_SIZE bytes");
+        for (page, data) in image.chunks_mut(PAGE_SIZE).enumerate() {
+            data.fill((page % (prg_rom / PAGE_SIZE)) as u8);
         }
+        cart.prg_rom = Arc::from(image);
         for (page, data) in cart
             .memory
             .region_mut(Src::Chr)
@@ -241,7 +224,11 @@ pub(crate) mod test_utils {
 
     /// What the CPU reads at `addr`.
     pub fn prg_peek(_mapper: &Mapper, cart: &Cart, addr: u16) -> u8 {
-        cart.memory.prg_peek(addr)
+        if addr >= 0x8000 {
+            cart.prg_rom[cart.memory.rom_index(addr)]
+        } else {
+            cart.memory.prg_peek(addr)
+        }
     }
 
     /// What the PPU reads at `addr`.
@@ -266,12 +253,11 @@ mod tests {
         );
     }
 
-    /// Page tables are `#[serde(skip)]` derived state, and [`Bus::load_state`] replaces the whole
-    /// console when a save state is loaded. Without a [`Map::update_banks`] on the way back in,
-    /// every page comes back unmapped and a restored state reads zeroes.
+    /// The page tables are part of the `Copy` state and travel with it through serde, so a
+    /// decoded state reads through the same banks as the console it was taken from.
     #[test]
-    fn update_banks_rebuilds_page_tables_after_a_save_state_round_trip() {
-        let mut cart = test_utils::page_indexed_cart(128 * 1024, 8 * 1024, 0);
+    fn page_tables_survive_a_state_round_trip() {
+        let mut cart = test_utils::page_indexed_cart(128 * 1024, 0);
         let mut mapper = Sxrom::load(&mut cart).expect("valid mapper");
         // Select PRG bank 3 at $8000: five serial writes to $E000, clocked apart.
         for bit in 0..5 {
@@ -279,23 +265,12 @@ mod tests {
             mapper.clock();
             mapper.clock();
         }
-        assert_eq!(cart.memory.prg_peek(0x8000), 3 * 16, "bank switched");
+        let peek = |memory: &Memory| cart.prg_rom[memory.rom_index(0x8000)];
+        assert_eq!(peek(&cart.memory), 3 * 16, "bank switched");
 
         let bytes = postcard::to_allocvec(&cart.memory).expect("memory serializes");
-        let mut restored: Memory = postcard::from_bytes(&bytes).expect("memory deserializes");
-        assert_eq!(
-            restored.prg_peek(0x8000),
-            0,
-            "page tables must not survive serialization"
-        );
-        // ROM is not serialized either; `Bus::load_state` reattaches it from the running console.
-        assert!(restored.restore_rom_from(&cart.memory), "same cart");
-        mapper.update_banks(&mut restored);
-        assert_eq!(
-            restored.prg_peek(0x8000),
-            3 * 16,
-            "update_banks must rebuild the mapping from mapper registers"
-        );
+        let restored: Memory = postcard::from_bytes(&bytes).expect("memory deserializes");
+        assert_eq!(peek(&restored), 3 * 16, "the mapping came back");
         assert_eq!(
             restored.region_ref(Src::PrgRam),
             cart.memory.region_ref(Src::PrgRam)

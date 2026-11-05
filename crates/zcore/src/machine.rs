@@ -2,7 +2,13 @@
 //! the emulator behind it, being cut down by the subtraction ladder (`UPSTREAM.md`); this module's
 //! interface stays put while that happens.
 
-use crate::{control_deck::ControlDeck, input::Player, memory::Src};
+use crate::{
+    bus::{Bus, State},
+    cart::Cart,
+    common::ResetKind,
+    input::Player,
+    memory::PrgRom,
+};
 use std::sync::Arc;
 
 /// Frame width in pixels (the whole picture, no overscan crop).
@@ -31,10 +37,19 @@ pub enum RomError {
 }
 
 /// A validated Zelda ROM image.
-#[derive(Debug)]
 pub struct Rom {
     bytes: Vec<u8>,
+    /// The PRG-ROM image every console of this ROM shares.
+    prg: Arc<PrgRom>,
     payload_sha1: [u8; 20],
+}
+
+impl std::fmt::Debug for Rom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Rom")
+            .field("payload_sha1", &self.payload_sha1)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Rom {
@@ -57,8 +72,14 @@ impl Rom {
             let hex: String = payload_sha1.iter().map(|b| format!("{b:02x}")).collect();
             return Err(RomError::WrongPayload(hex));
         }
+        let prg: Box<PrgRom> = bytes[16..]
+            .to_vec()
+            .into_boxed_slice()
+            .try_into()
+            .expect("128 KiB PRG-ROM");
         Ok(Arc::new(Rom {
             bytes: bytes.to_vec(),
+            prg: Arc::from(prg),
             payload_sha1,
         }))
     }
@@ -69,17 +90,19 @@ impl Rom {
     }
 }
 
-/// A complete, restorable machine state (the ROM is not part of it).
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+/// A complete, restorable machine state: every emulated byte, in fixed arrays, so a snapshot is a
+/// plain copy. The PRG-ROM is not part of it (the [`ZCore`] that restores it supplies its own),
+/// nor is the frame buffer.
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct MachineState {
-    bus: crate::bus::Bus,
+    state: State,
     frame: u64,
 }
 
 /// One Zelda console.
 pub struct ZCore {
     rom: Arc<Rom>,
-    deck: ControlDeck,
+    bus: Bus,
     frame: u64,
     rendered: bool,
     pixels: Box<[u8; WIDTH * HEIGHT]>,
@@ -88,14 +111,18 @@ pub struct ZCore {
 impl ZCore {
     /// Power on: CPU RAM $FF, battery PRG-RAM zeroed, no frame run yet.
     pub fn power_on(rom: Arc<Rom>) -> Self {
-        let mut deck = ControlDeck::new();
-        deck.load_rom("zelda.nes", &mut &rom.bytes[..])
-            .expect("a validated Zelda ROM loads");
-        let len = deck.sram().len();
-        deck.set_sram(&vec![0u8; len]);
+        let mut cart =
+            Cart::from_rom("zelda.nes", &mut &rom.bytes[..]).expect("a validated Zelda ROM loads");
+        // Share the ROM's image rather than keep the copy the cart was parsed into.
+        cart.prg_rom = Arc::clone(&rom.prg);
+        let mut bus = Bus::new();
+        bus.load_cart(cart);
+        bus.reset(ResetKind::Hard);
+        // Power-on spec (TFMOVIE v1): an empty, zero-filled battery.
+        bus.memory.prg_ram_mut().fill(0);
         Self {
             rom,
-            deck,
+            bus,
             frame: 0,
             rendered: false,
             pixels: Box::new([0; WIDTH * HEIGHT]),
@@ -103,24 +130,21 @@ impl ZCore {
     }
 
     /// The ROM this console runs.
-    pub fn rom(&self) -> &Arc<Rom> {
+    pub const fn rom(&self) -> &Arc<Rom> {
         &self.rom
     }
 
     /// Run one frame with the NES controller byte (A=0x01, B=0x02, Select=0x04, Start=0x08, Up, Down,
     /// Left, Right). With `render` false no pixel is produced; emulation is identical either way.
     pub fn run_frame(&mut self, buttons: u8, render: bool) {
-        self.deck.bus_mut().ppu.skip_rendering = !render;
-        self.deck.joypad_mut(Player::One).buttons = buttons;
-        self.deck.clock_frame().expect("zcore clock_frame");
+        self.bus.render = render;
+        self.bus.input.joypad_mut(Player::One).buttons = buttons;
+        self.bus.clock_frame();
+        assert!(!self.bus.cpu.corrupted, "zcore: the CPU jammed");
         self.frame += 1;
         self.rendered = render;
         if render {
-            for (dst, &src) in self
-                .pixels
-                .iter_mut()
-                .zip(self.deck.frame_buffer_raw().iter())
-            {
+            for (dst, &src) in self.pixels.iter_mut().zip(self.bus.frame().iter()) {
                 *dst = (src & 0x3F) as u8;
             }
         }
@@ -145,23 +169,20 @@ impl ZCore {
 
     /// CPU RAM $0000-$07FF.
     pub fn ram(&self) -> &[u8; 0x800] {
-        self.deck.wram()
+        &self.bus.wram
     }
 
     /// Cartridge PRG-RAM $6000-$7FFF.
     pub fn prg_ram(&self) -> &[u8; 0x2000] {
-        self.deck.bus().memory.region_ref(Src::PrgRam)[..0x2000]
-            .try_into()
-            .expect("8 KiB PRG-RAM")
+        self.bus.memory.prg_ram()
     }
 
     /// Write RAM ($0000-$07FF) or PRG-RAM ($6000-$7FFF). Panics on any other address.
     pub fn poke(&mut self, addr: u16, value: u8) {
         match addr {
-            0x0000..0x0800 => self.deck.wram_mut()[usize::from(addr)] = value,
+            0x0000..0x0800 => self.bus.wram[usize::from(addr)] = value,
             0x6000..0x8000 => {
-                self.deck.bus_mut().memory.region_mut(Src::PrgRam)[usize::from(addr) - 0x6000] =
-                    value;
+                self.bus.memory.prg_ram_mut()[usize::from(addr) - 0x6000] = value;
             }
             _ => panic!("poke address ${addr:04X} is outside $0000-$07FF/$6000-$7FFF"),
         }
@@ -170,7 +191,7 @@ impl ZCore {
     /// A complete copy of the machine state.
     pub fn snapshot(&self) -> MachineState {
         MachineState {
-            bus: self.deck.bus().clone(),
+            state: self.bus.state,
             frame: self.frame,
         }
     }
@@ -178,9 +199,7 @@ impl ZCore {
     /// Return to a [`ZCore::snapshot`] (or a decoded state file). The next frame must be rendered
     /// before `pixels` is valid.
     pub fn restore(&mut self, state: &MachineState) {
-        self.deck
-            .load_bus(state.bus.clone())
-            .expect("a state for this ROM");
+        self.bus.state = state.state;
         self.frame = state.frame;
         self.rendered = false;
     }
@@ -192,12 +211,13 @@ impl ZCore {
 
     /// CPU cycles since power-on.
     pub fn cycles(&self) -> u64 {
-        u64::from(self.deck.bus().cpu.cycle)
+        u64::from(self.bus.cpu.cycle)
     }
 
     /// The emulator underneath, for tools that read internal state.
-    pub const fn deck(&self) -> &ControlDeck {
-        &self.deck
+    #[doc(hidden)]
+    pub const fn bus(&self) -> &Bus {
+        &self.bus
     }
 }
 

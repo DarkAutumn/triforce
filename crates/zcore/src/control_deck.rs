@@ -4,11 +4,11 @@
 //! instruction. Each refreshes what [`ControlDeck::frame_buffer`] reports.
 
 use crate::{
-    bus::{self, Bus},
+    bus::{self, Bus, FrameBuffer, State},
     cart::{self, Cart},
     common::ResetKind,
     input::{Joypad, Player},
-    mapper, ppu,
+    mapper,
     video::{Frame, Video, VideoFilter},
 };
 use bitflags::bitflags;
@@ -37,9 +37,6 @@ pub enum Error {
     /// The ROM's mapper number has no board implementation.
     #[error("unimplemented mapper `{0}`")]
     UnimplementedMapper(u16),
-    /// A save state that does not belong to the loaded cart.
-    #[error(transparent)]
-    StateMismatch(#[from] crate::cpu::StateMismatch),
 }
 
 bitflags! {
@@ -75,7 +72,7 @@ pub struct LoadedRom {
 }
 
 /// Represents an NES Control Deck. Encapsulates the entire emulation state.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[must_use]
 pub struct ControlDeck {
     /// Whether a ROM is loaded and the emulation is currently running or not.
@@ -106,7 +103,7 @@ impl ControlDeck {
     /// Creates a NES `ControlDeck` with the given [`Config`].
     pub fn with_config(cfg: Config) -> Self {
         let mut bus = Bus::new();
-        bus.ppu.skip_rendering = cfg.headless_mode.contains(HeadlessMode::NO_VIDEO);
+        bus.render = !cfg.headless_mode.contains(HeadlessMode::NO_VIDEO);
         Self {
             running: false,
             video: Video::with_filter(cfg.filter),
@@ -151,28 +148,19 @@ impl ControlDeck {
         self.running = false;
     }
 
-    /// Replaces the running console with a previously saved [`Bus`] state.
-    ///
-    /// # Errors
-    ///
-    /// If the state was not produced by the currently loaded cart, in which case the running
-    /// console is left untouched.
+    /// Replaces the running console with a previously saved [`State`] (of this cart).
     #[inline]
-    pub fn load_bus(&mut self, bus: Bus) -> Result<()> {
-        self.bus.load_state(bus)?;
-        // Page tables are derived state and aren't serialized, so rebuild them from the restored
-        // mapper registers.
-        self.bus.rebuild_mapper_state();
+    pub fn load_bus(&mut self, state: State) {
+        self.bus.state = state;
         // The console this deck was showing is gone; anything cached from it describes a machine
         // that is no longer here.
         self.video_frame_stale = true;
-        Ok(())
     }
 
     /// Set the headless mode which can increase performance when the frame output is not needed.
     #[inline]
-    pub const fn set_headless_mode(&mut self, mode: HeadlessMode) {
-        self.bus.ppu.skip_rendering = mode.contains(HeadlessMode::NO_VIDEO);
+    pub fn set_headless_mode(&mut self, mode: HeadlessMode) {
+        self.bus.render = !mode.contains(HeadlessMode::NO_VIDEO);
     }
 
     /// Returns the loaded ROM, if any.
@@ -205,9 +193,9 @@ impl ControlDeck {
 
     /// The cart's whole battery as one slice. Empty for a cart without a battery.
     #[must_use]
-    pub fn sram(&mut self) -> &[u8] {
+    pub fn sram(&self) -> &[u8] {
         if self.cart_battery_backed() == Some(true) {
-            self.bus.sram()
+            self.bus.memory.prg_ram()
         } else {
             &[]
         }
@@ -217,15 +205,17 @@ impl ControlDeck {
     /// No-op for a cart without a battery.
     pub fn set_sram(&mut self, data: &[u8]) {
         if self.cart_battery_backed() == Some(true) {
-            self.bus.set_sram(data);
+            let sram = self.bus.memory.prg_ram_mut();
+            let len = sram.len().min(data.len());
+            sram[..len].copy_from_slice(&data[..len]);
         }
     }
 
     /// Returns the frame as raw PPU pixels, one palette index per pixel.
     #[inline]
     #[must_use]
-    pub fn frame_buffer_raw(&self) -> &[u16; ppu::size::FRAME] {
-        self.bus.ppu.frame_buffer()
+    pub fn frame_buffer_raw(&self) -> &FrameBuffer {
+        self.bus.frame()
     }
 
     /// Returns the frame as RGBA pixels, with the configured [`VideoFilter`] applied.
@@ -239,13 +229,13 @@ impl ControlDeck {
         }
         self.video_frame_stale = false;
         self.video
-            .apply_filter(self.bus.ppu.frame_buffer(), self.bus.ppu.frame_number())
+            .apply_filter(self.bus.frame(), self.bus.ppu.frame_number())
     }
 
     /// Returns the number of frames the console has rendered since power on.
     #[inline(always)]
     #[must_use]
-    pub const fn frame_number(&self) -> u32 {
+    pub fn frame_number(&self) -> u32 {
         self.bus.ppu.frame_number()
     }
 
@@ -324,7 +314,7 @@ impl ControlDeck {
     /// opcode and can't proceed executing the current ROM.
     #[inline]
     #[must_use]
-    pub const fn cpu_corrupted(&self) -> bool {
+    pub fn cpu_corrupted(&self) -> bool {
         self.bus.cpu.corrupted
     }
 
@@ -342,13 +332,13 @@ impl ControlDeck {
 
     /// Returns the current [`Joypad`] state for a given controller slot.
     #[inline]
-    pub const fn joypad(&self, slot: Player) -> &Joypad {
+    pub fn joypad(&self, slot: Player) -> &Joypad {
         self.bus.input.joypad(slot)
     }
 
     /// Returns a mutable reference to the current [`Joypad`] state for a given controller slot.
     #[inline]
-    pub const fn joypad_mut(&mut self, slot: Player) -> &mut Joypad {
+    pub fn joypad_mut(&mut self, slot: Player) -> &mut Joypad {
         self.bus.input.joypad_mut(slot)
     }
 
@@ -405,26 +395,23 @@ mod tests {
     }
 
     /// A restored state has to resume bit-identically, both as a copy and through the serialized
-    /// form. Page tables are derived state, so this only holds if the restore replays the mapper's
-    /// registers through `Map::update_banks`.
+    /// form.
     #[test]
     fn a_restored_state_resumes_identically() {
         let mut deck = spritecans();
         run(&mut deck, 30);
-        let state = deck.bus().clone();
-        let bytes = postcard::to_allocvec(deck.bus()).expect("serializes");
+        let state = deck.bus().state;
+        let bytes = postcard::to_allocvec(&deck.bus().state).expect("serializes");
         let expected = run(&mut deck, 30);
 
         let mut restored = spritecans();
         run(&mut restored, 5); // somewhere else entirely
-        restored.load_bus(state).expect("loads");
+        restored.load_bus(state);
         assert_eq!(run(&mut restored, 30), expected);
 
         let mut decoded = spritecans();
         run(&mut decoded, 5);
-        decoded
-            .load_bus(postcard::from_bytes(&bytes).expect("deserializes"))
-            .expect("loads");
+        decoded.load_bus(postcard::from_bytes(&bytes).expect("deserializes"));
         assert_eq!(run(&mut decoded, 30), expected);
     }
 
@@ -449,24 +436,26 @@ mod tests {
         );
     }
 
-    /// A restored state replaces the console outright. Anything cached from the old one describes
-    /// a machine that is no longer here, including the frame a caller is about to blit.
+    /// The frame buffer is not emulated state: a restored console keeps showing the last frame
+    /// drawn until it draws its next one, which is then the restored console's.
     #[test]
-    fn loading_a_state_refreshes_the_frame() {
+    fn the_frame_after_a_restore_is_the_restored_consoles() {
         let mut deck = spritecans();
+        run(&mut deck, 10);
+        let early = deck.bus().state;
         deck.clock_frame().expect("clocks");
-        let early = deck.bus().clone();
-        let early_frame = deck.frame_buffer().to_vec();
+        let next_frame = deck.frame_buffer().to_vec();
 
         run(&mut deck, 30);
         let late_frame = deck.frame_buffer().to_vec();
-        assert_ne!(early_frame, late_frame, "the game has moved on");
+        assert_ne!(next_frame, late_frame, "the game has moved on");
 
-        deck.load_bus(early).expect("restores");
+        deck.load_bus(early);
+        deck.clock_frame().expect("clocks");
         assert_eq!(
             deck.frame_buffer().to_vec(),
-            early_frame,
-            "reports the restored console, not the one it replaced"
+            next_frame,
+            "draws the restored console, not the one it replaced"
         );
     }
 
@@ -476,10 +465,10 @@ mod tests {
         let mut deck = spritecans();
         deck.clock_frame().expect("clocks");
         deck.joypad_mut(Player::One).press(JoypadBtn::A);
-        let held = deck.bus().clone();
+        let held = deck.bus().state;
 
         deck.joypad_mut(Player::One).buttons = 0;
-        deck.load_bus(held).expect("restores");
+        deck.load_bus(held);
         assert!(
             deck.joypad_mut(Player::One).button(JoypadBtn::A),
             "the state recorded A held, so the restored console has it held"

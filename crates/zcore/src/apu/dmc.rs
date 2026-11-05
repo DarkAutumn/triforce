@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// The output unit and the hardware sample reader went with audio synthesis (ladder stage Z4):
 /// FQ-12 already dropped every fetch the hardware reader asked for, so it never loaded a byte, never
 /// counted `bytes_remaining` down and never raised the DMC IRQ.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[must_use]
 pub struct Dmc {
     /// $4013 sample length in bytes.
@@ -83,7 +83,7 @@ impl Dmc {
 /// CPU reads, FQ-11), then counts the instruction's cycles down a timer that shifts a bit per period
 /// and empties the buffer every eight bits. Only the fetch timing matters to the console (it steals
 /// CPU cycles).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct FceuDmc {
     pub acc: i32,
     pub period: i32,

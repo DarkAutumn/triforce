@@ -116,7 +116,8 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   vector without `ADDCYC` (`src/x6502.c:407-412`).
 - **Affects:** boot only (shifts the CPU against the PPU by 7 cycles; together with FQ-07 sets the whole
   run's CPU/PPU phase).
-- **Implemented:** `Bus::reset` (`reset_cycles`).
+- **Implemented:** `Bus::reset` (fetches the reset vector without spending any cycles; the 7-cycle
+  sequence was deleted at Z3).
 - **Removal:** always run the 7 reset cycles; `cpu_reset` passes; re-measure FQ-07.
 
 ## FQ-07 — PPU starts at scanline 240, one dot ahead
@@ -153,8 +154,8 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   (`src/ppu.c:1262-1263`).
 - **Affects:** per-frame timing (frames are one dot shorter every other frame during boot and screen
   transitions with rendering off).
-- **Implemented:** `Bus::ppu_clock` (compat branch when rendering is off; parity from `Frame::is_odd`
-  matches FCEUmm's `kook` given FQ-01).
+- **Implemented:** `Bus::ppu_clock` (the branch when rendering is off; parity from
+  `Ppu::frame_is_odd` matches FCEUmm's `kook` given FQ-01).
 - **Removal:** delete the branch; `09` and `10` pass again.
 
 ## FQ-10 — 512-cycle OAM DMA, run inside `STA $4014`

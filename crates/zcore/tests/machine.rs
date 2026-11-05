@@ -71,6 +71,54 @@ fn state_file_round_trips() {
     assert_eq!(a.pixels(), b.pixels());
 }
 
+/// The state is a flat `Copy` value: 19 KiB of cartridge arena (zero page, PRG-RAM, CHR-RAM,
+/// CIRAM), 2 KiB of work RAM, 256 bytes of OAM and the PPU's 256-byte sprite cover map, plus a
+/// few hundred bytes of registers and page tables. 24 KiB leaves room for that and nothing else:
+/// a ROM image (128 KiB) or a frame buffer (120 KiB) creeping back in fails here.
+#[test]
+fn machine_state_is_small_and_copy() {
+    fn copy<T: Copy>() {}
+    copy::<zcore::MachineState>();
+    let size = std::mem::size_of::<zcore::MachineState>();
+    eprintln!("size_of::<MachineState>() = {size}");
+    assert!(size <= 24 * 1024, "MachineState is {size} bytes");
+}
+
+/// Snapshots are plain copies: restoring one and replaying gives the same frames, RAM and cycles.
+#[test]
+fn snapshot_restore_replays_identically() {
+    let Some(rom) = rom() else { return };
+    let inputs = inputs();
+    let mut nes = ZCore::power_on(rom);
+    for &x in &inputs {
+        nes.run_frame(x, false);
+    }
+    let snap = nes.snapshot();
+    let mut seed = 7u64;
+    let random: Vec<u8> = (0..600)
+        .map(|_| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed as u8 & !0x0C
+        })
+        .collect();
+    let run = |nes: &mut ZCore| {
+        let mut out = Vec::new();
+        for &x in &random {
+            nes.run_frame(x, false);
+            out.extend_from_slice(nes.ram());
+            out.extend_from_slice(&nes.cycles().to_le_bytes());
+        }
+        out
+    };
+    let first = run(&mut nes);
+    let bytes = zcore::state_file::encode(nes.rom(), &nes.snapshot(), 0);
+    eprintln!("gameplay TFZSTATE file: {} bytes", bytes.len());
+    nes.restore(&snap);
+    assert_eq!(run(&mut nes), first);
+}
+
 #[test]
 fn state_file_errors() {
     let Some(rom) = rom() else { return };

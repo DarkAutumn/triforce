@@ -14,7 +14,7 @@ use tracing::trace;
 /// The APU Frame Counter generates a low-frequency clock for each APU channel.
 ///
 /// See: <https://www.nesdev.org/wiki/APU_Frame_Counter>
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct FrameCounter {
     pub step_cycles: [u32; 6],
     pub step: usize,

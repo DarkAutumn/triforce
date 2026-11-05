@@ -90,17 +90,8 @@ bitflags! {
         const N = 1 << 7;
     }
 }
-/// Returned by [`Bus::load_state`] when a save state was not produced by the loaded cart.
-///
-/// A save state carries no ROM - it is reattached from the running console - so it carries the
-/// ROM's CRC32 instead, and a state recorded against another game cannot be applied at all.
-#[derive(thiserror::Error, Debug, Copy, Clone, PartialEq, Eq)]
-#[error("save state does not match the loaded ROM")]
-#[must_use]
-pub struct StateMismatch;
-
 /// The Central Processing Unit status and registers
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Copy, Clone, Serialize, Deserialize)]
 #[must_use]
 #[repr(C)]
 pub struct Cpu {
@@ -133,7 +124,6 @@ pub struct Cpu {
     /// Source page of an OAM DMA in progress.
     pub dma_oam_addr: Option<u16>,
     /// Set when an invalid opcode has jammed the CPU; it keeps cycling but stops fetching.
-    #[serde(skip)]
     pub corrupted: bool,
 }
 
@@ -309,61 +299,6 @@ impl Cpu {
 /// The CPU's view of the console: every access below moves the whole machine, so it takes the
 /// [`Bus`] rather than the [`Cpu`].
 impl Bus {
-    /// Load a console state, leaving `self` untouched if it does not belong to this cart.
-    ///
-    /// A state is the emulated machine and nothing else, so this is also what puts back what one
-    /// cannot carry: the cart's ROM, reattached from the running console, the attached debugger,
-    /// and the settings that belong to the player rather than to the NES.
-    ///
-    /// # Errors
-    ///
-    /// If the state was not produced by the currently loaded cart.
-    pub fn load_state(&mut self, mut state: Self) -> Result<(), StateMismatch> {
-        // Checked before anything moves out of the running console, so that a state from another
-        // cart leaves it exactly as it was.
-        if !self.memory.is_same_cart(&state.memory) {
-            return Err(StateMismatch);
-        }
-        // A state recorded elsewhere - a file, a rewind buffer - carries the settings the player
-        // had when it was recorded. Those are the session's, not the machine's, and must not come
-        // back with it. See `Bus::keep_session_settings`.
-        state.keep_session_settings(self);
-        self.swap_state(&mut state)
-    }
-
-    /// Exchange the console for `state`, leaving what was running here in `state`.
-    ///
-    /// Every restore path ends here - [`Bus::load_state`], rewind, and run-ahead, which calls it
-    /// directly - so it is what puts back what a state must not carry: the cart's ROM, copied in
-    /// from the running console, and the attached debugger. It is also where a state belonging to
-    /// a different cart is refused.
-    ///
-    /// Run-ahead restores a snapshot of *this* console taken a few frames ago, which is why it
-    /// stops short of `Bus::keep_session_settings`: the settings are already its own, and the APU
-    /// filter and synthesiser history that would come across with them belongs to the timeline
-    /// being discarded. Swapping rather than assigning also hands it back the console it gave up,
-    /// whose allocations it snapshots into again next frame.
-    ///
-    /// # Errors
-    ///
-    /// If the state was not produced by the currently loaded cart.
-    pub(crate) fn swap_state(&mut self, state: &mut Self) -> Result<(), StateMismatch> {
-        if !state.memory.restore_rom_from(&self.memory) {
-            return Err(StateMismatch);
-        }
-        // The pixel path compares against thresholds derived from $2001 rather than reading its
-        // flags, and they are not part of the save format.
-        state.ppu.update_draw_thresholds();
-        std::mem::swap(self, state);
-        Ok(())
-    }
-
-    /// Move the settings the *player* owns out of the running console and into a state about to
-    /// replace it: the headless rendering flag.
-    const fn keep_session_settings(&mut self, session: &Self) {
-        self.ppu.skip_rendering = session.ppu.skip_rendering;
-    }
-
     /// NTSC CPU clock rate.
     #[inline]
     #[must_use]
@@ -700,6 +635,15 @@ impl Bus {
         self.apu.clock_sync();
     }
 
+    /// Runs instructions until the frame counter advances (FQ-08), then synchronizes.
+    pub fn clock_frame(&mut self) {
+        let frame = self.ppu.frame_number();
+        while frame == self.ppu.frame_number() {
+            self.clock_instr();
+        }
+        self.clock_sync();
+    }
+
     /// Runs the CPU one instruction.
     #[inline(always)]
     pub fn clock_instr(&mut self) {
@@ -711,11 +655,8 @@ impl Bus {
         // FQ-12: FCEUmm's per-instruction DMC hook sees the instruction's base cycles already
         // counted; a fetch it starts is spent after the instruction (FQ-11).
         let base = Cpu::INSTR_REF[usize::from(self.peek(self.cpu.pc))].cycles;
-        let dmc_fetch = self
-            .apu
-            .dmc
-            .fceu
-            .hook(self.cpu.cycle.wrapping_add(u32::from(base)));
+        let now = self.cpu.cycle.wrapping_add(u32::from(base));
+        let dmc_fetch = self.apu.dmc.fceu.hook(now);
         let opcode = self.fetch_byte(); // Cycle 1
         let op = Cpu::OPS[usize::from(opcode)];
         self.cpu.addr_mode = op.addr_mode();

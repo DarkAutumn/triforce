@@ -1,6 +1,7 @@
 //! NES PPU (Picture Processing Unit) implementation.
 //!
-//! [`Ppu`] is the state a 2C02 keeps - registers, OAM, palette RAM and the frame it is drawing.
+//! [`Ppu`] is the state a 2C02 keeps - registers, OAM and palette RAM. The frame it draws is
+//! not part of it: the [`Bus`] owns that buffer and lends it to the pixel path.
 //! Anything that reaches the cartridge is an `impl Bus` block further down this file, since a CHR
 //! or nametable fetch resolves through the board: [`Bus::ppu_clock`](crate::bus::Bus::ppu_clock)
 //! drives a dot and [`Bus::chr_peek`](crate::bus::Bus::chr_peek) resolves an address, while the
@@ -18,7 +19,7 @@
 //! belongs to and why the derived fields here are public where [`Memory`](crate::memory::Memory)'s
 //! are not.
 
-use crate::{bus::Bus, common::ResetKind, memory::ConstArray, ppu::frame::Frame};
+use crate::{bus::Bus, common::ResetKind, memory::ConstArray};
 use scroll::Scroll;
 use serde::{Deserialize, Serialize};
 use sprite::Sprite;
@@ -26,7 +27,6 @@ use std::cmp::Ordering;
 use tracing::{error, trace};
 
 pub mod ctrl;
-pub mod frame;
 pub mod mask;
 pub mod scroll;
 pub mod sprite;
@@ -47,8 +47,6 @@ pub enum Mirroring {
     SingleScreenA = 2,
     /// All four nametables show CIRAM's second 1K bank.
     SingleScreenB = 3,
-    /// Four distinct nametables, which needs 2K of RAM on the cartridge beyond the console's CIRAM.
-    FourScreen = 4,
 }
 
 /// Palette RAM which enforces mirroring.
@@ -109,7 +107,7 @@ pub const fn is_palette(addr: u16) -> bool {
 /// NES PPU.
 ///
 /// See: <https://wiki.nesdev.org/w/index.php/PPU>
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[must_use]
 #[repr(C)]
 pub struct Ppu {
@@ -123,12 +121,9 @@ pub struct Ppu {
     ///
     /// Collapses "is the background on, and is this dot past the left-column clip" into one
     /// comparison for the pixel path, which asks it 61,440 times a frame.
-    // Derived from `mask_bits`; recomputed after a state load rather than stored, so the save
-    // format does not depend on it.
-    #[serde(skip)]
+    // Derived from `mask_bits`, kept in step by every $2001 write.
     pub mask_min_draw_bg_cycle: u16,
     /// First dot on which sprites are drawn. See [`Ppu::mask_min_draw_bg_cycle`].
-    #[serde(skip)]
     pub mask_min_draw_spr_cycle: u16,
     /// $2001 PPUMASK rendering enable, i.e. background or sprites shown (write-only).
     pub mask_rendering_enabled: bool,
@@ -184,9 +179,6 @@ pub struct Ppu {
     pub prev_palette: u8,
     /// Next tile palette.
     pub next_palette: u8,
-    /// Whether PPU is skipping rendering (used for
-    /// [`HeadlessMode`](crate::control_deck::HeadlessMode)).
-    pub skip_rendering: bool,
 
     /// Scanline is visible. *Derived* from `scanline`; recomputed once per scanline so the
     /// per-dot paths test a bool instead of a range. Writing it does not move the PPU.
@@ -234,18 +226,13 @@ pub struct Ppu {
     /// Sprite overflow count (> 8 on a scanline).
     pub overflow_count: u8,
 
-    /// Current PPU frame buffer.
-    pub frame: Frame,
-    /// How much of [`Ppu::frame`] has had greyscale and colour emphasis applied.
+    /// Frames run since power-on (FQ-08: counted at dot 1 of line 240).
+    pub frame_count: u32,
+    /// How much of the frame being drawn has had greyscale and colour emphasis applied.
     //
     // Rendering stores raw palette colours and the $2001 bits are folded in over whole runs of
     // pixels, so a frame that never touches them - which is nearly every frame - pays nothing per
-    // pixel. Derived from a frame buffer that is itself not serialized.
-    //
-    // Cold, but it lives here rather than with the other cold fields: moving it down shifts every
-    // field below by eight bytes, and that measured 3.2% slower even though it is what aligns
-    // `palette` inside a single cache line. See `benches/README.md`.
-    #[serde(skip)]
+    // pixel. Kept up to date whether or not pixels are being stored.
     pub color_bits_applied: usize,
     // === 104 ===
     /// Palette RAM: the 32 colours currently loaded, at $3F00-$3F1F.
@@ -263,8 +250,7 @@ pub struct Ppu {
     /// A set bit means that sprite's 8-pixel span contains the pixel, so the pixel path visits only
     /// the sprites that can contribute instead of scanning all [`Ppu::spr_count`] of them and
     /// range-testing each.
-    // Rebuilt every scanline, so there is nothing here worth saving.
-    #[serde(skip)]
+    // Rebuilt every scanline.
     pub spr_cover: ConstArray<u8, 256>,
     // === 520 ===
     /// $2004 Object Attribute Memory (OAM) data (read/write).
@@ -522,10 +508,9 @@ impl Ppu {
             spr_cover: ConstArray::new(),
 
             prevent_vbl: false,
-            frame: Frame::new(),
+            frame_count: 0,
             color_bits_applied: 0,
 
-            skip_rendering: false,
             dead_frames: 0,
             status_at_instr: 0,
             fceu_nmi: 0,
@@ -541,25 +526,18 @@ impl Ppu {
         ppu
     }
 
-    /// Return the current frame buffer.
-    #[inline]
-    #[must_use]
-    pub fn frame_buffer(&self) -> &[u16; size::FRAME] {
-        self.frame.buffer()
-    }
-
     /// Return the current frame number.
     #[inline(always)]
     #[must_use]
     pub const fn frame_number(&self) -> u32 {
-        self.frame.number()
+        self.frame_count
     }
 
-    /// Get the pixel pixel brightness at the given coordinates.
-    #[inline]
+    /// Whether the current frame number is odd.
+    #[inline(always)]
     #[must_use]
-    pub fn pixel_brightness(&self, x: u16, y: u16) -> u32 {
-        self.frame.pixel_brightness(x, y)
+    pub const fn frame_is_odd(&self) -> bool {
+        self.frame_count & 1 == 1
     }
 
     /// Load the passed given buffer with RGBA pixels from the current nametables.
@@ -1050,7 +1028,7 @@ impl Ppu {
     }
 
     #[inline(always)]
-    fn render_pixel(&mut self) {
+    fn render_pixel(&mut self, frame: &mut crate::bus::FrameBuffer) {
         let addr = self.scroll.addr();
         let color = if self.mask_rendering_enabled || !is_palette(addr) {
             let palette = u16::from(self.pixel_palette());
@@ -1060,8 +1038,7 @@ impl Ppu {
             self.palette.peek(addr)
         };
 
-        self.frame
-            .set_pixel(self.cycle - 1, self.scanline, u16::from(color));
+        frame[usize::from(self.cycle - 1) + (usize::from(self.scanline) << 8)] = u16::from(color);
     }
 
     /// One past the frame-buffer index of the last pixel rendered.
@@ -1077,16 +1054,19 @@ impl Ppu {
     ///
     /// Called where the $2001 bits are about to change and once at the end of a frame, so each run
     /// is covered by the settings it was drawn under. Neither bit is set in the overwhelming
-    /// majority of frames, which is the case this exists to make free.
-    fn apply_color_bits(&mut self, through: usize) {
+    /// majority of frames, which is the case this exists to make free. Without a `frame` (this
+    /// frame is not being drawn) only the bookkeeping moves.
+    fn apply_color_bits(&mut self, through: usize, frame: Option<&mut crate::bus::FrameBuffer>) {
         let through = through.min(size::FRAME);
         if through <= self.color_bits_applied {
             return;
         }
-        if self.mask_grayscale != 0x3F || self.mask_emphasis != 0 {
+        if let Some(frame) = frame
+            && (self.mask_grayscale != 0x3F || self.mask_emphasis != 0)
+        {
             let grayscale = u16::from(self.mask_grayscale);
             let emphasis = self.mask_emphasis;
-            for pixel in &mut self.frame.buffer[self.color_bits_applied..through] {
+            for pixel in &mut frame[self.color_bits_applied..through] {
                 *pixel = (*pixel & grayscale) | emphasis;
             }
         }
@@ -1280,7 +1260,7 @@ impl Ppu {
         self.prevent_vbl = false;
         // FQ-01: FCEUmm's two dead frames after every reset.
         self.dead_frames = 2;
-        self.frame.reset(kind);
+        self.frame_count = 0;
     }
 }
 
@@ -1550,7 +1530,7 @@ impl Bus {
 
             if self.ppu.is_prerender_scanline
                 && self.ppu.cycle == cycle::ODD_SKIP
-                && self.ppu.frame.is_odd()
+                && self.ppu.frame_is_odd()
             {
                 // NTSC behavior while rendering - each odd PPU frame is one clock shorter
                 // (skipping from 339 over 340 to 0)
@@ -1579,7 +1559,8 @@ impl Bus {
                 // so it is the last point before a consumer can ask for the buffer. The mark stays
                 // at the end of the buffer through vblank, so a $2001 write there finds nothing
                 // outstanding rather than folding the bits into the finished frame a second time.
-                self.ppu.apply_color_bits(size::FRAME);
+                let (ppu, frame) = self.ppu_and_frame();
+                ppu.apply_color_bits(size::FRAME, frame);
                 // FQ-08: FCEUmm's frame ends one dot later (`Bus::fceumm_events`).
             }
             s if s == self.ppu.prerender_scanline => {
@@ -1624,7 +1605,7 @@ impl Bus {
             }
         } else if self.ppu.is_prerender_scanline
             && self.ppu.cycle == cycle::ODD_SKIP
-            && self.ppu.frame.is_odd()
+            && self.ppu.frame_is_odd()
             && self.ppu.dead_frames == 0
         {
             // FQ-09: FCEUmm shortens every other frame by one dot (its `kook`) whether or not
@@ -1641,10 +1622,10 @@ impl Bus {
             // Pixels should be put even if rendering is disabled, as this is what blanks out the
             // screen. Rendering disabled just means we don't evaluate/read bg/sprite info
             if self.ppu.is_visible_scanline {
-                if self.ppu.skip_rendering {
-                    self.ppu.headless_sprite_zero_hit();
-                } else {
-                    self.ppu.render_pixel();
+                let (ppu, frame) = self.ppu_and_frame();
+                match frame {
+                    Some(frame) => ppu.render_pixel(frame),
+                    None => ppu.headless_sprite_zero_hit(),
                 }
             }
             self.ppu.tile_shift_lo <<= 1;
@@ -1679,7 +1660,7 @@ impl Bus {
     fn fceumm_events(&mut self) {
         let (scanline, cycle) = (self.ppu.scanline, self.ppu.cycle);
         if cycle == 1 && scanline == self.ppu.vblank_scanline - 1 {
-            self.ppu.frame.increment();
+            self.ppu.frame_count = self.ppu.frame_count.wrapping_add(1);
             self.ppu.dead_frames = self.ppu.dead_frames.saturating_sub(1);
         } else if cycle == 13
             && scanline == self.ppu.vblank_scanline
@@ -1809,8 +1790,9 @@ impl Bus {
     pub fn write_mask(&mut self, val: u8) {
         self.ppu.open_bus = val;
         // Settle the pixels drawn under the old greyscale/emphasis before adopting the new ones.
-        let through = self.ppu.rendered_through();
-        self.ppu.apply_color_bits(through);
+        let (ppu, frame) = self.ppu_and_frame();
+        let through = ppu.rendered_through();
+        ppu.apply_color_bits(through, frame);
         self.ppu.write_mask(val);
     }
 }
@@ -1842,7 +1824,7 @@ mod tests {
         for _ in 0..(3 * 341 * 262) {
             bus.ppu_clock();
         }
-        let frame = bus.ppu.frame_buffer();
+        let frame = bus.frame();
         let row = &frame[103 * 256..104 * 256];
         let sprite = row[248];
         assert_ne!(sprite, frame[100], "the sprite shows at x=248");
@@ -1878,7 +1860,7 @@ mod tests {
         for _ in 0..(3 * 341 * 262) {
             bus.ppu_clock();
         }
-        let frame = bus.ppu.frame_buffer();
+        let frame = bus.frame();
         let backdrop = frame[100];
         assert_ne!(
             frame[239 * 256 + 44],
@@ -2102,7 +2084,7 @@ mod tests {
     fn sprite_zero_hit_headless_visible_cycle() {
         let mut bus = Bus::default();
         bus.write_mask(0x18);
-        bus.ppu.skip_rendering = true;
+        bus.render = false;
         bus.ppu.scanline = 0;
         bus.ppu.cycle = 10;
         bus.ppu.scroll.fine_x = 0;

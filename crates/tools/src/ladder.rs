@@ -21,7 +21,7 @@ macro_rules! ladder_domains {
                 let p = &bus.ppu;
                 out.extend_from_slice(&p.scanline.to_le_bytes());
                 out.extend_from_slice(&p.cycle.to_le_bytes());
-                out.push((p.frame.count & 1) as u8);
+                out.push((p.frame_count & 1) as u8);
                 out.extend_from_slice(&p.scroll.v.to_le_bytes());
                 out.extend_from_slice(&p.scroll.t.to_le_bytes());
                 out.extend_from_slice(&p.scroll.fine_x.to_le_bytes());

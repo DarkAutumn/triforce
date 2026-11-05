@@ -31,7 +31,7 @@ pub mod length_counter;
 /// NES APU (Audio Processing Unit), without sound synthesis.
 ///
 /// See: <https://wiki.nesdev.org/w/index.php/APU>
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[must_use]
 pub struct Apu {
     /// Cycles into the current [`Apu::CYCLE_SIZE`] block.

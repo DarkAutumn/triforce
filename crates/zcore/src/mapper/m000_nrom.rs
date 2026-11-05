@@ -68,7 +68,7 @@ mod tests {
 
     /// `prg_rom` bytes of PRG-ROM (16K or 32K for a real NROM), 8K PRG-RAM, 8K CHR-ROM.
     fn load(prg_rom: usize) -> (Mapper, Cart) {
-        let mut cart = page_indexed_cart(prg_rom, 8 * 1024, 8 * 1024);
+        let mut cart = page_indexed_cart(prg_rom, 8 * 1024);
         let mapper = Nrom::load(&mut cart).expect("valid mapper");
         (mapper, cart)
     }
@@ -124,7 +124,7 @@ mod tests {
     /// being reported by `mirroring()`.
     #[test]
     fn header_mirroring_reaches_ciram() {
-        let mut cart = page_indexed_cart(32 * 1024, 8 * 1024, 8 * 1024);
+        let mut cart = page_indexed_cart(32 * 1024, 8 * 1024);
         cart.header.flags |= 0x01; // vertical
         let mapper = Nrom::load(&mut cart).expect("valid mapper");
         assert_eq!(mapper.mirroring(), Mirroring::Vertical);
@@ -135,8 +135,8 @@ mod tests {
     }
 
     /// `update_banks` must rebuild every window from the board alone, which is what
-    /// [`Bus::rebuild_mapper_state`](crate::bus::Bus::rebuild_mapper_state) relies on after a
-    /// save state.
+    /// [`State::rebuild_mapper_state`](crate::bus::State::rebuild_mapper_state) relies on after a
+    /// reset.
     #[test]
     fn update_banks_rebuilds_every_window_from_register_state() {
         let (mut mapper, mut cart) = nrom_256();
@@ -150,7 +150,8 @@ mod tests {
         };
         let before = sample(&mapper, &cart);
 
-        cart.memory.unmap_prg(0x0000, 0x10000);
+        cart.memory.unmap_prg(0x6000, 0x2000);
+        cart.memory.map_prg(0x8000, 0x8000, 3, Src::PrgRom);
         cart.memory.unmap_chr(0x0000, 0x4000);
         mapper.update_banks(&mut cart.memory);
 

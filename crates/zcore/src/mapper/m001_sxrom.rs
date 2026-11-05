@@ -16,7 +16,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 /// `SxROM`/`MMC1` (Mapper 001), MMC1B/C, up to 256K of PRG-ROM.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[must_use]
 pub struct Sxrom {
     pub mmc1: Mmc1,
@@ -113,9 +113,9 @@ mod tests {
     use super::*;
     use crate::mapper::test_utils::{chr_peek, page_indexed_cart, prg_peek, write};
 
-    /// 128K PRG-ROM (8 16K banks), 8K PRG-RAM, 64K CHR-ROM (16 4K banks).
+    /// 128K PRG-ROM (8 16K banks), 8K PRG-RAM, 8K CHR-ROM (2 4K banks).
     fn mmc1() -> (Mapper, Cart) {
-        let mut cart = page_indexed_cart(128 * 1024, 8 * 1024, 64 * 1024);
+        let mut cart = page_indexed_cart(128 * 1024, 8 * 1024);
         let mapper = Sxrom::load(&mut cart).expect("valid mapper");
         (mapper, cart)
     }
@@ -212,22 +212,19 @@ mod tests {
 
         // Bit 4 clear: 8K mode, low bank bit ignored.
         control(&mut mapper, &mut cart, 0b00000);
-        serial_write(&mut mapper, &mut cart, 0xA000, 4);
-        assert_eq!(chr_peek(&mapper, &cart, 0x0000), 0x80 | (4 * 4));
-        assert_eq!(chr_peek(&mapper, &cart, 0x1000), 0x80 | (5 * 4), "same 8K");
-        serial_write(&mut mapper, &mut cart, 0xA000, 5);
-        assert_eq!(
-            chr_peek(&mapper, &cart, 0x0000),
-            0x80 | (4 * 4),
-            "the low bank bit is ignored in 8K mode"
-        );
+        serial_write(&mut mapper, &mut cart, 0xA000, 1);
+        assert_eq!(chr_peek(&mapper, &cart, 0x0000), 0x80, "low bit ignored");
+        assert_eq!(chr_peek(&mapper, &cart, 0x1000), 0x80 | 4, "same 8K");
 
         // Bit 4 set: two independent 4K banks.
         control(&mut mapper, &mut cart, 0b10000);
-        serial_write(&mut mapper, &mut cart, 0xA000, 3);
-        serial_write(&mut mapper, &mut cart, 0xC000, 9);
-        assert_eq!(chr_peek(&mapper, &cart, 0x0000), 0x80 | (3 * 4));
-        assert_eq!(chr_peek(&mapper, &cart, 0x1000), 0x80 | (9 * 4));
+        serial_write(&mut mapper, &mut cart, 0xA000, 1);
+        serial_write(&mut mapper, &mut cart, 0xC000, 0);
+        assert_eq!(chr_peek(&mapper, &cart, 0x0000), 0x80 | 4);
+        assert_eq!(chr_peek(&mapper, &cart, 0x1000), 0x80);
+        // Bank numbers wrap within the 8K.
+        serial_write(&mut mapper, &mut cart, 0xC000, 3);
+        assert_eq!(chr_peek(&mapper, &cart, 0x1000), 0x80 | 4);
     }
 
     /// Bit 7 of any load-register write resets the shift register and forces the control register's
@@ -295,14 +292,14 @@ mod tests {
     }
 
     /// `update_banks` must rebuild every window from the registers alone, which is what
-    /// [`Bus::rebuild_mapper_state`](crate::bus::Bus::rebuild_mapper_state) relies on after a
-    /// save state.
+    /// [`State::rebuild_mapper_state`](crate::bus::State::rebuild_mapper_state) relies on after a
+    /// reset.
     #[test]
     fn update_banks_rebuilds_every_window_from_register_state() {
         let (mut mapper, mut cart) = mmc1();
         control(&mut mapper, &mut cart, 0b11000);
-        serial_write(&mut mapper, &mut cart, 0xA000, 3);
-        serial_write(&mut mapper, &mut cart, 0xC000, 9);
+        serial_write(&mut mapper, &mut cart, 0xA000, 1);
+        serial_write(&mut mapper, &mut cart, 0xC000, 0);
         serial_write(&mut mapper, &mut cart, 0xE000, 5);
 
         let sample = |mapper: &Mapper, cart: &Cart| -> Vec<u8> {
@@ -318,7 +315,8 @@ mod tests {
         };
         let before = sample(&mapper, &cart);
 
-        cart.memory.unmap_prg(0x0000, 0x10000);
+        cart.memory.unmap_prg(0x6000, 0x2000);
+        cart.memory.map_prg(0x8000, 0x8000, 3, Src::PrgRom);
         cart.memory.unmap_chr(0x0000, 0x4000);
         mapper.update_banks(&mut cart.memory);
 

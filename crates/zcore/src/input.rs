@@ -112,13 +112,13 @@ impl Input {
 impl Bus {
     /// Reads $4016/$4017 for one port, shifting the controller's register on.
     pub(crate) const fn input_read(&mut self, player: Player) -> u8 {
-        self.input.read_port(player) | 0x40
+        self.state.input.read_port(player) | 0x40
     }
 
     /// Reads $4016/$4017 without shifting.
     #[must_use]
     pub(crate) const fn input_peek(&self, player: Player) -> u8 {
-        self.input.peek_port(player) | 0x40
+        self.state.input.peek_port(player) | 0x40
     }
 }
 
