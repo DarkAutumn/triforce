@@ -1,0 +1,22 @@
+--- a/src/x6502.c	2026-11-02 16:19:26.000000000 -0500
++++ b/src/x6502.c	2026-11-04 22:34:02.385048987 -0500
+@@ -33,6 +33,8 @@
+ uint32_t timestamp;
+ uint32_t sound_timestamp;
+ void FP_FASTAPASS(1) (*MapIRQHook)(int a);
++/* triforce oracle: called at every instruction boundary after the opcode fetch. */
++void (*tfo_instr_hook)(uint16_t pc, uint8_t opcode) = NULL;
+ 
+ #define _PC        X.PC
+ #define _A         X.A
+@@ -447,6 +449,10 @@
+ 
+ 		_PI = _P;
+ 		b1 = RdMem(_PC);
++		if (tfo_instr_hook) {
++			X.PC = pbackus;
++			tfo_instr_hook(pbackus, b1);
++		}
+ 
+ 		ADDCYC(CycTable[b1]);
+ 
