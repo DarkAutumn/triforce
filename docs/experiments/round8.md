@@ -57,5 +57,8 @@ Curves: `target/l6/old-metrics.jsonl`, `target/l6/new-metrics.jsonl`.
    one. Fix the entry (e.g. require an entry cell that reaches the next exit) before ow-moblin uses it.
 2. Explore and evaluate ow-moblin.
 3. `entry_states audit` (0 problems required); backfill `command` on the manifest entries written before
-   command recording.
+   command recording. `tests/test_entry_states.py::test_configured_start_states_are_clean` fails on
+   `2_6ds_<c>` (4 hearts, expected 3): `path` writes the off-route 0x6d entries with `route_step: -1`, so the
+   test's route-hearts lookup treats them as pre-D1; the old manifest carried `from_step: 35`. Record the
+   origin step for off-route `path` entries.
 4. Restore main's watch-mode features on the native pool (see `todo.md`).
