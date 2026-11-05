@@ -800,6 +800,16 @@ impl Ppu {
         self.oam_eval_dots(cycle, cycle);
     }
 
+    /// Bit `i` set when OAM entry `i`'s Y byte puts it on `scanline` - the test sprite evaluation
+    /// makes of each entry it reads with the OAM address aligned.
+    #[inline]
+    fn y_in_range_mask(&self, scanline: u16, height: u16) -> u64 {
+        (0..64).fold(0, |mask, i| {
+            let y = u16::from(self.oamdata[i << 2]);
+            mask | (u64::from(scanline.wrapping_sub(y) < height) << i)
+        })
+    }
+
     /// Sprite evaluation over dots `from..=to` (within 65-256), the state held in locals for the
     /// run and stored once at the end.
     #[inline(always)]
@@ -817,74 +827,113 @@ impl Ppu {
         let mut overflow_count = self.overflow_count;
         let mut overflow = self.status_spr_overflow;
 
-        for dot in from..=to {
-            if dot & 0x01 == 0x01 {
-                // Odd cycles are reads from OAM
-                oam_fetch = self.oamdata[usize::from(oamaddr)];
-                continue;
-            }
-            let secondary_oamindex = usize::from(secondary_oamaddr) & 0x1F;
+        // One even dot: a write to secondary OAM and a step of the OAM address.
+        macro_rules! even_dot {
+            () => {
+                let secondary_oamindex = usize::from(secondary_oamaddr) & 0x1F;
 
-            // oamaddr rolled over, so we're done reading
-            if oam_eval_done {
-                oamaddr_hi = (oamaddr_hi + 1) & 0x3F;
-                if secondary_oamaddr >= 0x20 {
-                    oam_fetch = self.secondary_oamdata[secondary_oamindex];
-                }
-            } else {
-                // If previously not in range, interpret this byte as y
-                let y = u16::from(oam_fetch);
-                spr_in_range |= !spr_in_range && (y..y + height).contains(&scanline);
+                // oamaddr rolled over, so we're done reading
+                if oam_eval_done {
+                    oamaddr_hi = (oamaddr_hi + 1) & 0x3F;
+                    if secondary_oamaddr >= 0x20 {
+                        oam_fetch = self.secondary_oamdata[secondary_oamindex];
+                    }
+                } else {
+                    // If previously not in range, interpret this byte as y
+                    let y = u16::from(oam_fetch);
+                    spr_in_range |= !spr_in_range && (y..y + height).contains(&scanline);
 
-                // Even cycles are writes to Secondary OAM
-                if secondary_oamaddr < 0x20 {
-                    self.secondary_oamdata[secondary_oamindex] = oam_fetch;
+                    // Even cycles are writes to Secondary OAM
+                    if secondary_oamaddr < 0x20 {
+                        self.secondary_oamdata[secondary_oamindex] = oam_fetch;
 
-                    if spr_in_range {
-                        oamaddr_lo += 1;
-                        secondary_oamaddr += 1;
+                        if spr_in_range {
+                            oamaddr_lo += 1;
+                            secondary_oamaddr += 1;
 
-                        spr_zero_in_range |= oamaddr_hi == 0x00;
-                        if oamaddr_lo == 0x04 {
-                            spr_in_range = false;
-                            oamaddr_lo = 0x00;
+                            spr_zero_in_range |= oamaddr_hi == 0x00;
+                            if oamaddr_lo == 0x04 {
+                                spr_in_range = false;
+                                oamaddr_lo = 0x00;
+                                oamaddr_hi = (oamaddr_hi + 1) & 0x3F;
+                                oam_eval_done |= oamaddr_hi == 0x00;
+                            }
+                        } else {
                             oamaddr_hi = (oamaddr_hi + 1) & 0x3F;
                             oam_eval_done |= oamaddr_hi == 0x00;
                         }
                     } else {
-                        oamaddr_hi = (oamaddr_hi + 1) & 0x3F;
-                        oam_eval_done |= oamaddr_hi == 0x00;
-                    }
-                } else {
-                    oam_fetch = self.secondary_oamdata[secondary_oamindex];
-                    if spr_in_range {
-                        overflow = true;
-                        oamaddr_lo += 1;
-                        if oamaddr_lo == 0x04 {
-                            oamaddr_lo = 0x00;
-                            oamaddr_hi = (oamaddr_hi + 1) & 0x3F;
-                        }
-
-                        match overflow_count.cmp(&0) {
-                            Ordering::Equal => overflow_count = 3,
-                            Ordering::Greater => {
-                                overflow_count -= 1;
-                                let no_overflow = overflow_count == 0;
-                                oam_eval_done |= no_overflow;
-                                if no_overflow {
-                                    oamaddr_lo = 0;
-                                }
+                        oam_fetch = self.secondary_oamdata[secondary_oamindex];
+                        if spr_in_range {
+                            overflow = true;
+                            oamaddr_lo += 1;
+                            if oamaddr_lo == 0x04 {
+                                oamaddr_lo = 0x00;
+                                oamaddr_hi = (oamaddr_hi + 1) & 0x3F;
                             }
-                            Ordering::Less => (),
+
+                            match overflow_count.cmp(&0) {
+                                Ordering::Equal => overflow_count = 3,
+                                Ordering::Greater => {
+                                    overflow_count -= 1;
+                                    let no_overflow = overflow_count == 0;
+                                    oam_eval_done |= no_overflow;
+                                    if no_overflow {
+                                        oamaddr_lo = 0;
+                                    }
+                                }
+                                Ordering::Less => (),
+                            }
+                        } else {
+                            oamaddr_hi = (oamaddr_hi + 1) & 0x3F;
+                            oamaddr_lo = (oamaddr_lo + 1) & 0x03;
+                            oam_eval_done |= oamaddr_hi == 0x00;
                         }
-                    } else {
-                        oamaddr_hi = (oamaddr_hi + 1) & 0x3F;
-                        oamaddr_lo = (oamaddr_lo + 1) & 0x03;
-                        oam_eval_done |= oamaddr_hi == 0x00;
                     }
                 }
+                oamaddr = (oamaddr_hi << 2) | (oamaddr_lo & 0x03);
+            };
+        }
+
+        // Odd dots read OAM, even dots write: run them as (odd, even) pairs.
+        let mut dot = from;
+        if dot & 0x01 == 0 && dot <= to {
+            even_dot!();
+            dot += 1;
+        }
+        let mut y_in_range = None;
+        while dot < to {
+            if !oam_eval_done
+                && !spr_in_range
+                && secondary_oamaddr < 0x20
+                && oamaddr_lo == 0
+                && oamaddr == oamaddr_hi << 2
+            {
+                // Scanning: a sprite out of range costs a pair that reads its Y, writes it to
+                // the same secondary OAM slot and steps to the next sprite. A run of them leaves
+                // only the last Y and the address.
+                let mask =
+                    *y_in_range.get_or_insert_with(|| self.y_in_range_mask(scanline, height));
+                let run = (mask >> oamaddr_hi)
+                    .trailing_zeros()
+                    .min(u32::from((to - dot + 1) / 2))
+                    .min(64 - u32::from(oamaddr_hi)) as u8;
+                if run > 0 {
+                    oam_fetch = self.oamdata[usize::from(oamaddr_hi + run - 1) << 2];
+                    self.secondary_oamdata[usize::from(secondary_oamaddr) & 0x1F] = oam_fetch;
+                    oamaddr_hi = (oamaddr_hi + run) & 0x3F;
+                    oam_eval_done |= oamaddr_hi == 0x00;
+                    oamaddr = oamaddr_hi << 2;
+                    dot += 2 * u16::from(run);
+                    continue;
+                }
             }
-            oamaddr = (oamaddr_hi << 2) | (oamaddr_lo & 0x03);
+            oam_fetch = self.oamdata[usize::from(oamaddr)];
+            even_dot!();
+            dot += 2;
+        }
+        if dot == to {
+            oam_fetch = self.oamdata[usize::from(oamaddr)];
         }
 
         self.oamaddr = oamaddr;

@@ -42,28 +42,37 @@ impl Ppu {
         }
     }
 
+    /// The colour [`Ppu::render_pixel`] gives each pixel palette index with rendering on: the
+    /// backdrop for every transparent index, the palette entry otherwise. Constant over a span:
+    /// palette RAM changes only through a $2007 write, which ends it.
+    #[inline(always)]
+    fn resolved_palette(&self) -> [u16; 32] {
+        std::array::from_fn(|p| {
+            let p = p as u16;
+            u16::from(self.palette.peek(addr::PALETTE_START | ((p & 0x03 > 0) as u16 * p)))
+        })
+    }
+
     /// The 8 pixels of a whole tile (dots `dot..dot + 8`, `dot` ≡ 1 mod 8) on which no sprite
     /// lies, as [`Ppu::render_pixel`] draws them with rendering on, then the 8 shifts.
     #[inline(always)]
-    fn render_bg_tile(&mut self, frame: &mut FrameBuffer, dot: u16) {
+    fn render_bg_tile(&mut self, frame: &mut FrameBuffer, dot: u16, colors: &[u16; 32]) {
         let fine_x = self.scroll.fine_x;
-        let (lo, hi) = (self.tile_shift_lo, self.tile_shift_hi);
+        // Pixel i takes bit 15 - fine_x - i of the shift registers: bit 7 - i of these.
+        let lo = (self.tile_shift_lo << fine_x) >> 8;
+        let hi = (self.tile_shift_hi << fine_x) >> 8;
         let row = (usize::from(self.scanline) << 8) + usize::from(dot - 1);
         let out = &mut frame[row..row + 8];
         for (i, pixel) in (0u16..).zip(out.iter_mut()) {
-            let shift = 15 - fine_x - i;
-            let bg_color = u8::from(dot + i > self.mask_min_draw_bg_cycle)
-                * ((((hi >> shift) & 0x01) << 1) | ((lo >> shift) & 0x01)) as u8;
+            let bit = 7 - i;
+            let bg_color = u16::from(dot + i > self.mask_min_draw_bg_cycle)
+                * ((((hi >> bit) & 0x01) << 1) | ((lo >> bit) & 0x01));
             let palette = if fine_x + i < 8 {
                 self.prev_palette
             } else {
                 self.curr_palette
             };
-            let palette = u16::from(palette + bg_color);
-            *pixel = u16::from(
-                self.palette
-                    .peek(addr::PALETTE_START | ((palette & 0x03 > 0) as u16 * palette)),
-            );
+            *pixel = colors[usize::from(u16::from(palette) + bg_color) & 0x1F];
         }
         self.shift_bg(8);
     }
@@ -298,6 +307,7 @@ impl Bus {
             dot = SKIP_FETCH_END + 1;
         }
 
+        let mut colors = None;
         while dot <= to {
             if dot & 0x07 == 1 && dot + 7 <= to {
                 // A whole tile: its fetches only feed the next tile, so they go first.
@@ -307,8 +317,11 @@ impl Bus {
                     match frame {
                         Some(frame) => {
                             let x = usize::from(dot - 1);
-                            if ppu.spr_cover[x..x + 8].iter().all(|&c| c == 0) {
-                                ppu.render_bg_tile(frame, dot);
+                            let cover: [u8; 8] =
+                                ppu.spr_cover[x..x + 8].try_into().expect("8 dots");
+                            if u64::from_ne_bytes(cover) == 0 {
+                                let colors = colors.get_or_insert_with(|| ppu.resolved_palette());
+                                ppu.render_bg_tile(frame, dot, colors);
                             } else {
                                 for d in dot..dot + 8 {
                                     ppu.render_pixel(frame, d);
