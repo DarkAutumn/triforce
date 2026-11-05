@@ -6,6 +6,7 @@ use crate::{
     bus::{Bus, State},
     cart::Cart,
     common::ResetKind,
+    cpu::TraceHook,
     input::Player,
     memory::PrgRom,
 };
@@ -23,18 +24,32 @@ pub const ZELDA_PAYLOAD_SHA1: [u8; 20] = [
 ];
 
 /// Why a ROM image was refused.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum RomError {
     /// No iNES header.
-    #[error("not an iNES file")]
     NotInes,
     /// An iNES image, but not shaped like Zelda's cartridge.
-    #[error("not The Legend of Zelda (mapper 1, 8x16 KiB PRG, CHR-RAM): {0}")]
     WrongCart(String),
     /// Zelda-shaped, but not the expected PRG contents.
-    #[error("ROM payload SHA-1 {0} is not The Legend of Zelda's")]
     WrongPayload(String),
 }
+
+impl std::fmt::Display for RomError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotInes => f.write_str("not an iNES file"),
+            Self::WrongCart(why) => write!(
+                f,
+                "not The Legend of Zelda (mapper 1, 8x16 KiB PRG, CHR-RAM): {why}"
+            ),
+            Self::WrongPayload(sha) => {
+                write!(f, "ROM payload SHA-1 {sha} is not The Legend of Zelda's")
+            }
+        }
+    }
+}
+
+impl std::error::Error for RomError {}
 
 /// A validated Zelda ROM image.
 pub struct Rom {
@@ -97,6 +112,7 @@ impl Rom {
 pub struct MachineState {
     state: State,
     frame: u64,
+    cycles: u64,
 }
 
 /// One Zelda console.
@@ -104,6 +120,9 @@ pub struct ZCore {
     rom: Arc<Rom>,
     bus: Bus,
     frame: u64,
+    /// CPU cycles since power-on; the CPU's own counter is 32 bits and wraps after ~144,000
+    /// frames, so each frame's advance is accumulated here.
+    cycles: u64,
     rendered: bool,
     pixels: Box<[u8; WIDTH * HEIGHT]>,
 }
@@ -122,6 +141,7 @@ impl ZCore {
         bus.memory.prg_ram_mut().fill(0);
         Self {
             rom,
+            cycles: u64::from(bus.cpu.cycle),
             bus,
             frame: 0,
             rendered: false,
@@ -139,8 +159,10 @@ impl ZCore {
     pub fn run_frame(&mut self, buttons: u8, render: bool) {
         self.bus.render = render;
         self.bus.input.joypad_mut(Player::One).buttons = buttons;
+        let start = self.bus.cpu.cycle;
         self.bus.clock_frame();
         assert!(!self.bus.cpu.corrupted, "zcore: the CPU jammed");
+        self.cycles += u64::from(self.bus.cpu.cycle.wrapping_sub(start));
         self.frame += 1;
         self.rendered = render;
         if render {
@@ -193,6 +215,7 @@ impl ZCore {
         MachineState {
             state: self.bus.state,
             frame: self.frame,
+            cycles: self.cycles,
         }
     }
 
@@ -201,6 +224,7 @@ impl ZCore {
     pub fn restore(&mut self, state: &MachineState) {
         self.bus.state = state.state;
         self.frame = state.frame;
+        self.cycles = state.cycles;
         self.rendered = false;
     }
 
@@ -210,8 +234,15 @@ impl ZCore {
     }
 
     /// CPU cycles since power-on.
-    pub fn cycles(&self) -> u64 {
-        u64::from(self.bus.cpu.cycle)
+    pub const fn cycles(&self) -> u64 {
+        self.cycles
+    }
+
+    /// Call `hook` before every instruction (at the boundary, before the opcode fetch) until it is
+    /// replaced or cleared with `None`. Unset, the cost is one branch per instruction; the hook only
+    /// observes, so emulation is identical with or without it.
+    pub fn set_trace(&mut self, hook: Option<TraceHook>) {
+        self.bus.trace = hook;
     }
 
     /// The emulator underneath, for tools that read internal state.

@@ -35,7 +35,6 @@ pub(crate) mod tests {
         sync::OnceLock,
         time::{Duration, Instant},
     };
-    use tracing::debug;
 
     pub(crate) const RESULT_DIR: &str = "test_results";
 
@@ -225,7 +224,6 @@ pub(crate) mod tests {
 
     fn on_frame_action(test_frame: &TestFrame, deck: &mut ControlDeck) {
         if let Some(action) = test_frame.action {
-            debug!("{:?}", action);
             match action {
                 Action::Reset(kind) => deck.reset(kind),
                 Action::SetVideoFilter(filter) => deck.set_filter(filter),
@@ -285,12 +283,6 @@ pub(crate) mod tests {
                 let mut hasher = DefaultHasher::new();
                 deck.frame_buffer().hash(&mut hasher);
                 let actual = hasher.finish();
-                debug!(
-                    "frame: {}, matched: {}",
-                    test_frame.number,
-                    expected == actual
-                );
-
                 let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
                 let result_dir = if env::var("UPDATE_SNAPSHOT").is_ok() || expected == actual {
                     PASS_DIR.get_or_init(|| {
@@ -335,41 +327,7 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn test_rom(directory: &str, test_name: &str) -> anyhow::Result<()> {
-        thread_local! {
-            static INIT_TESTS: OnceLock<bool> = const { OnceLock::new() };
-        }
-
         let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let initialized = INIT_TESTS.with(|init| {
-            *init.get_or_init(|| {
-                use tracing_subscriber::{
-                    filter::Targets, fmt, layer::SubscriberExt, registry, util::SubscriberInitExt,
-                };
-                let _ = registry()
-                    .with(
-                        env::var("RUST_LOG")
-                            .ok()
-                            .and_then(|filter| filter.parse::<Targets>().ok())
-                            .unwrap_or_default(),
-                    )
-                    .with(
-                        fmt::layer()
-                            .compact()
-                            .with_ansi(false)
-                            .without_time()
-                            .with_line_number(true)
-                            .with_thread_ids(true)
-                            .with_thread_names(true)
-                            .with_writer(std::io::stderr),
-                    )
-                    .try_init();
-                true
-            })
-        });
-        if initialized {
-            debug!("Initialized tests");
-        }
-
         let (test_file, mut tests) = get_rom_tests(directory)?;
         let mut test = tests.iter_mut().find(|test| test.name.eq(test_name));
         assert!(test.is_some(), "No test found matching {test_name:?}");
@@ -386,8 +344,6 @@ pub(crate) mod tests {
         let mut tones = ToneCounter::default();
         assert!(!test.frames.is_empty(), "No test frames found for {rom:?}");
         for test_frame in test.frames.iter() {
-            debug!("{} - {:?}", test_frame.number, deck.joypad_mut(Player::One));
-
             while deck.frame_number() < test_frame.number {
                 deck.clock_frame().expect("valid frame clock");
                 tones.observe(&deck);

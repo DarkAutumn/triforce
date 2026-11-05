@@ -4,7 +4,7 @@
 //! instruction. Each refreshes what [`ControlDeck::frame_buffer`] reports.
 
 use crate::{
-    bus::{self, Bus, FrameBuffer, State},
+    bus::{Bus, State},
     cart::{self, Cart},
     common::ResetKind,
     input::{Joypad, Player},
@@ -14,29 +14,50 @@ use crate::{
 use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
 use std::io::Read;
-use thiserror::Error;
 
 /// Result returned from [`ControlDeck`] methods.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// Errors that [`ControlDeck`] can return.
-#[derive(Error, Debug)]
+#[derive(Debug)]
 #[must_use]
 #[non_exhaustive]
 pub enum Error {
     /// [`Cart`] error when loading a ROM.
-    #[error(transparent)]
-    Cart(#[from] cart::Error),
+    Cart(cart::Error),
     /// Operational error indicating a ROM must be loaded first.
-    #[error("no rom is loaded")]
     RomNotLoaded,
     /// CPU state is corrupted and emulation can't continue. Could be due to a bad ROM image or a
     /// corrupt save state.
-    #[error("cpu state is corrupted")]
     CpuCorrupted,
     /// The ROM's mapper number has no board implementation.
-    #[error("unimplemented mapper `{0}`")]
     UnimplementedMapper(u16),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Cart(err) => err.fmt(f),
+            Self::RomNotLoaded => f.write_str("no rom is loaded"),
+            Self::CpuCorrupted => f.write_str("cpu state is corrupted"),
+            Self::UnimplementedMapper(n) => write!(f, "unimplemented mapper `{n}`"),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Cart(err) => std::error::Error::source(err),
+            _ => None,
+        }
+    }
+}
+
+impl From<cart::Error> for Error {
+    fn from(err: cart::Error) -> Self {
+        Self::Cart(err)
+    }
 }
 
 bitflags! {
@@ -157,67 +178,6 @@ impl ControlDeck {
         self.video_frame_stale = true;
     }
 
-    /// Set the headless mode which can increase performance when the frame output is not needed.
-    #[inline]
-    pub fn set_headless_mode(&mut self, mode: HeadlessMode) {
-        self.bus.render = !mode.contains(HeadlessMode::NO_VIDEO);
-    }
-
-    /// Returns the loaded ROM, if any.
-    #[inline]
-    #[must_use]
-    pub const fn loaded_rom(&self) -> Option<&LoadedRom> {
-        self.loaded_rom.as_ref()
-    }
-
-    /// Returns whether the loaded ROM is battery-backed. Returns `None` if no ROM is loaded.
-    #[inline]
-    #[must_use]
-    pub fn cart_battery_backed(&self) -> Option<bool> {
-        self.loaded_rom.as_ref().map(|rom| rom.battery_backed)
-    }
-
-    /// Returns the NES Work RAM.
-    #[inline]
-    #[must_use]
-    pub fn wram(&self) -> &[u8; bus::size::WRAM] {
-        self.bus.wram()
-    }
-
-    /// Returns the NES Work RAM, for writing.
-    #[inline]
-    #[must_use]
-    pub fn wram_mut(&mut self) -> &mut [u8; bus::size::WRAM] {
-        self.bus.wram_mut()
-    }
-
-    /// The cart's whole battery as one slice. Empty for a cart without a battery.
-    #[must_use]
-    pub fn sram(&self) -> &[u8] {
-        if self.cart_battery_backed() == Some(true) {
-            self.bus.memory.prg_ram()
-        } else {
-            &[]
-        }
-    }
-
-    /// Replaces battery-backed Save RAM with raw bytes, as [`ControlDeck::sram`] hands them out.
-    /// No-op for a cart without a battery.
-    pub fn set_sram(&mut self, data: &[u8]) {
-        if self.cart_battery_backed() == Some(true) {
-            let sram = self.bus.memory.prg_ram_mut();
-            let len = sram.len().min(data.len());
-            sram[..len].copy_from_slice(&data[..len]);
-        }
-    }
-
-    /// Returns the frame as raw PPU pixels, one palette index per pixel.
-    #[inline]
-    #[must_use]
-    pub fn frame_buffer_raw(&self) -> &FrameBuffer {
-        self.bus.frame()
-    }
-
     /// Returns the frame as RGBA pixels, with the configured [`VideoFilter`] applied.
     ///
     /// The filter runs on the first call after a clock and the result is cached, so calling this
@@ -324,18 +284,6 @@ impl ControlDeck {
         &self.bus
     }
 
-    /// Returns a mutable reference to the ControlDeck bus state.
-    #[inline]
-    pub const fn bus_mut(&mut self) -> &mut Bus {
-        &mut self.bus
-    }
-
-    /// Returns the current [`Joypad`] state for a given controller slot.
-    #[inline]
-    pub fn joypad(&self, slot: Player) -> &Joypad {
-        self.bus.input.joypad(slot)
-    }
-
     /// Returns a mutable reference to the current [`Joypad`] state for a given controller slot.
     #[inline]
     pub fn joypad_mut(&mut self, slot: Player) -> &mut Joypad {
@@ -348,13 +296,6 @@ impl ControlDeck {
         self.video.filter = filter;
         // The cached frame was filtered with the old one.
         self.video_frame_stale = true;
-    }
-
-    /// Returns whether the control deck is currently running.
-    #[inline]
-    #[must_use]
-    pub const fn is_running(&self) -> bool {
-        self.running
     }
 
     /// Resets the console.

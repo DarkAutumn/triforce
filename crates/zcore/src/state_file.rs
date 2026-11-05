@@ -18,9 +18,16 @@ pub const VERSION: u16 = 1;
 const HEADER: usize = 8 + 2 + 20 + 1 + 4;
 
 /// A state file that can't be loaded for this ROM and build.
-#[derive(Debug, thiserror::Error)]
-#[error("{0}")]
+#[derive(Debug)]
 pub struct StateFormatError(pub String);
+
+impl std::fmt::Display for StateFormatError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for StateFormatError {}
 
 /// A decoded state file.
 #[derive(Clone)]

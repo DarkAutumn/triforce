@@ -671,17 +671,26 @@ fn trace_diff(
     }
 }
 
+/// The same seeded random input from the end of `power_on_to_start`, once drawing every frame and
+/// once (for backends that can skip it) drawing none.
 fn bench(rom: &rom::RomInfo, backend: &str, frames: usize) -> Result<i32> {
     let movie = Movie::load(&corpus::movie_path("power_on_to_start"))?;
-    let mut b = make_backend(backend, rom)?;
-    backend::play_movie(b.as_mut(), &movie)?;
-    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(1);
-    let t = std::time::Instant::now();
-    for _ in 0..frames {
-        b.run_frame(rng.random::<u8>() & !0x0C);
+    for render in [true, false] {
+        let mut b = make_backend(backend, rom)?;
+        backend::play_movie(b.as_mut(), &movie)?;
+        if !b.set_render(render) && !render {
+            println!("{backend}: always renders");
+            break;
+        }
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(1);
+        let t = std::time::Instant::now();
+        for _ in 0..frames {
+            b.run_frame(rng.random::<u8>() & !0x0C);
+        }
+        let dt = t.elapsed().as_secs_f64();
+        let mode = if render { "on" } else { "off" };
+        println!("{backend}: {:.0} frames/s (render {mode}, 1 core)", frames as f64 / dt);
     }
-    let dt = t.elapsed().as_secs_f64();
-    println!("{backend}: {:.0} frames/s (render on, 1 core)", frames as f64 / dt);
     Ok(0)
 }
 

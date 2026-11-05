@@ -33,7 +33,7 @@ use crate::{
     apu::Apu,
     cart::Cart,
     common::ResetKind,
-    cpu::Cpu,
+    cpu::{Cpu, TraceHook},
     input::{Input, Player},
     mapper::Mapper,
     memory::{ConstArray, Memory, PRG_ROM_SIZE, PrgRom},
@@ -44,7 +44,6 @@ use std::{
     ops::{Deref, DerefMut},
     sync::{Arc, LazyLock},
 };
-use tracing::trace;
 
 /// A pixel frame: one palette index (plus emphasis bits) per pixel, row-major.
 pub type FrameBuffer = [u16; ppu::size::FRAME];
@@ -70,6 +69,8 @@ pub struct Bus {
     /// Whether the PPU draws pixels. Off, it does every bit of the same work except storing them,
     /// so the emulated state is identical either way.
     pub render: bool,
+    /// Called before every instruction when set; see [`TraceHook`].
+    pub(crate) trace: Option<TraceHook>,
 }
 
 impl Deref for Bus {
@@ -114,6 +115,7 @@ impl Bus {
                 .try_into()
                 .expect("FRAME pixels"),
             render: true,
+            trace: None,
         }
     }
 
@@ -166,7 +168,6 @@ impl Bus {
 
     /// Resets the console, forwarding it to every component, and clears the frame buffer.
     pub fn reset(&mut self, kind: ResetKind) {
-        trace!("{kind:?} RESET");
         self.frame.fill(0);
         self.state.reset_components(kind);
         // Read straight off the bus so the components are not clocked during the reset itself.

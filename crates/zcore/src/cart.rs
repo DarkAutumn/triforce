@@ -16,8 +16,6 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use thiserror::Error;
-use tracing::{debug, info};
 
 const PRG_ROM_BANK_SIZE: usize = 0x4000;
 const CHR_ROM_BANK_SIZE: usize = 0x2000;
@@ -25,12 +23,11 @@ const CHR_ROM_BANK_SIZE: usize = 0x2000;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Errors from loading a cartridge.
-#[derive(Error, Debug)]
+#[derive(Debug)]
 #[must_use]
 #[non_exhaustive]
 pub enum Error {
     /// The iNES/NES 2.0 header did not describe a cartridge this crate can build.
-    #[error("invalid nes header (found: ${value:04X} at byte: {byte}). {message}")]
     InvalidHeader {
         /// Which header byte was rejected.
         byte: u8,
@@ -40,10 +37,8 @@ pub enum Error {
         message: String,
     },
     /// The header named a mapper no board in the table serves.
-    #[error("mapper: {0}")]
-    InvalidMapper(#[from] mapper::Error),
+    InvalidMapper(mapper::Error),
     /// The ROM could not be read.
-    #[error("{context}: {source:?}")]
     Io {
         /// What was being read when this happened.
         context: String,
@@ -59,6 +54,39 @@ impl Error {
             context: context.into(),
             source,
         }
+    }
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidHeader {
+                byte,
+                value,
+                message,
+            } => write!(
+                f,
+                "invalid nes header (found: ${value:04X} at byte: {byte}). {message}"
+            ),
+            Self::InvalidMapper(err) => write!(f, "mapper: {err}"),
+            Self::Io { context, source } => write!(f, "{context}: {source:?}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidMapper(err) => Some(err),
+            Self::Io { source, .. } => Some(source),
+            Self::InvalidHeader { .. } => None,
+        }
+    }
+}
+
+impl From<mapper::Error> for Error {
+    fn from(err: mapper::Error) -> Self {
+        Self::InvalidMapper(err)
     }
 }
 
@@ -148,8 +176,7 @@ impl Cart {
 
     /// Load `Cart` from ROM data, selecting the board its mapper number calls for.
     ///
-    /// Accepts both iNES and NES 2.0 headers. Most callers want
-    /// [`ControlDeck::load_rom`](crate::control_deck::ControlDeck::load_rom) instead, which does
+    /// Accepts both iNES and NES 2.0 headers. [`ZCore::power_on`](crate::ZCore::power_on) does
     /// this and installs the cart; reach for this to inspect a ROM without running it.
     ///
     /// ```no_run
@@ -177,8 +204,6 @@ impl Cart {
         let mut cart = Self::from_rom_unmapped(name, rom_data)?;
         // Which board each mapper number selects lives with the boards, in `Mapper::from_cart`.
         cart.mapper = Mapper::from_cart(&mut cart)?;
-        info!("loaded ROM `{cart}`");
-        debug!("{cart:?}");
         Ok(cart)
     }
 
@@ -197,7 +222,6 @@ impl Cart {
     {
         let name = name.to_string();
         let header = NesHeader::load(&mut rom_data)?;
-        debug!("{header:?}");
 
         let prg_rom_size = (header.prg_rom_banks as usize) * PRG_ROM_BANK_SIZE;
         let mut prg_rom = vec![0u8; prg_rom_size];

@@ -9,22 +9,17 @@
 //!
 //! # Stability
 //!
-//! [`Ppu`]'s fields are the emulation's internal wiring. They are public so that embedders and
-//! debuggers can read them - the PPU viewer in the `tetanes` UI does exactly that - but they track
-//! the implementation rather than the crate version, and a release may add, rename or retype any
-//! of them. The stable entry point is
-//! [`ControlDeck`](crate::control_deck::ControlDeck). Fields documented as *derived* are caches of
-//! state that lives elsewhere; writing one from outside desynchronizes the emulator rather than
-//! changing what it does. See the crate-level [stability](crate#stability) note for the tier this
-//! belongs to and why the derived fields here are public where [`Memory`](crate::memory::Memory)'s
-//! are not.
+//! [`Ppu`]'s fields are the emulation's internal wiring. They are public so that tools can digest
+//! them, but they track the implementation, not a stable interface; the stable entry point is
+//! [`ZCore`](crate::ZCore). Fields documented as *derived* are caches of state that lives
+//! elsewhere; writing one from outside desynchronizes the emulator rather than changing what it
+//! does.
 
 use crate::{bus::Bus, common::ResetKind, memory::ConstArray};
 use scroll::Scroll;
 use serde::{Deserialize, Serialize};
 use sprite::Sprite;
 use std::cmp::Ordering;
-use tracing::{error, trace};
 
 pub mod ctrl;
 pub mod mask;
@@ -757,7 +752,6 @@ impl Ppu {
     }
 
     fn start_vblank(&mut self) {
-        trace!("Start VBL - PPU:{:3},{:3}", self.cycle, self.scanline);
         // FQ-01: no VBlank in FCEUmm's dead frames after a reset.
         if !self.prevent_vbl && self.dead_frames == 0 {
             self.set_in_vblank(true);
@@ -767,10 +761,6 @@ impl Ppu {
     }
 
     fn stop_vblank(&mut self) {
-        trace!(
-            "Stop VBL, Sprite0 Hit, Overflow - PPU:{:3},{:3}",
-            self.cycle, self.scanline
-        );
         self.set_spr_zero_hit(false);
         self.set_spr_overflow(false);
         self.reset_in_vblank();
@@ -1295,10 +1285,8 @@ impl Bus {
         self.ppu.open_bus = match addr {
             0x0000..=0x3EFF => self.chr_read(addr),
             0x3F00..=0x3FFF => self.ppu.palette.peek(addr),
-            _ => {
-                error!("unexpected PPU memory access at ${:04X}", addr);
-                0x00
-            }
+            // The PPU address bus is 14 bits wide; nothing above $3FFF reaches here.
+            _ => 0x00,
         };
         self.ppu.open_bus
     }
@@ -1310,10 +1298,7 @@ impl Bus {
         match addr {
             0x0000..=0x3EFF => self.chr_peek(addr),
             0x3F00..=0x3FFF => self.ppu.palette.peek(addr),
-            _ => {
-                error!("unexpected PPU memory access at ${:04X}", addr);
-                0x00
-            }
+            _ => 0x00,
         }
     }
 
@@ -1324,7 +1309,7 @@ impl Bus {
         match addr {
             0x0000..=0x3EFF => self.chr_write(addr, val),
             0x3F00..=0x3FFF => self.ppu.palette.write(addr, val),
-            _ => error!("unexpected PPU memory access at ${:04X}", addr),
+            _ => {}
         }
     }
 
@@ -1534,12 +1519,6 @@ impl Bus {
             {
                 // NTSC behavior while rendering - each odd PPU frame is one clock shorter
                 // (skipping from 339 over 340 to 0)
-                trace!(
-                    "Skipped odd frame cycle: {} - PPU:{:3},{:3}",
-                    self.ppu.frame_number(),
-                    self.ppu.cycle,
-                    self.ppu.scanline
-                );
                 self.ppu.cycle = cycle::END;
             }
         }
@@ -1705,10 +1684,6 @@ impl Bus {
             val | (prev_open_bus & 0xC0)
         };
 
-        trace!(
-            "PPU $2007 read: {:02X} - PPU:{:3},{:3}",
-            self.ppu.open_bus, self.ppu.cycle, self.ppu.scanline
-        );
 
         self.ppu.open_bus
     }
@@ -1732,10 +1707,6 @@ impl Bus {
     /// Writes $2007 PPUDATA at the current VRAM address, incrementing it.
     pub fn write_data(&mut self, val: u8) {
         let addr = self.ppu.scroll.addr();
-        trace!(
-            "PPU $2007 write: ${addr:04X} -> {val:02X} - PPU:{:3},{:3}",
-            self.ppu.cycle, self.ppu.scanline
-        );
         self.ppu.increment_vram_addr();
         self.ppu_bus_write(addr, val);
     }

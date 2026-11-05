@@ -9,7 +9,6 @@
 
 use crate::common::ResetKind;
 use serde::{Deserialize, Serialize};
-use tracing::trace;
 
 /// The APU Frame Counter generates a low-frequency clock for each APU channel.
 ///
@@ -78,10 +77,8 @@ impl FrameCounter {
         self.write_buffer = Some(val);
         // Writes occurring on odd clocks are delayed
         self.write_delay = if cycle & 0x01 == 0x01 { 4 } else { 3 };
-        trace!("APU $4017 write delay cycles: {}", self.write_delay);
         self.inhibit_irq = val & 0x40 == 0x40; // D6
         if self.inhibit_irq {
-            trace!("APU Frame Counter IRQ inhibit");
             self.irq_pending = false;
         }
     }
@@ -109,10 +106,6 @@ impl FrameCounter {
         let step_cycles = self.step_cycles[self.step];
         if self.cycle + cycles >= step_cycles {
             if !self.inhibit_irq && self.mode == 0 && self.step >= 3 {
-                trace!(
-                    "APU Frame Counter IRQ pending - cycles: {} >= {step_cycles}",
-                    self.cycle + cycles
-                );
                 self.irq_pending = true;
             }
 
@@ -130,10 +123,6 @@ impl FrameCounter {
 
             self.step += 1;
             if self.step == 6 {
-                trace!(
-                    "APU Frame Counter total cycles: {}",
-                    self.cycle + cycles_ran
-                );
                 self.step = 0;
                 self.cycle = 0;
             } else {

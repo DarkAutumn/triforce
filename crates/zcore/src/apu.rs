@@ -22,7 +22,6 @@ use crate::{
     common::ResetKind,
 };
 use serde::{Deserialize, Serialize};
-use tracing::trace;
 
 pub mod dmc;
 pub mod frame_counter;
@@ -146,7 +145,6 @@ impl Apu {
             return;
         }
         self.clock_to(self.master_clock);
-        trace!("APU ${addr:04X} write: ${val:02X} - CYC:{}", self.cpu_cycle);
         match addr {
             // Pulse/noise control: the halt flag is D5.
             0x4000 => self.write_halt(Channel::Pulse1, val & 0x20 != 0),

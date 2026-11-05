@@ -1801,30 +1801,11 @@ impl Bus {
         if nmi {
             self.cpu.irq_flags.remove(IrqFlags::NMI);
             self.cpu.pc = self.read_word(Cpu::NMI_VECTOR); // Cycles 6-7
-            tracing::trace!(
-                "NMI - PPU:{:3},{:3} CYC:{}",
-                self.ppu.cycle,
-                self.ppu.scanline,
-                self.cpu.cycle
-            );
         } else {
             self.cpu.pc = self.read_word(Cpu::IRQ_VECTOR); // Cycles 6-7
-            tracing::trace!(
-                "IRQ - PPU:{:3},{:3} CYC:{}",
-                self.ppu.cycle,
-                self.ppu.scanline,
-                self.cpu.cycle
-            );
         }
 
         // Prevent NMI from triggering immediately after BRK
-        tracing::trace!(
-            "Suppress NMI after BRK - PPU:{:3},{:3} CYC:{}, prev_nmi:{}",
-            self.ppu.cycle,
-            self.ppu.scanline,
-            self.cpu.cycle,
-            self.cpu.irq_flags.contains(IrqFlags::PREV_NMI)
-        );
         self.cpu.irq_flags.remove(IrqFlags::PREV_NMI);
     }
 

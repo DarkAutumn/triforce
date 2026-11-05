@@ -21,14 +21,23 @@ pub use m001_sxrom::Sxrom;
 pub use mmc1::Mmc1;
 
 /// Errors that mappers can return while loading.
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 #[must_use]
 #[non_exhaustive]
 pub enum Error {
     /// No board serves this mapper number.
-    #[error("unimplemented mapper: {0}")]
     Unimplemented(u16),
 }
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unimplemented(n) => write!(f, "unimplemented mapper: {n}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 /// The cartridge board.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]

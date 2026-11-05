@@ -1,44 +1,40 @@
 #![doc = include_str!("../README.md")]
-#![doc(
-    html_favicon_url = "https://github.com/lukexor/tetanes/blob/main/assets/linux/icon.png?raw=true",
-    html_logo_url = "https://github.com/lukexor/tetanes/blob/main/assets/linux/icon.png?raw=true"
-)]
-#![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
 
+// The emulator behind `ZCore`. Public only so `tf` can digest internal state for the subtraction
+// ladder; it tracks the implementation, not a stable interface.
+#[doc(hidden)]
 pub mod apu;
+#[doc(hidden)]
 pub mod bus;
+#[doc(hidden)]
 pub mod cart;
+#[doc(hidden)]
 #[macro_use]
 pub mod common;
-pub mod control_deck;
+#[doc(hidden)]
 pub mod cpu;
+#[doc(hidden)]
 pub mod input;
+#[doc(hidden)]
 pub mod mapper;
+#[doc(hidden)]
 pub mod memory;
+#[doc(hidden)]
 pub mod ppu;
-pub mod video;
+
+// The TetaNES frame-at-a-time driver and RGBA video filters, kept for the CPU/PPU/APU test-ROM
+// harness (`common::tests`) only.
+#[cfg(test)]
+mod control_deck;
+#[cfg(test)]
+mod video;
 
 pub mod machine;
 pub mod state_file;
+pub use cpu::{TraceHook, TraceRow};
 pub use machine::{MachineState, Rom, RomError, ZCore};
 pub use state_file::StateFormatError;
-
-pub mod prelude {
-    //! The prelude re-exports all the common structs/enums used for basic NES emulation.
-
-    pub use crate::{
-        apu::Apu,
-        cart::Cart,
-        common::ResetKind,
-        control_deck::{Config, ControlDeck, HeadlessMode},
-        cpu::Cpu,
-        input::{Input, Player},
-        mapper::{Map, Mapper},
-        ppu::{Mirroring, Ppu},
-        video::Frame,
-    };
-}
 
 #[cfg(test)]
 mod fceumm_compat_tests;

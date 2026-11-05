@@ -22,6 +22,10 @@ pub trait Backend {
     fn name(&self) -> &'static str;
     fn run_frame(&mut self, buttons: u8);
     fn poke(&mut self, addr: u16, value: u8);
+    /// Draw pixels on the following frames (default on). Returns false when the backend always draws.
+    fn set_render(&mut self, _on: bool) -> bool {
+        false
+    }
     /// Fill `out` with the bytes of a domain. Returns false when the backend can't produce it.
     fn read_domain(&mut self, domain: Domain, out: &mut Vec<u8>) -> bool;
     /// Run one frame while recording every instruction.
@@ -49,6 +53,9 @@ impl<B: Backend> Backend for Tracing<B> {
     }
     fn poke(&mut self, addr: u16, value: u8) {
         self.0.poke(addr, value)
+    }
+    fn set_render(&mut self, on: bool) -> bool {
+        self.0.set_render(on)
     }
     fn read_domain(&mut self, domain: Domain, out: &mut Vec<u8>) -> bool {
         self.0.read_domain(domain, out)

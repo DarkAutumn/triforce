@@ -6,13 +6,6 @@ use std::{
     ops::{Index, IndexMut},
     slice::SliceIndex,
 };
-use thiserror::Error;
-
-/// Error parsing a [`VideoFilter`] from a string.
-#[derive(Error, Debug)]
-#[must_use]
-#[error("failed to parse `VideoFilter`")]
-pub struct ParseVideoFilterError;
 
 /// How a raw PPU frame is turned into RGBA pixels.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -25,31 +18,12 @@ pub enum VideoFilter {
     Ntsc,
 }
 
-impl VideoFilter {
-    /// Every filter, for enumerating them in a UI.
-    pub const fn as_slice() -> &'static [Self] {
-        &[Self::Pixellate, Self::Ntsc]
-    }
-}
-
 impl AsRef<str> for VideoFilter {
     fn as_ref(&self) -> &str {
         match self {
             Self::Pixellate => "Pixellate",
             Self::Ntsc => "NTSC",
         }
-    }
-}
-
-impl TryFrom<usize> for VideoFilter {
-    type Error = ParseVideoFilterError;
-
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
-        Ok(match value {
-            0 => Self::Pixellate,
-            1 => Self::Ntsc,
-            _ => return Err(ParseVideoFilterError),
-        })
     }
 }
 
@@ -208,19 +182,6 @@ impl Video {
         }
 
         self.frame.as_array()
-    }
-
-    /// Applies the configured filter to a raw PPU frame, writing the RGBA result into `output`.
-    pub fn apply_filter_into(
-        &self,
-        buffer: &[u16; ppu::size::FRAME],
-        frame_number: u32,
-        output: &mut [u8; Frame::SIZE],
-    ) {
-        match self.filter {
-            VideoFilter::Pixellate => Self::decode_buffer(buffer, output),
-            VideoFilter::Ntsc => Self::apply_ntsc_filter(buffer, frame_number, output),
-        }
     }
 
     /// Fills a fully rendered frame with RGB colors.

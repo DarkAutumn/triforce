@@ -10,10 +10,8 @@
 //! # Stability
 //!
 //! [`Cpu`]'s fields are the emulation's internal wiring - registers and cycle counters. They are
-//! public so that embedders and debuggers can read them, but they track the implementation rather
-//! than the crate version, and a release may add, rename or retype any of them. The stable entry
-//! point is [`ControlDeck`](crate::control_deck::ControlDeck). See the crate-level
-//! [stability](crate#stability) note for the tier this belongs to and why.
+//! public so that tools can digest them, but they track the implementation, not a stable
+//! interface; the stable entry point is [`ZCore`](crate::ZCore).
 
 use crate::{
     bus::Bus,
@@ -23,9 +21,36 @@ use crate::{
 use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
 use std::fmt::{self};
-use tracing::trace;
 
 pub mod instr;
+
+/// The CPU at an instruction boundary, before the opcode fetch: what a trace hook is handed.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct TraceRow {
+    /// Address of the instruction.
+    pub pc: u16,
+    /// Its opcode.
+    pub opcode: u8,
+    /// Accumulator.
+    pub a: u8,
+    /// X index.
+    pub x: u8,
+    /// Y index.
+    pub y: u8,
+    /// Status flags.
+    pub p: u8,
+    /// Stack pointer.
+    pub sp: u8,
+    /// CPU cycle counter (32-bit, wrapping).
+    pub cycle: u32,
+    /// PPU scanline.
+    pub scanline: u16,
+    /// PPU dot within the scanline.
+    pub dot: u16,
+}
+
+/// A per-instruction callback (see [`ZCore::set_trace`](crate::ZCore::set_trace)).
+pub type TraceHook = Box<dyn FnMut(&TraceRow) + Send + Sync>;
 
 bitflags! {
     /// Interrupt and DMA state, kept as one byte because it is tested on every cycle.
@@ -346,16 +371,8 @@ impl Bus {
             self.cpu.clear_irq_flags(IrqFlags::NMI);
             self.cpu.pc = self.read_word(Cpu::NMI_VECTOR);
             self.clock_sync();
-            trace!(
-                "NMI - PPU:{:3},{:3} CYC:{}",
-                self.ppu.cycle, self.ppu.scanline, self.cpu.cycle
-            );
         } else {
             self.cpu.pc = self.read_word(Cpu::IRQ_VECTOR);
-            trace!(
-                "IRQ - PPU:{:3},{:3} CYC:{}",
-                self.ppu.cycle, self.ppu.scanline, self.cpu.cycle
-            );
         }
     }
 
@@ -390,11 +407,6 @@ impl Bus {
         flags.set(IrqFlags::PREV_RUN_IRQ, flags.contains(IrqFlags::RUN_IRQ));
         let run_irq = irq_pending_apu & !status.intersects(Status::I);
         flags.set(IrqFlags::RUN_IRQ, run_irq);
-
-        #[cfg(feature = "trace")]
-        if !flags.contains(IrqFlags::PREV_NMI_PENDING) && flags.contains(IrqFlags::RUN_IRQ) {
-            trace!("IRQ: {} - CYC:{}", irq_pending_apu, self.cpu.cycle);
-        }
     }
 
     /// Start a CPU cycle.
@@ -606,24 +618,26 @@ impl Bus {
         u16::from_le_bytes([lo, hi])
     }
 
-    /// Logs the instruction about to execute.
+    /// Hands the instruction about to run to the trace hook.
     #[cold]
     #[inline(never)]
-    pub fn trace_instr(&mut self) {
+    fn trace_instr(&mut self) {
         let c = &self.cpu;
-        println!(
-            "${:04X} ${:02X} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}",
-            c.pc,
-            self.peek(c.pc),
-            c.acc,
-            c.x,
-            c.y,
-            c.status.bits(),
-            c.sp,
-            self.ppu.cycle,
-            self.ppu.scanline,
-            c.cycle
-        );
+        let row = TraceRow {
+            pc: c.pc,
+            opcode: self.peek(c.pc),
+            a: c.acc,
+            x: c.x,
+            y: c.y,
+            p: c.status.bits(),
+            sp: c.sp,
+            cycle: c.cycle,
+            scanline: self.ppu.scanline,
+            dot: self.ppu.cycle,
+        };
+        if let Some(hook) = self.trace.as_mut() {
+            hook(&row);
+        }
     }
 
     /// Runs all components up to master clock, synchronizing them.
@@ -647,8 +661,9 @@ impl Bus {
     /// Runs the CPU one instruction.
     #[inline(always)]
     pub fn clock_instr(&mut self) {
-        #[cfg(feature = "trace")]
-        self.trace_instr();
+        if self.trace.is_some() {
+            self.trace_instr();
+        }
 
         // FQ-03: FCEUmm raises and clears VBlank between instructions.
         self.ppu.status_at_instr = self.ppu.read_status_bits();
