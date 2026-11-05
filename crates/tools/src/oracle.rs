@@ -33,7 +33,10 @@ impl Backend for Oracle {
             Domain::Chr => out.extend_from_slice(&self.0.chr()),
             Domain::Ciram => out.extend_from_slice(&self.0.ciram()),
             Domain::Palette => out.extend_from_slice(&self.0.palette()),
-            Domain::Oam => out.extend_from_slice(&self.0.oam()),
+            // OAM as $2004 reads it: attribute bits 2-4 don't exist in the PPU (FCEUmm stores them).
+            Domain::Oam => {
+                out.extend(self.0.oam().iter().enumerate().map(|(i, &b)| if i & 3 == 2 { b & 0xE3 } else { b }))
+            }
             Domain::Pixels => {
                 let mut px = Box::new([0u8; 256 * 240]);
                 self.0.pixels(&mut px);

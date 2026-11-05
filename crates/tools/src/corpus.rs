@@ -7,7 +7,7 @@
 //! - `corpus/pixel-allowlist.toml` — `[[allow]] movie, frames = [first, last], rows = [first, last], reason`.
 
 use crate::backend::Backend;
-use crate::formats::{Golden, LADDER_MASK, Movie, ORACLE_MASK, movie_file_hash};
+use crate::formats::{Golden, LADDER_MASK, Movie, movie_file_hash};
 use crate::rom::{RomInfo, workspace_root};
 use anyhow::{Context, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
@@ -165,14 +165,14 @@ pub fn golden_all(rom: &RomInfo, parallel: usize) -> Result<i32> {
     Ok(if codes.iter().all(|&c| c == 0) { 0 } else { 1 })
 }
 
-pub fn diff_all(rom: &RomInfo, backend: &str, parallel: usize) -> Result<i32> {
+pub fn diff_all(rom: &RomInfo, backend: &str, mask: u16, parallel: usize) -> Result<i32> {
     let m = Manifest::load()?;
     let mut jobs = Vec::new();
     for e in &m.movie {
         let movie = corpus_dir().join(&e.file);
         let golden = golden_path(&e.name, &e.tags);
         ensure!(golden.exists(), "missing golden {}: run `tf golden --all`", golden.display());
-        jobs.push(os(&[&"--rom", &rom.path, &"diff-one", &movie, &backend, &golden, &ORACLE_MASK.to_string()]));
+        jobs.push(os(&[&"--rom", &rom.path, &"diff-one", &movie, &backend, &golden, &mask.to_string()]));
     }
     let codes = fan_out(jobs, parallel)?;
     let bad = codes.iter().filter(|&&c| c != 0).count();

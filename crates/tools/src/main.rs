@@ -57,6 +57,29 @@ enum Cmd {
         all: bool,
         #[arg(long)]
         jobs: Option<usize>,
+        /// Ignore the pixel domain (memory and VRAM only).
+        #[arg(long)]
+        no_pixels: bool,
+    },
+    /// Replay a movie to record K in the oracle and a backend and list the differing bytes.
+    Show {
+        movie: PathBuf,
+        #[arg(long)]
+        frame: usize,
+        #[arg(long, default_value = "zcore")]
+        backend: String,
+        /// Print at most this many differing bytes per domain.
+        #[arg(long, default_value_t = 32)]
+        limit: usize,
+    },
+    /// Per-frame instruction counts in the oracle and a backend (debugging frame boundaries).
+    #[command(hide = true)]
+    FrameLens {
+        movie: PathBuf,
+        #[arg(long, default_value_t = 30)]
+        frames: usize,
+        #[arg(long, default_value = "zcore")]
+        backend: String,
     },
     /// Trace one frame in the oracle and a backend and report the first differing instruction.
     TraceDiff {
@@ -68,6 +91,13 @@ enum Cmd {
         /// Print this many rows of context around the divergence.
         #[arg(long, default_value_t = 8)]
         context: usize,
+        /// Also compare CPU cycles relative to the aligned start (FCEUmm's per-frame timestamp is
+        /// made cumulative) and report the first instruction whose timing differs.
+        #[arg(long)]
+        cycles: bool,
+        /// Print aligned rows START..END of both traces (e.g. 30..60).
+        #[arg(long)]
+        rows: Option<String>,
     },
     /// Generate all-domain goldens for ladder self-diffs.
     LadderGolden {
@@ -198,16 +228,17 @@ fn run(cli: Cli) -> Result<i32> {
             golden_one(&rom, &movie, &out, "fceumm", ORACLE_MASK)?;
             Ok(0)
         }
-        Cmd::Diff { movie, backend, golden, all, jobs: j } => {
+        Cmd::Diff { movie, backend, golden, all, jobs: j, no_pixels } => {
+            let mask = if no_pixels { ORACLE_MASK & !Domain::Pixels.bit() } else { ORACLE_MASK };
             if all {
-                return corpus::diff_all(&rom, &backend, jobs(j));
+                return corpus::diff_all(&rom, &backend, mask, jobs(j));
             }
             let movie = movie.context("tf diff needs a movie or --all")?;
             let golden = match golden {
                 Some(g) => g,
                 None => corpus::golden_path_for(&movie)?,
             };
-            diff_one(&rom, &movie, &backend, &golden, ORACLE_MASK)
+            diff_one(&rom, &movie, &backend, &golden, mask)
         }
         Cmd::DiffOne { movie, backend, golden, mask } => diff_one(&rom, &movie, &backend, &golden, mask),
         Cmd::GoldenOne { movie, out, backend, mask } => {
@@ -215,7 +246,11 @@ fn run(cli: Cli) -> Result<i32> {
             Ok(0)
         }
         Cmd::EndRoom { movie } => corpus::end_room(&mut oracle::Oracle::open(&rom.path)?, &movie),
-        Cmd::TraceDiff { movie, frame, backend, context } => trace_diff(&rom, &movie, frame, &backend, context),
+        Cmd::TraceDiff { movie, frame, backend, context, cycles, rows } => {
+            trace_diff(&rom, &movie, frame, &backend, context, cycles, rows.as_deref())
+        }
+        Cmd::Show { movie, frame, backend, limit } => show(&rom, &movie, frame, &backend, limit),
+        Cmd::FrameLens { movie, frames, backend } => frame_lens(&rom, &movie, frames, &backend),
         Cmd::LadderGolden { movies, out, backend, jobs: j } => corpus::ladder_golden(&rom, &movies, &out, &backend, jobs(j)),
         Cmd::LadderDiff { dir, backend, jobs: j } => corpus::ladder_diff(&rom, &dir, &backend, jobs(j)),
         Cmd::Corpus { cmd } => match cmd {
@@ -346,7 +381,85 @@ pub fn diff_one(rom: &rom::RomInfo, movie_path: &Path, backend: &str, golden_pat
     }
 }
 
-fn trace_diff(rom: &rom::RomInfo, movie_path: &Path, frame: usize, backend: &str, context: usize) -> Result<i32> {
+fn show(rom: &rom::RomInfo, movie_path: &Path, frame: usize, backend: &str, limit: usize) -> Result<i32> {
+    let movie = Movie::load(movie_path)?;
+    ensure!(frame <= movie.inputs.len(), "movie has only {} frames", movie.inputs.len());
+    let mut o = oracle::Oracle::open(&rom.path)?;
+    let mut b = make_backend(backend, rom)?;
+    for x in [&mut o as &mut dyn Backend, b.as_mut()] {
+        backend::play_base(x, &movie)?;
+        let index = movie.poke_index();
+        let mut next = 0;
+        for k in 0..frame {
+            apply_pokes(x, &movie, &index, &mut next, k);
+            x.run_frame(movie.inputs[k]);
+        }
+    }
+    let (mut bo, mut bb) = (Vec::new(), Vec::new());
+    let mut same = true;
+    for d in Domain::in_mask(ORACLE_MASK) {
+        o.read_domain(d, &mut bo);
+        b.read_domain(d, &mut bb);
+        let diffs: Vec<usize> = (0..bo.len()).filter(|&i| bo[i] != bb[i]).collect();
+        if diffs.is_empty() {
+            continue;
+        }
+        same = false;
+        if d == Domain::Pixels {
+            let rows: std::collections::BTreeSet<usize> = diffs.iter().map(|i| i / 256).collect();
+            println!("pixels: {} differ in {} rows: {:?}", diffs.len(), rows.len(), rows.iter().take(limit).collect::<Vec<_>>());
+            continue;
+        }
+        let base = match d {
+            Domain::PrgRam => 0x6000,
+            _ => 0,
+        };
+        println!("{}: {} bytes differ", d.name(), diffs.len());
+        for &i in diffs.iter().take(limit) {
+            println!("  {:04X}: fceumm {:02X}  {backend} {:02X}", base + i, bo[i], bb[i]);
+        }
+    }
+    if same {
+        println!("record {frame}: all oracle domains identical");
+    }
+    Ok(if same { 0 } else { 1 })
+}
+
+fn frame_lens(rom: &rom::RomInfo, movie_path: &Path, frames: usize, backend: &str) -> Result<i32> {
+    let movie = Movie::load(movie_path)?;
+    let mut o = oracle::Oracle::open(&rom.path)?;
+    let mut b = make_backend(backend, rom)?;
+    backend::play_base(&mut o, &movie)?;
+    backend::play_base(b.as_mut(), &movie)?;
+    let index = movie.poke_index();
+    let (mut no, mut nb) = (0, 0);
+    for k in 0..frames.min(movie.inputs.len()) {
+        apply_pokes(&mut o, &movie, &index, &mut no, k);
+        apply_pokes(b.as_mut(), &movie, &index, &mut nb, k);
+        let to = o.trace_frame(movie.inputs[k]);
+        let tb = b.trace_frame(movie.inputs[k]);
+        let (fo, fb) = (to.first().map_or(0, |r| r.pc), tb.first().map_or(0, |r| r.pc));
+        let (ro, rb) = (o.ram(), b.ram());
+        println!(
+            "frame {:5}: fceumm {:6} instr start {fo:04X} | {backend} {:6} instr start {fb:04X} | ram {}",
+            k + 1,
+            to.len(),
+            tb.len(),
+            if ro == rb { "same" } else { "DIFF" }
+        );
+    }
+    Ok(0)
+}
+
+fn trace_diff(
+    rom: &rom::RomInfo,
+    movie_path: &Path,
+    frame: usize,
+    backend: &str,
+    context: usize,
+    cycles: bool,
+    rows: Option<&str>,
+) -> Result<i32> {
     ensure!(frame >= 1, "--frame is a 1-based record number");
     let movie = Movie::load(movie_path)?;
     ensure!(frame <= movie.inputs.len(), "movie has only {} frames", movie.inputs.len());
@@ -376,35 +489,86 @@ fn trace_diff(rom: &rom::RomInfo, movie_path: &Path, frame: usize, backend: &str
             println!("note: domain {} already differs before frame {frame}", d.name());
         }
     }
-    let to = o.trace_frame(movie.inputs[frame - 1]);
-    let tb = b.trace_frame(movie.inputs[frame - 1]);
-    println!("oracle {} instructions, {} {} instructions", to.len(), backend, tb.len());
-    let first = to.iter().zip(&tb).position(|(x, y)| !backend::same_instruction(x, y));
+    // Frame boundaries fall a few instructions apart in different emulators, so trace two frames
+    // (K-1 and K when K > 1) and align the starts before comparing.
+    let mut to = o.trace_frame(movie.inputs[frame - 1]);
+    let mut tb = b.trace_frame(movie.inputs[frame - 1]);
+    if frame < movie.inputs.len() {
+        apply_pokes(&mut o, &movie, &index, &mut no, frame);
+        apply_pokes(b.as_mut(), &movie, &index, &mut nb, frame);
+        to.extend(o.trace_frame(movie.inputs[frame]));
+        tb.extend(b.trace_frame(movie.inputs[frame]));
+    }
+    println!("oracle {} instructions, {} {} instructions (frames {frame}..={})", to.len(), backend, tb.len(), frame + 1);
+    let run = |i: usize, j: usize| (0..16).all(|k| match (to.get(i + k), tb.get(j + k)) {
+        (Some(x), Some(y)) => backend::same_instruction(x, y),
+        _ => false,
+    });
+    let mut align = None;
+    'search: for s in 0..400 {
+        for i in 0..=s {
+            if run(i, s - i) {
+                align = Some((i, s - i));
+                break 'search;
+            }
+        }
+    }
+    let Some((oi, bi)) = align else {
+        println!("could not align the traces within 400 instructions");
+        return Ok(1);
+    };
+    println!("aligned: oracle row {oi} = {backend} row {bi}");
     let line = |r: &backend::TraceRow| {
         format!(
             "PC:{:04X} OP:{:02X} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} SL:{:4} CYC:{}",
             r.pc, r.opcode, r.a, r.x, r.y, r.p, r.sp, r.scanline, r.cycle
         )
     };
-    let first_sl = to.iter().zip(&tb).position(|(x, y)| x.scanline != y.scanline);
-    if let Some(i) = first_sl {
-        println!("first scanline difference at row {i}: oracle {} vs {} {}", to[i].scanline, backend, tb[i].scanline);
+    let n = (to.len() - oi).min(tb.len() - bi);
+    if let Some(spec) = rows {
+        let (a, b) = spec.split_once("..").context("--rows START..END")?;
+        let (a, b): (usize, usize) = (a.parse()?, b.parse()?);
+        for j in a..b.min(to.len().saturating_sub(oi)).max(a) {
+            if let Some(r) = to.get(oi + j) {
+                println!("{:7} fceumm  {}", oi + j, line(r));
+            }
+            if let Some(r) = tb.get(bi + j) {
+                println!("{:7} {:7} {}", bi + j, backend, line(r));
+            }
+        }
     }
-    match first {
-        None if to.len() == tb.len() => {
-            println!("traces identical");
+    if cycles {
+        // FCEUmm's timestamp restarts each frame; make it cumulative.
+        let mut cum = Vec::with_capacity(to.len());
+        let (mut base, mut prev) = (0u64, 0u64);
+        for r in &to {
+            if r.cycle < prev {
+                base += prev + 1;
+            }
+            prev = r.cycle;
+            cum.push(base + r.cycle);
+        }
+        let (o0, b0) = (cum[oi], tb[bi].cycle);
+        if let Some(k) = (0..n).find(|&k| cum[oi + k] - o0 != tb[bi + k].cycle - b0) {
+            println!("first timing difference at aligned row {k}");
+            for j in k.saturating_sub(context)..(k + 2).min(n) {
+                println!("{:7} fceumm  +{:6} {}", oi + j, cum[oi + j] - o0, line(&to[oi + j]));
+                println!("{:7} {:7} +{:6} {}", bi + j, backend, tb[bi + j].cycle - b0, line(&tb[bi + j]));
+            }
+        } else {
+            println!("timing agrees on {n} aligned rows");
+        }
+    }
+    match (0..n).find(|&k| !backend::same_instruction(&to[oi + k], &tb[bi + k])) {
+        None => {
+            println!("traces agree on {n} aligned rows");
             Ok(0)
         }
-        None => {
-            println!("traces agree on {} rows, then lengths differ", to.len().min(tb.len()));
-            Ok(1)
-        }
-        Some(i) => {
-            println!("first differing instruction at row {i}");
-            let lo = i.saturating_sub(context);
-            for j in lo..(i + 2).min(to.len().min(tb.len())) {
-                println!("{:7} fceumm {}", j, line(&to[j]));
-                println!("{:7} {:6} {}", j, backend, line(&tb[j]));
+        Some(k) => {
+            println!("first differing instruction at aligned row {k} (oracle {}, {backend} {})", oi + k, bi + k);
+            for j in k.saturating_sub(context)..(k + 2).min(n) {
+                println!("{:7} fceumm {}", oi + j, line(&to[oi + j]));
+                println!("{:7} {:7} {}", bi + j, backend, line(&tb[bi + j]));
             }
             Ok(1)
         }

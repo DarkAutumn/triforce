@@ -22,6 +22,7 @@ impl Tetanes {
         cfg.filter = VideoFilter::Pixellate;
         cfg.headless_mode = HeadlessMode::NO_AUDIO;
         cfg.concurrent_dpad = true;
+        cfg.fceumm_compat = true;
         let mut deck = ControlDeck::with_config(cfg);
         deck.load_rom("zelda.nes", &mut &rom[..]).context("TetaNES load_rom")?;
         // Power-on spec (TFMOVIE v1): an empty, zero-filled battery, as the oracle does.
@@ -58,6 +59,7 @@ impl Backend for Tetanes {
     fn run_frame(&mut self, buttons: u8) {
         self.set_buttons(buttons);
         let _ = self.deck.clock_frame().expect("TetaNES clock_frame");
+        if std::env::var_os("TF_DBG").is_some() { eprintln!("frame {} dead {} sl {} vbl {}", self.deck.frame_number(), self.deck.bus().ppu.dead_frames, self.deck.bus().ppu.scanline, self.deck.bus().ppu.status_in_vblank); }
     }
 
     fn poke(&mut self, addr: u16, value: u8) {
