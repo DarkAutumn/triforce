@@ -18,8 +18,9 @@ use crate::machine::{MachineState, Rom};
 
 /// File magic.
 pub const MAGIC: &[u8; 8] = b"TFZSTATE";
-/// Current format version (2: the PPU I/O latch decay, FQ-13 restored).
-pub const VERSION: u16 = 2;
+/// Current format version (2: the PPU I/O latch decay, FQ-13; 3: the hardware DMC reader,
+/// FQ-11/FQ-12).
+pub const VERSION: u16 = 3;
 const HEADER: usize = 8 + 2 + 20 + 1 + 4;
 
 /// A state file that can't be loaded for this ROM and build.
@@ -103,7 +104,7 @@ pub fn decode(rom: &Rom, bytes: &[u8]) -> Result<StateFile, StateFormatError> {
 /// as frozen copies of every type that has changed since, each converted into the current type.
 mod v1 {
     use crate::{
-        apu::Apu,
+        apu::{self, dmc, frame_counter::FrameCounter, length_counter::LengthCounter},
         bus::{self, size},
         cpu::Cpu,
         input::Input,
@@ -206,6 +207,86 @@ mod v1 {
         }
     }
 
+    /// FCEUmm's DMC sample fetcher (FQ-12), v1's DMC timing.
+    #[derive(Deserialize)]
+    #[allow(dead_code)]
+    struct FceuDmc {
+        acc: i32,
+        period: i32,
+        bit_count: u8,
+        format: u8,
+        address_latch: u8,
+        size_latch: u8,
+        address: u16,
+        size: i32,
+        have_dma: bool,
+        have_sample: bool,
+        counted: u32,
+    }
+
+    /// [`dmc::Dmc`] v1: `$4015`'s view plus FCEUmm's fetcher.
+    #[derive(Deserialize)]
+    struct Dmc {
+        sample_length: u16,
+        bytes_remaining: u16,
+        fceu: FceuDmc,
+    }
+
+    impl Dmc {
+        /// The hardware reader where FCEUmm's fetcher was: the same registers, address, bytes
+        /// left, buffer and bit position, and the cycles to the next bit as the timer counter.
+        fn into_current(self, clock: u32) -> dmc::Dmc {
+            let f = self.fceu;
+            let mut d = dmc::Dmc::new();
+            d.cycle = clock;
+            d.write_timer(f.format);
+            d.write_addr(f.address_latch);
+            d.sample_length = self.sample_length;
+            d.addr = 0x8000 | f.address;
+            d.bytes_remaining = if self.bytes_remaining == 0 {
+                0
+            } else {
+                u16::try_from(f.size).unwrap_or(0)
+            };
+            d.buffer_empty = !f.have_dma;
+            d.bits_remaining = 8 - (f.bit_count & 7);
+            d.counter = u16::try_from((f.acc - 1).clamp(0, i32::from(d.period))).unwrap_or(0);
+            d
+        }
+    }
+
+    /// [`apu::Apu`] v1.
+    #[derive(Deserialize)]
+    struct Apu {
+        master_clock: u32,
+        cpu_cycle: u32,
+        clock: u32,
+        frame_counter: FrameCounter,
+        pulse1: LengthCounter,
+        pulse2: LengthCounter,
+        triangle: LengthCounter,
+        noise: LengthCounter,
+        dmc: Dmc,
+        should_clock: bool,
+    }
+
+    impl Apu {
+        fn into_current(self) -> apu::Apu {
+            apu::Apu {
+                master_clock: self.master_clock,
+                cpu_cycle: self.cpu_cycle,
+                clock: self.clock,
+                frame_counter: self.frame_counter,
+                pulse1: self.pulse1,
+                pulse2: self.pulse2,
+                triangle: self.triangle,
+                noise: self.noise,
+                dmc: self.dmc.into_current(self.clock),
+                should_clock: self.should_clock,
+            }
+        }
+    }
+
     /// [`bus::State`] v1.
     #[derive(Deserialize)]
     pub(super) struct State {
@@ -235,7 +316,7 @@ mod v1 {
                 ppu: s.ppu.into_current(),
                 mapper: s.mapper,
                 memory: s.memory,
-                apu: s.apu,
+                apu: s.apu.into_current(),
                 input: s.input,
                 wram: s.wram,
                 open_bus: s.open_bus,

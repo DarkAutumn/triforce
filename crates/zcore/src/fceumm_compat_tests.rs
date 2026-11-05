@@ -1,7 +1,8 @@
-//! Tests for the FCEUmm quirks (FQ-01..FQ-12), which zcore always reproduces. Each asserts the
-//! FCEUmm behaviour; the hardware behaviour each replaces is in `FCEUMM_QUIRKS.md`.
+//! Tests for the FCEUmm quirks zcore still reproduces (plan step 18a restores them to hardware
+//! one at a time). Each asserts the FCEUmm behaviour; the hardware behaviour each replaces is in
+//! `FCEUMM_QUIRKS.md`.
 
-use crate::{bus::Bus, cart::Cart, common::ResetKind, cpu::IrqFlags, mapper::Nrom};
+use crate::{bus::Bus, cart::Cart, common::ResetKind, mapper::Nrom};
 
 /// An NROM console spinning on `JMP $0000` in work RAM.
 fn console() -> Bus {
@@ -146,70 +147,4 @@ fn fq04_enabling_nmi_during_vblank_delays_one_instruction() {
     bus.ppu.fceu_nmi = 1;
     bus.write_ctrl(0x00);
     assert_eq!(bus.ppu.fceu_nmi, 1);
-}
-
-/// NOPs from $0010 on; returns the CPU cycles each instruction step took.
-fn nop_steps(bus: &mut Bus, n: usize) -> Vec<u32> {
-    for addr in 0x0010u16..0x0800 {
-        bus.cpu_bus_write(addr, 0xEA);
-    }
-    bus.cpu.pc = 0x0010;
-    (0..n)
-        .map(|_| {
-            let before = bus.cpu.cycle;
-            bus.clock_instr();
-            bus.cpu.cycle - before
-        })
-        .collect()
-}
-
-/// Start a 17-byte DMC sample at the fastest rate.
-fn start_dmc(bus: &mut Bus) {
-    for (addr, val) in [
-        (0x4010u16, 0x0Fu8),
-        (0x4012, 0x00),
-        (0x4013, 0x01),
-        (0x4015, 0x10),
-    ] {
-        bus.cpu_bus_write(addr, val);
-    }
-}
-
-#[test]
-fn fq11_dmc_fetch_takes_four_cycles() {
-    let mut bus = console();
-    start_dmc(&mut bus);
-    let steps = nop_steps(&mut bus, 1);
-    assert_eq!(
-        steps,
-        vec![2 + 4],
-        "the first hook after enabling fetches at once"
-    );
-}
-
-#[test]
-fn fq12_dmc_fetches_once_per_eight_timer_periods() {
-    let mut bus = console();
-    start_dmc(&mut bus);
-    let steps = nop_steps(&mut bus, 2000);
-    let mut at = Vec::new();
-    let mut cycle = 0;
-    for s in steps {
-        if s == 6 {
-            at.push(cycle);
-        }
-        cycle += s;
-    }
-    // The first fetch is immediate, the second waits for the first byte's eight bits to start
-    // shifting (the buffer is only emptied into the shifter), then one byte per 8 * 54 cycles.
-    assert!(at.len() >= 4, "{at:?}");
-    for w in at.windows(2).skip(1) {
-        let gap = w[1] - w[0];
-        assert!(
-            (8 * 54 - 2..=8 * 54 + 6).contains(&gap),
-            "gap {gap} in {at:?}"
-        );
-    }
-    // The hardware fetcher is idle while compat timing is in charge.
-    assert!(!bus.cpu.irq_flags.intersects(IrqFlags::DMA_DMC));
 }

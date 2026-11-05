@@ -59,20 +59,26 @@ macro_rules! ladder_domains {
             }
             $crate::formats::Domain::Apu => {
                 let a = &bus.apu;
-                let d = &a.dmc.fceu;
-                out.extend_from_slice(&d.acc.to_le_bytes());
+                let d = &a.dmc;
+                out.extend_from_slice(&d.cycle.to_le_bytes());
+                out.extend_from_slice(&d.counter.to_le_bytes());
                 out.extend_from_slice(&d.period.to_le_bytes());
-                out.extend_from_slice(&[d.bit_count, d.format, d.address_latch, d.size_latch]);
-                out.extend_from_slice(&d.address.to_le_bytes());
-                out.extend_from_slice(&d.size.to_le_bytes());
-                out.extend_from_slice(&[u8::from(d.have_dma), u8::from(d.have_sample)]);
-                out.extend_from_slice(&d.counted.to_le_bytes());
+                out.extend_from_slice(&d.addr.to_le_bytes());
+                out.extend_from_slice(&d.sample_addr.to_le_bytes());
+                out.extend_from_slice(&d.bytes_remaining.to_le_bytes());
+                out.extend_from_slice(&d.sample_length.to_le_bytes());
+                out.extend_from_slice(&[
+                    u8::from(d.irq_enabled),
+                    u8::from(d.loops),
+                    u8::from(d.buffer_empty),
+                    u8::from(d.dma_pending),
+                    d.init,
+                    d.bits_remaining,
+                ]);
                 out.extend_from_slice(&[
                     u8::from(a.frame_counter.irq_pending),
                     u8::from(a.frame_counter.inhibit_irq),
-                    // DMC IRQ pending: zcore never raises it (Z4: only the hardware DMC reader,
-                    // whose fetches FQ-12 dropped, could), so the byte is always 0.
-                    0,
+                    u8::from(d.irq_pending),
                 ]);
                 true
             }

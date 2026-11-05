@@ -438,7 +438,7 @@ pub(crate) mod tests {
         instr_rts,
         instr_special,
         instr_stack,
-        #[ignore = "FQ-10/FQ-12: FCEUmm DMA and DMC timing change instruction timing; not bisected"]
+        #[ignore = "FQ-01..FQ-08: remaining FCEUmm timing; not bisected"]
         instr_timing,
         instr_zp,
         instr_zp_xy,
@@ -453,9 +453,7 @@ pub(crate) mod tests {
         #[ignore = "FQ-01/FQ-05/FQ-06: FCEUmm boot and NMI timing; not bisected"]
         overclock,
         // Tests cycle stealing behavior of DMC DMA while running sprite DMAs
-        #[ignore = "FQ-10/FQ-11: FCEUmm OAM/DMC DMA"]
         sprdma_and_dmc_dma,
-        #[ignore = "FQ-10/FQ-11: FCEUmm OAM/DMC DMA"]
         sprdma_and_dmc_dma_512,
         timing_test, // Tests CPU timing
     );
@@ -529,7 +527,6 @@ pub(crate) mod tests {
         //
         // Number of extra reads depends in CPU-PPU
         // synchronization at reset.
-        #[ignore = "FQ-11/FQ-12: FCEUmm DMC DMA"]
         dmc_dma_2007_read,
         // DMC DMA during $2007 write has no effect.
         // Output:
@@ -538,13 +535,11 @@ pub(crate) mod tests {
         // 22 11 22 AA 44 55 66 77
         // 22 11 22 AA 44 55 66 77
         // 22 11 22 AA 44 55 66 77
-        #[ignore = "FQ-11/FQ-12: FCEUmm DMC DMA"]
         dmc_dma_2007_write,
         //  DMC DMA during $4016 read causes extra $4016
         // read.
         // Output:
         // 08 08 07 08 08
-        #[ignore = "FQ-11/FQ-12: FCEUmm DMC DMA"]
         dmc_dma_4016_read,
         // Double read of $2007 sometimes ignores extra
         //  read, and puts odd things into buffer.
@@ -566,7 +561,7 @@ pub(crate) mod tests {
         // This NES program demonstrates abusing the NTSC NES's sampled sound
         // playback hardware as a scanline timer to split the screen twice
         // without needing to use a mapper-generated IRQ.
-        #[ignore = "FQ-11/FQ-12: FCEUmm DMC DMA"]
+        #[ignore = "FQ-01..FQ-08: remaining FCEUmm timing; not bisected"]
         dpcmletterbox,
         // Blargg's APU tests
         //
@@ -812,10 +807,8 @@ pub(crate) mod tests {
         // end
         // 18) $4013=0 should give 1-byte sample
         // 19) There should be a one-byte buffer that's filled immediately if empty
-        #[ignore = "FQ-11/FQ-12: FCEUmm DMC DMA"]
         dmc_basics,
         // Verifies the DMC's 16 rates
-        #[ignore = "FQ-11/FQ-12: FCEUmm DMC DMA"]
         dmc_rates,
         // Reset
         // See: <https://github.com/christopherpow/nes-test-roms/tree/master/apu_reset>
@@ -862,7 +855,6 @@ pub(crate) mod tests {
 
         // 2) At power, writes should work immediately
         // 3) At reset, writes should work immediately
-        #[ignore = "FQ-06: 0-cycle reset"]
         reset_works_immediately,
         // 11 tests that verify a number of behaviors with the APU (including the frame counter)
         //
@@ -882,7 +874,6 @@ pub(crate) mod tests {
         // the tones it played, so these assert a tone count rather than a hash.
         dmc_buffer_retained,
         dmc_latency,
-        #[ignore = "FQ-11/FQ-12: FCEUmm DMC DMA"]
         dmc_status,
         dmc_status_irq,
         // The tone/pitch/envelope ROMs (`apu_env`, `dmc_pitch`, `lin_ctr`, `noise_pitch`,

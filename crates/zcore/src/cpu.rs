@@ -468,13 +468,25 @@ impl Bus {
         self.cpu.master_clock.saturating_sub(Cpu::PPU_OFFSET) >= self.ppu_deadline
     }
 
-    /// OAM DMA (nesdev "DMA"): the CPU halts on the first read after the `$4014` write (the read
-    /// is repeated), waits for a get cycle, then copies 256 bytes as get/put pairs: 513 cycles, or
-    /// 514 when it halts on a put cycle. A dummy read of `$4016`/`$4017` is not repeated (the
-    /// joypads would shift).
+    /// A DMA cycle: the first after the halt clears it, the next the DMC's dummy read; OAM DMA
+    /// cycles count as those for a DMC fetch that comes in while it runs.
+    #[inline(always)]
+    fn start_dma_cycle(&mut self) {
+        if self.cpu.irq_flags(IrqFlags::DMA_HALT) {
+            self.cpu.clear_irq_flags(IrqFlags::DMA_HALT);
+        } else {
+            self.cpu.clear_irq_flags(IrqFlags::DMA_DUMMY_READ);
+        }
+        self.start_cycle(self.cpu.start_cycles - 1);
+    }
+
+    /// OAM and DMC DMA (nesdev "DMA"), run when the CPU halts at a read with one pending.
     ///
-    /// DMC fetches are timed by [`FceuDmc`](crate::apu::dmc::FceuDmc) (FQ-12) and spent by
-    /// [`Bus::fceumm_dmc_fetch`] instead.
+    /// The halted read is repeated, then DMA runs on get (even) and put (odd) cycles: OAM DMA
+    /// copies 256 bytes as get/put pairs after aligning to a get cycle (513 or 514 cycles from a
+    /// `$4014` write), a DMC sample fetch reads on a get cycle after its halt and a dummy cycle
+    /// (3 or 4 cycles alone, fewer inside an OAM DMA, whose cycles count as its halt and dummy).
+    /// The CPU's repeated reads do not repeat for `$4016`/`$4017` (the joypads would shift).
     #[cold]
     #[inline(never)]
     fn handle_dma(&mut self, addr: u16) {
@@ -482,41 +494,67 @@ impl Bus {
         self.cpu_bus_read(addr);
         self.end_cycle(self.cpu.start_cycles + 1);
         self.cpu.clear_irq_flags(IrqFlags::DMA_HALT);
-        let Some(oam_addr) = self.cpu.dma_oam_addr.take() else {
-            return;
-        };
-        if self.cpu.cycle & 0x01 == 0x01 {
-            // Align to a get cycle.
-            self.start_cycle(self.cpu.start_cycles - 1);
-            if addr != 0x4016 && addr != 0x4017 {
-                self.cpu_bus_read(addr);
+
+        let skip_dummy_reads = addr == 0x4016 || addr == 0x4017;
+        let mut oam_offset = 0;
+        let mut oam_dma_count = 0;
+        let mut read_val = 0;
+        loop {
+            let dma_dmc = self.cpu.irq_flags(IrqFlags::DMA_DMC);
+            let dma_oam_addr = self.cpu.dma_oam_addr;
+            if !dma_dmc && dma_oam_addr.is_none() {
+                break;
             }
-            self.end_cycle(self.cpu.start_cycles + 1);
-        }
-        for offset in 0..256 {
-            self.start_cycle(self.cpu.start_cycles - 1);
-            let val = self.cpu_bus_read(oam_addr + offset);
-            self.end_cycle(self.cpu.start_cycles + 1);
-            self.start_cycle(self.cpu.start_cycles - 1);
-            self.cpu_bus_write(0x2004, val);
-            self.end_cycle(self.cpu.start_cycles + 1);
+            if self.cpu.cycle & 0x01 == 0x00 {
+                if dma_dmc
+                    && !self.cpu.irq_flags(IrqFlags::DMA_HALT)
+                    && !self.cpu.irq_flags(IrqFlags::DMA_DUMMY_READ)
+                {
+                    // The DMC's fetch, its halt and dummy cycles done.
+                    self.start_dma_cycle();
+                    self.cpu_bus_read(self.apu.dmc.dma_addr());
+                    self.end_cycle(self.cpu.start_cycles + 1);
+                    self.apu.dmc.load_buffer();
+                    self.cpu.clear_irq_flags(IrqFlags::DMA_DMC);
+                    // The buffer moved the DMC's next fetch, and the last byte may raise its IRQ.
+                    self.tick_deadline = 0;
+                    self.irq_quiet = false;
+                } else if let Some(oam_addr) = dma_oam_addr {
+                    self.start_dma_cycle();
+                    read_val = self.cpu_bus_read(oam_addr + oam_offset);
+                    self.end_cycle(self.cpu.start_cycles + 1);
+                    oam_offset += 1;
+                    oam_dma_count += 1;
+                } else {
+                    // A DMC fetch still halting or on its dummy cycle, no OAM DMA.
+                    self.start_dma_cycle();
+                    if !skip_dummy_reads {
+                        self.cpu_bus_read(addr);
+                    }
+                    self.end_cycle(self.cpu.start_cycles + 1);
+                }
+            } else if dma_oam_addr.is_some() && oam_dma_count & 0x01 == 0x01 {
+                // OAM DMA's put cycle after each get.
+                self.start_dma_cycle();
+                self.cpu_bus_write(0x2004, read_val);
+                self.end_cycle(self.cpu.start_cycles + 1);
+                oam_dma_count += 1;
+                if oam_dma_count == 0x200 {
+                    self.cpu.dma_oam_addr = None;
+                }
+            } else {
+                // Align to a get cycle for OAM DMA or the DMC's fetch.
+                self.start_dma_cycle();
+                if !skip_dummy_reads {
+                    self.cpu_bus_read(addr);
+                }
+                self.end_cycle(self.cpu.start_cycles + 1);
+            }
         }
         // FQ-03: the instruction whose read the DMA halted starts, as FCEUmm sees it, after the
         // DMA (FCEUmm ran it inside the `STA`), so `status_at_instr` is taken from here.
         self.instr_start_clock = self.cpu.master_clock.saturating_sub(Cpu::PPU_OFFSET);
         self.status_latched = false;
-    }
-
-    /// FQ-11: an FCEUmm DMC fetch, four CPU reads of the sample address (`DMCDMA`,
-    /// libretro-fceumm `src/sound.c:503-508`), spent after the instruction whose hook asked for it.
-    #[cold]
-    #[inline(never)]
-    fn fceumm_dmc_fetch(&mut self, addr: u16) {
-        for _ in 0..4 {
-            self.start_cycle(self.cpu.start_cycles - 1);
-            self.cpu_bus_read(addr);
-            self.end_cycle(self.cpu.start_cycles + 1);
-        }
     }
 
     // Stack Functions
@@ -743,21 +781,11 @@ impl Bus {
             self.trace_instr();
         }
 
-        // FQ-12: FCEUmm's per-instruction DMC hook sees the instruction's base cycles already
-        // counted; a fetch it starts is spent after the instruction (FQ-11). The hook touches
-        // nothing the opcode fetch does, so it runs after it on the fetched opcode.
-        let start = self.cpu.cycle;
         let opcode = self.fetch_byte(); // Cycle 1
-        let base = Cpu::INSTR_REF[usize::from(opcode)].cycles;
-        let dmc_fetch = self.apu.dmc.fceu.hook(start.wrapping_add(u32::from(base)));
         let op = Cpu::OPS[usize::from(opcode)];
         self.cpu.addr_mode = op.addr_mode();
         self.cpu.operand = self.fetch_operand();
         op.run(self);
-
-        if let Some(addr) = dmc_fetch {
-            self.fceumm_dmc_fetch(addr);
-        }
 
         if self.ppu_due() {
             self.ppu_sync();
@@ -852,7 +880,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "FQ-06: reset spends no cycles, and FQ-12's per-instruction DMC hook; expects 7"]
+    #[ignore = "FQ-06: reset spends no cycles; expects 7"]
     fn cycle_timing() {
         use super::*;
         let mut bus = Bus::default();
@@ -916,5 +944,48 @@ mod tests {
         }
         lens.sort_unstable();
         assert_eq!(lens, [513, 514]);
+    }
+
+    /// A playing DMC sample halts the CPU for each byte, 3 or 4 cycles between NOPs, once per
+    /// eight timer periods once the first byte is shifting, and its last byte raises the DMC IRQ
+    /// (nesdev "APU DMC", "DMA").
+    #[test]
+    fn dmc_fetches_halt_the_cpu_once_per_byte() {
+        use super::*;
+        let mut bus = Bus::default();
+        let mut cart = Cart::empty();
+        cart.mapper = Nrom::load(&mut cart).unwrap();
+        bus.load_cart(cart);
+        bus.reset(ResetKind::Hard);
+        // NOPs from $0010, looping back with `JMP $0010` at $07FD.
+        for addr in 0x0010u16..0x07FD {
+            bus.cpu_bus_write(addr, 0xEA);
+        }
+        for (addr, val) in [(0x07FDu16, 0x4Cu8), (0x07FE, 0x10), (0x07FF, 0x00)] {
+            bus.cpu_bus_write(addr, val);
+        }
+        bus.cpu.pc = 0x0010;
+        // IRQ on, fastest rate (54 cycles); 17 bytes from $C000.
+        for (addr, val) in [(0x4010u16, 0x8Fu8), (0x4012, 0x00), (0x4013, 0x01), (0x4015, 0x10)] {
+            bus.cpu_bus_write(addr, val);
+        }
+        let mut fetches = Vec::new();
+        for _ in 0..4000 {
+            let base = if bus.cpu.pc == 0x07FD { 3 } else { 2 };
+            let before = bus.cpu.cycle;
+            bus.clock_instr();
+            let stolen = bus.cpu.cycle - before - base;
+            if stolen > 0 {
+                assert!((3..=4).contains(&stolen), "a fetch stole {stolen} cycles");
+                fetches.push(before);
+            }
+        }
+        assert_eq!(fetches.len(), 17, "{fetches:?}");
+        // The second fetch waits for the first byte to reach the shifter.
+        for gap in fetches.windows(2).skip(1).map(|w| w[1] - w[0]) {
+            assert!((8 * 54 - 4..=8 * 54 + 4).contains(&gap), "gap {gap} in {fetches:?}");
+        }
+        assert!(bus.apu.dmc.irq_pending && bus.apu.peek_status() & 0x80 != 0);
+        assert_eq!(bus.apu.dmc.bytes_remaining, 0);
     }
 }

@@ -517,3 +517,5 @@ One line per quirk; numbers and reasoning in `docs/experiments/round9.md`, mecha
   (chain total 27 vs 32/24).
 - 2026-11-05 FQ-10 restored: OAM DMA halts the CPU at its next read for 513/514 cycles (hardware, TetaNES'
   timing); gate kept it (chain total 28 vs 32/24).
+- 2026-11-05 FQ-11 + FQ-12 restored together: the hardware DMC timer/reader, its DMA (3-4 cycles, merged with OAM
+  DMA) and IRQ; `TFZSTATE` v3; gate kept it (chain total 32 vs 32/24).

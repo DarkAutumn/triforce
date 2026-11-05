@@ -4,8 +4,8 @@
 //!
 //! zcore produces no sound (ladder stage Z4). What stays is every APU effect the CPU can see: the
 //! register writes' timing side effects, the four length counters `$4015` reports, the frame
-//! counter and its IRQ, and the DMC's `$4015` bit and FCEUmm sample fetcher (FQ-11/FQ-12), whose
-//! DMA steals CPU cycles.
+//! counter and its IRQ, and the DMC's sample reader, whose fetches steal CPU cycles (DMA), and its
+//! IRQ.
 //!
 //! # Stability
 //!
@@ -91,7 +91,7 @@ impl Apu {
         self.master_clock += 1;
     }
 
-    /// The work of a cycle on which the frame counter or a length counter may move.
+    /// The work of a cycle on which the frame counter, a length counter or the DMC may move.
     #[inline(always)]
     pub fn clock_due(&mut self) {
         if self.master_clock == Self::CYCLE_SIZE - 1 {
@@ -103,7 +103,8 @@ impl Apu {
 
     /// The `master_clock` from which [`Apu::clock_due`] has work to do: the next cycle while a
     /// register write or a frame counter block is pending, else the cycle before the frame
-    /// counter's next step (`FrameCounter::should_clock`) or the end of the cycle block.
+    /// counter's next step (`FrameCounter::should_clock`), the DMC's next fetch request
+    /// ([`Dmc::next_event`]) or the end of the cycle block.
     #[must_use]
     pub fn next_clock(&self) -> u32 {
         let fc = &self.frame_counter;
@@ -112,8 +113,8 @@ impl Apu {
             return next;
         }
         let step = fc.step_cycles[fc.step] - 1;
-        let due = (step.saturating_sub(fc.cycle) + self.clock).max(next);
-        due.min(Self::CYCLE_SIZE - 1)
+        let due = (step.saturating_sub(fc.cycle) + self.clock).min(self.dmc.next_event());
+        due.max(next).min(Self::CYCLE_SIZE - 1)
     }
 
     /// Runs the frame counter up to the master clock and starts the next [`Apu::CYCLE_SIZE`]
@@ -124,19 +125,21 @@ impl Apu {
         self.clock_to(self.master_clock);
         self.master_clock = 0;
         self.clock = 0;
+        self.dmc.cycle = 0;
     }
 
     #[inline(always)]
     fn should_clock(&mut self) -> bool {
-        // A length counter write is applied on the next cycle. (A playing DMC sample used to
-        // force every cycle too; with no sample reader since Z4 that changes nothing: the frame
-        // counter lands every step on the same cycle either way.)
+        if self.dmc.init > 0 {
+            self.dmc.clock_init();
+        }
+        // A length counter write is applied on the next cycle.
         if self.should_clock {
             self.should_clock = false;
             return true;
         }
         let cycles = self.master_clock - self.clock;
-        self.frame_counter.should_clock(cycles)
+        self.frame_counter.should_clock(cycles) || self.master_clock >= self.dmc.next_event()
     }
 
     fn clock_to(&mut self, cycle: u32) {
@@ -158,15 +161,12 @@ impl Apu {
             self.triangle.reload();
             self.noise.reload();
         }
+        self.dmc.clock_to(self.clock);
     }
 
     /// A write to `$4000-$4013`, `$4015` or `$4017`. Every mapped register first brings the
     /// frame counter up to date; `$4009` and `$400D` are unmapped and do nothing.
     pub fn write(&mut self, addr: u16, val: u8) {
-        if matches!(addr, 0x4010 | 0x4012 | 0x4013 | 0x4015) {
-            // FQ-12: FCEUmm's sample fetcher tracks the same registers.
-            self.dmc.fceu.write(addr, val);
-        }
         if matches!(addr, 0x4009 | 0x400D) {
             return;
         }
@@ -183,16 +183,19 @@ impl Apu {
             0x4007 => self.write_length(Channel::Pulse2, val),
             0x400B => self.write_length(Channel::Triangle, val),
             0x400F => self.write_length(Channel::Noise, val),
+            0x4010 => self.dmc.write_timer(val),
+            0x4012 => self.dmc.write_addr(val),
             0x4013 => self.dmc.write_length(val),
             0x4015 => {
                 self.pulse1.set_enabled(val & 0x01 == 0x01);
                 self.pulse2.set_enabled(val & 0x02 == 0x02);
                 self.triangle.set_enabled(val & 0x04 == 0x04);
                 self.noise.set_enabled(val & 0x08 == 0x08);
-                self.dmc.set_enabled(val & 0x10 == 0x10);
+                self.dmc.set_enabled(val & 0x10 == 0x10, self.cpu_cycle);
+                self.dmc.irq_pending = false;
             }
             0x4017 => self.frame_counter.write(val, self.cpu_cycle),
-            // Sweep, timer periods, envelope volume, DMC rate/output/address: sound only.
+            // Sweep, timer periods, envelope volume, DMC output: sound only.
             _ => (),
         }
     }
@@ -229,7 +232,7 @@ impl Apu {
 
     /// Read APU Status without side-effects.
     ///
-    /// Non-mutating version of `read_status`. The DMC IRQ bit is never set (see [`Dmc`]).
+    /// Non-mutating version of `read_status`.
     pub const fn peek_status(&self) -> u8 {
         let mut status = 0x00;
         if self.pulse1.counter > 0 {
@@ -250,13 +253,16 @@ impl Apu {
         if self.frame_counter.irq_pending {
             status |= 0x40;
         }
+        if self.dmc.irq_pending {
+            status |= 0x80;
+        }
         status
     }
 
-    /// Whether the frame counter is asserting IRQ (the DMC never does, see [`Dmc`]).
+    /// Whether the frame counter or the DMC is asserting IRQ.
     #[inline(always)]
     pub const fn irq_pending(&self) -> bool {
-        self.frame_counter.irq_pending
+        self.frame_counter.irq_pending | self.dmc.irq_pending
     }
 
     /// Resets the APU.

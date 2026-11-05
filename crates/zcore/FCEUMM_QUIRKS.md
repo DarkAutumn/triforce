@@ -28,8 +28,8 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 | FQ-08 | Frame boundary at dot 1 of line 240 | frame boundary (when inputs and pokes apply) |
 | FQ-09 | Odd-frame dot skip even when rendering is off (**restored to hardware**) | per-frame timing |
 | FQ-10 | 512-cycle OAM DMA, run inside `STA $4014` (**restored to hardware**) | per-frame timing |
-| FQ-11 | 4-read DMC DMA | per-frame timing |
-| FQ-12 | DMC fetch timed by FCEUmm's per-instruction sound hook | per-frame timing |
+| FQ-11 | 4-read DMC DMA (**restored to hardware**) | per-frame timing |
+| FQ-12 | DMC fetch timed by FCEUmm's per-instruction sound hook (**restored to hardware**) | per-frame timing |
 | FQ-13 | The PPU I/O latch never decays (**restored to hardware**) | CPU registers after $2002/open-bus reads (masked by the game: no RAM effect in the corpus) |
 
 ## FQ-01 — Two dead PPU frames after reset
@@ -184,6 +184,9 @@ step 18a, `docs/experiments/round9.md`): `Bus::handle_dma`. `sprdma_and_dmc_dma`
 
 ## FQ-11 — 4-read DMC DMA
 
+**Restored to hardware** with FQ-12 in `zcore: restore hardware DMC reader and DMC DMA (FQ-11, FQ-12
+removed)` (plan step 18a, `docs/experiments/round9.md`).
+
 - **Hardware:** a DMC sample fetch steals 1-4 cycles depending on what the CPU is doing and on alignment
   with OAM DMA. nesdev "APU DMC", "DMA"; `dmc_dma_during_read4`, `sprdma_and_dmc_dma`.
 - **FCEUmm:** `DMCDMA` performs four `X6502_DMR` reads of the sample address (`src/sound.c:502-508`) from
@@ -193,6 +196,9 @@ step 18a, `docs/experiments/round9.md`): `Bus::handle_dma`. `sprdma_and_dmc_dma`
 - **Removal:** delete with FQ-12; `dmc_dma_during_read4` passes again.
 
 ## FQ-12 — DMC fetch timed by FCEUmm's per-instruction sound hook
+
+**Restored to hardware** with FQ-11 in `zcore: restore hardware DMC reader and DMC DMA (FQ-11, FQ-12
+removed)`: `Dmc` (timer, reader, IRQ) and `Bus::handle_dma`.
 
 - **Hardware:** the DMC timer counts CPU cycles exactly; the reader requests a fetch as soon as the sample
   buffer empties, and the CPU services it at its next read cycle (with halt/alignment). nesdev "APU DMC";

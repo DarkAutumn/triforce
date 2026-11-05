@@ -33,7 +33,7 @@ use crate::{
     apu::Apu,
     cart::Cart,
     common::ResetKind,
-    cpu::{Cpu, TraceHook},
+    cpu::{Cpu, IrqFlags, TraceHook},
     input::{Input, Player},
     mapper::Mapper,
     memory::{ConstArray, Memory, PRG_ROM_SIZE, PrgRom},
@@ -358,12 +358,18 @@ impl Bus {
     }
 
     /// A cycle on which the board or the APU has work: the board's write countdown, then the
-    /// APU's frame counter and length counters.
+    /// APU's frame counter, length counters and DMC, whose fetch request halts the CPU at its
+    /// next read ([`Bus::handle_dma`]).
     #[inline(never)]
     fn cpu_clock_due(&mut self) {
-        let State { mapper, apu, .. } = &mut self.state;
+        let State { mapper, apu, cpu, .. } = &mut self.state;
         mapper.clock();
         apu.clock_due();
+        if apu.dmc.dma_pending {
+            apu.dmc.dma_pending = false;
+            cpu.irq_flags
+                .insert(IrqFlags::DMA_DMC | IrqFlags::DMA_HALT | IrqFlags::DMA_DUMMY_READ);
+        }
         self.tick_deadline = if mapper.clocking() {
             0
         } else {

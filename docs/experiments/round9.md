@@ -131,3 +131,47 @@ FQ-13 + FQ-09 + FQ-10. `tf bench` 2,452-2,456 / 4,384-4,577.
 **Decision: keep.** Every specialist is within or near the baselines' range: ow-octorok (97.9%, −0.074) and
 stalfos-keese-gel's health (−0.063) are a hair outside, well inside episode noise (±0.6 points at 660
 episodes); goriya's health is the best of the three runs. Chain total 28 (floor 12).
+
+## FQ-11 + FQ-12: the hardware DMC reader and its DMA
+
+**Change (one step: FQ-11's 4-read fetch only exists inside FQ-12's hook).** The DMC's timer counts CPU cycles
+whether or not a sample plays; each expiry shifts a bit, every eighth starts an output cycle that empties the
+buffer and requests the next byte, and a `$4015` enable with an empty buffer requests one 2-3 cycles later
+(`apu/dmc.rs` `Dmc`, from TetaNES' reader minus the output unit). The request halts the CPU at its next read:
+halt, dummy, alignment and fetch, 3-4 cycles alone, fewer inside an OAM DMA (`Bus::handle_dma`, TetaNES' whole
+loop now). The last byte raises the DMC IRQ (`$4015` bit 7) when enabled; `$4015` bit 4 counts down. The DMC
+stays off the per-cycle path: `Apu::next_clock` includes the cycle of its next fetch request
+(`Dmc::next_event`), and `Bus::cpu_clock_due` turns a request into the CPU's DMA flags. FCEUmm's
+per-instruction hook (`FceuDmc`, `fceumm_dmc_fetch`) is deleted. `TFZSTATE` v3; v1 DMC state converts from
+FCEUmm's fetcher (registers, address, bytes left, buffer, bit position, cycles to the next bit). The compat
+tests became `dmc_fetches_halt_the_cpu_once_per_byte`. Tests: `dmc_basics`, `dmc_rates`, `dmc_status`,
+`dmc_dma_2007_read`, `dmc_dma_2007_write`, `dmc_dma_4016_read`, `sprdma_and_dmc_dma`,
+`sprdma_and_dmc_dma_512` and `reset_works_immediately` pass and are un-ignored (`dpcmletterbox` and
+`instr_timing` still fail, now attributed to the remaining timing quirks); every zelda, env and pool test
+passes (no movie desynced). Gate build: FQ-13, 09, 10, 11, 12. `tf bench` 2,531-2,584 / 4,800-4,908 (faster:
+no per-instruction hook).
+
+| Specialist | Old | Baseline s0 | Baseline s1 | FQ-11-12 s0 |
+|---|---:|---:|---:|---:|
+| boss-aquamentus | 100.0% | 100.0% / +0.592 | 98.3% / +0.575 | 100.0% / +0.575 |
+| d2-rope | 95.2% | 94.0% / −0.254 | 93.6% / −0.231 | 93.1% / −0.249 |
+| goriya | 76.7% | 78.3% / −0.758 | 77.9% / −0.725 | 75.8% / −0.683 |
+| ow-leever-peahat | 100.0% | 97.1% / −0.325 | 96.2% / −0.296 | 96.2% / −0.344 |
+| ow-moblin | 97.1% | 95.3% / −0.215 | 96.4% / −0.236 | 96.4% / −0.201 |
+| ow-octorok | 99.0% | 98.3% / −0.073 | 98.2% / −0.066 | 98.0% / −0.083 |
+| ow-start | 98.5% | 100.0% / +0.278 | 100.0% / +0.287 | 100.0% / +0.278 |
+| ow-zora | 97.4% | 95.4% / −0.191 | 95.4% / −0.206 | 95.7% / −0.203 |
+| stalfos-keese-gel | — | 96.8% / −0.035 | 95.7% / −0.041 | 95.7% / −0.037 |
+| wallmaster | 87.5% | 98.3% / +0.167 | 100.0% / +0.208 | 100.0% / +0.192 |
+
+| Segment | Baseline s0 | Baseline s1 | FQ-11-12 s0 |
+|---|---:|---:|---:|
+| Full milestone1 | 1/40 | 1/40 | 0/40 |
+| Full milestone1-fairy | 3/40 | 2/40 | 3/40 |
+| Post-D1 main | 7/40 | 3/40 | 3/40 |
+| Post-D1 fairy | 6/40 | 6/40 | 9/40 |
+| D2 | 15/40 | 12/40 | 17/40 |
+| **Total** | 32 | 24 | 32 |
+
+**Decision: keep.** Chain total 32, equal to the better baseline. goriya's success (75.8%) is again under both
+baselines with better health (−0.683); every other specialist is within or at the edge of the baselines.
