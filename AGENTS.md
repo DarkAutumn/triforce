@@ -4,23 +4,18 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/todo.md` "Next up" (where the work
 stands and what to try next, in order).
 
-## Where things stand (round 7 active, Nov 3)
+## Where things stand (Nov 5)
 
-- Round 6 is complete (`docs/experiments/round6.md`); round 7 is in `docs/experiments/round7.md`.
-- Todo item 1 complete: shared lingering metrics and GUI, 383 tests, seeded parity, CUDA smoke and baseline chains.
-  Outputs `models/r29-linger-baseline/`. Audit complete; boomerang/config-loss bugs fixed. Aquamentus r30-exit
-  promoted: train the full kill/heart/exit visit. Next: Goriya block-reward and corner-stalemate experiments.
-- R31 live: `r31-block1` and `r31-block3` train in main on code snapshot `6421275`; `r31-quiet005` trains from
-  `../triforce2-dev` code snapshot `aa30a2f` with explicit main curriculum/model/log paths. All are matched Goriya
-  continuations from r21, seed 31, 245 updates (~1M actions). Freeze runtime code and active YAML in both trees
-  until these runs finish; do not merge dev code mid-round. Latest dev full check: 462 passed.
-- Lee resumed experiment mode: keep the omp todo updated, reconcile it with todo.md between experiments, log
-  every result, check off completed backlog entries, commit each finished item and keep going through items 1–8.
-- **Uncommitted on purpose:** `play-zelda.py`, `triforce/play_grid.py`, `tests/test_play_zelda.py` in main's
-  working tree (Lee is trying them; he said not to commit yet). They add `--games N` (more games than cells; a
-  cell's game is replaced by a better hidden one only when it enters a new room or starts its next run, with a
-  fade), an on-screen fps readout in the window title and `--benchmark SECONDS`. Tests pass. Leave them alone
-  unless Lee asks; don't sweep them into another commit (path-limited commits).
+- **The Rust port is merged** (`docs/decisions.md` 2026-11-05 entries; plan steps 1–18): the emulator is
+  `crates/zcore` (Zelda-only NES core cut down from TetaNES, hardware timing, no FCEUmm quirks left), the game,
+  env and pool logic is Rust (`crates/zelda`, `crates/env`, `crates/pool`), and Python drives it through
+  `triforce._native` (`crates/triforce-py`). stable-retro and the Python game stack are gone. All start states
+  and trajectories were regenerated on zcore (`round8.md`, `round9.md`); the promoted team is unchanged.
+- **Order from here (Lee, Nov 5; `todo.md` "Next up"):** raise test coverage, then the performance and
+  optimization step (`docs/performance.md`), then continue the experiments in `todo.md`.
+- **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
+- Lee's experiment mode stands: keep the omp todo updated, reconcile it with todo.md between experiments, log
+  every result, check off completed backlog entries, commit each finished item and keep going.
 - **VRAM (Lee, Nov 3):** leave his running `play-zelda.py` alone unless an experiment crashes from CUDA memory
   exhaustion. If it does, kill the player without asking, then resume the experiment.
 
@@ -44,7 +39,7 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
 - Rejected ideas stay rejected (marked in `todo.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee does
   want the separate experiment of training and evaluating everything after D1 with the boomerang usable vs masked:
   todo.md "Next up" item 8.)
-- **Start states** (`triforce/custom_integrations/Zelda-NES/`) must be clean pre-entry states: delete bad ones
+- **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
   rather than keep them (originals are backed up in the old triforce repo). No 16-heart states: max hearts follow
   the route (3 through Dungeon 1, 4 after Aquamentus, +1 per later heart container). Boss rooms keep only the fight
   entry. Build states with `python -m triforce.entry_states build|path` and check them with `... audit`.
@@ -75,8 +70,12 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
 
 ## Environment
 
-- Repo `/home/leculver/git/triforce2`, venv `.venv/bin/python` (Python 3.12); RTX 4090, 20 cores.
-- Tests: `.venv/bin/python -m pytest -q` (about 280 tests, 2–10 minutes depending on load). Keep them green.
+- Repo `/home/leculver/git/triforce2`, venv `.venv/bin/python` (Python 3.12); RTX 4090, 20 cores. ROM at
+  `roms/zelda.nes` (or `$TRIFORCE_ROM`). After changing any crate, rebuild the module:
+  `.venv/bin/maturin develop --release`.
+- Tests: `.venv/bin/python -m pytest -q` and `cargo test --release --workspace --features zelda/zcore` (about a
+  minute each). Keep them green. Emulator changes: `tf ladder-golden` before, `tf ladder-diff` after (README);
+  behaviour gate for emulator changes: `scripts/port_gate.sh LABEL`.
 - Training GUI: `uv run training-gui.py` (PEP 723 script; PySide6 isn't in the venv).
 - `logs/`, `models/`, `trajectories/` are gitignored. `models/<specialist>/<run-id>/` holds `ckpt.pt`,
   `metrics.jsonl`, `eval.json`, `train.log`; `models/<specialist>/promoted` names the promoted run.
@@ -84,21 +83,18 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
 
 ## Working rules learned the hard way
 
-- **Never change `triforce/` code or a running specialist's yaml in the main checkout while a training round is
-  running.** Training subprocesses and the background evaluation import the code fresh; a mid-round change broke two
-  evaluations (round 6). Code changes go in the worktree `../triforce2-dev` (branch `round4-dev`): fast-forward it
-  from `main` first, commit there, test there (`cd ../triforce2-dev && /home/leculver/git/triforce2/.venv/bin/python
-  -m pytest -q`), then `git merge round4-dev` into main once no round is running. The worktree needs the ROM
-  symlinked (`triforce/custom_integrations/Zelda-NES/rom.nes`).
-- Throwaway scripts live in `/tmp`. A script that uses a spawn `multiprocessing` pool (e.g. `evaluate_specialist`
-  with `parallel > 1`) must be a file with `if __name__ == '__main__':`, not stdin. A `/tmp` script imports the
-  installed (main) `triforce`; set `PYTHONPATH` to the worktree to test worktree code.
+- **Never change `triforce/` code, rebuild `triforce._native`, or change a running specialist's yaml in the main
+  checkout while a training round is running.** Training and the background evaluation import the code fresh; a
+  mid-round change broke two evaluations (round 6). Code changes go in a worktree (e.g. `../triforce2-dev`):
+  fast-forward it from `main` first, commit and test there (build its own module with maturin into a separate
+  venv, or test the Rust side with `cargo test`), then merge into main once no round is running. A worktree needs
+  `roms/zelda.nes`.
+- Throwaway scripts live in `/tmp`. A `/tmp` script imports the installed (main) `triforce`.
 - **Entry states are saved mid-scroll** (pre-entry: the frame before the room entry, game mode `$12` = 4, scroll
-  complete; every transition mode is in `frame_skip.SCROLLING_MODES`). For one-off investigations (screenshots,
-  ASCII tile maps, objective/wavefront checks) never read the screen or the room's tile map from a raw
-  `emu.load_state` or during a transition: load through `GameSession.load` (its `gain_control` runs to the first
-  playable frame) and check `$12 == 5` before capturing. Round 6: a mid-scroll screenshot of 0x5c looked like a
-  different room.
+  complete). For one-off investigations (screenshots, ASCII tile maps, objective/wavefront checks) never read the
+  screen or the room's tile map from a raw machine restore or during a transition: load through `Game.load` (it
+  runs to the first playable frame) and check `$12 == 5` before capturing. Round 6: a mid-scroll screenshot of
+  0x5c looked like a different room.
 - Launch long jobs through the tool's async/background mode; `( cmd & )` from a shell call gets killed.
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
@@ -110,7 +106,7 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
 - **Trajectories (curriculum) must stay inside the family's rooms.** Re-explore (`python -m triforce.explore
   --specialist NAME --states ...`) whenever a family's rooms change; a trajectory that runs into another family's
   room crashes training. `--out` is the trajectories *root* (explore appends `<specialist>/<state>`): from the
-  worktree pass `--out /home/leculver/git/triforce2/trajectories`, not `.../trajectories/NAME` (round 6 r26 trained
+  room crashes training. `--out` is the trajectories *root* (explore appends `<specialist>/<state>`): from a
   without its new trajectories that way). Check `curriculum.json` in the run dir lists the states you expect.
 - `max_steps` sets how many episodes finish per iteration. A curriculum specialist whose failures are slow
   (fleeing, waiting) needs `max_steps` near its explored path length (Aquamentus: 2000 → 400 took it from 0% to 93%).
