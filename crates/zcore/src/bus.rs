@@ -40,17 +40,12 @@ use crate::{
     cart::Cart,
     common::{NesRegion, ResetKind},
     cpu::Cpu,
-    debug::{AccessHit, Breakpoints, CallStack, CodeMap, Debugger, FrameKind, PcHistory},
-    fs,
-    genie::GenieCode,
     input::{Input, Player},
     mapper::{Mapper, MapperOps},
     memory::{ConstArray, Memory, RamState},
-    patch::{Patch, Patches},
     ppu::Ppu,
 };
 use serde::{Deserialize, Serialize};
-use std::io::{Read, Write};
 use tracing::trace;
 
 /// NES Bus
@@ -125,65 +120,6 @@ pub struct Bus {
     pub ram_state: RamState,
     /// NES Region.
     pub region: NesRegion,
-    /// Whether a [`Debugger`] is attached, cached so the per-dot path can skip touching the
-    /// (cold) `debugger` field when nothing is attached.
-    #[serde(skip)]
-    pub debugger_active: bool,
-    /// Attached debugger, run at a chosen PPU dot.
-    // Don't save debug state
-    #[serde(skip)]
-    pub debugger: Debugger,
-    /// Ring buffer of executed program counters, recorded only while a debugger is open and asks
-    /// for history.
-    #[serde(skip)]
-    pub pc_history: Option<PcHistory>,
-    /// What execution has shown each byte of cartridge memory to be, recorded only while a
-    /// debugger is open.
-    #[serde(skip)]
-    pub code_map: Option<CodeMap>,
-    /// The calls execution is inside, recorded only while a debugger is open and asks for them.
-    #[serde(skip)]
-    pub call_stack: Option<CallStack>,
-    /// Whether any breakpoint is armed, cached so the read and write paths test a bool rather
-    /// than an `Option` on every access.
-    #[serde(skip)]
-    pub breakpoints_active: bool,
-    /// Breakpoint ranges over the CPU bus, allocated only once one is armed.
-    #[serde(skip)]
-    pub breakpoints: Option<Box<Breakpoints>>,
-    /// Where the instruction being executed started, recorded only while a breakpoint is armed.
-    #[serde(skip)]
-    pub instr_addr: u16,
-    /// The access a breakpoint caught, taken by whoever reports the stop.
-    ///
-    /// An access happens part way through an instruction, where there is no clean way to unwind,
-    /// so this is left for the instruction boundary to find.
-    #[serde(skip)]
-    pub access_hit: Option<AccessHit>,
-    /// Which vector the instruction just run took, for a caller waiting on the next interrupt.
-    ///
-    /// An interrupt is not visible between instructions: the handler's first address can be
-    /// reached by a jump like any other. Recorded here because [`Bus::irq`] is the one place a
-    /// vector is taken. A `BRK` is left out: it reaches the IRQ vector by executing, so an
-    /// execute breakpoint already stops on it.
-    ///
-    /// Stale until the next one, so a caller waiting on an interrupt clears it as it starts
-    /// waiting. See [`ControlDeck::clear_interrupt`](crate::control_deck::ControlDeck::clear_interrupt).
-    #[serde(skip)]
-    pub interrupt_taken: Option<FrameKind>,
-    /// Cheats: values substituted for what a read would otherwise return.
-    ///
-    /// Not serialized. A cheat is the player's current choice rather than the machine's - the same
-    /// argument [`ControlDeck::load_bus`](crate::control_deck::ControlDeck::load_bus) makes for
-    /// mapper revisions - and `keep_session_settings` swaps the running table back in over
-    /// whatever a restore brought, so a serialized copy would be written and then discarded.
-    //
-    // Last, with the other cold fields, even though the WRAM read path consults its page mask:
-    // measured beside `wram` instead, so that the mask shares a line with it, at 1.946 ms/frame
-    // against 1.896 here and 1.881 with no patch table at all. Fifty-six bytes displacing
-    // `open_bus` costs more than the mask's own load saves.
-    #[serde(skip)]
-    pub patches: Patches,
 }
 
 impl Default for Bus {
@@ -211,93 +147,21 @@ impl Bus {
             mapper_ops: MapperOps::empty(),
             apu: Apu::new(region),
             input: Input::new(region),
-            patches: Patches::default(),
             open_bus: 0x00,
             ram_state,
             region,
-            debugger: Debugger::default(),
-            debugger_active: false,
-            breakpoints_active: false,
-            breakpoints: None,
-            instr_addr: 0,
-            access_hit: None,
-            interrupt_taken: None,
-            pc_history: None,
-            code_map: None,
-            call_stack: None,
         }
     }
 
     /// Installs a cart: its board and every memory region it came with.
     pub fn load_cart(&mut self, cart: Cart) {
         self.memory = cart.memory;
-        // Marks are offsets into the memory replaced above. Rebuild with the new cart's size,
-        // still recording if it was.
-        if self.code_map.is_some() {
-            self.attach_code_map(None);
-        }
         self.load_mapper(cart.mapper);
     }
 
     /// Removes the cart, leaving the console with no board.
     pub fn unload_cart(&mut self) {
         self.load_mapper(Mapper::default());
-    }
-
-    /// Overwrites this console with `src`'s state, reusing the allocations it already holds.
-    ///
-    /// What run-ahead wants every frame is not a fresh `Bus` but the one it snapshotted into last
-    /// frame, refilled: a console that has already run this cart has an arena of the right size
-    /// whose ROM half is already correct, so only what a frame can actually change has to be
-    /// copied. Restoring is `Bus::swap_state`, which hands the console back for the next one.
-    ///
-    /// The debugger is not copied, for the same reason `swap_state` keeps it across a restore: it
-    /// belongs to the session, not to the state.
-    pub(crate) fn snapshot_from(&mut self, src: &Self) {
-        // Destructured exhaustively so that a field added to `Bus` is a compile error here rather
-        // than console state that silently fails to survive a run-ahead frame.
-        let Self {
-            cpu,
-            ppu,
-            mapper_ops,
-            mapper,
-            memory,
-            apu,
-            input,
-            wram,
-            patches,
-            open_bus,
-            ram_state,
-            region,
-            debugger_active,
-            // These are all session-specific values and are not restored across snapshots.
-            debugger: _,
-            interrupt_taken: _,
-            pc_history: _,
-            code_map: _,
-            call_stack: _,
-            breakpoints_active: _,
-            breakpoints: _,
-            instr_addr: _,
-            access_hit: _,
-        } = src;
-
-        self.cpu.clone_from(cpu);
-        // Copies the 120 KiB frame buffer with it. Skipping that needs a field-wise copy of `Ppu`,
-        // which belongs next to `Ppu` rather than here; the pixels themselves are dead either way,
-        // since the caller parks the frame it means to display before snapshotting.
-        self.ppu.clone_from(ppu);
-        self.mapper_ops = *mapper_ops;
-        self.mapper.clone_from(mapper);
-        self.memory.snapshot_from(memory);
-        self.apu.clone_from(apu);
-        self.input.clone_from(input);
-        self.wram.clone_from(wram);
-        self.patches.clone_from(patches);
-        self.open_bus = *open_bus;
-        self.ram_state = *ram_state;
-        self.region = *region;
-        self.debugger_active = *debugger_active;
     }
 
     /// Copies the PPU's address space - `$0000-$2FFF`, banked and mirrored as it is right now -
@@ -369,24 +233,6 @@ impl Bus {
             _ => false,
         }
     }
-
-    /// Apply a Game Genie code, replacing any patch already at its address.
-    pub fn add_genie_code(&mut self, genie_code: GenieCode) {
-        self.patches.insert(Patch::from(&genie_code));
-    }
-
-    /// Remove the patch a Game Genie code applies, if the code is one this build can read.
-    pub fn remove_genie_code(&mut self, code: &str) {
-        if let Ok(genie_code) = GenieCode::new(code.to_string()) {
-            self.patches.remove(genie_code.addr());
-        }
-    }
-
-    /// Remove every patch.
-    pub fn clear_genie_codes(&mut self) {
-        self.patches.clear();
-    }
-
     /// Samples the APU has mixed since the last clear.
     #[inline]
     #[must_use]
@@ -431,16 +277,13 @@ impl Bus {
             _ => addr,
         };
         self.open_bus = match addr {
-            0x0000..=0x07FF => self.patches.read(addr, self.wram[usize::from(addr)]),
-            0x4100..=0xFFFF => {
-                let val = self
-                    .mapper_ops
-                    .intersects(MapperOps::SERVES_PRG_READS)
-                    .then(|| self.mapper.prg_read(addr))
-                    .flatten()
-                    .unwrap_or_else(|| self.memory.prg_peek(addr));
-                self.patches.read(addr, val)
-            }
+            0x0000..=0x07FF => self.wram[usize::from(addr)],
+            0x4100..=0xFFFF => self
+                .mapper_ops
+                .intersects(MapperOps::SERVES_PRG_READS)
+                .then(|| self.mapper.prg_read(addr))
+                .flatten()
+                .unwrap_or_else(|| self.memory.prg_peek(addr)),
             0x2002 => self.ppu.read_status(),
             0x2004 => self.ppu.read_oamdata(),
             0x2007 => self.read_data(),
@@ -462,16 +305,13 @@ impl Bus {
             _ => addr,
         };
         match addr {
-            0x0000..=0x07FF => self.patches.read(addr, self.wram[usize::from(addr)]),
-            0x4100..=0xFFFF => {
-                let val = self
-                    .mapper_ops
-                    .intersects(MapperOps::SERVES_PRG_READS)
-                    .then(|| self.mapper.prg_peek(addr))
-                    .flatten()
-                    .unwrap_or_else(|| self.memory.prg_peek(addr));
-                self.patches.read(addr, val)
-            }
+            0x0000..=0x07FF => self.wram[usize::from(addr)],
+            0x4100..=0xFFFF => self
+                .mapper_ops
+                .intersects(MapperOps::SERVES_PRG_READS)
+                .then(|| self.mapper.prg_peek(addr))
+                .flatten()
+                .unwrap_or_else(|| self.memory.prg_peek(addr)),
             0x2002 => self.ppu.peek_status(),
             0x2004 => self.ppu.peek_oamdata(),
             0x2007 => self.peek_data(),
@@ -613,34 +453,9 @@ impl Bus {
         memory.sram()
     }
 
-    /// Writes battery-backed cart RAM to `writer`.
-    ///
-    /// # Errors
-    ///
-    /// If the writer fails.
-    pub fn save_sram(&mut self, writer: impl Write) -> fs::Result<()> {
-        fs::save_sram(writer, self.sram())
-    }
-
-    /// Reads battery-backed cart RAM from `reader`.
-    ///
-    /// A save shorter than the cart's battery - one written before a board grew its
-    /// [`Src::BatteryExt`](crate::memory::Src::BatteryExt) - restores what it does hold and leaves
-    /// the rest powered on.
-    ///
-    /// # Errors
-    ///
-    /// If the reader fails.
-    pub fn load_sram(&mut self, reader: impl Read) -> fs::Result<()> {
-        let data = fs::load_sram::<Vec<u8>>(reader)?;
-        self.set_sram(&data);
-        Ok(())
-    }
-
     /// Replaces battery-backed cart RAM with raw bytes, as [`Bus::sram`] hands them out.
     ///
-    /// For a frontend that keeps the battery in its own format and hands it back unwrapped; the
-    /// `.sram` container is [`Bus::load_sram`].
+    /// For a frontend that keeps the battery in its own format and hands it back unwrapped.
     pub fn set_sram(&mut self, data: &[u8]) {
         let Self { mapper, memory, .. } = self;
         let sram = memory.sram_mut();
@@ -656,7 +471,6 @@ mod test {
     use super::*;
     use crate::{
         apu::noise::ShiftMode,
-        debug::{CallFrame, CallStack, FrameKind},
         input::JoypadBtn,
         mapper::{Cnrom, Nrom},
         memory::Src,
@@ -751,58 +565,6 @@ mod test {
         bus.ppu_clock();
         bus.cpu_bus_read(0x2007);
         assert_eq!(bus.cpu_bus_read(0x2007), 0x77, "chr_ram write");
-    }
-
-    #[test]
-    fn genie_codes() {
-        let mut bus = Bus::default();
-        let mut cart = Cart::empty_sized(0x8000, 0x2000);
-
-        let code = "YYKPOYZZ"; // The Legend of Zelda: New character with 8 Hearts
-        let addr = 0x9F41;
-        let orig_value = 0x22; // 3 Hearts
-        let new_value = 0x77; // 8 Hearts
-
-        cart.mapper = Nrom::load(&mut cart).unwrap();
-        cart.memory.region_mut(Src::PrgRom)[(addr & 0x7FFF) as usize] = orig_value;
-
-        bus.load_cart(cart);
-        bus.add_genie_code(GenieCode::new(code.to_string()).expect("valid genie code"));
-
-        assert_eq!(bus.cpu_bus_peek(addr), new_value, "peek code value");
-        assert_eq!(bus.cpu_bus_read(addr), new_value, "read code value");
-        bus.remove_genie_code(code);
-        assert_eq!(bus.cpu_bus_peek(addr), orig_value, "peek orig value");
-        assert_eq!(bus.cpu_bus_read(addr), orig_value, "read orig value");
-    }
-
-    /// The reason patches are not just Game Genie codes: a frontend's cheat is usually a RAM
-    /// address, which the Genie's 15-bit field over `$8000` cannot name.
-    #[test]
-    fn a_patch_substitutes_wram_reads_the_genie_cannot_reach() {
-        let mut bus = Bus::default();
-        bus.wram[0x10] = 0x03;
-        bus.wram[0x11] = 0x03;
-
-        bus.patches.insert(Patch::new(0x0010, 0x63, None));
-        assert_eq!(bus.cpu_bus_read(0x0010), 0x63, "read is substituted");
-        assert_eq!(bus.cpu_bus_peek(0x0010), 0x63, "and so is peek");
-        assert_eq!(bus.cpu_bus_peek(0x0011), 0x03, "the next byte is not");
-        // The mirrors fold onto the same address, so they are patched with it.
-        assert_eq!(bus.cpu_bus_peek(0x0810), 0x63, "and its mirror");
-
-        // Substitution is on the way out, so the game's own writes still land - which is what
-        // makes a cheat hold rather than flicker the way a once-a-frame poke would.
-        bus.cpu_bus_write(0x0010, 0x01);
-        assert_eq!(bus.wram[0x10], 0x01, "the write reaches memory");
-        assert_eq!(
-            bus.cpu_bus_peek(0x0010),
-            0x63,
-            "and the read still does not"
-        );
-
-        bus.patches.remove(0x0010);
-        assert_eq!(bus.cpu_bus_peek(0x0010), 0x01);
     }
 
     #[test]
@@ -1123,38 +885,6 @@ mod test {
                 "battery_backed {battery_backed}: cart RAM after a power cycle"
             );
         }
-    }
-
-    /// A restore puts the console somewhere its recorded frames do not describe, and `unwind_to`
-    /// cannot repair them: it pops what the stack pointer has risen past, which neither puts back
-    /// a frame returned from nor drops one pushed at a shallower depth. So the frames go and the
-    /// recorder stays, and a caller that knows the position it restored to puts its own back.
-    #[test]
-    fn a_restore_drops_the_recorded_frames_and_keeps_the_recorder() {
-        let console = || {
-            let mut bus = Bus::default();
-            let mut cart = Cart::empty_sized(0x4000, 0x2000);
-            cart.mapper = Nrom::load(&mut cart).expect("valid mapper");
-            bus.load_cart(cart);
-            bus
-        };
-        let mut bus = console();
-        let mut restored = console();
-        bus.call_stack = Some(CallStack::new());
-        bus.call_stack.as_mut().expect("recording").push(CallFrame {
-            caller: 0x8000,
-            entry: 0x9000,
-            sp: 0xFD,
-            kind: FrameKind::Call,
-        });
-
-        bus.swap_state(&mut restored).expect("the same cart");
-
-        let call_stack = bus.call_stack.as_ref().expect("still recording");
-        assert!(
-            call_stack.is_empty(),
-            "frames recorded before the restore do not describe the console after it"
-        );
     }
 
     /// A debugger write must not move the console, so it reaches RAM and refuses everything else

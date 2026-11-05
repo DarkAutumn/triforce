@@ -11,20 +11,18 @@
 
 use crate::{
     common::NesRegion,
-    fs,
     mapper::{self, Mapper},
     memory::RamState,
     memory::{Memory, MemoryLayout, Src},
     ppu::Mirroring,
 };
-use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
     io::{BufReader, Read},
     path::Path,
 };
 use thiserror::Error;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 /// Default CHR-RAM provided when a cart has no CHR-ROM.
 const DEFAULT_CHR_RAM_SIZE: usize = 8 * 1024;
@@ -97,8 +95,6 @@ pub struct Cart {
     pub prg_rom_size: usize,
     /// Bytes of PRG-RAM, battery-backed or not.
     pub prg_ram_size: usize,
-    /// What the game database knows about this ROM, matched by CRC.
-    pub game_info: Option<GameInfo>,
 }
 
 impl Default for Cart {
@@ -139,7 +135,6 @@ impl Cart {
             chr_ram_size,
             prg_rom_size,
             prg_ram_size: 0,
-            game_info: None,
         }
     }
 
@@ -314,30 +309,13 @@ impl Cart {
         };
 
         let crc32 = Self::rom_crc32(&prg_rom, &chr_rom);
-        // Deliberately does not overwrite `header.mapper_num`: the header records what the ROM
-        // itself claims, and `Cart::mapper_num` layers the database on top. Clobbering it made the
-        // database self-referential, since `generate-db` could then only ever read back its own
-        // previous answer.
-        let game_info = Self::lookup_info(crc32);
-        let region = if matches!(header.variant, NesVariant::INes | NesVariant::Nes2) {
-            match header.tv_mode {
-                1 => NesRegion::Pal,
-                3 => NesRegion::Dendy,
-                _ => game_info
-                    .as_ref()
-                    .map(|info| info.region)
-                    .unwrap_or_default(),
-            }
-        } else {
-            game_info
-                .as_ref()
-                .map(|info| info.region)
-                .unwrap_or_default()
+        let region = match header.tv_mode {
+            1 if matches!(header.variant, NesVariant::INes | NesVariant::Nes2) => NesRegion::Pal,
+            3 if matches!(header.variant, NesVariant::INes | NesVariant::Nes2) => NesRegion::Dendy,
+            _ => NesRegion::default(),
         };
 
-        let mapper_num = game_info
-            .as_ref()
-            .map_or(header.mapper_num, |info| info.mapper_num);
+        let mapper_num = header.mapper_num;
         let mut memory = Self::build_memory(
             mapper_num,
             prg_rom_size,
@@ -364,7 +342,6 @@ impl Cart {
             chr_ram_size,
             prg_rom_size,
             prg_ram_size,
-            game_info,
         };
         // Header mirroring is the default for every board; only boards that override it - either
         // hard-wired or via a register - touch it again.
@@ -418,20 +395,14 @@ impl Cart {
 
     /// Returns the Mapper number for this Cart.
     #[must_use]
-    pub fn mapper_num(&self) -> u16 {
-        self.game_info
-            .as_ref()
-            .map(|info| info.mapper_num)
-            .unwrap_or(self.header.mapper_num)
+    pub const fn mapper_num(&self) -> u16 {
+        self.header.mapper_num
     }
 
     /// Returns the Sub-Mapper number for this Cart.
     #[must_use]
-    pub fn submapper_num(&self) -> u8 {
-        self.game_info
-            .as_ref()
-            .map(|info| info.submapper_num)
-            .unwrap_or(self.header.submapper_num)
+    pub const fn submapper_num(&self) -> u8 {
+        self.header.submapper_num
     }
 
     /// Returns the Mapper and Board name for this Cart.
@@ -501,39 +472,17 @@ impl Cart {
 
     /// CRC32 of the ROM itself: PRG-ROM, plus CHR-ROM when the cart has any.
     ///
-    /// It identifies the game. The bundled database is keyed by it, and [`Cart::memory`] carries
-    /// it so that a save state - which holds no ROM of its own - can be refused when it belongs
-    /// to another game.
+    /// It identifies the game: [`Cart::memory`] carries it so that a save state - which holds no
+    /// ROM of its own - can be refused when it belongs to another game.
     fn rom_crc32(prg_rom: &[u8], chr_rom: &[u8]) -> u32 {
-        let crc32 = fs::compute_crc32(prg_rom);
-        if chr_rom.is_empty() {
-            crc32
-        } else {
-            fs::compute_combine_crc32(crc32, chr_rom)
-        }
-    }
-
-    fn lookup_info(crc32: u32) -> Option<GameInfo> {
-        const GAME_DB: &[u8] = include_bytes!("../game_db.dat");
-
-        let Ok(games) = fs::load_version::<Vec<GameInfo>>(GAME_DB, fs::GAME_DB_VERSION) else {
-            error!("failed to load `game_db.dat`");
-            return None;
-        };
-
-        match games.binary_search_by(|game| game.crc32.cmp(&crc32)) {
-            Ok(index) => {
-                info!(
-                    "found game matching crc: {crc32:#010X}. info: {:?}",
-                    games[index]
-                );
-                Some(games[index].clone())
-            }
-            Err(_) => {
-                info!("no game found matching crc: {crc32:#010X}");
-                None
+        let mut crc = 0xFFFF_FFFFu32;
+        for &byte in prg_rom.iter().chain(chr_rom) {
+            crc ^= u32::from(byte);
+            for _ in 0..8 {
+                crc = (crc >> 1) ^ (0xEDB8_8320 & (crc & 1).wrapping_neg());
             }
         }
+        !crc
     }
 
     /// Sets the region this cart runs in.
@@ -558,24 +507,6 @@ impl std::fmt::Display for Cart {
         )
     }
 }
-
-/// What the bundled game database knows about a ROM, matched by CRC32.
-///
-/// It exists because a fair number of ROMs carry a header that is wrong about their board, region
-/// or submapper; a database entry overrides the header.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[must_use]
-pub struct GameInfo {
-    /// CRC32 of the ROM's PRG and CHR data, which is what the database is keyed by.
-    pub crc32: u32,
-    /// The region the database says this ROM runs in.
-    pub region: NesRegion,
-    /// The mapper number the database says this ROM uses, overriding a wrong header.
-    pub mapper_num: u16,
-    /// The submapper number the database says this ROM uses.
-    pub submapper_num: u8,
-}
-
 /// Which cartridge header format a ROM carries.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 #[must_use]

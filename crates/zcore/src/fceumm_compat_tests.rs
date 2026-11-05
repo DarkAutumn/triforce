@@ -1,13 +1,7 @@
 //! Tests for `Config::fceumm_compat` (quirks FQ-01..FQ-11). Each asserts the compat-on behaviour and,
 //! where it differs, that the default (hardware) behaviour is unchanged.
 
-use crate::{
-    bus::Bus,
-    cart::Cart,
-    common::ResetKind,
-    cpu::IrqFlags,
-    mapper::Nrom,
-};
+use crate::{bus::Bus, cart::Cart, common::ResetKind, cpu::IrqFlags, mapper::Nrom};
 
 /// An NROM console spinning on `JMP $0000` in work RAM.
 fn console(compat: bool) -> Bus {
@@ -104,7 +98,11 @@ fn fq09_odd_frames_drop_a_dot_with_rendering_off() {
     let mut bus = console(false);
     ppu_dots_to_next_frame(&mut bus);
     let lens: Vec<u32> = (0..4).map(|_| ppu_dots_to_next_frame(&mut bus)).collect();
-    assert_eq!(lens, vec![89_342; 4], "rendering is off: hardware never skips");
+    assert_eq!(
+        lens,
+        vec![89_342; 4],
+        "rendering is off: hardware never skips"
+    );
 }
 
 #[test]
@@ -179,7 +177,10 @@ fn fq02_fq04_status_read_neither_suppresses_vblank_nor_cancels_nmi() {
     bus.ppu.scanline = bus.ppu.vblank_scanline;
     bus.ppu.cycle = 0;
     bus.ppu.read_status();
-    assert!(bus.ppu.prevent_vbl, "hardware: reading on the edge suppresses VBlank");
+    assert!(
+        bus.ppu.prevent_vbl,
+        "hardware: reading on the edge suppresses VBlank"
+    );
 }
 
 #[test]
@@ -205,14 +206,23 @@ fn fq04_enabling_nmi_during_vblank_delays_one_instruction() {
 fn fq10_oam_dma_takes_512_cycles() {
     let mut bus = console(true);
     // STA $4014; NOP at $0010.
-    for (addr, val) in [(0x0010u16, 0x8Du8), (0x0011, 0x14), (0x0012, 0x40), (0x0013, 0xEA)] {
+    for (addr, val) in [
+        (0x0010u16, 0x8Du8),
+        (0x0011, 0x14),
+        (0x0012, 0x40),
+        (0x0013, 0xEA),
+    ] {
         bus.cpu_bus_write(addr, val);
     }
     bus.cpu.pc = 0x0010;
     bus.cpu.acc = 0x02;
     let before = bus.cpu.cycle;
     bus.clock_instr();
-    assert_eq!(bus.cpu.cycle - before, 4 + 512, "the DMA runs inside the STA");
+    assert_eq!(
+        bus.cpu.cycle - before,
+        4 + 512,
+        "the DMA runs inside the STA"
+    );
     let before = bus.cpu.cycle;
     bus.clock_instr();
     assert_eq!(bus.cpu.cycle - before, 2);
@@ -235,7 +245,12 @@ fn nop_steps(bus: &mut Bus, n: usize) -> Vec<u32> {
 
 /// Start a 17-byte DMC sample at the fastest rate.
 fn start_dmc(bus: &mut Bus) {
-    for (addr, val) in [(0x4010u16, 0x0Fu8), (0x4012, 0x00), (0x4013, 0x01), (0x4015, 0x10)] {
+    for (addr, val) in [
+        (0x4010u16, 0x0Fu8),
+        (0x4012, 0x00),
+        (0x4013, 0x01),
+        (0x4015, 0x10),
+    ] {
         bus.cpu_bus_write(addr, val);
     }
 }
@@ -245,7 +260,11 @@ fn fq11_dmc_fetch_takes_four_cycles() {
     let mut bus = console(true);
     start_dmc(&mut bus);
     let steps = nop_steps(&mut bus, 1);
-    assert_eq!(steps, vec![2 + 4], "the first hook after enabling fetches at once");
+    assert_eq!(
+        steps,
+        vec![2 + 4],
+        "the first hook after enabling fetches at once"
+    );
 }
 
 #[test]
@@ -266,7 +285,10 @@ fn fq12_dmc_fetches_once_per_eight_timer_periods() {
     assert!(at.len() >= 4, "{at:?}");
     for w in at.windows(2).skip(1) {
         let gap = w[1] - w[0];
-        assert!((8 * 54 - 2..=8 * 54 + 6).contains(&gap), "gap {gap} in {at:?}");
+        assert!(
+            (8 * 54 - 2..=8 * 54 + 6).contains(&gap),
+            "gap {gap} in {at:?}"
+        );
     }
     // The hardware fetcher is idle while compat timing is in charge.
     assert!(!bus.cpu.irq_flags.intersects(IrqFlags::DMA_DMC));

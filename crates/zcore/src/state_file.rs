@@ -40,7 +40,11 @@ pub fn encode(rom: &Rom, machine: &MachineState, flags: u8) -> Vec<u8> {
     out.extend_from_slice(&VERSION.to_le_bytes());
     out.extend_from_slice(&rom.payload_sha1());
     out.push(flags);
-    out.extend_from_slice(&u32::try_from(z.len()).expect("state under 4 GiB").to_le_bytes());
+    out.extend_from_slice(
+        &u32::try_from(z.len())
+            .expect("state under 4 GiB")
+            .to_le_bytes(),
+    );
     out.extend_from_slice(&z);
     out
 }
@@ -49,14 +53,18 @@ pub fn encode(rom: &Rom, machine: &MachineState, flags: u8) -> Vec<u8> {
 pub fn decode(rom: &Rom, bytes: &[u8]) -> Result<StateFile, StateFormatError> {
     let err = |m: &str| Err(StateFormatError(m.to_owned()));
     if bytes.starts_with(&[0x1f, 0x8b]) {
-        return err("legacy stable-retro state; regenerate it with python -m triforce.entry_states");
+        return err(
+            "legacy stable-retro state; regenerate it with python -m triforce.entry_states",
+        );
     }
     if bytes.len() < HEADER || &bytes[..8] != MAGIC {
         return err("not a TFZSTATE file");
     }
     let version = u16::from_le_bytes([bytes[8], bytes[9]]);
     if version != VERSION {
-        return Err(StateFormatError(format!("TFZSTATE version {version}, expected {VERSION}")));
+        return Err(StateFormatError(format!(
+            "TFZSTATE version {version}, expected {VERSION}"
+        )));
     }
     if bytes[10..30] != rom.payload_sha1() {
         return err("state was saved with a different ROM");
@@ -66,7 +74,9 @@ pub fn decode(rom: &Rom, bytes: &[u8]) -> Result<StateFile, StateFormatError> {
     let Some(z) = bytes.get(HEADER..HEADER + len) else {
         return err("truncated TFZSTATE file");
     };
-    let body = zstd::stream::decode_all(z).map_err(|e| StateFormatError(format!("bad zstd body: {e}")))?;
-    let machine = postcard::from_bytes(&body).map_err(|e| StateFormatError(format!("bad state body: {e}")))?;
+    let body =
+        zstd::stream::decode_all(z).map_err(|e| StateFormatError(format!("bad zstd body: {e}")))?;
+    let machine = postcard::from_bytes(&body)
+        .map_err(|e| StateFormatError(format!("bad state body: {e}")))?;
     Ok(StateFile { machine, flags })
 }

@@ -594,7 +594,7 @@ impl Bus {
     /// ```
     #[inline(always)]
     pub fn acc_imp(&mut self) -> u16 {
-        self.read_unwatched(self.cpu.pc); // Cycle 2, dummy read
+        self.read(self.cpu.pc); // Cycle 2, dummy read
         0
     }
 
@@ -745,7 +745,7 @@ impl Bus {
     #[inline(always)]
     pub fn zpx(&mut self) -> u16 {
         let addr = u16::from(self.fetch_byte()); // Cycle 2
-        self.read_unwatched(addr); // Cycle 3, dummy read
+        self.read(addr); // Cycle 3, dummy read
         // High byte is always zero
         addr.wrapping_add(u16::from(self.cpu.x)) & 0x00FF
     }
@@ -788,7 +788,7 @@ impl Bus {
     #[inline(always)]
     pub fn zpy(&mut self) -> u16 {
         let addr = u16::from(self.fetch_byte()); // Cycle 2
-        self.read_unwatched(addr); // Cycle 3, dummy read
+        self.read(addr); // Cycle 3, dummy read
         // High byte is always zero
         addr.wrapping_add(u16::from(self.cpu.y)) & 0x00FF
     }
@@ -920,7 +920,7 @@ impl Bus {
         let addr = base_addr.wrapping_add(u16::from(self.cpu.x));
         if Cpu::pages_differ(base_addr, addr) || dummy_read {
             // Cycle 4 dummy read with fixed high byte
-            self.read_unwatched((base_addr & 0xFF00) | (addr & 0x00FF));
+            self.read((base_addr & 0xFF00) | (addr & 0x00FF));
         }
         addr
     }
@@ -1002,7 +1002,7 @@ impl Bus {
         let addr = base_addr.wrapping_add(u16::from(self.cpu.y));
         if Cpu::pages_differ(base_addr, addr) || dummy_read {
             // Cycle 4 dummy read with fixed high byte
-            self.read_unwatched((base_addr & 0xFF00) | (addr & 0x00FF));
+            self.read((base_addr & 0xFF00) | (addr & 0x00FF));
         }
         addr
     }
@@ -1099,7 +1099,7 @@ impl Bus {
     #[inline(always)]
     pub fn idx(&mut self) -> u16 {
         let mut zero_addr = self.fetch_byte(); // Cycle 2
-        self.read_unwatched(u16::from(zero_addr)); // Cycle 3 dummy read
+        self.read(u16::from(zero_addr)); // Cycle 3 dummy read
         zero_addr = zero_addr.wrapping_add(self.cpu.x);
         let lo = self.read(u16::from(zero_addr)); // Cycle 4
         let hi = self.read(u16::from(zero_addr.wrapping_add(1))); // Cycle 5
@@ -1193,7 +1193,7 @@ impl Bus {
         let addr = base_addr.wrapping_add(u16::from(self.cpu.y));
         if Cpu::pages_differ(base_addr, addr) || dummy_read {
             // Cycle 5 dummy read with fixed high byte
-            self.read_unwatched((base_addr & 0xFF00) | (addr & 0x00FF));
+            self.read((base_addr & 0xFF00) | (addr & 0x00FF));
         }
         addr
     }
@@ -1303,7 +1303,7 @@ impl Bus {
     pub fn inc(&mut self) {
         let addr = self.cpu.operand;
         let val = self.read(addr);
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let res = val.wrapping_add(1);
         self.write(addr, res);
         self.cpu.set_zn_status(res);
@@ -1313,7 +1313,7 @@ impl Bus {
     pub fn dec(&mut self) {
         let addr = self.cpu.operand;
         let val = self.read(addr);
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let res = val.wrapping_sub(1);
         self.write(addr, res);
         self.cpu.set_zn_status(res);
@@ -1374,7 +1374,7 @@ impl Bus {
     fn aslm(&mut self) {
         let addr = self.cpu.operand;
         let val = self.read(addr);
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let res = self.asl(val);
         self.write(addr, res);
     }
@@ -1398,7 +1398,7 @@ impl Bus {
     pub fn lsrm(&mut self) {
         let addr = self.cpu.operand;
         let val = self.read(addr);
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let res = self.lsr(val);
         self.write(addr, res);
     }
@@ -1422,7 +1422,7 @@ impl Bus {
     pub fn rolm(&mut self) {
         let addr = self.cpu.operand;
         let val = self.read(addr);
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let val = self.rol(val);
         self.write(addr, val);
     }
@@ -1447,7 +1447,7 @@ impl Bus {
     pub fn rorm(&mut self) {
         let addr = self.cpu.operand;
         let val = self.read(addr);
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let val = self.ror(val);
         self.write(addr, val);
     }
@@ -1525,11 +1525,11 @@ impl Bus {
         if run_irq && !prev_run_irq {
             self.cpu.irq_flags.remove(IrqFlags::RUN_IRQ);
         }
-        self.read_unwatched(self.cpu.pc); // Dummy read
+        self.read(self.cpu.pc); // Dummy read
 
         let offset = i16::from(self.cpu.operand as i8);
         if Cpu::page_crossed(self.cpu.pc, offset) {
-            self.read_unwatched(self.cpu.pc); // Dummy read
+            self.read(self.cpu.pc); // Dummy read
         }
         self.cpu.pc = (self.cpu.pc as i16).wrapping_add(offset) as u16;
     }
@@ -1590,7 +1590,7 @@ impl Bus {
     #[inline(always)]
     pub fn jsr(&mut self) {
         let lo = self.fetch_byte();
-        self.read_unwatched(self.cpu.pc); // Dummy read
+        self.read(self.cpu.pc); // Dummy read
         self.push_word(self.cpu.pc);
         let hi = self.fetch_byte();
         let addr = u16::from_le_bytes([lo, hi]);
@@ -1611,7 +1611,7 @@ impl Bus {
     /// ```
     #[inline(always)]
     pub fn rti(&mut self) {
-        self.read_unwatched(self.cpu.pc); // Dummy read
+        self.read(self.cpu.pc); // Dummy read
         let status = Status::from_bits_truncate(self.pop_byte());
         self.cpu.set_status(status);
         self.cpu.pc = self.pop_word();
@@ -1631,9 +1631,9 @@ impl Bus {
     /// ```
     #[inline(always)]
     pub fn rts(&mut self) {
-        self.read_unwatched(self.cpu.pc); // Dummy read
+        self.read(self.cpu.pc); // Dummy read
         let addr = self.pop_word();
-        self.read_unwatched(self.cpu.pc); // Dummy read
+        self.read(self.cpu.pc); // Dummy read
         self.cpu.pc = addr.wrapping_add(1);
     }
 
@@ -1732,7 +1732,7 @@ impl Bus {
     ///  ```
     #[inline(always)]
     pub fn plp(&mut self) {
-        self.read_unwatched(self.cpu.pc); // Dummy read
+        self.read(self.cpu.pc); // Dummy read
         let status = Status::from_bits_truncate(self.pop_byte());
         self.cpu.set_status(status);
     }
@@ -1763,7 +1763,7 @@ impl Bus {
     /// ```
     #[inline(always)]
     pub fn pla(&mut self) {
-        self.read_unwatched(Cpu::SP_BASE | u16::from(self.cpu.sp)); // Dummy read
+        self.read(Cpu::SP_BASE | u16::from(self.cpu.sp)); // Dummy read
         self.cpu.acc = self.pop_byte(); // Cycle 4
         self.cpu.set_zn_status(self.cpu.acc);
     }
@@ -1855,7 +1855,7 @@ impl Bus {
         let val = self.read_operand();
         let addr = self.cpu.operand;
         // INC
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let val = val.wrapping_add(1);
         // SBC
         self.add(val ^ 0xFF);
@@ -1868,7 +1868,7 @@ impl Bus {
         let val = self.read_operand();
         let addr = self.cpu.operand;
         // DEC
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let val = val.wrapping_sub(1);
         // CMP
         self.cmp(self.cpu.acc, val);
@@ -1953,7 +1953,7 @@ impl Bus {
 
         let start_cycles = self.cpu.cycle;
         // Dummy read with fixed high byte
-        self.read_unwatched((base_addr & 0xFF00) | (addr & 0x00FF));
+        self.read((base_addr & 0xFF00) | (addr & 0x00FF));
 
         // Dummy read took more than 1 cycle, so it was interrupted by a DMA
         let had_dma = (self.cpu.cycle - start_cycles) > 1;
@@ -1991,7 +1991,7 @@ impl Bus {
         let val = self.read_operand();
         let addr = self.cpu.operand;
         // ROR
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let shifted_val = self.ror(val);
         // ADC
         self.add(shifted_val);
@@ -2026,7 +2026,7 @@ impl Bus {
         let val = self.read_operand();
         let addr = self.cpu.operand;
         // LSR
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let shifted_val = self.lsr(val);
         // EOR
         self.cpu.set_acc(self.cpu.acc ^ shifted_val);
@@ -2048,7 +2048,7 @@ impl Bus {
         let val = self.read_operand();
         let addr = self.cpu.operand;
         // ROL
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let shifted_val = self.rol(val);
         // AND
         self.cpu.set_acc(self.cpu.acc & shifted_val);
@@ -2071,7 +2071,7 @@ impl Bus {
         let val = self.read_operand();
         let addr = self.cpu.operand;
         // ASL
-        self.write_unwatched(addr, val); // Dummy write
+        self.write(addr, val); // Dummy write
         let shifted_val = self.asl(val);
         // ORA
         self.cpu.set_acc(self.cpu.acc | shifted_val);

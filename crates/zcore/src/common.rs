@@ -221,11 +221,10 @@ pub fn hexdump(data: &[u8], addr_offset: usize) -> Vec<String> {
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::{
-        action::Action,
-        common::ResetKind,
+        common::{NesRegion, ResetKind},
         control_deck::{Config, ControlDeck, HeadlessMode},
-        input::Player,
-        // Aliased: `std::io::Read` is imported below for reading ROMs off disk.
+        input::{JoypadBtn, Player},
+        mapper::MapperRevision,
         memory::RamState,
         ppu::size,
         video::VideoFilter,
@@ -266,6 +265,18 @@ pub(crate) mod tests {
                 }
             )*}
         };
+    }
+    /// A change to the console a `tests.json` frame applies before it is checked.
+    #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+    enum Action {
+        Reset(ResetKind),
+        Joypad((Player, JoypadBtn)),
+        ToggleZapperConnected,
+        ZapperAim((u16, u16)),
+        ZapperTrigger,
+        MapperRevision(MapperRevision),
+        SetNesRegion(NesRegion),
+        SetVideoFilter(VideoFilter),
     }
 
     // TODO: Instead of a bunch of optional fields, it should be an enum:
@@ -519,10 +530,6 @@ pub(crate) mod tests {
         let mut deck = ControlDeck::with_config(Config {
             ram_state: RamState::AllZeros,
             filter: VideoFilter::Pixellate,
-            // A test ROM's battery is not the player's: reading one would make a run depend on
-            // whatever a previous run left behind, and writing one would scribble in `test_roms`,
-            // since `load_rom` is handed an absolute path here.
-            sram_dir: None,
             ..Default::default()
         });
         deck.load_rom(path.to_string_lossy(), &mut rom)
@@ -545,12 +552,6 @@ pub(crate) mod tests {
                 Action::ToggleZapperConnected => deck.connect_zapper(!deck.zapper_connected()),
                 Action::ZapperAim((x, y)) => deck.aim_zapper(x, y),
                 Action::ZapperTrigger => deck.trigger_zapper(),
-                Action::LoadState
-                | Action::SaveState
-                | Action::SetSaveSlot(_)
-                | Action::ToggleApuChannel(_)
-                | Action::ZapperAimOffscreen
-                | Action::FourPlayer(_) => (),
             }
         }
     }
@@ -732,7 +733,7 @@ pub(crate) mod tests {
             debug!("{} - {:?}", test_frame.number, deck.joypad_mut(Player::One));
 
             while deck.frame_number() < test_frame.number {
-                let _ = deck.clock_frame().expect("valid frame clock");
+                deck.clock_frame().expect("valid frame clock");
                 tones.observe(&deck);
                 deck.joypad_mut(Player::One).reset(ResetKind::Soft);
                 deck.joypad_mut(Player::Two).reset(ResetKind::Soft);

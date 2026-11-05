@@ -76,7 +76,12 @@ fn state_file_errors() {
     let Some(rom) = rom() else { return };
     let z = ZCore::power_on(rom.clone());
     let good = state_file::encode(&rom, &z.snapshot(), 0);
-    let msg = |b: &[u8]| state_file::decode(&rom, b).err().expect("refused").to_string();
+    let msg = |b: &[u8]| {
+        state_file::decode(&rom, b)
+            .err()
+            .expect("refused")
+            .to_string()
+    };
     assert!(msg(&[0x1f, 0x8b, 8, 0]).contains("legacy stable-retro state"));
     assert!(msg(b"NOTASTATEFILE_________________________").contains("not a TFZSTATE"));
     let mut v = good.clone();
@@ -93,18 +98,29 @@ fn rom_validation() {
     let Some(rom) = rom() else { return };
     assert_eq!(rom.payload_sha1(), zcore::machine::ZELDA_PAYLOAD_SHA1);
     let bytes = std::fs::read(repo().join("roms/zelda.nes")).unwrap();
-    assert!(matches!(Rom::from_ines(&bytes[1..]), Err(zcore::RomError::NotInes)));
+    assert!(matches!(
+        Rom::from_ines(&bytes[1..]),
+        Err(zcore::RomError::NotInes)
+    ));
     let mut wrong = bytes.clone();
     wrong[100] ^= 1;
-    assert!(matches!(Rom::from_ines(&wrong), Err(zcore::RomError::WrongPayload(_))));
+    assert!(matches!(
+        Rom::from_ines(&wrong),
+        Err(zcore::RomError::WrongPayload(_))
+    ));
     let mut mapper = bytes;
     mapper[6] = 0;
-    assert!(matches!(Rom::from_ines(&mapper), Err(zcore::RomError::WrongCart(_))));
+    assert!(matches!(
+        Rom::from_ines(&mapper),
+        Err(zcore::RomError::WrongCart(_))
+    ));
 }
 
 #[test]
 #[should_panic(expected = "outside")]
 fn poke_outside_ram_panics() {
-    let Some(rom) = rom() else { panic!("outside (no ROM)") };
+    let Some(rom) = rom() else {
+        panic!("outside (no ROM)")
+    };
     ZCore::power_on(rom).poke(0x2000, 0);
 }

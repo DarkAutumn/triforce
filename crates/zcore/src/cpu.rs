@@ -18,14 +18,7 @@
 use crate::{
     bus::Bus,
     common::{NesRegion, ResetKind},
-    debug::{Access, AccessHit, ByteKind, CallFrame, FrameKind, Verdict},
-};
-use crate::{
-    cpu::instr::{
-        AddrMode,
-        Instr::{JMP, JSR, SYA},
-        InstrRef,
-    },
+    cpu::instr::{AddrMode, InstrRef},
     mapper::MapperOps,
 };
 use bitflags::bitflags;
@@ -106,109 +99,6 @@ bitflags! {
 #[error("save state does not match the loaded ROM")]
 #[must_use]
 pub struct StateMismatch;
-
-/// One disassembled instruction, split into the parts a view tints and aligns separately.
-///
-/// [`Display`](fmt::Display) joins them back into the single line the instruction trace prints,
-/// which is also the column layout the debugger draws.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-#[must_use]
-pub struct Disasm {
-    /// Address the instruction was read from.
-    pub addr: u16,
-    /// Opcode, mnemonic, addressing mode and cycle count.
-    pub instr: InstrRef,
-    /// The bytes after the opcode. [`Disasm::operands`] slices off the ones that belong to the
-    /// instruction.
-    pub bytes: [u8; 2],
-    /// The operand as written: `#$42`, `$1234,X`, `($10),Y`. Empty for implied and accumulator
-    /// modes, which name no operand.
-    pub operand: String,
-    /// The address the operand lands on once a register is added, for the modes that compute one.
-    ///
-    /// `None` where the operand already names its address, and for the modes that touch memory
-    /// not at all.
-    pub effective: Option<u16>,
-    /// What sits at the address the operand reaches, on the console as it stands.
-    pub value: Option<Resolved>,
-}
-
-/// What an operand comes to when it is followed.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[must_use]
-pub enum Resolved {
-    /// The byte the instruction reads or writes.
-    Byte(u8),
-    /// The address an indirect jump reads out of the one it names.
-    Word(u16),
-}
-
-impl fmt::Display for Resolved {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Byte(byte) => write!(f, "#${byte:02X}"),
-            Self::Word(word) => write!(f, "${word:04X}"),
-        }
-    }
-}
-
-impl Disasm {
-    /// Columns the operand bytes are padded to, which `$10 $00 ` fills at its widest.
-    pub const BYTE_COLUMNS: usize = 8;
-
-    /// The bytes after the opcode that belong to the instruction, zero to two of them.
-    pub fn operands(&self) -> &[u8] {
-        &self.bytes[..usize::from(self.instr.addr_mode.operand_len())]
-    }
-
-    /// How many bytes the instruction occupies, opcode included.
-    #[expect(
-        clippy::len_without_is_empty,
-        reason = "an instruction is never zero bytes"
-    )]
-    pub const fn len(&self) -> u16 {
-        1 + self.instr.addr_mode.operand_len() as u16
-    }
-
-    /// [`Disasm::effective`] as either renderer writes it, two hex digits in zero page and four
-    /// everywhere else.
-    pub fn effective_text(&self) -> Option<String> {
-        let effective = self.effective?;
-        Some(
-            if matches!(self.instr.addr_mode, AddrMode::ZPX | AddrMode::ZPY) {
-                format!("${effective:02X}")
-            } else {
-                format!("${effective:04X}")
-            },
-        )
-    }
-}
-
-impl fmt::Display for Disasm {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "${:04X} ${:02X} ", self.addr, self.instr.opcode)?;
-        let mut columns = 0;
-        for byte in self.operands() {
-            write!(f, "${byte:02X} ")?;
-            columns += 4;
-        }
-        // Padded so the mnemonic starts in the same column whatever the instruction's length.
-        write!(f, "{:width$}", "", width = Self::BYTE_COLUMNS - columns)?;
-        write!(f, "{}", self.instr)?;
-        if !self.operand.is_empty() {
-            write!(f, " {}", self.operand)?;
-        }
-        // `@ addr` rather than the debugger's `[addr]`, since this line is read side by side with
-        // other emulators' instruction traces.
-        if let Some(effective) = self.effective_text() {
-            write!(f, " @ {effective}")?;
-        }
-        if let Some(value) = self.value {
-            write!(f, " = {value}")?;
-        }
-        Ok(())
-    }
-}
 
 /// The Central Processing Unit status and registers
 #[derive(Default, Clone, Serialize, Deserialize)]
@@ -494,41 +384,6 @@ impl Bus {
         if !state.memory.restore_rom_from(&self.memory) {
             return Err(StateMismatch);
         }
-        state.debugger = std::mem::take(&mut self.debugger);
-        state.debugger_active = self.debugger_active;
-        // Which bytes are instructions belongs to the session, not to the state: restoring
-        // earlier state does not unlearn it. The cart is the same one - `restore_rom_from` above
-        // asserted that - so the map's offsets still address the same bytes.
-        //
-        // What has run is the other way round, so the ring is emptied. Run-ahead puts back what
-        // it recorded before speculating, the way it does the call stack.
-        state.pc_history = self.pc_history.take().map(|mut history| {
-            history.clear();
-            history
-        });
-        state.code_map = self.code_map.take();
-        // A call stack says where execution is, not what the session has learned, so the recorder
-        // survives the restore and its frames do not. `unwind_to` cannot stand in for that: it
-        // pops what the stack pointer has risen past, which neither puts back a frame returned
-        // from nor drops one pushed at a shallower depth. Run-ahead puts its own frames back,
-        // since it is the one caller that knows the position it restored to.
-        state.call_stack = self.call_stack.take().map(|mut call_stack| {
-            call_stack.clear();
-            call_stack
-        });
-        // Breakpoints belong to the session, and what they caught to the timeline being
-        // discarded. Run-ahead restores over speculative frames, so a hit from one of those would
-        // otherwise stop the console at a PC it never reached, or be reported twice once the
-        // frame is really clocked.
-        state.breakpoints_active = self.breakpoints_active;
-        state.breakpoints = self.breakpoints.take().map(|mut breakpoints| {
-            breakpoints.drain_hits();
-            breakpoints
-        });
-        state.access_hit = None;
-        // Which vector was taken belongs to the timeline being discarded, the way a caught
-        // access does.
-        state.interrupt_taken = None;
         // The pixel path compares against thresholds derived from $2001 rather than reading its
         // flags, and they are not part of the save format.
         state.ppu.update_draw_thresholds();
@@ -561,10 +416,8 @@ impl Bus {
     /// `*self = state`, so a skipped field arrives as `Default` rather than keeping the value the
     /// running console had - which is how `ram_state` below silently reverted on every load.
     fn keep_session_settings(&mut self, session: &mut Self) {
-        // Emulation speed and the output sample rate, plus the sample period derived from them.
-        self.apu.speed = session.apu.speed;
+        // The output sample rate.
         self.apu.sample_rate = session.apu.sample_rate;
-        self.apu.sample_ratio = session.apu.sample_ratio;
         // Swapped rather than rebuilt for the same reason as the filter chain below: it holds
         // steps still being played out, and it is already tuned to the session's rate.
         std::mem::swap(&mut self.apu.synth, &mut session.apu.synth);
@@ -589,9 +442,6 @@ impl Bus {
         self.ppu.skip_rendering = session.ppu.skip_rendering;
         self.ppu.emulate_warmup = session.ppu.emulate_warmup;
         self.ppu.fceumm_compat = session.ppu.fceumm_compat;
-
-        // Cheats: a code entered after the state was recorded stays entered.
-        std::mem::swap(&mut self.patches, &mut session.patches);
 
         // How RAM is filled at power-on, which only shows on the next hard reset.
         self.ram_state = session.ram_state;
@@ -640,8 +490,8 @@ impl Bus {
             self.handle_dma(self.cpu.pc);
         }
 
-        self.read_unwatched(self.cpu.pc); // Dummy read
-        self.read_unwatched(self.cpu.pc); // Dummy read
+        self.read(self.cpu.pc); // Dummy read
+        self.read(self.cpu.pc); // Dummy read
         self.push_word(self.cpu.pc);
 
         // Pushing status to the stack has to happen after checking NMI since it can hijack the BRK
@@ -936,24 +786,6 @@ impl Bus {
     /// Read a byte, spending a full CPU cycle - which clocks the PPU, the APU and the board.
     #[inline(always)]
     pub fn read(&mut self, addr: u16) -> u8 {
-        let val = self.read_unwatched(addr);
-        if self.breakpoints_active {
-            self.check_access(addr, Access::READ, val);
-        }
-        val
-    }
-
-    /// Read a byte without a read breakpoint seeing it, spending its cycle all the same.
-    ///
-    /// The 6502 spends cycles on reads the program did not ask for: a wrong address before the
-    /// high byte is fixed on an indexed page cross, a re-read before a read-modify-write, and the
-    /// dummy reads of PC or the stack that a branch, `JSR`, `RTS`, `RTI`, `PLA` and `PLP` take
-    /// while the address bus has nothing else to do. All of them come through here, so a read
-    /// breakpoint reports what the program reached for. Instruction and operand fetches do too,
-    /// since [`Access::EXEC`] covers those and a read breakpoint over a code bank would otherwise
-    /// fire on every instruction in it.
-    #[inline(always)]
-    pub fn read_unwatched(&mut self, addr: u16) -> u8 {
         if self.cpu.irq_flags(IrqFlags::DMA_HALT) {
             self.handle_dma(addr);
         }
@@ -963,68 +795,6 @@ impl Bus {
         self.end_cycle(self.cpu.end_cycles + 1);
         val
     }
-
-    /// Record an access against the armed breakpoints, keeping the first one that stops.
-    ///
-    /// Out of line and cold, so the test in `read` and `write` is a predictable branch over a
-    /// call rather than the scan itself.
-    #[cold]
-    #[inline(never)]
-    fn check_access(&mut self, addr: u16, access: Access, val: u8) {
-        let pc = self.instr_addr;
-        let hit = AccessHit {
-            pc,
-            addr,
-            access,
-            value: val,
-        };
-        let verdict = self.breakpoint_verdict(addr, access);
-        if verdict.record
-            && let Some(breakpoints) = self.breakpoints.as_mut()
-        {
-            breakpoints.record(hit);
-        }
-        if verdict.stop && self.access_hit.is_none() {
-            self.access_hit = Some(hit);
-        }
-    }
-
-    /// Ask the armed breakpoints about an access, with the whole console in hand.
-    #[inline]
-    fn breakpoint_verdict(&self, addr: u16, access: Access) -> Verdict {
-        self.breakpoints
-            .as_ref()
-            .map_or_else(Verdict::default, |breakpoints| {
-                breakpoints.check(self, addr, access)
-            })
-    }
-
-    /// Record the instruction at `pc` against the breakpoints that watch execution.
-    ///
-    /// Only the breakpoints that record are served here. Stopping on execution belongs to whoever
-    /// drives the console, through
-    /// [`ControlDeck::clock_frame_until`](crate::control_deck::ControlDeck::clock_frame_until),
-    /// because a stop part way through an instruction has no clean way to unwind. So
-    /// [`Verdict::stop`] is dropped here and a breakpoint that stops is checked between
-    /// instructions instead.
-    ///
-    /// Out of line and behind the bitmap, so an instruction nothing watches tests one bit.
-    #[cold]
-    #[inline(never)]
-    fn check_exec(&mut self, pc: u16) {
-        if self.breakpoint_verdict(pc, Access::EXEC).record {
-            let opcode = self.peek(pc);
-            if let Some(breakpoints) = self.breakpoints.as_mut() {
-                breakpoints.record(AccessHit {
-                    pc,
-                    addr: pc,
-                    access: Access::EXEC,
-                    value: opcode,
-                });
-            }
-        }
-    }
-
     /// Read a byte without side effects, and without moving the console.
     #[inline(always)]
     #[must_use]
@@ -1035,19 +805,6 @@ impl Bus {
     /// Write a byte, spending a full CPU cycle - which clocks the PPU, the APU and the board.
     #[inline(always)]
     pub fn write(&mut self, addr: u16, val: u8) {
-        self.write_unwatched(addr, val);
-        if self.breakpoints_active {
-            self.check_access(addr, Access::WRITE, val);
-        }
-    }
-
-    /// Write a byte without a write breakpoint seeing it, spending its cycle all the same.
-    ///
-    /// A read-modify-write puts the old value back before the new one. Reporting that would name
-    /// a value the program never chose, and `check_access` keeps the first hit, so the report
-    /// would be the wrong one.
-    #[inline(always)]
-    pub fn write_unwatched(&mut self, addr: u16, val: u8) {
         self.start_cycle(self.cpu.start_cycles + 1);
         if addr == 0x4014 {
             self.cpu.start_oam_dma(u16::from(val) << 8);
@@ -1061,7 +818,7 @@ impl Bus {
     #[inline(always)]
     #[must_use]
     pub(crate) fn fetch_byte(&mut self) -> u8 {
-        let val = self.read_unwatched(self.cpu.pc);
+        let val = self.read(self.cpu.pc);
         self.cpu.pc = self.cpu.pc.wrapping_add(1);
         val
     }
@@ -1129,169 +886,23 @@ impl Bus {
         u16::from_le_bytes([lo, hi])
     }
 
-    /// Disassemble the instruction at the given program counter, advancing `pc` past it.
-    pub fn disassemble(&self, pc: &mut u16) -> Disasm {
-        let mut disasm = Disasm::default();
-        self.disassemble_into(pc, &mut disasm);
-        disasm
-    }
-
-    /// Disassemble the instruction at the given program counter into `out`, advancing `pc` past it.
-    ///
-    /// `out` is reused rather than returned, so a sweep over the address space grows its string
-    /// once instead of allocating per instruction.
-    pub fn disassemble_into(&self, pc: &mut u16, out: &mut Disasm) {
-        use fmt::Write;
-
-        out.addr = *pc;
-        out.operand.clear();
-        out.effective = None;
-        out.value = None;
-
-        let opcode = {
-            let byte = self.peek(*pc);
-            *pc = pc.wrapping_add(1);
-            byte
-        };
-        out.instr = Cpu::INSTR_REF[usize::from(opcode)];
-
-        let mut peek_byte = |out: &mut Disasm, index: usize| {
-            let byte = self.peek(*pc);
-            *pc = pc.wrapping_add(1);
-            out.bytes[index] = byte;
-            byte
-        };
-        let mut peek_word = |out: &mut Disasm| {
-            let lo = peek_byte(out, 0);
-            let hi = peek_byte(out, 1);
-            u16::from_le_bytes([lo, hi])
-        };
-
-        // `out.operand` gives the operand as written, `out.effective` and `out.value` what it
-        // comes to on the console as it stands now. Only the row at PC is about to run, so the
-        // rest resolve against registers they will not see.
-        match out.instr.addr_mode {
-            AddrMode::ACC | AddrMode::IMP => (),
-            AddrMode::IMM => {
-                let byte = peek_byte(out, 0);
-                let _ = write!(out.operand, "#${byte:02X}");
-            }
-            AddrMode::REL => {
-                let byte = peek_byte(out, 0);
-                let addr = (*pc as i16).wrapping_add(i16::from(byte as i8)) as u16;
-                let _ = write!(out.operand, "${addr:04X}");
-            }
-            AddrMode::ZP0 => {
-                let byte = peek_byte(out, 0);
-                let _ = write!(out.operand, "${byte:02X}");
-                out.value = Some(Resolved::Byte(self.peek(byte.into())));
-            }
-            AddrMode::ZPX => {
-                let byte = peek_byte(out, 0);
-                let addr = byte.wrapping_add(self.cpu.x);
-                let _ = write!(out.operand, "${byte:02X},X");
-                out.effective = Some(addr.into());
-                out.value = Some(Resolved::Byte(self.peek(addr.into())));
-            }
-            AddrMode::ZPY => {
-                let byte = peek_byte(out, 0);
-                let addr = byte.wrapping_add(self.cpu.y);
-                let _ = write!(out.operand, "${byte:02X},Y");
-                out.effective = Some(addr.into());
-                out.value = Some(Resolved::Byte(self.peek(addr.into())));
-            }
-            AddrMode::IND => {
-                let base_addr = peek_word(out);
-                let val = if (base_addr & 0xFF) == 0xFF {
-                    let lo = self.peek(base_addr);
-                    let hi = self.peek(base_addr - 0xFF);
-                    u16::from_le_bytes([lo, hi])
-                } else {
-                    self.peek_word(base_addr)
-                };
-                let _ = write!(out.operand, "(${base_addr:04X})");
-                out.value = Some(Resolved::Word(val));
-            }
-            AddrMode::IDX => {
-                let byte = peek_byte(out, 0);
-                let zero_addr = byte.wrapping_add(self.cpu.x);
-                let lo = self.peek(u16::from(zero_addr));
-                let hi = self.peek(u16::from(zero_addr.wrapping_add(1)));
-                let addr = u16::from_le_bytes([lo, hi]);
-                let _ = write!(out.operand, "(${byte:02X},X)");
-                out.effective = Some(addr);
-                out.value = Some(Resolved::Byte(self.peek(addr)));
-            }
-            AddrMode::IDY | AddrMode::IDYW => {
-                let byte = peek_byte(out, 0);
-                let base_addr = {
-                    let lo = self.peek(u16::from(byte));
-                    let hi = self.peek(u16::from(byte.wrapping_add(1)));
-                    u16::from_le_bytes([lo, hi])
-                };
-                let addr = base_addr.wrapping_add(u16::from(self.cpu.y));
-                let _ = write!(out.operand, "(${byte:02X}),Y");
-                out.effective = Some(addr);
-                out.value = Some(Resolved::Byte(self.peek(addr)));
-            }
-            AddrMode::ABS => {
-                let addr = peek_word(out);
-                let _ = write!(out.operand, "${addr:04X}");
-                // A jump names where it goes, so the byte sitting at the target says nothing about
-                // it.
-                if out.instr.instr != JMP {
-                    out.value = Some(Resolved::Byte(self.peek(addr)));
-                }
-            }
-            // JSR shares the catch-all mode with the unofficial stores, and is the one of them
-            // that reaches an absolute address.
-            AddrMode::OTH if out.instr.instr == JSR => {
-                let addr = peek_word(out);
-                let _ = write!(out.operand, "${addr:04X}");
-            }
-            // The rest of the catch-all is the unofficial stores, which index the way
-            // `InstrRef::mode_name` reports: SYA by X, the other three by Y.
-            AddrMode::ABX | AddrMode::ABXW | AddrMode::ABY | AddrMode::ABYW | AddrMode::OTH => {
-                let base_addr = peek_word(out);
-                let indexed_by_x = matches!(out.instr.addr_mode, AddrMode::ABX | AddrMode::ABXW)
-                    || out.instr.instr == SYA;
-                let (index, register) = if indexed_by_x {
-                    ('X', self.cpu.x)
-                } else {
-                    ('Y', self.cpu.y)
-                };
-                let addr = base_addr.wrapping_add(register.into());
-                let _ = write!(out.operand, "${base_addr:04X},{index}");
-                out.effective = Some(addr);
-                out.value = Some(Resolved::Byte(self.peek(addr)));
-            }
-        };
-    }
-
-    /// Logs the disassembled instruction being executed.
+    /// Logs the instruction about to execute.
     #[cold]
     #[inline(never)]
     pub fn trace_instr(&mut self) {
-        if !tracing::enabled!(tracing::Level::TRACE) {
-            return;
-        }
-        let mut pc = self.cpu.pc;
-        let status = self.cpu.status;
-        let acc = self.cpu.acc;
-        let x = self.cpu.x;
-        let y = self.cpu.y;
-        let sp = self.cpu.sp;
-        let ppu_cycle = self.ppu.cycle;
-        let ppu_scanline = self.ppu.scanline;
-        let cycle = self.cpu.cycle;
-        let n = if status.contains(Status::N) { 'N' } else { 'n' };
-        let v = if status.contains(Status::V) { 'V' } else { 'v' };
-        let i = if status.contains(Status::I) { 'I' } else { 'i' };
-        let z = if status.contains(Status::Z) { 'Z' } else { 'z' };
-        let c = if status.contains(Status::C) { 'C' } else { 'c' };
-        let disasm = self.disassemble(&mut pc).to_string();
+        let c = &self.cpu;
         println!(
-            "{disasm:<50} A:{acc:02X} X:{x:02X} Y:{y:02X} P:{n}{v}--d{i}{z}{c} SP:{sp:02X} PPU:{ppu_cycle:3},{ppu_scanline:3} CYC:{cycle}",
+            "${:04X} ${:02X} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}",
+            c.pc,
+            self.peek(c.pc),
+            c.acc,
+            c.x,
+            c.y,
+            c.status.bits(),
+            c.sp,
+            self.ppu.cycle,
+            self.ppu.scanline,
+            c.cycle
         );
     }
 
@@ -1310,28 +921,16 @@ impl Bus {
         #[cfg(feature = "trace")]
         self.trace_instr();
 
-        let prev_pc = self.cpu.pc;
-        if let Some(history) = &mut self.pc_history {
-            history.push(prev_pc);
-        }
-        if let Some(code_map) = &mut self.code_map
-            && let Some(offset) = self.memory.prg_offset(prev_pc)
-        {
-            code_map.mark(offset, ByteKind::CODE);
-        }
-        // An access is caught part way through, by which point PC has moved into the operand. A
-        // hit that named that would point at no instruction at all.
-        if self.breakpoints_active {
-            self.instr_addr = prev_pc;
-            self.check_exec(prev_pc);
-        }
         // FQ-03: FCEUmm raises and clears VBlank between instructions.
         self.ppu.status_at_instr = self.ppu.read_status_bits();
         // FQ-12: FCEUmm's per-instruction DMC hook sees the instruction's base cycles already
         // counted; a fetch it starts is spent after the instruction (FQ-11).
         let dmc_fetch = if self.ppu.fceumm_compat {
             let base = Cpu::INSTR_REF[usize::from(self.peek(self.cpu.pc))].cycles;
-            self.apu.dmc.fceu.hook(self.cpu.cycle.wrapping_add(u32::from(base)))
+            self.apu
+                .dmc
+                .fceu
+                .hook(self.cpu.cycle.wrapping_add(u32::from(base)))
         } else {
             None
         };
@@ -1340,31 +939,6 @@ impl Bus {
         self.cpu.addr_mode = op.addr_mode();
         self.cpu.operand = self.fetch_operand();
         op.run(self);
-
-        // A JSR destination is wherever it left PC, so this reads after the opcode has run and
-        // before an interrupt can change it again. The next instruction would mark it as code,
-        // but this additionally marks it as a subroutine entry.
-        if let Some(code_map) = &mut self.code_map
-            && opcode == Cpu::JSR
-            && let Some(offset) = self.memory.prg_offset(self.cpu.pc)
-        {
-            code_map.mark(offset, ByteKind::SUB_ENTRY);
-        }
-
-        if let Some(call_stack) = &mut self.call_stack {
-            // Every way of discarding a return address raises the stack pointer back over the
-            // frame that pushed it, an `RTS` included.
-            call_stack.unwind_to(self.cpu.sp);
-        }
-        // The return address is on the stack by now, so the frame records a stack pointer the
-        // matching return raises back over.
-        if self.call_stack.is_some() {
-            match opcode {
-                Cpu::JSR => self.push_call_frame(prev_pc, FrameKind::Call),
-                Cpu::BRK => self.push_call_frame(prev_pc, FrameKind::Brk),
-                _ => (),
-            }
-        }
 
         // FQ-10: FCEUmm runs OAM DMA inside the `STA $4014` that starts it, so its 512 cycles
         // count toward this instruction (and reach FQ-12's DMC timer at the next hook).
@@ -1387,22 +961,7 @@ impl Bus {
             .irq_flags
             .intersects(IrqFlags::PREV_RUN_IRQ | IrqFlags::PREV_NMI)
         {
-            let interrupted = self.cpu.pc;
             self.irq();
-            // Which vector was taken is read back from PC rather than from the flags, since an
-            // NMI arriving mid-sequence hijacks the IRQ. Read whether or not anything is
-            // recording: this is the one place a vector is taken, and a caller waiting on the
-            // next interrupt has nothing to see between instructions. One read per interrupt,
-            // against 1.79M CPU cycles a second, so there is nothing here to gate.
-            let kind = if self.cpu.pc == self.peek_word(Cpu::NMI_VECTOR) {
-                FrameKind::Nmi
-            } else {
-                FrameKind::Irq
-            };
-            self.interrupt_taken = Some(kind);
-            if self.call_stack.is_some() {
-                self.push_call_frame(interrupted, kind);
-            }
         }
     }
 
@@ -1418,21 +977,6 @@ impl Bus {
         self.ppu.fceu_nmi = 0;
         self.cpu.irq_flags.insert(IrqFlags::NMI);
         self.irq();
-    }
-
-    /// Record the call the instruction just run made, once it has pushed its return address.
-    #[cold]
-    #[inline(never)]
-    fn push_call_frame(&mut self, caller: u16, kind: FrameKind) {
-        let frame = CallFrame {
-            caller,
-            entry: self.cpu.pc,
-            sp: self.cpu.sp,
-            kind,
-        };
-        if let Some(call_stack) = &mut self.call_stack {
-            call_stack.push(frame);
-        }
     }
 }
 
@@ -1455,115 +999,7 @@ impl fmt::Debug for Cpu {
 mod tests {
     use crate::{cart::Cart, cpu::instr::Instr::*, mapper::Nrom};
 
-    /// The parts have to join back into the line the instruction trace prints, which is read
-    /// against other emulators' logs, and into the columns the debugger draws. One instruction per
-    /// addressing mode, plus the cases that turn a part off: a jump resolves nothing, and an
-    /// unofficial opcode takes the `*` the mnemonic column reserves. All four unofficial stores
-    /// are here, since the catch-all mode they share names no index of its own.
-    #[test]
-    fn the_parts_join_back_into_one_aligned_line() {
-        use super::*;
-        let mut bus = Bus::default();
-        let mut cart = Cart::empty();
-        cart.mapper = Nrom::load(&mut cart).unwrap();
-        bus.load_cart(cart);
-        bus.reset(ResetKind::Hard);
-        bus.cpu.x = 0x02;
-        bus.cpu.y = 0x03;
-        for (addr, val) in [
-            (0x0010u16, 0x34u8),
-            (0x0011, 0x12),
-            (0x0012, 0x78),
-            (0x0013, 0x56),
-            (0x0234, 0xCC),
-            (0x0237, 0xBB),
-        ] {
-            bus.cpu_bus_write(addr, val);
-        }
-
-        for (bytes, expected) in [
-            (&[0x0Au8] as &[u8], "$0700 $0A          ASL"),
-            (&[0xEA], "$0700 $EA          NOP"),
-            (&[0xA9, 0x42], "$0700 $A9 $42      LDA #$42"),
-            (&[0x10, 0x7F], "$0700 $10 $7F      BPL $0781"),
-            (&[0x10, 0xF0], "$0700 $10 $F0      BPL $06F2"),
-            (&[0xA5, 0x10], "$0700 $A5 $10      LDA $10 = #$34"),
-            (&[0xB5, 0x10], "$0700 $B5 $10      LDA $10,X @ $12 = #$78"),
-            (&[0xB6, 0x10], "$0700 $B6 $10      LDX $10,Y @ $13 = #$56"),
-            (
-                &[0x6C, 0x10, 0x00],
-                "$0700 $6C $10 $00  JMP ($0010) = $1234",
-            ),
-            (
-                &[0xA1, 0x0E],
-                "$0700 $A1 $0E      LDA ($0E,X) @ $1234 = #$CC",
-            ),
-            (
-                &[0xB1, 0x10],
-                "$0700 $B1 $10      LDA ($10),Y @ $1237 = #$BB",
-            ),
-            (
-                &[0x91, 0x10],
-                "$0700 $91 $10      STA ($10),Y @ $1237 = #$BB",
-            ),
-            (&[0xAD, 0x34, 0x12], "$0700 $AD $34 $12  LDA $1234 = #$CC"),
-            (&[0x4C, 0x34, 0x12], "$0700 $4C $34 $12  JMP $1234"),
-            (
-                &[0xBD, 0x34, 0x12],
-                "$0700 $BD $34 $12  LDA $1234,X @ $1236 = #$00",
-            ),
-            (
-                &[0x9D, 0x34, 0x12],
-                "$0700 $9D $34 $12  STA $1234,X @ $1236 = #$00",
-            ),
-            (
-                &[0xB9, 0x34, 0x12],
-                "$0700 $B9 $34 $12  LDA $1234,Y @ $1237 = #$BB",
-            ),
-            (
-                &[0x99, 0x34, 0x12],
-                "$0700 $99 $34 $12  STA $1234,Y @ $1237 = #$BB",
-            ),
-            (&[0x20, 0x34, 0x12], "$0700 $20 $34 $12  JSR $1234"),
-            (
-                &[0x9B, 0x34, 0x12],
-                "$0700 $9B $34 $12 *TAS $1234,Y @ $1237 = #$BB",
-            ),
-            (
-                &[0x9C, 0x34, 0x12],
-                "$0700 $9C $34 $12 *SYA $1234,X @ $1236 = #$00",
-            ),
-            (
-                &[0x9E, 0x34, 0x12],
-                "$0700 $9E $34 $12 *SXA $1234,Y @ $1237 = #$BB",
-            ),
-            (
-                &[0x9F, 0x34, 0x12],
-                "$0700 $9F $34 $12 *SHAA $1234,Y @ $1237 = #$BB",
-            ),
-            (&[0x07, 0x10], "$0700 $07 $10     *SLO $10 = #$34"),
-            (&[0x1A], "$0700 $1A         *NOP"),
-        ] {
-            for (i, byte) in bytes.iter().enumerate() {
-                bus.cpu_bus_write(0x0700 + i as u16, *byte);
-            }
-            let mut pc = 0x0700;
-            let disasm = bus.disassemble(&mut pc);
-            assert_eq!(disasm.to_string(), expected);
-            assert_eq!(
-                usize::from(disasm.len()),
-                bytes.len(),
-                "${:02X} reported the wrong length for {expected}",
-                bytes[0]
-            );
-        }
-    }
-
-    /// `AddressSpace::capture` steps by [`Disasm::len`], so an instruction the CPU measures
-    /// differently puts the sweep out of step with every boundary after it.
-    ///
-    /// Measured against execution rather than against the disassembler, which derives its own
-    /// length from the same [`AddrMode`] and would agree with itself whatever the CPU does.
+    /// An instruction is as long as its addressing mode's operand says.
     #[test]
     fn every_opcodes_length_matches_what_executing_it_consumes() {
         use super::*;
@@ -1583,18 +1019,13 @@ mod tests {
             bus.reset(ResetKind::Hard);
             bus.cpu_bus_write(0x0000, instr_ref.opcode);
             bus.cpu.pc = 0x0000;
-            // Read off before running it, since a read-modify-write can land on its own operand.
-            let mut pc = 0x0000;
-            let disasm = bus.disassemble(&mut pc);
+            let len = 1 + u16::from(instr_ref.addr_mode.operand_len());
             bus.clock_instr();
             let consumed = bus.cpu.pc;
             assert_eq!(
-                disasm.len(),
-                consumed,
+                len, consumed,
                 "${:02X} {:?} #{:?} runs {consumed} bytes",
-                instr_ref.opcode,
-                instr_ref.instr,
-                instr_ref.addr_mode
+                instr_ref.opcode, instr_ref.instr, instr_ref.addr_mode
             );
         }
     }

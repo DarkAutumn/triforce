@@ -1814,22 +1814,6 @@ impl Bus {
         // PAL refreshes OAM later due to extended vblank to avoid OAM decay
         self.ppu.is_pal_spr_eval_scanline =
             self.ppu.region.is_pal() && self.ppu.scanline >= self.ppu.vblank_scanline + 24;
-
-        self.check_debugger();
-    }
-
-    /// Fire the attached debugger if the PPU has reached its dot.
-    #[inline(always)]
-    fn check_debugger(&mut self) {
-        if self.debugger_active
-            && self.ppu.scanline == self.debugger.scanline
-            && self.ppu.cycle == self.debugger.cycle
-        {
-            // Cloned so the callback can borrow the console it is handed. At most once a frame,
-            // and only while a debugger is attached.
-            let callback = std::sync::Arc::clone(&self.debugger.callback);
-            callback(self);
-        }
     }
 
     /// Clocks the PPU a single dot.
@@ -1902,8 +1886,6 @@ impl Bus {
                 self.ppu.stop_vblank();
             }
         }
-
-        self.check_debugger();
     }
 
     /// Events FCEUmm (`fceumm_compat`) places at fixed points of its frame:
@@ -2124,7 +2106,11 @@ mod tests {
         let row = &frame[103 * 256..104 * 256];
         let sprite = row[248];
         assert_ne!(sprite, frame[100], "the sprite shows at x=248");
-        assert!(row[248..256].iter().all(|&p| p == sprite), "{:?}", &row[244..256]);
+        assert!(
+            row[248..256].iter().all(|&p| p == sprite),
+            "{:?}",
+            &row[244..256]
+        );
     }
 
     /// Sprite evaluation does not run on the pre-render line, so nothing line 239 found for
@@ -2154,7 +2140,11 @@ mod tests {
         }
         let frame = bus.ppu.frame_buffer();
         let backdrop = frame[100];
-        assert_ne!(frame[239 * 256 + 44], backdrop, "the sprite shows on line 239");
+        assert_ne!(
+            frame[239 * 256 + 44],
+            backdrop,
+            "the sprite shows on line 239"
+        );
         assert!(
             (40..48).all(|x| frame[x] == backdrop),
             "line 0 must show no sprite: {:?}",

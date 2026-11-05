@@ -6,26 +6,17 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
 
-pub mod action;
 pub mod apu;
 pub mod bus;
 pub mod cart;
-/// Component debuggers.
-pub mod debug;
-pub mod fs;
-pub mod time;
 #[macro_use]
 pub mod common;
 pub mod control_deck;
 pub mod cpu;
-pub mod error;
-pub mod genie;
 pub mod input;
 pub mod mapper;
 pub mod memory;
-pub mod patch;
 pub mod ppu;
-pub mod sys;
 pub mod video;
 
 pub mod machine;
@@ -37,13 +28,11 @@ pub mod prelude {
     //! The prelude re-exports all the common structs/enums used for basic NES emulation.
 
     pub use crate::{
-        action::Action,
         apu::{Apu, Channel},
         cart::Cart,
         common::{NesRegion, ResetKind},
-        control_deck::{Clocked, Config, ControlDeck, HeadlessMode},
+        control_deck::{Config, ControlDeck, HeadlessMode},
         cpu::Cpu,
-        genie::GenieCode,
         input::{FourPlayer, Input, Player},
         mapper::{Map, Mapper, MapperRevision},
         memory::RamState,
@@ -65,11 +54,9 @@ mod tests {
         },
         bus::{self, Bus},
         cpu::{IrqFlags, Status, instr::AddrMode},
-        debug::Debugger,
         mapper::{BOARD_LAYOUTS, MapperOps},
         memory::ConstArray,
         memory::Memory,
-        patch::Patches,
         ppu::{PaletteRam, frame::Frame as PpuFrame, mask, scroll::Scroll, sprite::Sprite},
     };
 
@@ -156,12 +143,9 @@ mod tests {
             open_bus: u8,
             ram_state: RamState,
             region: NesRegion,
-            debugger_active: bool,
-            debugger: Debugger,
             ppu: Ppu,
             apu: Apu,
             input: Input,
-            patches: Patches,
         );
 
         print_struct_layout!(

@@ -67,7 +67,7 @@ impl Namco163 {
         let mut auto_detect_board = false;
         let board = match cart.mapper_num() {
             19 => {
-                auto_detect_board = cart.game_info.is_none();
+                auto_detect_board = true;
                 Board::Namco163
             }
             210 => match cart.submapper_num() {

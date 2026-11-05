@@ -17,7 +17,6 @@ impl Zcore {
     pub fn open(rom: &[u8]) -> Result<Zcore> {
         let mut cfg = Config::default();
         cfg.ram_state = RamState::AllOnes;
-        cfg.sram_dir = None;
         cfg.filter = VideoFilter::Pixellate;
         cfg.headless_mode = HeadlessMode::NO_AUDIO;
         cfg.concurrent_dpad = true;
@@ -57,7 +56,7 @@ impl Backend for Zcore {
 
     fn run_frame(&mut self, buttons: u8) {
         self.set_buttons(buttons);
-        let _ = self.deck.clock_frame().expect("zcore clock_frame");
+        self.deck.clock_frame().expect("zcore clock_frame");
     }
 
     fn poke(&mut self, addr: u16, value: u8) {
@@ -100,7 +99,7 @@ impl Backend for Zcore {
                 rows.borrow_mut().push(Self::row(bus));
                 false
             });
-            let _ = r.expect("zcore clock_frame_until");
+            r.expect("zcore clock_frame_until");
             if self.deck.frame_number() != start {
                 break;
             }

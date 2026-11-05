@@ -1,169 +1,27 @@
-<!-- markdownlint-disable no-inline-html no-duplicate-heading -->
+# zcore
 
-# TetaNES Core
+A NES core for *The Legend of Zelda* (USA), subtracted from TetaNES's `tetanes-core` one verified
+stage at a time (see `UPSTREAM.md`). It reproduces FCEUmm (libretro `fceumm`, commit `e0f3086`)
+frame for frame, including the FCEUmm behaviours listed in `FCEUMM_QUIRKS.md`.
 
-[![Build Status]][build] [![Doc Status]][docs] [![Latest Version]][crates.io]
-[![Downloads]][crates.io] [![License]][gnu]
+The supported interface is [`ZCore`](crate::ZCore) with [`Rom`](crate::Rom),
+[`MachineState`](crate::MachineState) and the [`state_file`](crate::state_file) format:
 
-[build status]: https://img.shields.io/github/actions/workflow/status/lukexor/tetanes/ci.yml?branch=main
-[build]: https://github.com/lukexor/tetanes/actions/workflows/ci.yml
-[doc status]: https://img.shields.io/docsrs/tetanes-core?style=plastic
-[docs]: https://docs.rs/tetanes-core/
-[latest version]: https://img.shields.io/crates/v/tetanes-core?style=plastic
-[crates.io]: https://crates.io/crates/tetanes-core
-[downloads]: https://img.shields.io/crates/d/tetanes-core?style=plastic
-[license]: https://img.shields.io/crates/l/tetanes-core?style=plastic
-[gnu]: https://github.com/lukexor/tetanes/blob/main/LICENSE-MIT
-
-<!-- markdownlint-disable line-length -->
-📖 [Summary](#summary) - ✨ [Features](#features) - 🚧 [Building](#building) - 🚀 [Getting
-Started](#getting-started) - ⚠️ [Known Issues](#known-issues) - 💬 [Contact](#contact)
-<!-- markdownlint-enable line-length -->
-
-## Summary
-
-<img width="100%" alt="TetaNES"
-  src="https://raw.githubusercontent.com/lukexor/tetanes/main/static/tetanes.png">
-
-> photo credit for background: [Zsolt Palatinus](https://unsplash.com/@sunitalap)
-> on [unsplash](https://unsplash.com/photos/pEK3AbP8wa4)
-
-This is the core emulation library for `TetaNES`. Savvy developers can build their
-own custom emulation libraries or applications in Rust on top of `tetanes-core`.
-
-Some community examples:
-
-- [NES Bundler](https://github.com/tedsteen/nes-bundler) - Transform your
-  NES-game into a single executable targeting your favourite OS!
-- [Dappicom](https://github.com/tonk-gg/dappicom) - Dappicom is a provable
-  Nintendo Entertainment System emulator written in Noir and Rust.
-- [NESBox](https://github.com/mantou132/nesbox/) - NESBox's vision is to become
-  the preferred platform for people playing online multiplayer games, providing
-  an excellent user experience for all its users.
-
-## Minimum Supported Rust Version (MSRV)
-
-The current minimum Rust version is `1.88.0`.
-
-## Features
-
-- NTSC, PAL and Dendy emulation.
-- Headless Mode.
-- Pixellate and NTSC filters.
-- Zapper (Light Gun) support.
-- iNES and NES 2.0 ROM header formats supported.
-- Over 30 supported mappers covering >90% of licensed games.
-- Game Genie Codes.
-- Preference snd keybonding menus using [egui](https://egui.rs).
-  - Increase/Decrease speed & Fast Forward
-  - Save & Load States
-  - Battery-backed RAM saves
-
-### Building
-
-To build the project, you'll need a nightly version of the compiler and run
-`cargo build` or `cargo build --release` (if you want better framerates).
-
-### Getting Started
-
-Below is a basic example of setting up `zcore` with a ROM and running the
-emulation. For a more in-depth example see the `tetanes::nes::emulation` module.
-
-```rust no_run
-use zcore::prelude::*;
-
-fn main() -> anyhow::Result<()> {
-    let mut control_deck = ControlDeck::new();
-
-    // Load a ROM from the filesystem.
-    // See also: `ControlDeck::load_rom` for loading anything that implements `Read`.
-    control_deck.load_rom_path("some_awesome_game.nes")?;
-
-    while control_deck.is_running() {
-        // A display frame is however many NES frames the emulation speed asks for, so clock
-        // until it reports the display frame is done. At the default 1x that is one pass.
-        while control_deck.clock_frame()? == Clocked::Continue {}
-
-        // The audio this frame produced. Queue it to an audio device. Each clock
-        // discards the previous call's samples, so nothing accumulates - see
-        // `Config::clear_audio_on_clock` if you would rather drain them yourself.
-        let audio_samples = control_deck.audio_samples();
-
-        // The frame to display, as RGBA pixels. Blit it to the screen.
-        // See also: `ControlDeck::frame_buffer_into` to render into a buffer you
-        // already own, and `frame_buffer_raw` for undecoded PPU pixels.
-        let frame_buffer = control_deck.frame_buffer();
-
-        // If not relying on vsync, sleep or otherwise wait the remainder of the
-        // 16ms frame time to clock again.
-    }
-
-    Ok(())
+```no_run
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let rom = zcore::Rom::from_ines(&std::fs::read("roms/zelda.nes")?)?;
+let mut nes = zcore::ZCore::power_on(rom);
+for _ in 0..600 {
+    nes.run_frame(0, false); // controller byte, render this frame?
 }
+let state = nes.snapshot();
+nes.run_frame(0x08, true); // START
+let _pixels = nes.pixels().expect("rendered"); // 256x240 palette indices
+nes.restore(&state);
+# Ok(())
+# }
 ```
 
-To hide input lag, have the deck run ahead of itself and display a frame from the
-future, rewinding back each time:
+Everything else in the crate is the emulator behind that interface and changes with the ladder.
 
-```rust no_run
-# use zcore::prelude::*;
-# let mut control_deck = ControlDeck::new();
-control_deck.set_run_ahead(2);
-```
-
-Input goes through `ControlDeck::joypad_mut`, and `ControlDeck::save_state` /
-`load_state` capture and restore the whole console.
-
-## Stability
-
-The aim is for general stability, but the version isn't `1.0` yet and there are
-several large features on the roadmap that may result in breaking changes. This
-applies to both APIs and save file formats.
-
-Once some of these larger features are completed, and `1.0` is released, more
-effort will be dedicated to versioning these files for backward compatibility
-in the event of future breaking changes.
-
-Even past `1.0`, the API surface falls into three stability tiers. A mix of
-`pub` fields and getter methods is deliberate. A chain like
-`deck.bus().memory.prg_pages()` may look inconsistent but crosses separate API
-boundaries.
-
-1. **`ControlDeck` is the primary stable API.** Its fields are private and it is
-   the only item covered by semantic versioning. Its accessors are not
-   pass-throughs: `frame_buffer` applies the video filter, cached behind a dirty
-   flag, `frame_buffer_raw` picks the run-ahead (older) frame over the most
-   recent one, `sram` is a no-op unless the cart has a battery, etc.
-2. **The ControlDeck component internals are unstable but public.** `Bus`,
-   `Cpu`, `Ppu`, `Apu`, `Input` and every mapper board expose all their fields
-   as `pub`, so a debugger, a cheat engine or a machine-learning harness can
-   read and write internals as needed for any imagined use case. A release may
-   add, rename or retype any of them. `ControlDeck::bus` and `bus_mut` enable
-   full access. Getters for internal fields are provided when the type is
-   wrapped in a container: `Bus::wram` returns `&[u8; 2048]` from a
-   `Box<ConstArray<..>>`, `Ppu::frame_buffer` dereferences a `Frame`, etc.
-3. **Types that require invariants.** `Memory`, `Cart`, `GenieCode`,
-   `PaletteRam` and `Scroll` have private fields and getters that require
-   additional logic. `Memory::sram` splices PRG-RAM together with the used
-   prefix of the battery region, `Cart::mapper_num` prefers the game database
-   over the header, `Cart::prg_rom` trims the padding `Memory` added to reach a
-   whole page, etc. `PaletteRam` is private *because* every access has to apply
-   `$3F10`/`$14`/`$18`/ `$1C` mirroring.
-
-Derived state is split across the last two tiers. `Ppu`'s render-gating caches
-and `Bus::mapper_ops` are `pub` with a comment warning that writing them
-desynchronizes the emulator, while `Memory`'s page tables are private behind
-read-only getters. The difference is that `Memory`'s private set is not only
-derived — `data`, `ram_start` and the region ranges have to agree with each
-other, where the PPU's caches are scalars recomputed from a register write.
-
-## Known Issues
-
-See the [github issue tracker][].
-
-### Contact
-
-For issue reporting, please use the [github issue tracker][]. You can also
-contact me directly at <https://lukeworks.tech/contact/>.
-
-[github issue tracker]: https://github.com/lukexor/tetanes/issues
+Licensed MIT OR Apache-2.0, like TetaNES (`LICENSE-MIT`, `LICENSE-APACHE`).
