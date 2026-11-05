@@ -148,32 +148,6 @@ fn fq04_enabling_nmi_during_vblank_delays_one_instruction() {
     assert_eq!(bus.ppu.fceu_nmi, 1);
 }
 
-#[test]
-fn fq10_oam_dma_takes_512_cycles() {
-    let mut bus = console();
-    // STA $4014; NOP at $0010.
-    for (addr, val) in [
-        (0x0010u16, 0x8Du8),
-        (0x0011, 0x14),
-        (0x0012, 0x40),
-        (0x0013, 0xEA),
-    ] {
-        bus.cpu_bus_write(addr, val);
-    }
-    bus.cpu.pc = 0x0010;
-    bus.cpu.acc = 0x02;
-    let before = bus.cpu.cycle;
-    bus.clock_instr();
-    assert_eq!(
-        bus.cpu.cycle - before,
-        4 + 512,
-        "the DMA runs inside the STA"
-    );
-    let before = bus.cpu.cycle;
-    bus.clock_instr();
-    assert_eq!(bus.cpu.cycle - before, 2);
-}
-
 /// NOPs from $0010 on; returns the CPU cycles each instruction step took.
 fn nop_steps(bus: &mut Bus, n: usize) -> Vec<u32> {
     for addr in 0x0010u16..0x0800 {

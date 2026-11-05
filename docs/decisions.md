@@ -515,3 +515,5 @@ One line per quirk; numbers and reasoning in `docs/experiments/round9.md`, mecha
   (chain total 26 vs baselines 32/24).
 - 2026-11-05 FQ-09 restored: the odd-frame dot skip happens only with rendering on (hardware); gate kept it
   (chain total 27 vs 32/24).
+- 2026-11-05 FQ-10 restored: OAM DMA halts the CPU at its next read for 513/514 cycles (hardware, TetaNES'
+  timing); gate kept it (chain total 28 vs 32/24).

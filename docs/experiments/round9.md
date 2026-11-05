@@ -92,3 +92,42 @@ test passes (no movie desynced). Gate build: FQ-13 + FQ-09. `tf bench` 2,396-2,4
 **Decision: keep.** goriya's success (75.4%) is under both baselines (78.3/77.9), but its health change is
 better than both (−0.706 vs −0.758/−0.725) and it is 1.3 points from its old eval; d2-rope, ow-zora and
 wallmaster are above both baselines. The chain total (27) is between the baselines.
+
+## FQ-10: OAM DMA halts the CPU for 513/514 cycles
+
+**Change.** A `$4014` write halts the CPU at its next read (the next instruction's opcode fetch, or an
+interrupt's dummy read): the halted read is repeated, one alignment cycle follows when the halt lands on a put
+(odd) cycle, then 256 get/put pairs, so 513 or 514 cycles (nesdev "DMA"; TetaNES' `handle_dma` without the DMC
+half, which comes with FQ-11/12). FCEUmm ran 512 cycles inside the `STA`. `Bus::handle_dma` replaces
+`handle_dma_fceumm`; the FQ-10 compat test became `oam_dma_takes_513_or_514_cycles_from_the_next_read`.
+FQ-03's instruction-start snapshot is re-taken after the DMA, since FCEUmm's instruction after the `STA`
+started after it. No state change. Tests: `int_irq_and_dma` passes and is un-ignored; `spr_hit_timing_order`
+(passing before on FCEUmm timing) fails on hardware DMA with FCEUmm's VBlank/NMI timing and is ignored under
+FQ-03..FQ-05 until those are restored; every zelda, env and pool test passes (no movie desynced). Gate build:
+FQ-13 + FQ-09 + FQ-10. `tf bench` 2,452-2,456 / 4,384-4,577.
+
+| Specialist | Old | Baseline s0 | Baseline s1 | FQ-10 s0 |
+|---|---:|---:|---:|---:|
+| boss-aquamentus | 100.0% | 100.0% / +0.592 | 98.3% / +0.575 | 100.0% / +0.650 |
+| d2-rope | 95.2% | 94.0% / −0.254 | 93.6% / −0.231 | 94.3% / −0.218 |
+| goriya | 76.7% | 78.3% / −0.758 | 77.9% / −0.725 | 77.5% / −0.675 |
+| ow-leever-peahat | 100.0% | 97.1% / −0.325 | 96.2% / −0.296 | 96.7% / −0.308 |
+| ow-moblin | 97.1% | 95.3% / −0.215 | 96.4% / −0.236 | 95.6% / −0.203 |
+| ow-octorok | 99.0% | 98.3% / −0.073 | 98.2% / −0.066 | 97.9% / −0.074 |
+| ow-start | 98.5% | 100.0% / +0.278 | 100.0% / +0.287 | 100.0% / +0.278 |
+| ow-zora | 97.4% | 95.4% / −0.191 | 95.4% / −0.206 | 95.9% / −0.226 |
+| stalfos-keese-gel | — | 96.8% / −0.035 | 95.7% / −0.041 | 96.0% / −0.063 |
+| wallmaster | 87.5% | 98.3% / +0.167 | 100.0% / +0.208 | 98.3% / +0.217 |
+
+| Segment | Baseline s0 | Baseline s1 | FQ-10 s0 |
+|---|---:|---:|---:|
+| Full milestone1 | 1/40 | 1/40 | 0/40 |
+| Full milestone1-fairy | 3/40 | 2/40 | 2/40 |
+| Post-D1 main | 7/40 | 3/40 | 2/40 |
+| Post-D1 fairy | 6/40 | 6/40 | 8/40 |
+| D2 | 15/40 | 12/40 | 16/40 |
+| **Total** | 32 | 24 | 28 |
+
+**Decision: keep.** Every specialist is within or near the baselines' range: ow-octorok (97.9%, −0.074) and
+stalfos-keese-gel's health (−0.063) are a hair outside, well inside episode noise (±0.6 points at 660
+episodes); goriya's health is the best of the three runs. Chain total 28 (floor 12).

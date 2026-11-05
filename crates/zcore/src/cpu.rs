@@ -468,27 +468,43 @@ impl Bus {
         self.cpu.master_clock.saturating_sub(Cpu::PPU_OFFSET) >= self.ppu_deadline
     }
 
-    /// DMA as FCEUmm times it.
-    ///
-    /// - FQ-10: OAM DMA is exactly 512 cycles (256 reads and 256 writes) with no halt or alignment
-    ///   cycle.
+    /// OAM DMA (nesdev "DMA"): the CPU halts on the first read after the `$4014` write (the read
+    /// is repeated), waits for a get cycle, then copies 256 bytes as get/put pairs: 513 cycles, or
+    /// 514 when it halts on a put cycle. A dummy read of `$4016`/`$4017` is not repeated (the
+    /// joypads would shift).
     ///
     /// DMC fetches are timed by [`FceuDmc`](crate::apu::dmc::FceuDmc) (FQ-12) and spent by
     /// [`Bus::fceumm_dmc_fetch`] instead.
     #[cold]
     #[inline(never)]
-    fn handle_dma_fceumm(&mut self) {
+    fn handle_dma(&mut self, addr: u16) {
+        self.start_cycle(self.cpu.start_cycles - 1);
+        self.cpu_bus_read(addr);
+        self.end_cycle(self.cpu.start_cycles + 1);
         self.cpu.clear_irq_flags(IrqFlags::DMA_HALT);
-        if let Some(oam_addr) = self.cpu.dma_oam_addr.take() {
-            for offset in 0..256 {
-                self.start_cycle(self.cpu.start_cycles - 1);
-                let val = self.cpu_bus_read(oam_addr + offset);
-                self.end_cycle(self.cpu.start_cycles + 1);
-                self.start_cycle(self.cpu.start_cycles - 1);
-                self.cpu_bus_write(0x2004, val);
-                self.end_cycle(self.cpu.start_cycles + 1);
+        let Some(oam_addr) = self.cpu.dma_oam_addr.take() else {
+            return;
+        };
+        if self.cpu.cycle & 0x01 == 0x01 {
+            // Align to a get cycle.
+            self.start_cycle(self.cpu.start_cycles - 1);
+            if addr != 0x4016 && addr != 0x4017 {
+                self.cpu_bus_read(addr);
             }
+            self.end_cycle(self.cpu.start_cycles + 1);
         }
+        for offset in 0..256 {
+            self.start_cycle(self.cpu.start_cycles - 1);
+            let val = self.cpu_bus_read(oam_addr + offset);
+            self.end_cycle(self.cpu.start_cycles + 1);
+            self.start_cycle(self.cpu.start_cycles - 1);
+            self.cpu_bus_write(0x2004, val);
+            self.end_cycle(self.cpu.start_cycles + 1);
+        }
+        // FQ-03: the instruction whose read the DMA halted starts, as FCEUmm sees it, after the
+        // DMA (FCEUmm ran it inside the `STA`), so `status_at_instr` is taken from here.
+        self.instr_start_clock = self.cpu.master_clock.saturating_sub(Cpu::PPU_OFFSET);
+        self.status_latched = false;
     }
 
     /// FQ-11: an FCEUmm DMC fetch, four CPU reads of the sample address (`DMCDMA`,
@@ -558,8 +574,7 @@ impl Bus {
     #[inline(always)]
     pub fn read(&mut self, addr: u16) -> u8 {
         if self.cpu.irq_flags(IrqFlags::DMA_HALT) {
-            // FQ-10: FCEUmm's OAM DMA.
-            self.handle_dma_fceumm();
+            self.handle_dma(addr);
         }
 
         self.start_cycle(self.cpu.start_cycles - 1);
@@ -740,11 +755,6 @@ impl Bus {
         self.cpu.operand = self.fetch_operand();
         op.run(self);
 
-        // FQ-10: FCEUmm runs OAM DMA inside the `STA $4014` that starts it, so its 512 cycles
-        // count toward this instruction (and reach FQ-12's DMC timer at the next hook).
-        if self.cpu.dma_oam_addr.is_some() {
-            self.handle_dma_fceumm();
-        }
         if let Some(addr) = dmc_fetch {
             self.fceumm_dmc_fetch(addr);
         }
@@ -873,5 +883,38 @@ mod tests {
                 instr_ref.opcode, instr_ref.instr, instr_ref.addr_mode
             );
         }
+    }
+
+    /// OAM DMA halts the CPU at the read after `STA $4014` for 513 cycles, 514 when it halts on
+    /// a put (odd) cycle (nesdev "DMA").
+    #[test]
+    fn oam_dma_takes_513_or_514_cycles_from_the_next_read() {
+        use super::*;
+        let mut lens = Vec::new();
+        // With and without a 3-cycle `LDA $00` first, so the halt lands on both cycle parities.
+        for prefix in [&[][..], &[0xA5, 0x00][..]] {
+            let mut bus = Bus::default();
+            let mut cart = Cart::empty();
+            cart.mapper = Nrom::load(&mut cart).unwrap();
+            bus.load_cart(cart);
+            bus.reset(ResetKind::Hard);
+            let code: Vec<u8> = [prefix, &[0x8D, 0x14, 0x40, 0xEA][..]].concat();
+            for (addr, &val) in (0x0010u16..).zip(&code) {
+                bus.cpu_bus_write(addr, val);
+            }
+            bus.cpu.pc = 0x0010;
+            bus.cpu.acc = 0x02;
+            if !prefix.is_empty() {
+                bus.clock_instr();
+            }
+            let before = bus.cpu.cycle;
+            bus.clock_instr();
+            assert_eq!(bus.cpu.cycle - before, 4, "the STA itself");
+            let before = bus.cpu.cycle;
+            bus.clock_instr();
+            lens.push(bus.cpu.cycle - before - 2);
+        }
+        lens.sort_unstable();
+        assert_eq!(lens, [513, 514]);
     }
 }

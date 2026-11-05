@@ -27,7 +27,7 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 | FQ-07 | PPU starts at scanline 240, one dot ahead | boot, then CPU/PPU phase for the whole run |
 | FQ-08 | Frame boundary at dot 1 of line 240 | frame boundary (when inputs and pokes apply) |
 | FQ-09 | Odd-frame dot skip even when rendering is off (**restored to hardware**) | per-frame timing |
-| FQ-10 | 512-cycle OAM DMA, run inside `STA $4014` | per-frame timing |
+| FQ-10 | 512-cycle OAM DMA, run inside `STA $4014` (**restored to hardware**) | per-frame timing |
 | FQ-11 | 4-read DMC DMA | per-frame timing |
 | FQ-12 | DMC fetch timed by FCEUmm's per-instruction sound hook | per-frame timing |
 | FQ-13 | The PPU I/O latch never decays (**restored to hardware**) | CPU registers after $2002/open-bus reads (masked by the game: no RAM effect in the corpus) |
@@ -167,6 +167,9 @@ on the VBlank/NMI quirks; `vbl_nmi_basics`, `clear_timing` and `frame_basics` pa
 - **Removal:** delete the branch; `09` and `10` pass again.
 
 ## FQ-10 — 512-cycle OAM DMA, run inside `STA $4014`
+
+**Restored to hardware** in `zcore: restore hardware OAM DMA halt and alignment (FQ-10 removed)` (plan
+step 18a, `docs/experiments/round9.md`): `Bus::handle_dma`. `sprdma_and_dmc_dma` still waits for FQ-11/12.
 
 - **Hardware:** OAM DMA halts the CPU for 513 cycles, 514 if it starts on an odd (put) cycle, starting
   at the next read cycle after the write. nesdev "PPU registers" (OAMDMA), "DMA"; `sprdma_and_dmc_dma`,
