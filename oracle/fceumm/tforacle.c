@@ -20,6 +20,7 @@
 /* FCEUmm globals (exported because the core is built without a version script). */
 extern X6502 X;
 extern uint32_t timestamp;
+extern uint64_t timestampbase;
 extern int scanline;
 extern uint8_t RAM[0x800];
 extern uint8_t NTARAM[0x800], PALRAM[0x20], SPRAM[0x100];
@@ -117,7 +118,7 @@ static void instr_hook(uint16_t pc, uint8_t opcode) {
     row.y = X.Y;
     row.p = X.P;
     row.sp = X.S;
-    row.cycle = timestamp; /* frame-relative; informational only */
+    row.cycle = timestampbase + timestamp; /* CPU cycles since power-on at instruction start */
     row.scanline = (int16_t)scanline;
     g_trace_cb(&row, g_trace_user);
 }
@@ -230,3 +231,6 @@ void tfo_set_trace(tfo_trace_cb cb, void *user) {
     g_trace_user = user;
     tfo_instr_hook = cb ? instr_hook : NULL;
 }
+
+/* CPU run budget left after the last frame (FCEUmm `X.count`, 1/16 dot units; <= 0 after a frame). */
+int32_t tfo_count(void) { return X.count; }

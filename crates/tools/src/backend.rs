@@ -26,6 +26,10 @@ pub trait Backend {
     fn read_domain(&mut self, domain: Domain, out: &mut Vec<u8>) -> bool;
     /// Run one frame while recording every instruction.
     fn trace_frame(&mut self, buttons: u8) -> Vec<TraceRow>;
+    /// Debugging aid: how many dots the last frame's final instruction ran past the frame end.
+    fn overshoot_dots(&self) -> Option<f64> {
+        None
+    }
     fn ram(&mut self) -> [u8; 0x800] {
         let mut v = Vec::new();
         self.read_domain(Domain::Ram, &mut v);

@@ -47,6 +47,10 @@ impl Backend for Oracle {
         true
     }
 
+    fn overshoot_dots(&self) -> Option<f64> {
+        Some(-self.0.budget_dots())
+    }
+
     fn trace_frame(&mut self, buttons: u8) -> Vec<TraceRow> {
         self.0.trace_frame(buttons)
     }

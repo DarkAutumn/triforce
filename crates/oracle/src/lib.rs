@@ -64,6 +64,7 @@ struct Api {
     save_state: unsafe extern "C" fn(*mut u8, usize) -> c_int,
     load_state: unsafe extern "C" fn(*const u8, usize) -> c_int,
     set_trace: unsafe extern "C" fn(Option<TraceCb>, *mut c_void),
+    count: unsafe extern "C" fn() -> i32,
 }
 
 pub struct Oracle {
@@ -132,6 +133,7 @@ impl Oracle {
                 save_state: sym!("tfo_save_state"),
                 load_state: sym!("tfo_load_state"),
                 set_trace: sym!("tfo_set_trace"),
+                count: sym!("tfo_count"),
             };
             let rom = CString::new(rom_path.to_string_lossy().as_bytes())?;
             let rc = unsafe { open(rom.as_ptr()) };
@@ -219,6 +221,12 @@ impl Oracle {
         ensure!(unsafe { (self.api.load_state)(body.as_ptr(), body.len()) } == 0, "tfo_load_state failed");
         self.frame = u64::from_le_bytes(frame.try_into().unwrap());
         Ok(())
+    }
+
+    /// FCEUmm's CPU run budget after the last frame, in dots (`X.count / 16`; zero or negative:
+    /// how far the last instruction ran past the frame's end). Debugging aid for frame timing.
+    pub fn budget_dots(&self) -> f64 {
+        f64::from(unsafe { (self.api.count)() }) / 16.0
     }
 
     /// Runs one frame while recording every instruction.

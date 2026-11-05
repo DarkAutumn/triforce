@@ -80,6 +80,9 @@ enum Cmd {
         frames: usize,
         #[arg(long, default_value = "zcore")]
         backend: String,
+        /// Only print frames from this record on.
+        #[arg(long, default_value_t = 1)]
+        from: usize,
     },
     /// Trace one frame in the oracle and a backend and report the first differing instruction.
     TraceDiff {
@@ -250,7 +253,7 @@ fn run(cli: Cli) -> Result<i32> {
             trace_diff(&rom, &movie, frame, &backend, context, cycles, rows.as_deref())
         }
         Cmd::Show { movie, frame, backend, limit } => show(&rom, &movie, frame, &backend, limit),
-        Cmd::FrameLens { movie, frames, backend } => frame_lens(&rom, &movie, frames, &backend),
+        Cmd::FrameLens { movie, frames, backend, from } => frame_lens(&rom, &movie, frames, from, &backend),
         Cmd::LadderGolden { movies, out, backend, jobs: j } => corpus::ladder_golden(&rom, &movies, &out, &backend, jobs(j)),
         Cmd::LadderDiff { dir, backend, jobs: j } => corpus::ladder_diff(&rom, &dir, &backend, jobs(j)),
         Cmd::Corpus { cmd } => match cmd {
@@ -425,7 +428,7 @@ fn show(rom: &rom::RomInfo, movie_path: &Path, frame: usize, backend: &str, limi
     Ok(if same { 0 } else { 1 })
 }
 
-fn frame_lens(rom: &rom::RomInfo, movie_path: &Path, frames: usize, backend: &str) -> Result<i32> {
+fn frame_lens(rom: &rom::RomInfo, movie_path: &Path, frames: usize, from: usize, backend: &str) -> Result<i32> {
     let movie = Movie::load(movie_path)?;
     let mut o = oracle::Oracle::open(&rom.path)?;
     let mut b = make_backend(backend, rom)?;
@@ -438,14 +441,28 @@ fn frame_lens(rom: &rom::RomInfo, movie_path: &Path, frames: usize, backend: &st
         apply_pokes(b.as_mut(), &movie, &index, &mut nb, k);
         let to = o.trace_frame(movie.inputs[k]);
         let tb = b.trace_frame(movie.inputs[k]);
+        if k + 1 < from {
+            continue;
+        }
         let (fo, fb) = (to.first().map_or(0, |r| r.pc), tb.first().map_or(0, |r| r.pc));
+        let (co, cb) = (to.first().map_or(0, |r| r.cycle as i64), tb.first().map_or(0, |r| r.cycle as i64));
+        // NMI entry: the first row whose stack pointer is three below the previous row's.
+        let nmi = |rows: &[backend::TraceRow]| {
+            let start = rows.first().map_or(0, |r| r.cycle as i64);
+            rows.windows(2).find(|w| w[1].sp == w[0].sp.wrapping_sub(3)).map_or(-1, |w| w[1].cycle as i64 - start)
+        };
         let (ro, rb) = (o.ram(), b.ram());
         println!(
-            "frame {:5}: fceumm {:6} instr start {fo:04X} | {backend} {:6} instr start {fb:04X} | ram {}",
+            "frame {:5}: fceumm {:6} instr start {fo:04X} | {backend} {:6} instr start {fb:04X} | ram {} | overshoot {} {} | start-cycle delta {} | nmi entry {} {}",
             k + 1,
             to.len(),
             tb.len(),
-            if ro == rb { "same" } else { "DIFF" }
+            if ro == rb { "same" } else { "DIFF" },
+            o.overshoot_dots().unwrap_or(f64::NAN),
+            b.overshoot_dots().unwrap_or(f64::NAN),
+            cb - co,
+            nmi(&to),
+            nmi(&tb)
         );
     }
     Ok(0)
@@ -538,18 +555,13 @@ fn trace_diff(
         }
     }
     if cycles {
-        // FCEUmm's timestamp restarts each frame; make it cumulative.
-        let mut cum = Vec::with_capacity(to.len());
-        let (mut base, mut prev) = (0u64, 0u64);
-        for r in &to {
-            if r.cycle < prev {
-                base += prev + 1;
-            }
-            prev = r.cycle;
-            cum.push(base + r.cycle);
-        }
+        // Both traces carry CPU cycles since power-on; compare them relative to the aligned start.
+        let cum: Vec<u64> = to.iter().map(|r| r.cycle).collect();
         let (o0, b0) = (cum[oi], tb[bi].cycle);
-        if let Some(k) = (0..n).find(|&k| cum[oi + k] - o0 != tb[bi + k].cycle - b0) {
+        // A single-row difference is the OAM DMA showing up after STA $4014 in FCEUmm but before
+        // the next instruction in the backend; report differences that persist for two rows.
+        let differs = |k: usize| cum[oi + k] - o0 != tb[bi + k].cycle - b0;
+        if let Some(k) = (0..n.saturating_sub(1)).find(|&k| differs(k) && differs(k + 1)) {
             println!("first timing difference at aligned row {k}");
             for j in k.saturating_sub(context)..(k + 2).min(n) {
                 println!("{:7} fceumm  +{:6} {}", oi + j, cum[oi + j] - o0, line(&to[oi + j]));

@@ -59,7 +59,17 @@ impl Backend for Tetanes {
     fn run_frame(&mut self, buttons: u8) {
         self.set_buttons(buttons);
         let _ = self.deck.clock_frame().expect("TetaNES clock_frame");
-        if std::env::var_os("TF_DBG").is_some() { eprintln!("frame {} dead {} sl {} vbl {}", self.deck.frame_number(), self.deck.bus().ppu.dead_frames, self.deck.bus().ppu.scanline, self.deck.bus().ppu.status_in_vblank); }
+        if std::env::var_os("TF_DBG").is_some() {
+            let bus = self.deck.bus();
+            eprintln!(
+                "frame {} boundary_dot {} sl {} cyc {} render {}",
+                self.deck.frame_number(),
+                bus.cpu.cycle as i64 * 3 - (bus.ppu.cycle as i64 - 1),
+                bus.ppu.scanline,
+                bus.ppu.cycle,
+                bus.ppu.mask_rendering_enabled
+            );
+        }
     }
 
     fn poke(&mut self, addr: u16, value: u8) {
@@ -84,6 +94,12 @@ impl Backend for Tetanes {
             _ => return false,
         }
         true
+    }
+
+    fn overshoot_dots(&self) -> Option<f64> {
+        let fb: i64 = std::env::var("TF_FB_OFF").ok().and_then(|s| s.parse().ok()).unwrap_or(1);
+        let ppu = &self.deck.bus().ppu;
+        Some((i64::from(ppu.scanline) * 341 + i64::from(ppu.cycle) - (240 * 341 + fb)) as f64)
     }
 
     fn trace_frame(&mut self, buttons: u8) -> Vec<TraceRow> {

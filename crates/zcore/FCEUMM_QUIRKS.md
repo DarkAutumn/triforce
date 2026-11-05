@@ -27,8 +27,9 @@ the same functions under `crates/zcore/src`.
 | FQ-07 | PPU starts at scanline 240, one dot ahead | boot, then CPU/PPU phase for the whole run |
 | FQ-08 | Frame boundary at dot 1 of line 240 | frame boundary (when inputs and pokes apply) |
 | FQ-09 | Odd-frame dot skip even when rendering is off | per-frame timing |
-| FQ-10 | 512-cycle OAM DMA | per-frame timing |
+| FQ-10 | 512-cycle OAM DMA, run inside `STA $4014` | per-frame timing |
 | FQ-11 | 4-read DMC DMA | per-frame timing |
+| FQ-12 | DMC fetch timed by FCEUmm's per-instruction sound hook | per-frame timing |
 
 ## FQ-01 — Two dead PPU frames after reset
 
@@ -152,15 +153,18 @@ the same functions under `crates/zcore/src`.
   matches FCEUmm's `kook` given FQ-01).
 - **Removal:** delete the branch; `09` and `10` pass again.
 
-## FQ-10 — 512-cycle OAM DMA
+## FQ-10 — 512-cycle OAM DMA, run inside `STA $4014`
 
-- **Hardware:** OAM DMA halts the CPU for 513 cycles, 514 if it starts on an odd (put) cycle. nesdev
-  "PPU registers" (OAMDMA), "DMA"; `sprdma_and_dmc_dma`, `cpu_interrupts_v2`.
-- **FCEUmm:** `B4014` performs 256 `X6502_DMR`/`X6502_DMW` pairs of one cycle each
-  (`src/ppu.c:374-380`, `src/x6502.c:74-82`): 512 cycles, no halt or alignment cycle.
-- **Affects:** per-frame timing (every frame's NMI handler: 1-2 cycles).
-- **Implemented:** `Bus::handle_dma` (compat dispatch), `Bus::handle_dma_fceumm` (OAM part).
-- **Removal:** delete the compat dispatch; `sprdma_and_dmc_dma` passes again.
+- **Hardware:** OAM DMA halts the CPU for 513 cycles, 514 if it starts on an odd (put) cycle, starting
+  at the next read cycle after the write. nesdev "PPU registers" (OAMDMA), "DMA"; `sprdma_and_dmc_dma`,
+  `cpu_interrupts_v2`.
+- **FCEUmm:** `B4014` performs 256 `X6502_DMR`/`X6502_DMW` pairs of one cycle each inside the write
+  (`src/ppu.c:374-380`, `src/x6502.c:74-82`): 512 cycles, no halt or alignment cycle, counted toward the
+  `STA` itself (so they reach FQ-12's DMC timer at the next instruction's hook).
+- **Affects:** per-frame timing (every frame's NMI handler: 1-2 cycles, and DMC fetch placement).
+- **Implemented:** `Bus::clock_instr` (runs the DMA after the `STA` in compat), `Bus::handle_dma`
+  (compat dispatch), `Bus::handle_dma_fceumm`.
+- **Removal:** delete the compat paths; `sprdma_and_dmc_dma` passes again.
 
 ## FQ-11 — 4-read DMC DMA
 
@@ -169,8 +173,25 @@ the same functions under `crates/zcore/src`.
 - **FCEUmm:** `DMCDMA` performs four `X6502_DMR` reads of the sample address (`src/sound.c:502-508`) from
   the per-instruction sound hook.
 - **Affects:** per-frame timing while samples play.
-- **Implemented:** `Bus::handle_dma` (compat dispatch), `Bus::handle_dma_fceumm` (DMC part).
-- **Removal:** delete the compat dispatch; `dmc_dma_during_read4` passes again.
+- **Implemented:** `Bus::fceumm_dmc_fetch` (four read cycles after the instruction whose hook asked).
+- **Removal:** delete with FQ-12; `dmc_dma_during_read4` passes again.
+
+## FQ-12 — DMC fetch timed by FCEUmm's per-instruction sound hook
+
+- **Hardware:** the DMC timer counts CPU cycles exactly; the reader requests a fetch as soon as the sample
+  buffer empties, and the CPU services it at its next read cycle (with halt/alignment). nesdev "APU DMC";
+  `dmc_dma_during_read4`, `dmc_basics`.
+- **FCEUmm:** `FCEU_SoundCPUHook` (`src/sound.c:525-555`) runs once per instruction, after the opcode's
+  base cycles are counted: if the buffer is empty and bytes remain it fetches at once (`DMCDMA`,
+  `src/sound.c:503-523`), then counts the cycles since the last hook (the opcode's base cycles plus any
+  extra cycles of the previous instruction, DMA included) down `DMCacc`, emptying the buffer every eight
+  bits. `$4010/$4012/$4013/$4015` per `Write_DMCRegs`/`StatusWrite` (`src/sound.c:303-370`).
+- **Affects:** per-frame timing while samples play (Zelda plays DMC sound effects).
+- **Implemented:** `FceuDmc` in `apu/dmc.rs` (state, `write`, `hook`), `Bus::cpu_bus_write` (register
+  writes), `Bus::clock_instr` (hook before the opcode fetch), `Bus::handle_interrupts` (hardware DMA
+  requests dropped in compat).
+- **Removal:** delete `FceuDmc` and the compat paths; the hardware fetcher drives DMA again;
+  `dmc_dma_during_read4` and `dmc_basics` pass again.
 
 ## Not quirks
 
