@@ -1,13 +1,17 @@
 """PPO trainer (port of v1 ``ml_ppo``) for one specialist.
 
-Kept from v1: shared-memory rollouts with one subprocess env per worker, KL early stop, KL rollback
-(weights *and* optimizer state restored when KL exceeds ``kl_rollback × target_kl``), checkpointable optimizer
-state, per-minibatch advantage normalization, legacy time-limit termination, optional demo-regularization
-(behavior-cloning loss on a fixed demo batch).
+Kept from v1: KL early stop, KL rollback (weights *and* optimizer state restored when KL exceeds
+``kl_rollback × target_kl``), checkpointable optimizer state, per-minibatch advantage normalization, legacy
+time-limit termination, optional demo-regularization (behavior-cloning loss on a fixed demo batch).
 
 Changed for v2: dict observations, factored (kind, direction, duration) actions, flat masks, frame-aware GAE
 (see ``rollout_buffer``), and ``train`` counts PPO *iterations* (one rollout + one optimization each).
-Opted-in no-progress truncations bootstrap their actual final observation without crossing episode resets.
+
+Rollouts come from a native ``EnvPool`` (``TrainTask``) in lockstep (``Collector``): ``recv`` every env's row,
+store it, run one batched ``network.evaluate`` on the PPO device, ``send`` the actions.  Envs auto-reset: a
+terminal row's ``obs`` already starts the next episode and ``final_obs`` holds the terminal observation.
+Opted-in no-progress truncations (the ``bootstrap`` column) add ``gamma ** (frames / 8) * V(final_obs)`` to that
+step's reward without crossing the episode reset.
 """
 
 import copy
@@ -20,9 +24,9 @@ import numpy as np
 import torch
 from torch import nn
 
-from .metrics import EpisodeTracker, RolloutMetrics
 from .demo import compute_demo_accuracy
-from .rollout_buffer import RolloutBuffer
+from .metrics import RolloutMetrics
+from .rollout_buffer import FRAMES_PER_DISCOUNT, RolloutBuffer
 
 
 @dataclass
@@ -59,6 +63,69 @@ class IterationResult:
     stats: dict               # optimization stats + entropy per head + steps/sec
 
 
+class Collector:
+    """Lockstep rollouts from a pool into an env-major ``RolloutBuffer``.
+
+    ``pool`` is a native ``EnvPool`` (or anything with its ``num_envs`` / ``make_buffers`` / ``recv`` / ``send`` /
+    ``poll_events`` interface).  The first ``recv`` returns every env's reset observation; between ``collect``
+    calls every env waits for its next action, so episodes continue across rollouts.
+    """
+
+    def __init__(self, pool, memory_length: int, gamma: float, lam: float):
+        self.pool = pool
+        self.n_envs = pool.num_envs
+        self.gamma = gamma
+        self.rows = pool.make_buffers()
+        self.buffer = RolloutBuffer(memory_length, self.n_envs, self.rows['obs'], gamma, lam)
+        self._recv()
+        self.dones = np.zeros(self.n_envs, dtype=np.float32)
+
+    def _recv(self):
+        count = self.pool.recv(self.rows, min_ready=self.n_envs)
+        if count != self.n_envs or not np.array_equal(self.rows['env_ids'], np.arange(self.n_envs)):
+            raise RuntimeError(f"lockstep recv returned {count} of {self.n_envs} envs: {self.rows['env_ids']}")
+
+    def collect(self, network: nn.Module, device) -> RolloutMetrics:
+        """Fills the buffer with ``memory_length`` steps per env and computes returns and advantages."""
+        buffer, rows = self.buffer, self.rows
+        metrics = RolloutMetrics()
+        was_training = network.training
+        network.to(device)
+        network.eval()
+        try:
+            with torch.no_grad():
+                for t in range(buffer.memory_length):
+                    buffer.store_obs(t, rows['obs'], self.dones)
+                    out = network.evaluate(buffer.obs_at(t), buffer.masks[:, t])
+                    actions = out.actions.cpu()
+                    buffer.store_policy(t, actions, out.log_prob, out.entropy, out.value)
+                    self.pool.send(rows['env_ids'], actions.numpy())
+                    self._recv()
+
+                    rewards = rows['reward'].astype(np.float32)
+                    frames = rows['frames'].astype(np.float32)
+                    bootstrap = rows['bootstrap'].astype(bool)
+                    if bootstrap.any():
+                        final = {key: value[bootstrap] for key, value in rows['final_obs'].items()}
+                        values = network.get_value(final).cpu().numpy()
+                        rewards[bootstrap] += self.gamma ** (frames[bootstrap] / FRAMES_PER_DISCOUNT) * values
+                    buffer.store_result(t, rewards, frames)
+                    self.dones = (rows['terminated'] | rows['truncated']).astype(np.float32)
+
+                    metrics.add_steps(actions.numpy(), rows['frames'], rows['interrupt'])
+                    events = sorted((e for e in self.pool.poll_events() if e['type'] == 'episode'),
+                                    key=lambda e: e['env'])
+                    for event in events:
+                        metrics.add_episode(event['info'])
+
+                buffer.store_obs(buffer.memory_length, rows['obs'], self.dones)
+                last_values = network.get_value(buffer.obs_at(buffer.memory_length))
+                buffer.compute_returns(last_values)
+        finally:
+            network.train(was_training)
+        return metrics
+
+
 class PPO:
     """PPO with factored heads and frame-aware GAE."""
 
@@ -91,23 +158,18 @@ class PPO:
 
     # ------------------------------------------------------------------ training loop
 
-    def train(self, network: nn.Module, make_env: Callable, iterations: int, n_envs: int = 1,
-              make_network: Optional[Callable] = None, callback: Optional[Callable] = None,
-              start_steps: int = 0, observation_space=None, seed: Optional[int] = None) -> nn.Module:
-        """Runs ``iterations`` rounds of (collect ``target_steps`` env steps, optimize).
+    def train(self, network: nn.Module, pool, iterations: int, callback: Optional[Callable] = None,
+              start_steps: int = 0, seed: Optional[int] = None) -> nn.Module:
+        """Runs ``iterations`` rounds of (collect ``target_steps`` env steps across ``pool``'s envs, optimize).
 
         Args:
-            make_env: picklable zero-arg env factory (called in-process when n_envs == 1).
-            n_envs: 1 = in-process env (debuggable); >1 = one subprocess worker per env.
-            make_network: picklable zero-arg factory that builds an identical network (workers only).
+            pool: a native ``EnvPool`` over a ``TrainTask`` (the caller owns and closes it).
             callback: called with an ``IterationResult`` after each iteration; return False to stop.
-            observation_space: the env's observation space (required when n_envs > 1).
-            seed: seeds training RNGs and the first env reset; worker i uses seed + i.
-                Later episodes advance their streams. Shared curriculum scheduling is still asynchronous.
+            seed: seeds the training RNGs (action sampling, minibatch order); the pool has its own seed.
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
         cfg = self.config
-        steps_per_env = max(1, cfg.target_steps // n_envs)
+        steps_per_env = max(1, cfg.target_steps // pool.num_envs)
         self.setup_optimizer(network)
         self.total_steps = start_steps
         if seed is not None:
@@ -116,56 +178,30 @@ class PPO:
             random.seed(seed)
             np.random.seed(seed % (1 << 32))
 
-        env = make_env() if n_envs == 1 else None
-        if observation_space is None:
-            if env is None:
-                raise ValueError("observation_space is required for n_envs > 1")
-            observation_space = env.observation_space
-        buffer = RolloutBuffer(steps_per_env, n_envs, observation_space, cfg.gamma, cfg.lam)
-        pool = None
-        tracker = None
-        if n_envs == 1:
-            tracker = EpisodeTracker()
-        else:
-            if make_network is None:
-                raise ValueError("make_network is required for n_envs > 1")
-            from .ppo_worker import RolloutWorkerPool  # pylint: disable=import-outside-toplevel
-            buffer.share_memory_()
-            pool = RolloutWorkerPool(n_envs, buffer, network, make_network, make_env, seed=seed)
-
+        collector = Collector(pool, steps_per_env, cfg.gamma, cfg.lam)
+        buffer = collector.buffer
         start = time.time()
         steps_this_run = 0
-        try:
-            for iteration in range(1, iterations + 1):
-                collect_start = time.time()
-                network.to('cpu')
-                if pool is None:
-                    buffer.collect(0, network, env, tracker, seed=seed)
-                    rollout = tracker.take()
-                else:
-                    rollout = pool.collect(network)
-                collect_time = time.time() - collect_start
+        for iteration in range(1, iterations + 1):
+            collect_start = time.time()
+            rollout = collector.collect(network, self.device)
+            collect_time = time.time() - collect_start
 
-                batch_steps = buffer.memory_length * n_envs
-                steps_this_run += batch_steps
-                self.total_steps += batch_steps
+            batch_steps = buffer.memory_length * buffer.n_envs
+            steps_this_run += batch_steps
+            self.total_steps += batch_steps
 
-                optimize_start = time.time()
-                stats = self.optimize(network, buffer)
-                elapsed = time.time() - start
-                stats['charts/SPS'] = steps_this_run / elapsed if elapsed > 0 else 0.0
-                stats['charts/rollout_SPS'] = batch_steps / collect_time if collect_time > 0 else 0.0
-                stats['charts/rollout_seconds'] = collect_time
-                stats['charts/optimize_seconds'] = time.time() - optimize_start
+            optimize_start = time.time()
+            stats = self.optimize(network, buffer)
+            elapsed = time.time() - start
+            stats['charts/SPS'] = steps_this_run / elapsed if elapsed > 0 else 0.0
+            stats['charts/rollout_SPS'] = batch_steps / collect_time if collect_time > 0 else 0.0
+            stats['charts/rollout_seconds'] = collect_time
+            stats['charts/optimize_seconds'] = time.time() - optimize_start
 
-                if callback is not None:
-                    if callback(IterationResult(iteration, self.total_steps, rollout, stats)) is False:
-                        break
-        finally:
-            if pool is not None:
-                pool.close()
-            if env is not None:
-                env.close()
+            if callback is not None:
+                if callback(IterationResult(iteration, self.total_steps, rollout, stats)) is False:
+                    break
         return network
 
     # ------------------------------------------------------------------ optimization

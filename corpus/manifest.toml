@@ -1,0 +1,573 @@
+[[movie]]
+name = "chain-milestone1-11"
+file = "movies/chain-milestone1-11.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 36454
+
+[[movie]]
+name = "chain-milestone1-111"
+file = "movies/chain-milestone1-111.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 5112
+
+[[movie]]
+name = "chain-milestone1-116"
+file = "movies/chain-milestone1-116.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 6061
+
+[[movie]]
+name = "chain-milestone1-122"
+file = "movies/chain-milestone1-122.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 8326
+
+[[movie]]
+name = "chain-milestone1-123"
+file = "movies/chain-milestone1-123.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 40809
+
+[[movie]]
+name = "chain-milestone1-127"
+file = "movies/chain-milestone1-127.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 26181
+
+[[movie]]
+name = "chain-milestone1-130"
+file = "movies/chain-milestone1-130.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 18832
+
+[[movie]]
+name = "chain-milestone1-137"
+file = "movies/chain-milestone1-137.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 53549
+
+[[movie]]
+name = "chain-milestone1-138"
+file = "movies/chain-milestone1-138.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+    "power-on-to-d2",
+]
+frames = 27230
+
+[[movie]]
+name = "chain-milestone1-153"
+file = "movies/chain-milestone1-153.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 26736
+
+[[movie]]
+name = "chain-milestone1-158"
+file = "movies/chain-milestone1-158.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 15254
+
+[[movie]]
+name = "chain-milestone1-167"
+file = "movies/chain-milestone1-167.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 25686
+
+[[movie]]
+name = "chain-milestone1-172"
+file = "movies/chain-milestone1-172.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+    "power-on-to-d2",
+]
+frames = 24106
+
+[[movie]]
+name = "chain-milestone1-180"
+file = "movies/chain-milestone1-180.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 37420
+
+[[movie]]
+name = "chain-milestone1-189"
+file = "movies/chain-milestone1-189.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+    "power-on-to-d2",
+]
+frames = 22255
+
+[[movie]]
+name = "chain-milestone1-191"
+file = "movies/chain-milestone1-191.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 9111
+
+[[movie]]
+name = "chain-milestone1-194"
+file = "movies/chain-milestone1-194.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 4527
+
+[[movie]]
+name = "chain-milestone1-31"
+file = "movies/chain-milestone1-31.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 8893
+
+[[movie]]
+name = "chain-milestone1-47"
+file = "movies/chain-milestone1-47.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 19201
+
+[[movie]]
+name = "chain-milestone1-62"
+file = "movies/chain-milestone1-62.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 16666
+
+[[movie]]
+name = "chain-milestone1-84"
+file = "movies/chain-milestone1-84.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 33100
+
+[[movie]]
+name = "chain-milestone1-91"
+file = "movies/chain-milestone1-91.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 16338
+
+[[movie]]
+name = "chain-milestone1-93"
+file = "movies/chain-milestone1-93.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+]
+frames = 8780
+
+[[movie]]
+name = "chain-milestone1-97"
+file = "movies/chain-milestone1-97.tfmovie"
+tags = [
+    "agent",
+    "milestone1",
+    "power-on-to-d2",
+]
+frames = 22205
+
+[[movie]]
+name = "chain-milestone1-fairy-0"
+file = "movies/chain-milestone1-fairy-0.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 27078
+
+[[movie]]
+name = "chain-milestone1-fairy-11"
+file = "movies/chain-milestone1-fairy-11.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 44655
+
+[[movie]]
+name = "chain-milestone1-fairy-113"
+file = "movies/chain-milestone1-fairy-113.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+]
+frames = 2682
+
+[[movie]]
+name = "chain-milestone1-fairy-114"
+file = "movies/chain-milestone1-fairy-114.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 22742
+
+[[movie]]
+name = "chain-milestone1-fairy-13"
+file = "movies/chain-milestone1-fairy-13.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+]
+frames = 15034
+
+[[movie]]
+name = "chain-milestone1-fairy-138"
+file = "movies/chain-milestone1-fairy-138.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+]
+frames = 15501
+
+[[movie]]
+name = "chain-milestone1-fairy-147"
+file = "movies/chain-milestone1-fairy-147.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 25823
+
+[[movie]]
+name = "chain-milestone1-fairy-158"
+file = "movies/chain-milestone1-fairy-158.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 24932
+
+[[movie]]
+name = "chain-milestone1-fairy-165"
+file = "movies/chain-milestone1-fairy-165.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+]
+frames = 16307
+
+[[movie]]
+name = "chain-milestone1-fairy-169"
+file = "movies/chain-milestone1-fairy-169.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 22354
+
+[[movie]]
+name = "chain-milestone1-fairy-174"
+file = "movies/chain-milestone1-fairy-174.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 24682
+
+[[movie]]
+name = "chain-milestone1-fairy-176"
+file = "movies/chain-milestone1-fairy-176.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 23259
+
+[[movie]]
+name = "chain-milestone1-fairy-180"
+file = "movies/chain-milestone1-fairy-180.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 24052
+
+[[movie]]
+name = "chain-milestone1-fairy-189"
+file = "movies/chain-milestone1-fairy-189.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 26289
+
+[[movie]]
+name = "chain-milestone1-fairy-197"
+file = "movies/chain-milestone1-fairy-197.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+]
+frames = 50553
+
+[[movie]]
+name = "chain-milestone1-fairy-2"
+file = "movies/chain-milestone1-fairy-2.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 24548
+
+[[movie]]
+name = "chain-milestone1-fairy-20"
+file = "movies/chain-milestone1-fairy-20.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 35698
+
+[[movie]]
+name = "chain-milestone1-fairy-22"
+file = "movies/chain-milestone1-fairy-22.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 24015
+
+[[movie]]
+name = "chain-milestone1-fairy-39"
+file = "movies/chain-milestone1-fairy-39.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 24919
+
+[[movie]]
+name = "chain-milestone1-fairy-47"
+file = "movies/chain-milestone1-fairy-47.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+]
+frames = 23474
+
+[[movie]]
+name = "chain-milestone1-fairy-56"
+file = "movies/chain-milestone1-fairy-56.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 26873
+
+[[movie]]
+name = "chain-milestone1-fairy-57"
+file = "movies/chain-milestone1-fairy-57.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+]
+frames = 38191
+
+[[movie]]
+name = "chain-milestone1-fairy-67"
+file = "movies/chain-milestone1-fairy-67.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 22398
+
+[[movie]]
+name = "chain-milestone1-fairy-8"
+file = "movies/chain-milestone1-fairy-8.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+]
+frames = 1828
+
+[[movie]]
+name = "chain-milestone1-fairy-84"
+file = "movies/chain-milestone1-fairy-84.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+]
+frames = 36529
+
+[[movie]]
+name = "chain-milestone1-fairy-90"
+file = "movies/chain-milestone1-fairy-90.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 36872
+
+[[movie]]
+name = "chain-milestone1-fairy-97"
+file = "movies/chain-milestone1-fairy-97.tfmovie"
+tags = [
+    "agent",
+    "milestone1-fairy",
+    "power-on-to-d2",
+]
+frames = 23462
+
+[[movie]]
+name = "die_continue"
+file = "movies/die_continue.tfmovie"
+tags = [
+    "short",
+    "scripted",
+]
+frames = 1799
+
+[[movie]]
+name = "file_select_register_erase"
+file = "movies/file_select_register_erase.tfmovie"
+tags = [
+    "short",
+    "scripted",
+]
+frames = 798
+
+[[movie]]
+name = "item_switch_spam"
+file = "movies/item_switch_spam.tfmovie"
+tags = [
+    "short",
+    "scripted",
+]
+frames = 4567
+
+[[movie]]
+name = "pause_spam"
+file = "movies/pause_spam.tfmovie"
+tags = [
+    "short",
+    "scripted",
+]
+frames = 1323
+
+[[movie]]
+name = "power_on_to_start"
+file = "movies/power_on_to_start.tfmovie"
+tags = [
+    "short",
+    "scripted",
+]
+frames = 662
+
+[[movie]]
+name = "random-1"
+file = "movies/random-1.tfmovie"
+tags = ["random"]
+frames = 30000
+
+[[movie]]
+name = "random-2"
+file = "movies/random-2.tfmovie"
+tags = ["random"]
+frames = 30000
+
+[[movie]]
+name = "random-3"
+file = "movies/random-3.tfmovie"
+tags = ["random"]
+frames = 30000
+
+[[movie]]
+name = "random-4"
+file = "movies/random-4.tfmovie"
+tags = ["random"]
+frames = 30000
+
+[[movie]]
+name = "random-5"
+file = "movies/random-5.tfmovie"
+tags = ["random"]
+frames = 30000
+
+[[movie]]
+name = "sword_cave_in_out"
+file = "movies/sword_cave_in_out.tfmovie"
+tags = [
+    "short",
+    "scripted",
+]
+frames = 862
+
+[[movie]]
+name = "title_idle_3600"
+file = "movies/title_idle_3600.tfmovie"
+tags = [
+    "short",
+    "scripted",
+]
+frames = 3600

@@ -145,3 +145,362 @@ Format: date — what changed — why — evidence.
   (feet or right half off the map counted as walkable). That lane ran under every overworld room's bottom tree
   line and joined all south openings, so 0x5c's pocket looked connected to its E exit. An audit of every
   overworld entry state on both routes found no other split entry edge.
+
+## 2026-11-05 — FCEUmm oracle, movies from a registered-game base, corpus contents (Rust port)
+
+- **What:** emulator fidelity is checked against upstream FCEUmm (`../libretro-fceumm` e0f3086) built by
+  `oracle/fceumm/build.sh` into a dev-only `libtforacle.so` (instruction-hook patch, minimal libretro
+  frontend: NTSC, no overscan crop, `fceumm_up_down_allowed=enabled` so a movie's controller byte reaches the
+  game unchanged, battery PRG-RAM zero-filled before the first frame). Movies (`TFMOVIE` v1) carry a `base`:
+  every movie but `power_on_to_start` starts from the end of that movie (first gameplay frame after
+  registering LINK, mode 5, room 0x77), so nothing replays the title and registration screens per run (Lee).
+  `OracleEmulator` caches the base state on disk; `tf` backends play the base once per process.
+- **Why:** FCEUmm is the emulator the models were trained on (stable-retro wraps it), and a power-on movie is
+  the only artifact every emulator can replay. The base keeps every run starting from the same registered
+  game without repeating the menus.
+- **Corpus:** 63 movies, 1,361,193 frames: 7 scripted (`power_on_to_start`, `title_idle_3600`,
+  `file_select_register_erase`, `sword_cave_in_out`, `die_continue`, `pause_spam`, `item_switch_spam`),
+  5 × 30,000-frame random-input movies, and 51 agent chains recorded on the oracle with the promoted
+  specialists (400 runs over `milestone1`/`milestone1-fairy` seeds 0–199: 22 reach the Dungeon 2 boss room;
+  all 22 are kept, plus one failure per distinct (last room, reason) and the longest remaining runs). The
+  planned scripted `screen_transitions_ow`, `take_damage_octorok` and `transition_under_fire` were dropped:
+  every agent chain crosses dozens of screens, takes hits and changes rooms under fire, and scripting them
+  around live enemies was brittle.
+- **Evidence:** `tf corpus check` passes (all 22 `power-on-to-d2` movies end at level 2 room 0x0e when
+  replayed); `tf golden` is byte-identical across runs and with instruction tracing on; a chain recorded with
+  Python matches `tf movie rebase` of the power-on recording byte for byte (inputs, pokes, metadata).
+
+## 2026-11-05 — `zelda` crate: game model and session ported from Python, checked by env parity fixtures
+
+- **What:** `crates/zelda` ports the game model one module at a time (`vars`, `tables`, `enums`, `game`,
+  `room`, `room_state`, `tiles`, `actions`, `executor`, `blocks`, `change` + `ledger`, `room_entry`,
+  `game_map`, `objectives`, `hearts`, `linger`, `session`) over the `zelda::Nes` trait. Departures from the
+  draft API and the Python shape:
+  - `Session::load` takes an `N::State` plus `LoadOptions`; like `GameSession.load` it resets the executor's
+    cave flags (a curriculum `controllable` load sets `was_in_cave` from the mode). Exact resumption,
+    flags included, goes through `SessionSnapshot`/`restore`. A `TFZSTATE`'s executor flags belong to
+    `restore`, not `load`.
+  - `GameView` copies the 10,240-byte RAM image once per state and decodes Link, enemies, items and
+    projectiles eagerly; the room model and bomb walls are decoded on first use. Setters of `ZeldaGame`/`Link`
+    are not ported; writes go through `Session::apply_ram`.
+  - The session's frame counter is monotonic and not part of a snapshot. Only frame differences are used
+    (ledger expiry, item timers), and the ledger is cleared on every load and restore.
+  - `Change::action_mask` is the mask of the resulting state, as `GameSession.act` sets it (only `__str__` read
+    it).
+  - Not ported: `zelda_game_data.txt`'s `[memory]` (duplicates `data.json`) and `[rooms]` (unused), the
+    unused `RoomMemory.exits/locked/barred`, the room/wavefront LRU caches and the `GameMap` route cache (pure
+    functions; caches only saved time), and the dead `ReachLocation`, `TreasureObjective`, `RoomWalk`,
+    `OBJECTIVES`. `_get_map_objective`'s last-route cache is kept because it changes results: the cached exit
+    targets survive door and tile changes until the route key changes.
+  - The wavefront is a FIFO breadth-first search. Python's heap pops in the same distance order, so every
+    distance is identical.
+  - `can_link_move` with a diagonal `doorway_dir` would raise `KeyError` in Python; Rust treats it as
+    blocking. No fixture reaches it.
+- **Randomness:** `randomize_rng` (12 bytes, 1–255), the pre-entry spawn cycle (0–8) and overworld edge cell
+  (`EDGE_CELLS`), and `start_route`'s choice between routes draw from a caller-provided `rand::Rng`
+  (`ChaCha8Rng` in the pool). Python's `random` streams are not reproduced, so seeded Python and Rust loads
+  differ. Fixtures and parity use `randomize_rng=False`.
+- **Parity fixtures:** `scripts/record_env_parity.py` writes `crates/env/tests/fixtures/parity/<room>.npz` for
+  14 rooms (0x77 start and cave, 0x67, 0x38, 1:0x73/72/74/44/45/35/36, 2:0x7d/5e from
+  `chain-milestone1-97`, 0x39 from `chain-milestone1-fairy-0`). At the last pre-entry frame before Link first
+  controls the room (the base position for the start room), it stores the oracle state, loads it with
+  `GameSession.load(randomize_rng=False, fresh_room=True)` and plays 200 `ZeldaEnv(strict_actions=True)`
+  steps: 40 scripted (`scripts/parity_actions.toml`; a masked one is replaced by a random legal action), then
+  `random.Random(1000 + index)` legal actions. When an episode ends before step 200, the next episode starts
+  from the same position with `env.restore` (`episode_start`); a game over ends the fixture. Because
+  `ZeldaEnv.restore` keeps the route `reset` last chose (`milestone1`, step None on a fresh env), the
+  recorder sets the route and step with `start_route(location, entry, route)` from the movie's route. The
+  fixture stores both, and the env port must use them.
+- **Evidence:** `cargo test -p zelda`: 58 unit tests (ported `test_hearts`, `test_linger`, `test_game_map`,
+  the action schema, the shield-collision unit tests and the scripted-shield executor tests of `test_core`
+  on a scripted `Nes` double) plus two oracle tests. `oracle_game.rs` ports the `test_core`,
+  `test_room_state` and `test_room_entry` emulator tests onto the fixtures' entry states (`1_44w` → `1_44`,
+  `1_72e` → `1_72`, …); a constructed "remembered as cleared" 0x72 replaces `0_48s`. `parity.rs` matches all
+  14 fixtures (2,441 steps) with no differences and an empty `crates/zelda/tests/parity_exceptions.toml`.
+  It compares frames, interrupts, control frames, blocks, change fields, masks, per-step RAM, the tile grid,
+  objective kind and next rooms, the PBRS wavefront, linger and heart counts. The recorded chains had no
+  confirmed shield block, so blocks are covered by the unit tests and the ported real-RAM block tests on
+  `1_73`. Not ported, because no FCEUmm state exists for them yet (step 17 regenerates states): the
+  `2_2es`, `1_22e`, `0_5fs`, `2_7dn`, `1_36w_2`, `1_42e` room-state cases and the bomb-wall test.
+  `test_nearby_items` needs the env crate.
+
+## 2026-11-05 — `env` crate: configs, rewards, observations, envs, chain and explore ported from Python
+
+- **What:** `crates/env` ports `specialist.py` + game data (`config`), `rewards.py`, `critics.py` (`critic`),
+  `end_conditions.py`, `observation.py`, `start_states.py`, `curriculum.py`, `env.py` (`specialist_env`),
+  `Runner._run` (`chain`) and `explore.py` over the `zelda` session. Term names, order and clamps, ending
+  classification, observation schema v1 (feature names, sizes and float arithmetic) are Python's. Departures:
+  - **Config.** `serde_yaml_ng` with `deny_unknown_fields`, Python's keys, defaults and validators, plus
+    `curriculum.fraction`, `curriculum.threshold`, `harvested_fraction` in [0, 1] and `route` naming a
+    routes.yaml route. Errors are `ConfigError` naming the file and key. `GameData::load` reads game.yaml,
+    routes.yaml (with its `families`), `chain_hp.json` and every `specialists/*.yaml` once and cross-checks
+    them: configs = game.yaml `specialist:` tags = families, every route step's room is tagged, and a step's
+    `specialist:` equals the tag. `reward_profile` is still checked when the critic is built, as in Python.
+  - **YAML booleans.** `specialists/*.yaml` now say `true`/`false` instead of `on`/`off` (YAML 1.2 reads
+    `on` as a string); `pytest tests/test_specialist.py` still passes (39). The Rust parser also accepts
+    PyYAML's `on`/`off`/`yes`/`no` words, so hand-written `{bombs: off}` keeps loading.
+  - **States are opaque.** A `StateStore` trait loads named or path states and writes captures and
+    trajectory states (`SessionSnapshot`, so a future TFZSTATE writer can keep the executor flags). Tests use
+    a gzip store over the legacy states: their bodies are FCEUmm savestates and load into the oracle as they
+    are (`1_44w_0` → level 1, room 0x44, mode 4).
+  - **Randomness.** Every draw (load RNG bytes and spawn, start-state selection, RAM randomization,
+    `start_route`, curriculum, explore) comes from a caller-seeded `ChaCha8Rng`; Python's `random` streams
+    are not reproduced. Weighted draws walk cumulative weights; Python's `round` (half to even) is kept.
+  - **Curriculum.** Progress lives in one `Arc<parking_lot::Mutex<Curriculum>>` per run instead of a file
+    re-read under `flock` by every worker process; it is rewritten atomically to the same `curriculum.json`
+    schema (indent 1) whenever an attempt counts, and an existing file is resumed.
+  - **SpecialistEnv.** Owns its session (there is no borrowed-session `close`); `EnvOptions` replaces the
+    constructor arguments (`lenient_actions` = `strict_actions=False`; `explicit_starts` skips the start-state
+    pool, which the explorer never uses, so a specialist without start states can be explored). Infos are a
+    typed `StepInfo`/`TerminalInfo` with `to_json()` producing Python's dict. New terminal keys:
+    `episode_steps`, `episode_frames`, `reward_total` and per-term episode totals under `episode_rewards`
+    (the plan's draft named them `rewards`, but `rewards` already holds the step's terms in every info).
+  - **Critic and PBRS.** The previous state's objective and wavefront are passed explicitly instead of being
+    read from attributes attached to the state objects.
+  - **ChainEnv.** Owns no models: `reset`/`step` return `Act { specialist, obs, new_room }` or
+    `Done(RunResult)`, and the caller chooses the action. `fail(reason)` ends a run as `error` (a specialist
+    without a promoted model, as `FileNotFoundError` did); a missing start state and a masked action end it as
+    `error` the same way `run()` caught `RunnerError`. One observation builder is rebuilt on every
+    specialist switch and continued otherwise, as the per-specialist builders behaved. `min_room_steps`
+    (default 2000) is a field so tests can lower it.
+  - **Explorer.** `AcceptSpec { target, min_keys, item_taken_room }` replaces the `accepted` closure of
+    `entry_states.cross_room`.
+- **Evidence:** `cargo test -p env`, 94 tests: 23 unit tests; `tests/parity.rs` replays all 14 fixtures (2,441 steps,
+  ~1.5M compared values: observations, masks, rewards and reward terms, terminated/truncated, endings,
+  outcomes, linger and every key of the Python terminal info) with no differences and an empty
+  `crates/env/tests/parity_exceptions.toml`; `tests/pure.rs` ports the pure parts of `test_rewards`,
+  `test_curriculum` and `test_specialist`; `tests/chain_explore.rs` ports `test_runner` (scripted policies in
+  place of networks) and `test_explore`; `tests/oracle_env.rs` ports the game parts of `test_env`,
+  `test_nearby_items`, `test_rewards` and `test_specialist` on the legacy states.
+
+## 2026-11-05 — TetaNES matches FCEUmm on the whole corpus (S1, plan step 8)
+
+- **What:** `../tetanes` branch `bugs` at `98542624` (from `a0a6b17f`), with `Config::fceumm_compat`
+  on, reproduces FCEUmm frame for frame on all 63 corpus movies (1,361,193 frames): CPU instruction
+  traces with cycle timing, RAM, PRG-RAM, CHR, CIRAM, palette, OAM, and every pixel outside
+  `corpus/pixel-allowlist.toml`.
+- **Changes on `bugs`:** two `fix:` commits for real TetaNES bugs (sprites from line 239's evaluation
+  drawn on line 0; sprite pixels never drawn at x = 255), each with a unit test; and FCEUmm quirks
+  FQ-01..FQ-12 behind `fceumm_compat`, documented in `crates/zcore/FCEUMM_QUIRKS.md` with tests in
+  `fceumm_compat_tests.rs`.
+- **Pixel allowlist:** rows 63-64 everywhere (the status-bar split: mid-line `$2006/$2005` writes
+  around line 63 dot 230, which FCEUmm's line-granular renderer applies at the instruction's timestamp),
+  and row 49 of record 121 in `power_on_to_start`/`file_select_register_erase` (a mid-line `$2001 = 0`
+  write; FCEUmm composes a line's sprites at its end). Goldens are keyed on the movie plus the allowlist,
+  and the listed rows are blanked in both emulators before hashing.
+- **Comparison conventions (not quirks):** OAM attribute bytes are read as `$2004` returns them
+  (`& 0xE3`); battery PRG-RAM starts zeroed.
+- **Evidence:** `tf diff --all --backend tetanes` → `0 of 63 movies diverge`; `cargo test -p
+  tetanes-core` (stable, `RUSTFLAGS=""`) 553 + 16 passed.
+
+## 2026-11-05 — `pool` crate: threaded env pool and Zelda adapters (plan step 14)
+
+- **What:** `crates/pool` has a generic core (`Pool<E: PoolEnv>`; nothing about Zelda) and, behind the default
+  `zelda` feature, adapters from `env::SpecialistEnv`/`env::ChainEnv` over any `zelda::Nes`. Departures from
+  the draft:
+  - **Env trait.** `PoolEnv { layout, reset, step }`: `reset` writes the first observation and returns the acting
+    `policy` (or `None`: the env's job list ran out, it is finished); `step` writes the next observation and
+    returns reward, frames, interrupt code, terminated/truncated/bootstrap and policy. Envs are built on the
+    caller's thread by a factory that gets `EnvInit { index, rng, control }`; env `i` lives on thread
+    `i % threads`.
+  - **Same-row auto-reset.** After a terminal step the env resets at once: the row's `obs` is the next
+    episode's first observation, `final_obs`/`final_valid` keep the terminal one (gymnasium's same-step reset,
+    matching `RolloutBuffer.collect`, which stores the reset observation and uses the terminal one only for the
+    bootstrap value). No step is spent on a reset.
+  - **Buffers.** Caller-owned `Batch` of C-contiguous columns: one per observation key (`[rows, *shape]`,
+    int64/float32/bool) for `obs` and `final_obs`, plus `env_ids`, `reward` (f32), `frames`, `interrupt`,
+    `terminated`, `truncated`, `bootstrap`, `final_valid`, `policy`, `finished`. The mask is the `action_mask`
+    observation key, not a separate column. The chain's specialist is the generic `policy` column (index into the
+    chain env's policy list). Rows are written in ascending env id; with more ready envs than rows the oldest are
+    taken.
+  - **recv/wait.** `recv(out, min_ready, timeout)` waits for `min(min_ready, rows, ready + running)` rows, so
+    finished or failed envs and envs still awaiting `send` can't deadlock it; a timeout returns what is ready
+    (maybe 0). `wait(min_ready, timeout)` blocks without copying, for the PyO3 layer's release-the-GIL loop
+    with signal checks. Every method takes `&self` (one `recv` at a time), so `frame`, `set_render` and
+    `poll_events` work while another thread blocks in `recv`; `close()` wakes it with `Closed`.
+  - **Failures.** An env error or panic (caught on the worker) takes that env out and is returned once by the
+    next `recv`/`wait` as `PoolError::Env { env, error }` (typed, so the PyO3 layer maps `EnvError` variants to
+    exception classes) or `PoolError::Panic`; the other envs keep going.
+  - **Seeding.** Env `i`'s generator is `ChaCha8Rng::seed_from_u64(seed)` on stream `i`. Lockstep runs are
+    reproducible across thread counts. Eval jobs and chain seeds come from a shared `Jobs` queue (an env takes
+    the next job when it resets), so which env plays a job depends on timing, but each job reseeds from its own
+    seed.
+  - **Rendering.** `zelda::Nes` has no RGB method and the zelda crate stays untouched: envs run on `PoolNes<N>`,
+    which renders a frame only while the pool's per-env flag is set (read as each frame starts, so
+    `set_render` takes effect from the next frame). The session renders every real frame; look-ahead frames
+    (`run_frame(_, false)`) never render. The session's frame sink (real frames only) publishes rendered frames
+    into the env's double buffer through an `RgbFn<N>` (zcore will pass `ZCore::rgb`) and paces.
+  - **Pacing** sleeps the env's worker per real frame (`FramePacer` semantics), so an env holds its rate only
+    with a thread to itself (`threads == num_envs`, as `GameGrid` plans). Closing the pool stops pacing sleeps
+    (threads are unparked), so shutdown doesn't wait out a paced step.
+  - **Recording.** `set_record(env, on)` takes effect at the env's next episode. `PoolNes` logs every real
+    frame's buttons and every poke; restoring one of the log's own snapshots (look-ahead) truncates it, the
+    `OracleEmulator.load_state` rule, and loading a start state begins a new log. `PoolStore` tags loaded states
+    with their name, the log's `origin`. The log arrives as `ZeldaEvent::Movie(InputLog)`; building the
+    `TFMOVIE` (the origin state's power-on prefix) is the writer's job.
+  - **Events.** `ZeldaEvent::{Episode(StepInfo), Eval(EvalRecord), Run(RunResult), Room(RoomEvent),
+    Movie(InputLog)}` with the env id. Room events (play_grid's `room` message: specialist, level, room,
+    health, max health, on change) are on for chains and opt-in for training/eval; each episode reports its first
+    room.
+  - **Chains.** A specialist without a model is listed in the env's `missing` map (specialist → reason) and its
+    run ends as `error` with that reason via `ChainEnv::fail`, in Rust, so the pool never hands Python a row it
+    can't act on. Chain rows have reward 0, `terminated` at the run's end and no interrupt code (`ChainEnv` keeps
+    its last change private).
+  - **`TaskEnv`** (`Train`/`Eval`/`Chain`) lets one concrete pool type serve every task.
+- **Evidence:** `CARGO_TARGET_DIR=target/agent-pool cargo test -p pool`: 25 tests. Fake-env tests: lockstep
+  buffers and events identical with 1, 3 and 8 threads (with timing jitter); `recv(min_ready=1)` returns the
+  fast env in < 300 ms while another takes 600 ms; auto-reset rows; `set_render` turned on and off mid-step
+  takes effect at the next frame; `frame(env, since)` returns only newer frames; 60 frames at 100 fps take 0.5–3
+  s; `close()` mid-step at 10 fps returns in < 2 s and wakes a blocked `recv`; a panic and an error fail only
+  their env; finished envs leave the pool. Oracle tests: a pooled `TrainEnv` matches the same `SpecialistEnv`
+  played directly row for row (observations, final observations, rewards, frames, interrupts, endings over
+  40 steps with `max_steps` 12, so several auto-resets); pooled chain runs equal direct runs; frames are
+  published for exactly the real frames of each step while beams run the look-ahead; a recorded Goriya episode
+  with beam look-ahead replays on the oracle from its origin state to identical RAM and PRG-RAM.
+
+## 2026-11-05 — `triforce._native`: the PyO3 module (plan step 15)
+
+- **What:** `crates/triforce-py` (lib `_native`, cdylib + rlib) on PyO3 0.30 and `numpy` 0.30 with
+  `abi3-py312`; `pyproject.toml` builds with maturin (`python-source = "."`, `module-name = "triforce._native"`,
+  `features = ["pyo3/extension-module"]`), dependencies `numpy torch gymnasium tensorboard pillow`. maturin 1.16
+  was installed into `.venv` with `uv pip`; `stable-retro`, `pydantic` and `pyyaml` stay installed there until
+  the step-16 cutover deletes their importers. Departures from the draft:
+  - **Locations.** The repo root is the parent of the directory `_native` was loaded from. The ROM is
+    `$TRIFORCE_ROM`, else `<root>/roms/zelda.nes`, validated once per process (`RomError`). Start states are
+    `TFZSTATE` files under `$TRIFORCE_STATES_DIR`, else `triforce/states` once it exists (step 16), else the
+    legacy integration directory; every constructor also takes `states_dir=` (tests use a tmp dir). Bare names
+    resolve as `emulator.state_path` did. `paths()` reports what is in use.
+  - **Game.** `Game(seed=0, render=False, states_dir=None, look_ahead=True)`. `load` takes a name, a path,
+    `TFZSTATE` bytes or a `Snapshot`, plus `seed=` to reseed its ChaCha8 load randomization. Added beyond the
+    draft: `play_movie(path)` (a `TFMOVIE` with its `base` chain, on the current machine: the base state for
+    step 17 and the tests), `save_state()` (bytes), `legal`, `is_allowed`, `set_disabled_kinds`,
+    `render_grid()`, `look_ahead`. `press` takes `'UP+A'`, `['UP', 'A']` or a controller byte and runs through
+    the new `Session::press` (counted frames, frame sink). `ram()` is a uint8 array; `describe_change` is a
+    static method taking a `Change`. `GameState` exposes scalars plus `link`/`enemies`/`items`/`projectiles`/
+    `treasure` as dicts (frozen copies, not live objects); `Change` exposes the step-12 fields, `enemies_hit` as
+    `(slot, damage)` pairs. `describe.py` is ported into the crate (text identical in shape, Python enum names).
+  - **Snapshot** pickles as `u64 total_frames, u64 steps` + the `TFZSTATE` file; `Snapshot.state_file()` gives
+    the bare file (pre-entry captures for `entry_states`).
+  - **SpecialistConfig.** Built from keyword fields (`SpecialistConfig(name=..., rooms=[(1, 0x73)], ...)`, what
+    `entry_states.step_config` does), `load`, `names`, `replace(**fields)` (re-validated through
+    `from_json`), `to_dict`, `disabled_kinds()`, `rooms` as `(level, room, in_cave)`; every other field through
+    `__getattr__`, nested blocks as `types.SimpleNamespace` (`config.curriculum.enabled` keeps working).
+    Pickles via JSON. `GameData` gained `Clone` for per-`states_dir` copies.
+  - **Tasks.** `TrainTask(config, run_dir, start_state=None, curriculum=None, capture_dir=None, states_dir=None,
+    room_events=False)` with `curriculum` a `CurriculumSpec(trajectories, state_path=None, fraction, stages,
+    window, threshold)` (state path defaults to `<run_dir>/curriculum.json`). `EvalTask(config, jobs)` with
+    `jobs` a list of `(start_state, seed)`. `ChainTask(configs, route, seeds, stop_at=None, start_from=None,
+    max_steps=50000, missing=None, states_dir=None)`: `configs` (names or configs) are the specialists that have
+    policies, in policy-index order; `missing` maps specialists without models to the `error` reason; any other
+    specialist a run needs also ends it as `error`.
+  - **EnvPool.** `EnvPool(task, num_envs, threads=None, seed=0, fps=0.0)` (`threads` defaults to
+    `min(num_envs, cpus)`). `make_buffers(rows=None)` returns `{'obs': {key: array}, 'final_obs': {...}, <the
+    pool's scalar columns>, 'mask': obs['action_mask']}`; the chain's specialist is the pool's generic `policy`
+    column (not `specialist`), and `finished` marks envs whose job list ran out. `recv(out, min_ready=None,
+    timeout=None)` waits in 50 ms GIL-released slices (checking signals between them), then copies rows with
+    the GIL released. `poll_events()` returns dicts with `env` and `type`: `episode` (`info`), `eval`
+    (`record`), `run` (`result`), `room` (flat fields) and `movie` (`origin`, `buttons`, `pokes`). Eval records
+    arrive in completion order; `evaluate.py` sorts by seed. Also `set_fps`, `set_record`, `frame_counter`,
+    `frame(env, since=0, out=None)`, `curriculum_progress()`, `active`, `policies`, context manager.
+  - **Errors.** `EnvError` variants map to their classes; `EnvError::State` (any unreadable state, also a
+    missing file reached through an env) is `StateFormatError`; a missing file in `Game.load` is `OSError`;
+    `ZeldaError` is `RuntimeError`; pool misuse is `ValueError`; an env's error from a pool keeps its class with
+    an `env N:` prefix.
+  - **Explore.** `Explorer(config, seed=0, states_dir=None)` with `explore`/`write`/`replay` (`replay` returns
+    the final info and a `Snapshot`), `AcceptSpec(target, min_keys=0, item_taken_room=None)`, `ExploreResult`.
+    `explore_states(...)` runs states on threads with a fresh explorer per state (seeded with `seed`), so results
+    don't depend on `parallel`; Python reused one explorer per worker process, so its results did.
+  - **Routes.** `route_steps(route)` (dicts with the tagged specialist filled in), `route_alternates()` (needs
+    the new `GameMap::alternates`), `routes()`, `families()`, `specialist_for(location)`.
+  - **Constants** also include `ROOM_VOCAB`, `ENTITY_VOCAB`, `NUM_TILE_CLASSES`, `NUM_ENTITY_SLOTS`, `OUTCOMES`,
+    `ACTION_KINDS`, `DIRECTIONS`, `DURATIONS`, `SCALAR_COLUMNS`; `INTERRUPTS[code]` names the batch's interrupt
+    codes (0 = none).
+- **Evidence:** `.venv/bin/python -m pytest -q tests/native`: 36 tests on zcore and the corpus movie
+  `power_on_to_start` (states made in a tmp dir); among them a train pool's lockstep rows identical with 1 and
+  4 threads over 60 rounds with auto-resets, eval records for every job, chain runs ending `error` for missing
+  models, per-env render toggling, pickled snapshots replaying to identical RAM, render on/off giving identical
+  emulation, legacy gzip states rejected with `StateFormatError`. `cargo test -p triforce-py`: store and
+  describe unit tests. Raw zcore speed at this point (Z1) is about 490 frames/s per core, release build.
+
+## 2026-11-05 — Python cutover onto `triforce._native` (plan step 16)
+
+- **What:** the Python package drives the native module only. Deleted: the Python game stack (`emulator`,
+  `session`, `env`, `ppo_worker`, `frame_skip`, `state_change`, `zelda_game*`, `room*`, `link`, `enemy`,
+  `zelda_objects`, `tiles`, `wavefront`, `projectile_blocks`, `objectives`, `critics`, `rewards`,
+  `end_conditions`, `hearts`, `linger`, `start_states`, `curriculum`, `describe`, `game_map`), the oracle-era
+  scripts (`oracle_emulator`, `record_corpus`, `record_env_parity`, `tfmovie`), `custom_integrations/` (old
+  FCEUmm states, `data.json`, `scenario.json`, `rom.sha`) and the game-logic Python tests (ported to Rust in
+  `crates/env/tests/ported_*.rs`, or already covered by Rust tests named in the commit). Thin modules remain:
+  `paths.py` (`STATES_DIR = triforce/states` or `$TRIFORCE_STATES_DIR`), `specialist.py` (native
+  `SpecialistConfig`), `observation.py` (gym space from `OBS_SPEC`), `actions.py` (schema + flat `ActionMask`),
+  `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`).
+- **Training.** `ppo.Collector` runs the lockstep loop over `EnvPool(TrainTask)`; `PPO.train(network, pool,
+  iterations, callback, start_steps, seed)`; bootstrap rows add `gamma**(frames/8)·V(final_obs)`.
+  `RolloutMetrics.add_steps/add_episode` read the pool's `episode` events (`episode_rewards`, not the last
+  step's `rewards`); metric names unchanged. `train.py`: `--parallel` = envs, `--threads`, `--states-dir`,
+  `--start-state` takes a path. Same seed → identical first-iteration metrics with 1 vs 4 threads.
+- **Evaluation and chains.** One `EvalTask`/`ChainTask` pool with batched inference (`evaluate --threads
+  --device`, `eval-chain --threads --device`); eval records sorted by seed; output formats unchanged. A run
+  without `--from` starts from `start.state` in the states directory. Jobs go to whichever env is free, so a run
+  with *sampled* actions is reproducible only with `threads=1`; `--deterministic` runs always are.
+- **Watching.** `run.py --fps` is now real frames per second (was decisions per second); `run.py --video PATH`
+  records the run's inputs (`EnvPool(..., record=True)`, new: recording from the pool's first episode) and
+  renders the recording frame by frame through a `Game` restored with the new `Snapshot.from_state_file`.
+  `play_grid.GameGrid` is one paced chain pool; seeds go to the next free game, so the start message has no
+  seed (the end message does); a finished game holds its next run for 3 s so the result stays visible.
+- **States and exploration.** `entry_states` keeps its subcommands, manifest and names (`convert` deleted; new
+  `start` writes `start.state` at the base movie's first mode-5 frame), runs chains on threads, and reads room
+  data from the new native `game_rooms()`. **On-route build steps must now succeed on the room's own objective**
+  (`exit-correct`/`triforce-collected`) and then pass the `AcceptSpec`: with the `AcceptSpec` alone a rebuilt
+  `0_77c_0` left the sword cave without the sword (the old builder had the same hole). Alternates and `path`
+  still use the `AcceptSpec` alone.
+- **Legacy states as Rust test fixtures.** The Rust oracle tests load the old gzip FCEUmm states; they moved to
+  `crates/env/tests/fixtures/legacy-states/` (one loader per crate) until those tests switch to zcore and the
+  regenerated states (step 17). `env::config::STATES_DIR` is `triforce/states`. The `zelda::vars` table is now
+  the source of truth for named RAM variables (its data.json cross-check went with data.json).
+- **Waiting on step 17:** `tests/test_entry_states.py::{test_every_trainable_specialist_has_start_states,
+  test_configured_start_states_are_clean}` and `env` `pure::trainable_specialists_have_start_states` fail until
+  the start states are regenerated.
+
+## 2026-11-05 — Rust game/env/pool tests on zcore and the regenerated states
+
+- **What:** every `zelda`, `env` and `pool` test that plays the game runs on `zcore::ZCore` (state
+  `zcore::MachineState`) instead of the FCEUmm oracle. The named-state loaders (`env` `common::load_named_state`
+  / `TfzStore`, `zelda` `common::load_named_state`, the pool test's `TfzStore`) decode `triforce/states/<name>.state`
+  with `zcore::state_file::decode` (ROM `$TRIFORCE_ROM` or `roms/zelda.nes`); `env` `common::game_data()` is the
+  repo's `GameData` with the real `triforce/states`. Tests that count emulated frames (look-ahead checks) wrap zcore
+  in a counting `Nes` (`Counted`). `crates/env/tests/fixtures/legacy-states/` and every gzip/flate2 read are gone.
+- **Parity fixtures without the oracle.** `zelda`/`env` `parity.rs` rebuild each fixture's room entry by
+  replaying its corpus movie (base, then `entry_frame` inputs with the pokes tagged before it) in zcore instead of
+  restoring the fixture's FCEUmm `oracle_state`; the fixtures' `ram0`/step checks still pass on all 14 rooms with no
+  exceptions.
+- **Name remaps:** `1_44w`→`1_44w_0`, `1_73e`→`1_73e_0`, `1_72e`→`1_72e_0`, `1_36w`→`1_36w_0`,
+  `1_22e`→`1_22e_0`, `0_38s`→`0_38s_0`, `0_48s`→`0_48s_0`; the zelda game tests' parity-fixture names
+  `1_44`/`1_72`/`1_74`/`1_73`/`0_77_cave`/`0_77_start`/`1_35` → `1_44w_0`/`1_72e_0`/`1_74w_0`/`1_73s_0`/
+  `0_77cave_0`/`start`/`1_35s_0`. No regenerated equivalent: `0_77n`, `0_77w` → `0_77c_0` with Link moved to the
+  start-screen spawn (0x78, 0x8D), so the sworded N exit and the wrong W exit are both a straight walk; `2_7dn` →
+  `2_7ds_0` (same room); `1_42e` (D1 with the map) → `1_44w_0` (after the 0x43 map pickup); `0_5fs` (outdoor heart
+  container in 0x5f, off every route) → `0_77cave_0`, the overworld-level room with a floor item.
+- **Re-derived assertions** (old → new, read from the new states): `1_44w_0` bombs 4 → 0, plus `2_0es_0` (Dodongo
+  entry) bombs 4 so a non-zero count still decodes; D1 room flags after `1_36w_2` W into 0x35: `$74` 0x70 → 0xF0,
+  `$43` 0x71 → 0xB1 (`$53` 0xF0, `$35` 0xF4, `$52` 0xA8 unchanged); 0x58 re-entered from `0_48s_0` spawns 2 (chain 0
+  killed 2 of 4; the legacy route had cleared it) → the test asserts 2 remembered, 4 with `fresh_room` (the fully
+  cleared case stays in `zelda` `oracle_game.rs` `pre_entry_loads` on poked flags); bombing the 0x44 S wall gets
+  `bombs = 4` through `apply_ram` (the regenerated state has none); the frame-sink pixel check turns rendering on
+  (zcore only keeps pixels of rendered frames).
+- **Still on the oracle:** only `zelda` `tests/zcore_session.rs` `zcore_matches_oracle_over_random_play`, the
+  zcore-vs-FCEUmm session comparison (its `OracleNes` now lives in that file). `zelda` keeps the `oracle`
+  dev-dependency for it; `env` and `pool` dropped `oracle` and `flate2`. Goes with the oracle in step 18c.
+- **Evidence:** `CARGO_TARGET_DIR=target/agent-tests2 cargo test --release -p zelda --features zcore -p env -p pool`
+  all green, including `pure::trainable_specialists_have_start_states`.
+
+## 2026-11-05 — Entry-state builder fixes during regeneration (plan step 17)
+
+- **Key guard only in dungeons.** `cross_room` required a room's 'key' treasure to be taken before leaving it;
+  game.yaml also lists 'key' for overworld 0x5a (its room-item byte), so every `milestone1-fairy` build stopped
+  there. The guard now applies to `level != 0` only.
+- **Manifest.** Concurrent `build`/`path` runs into one directory lock `entry_states.json` while merging; new
+  entries record the exact `python -m triforce.entry_states ...` command (plan step 17.9).
+- **FQ-13 and two TetaNES fixes** (open-bus latch) landed in zcore before regeneration; see
+  `crates/zcore/FCEUMM_QUIRKS.md` and `UPSTREAM.md`.
+- Results so far and the open chain-2 0x5c dead-end entry: `docs/experiments/round8.md`.

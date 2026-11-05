@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/zcore",
+    "crates/zelda",
+    "crates/env",
+    "crates/pool",
+    "crates/triforce-py",
+    "crates/tools",
+    "crates/oracle",
+    "crates/movie",
+]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.99"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

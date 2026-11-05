@@ -5,10 +5,10 @@ One row per candidate observation feature.
 
 **Citation keys**
 - `ASM Z_0n:Label` → `zelda1-disassembly/src/Z_0n.asm`, routine/table `Label` (local path `/home/leculver/work/git/zelda1-disassembly/src`). Variable names come from `Variables.inc` / `ObjVars.inc` / `CommonVars.inc` / `CaveVars.inc`.
-- `v1 file` → `/home/leculver/work/git/triforce/triforce/<file>` (`gd.txt` = `zelda_game_data.txt`, `data.json` = `custom_integrations/Zelda-NES/data.json`, `ram.md` = `docs/ram.md`).
-- `ss <name>` → value observed by loading savestate `triforce/custom_integrations/Zelda-NES/<name>.state` in this repo, stepping no-op until `GameMode=5`, and reading RAM (stable-retro 1.0.1).
+- `v1 file` → `/home/leculver/work/git/triforce/triforce/<file>` (`gd.txt` = `zelda_game_data.txt`, `data.json` = v1's retro integration variable table; this repo's equivalent is `crates/zelda/src/vars.rs`, `ram.md` = `docs/ram.md`).
+- `ss <name>` → value observed by loading savestate `<name>.state` in this repo, stepping no-op until `GameMode=5`, and reading RAM. Historical: these observations were made in Phase 0 on the old stable-retro 1.0.1 savestates (since replaced by `TFZSTATE` files in `triforce/states/`, read with `triforce._native.Game`).
 
-**Address space.** `env.get_ram()` returns 10240 bytes: index `0x000–0x7FF` = CPU RAM `$0000–$07FF`; index `0x800–0x27FF` = cartridge SRAM `$6000–$7FFF`. So **SRAM address `A` is at `get_ram()[A - 0x5800]`** (v1's `tile_layout` at index `0xD30` is `PlayAreaTiles $6530`). Verified: attribute bytes read this way decode to door layouts that match RAM door state in ss `1_35e`, `1_42e` (see §R.9).
+**Address space.** `Game.ram()` (`triforce._native`) returns 10240 bytes: index `0x000–0x7FF` = CPU RAM `$0000–$07FF`; index `0x800–0x27FF` = cartridge SRAM `$6000–$7FFF`. So **SRAM address `A` is at `ram()[A - 0x5800]`** (v1's `tile_layout` at index `0xD30` is `PlayAreaTiles $6530`). Verified: attribute bytes read this way decode to door layouts that match RAM door state in ss `1_35e`, `1_42e` (see §R.9).
 
 **Object slot indices** (fiskbit notes in v1 `ram.md`, confirmed by asm and ss): `0` Link · `1–$B` monsters/projectiles/dropped items (`ASM Z_07:FindEmptyMonsterSlot` searches `$B..1`) · `$B` is also the *tile-object* slot (push block, OW rock wall/tree; `ASM Z_05:FindAndCreatePushBlockObject`, `CheckSecretTriggerBlockStairs` "LDX #$0B ; Tile object slot") · `$C` see open questions · `$D` sword · `$E` beam/rod shot · `$F` boomerang/bait · `$10,$11` bomb/fire · `$12` arrow/rod · `$13` room item ("treasure"). Table address for slot `i` = base + `i`.
 > The `; TRIFORCE:` comment in `Variables.inc` lines 49–59 (sword = slot `$0B`, beam = `$0E`) is wrong: `ObjState+$0D = $B9` is the sword slot (v1 `sword_animation`), and `$0B` is the tile-object slot.
@@ -153,7 +153,7 @@ v1 reads slots 0–$B (12 bytes) of each table (gd.txt `[tables]`); add slot `$1
 
 | Address(es) | Meaning | Encoding | Valid when | Include? | Source |
 |---|---|---|---|---|---|
-| `$6530–$67EF` PlayAreaTiles (get_ram `0xD30`, len `$2C0`) | 32 cols × 22 rows of 8-px tiles, **column-major** (`tiles[x*22+y]`); row r covers y = $40+8r | categorical(256) → tile class map (below) | both | yes — Room grid | ASM Variables.inc, Z_05:FillWalls/FindAndCreatePushBlockObject; v1 zelda_game.py `current_tiles` |
+| `$6530–$67EF` PlayAreaTiles (`ram()` index `0xD30`, len `$2C0`) | 32 cols × 22 rows of 8-px tiles, **column-major** (`tiles[x*22+y]`); row r covers y = $40+8r | categorical(256) → tile class map (below) | both | yes — Room grid | ASM Variables.inc, Z_05:FillWalls/FindAndCreatePushBlockObject; v1 zelda_game.py `current_tiles` |
 | `$34A` ObjectFirstUnwalkableTile | walkability threshold: OW `$89`, UW `$78`; becomes `$99` after pond secret | ordinal — decoder input | both | no (input) | ASM Z_05:ObjectRoomBoundsOW/UW, Z_07 L5946; ss |
 | `$346–$349` RoomBoundLeft/Right/Up/Down | OW `$11,$E0,$4E,$CD`; UW `$21,$D0,$5E,$BD` | position — decoder input | both | no (input; for masks) | ASM Z_05:ObjectRoomBoundsOW/UW; ss |
 | attr D & `$3F` (UW) / `$7F` (OW) | unique room layout id (column template) | categorical(64/128) | meaning changes by mode | maybe — "layout template ID" embedding | ASM Z_07:GetUniqueRoomId, Z_05 L5785 (OW keeps 7 bits) |
@@ -208,7 +208,7 @@ Recommended grid: 16×11 of 16-px squares (row r covers y=$40+16r), class = max-
 
 # R. Room-state decoding (bit level)
 
-Notation: `r` = RoomId (`$EB`), `S(A)` = SRAM byte `get_ram()[A-0x5800]`, `flags = ram[wfa + r]` with `wfa = S($6BAF) | S($6BB0)<<8`.
+Notation: `r` = RoomId (`$EB`), `S(A)` = SRAM byte `ram()[A-0x5800]`, `flags = ram[wfa + r]` with `wfa = S($6BAF) | S($6BB0)<<8`.
 
 ## R.1 Room flags byte (`GetRoomFlags`)
 

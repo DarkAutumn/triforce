@@ -3,8 +3,8 @@ rooms: ['(2, 0x0e)']
 start_states: []
 success: [exit-correct]
 reward_profile: default
-reward: {pbrs: on}
-obs: {objective: on}
+reward: {pbrs: true}
+obs: {objective: true}
 ram_randomization: {}
 max_steps: 2000
 warm_start: null

@@ -225,6 +225,13 @@ the remaining list is deferred until Lee resumes work.
 
 ### Other open items
 
+- [ ] **Rust port: restore main's watch mode on the native pool.** Main's `play-zelda.py --games N` (more games
+  than cells; a cell switches to a better hidden game only on a new room or a new run, with a fade), the fps
+  readout in the window title and `--benchmark SECONDS` (main commit `8cc3012`) were written against the old
+  process-pool `GameGrid`; the merged `play_grid.GameGrid` is one native chain pool. Re-implement them there
+  (`show`/`frame` per game, `set_render` only for shown games) and keep `tests/test_play_zelda.py` covering them.
+- [ ] **Rust port: finish plan step 17** (`round8.md` "Open"): chain-2 fairy 0x5c dead-end entry, ow-moblin
+  explore/eval, `entry_states audit`, manifest command backfill.
 - [ ] **Scratch-team convergence and Zora stalls (r36 §21; deferred).** At the matched 2,007,040-action budget,
   both fresh teams fail all full/post-D1 chains. Bundle Zora is worse in success, health and mean quiet time;
   its full-route 0x48 stalls last 2,000 actions. Baseline post-D1 fairy has 58/80 stalls in 0x59; baseline D2
@@ -233,7 +240,6 @@ the remaining list is deferred until Lee resumes work.
 - [ ] **Audit full D2 key carriage separately from milestone entry (r36 §21; deferred).** Both fresh teams
   reach Dodongo with the requested 7e key 7/80 times, but only 5/80 baseline versus 7/80 bundle arrivals satisfy
   the full-three-key audit. Keep both counters; do not silently count all milestone arrivals as full key carriage.
-
 - [ ] **Swordless departure from the starting area (Lee, Nov 4).** Lee observes runs where Link leaves without
   taking the sword; these runs cannot win and waste training. Reduce how often this happens. His original
   training failed immediately on leaving the starting area swordless; that is an acceptable option, not a

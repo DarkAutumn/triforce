@@ -3,10 +3,10 @@ rooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']
 start_states: ['start', '0_77*_[0-9]', '0_39*_[0-9]']
 success: [exit-correct]
 reward_profile: default
-reward: {pbrs: on}
-obs: {objective: on}
+reward: {pbrs: true}
+obs: {objective: true}
 ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # 0x39: the pond only matters below full hearts
-items: {bombs: off}
+items: {bombs: false}
 max_steps: 1000
 warm_start: null
 notes: >-

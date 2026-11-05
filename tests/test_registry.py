@@ -6,8 +6,7 @@ import torch
 
 from triforce import registry
 from triforce.model import ModelConfig, ZeldaPolicy
-from triforce.ppo import PPO, PPOConfig
-from triforce.rollout_buffer import RolloutBuffer
+from triforce.ppo import PPO, Collector, PPOConfig
 
 from . import synthetic
 
@@ -15,10 +14,10 @@ from . import synthetic
 def _trained(seed=0):
     torch.manual_seed(seed)
     network = ZeldaPolicy(synthetic.observation_space(), ModelConfig(hidden_dim=32, grid_encoder='linear'))
-    buffer = RolloutBuffer(32, 1, synthetic.observation_space(), 0.99, 0.95)
-    buffer.collect(0, network, synthetic.BanditEnv())
+    collector = Collector(synthetic.ListPool(synthetic.BanditEnv, 1), 32, 0.99, 0.95)
+    collector.collect(network, 'cpu')
     ppo = PPO(PPOConfig(num_epochs=1))
-    ppo.optimize(network, buffer)
+    ppo.optimize(network, collector.buffer)
     return network, ppo.optimizer
 
 

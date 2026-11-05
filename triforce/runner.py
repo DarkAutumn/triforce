@@ -1,41 +1,32 @@
 """Plays a route end to end with trained specialists (design §9).
 
-On every room entry the runner looks up the room's ``specialist:`` tag in game.yaml, loads that specialist's
-promoted checkpoint (cached), and lets it act until the next room transition.  Models switch only on room
-transitions.  An untagged room, or a specialist without a promoted model, stops the run with an error.
+The chain itself runs natively (``ChainTask`` in an ``EnvPool``): on every room entry the room's game.yaml
+``specialist:`` tag picks who acts, specialists switch only on room transitions, and a run ends with a
+``RunResult``.  This module owns the models: each pool row names its acting specialist (the ``policy`` column, an
+index into the loaded-model list) and the rows of one specialist are evaluated in one batch on ``device``.  A
+specialist without a promoted model ends the runs that need it as ``error`` with the registry's reason; an
+untagged room the route needs is an error too, a wrong exit into one a gameplay failure.
 """
 
 import json
-import random
 from dataclasses import asdict, dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
 
-from .actions import Action
-from .game_map import GameMap, load_routes
-from .hearts import HeartTracker
-from .linger import LingerTracker
-from .objectives import GameCompletion, exit_is_correct, start_route
-from .observation import ObservationBuilder
+from . import _native
 from .registry import load_model, promoted_checkpoint
-from .session import GameSession
-from .specialist import SpecialistConfig, load_specialist
-from .start_states import state_entry
+from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import MapLocation
 
-ROUTES_PATH = __file__.rsplit('/', 1)[0] + '/routes.yaml'
 DEFAULT_MAX_STEPS = 50_000
-# Per-room budget: a specialist's max_steps is a training episode cap (boss-aquamentus: 400, to keep curriculum
-# episodes short); a chain room gets at least this many steps before it counts as stuck.
-MIN_ROOM_STEPS = 2000
 
 RoomKey = Tuple[int, int, bool]
 
 
 class RunnerError(RuntimeError):
-    """The runner can't continue: unknown room, missing model, bad route."""
+    """The runner can't start: unknown or malformed route."""
 
 
 @dataclass
@@ -49,17 +40,19 @@ class Route:
     def load(name: str, stop_at: Optional[MapLocation] = None, start_from: Optional[str] = None) -> 'Route':
         """Loads a route from routes.yaml.  ``stop_at`` replaces the terminal room and ``start_from`` (a savestate,
         e.g. a route entry state like ``0_37c_2``) the game start, for partial chain evals."""
-        routes = load_routes(ROUTES_PATH)
-        steps = routes.get(name)
+        try:
+            steps = _native.route_steps(name)
+        except _native.ConfigError as err:
+            raise RunnerError(str(err)) from err
         if not steps:
-            raise RunnerError(f"Unknown route '{name}' (routes.yaml has {sorted(routes)})")
-        if steps[0].get('entry') != 'start':
+            raise RunnerError(f"Unknown route '{name}'")
+        if steps[0]['entry'] != 'start':
             raise RunnerError(f"Route '{name}' must begin at the game start (entry: start)")
-        terminals = [s for s in steps if s.get('exit') == 'terminal']
+        terminals = [s for s in steps if s['exit'] == 'terminal']
         if stop_at is None and not terminals:
             raise RunnerError(f"Route '{name}' has no terminal room")
         last = terminals[-1] if terminals else steps[-1]
-        terminal = stop_at or MapLocation(int(last['level']), int(str(last['room']), 16), bool(last.get('in_cave')))
+        terminal = stop_at or MapLocation(last['level'], last['room'], last['in_cave'])
         return Route(name, start_from or 'start', terminal)
 
 
@@ -77,8 +70,8 @@ class RoomRecord:
     health_out: float = 0.0
     max_health: int = 0
     outcome: str = 'in-progress'    # exit-correct, exit-wrong, death, stuck, milestone, error
-    # Dropped hearts during the visit (triforce/hearts.py): healed = real hearts gained, wasted = taken - healed,
-    # left = still on the floor when the visit ended.
+    # Dropped hearts during the visit: healed = real hearts gained, wasted = taken - healed, left = still on the
+    # floor when the visit ended.
     hearts_dropped: int = 0
     hearts_taken: int = 0
     hearts_healed: float = 0.0
@@ -109,6 +102,12 @@ class RunResult:
         """JSON-friendly dict."""
         return asdict(self)
 
+    @staticmethod
+    def from_dict(data: dict) -> 'RunResult':
+        """Inverse of ``to_dict`` (also reads the native pool's ``run`` events)."""
+        rooms = [RoomRecord(**room) for room in data.get('rooms', ())]
+        return RunResult(**{**data, 'rooms': rooms})
+
 
 def write_jsonl(path: str, results: List[RunResult]):
     """Appends results (one per line) to path."""
@@ -117,212 +116,175 @@ def write_jsonl(path: str, results: List[RunResult]):
             f.write(json.dumps(result.to_dict()) + '\n')
 
 
-class _Specialist:
-    """A loaded specialist: config, network and its own observation builder."""
-    def __init__(self, name: str, checkpoint_path, config: SpecialistConfig, device: str = 'cpu'):
-        self.name = name
-        self.config = config
-        with torch.random.fork_rng():   # building the network draws init weights; keep seeded runs reproducible
-            self.network, self.checkpoint = load_model(checkpoint_path)
-        self.network.eval()
-        self.network.to(device)
-        self.builder = ObservationBuilder(objective=self.config.obs.objective)
+def infer_actions(network, obs: dict, deterministic: bool) -> np.ndarray:
+    """``[rows, 3]`` int64 action head indices for a batch of observations (``obs`` key -> ``[rows, ...]``)."""
+    with torch.no_grad():
+        actions = network.get_action(obs, deterministic=deterministic)
+    return np.asarray(torch.as_tensor(actions).cpu(), dtype=np.int64).reshape(-1, 3)
 
-    def act(self, obs, deterministic: bool) -> Action:
-        """Chooses an action for one observation."""
-        with torch.no_grad():
-            indices = self.network.get_action(obs, deterministic=deterministic)
-        return Action.from_indices(*np.asarray(indices.cpu()).reshape(-1)[:3])
+
+class Policies:
+    """The specialists' networks for a chain pool, in policy-index order, plus why the others are missing.
+
+    ``checkpoints`` (name -> checkpoint file or run dir) overrides the registry's promoted model; ``networks``
+    (name -> anything with ``get_action(obs, deterministic=...)``) supplies a loaded policy directly;
+    ``specialist_configs`` (name -> config) replaces a specialist's canonical YAML at runtime."""
+
+    def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
+                 specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
+                 networks: Optional[Dict[str, object]] = None, device: str = 'cpu',
+                 names: Optional[Iterable[str]] = None):
+        # pylint: disable=too-many-arguments, too-many-positional-arguments
+        overrides = dict(checkpoints or {})
+        configs = dict(specialist_configs or {})
+        given = dict(networks or {})
+        self.names: List[str] = []
+        self.configs: List[SpecialistConfig] = []
+        self.networks: list = []
+        self.missing: Dict[str, str] = {}
+        for name in sorted(set(names if names is not None else list_specialists()) | set(given) | set(configs)):
+            network = given.get(name)
+            if network is None:
+                try:
+                    path = overrides.get(name) or promoted_checkpoint(name, models_dir)
+                    with torch.random.fork_rng():   # building the network draws init weights; keep seeds intact
+                        network, _ = load_model(path)
+                except FileNotFoundError as err:
+                    self.missing[name] = str(err)
+                    continue
+                network.eval()
+                network.to(device)
+            self.names.append(name)
+            self.configs.append(configs.get(name) or load_specialist(name))
+            self.networks.append(network)
+
+    def actions(self, obs: dict, policy: np.ndarray, deterministic: bool) -> np.ndarray:
+        """Actions for rows ``obs`` whose acting specialist is ``policy`` (indices into ``names``), one batch per
+        specialist."""
+        actions = np.zeros((len(policy), 3), dtype=np.int64)
+        for index in np.unique(policy):
+            rows = np.flatnonzero(policy == index)
+            subset = {key: value[rows] for key, value in obs.items()}
+            actions[rows] = infer_actions(self.networks[int(index)], subset, deterministic)
+        return actions
+
+
+class ChainPool:
+    """An ``EnvPool`` of chain runs of one route (one run per seed, shared by ``num_envs`` envs) and the policies
+    acting in it.  ``run()`` plays every seed in lockstep; watchers drive ``recv`` / ``actions`` / ``send``
+    themselves."""
+
+    def __init__(self, route: Route, seeds: Sequence[int], policies: Policies, num_envs: int = 1,
+                 threads: Optional[int] = None, seed: int = 0, fps: float = 0.0, deterministic: bool = False,
+                 max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: bool = False):
+        # pylint: disable=too-many-arguments, too-many-positional-arguments
+        self.route = route
+        self.policies = policies
+        self.deterministic = deterministic
+        start_from = None if route.start_state == 'start' else route.start_state
+        task = _native.ChainTask(policies.configs, route.name, [int(s) for s in seeds], stop_at=route.terminal,
+                                 start_from=start_from, max_steps=max_steps, missing=policies.missing,
+                                 states_dir=None if states_dir is None else str(states_dir))
+        num_envs = max(1, min(num_envs, len(seeds)))
+        self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
+        self.buffers = self.pool.make_buffers()
+
+    def recv(self, min_ready: Optional[int] = None, timeout: Optional[float] = None) -> int:
+        """Rows ready (see ``EnvPool.recv``); they are in ``buffers``."""
+        return self.pool.recv(self.buffers, min_ready=min_ready, timeout=timeout)
+
+    def live_rows(self, count: int) -> np.ndarray:
+        """Indices of the first ``count`` rows that await an action (not finished)."""
+        return np.flatnonzero(~self.buffers['finished'][:count])
+
+    def actions(self, rows: np.ndarray) -> np.ndarray:
+        """Batched per-specialist actions for buffer rows ``rows``."""
+        obs = {key: value[rows] for key, value in self.buffers['obs'].items()}
+        return self.policies.actions(obs, self.buffers['policy'][rows], self.deterministic)
+
+    def send(self, env_ids, actions):
+        """Queues one action per env."""
+        self.pool.send(env_ids, actions)
+
+    def results(self, events: Iterable[dict]) -> List[Tuple[int, RunResult]]:
+        """(env, RunResult) of every ``run`` event in ``events``."""
+        return [(e['env'], RunResult.from_dict(e['result'])) for e in events if e['type'] == 'run']
+
+    def run(self, on_result: Optional[Callable[[RunResult], None]] = None) -> List[RunResult]:
+        """Plays every seed in lockstep; returns the results sorted by seed."""
+        results: List[RunResult] = []
+        while self.pool.active:
+            count = self.recv(min_ready=self.pool.active)
+            rows = self.live_rows(count)
+            if len(rows):
+                self.send(self.buffers['env_ids'][rows], self.actions(rows))
+            for _, result in self.results(self.pool.poll_events()):
+                results.append(result)
+                if on_result is not None:
+                    on_result(result)
+        for _, result in self.results(self.pool.poll_events()):
+            results.append(result)
+            if on_result is not None:
+                on_result(result)
+        return sorted(results, key=lambda r: (r.seed is None, r.seed))
+
+    def close(self):
+        """Stops the pool's worker threads (idempotent)."""
+        self.pool.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
 
 
 class Runner:
-    """Drives one GameSession through a route, switching specialists on room transitions."""
+    """Plays a route with the promoted (or given) specialists: ``run(route, seed)`` for one run,
+    ``run_many(route, seeds)`` for a batch on ``parallel`` envs."""
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, session: Optional[GameSession] = None, models_dir=None,
-                 checkpoints: Optional[Dict[str, str]] = None, deterministic: bool = False,
-                 max_steps: int = DEFAULT_MAX_STEPS, renderer=None, game_map: Optional[GameMap] = None,
-                 device: str = 'cpu', specialist_configs: Optional[Dict[str, SpecialistConfig]] = None):
+
+    def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None, deterministic: bool = False,
+                 max_steps: int = DEFAULT_MAX_STEPS, device: str = 'cpu',
+                 specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
+                 networks: Optional[Dict[str, object]] = None, parallel: int = 1, threads: Optional[int] = None,
+                 states_dir=None):
         """
         checkpoints: specialist name → checkpoint path, overriding the registry's promoted model.
-        renderer: optional object with ``show(session, specialist, action, change)`` (watching only).
         device: torch device for the specialists' networks ('cpu' or 'cuda').
         specialist_configs: specialist name → loaded config, replacing its canonical YAML at runtime.
+        networks: specialist name → a loaded policy (``get_action(obs, deterministic=...)``), e.g. a scripted one.
+        parallel: envs in the chain pool; threads: its worker threads (default min(parallel, cores)).
         """
-        self._owns_session = session is None
-        self.session = session or GameSession()
-        self.models_dir = models_dir
-        self.overrides = dict(checkpoints or {})
-        self.configs = dict(specialist_configs or {})
+        # pylint: disable=too-many-arguments, too-many-positional-arguments
+        self.policies = Policies(models_dir, checkpoints, specialist_configs, networks, device)
         self.deterministic = deterministic
         self.max_steps = max_steps
-        self.renderer = renderer
-        self.device = device
-        self.game_map = game_map or GameMap.load()
-        self._specialists: Dict[str, _Specialist] = {}
+        self.parallel = parallel
+        self.threads = threads
+        self.states_dir = states_dir
 
-    def close(self):
-        """Releases the emulator if the runner created it."""
-        if self._owns_session:
-            self.session.close()
+    def pool(self, route: Route, seeds: Sequence[int], **kwargs) -> ChainPool:
+        """A chain pool over this runner's policies (``kwargs``: ``num_envs``, ``threads``, ``fps``, ``seed``,
+        ``record``)."""
+        kwargs.setdefault('num_envs', self.parallel)
+        kwargs.setdefault('threads', self.threads)
+        return ChainPool(route, seeds, self.policies, deterministic=self.deterministic, max_steps=self.max_steps,
+                         states_dir=self.states_dir, **kwargs)
 
-    def specialist_for(self, location: MapLocation) -> str:
-        """The specialist tagged on a room.  Raises RunnerError for unknown or untagged rooms."""
-        room = self.game_map.get(location)
-        if room is None:
-            raise RunnerError(f"Room {_describe(location)} is not in game.yaml")
-        if not room.specialist:
-            raise RunnerError(f"Room {_describe(location)} has no specialist: tag in game.yaml")
-        return room.specialist
-
-    def _load(self, name: str) -> _Specialist:
-        if name not in self._specialists:
-            path = self.overrides.get(name) or promoted_checkpoint(name, self.models_dir)
-            config = self.configs.get(name)
-            if config is None:
-                config = load_specialist(name)
-            self._specialists[name] = _Specialist(name, path, config, self.device)
-        return self._specialists[name]
+    def run_many(self, route: Route, seeds: Sequence[int],
+                 on_result: Optional[Callable[[RunResult], None]] = None) -> List[RunResult]:
+        """Plays route once per seed; results sorted by seed.  Never raises for gameplay failures."""
+        seeds = list(seeds)
+        if not seeds:
+            return []
+        torch.manual_seed(seeds[0])
+        with self.pool(route, seeds) as pool:
+            return pool.run(on_result)
 
     def run(self, route: Route, seed: Optional[int] = None) -> RunResult:
-        """Plays route once.  Never raises for gameplay failures; RunnerError ends the run with result=error."""
-        if seed is not None:
-            random.seed(seed)
-            torch.manual_seed(seed)
-
-        result = RunResult(route.name, seed)
-        try:
-            self._run(route, result)
-        except (RunnerError, FileNotFoundError) as err:
-            result.result, result.reason = 'error', str(err)
-            if result.rooms and result.rooms[-1].outcome == 'in-progress':
-                result.rooms[-1].outcome = 'error'
-        return result
-
-    def _run(self, route: Route, result: RunResult):
-        # pylint: disable=too-many-branches,too-many-statements
-        session = self.session
-        state = session.load(route.start_state, fresh_room=True)    # a pre-entry --from state spawns its full room
-        _, step = start_route(state.full_location, state_entry(route.start_state), None, route.name)
-        objectives = GameCompletion(route.name, step)
-        state.objectives = objectives.get_current_objectives(None, state)
-
-        current: Optional[_Specialist] = None
-        record: Optional[RoomRecord] = None
-        obs = None
-        change = None
-        hearts = HeartTracker()
-        linger = LingerTracker()
-
-        while True:
-            location = state.full_location
-            if record is None or (record.level, int(record.room, 16), record.in_cave) != _key(location):
-                correct = None
-                if record is not None:
-                    correct = change is not None and exit_is_correct(change.previous, location)
-                    record.outcome = 'exit-correct' if correct else 'exit-wrong'
-                    _finish_record(record, hearts, state)
-
-                if location == route.terminal:
-                    result.result, result.reason = 'success', f"entered {_describe(location)}"
-                    result.rooms.append(self._new_record(len(result.rooms), location, '-', state, 'milestone'))
-                    return
-
-                # A wrong exit into a room no specialist plays is a gameplay failure, not a game.yaml problem
-                # (that is only an error when the objective wanted the room).
-                room = self.game_map.get(location)
-                if correct is False and (room is None or not room.specialist):
-                    result.result = 'failure'
-                    result.reason = f"{record.specialist} left the route into untagged {_describe(location)}"
-                    return
-
-                name = self.specialist_for(location)
-                record = self._new_record(len(result.rooms), location, name, state)
-                result.rooms.append(record)
-                hearts.reset(state)
-                linger.reset(state)
-                record.linger = linger.summary()
-                if current is None or current.name != name:
-                    current = self._load(name)
-                    session.set_disabled_kinds(current.config.items.disabled_kinds())
-                    obs = current.builder.reset(state, session.mask)
-                elif change is not None:
-                    obs = current.builder.build(change, session.mask)
-            elif change is not None:
-                obs = current.builder.build(change, session.mask)
-
-            no_progress_steps = current.config.no_progress_steps
-            if no_progress_steps is not None:
-                if linger.tail_steps >= no_progress_steps:
-                    record.outcome = 'stuck'
-                    _finish_record(record, hearts, state)
-                    result.result = 'failure'
-                    result.reason = (f"{current.name} no-room-progress: {linger.tail_steps} quiet actions "
-                                     f"(limit {no_progress_steps}) in {_describe(location)}")
-                    return
-            else:
-                room_steps = max(current.config.max_steps, MIN_ROOM_STEPS)
-                if record.steps >= room_steps:
-                    record.outcome = 'stuck'
-                    _finish_record(record, hearts, state)
-                    result.result, result.reason = 'failure', f"{current.name} exceeded {room_steps} steps"
-                    return
-            if result.steps >= self.max_steps:
-                record.outcome = 'stuck'
-                _finish_record(record, hearts, state)
-                result.result, result.reason = 'failure', f"run exceeded {self.max_steps} steps"
-                return
-
-            action = current.act(obs, self.deterministic)
-            if not session.mask.is_allowed(action):
-                _finish_record(record, hearts, state)
-                raise RunnerError(f"{current.name} chose masked action {action} (legal: {session.mask})")
-
-            change = session.act(action)
-            state = change.state
-            taken = hearts.taken
-            hearts.update(change)
-            state.objectives = objectives.get_current_objectives(change.previous, state)
-            linger.update(change, hearts.taken - taken)
-            record.linger = linger.summary()
-            record.blocks += change.blocks
-            record.steps += 1
-            record.frames += change.frames
-            result.steps += 1
-            result.frames += change.frames
-
-            if self.renderer is not None:
-                self.renderer.show(session, current.name, action, change)
-
-            if state.game_over:
-                record.outcome = 'death'
-                _finish_record(record, hearts, state)
-                result.result, result.reason = 'failure', f"died in {_describe(state.full_location)}"
-                return
-
-    @staticmethod
-    def _new_record(index, location, name, state, outcome='in-progress') -> RoomRecord:
-        return RoomRecord(index, location.level, f"0x{location.value:02x}", bool(location.in_cave), name,
-                          health_in=state.link.health, health_out=state.link.health,
-                          max_health=state.link.max_health, outcome=outcome)
-
-
-def _finish_record(record: RoomRecord, tracker: HeartTracker, state):
-    """Capture live ending health and finalize the room's dropped-heart counts."""
-    record.health_out = 0.0 if state.game_over else state.link.health
-    tracker.finish(state)
-    summary = tracker.summary()
-    record.hearts_dropped, record.hearts_taken, record.hearts_left = (summary['dropped'], summary['taken'],
-                                                                      summary['left'])
-    record.hearts_healed, record.hearts_wasted = summary['healed'], summary['wasted']
-    record.hearts_expired = summary['expired']
-
-
-def _key(location: MapLocation) -> RoomKey:
-    return (location.level, location.value, bool(location.in_cave))
-
-
-def _describe(location: MapLocation) -> str:
-    return f"(level {location.level}, room 0x{location.value:02x}{', cave' if location.in_cave else ''})"
+        """Plays route once (seed None: 0)."""
+        return self.run_many(route, [0 if seed is None else seed])[0]
 
 
 def parse_location(text: str) -> MapLocation:

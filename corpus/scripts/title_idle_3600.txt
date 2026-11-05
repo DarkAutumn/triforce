@@ -1,0 +1,3 @@
+# Power on and idle on the title screen and story scroll for 3600 frames.
+tags: short, scripted
+- 3600

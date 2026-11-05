@@ -1,0 +1,24 @@
+[package]
+name = "triforce-py"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "_native"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+env = { path = "../env" }
+indexmap = "2.14.2"
+movie = { path = "../movie" }
+numpy = "0.30"
+parking_lot = "0.12.5"
+pool = { path = "../pool" }
+pyo3 = { version = "0.30", features = ["abi3-py312"] }
+rand = "0.10.3"
+rand_chacha = "0.10.0"
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+zcore = { path = "../zcore" }
+zelda = { path = "../zelda", features = ["zcore"] }

@@ -3,11 +3,11 @@ rooms: ['(1, 0x73)', '(1, 0x72)', '(1, 0x74)', '(1, 0x63)', '(1, 0x53)', '(1, 0x
 start_states: ['1_73*_[0-9]', '1_72*_[0-9]', '1_74*_[0-9]', '1_63*_[0-9]', '1_53*_[0-9]', '1_52*_[0-9]', '1_42*_[0-9]', '1_43*_[0-9]', '1_36*_[0-9]', '1_33*_[0-9]']
 success: [exit-correct, triforce-collected]
 reward_profile: default
-reward: {pbrs: on}
-obs: {objective: on}
+reward: {pbrs: true}
+obs: {objective: true}
 ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chains arrive in Stalfos rooms with 0.5-1.5 hearts (round 4)
-items: {bombs: off}
-one_room: on                          # an episode is one room (round 4)
+items: {bombs: false}
+one_room: true                          # an episode is one room (round 4)
 max_steps: 3000
 warm_start: null
 notes: >-
