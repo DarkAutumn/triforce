@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .play/
 *.nes
+!crates/zcore/test_roms/**/*.nes
 triforce/states/*.png
 models/
 runs/
