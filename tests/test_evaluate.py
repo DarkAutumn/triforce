@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 from triforce import _native
-from triforce.evaluate import _group, _linger_stats, evaluate_specialist, format_report
+from triforce.evaluate import _group, _linger_stats, _room_key, evaluate_specialist, format_report
 from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.observation import observation_space
 from triforce.registry import save_checkpoint
@@ -86,3 +86,47 @@ def test_linger_evaluation_aggregates_only_measured_records():
     assert not any(key.startswith('linger_') for key in rooms['room-b'])
     assert not any(key.startswith('linger_') for key in states['c'])
     assert _linger_stats([]) == _linger_stats([base]) == {}
+
+
+def _record(room, state, success, health, start_health, ending, hearts=None, **extra):
+    return {'room': room, 'start_state': state, 'success': success, 'health': health, 'start_health': start_health,
+            'ending': ending, 'hearts': hearts, **extra}
+
+
+def test_room_and_state_groups_average_health_hearts_blocks_and_count_endings():
+    records = [
+        _record((1, 0x44, False), '1_44w_0', True, 2.0, 3.0, 'exit-correct',
+                {'dropped': 2, 'taken': 1, 'left': 1, 'wasted': 0.5}, blocks=4),
+        _record((1, 0x44, False), '1_44w_1', False, 0.0, 1.5, 'death', blocks=0),
+        _record((0, 0x77, True), '0_77cave_0', True, 3.0, 3.0, 'exit-correct', {'dropped': 1, 'taken': 1, 'left': 0}),
+    ]
+    rooms = _group(records, lambda r: _room_key(r['room']))
+    assert list(rooms) == ['0:0x77:cave', '1:0x44']
+    room = rooms['1:0x44']
+    assert (room['episodes'], room['success_rate'], room['health_change']) == (2, 0.5, -1.25)
+    assert room['health_change_total'] == (-1.0 + 0.5 - 1.5) / 2       # wasted hearts count as lost health
+    assert (room['hearts_dropped'], room['hearts_taken'], room['hearts_left']) == (1.0, 0.5, 0.5)
+    assert room['blocks'] == 2.0 and room['endings'] == {'exit-correct': 1, 'death': 1}
+    assert 'blocks' not in rooms['0:0x77:cave']                         # never measured, not zero
+    states = _group(records, lambda r: r['start_state'])
+    assert list(states) == ['0_77cave_0', '1_44w_0', '1_44w_1']
+    assert states['1_44w_1']['hearts_dropped'] == 0 and states['1_44w_1']['health_change_total'] == -1.5
+
+
+def test_report_lists_rooms_worst_first_with_their_top_ending():
+    result = {'specialist': 'goriya', 'episodes': 3, 'success_rate': 1 / 3, 'mean_health_change': -0.5,
+              'mean_health_change_total': -0.75, 'hearts_dropped': 1.0, 'hearts_taken': 0.5, 'hearts_left': 0.5,
+              'mean_steps': 41.6,
+              'records': [{'success': True}, {'success': False}, {'success': False}],
+              'by_room': {
+                  '1:0x44': {'success_rate': 0.5, 'health_change': -0.25, 'health_change_total': -0.5,
+                             'hearts_dropped': 1, 'hearts_taken': 0, 'hearts_left': 1, 'episodes': 2,
+                             'endings': {'exit-correct': 1, 'death': 2}},
+                  '1:0x45': {'success_rate': 0.0, 'health_change': -1.0, 'health_change_total': -1.0,
+                             'hearts_dropped': 0, 'hearts_taken': 0, 'hearts_left': 0, 'episodes': 1,
+                             'endings': {'max-steps': 1}}}}
+    lines = format_report(result).splitlines()
+    assert lines[0].startswith('goriya: success 1/3 = 33%  health change -0.50 (total -0.75)')
+    assert 'steps 42' in lines[0] and 'linger' not in lines[0]
+    assert [line.split()[0] for line in lines[1:]] == ['1:0x45', '1:0x44']
+    assert lines[1].split()[-1] == 'max-steps' and lines[2].split()[-1] == 'death'

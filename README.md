@@ -36,6 +36,7 @@ The ROM isn't checked in. Put an uncompressed *Legend of Zelda (U)* ROM at `roms
 ```bash
 cargo test --workspace                                          # Rust tests
 .venv/bin/python -m pytest -q                                   # Python tests
+.venv/bin/python -m pytest -q -m e2e                           # only the end-to-end tests (untrained nets, seconds)
 .venv/bin/python -m triforce.play --state 1_44w_0               # load a savestate and look at the room
 .venv/bin/python -m triforce.play "MOVE E 16" "SWORD E"         # act; the session persists between calls
 .venv/bin/python -m triforce.train --specialist ow-start --parallel 8 --iterations 100

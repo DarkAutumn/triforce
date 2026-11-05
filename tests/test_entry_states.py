@@ -10,9 +10,11 @@ import os
 import pytest
 
 from triforce import _native as native
-from triforce.entry_states import (BASE_HEARTS, DEFAULT_ROUTE, MANIFEST, audit_state, build_path, full_monster_counts,
-                                   game_rooms, is_pre_entry, pending_room, route_steps, write_entry_state,
-                                   write_start_state)
+from triforce import entry_states
+from triforce.entry_states import (BASE_HEARTS, DEFAULT_ROUTE, MANIFEST, _manifest_step, _merge_manifest, _named_room,
+                                   _state_glob, alternate_steps, audit_problems, audit_state, build_path,
+                                   format_audit, full_monster_counts, game_rooms, is_pre_entry, path_route_fields,
+                                   pending_room, route_steps, state_label, write_entry_state, write_start_state)
 from triforce.specialist import list_specialists, load_specialist
 from triforce.zelda_enums import MapLocation
 
@@ -125,3 +127,129 @@ def test_build_path_writes_the_next_room_and_its_manifest_entry(states_dir, tmp_
         assert json.load(file) == manifest
     row = audit_state(native.Game(states_dir=str(states_dir)), str(tmp_path / '0_67s_0.state'), loads=2)
     assert row['pre_entry'] and row['full'] and row['named_room_matches']
+
+
+# --- helpers without exploration ---
+
+def _row(**update):
+    row = {'state': '1_44w_0', 'level': 1, 'room': '0x44', 'in_cave': False, 'named_room_matches': True,
+           'pre_entry': True, 'monsters_min': 3, 'monsters_max': 3, 'full_count': 3, 'full': True, 'layouts': 4,
+           'hearts': 3, 'triforce': 0}
+    return {**row, **update}
+
+
+def test_audit_problems_flag_each_defect():
+    assert not audit_problems(_row())
+    assert audit_problems(_row(named_room_matches=False, pre_entry=False, full=False)) == \
+        ['MISNAMED', 'POST-ENTRY', 'SHORT']
+    assert not audit_problems(_row(pre_entry=False, full_count=0))          # nothing to spawn: entry doesn't matter
+    assert not audit_problems(_row(pre_entry=False, full_count=None))       # room without game.yaml monsters
+    lines = format_audit([_row(), _row(state='1_45w_0', full=False, monsters_min=1)]).splitlines()
+    assert lines[0].split()[:2] == ['1_44w_0', 'L1:44'] and not lines[0].endswith('SHORT')
+    assert lines[1].endswith('SHORT') and 'monsters 1-3/3' in lines[1]
+
+
+def test_state_names_and_globs():
+    assert state_label('/x/1_44w_0.state') == '1_44w_0' and state_label('start') == 'start'
+    assert _named_room('1_44w_0') == (1, 0x44) and _named_room('0_77cave_2') == (0, 0x77)
+    assert _named_room('start') is None
+    assert _state_glob('1_44*', '/s') == '/s/1_44*.state'
+    assert _state_glob('1_44w_0.state', '/s') == '/s/1_44w_0.state'
+    assert _state_glob('/elsewhere/*.state', '/s') == '/elsewhere/*.state'
+    steps = route_steps()
+    assert [steps[i].filename(2) for i in (1, 2, 3)] == ['0_77cave_2.state', '0_77c_2.state', '0_67s_2.state']
+    assert [(origin, alt.filename(0), alt.index) for origin, alt in alternate_steps(steps)
+            if (alt.level, alt.room) == (0, 0x78)] == [(2, '0_78w_0.state', 3)]
+
+
+def test_manifest_merge_replaces_rebuilt_files_and_steps_resolve(tmp_path):
+    out = str(tmp_path)
+    assert _manifest_step(out, 'anything') is None                          # no manifest yet
+    _merge_manifest(out, [{'file': '0_67s_0.state', 'chain': 0, 'route_step': 3},
+                          {'file': '0_57s_0.state', 'chain': 0, 'route_step': -1, 'from_step': 3},
+                          {'file': '0_47s_0.state', 'chain': 0, 'route_step': -1}])
+    _merge_manifest(out, [{'file': '0_67s_0.state', 'chain': 0, 'route_step': 3, 'rebuilt': True},
+                          {'file': '0_67s_1.state', 'chain': 1, 'route_step': 3}], command='python -m x')
+    with open(tmp_path / MANIFEST, encoding='utf-8') as file:
+        manifest = json.load(file)
+    assert [(e['file'], e.get('command')) for e in manifest] == [
+        ('0_47s_0.state', None), ('0_57s_0.state', None), ('0_67s_0.state', 'python -m x'),
+        ('0_67s_1.state', 'python -m x')]
+    assert manifest[2]['rebuilt']
+    assert _manifest_step(out, '0_67s_0') == 3
+    assert _manifest_step(out, str(tmp_path / '0_57s_0.state')) == 3      # off route: the step it came from
+    assert _manifest_step(out, '0_47s_0') is None and _manifest_step(out, 'unknown') is None
+
+
+def test_path_route_fields():
+    assert path_route_fields(DEFAULT_ROUTE, 0, 0x67, 'S') == {'route': DEFAULT_ROUTE, 'route_step': 3,
+                                                              'off_route': False}
+    assert path_route_fields(DEFAULT_ROUTE, 0, 0x67, 'N') == {'route': DEFAULT_ROUTE, 'route_step': -1,
+                                                              'off_route': True}
+    assert path_route_fields(None, 0, 0x67, 'S') == {'route_step': -1, 'off_route': True}
+
+
+class FakeCrossing:
+    """Stands in for Go-Explore: fails into the rooms in ``fail`` (room -> failures before it succeeds)."""
+
+    def __init__(self, fail):
+        self.fail = dict(fail)
+        self.calls = []
+
+    def __call__(self, step, goal, source, seed, iterations, patience, **_):
+        self.calls.append((goal.room, seed, os.path.basename(source)))
+        stats = {'env_steps': 10, 'attempts': 1, 'seconds': 0.0}
+        if self.fail.get(goal.room, 0) > 0:
+            self.fail[goal.room] -= 1
+            return None, stats
+        return (step.room, goal.room), {**stats, 'steps': 5, 'health': 3.0, 'ending': 'exit'}
+
+
+def _fake_build_path(monkeypatch, states_dir, out, fail):
+    crossing, logs = FakeCrossing(fail), []
+    monkeypatch.setattr(entry_states, 'cross_room', crossing)
+    monkeypatch.setattr(entry_states, 'write_entry_state',
+                        lambda game, pre_entry, path, expected: open(path, 'wb').close())
+    rooms = [MapLocation(0, room, False) for room in (0x67, 0x57, 0x47)]
+    manifest = build_path('start', rooms, chain=2, out=str(out), iterations=1, patience=1, log=logs.append,
+                          route=DEFAULT_ROUTE, states_dir=str(states_dir))
+    return manifest, crossing.calls, logs
+
+
+def test_build_path_backtracks_into_the_previous_room_with_a_new_seed(monkeypatch, states_dir, tmp_path):
+    manifest, calls, logs = _fake_build_path(monkeypatch, states_dir, tmp_path, {0x57: 2})
+    assert calls == [(0x67, 2, 'start'), (0x57, 2, '0_67s_2.state'),
+                     (0x67, 1002, 'start'), (0x57, 2, '0_67s_2.state'),
+                     (0x67, 2002, 'start'), (0x57, 2, '0_67s_2.state'), (0x47, 2, '0_57s_2.state')]
+    assert sum('re-crossing into 0x67' in line for line in logs) == 2
+    assert [(e['file'], e['explore_seed'], e['from']) for e in manifest] == [
+        ('0_67s_2.state', 2002, 'start'), ('0_57s_2.state', 2, str(tmp_path / '0_67s_2.state')),
+        ('0_47s_2.state', 2, str(tmp_path / '0_57s_2.state'))]
+    assert (manifest[0]['route_step'], manifest[0]['off_route']) == (3, False)
+    # Off-route rooms remember the route step they were reached from.
+    assert [(e['route_step'], e.get('from_step')) for e in manifest[1:]] == [(-1, 3), (-1, 3)]
+    assert all(e['entry'] == 'S' and e['specialist'] == (native.specialist_for((0, int(e['room'], 16))) or 'none')
+               for e in manifest)
+    with open(tmp_path / MANIFEST, encoding='utf-8') as file:
+        assert sorted(e['file'] for e in json.load(file)) == sorted(e['file'] for e in manifest)
+
+
+def test_build_path_gives_up_after_the_backtracks(monkeypatch, states_dir, tmp_path):
+    manifest, calls, logs = _fake_build_path(monkeypatch, states_dir, tmp_path, {0x57: 99})
+    assert [seed for room, seed, _ in calls if room == 0x67] == [2, 1002, 2002, 3002]
+    assert len(calls) == 8 and logs[-1].endswith('FAILED after 1 attempts (10 env steps)')
+    assert [(e['file'], e['explore_seed']) for e in manifest] == [('0_67s_2.state', 3002)]
+
+    manifest, calls, _ = _fake_build_path(monkeypatch, states_dir, tmp_path / 'first', {0x67: 99})
+    assert manifest == [] and calls == [(0x67, 2, 'start')]                 # nothing earlier to re-cross
+
+
+def test_audit_cli_reports_rows_and_writes_json(states_dir, tmp_path, capsys):
+    out = tmp_path / 'audit.json'
+    assert entry_states.main(['audit', '--states', str(states_dir / 'start.state'), '--loads', '2',
+                              '--output', str(out)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[-1] == '1 states, 0 with problems' and lines[0].startswith('start ')
+    row, = json.loads(out.read_text())
+    assert (row['state'], row['level'], row['room'], row['in_cave']) == ('start', 0, '0x77', False)
+    assert not audit_problems(row)                  # the game start has no entry before it and no monsters

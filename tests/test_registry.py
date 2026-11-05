@@ -1,5 +1,7 @@
 """Model registry: checkpoint round trip, schema checks, promotion."""
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 import torch
@@ -77,3 +79,36 @@ def test_promote_round_trip_and_listing(tmp_path, monkeypatch):
     registry.promote('d1-test', '20260102-b')
     assert registry.promoted_run('d1-test') == '20260102-b'
     assert registry.list_runs('d1-test') == ['20260101-a', '20260102-b']     # 'promoted' is not a run
+
+
+def test_models_root_prefers_the_argument_then_the_environment(tmp_path, monkeypatch):
+    monkeypatch.delenv(registry.MODELS_DIR_ENV, raising=False)
+    assert registry.models_root() == Path(registry.__file__).resolve().parent.parent / 'models'
+    monkeypatch.setenv(registry.MODELS_DIR_ENV, str(tmp_path / 'env'))
+    assert registry.models_root() == tmp_path / 'env'
+    assert registry.models_root(tmp_path / 'arg') == tmp_path / 'arg'
+    assert registry.checkpoint_path('goriya', 'r1') == tmp_path / 'env' / 'goriya' / 'r1' / 'ckpt.pt'
+
+
+def test_promoted_run_without_a_checkpoint_is_an_error(tmp_path):
+    network, _ = _trained()
+    registry.save_checkpoint('d1-test', 'gone', network, root=tmp_path)
+    registry.promote('d1-test', 'gone', root=tmp_path)
+    (tmp_path / 'd1-test' / 'gone' / 'ckpt.pt').unlink()
+    assert registry.promoted_run('d1-test', tmp_path) == 'gone'
+    with pytest.raises(FileNotFoundError, match='has no checkpoint'):
+        registry.promoted_checkpoint('d1-test', tmp_path)
+
+
+def test_registry_cli_lists_runs_marking_the_promoted_one(tmp_path, capsys):
+    network, _ = _trained()
+    registry.save_checkpoint('d1-test', 'a', network, iterations=2, steps=64, metrics={'success_rate': 0.25},
+                             root=tmp_path)
+    registry.save_checkpoint('d1-test', 'b', network, root=tmp_path)
+    registry.main(['--models-dir', str(tmp_path), 'list', 'd1-test'])
+    assert capsys.readouterr().out.splitlines() == [
+        '  a  iterations=2 steps=64 success_rate=0.25', '  b  iterations=0 steps=0 success_rate=None']
+    registry.main(['--models-dir', str(tmp_path), 'promote', 'd1-test', 'a'])
+    assert capsys.readouterr().out.strip() == str(tmp_path / 'd1-test' / 'promoted')
+    registry.main(['--models-dir', str(tmp_path), 'list', 'd1-test'])
+    assert [line[0] for line in capsys.readouterr().out.splitlines()] == ['*', ' ']
