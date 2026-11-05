@@ -35,8 +35,8 @@ sites are the named functions under `crates/zcore/src`; the tests were `src/fceu
 
 ## FQ-01 — Two dead PPU frames after reset
 
-**Restored to hardware** with FQ-06, FQ-07 and FQ-08 in `zcore: restore hardware boot timing; frame
-boundary at VBlank start (FQ-01, FQ-06..FQ-08 removed)` (plan step 18a, `docs/experiments/round9.md`):
+**Restored to hardware** with FQ-06, FQ-07 and FQ-08 in `82d9666` (plan step 18a,
+`docs/experiments/round9.md`):
 `dead_frames` deleted (`TFZSTATE` v5), VBlank rises from the first frame. `flag_concurrency`, `instr_brk`,
 `instr_zp_xy` pass again (their snapshot frames, which hardware `$2002` timing had moved, line up).
 The base state (`power_on_to_start`) changes: step 18b regenerates it.
@@ -56,8 +56,8 @@ The base state (`power_on_to_start`) changes: step 18b regenerates it.
 
 ## FQ-02 — No $2002 read-before-VBlank suppression race
 
-**Restored to hardware** with FQ-03, FQ-04 and FQ-05 in `zcore: restore hardware VBlank flag and NMI
-timing (FQ-02..FQ-05 removed)` (plan step 18a, `docs/experiments/round9.md`): `Ppu::read_status` sets
+**Restored to hardware** with FQ-03, FQ-04 and FQ-05 in `403f09c` (plan step 18a,
+`docs/experiments/round9.md`): `Ppu::read_status` sets
 `prevent_vbl` on a read at line 241 dot 0.
 
 - **Hardware:** reading $2002 one PPU clock before VBlank sets returns clear and suppresses both the flag
@@ -193,7 +193,7 @@ between the two except the last post-render line.
 
 ## FQ-09 — Odd-frame dot skip even when rendering is off
 
-**Restored to hardware** in `zcore: restore hardware odd-frame skip only while rendering (FQ-09 removed)`
+**Restored to hardware** in `1d896d9`
 (plan step 18a, `docs/experiments/round9.md`). `09-even_odd_frames` and `10-even_odd_timing` still fail
 on the VBlank/NMI quirks; `vbl_nmi_basics`, `clear_timing` and `frame_basics` pass.
 
@@ -210,7 +210,7 @@ on the VBlank/NMI quirks; `vbl_nmi_basics`, `clear_timing` and `frame_basics` pa
 
 ## FQ-10 — 512-cycle OAM DMA, run inside `STA $4014`
 
-**Restored to hardware** in `zcore: restore hardware OAM DMA halt and alignment (FQ-10 removed)` (plan
+**Restored to hardware** in `590328f` (plan
 step 18a, `docs/experiments/round9.md`): `Bus::handle_dma`. `sprdma_and_dmc_dma` still waits for FQ-11/12.
 
 - **Hardware:** OAM DMA halts the CPU for 513 cycles, 514 if it starts on an odd (put) cycle, starting
@@ -226,8 +226,7 @@ step 18a, `docs/experiments/round9.md`): `Bus::handle_dma`. `sprdma_and_dmc_dma`
 
 ## FQ-11 — 4-read DMC DMA
 
-**Restored to hardware** with FQ-12 in `zcore: restore hardware DMC reader and DMC DMA (FQ-11, FQ-12
-removed)` (plan step 18a, `docs/experiments/round9.md`).
+**Restored to hardware** with FQ-12 in `4b3a71b` (plan step 18a, `docs/experiments/round9.md`).
 
 - **Hardware:** a DMC sample fetch steals 1-4 cycles depending on what the CPU is doing and on alignment
   with OAM DMA. nesdev "APU DMC", "DMA"; `dmc_dma_during_read4`, `sprdma_and_dmc_dma`.
@@ -239,8 +238,7 @@ removed)` (plan step 18a, `docs/experiments/round9.md`).
 
 ## FQ-12 — DMC fetch timed by FCEUmm's per-instruction sound hook
 
-**Restored to hardware** with FQ-11 in `zcore: restore hardware DMC reader and DMC DMA (FQ-11, FQ-12
-removed)`: `Dmc` (timer, reader, IRQ) and `Bus::handle_dma`.
+**Restored to hardware** with FQ-11 in `4b3a71b`: `Dmc` (timer, reader, IRQ) and `Bus::handle_dma`.
 
 - **Hardware:** the DMC timer counts CPU cycles exactly; the reader requests a fetch as soon as the sample
   buffer empties, and the CPU services it at its next read cycle (with halt/alignment). nesdev "APU DMC";
@@ -261,7 +259,7 @@ removed)`: `Dmc` (timer, reader, IRQ) and `Bus::handle_dma`.
 
 ## FQ-13 — The PPU I/O latch never decays
 
-**Restored to hardware** in `zcore: restore hardware PPU I/O latch decay (FQ-13 removed)` (plan step 18a,
+**Restored to hardware** in `fa207a5` (plan step 18a,
 `docs/experiments/round9.md`): each latch bit decays to 0 after 36 frames without a refresh
 (`Ppu::open_bus_now`, `Ppu::drive_open_bus`, `Ppu::open_bus_refreshed`); `open_bus` passes again.
 
