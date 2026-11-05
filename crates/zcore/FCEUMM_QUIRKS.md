@@ -26,7 +26,7 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 | FQ-06 | 0-cycle CPU reset | boot only |
 | FQ-07 | PPU starts at scanline 240, one dot ahead | boot, then CPU/PPU phase for the whole run |
 | FQ-08 | Frame boundary at dot 1 of line 240 | frame boundary (when inputs and pokes apply) |
-| FQ-09 | Odd-frame dot skip even when rendering is off | per-frame timing |
+| FQ-09 | Odd-frame dot skip even when rendering is off (**restored to hardware**) | per-frame timing |
 | FQ-10 | 512-cycle OAM DMA, run inside `STA $4014` | per-frame timing |
 | FQ-11 | 4-read DMC DMA | per-frame timing |
 | FQ-12 | DMC fetch timed by FCEUmm's per-instruction sound hook | per-frame timing |
@@ -150,6 +150,10 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 - **Removal:** increment on entering line 240 again. No test ROM; corpus ladder self-diffs re-baselined.
 
 ## FQ-09 — Odd-frame dot skip even when rendering is off
+
+**Restored to hardware** in `zcore: restore hardware odd-frame skip only while rendering (FQ-09 removed)`
+(plan step 18a, `docs/experiments/round9.md`). `09-even_odd_frames` and `10-even_odd_timing` still fail
+on the VBlank/NMI quirks; `vbl_nmi_basics`, `clear_timing` and `frame_basics` pass.
 
 - **Hardware:** on NTSC the pre-render line's last dot is skipped on odd frames only while rendering is
   enabled. nesdev "PPU frame timing" ("even/odd frames"); `ppu_vbl_nmi` `09-even_odd_frames`,

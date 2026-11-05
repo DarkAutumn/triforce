@@ -61,17 +61,6 @@ fn fq01_no_vblank_in_the_two_frames_after_reset() {
 }
 
 #[test]
-fn fq09_odd_frames_drop_a_dot_with_rendering_off() {
-    let mut bus = console();
-    for _ in 0..3 {
-        ppu_dots_to_next_frame(&mut bus);
-    }
-    let lens: Vec<u32> = (0..4).map(|_| ppu_dots_to_next_frame(&mut bus)).collect();
-    assert_eq!(lens.iter().sum::<u32>(), 4 * 89_342 - 2, "{lens:?}");
-    assert!(lens.contains(&89_341) && lens.contains(&89_342), "{lens:?}");
-}
-
-#[test]
 fn fq05_nmi_requested_12_dots_after_vblank() {
     let mut bus = console();
     for _ in 0..2 {

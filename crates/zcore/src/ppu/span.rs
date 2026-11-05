@@ -180,22 +180,7 @@ impl Bus {
     #[inline(never)]
     fn idle_span(&mut self, span: u16) -> u16 {
         let from = self.ppu.cycle + 1;
-        let mut to = self.ppu.cycle + span;
-        let mut ran = span;
-
-        // FQ-09: FCEUmm's short odd frame with rendering off: the clock reaching 339 ends the
-        // line (`Bus::ppu_clock`); FQ-01: not in the dead frames.
-        let ppu = &self.ppu;
-        let skip = !ppu.mask_rendering_enabled
-            && ppu.is_prerender_scanline
-            && from <= cycle::ODD_SKIP
-            && to >= cycle::ODD_SKIP
-            && ppu.frame_is_odd()
-            && ppu.dead_frames == 0;
-        if skip {
-            ran -= to - cycle::ODD_SKIP;
-            to = cycle::ODD_SKIP;
-        }
+        let to = self.ppu.cycle + span;
 
         // FQ-08/FQ-05 events and the vblank edges, in dot order. Nothing else here reads what
         // they change.
@@ -235,8 +220,8 @@ impl Bus {
             + overlap(from, to, cycle::BG_PREFETCH_START, cycle::BG_PREFETCH_END);
         self.ppu.shift_bg(shifts);
 
-        self.ppu.cycle = if skip { cycle::END } else { to };
-        ran
+        self.ppu.cycle = to;
+        span
     }
 
     /// Up to `span` dots of a visible or pre-render line with rendering on and settled,

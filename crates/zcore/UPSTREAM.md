@@ -69,3 +69,4 @@ Each FCEUmm quirk's hardware behaviour back, one commit per quirk, gated on the 
 | Commit | Quirk | Change | frames/s |
 |---|---|---|---|
 | `zcore: restore hardware PPU I/O latch decay (FQ-13 removed)` | FQ-13 | Per-bit I/O latch decay after 36 frames without a refresh (`Ppu::open_bus_now`, `drive_open_bus`, `write_open_bus`, `open_bus_refreshed`); `ppu_bus_read`/`ppu_bus_write` no longer touch the latch (the register paths drive it). `TFZSTATE` v2, v1 decoded through `state_file::v1`. `open_bus` passes. | 2,441 / 4,697 |
+| `zcore: restore hardware odd-frame skip only while rendering (FQ-09 removed)` | FQ-09 | The rendering-off odd-frame skip in `Bus::ppu_clock` / `Bus::idle_span` deleted. `vbl_nmi_basics`, `vbl_nmi_clear_timing`, `vbl_nmi_frame_basics` pass. | 2,419 / 4,595 |

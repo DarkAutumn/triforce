@@ -582,7 +582,7 @@ impl Ppu {
     /// The master clock by which the PPU must be caught up for the CPU to see its next
     /// frame-boundary (FQ-08, line 240 dot 1) or NMI-request (FQ-05, line 241 dot 13) dot.
     ///
-    /// Counts dots from the current one assuming the odd-frame skip (FQ-09) happens on the way,
+    /// Counts dots from the current one assuming the odd-frame skip happens on the way,
     /// so it is never late; when it does not, the catch-up comes a dot early and this is asked
     /// again.
     #[must_use]
@@ -1718,18 +1718,8 @@ impl Bus {
         }
 
         // === RENDER LINE (scanlins 0-239, 261) ===
-        if self.ppu.mask_rendering_enabled {
-            if self.ppu.is_render_scanline {
-                self.clock_render_scanline();
-            }
-        } else if self.ppu.is_prerender_scanline
-            && self.ppu.cycle == cycle::ODD_SKIP
-            && self.ppu.frame_is_odd()
-            && self.ppu.dead_frames == 0
-        {
-            // FQ-09: FCEUmm shortens every other frame by one dot (its `kook`) whether or not
-            // rendering is enabled; hardware only does it while rendering.
-            self.ppu.cycle = cycle::END;
+        if self.ppu.mask_rendering_enabled && self.ppu.is_render_scanline {
+            self.clock_render_scanline();
         }
 
         self.ppu.clock_mask();
@@ -2217,5 +2207,25 @@ mod tests {
 
         bus.ppu.write_oamaddr(0x11);
         assert_eq!(bus.ppu.read_oamdata(), 0x77);
+    }
+
+    /// NTSC odd frames skip the pre-render line's last dot only while rendering is enabled
+    /// (nesdev "PPU frame timing"): with it off, every frame is 341 * 262 dots.
+    #[test]
+    fn odd_frames_keep_every_dot_with_rendering_off() {
+        let mut bus = Bus::default();
+        bus.reset(ResetKind::Hard);
+        let mut frame_dots = || {
+            let start = bus.ppu.frame_number();
+            let mut dots = 0u32;
+            while bus.ppu.frame_number() == start {
+                bus.ppu_clock();
+                dots += 1;
+            }
+            dots
+        };
+        frame_dots();
+        let lens: Vec<u32> = (0..4).map(|_| frame_dots()).collect();
+        assert_eq!(lens, [341 * 262; 4]);
     }
 }

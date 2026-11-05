@@ -513,3 +513,5 @@ One line per quirk; numbers and reasoning in `docs/experiments/round9.md`, mecha
 - 2026-11-05 FQ-13 restored: the PPU I/O latch decays per bit after 36 frames without a refresh (a model of the
   ~600 ms capacitor decay, not TetaNES' clear-every-VBlank); `TFZSTATE` v2 with a v1 decode path; gate kept it
   (chain total 26 vs baselines 32/24).
+- 2026-11-05 FQ-09 restored: the odd-frame dot skip happens only with rendering on (hardware); gate kept it
+  (chain total 27 vs 32/24).

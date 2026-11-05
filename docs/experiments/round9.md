@@ -57,3 +57,38 @@ desynced: Zelda masks the latch bits). `tf bench` 2,337-2,439 / 4,401-4,441 befo
 
 **Decision: keep.** Every specialist is within the baselines' range or above it; the chain total (26) is between
 the two baselines. No seed-1 confirmation needed.
+
+## FQ-09: the odd-frame dot skip only while rendering
+
+**Change.** The pre-render line's last dot is skipped on odd frames only with rendering enabled (nesdev "PPU
+frame timing"); FCEUmm skipped it every other frame regardless. Deleted the rendering-off branches in
+`Bus::ppu_clock` and `Bus::idle_span`; the FQ-09 compat test became the hardware test
+`odd_frames_keep_every_dot_with_rendering_off`. No state change. Tests: `vbl_nmi_basics`,
+`vbl_nmi_clear_timing` and `vbl_nmi_frame_basics` pass and are un-ignored; every zcore, zelda, env and pool
+test passes (no movie desynced). Gate build: FQ-13 + FQ-09. `tf bench` 2,396-2,419 / 4,526-4,595.
+
+| Specialist | Old | Baseline s0 | Baseline s1 | FQ-09 s0 |
+|---|---:|---:|---:|---:|
+| boss-aquamentus | 100.0% | 100.0% / +0.592 | 98.3% / +0.575 | 100.0% / +0.517 |
+| d2-rope | 95.2% | 94.0% / −0.254 | 93.6% / −0.231 | 95.2% / −0.199 |
+| goriya | 76.7% | 78.3% / −0.758 | 77.9% / −0.725 | 75.4% / −0.706 |
+| ow-leever-peahat | 100.0% | 97.1% / −0.325 | 96.2% / −0.296 | 97.1% / −0.302 |
+| ow-moblin | 97.1% | 95.3% / −0.215 | 96.4% / −0.236 | 96.4% / −0.196 |
+| ow-octorok | 99.0% | 98.3% / −0.073 | 98.2% / −0.066 | 98.0% / −0.057 |
+| ow-start | 98.5% | 100.0% / +0.278 | 100.0% / +0.287 | 100.0% / +0.278 |
+| ow-zora | 97.4% | 95.4% / −0.191 | 95.4% / −0.206 | 96.1% / −0.202 |
+| stalfos-keese-gel | — | 96.8% / −0.035 | 95.7% / −0.041 | 96.5% / −0.044 |
+| wallmaster | 87.5% | 98.3% / +0.167 | 100.0% / +0.208 | 100.0% / +0.292 |
+
+| Segment | Baseline s0 | Baseline s1 | FQ-09 s0 |
+|---|---:|---:|---:|
+| Full milestone1 | 1/40 | 1/40 | 3/40 |
+| Full milestone1-fairy | 3/40 | 2/40 | 5/40 |
+| Post-D1 main | 7/40 | 3/40 | 1/40 |
+| Post-D1 fairy | 6/40 | 6/40 | 6/40 |
+| D2 | 15/40 | 12/40 | 12/40 |
+| **Total** | 32 | 24 | 27 |
+
+**Decision: keep.** goriya's success (75.4%) is under both baselines (78.3/77.9), but its health change is
+better than both (−0.706 vs −0.758/−0.725) and it is 1.3 points from its old eval; d2-rope, ow-zora and
+wallmaster are above both baselines. The chain total (27) is between the baselines.

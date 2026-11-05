@@ -492,33 +492,30 @@ pub(crate) mod tests {
         spr_overflow_timing, // Tests sprite overflow timing
         sprite_ram,           // Tests sprite ram
         tv,                   // Tests NTSC color and NTSC/PAL aspect ratio
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
-        vbl_nmi_basics, // Tests vblank NMI basics
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
+        vbl_nmi_basics,       // Tests vblank NMI basics
         vbl_nmi_clear_timing, // Tests vblank NMI clear timing
         vbl_nmi_control,      // Tests vblank NMI control
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
+        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_disable, // Tests vblank NMI disable
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
+        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_even_odd_frames, // Tests vblank NMI on even/odd frames
         // Passes: the ROM reports code 0 and prints "10-even_odd_timing / Passed". Asserted on
         // that $6000 status code rather than a frame hash, so a regression says which sub-test
         // failed instead of only that some pixel moved.
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
+        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_even_odd_timing, // Tests vblank NMI even/odd frame timing
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
-        vbl_nmi_frame_basics, // Tests vblank NMI frame basics
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
+        vbl_nmi_frame_basics,    // Tests vblank NMI frame basics
+        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_off_timing, // Tests vblank NMI off timing
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
+        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_on_timing, // Tests vblank NMI on timing
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
+        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_set_time, // Tests vblank NMI set timing
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
+        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_suppression, // Tests vblank NMI suppression
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
+        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_nmi_timing, // Tests vblank NMI timing
-        #[ignore = "FQ-01..FQ-05, FQ-09: FCEUmm VBlank/NMI timing"]
+        #[ignore = "FQ-01..FQ-05: FCEUmm VBlank/NMI timing"]
         vbl_timing, // Tests vblank timing
         vram_access, // Tests video RAM access
     );
