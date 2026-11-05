@@ -1,110 +1,8 @@
-"""Various enumerations of equipment, item, and enemy types in the game."""
+"""The game enumerations the Python side still uses: action kinds, directions and map locations.  Everything
+else about the game lives in the native ``zelda`` crate."""
 
 from enum import Enum, IntEnum
-from functools import cached_property
 
-import torch
-
-# the y coordinate where the gameplay window starts (above this line is the HUD)
-# This is a fixed NES constant used to convert between RAM coordinates and tile indices.
-# It does NOT change with overscan settings — RAM coordinates are always absolute NES coordinates.
-GAMEPLAY_START_Y = 56
-
-# Frame dimensions depend on whether the emulator crops overscan.
-# Cropped (default stable-retro): 240×224, removes 8px from each edge.
-# Full (fork with crop_overscan=False): 256×240, full NES output.
-NES_FULL_WIDTH = 256
-NES_FULL_HEIGHT = 240
-NES_CROPPED_WIDTH = 240
-NES_CROPPED_HEIGHT = 224
-
-# How many pixels to trim from the top of the emulator frame to remove the HUD.
-#
-# The NES HUD occupies scanlines 0-47 (48px). Scanlines 48-63 are a gap between
-# HUD and gameplay tiles (may render as black or scroll artifacts). The first
-# gameplay tile row starts at NES scanline 64 (0x40), which is what the game's
-# collision code uses as the tile area offset.
-#
-# In cropped mode (240×224), the emulator already removes the top 8 NES scanlines,
-# so frame pixel 0 = NES scanline 8.  Trimming 56 pixels reaches NES scanline 64.
-#
-# In full mode (256×240), frame pixel 0 = NES scanline 0.  Trimming 64 pixels
-# reaches the same NES scanline 64.
-#
-# The viewport centering uses a *separate* offset (GAMEPLAY_START_Y = 56) which
-# is subtracted from Link's RAM y-coordinate. This produces a consistent viewport
-# position across both modes — models trained in cropped mode work in full mode.
-HUD_TRIM_CROPPED = 56
-HUD_TRIM_FULL = 64
-
-# Number of visible tile columns after overscan clipping.
-# Cropped: columns 1-30 visible (0 and 31 clipped), Full: all 32 columns visible.
-VISIBLE_COLS_CROPPED = 30
-VISIBLE_COLS_FULL = 32
-VISIBLE_ROWS = 22
-
-class SoundKind(Enum):
-    """Sound codes for the game."""
-    # pylint: disable=invalid-name
-    ArrowDeflected : int = 0x01
-    BoomerangStun : int = 0x02
-    MagicCast : int = 0x04
-    KeyPickup : int = 0x08
-    SmallHeartPickup : int = 0x10
-    SetBomb : int = 0x20
-    HeartWarning : int = 0x40
-
-class RingKind(Enum):
-    """The status of Link's ring."""
-    NONE = 0
-    BLUE = 1
-    RED = 2
-
-class SwordKind(Enum):
-    """The status of Link's sword."""
-    NONE = 0
-    WOOD = 1
-    WHITE = 2
-    MAGIC = 3
-
-    def __bool__(self):
-        return self != SwordKind.NONE
-
-class ArrowKind(Enum):
-    """The type of arrow Link has."""
-    NONE = 0
-    WOOD = 1
-    SILVER = 2
-
-class BoomerangKind(Enum):
-    """The type of boomerang Link has."""
-    NONE = 0
-    WOOD = 1
-    MAGIC = 2
-
-class CandleKind(Enum):
-    """The type of candle Link has."""
-    NONE = 0
-    RED = 1
-    BLUE = 2
-
-class PotionKind(Enum):
-    """The type of potion Link has."""
-    NONE = 0
-    RED = 1
-    BLUE = 2
-
-class SelectedEquipmentKind(Enum):
-    """The currently selected equipment (B button)."""
-    NONE = -1
-    BOOMERANG = 0
-    BOMBS = 1
-    ARROWS = 2
-    CANDLE = 4
-    WHISTLE = 5
-    FOOD = 6
-    POTION = 7
-    WAND = 8
 
 class ActionKind(IntEnum):
     """Action kinds of the v2 action schema (the value is the kind-head index)."""
@@ -121,134 +19,9 @@ class ActionKind(IntEnum):
         """True for kinds that use the B button with a selected item."""
         return self in (ActionKind.BOMB, ActionKind.BOOMERANG, ActionKind.ARROW)
 
-class AnimationState(Enum):
-    """The state of link's sword beams."""
-    INACTIVE = 0
-    ACTIVE = 1
-    HIT = 2
-
-class ZeldaAnimationKind(Enum):
-    """Animation states"""
-    BEAMS = 0
-    BOMB_1 = 1
-    BOMB_2 = 2
-    FLAME_1 = 3
-    FLAME_2 = 4
-    MAGIC = 5
-    ARROW = 6
-    BOOMERANG = 7
-    BAIT = 8
-
-class ZeldaEnemyKind(Enum):
-    """Enemy type IDs from UpdateObject_JumpTable (Z_07.asm:5321).
-
-    These are ObjType values for enemies in slots 1-11. Range is $01-$48,
-    excluding non-combat objects ($1F/$20=boulders, $29=unused, $2E=whirlwind,
-    $2F=fairy, $35-$37=NPCs, $3F/$40=fires).
-    Trap ($49) is classified as a projectile/hazard, not an enemy.
-    """
-    # pylint: disable=invalid-name
-    BlueLynel : int = 0x01
-    RedLynel : int = 0x02
-    BlueMoblin : int = 0x03
-    RedMoblin : int = 0x04
-    BlueGoriya : int = 0x05
-    RedGoriya : int = 0x06
-    BlueOctorok : int = 0x07
-    RedOctorok : int = 0x08
-    BlueSlowOctorok : int = 0x09
-    RedSlowOctorok : int = 0x0A
-    BlueDarknut : int = 0x0B
-    RedDarknut : int = 0x0C
-    BlueTektite : int = 0x0D
-    RedTektite : int = 0x0E
-    BlueLeever : int = 0x0F
-    RedLeever : int = 0x10
-    Zora : int = 0x11
-    Vire : int = 0x12
-    Zol : int = 0x13
-    GreenGel : int = 0x14
-    BlueGel : int = 0x15
-    PolsVoice : int = 0x16
-    LikeLike : int = 0x17
-    Digdogger : int = 0x18
-    DigdoggerChild : int = 0x19
-    Peahat : int = 0x1A
-    BlueKeese : int = 0x1B
-    RedKeese : int = 0x1C
-    BlackKeese : int = 0x1D
-    Armos : int = 0x1E
-    Ghini : int = 0x21
-    FlyingGhini : int = 0x22
-    BlueWizzrobe : int = 0x23
-    RedWizzrobe : int = 0x24
-    PatraChild1 : int = 0x25
-    PatraChild2 : int = 0x26
-    Wallmaster : int = 0x27
-    Rope : int = 0x28
-    Stalfos : int = 0x2A
-    Bubble : int = 0x2B
-    BlueBubble : int = 0x2C
-    RedBubble : int = 0x2D
-    Gibdo : int = 0x30
-    Dodongo : int = 0x31
-    Dodongo2 : int = 0x32
-    BlueGohma : int = 0x33
-    RedGohma : int = 0x34
-    Digdogger2 : int = 0x38
-    Digdogger3 : int = 0x39
-    BlueLamnola : int = 0x3A
-    RedLamnola : int = 0x3B
-    Manhandla : int = 0x3C
-    Aquamentus : int = 0x3D
-    Ganon : int = 0x3E
-    Moldorm : int = 0x41
-    Gleeok : int = 0x42
-    Gleeok2 : int = 0x43
-    Gleeok3 : int = 0x44
-    Gleeok4 : int = 0x45
-    GleeokHead : int = 0x46
-    Patra : int = 0x47
-    Patra2 : int = 0x48
-
-class ZeldaProjectileId(Enum):
-    """Projectile codes for the game."""
-    # pylint: disable=invalid-name
-    OtorokRock : int = 83
-    ZoraFireball : int = 85
-    Arrow : int = 91
-    Boomerang : int = 92
-
-class ZeldaItemKind(Enum):
-    """Item codes for the game."""
-    # pylint: disable=invalid-name
-    Triforce1 : int = -101
-    Triforce2 : int = -102
-    Triforce3 : int = -103
-    Triforce4 : int = -104
-    Triforce5 : int = -105
-    Triforce6 : int = -106
-    Triforce7 : int = -107
-    Triforce8 : int = -108
-    TriforceOfPower = -109
-    Map : int = -4
-    Compass : int = -3
-    HeartContainer : int = -2
-    Key : int = -1
-    Bombs : int = 0x00
-    BlueRupee : int = 0x0f
-    Rupee : int = 0x18
-    Clock : int = 0x21
-    Heart : int = 0x22
-    Fairy : int = 0x23
-
-    @property
-    def is_triforce(self):
-        """Returns True if the item is a triforce piece."""
-        return -109 <= self.value <= -101
 
 class Direction(Enum):
-    """The four cardinal directions, as the game defines them."""
+    """The four cardinal directions (and diagonals), as the game defines them."""
     NONE = 0
     E = 1
     W = 2
@@ -275,128 +48,22 @@ class Direction(Enum):
             case _:
                 return Direction.NONE
 
-    @cached_property
-    def vector(self):
-        """Returns the vector for the direction."""
-        match self:
-            case Direction.NONE:
-                return torch.tensor([0, 0], dtype=torch.float32)
-            case Direction.E:
-                return torch.tensor([1, 0], dtype=torch.float32)
-            case Direction.W:
-                return torch.tensor([-1, 0], dtype=torch.float32)
-            case Direction.S:
-                return torch.tensor([0, 1], dtype=torch.float32)
-            case Direction.N:
-                return torch.tensor([0, -1], dtype=torch.float32)
-            case _:
-                raise ValueError(f"Unhandled Direction: {self}")
 
-ENEMY_MAP = {x.value: x for x in ZeldaEnemyKind}
-ITEM_MAP = {x.value: x for x in ZeldaItemKind}
-PROJECTILE_MAP = {x.value: x for x in ZeldaProjectileId}
+class MapLocation:
+    """A room: level (0 = overworld), room byte (high nibble row, low nibble column) and whether Link is in its
+    cave.  Equal to ``(level, room)`` and ``(level, room, in_cave)`` tuples."""
+    __slots__ = ('level', 'value', 'in_cave', 'x', 'y', '_hash')
 
-class Coordinates:
-    """Base class of coordinates in the game world."""
-    def __init__(self, x: int, y: int):
-        self._x = int(x)
-        self._y = int(y)
-
-    @property
-    def x(self) -> int:
-        """The x coordinate."""
-        return self._x
-
-    @property
-    def y(self) -> int:
-        """The y coordinate."""
-        return self._y
-
-    def __getitem__(self, index: int) -> int:
-        if index == 0:
-            return self._x
-
-        if index == 1:
-            return self._y
-
-        raise IndexError("Index out of range. Valid indices are 0 and 1.")
-
-    def __len__(self) -> int:
-        return 2
+    def __init__(self, level: int, location: int, in_cave: bool):
+        self.level = int(level)
+        self.value = int(location)
+        self.in_cave = bool(in_cave)
+        self.x = self.value & 0x0F
+        self.y = (self.value & 0xF0) >> 4
+        self._hash = hash((self.x, self.y, self.level, self.in_cave))
 
     def __iter__(self):
-        return iter((self._x, self._y))
-
-    def __repr__(self) -> str:
-        return f"({self._x}, {self._y})"
-
-    def __eq__(self, other) -> bool:
-        if isinstance(other, Coordinates):
-            return self._x == other._x and self._y == other._y
-
-        if isinstance(other, tuple):
-            return (self._x, self._y) == other
-
-        return False
-
-    def __hash__(self):
-        return hash((self.x, self.y))
-
-    def __lt__(self, other):
-        if not isinstance(other, Coordinates):
-            return NotImplemented
-        return (self.x, self.y) < (other.x, other.y)
-
-    def __add__(self, other):
-        if isinstance(other, Coordinates):
-            return Coordinates(self.x + other.x, self.y + other.y)
-        if len(other) == 2:
-            return Coordinates(self.x + other[0], self.y + other[1])
-        raise TypeError("Can only add Coordinates or a tuple of length 2.")
-
-    def __sub__(self, other):
-        if isinstance(other, Coordinates):
-            return Coordinates(self.x - other.x, self.y - other.y)
-        if isinstance(other, tuple) and len(other) == 2:
-            return Coordinates(self.x - other[0], self.y - other[1])
-        raise TypeError("Can only subtract Coordinates or a tuple of length 2.")
-
-    @property
-    def torch(self):
-        """Converts the coordinates to a torch tensor."""
-        return torch.tensor([self.x, self.y], dtype=torch.float32)
-
-class Position(Coordinates):
-    """A position in the game world."""
-    def __repr__(self):
-        return f"Pos({self.x}, {self.y})"
-
-    @property
-    def tile_index(self) -> 'TileIndex':
-        """The tile coordinates of the position."""
-        return TileIndex(int(self.x // 8), int((self.y - GAMEPLAY_START_Y) // 8))
-
-class TileIndex(Coordinates):
-    """A tile index in the game world."""
-    def __repr__(self) -> str:
-        return f"Tile({self.x}, {self.y})"
-
-    @property
-    def position(self) -> Position:
-        """The screen coordinates of the top-left corner of this tile in the gameworld."""
-        return (self.x * 8, self.y * 8 + GAMEPLAY_START_Y)
-
-class MapLocation(Coordinates):
-    """A location on the map of the game world."""
-    __slots__ = ('level', 'value', 'in_cave', '_hash')
-
-    def __init__(self, level : int, location : int, in_cave : bool):
-        super().__init__(location & 0x0F, (location & 0xF0) >> 4)
-
-        self.level = level
-        self.value = location
-        self.in_cave = in_cave
-        self._hash = hash((self._x, self._y, level, in_cave))
+        return iter((self.x, self.y))
 
     def __eq__(self, other) -> bool:
         if isinstance(other, tuple):
@@ -407,100 +74,42 @@ class MapLocation(Coordinates):
                     return self.level == other[0] and self.value == other[1] and self.in_cave == other[2]
                 case _:
                     raise ValueError("Invalid tuple length.")
-
-        return super().__eq__(other) and self.level == other.level and self.in_cave == other.in_cave
+        if isinstance(other, MapLocation):
+            return (self.level, self.value, self.in_cave) == (other.level, other.value, other.in_cave)
+        return False
 
     def __hash__(self):
         return self._hash
 
-    @property
-    def tile_index(self) -> 'TileIndex':
-        """The tile coordinates of the location."""
-        return TileIndex(int(self.x // 8), int((self.y - GAMEPLAY_START_Y) // 8))
-
-    @property
-    def position(self) -> Position:
-        """The screen coordinates of the top-left corner of this tile in the gameworld."""
-        return (self.x * 8, self.y * 8 + GAMEPLAY_START_Y)
+    def __lt__(self, other):
+        if not isinstance(other, MapLocation):
+            return NotImplemented
+        return (self.level, self.value, self.in_cave) < (other.level, other.value, other.in_cave)
 
     def __repr__(self) -> str:
         return f"({self.x}, {self.y}), loc={self.value:02X}"
+
+    def as_tuple(self):
+        """``(level, room, in_cave)``, the native module's form."""
+        return (self.level, self.value, self.in_cave)
 
     @staticmethod
     def from_coordinates(level, x, y, in_cave):
         """Creates a MapLocation from x, y coordinates."""
         return MapLocation(level, (y << 4) | x, in_cave)
 
-    def get_location_in_direction(self, direction):
-        """Gets the location of the tile in the given direction."""
-        x, y = self
-
-        match direction:
-            case Direction.N:
-                y -= 1
-            case Direction.S:
-                y += 1
-            case Direction.E:
-                x += 1
-            case Direction.W:
-                x -= 1
-            case _:
-                raise ValueError("Invalid direction provided.")
-
-        # Combine the new row and column into a single hex value
-        if not (0 <= x <= 0xF and 0 <= y <= 0xF):
-            raise ValueError("Resulting location is out of bounds.")
-
-        return MapLocation.from_coordinates(self.level, x, y, self.in_cave)
-
     def get_direction_to(self, next_room):
-        """Gets the direction of movement from curr -> dest."""
+        """The exit direction from this room into the adjacent ``next_room`` (NONE if not adjacent)."""
         if self.in_cave and not next_room.in_cave:
             return Direction.S
-
         if self.level == 0 and next_room.level != 0:
             return Direction.S
-
         if self.level != 0 and next_room.level == 0:
             return Direction.N
-
-        dist = self.manhattan_distance(next_room)
-
-        result = Direction.NONE
-        if dist == 1:
-            if self.x < next_room.x:
-                result = Direction.E
-            elif self.x > next_room.x:
-                result = Direction.W
-            elif self.y < next_room.y:
-                result = Direction.S
-            elif self.y > next_room.y:
-                result = Direction.N
-
-        return result
-
-    def manhattan_distance(self, other):
-        """Calculates the Manhattan distance between two locations."""
-        if self.in_cave != other.in_cave:
-            assert self.level == other.level and self.x == other.x and self.y == other.y
-            return 1
-
-        if self.level != other.level:
-            return 1
-
-        assert self.level == other.level and self.in_cave == other.in_cave
-        return abs(self.x - other.x) + abs(self.y - other.y)
-
-    def enumerate_possible_neighbors(self):
-        """Returns the possible neighbors of this location."""
-        if self.x > 0:
-            yield MapLocation.from_coordinates(self.level, self.x - 1, self.y, self.in_cave)
-
-        if self.x < 0xF:
-            yield MapLocation.from_coordinates(self.level, self.x + 1, self.y, self.in_cave)
-
-        if self.y > 0:
-            yield MapLocation.from_coordinates(self.level, self.x, self.y - 1, self.in_cave)
-
-        if self.y < 0xF:
-            yield MapLocation.from_coordinates(self.level, self.x, self.y + 1, self.in_cave)
+        if self.in_cave != next_room.in_cave or self.level != next_room.level:
+            return Direction.NONE
+        if abs(self.x - next_room.x) + abs(self.y - next_room.y) != 1:
+            return Direction.NONE
+        if self.x != next_room.x:
+            return Direction.E if self.x < next_room.x else Direction.W
+        return Direction.S if self.y < next_room.y else Direction.N

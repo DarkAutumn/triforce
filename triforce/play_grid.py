@@ -1,72 +1,34 @@
-"""Many live games at once for ``play-zelda.py``: one spawned process per game (stable-retro allows one emulator
-per process), each playing route ``milestone1`` with the promoted specialists at a paced frame rate.
+"""Many live games at once for ``play-zelda.py``: one native chain pool (route ``milestone1`` with the promoted
+specialists), one worker thread per game paced at ``fps`` frames per second, and a Python inference thread that
+batches every waiting game's action per specialist on ``device``.
 
-Every emulated frame is copied into a shared buffer the GUI reads; room/health changes and run results go through
-one shared status queue as dicts with ``cell`` and ``event`` (``start``, ``room``, ``end``, ``crash``).  After a
-run ends the cell shows its result for ``RESULT_PAUSE`` seconds and plays the next seed (``cell + k * cells``); a
-configuration error (e.g. a missing promoted model) stops the cell instead of retrying in a loop.
+Shown games render every frame into the pool's frame buffers (``show(game, on)`` toggles a game; hidden games
+emulate without rendering) and ``frame(game, since)`` copies a game's latest one.  Room/health changes and run
+results go through one status queue as dicts with ``cell`` and ``event`` (``start``, ``room``, ``end``, ``crash``).
+After a run ends its game holds its result for ``RESULT_PAUSE`` seconds before the next seed plays (seeds are
+handed out in order to whichever game is free, so ``start`` carries no seed; ``end`` does).  A setup error (an
+error before the first step, e.g. a missing promoted model for the route's first room) stops the game instead of
+retrying in a loop.
 """
 
-import multiprocessing as mp
 import queue
+import threading
 import time
-from typing import Optional
+from typing import Dict, Iterable, List, Optional
 
 import numpy as np
 
-FRAME_SHAPE = (224, 240, 3)        # Emulator.get_screen(): rows, columns, RGB
-FRAME_BYTES = 224 * 240 * 3
+from . import _native
+from .runner import ChainPool, Policies, Route, RunResult
+
+FRAME_SHAPE = _native.FRAME_SHAPE   # rows, columns, RGB
 ROUTE = 'milestone1'
 RESULT_PAUSE = 3.0
-RESYNC_SECONDS = 0.25
+SEEDS_PER_GAME = 1000
+POLL_SECONDS = 0.02
 
 
-class StopPlaying(Exception):
-    """Raised from the per-frame hook to unwind out of ``Runner.run`` when the grid stops."""
-
-
-class FramePacer:
-    """Holds a frame rate: ``wait()`` sleeps until the next frame is due.  Falling more than RESYNC_SECONDS behind
-    restarts the schedule instead of fast-forwarding to catch up.  ``fps <= 0`` disables pacing."""
-
-    def __init__(self, fps: float, clock=time.monotonic, sleep=time.sleep):
-        self.period = 1.0 / fps if fps > 0 else 0.0
-        self.clock = clock
-        self.sleep = sleep
-        self._next = None
-
-    def wait(self) -> None:
-        if not self.period:
-            return
-        if self._next is None:
-            self._next = self.clock()
-        self._next += self.period
-        delay = self._next - self.clock()
-        if delay > 0:
-            self.sleep(delay)
-        elif delay < -RESYNC_SECONDS:
-            self._next = self.clock()
-
-
-class _Reporter:
-    """The Runner's renderer hook: reports the specialist, room and health whenever one of them changes."""
-
-    def __init__(self, cell: int, status):
-        self.cell = cell
-        self.status = status
-        self._last = None
-
-    def show(self, session, specialist, action, change):  # pylint: disable=unused-argument
-        state = change.state
-        info = (specialist, state.level, state.location, state.link.health, state.link.max_health)
-        if info != self._last:
-            self._last = info
-            self.status.put({'cell': self.cell, 'event': 'room', 'specialist': specialist, 'level': state.level,
-                             'room': state.location, 'health': float(state.link.health),
-                             'max_health': int(state.link.max_health)})
-
-
-def end_message(cell: int, seed: int, result) -> tuple[dict, bool]:
+def end_message(cell: int, seed: Optional[int], result: RunResult) -> tuple[dict, bool]:
     """The 'end' status message for a finished ``RunResult`` and whether it was a setup error.  ``outcome`` is the
     last room's (milestone | death | stuck) or 'error' for any error.  An error before the first step (e.g. no
     promoted model) is a setup error; one mid-game (e.g. wandering into an untagged room) is just another ending."""
@@ -79,82 +41,56 @@ def end_message(cell: int, seed: int, result) -> tuple[dict, bool]:
     return message, result.result == 'error' and result.steps == 0
 
 
-def play_cell(cell: int, cells: int, device: str, fps: float, models_dir, frame_buf, frame_no, status,
-              stop) -> None:
-    """Process target: plays seeds ``cell, cell + cells, ...`` until ``stop`` is set."""
-    # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
-    import torch
-    from .runner import Route, Runner
-    from .session import GameSession
+class _Held:
+    """A game whose next run is ready but waits until ``until`` (the last result is on screen): its first
+    observation and the status messages its new run produced meanwhile."""
 
-    torch.set_num_threads(1)    # N processes × all-core torch threads oversubscribes the machine
-    session = GameSession(look_ahead=False)     # nothing is scored here; look-ahead frames would be shown and paced
-    try:
-        runner = Runner(session=session, models_dir=models_dir, renderer=_Reporter(cell, status), device=device)
-        route = Route.load(ROUTE)
-        pacer = FramePacer(fps)
-        screen = np.frombuffer(frame_buf.get_obj(), dtype=np.uint8)
-
-        def on_frame():
-            if stop.is_set():
-                raise StopPlaying
-            with frame_buf.get_lock():
-                screen[:] = session.emu.get_screen().reshape(-1)
-            frame_no.value += 1
-            pacer.wait()
-
-        session.emu.on_frame = on_frame
-        k = 0
-        while True:
-            seed = cell + k * cells
-            status.put({'cell': cell, 'event': 'start', 'seed': seed})
-            result = runner.run(route, seed)
-            message, setup_error = end_message(cell, seed, result)
-            status.put(message)
-            if setup_error:
-                stop.wait()     # every seed would fail the same way at once; don't restart in a loop
-                return
-            if stop.wait(RESULT_PAUSE):
-                return
-            k += 1
-    except StopPlaying:
-        return
-    except Exception as err:  # pylint: disable=broad-exception-caught
-        status.put({'cell': cell, 'event': 'crash', 'reason': f"{type(err).__name__}: {err}"})
-    finally:
-        session.close()
+    def __init__(self, until: float):
+        self.until = until
+        self.obs: Optional[Dict[str, np.ndarray]] = None
+        self.policy: Optional[np.ndarray] = None
+        self.messages: List[dict] = []
 
 
 class GameGrid:
-    """Parent side: starts one game process per cell and exposes their latest frames and status messages."""
+    """Plays ``games`` games of route ``milestone1`` in one chain pool and exposes their latest frames and status
+    messages.  ``shown``: the games that render (default all)."""
 
-    def __init__(self, cells: int, device: str, fps: float, models_dir=None):
-        ctx = mp.get_context('spawn')
-        self.cells = cells
-        self._buffers = [ctx.Array('B', FRAME_BYTES) for _ in range(cells)]
-        self._counters = [ctx.Value('q', 0, lock=False) for _ in range(cells)]
-        self._status = ctx.Queue()
-        self._stop = ctx.Event()
-        self._processes = [
-            ctx.Process(target=play_cell, name=f'play_grid-{cell}', daemon=True,
-                        args=(cell, cells, device, fps, None if models_dir is None else str(models_dir),
-                              self._buffers[cell], self._counters[cell], self._status, self._stop))
-            for cell in range(cells)]
-        self._stopped = False
+    def __init__(self, games: int, device: str, fps: float, models_dir=None, shown: Optional[Iterable[int]] = None,
+                 states_dir=None):
+        # pylint: disable=too-many-arguments, too-many-positional-arguments
+        self.games = games
+        self.device = device
+        self.fps = fps
+        self.models_dir = None if models_dir is None else str(models_dir)
+        self.states_dir = states_dir
+        self._shown = set(range(games)) if shown is None else set(shown)
+        self._status: queue.Queue = queue.Queue()
+        self._stop = threading.Event()
+        self._lock = threading.Lock()
+        self._pool = None
+        self._thread = threading.Thread(target=self._run, name='play_grid', daemon=True)
 
     def start(self) -> None:
-        for process in self._processes:
-            process.start()
+        """Loads the models and starts playing (on the inference thread)."""
+        self._thread.start()
 
-    def frame(self, cell: int, since: int) -> Optional[tuple[int, np.ndarray]]:
-        """(frame number, RGB copy) of a cell's latest frame, or None when it is still frame ``since``."""
-        number = self._counters[cell].value
-        if number == since:
-            return None
-        buffer = self._buffers[cell]
-        with buffer.get_lock():
-            pixels = np.frombuffer(buffer.get_obj(), dtype=np.uint8).reshape(FRAME_SHAPE).copy()
-        return number, pixels
+    def show(self, game: int, on: bool) -> None:
+        """Renders ``game``'s frames from its next frame on (or stops rendering it)."""
+        with self._lock:
+            if on:
+                self._shown.add(game)
+            else:
+                self._shown.discard(game)
+            if self._pool is not None:
+                self._pool.set_render(game, on)
+
+    def frame(self, game: int, since: int) -> Optional[tuple[int, np.ndarray]]:
+        """(frame number, RGB copy) of a game's latest frame, or None when it is still frame ``since``."""
+        with self._lock:
+            if self._pool is None:
+                return None
+            return self._pool.frame(game, since=since)
 
     def poll_status(self) -> list[dict]:
         """Every status message received since the last call."""
@@ -162,24 +98,115 @@ class GameGrid:
         while True:
             try:
                 messages.append(self._status.get_nowait())
-            except (queue.Empty, OSError, ValueError):
+            except queue.Empty:
                 return messages
 
     def stop(self, timeout: float = 5.0) -> None:
-        """Stops every game (idempotent): signal, wait while draining the queue, then terminate stragglers."""
-        if self._stopped:
-            return
-        self._stopped = True
+        """Stops every game (idempotent): signal the inference thread, which closes the pool."""
         self._stop.set()
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline and any(p.is_alive() for p in self._processes):
-            self.poll_status()
-            for process in self._processes:
-                if process.is_alive():
-                    process.join(0.1)
-        for process in self._processes:
-            if process.is_alive():
-                process.terminate()
-                process.join(1)
-        self._status.close()
-        self._status.cancel_join_thread()
+        if self._thread.is_alive():
+            self._thread.join(timeout)
+
+    @property
+    def stopped(self) -> bool:
+        """The inference thread has exited."""
+        return not self._thread.is_alive()
+
+    # ------------------------------------------------------------------ inference thread
+
+    def _run(self) -> None:
+        try:
+            route = Route.load(ROUTE)
+            policies = Policies(self.models_dir, device=self.device)
+            first = _native.route_steps(ROUTE)[0]['specialist']
+            if first in policies.missing:
+                # Every run would end before its first step; don't start games that fail in a loop.
+                for cell in range(self.games):
+                    self._status.put({'cell': cell, 'event': 'start', 'seed': None})
+                    result = RunResult(ROUTE, None, 'error', policies.missing[first])
+                    self._status.put(end_message(cell, None, result)[0])
+                return
+            seeds = range(self.games * SEEDS_PER_GAME)
+            chain = ChainPool(route, seeds, policies, num_envs=self.games, threads=self.games, fps=self.fps,
+                              states_dir=self.states_dir)
+        except Exception as err:  # pylint: disable=broad-exception-caught
+            self._crash(err)
+            return
+        try:
+            with self._lock:
+                self._pool = chain.pool
+                for game in self._shown:
+                    chain.pool.set_render(game, True)
+            for cell in range(self.games):
+                self._status.put({'cell': cell, 'event': 'start', 'seed': None})
+            self._play(chain)
+        except Exception as err:  # pylint: disable=broad-exception-caught
+            self._crash(err)
+        finally:
+            with self._lock:
+                self._pool = None
+            chain.close()
+
+    def _crash(self, err: Exception) -> None:
+        for cell in range(self.games):
+            self._status.put({'cell': cell, 'event': 'crash', 'reason': f"{type(err).__name__}: {err}"})
+
+    def _play(self, chain: ChainPool) -> None:
+        """Lockstep-free loop: act for every game that is ready, hold games showing a result, release them later."""
+        held: Dict[int, _Held] = {}
+        stopped = set()
+        while not self._stop.is_set() and chain.pool.active:
+            count = chain.recv(min_ready=1, timeout=POLL_SECONDS)
+            for event in chain.pool.poll_events():
+                self._event(event, held, stopped)
+            rows = chain.live_rows(count)
+            ids = chain.buffers['env_ids'][rows]
+            act = []
+            for row, env in zip(rows, ids):
+                env = int(env)
+                if env in stopped:
+                    continue
+                if env in held:
+                    hold = held[env]
+                    hold.obs = {key: value[row].copy() for key, value in chain.buffers['obs'].items()}
+                    hold.policy = chain.buffers['policy'][row].copy()
+                else:
+                    act.append(row)
+            if act:
+                act = np.asarray(act)
+                chain.send(chain.buffers['env_ids'][act], chain.actions(act))
+            self._release(chain, held)
+
+    def _event(self, event: dict, held: Dict[int, _Held], stopped: set) -> None:
+        env = event['env']
+        if event['type'] == 'run':
+            result = RunResult.from_dict(event['result'])
+            message, setup_error = end_message(env, result.seed, result)
+            self._status.put(message)
+            if setup_error:
+                stopped.add(env)
+            else:
+                held[env] = _Held(time.monotonic() + RESULT_PAUSE)
+        elif event['type'] == 'room':
+            message = {'cell': env, 'event': 'room', 'specialist': event['specialist'], 'level': event['level'],
+                       'room': event['room'], 'health': float(event['health']),
+                       'max_health': int(event['max_health'])}
+            if env in held:
+                held[env].messages.append(message)
+            else:
+                self._status.put(message)
+
+    def _release(self, chain: ChainPool, held: Dict[int, _Held]) -> None:
+        now = time.monotonic()
+        due = [env for env, hold in held.items() if hold.obs is not None and hold.until <= now]
+        if not due:
+            return
+        obs = {key: np.stack([held[env].obs[key] for env in due]) for key in held[due[0]].obs}
+        policy = np.stack([held[env].policy for env in due])
+        actions = chain.policies.actions(obs, policy, chain.deterministic)
+        for env in due:
+            hold = held.pop(env)
+            self._status.put({'cell': env, 'event': 'start', 'seed': None})
+            for message in hold.messages:
+                self._status.put(message)
+        chain.send(np.asarray(due), actions)

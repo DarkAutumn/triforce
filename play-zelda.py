@@ -5,8 +5,9 @@
     .venv/bin/python play-zelda.py 8x6 --scale 2   # COLUMNSxROWS
     .venv/bin/python play-zelda.py 2x2 --cpu       # inference on the CPU
 
-Each game runs in its own process (see triforce/play_grid.py).  When a game ends its result shows for a few
-seconds and the cell starts the next seed.
+All games play in one native chain pool, each on its own thread with one batched inference loop for the models
+(see triforce/play_grid.py).  When a game ends its result shows for a few seconds and the cell starts the next
+seed; the seed shows once the run ends.
 """
 
 import argparse
@@ -20,7 +21,8 @@ from PySide6.QtCore import QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QImage, QPainter, QPalette
 from PySide6.QtWidgets import QApplication, QGridLayout, QLayout, QMainWindow, QWidget
 
-from triforce.play_grid import FRAME_SHAPE, GameGrid
+from triforce._native import FRAME_SHAPE
+from triforce.play_grid import GameGrid
 
 DEFAULT_GRID = '4x3'
 DEFAULT_SCALE = 3
@@ -107,6 +109,7 @@ class GameView(QWidget):
             self.health = message.get('health')
             self.max_health = message.get('max_health')
         elif event == 'end':
+            self.seed = message.get('seed', self.seed)
             self.outcome = message.get('outcome')
             self.reason = message.get('reason') or ''
         elif event == 'crash':

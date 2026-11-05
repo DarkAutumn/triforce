@@ -1,8 +1,8 @@
 """Training metrics (design §12, "Measure before tuning").
 
-``EpisodeTracker`` watches every env step (one per env/worker) and accumulates into a ``RolloutMetrics``:
-raw counts and sums that merge exactly across workers.  ``RolloutMetrics.summary()`` turns them into the
-flat metric dict logged per iteration:
+``RolloutMetrics`` accumulates raw counts and sums that merge exactly: ``add_steps`` takes every lockstep batch
+(actions, frames, interrupt codes) and ``add_episode`` every terminal info (the pool's ``episode`` events).
+``RolloutMetrics.summary()`` turns them into the flat metric dict logged per iteration:
 
 - ``episodes``, ``success_rate``, ``outcome/<success|hard-failure|soft-failure>`` (fractions),
   ``ending/<end-condition>`` (fractions) — from ``info['outcome']`` / ``info['ending']``.  These and every other
@@ -12,19 +12,21 @@ flat metric dict logged per iteration:
 - ``curriculum/episodes``, ``curriculum/success_rate``, ``curriculum/start_fraction`` (mean start index /
   trajectory length; 0 = room entry) and ``curriculum/point_fraction`` (mean current stage point / length)
   for episodes started partway along an explored trajectory (``info['curriculum']``).
-- ``reward/total`` and ``reward/<term>``: mean per completed episode, from ``info['rewards']``.
+- ``reward/total`` and ``reward/<term>``: mean per completed episode, from ``info['reward_total']`` and
+  ``info['episode_rewards']`` (the env's reward, without the trainer's bootstrap value).
 - ``health_at_exit`` (hp / max_hp) and ``hearts_at_exit`` (``info['health']``) at episode end, and
   ``health_change``: hearts at exit minus hearts at the start (after reset-time hp randomization), so +1.5 means
   Link left with 1.5 more hearts than he came in with and -1 means he lost a heart.  ``health_change_total`` adds
-  the hearts wasted by picking up dropped hearts at (or near) full health (``info['hearts']``, ``hearts.py``): the
+  the hearts wasted by picking up dropped hearts at (or near) full health (``info['hearts']['wasted']``): the
   heart change Link would have had without the max-health cap.
 - ``hearts/dropped``, ``hearts/taken``, ``hearts/left`` (still on the floor at the episode's end) and
   ``hearts/wasted``: dropped hearts per completed episode.
-- ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['frames']``).
+- ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['episode_frames']`` /
+  ``info['episode_steps']``).
 - ``linger/max_steps``, ``linger/max_frames``, ``linger/tail_steps``, ``linger/tail_frames``: means of the
   longest quiet streak and time since last progress; ``linger/worst_steps`` / ``linger/worst_frames`` are
   maxima across measured episodes. Curriculum starts use ``curriculum/linger/*``; absent data stays absent.
-- ``interrupt/<reason>``: fraction of steps that ended with each ``info['interrupt']`` reason.
+- ``interrupt/<reason>``: fraction of steps that ended with each interrupt (``INTERRUPTS[code]``).
 - ``kind/<KIND>`` and ``duration/<KIND>/<frames>``: action-kind and per-kind duration histograms (fractions).
 - ``rollout/steps``, ``rollout/frames``.
 
@@ -39,8 +41,15 @@ import time
 from collections import Counter
 from typing import Optional
 
+import numpy as np
+
+from ._native import INTERRUPTS
 from .actions import DURATIONS, KINDS, TIMED_KINDS
-from .hearts import heart_change_total
+
+
+def heart_change_total(health_change: float, hearts: Optional[dict]) -> float:
+    """Real health change plus the hearts wasted by picking them up at (or near) full health."""
+    return health_change + (hearts or {}).get('wasted', 0.0)
 
 
 class RolloutMetrics:
@@ -97,6 +106,61 @@ class RolloutMetrics:
             else:
                 setattr(self, name, mine + value)
         return self
+
+    def add_steps(self, actions, frames, interrupts):
+        """Counts one batch of env steps: ``actions`` ``[n, 3]`` (kind, direction, duration indices), ``frames``
+        ``[n]`` and ``interrupts`` ``[n]`` (``INTERRUPTS`` codes or names; None/0 = none)."""
+        actions = np.asarray(actions).reshape(-1, 3)
+        frames = np.asarray(frames).reshape(-1)
+        self.steps += len(actions)
+        self.frames += int(frames.sum())
+        for (kind_index, _, duration_index), interrupt in zip(actions.tolist(), list(interrupts)):
+            kind = KINDS[int(kind_index)]
+            self.kinds[kind.name] += 1
+            if kind in TIMED_KINDS:
+                self.durations[(kind.name, DURATIONS[int(duration_index)])] += 1
+            if isinstance(interrupt, str):
+                name = interrupt
+            else:
+                name = INTERRUPTS[int(interrupt)] if interrupt is not None else 'none'
+            self.interrupts[name] += 1
+
+    def add_episode(self, info: dict):
+        """Folds one finished episode's terminal info into the counts."""
+        if info.get('linger'):
+            self.record_linger(info['linger'], bool(info.get('curriculum')), info.get('linger_room'))
+        if 'blocks' in info:
+            prefix = 'curriculum_' if info.get('curriculum') else ''
+            setattr(self, f'{prefix}block_episodes', getattr(self, f'{prefix}block_episodes') + 1)
+            setattr(self, f'{prefix}blocks', getattr(self, f'{prefix}blocks') + info['blocks'])
+        if info.get('curriculum'):
+            curriculum = info['curriculum']
+            self.curriculum_episodes += 1
+            self.curriculum_successes += int(info.get('outcome') == 'success')
+            self.curriculum_start += curriculum['index'] / curriculum['length']
+            self.curriculum_point += curriculum['point'] / curriculum['length']
+            return
+        self.episodes += 1
+        self.outcomes[info.get('outcome', 'unknown')] += 1
+        self.start_results[(info.get('start_state'), info.get('outcome') == 'success')] += 1
+        self.endings[info.get('ending', 'unknown')] += 1
+        for name, value in (info.get('episode_rewards') or {}).items():
+            self.reward_terms[name] += float(value)
+        self.reward_total += float(info.get('reward_total', 0.0))
+        health = float(info.get('health', 0.0))
+        max_health = float(info.get('max_health', 0.0))
+        self.hearts += health
+        health_change = health - float(info.get('start_health', health))
+        hearts = info.get('hearts') or {}
+        self.health_change += health_change
+        self.health_change_total += heart_change_total(health_change, hearts)
+        self.hearts_dropped += hearts.get('dropped', 0)
+        self.hearts_taken += hearts.get('taken', 0)
+        self.hearts_left += hearts.get('left', 0)
+        self.hearts_wasted += hearts.get('wasted', 0.0)
+        self.health_fraction += health / max_health if max_health > 0 else 0.0
+        self.episode_frames += int(info.get('episode_frames', 0))
+        self.episode_steps += int(info.get('episode_steps', 0))
 
     def record_linger(self, linger: dict, curriculum: bool, room=None):
         """Folds one measured episode into its room-entry or curriculum accumulator."""
@@ -175,85 +239,6 @@ class RolloutMetrics:
             if total:
                 for duration in DURATIONS:
                     result[f'duration/{kind.name}/{duration}'] = self.durations[(kind.name, duration)] / total
-        return result
-
-
-class EpisodeTracker:
-    """Follows one env's steps and folds finished episodes into ``metrics``."""
-
-    def __init__(self):
-        self.metrics = RolloutMetrics()
-        self._rewards = Counter()
-        self._reward_total = 0.0
-        self._frames = 0
-        self._steps = 0
-
-    def begin(self):
-        """Starts a new episode (after env.reset)."""
-        self._rewards = Counter()
-        self._reward_total = 0.0
-        self._frames = 0
-        self._steps = 0
-
-    def step(self, action, reward: float, info: dict, done: bool):
-        """Records one env step; ``action`` is the (kind, direction, duration) index triple."""
-        metrics = self.metrics
-        kind = KINDS[int(action[0])]
-        frames = int(info.get('frames', 0))
-        metrics.steps += 1
-        metrics.frames += frames
-        metrics.kinds[kind.name] += 1
-        if kind in TIMED_KINDS:
-            metrics.durations[(kind.name, DURATIONS[int(action[2])])] += 1
-        interrupt = info.get('interrupt')
-        metrics.interrupts[str(interrupt) if interrupt else 'none'] += 1
-
-        self._steps += 1
-        self._frames += frames
-        self._reward_total += reward
-        for name, value in (info.get('rewards') or {}).items():
-            self._rewards[name] += float(value)
-
-        if done and info.get('linger'):
-            metrics.record_linger(info['linger'], bool(info.get('curriculum')), info.get('linger_room'))
-        if done and 'blocks' in info:
-            prefix = 'curriculum_' if info.get('curriculum') else ''
-            setattr(metrics, f'{prefix}block_episodes', getattr(metrics, f'{prefix}block_episodes') + 1)
-            setattr(metrics, f'{prefix}blocks', getattr(metrics, f'{prefix}blocks') + info['blocks'])
-
-        if done and info.get('curriculum'):
-            curriculum = info['curriculum']
-            metrics.curriculum_episodes += 1
-            metrics.curriculum_successes += int(info.get('outcome') == 'success')
-            metrics.curriculum_start += curriculum['index'] / curriculum['length']
-            metrics.curriculum_point += curriculum['point'] / curriculum['length']
-            self.begin()
-        elif done:
-            metrics.episodes += 1
-            metrics.outcomes[info.get('outcome', 'unknown')] += 1
-            metrics.start_results[(info.get('start_state'), info.get('outcome') == 'success')] += 1
-            metrics.endings[info.get('ending', 'unknown')] += 1
-            metrics.reward_terms.update(self._rewards)
-            metrics.reward_total += self._reward_total
-            health = float(info.get('health', 0.0))
-            max_health = float(info.get('max_health', 0.0))
-            metrics.hearts += health
-            health_change = health - float(info.get('start_health', health))
-            hearts = info.get('hearts') or {}
-            metrics.health_change += health_change
-            metrics.health_change_total += heart_change_total(health_change, hearts)
-            metrics.hearts_dropped += hearts.get('dropped', 0)
-            metrics.hearts_taken += hearts.get('taken', 0)
-            metrics.hearts_left += hearts.get('left', 0)
-            metrics.hearts_wasted += hearts.get('wasted', 0.0)
-            metrics.health_fraction += health / max_health if max_health > 0 else 0.0
-            metrics.episode_frames += self._frames
-            metrics.episode_steps += self._steps
-            self.begin()
-
-    def take(self) -> RolloutMetrics:
-        """Returns the accumulated metrics and starts a fresh accumulator (in-progress episode is kept)."""
-        result, self.metrics = self.metrics, RolloutMetrics()
         return result
 
 

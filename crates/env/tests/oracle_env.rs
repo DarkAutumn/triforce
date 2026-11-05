@@ -8,7 +8,7 @@
 
 mod common;
 
-use common::{GzipStore, OracleNes, assert_obs_valid, open_oracle, repo};
+use common::{GzipStore, OracleNes, assert_obs_valid, open_oracle};
 use env::config::{
     GameData, HpBound, ItemsConfig, RamRandomization, RewardConfig, SpecialistConfig,
 };
@@ -53,7 +53,7 @@ const STEP_INFO_KEYS: [&str; 11] = [
 ];
 
 static DATA: LazyLock<Arc<GameData>> =
-    LazyLock::new(|| GameData::load(&repo()).expect("game data"));
+    LazyLock::new(common::game_data);
 
 fn data() -> &'static Arc<GameData> {
     &DATA

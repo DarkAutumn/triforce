@@ -43,7 +43,7 @@
 
 mod common;
 
-use common::{GzipStore, OracleNes, open_oracle, repo};
+use common::{GzipStore, OracleNes, open_oracle};
 use env::StateStore;
 use env::config::{GameData, RamRandomization, RewardConfig, SpecialistConfig};
 use env::critic::ROOM_STEP_GRACE;
@@ -56,7 +56,7 @@ use zelda::{Action, LoadOptions, Nes, Session};
 type Env = SpecialistEnv<OracleNes, GzipStore>;
 
 static DATA: LazyLock<Arc<GameData>> =
-    LazyLock::new(|| GameData::load(&repo()).expect("game data"));
+    LazyLock::new(common::game_data);
 
 /// `make_env`: an env with RAM randomization cleared, then `update` applied to the config.
 fn make_env(

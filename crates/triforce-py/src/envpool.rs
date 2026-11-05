@@ -533,9 +533,10 @@ fn event_dict<'py>(
 #[pymethods]
 impl PyEnvPool {
     /// `num_envs` envs of `task` on `threads` worker threads (env `i` on thread `i % threads`), env `i` seeded
-    /// from (`seed`, `i`); `fps > 0` paces every env's real frames.
+    /// from (`seed`, `i`); `fps > 0` paces every env's real frames; `record` records every env's inputs from
+    /// its first episode on (as `set_record(env, True)` for all, but in time for the episodes started here).
     #[new]
-    #[pyo3(signature = (task, num_envs, threads=None, seed=0, fps=0.0))]
+    #[pyo3(signature = (task, num_envs, threads=None, seed=0, fps=0.0, record=false))]
     fn new(
         py: Python<'_>,
         task: &Bound<'_, PyAny>,
@@ -543,6 +544,7 @@ impl PyEnvPool {
         threads: Option<usize>,
         seed: u64,
         fps: f64,
+        record: bool,
     ) -> PyResult<Self> {
         let threads = threads.unwrap_or_else(|| {
             num_envs.min(std::thread::available_parallelism().map_or(1, |n| n.get()))
@@ -550,6 +552,7 @@ impl PyEnvPool {
         let mut opts = PoolOptions::new(num_envs, threads, seed);
         opts.fps = fps;
         opts.frame_shape = FRAME_SHAPE;
+        opts.record = record;
         build(py, task, opts)
     }
 

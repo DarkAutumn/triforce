@@ -1,8 +1,9 @@
-"""The v2 action schema: factored (kind × direction × duration) timed options, plus masking.
+"""The v2 action schema: factored (kind × direction × duration) timed options.
 
 Every specialist shares this schema.  A model emits three integers ``(kind, direction, duration)``.
 Direction and duration only apply to some kinds; for the others the index is ignored and the mask
-row is all False (the model must treat that head as not applicable).
+row is all False (the model must treat that head as not applicable).  Legal-action masks are computed
+natively (``zelda::actions``); ``ActionMask`` here only reads and writes the flat form.
 """
 
 from dataclasses import dataclass
@@ -10,9 +11,10 @@ from typing import Optional
 
 import numpy as np
 
+from . import _native
 from .zelda_enums import ActionKind, Direction
 
-ACTION_SCHEMA_VERSION = 1
+ACTION_SCHEMA_VERSION = _native.ACTION_SCHEMA_VERSION
 
 KINDS = tuple(ActionKind)
 DIRECTIONS = (Direction.N, Direction.S, Direction.W, Direction.E,
@@ -34,6 +36,7 @@ DIAGONAL_KINDS = frozenset({ActionKind.BOOMERANG})
 
 # Flat mask layout: [kind (K) | direction (K×D) | duration (K×U)].
 MASK_SIZE = NUM_KINDS + NUM_KINDS * NUM_DIRECTIONS + NUM_KINDS * NUM_DURATIONS
+assert MASK_SIZE == _native.MASK_SIZE, "actions.py and the native action schema disagree"
 
 
 @dataclass(frozen=True)
@@ -149,75 +152,3 @@ class ActionMask:
                 text += '[' + ','.join(d.name for d in self.directions(kind)) + ']'
             parts.append(text)
         return ' '.join(parts)
-
-
-# Directions where pressing a d-pad button with a weapon near a dungeon wall would start a room transition.
-_EDGE_TILE_MIN = 0x03
-_EDGE_TILE_MAX_X = 0x1c
-_EDGE_TILE_MAX_Y = 0x12
-
-
-def compute_action_mask(state) -> ActionMask:
-    """Legal actions for a ZeldaGame state.  Ports v1's masking with the v2 changes (design §5.3):
-
-    - MOVE into a not-yet-pushed push block is legal (pushing means holding against it).
-    - BOMB is offered whenever bombs > 0 and enemies or a bombable wall are present; Link does not
-      need to be lined up with the wall.
-    - Empty-mask fallback: unmask all MOVE directions.
-    """
-    # pylint: disable=too-many-branches
-    link = state.link
-    mask = ActionMask()
-    available = link.get_available_actions()
-
-    for direction in CARDINALS:
-        if state.can_link_move(direction) or state.is_push_block_direction(direction):
-            mask.allow(ActionKind.MOVE, direction)
-
-    mask.allow(ActionKind.WAIT)
-
-    has_enemies = bool(state.active_enemies)
-    has_items = bool(state.items)
-    has_bomb_walls = bool(state.bomb_walls)
-
-    # Items with no enemies: only kinds that can pick items up.  Nothing to hit: no weapons at all.
-    item_pickup = {ActionKind.SWORD, ActionKind.BEAMS, ActionKind.BOOMERANG, ActionKind.ARROW}
-    sword_dirs = link.get_sword_directions_allowed()
-    item_dirs = set(link.get_item_directions_allowed())
-
-    # Near dungeon walls, a directional weapon press can trigger a room transition (v1 _update_mask).
-    blocked = set()
-    if state.level != 0:
-        if link.tile.x <= _EDGE_TILE_MIN or link.tile.x >= _EDGE_TILE_MAX_X:
-            blocked |= {Direction.N, Direction.S}
-        if link.tile.y <= _EDGE_TILE_MIN or link.tile.y >= _EDGE_TILE_MAX_Y:
-            blocked |= {Direction.W, Direction.E}
-
-    for kind in (ActionKind.SWORD, ActionKind.BEAMS, ActionKind.BOOMERANG, ActionKind.ARROW, ActionKind.BOMB):
-        if kind not in available:
-            continue
-
-        if kind == ActionKind.BOMB:
-            if not (has_enemies or has_bomb_walls):
-                continue
-        elif not has_enemies and not (has_items and kind in item_pickup):
-            continue
-
-        dirs = sword_dirs if kind in (ActionKind.SWORD, ActionKind.BEAMS) else item_dirs
-        for direction in CARDINALS:
-            if direction in dirs and direction not in blocked:
-                mask.allow(kind, direction)
-
-        if kind in DIAGONAL_KINDS:
-            for diag, (a, b) in {Direction.NW: (Direction.N, Direction.W), Direction.NE: (Direction.N, Direction.E),
-                                 Direction.SW: (Direction.S, Direction.W),
-                                 Direction.SE: (Direction.S, Direction.E)}.items():
-                if a in item_dirs and b in item_dirs and a not in blocked and b not in blocked:
-                    mask.allow(kind, diag)
-
-    if not mask.direction[ActionKind.MOVE].any():
-        # Sword knockback can leave Link where the walkability model thinks he is stuck.
-        for direction in CARDINALS:
-            mask.allow(ActionKind.MOVE, direction)
-
-    return mask

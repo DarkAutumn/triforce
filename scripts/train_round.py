@@ -35,17 +35,15 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import yaml
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # pylint: disable=wrong-import-position
-from triforce import registry
+from triforce import _native, registry
 from triforce.cli import eval_chain
 from triforce.evaluate import evaluate_specialist
 from triforce.events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir
 from triforce.metrics import read_jsonl
-from triforce.runner import ROUTES_PATH, write_jsonl
+from triforce.runner import write_jsonl
 from triforce.specialist import list_specialists, load_specialist
 from triforce.train import interrupt_on_sigterm
 
@@ -71,7 +69,7 @@ def parse_args(argv=None):
     parser.add_argument('--steps-per-update', type=int, default=4096)
     parser.add_argument('--parallel', type=int, default=16, help="training env workers")
     parser.add_argument('--eval-parallel', type=int, default=4,
-                        help="processes for each specialist's evaluation, which runs while the next one trains")
+                        help="envs in each specialist's evaluation pool, which runs while the next one trains")
     parser.add_argument('--device', default='cuda', choices=['cpu', 'cuda'])
     parser.add_argument('--models-dir', default='models')
     parser.add_argument('--specialists', default=None, help="comma-separated names (default: all trainable)")
@@ -89,9 +87,7 @@ def parse_args(argv=None):
 
 def route_order() -> list[str]:
     """Specialist names in order of first appearance on milestone1."""
-    with open(ROUTES_PATH, encoding='utf-8') as file:
-        steps = yaml.safe_load(file)['milestone1']
-    return list(dict.fromkeys(step['specialist'] for step in steps))
+    return list(dict.fromkeys(step['specialist'] for step in _native.route_steps('milestone1')))
 
 
 def default_specialists() -> list[str]:
@@ -206,7 +202,7 @@ def train_specialist(name: str, args, models: Path, log_dir: Path) -> dict:
 
 
 def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
-    """Evaluates a trained specialist (``triforce.evaluate``, ``--eval-parallel`` processes), writes eval.json and
+    """Evaluates a trained specialist (``triforce.evaluate``, ``--eval-parallel`` envs), writes eval.json and
     the stream's eval/end events, and fills ``record``.  Runs on a background thread while the next specialist
     trains."""
     events = EventLog(log_dir / f'{name}.jsonl', specialist=name, run_id=args.round)
@@ -357,7 +353,7 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
     def evaluate_and_finish(index: int, name: str, record: dict):
         finish(index, name, evaluate_record(name, record, args, log_dir))
 
-    # Each evaluation runs on a background thread (its own process pool) while the next specialist trains.
+    # Each evaluation runs on a background thread (its own native env pool) while the next specialist trains.
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix='eval') as evaluations:
         pending = []
         for index, name in enumerate(names):
@@ -381,7 +377,7 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
         if args.no_promote:
             overrides = {name: str(registry.checkpoint_path(name, args.round, models)) for name in names
                          if registry.checkpoint_path(name, args.round, models).is_file()}
-        say(f"[round] eval-chain milestone1: {args.chain_runs} runs, {args.chain_parallel} processes")
+        say(f"[round] eval-chain milestone1: {args.chain_runs} runs, {args.chain_parallel} envs")
         events.emit('chain_start', runs=args.chain_runs, parallel=args.chain_parallel, overrides=overrides)
         try:
             results, chain = eval_chain('milestone1', args.chain_runs, args.chain_parallel, models_dir=str(models),

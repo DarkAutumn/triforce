@@ -108,6 +108,17 @@ impl PySnapshot {
         Ok(PySnapshot { snap })
     }
 
+    /// A snapshot of a `TFZSTATE` file as it is on disk (no frames or steps counted): `Game.restore` of it is the
+    /// raw machine state, without the load-time randomization or control gain of `Game.load`.
+    #[staticmethod]
+    fn from_state_file(py: Python<'_>, data: &[u8]) -> PyResult<PySnapshot> {
+        let rom = context::rom(py)?;
+        let file = state_file::decode(&rom, data).map_err(|e| StateFormatError::new_err(e.0))?;
+        Ok(PySnapshot {
+            snap: snapshot_from_file(file),
+        })
+    }
+
     fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         Ok(PyBytes::new(py, &self.encode(py)?))
     }

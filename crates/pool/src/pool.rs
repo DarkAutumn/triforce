@@ -92,6 +92,8 @@ pub struct PoolOptions {
     /// Initial pacing of every env in real frames per second (`<= 0`: unthrottled).
     pub fps: f64,
     pub frame_shape: [usize; 3],
+    /// Initial record flag of every env, so the episodes started while the pool is built are recorded too.
+    pub record: bool,
 }
 
 impl PoolOptions {
@@ -102,6 +104,7 @@ impl PoolOptions {
             seed,
             fps: 0.0,
             frame_shape: FRAME_SHAPE,
+            record: false,
         }
     }
 }
@@ -229,7 +232,11 @@ impl<E: PoolEnv> Pool<E> {
         let frame_bytes = opts.frame_shape.iter().product();
         let stop = Arc::new(AtomicBool::new(false));
         let controls: Vec<EnvControl> = (0..n)
-            .map(|i| EnvControl::new(i, opts.fps, frame_bytes, stop.clone()))
+            .map(|i| {
+                let control = EnvControl::new(i, opts.fps, frame_bytes, stop.clone());
+                control.set_recording(opts.record);
+                control
+            })
             .collect();
         let mut envs = Vec::with_capacity(n);
         for (index, control) in controls.iter().enumerate() {

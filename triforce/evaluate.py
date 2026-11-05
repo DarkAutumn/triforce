@@ -1,15 +1,17 @@
 """Evaluate one specialist on its own rooms: N episodes from every seed start state.
 
     python -m triforce.evaluate --specialist NAME [--checkpoint PATH | --run-id ID] [--models-dir DIR]
-        [--episodes-per-state 20] [--parallel 1] [--seed 0] [--deterministic] [--output PATH]
+        [--episodes-per-state 20] [--parallel 1] [--threads N] [--device cpu] [--seed 0] [--deterministic]
+        [--output PATH]
 
 Training metrics mix start states and ``eval-chain`` plays the whole route; this measures one model in
 isolation.  Every seed savestate of the specialist (``SpecialistConfig.resolve_start_states``) is played
-``--episodes-per-state`` times in a ``ZeldaEnv`` (same rewards, end conditions and RAM randomization as
-training), episode ``i`` seeded with ``seed + i``.  Actions are sampled unless ``--deterministic``.  The
-checkpoint defaults to the specialist's promoted model; results go to ``<checkpoint dir>/eval.json``.
+``--episodes-per-state`` times in a native ``EvalTask`` pool of ``--parallel`` envs (same rewards, end conditions
+and RAM randomization as training), episode ``i`` seeded with ``seed + i``; one batched network evaluation per
+step serves every env.  Actions are sampled unless ``--deterministic``.  The checkpoint defaults to the
+specialist's promoted model; results go to ``<checkpoint dir>/eval.json``, records sorted by seed.
 ``mean_health_change`` is hearts at the episode's end minus hearts at its start (after hp randomization).
-Dropped hearts (``triforce/hearts.py``) are kept per episode (``records[i]['hearts']``); ``mean_health_change_total``
+Dropped hearts are kept per episode (``records[i]['hearts']``); ``mean_health_change_total``
 adds the hearts wasted by picking them up at (or near) full health, and ``hearts_dropped`` / ``hearts_taken`` /
 ``hearts_left`` are means per episode (also per room and per start state).
 Lingering records retain longest quiet streak, terminal tail, visit time and boss/pickup milestones. Overall,
@@ -18,7 +20,6 @@ room and start-state aggregates report mean longest/tail steps and frames plus t
 
 import argparse
 import json
-import multiprocessing as mp
 from collections import Counter
 from pathlib import Path
 from typing import Callable, Optional
@@ -26,14 +27,10 @@ from typing import Callable, Optional
 import numpy as np
 import torch
 
-from . import registry
-from .env import ZeldaEnv
-from .hearts import heart_change_total
-from .session import GameSession
+from . import _native, registry
+from .metrics import heart_change_total
+from .runner import infer_actions
 from .specialist import SpecialistConfig, load_specialist
-from .start_states import state_label
-
-_WORKER = {}
 
 
 def _room_key(room) -> str:
@@ -41,46 +38,34 @@ def _room_key(room) -> str:
     return f"{level}:0x{location:02x}" + (":cave" if in_cave else "")
 
 
-def _load_network(checkpoint):
+def _load_network(checkpoint, device: str = 'cpu'):
     network, _ = registry.load_model(checkpoint)
     network.eval()
-    return network
+    return network.to(device)
 
 
-def _play(env: ZeldaEnv, network, state: str, episode_seed: int, deterministic: bool) -> dict:
-    """One episode from `state`; returns its record."""
-    torch.manual_seed(episode_seed)
-    obs, reset_info = env.reset(seed=episode_seed, options={'start_state': state})
-    terminated = truncated = False
-    steps = frames = 0
-    info = reset_info
-    while not (terminated or truncated):
-        with torch.no_grad():
-            action = network.get_action(obs, deterministic=deterministic)
-        obs, _, terminated, truncated, info = env.step(np.asarray(action).reshape(-1)[:3])
-        steps += 1
-        frames += info['frames']
-    record = {'start_state': state, 'room': list(reset_info['room']), 'seed': episode_seed,
-              'outcome': info['outcome'], 'ending': info['ending'], 'success': info['outcome'] == 'success',
-              'steps': steps, 'frames': frames, 'start_health': reset_info['health'], 'health': info['health'],
-              'max_health': info['max_health'], 'hearts': info['hearts']}
-    if info.get('linger') is not None:
-        record['linger'] = info['linger']
-    if 'blocks' in info:
-        record['blocks'] = info['blocks']
-    return record
+def _play(pool, network, deterministic: bool, total: int,
+          on_episode: Optional[Callable[[dict, int, int], None]]) -> list[dict]:
+    """Steps the eval pool in lockstep until every job ran; returns the records in completion order."""
+    buffers = pool.make_buffers()
+    records = []
 
+    def collect():
+        for event in pool.poll_events():
+            if event['type'] == 'eval':
+                records.append(event['record'])
+                if on_episode is not None:
+                    on_episode(records[-1], len(records), total)
 
-def _worker_init(config: SpecialistConfig, checkpoint: str, deterministic: bool):
-    torch.set_num_threads(1)    # N processes × all-core torch threads oversubscribes the machine
-    _WORKER['env'] = ZeldaEnv(config, capture_dir=None)
-    _WORKER['network'] = _load_network(checkpoint)
-    _WORKER['deterministic'] = deterministic
-
-
-def _worker_run(job):
-    state, episode_seed = job
-    return _play(_WORKER['env'], _WORKER['network'], state, episode_seed, _WORKER['deterministic'])
+    while pool.active:
+        count = pool.recv(buffers, min_ready=pool.active)
+        rows = np.flatnonzero(~buffers['finished'][:count])
+        if len(rows):
+            obs = {key: value[rows] for key, value in buffers['obs'].items()}
+            pool.send(buffers['env_ids'][rows], infer_actions(network, obs, deterministic))
+        collect()
+    collect()
+    return records
 
 
 def _heart_stats(records: list[dict]) -> dict:
@@ -127,37 +112,26 @@ def _group(records: list[dict], key) -> dict:
 
 def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes_per_state: int = 20,
                         parallel: int = 1, seed: int = 0, deterministic: bool = False,
-                        session: Optional[GameSession] = None,
-                        on_episode: Optional[Callable[[dict, int, int], None]] = None) -> dict:
-    """Plays every seed start state `episodes_per_state` times and returns the summary dict (see module doc).
-    ``on_episode(record, done, total)`` is called as each episode finishes (completion order when parallel)."""
+                        on_episode: Optional[Callable[[dict, int, int], None]] = None, *,
+                        threads: Optional[int] = None, device: str = 'cpu', states_dir=None) -> dict:
+    """Plays every seed start state `episodes_per_state` times on `parallel` envs and returns the summary dict
+    (see module doc).  ``on_episode(record, done, total)`` is called as each episode finishes (completion order).
+    ``threads``: the pool's worker threads (default min(parallel, cores)); ``device``: where the network runs;
+    ``states_dir``: where start states resolve (default the states directory)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     config = load_specialist(specialist) if isinstance(specialist, str) else specialist
-    states = sorted(state_label(p) for p in config.resolve_start_states())
+    states_dir = None if states_dir is None else str(states_dir)
+    states = sorted(Path(p).stem for p in config.resolve_start_states(states_dir))
     if not states:
         raise ValueError(f"{config.name} has no seed start states")
     episode_states = [state for state in states for _ in range(episodes_per_state)]
     jobs = [(state, seed + index) for index, state in enumerate(episode_states)]
 
-    if parallel <= 1:
-        env = ZeldaEnv(config, session=session, capture_dir=None)
-        network = _load_network(checkpoint)
-        try:
-            records = []
-            for state, s in jobs:
-                records.append(_play(env, network, state, s, deterministic))
-                if on_episode is not None:
-                    on_episode(records[-1], len(records), len(jobs))
-        finally:
-            env.close()
-    else:
-        ctx = mp.get_context('spawn')
-        with ctx.Pool(parallel, _worker_init, (config, str(checkpoint), deterministic)) as pool:
-            records = []
-            for record in pool.imap_unordered(_worker_run, jobs):
-                records.append(record)
-                if on_episode is not None:
-                    on_episode(record, len(records), len(jobs))
+    network = _load_network(checkpoint, device)
+    torch.manual_seed(seed)
+    task = _native.EvalTask(config, jobs, states_dir=states_dir)
+    with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed) as pool:
+        records = _play(pool, network, deterministic, len(jobs), on_episode)
     records.sort(key=lambda r: r['seed'])
 
     count = len(records)
@@ -220,7 +194,9 @@ def main(argv=None):
     parser.add_argument('--run-id', default=None, help="evaluate <models>/<specialist>/<run-id>/ckpt.pt")
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
     parser.add_argument('--episodes-per-state', type=int, default=20)
-    parser.add_argument('--parallel', type=int, default=1)
+    parser.add_argument('--parallel', type=int, default=1, help="envs in the evaluation pool")
+    parser.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
+    parser.add_argument('--device', default='cpu', help="torch device for the network")
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--deterministic', action='store_true', help="argmax actions instead of sampling")
     parser.add_argument('--output', default=None, help="JSON output (default: <checkpoint dir>/eval.json)")
@@ -239,7 +215,7 @@ def main(argv=None):
         raise FileNotFoundError(checkpoint)
 
     result = evaluate_specialist(config, checkpoint, args.episodes_per_state, args.parallel, args.seed,
-                                 args.deterministic)
+                                 args.deterministic, threads=args.threads, device=args.device)
     output = Path(args.output) if args.output else checkpoint.parent / 'eval.json'
     output.parent.mkdir(parents=True, exist_ok=True)
     with open(output, 'w', encoding='utf-8') as file:

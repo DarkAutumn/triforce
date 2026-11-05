@@ -329,7 +329,7 @@ fn run_fixture(
 fn env_matches_python_fixtures() {
     let _lock = oracle::lock();
     let Some(mut nes) = open_oracle() else { return };
-    let data = GameData::load(&repo()).expect("game data");
+    let data = common::game_data();
     let text =
         std::fs::read_to_string(repo().join("crates/env/tests/parity_exceptions.toml")).unwrap();
     let exceptions: Exceptions = toml::from_str(&text).unwrap();

@@ -2,44 +2,22 @@
 
 import argparse
 import json
-import multiprocessing as mp
 import os
 import sys
-
-_WORKER = {}
-
-
-def _eval_worker_init(models_dir, overrides, deterministic, specialist_configs):
-    import torch  # pylint: disable=import-outside-toplevel
-    from .runner import Runner  # pylint: disable=import-outside-toplevel
-    torch.set_num_threads(1)    # N processes × all-core torch threads oversubscribes the machine
-    _WORKER['runner'] = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic,
-                               specialist_configs=specialist_configs)
-
-
-def _eval_worker_run(args):
-    route, seed = args
-    return _WORKER['runner'].run(route, seed)
 
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
                deterministic: bool = False, stop_at=None, first_seed: int = 0, start_from=None,
-               specialist_configs=None):
-    """Runs the route with optional loaded specialist configs, preserving them in spawned workers."""
+               specialist_configs=None, threads=None, device: str = 'cpu'):
+    """Runs the route once per seed in one chain pool of ``parallel`` envs (``threads`` worker threads), with
+    optional checkpoint overrides and loaded specialist configs.  Returns (results sorted by seed, summary)."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     from .runner import Route, Runner, chain_summary, parse_location  # pylint: disable=import-outside-toplevel
     route = Route.load(route_name, parse_location(stop_at) if stop_at else None, start_from)
     seeds = list(range(first_seed, first_seed + runs))
-    if parallel <= 1:
-        runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic,
-                        specialist_configs=specialist_configs)
-        try:
-            results = [runner.run(route, seed) for seed in seeds]
-        finally:
-            runner.close()
-    else:
-        ctx = mp.get_context('spawn')
-        with ctx.Pool(parallel, _eval_worker_init, (models_dir, overrides, deterministic, specialist_configs)) as pool:
-            results = pool.map(_eval_worker_run, [(route, seed) for seed in seeds])
+    runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic, device=device,
+                    specialist_configs=specialist_configs, parallel=parallel, threads=threads)
+    results = runner.run_many(route, seeds)
     return results, chain_summary(results)
 
 
@@ -50,7 +28,8 @@ def _cmd_eval_chain(args):
     overrides = dict(item.split('=', 1) for item in args.checkpoint)
     results, summary = eval_chain(args.route, args.runs, args.parallel, args.models_dir, overrides,
                                   args.deterministic, args.stop_at, args.first_seed, args.start_from,
-                                  specialist_configs={config.name: config for config in configs})
+                                  specialist_configs={config.name: config for config in configs},
+                                  threads=args.threads, device=args.device)
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     write_jsonl(args.output, results)
     print(json.dumps(summary, indent=2))
@@ -103,7 +82,9 @@ def main(argv=None):
     chain = sub.add_parser('eval-chain', help="run the route N times; the milestone metric")
     chain.add_argument('--route', default='milestone1')
     chain.add_argument('--runs', type=int, default=20)
-    chain.add_argument('--parallel', type=int, default=1)
+    chain.add_argument('--parallel', type=int, default=1, help="envs in the chain pool")
+    chain.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
+    chain.add_argument('--device', default='cpu', help="torch device for the specialists' networks")
     chain.add_argument('--first-seed', type=int, default=0)
     chain.add_argument('--deterministic', action='store_true')
     chain.add_argument('--stop-at', help="end the route on entering this room, e.g. 1:0x73")

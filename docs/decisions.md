@@ -421,3 +421,43 @@ Format: date — what changed — why — evidence.
   models, per-env render toggling, pickled snapshots replaying to identical RAM, render on/off giving identical
   emulation, legacy gzip states rejected with `StateFormatError`. `cargo test -p triforce-py`: store and
   describe unit tests. Raw zcore speed at this point (Z1) is about 490 frames/s per core, release build.
+
+## 2026-11-05 — Python cutover onto `triforce._native` (plan step 16)
+
+- **What:** the Python package drives the native module only. Deleted: the Python game stack (`emulator`,
+  `session`, `env`, `ppo_worker`, `frame_skip`, `state_change`, `zelda_game*`, `room*`, `link`, `enemy`,
+  `zelda_objects`, `tiles`, `wavefront`, `projectile_blocks`, `objectives`, `critics`, `rewards`,
+  `end_conditions`, `hearts`, `linger`, `start_states`, `curriculum`, `describe`, `game_map`), the oracle-era
+  scripts (`oracle_emulator`, `record_corpus`, `record_env_parity`, `tfmovie`), `custom_integrations/` (old
+  FCEUmm states, `data.json`, `scenario.json`, `rom.sha`) and the game-logic Python tests (ported to Rust in
+  `crates/env/tests/ported_*.rs`, or already covered by Rust tests named in the commit). Thin modules remain:
+  `paths.py` (`STATES_DIR = triforce/states` or `$TRIFORCE_STATES_DIR`), `specialist.py` (native
+  `SpecialistConfig`), `observation.py` (gym space from `OBS_SPEC`), `actions.py` (schema + flat `ActionMask`),
+  `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`).
+- **Training.** `ppo.Collector` runs the lockstep loop over `EnvPool(TrainTask)`; `PPO.train(network, pool,
+  iterations, callback, start_steps, seed)`; bootstrap rows add `gamma**(frames/8)·V(final_obs)`.
+  `RolloutMetrics.add_steps/add_episode` read the pool's `episode` events (`episode_rewards`, not the last
+  step's `rewards`); metric names unchanged. `train.py`: `--parallel` = envs, `--threads`, `--states-dir`,
+  `--start-state` takes a path. Same seed → identical first-iteration metrics with 1 vs 4 threads.
+- **Evaluation and chains.** One `EvalTask`/`ChainTask` pool with batched inference (`evaluate --threads
+  --device`, `eval-chain --threads --device`); eval records sorted by seed; output formats unchanged. A run
+  without `--from` starts from `start.state` in the states directory. Jobs go to whichever env is free, so a run
+  with *sampled* actions is reproducible only with `threads=1`; `--deterministic` runs always are.
+- **Watching.** `run.py --fps` is now real frames per second (was decisions per second); `run.py --video PATH`
+  records the run's inputs (`EnvPool(..., record=True)`, new: recording from the pool's first episode) and
+  renders the recording frame by frame through a `Game` restored with the new `Snapshot.from_state_file`.
+  `play_grid.GameGrid` is one paced chain pool; seeds go to the next free game, so the start message has no
+  seed (the end message does); a finished game holds its next run for 3 s so the result stays visible.
+- **States and exploration.** `entry_states` keeps its subcommands, manifest and names (`convert` deleted; new
+  `start` writes `start.state` at the base movie's first mode-5 frame), runs chains on threads, and reads room
+  data from the new native `game_rooms()`. **On-route build steps must now succeed on the room's own objective**
+  (`exit-correct`/`triforce-collected`) and then pass the `AcceptSpec`: with the `AcceptSpec` alone a rebuilt
+  `0_77c_0` left the sword cave without the sword (the old builder had the same hole). Alternates and `path`
+  still use the `AcceptSpec` alone.
+- **Legacy states as Rust test fixtures.** The Rust oracle tests load the old gzip FCEUmm states; they moved to
+  `crates/env/tests/fixtures/legacy-states/` (one loader per crate) until those tests switch to zcore and the
+  regenerated states (step 17). `env::config::STATES_DIR` is `triforce/states`. The `zelda::vars` table is now
+  the source of truth for named RAM variables (its data.json cross-check went with data.json).
+- **Waiting on step 17:** `tests/test_entry_states.py::{test_every_trainable_specialist_has_start_states,
+  test_configured_start_states_are_clean}` and `env` `pure::trainable_specialists_have_start_states` fail until
+  the start states are regenerated.

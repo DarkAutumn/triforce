@@ -6,6 +6,7 @@ use env::observation::{OBS_SPEC, Observation};
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use zelda::{ActionMask, Nes};
 
 /// `zelda::Nes` over the dev-only FCEUmm oracle (state = oracle savestate bytes); `.1` counts every frame run.
@@ -274,9 +275,17 @@ impl env::StateStore<Vec<u8>> for MemStore {
     }
 }
 
-/// Directory of the named start states.
+/// Directory of the named start states the oracle tests use: the legacy gzip FCEUmm states, kept as test
+/// fixtures until the tests move to zcore and the regenerated `TFZSTATE` states (plan step 17).
 pub fn states_dir() -> PathBuf {
-    repo().join(env::config::STATES_DIR)
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/legacy-states")
+}
+
+/// The repo's game data with its states directory pointed at [`states_dir`] (the oracle tests' fixtures).
+pub fn game_data() -> Arc<env::config::GameData> {
+    let mut data = (*env::config::GameData::load(&repo()).expect("game data")).clone();
+    data.states_dir = states_dir();
+    Arc::new(data)
 }
 
 /// File of a named state, resolved like `GameSession.load` (bare name -> `<states dir>/<name>.state`; an
@@ -297,7 +306,7 @@ pub fn state_path(name: &str) -> PathBuf {
 /// THE state loader of the env tests: every test that starts from a named state (directly or through
 /// `GzipStore`) reads it here, so switching the tests to zcore + regenerated `TFZSTATE` files
 /// (`triforce/states/<name>.state`, legacy unsuffixed names such as `1_44w` remapped to `1_44w_0`) happens in
-/// this one place.  Today: the legacy gzip FCEUmm bodies in `triforce/custom_integrations/Zelda-NES/`, which
+/// this one place.  Today: the legacy gzip FCEUmm bodies in `tests/fixtures/legacy-states/`, which
 /// the oracle loads directly, with a zero frame counter appended.
 pub fn load_named_state(name: &str) -> Result<Vec<u8>, env::EnvError> {
     let path = state_path(name);

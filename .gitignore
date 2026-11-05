@@ -3,12 +3,12 @@ __pycache__/
 *.pyc
 .play/
 *.nes
-triforce/custom_integrations/Zelda-NES/*.png
+triforce/states/*.png
 models/
 runs/
 *.prof
 triforce.egg-info/
-triforce/custom_integrations/Zelda-NES/*.yaml
+triforce/states/*.yaml
 trajectories/
 logs/
 target/

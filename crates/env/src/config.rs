@@ -32,8 +32,8 @@ fn err<T>(msg: impl Into<String>) -> Result<T, ConfigError> {
     Err(ConfigError(msg.into()))
 }
 
-/// Integration directory of the start states, relative to the repo root.
-pub const STATES_DIR: &str = "triforce/custom_integrations/Zelda-NES";
+/// Start states (`TFZSTATE` files), relative to the repo root.
+pub const STATES_DIR: &str = "triforce/states";
 
 /// '(1, 0x73)', '(0, 0x77, cave)', '1, 0x73' -> MapLocation (`specialist.parse_room`).
 pub fn parse_room(text: &str) -> Result<MapLocation, ConfigError> {

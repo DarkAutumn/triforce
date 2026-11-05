@@ -12,9 +12,6 @@ use std::sync::Arc;
 use zcore::{MachineState, Rom, state_file};
 use zelda::SessionSnapshot;
 
-/// The new state directory (plan step 16); the legacy one is used until it exists.
-pub const NEW_STATES_DIR: &str = "triforce/states";
-
 struct Loaded {
     root: PathBuf,
     rom: Option<Arc<Rom>>,
@@ -83,18 +80,9 @@ pub fn rom(py: Python<'_>) -> PyResult<Arc<Rom>> {
     })
 }
 
-/// The default state directory: `$TRIFORCE_STATES_DIR`, else `<root>/triforce/states` once it exists, else the
-/// legacy integration directory.
+/// The default state directory: `$TRIFORCE_STATES_DIR`, else `<root>/triforce/states`.
 fn default_states_dir(root: &Path) -> PathBuf {
-    if let Some(dir) = std::env::var_os("TRIFORCE_STATES_DIR") {
-        return PathBuf::from(dir);
-    }
-    let new = root.join(NEW_STATES_DIR);
-    if new.is_dir() {
-        new
-    } else {
-        root.join(STATES_DIR)
-    }
+    std::env::var_os("TRIFORCE_STATES_DIR").map_or_else(|| root.join(STATES_DIR), PathBuf::from)
 }
 
 /// The game data (configs, map, routes, chain hp), loaded once; `states_dir` overrides where start states live.

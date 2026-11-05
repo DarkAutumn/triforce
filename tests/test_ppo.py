@@ -1,6 +1,7 @@
-"""PPO trainer: learning a synthetic dict-obs bandit, KL rollback/early stop, workers, demo regularization."""
+"""PPO trainer: learning a synthetic dict-obs bandit, KL rollback/early stop, lockstep pools, demo regularization."""
 
 import copy
+import itertools
 import random
 
 import numpy as np
@@ -10,14 +11,17 @@ import torch
 from triforce.actions import Action
 from triforce.demo import behavior_clone, compute_demo_accuracy, stack_observations
 from triforce.model import ModelConfig, ZeldaPolicy
-from triforce.ppo import PPO, PPOConfig
-from triforce.ppo_worker import ModelFactory
-from triforce.rollout_buffer import RolloutBuffer
+from triforce.ppo import PPO, Collector, PPOConfig
 
 from . import synthetic
 
 SMALL = ModelConfig(hidden_dim=64, entity_d_model=32, entity_ff_dim=64, entity_out_dim=32, grid_channels=(8, 8, 8),
                     grid_out_dim=32)
+
+
+def _bandit_pool(n_envs=1):
+    seeds = itertools.count()
+    return synthetic.ListPool(lambda: synthetic.BanditEnv(seed=next(seeds)), n_envs)
 
 
 def _seed(seed=0):
@@ -41,18 +45,16 @@ def test_ppo_learns_dict_obs_bandit():
     network = ZeldaPolicy(synthetic.observation_space(), SMALL)
     ppo = PPO(PPOConfig(target_steps=256, learning_rate=2e-3, num_epochs=4, ent_coeff=0.0, target_kl=0.05))
     history = []
-    ppo.train(network, synthetic.BanditEnv, iterations=10,
+    ppo.train(network, _bandit_pool(), iterations=10,
               callback=lambda result: history.append(result.rollout.summary()['reward/total']))
     assert _greedy_bandit_actions(network) == synthetic.BANDIT_TARGETS
     assert history[-1] > 0.9 and np.mean(history[:2]) < 0.5
 
 
 def _filled_buffer(network, n_envs=1, steps=128):
-    buffer = RolloutBuffer(steps, n_envs, synthetic.observation_space(), 0.99, 0.95)
-    env = synthetic.BanditEnv()
-    for i in range(n_envs):
-        buffer.collect(i, network, env)
-    return buffer
+    collector = Collector(_bandit_pool(n_envs), steps, 0.99, 0.95)
+    collector.collect(network, 'cpu')
+    return collector.buffer
 
 
 def test_kl_rollback_restores_weights_and_optimizer_state():
@@ -92,14 +94,12 @@ def test_kl_early_stop_without_rollback_keeps_update():
         assert stats[f'entropy/{head}'] >= 0.0
 
 
-def test_parallel_workers_fill_shared_buffer_and_merge_metrics():
+def test_pool_envs_fill_buffer_and_metrics():
     _seed()
     network = ZeldaPolicy(synthetic.observation_space(), SMALL)
     ppo = PPO(PPOConfig(target_steps=64, num_epochs=1))
     results = []
-    ppo.train(network, synthetic.BanditEnv, iterations=2, n_envs=2,
-              make_network=ModelFactory(ZeldaPolicy, synthetic.observation_space(), SMALL),
-              observation_space=synthetic.observation_space(), callback=results.append)
+    ppo.train(network, _bandit_pool(2), iterations=2, callback=results.append)
     assert [r.iteration for r in results] == [1, 2]
     assert results[-1].total_steps == 128
     summary = results[0].rollout.summary()

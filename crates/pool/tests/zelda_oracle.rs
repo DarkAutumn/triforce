@@ -91,13 +91,14 @@ fn open_oracle() -> Option<OracleNes> {
     ))
 }
 
-/// The legacy gzip states (FCEUmm bodies the oracle loads) plus the oracle's 8-byte frame counter.
+/// The legacy gzip states (FCEUmm bodies the oracle loads, env's test fixtures) plus the oracle's 8-byte frame
+/// counter.
 struct GzipStore;
 
 impl GzipStore {
     fn path(&self, name: &str) -> PathBuf {
         repo()
-            .join(env::config::STATES_DIR)
+            .join("crates/env/tests/fixtures/legacy-states")
             .join(format!("{name}.state"))
     }
 }

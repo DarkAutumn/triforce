@@ -5,8 +5,8 @@
 Chain runs (``triforce eval-chain`` / ``scripts/train_round.py``) record ``health_in`` for every room visit.  This
 collects them per room (``"<level>:0x<room>[:cave]"``) into a JSON profile.  A specialist with
 ``ram_randomization.chain_hp: p`` draws its reset health from its start room's profile in a share ``p`` of resets
-(``start_states.ram_randomization_values``); the other resets keep the ``hp`` / ``full_hp`` draw, so training still
-sees full health (sword beams) and the whole range.
+(the native ``env::start_states::ram_randomization_values``, which loads ``triforce/chain_hp.json``); the other
+resets keep the ``hp`` / ``full_hp`` draw, so training still sees full health (sword beams) and the whole range.
 """
 
 import argparse
@@ -14,15 +14,7 @@ import json
 import os
 from typing import Dict, Iterable, List
 
-from .zelda_enums import MapLocation
-
 PROFILE_PATH = os.path.join(os.path.dirname(__file__), 'chain_hp.json')
-MIN_SAMPLES = 5                 # rooms with fewer chain visits fall back to the hp range
-
-
-def room_key(location: MapLocation) -> str:
-    """'1:0x44', '0:0x77:cave'."""
-    return f"{location.level}:0x{location.value:02x}" + (':cave' if location.in_cave else '')
 
 
 def build_profile(paths: Iterable[str]) -> Dict[str, List[float]]:
@@ -37,20 +29,6 @@ def build_profile(paths: Iterable[str]) -> Dict[str, List[float]]:
                     key = f"{room['level']}:{room['room']}" + (':cave' if room['in_cave'] else '')
                     profile.setdefault(key, []).append(float(room['health_in']))
     return {key: sorted(values) for key, values in sorted(profile.items())}
-
-
-_CACHE: Dict[str, Dict[str, List[float]]] = {}
-
-
-def load_profile(path: str = PROFILE_PATH) -> Dict[str, List[float]]:
-    """The profile at ``path`` (cached per process); empty if the file doesn't exist."""
-    if path not in _CACHE:
-        if os.path.exists(path):
-            with open(path, encoding='utf-8') as file:
-                _CACHE[path] = json.load(file)
-        else:
-            _CACHE[path] = {}
-    return _CACHE[path]
 
 
 def main(argv=None):

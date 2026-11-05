@@ -18,7 +18,7 @@ from typing import Optional
 
 import torch
 
-from .actions import ACTION_SCHEMA_VERSION
+from ._native import ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION
 
 MODELS_DIR_ENV = 'TRIFORCE_MODELS_DIR'
 CHECKPOINT_NAME = 'ckpt.pt'
@@ -30,8 +30,7 @@ class SchemaMismatchError(ValueError):
 
 
 def obs_schema_version() -> int:
-    """The current observation schema version."""
-    from .observation import OBS_SCHEMA_VERSION  # pylint: disable=import-outside-toplevel
+    """The current observation schema version (the native observation builder's)."""
     return OBS_SCHEMA_VERSION
 
 

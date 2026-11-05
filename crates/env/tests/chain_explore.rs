@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{GzipStore, MemStore, OracleNes, open_oracle, repo};
+use common::{GzipStore, MemStore, OracleNes, open_oracle};
 use env::StateStore;
 use env::chain::{ChainEnv, ChainStatus, RoomRecord, Route, RunResult, chain_summary};
 use env::config::{GameData, SpecialistConfig};
@@ -16,7 +16,7 @@ use std::sync::Arc;
 use zelda::{Action, GameMap, LoadOptions, MapLocation, Session, Var};
 
 fn data() -> Arc<GameData> {
-    GameData::load(&repo()).expect("game data")
+    common::game_data()
 }
 
 /// Runs one chain to its end with `policy`.

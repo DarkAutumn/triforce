@@ -1,52 +1,31 @@
 """Specialist task configs: ``specialists/<name>.yaml`` (design §3.3).
 
-```yaml
-name: stalfos-keese-gel
-rooms: ['(1, 0x73)', '(0, 0x77, cave)']   # (level, room[, cave]); must be tagged `specialist: <name>` in game.yaml
-start_states: ['1_73*', '1_72e']          # savestate globs (integration dir); rooms are verified from RAM at load
-success: [exit-correct]                   # exit-correct | boss-dead-and-heart | triforce-collected | enter-room:<l>:<r>
-endings: {}                               # optional ending -> outcome overrides of end_conditions.DEFAULT_FAILURES
-reward_profile: default
-reward: {pbrs: on}
-obs: {objective: on}
-ram_randomization: {hp: [0.5, max], bombs: [0, 8], keys: [0, 1]}
-fresh_rooms: true                         # pre-entry savestates: clear the room's kill history (full spawn)
-items: {bombs: off}                       # mask out items even when Link has them (bombs/boomerang/arrows)
-curriculum: {enabled: off}               # backward curriculum over trajectories/<name> (triforce.explore)
-one_room: off                             # on: every episode ends at its first room exit (else when it leaves rooms)
-max_steps: 2000
-warm_start: null
-```
+Parsing and validation live in the native module (``env::config``); this module keeps the Python-facing names.
+``SpecialistConfig.rooms`` is a list of ``(level, room, in_cave)`` tuples; nested blocks (``reward``, ``items``,
+``ram_randomization``, ``curriculum``, ``obs``) read as attribute namespaces; ``replace(**fields)`` re-validates.
 """
 
-import glob
-import os
 import re
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from pathlib import Path
+from typing import List, Union
 
-import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from ._native import ConfigError, SpecialistConfig
+from .paths import HARVESTED_DIR, SPECIALISTS_DIR
+from .zelda_enums import MapLocation
 
-from .emulator import GAME_DIR
-from .end_conditions import validate_success_kind
-from .rewards import OUTCOMES
-from .zelda_enums import ActionKind, MapLocation
-
-SPECIALISTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'specialists')
-HARVESTED_DIR = os.path.join(GAME_DIR, 'harvested')
+__all__ = ['ConfigError', 'SpecialistConfig', 'format_room', 'harvested_dir', 'list_specialists', 'load_specialist',
+           'parse_room', 'room_locations', 'specialist_path']
 
 _ROOM_RE = re.compile(r'^\(?\s*(\d+)\s*,\s*(0x[0-9a-fA-F]+|\d+)\s*(?:,\s*(cave))?\s*\)?$')
-
-HpBound = Union[float, Literal['max']]
 
 
 def parse_room(text: Union[str, list, tuple]) -> MapLocation:
     """'(1, 0x73)', '(0, 0x77, cave)' or [1, '0x73'] -> MapLocation."""
     if isinstance(text, (list, tuple)):
         text = ', '.join(str(x) for x in text)
-    match = _ROOM_RE.match(str(text).strip())
+    match = _ROOM_RE.match(text.strip())
     if not match:
-        raise ValueError(f"Bad room {text!r}; expected '(level, 0xRR)' or '(level, 0xRR, cave)'")
+        raise ValueError(f"bad room {text!r}: expected '(level, 0xROOM)' or '(level, 0xROOM, cave)'")
     level, room, cave = match.groups()
     return MapLocation(int(level), int(room, 0), cave is not None)
 
@@ -57,176 +36,26 @@ def format_room(location: MapLocation) -> str:
     return f"({location.level}, 0x{location.value:02x}{cave})"
 
 
-class RewardConfig(BaseModel):
-    """reward: block."""
-    model_config = ConfigDict(extra='forbid')
-    pbrs: bool = True
-    block_reward: float = Field(default=1.0, ge=0)
-    nearby_items: bool = False
-    quiet_enemy_penalty: float = Field(default=0.0, ge=0)
+def room_locations(config: SpecialistConfig) -> List[MapLocation]:
+    """The config's rooms as MapLocations."""
+    return [MapLocation(level, room, in_cave) for level, room, in_cave in config.rooms]
 
 
-class ObsConfig(BaseModel):
-    """obs: block."""
-    model_config = ConfigDict(extra='forbid')
-    objective: bool = True
+def harvested_dir(config: SpecialistConfig) -> Path:
+    """Directory of harvested start states for this specialist."""
+    return Path(config.harvested_states) if config.harvested_states else HARVESTED_DIR / config.name
 
 
-class CurriculumConfig(BaseModel):
-    """Backward curriculum over Go-Explore trajectories (``curriculum.py``); off unless enabled.  ``trajectories``
-    defaults to ``trajectories/<name>`` at the repo root (``python -m triforce.explore --specialist <name>``)."""
-    model_config = ConfigDict(extra='forbid')
-    enabled: bool = False
-    trajectories: Optional[str] = None
-    fraction: float = 0.5
-    threshold: float = 0.6
-
-
-class ItemsConfig(BaseModel):
-    """Which inventory items the specialist may use (off = masked out even when Link has the item)."""
-    model_config = ConfigDict(extra='forbid')
-    bombs: bool = True
-    boomerang: bool = True
-    arrows: bool = True
-
-    def disabled_kinds(self) -> frozenset:
-        """ActionKinds masked out for this specialist."""
-        pairs = ((self.bombs, ActionKind.BOMB), (self.boomerang, ActionKind.BOOMERANG), (self.arrows, ActionKind.ARROW))
-        return frozenset(kind for enabled, kind in pairs if not enabled)
-
-
-class RamRandomization(BaseModel):
-    """Reset-time RAM randomization.  hp bounds are fractions of max hp (or 'max'); bombs/keys are inclusive
-    integer ranges.  Omitted fields leave the savestate's value.
-
-    ``full_hp`` (with ``hp``) is the share of resets that start at full health, the only state where the sword fires
-    beams; the rest draw hp below full (no beams) within the ``hp`` bounds.  Without it, hp is uniform over the bounds
-    (full health only as often as any other value).
-
-    ``chain_hp`` (with ``hp``) is the share of resets whose hp comes from the hearts chain runs entered the start room
-    with (``chain_hp.py`` profile; rooms with too few chain visits keep the ``hp`` draw)."""
-    model_config = ConfigDict(extra='forbid')
-    hp: Optional[Tuple[HpBound, HpBound]] = None
-    full_hp: Optional[float] = None
-    chain_hp: Optional[float] = None
-    bombs: Optional[Tuple[int, int]] = None
-    keys: Optional[Tuple[int, int]] = None
-
-    @field_validator('full_hp', 'chain_hp')
-    @classmethod
-    def _check_full_hp(cls, value):
-        if value is not None and not 0.0 <= value <= 1.0:
-            raise ValueError(f"full_hp/chain_hp must be a probability in [0, 1], got {value}")
-        return value
-
-    @field_validator('hp')
-    @classmethod
-    def _check_hp(cls, value):
-        if value is not None:
-            lo, hi = (1.0 if v == 'max' else float(v) for v in value)
-            if not 0.0 < lo <= hi <= 1.0:
-                raise ValueError(f"hp bounds must satisfy 0 < min <= max <= 1 (or 'max'), got {value}")
-        return value
-
-    @field_validator('bombs', 'keys')
-    @classmethod
-    def _check_range(cls, value):
-        if value is not None and not 0 <= value[0] <= value[1] <= 255:
-            raise ValueError(f"range must satisfy 0 <= lo <= hi <= 255, got {value}")
-        return value
-
-
-class SpecialistConfig(BaseModel):
-    """One specialist task (design §3.3)."""
-    model_config = ConfigDict(extra='forbid', arbitrary_types_allowed=True)
-
-    name: str
-    rooms: List[MapLocation]
-    start_states: List[str] = Field(default_factory=list)
-    success: List[str]
-    endings: Dict[str, str] = Field(default_factory=dict)
-    reward_profile: str = 'default'
-    reward: RewardConfig = Field(default_factory=RewardConfig)
-    obs: ObsConfig = Field(default_factory=ObsConfig)
-    ram_randomization: RamRandomization = Field(default_factory=RamRandomization)
-    fresh_rooms: bool = True                     # pre-entry start states spawn the room's full monster count
-    items: ItemsConfig = Field(default_factory=ItemsConfig)
-    curriculum: CurriculumConfig = Field(default_factory=CurriculumConfig)
-    one_room: bool = False                       # episodes end at the first correct room exit, even inside `rooms`
-    max_steps: int = 2000
-    no_progress_steps: Optional[int] = Field(default=None, gt=0)
-    route: Optional[str] = None                  # routes.yaml route for objectives; default: from the start state
-    warm_start: Optional[str] = None
-    harvested_states: Optional[str] = None       # directory; default <integration dir>/harvested/<name>
-    harvested_fraction: float = 0.5              # share of resets drawn from harvested states when any exist
-    trainable: bool = True
-    notes: Optional[str] = None
-
-    @field_validator('rooms', mode='before')
-    @classmethod
-    def _parse_rooms(cls, value):
-        rooms = [x if isinstance(x, MapLocation) else parse_room(x) for x in value]
-        if not rooms:
-            raise ValueError("a specialist needs at least one room")
-        return rooms
-
-    @field_validator('success', mode='before')
-    @classmethod
-    def _parse_success(cls, value):
-        value = [value] if isinstance(value, str) else list(value)
-        if not value:
-            raise ValueError("a specialist needs at least one success kind")
-        return [validate_success_kind(v) for v in value]
-
-    @field_validator('endings')
-    @classmethod
-    def _check_endings(cls, value):
-        for ending, outcome in value.items():
-            if outcome not in OUTCOMES:
-                raise ValueError(f"ending {ending!r}: outcome must be one of {OUTCOMES}, got {outcome!r}")
-        return value
-
-    @field_validator('max_steps')
-    @classmethod
-    def _check_max_steps(cls, value):
-        if value <= 0:
-            raise ValueError("max_steps must be positive")
-        return value
-
-    @property
-    def harvested_dir(self) -> str:
-        """Directory of harvested start states for this specialist."""
-        return self.harvested_states or os.path.join(HARVESTED_DIR, self.name)
-
-    def resolve_start_states(self) -> List[str]:
-        """Absolute paths of seed savestates matching start_states globs (sorted, de-duplicated)."""
-        found = set()
-        for pattern in self.start_states:
-            path = pattern if os.path.isabs(pattern) else os.path.join(GAME_DIR, pattern)
-            if not path.endswith('.state'):
-                path += '.state'
-            found.update(glob.glob(path))
-        return sorted(found)
-
-
-def specialist_path(name: str) -> str:
+def specialist_path(name: str) -> Path:
     """specialists/<name>.yaml."""
-    return os.path.join(SPECIALISTS_DIR, f"{name}.yaml")
+    return SPECIALISTS_DIR / f"{name}.yaml"
 
 
 def load_specialist(name: str) -> SpecialistConfig:
-    """Loads specialists/<name>.yaml (or a path to a yaml file)."""
-    path = name if name.endswith('.yaml') and os.path.exists(name) else specialist_path(name)
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"No specialist config {path}; known: {list_specialists()}")
-    with open(path, encoding='utf-8') as f:
-        data = yaml.safe_load(f)
-    config = SpecialistConfig(**data)
-    if not name.endswith('.yaml') and config.name != name:
-        raise ValueError(f"{path} declares name {config.name!r}")
-    return config
+    """Loads specialists/<name>.yaml (or a path to a yaml file); raises ConfigError (a ValueError)."""
+    return SpecialistConfig.load(str(name))
 
 
 def list_specialists() -> List[str]:
     """Names of every specialists/*.yaml."""
-    return sorted(os.path.splitext(os.path.basename(p))[0] for p in glob.glob(os.path.join(SPECIALISTS_DIR, '*.yaml')))
+    return list(SpecialistConfig.names())

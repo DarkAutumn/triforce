@@ -2,7 +2,7 @@
 
 A demo trace is a text file with one action per line in ``Action.parse`` syntax (``MOVE N 16``, ``SWORD E``,
 ``WAIT 8``); blank lines and ``#`` comments are ignored.  ``collect_demo_batch`` replays a trace through a
-``ZeldaEnv`` (refusing actions the mask forbids) and returns ``(observations, masks, targets)`` tensors that
+native ``Env`` (refusing actions the mask forbids) and returns ``(observations, masks, targets)`` tensors that
 ``behavior_clone`` trains on and ``ppo.PPO(demo_batch=...)`` uses as its demo-regularization term.
 """
 
@@ -35,8 +35,8 @@ def stack_observations(observations: list[dict], device='cpu') -> dict[str, torc
 
 
 def collect_demo_batch(env, actions: list[Action], device='cpu', require_success: bool = True):
-    """Replays ``actions`` from ``env.reset()``; returns (obs dict [N,...], masks bool [N, MASK_SIZE],
-    targets int64 [N, 3]) for every step taken.
+    """Replays ``actions`` from ``env.reset()`` (a native ``Env``); returns (obs dict [N,...], masks bool
+    [N, MASK_SIZE], targets int64 [N, 3]) for every step taken.
 
     Raises if an action is illegal under the current mask, or (``require_success``) if the episode does not
     end with ``info['outcome'] == 'success'``.

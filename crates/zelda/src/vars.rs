@@ -1,18 +1,18 @@
-//! Named RAM variables: `triforce/custom_integrations/Zelda-NES/data.json` (`name -> (address, signed)`).
+//! Named RAM variables (`name -> (address, signed)`), the table stable-retro's `data.json` used to hold.
 //!
 //! Every variable is one byte of CPU RAM; signed ones (`=i1`) decode as `i8`.
 
 macro_rules! vars {
     ($($variant:ident = ($name:literal, $addr:literal, $signed:literal),)*) => {
-        /// A data.json variable.
+        /// A named RAM variable.
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
         pub enum Var { $($variant,)* }
 
         impl Var {
-            /// Every variable in data.json order.
+            /// Every variable, in the old data.json order.
             pub const ALL: &'static [Var] = &[$(Var::$variant,)*];
 
-            /// The data.json name.
+            /// The variable's name (the old data.json key; Python's `GameState.var` and `Game.set_value` take it).
             pub const fn name(self) -> &'static str {
                 match self { $(Var::$variant => $name,)* }
             }
@@ -27,7 +27,7 @@ macro_rules! vars {
                 match self { $(Var::$variant => $signed,)* }
             }
 
-            /// Looks a variable up by its data.json name.
+            /// Looks a variable up by its name.
             pub fn from_name(name: &str) -> Option<Var> {
                 match name { $($name => Some(Var::$variant),)* _ => None }
             }
@@ -147,26 +147,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn table_matches_data_json() {
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../triforce/custom_integrations/Zelda-NES/data.json"
-        );
-        let data: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        let info = data["info"].as_object().unwrap();
-        assert_eq!(info.len(), Var::ALL.len());
+    fn names_round_trip_and_signed_vars_decode_as_i8() {
         for var in Var::ALL {
-            let name = var.name();
-            let spec = &info[name];
-            assert_eq!(
-                var.addr() as u64,
-                spec["address"].as_u64().unwrap(),
-                "{name}"
-            );
-            assert_eq!(var.signed(), spec["type"] == "=i1", "{name}");
-            assert_eq!(Var::from_name(name), Some(*var));
+            assert_eq!(Var::from_name(var.name()), Some(*var), "{}", var.name());
         }
+        assert_eq!(Var::from_name("no-such-var"), None);
         assert_eq!(Var::LinkGridOffset.decode(0xF8), -8);
     }
 }

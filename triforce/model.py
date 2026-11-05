@@ -1,6 +1,6 @@
 """The v2 policy network (design §7.3): structured observations in, factored timed-option actions out.
 
-No vision.  Every observation block from ``observation.ObservationBuilder`` gets its own small encoder:
+No vision.  Every observation block (built natively; ``observation.observation_space()``) gets its own small encoder:
 
 - ``room_id`` → ``nn.Embedding`` (dim ~16).
 - ``entity_types`` + ``entity_features`` → type embedding, projection, 1–2 layer transformer encoder over the

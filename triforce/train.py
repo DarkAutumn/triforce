@@ -1,11 +1,13 @@
 """Train one specialist with PPO (design §7.1).
 
-    python -m triforce.train --specialist stalfos-keese-gel [--load CKPT] [--parallel N] [--iterations N]
-        [--steps-per-update N] [--device cpu|cuda] [--run-id ID] [--models-dir DIR]
+    python -m triforce.train --specialist stalfos-keese-gel [--load CKPT] [--parallel N] [--threads N]
+        [--iterations N] [--steps-per-update N] [--device cpu|cuda] [--run-id ID] [--models-dir DIR]
         [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
 
-Each iteration collects ``--steps-per-update`` env steps (split across ``--parallel`` subprocess workers, one
-emulator each; ``--parallel 1`` runs the env in-process for debugging), then runs one PPO update.  Output goes
+Each iteration collects ``--steps-per-update`` env steps, split across ``--parallel`` envs of one native
+``EnvPool`` (``--threads`` worker threads, default ``min(parallel, cpu count)``; results do not depend on the
+thread count), stepped in lockstep with one batched policy evaluation per step on ``--device``, then runs one
+PPO update.  Output goes
 to ``<models>/<specialist>/<run-id>/``: ``ckpt.pt`` (see ``registry``), ``metrics.jsonl``, ``tb/``
 (TensorBoard), ``run.json`` (arguments and configs) and ``train_summary.json`` (iterations, steps, early
 stop, wall time).  ``--stop-success`` ends training once the start-state-balanced training success rate
@@ -13,7 +15,7 @@ stop, wall time).  ``--stop-success`` ends training once the start-state-balance
 consecutive iterations.  Only episodes that started at a room entry count; ``--curriculum`` episodes are reported
 separately as ``curriculum/*``.
 ``--curriculum`` starts a share of episodes along trajectories found by ``triforce.explore`` (backward
-curriculum, ``curriculum.py``); its shared progress file is ``<run dir>/curriculum.json``.
+curriculum, native ``CurriculumSpec``); its shared progress file is ``<run dir>/curriculum.json``.
 
 Live progress goes to an event stream (``events.py``): ``--events FILE`` appends to a caller-owned stream
 (``scripts/train_round.py``); otherwise the run gets its own ``logs/<yymmdd>_<NNN>_<specialist>/`` folder with
@@ -39,14 +41,14 @@ from typing import Deque, Dict, Optional
 import torch
 
 from . import registry
-from .curriculum import TRAJECTORIES_DIR, CurriculumSpec
+from ._native import CurriculumSpec, Env, EnvPool, TrainTask
 from .demo import collect_demo_batch, parse_demo_actions
 from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy
-from .observation import ObservationBuilder
+from .observation import observation_space
+from .paths import STATES_DIR, TRAJECTORIES_DIR
 from .ppo import PPO, IterationResult, PPOConfig
-from .ppo_worker import ModelFactory, ZeldaEnvFactory
 from .specialist import SpecialistConfig, load_specialist
 
 
@@ -90,7 +92,9 @@ def parse_args(argv=None):
     parser.add_argument('--specialist', required=True, help="specialists/<name>.yaml")
     parser.add_argument('--load', default=None,
                         help="checkpoint file, run dir, or a specialist name (its promoted checkpoint) to start from")
-    parser.add_argument('--parallel', type=int, default=1, help="env workers (1 = in-process)")
+    parser.add_argument('--parallel', type=int, default=1, help="number of envs in the pool")
+    parser.add_argument('--threads', type=int, default=None,
+                        help="env worker threads (default: min(parallel, cpu count))")
     parser.add_argument('--iterations', type=int, default=100, help="PPO iterations (rollout + update)")
     parser.add_argument('--steps-per-update', type=int, default=PPOConfig.target_steps)
     parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'])
@@ -100,10 +104,12 @@ def parse_args(argv=None):
     parser.add_argument('--learning-rate', type=float, default=PPOConfig.learning_rate)
     parser.add_argument('--grid-encoder', default='conv', choices=['conv', 'linear'],
                         help="new models only; a loaded checkpoint keeps its architecture")
-    parser.add_argument('--start-state', default=None, help="pin every episode to this savestate")
+    parser.add_argument('--start-state', default=None, help="pin every episode to this savestate (name or path)")
+    parser.add_argument('--states-dir', default=None,
+                        help="where bare start-state names resolve (default: $TRIFORCE_STATES_DIR or triforce/states)")
     parser.add_argument('--capture-states', action='store_true',
-                        help="let envs write first-entry savestates into the integration dir (off by default: "
-                             "parallel workers would race on the same files)")
+                        help="let envs write first-entry savestates into the states dir (off by default: "
+                             "parallel envs would race on the same files)")
     parser.add_argument('--demo', default=None, help="demo trace (Action.parse lines) for demo regularization")
     parser.add_argument('--demo-bc-coeff', type=float, default=0.1)
     parser.add_argument('--demo-allow-incomplete', action='store_true',
@@ -148,7 +154,7 @@ def initial_model(args, config: SpecialistConfig, root):
     else:
         source = str(resolve_warm_start(config.warm_start, root)) if config.warm_start else None
     if source is None:
-        network = ZeldaPolicy(ObservationBuilder.observation_space(), ModelConfig(grid_encoder=args.grid_encoder))
+        network = ZeldaPolicy(observation_space(), ModelConfig(grid_encoder=args.grid_encoder))
         return network, None, 0, 0, None
 
     network, checkpoint = registry.load_model(source)
@@ -173,28 +179,32 @@ def open_events(args, specialist: str, run_id: str, run_dir: Path):
     return EventLog(log_dir / f'{specialist}.jsonl', **context), plan
 
 
-def curriculum_spec(args, config, out_dir: Path) -> Optional[CurriculumSpec]:
-    """The run's curriculum: --curriculum, else the specialist's ``curriculum`` config when enabled (and not
-    --no-curriculum).  Progress (``<run dir>/curriculum.json``) restarts with every training invocation."""
+def curriculum_spec(args, config, out_dir: Path) -> tuple[Optional[CurriculumSpec], Optional[str]]:
+    """(spec, trajectories dir) of the run's curriculum: --curriculum, else the specialist's ``curriculum`` config
+    when enabled (and not --no-curriculum).  Progress (``<run dir>/curriculum.json``) restarts with every
+    training invocation."""
     settings = config.curriculum
     if args.no_curriculum or not (args.curriculum or settings.enabled):
-        return None
-    trajectories = args.curriculum or settings.trajectories or os.path.join(TRAJECTORIES_DIR, config.name)
+        return None, None
+    trajectories = str(args.curriculum or settings.trajectories or TRAJECTORIES_DIR / config.name)
     state_path = out_dir / 'curriculum.json'
     state_path.unlink(missing_ok=True)
     fraction = settings.fraction if args.curriculum_fraction is None else args.curriculum_fraction
     threshold = settings.threshold if args.curriculum_threshold is None else args.curriculum_threshold
-    return CurriculumSpec(trajectories, str(state_path), fraction=fraction, threshold=threshold)
+    return CurriculumSpec(trajectories, str(state_path), fraction=fraction, threshold=threshold), trajectories
 
 
-def main(argv=None, session=None) -> Path:
-    """Runs training; returns the run directory.  ``session`` (an existing GameSession) is used by the
-    in-process env when ``--parallel 1`` (tests share one emulator per process)."""
+def main(argv=None) -> Path:
+    """Runs training; returns the run directory."""
     args = parse_args(argv)
     if args.seed is not None:
         torch.manual_seed(args.seed)
     if args.parallel < 1:
         raise SystemExit("--parallel must be >= 1")
+    if args.threads is None:
+        args.threads = min(args.parallel, os.cpu_count() or 1)
+    if args.threads < 1:
+        raise SystemExit("--threads must be >= 1")
     if args.device == 'cuda' and not torch.cuda.is_available():
         raise SystemExit("--device cuda requested but CUDA is not available")
 
@@ -205,7 +215,7 @@ def main(argv=None, session=None) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     events, plan = open_events(args, specialist, run_id, out_dir)
     try:
-        summary = _train(args, specialist, run_id, root, out_dir, session, events)
+        summary = _train(args, specialist, run_id, root, out_dir, events)
     except Exception as error:
         events.emit('error', message=f"{type(error).__name__}: {error}", traceback=traceback.format_exc())
         events.emit('train_end', status='error')
@@ -221,29 +231,30 @@ def main(argv=None, session=None) -> Path:
     return out_dir
 
 
-def _train(args, specialist: str, run_id: str, root, out_dir: Path, session, events: EventLog) -> dict:
+def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: EventLog) -> dict:
     """The training run proper; returns the train_end event fields."""
-    # pylint: disable=too-many-locals, too-many-statements, too-many-arguments, too-many-positional-arguments
+    # pylint: disable=too-many-locals, too-many-statements
     config = load_specialist(args.specialist)
     network, optimizer_state, start_iteration, start_steps, source = initial_model(args, config, root)
-    curriculum = curriculum_spec(args, config, out_dir)
-    env_factory = ZeldaEnvFactory(config, start_state=args.start_state, curriculum=curriculum,
-                                  **({} if args.capture_states else {'capture_dir': None}))
-    in_process_env = env_factory(session) if args.parallel == 1 else None
+    curriculum, trajectories = curriculum_spec(args, config, out_dir)
+    capture_dir = str(args.states_dir or STATES_DIR) if args.capture_states else None
+    task = TrainTask(config, str(out_dir), start_state=args.start_state, curriculum=curriculum,
+                     capture_dir=capture_dir, states_dir=args.states_dir)
 
     demo_batch = None
     if args.demo:
-        demo_env = in_process_env or env_factory()
-        try:
-            demo_batch = collect_demo_batch(demo_env, parse_demo_actions(args.demo),
-                                            require_success=not args.demo_allow_incomplete)
-        finally:
-            if demo_env is not in_process_env:
-                demo_env.close()
+        demo_env = Env(config, start_state=args.start_state, capture_dir=None, states_dir=args.states_dir,
+                       seed=args.seed or 0)
+        demo_batch = collect_demo_batch(demo_env, parse_demo_actions(args.demo),
+                                        require_success=not args.demo_allow_incomplete)
 
     ppo_config = PPOConfig(target_steps=args.steps_per_update, learning_rate=args.learning_rate,
                            demo_bc_coeff=args.demo_bc_coeff if demo_batch is not None else 0.0)
     ppo = PPO(ppo_config, device=args.device, optimizer_state=optimizer_state, demo_batch=demo_batch)
+
+    # Built before the 'start' event so bad start states or trajectories fail the run up front.
+    pool_seed = args.seed if args.seed is not None else int.from_bytes(os.urandom(8), 'little') >> 1
+    pool = EnvPool(task, num_envs=args.parallel, threads=args.threads, seed=pool_seed)
 
     with open(out_dir / 'run.json', 'w', encoding='utf-8') as file:
         json.dump({'args': vars(args), 'specialist': specialist, 'run_id': run_id, 'source': source,
@@ -253,13 +264,14 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, session, eve
 
     print(f"[train] {specialist} run={run_id} dir={out_dir}")
     print(f"[train] parameters={network.parameter_count():,} grid={network.config.grid_encoder} "
-          f"parallel={args.parallel} steps/update={args.steps_per_update} device={args.device}"
+          f"parallel={args.parallel} threads={args.threads} steps/update={args.steps_per_update} "
+          f"device={args.device}"
           + (f" from={source}" if source else ""))
     target_steps = start_steps + args.iterations * args.steps_per_update
     events.emit('start', target_iterations=start_iteration + args.iterations, target_steps=target_steps,
                 start_iteration=start_iteration, start_steps=start_steps, steps_per_update=args.steps_per_update,
-                parallel=args.parallel, device=args.device,
-                curriculum=curriculum.trajectories if curriculum else None, source=source,
+                parallel=args.parallel, threads=args.threads, device=args.device,
+                curriculum=trajectories, source=source,
                 stop_success=args.stop_success, stop_patience=args.stop_patience, run_dir=str(out_dir),
                 pid=os.getpid())
 
@@ -307,15 +319,13 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, session, eve
     started = time.time()
     status = 'completed'
     try:
-        ppo.train(network, (lambda: in_process_env) if in_process_env is not None else env_factory,
-                  args.iterations, n_envs=args.parallel,
-                  make_network=ModelFactory(ZeldaPolicy, None, network.config.to_dict()),
-                  callback=on_iteration, start_steps=start_steps,
-                  observation_space=ObservationBuilder.observation_space(), seed=args.seed)
+        ppo.train(network, pool, args.iterations, callback=on_iteration, start_steps=start_steps,
+                  seed=args.seed)
     except KeyboardInterrupt:
         print("[train] interrupted; saving checkpoint")
         status = 'interrupted'
     finally:
+        pool.close()
         logger.close()
         if state['iteration'] > start_iteration and state['saved'] != state['iteration']:
             save()

@@ -2,8 +2,8 @@
 //!
 //! The emulator is `zcore::ZCore`; the ROM is `$TRIFORCE_ROM`, else `<repo>/roms/zelda.nes` (the repo being the
 //! directory holding the `triforce` package), validated once per process. Start states are `TFZSTATE` files
-//! under the states directory (`$TRIFORCE_STATES_DIR`, else `triforce/states` once it exists, else the legacy
-//! integration directory; every constructor also takes `states_dir=`).
+//! under the states directory (`$TRIFORCE_STATES_DIR`, else `triforce/states`; every constructor also takes
+//! `states_dir=`).
 
 mod config;
 mod context;
@@ -105,6 +105,24 @@ fn families(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
     Ok(d)
 }
 
+/// game.yaml rooms: `(level, room, in_cave)` -> `{'enemies': {name: count}, 'treasure': str or None}`.
+#[pyfunction]
+fn game_rooms(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
+    let data = context::data(py, None)?;
+    let d = pyo3::types::PyDict::new(py);
+    for (location, room) in data.map.rooms() {
+        let info = pyo3::types::PyDict::new(py);
+        let enemies = pyo3::types::PyDict::new(py);
+        for (name, count) in &room.enemies {
+            enemies.set_item(name, count)?;
+        }
+        info.set_item("enemies", enemies)?;
+        info.set_item("treasure", room.treasure.as_deref())?;
+        d.set_item((location.level, location.value, location.in_cave), info)?;
+    }
+    Ok(d)
+}
+
 /// The specialist game.yaml tags on a room (`(level, room[, in_cave])` or `'(1, 0x44)'`), or None.
 #[pyfunction]
 fn specialist_for(py: Python<'_>, location: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
@@ -136,7 +154,7 @@ mod _native {
     use pyo3::types::PyDict;
 
     #[pymodule_export]
-    use super::{families, paths, route_alternates, route_steps, routes, specialist_for};
+    use super::{families, game_rooms, paths, route_alternates, route_steps, routes, specialist_for};
     #[pymodule_export]
     use crate::config::PySpecialistConfig;
     #[pymodule_export]
