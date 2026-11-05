@@ -21,6 +21,10 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
   `docs/performance.md`. **Then continue with the experiments below** (the "Work in this order" list, then
   "Other open items"), as before: log every result, commit each finished item, keep going. Side experiments
   found during the port or the performance work go into "Other open items" instead of derailing the work.
+- **Long jobs (Lee, Nov 5):** a state build, explore or chain hunt can hang (one hung on Aquamentus before).
+  Check any such job's progress at least every couple of hours and intervene early when a single state or room
+  makes no progress (retry with another seed or source, record it, move on); **12 hours on any single task is a
+  hard stop**: kill it, log it in the round doc, and continue with other work.
 
 ### Work in this order
 
