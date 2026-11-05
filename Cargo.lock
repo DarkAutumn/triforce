@@ -287,9 +287,8 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 name = "env"
 version = "0.1.0"
 dependencies = [
- "flate2",
  "indexmap",
- "oracle",
+ "movie",
  "parking_lot",
  "rand",
  "rand_chacha",
@@ -298,6 +297,7 @@ dependencies = [
  "serde_yaml_ng",
  "tempfile",
  "toml",
+ "zcore",
  "zelda",
  "zip",
 ]
@@ -667,12 +667,11 @@ name = "pool"
 version = "0.1.0"
 dependencies = [
  "env",
- "flate2",
- "oracle",
  "parking_lot",
  "rand",
  "rand_chacha",
  "serde_json",
+ "zcore",
  "zelda",
 ]
 

@@ -3,12 +3,61 @@
 
 mod common;
 
-use common::{OracleNes, open_oracle, repo};
+use common::repo;
+use std::path::PathBuf;
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
 use zelda::actions::{NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS};
 use zelda::{Action, GameMap, LoadOptions, Nes, Session};
+
+/// `zelda::Nes` over the dev-only FCEUmm oracle (state = oracle savestate bytes): the reference this file
+/// compares zcore sessions against (the one oracle use left in the zelda tests; goes with the oracle, step 18c).
+pub struct OracleNes(pub oracle::Oracle);
+
+impl Nes for OracleNes {
+    type State = Vec<u8>;
+
+    fn run_frame(&mut self, buttons: u8, _render: bool) {
+        self.0.run_frame(buttons);
+    }
+
+    fn ram(&self) -> &[u8; 0x800] {
+        self.0.ram()
+    }
+
+    fn prg_ram(&self) -> &[u8; 0x2000] {
+        self.0.prg_ram()
+    }
+
+    fn poke(&mut self, addr: u16, value: u8) {
+        self.0.poke(addr, value);
+    }
+
+    fn snapshot(&self) -> Vec<u8> {
+        self.0.save_state()
+    }
+
+    fn restore(&mut self, state: &Vec<u8>) {
+        self.0.load_state(state).expect("oracle load_state");
+    }
+}
+
+/// Opens the oracle, or None (with the reason on stderr) when the library or ROM is missing.
+fn open_oracle() -> Option<OracleNes> {
+    if !oracle::available() {
+        eprintln!("oracle library not built (oracle/fceumm/build.sh): skipping");
+        return None;
+    }
+    let rom = std::env::var_os("TRIFORCE_ROM")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo().join("roms/zelda.nes"));
+    if !rom.exists() {
+        eprintln!("ROM not found: set TRIFORCE_ROM or create roms/zelda.nes");
+        return None;
+    }
+    Some(OracleNes(oracle::Oracle::open(&rom).expect("open oracle")))
+}
 
 struct Play<'a, N: Nes>(&'a mut N);
 
@@ -49,6 +98,7 @@ fn random_action(mask: &zelda::ActionMask, rng: &mut ChaCha8Rng) -> Action {
 
 #[test]
 fn zcore_matches_oracle_over_random_play() {
+    let _lock = oracle::lock();
     let Some(mut o) = open_oracle() else { return };
     let mut z = zcore();
     let (ob, zb) = (base(&mut o), base(&mut z));

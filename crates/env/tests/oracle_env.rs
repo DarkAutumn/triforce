@@ -1,14 +1,14 @@
-//! `SpecialistEnv` end to end on real savestates (FCEUmm oracle): episodes, endings, outcomes, terminal rewards,
+//! `SpecialistEnv` end to end on real savestates (zcore): episodes, endings, outcomes, terminal rewards,
 //! the info contract, objectives and routes, critic behaviour, RAM randomization, start states and capture.
 //!
 //! Ports of the emulator parts of tests/test_env.py, tests/test_nearby_items.py, tests/test_rewards.py and
-//! tests/test_specialist.py.  States are the legacy gzip start states (`GzipStore`).  Python's `random` streams
-//! are not reproduced (the env draws from ChaCha8), so tests assert properties, not particular draws.  Every test
-//! skips when the oracle library or ROM is missing.
+//! tests/test_specialist.py.  States are the regenerated `TFZSTATE` start states in `triforce/states`
+//! (`TfzStore`).  Python's `random` streams are not reproduced (the env draws from ChaCha8), so tests assert
+//! properties, not particular draws.  Every test skips when the ROM is missing.
 
 mod common;
 
-use common::{GzipStore, OracleNes, assert_obs_valid, open_oracle};
+use common::{MachineState, TfzStore, ZCore, assert_obs_valid, open_core};
 use env::config::{
     GameData, HpBound, ItemsConfig, RamRandomization, RewardConfig, SpecialistConfig,
 };
@@ -35,8 +35,8 @@ use zelda::{
     Session, SessionSnapshot, Var,
 };
 
-type Env = SpecialistEnv<OracleNes, GzipStore>;
-type S = Session<OracleNes>;
+type Env = SpecialistEnv<ZCore, TfzStore>;
+type S = Session<ZCore>;
 
 const STEP_INFO_KEYS: [&str; 11] = [
     "frames",
@@ -61,10 +61,10 @@ fn data() -> &'static Arc<GameData> {
 
 // --- helpers (tests/test_env.py, tests/conftest.py) ---
 
-/// An env on the oracle.  `update` overrides config fields; RAM randomization is cleared first so tests are
+/// An env on zcore.  `update` overrides config fields; RAM randomization is cleared first so tests are
 /// deterministic (`make_env`).
 fn make_env_with(
-    nes: OracleNes,
+    nes: ZCore,
     specialist: &str,
     opts: EnvOptions,
     update: impl FnOnce(&mut SpecialistConfig),
@@ -76,14 +76,14 @@ fn make_env_with(
         Arc::new(config),
         data().clone(),
         nes,
-        GzipStore::new(),
+        TfzStore::new(),
         opts,
     )
     .expect("env")
 }
 
 fn make_env(
-    nes: OracleNes,
+    nes: ZCore,
     specialist: &str,
     start_state: Option<&str>,
     update: impl FnOnce(&mut SpecialistConfig),
@@ -95,8 +95,8 @@ fn make_env(
     make_env_with(nes, specialist, opts, update)
 }
 
-/// The oracle back from an env (one oracle per process).
-fn release(env: Env) -> OracleNes {
+/// The emulator back from an env.
+fn release(env: Env) -> ZCore {
     env.into_parts().0.into_nes()
 }
 
@@ -276,13 +276,13 @@ fn chase_step(env: &mut Env) -> Result<StepResult, EnvError> {
 
 /// `GameSession.load(name, randomize_rng=..., fresh_room=..., ram_overrides=...)` on a bare session.
 fn load(s: &mut S, name: &str, opts: LoadOptions) -> Arc<GameView> {
-    let machine = GzipStore::new().load(name).expect("state");
+    let machine = TfzStore::new().load(name).expect("state");
     s.load(&machine, &opts, &mut ChaCha8Rng::seed_from_u64(0))
         .expect("load")
         .clone()
 }
 
-fn session(nes: OracleNes) -> S {
+fn session(nes: ZCore) -> S {
     Session::new(nes, data().map.clone())
 }
 
@@ -377,8 +377,7 @@ fn critique(critic: &mut GameplayCritic, change: &Change, rewards: &mut StepRewa
 
 #[test]
 fn spaces_and_reset_contract() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |_| {});
     let (obs, info) = env.reset(Some(1), None).unwrap();
     assert_obs_valid(&obs, env.session().mask());
@@ -392,8 +391,7 @@ fn spaces_and_reset_contract() {
 /// every step returns valid observations and the info contract.
 #[test]
 fn random_legal_episode_ends_classified() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |c| {
         c.max_steps = 150
     });
@@ -424,14 +422,23 @@ fn random_legal_episode_ends_classified() {
     assert!(!outcomes.is_empty(), "no episode ended");
 }
 
+/// An ow-start env in 0x77 with the sword (so N is the correct exit, 0x78 E the alternate): the regenerated
+/// 0_77c_0 (just out of the sword cave; no state enters 0x77 from N or W as the legacy 0_77n/0_77w did) with
+/// Link moved to the start-screen spawn, clear of the cave mouth's rocks.
+fn sworded_ow_start(nes: ZCore, seed: u64, update: impl FnOnce(&mut SpecialistConfig)) -> Env {
+    let mut env = make_env(nes, "ow-start", Some("0_77c_0"), update);
+    env.reset(Some(seed), None).unwrap();
+    env.session_mut()
+        .apply_ram(&[(Var::LinkX, 0x78), (Var::LinkY, 0x8D)]);
+    let snapshot = env.session().snapshot();
+    env.restore(&snapshot, "0_77c_0").unwrap();
+    env
+}
+
 #[test]
 fn correct_exit_is_success_with_health_scaled_reward() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
-    let mut env = make_env(nes, "ow-start", Some("0_77n"), |c| {
-        c.ram_randomization = hp(0.5, 0.5)
-    });
-    env.reset(Some(0), None).unwrap();
+    let Some(nes) = open_core() else { return };
+    let mut env = sworded_ow_start(nes, 0, |c| c.ram_randomization = hp(0.5, 0.5));
     assert_eq!(state(&env).health(), 1.5);
     let (reward, info) = last_info(run_until_done(&mut env, greedy_step, 400).unwrap());
     assert_eq!(
@@ -452,10 +459,8 @@ fn correct_exit_is_success_with_health_scaled_reward() {
 
 #[test]
 fn full_health_success_pays_full_terminal() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
-    let mut env = make_env(nes, "ow-start", Some("0_77n"), |_| {});
-    env.reset(Some(0), None).unwrap();
+    let Some(nes) = open_core() else { return };
+    let mut env = sworded_ow_start(nes, 0, |_| {});
     let (_, info) = last_info(run_until_done(&mut env, greedy_step, 400).unwrap());
     assert!(
         approx(term(&info, REWARD_TERMINAL_SUCCESS).unwrap(), 20.0),
@@ -466,10 +471,8 @@ fn full_health_success_pays_full_terminal() {
 
 #[test]
 fn wrong_exit_is_soft_failure() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
-    let mut env = make_env(nes, "ow-start", Some("0_77w"), |_| {});
-    env.reset(Some(0), None).unwrap();
+    let Some(nes) = open_core() else { return };
+    let mut env = sworded_ow_start(nes, 0, |_| {});
     assert!(!next_rooms(&env).contains(&MapLocation::new(0, 0x76, false)));
     let results = run_until_done(
         &mut env,
@@ -492,10 +495,9 @@ fn wrong_exit_is_soft_failure() {
 
 #[test]
 fn death_is_hard_failure() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     // 0.01 rounds up to half a heart.
-    let mut env = make_env(nes, "goriya", Some("1_44w"), |c| {
+    let mut env = make_env(nes, "goriya", Some("1_44w_0"), |c| {
         c.ram_randomization = hp(0.01, 0.01)
     });
     env.reset(Some(2), None).unwrap();
@@ -527,12 +529,10 @@ fn death_is_hard_failure() {
 /// Deny-by-default: an ow-start variant that only lists triforce-collected can't classify exit-correct.
 #[test]
 fn unlisted_ending_raises() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
-    let mut env = make_env(nes, "ow-start", Some("0_77n"), |c| {
+    let Some(nes) = open_core() else { return };
+    let mut env = sworded_ow_start(nes, 0, |c| {
         c.success = vec!["triforce-collected".into()]
     });
-    env.reset(Some(0), None).unwrap();
     match run_until_done(&mut env, greedy_step, 400) {
         Err(EnvError::Unclassified(e)) => assert!(e.0.contains("exit-correct"), "{e}"),
         Err(e) => panic!("expected an unclassified ending, got {e}"),
@@ -545,8 +545,7 @@ fn unlisted_ending_raises() {
 
 #[test]
 fn max_steps_truncates_without_terminal_reward() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |c| {
         c.max_steps = 3
     });
@@ -577,8 +576,7 @@ fn max_steps_truncates_without_terminal_reward() {
 
 #[test]
 fn no_room_progress_truncates_at_threshold_and_resets_shared_tracker() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |c| {
         c.no_progress_steps = Some(3);
         c.max_steps = 100;
@@ -626,8 +624,7 @@ fn no_room_progress_truncates_at_threshold_and_resets_shared_tracker() {
 
 #[test]
 fn no_room_progress_disabled_preserves_position_timeout() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |c| {
         c.max_steps = 100
     });
@@ -658,8 +655,7 @@ fn no_room_progress_disabled_preserves_position_timeout() {
 
 #[test]
 fn no_room_progress_keeps_episode_cap() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |c| {
         c.no_progress_steps = Some(10);
         c.max_steps = 2;
@@ -672,8 +668,7 @@ fn no_room_progress_keeps_episode_cap() {
 
 #[test]
 fn masked_action_raises() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |_| {});
     env.reset(Some(0), None).unwrap();
     act(&mut env, "MOVE N 16"); // off the S door tile, where weapons are masked anyway
@@ -687,9 +682,8 @@ fn masked_action_raises() {
 
 #[test]
 fn start_state_outside_rooms_is_rejected() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
-    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_44w"), |_| {});
+    let Some(nes) = open_core() else { return };
+    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_44w_0"), |_| {});
     match env.reset(Some(0), None) {
         Err(EnvError::StartState(m)) => assert!(m.contains("0x44"), "{m}"),
         Err(e) => panic!("expected a start-state error, got {e}"),
@@ -701,8 +695,7 @@ fn start_state_outside_rooms_is_rejected() {
 /// that stays inside ow-start, and N from the start screen ends the episode with success.
 #[test]
 fn sword_cave_objective_and_exit() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "ow-start", Some("0_77cave_0"), |_| {});
     env.reset(Some(0), None).unwrap();
     assert_eq!(objective(&env).kind, ObjectiveKind::Treasure);
@@ -749,9 +742,8 @@ fn sword_cave_objective_and_exit() {
 
 #[test]
 fn triforce_pickup_is_success_in_the_triforce_room() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
-    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_36w"), |_| {});
+    let Some(nes) = open_core() else { return };
+    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_36w_0"), |_| {});
     env.reset(Some(0), None).unwrap();
     assert_eq!(objective(&env).kind, ObjectiveKind::Treasure);
     let (_, info) = last_info(run_until_done(&mut env, greedy_step, 100).unwrap());
@@ -763,14 +755,13 @@ fn triforce_pickup_is_success_in_the_triforce_room() {
 
 #[test]
 fn items_config_masks_bombs_even_when_link_has_them() {
-    let _lock = oracle::lock();
-    let Some(mut nes) = open_oracle() else { return };
+    let Some(mut nes) = open_core() else { return };
     for bombs_on in [true, false] {
         let items = ItemsConfig {
             bombs: bombs_on,
             ..data().specialists["goriya"].items.clone()
         };
-        let mut env = make_env(nes, "goriya", Some("1_44w"), |c| {
+        let mut env = make_env(nes, "goriya", Some("1_44w_0"), |c| {
             c.ram_randomization = RamRandomization {
                 bombs: Some((4, 4)),
                 ..Default::default()
@@ -802,8 +793,7 @@ fn items_config_masks_bombs_even_when_link_has_them() {
 
 #[test]
 fn route_shutter_requires_combat_without_a_room_treasure() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "d2-rope", Some("2_2es_0"), |_| {});
     env.reset(Some(0), None).unwrap();
     assert_eq!(objective(&env).kind, ObjectiveKind::Fight);
@@ -812,8 +802,7 @@ fn route_shutter_requires_combat_without_a_room_treasure() {
 
 #[test]
 fn open_route_ignores_optional_combat() {
-    let _lock = oracle::lock();
-    let Some(mut nes) = open_oracle() else { return };
+    let Some(mut nes) = open_core() else { return };
     for (start_state, next_room) in [("2_6es_0", 0x5e), ("2_6ds_0", 0x6e)] {
         let mut env = make_env(nes, "d2-rope", Some(start_state), |_| {});
         env.reset(Some(0), None).unwrap();
@@ -827,8 +816,7 @@ fn open_route_ignores_optional_combat() {
 /// Stalfos room's key (0x33, off the route); the objective still only accepts 0x44.
 #[test]
 fn route_room_only_offers_its_route_exit() {
-    let _lock = oracle::lock();
-    let Some(mut nes) = open_oracle() else { return };
+    let Some(mut nes) = open_core() else { return };
     for keys in [0, 1] {
         let mut env = make_env(nes, "stalfos-keese-gel", Some("1_43w_0"), |c| {
             c.ram_randomization = RamRandomization {
@@ -846,8 +834,7 @@ fn route_room_only_offers_its_route_exit() {
 /// Entering Dungeon 1 with no keys, 0x72 (W) and 0x74 (E) are equally short key detours; the route takes 0x72 first.
 #[test]
 fn first_visit_to_0x73_follows_the_route_order() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |_| {});
     env.reset(Some(0), None).unwrap();
     assert_eq!(state(&env).keys(), 0);
@@ -858,8 +845,7 @@ fn first_visit_to_0x73_follows_the_route_order() {
 /// out of those stairs with the triforce) the objective wants E, so walking back down is exit-wrong.
 #[test]
 fn enter_room_success_needs_the_objective() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "ow-octorok", Some("0_37c_2"), |_| {});
     env.reset(Some(0), None).unwrap();
     assert_eq!(next_rooms(&env), rooms(&[(0, 0x38)]));
@@ -883,8 +869,7 @@ fn enter_room_success_needs_the_objective() {
 /// 0x38 from W, just out of Dungeon 1: milestone1 goes N toward D2, milestone1-fairy S toward the fairy pond.
 #[test]
 fn after_dungeon_1_each_route_leaves_0x38_its_own_way() {
-    let _lock = oracle::lock();
-    let Some(mut nes) = open_oracle() else { return };
+    let Some(mut nes) = open_core() else { return };
     for (route, wanted) in [("milestone1", 0x28), ("milestone1-fairy", 0x48)] {
         let mut env = make_env(nes, "ow-zora", Some("0_38w_2"), |c| {
             c.route = Some(route.into())
@@ -899,8 +884,7 @@ fn after_dungeon_1_each_route_leaves_0x38_its_own_way() {
 /// Without a pinned route, 0x38-from-W resets play either route; rooms where the routes agree play milestone1.
 #[test]
 fn a_room_the_routes_leave_differently_trains_both() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "ow-zora", Some("0_38w_2"), |_| {});
     let mut seen = BTreeSet::new();
     for seed in 0..16 {
@@ -923,8 +907,7 @@ fn a_room_the_routes_leave_differently_trains_both() {
 /// N to it fills every heart (Z_04 UpdatePondFairy), and then S is the exit.
 #[test]
 fn fairy_pond_holds_the_exit_until_the_hearts_are_full() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "ow-start", Some("0_39s_2"), |c| {
         c.ram_randomization = hp(0.25, 0.25)
     });
@@ -947,8 +930,7 @@ fn fairy_pond_holds_the_exit_until_the_hearts_are_full() {
 /// 0x49 from S goes N to the pond; back from the pond (from N) the waypoint is done and the route goes S/E.
 #[test]
 fn fairy_route_heads_to_the_pond_then_east() {
-    let _lock = oracle::lock();
-    let Some(mut nes) = open_oracle() else { return };
+    let Some(mut nes) = open_core() else { return };
     for (start_state, wanted) in [("0_49s_2", 0x39), ("0_49n_2", 0x59)] {
         let mut env = make_env(nes, "ow-octorok", Some(start_state), |_| {});
         let (_, info) = env.reset(Some(0), None).unwrap();
@@ -962,8 +944,7 @@ fn fairy_route_heads_to_the_pond_then_east() {
 /// along the off-map row under the bottom trees.
 #[test]
 fn wavefront_has_no_lane_below_the_bottom_tree_line() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut s = session(nes);
     let opts = LoadOptions {
         randomize_rng: true,
@@ -988,10 +969,9 @@ fn wavefront_has_no_lane_below_the_bottom_tree_line() {
 /// episode there as exit-correct, otherwise it continues.
 #[test]
 fn one_room_episode_ends_at_the_first_correct_exit() {
-    let _lock = oracle::lock();
-    let Some(mut nes) = open_oracle() else { return };
+    let Some(mut nes) = open_core() else { return };
     for one_room in [true, false] {
-        let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73e"), |c| {
+        let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73e_0"), |c| {
             c.one_room = one_room
         });
         env.reset(Some(0), None).unwrap();
@@ -1009,12 +989,11 @@ fn one_room_episode_ends_at_the_first_correct_exit() {
 /// A saved half-heart frame is survivable only if loading leaves the first action to the policy.
 #[test]
 fn curriculum_reset_preserves_the_first_shield_turn() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let dir = tempfile::tempdir().unwrap();
     let track = dir.path().join("trajectories").join("1_73s_0");
     std::fs::create_dir_all(&track).unwrap();
-    let store = GzipStore::new();
+    let store = TfzStore::new();
     let mut s = session(nes);
     load(&mut s, "1_73s_0", LoadOptions::default());
     s.act(Action::parse("MOVE N 16").unwrap()).unwrap();
@@ -1103,12 +1082,12 @@ fn curriculum_reset_preserves_the_first_shield_turn() {
 /// stalfos-keese-gel at 1_73e (one room) with Link hurt at (120, y) and `drops` (kind, x, y) placed in slots 3+;
 /// the env restarts from that snapshot.
 fn placed_env(
-    nes: OracleNes,
+    nes: ZCore,
     drops: &[(i16, u8, u8)],
     y: u8,
     nearby: bool,
-) -> (Env, SessionSnapshot<Vec<u8>>) {
-    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73e"), |c| {
+) -> (Env, SessionSnapshot<MachineState>) {
+    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73e_0"), |c| {
         c.one_room = true;
         c.reward = RewardConfig {
             nearby_items: nearby,
@@ -1141,7 +1120,7 @@ fn placed_env(
     }
     s.apply_ram(&[]);
     let snapshot = env.session().snapshot();
-    env.restore(&snapshot, "1_73e").unwrap();
+    env.restore(&snapshot, "1_73e_0").unwrap();
     (env, snapshot)
 }
 
@@ -1162,8 +1141,7 @@ fn finish(env: &mut Env) -> StepInfo {
 
 #[test]
 fn nearest_clock_then_heart_then_exit_without_changing_task() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let (mut env, snapshot) = placed_env(
         nes,
         &[(item::HEART, 72, 157), (item::CLOCK, 152, 157)],
@@ -1187,15 +1165,14 @@ fn nearest_clock_then_heart_then_exit_without_changing_task() {
     assert_eq!(info.health, 3.0);
 
     let (mut legacy, _) = placed_env(release(env), &[], 157, false);
-    legacy.restore(&snapshot, "1_73e").unwrap();
+    legacy.restore(&snapshot, "1_73e_0").unwrap();
     let shaped = movement_reward(&mut legacy, "E");
     assert!(shaped < 0.0, "{shaped}");
 }
 
 #[test]
 fn nearer_exit_leaves_distant_helpful_drops() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let (mut env, _) = placed_env(
         nes,
         &[(item::HEART, 48, 189), (item::CLOCK, 200, 189)],
@@ -1215,8 +1192,7 @@ fn nearer_exit_leaves_distant_helpful_drops() {
 
 #[test]
 fn gameplay_rewards_a_real_shield_collision_in_weapon_settling() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut s = session(nes);
     place_shield_projectile(&mut s, &[11]);
     s.nes_mut().poke(0x70 + 11, 180);
@@ -1255,8 +1231,7 @@ fn gameplay_rewards_a_real_shield_collision_in_weapon_settling() {
 
 #[test]
 fn real_simultaneous_projectiles_each_earn_one_block_reward_and_not_again() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut s = session(nes);
     place_shield_projectile(&mut s, &[10, 11]);
     let mut critic = GameplayCritic::new(false, 1.0, 0.0);
@@ -1298,9 +1273,8 @@ fn walk(env: &mut Env, steps: usize) -> Vec<StepInfo> {
 /// into 0x63.
 #[test]
 fn locked_door_reward_fires_once() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
-    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73e"), |_| {});
+    let Some(nes) = open_core() else { return };
+    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73e_0"), |_| {});
     env.reset(Some(0), None).unwrap();
     let infos = walk(&mut env, 40);
     let hits: Vec<usize> = (0..infos.len())
@@ -1318,8 +1292,7 @@ fn locked_door_reward_fires_once() {
 /// outcome is identical.
 #[test]
 fn pbrs_switch_changes_only_movement_shaping() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let script = [
         "MOVE N 16",
         "MOVE N 16",
@@ -1328,7 +1301,7 @@ fn pbrs_switch_changes_only_movement_shaping() {
         "MOVE W 16",
         "WAIT 8",
     ];
-    let run = |nes: OracleNes, pbrs: bool| {
+    let run = |nes: ZCore, pbrs: bool| {
         let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |c| {
             c.reward = RewardConfig {
                 pbrs,
@@ -1362,8 +1335,7 @@ fn pbrs_switch_changes_only_movement_shaping() {
 
 #[test]
 fn wait_gets_no_movement_shaping() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |_| {});
     env.reset(Some(0), None).unwrap();
     act(&mut env, "MOVE N 8"); // seeds the PBRS baseline
@@ -1381,8 +1353,7 @@ fn wait_gets_no_movement_shaping() {
 /// From the 0x73 S entry (no keys) the objective is W or E; walking toward an exit earns positive PBRS.
 #[test]
 fn pbrs_rewards_walking_toward_objective() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |_| {});
     env.reset(Some(0), None).unwrap();
     let total: f64 = walk(&mut env, 8).iter().map(pbrs_total).sum();
@@ -1391,10 +1362,9 @@ fn pbrs_rewards_walking_toward_objective() {
 
 #[test]
 fn sword_miss_is_penalized() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     // Half health: the sword, not beams.
-    let mut env = make_env(nes, "goriya", Some("1_44w"), |c| {
+    let mut env = make_env(nes, "goriya", Some("1_44w_0"), |c| {
         c.ram_randomization = hp(0.5, 0.5)
     });
     env.reset(Some(0), None).unwrap();
@@ -1423,9 +1393,8 @@ fn sword_miss_is_penalized() {
 /// 0x44).
 #[test]
 fn damage_penalty_and_reward_halving() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
-    let mut env = make_env(nes, "goriya", Some("1_44w"), |c| {
+    let Some(nes) = open_core() else { return };
+    let mut env = make_env(nes, "goriya", Some("1_44w_0"), |c| {
         c.ram_randomization = hp(0.5, 0.5)
     });
     env.reset(Some(1), None).unwrap();
@@ -1473,9 +1442,8 @@ fn damage_penalty_and_reward_halving() {
 /// pickups do), so dithering at the 0x38 entrance is penalized after the grace period.
 #[test]
 fn stalling_penalty_fires_in_zora_room() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
-    let mut env = make_env(nes, "ow-zora", Some("0_38s"), |_| {});
+    let Some(nes) = open_core() else { return };
+    let mut env = make_env(nes, "ow-zora", Some("0_38s_0"), |_| {});
     env.reset(Some(0), None).unwrap();
     let script = ["WAIT 8", "WAIT 8", "MOVE E 4", "MOVE W 4"];
     for i in 0..300 {
@@ -1497,8 +1465,7 @@ fn stalling_penalty_fires_in_zora_room() {
 /// RAM decides: every seed state a config resolves must load into one of its rooms.
 #[test]
 fn start_states_load_into_their_rooms() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut s = session(nes);
     let mut loaded = 0;
     for (name, config) in &data().specialists {
@@ -1522,8 +1489,7 @@ fn start_states_load_into_their_rooms() {
 
 #[test]
 fn hp_randomization_bounds() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut s = session(nes);
     let mut rng = ChaCha8Rng::seed_from_u64(0);
     let cases = [
@@ -1568,8 +1534,7 @@ fn hp_randomization_bounds() {
 /// full_hp: half the resets at full health (the sword fires beams), the rest strictly below full.
 #[test]
 fn full_hp_share_splits_resets_between_beams_and_no_beams() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut s = session(nes);
     let mut rng = ChaCha8Rng::seed_from_u64(0);
     let spec = RamRandomization {
@@ -1600,10 +1565,9 @@ fn full_hp_share_splits_resets_between_beams_and_no_beams() {
 
 #[test]
 fn capture_saves_first_entry_once_before_monsters_spawn() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let dir = tempfile::tempdir().unwrap();
-    let store = GzipStore::new();
+    let store = TfzStore::new();
     let mut capture = SavestateCapture::new(dir.path().to_path_buf());
     let mut s = session(nes);
     load(&mut s, "start", LoadOptions::default());
@@ -1660,7 +1624,7 @@ fn capture_saves_first_entry_once_before_monsters_spawn() {
     }
     let captured = captured.expect("entering 0x78 captured a state");
     assert_eq!(captured, env_dir.path().join("0_78w.state"));
-    let machine = GzipStore::new().load(captured.to_str().unwrap()).unwrap();
+    let machine = TfzStore::new().load(captured.to_str().unwrap()).unwrap();
     let mut s = env.into_parts().0;
     s.nes_mut().restore(&machine);
     assert!(is_pre_entry(|a| s.nes().peek(a)));

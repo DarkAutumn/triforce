@@ -1,19 +1,22 @@
-//! Shared test helpers: an oracle-backed `Nes`, an `.npz` reader and the parity fixtures.
+//! Shared test helpers: zcore over the ROM (and a frame-counting wrapper), the named-state loader (`TFZSTATE`
+//! files in `triforce/states`), an `.npz` reader and the parity fixtures (replayed from their corpus movies).
 #![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock};
+use zcore::{MachineState, Rom, ZCore};
 use zelda::Nes;
 
-/// `zelda::Nes` over the dev-only FCEUmm oracle (state = oracle savestate bytes); `.1` counts every frame run.
-pub struct OracleNes(pub oracle::Oracle, pub u64);
+/// zcore with `.1` counting every frame run (look-ahead frames included; restores don't rewind it).
+pub struct Counted(pub ZCore, pub u64);
 
-impl Nes for OracleNes {
-    type State = Vec<u8>;
+impl Nes for Counted {
+    type State = MachineState;
 
-    fn run_frame(&mut self, buttons: u8, _render: bool) {
-        self.0.run_frame(buttons);
+    fn run_frame(&mut self, buttons: u8, render: bool) {
+        self.0.run_frame(buttons, render);
         self.1 += 1;
     }
 
@@ -29,12 +32,12 @@ impl Nes for OracleNes {
         self.0.poke(addr, value);
     }
 
-    fn snapshot(&self) -> Vec<u8> {
-        self.0.save_state()
+    fn snapshot(&self) -> MachineState {
+        self.0.snapshot()
     }
 
-    fn restore(&mut self, state: &Vec<u8>) {
-        self.0.load_state(state).expect("oracle load_state");
+    fn restore(&mut self, state: &MachineState) {
+        self.0.restore(state);
     }
 }
 
@@ -42,23 +45,24 @@ pub fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// Opens the oracle, or None (with the reason on stderr) when the library or ROM is missing.
-pub fn open_oracle() -> Option<OracleNes> {
-    if !oracle::available() {
-        eprintln!("oracle library not built (oracle/fceumm/build.sh): skipping");
-        return None;
-    }
-    let rom = std::env::var_os("TRIFORCE_ROM")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| repo().join("roms/zelda.nes"));
-    if !rom.exists() {
+/// The ROM (`$TRIFORCE_ROM`, else `roms/zelda.nes`), or None (with the reason on stderr) when it is missing.
+pub fn rom() -> Option<Arc<Rom>> {
+    static ROM: LazyLock<Option<Arc<Rom>>> = LazyLock::new(|| {
+        let path = std::env::var_os("TRIFORCE_ROM")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| repo().join("roms/zelda.nes"));
+        let bytes = std::fs::read(path).ok()?;
+        Some(Rom::from_ines(&bytes).expect("valid Zelda ROM"))
+    });
+    if ROM.is_none() {
         eprintln!("ROM not found: set TRIFORCE_ROM or create roms/zelda.nes");
-        return None;
     }
-    Some(OracleNes(
-        oracle::Oracle::open(&rom).expect("open oracle"),
-        0,
-    ))
+    ROM.clone()
+}
+
+/// A powered-on zcore, or None when the ROM is missing.
+pub fn open_core() -> Option<ZCore> {
+    rom().map(ZCore::power_on)
 }
 
 /// One array of an `.npz`.
@@ -231,17 +235,43 @@ pub fn fixtures() -> Vec<PathBuf> {
     v
 }
 
-/// Oracle state of a fixture's room entry (FCEUmm body + the oracle's frame counter).
-pub fn entry_state(f: &HashMap<String, Npy>) -> Vec<u8> {
-    let mut state = f["oracle_state"].bytes();
-    state.extend_from_slice(&(f["entry_frame"].scalar_i64() as u64).to_le_bytes());
-    state
+struct Play<'a>(&'a mut ZCore);
+
+impl movie::Playback for Play<'_> {
+    fn run_frame(&mut self, buttons: u8) {
+        self.0.run_frame(buttons, false);
+    }
+    fn poke(&mut self, addr: u16, value: u8) {
+        self.0.poke(addr, value);
+    }
 }
 
-/// THE state loader of the zelda tests: every test that starts from a named state reads it here, so switching
-/// to zcore + regenerated `TFZSTATE` files (`triforce/states/<name>.state`) happens in this one place.  Today the
-/// names are parity-fixture room entries (`1_44`, `0_77_cave`, ...: oracle states recorded on a chain-0 movie,
-/// see oracle_game.rs for the legacy names they stand in for).
-pub fn load_named_state(name: &str) -> Vec<u8> {
-    entry_state(&read_npz(&fixture_dir().join(format!("{name}.npz"))))
+/// zcore state at a fixture's room entry: its corpus movie (`movie`, after the base) replayed for `entry_frame`
+/// inputs, with the pokes tagged before `entry_frame` applied (how `record_env_parity.py` reached the entry on
+/// the oracle; the fixture's `ram0` check proves the two states agree).
+pub fn entry_state(f: &HashMap<String, Npy>) -> MachineState {
+    let movies = repo().join("corpus/movies");
+    let name = f["movie"].string();
+    let entry = f["entry_frame"].scalar_i64() as usize;
+    let m = movie::Movie::load(&movies.join(format!("{name}.tfmovie"))).expect("corpus movie");
+    let mut core = open_core().expect("ROM");
+    movie::play_base(&mut Play(&mut core), &m, &movies).expect("base movie");
+    let mut pokes = m.pokes.iter().peekable();
+    for (k, &buttons) in m.inputs[..entry].iter().enumerate() {
+        while let Some(q) = pokes.next_if(|q| q.frame as usize <= k) {
+            core.poke(q.addr, q.value);
+        }
+        core.run_frame(buttons, false);
+    }
+    core.snapshot()
+}
+
+/// THE state loader of the zelda tests: every test that starts from a named state decodes
+/// `triforce/states/<name>.state` here.
+pub fn load_named_state(name: &str) -> MachineState {
+    let path = repo().join(format!("triforce/states/{name}.state"));
+    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    zcore::state_file::decode(&rom().expect("ROM"), &bytes)
+        .unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+        .machine
 }

@@ -1,13 +1,13 @@
-//! Game-model and session tests on the FCEUmm oracle, from the parity fixtures' room-entry states.
+//! Game-model and session tests on zcore, from the regenerated start states (`triforce/states`).
 //!
-//! Ports of the emulator tests in tests/test_core.py, tests/test_room_state.py and tests/test_room_entry.py
-//! (their legacy stable-retro states map to these chain states: `1_44w` -> `1_44`, `1_72e` -> `1_72`,
-//! `1_74w` -> `1_74`, `1_73s_0` -> `1_73`, `0_77cave_0` -> `0_77_cave`, `start` -> `0_77_start`,
-//! `1_35s_0` -> `1_35`).  One oracle per process, so every case runs inside one test.
+//! Ports of the emulator tests in tests/test_core.py, tests/test_room_state.py and tests/test_room_entry.py,
+//! on their chain-0 states (`1_44w_0`, `1_72e_0`, `1_74w_0`, `1_73s_0`, `0_77cave_0`, `start`, `1_35s_0`).
+//! Every case runs inside one test on one emulator.
+#![cfg(feature = "zcore")]
 
 mod common;
 
-use common::{OracleNes, load_named_state, open_oracle};
+use common::{Counted, load_named_state, open_core};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::BTreeSet;
@@ -22,7 +22,7 @@ use zelda::{
     Session, Var,
 };
 
-type S = Session<OracleNes>;
+type S = Session<Counted>;
 
 fn rng() -> ChaCha8Rng {
     ChaCha8Rng::seed_from_u64(0)
@@ -79,7 +79,7 @@ fn leave_west_door(s: &mut S) {
 }
 
 fn decodes_dungeon_and_overworld_states(s: &mut S) {
-    load(s, "1_44", &[]);
+    load(s, "1_44w_0", &[]);
     let st = s.state().clone();
     assert_eq!(st.full_location(), MapLocation::new(1, 0x44, false));
     assert_eq!(st.sword(), SwordKind::Wood);
@@ -95,7 +95,7 @@ fn decodes_dungeon_and_overworld_states(s: &mut S) {
         Some(Direction::S)
     );
 
-    load(s, "0_77_start", &[]);
+    load(s, "start", &[]);
     let st = s.state().clone();
     assert_eq!((st.level(), st.location()), (0, 0x77));
     assert_eq!(st.sword(), SwordKind::None);
@@ -107,7 +107,7 @@ fn decodes_dungeon_and_overworld_states(s: &mut S) {
 
 fn masks(s: &mut S) {
     let bombs = (Var::Bombs, 4);
-    load(s, "1_44", &[HURT[0], HURT[1], bombs]);
+    load(s, "1_44w_0", &[HURT[0], HURT[1], bombs]);
     assert_eq!(
         s.mask().directions(ActionKind::Move),
         vec![Direction::W, Direction::E]
@@ -121,11 +121,11 @@ fn masks(s: &mut S) {
     assert!(!s.mask().kind[ActionKind::Beams.index()]);
 
     let f = full_health(16);
-    load(s, "1_44", &f);
+    load(s, "1_44w_0", &f);
     leave_west_door(s);
     assert!(s.mask().kind[ActionKind::Beams.index()] && !s.mask().kind[ActionKind::Sword.index()]);
 
-    load(s, "1_73", &[]);
+    load(s, "1_73s_0", &[]);
     act(s, "MOVE N 16");
     let m = *s.mask();
     assert!(m.kind[ActionKind::Move.index()] && m.kind[ActionKind::Wait.index()]);
@@ -133,7 +133,7 @@ fn masks(s: &mut S) {
 }
 
 fn executor_timing(s: &mut S) {
-    load(s, "1_73", &[]);
+    load(s, "1_73s_0", &[]);
     let start_y = s.state().link.position.y;
     let c = act(s, "MOVE N 16");
     assert_eq!(c.interrupt, None);
@@ -149,7 +149,7 @@ fn executor_timing(s: &mut S) {
     assert_eq!(c.interrupt, Some(Interrupt::Wall));
     assert!(c.frames <= 2);
 
-    load(s, "1_44", &[]);
+    load(s, "1_44w_0", &[]);
     act(s, "MOVE E 16");
     let mut reasons = BTreeSet::new();
     for _ in 0..40 {
@@ -166,7 +166,7 @@ fn executor_timing(s: &mut S) {
 }
 
 fn look_ahead(s: &mut S) {
-    load(s, "1_44", &full_health(16));
+    load(s, "1_44w_0", &full_health(16));
     leave_west_door(s);
     let mut credited = 0;
     let mut lined_up = false;
@@ -204,7 +204,7 @@ fn look_ahead(s: &mut S) {
     assert!(lined_up, "never landed a beam shot from 1_44");
 
     // look_ahead=false emulates only real frames; with it the beam runs hidden frames.
-    load(s, "1_44", &full_health(16));
+    load(s, "1_44w_0", &full_health(16));
     leave_west_door(s);
     assert!(s.mask().kind[ActionKind::Beams.index()]);
     let snap = s.snapshot();
@@ -222,7 +222,7 @@ fn look_ahead(s: &mut S) {
 }
 
 fn snapshot_restore_is_deterministic(s: &mut S) {
-    load(s, "1_44", &[]);
+    load(s, "1_44w_0", &[]);
     let snap = s.snapshot();
     let script = ["MOVE E 16", "WAIT 8", "MOVE S 8", "SWORD E"];
     let first: Vec<_> = script
@@ -239,7 +239,7 @@ fn snapshot_restore_is_deterministic(s: &mut S) {
 }
 
 fn caves(s: &mut S) {
-    load(s, "0_77_cave", &[]);
+    load(s, "0_77cave_0", &[]);
     assert!(s.state().in_cave());
     act_until(
         s,
@@ -250,7 +250,7 @@ fn caves(s: &mut S) {
     assert!(s.state().link.position.y < 0x8E);
     assert_eq!(s.state().sword(), SwordKind::None);
 
-    load(s, "0_77_cave", &[]);
+    load(s, "0_77cave_0", &[]);
     let rs = decode_room_state(s.state().ram());
     assert!(rs.in_cave && rs.is_overworld() && rs.doors.is_empty());
     assert!(
@@ -282,7 +282,7 @@ fn caves(s: &mut S) {
 }
 
 fn walk_three_rooms(s: &mut S) {
-    load(s, "0_77_start", &[]);
+    load(s, "start", &[]);
     let mut visited = vec![s.state().location()];
     for d in ["E", "W", "W"] {
         let changes = act_until(s, &format!("MOVE {d} 32"), |_, c| c.changed_location(), 30);
@@ -292,7 +292,7 @@ fn walk_three_rooms(s: &mut S) {
 }
 
 fn room_states(s: &mut S) {
-    load(s, "1_44", &[]);
+    load(s, "1_44w_0", &[]);
     let rs = decode_room_state(s.state().ram());
     assert_eq!((rs.level, rs.room, rs.in_cave), (1, 0x44, false));
     let doors: Vec<(Direction, DoorType, bool)> = rs
@@ -328,7 +328,7 @@ fn room_states(s: &mut S) {
     assert!(rs.enemies_remaining == 3 && rs.enemies_unspawned == 0 && !rs.all_dead());
     assert!(rs.has_item && !rs.item_visible && rs.item_hidden_until_clear);
 
-    load(s, "1_72", &[]);
+    load(s, "1_72e_0", &[]);
     let rs = decode_room_state(s.state().ram());
     assert!(
         rs.item_id == Some(0x19)
@@ -337,7 +337,7 @@ fn room_states(s: &mut S) {
     );
     assert!(rs.enemies_remaining == 3 && rs.enemies_unspawned == 3);
 
-    load(s, "1_74", &[]);
+    load(s, "1_74w_0", &[]);
     for _ in 0..4 {
         let st = act(s, "WAIT 8").state;
         let rs = decode_room_state(st.ram());
@@ -359,7 +359,7 @@ fn room_states(s: &mut S) {
 }
 
 fn boomerang_stays_active_until_caught(s: &mut S) {
-    load(s, "1_35", &[]);
+    load(s, "1_35s_0", &[]);
     act_until(s, "MOVE N 32", |s, _| s.nes().peek(0x53) == 0, 30);
     act(s, "BOOMERANG E");
     let c = act_until(
@@ -404,7 +404,7 @@ fn layout(s: &S) -> Vec<(i32, i32)> {
 
 fn pre_entry_loads(s: &mut S) {
     // 1_72 is saved before D1 0x72's EnterRoom (3 Keese): the spawn cycle decides their layout.
-    let state = load_named_state("1_72");
+    let state = load_named_state("1_72e_0");
     let opts = LoadOptions {
         randomize_rng: true,
         ..Default::default()
@@ -456,7 +456,7 @@ fn pre_entry_loads(s: &mut S) {
 
 /// A boomerang shot already in Link's shield box in D1 0x73 (`_place_shield_projectile`).
 fn place_shield_projectile(s: &mut S, slots: &[u16]) {
-    load(s, "1_73", &[]);
+    load(s, "1_73s_0", &[]);
     act(s, "MOVE N 16");
     s.apply_ram(&[
         (Var::LinkX, 128),
@@ -540,9 +540,9 @@ fn real_shield_blocks(s: &mut S) {
 }
 
 #[test]
-fn game_model_on_the_oracle() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+fn game_model_on_zcore() {
+    let Some(nes) = open_core() else { return };
+    let nes = Counted(nes, 0);
     let mut s = Session::new(nes, Arc::new(GameMap::builtin()));
     s.set_disabled_kinds(&[]);
     decodes_dungeon_and_overworld_states(&mut s);

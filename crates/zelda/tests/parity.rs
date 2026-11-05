@@ -1,14 +1,17 @@
-//! Session parity with the Python game stack on the FCEUmm oracle (env parity fixtures, plan step 10).
+//! Session parity with the Python game stack on zcore (env parity fixtures recorded on the FCEUmm oracle, plan
+//! step 10).
 //!
-//! For every `crates/env/tests/fixtures/parity/*.npz`: restore the recorded room-entry oracle state, load it as
+//! For every `crates/env/tests/fixtures/parity/*.npz`: replay the fixture's corpus movie to its room entry in
+//! zcore, load it as
 //! the recorder did (`randomize_rng=False, fresh_room=True`, the specialist's disabled kinds), restore a snapshot
 //! at every episode start, replay the recorded actions and require exact frames, interrupts, control frames,
 //! shield blocks, change fields, masks, RAM, tile grid, objectives, PBRS wavefront, linger and heart counts
 //! (floats within 1e-6).  A difference is allowed only when `tests/parity_exceptions.toml` lists it.
+#![cfg(feature = "zcore")]
 
 mod common;
 
-use common::{Npy, entry_state, fixtures, open_oracle, read_npz, repo};
+use common::{Npy, entry_state, fixtures, open_core, read_npz, repo};
 use rand::SeedableRng;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -136,11 +139,11 @@ fn wavefront_grid(w: Option<&Arc<Wavefront>>) -> Vec<i64> {
 }
 
 fn run_fixture(
-    nes: common::OracleNes,
+    nes: zcore::ZCore,
     f: &HashMap<String, Npy>,
     map: &Arc<GameMap>,
     c: &mut Checker,
-) -> common::OracleNes {
+) -> zcore::ZCore {
     let specialist = f["specialist"].string();
     let (pbrs, nearby) = reward_flags(&specialist);
     let route = f["route"].string();
@@ -355,8 +358,7 @@ fn run_fixture(
 
 #[test]
 fn session_matches_python_fixtures() {
-    let _lock = oracle::lock();
-    let Some(mut nes) = open_oracle() else { return };
+    let Some(mut nes) = open_core() else { return };
     let map = Arc::new(GameMap::builtin());
     let text =
         std::fs::read_to_string(repo().join("crates/zelda/tests/parity_exceptions.toml")).unwrap();

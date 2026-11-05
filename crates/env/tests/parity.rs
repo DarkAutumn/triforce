@@ -1,6 +1,8 @@
-//! `SpecialistEnv` parity with the Python `ZeldaEnv` on the FCEUmm oracle (env parity fixtures, plan step 10).
+//! `SpecialistEnv` parity with the Python `ZeldaEnv` on zcore (env parity fixtures recorded on the FCEUmm oracle,
+//! plan step 10).
 //!
-//! For every `tests/fixtures/parity/*.npz`: load the recorded room-entry oracle state as the recorder did
+//! For every `tests/fixtures/parity/*.npz`: replay the fixture's corpus movie to its room entry in zcore, load it
+//! as the recorder did
 //! (`randomize_rng=False, fresh_room=True`), build the fixture's specialist env with RAM randomization cleared,
 //! set its route and route step, `restore` a snapshot at every episode start and replay the recorded actions.
 //! Observations, masks, rewards and reward terms, terminated/truncated/ending/outcome and the terminal info must
@@ -9,7 +11,7 @@
 
 mod common;
 
-use common::{MemStore, Npy, OracleNes, entry_state, fixtures, open_oracle, read_npz, repo};
+use common::{MemStore, Npy, ZCore, entry_state, fixtures, open_core, read_npz, repo};
 use env::config::{GameData, RamRandomization, SpecialistConfig};
 use env::observation::Observation;
 use env::specialist_env::{EnvOptions, SpecialistEnv};
@@ -169,11 +171,11 @@ fn check_obs(
 }
 
 fn run_fixture(
-    nes: OracleNes,
+    nes: ZCore,
     f: &HashMap<String, Npy>,
     data: &Arc<GameData>,
     c: &mut Checker,
-) -> OracleNes {
+) -> ZCore {
     let specialist = f["specialist"].string();
     let config = SpecialistConfig {
         ram_randomization: RamRandomization::default(),
@@ -327,8 +329,7 @@ fn run_fixture(
 
 #[test]
 fn env_matches_python_fixtures() {
-    let _lock = oracle::lock();
-    let Some(mut nes) = open_oracle() else { return };
+    let Some(mut nes) = open_core() else { return };
     let data = common::game_data();
     let text =
         std::fs::read_to_string(repo().join("crates/env/tests/parity_exceptions.toml")).unwrap();

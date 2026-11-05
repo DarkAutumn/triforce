@@ -16,8 +16,9 @@ serde_yaml_ng = "0.10"
 zelda = { path = "../zelda" }
 
 [dev-dependencies]
-flate2 = "1.1.10"
-oracle = { path = "../oracle" }
+movie = { path = "../movie" }
 tempfile = "3.27.0"
 toml = "1.2.0"
+zcore = { path = "../zcore" }
+zelda = { path = "../zelda", features = ["zcore"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }

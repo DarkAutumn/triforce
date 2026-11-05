@@ -1,4 +1,4 @@
-//! `ObservationBuilder` on the legacy named start states (FCEUmm oracle): contract conformance and decoded values
+//! `ObservationBuilder` on the named start states (zcore): contract conformance and decoded values
 //! against known savestate facts.  Ported from tests/test_observation.py before the Python game stack is deleted
 //! (plan step 16).  Every state comes from `common::load_named_state`.
 //!
@@ -19,7 +19,7 @@
 
 mod common;
 
-use common::{OracleNes, load_named_state, named_states, obs_values, obs_violations, open_oracle};
+use common::{ZCore, load_named_state, named_states, obs_values, obs_violations, open_core};
 use env::observation::{
     ITEM_TYPE_BASE, NUM_ENTITY_SLOTS, OBS_SCHEMA_VERSION, OBS_SPEC, Observation,
     ObservationBuilder, TREASURE_SLOT, feature_names, room_index,
@@ -32,7 +32,7 @@ use zelda::objectives::{Objective, ObjectiveKind};
 use zelda::tiles::TileClass;
 use zelda::{Action, Change, GameMap, GameView, LoadOptions, MapLocation, Session, Var};
 
-type S = Session<OracleNes>;
+type S = Session<ZCore>;
 
 fn index(names: &[String], name: &str) -> usize {
     names
@@ -76,7 +76,7 @@ fn no_objective() -> Objective {
 }
 
 fn session() -> Option<S> {
-    open_oracle().map(|nes| Session::new(nes, Arc::new(GameMap::builtin())))
+    open_core().map(|nes| Session::new(nes, Arc::new(GameMap::builtin())))
 }
 
 /// `session.load(name, randomize_rng=False)`.
@@ -169,7 +169,6 @@ fn space_matches_contract() {
 /// Acceptance: every savestate in the states directory produces a contract-conforming observation.
 #[test]
 fn every_savestate_builds_a_valid_observation() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     let names = named_states();
     assert!(names.len() > 100, "{}", names.len());
@@ -200,9 +199,8 @@ fn every_savestate_builds_a_valid_observation() {
 
 #[test]
 fn goriya_room_entities_and_grid() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
-    let (mut builder, obs) = reset(&mut s, "1_44w");
+    let (mut builder, obs) = reset(&mut s, "1_44w_0");
     for f in &obs.entity_features[..3] {
         assert_eq!(f[e("spawning")], 1.0, "just created, in their spawn clouds");
         assert_eq!(f[e("hurts_on_touch")], 0.0);
@@ -262,10 +260,9 @@ fn goriya_room_entities_and_grid() {
 
 #[test]
 fn push_block_in_grid_and_room_state() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     // conftest.load_and_place: settle the room, then put Link just N of the push block.
-    load(&mut s, "1_22e");
+    load(&mut s, "1_22e_0");
     for _ in 0..30 {
         if s.act(Action::parse("WAIT 8").unwrap())
             .unwrap()
@@ -315,7 +312,6 @@ fn push_block_in_grid_and_room_state() {
 
 #[test]
 fn start_state_link_and_room() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     let (_, obs) = reset(&mut s, "start");
     assert_eq!(obs.room_id, room_index(0, false, 0x77));
@@ -340,9 +336,8 @@ fn start_state_link_and_room() {
 
 #[test]
 fn key_room_treasure() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
-    let (_, obs) = reset(&mut s, "1_72e");
+    let (_, obs) = reset(&mut s, "1_72e_0");
     assert_eq!(obs.entity_types[TREASURE_SLOT], ITEM_TYPE_BASE + 0x19);
     assert!(obs.room_state[r("item_is_key")] == 1.0 && obs.room_state[r("item_visible")] == 0.0);
     assert!(approx(obs.room_state[r("enemies_unspawned")], 3.0 / 8.0));
@@ -353,7 +348,6 @@ fn key_room_treasure() {
 
 #[test]
 fn sword_cave_exposes_ware_and_fires() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     let (_, obs) = reset(&mut s, "0_77cave_0");
     let (types, feats) = (&obs.entity_types, &obs.entity_features);
@@ -372,9 +366,8 @@ fn sword_cave_exposes_ware_and_fires() {
 
 #[test]
 fn velocity_is_position_delta() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
-    let (mut builder, obs) = reset(&mut s, "1_44w");
+    let (mut builder, obs) = reset(&mut s, "1_44w_0");
     assert!(velocities(&obs).iter().flatten().all(|&v| v == 0.0));
     // Monsters don't move inside their spawn clouds.
     let (_, obs) = wait_until_spawned(&mut s, &mut builder, 3);
@@ -414,7 +407,6 @@ fn velocity_is_position_delta() {
 
 #[test]
 fn room_change_resets_velocity_and_records_entry() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     let (mut builder, mut obs) = reset(&mut s, "start");
     for _ in 0..30 {
@@ -432,9 +424,8 @@ fn room_change_resets_velocity_and_records_entry() {
 
 #[test]
 fn objective_block() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
-    let state = load(&mut s, "1_44w");
+    let state = load(&mut s, "1_44w_0");
     let objective = Objective {
         kind: ObjectiveKind::Move,
         next_rooms: [MapLocation::new(1, 0x45, false)].into_iter().collect(),

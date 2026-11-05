@@ -1,5 +1,5 @@
-//! The Zelda adapters in a pool, on the dev-only FCEUmm oracle (skipped when the oracle library, ROM or legacy
-//! states are missing). FCEUmm keeps its state in globals, so each test uses one env and holds `oracle::lock()`.
+//! The Zelda adapters in a pool, on zcore with the regenerated `TFZSTATE` start states in `triforce/states`
+//! (skipped when the ROM is missing).
 
 use env::chain::{ChainEnv, ChainStatus, Route, RunResult};
 use env::config::{GameData, HpBound, RamRandomization};
@@ -14,23 +14,19 @@ use pool::zelda::{
 use pool::{Buffers, Column, EnvControl, EnvInit, Jobs, ObsData, Pool, PoolEnv, PoolOptions};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+use zcore::{MachineState, Rom, ZCore};
 use zelda::{ActionKind, ActionMask, MASK_SIZE, Nes, SessionSnapshot};
 
-/// The oracle as a `zelda::Nes`; `.1` counts every frame run (look-ahead included). FCEUmm's globals have no
-/// thread affinity; tests hold `oracle::lock()` and use one instance at a time, so moving it to a worker thread is
-/// sound.
-struct OracleNes(oracle::Oracle, u64);
+/// zcore as a `zelda::Nes`; `.1` counts every frame run (look-ahead included; restores don't rewind it).
+struct Counted(ZCore, u64);
 
-unsafe impl Send for OracleNes {}
+impl Nes for Counted {
+    type State = MachineState;
 
-impl Nes for OracleNes {
-    type State = Vec<u8>;
-
-    fn run_frame(&mut self, buttons: u8, _render: bool) {
-        self.0.run_frame(buttons);
+    fn run_frame(&mut self, buttons: u8, render: bool) {
+        self.0.run_frame(buttons, render);
         self.1 += 1;
     }
 
@@ -46,19 +42,20 @@ impl Nes for OracleNes {
         self.0.poke(addr, value);
     }
 
-    fn snapshot(&self) -> Vec<u8> {
-        self.0.save_state()
+    fn snapshot(&self) -> MachineState {
+        self.0.snapshot()
     }
 
-    fn restore(&mut self, state: &Vec<u8>) {
-        self.0.load_state(state).expect("oracle load_state");
+    fn restore(&mut self, state: &MachineState) {
+        self.0.restore(state);
     }
 }
 
-/// Palette indices as gray RGB.
-fn rgb(nes: &OracleNes, out: &mut [u8]) -> bool {
-    let mut pixels = [0u8; 256 * 240];
-    nes.0.pixels(&mut pixels);
+/// Palette indices of the last rendered frame as gray RGB (false when it wasn't rendered).
+fn rgb(nes: &Counted, out: &mut [u8]) -> bool {
+    let Some(pixels) = nes.0.pixels() else {
+        return false;
+    };
     for (o, &p) in out.as_chunks_mut::<3>().0.iter_mut().zip(pixels.iter()) {
         o.fill(p);
     }
@@ -69,52 +66,41 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-fn open_oracle() -> Option<OracleNes> {
-    if !oracle::available() {
-        eprintln!("oracle library not built (oracle/fceumm/build.sh): skipping");
-        return None;
-    }
-    let rom = std::env::var_os("TRIFORCE_ROM")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| repo().join("roms/zelda.nes"));
-    if !rom.exists() {
+/// The ROM (`$TRIFORCE_ROM`, else `roms/zelda.nes`), or None when it is missing.
+fn rom() -> Option<Arc<Rom>> {
+    static ROM: LazyLock<Option<Arc<Rom>>> = LazyLock::new(|| {
+        let path = std::env::var_os("TRIFORCE_ROM")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| repo().join("roms/zelda.nes"));
+        let bytes = std::fs::read(path).ok()?;
+        Some(Rom::from_ines(&bytes).expect("valid Zelda ROM"))
+    });
+    ROM.clone()
+}
+
+fn open_core() -> Option<Counted> {
+    let Some(rom) = rom() else {
         eprintln!("ROM not found: set TRIFORCE_ROM or create roms/zelda.nes");
         return None;
-    }
-    if !GzipStore.path("start").exists() {
-        eprintln!("legacy states not found: skipping");
-        return None;
-    }
-    Some(OracleNes(
-        oracle::Oracle::open(&rom).expect("open oracle"),
-        0,
-    ))
+    };
+    Some(Counted(ZCore::power_on(rom), 0))
 }
 
-/// The legacy gzip states (FCEUmm bodies the oracle loads, env's test fixtures) plus the oracle's 8-byte frame
-/// counter.
-struct GzipStore;
+/// The regenerated start states, `triforce/states/<name>.state` (read-only).
+struct TfzStore;
 
-impl GzipStore {
-    fn path(&self, name: &str) -> PathBuf {
-        repo()
-            .join("crates/env/tests/fixtures/legacy-states")
-            .join(format!("{name}.state"))
-    }
-}
-
-impl StateStore<Vec<u8>> for GzipStore {
-    fn load(&self, name: &str) -> Result<Vec<u8>, EnvError> {
-        let path = self.path(name);
-        let file = std::fs::File::open(&path)
-            .map_err(|e| EnvError::State(format!("{}: {e}", path.display())))?;
-        let mut body = Vec::new();
-        flate2::read::GzDecoder::new(file).read_to_end(&mut body)?;
-        body.extend_from_slice(&0u64.to_le_bytes());
-        Ok(body)
+impl StateStore<MachineState> for TfzStore {
+    fn load(&self, name: &str) -> Result<MachineState, EnvError> {
+        let path = repo().join(format!("triforce/states/{name}.state"));
+        let err = |e: &dyn std::fmt::Display| EnvError::State(format!("{}: {e}", path.display()));
+        let bytes = std::fs::read(&path).map_err(|e| err(&e))?;
+        let rom = rom().ok_or_else(|| EnvError::State("ROM not found".into()))?;
+        Ok(zcore::state_file::decode(&rom, &bytes)
+            .map_err(|e| err(&e))?
+            .machine)
     }
 
-    fn save(&self, _: &Path, _: &SessionSnapshot<Vec<u8>>) -> Result<(), EnvError> {
+    fn save(&self, _: &Path, _: &SessionSnapshot<MachineState>) -> Result<(), EnvError> {
         Err(EnvError::State("read-only store".into()))
     }
 }
@@ -180,15 +166,14 @@ struct Expected {
 
 #[test]
 fn train_env_rows_match_the_env_played_directly() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let data = data();
     let config = config(&data, 12);
     let seed = 9;
 
-    // Directly: the SpecialistEnv on the bare oracle, seeded like pool env 0.
+    // Directly: the SpecialistEnv on the bare emulator, seeded like pool env 0.
     let mut direct =
-        SpecialistEnv::new(config.clone(), data.clone(), nes, GzipStore, start_opts()).unwrap();
+        SpecialistEnv::new(config.clone(), data.clone(), nes, TfzStore, start_opts()).unwrap();
     direct.rng = pool::env_rng(seed, 0);
     let mut action_rng = ChaCha8Rng::seed_from_u64(1);
     let first = obs_data(&direct.reset(None, None).unwrap().0);
@@ -226,7 +211,7 @@ fn train_env_rows_match_the_env_played_directly() {
             config.clone(),
             data.clone(),
             nes,
-            GzipStore,
+            TfzStore,
             start_opts(),
             init,
             None,
@@ -272,14 +257,13 @@ fn train_env_rows_match_the_env_played_directly() {
 
 #[test]
 fn chain_runs_in_a_pool_match_direct_runs() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let data = data();
     let route = Route::load(&data.map, "milestone1", None, None).unwrap();
     let seeds = [3u64, 4];
     let cap = 80;
 
-    let mut direct = ChainEnv::new(data.clone(), nes, GzipStore, route.clone());
+    let mut direct = ChainEnv::new(data.clone(), nes, TfzStore, route.clone());
     direct.max_steps = cap;
     let mut runs: Vec<RunResult> = Vec::new();
     for &seed in &seeds {
@@ -312,7 +296,7 @@ fn chain_runs_in_a_pool_match_direct_runs() {
         let mut env = ChainRunEnv::new(
             data.clone(),
             nes,
-            GzipStore,
+            TfzStore,
             route.clone(),
             jobs.clone(),
             policies.clone(),
@@ -379,8 +363,7 @@ fn chain_runs_in_a_pool_match_direct_runs() {
 
 #[test]
 fn a_chain_specialist_without_a_model_ends_the_run_as_error() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let data = data();
     let route = Route::load(&data.map, "milestone1", None, None).unwrap();
     let policies: Vec<Arc<str>> = data
@@ -391,7 +374,7 @@ fn a_chain_specialist_without_a_model_ends_the_run_as_error() {
     let mut env = ChainRunEnv::new(
         data.clone(),
         nes,
-        GzipStore,
+        TfzStore,
         route,
         Jobs::new([0u64]),
         policies,
@@ -426,8 +409,7 @@ fn init() -> EnvInit {
 
 #[test]
 fn frames_publish_only_while_rendering() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let data = data();
     // The Goriya room at full health, no moves: Link stays in the room (no episode ends mid-test), waits for the
     // Goriyas and then attacks; beams make the session run look-ahead frames, which are never shown.
@@ -439,7 +421,7 @@ fn frames_publish_only_while_rendering() {
     };
     let config = Arc::new(config);
     let opts = || EnvOptions {
-        start_state: Some("1_44w".into()),
+        start_state: Some("1_44w_0".into()),
         ..Default::default()
     };
     let mut nes = Some(nes);
@@ -448,7 +430,7 @@ fn frames_publish_only_while_rendering() {
             config.clone(),
             data.clone(),
             nes.take().unwrap(),
-            GzipStore,
+            TfzStore,
             opts(),
             init,
             Some(rgb),
@@ -517,9 +499,9 @@ fn prefer_attacks(mask: ActionMask) -> ActionMask {
     }
 }
 
-/// Replays a log on the bare oracle from its origin state (TFMOVIE poke order).
-fn replay(nes: &mut OracleNes, log: &InputLog) {
-    nes.restore(&GzipStore.load(log.origin.as_deref().unwrap()).unwrap());
+/// Replays a log on the bare emulator from its origin state (TFMOVIE poke order).
+fn replay(nes: &mut Counted, log: &InputLog) {
+    nes.restore(&TfzStore.load(log.origin.as_deref().unwrap()).unwrap());
     let mut pokes = log.pokes.iter().peekable();
     for (frame, &buttons) in log.buttons.iter().enumerate() {
         while let Some(&(_, addr, value)) = pokes.next_if(|p| p.0 as usize == frame) {
@@ -534,13 +516,12 @@ fn replay(nes: &mut OracleNes, log: &InputLog) {
 
 #[test]
 fn recorded_episodes_replay_to_the_same_machine() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let data = data();
     // Eval: an explicit start and seed per episode. The Goriya room at full health (the NES full-health encoding)
     // with attacks preferred: sword beams fire, so the session runs its look-ahead; the health pokes land after
     // the gain-control frames.
-    let start = "1_44w";
+    let start = "1_44w_0";
     let opts = EnvOptions {
         explicit_starts: true,
         ..Default::default()
@@ -561,7 +542,7 @@ fn recorded_episodes_replay_to_the_same_machine() {
         Arc::new(config),
         data.clone(),
         nes,
-        GzipStore,
+        TfzStore,
         opts,
         jobs,
         init,
@@ -614,7 +595,7 @@ fn recorded_episodes_replay_to_the_same_machine() {
     // Load randomization pokes come first; the log covers the gain-control frames and every step.
     assert!(log.pokes.iter().any(|p| p.0 == 0));
     assert!(log.buttons.len() as u64 >= record.frames);
-    // The oracle ran every frame since it opened, look-ahead included; the log kept only the real ones.
+    // zcore ran every frame since it powered on, look-ahead included; the log kept only the real ones.
     assert!(
         emulated > log.buttons.len() as u64,
         "look-ahead ran: {emulated} frames emulated"

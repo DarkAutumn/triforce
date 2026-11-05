@@ -1,9 +1,9 @@
-//! ChainEnv (`tests/test_runner.py`) and Explorer (`tests/test_explore.py`) on the oracle with scripted
+//! ChainEnv (`tests/test_runner.py`) and Explorer (`tests/test_explore.py`) on zcore with scripted
 //! policies in place of networks.
 
 mod common;
 
-use common::{GzipStore, MemStore, OracleNes, open_oracle};
+use common::{MachineState, MemStore, TfzStore, ZCore, open_core};
 use env::StateStore;
 use env::chain::{ChainEnv, ChainStatus, RoomRecord, Route, RunResult, chain_summary};
 use env::config::{GameData, SpecialistConfig};
@@ -20,10 +20,10 @@ fn data() -> Arc<GameData> {
 }
 
 /// Runs one chain to its end with `policy`.
-fn drive<St: StateStore<Vec<u8>>>(
-    chain: &mut ChainEnv<OracleNes, St>,
+fn drive<St: StateStore<MachineState>>(
+    chain: &mut ChainEnv<ZCore, St>,
     seed: u64,
-    mut policy: impl FnMut(&Session<OracleNes>, &mut ChaCha8Rng) -> Action,
+    mut policy: impl FnMut(&Session<ZCore>, &mut ChaCha8Rng) -> Action,
 ) -> RunResult {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let mut status = chain.reset(Some(seed), &mut rng).expect("reset");
@@ -38,12 +38,12 @@ fn drive<St: StateStore<Vec<u8>>>(
     }
 }
 
-fn random_policy(session: &Session<OracleNes>, rng: &mut ChaCha8Rng) -> Action {
+fn random_policy(session: &Session<ZCore>, rng: &mut ChaCha8Rng) -> Action {
     random_action(session.mask(), rng, None)
 }
 
-fn chain(nes: OracleNes, data: &Arc<GameData>, route: Route) -> ChainEnv<OracleNes, GzipStore> {
-    ChainEnv::new(data.clone(), nes, GzipStore::new(), route)
+fn chain(nes: ZCore, data: &Arc<GameData>, route: Route) -> ChainEnv<ZCore, TfzStore> {
+    ChainEnv::new(data.clone(), nes, TfzStore::new(), route)
 }
 
 fn milestone1(data: &GameData) -> Route {
@@ -142,11 +142,10 @@ fn chain_summary_counts_failures_by_room() {
     );
 }
 
-/// All the oracle-backed chain tests share one oracle (one per process).
+/// The chain tests, run in sequence on one emulator.
 #[test]
 fn chain_runs() {
-    let _lock = oracle::lock();
-    let Some(mut nes) = open_oracle() else { return };
+    let Some(mut nes) = open_core() else { return };
     let data = data();
     for case in [
         untagged_room_stops_with_clear_error,
@@ -163,7 +162,7 @@ fn chain_runs() {
     }
 }
 
-fn untagged_room_stops_with_clear_error(nes: OracleNes, data: &Arc<GameData>) -> OracleNes {
+fn untagged_room_stops_with_clear_error(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     let mut map = GameMap::builtin();
     map.get_mut(MapLocation::new(0, 0x77, false))
         .unwrap()
@@ -188,7 +187,7 @@ fn untagged_room_stops_with_clear_error(nes: OracleNes, data: &Arc<GameData>) ->
     c.into_parts().0.into_nes()
 }
 
-fn wrong_exit_into_untagged_room_is_a_failure(nes: OracleNes, data: &Arc<GameData>) -> OracleNes {
+fn wrong_exit_into_untagged_room_is_a_failure(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     let mut c = chain(nes, data, milestone1(data));
     c.max_steps = 200;
     let r = drive(&mut c, 0, |_, _| parse("MOVE W 16"));
@@ -206,7 +205,7 @@ fn wrong_exit_into_untagged_room_is_a_failure(nes: OracleNes, data: &Arc<GameDat
     c.into_parts().0.into_nes()
 }
 
-fn missing_model_is_an_error(nes: OracleNes, data: &Arc<GameData>) -> OracleNes {
+fn missing_model_is_an_error(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     let mut c = chain(nes, data, milestone1(data));
     let mut rng = ChaCha8Rng::seed_from_u64(0);
     let status = c.reset(Some(0), &mut rng).unwrap();
@@ -230,7 +229,7 @@ fn missing_model_is_an_error(nes: OracleNes, data: &Arc<GameData>) -> OracleNes 
     c.into_parts().0.into_nes()
 }
 
-fn run_records_rooms_and_ends_cleanly(nes: OracleNes, data: &Arc<GameData>) -> OracleNes {
+fn run_records_rooms_and_ends_cleanly(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     let mut c = chain(nes, data, milestone1(data));
     c.max_steps = 150;
     let r = drive(&mut c, 3, random_policy);
@@ -249,7 +248,7 @@ fn run_records_rooms_and_ends_cleanly(nes: OracleNes, data: &Arc<GameData>) -> O
     c.into_parts().0.into_nes()
 }
 
-fn same_seed_same_run(nes: OracleNes, data: &Arc<GameData>) -> OracleNes {
+fn same_seed_same_run(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     let mut c = chain(nes, data, milestone1(data));
     c.max_steps = 60;
     let first = drive(&mut c, 7, random_policy);
@@ -260,9 +259,9 @@ fn same_seed_same_run(nes: OracleNes, data: &Arc<GameData>) -> OracleNes {
 }
 
 fn no_room_progress_threshold_replaces_flat_budget(
-    nes: OracleNes,
+    nes: ZCore,
     data: &Arc<GameData>,
-) -> OracleNes {
+) -> ZCore {
     let mut c = chain(nes, data, milestone1(data));
     c.min_room_steps = 2;
     c.max_steps = 20;
@@ -291,9 +290,9 @@ fn no_room_progress_threshold_replaces_flat_budget(
 }
 
 fn no_room_progress_preserves_global_guard_and_disabled_budget(
-    mut nes: OracleNes,
+    mut nes: ZCore,
     data: &Arc<GameData>,
-) -> OracleNes {
+) -> ZCore {
     for enabled in [false, true] {
         let mut c = chain(nes, data, milestone1(data));
         c.min_room_steps = 3;
@@ -324,7 +323,7 @@ fn no_room_progress_preserves_global_guard_and_disabled_budget(
     nes
 }
 
-fn room_exit_resets_visit_clock(nes: OracleNes, data: &Arc<GameData>) -> OracleNes {
+fn room_exit_resets_visit_clock(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     let route = Route::load(&data.map, "milestone1", None, Some("0_77cave_0")).unwrap();
     let mut c = chain(nes, data, route);
     c.max_steps = 100;
@@ -354,13 +353,13 @@ fn room_exit_resets_visit_clock(nes: OracleNes, data: &Arc<GameData>) -> OracleN
 }
 
 fn step_budget_records_health_after_native_fairy_healing(
-    mut nes: OracleNes,
+    mut nes: ZCore,
     data: &Arc<GameData>,
-) -> OracleNes {
+) -> ZCore {
     for room_budget in [true, false] {
         // A pond state at one heart of four.
         let mut session = Session::new(nes, data.map.clone());
-        let state = GzipStore::new().load("0_39s_2").unwrap();
+        let state = TfzStore::new().load("0_39s_2").unwrap();
         let opts = LoadOptions {
             randomize_rng: false,
             ..Default::default()
@@ -412,18 +411,17 @@ fn step_budget_records_health_after_native_fairy_healing(
 /// away past Octoroks and the Zora; the written trajectory feeds a curriculum env.
 #[test]
 fn explore_finds_replays_and_writes_a_curriculum_trajectory() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let data = data();
     let tmp = tempfile::tempdir().unwrap();
     let config = data.specialists["ow-zora"].clone();
-    let mut explorer = Explorer::new(&config, data.clone(), nes, GzipStore::new(), 0).unwrap();
-    let result = explorer.explore("0_38s", 400, 25, 20, None).unwrap();
+    let mut explorer = Explorer::new(&config, data.clone(), nes, TfzStore::new(), 0).unwrap();
+    let result = explorer.explore("0_38s_0", 400, 25, 20, None).unwrap();
     assert!(result.success, "{result:?}");
     assert_eq!(result.ending.as_deref(), Some("exit-correct"));
     assert!(!result.actions.is_empty() && result.actions.len() as u64 <= result.env_steps);
 
-    let dir = tmp.path().join("0_38s");
+    let dir = tmp.path().join("0_38s_0");
     assert!(
         explorer.write(&result, &dir).unwrap(),
         "replaying the actions reproduces the success"
@@ -433,7 +431,7 @@ fn explore_finds_replays_and_writes_a_curriculum_trajectory() {
             .unwrap();
     assert_eq!(meta["success"], true);
     assert_eq!(meta["steps"], result.actions.len());
-    let paths = &load_trajectories(tmp.path()).unwrap()["0_38s"];
+    let paths = &load_trajectories(tmp.path()).unwrap()["0_38s_0"];
     assert_eq!(paths.len(), result.actions.len());
     assert!(paths[0].ends_with("0000.state"));
 
@@ -455,7 +453,7 @@ fn explore_finds_replays_and_writes_a_curriculum_trajectory() {
         curriculum: Some(curriculum),
         ..Default::default()
     };
-    let mut env = SpecialistEnv::new(config, data, nes, GzipStore::new(), opts).unwrap();
+    let mut env = SpecialistEnv::new(config, data, nes, TfzStore::new(), opts).unwrap();
     let (_, info) = env.reset(Some(0), None).unwrap();
     let start = info.start_state.unwrap();
     let tail = &paths[paths.len() - (paths.len() / 10 + 1)..];
@@ -478,5 +476,5 @@ fn explore_finds_replays_and_writes_a_curriculum_trajectory() {
         }
     }
     let terminal = terminal.expect("episode ended");
-    assert_eq!(terminal.curriculum.unwrap().track, "0_38s");
+    assert_eq!(terminal.curriculum.unwrap().track, "0_38s_0");
 }

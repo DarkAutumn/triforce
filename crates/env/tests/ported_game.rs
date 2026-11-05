@@ -1,4 +1,4 @@
-//! Session and game-model tests on the legacy named start states (FCEUmm oracle), ported from the Python tests
+//! Session and game-model tests on the named start states (zcore), ported from the Python tests
 //! before the Python game stack is deleted (plan step 16).  Every state comes from `common::load_named_state`.
 //!
 //! Mapping of tests/test_core.py, tests/test_room_state.py and tests/test_room_entry.py (zelda = crates/zelda):
@@ -43,11 +43,11 @@
 //! | room_entry::test_pre_entry_state_draws_a_new_layout_per_load_and_reproduces_per_seed | zelda oracle_game.rs `pre_entry_loads` (ChaCha8 seeds replace `random.seed`) |
 //! | room_entry::test_fresh_room_refills_a_room_the_game_remembers_as_cleared | here `fresh_room_refills_a_room_the_game_remembers_as_cleared` (zelda oracle_game.rs `pre_entry_loads` checks the same rule on poked flags) |
 //!
-//! One oracle per process: every test takes `oracle::lock()` and skips when the library or ROM is missing.
+//! Every test skips when the ROM is missing.
 
 mod common;
 
-use common::{OracleNes, load_named_state, open_oracle};
+use common::{ZCore, load_named_state, open_core};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
@@ -60,10 +60,10 @@ use zelda::{
     Session, Var, compute_action_mask,
 };
 
-type S = Session<OracleNes>;
+type S = Session<ZCore>;
 
 fn session() -> Option<S> {
-    open_oracle().map(|nes| Session::new(nes, Arc::new(GameMap::builtin())))
+    open_core().map(|nes| Session::new(nes, Arc::new(GameMap::builtin())))
 }
 
 fn rng() -> ChaCha8Rng {
@@ -118,7 +118,7 @@ fn load_and_place(s: &mut S, name: &str, ram: &[(Var, u8)]) -> Arc<GameView> {
 
 /// Link standing just N of 1_22e's push block, after the room has created it.
 fn place_at_push_block(s: &mut S) -> Arc<GameView> {
-    load_and_place(s, "1_22e", &[(Var::LinkX, 96), (Var::LinkY, 125)])
+    load_and_place(s, "1_22e_0", &[(Var::LinkX, 96), (Var::LinkY, 125)])
 }
 
 fn door(rs: &zelda::room_state::RoomState, d: Direction) -> zelda::room_state::DoorState {
@@ -129,12 +129,13 @@ fn door(rs: &zelda::room_state::RoomState, d: Direction) -> zelda::room_state::D
 
 #[test]
 fn decodes_dungeon_and_overworld_savestates() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
-    let state = load(&mut s, "1_44w", false, &[]);
+    let state = load(&mut s, "1_44w_0", false, &[]);
     assert_eq!(state.full_location(), MapLocation::new(1, 0x44, false));
+    // Regenerated 1_44w_0 carries no bombs (chain 0 never picks any up before D1 0x44; the legacy 1_44w had 4);
+    // 2_0es_0 (the Dodongo entry, after the D2 bomb pickups) holds 4: both decode from $0658.
+    assert_eq!(state.bombs(), 0);
     assert_eq!(state.sword(), SwordKind::Wood);
-    assert_eq!(state.bombs(), 4);
     let goriyas = state
         .enemies
         .iter()
@@ -145,6 +146,7 @@ fn decodes_dungeon_and_overworld_savestates() {
         state.bomb_walls().first().map(|w| w.wall_direction),
         Some(Direction::S)
     );
+    assert_eq!(load(&mut s, "2_0es_0", false, &[]).bombs(), 4);
 
     let state = load(&mut s, "start", false, &[]);
     assert_eq!((state.level(), state.location()), (0, 0x77));
@@ -154,7 +156,6 @@ fn decodes_dungeon_and_overworld_savestates() {
 
 #[test]
 fn north_shutter_is_barred_not_a_wall() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     let state = load(&mut s, "2_2es_0", true, &[]);
     assert!(state.is_door_barred(Direction::N));
@@ -168,7 +169,6 @@ fn north_shutter_is_barred_not_a_wall() {
 
 #[test]
 fn push_block_move_is_legal() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     let state = place_at_push_block(&mut s);
     assert!(state.push_block_pending());
@@ -221,9 +221,7 @@ fn place_shield_projectile(s: &mut S, slots: &[u16]) {
 }
 
 fn pixels(s: &S) -> Box<[u8; 256 * 240]> {
-    let mut out = Box::new([0u8; 256 * 240]);
-    s.nes().0.pixels(&mut out);
-    out
+    Box::new(*s.nes().pixels().expect("the last frame was rendered"))
 }
 
 /// Block collection only reads RAM: an option that collects a real block emulates exactly the frames a bare
@@ -233,13 +231,13 @@ fn pixels(s: &S) -> Box<[u8; 256 * 240]> {
 /// presses none: zelda src/executor.rs), which is a stricter reference.
 #[test]
 fn block_collection_preserves_timing_state_and_frame_sink() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     place_shield_projectile(&mut s, &[11]);
+    s.set_render(true);
     let snapshot = s.snapshot();
     let observed = Arc::new(AtomicU64::new(0));
     let seen = observed.clone();
-    s.set_frame_sink(Some(Box::new(move |_: &OracleNes| {
+    s.set_frame_sink(Some(Box::new(move |_: &ZCore| {
         seen.fetch_add(1, Ordering::Relaxed);
     })));
     let active = act(&mut s, "WAIT 16");
@@ -278,7 +276,6 @@ fn block_collection_preserves_timing_state_and_frame_sink() {
 
 #[test]
 fn push_block_opens() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     place_at_push_block(&mut s);
     act(&mut s, "MOVE S 32");
@@ -291,7 +288,6 @@ fn push_block_opens() {
 
 #[test]
 fn cleared_boss_room_and_persisted_flags() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     // No savestate starts in a cleared 0x35: walk back W from the triforce room (Aquamentus dead, heart taken).
     load(&mut s, "1_36w_2", false, &[]);
@@ -308,9 +304,10 @@ fn cleared_boss_room_and_persisted_flags() {
         "CurOpenedDoors only"
     );
     assert!(rs.item_taken && !rs.has_item && rs.kill_state == 3 && rs.all_dead());
-    // Flag bytes ($6FF+room) on this route ($53:F0 and $35:F4 match ram-catalog R.1).
+    // Flag bytes ($6FF+room) on this route ($53:F0 and $35:F4 match ram-catalog R.1; regenerated chain 2 visits
+    // 0x74 and 0x43 with their kill/visit bits set, F0 and B1, where the legacy route had 70 and 71).
     let rooms = [0x74, 0x53, 0x35, 0x52, 0x43];
-    let flags = vec![0x70, 0xF0, 0xF4, 0xA8, 0x71];
+    let flags = vec![0xF0, 0xF0, 0xF4, 0xA8, 0xB1];
     assert_eq!(
         rooms
             .iter()
@@ -330,7 +327,6 @@ fn cleared_boss_room_and_persisted_flags() {
 
 #[test]
 fn push_block_progress() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     place_at_push_block(&mut s);
     let rs = decode_room_state(s.state().ram());
@@ -354,12 +350,12 @@ fn push_block_progress() {
 
 #[test]
 fn bombing_the_south_wall_opens_it() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     load_and_place(
         &mut s,
-        "1_44w",
+        "1_44w_0",
         &[
+            (Var::Bombs, 4), // regenerated 1_44w_0 has no bombs: give the precondition the legacy state had
             (Var::HeartsAndContainers, 0xFF),
             (Var::PartialHearts, 0xFF),
             (Var::LinkX, 120),
@@ -383,25 +379,25 @@ fn bombing_the_south_wall_opens_it() {
 
 #[test]
 fn overworld_rooms() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     let rs = decode_room_state(load(&mut s, "start", false, &[]).ram());
     assert!(
         (rs.level, rs.room) == (0, 0x77) && rs.doors.is_empty() && !rs.has_item && !rs.item_taken
     );
     assert!(!rs.has_push_block && rs.secret_trigger == SecretTrigger::None);
-
-    let rs = decode_room_state(load(&mut s, "0_5fs", false, &[]).ram());
-    assert!(rs.item_id == Some(0x1A) && rs.item_visible && rs.item_position == Some((0xC0, 0x90)));
+    // No regenerated state enters an overworld room with a floor item outdoors (the legacy 0_5fs heart container
+    // at 0x5f is off every route); the sword cave is the overworld-level room with one.
+    let rs = decode_room_state(load(&mut s, "0_77cave_0", false, &[]).ram());
+    assert!(rs.is_overworld() && rs.in_cave);
+    assert!(rs.item_id == Some(0x01) && rs.item_visible && rs.item_position == Some((0x78, 0x98)));
 }
 
 #[test]
 fn map_and_compass_use_the_level_bit() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
     let state = load(
         &mut s,
-        "2_7dn",
+        "2_7ds_0",
         false,
         &[(Var::Map, 0x01), (Var::Compass, 0x02)],
     );
@@ -412,26 +408,26 @@ fn map_and_compass_use_the_level_bit() {
         "D1's map bit does not count in D2"
     );
     assert!(!state.has_map() && state.has_compass());
-
-    let rs = decode_room_state(load(&mut s, "1_42e", false, &[]).ram());
+    // D1 with the map and no compass: 1_44w_0 (after the 0x43 map pickup; the legacy used 1_42e).
+    let rs = decode_room_state(load(&mut s, "1_44w_0", false, &[]).ram());
     assert!(rs.has_map && !rs.has_compass);
 }
 
 // --- tests/test_room_entry.py ---
 
-/// From 0x48 (entered from 0x58, which was cleared), walking S back into 0x58: the game spawns nobody unless the
-/// room's kill history is cleared before entry.
+/// From 0x48 (entered from 0x58, where chain 0 killed 2 of the 4 monsters), walking S back into 0x58: the game
+/// remembers the kills and spawns only the 2 left unless the room's kill history is cleared before entry (the
+/// legacy state had 0x58 fully cleared; zelda oracle_game.rs `pre_entry_loads` covers a fully cleared room).
 #[test]
 fn fresh_room_refills_a_room_the_game_remembers_as_cleared() {
-    let _lock = oracle::lock();
     let Some(mut s) = session() else { return };
-    load(&mut s, "0_48s", false, &[]);
+    load(&mut s, "0_48s_0", false, &[]);
     s.set_capture_pre_entry(true);
     let changes = act_until(&mut s, "MOVE S 16", |c| c.changed_location(), 10);
     s.set_capture_pre_entry(false);
     let last = changes.last().unwrap();
     assert_eq!(last.state.full_location(), MapLocation::new(0, 0x58, false));
-    assert!(last.state.enemies.is_empty());
+    assert_eq!(last.state.enemies.len(), 2);
     let pre_entry = s.last_pre_entry().expect("captured").machine.clone();
 
     s.nes_mut().restore(&pre_entry);
@@ -443,7 +439,7 @@ fn fresh_room_refills_a_room_the_game_remembers_as_cleared() {
         ..Default::default()
     };
     let state = s.load(&pre_entry, &opts, &mut rng()).unwrap();
-    assert_eq!(state.enemies.len(), 0);
+    assert_eq!(state.enemies.len(), 2);
     opts.fresh_room = true;
     let state = s.load(&pre_entry, &opts, &mut rng()).unwrap();
     assert_eq!(state.enemies.len(), 4);

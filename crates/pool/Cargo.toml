@@ -18,9 +18,9 @@ serde_json = { version = "1.0.154", features = ["preserve_order"], optional = tr
 zelda = { path = "../zelda", optional = true }
 
 [dev-dependencies]
-flate2 = "1.1.10"
-oracle = { path = "../oracle" }
 rand = "0.10.3"
+zcore = { path = "../zcore" }
+zelda = { path = "../zelda", features = ["zcore"] }
 
 [[test]]
 name = "zelda_oracle"

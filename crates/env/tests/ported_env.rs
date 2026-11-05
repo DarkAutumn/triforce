@@ -1,6 +1,6 @@
-//! `SpecialistEnv` tests on the legacy named start states (FCEUmm oracle) that oracle_env.rs did not port yet,
+//! `SpecialistEnv` tests on the named start states (zcore) that oracle_env.rs did not port yet,
 //! ported from the Python tests before the Python game stack is deleted (plan step 16).  Every state comes from
-//! `common::load_named_state` (through `GzipStore`).
+//! `common::load_named_state` (through `TfzStore`).
 //!
 //! Mapping of the game parts of tests/test_env.py, tests/test_nearby_items.py and
 //! tests/test_quiet_enemy_penalty.py:
@@ -43,7 +43,7 @@
 
 mod common;
 
-use common::{GzipStore, OracleNes, open_oracle};
+use common::{TfzStore, ZCore, open_core};
 use env::StateStore;
 use env::config::{GameData, RamRandomization, RewardConfig, SpecialistConfig};
 use env::critic::ROOM_STEP_GRACE;
@@ -51,16 +51,16 @@ use env::specialist_env::{EnvOptions, SpecialistEnv, StepResult};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::sync::{Arc, LazyLock};
-use zelda::{Action, LoadOptions, Nes, Session};
+use zelda::{Action, LoadOptions, Session};
 
-type Env = SpecialistEnv<OracleNes, GzipStore>;
+type Env = SpecialistEnv<ZCore, TfzStore>;
 
 static DATA: LazyLock<Arc<GameData>> =
     LazyLock::new(common::game_data);
 
 /// `make_env`: an env with RAM randomization cleared, then `update` applied to the config.
 fn make_env(
-    nes: OracleNes,
+    nes: ZCore,
     specialist: &str,
     start_state: &str,
     update: impl FnOnce(&mut SpecialistConfig),
@@ -72,7 +72,7 @@ fn make_env(
         start_state: Some(start_state.to_owned()),
         ..Default::default()
     };
-    SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, GzipStore::new(), opts).expect("env")
+    SpecialistEnv::new(Arc::new(config), DATA.clone(), nes, TfzStore::new(), opts).expect("env")
 }
 
 fn act(env: &mut Env, text: &str) -> StepResult {
@@ -87,12 +87,11 @@ fn term(r: &StepResult, name: &str) -> Option<f64> {
 /// session).
 #[test]
 fn close_keeps_borrowed_session() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", "1_73s_0", |_| {});
     env.reset(Some(0), None).unwrap();
     let mut session = env.into_parts().0;
-    let machine = GzipStore::new().load("1_73s_0").unwrap();
+    let machine = TfzStore::new().load("1_73s_0").unwrap();
     session
         .load(
             &machine,
@@ -101,14 +100,13 @@ fn close_keeps_borrowed_session() {
         )
         .unwrap();
     assert_eq!(session.state().location(), 0x73);
-    let _: Session<OracleNes> = session;
+    let _: Session<ZCore> = session;
 }
 
 /// A stronger quiet-fight cost uses real shared progress and stops when the fight is over.
 #[test]
 fn quiet_fight_penalty_respects_grace_and_stops_without_targetable_enemies() {
-    let _lock = oracle::lock();
-    let Some(nes) = open_oracle() else { return };
+    let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "goriya", "1_44w_0", |c| {
         c.no_progress_steps = Some(1000);
         c.max_steps = 1000;

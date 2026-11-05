@@ -461,3 +461,35 @@ Format: date — what changed — why — evidence.
 - **Waiting on step 17:** `tests/test_entry_states.py::{test_every_trainable_specialist_has_start_states,
   test_configured_start_states_are_clean}` and `env` `pure::trainable_specialists_have_start_states` fail until
   the start states are regenerated.
+
+## 2026-11-05 — Rust game/env/pool tests on zcore and the regenerated states
+
+- **What:** every `zelda`, `env` and `pool` test that plays the game runs on `zcore::ZCore` (state
+  `zcore::MachineState`) instead of the FCEUmm oracle. The named-state loaders (`env` `common::load_named_state`
+  / `TfzStore`, `zelda` `common::load_named_state`, the pool test's `TfzStore`) decode `triforce/states/<name>.state`
+  with `zcore::state_file::decode` (ROM `$TRIFORCE_ROM` or `roms/zelda.nes`); `env` `common::game_data()` is the
+  repo's `GameData` with the real `triforce/states`. Tests that count emulated frames (look-ahead checks) wrap zcore
+  in a counting `Nes` (`Counted`). `crates/env/tests/fixtures/legacy-states/` and every gzip/flate2 read are gone.
+- **Parity fixtures without the oracle.** `zelda`/`env` `parity.rs` rebuild each fixture's room entry by
+  replaying its corpus movie (base, then `entry_frame` inputs with the pokes tagged before it) in zcore instead of
+  restoring the fixture's FCEUmm `oracle_state`; the fixtures' `ram0`/step checks still pass on all 14 rooms with no
+  exceptions.
+- **Name remaps:** `1_44w`→`1_44w_0`, `1_73e`→`1_73e_0`, `1_72e`→`1_72e_0`, `1_36w`→`1_36w_0`,
+  `1_22e`→`1_22e_0`, `0_38s`→`0_38s_0`, `0_48s`→`0_48s_0`; the zelda game tests' parity-fixture names
+  `1_44`/`1_72`/`1_74`/`1_73`/`0_77_cave`/`0_77_start`/`1_35` → `1_44w_0`/`1_72e_0`/`1_74w_0`/`1_73s_0`/
+  `0_77cave_0`/`start`/`1_35s_0`. No regenerated equivalent: `0_77n`, `0_77w` → `0_77c_0` with Link moved to the
+  start-screen spawn (0x78, 0x8D), so the sworded N exit and the wrong W exit are both a straight walk; `2_7dn` →
+  `2_7ds_0` (same room); `1_42e` (D1 with the map) → `1_44w_0` (after the 0x43 map pickup); `0_5fs` (outdoor heart
+  container in 0x5f, off every route) → `0_77cave_0`, the overworld-level room with a floor item.
+- **Re-derived assertions** (old → new, read from the new states): `1_44w_0` bombs 4 → 0, plus `2_0es_0` (Dodongo
+  entry) bombs 4 so a non-zero count still decodes; D1 room flags after `1_36w_2` W into 0x35: `$74` 0x70 → 0xF0,
+  `$43` 0x71 → 0xB1 (`$53` 0xF0, `$35` 0xF4, `$52` 0xA8 unchanged); 0x58 re-entered from `0_48s_0` spawns 2 (chain 0
+  killed 2 of 4; the legacy route had cleared it) → the test asserts 2 remembered, 4 with `fresh_room` (the fully
+  cleared case stays in `zelda` `oracle_game.rs` `pre_entry_loads` on poked flags); bombing the 0x44 S wall gets
+  `bombs = 4` through `apply_ram` (the regenerated state has none); the frame-sink pixel check turns rendering on
+  (zcore only keeps pixels of rendered frames).
+- **Still on the oracle:** only `zelda` `tests/zcore_session.rs` `zcore_matches_oracle_over_random_play`, the
+  zcore-vs-FCEUmm session comparison (its `OracleNes` now lives in that file). `zelda` keeps the `oracle`
+  dev-dependency for it; `env` and `pool` dropped `oracle` and `flate2`. Goes with the oracle in step 18c.
+- **Evidence:** `CARGO_TARGET_DIR=target/agent-tests2 cargo test --release -p zelda --features zcore -p env -p pool`
+  all green, including `pure::trainable_specialists_have_start_states`.

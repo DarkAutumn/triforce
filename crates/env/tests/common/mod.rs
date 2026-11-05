@@ -1,67 +1,38 @@
-//! Shared test helpers: an oracle-backed `Nes`, the named-state loader, an `.npz` reader, the parity fixtures and
-//! the observation-space check.
+//! Shared test helpers: zcore over the ROM, the named-state loader (`TFZSTATE` files in `triforce/states`), an
+//! `.npz` reader, the parity fixtures (replayed from their corpus movies) and the observation-space check.
 #![allow(dead_code)]
 
 use env::observation::{OBS_SPEC, Observation};
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use zelda::{ActionMask, Nes};
-
-/// `zelda::Nes` over the dev-only FCEUmm oracle (state = oracle savestate bytes); `.1` counts every frame run.
-pub struct OracleNes(pub oracle::Oracle, pub u64);
-
-impl Nes for OracleNes {
-    type State = Vec<u8>;
-
-    fn run_frame(&mut self, buttons: u8, _render: bool) {
-        self.0.run_frame(buttons);
-        self.1 += 1;
-    }
-
-    fn ram(&self) -> &[u8; 0x800] {
-        self.0.ram()
-    }
-
-    fn prg_ram(&self) -> &[u8; 0x2000] {
-        self.0.prg_ram()
-    }
-
-    fn poke(&mut self, addr: u16, value: u8) {
-        self.0.poke(addr, value);
-    }
-
-    fn snapshot(&self) -> Vec<u8> {
-        self.0.save_state()
-    }
-
-    fn restore(&mut self, state: &Vec<u8>) {
-        self.0.load_state(state).expect("oracle load_state");
-    }
-}
+use std::sync::{Arc, LazyLock};
+use zcore::Rom;
+pub use zcore::{MachineState, ZCore};
+use zelda::ActionMask;
 
 pub fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// Opens the oracle, or None (with the reason on stderr) when the library or ROM is missing.
-pub fn open_oracle() -> Option<OracleNes> {
-    if !oracle::available() {
-        eprintln!("oracle library not built (oracle/fceumm/build.sh): skipping");
-        return None;
-    }
-    let rom = std::env::var_os("TRIFORCE_ROM")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| repo().join("roms/zelda.nes"));
-    if !rom.exists() {
+/// The ROM (`$TRIFORCE_ROM`, else `roms/zelda.nes`), or None (with the reason on stderr) when it is missing.
+pub fn rom() -> Option<Arc<Rom>> {
+    static ROM: LazyLock<Option<Arc<Rom>>> = LazyLock::new(|| {
+        let path = std::env::var_os("TRIFORCE_ROM")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| repo().join("roms/zelda.nes"));
+        let bytes = std::fs::read(path).ok()?;
+        Some(Rom::from_ines(&bytes).expect("valid Zelda ROM"))
+    });
+    if ROM.is_none() {
         eprintln!("ROM not found: set TRIFORCE_ROM or create roms/zelda.nes");
-        return None;
     }
-    Some(OracleNes(
-        oracle::Oracle::open(&rom).expect("open oracle"),
-        0,
-    ))
+    ROM.clone()
+}
+
+/// A powered-on zcore, or None when the ROM is missing.
+pub fn open_core() -> Option<ZCore> {
+    rom().map(ZCore::power_on)
 }
 
 /// One array of an `.npz`.
@@ -234,20 +205,44 @@ pub fn fixtures() -> Vec<PathBuf> {
     v
 }
 
-/// Oracle state of a fixture's room entry (FCEUmm body + the oracle's frame counter).
-pub fn entry_state(f: &HashMap<String, Npy>) -> Vec<u8> {
-    let mut state = f["oracle_state"].bytes();
-    state.extend_from_slice(&(f["entry_frame"].scalar_i64() as u64).to_le_bytes());
-    state
+struct Play<'a>(&'a mut ZCore);
+
+impl movie::Playback for Play<'_> {
+    fn run_frame(&mut self, buttons: u8) {
+        self.0.run_frame(buttons, false);
+    }
+    fn poke(&mut self, addr: u16, value: u8) {
+        self.0.poke(addr, value);
+    }
+}
+
+/// zcore state at a fixture's room entry: its corpus movie (`movie`, after the base) replayed for `entry_frame`
+/// inputs, with the pokes tagged before `entry_frame` applied (how `record_env_parity.py` reached the entry on
+/// the oracle; the fixture's `ram0` check proves the two states agree).
+pub fn entry_state(f: &HashMap<String, Npy>) -> MachineState {
+    let movies = repo().join("corpus/movies");
+    let name = f["movie"].string();
+    let entry = f["entry_frame"].scalar_i64() as usize;
+    let m = movie::Movie::load(&movies.join(format!("{name}.tfmovie"))).expect("corpus movie");
+    let mut core = open_core().expect("ROM");
+    movie::play_base(&mut Play(&mut core), &m, &movies).expect("base movie");
+    let mut pokes = m.pokes.iter().peekable();
+    for (k, &buttons) in m.inputs[..entry].iter().enumerate() {
+        while let Some(q) = pokes.next_if(|q| q.frame as usize <= k) {
+            core.poke(q.addr, q.value);
+        }
+        core.run_frame(buttons, false);
+    }
+    core.snapshot()
 }
 
 /// In-memory `StateStore` (tests): `load` finds a state by name or by the label of a saved path; `save` keeps
 /// the machine state under the path.
 #[derive(Default)]
-pub struct MemStore(pub std::cell::RefCell<HashMap<String, Vec<u8>>>);
+pub struct MemStore(pub std::cell::RefCell<HashMap<String, MachineState>>);
 
-impl env::StateStore<Vec<u8>> for MemStore {
-    fn load(&self, name: &str) -> Result<Vec<u8>, env::EnvError> {
+impl env::StateStore<MachineState> for MemStore {
+    fn load(&self, name: &str) -> Result<MachineState, env::EnvError> {
         let states = self.0.borrow();
         states
             .get(name)
@@ -265,31 +260,28 @@ impl env::StateStore<Vec<u8>> for MemStore {
     fn save(
         &self,
         path: &Path,
-        snapshot: &zelda::SessionSnapshot<Vec<u8>>,
+        snapshot: &zelda::SessionSnapshot<MachineState>,
     ) -> Result<(), env::EnvError> {
         std::fs::write(path, b"mem")?;
         self.0
             .borrow_mut()
-            .insert(path.display().to_string(), snapshot.machine.clone());
+            .insert(path.display().to_string(), snapshot.machine);
         Ok(())
     }
 }
 
-/// Directory of the named start states the oracle tests use: the legacy gzip FCEUmm states, kept as test
-/// fixtures until the tests move to zcore and the regenerated `TFZSTATE` states (plan step 17).
+/// Directory of the named start states: the regenerated `TFZSTATE` states, `triforce/states`.
 pub fn states_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/legacy-states")
+    repo().join("triforce/states")
 }
 
-/// The repo's game data with its states directory pointed at [`states_dir`] (the oracle tests' fixtures).
+/// The repo's game data (its states directory is [`states_dir`]).
 pub fn game_data() -> Arc<env::config::GameData> {
-    let mut data = (*env::config::GameData::load(&repo()).expect("game data")).clone();
-    data.states_dir = states_dir();
-    Arc::new(data)
+    env::config::GameData::load(&repo()).expect("game data")
 }
 
-/// File of a named state, resolved like `GameSession.load` (bare name -> `<states dir>/<name>.state`; an
-/// existing or absolute path is used as is).
+/// File of a named state, resolved like `Game.load` (bare name -> `<states dir>/<name>.state`; an existing or
+/// absolute path is used as is).
 pub fn state_path(name: &str) -> PathBuf {
     let p = Path::new(name);
     if p.is_absolute() || p.exists() {
@@ -303,21 +295,25 @@ pub fn state_path(name: &str) -> PathBuf {
     states_dir().join(file)
 }
 
+/// A decoded `TFZSTATE` file as a session snapshot (executor flags from the file, no frames or steps).
+pub fn read_state_file(path: &Path) -> Result<zelda::SessionSnapshot<MachineState>, env::EnvError> {
+    let err = |e: &dyn std::fmt::Display| env::EnvError::State(format!("{}: {e}", path.display()));
+    let rom = rom().ok_or_else(|| env::EnvError::State("ROM not found".into()))?;
+    let bytes = std::fs::read(path).map_err(|e| err(&e))?;
+    let file = zcore::state_file::decode(&rom, &bytes).map_err(|e| err(&e))?;
+    Ok(zelda::SessionSnapshot {
+        machine: file.machine,
+        was_in_cave: file.flags & 1 != 0,
+        just_exited_cave: file.flags & 2 != 0,
+        total_frames: 0,
+        steps: 0,
+    })
+}
+
 /// THE state loader of the env tests: every test that starts from a named state (directly or through
-/// `GzipStore`) reads it here, so switching the tests to zcore + regenerated `TFZSTATE` files
-/// (`triforce/states/<name>.state`, legacy unsuffixed names such as `1_44w` remapped to `1_44w_0`) happens in
-/// this one place.  Today: the legacy gzip FCEUmm bodies in `tests/fixtures/legacy-states/`, which
-/// the oracle loads directly, with a zero frame counter appended.
-pub fn load_named_state(name: &str) -> Result<Vec<u8>, env::EnvError> {
-    let path = state_path(name);
-    let file = std::fs::File::open(&path)
-        .map_err(|e| env::EnvError::State(format!("{}: {e}", path.display())))?;
-    let mut body = Vec::new();
-    flate2::read::GzDecoder::new(file)
-        .read_to_end(&mut body)
-        .map_err(|e| env::EnvError::State(format!("{}: {e}", path.display())))?;
-    body.extend_from_slice(&0u64.to_le_bytes());
-    Ok(body)
+/// `TfzStore`) reads `triforce/states/<name>.state` here.
+pub fn load_named_state(name: &str) -> Result<MachineState, env::EnvError> {
+    read_state_file(&state_path(name)).map(|s| s.machine)
 }
 
 /// Every named state in the states directory, sorted.
@@ -333,36 +329,32 @@ pub fn named_states() -> Vec<String> {
     names
 }
 
-/// `StateStore` over the named states (`load_named_state`); `save` writes a gzip body.
+/// `StateStore` over the named states (`load_named_state`, like the native `TfzStore`); `save` writes a
+/// `TFZSTATE` file atomically.
 #[derive(Default)]
-pub struct GzipStore;
+pub struct TfzStore;
 
-impl GzipStore {
-    pub fn new() -> GzipStore {
-        GzipStore
+impl TfzStore {
+    pub fn new() -> TfzStore {
+        TfzStore
     }
 }
 
-impl env::StateStore<Vec<u8>> for GzipStore {
-    fn load(&self, name: &str) -> Result<Vec<u8>, env::EnvError> {
+impl env::StateStore<MachineState> for TfzStore {
+    fn load(&self, name: &str) -> Result<MachineState, env::EnvError> {
         load_named_state(name)
     }
 
     fn save(
         &self,
         path: &Path,
-        snapshot: &zelda::SessionSnapshot<Vec<u8>>,
+        snapshot: &zelda::SessionSnapshot<MachineState>,
     ) -> Result<(), env::EnvError> {
-        use std::io::Write;
-        let state = &snapshot.machine;
-        let body = &state[..state.len() - 8];
+        let rom = rom().ok_or_else(|| env::EnvError::State("ROM not found".into()))?;
+        let flags = snapshot.was_in_cave as u8 | (snapshot.just_exited_cave as u8) << 1;
+        let bytes = zcore::state_file::encode(&rom, &snapshot.machine, flags);
         let tmp = PathBuf::from(format!("{}.{}.tmp", path.display(), std::process::id()));
-        let mut enc = flate2::write::GzEncoder::new(
-            std::fs::File::create(&tmp)?,
-            flate2::Compression::default(),
-        );
-        enc.write_all(body)?;
-        enc.finish()?;
+        std::fs::write(&tmp, bytes)?;
         std::fs::rename(&tmp, path)?;
         Ok(())
     }
