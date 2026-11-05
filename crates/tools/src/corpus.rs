@@ -7,7 +7,7 @@
 //! - `corpus/pixel-allowlist.toml` — `[[allow]] movie, frames = [first, last], rows = [first, last], reason`.
 
 use crate::backend::Backend;
-use crate::formats::{Golden, LADDER_MASK, Movie, movie_file_hash};
+use crate::formats::{Golden, LADDER_MASK, Movie};
 use crate::rom::{RomInfo, workspace_root};
 use anyhow::{Context, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
@@ -141,8 +141,20 @@ fn os(args: &[&dyn AsRef<std::ffi::OsStr>]) -> Vec<OsString> {
     args.iter().map(|a| a.as_ref().to_os_string()).collect()
 }
 
+/// The key an oracle golden is stamped with: BLAKE3 of the movie file followed by the pixel
+/// allowlist, so editing the allowlist makes every golden stale.
+pub fn golden_key(movie: &Path) -> Result<[u8; 32]> {
+    let mut h = blake3::Hasher::new();
+    h.update(&std::fs::read(movie).with_context(|| format!("reading {}", movie.display()))?);
+    let allow = corpus_dir().join("pixel-allowlist.toml");
+    if allow.exists() {
+        h.update(&std::fs::read(&allow)?);
+    }
+    Ok(*h.finalize().as_bytes())
+}
+
 fn golden_current(golden: &Path, movie: &Path) -> bool {
-    match (Golden::load(golden), movie_file_hash(movie)) {
+    match (Golden::load(golden), golden_key(movie)) {
         (Ok(g), Ok(h)) => g.movie_hash == h,
         _ => false,
     }
@@ -222,12 +234,18 @@ pub struct PixelAllowlist {
     allow: Vec<Allow>,
 }
 
+/// Pixel rows the FCEUmm comparison ignores. Only for rows whose difference has been traced to
+/// FCEUmm's scanline-granular rendering around a mid-frame scroll split (plan step 8); CPU timing,
+/// RAM and VRAM are always compared in full.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Allow {
+    /// Movie name, or `*` for every movie.
     movie: String,
-    frames: [usize; 2],
-    #[allow(dead_code)]
+    /// Inclusive record range; every record when absent.
+    #[serde(default)]
+    frames: Option<[usize; 2]>,
+    /// Inclusive row range.
     rows: [usize; 2],
     #[allow(dead_code)]
     reason: String,
@@ -239,11 +257,21 @@ impl PixelAllowlist {
         if !p.exists() {
             return Ok(PixelAllowlist::default());
         }
-        toml::from_str(&std::fs::read_to_string(&p)?).with_context(|| format!("parsing {}", p.display()))
+        let list: PixelAllowlist =
+            toml::from_str(&std::fs::read_to_string(&p)?).with_context(|| format!("parsing {}", p.display()))?;
+        for a in &list.allow {
+            ensure!(a.rows[0] <= a.rows[1] && a.rows[1] < 240, "bad rows {:?} in {}", a.rows, p.display());
+        }
+        Ok(list)
     }
 
-    pub fn covers(&self, movie: &str, frame: usize) -> bool {
-        self.allow.iter().any(|a| a.movie == movie && (a.frames[0]..=a.frames[1]).contains(&frame))
+    /// Zero the allowlisted rows of `movie`'s frame at `record`.
+    pub fn blank(&self, movie: &str, record: usize, pixels: &mut [u8]) {
+        for a in &self.allow {
+            if (a.movie == "*" || a.movie == movie) && a.frames.is_none_or(|f| (f[0]..=f[1]).contains(&record)) {
+                pixels[a.rows[0] * 256..(a.rows[1] + 1) * 256].fill(0);
+            }
+        }
     }
 }
 

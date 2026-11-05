@@ -20,7 +20,7 @@ the same functions under `crates/zcore/src`.
 |---|---|---|
 | FQ-01 | Two dead PPU frames after reset | boot only |
 | FQ-02 | No $2002 read-before-VBlank suppression race | per-frame timing, RAM |
-| FQ-03 | VBlank visible only at instruction boundaries | per-frame timing, RAM |
+| FQ-03 | PPUSTATUS flags visible only at instruction boundaries | per-frame timing, RAM |
 | FQ-04 | A $2002 read never cancels an NMI; enabling NMI during VBlank gives a delayed NMI | per-frame timing, RAM |
 | FQ-05 | NMI requested 12 dots after VBlank, taken at the next instruction start | per-frame timing, RAM |
 | FQ-06 | 0-cycle CPU reset | boot only |
@@ -59,20 +59,24 @@ the same functions under `crates/zcore/src`.
 - **Removal:** drop the compat branch so the race check in `Ppu::read_status` runs again; `06-suppression`
   passes again.
 
-## FQ-03 — VBlank visible only at instruction boundaries
+## FQ-03 — PPUSTATUS flags visible only at instruction boundaries
 
-- **Hardware:** the flag rises at dot 1 of line 241 and falls at dot 1 of line 261; a $2002 read sees it
-  if its read cycle comes after the edge, even part way through an instruction. nesdev "PPU frame
-  timing"; `ppu_vbl_nmi` `02-vbl_set_time`, `03-vbl_clear_time`.
-- **FCEUmm:** the flag is set and cleared between `X6502_Run` chunks (`src/ppu.c:1211-1212`, `1236`); a
-  chunk always finishes the instruction it is in (`src/x6502.c:402-470`), so reads see the flag as it
-  stood when the reading instruction started.
-- **Affects:** per-frame timing and RAM (boot wait loops; any $2002 poll).
-- **Implemented:** `Ppu::vblank_at_instr` (field), `Bus::clock_instr` (snapshot at instruction start),
-  `Ppu::read_status_fceumm` (returns the snapshot; clears the live flag only if the snapshot had it),
-  `Bus::write_ctrl` (FQ-04 uses the snapshot).
-- **Removal:** delete `vblank_at_instr` and read the live flag in `Ppu::read_status`; `02-vbl_set_time`
-  and `03-vbl_clear_time` pass again.
+- **Hardware:** VBlank rises at dot 1 of line 241; VBlank, sprite 0 hit and overflow fall at dot 1 of
+  line 261; a $2002 read sees each change if its read cycle comes after the edge, even part way through
+  an instruction. nesdev "PPU frame timing"; `ppu_vbl_nmi` `02-vbl_set_time`, `03-vbl_clear_time`;
+  `sprite_hit_tests` `09-timing`.
+- **FCEUmm:** the flags are set (`PPU_status |= 0x80`) and cleared (`PPU_status &= 0x1f`) between
+  `X6502_Run` chunks (`src/ppu.c:1211-1212`, `1236`); a chunk always finishes the instruction it is in
+  (`src/x6502.c:402-470`), so a read sees those changes as they stood when the reading instruction
+  started. Sprite 0 hit and overflow raised while rendering go through `FCEUPPU_LineUpdate` inside the
+  read and are seen at once.
+- **Affects:** per-frame timing and RAM (boot VBlank waits; the sprite 0 "wait for clear" loop at the
+  end of VBlank).
+- **Implemented:** `Ppu::status_at_instr` (field, bits 5-7), `Bus::clock_instr` (snapshot at
+  instruction start), `Ppu::read_status_fceumm` (VBlank from the snapshot, cleared only if seen; bits 5/6
+  as live | snapshot), `Bus::write_ctrl` (FQ-04 uses the snapshot).
+- **Removal:** delete `status_at_instr` and read the live flags in `Ppu::read_status`; `02-vbl_set_time`,
+  `03-vbl_clear_time` and `09-timing` pass again.
 
 ## FQ-04 — A $2002 read never cancels an NMI; enabling NMI during VBlank gives a delayed NMI
 

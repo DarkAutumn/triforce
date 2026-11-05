@@ -4,6 +4,7 @@ mod backend;
 mod corpus;
 mod formats;
 mod oracle;
+mod palette;
 mod rom;
 mod script;
 mod tetanes;
@@ -71,6 +72,9 @@ enum Cmd {
         /// Print at most this many differing bytes per domain.
         #[arg(long, default_value_t = 32)]
         limit: usize,
+        /// Also write both frames as PPM images into this directory.
+        #[arg(long)]
+        ppm: Option<PathBuf>,
     },
     /// Per-frame instruction counts in the oracle and a backend (debugging frame boundaries).
     #[command(hide = true)]
@@ -138,6 +142,9 @@ enum Cmd {
     /// Internal: golden for one movie on any backend (ladder fan-out).
     #[command(hide = true)]
     GoldenOne { movie: PathBuf, out: PathBuf, backend: String, mask: u16 },
+    /// Internal: per-row pixel differences between the oracle and a backend over a whole movie.
+    #[command(hide = true)]
+    PixelRows { movie: PathBuf, backend: String },
     /// Internal: replay a movie in the oracle and check it ends in Dungeon 2's boss room.
     #[command(hide = true)]
     EndRoom { movie: PathBuf },
@@ -222,8 +229,11 @@ fn run(cli: Cli) -> Result<i32> {
             let out = out.context("tf golden needs -o")?;
             if trace {
                 let movie_data = Movie::load(&movie)?;
+                let allow = corpus::PixelAllowlist::load()?;
+                let name = movie_data.name().to_owned();
+                let blank = |k: usize, px: &mut [u8]| allow.blank(&name, k, px);
                 let mut b = backend::Tracing(oracle::Oracle::open(&rom.path)?, 0);
-                let g = golden_of(&mut b, &movie_data, movie_file_hash(&movie)?, ORACLE_MASK)?;
+                let g = golden_of(&mut b, &movie_data, corpus::golden_key(&movie)?, ORACLE_MASK, &blank)?;
                 g.save(&out)?;
                 println!("traced {} instructions", b.1);
                 return Ok(0);
@@ -249,10 +259,11 @@ fn run(cli: Cli) -> Result<i32> {
             Ok(0)
         }
         Cmd::EndRoom { movie } => corpus::end_room(&mut oracle::Oracle::open(&rom.path)?, &movie),
+        Cmd::PixelRows { movie, backend } => pixel_rows(&rom, &movie, &backend),
         Cmd::TraceDiff { movie, frame, backend, context, cycles, rows } => {
             trace_diff(&rom, &movie, frame, &backend, context, cycles, rows.as_deref())
         }
-        Cmd::Show { movie, frame, backend, limit } => show(&rom, &movie, frame, &backend, limit),
+        Cmd::Show { movie, frame, backend, limit, ppm } => show(&rom, &movie, frame, &backend, limit, ppm),
         Cmd::FrameLens { movie, frames, backend, from } => frame_lens(&rom, &movie, frames, from, &backend),
         Cmd::LadderGolden { movies, out, backend, jobs: j } => corpus::ladder_golden(&rom, &movies, &out, &backend, jobs(j)),
         Cmd::LadderDiff { dir, backend, jobs: j } => corpus::ladder_diff(&rom, &dir, &backend, jobs(j)),
@@ -348,30 +359,91 @@ fn movie_cmd(cmd: MovieCmd, rom: &rom::RomInfo) -> Result<i32> {
     }
 }
 
+/// Oracle comparisons (no ladder-only domains) key goldens on the movie plus the pixel allowlist and
+/// blank allowlisted rows; ladder self-diffs compare everything and key on the movie alone.
+fn comparison_key(movie_path: &Path, mask: u16) -> Result<([u8; 32], Option<corpus::PixelAllowlist>)> {
+    if mask & !ORACLE_MASK == 0 {
+        Ok((corpus::golden_key(movie_path)?, Some(corpus::PixelAllowlist::load()?)))
+    } else {
+        Ok((movie_file_hash(movie_path)?, None))
+    }
+}
+
 pub fn golden_one(rom: &rom::RomInfo, movie_path: &Path, out: &Path, backend: &str, mask: u16) -> Result<()> {
     let movie = Movie::load(movie_path)?;
     check_movie_rom(&movie, rom, movie_path)?;
+    let (key, allow) = comparison_key(movie_path, mask)?;
+    let name = movie.name().to_owned();
+    let blank = |k: usize, px: &mut [u8]| {
+        if let Some(a) = &allow {
+            a.blank(&name, k, px)
+        }
+    };
     let mut b = make_backend(backend, rom)?;
-    let g = golden_of(b.as_mut(), &movie, movie_file_hash(movie_path)?, mask)?;
+    let g = golden_of(b.as_mut(), &movie, key, mask, &blank)?;
     g.save(out)?;
     Ok(())
+}
+
+/// Replay a movie in the oracle and a backend side by side and count, per pixel row, the frames in
+/// which that row differs (debugging pixel divergences).
+fn pixel_rows(rom: &rom::RomInfo, movie_path: &Path, backend: &str) -> Result<i32> {
+    let movie = Movie::load(movie_path)?;
+    let mut o = oracle::Oracle::open(&rom.path)?;
+    let mut b = make_backend(backend, rom)?;
+    backend::play_base(&mut o, &movie)?;
+    backend::play_base(b.as_mut(), &movie)?;
+    let index = movie.poke_index();
+    let (mut no, mut nb) = (0, 0);
+    let (mut po, mut pb) = (Vec::new(), Vec::new());
+    let mut rows = [0usize; 240];
+    let mut first = [usize::MAX; 240];
+    let mut frames = 0;
+    for k in 0..movie.inputs.len() {
+        apply_pokes(&mut o, &movie, &index, &mut no, k);
+        apply_pokes(b.as_mut(), &movie, &index, &mut nb, k);
+        o.run_frame(movie.inputs[k]);
+        b.run_frame(movie.inputs[k]);
+        o.read_domain(Domain::Pixels, &mut po);
+        b.read_domain(Domain::Pixels, &mut pb);
+        let mut any = false;
+        for (r, (ro, rb)) in po.chunks(256).zip(pb.chunks(256)).enumerate() {
+            if ro != rb {
+                rows[r] += 1;
+                first[r] = first[r].min(k + 1);
+                any = true;
+            }
+        }
+        frames += usize::from(any);
+    }
+    println!("{}: {frames} of {} frames differ", movie_path.display(), movie.inputs.len());
+    for (r, &n) in rows.iter().enumerate() {
+        if n > 0 {
+            println!("  row {r:3}: {n:6} frames (first {})", first[r]);
+        }
+    }
+    Ok(if frames == 0 { 0 } else { 1 })
 }
 
 pub fn diff_one(rom: &rom::RomInfo, movie_path: &Path, backend: &str, golden_path: &Path, mask: u16) -> Result<i32> {
     let movie = Movie::load(movie_path)?;
     check_movie_rom(&movie, rom, movie_path)?;
     let golden = Golden::load(golden_path)?;
+    let (key, allow) = comparison_key(movie_path, golden.domain_mask)?;
     ensure!(
-        golden.movie_hash == movie_file_hash(movie_path)?,
-        "{} was generated from a different movie than {}",
+        golden.movie_hash == key,
+        "{} is stale (other movie or pixel allowlist) for {}: run `tf golden --all`",
         golden_path.display(),
         movie_path.display()
     );
-    let allow = corpus::PixelAllowlist::load()?;
     let name = movie.name().to_owned();
-    let skip = |k: usize| allow.covers(&name, k);
+    let blank = |k: usize, px: &mut [u8]| {
+        if let Some(a) = &allow {
+            a.blank(&name, k, px)
+        }
+    };
     let mut b = make_backend(backend, rom)?;
-    match first_divergence(b.as_mut(), &movie, &golden, mask, &skip)? {
+    match first_divergence(b.as_mut(), &movie, &golden, mask, &blank)? {
         None => {
             println!("{}: {} frames identical ({})", movie_path.display(), movie.inputs.len(), backend);
             Ok(0)
@@ -384,7 +456,7 @@ pub fn diff_one(rom: &rom::RomInfo, movie_path: &Path, backend: &str, golden_pat
     }
 }
 
-fn show(rom: &rom::RomInfo, movie_path: &Path, frame: usize, backend: &str, limit: usize) -> Result<i32> {
+fn show(rom: &rom::RomInfo, movie_path: &Path, frame: usize, backend: &str, limit: usize, ppm: Option<PathBuf>) -> Result<i32> {
     let movie = Movie::load(movie_path)?;
     ensure!(frame <= movie.inputs.len(), "movie has only {} frames", movie.inputs.len());
     let mut o = oracle::Oracle::open(&rom.path)?;
@@ -397,6 +469,14 @@ fn show(rom: &rom::RomInfo, movie_path: &Path, frame: usize, backend: &str, limi
             apply_pokes(x, &movie, &index, &mut next, k);
             x.run_frame(movie.inputs[k]);
         }
+    }
+    if let Some(dir) = &ppm {
+        std::fs::create_dir_all(dir)?;
+        let (mut po, mut pb) = (Vec::new(), Vec::new());
+        o.read_domain(Domain::Pixels, &mut po);
+        b.read_domain(Domain::Pixels, &mut pb);
+        palette::write_ppm(&dir.join(format!("fceumm-{frame}.ppm")), &po)?;
+        palette::write_ppm(&dir.join(format!("{backend}-{frame}.ppm")), &pb)?;
     }
     let (mut bo, mut bb) = (Vec::new(), Vec::new());
     let mut same = true;
@@ -411,6 +491,9 @@ fn show(rom: &rom::RomInfo, movie_path: &Path, frame: usize, backend: &str, limi
         if d == Domain::Pixels {
             let rows: std::collections::BTreeSet<usize> = diffs.iter().map(|i| i / 256).collect();
             println!("pixels: {} differ in {} rows: {:?}", diffs.len(), rows.len(), rows.iter().take(limit).collect::<Vec<_>>());
+            for &i in diffs.iter().take(limit) {
+                println!("  ({:3},{:3}): fceumm {:02X}  {backend} {:02X}", i % 256, i / 256, bo[i], bb[i]);
+            }
             continue;
         }
         let base = match d {

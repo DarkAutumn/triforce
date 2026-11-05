@@ -58,16 +58,29 @@ impl<B: Backend> Backend for Tracing<B> {
     }
 }
 
+/// Pixel rows a comparison ignores: called with the record number and the 256x240 frame, it blanks
+/// (zeroes) the rows to ignore before the frame is digested. See `corpus::PixelAllowlist`.
+pub type PixelBlank<'a> = &'a dyn Fn(usize, &mut [u8]);
+
 /// Digests of the enabled domains. Record 0 has no pixel digest (0).
-pub fn digests(b: &mut dyn Backend, mask: u16, record0: bool, buf: &mut Vec<u8>) -> Result<Vec<u64>> {
+pub fn digests(
+    b: &mut dyn Backend,
+    mask: u16,
+    record: usize,
+    blank: PixelBlank,
+    buf: &mut Vec<u8>,
+) -> Result<Vec<u64>> {
     let mut out = Vec::new();
     for d in Domain::in_mask(mask) {
-        if record0 && d == Domain::Pixels {
+        if record == 0 && d == Domain::Pixels {
             out.push(0);
             continue;
         }
         buf.clear();
         anyhow::ensure!(b.read_domain(d, buf), "backend {} can't read domain {}", b.name(), d.name());
+        if d == Domain::Pixels {
+            blank(record, buf);
+        }
         out.push(digest8(buf));
     }
     Ok(out)
@@ -106,11 +119,12 @@ pub fn replay(
     movie: &Movie,
     mask: u16,
     limit: Option<usize>,
+    blank: PixelBlank,
     mut each: impl FnMut(usize, &[u64]) -> bool,
 ) -> Result<()> {
     play_base(b, movie)?;
     let mut buf = Vec::with_capacity(256 * 240);
-    let d0 = digests(b, mask, true, &mut buf)?;
+    let d0 = digests(b, mask, 0, blank, &mut buf)?;
     if !each(0, &d0) {
         return Ok(());
     }
@@ -120,7 +134,7 @@ pub fn replay(
     for k in 0..frames {
         apply_pokes(b, movie, &index, &mut next, k);
         b.run_frame(movie.inputs[k]);
-        let d = digests(b, mask, false, &mut buf)?;
+        let d = digests(b, mask, k + 1, blank, &mut buf)?;
         if !each(k + 1, &d) {
             return Ok(());
         }
@@ -146,13 +160,19 @@ pub fn apply_pokes(
     }
 }
 
-pub fn golden_of(b: &mut dyn Backend, movie: &Movie, movie_hash: [u8; 32], mask: u16) -> Result<Golden> {
+pub fn golden_of(
+    b: &mut dyn Backend,
+    movie: &Movie,
+    key: [u8; 32],
+    mask: u16,
+    blank: PixelBlank,
+) -> Result<Golden> {
     let mut records = Vec::with_capacity(movie.inputs.len() + 1);
-    replay(b, movie, mask, None, |_, d| {
+    replay(b, movie, mask, None, blank, |_, d| {
         records.push(d.to_vec());
         true
     })?;
-    Ok(Golden { domain_mask: mask, movie_hash, records })
+    Ok(Golden { domain_mask: mask, movie_hash: key, records })
 }
 
 /// First record where `b` diverges from `golden`, with the differing domains.
@@ -166,7 +186,7 @@ pub fn first_divergence(
     movie: &Movie,
     golden: &Golden,
     mask: u16,
-    pixel_skip: &dyn Fn(usize) -> bool,
+    blank: PixelBlank,
 ) -> Result<Option<Divergence>> {
     let gdomains = golden.domains();
     let mask = mask & golden.domain_mask;
@@ -179,10 +199,10 @@ pub fn first_divergence(
         movie.inputs.len()
     );
     let mut found = None;
-    replay(b, movie, mask, None, |k, d| {
+    replay(b, movie, mask, None, blank, |k, d| {
         let mut bad = Vec::new();
         for (i, dom) in ours.iter().enumerate() {
-            if d[i] != golden.records[k][cols[i]] && !(*dom == Domain::Pixels && pixel_skip(k)) {
+            if d[i] != golden.records[k][cols[i]] {
                 bad.push(*dom);
             }
         }

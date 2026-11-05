@@ -272,3 +272,23 @@ Format: date — what changed — why — evidence.
   `test_curriculum` and `test_specialist`; `tests/chain_explore.rs` ports `test_runner` (scripted policies in
   place of networks) and `test_explore`; `tests/oracle_env.rs` ports the game parts of `test_env`,
   `test_nearby_items`, `test_rewards` and `test_specialist` on the legacy states.
+
+## 2026-11-05 — TetaNES matches FCEUmm on the whole corpus (S1, plan step 8)
+
+- **What:** `../tetanes` branch `bugs` at `98542624` (from `a0a6b17f`), with `Config::fceumm_compat`
+  on, reproduces FCEUmm frame for frame on all 63 corpus movies (1,361,193 frames): CPU instruction
+  traces with cycle timing, RAM, PRG-RAM, CHR, CIRAM, palette, OAM, and every pixel outside
+  `corpus/pixel-allowlist.toml`.
+- **Changes on `bugs`:** two `fix:` commits for real TetaNES bugs (sprites from line 239's evaluation
+  drawn on line 0; sprite pixels never drawn at x = 255), each with a unit test; and FCEUmm quirks
+  FQ-01..FQ-12 behind `fceumm_compat`, documented in `crates/zcore/FCEUMM_QUIRKS.md` with tests in
+  `fceumm_compat_tests.rs`.
+- **Pixel allowlist:** rows 63-64 everywhere (the status-bar split: mid-line `$2006/$2005` writes
+  around line 63 dot 230, which FCEUmm's line-granular renderer applies at the instruction's timestamp),
+  and row 49 of record 121 in `power_on_to_start`/`file_select_register_erase` (a mid-line `$2001 = 0`
+  write; FCEUmm composes a line's sprites at its end). Goldens are keyed on the movie plus the allowlist,
+  and the listed rows are blanked in both emulators before hashing.
+- **Comparison conventions (not quirks):** OAM attribute bytes are read as `$2004` returns them
+  (`& 0xE3`); battery PRG-RAM starts zeroed.
+- **Evidence:** `tf diff --all --backend tetanes` → `0 of 63 movies diverge`; `cargo test -p
+  tetanes-core` (stable, `RUSTFLAGS=""`) 553 + 16 passed.
