@@ -410,7 +410,7 @@ impl Bus {
             0x2002 => self.ppu.read_status(),
             0x2004 => self.ppu.read_oamdata(),
             0x2007 => self.read_data(),
-            _ => self.ppu.open_bus,
+            _ => self.ppu.open_bus_now(),
         }
     }
 
@@ -431,7 +431,7 @@ impl Bus {
             0x4015 => self.apu.peek_status(),
             0x4016 => self.input_peek(Player::One),
             0x4017 => self.input_peek(Player::Two),
-            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 => self.ppu.open_bus,
+            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 => self.ppu.open_bus_now(),
             _ => self.open_bus,
         }
     }
@@ -479,7 +479,7 @@ impl Bus {
         match addr {
             0x2000 => self.write_ctrl(val),
             0x2001 => self.write_mask(val),
-            0x2002 => self.ppu.open_bus = val,
+            0x2002 => self.ppu.write_open_bus(val),
             0x2003 => self.ppu.write_oamaddr(val),
             0x2004 => self.ppu.write_oamdata(val),
             0x2005 => self.ppu.write_scroll(val),

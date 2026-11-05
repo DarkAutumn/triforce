@@ -133,8 +133,8 @@ fn state_file_errors() {
     assert!(msg(&[0x1f, 0x8b, 8, 0]).contains("legacy stable-retro state"));
     assert!(msg(b"NOTASTATEFILE_________________________").contains("not a TFZSTATE"));
     let mut v = good.clone();
-    v[8] = 2;
-    assert!(msg(&v).contains("version 2"));
+    v[8] = 0x7F;
+    assert!(msg(&v).contains("version 127"));
     let mut r = good.clone();
     r[10] ^= 1;
     assert!(msg(&r).contains("different ROM"));
@@ -298,9 +298,38 @@ fn trace_hook_observes_without_changing_anything() {
 fn power_on_state_file_is_pinned() {
     let Some(rom) = rom() else { return };
     let bytes = state_file::encode(&rom, &ZCore::power_on(rom.clone()).snapshot(), 0);
-    assert_eq!(state_file::VERSION, 1);
+    assert_eq!(state_file::VERSION, 2);
     assert_eq!(
         blake3::hash(&bytes).to_hex().as_str(),
-        "f644821b6d79f1e07950422c473f8730017b08dace9083ef9e8e14460044fba0"
+        "7fc2a7ed34632c45e66de0b3ccb2d4eb4ef09af8c298e22115cc175297148a82"
     );
+}
+
+/// Plan step 18a: the step-17 start states are `TFZSTATE` v1 files, decoded into the current
+/// layout. Each loads, keeps its RAM, and plays on.
+#[test]
+fn v1_start_states_decode_and_run() {
+    let Some(rom) = rom() else { return };
+    let dir = repo().join("triforce/states");
+    let mut names: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|x| x == "state"))
+        .collect();
+    names.sort();
+    assert!(!names.is_empty());
+    for path in names.iter().step_by(20) {
+        let bytes = std::fs::read(path).unwrap();
+        if u16::from_le_bytes([bytes[8], bytes[9]]) != 1 {
+            continue;
+        }
+        let f = state_file::decode(&rom, &bytes).unwrap();
+        let mut nes = ZCore::power_on(rom.clone());
+        nes.restore(&f.machine);
+        let mode = nes.ram()[0x12];
+        assert!(mode != 0xFF && nes.frame() > 0, "{}", path.display());
+        for _ in 0..120 {
+            nes.run_frame(0, false);
+        }
+    }
 }

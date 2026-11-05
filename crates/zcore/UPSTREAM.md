@@ -60,3 +60,12 @@ instructions, +4% cycles), fat LTO (no gain), the colour table on tiles with spr
 | Change | Kind | Check |
 |---|---|---|
 | The PPU's internal OAMADDR reset during sprite fetches no longer clears the I/O latch (it went through `write_oamaddr`); a $2002 read drives its status bits into the latch instead of OR-ing them (upstream TetaNES bugs, also in `a0a6b17f`). FQ-13: the latch never decays (FCEUmm `PPUGenLatch`). | fix + FQ-13 | `tf trace-diff` agrees where it diverged (`sword_cave_in_out` frame 300, `LDA $2002` at `$E573`); `tf diff --all` 0 of 63; the ladder baseline moves to `target/ladder/z6-fq13`: against `s1-tetanes` only the PPU domain (the latch byte, 1,351,805 frame records) and the CPU domain (2 records: a register loaded from the latch at a frame boundary) changed; the `open_bus` test ROM is `#[ignore]`d under FQ-13 (it passes with the decay restored). |
+
+## Plan step 18a: hardware behaviour restored
+
+Each FCEUmm quirk's hardware behaviour back, one commit per quirk, gated on the promoted models
+(`scripts/port_gate.sh`, `docs/experiments/round9.md`). `tf bench` render on / off after each.
+
+| Commit | Quirk | Change | frames/s |
+|---|---|---|---|
+| `zcore: restore hardware PPU I/O latch decay (FQ-13 removed)` | FQ-13 | Per-bit I/O latch decay after 36 frames without a refresh (`Ppu::open_bus_now`, `drive_open_bus`, `write_open_bus`, `open_bus_refreshed`); `ppu_bus_read`/`ppu_bus_write` no longer touch the latch (the register paths drive it). `TFZSTATE` v2, v1 decoded through `state_file::v1`. `open_bus` passes. | 2,441 / 4,697 |

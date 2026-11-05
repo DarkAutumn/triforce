@@ -504,3 +504,12 @@ Format: date — what changed — why — evidence.
 - **FQ-13 and two TetaNES fixes** (open-bus latch) landed in zcore before regeneration; see
   `crates/zcore/FCEUMM_QUIRKS.md` and `UPSTREAM.md`.
 - Results so far and the open chain-2 0x5c dead-end entry: `docs/experiments/round8.md`.
+
+## 2026-11-05 — Plan step 18a: FCEUmm quirks restored to hardware behaviour
+
+One line per quirk; numbers and reasoning in `docs/experiments/round9.md`, mechanics in
+`crates/zcore/FCEUMM_QUIRKS.md` and `UPSTREAM.md`.
+
+- 2026-11-05 FQ-13 restored: the PPU I/O latch decays per bit after 36 frames without a refresh (a model of the
+  ~600 ms capacitor decay, not TetaNES' clear-every-VBlank); `TFZSTATE` v2 with a v1 decode path; gate kept it
+  (chain total 26 vs baselines 32/24).

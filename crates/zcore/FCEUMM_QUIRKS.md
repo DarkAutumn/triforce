@@ -30,7 +30,7 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
 | FQ-10 | 512-cycle OAM DMA, run inside `STA $4014` | per-frame timing |
 | FQ-11 | 4-read DMC DMA | per-frame timing |
 | FQ-12 | DMC fetch timed by FCEUmm's per-instruction sound hook | per-frame timing |
-| FQ-13 | The PPU I/O latch never decays | CPU registers after $2002/open-bus reads (masked by the game: no RAM effect in the corpus) |
+| FQ-13 | The PPU I/O latch never decays (**restored to hardware**) | CPU registers after $2002/open-bus reads (masked by the game: no RAM effect in the corpus) |
 
 ## FQ-01 — Two dead PPU frames after reset
 
@@ -205,6 +205,10 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   `dmc_basics` pass again.
 
 ## FQ-13 — The PPU I/O latch never decays
+
+**Restored to hardware** in `zcore: restore hardware PPU I/O latch decay (FQ-13 removed)` (plan step 18a,
+`docs/experiments/round9.md`): each latch bit decays to 0 after 36 frames without a refresh
+(`Ppu::open_bus_now`, `Ppu::drive_open_bus`, `Ppu::open_bus_refreshed`); `open_bus` passes again.
 
 - **Hardware:** the PPU's CPU-facing data latch ("open bus", read back in $2002 bits 0-4 and from the
   write-only registers) is a capacitor that decays to 0 within roughly 600 ms without a refresh. nesdev

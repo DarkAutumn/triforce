@@ -166,7 +166,8 @@ pub struct Ppu {
     pub tile_hi: u8,
     /// Master clock divider.
     pub clock_divider: u8,
-    /// Whatever was last read or written to to the Ppu.
+    /// The I/O latch ("open bus"): whatever was last written to or driven by a PPU register.
+    /// Read it through [`Ppu::open_bus_now`], which applies the decay.
     pub open_bus: u8,
 
     /// Current tile palette.
@@ -271,6 +272,9 @@ pub struct Ppu {
     /// FQ-04/FQ-05: FCEUmm's NMI request. 1 = take the NMI before the next instruction (FQ-05),
     /// 2 = after one more instruction (FQ-04: NMI enabled through $2000 while VBlank is up).
     pub fceu_nmi: u8,
+    /// The frame each I/O latch bit was last refreshed (driven by a register access), indexed by
+    /// bit: a bit left alone for [`Ppu::OPEN_BUS_DECAY_FRAMES`] has decayed to 0.
+    pub open_bus_refreshed: [u32; 8],
 }
 
 impl Default for Ppu {
@@ -510,6 +514,7 @@ impl Ppu {
             dead_frames: 0,
             status_at_instr: 0,
             fceu_nmi: 0,
+            open_bus_refreshed: [0; 8],
         };
 
         // Decode both registers from zero rather than trusting the literals above: everything
@@ -534,6 +539,44 @@ impl Ppu {
     #[must_use]
     pub const fn frame_is_odd(&self) -> bool {
         self.frame_count & 1 == 1
+    }
+
+    /// How long an I/O latch bit holds without a refresh: the latch is a capacitor whose bits
+    /// decay to 0 "about 600 milliseconds" after they were last driven (nesdev "PPU registers",
+    /// open bus; blargg `ppu_open_bus`), 36 frames.
+    pub const OPEN_BUS_DECAY_FRAMES: u32 = 36;
+
+    /// The I/O latch as a read sees it now: every bit not refreshed within
+    /// [`Ppu::OPEN_BUS_DECAY_FRAMES`] reads 0.
+    #[must_use]
+    pub fn open_bus_now(&self) -> u8 {
+        let mut bus = self.open_bus;
+        for (bit, &at) in self.open_bus_refreshed.iter().enumerate() {
+            if self.frame_count.wrapping_sub(at) > Self::OPEN_BUS_DECAY_FRAMES {
+                bus &= !(1 << bit);
+            }
+        }
+        bus
+    }
+
+    /// Drives the I/O latch bits in `mask` with `val`, refreshing them, and returns the latch
+    /// (the other bits as they read now, decayed or not).
+    pub fn drive_open_bus(&mut self, mask: u8, val: u8) -> u8 {
+        let bus = (self.open_bus_now() & !mask) | (val & mask);
+        for (bit, at) in self.open_bus_refreshed.iter_mut().enumerate() {
+            if mask & (1 << bit) != 0 {
+                *at = self.frame_count;
+            }
+        }
+        self.open_bus = bus;
+        bus
+    }
+
+    /// A register write: the whole latch takes the value written.
+    #[inline(always)]
+    pub fn write_open_bus(&mut self, val: u8) {
+        self.open_bus = val;
+        self.open_bus_refreshed = [self.frame_count; 8];
     }
 
     /// The master clock by which the PPU must be caught up for the CPU to see its next
@@ -790,7 +833,6 @@ impl Ppu {
         self.set_spr_overflow(false);
         self.reset_in_vblank();
         self.nmi_pending = false;
-        // FQ-13: the I/O latch (`open_bus`) never decays; FCEUmm's `PPUGenLatch` keeps its value.
     }
 
     /// One dot of sprite evaluation (dots 65-256): odd dots read OAM, even dots write secondary
@@ -1173,13 +1215,13 @@ impl Ppu {
     ///   instruction survives it.
     /// - FQ-04: the read never cancels an NMI.
     /// - FQ-02: there is no read-before-VBlank suppression race.
-    /// - FQ-13: the returned byte (status bits over the latch's low five) becomes the I/O latch.
+    ///
+    /// Bits 5-7 are driven onto the I/O latch (refreshing it); bits 0-4 read the latch.
     pub fn read_status(&mut self) -> u8 {
         // Bits 5/6: a set during the instruction shows at once, a clear only from the next one.
-        let status = (self.status_at_instr & 0x80)
-            | ((self.read_status_bits() | self.status_at_instr) & 0x60)
-            | (self.open_bus & 0x1F);
-        self.open_bus = status; // FQ-13
+        let bits = (self.status_at_instr & 0x80)
+            | ((self.read_status_bits() | self.status_at_instr) & 0x60);
+        let status = self.drive_open_bus(0xE0, bits);
         if self.status_at_instr & 0x80 != 0 {
             self.reset_in_vblank();
             self.status_at_instr &= !0x80;
@@ -1198,9 +1240,9 @@ impl Ppu {
     // Non-mutating version of `read_status`.
     /// Reads $2002 PPUSTATUS without its side effects.
     #[inline(always)]
-    pub const fn peek_status(&self) -> u8 {
+    pub fn peek_status(&self) -> u8 {
         // Only upper 3 bits are connected for this register
-        (self.read_status_bits() & 0xE0) | (self.open_bus & 0x1F)
+        (self.read_status_bits() & 0xE0) | (self.open_bus_now() & 0x1F)
     }
 
     // $2003 | W   | OAMADDR
@@ -1210,8 +1252,8 @@ impl Ppu {
     //       |     | colors, and other attributes of the sprites.
     /// Writes $2003 OAMADDR, the index the next OAM access starts from.
     #[inline(always)]
-    pub const fn write_oamaddr(&mut self, val: u8) {
-        self.open_bus = val;
+    pub fn write_oamaddr(&mut self, val: u8) {
+        self.write_open_bus(val);
         self.oamaddr = val;
     }
 
@@ -1223,8 +1265,9 @@ impl Ppu {
     /// Reads $2004 OAMDATA at the current OAM address.
     #[inline(always)]
     pub fn read_oamdata(&mut self) -> u8 {
-        self.open_bus = self.peek_oamdata();
-        self.open_bus
+        let val = self.peek_oamdata();
+        self.write_open_bus(val);
+        val
     }
 
     // $2004 | RW  | OAMDATA
@@ -1254,7 +1297,7 @@ impl Ppu {
     //       |     | sprites.
     /// Writes $2004 OAMDATA at the current OAM address, incrementing it.
     pub fn write_oamdata(&mut self, mut val: u8) {
-        self.open_bus = val;
+        self.write_open_bus(val);
 
         if self.mask_rendering_enabled && (self.is_visible_scanline || self.is_prerender_scanline) {
             // https://www.nesdev.org/wiki/PPU_registers#OAMDATA
@@ -1291,7 +1334,7 @@ impl Ppu {
     /// Writes $2005 PPUSCROLL: X then Y, selected by the shared address latch.
     #[inline(always)]
     pub fn write_scroll(&mut self, val: u8) {
-        self.open_bus = val;
+        self.write_open_bus(val);
         self.scroll.write(val);
     }
 
@@ -1299,7 +1342,7 @@ impl Ppu {
     /// Writes $2006 PPUADDR: high byte then low, selected by the shared address latch.
     #[inline(always)]
     pub fn write_addr(&mut self, val: u8) {
-        self.open_bus = val;
+        self.write_open_bus(val);
         self.scroll.write_addr(val);
     }
 
@@ -1318,6 +1361,7 @@ impl Ppu {
         self.is_prerender_scanline = false;
         self.is_render_scanline = false;
         self.open_bus = 0x00;
+        self.open_bus_refreshed = [0; 8];
 
         self.reset_mask(kind);
         self.scroll.reset(kind);
@@ -1374,17 +1418,15 @@ impl Bus {
     /// Route a read on the PPU bus: pattern tables and nametables through the board, palette RAM
     /// on the PPU itself.
     ///
-    /// Has a side effect - it latches the PPU's open bus. [`Bus::ppu_bus_peek`] observes without
-    /// it.
+    /// The internal PPU bus, not the CPU-facing I/O latch; [`Bus::read_data`] drives that.
     #[inline]
     pub(crate) fn ppu_bus_read(&mut self, addr: u16) -> u8 {
-        self.ppu.open_bus = match addr {
+        match addr {
             0x0000..=0x3EFF => self.chr_read(addr),
             0x3F00..=0x3FFF => self.ppu.palette.peek(addr),
             // The PPU address bus is 14 bits wide; nothing above $3FFF reaches here.
             _ => 0x00,
-        };
-        self.ppu.open_bus
+        }
     }
 
     /// Route a read on the PPU bus with no side effects at all.
@@ -1401,7 +1443,6 @@ impl Bus {
     /// Route a write on the PPU bus.
     #[inline]
     pub(crate) fn ppu_bus_write(&mut self, addr: u16, val: u8) {
-        self.ppu.open_bus = val;
         match addr {
             0x0000..=0x3EFF => self.chr_write(addr, val),
             0x3F00..=0x3FFF => self.ppu.palette.write(addr, val),
@@ -1759,23 +1800,19 @@ impl Bus {
 
         // Buffering quirk resulting in a dummy read for the CPU
         // for reading pre-palette data in $0000 - $3EFF
-        let prev_open_bus = self.ppu.open_bus;
         let val = self.ppu_bus_read(addr);
-        self.ppu.open_bus = if addr < addr::PALETTE_START {
+        if addr < addr::PALETTE_START {
             let buffer = self.ppu.vram_buffer;
             self.ppu.vram_buffer = val;
-            buffer
+            self.ppu.drive_open_bus(0xFF, buffer)
         } else {
             // Set internal buffer with mirrors of nametable when reading palettes
             // Since we're reading from > $3EFF subtract $1000 to fill
             // buffer with nametable mirror data
             self.ppu.vram_buffer = self.ppu_bus_read(addr - 0x1000);
-            // Hi 2 bits of palette should be open bus
-            val | (prev_open_bus & 0xC0)
-        };
-
-
-        self.ppu.open_bus
+            // A palette entry is six bits: the top two read the I/O latch.
+            self.ppu.drive_open_bus(0x3F, val)
+        }
     }
 
     // $2007 | RW  | PPUDATA
@@ -1789,7 +1826,7 @@ impl Bus {
         } else {
             // Since we're reading from > $3EFF subtract $1000
             // Hi 2 bits of palette should be open bus
-            self.ppu_bus_peek(addr - 0x1000) | (self.ppu.open_bus & 0xC0)
+            self.ppu_bus_peek(addr - 0x1000) | (self.ppu.open_bus_now() & 0xC0)
         }
     }
 
@@ -1797,6 +1834,7 @@ impl Bus {
     /// Writes $2007 PPUDATA at the current VRAM address, incrementing it.
     pub fn write_data(&mut self, val: u8) {
         let addr = self.ppu.scroll.addr();
+        self.ppu.write_open_bus(val);
         self.ppu.increment_vram_addr();
         self.ppu_bus_write(addr, val);
     }
@@ -1827,7 +1865,7 @@ impl Bus {
     /// Writes $2000 PPUCTRL: nametable select, VRAM increment, pattern table selects, sprite size
     /// and NMI enable.
     pub fn write_ctrl(&mut self, val: u8) {
-        self.ppu.open_bus = val;
+        self.ppu.write_open_bus(val);
         let was_enabled = self.ppu.ctrl_nmi_enabled;
         self.ppu.write_ctrl(val);
         self.ppu.scroll.write_nametable_select(val);
@@ -1849,7 +1887,7 @@ impl Bus {
     /// colour emphasis.
     #[inline(always)]
     pub fn write_mask(&mut self, val: u8) {
-        self.ppu.open_bus = val;
+        self.ppu.write_open_bus(val);
         // Settle the pixels drawn under the old greyscale/emphasis before adopting the new ones.
         let (ppu, frame) = self.ppu_and_frame();
         let through = ppu.rendered_through();
