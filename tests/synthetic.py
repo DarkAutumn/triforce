@@ -124,21 +124,27 @@ class BanditEnv:
 
 
 class ListPool:
-    """The native ``EnvPool`` lockstep protocol over Python gym-like envs (``reset`` / ``step``).
+    """The native ``EnvPool`` protocol over Python gym-like envs (``reset`` / ``step``).
 
     The first ``recv`` returns every env's reset observation (zero reward and frames); a terminal step resets in
     the same row with ``final_obs`` / ``final_valid`` holding the terminal observation and ``bootstrap`` set for
     ``info['bootstrap_truncation']`` truncations.  Each finished episode emits an ``episode`` event whose info adds
     ``episode_steps``, ``episode_frames``, ``reward_total`` and ``episode_rewards`` to the terminal step's info.
+
+    ``send`` steps the given envs at once; ``recv`` returns ready rows in ascending env order.  By default every
+    ready env is returned; with ``schedule_seed`` each ``recv`` returns a random subset of at least ``min_ready`` of
+    them (the rest stay ready), imitating asynchronous native workers.
     """
 
-    def __init__(self, make_env, num_envs: int):
+    def __init__(self, make_env, num_envs: int, schedule_seed=None):
         self.envs = [make_env() for _ in range(num_envs)]
         self.num_envs = num_envs
-        self._pending = None
+        self._ready = {}            # env -> its next row
+        self._started = False
         self._events = []
         self._episodes = [None] * num_envs
         self._space = getattr(self.envs[0], 'observation_space', None) or observation_space()
+        self._schedule = None if schedule_seed is None else np.random.default_rng(schedule_seed)
 
     def make_buffers(self):
         """Zeroed row buffers shaped like the native ones."""
@@ -162,43 +168,53 @@ class ListPool:
         self._episodes[env_index] = {'steps': 0, 'frames': 0, 'reward': 0.0, 'rewards': Counter()}
         return obs
 
+    def _step(self, i, action):
+        row = {'terminated': False, 'truncated': False, 'bootstrap': False, 'final_valid': False, 'final_obs': None}
+        obs, reward, terminated, truncated, info = self.envs[i].step(action)
+        frames = int(info.get('frames', 0))
+        episode = self._episodes[i]
+        episode['steps'] += 1
+        episode['frames'] += frames
+        episode['reward'] += float(reward)
+        episode['rewards'].update(info.get('rewards') or {})
+        if terminated or truncated:
+            row.update(final_obs=obs, terminated=terminated, truncated=truncated, final_valid=True,
+                       bootstrap=bool(truncated and not terminated and info.get('bootstrap_truncation')))
+            self._events.append({'env': i, 'type': 'episode', 'info': {
+                **info, 'episode_steps': episode['steps'], 'episode_frames': episode['frames'],
+                'reward_total': episode['reward'], 'episode_rewards': dict(episode['rewards'])}})
+            obs = self._begin(i)
+        row.update(obs=obs, reward=reward, frames=frames)
+        return row
+
     def recv(self, out, min_ready=None):
-        """Writes every env's row (resetting on the first call or stepping the sent actions)."""
-        _ = min_ready
-        out['env_ids'][:] = np.arange(self.num_envs)
-        for i in range(self.num_envs):
-            for key in ('terminated', 'truncated', 'bootstrap', 'final_valid'):
-                out[key][i] = False
-            if self._pending is None:
-                obs, reward, frames = self._begin(i), 0.0, 0
-            else:
-                obs, reward, terminated, truncated, info = self.envs[i].step(self._pending[i])
-                frames = int(info.get('frames', 0))
-                episode = self._episodes[i]
-                episode['steps'] += 1
-                episode['frames'] += frames
-                episode['reward'] += float(reward)
-                episode['rewards'].update(info.get('rewards') or {})
-                if terminated or truncated:
-                    for key, value in obs.items():
-                        out['final_obs'][key][i] = value
-                    out['terminated'][i], out['truncated'][i], out['final_valid'][i] = terminated, truncated, True
-                    out['bootstrap'][i] = bool(truncated and not terminated and info.get('bootstrap_truncation'))
-                    self._events.append({'env': i, 'type': 'episode', 'info': {
-                        **info, 'episode_steps': episode['steps'], 'episode_frames': episode['frames'],
-                        'reward_total': episode['reward'], 'episode_rewards': dict(episode['rewards'])}})
-                    obs = self._begin(i)
-            for key, value in obs.items():
-                out['obs'][key][i] = value
-            out['reward'][i] = reward
-            out['frames'][i] = frames
-        self._pending = None
-        return self.num_envs
+        """Writes ready envs' rows (every env's reset on the first call) and returns how many."""
+        if not self._started:
+            self._started = True
+            for i in range(self.num_envs):
+                self._ready[i] = {'obs': self._begin(i), 'reward': 0.0, 'frames': 0, 'terminated': False,
+                                  'truncated': False, 'bootstrap': False, 'final_valid': False, 'final_obs': None}
+        ids = sorted(self._ready)
+        if self._schedule is not None and len(ids) > 1:
+            least = min(len(ids), max(1, min_ready or len(ids)))
+            take = int(self._schedule.integers(least, len(ids) + 1))
+            ids = sorted(int(i) for i in self._schedule.choice(ids, take, replace=False))
+        for row, i in enumerate(ids):
+            result = self._ready.pop(i)
+            out['env_ids'][row] = i
+            for key, value in result['obs'].items():
+                out['obs'][key][row] = value
+            for key, value in (result['final_obs'] or {}).items():
+                out['final_obs'][key][row] = value
+            for key in ('reward', 'frames', 'terminated', 'truncated', 'bootstrap', 'final_valid'):
+                out[key][row] = result[key]
+        return len(ids)
 
     def send(self, env_ids, actions):
-        """Queues one action per env (all envs, in order)."""
-        assert list(env_ids) == list(range(self.num_envs))
-        self._pending = [tuple(int(x) for x in a) for a in np.asarray(actions)]
+        """Steps each given env with its action."""
+        for i, action in zip(np.asarray(env_ids).tolist(), np.asarray(actions)):
+            assert i not in self._ready, f"env {i} is not awaiting an action"
+            self._ready[i] = self._step(i, tuple(int(x) for x in action))
 
     def poll_events(self):
         """Episode events since the last call."""

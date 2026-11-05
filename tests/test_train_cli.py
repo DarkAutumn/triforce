@@ -4,6 +4,7 @@ import json
 from collections import Counter
 
 import pytest
+import torch
 
 from triforce import registry, train
 from triforce.metrics import read_jsonl
@@ -69,13 +70,14 @@ def test_supplied_config_and_explicit_start_state(states_dir, tmp_path):
     assert metrics['episodes'] == 8
 
 
-@pytest.mark.parametrize('parallel', [1, 3])
-def test_seeded_training_repeats_gameplay_for_any_thread_count(states_dir, tmp_path, parallel):
+@pytest.mark.parametrize('parallel,device', [(1, 'cpu'), (3, 'cpu'), pytest.param(
+    3, 'cuda', marks=pytest.mark.skipif(not torch.cuda.is_available(), reason='needs CUDA'))])
+def test_seeded_training_repeats_gameplay_for_any_thread_count(states_dir, tmp_path, parallel, device):
     histories = []
     for run_id, threads in (('one-thread', 1), ('threads', parallel)):
         run = train.main(_common(states_dir, tmp_path, '--parallel', str(parallel), '--threads', str(threads),
                                  '--iterations', '2', '--steps-per-update', '48', '--no-curriculum',
-                                 '--run-id', f'{run_id}-{parallel}', '--seed', '31', '--device', 'cpu'))
+                                 '--run-id', f'{run_id}-{parallel}-{device}', '--seed', '31', '--device', device))
         histories.append(_gameplay(run))
     assert histories[0] == histories[1]
     assert histories[0][0]['rollout/steps'] == 48

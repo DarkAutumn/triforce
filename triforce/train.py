@@ -6,8 +6,8 @@
 
 Each iteration collects ``--steps-per-update`` env steps, split across ``--parallel`` envs of one native
 ``EnvPool`` (``--threads`` worker threads, default ``min(parallel, cpu count)``; results do not depend on the
-thread count), stepped in lockstep with one batched policy evaluation per step on ``--device``, then runs one
-PPO update.  Output goes
+thread count), stepped asynchronously (``ppo.Collector``: each ready env gets its next action from a fixed-shape
+policy forward on ``--device``, a CUDA graph on CUDA), then runs one PPO update.  Output goes
 to ``<models>/<specialist>/<run-id>/``: ``ckpt.pt`` (see ``registry``), ``metrics.jsonl``, ``tb/``
 (TensorBoard), ``run.json`` (arguments and configs) and ``train_summary.json`` (iterations, steps, early
 stop, wall time).  ``--stop-success`` ends training once the start-state-balanced training success rate

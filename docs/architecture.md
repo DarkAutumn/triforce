@@ -170,12 +170,20 @@ Nearby-item shaping and the measured cutoff remain disabled in promoted configs 
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
   records iterations, steps, `stopped_early`, wall time and steps/sec.
-- Training collects in lockstep from one `EnvPool(TrainTask(...), num_envs=--parallel, threads=--threads)`:
-  `recv` → store in the env-major `RolloutBuffer` → one batched `network.evaluate` on `--device` → `send`.
+- Training collects asynchronously from one `EnvPool(TrainTask(...), num_envs=--parallel, threads=--threads)`
+  (`ppo.Collector`): `recv(min_ready=1)` → store each ready env's row in its own rows of the env-major
+  `RolloutBuffer` → one `RolloutPolicy` forward over a fixed batch of one row per env (CUDA: a replayed CUDA
+  graph of a private copy of the network) → `send` actions to the ready envs only. A rollout ends when every env
+  has `T = steps_per_update / parallel` steps; finished envs wait for the rest. Bootstrap values
+  (`V(final_obs)`) are computed in one batch at the end of the rollout. See `docs/performance.md`.
 - `train --seed S` seeds model initialization and PPO RNGs, and the pool: env `i` draws from a `ChaCha8Rng`
-  seeded with `(S, i)`. Without `--seed` the pool seed is random. Shared curriculum progress still depends on
-  env completion order; this is not a promise of bitwise-identical curriculum or CUDA training, nor exact RNG
-  continuation when resuming a checkpoint. (Python's `random` streams of the old stack are not reproduced.)
+  seeded with `(S, i)`. Without `--seed` the pool seed is random. Actions are sampled with Gumbel noise drawn per
+  rollout as an `[n, T, NOISE_SIZE]` block from the collector's own generator (seeded from the torch RNG), indexed
+  by (env, step), and the policy forward always has the same shape, so a row's action depends only on that env's
+  observation and noise: training is reproducible across `--threads` and scheduling (CPU and CUDA, tested).
+  Shared curriculum progress still depends on env completion order; this is not a promise of bitwise-identical
+  curriculum training, nor exact RNG continuation when resuming a checkpoint. (Python's `random` streams of the
+  old stack are not reproduced.)
 - Live event logs (`events.py`, watched by `training-gui.py`): each training invocation gets
   `logs/<yymmdd>_<NNN>_<what>/` (gitignored; `--logs-dir` / `$TRIFORCE_LOGS_DIR`). `training.json` lists every
   specialist run in order with its status and is rewritten atomically. `<specialist>.jsonl` is an append-only

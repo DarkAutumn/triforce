@@ -591,3 +591,23 @@ entry below and `crates/zcore/UPSTREAM.md`.
   `corpus/golden/` (~1.2 MB) so a fresh clone has a reference; `tf ladder-diff` with no argument uses them.
 - **Why:** every quirk is gone (entry above) and the promoted models passed the gates on hardware behaviour, so
   FCEUmm is no longer the reference.
+
+## 2026-11-05 — Asynchronous training collection; per-(env, step) sampling noise; CUDA-graph rollout forward
+
+- **What:** `ppo.Collector` no longer steps the pool in lockstep. It hands every ready env its next action at once
+  (`recv(min_ready=1)`), each env fills its own rows of the env-major `RolloutBuffer`, and a rollout ends when every
+  env has its `T` steps. The forward runs in `RolloutPolicy`: a private eval copy of the network (weights copied in
+  place before each rollout) over a fixed batch of one row per env, captured once as a CUDA graph on CUDA. Bootstrap
+  values `V(final_obs)` are computed in one batch after the rollout; GAE is vectorized over envs.
+- **Determinism mechanism:** actions are sampled by Gumbel-max (`argmax(log_probs + noise)`) with noise drawn per
+  rollout as an `[n, T, NOISE_SIZE]` block from the collector's own `torch.Generator` (seeded from the torch RNG,
+  so `--seed` still fixes it), indexed by (env, step); the forward shape never changes, so a row's numbers don't
+  depend on which other envs are ready. Episode events are folded into the metrics in env order after the rollout.
+  Same seed ⇒ same gameplay and metrics whatever `--threads` or scheduling (tests: `test_train_cli` threads 1 vs N
+  on CPU and CUDA, `test_ppo::test_async_schedule_does_not_change_training` with a randomly scheduled pool).
+  `ZeldaPolicy.evaluate(..., noise=)` is the new sampling path; without noise it still uses `torch.multinomial`.
+- **Not changed:** per-env trajectories, rewards, bootstrap rule, frame-aware GAE and the PPO update. A seeded run
+  draws different random actions than before this change (Gumbel noise instead of `multinomial`), so old seeded
+  runs don't replay bit for bit.
+- **Why:** the lockstep barrier left each env thread on-CPU ~25% of the time; ow-zora p16 went from 304 to
+  ~1,500 steps/s (old stable-retro stack: ~920). Numbers and profiles: `docs/performance.md`.

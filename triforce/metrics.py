@@ -1,6 +1,6 @@
 """Training metrics (design §12, "Measure before tuning").
 
-``RolloutMetrics`` accumulates raw counts and sums that merge exactly: ``add_steps`` takes every lockstep batch
+``RolloutMetrics`` accumulates raw counts and sums that merge exactly: ``add_steps`` takes batches of env steps
 (actions, frames, interrupt codes) and ``add_episode`` every terminal info (the pool's ``episode`` events).
 ``RolloutMetrics.summary()`` turns them into the flat metric dict logged per iteration:
 

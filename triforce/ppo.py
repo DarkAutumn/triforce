@@ -7,11 +7,14 @@ time-limit termination, optional demo-regularization (behavior-cloning loss on a
 Changed for v2: dict observations, factored (kind, direction, duration) actions, flat masks, frame-aware GAE
 (see ``rollout_buffer``), and ``train`` counts PPO *iterations* (one rollout + one optimization each).
 
-Rollouts come from a native ``EnvPool`` (``TrainTask``) in lockstep (``Collector``): ``recv`` every env's row,
-store it, run one batched ``network.evaluate`` on the PPO device, ``send`` the actions.  Envs auto-reset: a
-terminal row's ``obs`` already starts the next episode and ``final_obs`` holds the terminal observation.
-Opted-in no-progress truncations (the ``bootstrap`` column) add ``gamma ** (frames / 8) * V(final_obs)`` to that
-step's reward without crossing the episode reset.
+Rollouts come from a native ``EnvPool`` (``TrainTask``), stepped asynchronously (``Collector``): every env that is
+ready gets its next action at once, without waiting for the others, and fills its own rows of the env-major buffer;
+a rollout ends when every env has its ``T`` steps.  Determinism does not depend on which envs happen to be ready
+together: actions are sampled with per-(env, step) Gumbel noise drawn up front, and the policy always evaluates a
+fixed batch of one row per env (``RolloutPolicy``; on CUDA a replayed CUDA graph), so a row's numbers depend only
+on its own inputs.  Envs auto-reset: a terminal row's ``obs`` already starts the next episode and ``final_obs``
+holds the terminal observation.  Opted-in no-progress truncations (the ``bootstrap`` column) add
+``gamma ** (frames / 8) * V(final_obs)`` to that step's reward without crossing the episode reset.
 """
 
 import copy
@@ -24,8 +27,10 @@ import numpy as np
 import torch
 from torch import nn
 
+from .actions import NUM_KINDS
 from .demo import compute_demo_accuracy
 from .metrics import RolloutMetrics
+from .model import MASK_KEY, NOISE_SIZE, gumbel_noise
 from .rollout_buffer import FRAMES_PER_DISCOUNT, RolloutBuffer
 
 
@@ -63,66 +68,178 @@ class IterationResult:
     stats: dict               # optimization stats + entropy per head + steps/sec
 
 
+class RolloutPolicy:
+    """The rollout forward pass over a fixed batch of one row per env.
+
+    Holds its own eval-mode copy of the network on ``device`` (``load`` refreshes the weights in place) and host
+    staging tensors (``obs`` per key including ``action_mask``, ``noise``) that the collector writes ready envs'
+    rows into.  Every call evaluates all ``n`` rows, so a row's outputs depend only on its own observation and
+    noise, not on which other envs are waiting.  On CUDA the forward is captured once as a CUDA graph and replayed:
+    one pinned host→device copy of the staging, one device→host copy of the outputs, one sync per call.
+    """
+
+    def __init__(self, network: nn.Module, observation: dict, device):
+        """``observation``: per-key ``[n, *shape]`` arrays (the pool's ``obs`` rows) giving shapes and dtypes."""
+        self.device = torch.device(device)
+        self.network = copy.deepcopy(network).to(self.device).eval()
+        pin = self.device.type == 'cuda'
+        self.obs = {key: torch.from_numpy(np.array(value)).pin_memory() if pin else torch.from_numpy(np.array(value))
+                    for key, value in observation.items()}
+        n = len(self.obs[MASK_KEY])
+        self.noise = torch.zeros((n, NOISE_SIZE), pin_memory=pin)
+        self.actions = torch.zeros((n, 3), dtype=torch.int64, pin_memory=pin)
+        self.logp_ent_val = torch.zeros((n, 3), pin_memory=pin)
+        self._graph = None
+        if pin:
+            self._capture()
+
+    def _forward(self, obs, noise):
+        out = self.network.evaluate({k: v for k, v in obs.items() if k != MASK_KEY}, obs[MASK_KEY], noise=noise)
+        return out.actions, torch.stack([out.log_prob, out.entropy, out.value], dim=-1)
+
+    def _capture(self):
+        self._device_obs = {key: value.to(self.device) for key, value in self.obs.items()}
+        self._device_noise = self.noise.to(self.device)
+        stream = torch.cuda.Stream(self.device)
+        stream.wait_stream(torch.cuda.current_stream(self.device))
+        with torch.no_grad():
+            with torch.cuda.stream(stream):          # warm up kernels/allocations off the capture stream
+                for _ in range(3):
+                    self._forward(self._device_obs, self._device_noise)
+            torch.cuda.current_stream(self.device).wait_stream(stream)
+            self._graph = torch.cuda.CUDAGraph()
+            with torch.cuda.graph(self._graph):
+                self._device_out = self._forward(self._device_obs, self._device_noise)
+
+    def load(self, network: nn.Module):
+        """Copies ``network``'s weights into the rollout copy (in place, so the captured graph sees them)."""
+        self.network.load_state_dict(network.state_dict())
+
+    @torch.no_grad()
+    def __call__(self) -> tuple[np.ndarray, np.ndarray]:
+        """(actions ``[n, 3]`` int64, ``[n, 3]`` log-prob/entropy/value) for every staged row."""
+        if self._graph is None:
+            actions, logp_ent_val = self._forward(self.obs, self.noise)
+            self.actions.copy_(actions)
+            self.logp_ent_val.copy_(logp_ent_val)
+        else:
+            for key, value in self.obs.items():
+                self._device_obs[key].copy_(value, non_blocking=True)
+            self._device_noise.copy_(self.noise, non_blocking=True)
+            self._graph.replay()
+            self.actions.copy_(self._device_out[0], non_blocking=True)
+            self.logp_ent_val.copy_(self._device_out[1], non_blocking=True)
+            torch.cuda.current_stream(self.device).synchronize()
+        return self.actions.numpy(), self.logp_ent_val.numpy()
+
+    @torch.no_grad()
+    def value(self, obs: dict) -> np.ndarray:
+        """Value estimates ``[k]`` of ``obs`` (per-key ``[k, *shape]``; eager, any batch size)."""
+        return self.network.get_value({k: v for k, v in obs.items() if k != MASK_KEY}).cpu().numpy()
+
+
 class Collector:
-    """Lockstep rollouts from a pool into an env-major ``RolloutBuffer``.
+    """Asynchronous rollouts from a pool into an env-major ``RolloutBuffer``.
 
     ``pool`` is a native ``EnvPool`` (or anything with its ``num_envs`` / ``make_buffers`` / ``recv`` / ``send`` /
     ``poll_events`` interface).  The first ``recv`` returns every env's reset observation; between ``collect``
-    calls every env waits for its next action, so episodes continue across rollouts.
+    calls every env waits for its next action, so episodes continue across rollouts.  ``seed`` seeds the action
+    sampling noise (default: drawn from the global torch RNG).
     """
+    # pylint: disable=too-many-instance-attributes
 
-    def __init__(self, pool, memory_length: int, gamma: float, lam: float):
+    def __init__(self, pool, memory_length: int, gamma: float, lam: float, seed: Optional[int] = None):
+        # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.pool = pool
         self.n_envs = pool.num_envs
         self.gamma = gamma
         self.rows = pool.make_buffers()
         self.buffer = RolloutBuffer(memory_length, self.n_envs, self.rows['obs'], gamma, lam)
-        self._recv()
-        self.dones = np.zeros(self.n_envs, dtype=np.float32)
-
-    def _recv(self):
         count = self.pool.recv(self.rows, min_ready=self.n_envs)
         if count != self.n_envs or not np.array_equal(self.rows['env_ids'], np.arange(self.n_envs)):
-            raise RuntimeError(f"lockstep recv returned {count} of {self.n_envs} envs: {self.rows['env_ids']}")
+            raise RuntimeError(f"first recv returned {count} of {self.n_envs} envs: {self.rows['env_ids']}")
+        self.dones = np.zeros(self.n_envs, dtype=np.float32)
+        if seed is None:
+            seed = int(torch.randint(0, 2 ** 62, ()))
+        self.generator = torch.Generator().manual_seed(seed)
+        self.policy: Optional[RolloutPolicy] = None
+
+    def _policy(self, network: nn.Module, device) -> RolloutPolicy:
+        if self.policy is None or self.policy.device != torch.device(device):
+            current = None if self.policy is None else self.policy.obs
+            self.policy = RolloutPolicy(network, current or self.rows['obs'], device)
+        else:
+            self.policy.load(network)
+        return self.policy
 
     def collect(self, network: nn.Module, device) -> RolloutMetrics:
         """Fills the buffer with ``memory_length`` steps per env and computes returns and advantages."""
-        buffer, rows = self.buffer, self.rows
+        # pylint: disable=too-many-locals, too-many-statements
+        buffer, rows, n, length = self.buffer, self.rows, self.n_envs, self.buffer.memory_length
+        policy = self._policy(network, device)
+        staged = policy.obs
+        noise = gumbel_noise((n, length, NOISE_SIZE), self.generator)
+        rewards = np.zeros((n, length), dtype=np.float32)
+        frames = np.zeros((n, length), dtype=np.int64)
+        interrupts = np.zeros((n, length), dtype=np.int64)
+        counts = np.zeros(n, dtype=np.int64)
+        bootstraps, events = [], []
+
+        everyone = np.arange(n)
+        buffer.store_obs(everyone, counts, staged, self.dones)
+        ready, outstanding = everyone, 0
+        while True:
+            if len(ready):
+                steps = counts[ready]
+                masks = staged[MASK_KEY][ready, :NUM_KINDS].numpy()
+                if not masks.any(axis=1).all():
+                    bad = int(ready[np.flatnonzero(~masks.any(axis=1))[0]])
+                    raise ValueError(f"Empty kind mask for env {bad}: {staged[MASK_KEY][bad].tolist()}")
+                policy.noise[ready] = noise[ready, steps]
+                actions, logp_ent_val = policy()
+                buffer.store_policy(ready, steps, actions[ready], logp_ent_val[ready])
+                self.pool.send(ready, actions[ready])
+                outstanding += len(ready)
+            if not outstanding:
+                break
+
+            count = self.pool.recv(rows, min_ready=1)
+            outstanding -= count
+            ids = rows['env_ids'][:count].copy()
+            steps = counts[ids]
+            rewards[ids, steps] = rows['reward'][:count]
+            frames[ids, steps] = rows['frames'][:count]
+            interrupts[ids, steps] = rows['interrupt'][:count]
+            bootstrap = np.flatnonzero(rows['bootstrap'][:count])
+            if len(bootstrap):
+                bootstraps.append((ids[bootstrap], steps[bootstrap],
+                                   {key: value[bootstrap].copy() for key, value in rows['final_obs'].items()}))
+            dones = (rows['terminated'][:count] | rows['truncated'][:count]).astype(np.float32)
+            self.dones[ids] = dones
+            counts[ids] += 1
+            ids_tensor = torch.from_numpy(ids)
+            for key, value in staged.items():
+                value[ids_tensor] = torch.from_numpy(rows['obs'][key][:count])
+            buffer.store_obs(ids, counts[ids], {key: value[ids_tensor] for key, value in staged.items()}, dones)
+            events += [e for e in self.pool.poll_events() if e['type'] == 'episode']
+            ready = ids[counts[ids] < length]
+
+        if bootstraps:
+            envs = np.concatenate([b[0] for b in bootstraps])
+            steps = np.concatenate([b[1] for b in bootstraps])
+            order = np.lexsort((steps, envs))                       # env-major: independent of arrival order
+            envs, steps = envs[order], steps[order]
+            final = {key: np.concatenate([b[2][key] for b in bootstraps])[order] for key in bootstraps[0][2]}
+            values = policy.value(final)
+            rewards[envs, steps] += self.gamma ** (frames[envs, steps].astype(np.float32) / FRAMES_PER_DISCOUNT) \
+                * values
+        buffer.store_results(rewards, frames)
+        buffer.compute_returns(policy.value(staged))
+
         metrics = RolloutMetrics()
-        was_training = network.training
-        network.to(device)
-        network.eval()
-        try:
-            with torch.no_grad():
-                for t in range(buffer.memory_length):
-                    buffer.store_obs(t, rows['obs'], self.dones)
-                    out = network.evaluate(buffer.obs_at(t), buffer.masks[:, t])
-                    actions = out.actions.cpu()
-                    buffer.store_policy(t, actions, out.log_prob, out.entropy, out.value)
-                    self.pool.send(rows['env_ids'], actions.numpy())
-                    self._recv()
-
-                    rewards = rows['reward'].astype(np.float32)
-                    frames = rows['frames'].astype(np.float32)
-                    bootstrap = rows['bootstrap'].astype(bool)
-                    if bootstrap.any():
-                        final = {key: value[bootstrap] for key, value in rows['final_obs'].items()}
-                        values = network.get_value(final).cpu().numpy()
-                        rewards[bootstrap] += self.gamma ** (frames[bootstrap] / FRAMES_PER_DISCOUNT) * values
-                    buffer.store_result(t, rewards, frames)
-                    self.dones = (rows['terminated'] | rows['truncated']).astype(np.float32)
-
-                    metrics.add_steps(actions.numpy(), rows['frames'], rows['interrupt'])
-                    events = sorted((e for e in self.pool.poll_events() if e['type'] == 'episode'),
-                                    key=lambda e: e['env'])
-                    for event in events:
-                        metrics.add_episode(event['info'])
-
-                buffer.store_obs(buffer.memory_length, rows['obs'], self.dones)
-                last_values = network.get_value(buffer.obs_at(buffer.memory_length))
-                buffer.compute_returns(last_values)
-        finally:
-            network.train(was_training)
+        metrics.add_steps(buffer.actions.reshape(-1, 3).numpy(), frames.reshape(-1), interrupts.reshape(-1))
+        for event in sorted(events, key=lambda e: e['env']):     # stable: per env in step order
+            metrics.add_episode(event['info'])
         return metrics
 
 

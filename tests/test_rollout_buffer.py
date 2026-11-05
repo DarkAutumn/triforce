@@ -1,4 +1,4 @@
-"""Rollout buffer and lockstep collector: frame-aware GAE, storage layout, episode boundaries, resumption and
+"""Rollout buffer and async collector: frame-aware GAE, storage layout, episode boundaries, resumption and
 rollout metrics."""
 
 from types import SimpleNamespace
@@ -121,7 +121,7 @@ def test_opted_in_truncation_uses_final_value_and_stops_trace_across_reset():
         def get_value(self, obs):
             return torch.as_tensor(obs['room_id'], dtype=torch.float32).reshape(-1)
 
-        def evaluate(self, obs, _mask):
+        def evaluate(self, obs, _mask, noise=None):
             return SimpleNamespace(actions=torch.zeros((1, 3), dtype=torch.long),
                                    log_prob=torch.zeros(1), entropy=torch.zeros(1), value=self.get_value(obs))
 

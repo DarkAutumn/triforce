@@ -18,6 +18,12 @@ Masking follows ``actions.ActionMask.to_flat()``: the kind mask comes from ``mas
 duration masks are the rows of the sampled (or given) kind.  A head whose row is all False for that kind
 does not apply: its log-prob and entropy are 0 and its sampled index is 0 (matching ``Action.to_indices``).
 When only one kind is legal, the kind head is excluded from log-prob and entropy (v1's forced-type rule).
+
+Sampling uses ``torch.multinomial`` (the global torch RNG) unless the caller passes Gumbel ``noise`` (one row of
+``NOISE_SIZE`` values per sample, see ``gumbel_noise``): then each head picks ``argmax(log_probs + noise)``, so a
+row's choice depends only on its own inputs and noise.  Training rollouts use that (``ppo.Collector``) to stay
+reproducible when envs are stepped asynchronously.  ``evaluate`` with noise does no host/device synchronization
+(CUDA-graph capturable); callers check the kind mask themselves.
 """
 
 from dataclasses import asdict, dataclass, field, fields
@@ -31,6 +37,16 @@ from gymnasium import spaces
 from .actions import MASK_SIZE, NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS
 
 MASKED_LOGIT = -1e9
+
+# Gumbel noise columns per sample: kind, direction, duration heads.
+NOISE_SIZE = NUM_KINDS + NUM_DIRECTIONS + NUM_DURATIONS
+
+
+def gumbel_noise(shape, generator: torch.Generator) -> torch.Tensor:
+    """Standard Gumbel samples (float32, finite) of ``shape`` from ``generator``."""
+    uniform = torch.rand(shape, generator=generator).clamp_min_(torch.finfo(torch.float32).tiny)
+    return -torch.log(-torch.log(uniform))
+
 
 # Observation keys with special encoders; every other non-mask key is a float vector concatenated directly.
 ROOM_KEY = 'room_id'
@@ -115,10 +131,11 @@ def layer_init(layer: nn.Module, std: float = float(np.sqrt(2)), bias_const: flo
     return layer
 
 
-def _masked_head(logits, mask, given, deterministic):
+def _masked_head(logits, mask, given, deterministic, noise=None):
     """(log_prob [B], entropy [B], choice [B]) of a categorical head with illegal logits set to MASKED_LOGIT.
 
     Hand-rolled instead of ``torch.distributions.Categorical``: it is twice as fast for single-step rollouts.
+    ``noise``: Gumbel samples ``[B, classes]`` to sample with instead of ``torch.multinomial``.
     """
     log_probs = torch.log_softmax(logits.masked_fill(~mask, MASKED_LOGIT), dim=-1)
     probs = log_probs.exp()
@@ -127,6 +144,8 @@ def _masked_head(logits, mask, given, deterministic):
         choice = given
     elif deterministic:
         choice = log_probs.argmax(dim=-1)
+    elif noise is not None:
+        choice = (log_probs + noise).argmax(dim=-1)
     else:
         choice = torch.multinomial(probs, 1).squeeze(-1)
     return log_probs.gather(-1, choice.unsqueeze(-1)).squeeze(-1), entropy, choice
@@ -173,7 +192,7 @@ class EntityEncoder(nn.Module):
 
         empty = entity_features[..., 0] <= 0
         safe = empty.clone()
-        safe[empty.all(dim=1), 0] = False
+        safe[:, 0] &= ~empty.all(dim=1)
         attended = self.transformer(projected, src_key_padding_mask=safe)
 
         present = (~empty).unsqueeze(-1).to(attended.dtype)
@@ -299,8 +318,11 @@ class ZeldaPolicy(nn.Module):
 
     # ------------------------------------------------------------------ policy
 
-    def evaluate(self, obs, mask=None, actions=None, deterministic=False) -> PolicyOutput:
-        """Samples (or scores the given) factored actions under the action mask."""
+    def evaluate(self, obs, mask=None, actions=None, deterministic=False, noise=None) -> PolicyOutput:
+        """Samples (or scores the given) factored actions under the action mask.
+
+        ``noise``: ``[B, NOISE_SIZE]`` Gumbel samples to sample with (see the module docstring); skips the
+        empty-kind-mask check, which needs a device sync."""
         # pylint: disable=too-many-locals
         obs = self._batch(obs)
         if mask is None:
@@ -318,22 +340,26 @@ class ZeldaPolicy(nn.Module):
         kind_mask = mask[:, :NUM_KINDS]
         dir_masks = mask[:, NUM_KINDS:NUM_KINDS + NUM_KINDS * NUM_DIRECTIONS].view(batch, NUM_KINDS, NUM_DIRECTIONS)
         dur_masks = mask[:, NUM_KINDS + NUM_KINDS * NUM_DIRECTIONS:].view(batch, NUM_KINDS, NUM_DURATIONS)
-        if not kind_mask.any(dim=-1).all():
+        if noise is None and not kind_mask.any(dim=-1).all():
             bad = int((~kind_mask.any(dim=-1)).nonzero()[0, 0])
             raise ValueError(f"Empty kind mask in batch element {bad}: {mask[bad].tolist()}")
+        kind_noise = dir_noise = dur_noise = None
+        if noise is not None:
+            noise = torch.as_tensor(noise, device=mask.device)
+            kind_noise, dir_noise, dur_noise = noise.split([NUM_KINDS, NUM_DIRECTIONS, NUM_DURATIONS], dim=-1)
 
         if actions is not None:
             actions = torch.as_tensor(actions, device=mask.device).long().view(batch, 3)
         kind_lp, kind_ent, kind = _masked_head(self.kind_head(policy_features), kind_mask,
-                                               None if actions is None else actions[:, 0], deterministic)
+                                               None if actions is None else actions[:, 0], deterministic, kind_noise)
 
         conditioned = torch.relu(self.kind_condition(policy_features) + self.kind_embedding(kind))
         dir_lp, dir_ent, direction, dir_applies = self._sub_head(
             self.direction_head(conditioned), dir_masks[rows, kind],
-            None if actions is None else actions[:, 1], deterministic)
+            None if actions is None else actions[:, 1], deterministic, dir_noise)
         dur_lp, dur_ent, duration, dur_applies = self._sub_head(
             self.duration_head(conditioned), dur_masks[rows, kind],
-            None if actions is None else actions[:, 2], deterministic)
+            None if actions is None else actions[:, 2], deterministic, dur_noise)
 
         # v1's forced-type rule: with one legal kind, the kind head contributes nothing.
         kind_applies = kind_mask.sum(dim=-1) > 1
@@ -351,11 +377,11 @@ class ZeldaPolicy(nn.Module):
                             head_applies={'kind': kind_applies, 'direction': dir_applies, 'duration': dur_applies})
 
     @staticmethod
-    def _sub_head(logits, row_mask, given, deterministic):
+    def _sub_head(logits, row_mask, given, deterministic, noise=None):
         """Log-prob, entropy, chosen index, applies for a kind-conditioned head; zeros where the row is empty."""
         applies = row_mask.any(dim=-1)
         safe_mask = row_mask | ~applies.unsqueeze(-1)
-        log_prob, entropy, choice = _masked_head(logits, safe_mask, given, deterministic)
+        log_prob, entropy, choice = _masked_head(logits, safe_mask, given, deterministic, noise)
         return (torch.where(applies, log_prob, 0.0), torch.where(applies, entropy, 0.0),
                 torch.where(applies, choice, 0), applies)
 

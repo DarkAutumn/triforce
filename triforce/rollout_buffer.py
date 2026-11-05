@@ -1,5 +1,6 @@
 """Rollout storage for PPO (port of v1 ``ml_ppo_rollout_buffer``), with dict observations, factored actions,
-flat action masks, and frame-aware GAE.  ``ppo.Collector`` fills it from a native ``EnvPool`` in lockstep.
+flat action masks, and frame-aware GAE.  ``ppo.Collector`` fills it from a native ``EnvPool``, each env its own
+rows as it steps (envs run asynchronously).
 
 Layout (``n`` envs, ``T`` steps per env; index ``T`` holds the observation to resume from):
 
@@ -43,29 +44,30 @@ def _space_layout(space) -> tuple[tuple, bool]:
 
 def frame_aware_gae(rewards, values, frames, dones_next, last_value, gamma, lam,
                     frames_per_discount=FRAMES_PER_DISCOUNT):
-    """Returns (returns, advantages) for one env's trajectory segment.
+    """Returns (returns, advantages) for trajectory segments ``[..., T]`` (one per leading index, e.g. per env).
 
     Args:
-        rewards, values, frames: [T] tensors for steps 0..T-1.
-        dones_next: [T] — 1 when step t ended the episode (terminated or truncated).
-        last_value: value of the observation after step T-1 (ignored if that step ended an episode).
+        rewards, values, frames: ``[..., T]`` tensors for steps 0..T-1.
+        dones_next: ``[..., T]`` — 1 when step t ended the episode (terminated or truncated).
+        last_value: ``[...]`` value of the observation after step T-1 (ignored if that step ended an episode).
     """
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    length = rewards.shape[0]
-    exponent = frames.to(torch.float64) / frames_per_discount
+    rewards = torch.as_tensor(rewards, dtype=torch.float64)
+    values64 = torch.as_tensor(values, dtype=torch.float64)
+    exponent = torch.as_tensor(frames, dtype=torch.float64) / frames_per_discount
     step_gamma = torch.pow(torch.tensor(gamma, dtype=torch.float64), exponent)
     step_lambda = torch.pow(torch.tensor(lam, dtype=torch.float64), exponent)
-    advantages = torch.zeros(length, dtype=torch.float64)
-    last_gae = 0.0
-    next_value = float(last_value)
-    for t in reversed(range(length)):
-        nonterminal = 1.0 - float(dones_next[t])
-        delta = float(rewards[t]) + float(step_gamma[t]) * next_value * nonterminal - float(values[t])
-        last_gae = delta + float(step_gamma[t]) * float(step_lambda[t]) * nonterminal * last_gae
-        advantages[t] = last_gae
-        next_value = float(values[t])
+    nonterminal = 1.0 - torch.as_tensor(dones_next, dtype=torch.float64)
+    advantages = torch.zeros_like(rewards)
+    last_gae = torch.zeros(rewards.shape[:-1], dtype=torch.float64)
+    next_value = torch.as_tensor(last_value, dtype=torch.float64).reshape(rewards.shape[:-1])
+    for t in reversed(range(rewards.shape[-1])):
+        delta = rewards[..., t] + step_gamma[..., t] * next_value * nonterminal[..., t] - values64[..., t]
+        last_gae = delta + step_gamma[..., t] * step_lambda[..., t] * nonterminal[..., t] * last_gae
+        advantages[..., t] = last_gae
+        next_value = values64[..., t]
     advantages = advantages.to(torch.float32)
-    return advantages + values.to(torch.float32), advantages
+    return advantages + torch.as_tensor(values).to(torch.float32), advantages
 
 
 class RolloutBuffer:
@@ -96,39 +98,34 @@ class RolloutBuffer:
         self.returns = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.advantages = torch.zeros(n_envs, memory_length, dtype=torch.float32)
 
-    def store_obs(self, t: int, obs: dict, dones):
-        """Stores every env's observation at step ``t`` (``obs``: per-key ``[n, *shape]`` arrays including
-        ``action_mask``) and whether it starts a new episode."""
+    def store_obs(self, envs, steps, obs: dict, dones):
+        """Stores env ``envs[k]``'s observation at step ``steps[k]`` (``obs``: per-key ``[k, *shape]`` arrays or
+        tensors including ``action_mask``) and whether it starts a new episode."""
+        envs, steps = torch.as_tensor(envs), torch.as_tensor(steps)
         for key, storage in self.observation.items():
-            storage[:, t] = torch.as_tensor(np.asarray(obs[key])).reshape(storage.shape[:1] + storage.shape[2:])
-        self.masks[:, t] = torch.as_tensor(np.asarray(obs[MASK_KEY], dtype=bool))
-        self.dones[:, t] = torch.as_tensor(np.asarray(dones, dtype=np.float32))
+            storage[envs, steps] = torch.as_tensor(obs[key]).reshape(len(envs), *storage.shape[2:])
+        self.masks[envs, steps] = torch.as_tensor(obs[MASK_KEY]).bool()
+        self.dones[envs, steps] = torch.as_tensor(np.asarray(dones, dtype=np.float32))
 
-    def obs_at(self, t: int) -> dict:
-        """The stored observations at step ``t`` (``[n, ...]`` per key, without the mask)."""
-        return {key: storage[:, t] for key, storage in self.observation.items()}
+    def store_policy(self, envs, steps, actions, logp_ent_val):
+        """Stores the actions env ``envs[k]`` took at step ``steps[k]`` with their ``[k, 3]`` log-prob, entropy
+        and value."""
+        envs, steps = torch.as_tensor(envs), torch.as_tensor(steps)
+        self.actions[envs, steps] = torch.as_tensor(actions)
+        self.logp_ent_val[envs, steps] = torch.as_tensor(logp_ent_val)
 
-    def store_policy(self, t: int, actions, log_prob, entropy, value):
-        """Stores the actions taken at step ``t`` with their log-prob, entropy and value."""
-        self.actions[:, t] = torch.as_tensor(actions).cpu()
-        self.logp_ent_val[:, t, 0] = torch.as_tensor(log_prob).cpu()
-        self.logp_ent_val[:, t, 1] = torch.as_tensor(entropy).cpu()
-        self.logp_ent_val[:, t, 2] = torch.as_tensor(value).cpu()
-
-    def store_result(self, t: int, rewards, frames):
-        """Stores step ``t``'s learning rewards (bootstrap already added) and elapsed frames."""
-        self.rewards[:, t] = torch.as_tensor(np.asarray(rewards, dtype=np.float32))
-        self.frames[:, t] = torch.as_tensor(np.asarray(frames, dtype=np.float32))
+    def store_results(self, rewards, frames):
+        """Stores every step's ``[n, T]`` learning rewards (bootstrap already added) and elapsed frames."""
+        self.rewards.copy_(torch.as_tensor(np.asarray(rewards, dtype=np.float32)))
+        self.frames.copy_(torch.as_tensor(np.asarray(frames, dtype=np.float32)))
 
     def compute_returns(self, last_values):
         """Frame-aware GAE per env; ``last_values[i]`` is the value of env ``i``'s observation at index ``T``."""
         last_values = torch.as_tensor(last_values).cpu()
-        for env in range(self.n_envs):
-            returns, advantages = frame_aware_gae(
-                self.rewards[env], self.logp_ent_val[env, :, 2], self.frames[env], self.dones[env, 1:],
-                float(last_values[env]), self.gamma, self.lam)
-            self.returns[env] = returns
-            self.advantages[env] = advantages
+        returns, advantages = frame_aware_gae(self.rewards, self.logp_ent_val[:, :, 2], self.frames,
+                                              self.dones[:, 1:], last_values, self.gamma, self.lam)
+        self.returns.copy_(returns)
+        self.advantages.copy_(advantages)
 
     def flatten(self, device) -> dict:
         """Batch tensors [n·T, ...] for optimization."""
