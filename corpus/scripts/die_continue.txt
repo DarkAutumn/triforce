@@ -1,11 +1,13 @@
-# Walk into 0x67, stand still until the Octoroks kill Link, choose CONTINUE.
+# Walk into 0x67, stand still until the Octoroks kill Link, choose CONTINUE. Waits on game state, not frame
+# counts, so the script survives emulator timing changes.
 base: power_on_to_start
 tags: short, scripted
 UP 90
 - 56
 assert ram[0xEB] == 0x67
 UP 34
-- 1345
+until ram[0x12] == 0x08 - max 4000      # game over menu (CONTINUE selected)
+- 30
 START 2
-- 272
+until ram[0x12] == 0x05 - max 600       # back in play
 assert ram[0x12] == 0x05

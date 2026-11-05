@@ -153,7 +153,7 @@ enum Cmd {
 
 #[derive(Subcommand)]
 enum MovieCmd {
-    /// Record a script in the oracle.
+    /// Record a script on zcore.
     Script {
         script: PathBuf,
         #[arg(short, long)]
@@ -282,7 +282,7 @@ fn movie_cmd(cmd: MovieCmd, rom: &rom::RomInfo) -> Result<i32> {
             let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
             let mut directives = script::parse(&text)?;
             let name = out.file_stem().unwrap().to_string_lossy().into_owned();
-            let mut b = oracle::Oracle::open(&rom.path)?;
+            let mut b = zcore::Zcore::open(&rom.bytes)?;
             let mut movie = Movie::new(
                 rom.payload_sha1,
                 serde_json::json!({"name": name, "tags": [], "source": {"script": path.file_name().unwrap().to_string_lossy()}}),
@@ -302,7 +302,7 @@ fn movie_cmd(cmd: MovieCmd, rom: &rom::RomInfo) -> Result<i32> {
         MovieCmd::Random { base, seed, frames, out } => {
             let p = Movie::load(&corpus::movie_path(&base))?;
             check_movie_rom(&p, rom, &corpus::movie_path(&base))?;
-            let mut b = oracle::Oracle::open(&rom.path)?;
+            let mut b = zcore::Zcore::open(&rom.bytes)?;
             backend::play_movie(&mut b, &p)?;
             let name = out.file_stem().unwrap().to_string_lossy().into_owned();
             let mut movie = Movie::new(

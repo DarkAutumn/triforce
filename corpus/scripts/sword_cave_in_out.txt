@@ -1,15 +1,15 @@
-# Walk into the 0x77 cave, take the sword and walk back out.
+# Walk into the 0x77 cave, take the sword and walk back out. Waits on game state, not frame counts, so the
+# script survives emulator timing changes.
 base: power_on_to_start
 tags: short, scripted
 UP 36
 LEFT 42
 UP 12
-- 182
-RIGHT 158
-UP 176
-assert ram[0x657] == 0x01
+until ram[0x12] == 0x0B - max 300       # in the cave
+until ram[0x70] == 120 RIGHT max 600    # line up with the sword (moves once the old man's text is done)
+until ram[0x657] == 0x01 UP max 600     # take the sword
 - 30
-DOWN 166
+until ram[0x12] == 0x05 DOWN max 600    # back out on the overworld
 - 60
 assert ram[0x12] == 0x05
 assert ram[0xEB] == 0x77

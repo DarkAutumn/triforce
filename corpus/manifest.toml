@@ -486,7 +486,7 @@ tags = [
     "short",
     "scripted",
 ]
-frames = 1799
+frames = 1955
 
 [[movie]]
 name = "file_select_register_erase"
@@ -561,7 +561,7 @@ tags = [
     "short",
     "scripted",
 ]
-frames = 862
+frames = 807
 
 [[movie]]
 name = "title_idle_3600"
