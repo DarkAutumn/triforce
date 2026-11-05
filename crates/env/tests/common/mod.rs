@@ -1,10 +1,12 @@
-//! Shared test helpers: an oracle-backed `Nes`, an `.npz` reader and the parity fixtures.
+//! Shared test helpers: an oracle-backed `Nes`, the named-state loader, an `.npz` reader, the parity fixtures and
+//! the observation-space check.
 #![allow(dead_code)]
 
+use env::observation::{OBS_SPEC, Observation};
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use zelda::Nes;
+use zelda::{ActionMask, Nes};
 
 /// `zelda::Nes` over the dev-only FCEUmm oracle (state = oracle savestate bytes); `.1` counts every frame run.
 pub struct OracleNes(pub oracle::Oracle, pub u64);
@@ -272,45 +274,69 @@ impl env::StateStore<Vec<u8>> for MemStore {
     }
 }
 
-/// `StateStore` over the legacy gzip start states (`triforce/custom_integrations/Zelda-NES/*.state`, FCEUmm
-/// bodies the oracle loads directly): names resolve like `GameSession.load` (bare name -> `<dir>/<name>.state`),
-/// and `save` writes a gzip body.  Loaded states get a zero frame counter.
-pub struct GzipStore {
-    pub dir: PathBuf,
+/// Directory of the named start states.
+pub fn states_dir() -> PathBuf {
+    repo().join(env::config::STATES_DIR)
 }
+
+/// File of a named state, resolved like `GameSession.load` (bare name -> `<states dir>/<name>.state`; an
+/// existing or absolute path is used as is).
+pub fn state_path(name: &str) -> PathBuf {
+    let p = Path::new(name);
+    if p.is_absolute() || p.exists() {
+        return p.to_path_buf();
+    }
+    let file = if name.ends_with(".state") {
+        name.to_owned()
+    } else {
+        format!("{name}.state")
+    };
+    states_dir().join(file)
+}
+
+/// THE state loader of the env tests: every test that starts from a named state (directly or through
+/// `GzipStore`) reads it here, so switching the tests to zcore + regenerated `TFZSTATE` files
+/// (`triforce/states/<name>.state`, legacy unsuffixed names such as `1_44w` remapped to `1_44w_0`) happens in
+/// this one place.  Today: the legacy gzip FCEUmm bodies in `triforce/custom_integrations/Zelda-NES/`, which
+/// the oracle loads directly, with a zero frame counter appended.
+pub fn load_named_state(name: &str) -> Result<Vec<u8>, env::EnvError> {
+    let path = state_path(name);
+    let file = std::fs::File::open(&path)
+        .map_err(|e| env::EnvError::State(format!("{}: {e}", path.display())))?;
+    let mut body = Vec::new();
+    flate2::read::GzDecoder::new(file)
+        .read_to_end(&mut body)
+        .map_err(|e| env::EnvError::State(format!("{}: {e}", path.display())))?;
+    body.extend_from_slice(&0u64.to_le_bytes());
+    Ok(body)
+}
+
+/// Every named state in the states directory, sorted.
+pub fn named_states() -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(states_dir())
+        .expect("states dir")
+        .filter_map(|e| {
+            let name = e.unwrap().file_name().into_string().unwrap();
+            name.strip_suffix(".state").map(str::to_owned)
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// `StateStore` over the named states (`load_named_state`); `save` writes a gzip body.
+#[derive(Default)]
+pub struct GzipStore;
 
 impl GzipStore {
     pub fn new() -> GzipStore {
-        GzipStore {
-            dir: repo().join(env::config::STATES_DIR),
-        }
-    }
-
-    pub fn path(&self, name: &str) -> PathBuf {
-        let p = Path::new(name);
-        if p.is_absolute() || p.exists() {
-            return p.to_path_buf();
-        }
-        let file = if name.ends_with(".state") {
-            name.to_owned()
-        } else {
-            format!("{name}.state")
-        };
-        self.dir.join(file)
+        GzipStore
     }
 }
 
 impl env::StateStore<Vec<u8>> for GzipStore {
     fn load(&self, name: &str) -> Result<Vec<u8>, env::EnvError> {
-        let path = self.path(name);
-        let file = std::fs::File::open(&path)
-            .map_err(|e| env::EnvError::State(format!("{}: {e}", path.display())))?;
-        let mut body = Vec::new();
-        flate2::read::GzDecoder::new(file)
-            .read_to_end(&mut body)
-            .map_err(|e| env::EnvError::State(format!("{}: {e}", path.display())))?;
-        body.extend_from_slice(&0u64.to_le_bytes());
-        Ok(body)
+        load_named_state(name)
     }
 
     fn save(
@@ -331,4 +357,74 @@ impl env::StateStore<Vec<u8>> for GzipStore {
         std::fs::rename(&tmp, path)?;
         Ok(())
     }
+}
+
+/// (key, flattened values) of an observation.
+pub fn obs_values(o: &Observation) -> Vec<(&'static str, Vec<f64>)> {
+    let f = |v: &[f32]| v.iter().map(|&x| x as f64).collect::<Vec<_>>();
+    vec![
+        ("room_id", vec![o.room_id as f64]),
+        ("room_state", f(&o.room_state)),
+        ("link", f(&o.link)),
+        (
+            "entity_types",
+            o.entity_types.iter().map(|&x| x as f64).collect(),
+        ),
+        (
+            "entity_features",
+            o.entity_features.iter().flat_map(|r| f(r)).collect(),
+        ),
+        ("grid", o.grid.iter().flatten().map(|&x| x as f64).collect()),
+        ("history", f(&o.history)),
+        ("objective", f(&o.objective)),
+        (
+            "action_mask",
+            o.action_mask.iter().map(|&x| x as u8 as f64).collect(),
+        ),
+    ]
+}
+
+/// The OBS_SPEC keys whose shape, bounds or integer vocabulary `o` violates (`not space[k].contains(v)`).
+pub fn obs_violations(o: &Observation) -> Vec<String> {
+    let values = obs_values(o);
+    assert_eq!(values.len(), OBS_SPEC.len());
+    let mut bad = Vec::new();
+    for spec in OBS_SPEC {
+        let (_, v) = values
+            .iter()
+            .find(|(k, _)| *k == spec.key)
+            .expect("obs key");
+        let n: usize = spec.shape.iter().product();
+        if v.len() != n {
+            bad.push(format!("{} shape {}", spec.key, v.len()));
+            continue;
+        }
+        for &x in v {
+            if !(x.is_finite() && spec.low <= x && x <= spec.high) {
+                bad.push(format!(
+                    "{} value {x} outside [{}, {}]",
+                    spec.key, spec.low, spec.high
+                ));
+                break;
+            }
+            if let Some(vocab) = spec.vocab
+                && !(x.fract() == 0.0 && (x as usize) < vocab)
+            {
+                bad.push(format!("{} id {x}", spec.key));
+                break;
+            }
+        }
+    }
+    bad
+}
+
+/// `observation_space.contains(obs)` for every key; the mask is the session's.
+pub fn assert_obs_valid(o: &Observation, mask: &ActionMask) {
+    let bad = obs_violations(o);
+    assert!(bad.is_empty(), "{bad:?}");
+    assert_eq!(
+        o.action_mask,
+        mask.to_flat(),
+        "obs mask is the session mask"
+    );
 }

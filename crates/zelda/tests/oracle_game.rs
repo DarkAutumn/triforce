@@ -7,7 +7,7 @@
 
 mod common;
 
-use common::{OracleNes, entry_state, fixture_dir, open_oracle, read_npz};
+use common::{OracleNes, load_named_state, open_oracle};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::BTreeSet;
@@ -24,10 +24,6 @@ use zelda::{
 
 type S = Session<OracleNes>;
 
-fn state_of(name: &str) -> Vec<u8> {
-    entry_state(&read_npz(&fixture_dir().join(format!("{name}.npz"))))
-}
-
 fn rng() -> ChaCha8Rng {
     ChaCha8Rng::seed_from_u64(0)
 }
@@ -37,7 +33,7 @@ fn load(s: &mut S, name: &str, overrides: &[(Var, u8)]) {
         overrides: overrides.to_vec(),
         ..Default::default()
     };
-    s.load(&state_of(name), &opts, &mut rng()).unwrap();
+    s.load(&load_named_state(name), &opts, &mut rng()).unwrap();
 }
 
 fn act(s: &mut S, text: &str) -> Change {
@@ -408,7 +404,7 @@ fn layout(s: &S) -> Vec<(i32, i32)> {
 
 fn pre_entry_loads(s: &mut S) {
     // 1_72 is saved before D1 0x72's EnterRoom (3 Keese): the spawn cycle decides their layout.
-    let state = state_of("1_72");
+    let state = load_named_state("1_72");
     let opts = LoadOptions {
         randomize_rng: true,
         ..Default::default()

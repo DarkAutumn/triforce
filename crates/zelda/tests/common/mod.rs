@@ -237,3 +237,11 @@ pub fn entry_state(f: &HashMap<String, Npy>) -> Vec<u8> {
     state.extend_from_slice(&(f["entry_frame"].scalar_i64() as u64).to_le_bytes());
     state
 }
+
+/// THE state loader of the zelda tests: every test that starts from a named state reads it here, so switching
+/// to zcore + regenerated `TFZSTATE` files (`triforce/states/<name>.state`) happens in this one place.  Today the
+/// names are parity-fixture room entries (`1_44`, `0_77_cave`, ...: oracle states recorded on a chain-0 movie,
+/// see oracle_game.rs for the legacy names they stand in for).
+pub fn load_named_state(name: &str) -> Vec<u8> {
+    entry_state(&read_npz(&fixture_dir().join(format!("{name}.npz"))))
+}

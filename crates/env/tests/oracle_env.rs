@@ -8,13 +8,12 @@
 
 mod common;
 
-use common::{GzipStore, OracleNes, open_oracle, repo};
+use common::{GzipStore, OracleNes, assert_obs_valid, open_oracle, repo};
 use env::config::{
     GameData, HpBound, ItemsConfig, RamRandomization, RewardConfig, SpecialistConfig,
 };
 use env::critic::{Critique, GameplayCritic};
 use env::curriculum::{Curriculum, CurriculumSpec};
-use env::observation::{OBS_SPEC, Observation};
 use env::rewards::{
     Outcome, PENALTY_TERMINAL_FAILURE, REWARD_MEDIUM, REWARD_TERMINAL_SUCCESS, StepRewards,
     TERMINAL_FAILURE_PENALTY_VALUE, success_reward_value,
@@ -156,67 +155,6 @@ fn assert_info_contract(info: &StepInfo) {
     for key in STEP_INFO_KEYS {
         assert!(json.get(key).is_some(), "info lacks {key}: {json}");
     }
-}
-
-/// (key, flattened values) of an observation.
-fn obs_values(o: &Observation) -> Vec<(&'static str, Vec<f64>)> {
-    let f = |v: &[f32]| v.iter().map(|&x| x as f64).collect::<Vec<_>>();
-    vec![
-        ("room_id", vec![o.room_id as f64]),
-        ("room_state", f(&o.room_state)),
-        ("link", f(&o.link)),
-        (
-            "entity_types",
-            o.entity_types.iter().map(|&x| x as f64).collect(),
-        ),
-        (
-            "entity_features",
-            o.entity_features.iter().flat_map(|r| f(r)).collect(),
-        ),
-        ("grid", o.grid.iter().flatten().map(|&x| x as f64).collect()),
-        ("history", f(&o.history)),
-        ("objective", f(&o.objective)),
-        (
-            "action_mask",
-            o.action_mask.iter().map(|&x| x as u8 as f64).collect(),
-        ),
-    ]
-}
-
-/// `observation_space.contains(obs)`: every OBS_SPEC key with its shape, bounds and integer vocabulary; the mask
-/// is the session's.
-fn assert_obs_valid(o: &Observation, mask: &ActionMask) {
-    let values = obs_values(o);
-    assert_eq!(values.len(), OBS_SPEC.len());
-    for spec in OBS_SPEC {
-        let (_, v) = values
-            .iter()
-            .find(|(k, _)| *k == spec.key)
-            .expect("obs key");
-        let n: usize = spec.shape.iter().product();
-        assert_eq!(v.len(), n, "{} shape", spec.key);
-        for &x in v {
-            assert!(
-                x.is_finite() && spec.low <= x && x <= spec.high,
-                "{} value {x} outside [{}, {}]",
-                spec.key,
-                spec.low,
-                spec.high
-            );
-            if let Some(vocab) = spec.vocab {
-                assert!(
-                    x.fract() == 0.0 && (x as usize) < vocab,
-                    "{} id {x}",
-                    spec.key
-                );
-            }
-        }
-    }
-    assert_eq!(
-        o.action_mask,
-        mask.to_flat(),
-        "obs mask is the session mask"
-    );
 }
 
 /// Uniform over legal kinds, then legal direction/duration for that kind.
