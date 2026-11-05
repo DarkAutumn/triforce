@@ -36,7 +36,7 @@
 //! [stability](crate#stability) note for the tier this belongs to and why.
 
 use crate::{
-    apu::{Apu, Channel},
+    apu::Apu,
     cart::Cart,
     common::ResetKind,
     cpu::Cpu,
@@ -198,18 +198,6 @@ impl Bus {
             _ => false,
         }
     }
-    /// Samples the APU has mixed since the last clear.
-    #[inline]
-    #[must_use]
-    pub fn audio_samples(&self) -> &[f32] {
-        &self.apu.audio_samples
-    }
-
-    /// Drops the mixed samples, which the clocking API does at the start of each call.
-    #[inline]
-    pub fn clear_audio_samples(&mut self) {
-        self.apu.audio_samples.clear();
-    }
 
     /// Clocks everything the CPU's cycle drives: the board, the APU, input and the PPU.
     #[inline(always)]
@@ -293,33 +281,8 @@ impl Bus {
             0x2005 => self.ppu.write_scroll(val),
             0x2006 => self.ppu.write_addr(val),
             0x2007 => self.write_data(val),
-            0x4000 => self.apu.write_ctrl(Channel::Pulse1, val),
-            0x4001 => self.apu.write_sweep(Channel::Pulse1, val),
-            0x4002 => self.apu.write_timer_lo(Channel::Pulse1, val),
-            0x4003 => self.apu.write_timer_hi(Channel::Pulse1, val),
-            0x4004 => self.apu.write_ctrl(Channel::Pulse2, val),
-            0x4005 => self.apu.write_sweep(Channel::Pulse2, val),
-            0x4006 => self.apu.write_timer_lo(Channel::Pulse2, val),
-            0x4007 => self.apu.write_timer_hi(Channel::Pulse2, val),
-            0x4008 => self.apu.write_linear_counter(val),
-            0x400A => self.apu.write_timer_lo(Channel::Triangle, val),
-            0x400B => self.apu.write_timer_hi(Channel::Triangle, val),
-            0x400C => self.apu.write_ctrl(Channel::Noise, val),
-            0x400E => self.apu.write_timer_lo(Channel::Noise, val),
-            0x400F => self.apu.write_length(Channel::Noise, val),
-            0x4010 | 0x4012 | 0x4013 | 0x4015 => {
-                // FQ-12: FCEUmm's sample fetcher tracks the same registers.
-                self.apu.dmc.fceu.write(addr, val);
-                match addr {
-                    0x4010 => self.apu.write_timer_lo(Channel::Dmc, val),
-                    0x4012 => self.apu.write_dmc_addr(val),
-                    0x4013 => self.apu.write_length(Channel::Dmc, val),
-                    _ => self.apu.write_status(val),
-                }
-            }
-            0x4011 => self.apu.write_dmc_output(val),
+            0x4000..=0x4013 | 0x4015 | 0x4017 => self.apu.write(addr, val),
             0x4016 => self.input.write(val),
-            0x4017 => self.apu.write_frame_counter(val),
             0x4014 => (), // DMA handled by CPU
             _ => (),
         }
@@ -375,7 +338,7 @@ impl Bus {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{apu::noise::ShiftMode, input::JoypadBtn, mapper::Nrom, memory::Src};
+    use crate::{input::JoypadBtn, mapper::Nrom, memory::Src};
 
     #[test]
     fn load_cart_values() {
@@ -546,12 +509,12 @@ mod test {
 
         // $4015 write enables length counters; reading it reports which are non-zero.
         bus.cpu_bus_write(0x4015, 0x0F);
-        assert!(bus.apu.pulse1.length.enabled, "pulse1 enabled");
-        assert!(bus.apu.pulse2.length.enabled, "pulse2 enabled");
-        assert!(bus.apu.triangle.length.enabled, "triangle enabled");
-        assert!(bus.apu.noise.length.enabled, "noise enabled");
+        assert!(bus.apu.pulse1.enabled, "pulse1 enabled");
+        assert!(bus.apu.pulse2.enabled, "pulse2 enabled");
+        assert!(bus.apu.triangle.enabled, "triangle enabled");
+        assert!(bus.apu.noise.enabled, "noise enabled");
         bus.cpu_bus_write(0x4015, 0x00);
-        assert!(!bus.apu.pulse1.length.enabled, "pulse1 disabled");
+        assert!(!bus.apu.pulse1.enabled, "pulse1 disabled");
 
         // $4017 write is the frame counter; bit 6 inhibits the frame IRQ.
         bus.cpu_bus_write(0x4017, 0x40);
@@ -571,98 +534,58 @@ mod test {
         );
     }
 
-    /// $4000-$4003 is pulse 1 and $4004-$4007 is pulse 2. The two blocks must stay independent.
+    /// Each channel's length load and halt flag reach its own counter only.
     #[test]
-    fn write_apu_pulse() {
+    fn write_apu_lengths() {
         let mut bus = Bus::default();
+        bus.cpu_bus_write(0x4015, 0x0F);
 
-        bus.cpu_bus_write(0x4000, 0x3F); // duty 0, constant volume 15
-        bus.cpu_bus_write(0x4002, 0x34); // timer low
-        bus.cpu_bus_write(0x4003, 0x01); // timer high
-        assert_eq!(bus.apu.pulse1.real_period, 0x134, "pulse1 period");
-        assert_eq!(bus.apu.pulse2.real_period, 0, "pulse2 untouched");
+        // Halt flags: D5 for pulse/noise, D7 for the triangle.
+        bus.cpu_bus_write(0x4000, 0x20);
+        bus.cpu_bus_write(0x4008, 0x80);
+        bus.cpu_bus_write(0x400C, 0x20);
+        assert!(bus.apu.pulse1.new_halt, "$4000 D5");
+        assert!(!bus.apu.pulse2.new_halt, "pulse2 untouched");
+        assert!(bus.apu.triangle.new_halt, "$4008 D7");
+        assert!(bus.apu.noise.new_halt, "$400C D5");
 
-        bus.cpu_bus_write(0x4006, 0x78);
-        bus.cpu_bus_write(0x4007, 0x02);
-        assert_eq!(bus.apu.pulse2.real_period, 0x278, "pulse2 period");
-        assert_eq!(bus.apu.pulse1.real_period, 0x134, "pulse1 still untouched");
+        // Length loads latch a reload value; the next APU clock applies it.
+        bus.cpu_bus_write(0x4003, 0x08);
+        assert_eq!(bus.apu.pulse1.reload, 254, "$4003 length");
+        assert_eq!(bus.apu.pulse2.reload, 0, "pulse2 untouched");
+        bus.cpu_bus_write(0x4007, 0x10);
+        bus.cpu_bus_write(0x400B, 0x18);
+        bus.cpu_bus_write(0x400F, 0x20);
+        assert_eq!(bus.apu.noise.reload, 40, "$400F length");
+        bus.cpu_clock();
+        assert_eq!(bus.apu.peek_status() & 0x0F, 0x0F, "all four counting");
 
-        // $4001/$4005 are the sweep units.
-        bus.cpu_bus_write(0x4001, 0x8F);
-        assert!(bus.apu.pulse1.sweep.enabled, "$4001 pulse1 sweep");
-        assert!(!bus.apu.pulse2.sweep.enabled, "pulse2 sweep untouched");
-        bus.cpu_bus_write(0x4005, 0x8F);
-        assert!(bus.apu.pulse2.sweep.enabled, "$4005 pulse2 sweep");
-    }
-
-    /// $4008/$400A/$400B is the triangle. $4009 is unmapped and must do nothing.
-    #[test]
-    fn write_apu_triangle() {
-        let mut bus = Bus::default();
-
-        bus.cpu_bus_write(0x400A, 0x56);
-        bus.cpu_bus_write(0x400B, 0x03);
-        assert_eq!(bus.apu.triangle.timer.period, 0x356, "triangle period");
-
-        bus.cpu_bus_write(0x4008, 0x7F);
-        assert_eq!(
-            bus.apu.triangle.linear.counter_reload, 0x7F,
-            "$4008 linear counter"
-        );
-
-        // $4009 is not a register; it must not disturb the channel.
-        let before = bus.apu.triangle.timer.period;
-        bus.cpu_bus_write(0x4009, 0xFF);
-        assert_eq!(bus.apu.triangle.timer.period, before, "$4009 is unmapped");
-    }
-
-    /// $400C/$400E/$400F is the noise channel. $400D is unmapped.
-    #[test]
-    fn write_apu_noise() {
-        let mut bus = Bus::default();
-
-        bus.cpu_bus_write(0x400E, 0x80 | 0x04);
-        assert_eq!(bus.apu.noise.shift_mode, ShiftMode::One, "$400E shift mode");
-
-        bus.cpu_bus_write(0x400C, 0x3F);
-        assert!(bus.apu.noise.envelope.constant_volume, "$400C envelope");
-
-        // The length counter latches a reload value here; the frame counter loads it later.
-        bus.cpu_bus_write(0x4015, 0x08); // enable, or the write is ignored entirely
-        bus.cpu_bus_write(0x400F, 0x08);
-        assert_ne!(bus.apu.noise.length.reload, 0, "$400F length reload");
+        // A disabled channel ignores the write.
         bus.cpu_bus_write(0x4015, 0x00);
         bus.cpu_bus_write(0x400F, 0x10);
-        assert_eq!(
-            bus.apu.noise.length.reload, 254,
-            "a disabled channel ignores the write"
-        );
+        assert_eq!(bus.apu.noise.reload, 0, "a disabled channel ignores the write");
 
-        let before = bus.apu.noise.timer.period;
+        // $4009 and $400D are not registers.
+        bus.cpu_bus_write(0x4015, 0x0F);
+        bus.cpu_bus_write(0x4009, 0xFF);
         bus.cpu_bus_write(0x400D, 0xFF);
-        assert_eq!(bus.apu.noise.timer.period, before, "$400D is unmapped");
+        assert_eq!(bus.apu.triangle.reload, 0, "$4009 is unmapped");
+        assert_eq!(bus.apu.noise.reload, 0, "$400D is unmapped");
     }
 
-    /// $4010-$4013 is the DMC. Sample address and length are stored scaled, not raw.
+    /// $4013 sets the DMC sample length, stored scaled; $4015 bit 4 reports it once enabled.
     #[test]
     fn write_dmc() {
         let mut bus = Bus::default();
 
-        bus.cpu_bus_write(0x4010, 0x0F); // rate index 15, IRQ and loop clear
-        assert!(!bus.apu.dmc.irq_enabled, "$4010 IRQ disabled");
-        assert!(!bus.apu.dmc.loops, "$4010 loop clear");
-        bus.cpu_bus_write(0x4010, 0xC0);
-        assert!(bus.apu.dmc.irq_enabled, "$4010 bit 7 enables the IRQ");
-        assert!(bus.apu.dmc.loops, "$4010 bit 6 sets loop");
-
-        bus.cpu_bus_write(0x4011, 0xFF);
-        assert_eq!(bus.apu.dmc.output_level, 0x7F, "$4011 keeps 7 bits");
-
-        bus.cpu_bus_write(0x4012, 0x02);
-        assert_eq!(bus.apu.dmc.sample_addr, 0xC080, "$4012 is $C000 + n*64");
-
         bus.cpu_bus_write(0x4013, 0x02);
         assert_eq!(bus.apu.dmc.sample_length, 0x21, "$4013 is n*16 + 1");
+        assert_eq!(bus.apu.peek_status() & 0x10, 0, "not playing");
+        bus.cpu_bus_write(0x4015, 0x10);
+        assert_eq!(bus.apu.dmc.bytes_remaining, 0x21, "enabled");
+        assert_eq!(bus.apu.peek_status() & 0x10, 0x10, "$4015 bit 4");
+        bus.cpu_bus_write(0x4015, 0x00);
+        assert_eq!(bus.apu.peek_status() & 0x10, 0, "disabled");
     }
 
     /// $4016 writes strobe both controllers; $4016 and $4017 read them back one bit at a time.

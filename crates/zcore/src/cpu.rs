@@ -359,35 +359,8 @@ impl Bus {
     }
 
     /// Move the settings the *player* owns out of the running console and into a state about to
-    /// replace it.
-    ///
-    /// A save state is the emulated machine, but `Bus` also holds a handful of knobs that belong
-    /// to the session rather than to the NES: the audio device's sample rate, muted channels, the
-    /// headless flags. Restoring those along with the machine rewinds the session's settings too.
-    fn keep_session_settings(&mut self, session: &mut Self) {
-        // The output sample rate.
-        self.apu.sample_rate = session.apu.sample_rate;
-        // Swapped rather than rebuilt for the same reason as the filter chain below: it holds
-        // steps still being played out, and it is already tuned to the session's rate.
-        std::mem::swap(&mut self.apu.synth, &mut session.apu.synth);
-        // Swapped rather than rebuilt: the chain's contents are signal history, so carrying the
-        // running one over keeps audio continuous across a restore instead of restarting the
-        // filters mid-waveform. It is configured for the session's rate, which is what the three
-        // fields above just restored. (If the region changed since the state was recorded, the
-        // chain is one region behind until `Apu::set_region` next rebuilds it - the same tradeoff
-        // the region note above describes.)
-        std::mem::swap(&mut self.apu.filter_chain, &mut session.apu.filter_chain);
-
-        // Channels the player muted, which live beside the hardware's own enable bits.
-        self.apu.pulse1.set_silent(session.apu.pulse1.silent());
-        self.apu.pulse2.set_silent(session.apu.pulse2.silent());
-        self.apu.triangle.set_silent(session.apu.triangle.silent());
-        self.apu.noise.set_silent(session.apu.noise.silent());
-        self.apu.dmc.set_silent(session.apu.dmc.silent());
-        self.apu.mapper_enabled = session.apu.mapper_enabled;
-
-        // Headless flags.
-        self.apu.skip_mixing = session.apu.skip_mixing;
+    /// replace it: the headless rendering flag.
+    const fn keep_session_settings(&mut self, session: &Self) {
         self.ppu.skip_rendering = session.ppu.skip_rendering;
     }
 
@@ -456,13 +429,6 @@ impl Bus {
     fn handle_interrupts(&mut self) {
         let nmi_pending = self.ppu.nmi_pending;
         let irq_pending_apu = self.apu.irq_pending();
-        let dma_pending_apu = self.apu.dma_pending();
-
-        if dma_pending_apu {
-            // FQ-12: the DMC fetch is timed by `FceuDmc`; the hardware fetcher's requests are
-            // dropped.
-            self.apu.clear_dma_pending();
-        }
 
         let status = self.cpu.status;
         let flags = &mut self.cpu.irq_flags;

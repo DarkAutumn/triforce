@@ -2,27 +2,30 @@
 //!
 //! See: <https://www.nesdev.org/wiki/APU_Length_Counter>
 
-// The APU's internal wiring: channel state, dividers and filter taps, whose meaning is the
-// hardware's rather than this crate's. Public for embedders and debuggers, not a stable surface -
-// see the module docs on `apu`.
+// The APU's internal wiring, whose meaning is the hardware's rather than this crate's. Public for
+// tools that digest machine state, not a stable surface - see the module docs on `apu`.
 #![allow(missing_docs)]
 
-use crate::{apu::Channel, common::ResetKind};
 use serde::{Deserialize, Serialize};
 
-/// APU Length Counter provides duration control for APU waveform channels.
+/// APU Length Counter: how long a channel keeps playing, and what `$4015` reports of it.
 ///
 /// See: <https://www.nesdev.org/wiki/APU_Length_Counter>
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[must_use]
 pub struct LengthCounter {
     pub enabled: bool,
-    pub channel: Channel,
     pub halt: bool,
     pub new_halt: bool,
     pub counter: u8, // Entry into LENGTH_TABLE
     pub previous_counter: u8,
     pub reload: u8,
+}
+
+impl Default for LengthCounter {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LengthCounter {
@@ -31,10 +34,9 @@ impl LengthCounter {
         22, 192, 24, 72, 26, 16, 28, 32, 30,
     ];
 
-    pub const fn new(channel: Channel) -> Self {
+    pub const fn new() -> Self {
         Self {
             enabled: false,
-            channel,
             halt: false,
             new_halt: false,
             counter: 0,
@@ -43,6 +45,7 @@ impl LengthCounter {
         }
     }
 
+    /// Length load (`$4003`/`$4007`/`$400B`/`$400F` bits 3-7, already shifted down).
     #[inline]
     pub const fn write(&mut self, val: u8) {
         if self.enabled {
@@ -70,34 +73,28 @@ impl LengthCounter {
         self.halt = self.new_halt;
     }
 
+    /// The halt flag (`$4000`/`$4004`/`$400C` bit 5, `$4008` bit 7), applied at the next reload.
     #[inline]
     pub const fn write_ctrl(&mut self, halt: bool) {
         self.new_halt = halt;
     }
+
     pub const fn clock(&mut self) {
         if self.counter > 0 && !self.halt {
             self.counter -= 1;
         }
     }
-    pub fn reset(&mut self, kind: ResetKind) {
+
+    /// Reset: always disables; `clear` also zeroes the counter and its pending writes (every
+    /// channel on power-on, all but the triangle on a soft reset).
+    pub const fn reset(&mut self, clear: bool) {
         self.enabled = false;
-        match kind {
-            ResetKind::Soft => {
-                if self.channel != Channel::Triangle {
-                    self.halt = false;
-                    self.new_halt = false;
-                    self.counter = 0;
-                    self.reload = 0;
-                    self.previous_counter = 0;
-                }
-            }
-            ResetKind::Hard => {
-                self.halt = false;
-                self.new_halt = false;
-                self.counter = 0;
-                self.reload = 0;
-                self.previous_counter = 0;
-            }
+        if clear {
+            self.halt = false;
+            self.new_halt = false;
+            self.counter = 0;
+            self.reload = 0;
+            self.previous_counter = 0;
         }
     }
 }

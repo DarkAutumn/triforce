@@ -16,7 +16,7 @@ pub enum ResetKind {
 pub(crate) mod tests {
     use crate::{
         common::ResetKind,
-        control_deck::{Config, ControlDeck, HeadlessMode},
+        control_deck::{Config, ControlDeck},
         input::{JoypadBtn, Player},
         ppu::size,
         video::VideoFilter,
@@ -66,12 +66,6 @@ pub(crate) mod tests {
         SetVideoFilter(VideoFilter),
     }
 
-    // TODO: Instead of a bunch of optional fields, it should be an enum:
-    // enum FrameAction {
-    //   DeckAction(DeckAction),
-    //   FrameHash(u64),
-    //   AudioHash(u64),
-    // }
     #[derive(Default, Debug, Clone, Serialize, Deserialize)]
     #[serde(default)]
     #[must_use]
@@ -92,35 +86,13 @@ pub(crate) mod tests {
         /// Expected number of [report tones](ToneCounter) played by `number`. `1` means passed.
         #[serde(skip_serializing_if = "Option::is_none")]
         tones: Option<u32>,
-        /// Expected [coarse audio profile](audio_profile) of everything played up to `number`.
-        ///
-        /// Set this to `[]` in `tests.json` and run with `UPDATE_SNAPSHOT=1` to record one.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        audio_profile: Option<Vec<(u32, u32)>>,
-        #[serde(skip_serializing_if = "is_false")]
-        audio: bool,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[must_use]
     struct RomTest {
         name: String,
-        #[serde(default, skip_serializing_if = "is_false")]
-        audio: bool,
         frames: Vec<TestFrame>,
-    }
-
-    /// Keeps `audio: false` - by far the common case - out of the written-back `tests.json`.
-    ///
-    /// This has to be `skip_serializing_if` and not `skip_serializing`: the latter drops the field
-    /// even when it is `true`, so `UPDATE_SNAPSHOT=1` would silently rewrite every audio test into
-    /// a frame-buffer test.
-    #[expect(
-        clippy::trivially_copy_pass_by_ref,
-        reason = "serde attribute signature"
-    )]
-    fn is_false(audio: &bool) -> bool {
-        !*audio
     }
 
     /// The `$DE $B0 $61` marker a blargg test writes to `$6001..=$6003` to say the region is valid.
@@ -157,78 +129,6 @@ pub(crate) mod tests {
             .collect()
     }
 
-    /// Time buckets an [`audio_profile`] summarises a run into.
-    const AUDIO_BUCKETS: usize = 16;
-    /// Tolerated difference in a bucket's RMS, in units of 1/10000 of full scale.
-    const RMS_TOLERANCE: u32 = 5;
-    /// Tolerated difference in a bucket's mean-crossing rate, in Hz.
-    const RATE_TOLERANCE: u32 = 5;
-
-    /// Summarises a run's audio as one `(rms, crossing_rate)` pair per [`AUDIO_BUCKETS`] time
-    /// bucket.
-    ///
-    /// Hashing the samples themselves would pin every one of them, so any change to the filter,
-    /// the mixer or the sample rate would churn every audio test at once and none of the diffs
-    /// would mean anything. These ROMs test envelopes and frequencies, so this measures those
-    /// coarsely instead:
-    ///
-    /// - **RMS about the bucket's mean**, in units of 1/10000 of full scale - the envelope,
-    ///   deliberately measured about the mean so a DC offset does not move it.
-    /// - **Mean-crossing rate**, in Hz - likewise DC-offset invariant, and expressed per *second*
-    ///   rather than per sample so changing the sample rate does not move it either.
-    ///
-    /// The crossing rate is a **timbre fingerprint, not a fundamental-frequency estimate**: on a
-    /// filtered, harmonically rich waveform it tracks the high-frequency content rather than the
-    /// note being played, and it can move in the opposite direction to the fundamental. It is here
-    /// because it changes when the waveform changes, not because it measures pitch.
-    ///
-    /// So this is a change detector, not a correctness oracle: it catches a regression that alters
-    /// the sound and points at the bucket where it happened, but it does not certify that the
-    /// sound is right. Calibrated against a deliberately perturbed pulse timer period, which at
-    /// this resolution is caught by all four pulse-driven tests (`apu_env`, `square_pitch`,
-    /// `sweep_cutoff`, `sweep_sub`) and by none of the four that drive other channels - no misses
-    /// and no false positives. Eight buckets and coarser quantisation missed two of the four.
-    ///
-    /// Both numbers are compared with a tolerance ([`RMS_TOLERANCE`], [`RATE_TOLERANCE`]) so that
-    /// ordinary floating-point drift does not require a re-snapshot.
-    fn audio_profile(samples: &[f32], sample_rate: f32) -> Vec<(u32, u32)> {
-        if samples.is_empty() {
-            return Vec::new();
-        }
-        let bucket_len = samples.len().div_ceil(AUDIO_BUCKETS);
-        samples
-            .chunks(bucket_len)
-            .map(|bucket| {
-                let len = bucket.len() as f32;
-                let mean = bucket.iter().sum::<f32>() / len;
-                let rms = (bucket.iter().map(|s| (s - mean).powi(2)).sum::<f32>() / len).sqrt();
-                // Two crossings per cycle, so halve them to get a frequency.
-                let crossings = bucket
-                    .windows(2)
-                    .filter(|pair| (pair[0] < mean) != (pair[1] < mean))
-                    .count() as f32;
-                let hz = crossings * sample_rate / (2.0 * len);
-                ((rms * 10000.0).round() as u32, hz.round() as u32)
-            })
-            .collect()
-    }
-
-    /// Whether two profiles agree within tolerance. Differing lengths never match.
-    fn profiles_match(expected: &[(u32, u32)], actual: &[(u32, u32)]) -> bool {
-        expected.len() == actual.len()
-            && expected.iter().zip(actual).all(|(want, got)| {
-                if want.0.abs_diff(got.0) > RMS_TOLERANCE {
-                    return false;
-                }
-                // A bucket whose RMS rounds to zero is silence, and a mean-crossing rate measured
-                // on silence counts the last bits of a decaying filter tail rather than a
-                // waveform: one sample either side of the mean is the difference between 0 Hz and
-                // 8 Hz. Comparing it churns the snapshots on changes nobody can hear, so a bucket
-                // with no signal in it is judged by its RMS alone.
-                want.0 == 0 && got.0 == 0 || want.1.abs_diff(got.1) <= RATE_TOLERANCE
-            })
-    }
-
     /// Counts the result tones a blargg test plays on pulse 1.
     ///
     /// Tests with no PPU output - the `dmc_tests` set renders nothing and ends in a `jmp *` -
@@ -243,10 +143,10 @@ pub(crate) mod tests {
     }
 
     impl ToneCounter {
-        /// Samples pulse 1 once per frame. A report tone runs its length counter down from 253,
+        /// Samples pulse 1's length counter once per frame. A report tone runs it down from 253,
         /// i.e. roughly two seconds, so per-frame resolution is far finer than it needs to be.
         fn observe(&mut self, deck: &ControlDeck) {
-            let playing = deck.bus().apu.pulse1.length.counter > 0;
+            let playing = deck.bus().apu.pulse1.counter > 0;
             self.count += u32::from(playing && !self.playing);
             self.playing = playing;
         }
@@ -383,13 +283,7 @@ pub(crate) mod tests {
         match test_frame.hash {
             Some(expected) => {
                 let mut hasher = DefaultHasher::new();
-                if test_frame.audio {
-                    deck.audio_samples()
-                        .iter()
-                        .for_each(|s| s.to_le_bytes().hash(&mut hasher));
-                } else {
-                    deck.frame_buffer().hash(&mut hasher);
-                }
+                deck.frame_buffer().hash(&mut hasher);
                 let actual = hasher.finish();
                 debug!(
                     "frame: {}, matched: {}",
@@ -487,24 +381,8 @@ pub(crate) mod tests {
             .with_extension("nes");
         assert!(rom.exists(), "No test rom found for {rom:?}");
 
-        // Both audio expectations - the sample hash and the coarse profile - describe everything
-        // played from the start of the run, so both need mixing on and samples accumulating rather
-        // than dropped each frame.
-        let wants_audio = test.audio
-            || test
-                .frames
-                .iter()
-                .any(|frame| frame.audio_profile.is_some());
         let mut deck = load_control_deck(&rom);
-        deck.set_headless_mode(if wants_audio {
-            HeadlessMode::empty()
-        } else {
-            HeadlessMode::NO_AUDIO
-        });
-        deck.set_clear_audio_on_clock(!wants_audio);
-
         let mut results = Vec::new();
-        let mut profiles = Vec::new();
         let mut tones = ToneCounter::default();
         assert!(!test.frames.is_empty(), "No test frames found for {rom:?}");
         for test_frame in test.frames.iter() {
@@ -528,40 +406,12 @@ pub(crate) mod tests {
 
             on_frame_action(test_frame, &mut deck);
             on_report(&test.name, test_frame, &deck, &tones);
-            if let Some(expected) = &test_frame.audio_profile {
-                let sample_rate = deck.bus().apu.sample_rate;
-                let actual = audio_profile(deck.audio_samples(), sample_rate);
-                profiles.push((test_frame.number, expected.clone(), actual));
-            }
             if let Ok(Some(result)) = on_snapshot(&test.name, test_frame, &mut deck, results.len())
             {
                 results.push(result);
             }
         }
         let mut update_required = false;
-        for (frame_number, expected, actual) in profiles {
-            let updating = env::var("UPDATE_SNAPSHOT").is_ok();
-            if profiles_match(&expected, &actual) {
-                continue;
-            }
-            if updating {
-                update_required = true;
-                if let Some(frame) = test
-                    .frames
-                    .iter_mut()
-                    .find(|frame| frame.number == frame_number)
-                {
-                    frame.audio_profile = Some(actual);
-                }
-                continue;
-            }
-            panic!(
-                "mismatched audio profile for {rom:?} at frame {frame_number}.\n  \
-                 expected: {expected:?}\n  actual:   {actual:?}\n  \
-                 Each pair is (RMS in 1/10000 full scale, mean-crossing rate in Hz) for one \
-                 sixteenth of the run."
-            );
-        }
         for (mut expected, actual, frame_number, screenshot) in results {
             if env::var("UPDATE_SNAPSHOT").is_ok() && expected != actual {
                 expected = actual;
@@ -1072,32 +922,17 @@ pub(crate) mod tests {
         test_8,
         test_9,
         test_10,
-        apu_env,
         // The `dmc_tests` set (buffer_retained/latency/status/status_irq) renders nothing, leaves
         // nothing at $6000 and nothing in RAM - it ends in a `jmp *` with the result encoded in
         // the tones it played, so these assert a tone count rather than a hash.
         dmc_buffer_retained,
         dmc_latency,
         #[ignore = "FQ-11/FQ-12: FCEUmm DMC DMA"]
-        dmc_pitch,
-        #[ignore = "FQ-11/FQ-12: FCEUmm DMC DMA"]
         dmc_status,
         dmc_status_irq,
-        #[ignore = "FQ-01/FQ-06/FQ-07: boot alignment shifts the audio profile; not bisected"]
-        lin_ctr,
-        #[ignore = "FQ-01/FQ-06/FQ-07: boot alignment shifts the audio profile; not bisected"]
-        noise_pitch,
-        // Two APU behaviours are covered by unit tests rather than by a ROM here, because the
-        // ROMs that demonstrate them have no pass/fail output - one is a listening demo of the
-        // mixer's channel balance needing reference recordings we do not ship, the other plays a
-        // tone you judge by ear - so no snapshot of either could mean anything. See
-        // `apu::pulse::tests::writing_timer_hi_resets_the_duty_phase_but_not_the_divider` and
-        // `apu::tests::the_mixer_is_non_linear`.
-        square_pitch,
-        #[ignore = "FQ-01/FQ-06/FQ-07: boot alignment shifts the audio profile; not bisected"]
-        sweep_cutoff,
-        sweep_sub,
-        triangle_pitch,
+        // The tone/pitch/envelope ROMs (`apu_env`, `dmc_pitch`, `lin_ctr`, `noise_pitch`,
+        // `square_pitch`, `sweep_cutoff`, `sweep_sub`, `triangle_pitch`) went with audio synthesis
+        // in ladder stage Z4: they could only be judged by the sound.
         // Mixer
         // The test status is written to $6000. $80 means the test is running, $81
         // means the test needs the reset button pressed, but delayed by at least

@@ -2,12 +2,7 @@
 //! the emulator behind it, being cut down by the subtraction ladder (`UPSTREAM.md`); this module's
 //! interface stays put while that happens.
 
-use crate::{
-    control_deck::{Config, ControlDeck, HeadlessMode},
-    input::Player,
-    memory::Src,
-    video::VideoFilter,
-};
+use crate::{control_deck::ControlDeck, input::Player, memory::Src};
 use std::sync::Arc;
 
 /// Frame width in pixels (the whole picture, no overscan crop).
@@ -93,10 +88,7 @@ pub struct ZCore {
 impl ZCore {
     /// Power on: CPU RAM $FF, battery PRG-RAM zeroed, no frame run yet.
     pub fn power_on(rom: Arc<Rom>) -> Self {
-        let mut cfg = Config::default();
-        cfg.filter = VideoFilter::Pixellate;
-        cfg.headless_mode = HeadlessMode::NO_AUDIO;
-        let mut deck = ControlDeck::with_config(cfg);
+        let mut deck = ControlDeck::new();
         deck.load_rom("zelda.nes", &mut &rom.bytes[..])
             .expect("a validated Zelda ROM loads");
         let len = deck.sram().len();

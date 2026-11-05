@@ -191,11 +191,12 @@ every test ROM the quirks break is `#[ignore]`d with its FQ ID in `src/common.rs
   extra cycles of the previous instruction, DMA included) down `DMCacc`, emptying the buffer every eight
   bits. `$4010/$4012/$4013/$4015` per `Write_DMCRegs`/`StatusWrite` (`src/sound.c:303-370`).
 - **Affects:** per-frame timing while samples play (Zelda plays DMC sound effects).
-- **Implemented:** `FceuDmc` in `apu/dmc.rs` (state, `write`, `hook`), `Bus::cpu_bus_write` (register
-  writes), `Bus::clock_instr` (hook before the opcode fetch), `Bus::handle_interrupts` (hardware DMA
-  requests dropped in compat).
-- **Removal:** delete `FceuDmc` and the compat paths; the hardware fetcher drives DMA again;
-  `dmc_dma_during_read4` and `dmc_basics` pass again.
+- **Implemented:** `FceuDmc` in `apu/dmc.rs` (state, `write`, `hook`), `Apu::write` (register writes),
+  `Bus::clock_instr` (hook before the opcode fetch). The hardware sample reader was deleted with audio
+  at Z4 (it fed only sound and the DMA requests FQ-12 dropped).
+- **Removal:** delete `FceuDmc`; restore the hardware reader (`Dmc` timer, buffer, `load_buffer`, DMA
+  requests and IRQ, from Z3's `apu/dmc.rs`) and the CPU's DMC DMA; `dmc_dma_during_read4` and
+  `dmc_basics` pass again.
 
 ## Not quirks
 

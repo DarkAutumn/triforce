@@ -28,7 +28,7 @@ pub mod prelude {
     //! The prelude re-exports all the common structs/enums used for basic NES emulation.
 
     pub use crate::{
-        apu::{Apu, Channel},
+        apu::Apu,
         cart::Cart,
         common::ResetKind,
         control_deck::{Config, ControlDeck, HeadlessMode},

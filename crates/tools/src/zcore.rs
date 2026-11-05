@@ -4,10 +4,9 @@ use crate::backend::{Backend, TraceRow};
 use crate::formats::Domain;
 use anyhow::{Context, Result};
 use std::cell::RefCell;
-use zcore::control_deck::{Config, ControlDeck, HeadlessMode};
+use zcore::control_deck::ControlDeck;
 use zcore::input::Player;
 use zcore::memory::Src;
-use zcore::video::VideoFilter;
 
 pub struct Zcore {
     deck: ControlDeck,
@@ -15,10 +14,7 @@ pub struct Zcore {
 
 impl Zcore {
     pub fn open(rom: &[u8]) -> Result<Zcore> {
-        let mut cfg = Config::default();
-        cfg.filter = VideoFilter::Pixellate;
-        cfg.headless_mode = HeadlessMode::NO_AUDIO;
-        let mut deck = ControlDeck::with_config(cfg);
+        let mut deck = ControlDeck::new();
         deck.load_rom("zelda.nes", &mut &rom[..]).context("zcore load_rom")?;
         // Power-on spec (TFMOVIE v1): an empty, zero-filled battery, as the oracle does.
         let len = deck.sram().len();

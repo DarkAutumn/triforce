@@ -70,7 +70,9 @@ macro_rules! ladder_domains {
                 out.extend_from_slice(&[
                     u8::from(a.frame_counter.irq_pending),
                     u8::from(a.frame_counter.inhibit_irq),
-                    u8::from(a.dmc.irq_pending),
+                    // DMC IRQ pending: zcore never raises it (Z4: only the hardware DMC reader,
+                    // whose fetches FQ-12 dropped, could), so the byte is always 0.
+                    0,
                 ]);
                 true
             }

@@ -1,7 +1,6 @@
 [
   {
     "name": "branch_backward",
-    "audio": false,
     "frames": [
       {
         "number": 20,
@@ -11,7 +10,6 @@
   },
   {
     "name": "nestest",
-    "audio": false,
     "frames": [
       {
         "number": 10,
@@ -45,7 +43,6 @@
   },
   {
     "name": "branch_basics",
-    "audio": false,
     "frames": [
       {
         "number": 20,
@@ -55,7 +52,6 @@
   },
   {
     "name": "branch_forward",
-    "audio": false,
     "frames": [
       {
         "number": 20,
@@ -65,7 +61,6 @@
   },
   {
     "name": "dummy_writes_oam",
-    "audio": false,
     "frames": [
       {
         "number": 330,
@@ -75,7 +70,6 @@
   },
   {
     "name": "dummy_writes_ppumem",
-    "audio": false,
     "frames": [
       {
         "number": 235,
@@ -85,7 +79,6 @@
   },
   {
     "name": "exec_space_apu",
-    "audio": false,
     "frames": [
       {
         "number": 309,
@@ -95,7 +88,6 @@
   },
   {
     "name": "exec_space_ppuio",
-    "audio": false,
     "frames": [
       {
         "number": 50,
@@ -105,7 +97,6 @@
   },
   {
     "name": "flag_concurrency",
-    "audio": false,
     "frames": [
       {
         "number": 855,
@@ -115,7 +106,6 @@
   },
   {
     "name": "instr_abs",
-    "audio": false,
     "frames": [
       {
         "number": 120,
@@ -125,7 +115,6 @@
   },
   {
     "name": "instr_abs_xy",
-    "audio": false,
     "frames": [
       {
         "number": 367,
@@ -135,7 +124,6 @@
   },
   {
     "name": "instr_basics",
-    "audio": false,
     "frames": [
       {
         "number": 20,
@@ -145,7 +133,6 @@
   },
   {
     "name": "instr_branches",
-    "audio": false,
     "frames": [
       {
         "number": 44,
@@ -155,7 +142,6 @@
   },
   {
     "name": "instr_brk",
-    "audio": false,
     "frames": [
       {
         "number": 26,
@@ -165,7 +151,6 @@
   },
   {
     "name": "instr_imm",
-    "audio": false,
     "frames": [
       {
         "number": 90,
@@ -175,7 +160,6 @@
   },
   {
     "name": "instr_imp",
-    "audio": false,
     "frames": [
       {
         "number": 110,
@@ -185,7 +169,6 @@
   },
   {
     "name": "instr_ind_x",
-    "audio": false,
     "frames": [
       {
         "number": 148,
@@ -195,7 +178,6 @@
   },
   {
     "name": "instr_ind_y",
-    "audio": false,
     "frames": [
       {
         "number": 138,
@@ -205,7 +187,6 @@
   },
   {
     "name": "instr_jmp_jsr",
-    "audio": false,
     "frames": [
       {
         "number": 20,
@@ -215,7 +196,6 @@
   },
   {
     "name": "instr_misc",
-    "audio": false,
     "frames": [
       {
         "number": 240,
@@ -225,7 +205,6 @@
   },
   {
     "name": "instr_rti",
-    "audio": false,
     "frames": [
       {
         "number": 20,
@@ -235,7 +214,6 @@
   },
   {
     "name": "instr_rts",
-    "audio": false,
     "frames": [
       {
         "number": 20,
@@ -245,7 +223,6 @@
   },
   {
     "name": "instr_special",
-    "audio": false,
     "frames": [
       {
         "number": 20,
@@ -255,7 +232,6 @@
   },
   {
     "name": "instr_stack",
-    "audio": false,
     "frames": [
       {
         "number": 168,
@@ -265,7 +241,6 @@
   },
   {
     "name": "instr_timing",
-    "audio": false,
     "frames": [
       {
         "number": 1305,
@@ -275,7 +250,6 @@
   },
   {
     "name": "instr_zp",
-    "audio": false,
     "frames": [
       {
         "number": 119,
@@ -285,7 +259,6 @@
   },
   {
     "name": "instr_zp_xy",
-    "audio": false,
     "frames": [
       {
         "number": 261,
@@ -295,7 +268,6 @@
   },
   {
     "name": "int_branch_delays_irq",
-    "audio": false,
     "frames": [
       {
         "number": 384,
@@ -305,7 +277,6 @@
   },
   {
     "name": "int_cli_latency",
-    "audio": false,
     "frames": [
       {
         "number": 20,
@@ -315,7 +286,6 @@
   },
   {
     "name": "int_irq_and_dma",
-    "audio": false,
     "frames": [
       {
         "number": 75,
@@ -325,7 +295,6 @@
   },
   {
     "name": "int_nmi_and_brk",
-    "audio": false,
     "frames": [
       {
         "number": 114,
@@ -335,7 +304,6 @@
   },
   {
     "name": "int_nmi_and_irq",
-    "audio": false,
     "frames": [
       {
         "number": 134,
@@ -345,7 +313,6 @@
   },
   {
     "name": "overclock",
-    "audio": false,
     "frames": [
       {
         "number": 15,
@@ -355,7 +322,6 @@
   },
   {
     "name": "sprdma_and_dmc_dma",
-    "audio": false,
     "frames": [
       {
         "number": 145,
@@ -365,7 +331,6 @@
   },
   {
     "name": "sprdma_and_dmc_dma_512",
-    "audio": false,
     "frames": [
       {
         "number": 145,
@@ -375,7 +340,6 @@
   },
   {
     "name": "timing_test",
-    "audio": false,
     "frames": [
       {
         "number": 615,
@@ -385,7 +349,6 @@
   },
   {
     "name": "ram_after_reset",
-    "audio": false,
     "frames": [
       {
         "number": 142,
@@ -401,7 +364,6 @@
   },
   {
     "name": "regs_after_reset",
-    "audio": false,
     "frames": [
       {
         "number": 140,

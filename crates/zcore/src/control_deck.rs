@@ -1,12 +1,9 @@
 //! [`ControlDeck`], which loads a ROM into a [`Bus`] and drives it one frame at a time.
 //!
 //! [`ControlDeck::clock_frame`] runs one NES frame; [`ControlDeck::clock_instr`] steps a single
-//! instruction. Each refreshes what [`ControlDeck::frame_buffer`] and
-//! [`ControlDeck::audio_samples`] report, and discards what the previous call produced - so audio
-//! cannot silently accumulate. See [`Config::clear_audio_on_clock`] to opt out of that.
+//! instruction. Each refreshes what [`ControlDeck::frame_buffer`] reports.
 
 use crate::{
-    apu::{self, Apu, Channel},
     bus::{self, Bus},
     cart::{self, Cart},
     common::ResetKind,
@@ -46,47 +43,25 @@ pub enum Error {
 }
 
 bitflags! {
-    /// Headless mode flags to disable audio and video processing, reducing CPU usage.
+    /// Headless mode flags to skip video processing, reducing CPU usage.
     #[derive(Default, Debug, Copy, Clone, PartialEq, Serialize, Deserialize, )]
     #[must_use]
     pub struct HeadlessMode: u8 {
-        /// Disable audio mixing.
-        const NO_AUDIO = 0x01;
         /// Disable pixel rendering.
         const NO_VIDEO = 0x02;
     }
 }
 
 /// Control deck configuration settings.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 #[must_use]
 #[non_exhaustive]
 pub struct Config {
     /// Video filter.
     pub filter: VideoFilter,
-    /// Apu channels enabled.
-    pub channels_enabled: [bool; Apu::MAX_CHANNEL_COUNT],
     /// Headless mode.
     pub headless_mode: HeadlessMode,
-    /// Whether clocking discards the previous call's audio samples first.
-    ///
-    /// `true`, the default, means [`ControlDeck::audio_samples`] holds exactly what the most recent
-    /// clock produced. Set it to `false` to accumulate samples across several clock calls, in which
-    /// case you must call [`ControlDeck::clear_audio_samples`] yourself or the buffer grows without
-    /// bound.
-    pub clear_audio_on_clock: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            filter: VideoFilter::default(),
-            channels_enabled: [true; Apu::MAX_CHANNEL_COUNT],
-            headless_mode: HeadlessMode::empty(),
-            clear_audio_on_clock: true,
-        }
-    }
 }
 
 /// Represents a loaded ROM [`Cart`].
@@ -110,8 +85,6 @@ pub struct ControlDeck {
     /// Whether `video.frame` still needs the filter applied, letting `frame_buffer` be cached when
     /// called more than once between clocks.
     video_frame_stale: bool,
-    /// Whether clocking discards the previous call's audio samples first.
-    clear_audio_on_clock: bool,
     /// The currently loaded ROM [`Cart`], if any.
     loaded_rom: Option<LoadedRom>,
     /// The console: CPU, PPU, APU, input and the cart's board.
@@ -134,18 +107,10 @@ impl ControlDeck {
     pub fn with_config(cfg: Config) -> Self {
         let mut bus = Bus::new();
         bus.ppu.skip_rendering = cfg.headless_mode.contains(HeadlessMode::NO_VIDEO);
-        bus.apu.skip_mixing = cfg.headless_mode.contains(HeadlessMode::NO_AUDIO);
-        for (i, enabled) in cfg.channels_enabled.iter().enumerate() {
-            match Channel::try_from(i) {
-                Ok(channel) => bus.apu.set_channel_enabled(channel, *enabled),
-                Err(apu::ParseChannelError) => tracing::error!("invalid APU channel: {i}"),
-            }
-        }
         Self {
             running: false,
             video: Video::with_filter(cfg.filter),
             video_frame_stale: true,
-            clear_audio_on_clock: cfg.clear_audio_on_clock,
             loaded_rom: None,
             bus,
         }
@@ -204,12 +169,10 @@ impl ControlDeck {
         Ok(())
     }
 
-    /// Set the headless mode which can increase performance when the frame and audio outputs are
-    /// not needed.
+    /// Set the headless mode which can increase performance when the frame output is not needed.
     #[inline]
     pub const fn set_headless_mode(&mut self, mode: HeadlessMode) {
         self.bus.ppu.skip_rendering = mode.contains(HeadlessMode::NO_VIDEO);
-        self.bus.apu.skip_mixing = mode.contains(HeadlessMode::NO_AUDIO);
     }
 
     /// Returns the loaded ROM, if any.
@@ -286,32 +249,6 @@ impl ControlDeck {
         self.bus.ppu.frame_number()
     }
 
-    /// Returns the audio samples produced by the most recent clock.
-    #[inline(always)]
-    #[must_use]
-    pub fn audio_samples(&self) -> &[f32] {
-        self.bus.audio_samples()
-    }
-
-    /// Discards the audio samples produced so far.
-    #[inline]
-    pub fn clear_audio_samples(&mut self) {
-        self.bus.clear_audio_samples();
-    }
-
-    /// Sets whether clocking discards the previous call's audio samples first.
-    #[inline]
-    pub const fn set_clear_audio_on_clock(&mut self, enabled: bool) {
-        self.clear_audio_on_clock = enabled;
-    }
-
-    /// CPU clock rate based on currently configured NES region.
-    #[inline]
-    #[must_use]
-    pub const fn clock_rate(&self) -> f32 {
-        self.bus.clock_rate()
-    }
-
     /// Steps the control deck a single CPU instruction.
     ///
     /// # Errors
@@ -340,9 +277,6 @@ impl ControlDeck {
             return Err(Error::RomNotLoaded);
         }
         self.video_frame_stale = true;
-        if self.clear_audio_on_clock {
-            self.bus.clear_audio_samples();
-        }
         Ok(())
     }
 
@@ -426,25 +360,6 @@ impl ControlDeck {
         self.video_frame_stale = true;
     }
 
-    /// Set the [`Apu`] sample rate.
-    #[inline]
-    pub fn set_sample_rate(&mut self, sample_rate: f32) {
-        self.bus.apu.set_sample_rate(sample_rate);
-    }
-
-    /// Returns whether a given [`Apu`] [`Channel`] is enabled.
-    #[inline]
-    #[must_use]
-    pub const fn apu_channel_enabled(&self, channel: Channel) -> bool {
-        self.bus.apu.channel_enabled(channel)
-    }
-
-    /// Enable or disable a given [`Apu`] [`Channel`].
-    #[inline]
-    pub const fn set_apu_channel_enabled(&mut self, channel: Channel, enabled: bool) {
-        self.bus.apu.set_channel_enabled(channel, enabled);
-    }
-
     /// Returns whether the control deck is currently running.
     #[inline]
     #[must_use]
@@ -511,47 +426,6 @@ mod tests {
             .load_bus(postcard::from_bytes(&bytes).expect("deserializes"))
             .expect("loads");
         assert_eq!(run(&mut decoded, 30), expected);
-    }
-
-    /// Clocking drops the previous call's samples by default, so a caller that never reaches for
-    /// `clear_audio_samples` still does not grow the buffer without bound.
-    #[test]
-    fn audio_samples_do_not_accumulate_across_frames() {
-        let mut deck = spritecans();
-        deck.clock_frame().expect("clocks");
-        let one_frame = deck.audio_samples().len();
-        assert!(one_frame > 0, "a frame should produce audio");
-
-        let mut max = 0;
-        for _ in 0..60 {
-            deck.clock_frame().expect("clocks");
-            max = max.max(deck.audio_samples().len());
-        }
-        assert!(
-            max < one_frame * 2,
-            "samples accumulated across frames without a manual clear: \
-             one frame is {one_frame}, peaked at {max}"
-        );
-    }
-
-    /// Opting out lets the samples accumulate, for callers that clock several times before draining.
-    #[test]
-    fn audio_samples_accumulate_when_opted_out() {
-        let mut deck = spritecans();
-        deck.set_clear_audio_on_clock(false);
-        deck.clock_frame().expect("clocks");
-        let one_frame = deck.audio_samples().len();
-
-        for _ in 0..9 {
-            deck.clock_frame().expect("clocks");
-        }
-        assert!(
-            deck.audio_samples().len() > one_frame * 9,
-            "10 frames should have accumulated roughly 10 frames of audio"
-        );
-
-        deck.clear_audio_samples();
-        assert_eq!(deck.audio_samples().len(), 0);
     }
 
     /// `frame_buffer` caches the filtered frame, so every path that moves the console has to say
