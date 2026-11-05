@@ -4,31 +4,18 @@
 use crate::formats::{Domain, Golden, Movie, digest8};
 use anyhow::Result;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TraceRow {
-    pub pc: u16,
-    pub opcode: u8,
-    pub a: u8,
-    pub x: u8,
-    pub y: u8,
-    pub p: u8,
-    pub sp: u8,
-    pub cycle: u64,
-    pub scanline: i16,
-}
+pub use oracle::TraceRow;
 
-impl TraceRow {
-    /// Rows compare on `pc, opcode, a, x, y, sp` and the N/V/D/I/Z/C flags (B and the unused bit are
-    /// not real register state).
-    pub fn same_instruction(&self, o: &TraceRow) -> bool {
-        self.pc == o.pc
-            && self.opcode == o.opcode
-            && self.a == o.a
-            && self.x == o.x
-            && self.y == o.y
-            && self.sp == o.sp
-            && (self.p & 0xCF) == (o.p & 0xCF)
-    }
+/// Rows compare on `pc, opcode, a, x, y, sp` and the N/V/D/I/Z/C flags (B and the unused bit are not
+/// real register state).
+pub fn same_instruction(a: &TraceRow, b: &TraceRow) -> bool {
+    a.pc == b.pc
+        && a.opcode == b.opcode
+        && a.a == b.a
+        && a.x == b.x
+        && a.y == b.y
+        && a.sp == b.sp
+        && (a.p & 0xCF) == (b.p & 0xCF)
 }
 
 pub trait Backend {

@@ -348,7 +348,7 @@ fn trace_diff(rom: &rom::RomInfo, movie_path: &Path, frame: usize, backend: &str
     let to = o.trace_frame(movie.inputs[frame - 1]);
     let tb = b.trace_frame(movie.inputs[frame - 1]);
     println!("oracle {} instructions, {} {} instructions", to.len(), backend, tb.len());
-    let first = to.iter().zip(&tb).position(|(x, y)| !x.same_instruction(y));
+    let first = to.iter().zip(&tb).position(|(x, y)| !backend::same_instruction(x, y));
     let line = |r: &backend::TraceRow| {
         format!(
             "PC:{:04X} OP:{:02X} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} SL:{:4} CYC:{}",
