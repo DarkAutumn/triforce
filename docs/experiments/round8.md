@@ -1,7 +1,8 @@
-# Round 8: Rust port, data regeneration (plan step 17, paused)
+# Round 8: Rust port, data regeneration (plan step 17)
 
-Paused on Nov 5 to merge the `rust` branch into main; resumes from main. Raw logs and per-run outputs were under
-`target/step17/` and `target/l6/` in the worktree and are copied to main's `target/` (gitignored).
+Step 17 of the Rust port (the regenerated data and the promoted team's results on the new stack). Paused on
+Nov 5 to merge the `rust` branch into main and finished in main. Raw logs and per-run outputs are under
+`target/step17/` and `target/l6/` (gitignored).
 
 ## Done
 
@@ -13,8 +14,17 @@ Paused on Nov 5 to merge the `rust` branch into main; resumes from main. Raw log
   overworld 0x5a, which stopped every fairy build there); concurrent builders lock the manifest; new entries
   record the exact `entry_states` command.
 - Trajectories (default budgets, then 12,000/500 for the four unsolved states): boss-aquamentus 3/3,
-  wallmaster 3/3, goriya 12/12, d2-rope 21/21, ow-zora 27/27.
+  wallmaster 3/3, goriya 12/12, d2-rope 21/21, ow-zora 27/27, ow-moblin 18/18. Each curriculum specialist's
+  training pool loads exactly one track per configured start state (checked through `curriculum.json`).
 - `triforce/chain_hp.json` rebuilt from the five chain segments below.
+- `entry_states audit`: **0 problems over all 181 states**. The audit now counts a post-entry save as a problem
+  only in rooms that spawn monsters (as the test always did), so the game-start base state isn't flagged.
+- All 180 manifest entries record the exact `entry_states` command that wrote them (`start.state` is written
+  by `entry_states start`); off-route `path` entries record `from_step`.
+- **Chain 2's fairy route** first entered 0x5c through the bottom-left lane, from which no exploration
+  (up to 12,000 iterations / patience 500, three seeds) reaches the east exit. `path` now backtracks: when a
+  crossing fails it re-crosses the previous room with a new explore seed (up to three times). Re-crossing 0x5b
+  with seed 1002 entered 0x5c higher up and the rest of the route built in under a minute per room.
 
 ## Promoted models on the new stack (20 episodes per start state, sampled, seed 0)
 
@@ -27,10 +37,12 @@ Paused on Nov 5 to merge the `rust` branch into main; resumes from main. Raw log
 | ow-leever-peahat | 100.0% (80) | 96.7% (240) | −3.3 | −0.163 | −0.265 |
 | ow-start | 98.5% (200) | 99.5% (200) | +1.0 | +0.278 | +0.278 |
 | ow-zora | 97.4% (460) | 95.2% (540) | −2.2 | −0.147 | −0.226 |
-| ow-octorok | 99.0% (620) | 97.7% (660) | −1.3 | −0.064 | −0.086 |
+| ow-octorok | 99.0% (620) | 98.0% (660) | −1.0 | −0.064 | −0.073 |
+| ow-moblin | 97.1% (280) | 96.4% (360) | −0.8 | −0.195 | −0.204 |
 | stalfos-keese-gel | no eval.json | 96.4% (720) | | | −0.057 |
 
-All within the 15-point gate. ow-moblin is not evaluated yet (its fairy-route states are incomplete).
+All within the 15-point gate (the largest drop is ow-leever-peahat, −3.3). ow-octorok and ow-moblin were
+evaluated after the chain-2 fairy states were rebuilt.
 
 ## Chains (40 runs, seeds 0–39, promoted team) vs round 7 §19 (r35 requested-key arrivals)
 
@@ -48,17 +60,7 @@ Old stack final `balanced_success_rate` 1.000 (210 steps/s, idle machine); new s
 chain evaluations and state builds shared the 20 cores, so not a speed comparison). Gate (≥ old − 0.05) passes.
 Curves: `target/l6/old-metrics.jsonl`, `target/l6/new-metrics.jsonl`.
 
-## Open (resume here)
+## Status
 
-1. **Chain 2 fairy route stops at 0x5c.** Every chain-2 build enters 0x5c through the bottom-left lane
-   (`0_5cw_2`: Link at (0, 181)), from which no exploration (up to 12,000 iterations / patience 500, three
-   seeds) reaches the east exit; chains 0 and 1 enter higher and cross in under a minute. `0_5cw_2` is a
-   dead-end start state for ow-moblin; `0_5dw_2`, `0_4ds_2` are missing and `0_4ce_2` is still the milestone1
-   one. Fix the entry (e.g. require an entry cell that reaches the next exit) before ow-moblin uses it.
-2. Explore and evaluate ow-moblin.
-3. `entry_states audit` (0 problems required); backfill `command` on the manifest entries written before
-   command recording. `tests/test_entry_states.py::test_configured_start_states_are_clean` fails on
-   `2_6ds_<c>` (4 hearts, expected 3): `path` writes the off-route 0x6d entries with `route_step: -1`, so the
-   test's route-hearts lookup treats them as pre-D1; the old manifest carried `from_step: 35`. Record the
-   origin step for off-route `path` entries.
-4. Restore main's watch-mode features on the native pool (see `todo.md`).
+Plan step 17 is complete. Next: plan step 18 (retire the FCEUmm oracle and quirks), then the test-coverage and
+performance steps (`todo.md` "Next up").

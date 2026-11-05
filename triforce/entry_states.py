@@ -345,39 +345,80 @@ def path_route_fields(route: Optional[str], level: int, room: int, entry: str) -
     return {**fields, 'route_step': -1 if index is None else index, 'off_route': index is None}
 
 
+def _manifest_step(out: str, source: str) -> Optional[int]:
+    """The route step a manifest state sits on (``route_step``, else its off-route ``from_step``), or None."""
+    path = os.path.join(out, MANIFEST)
+    if not os.path.exists(path):
+        return None
+    name = os.path.basename(source)
+    name = name if name.endswith('.state') else f'{name}.state'
+    with open(path, encoding='utf-8') as file:
+        entry = next((e for e in json.load(file) if e['file'] == name), None)
+    if entry is None:
+        return None
+    return entry['route_step'] if entry['route_step'] >= 0 else entry.get('from_step')
+
+
+PATH_BACKTRACKS = 3     # re-crossings of the previous room (new explore seed) when the next crossing fails
+
+
 def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iterations: int, patience: int,
                log: Callable = print, route: Optional[str] = None, states_dir: str = STATES_DIR,
                command: Optional[str] = None) -> List[dict]:
     """Walks ``rooms`` in order from ``source`` (a state in the room before the first of them), writing each room's
     entry state.  Go-Explore only has to enter the next room, whatever the objective wants, so this works for rooms
     off a route (e.g. Dungeon 1's north rooms toward the bow) and for a route the objective doesn't follow.  With
-    ``route``, manifest entries record their step on it (``path_route_fields``); otherwise ``route_step: -1``."""
+    ``route``, manifest entries record their step on it (``path_route_fields``); otherwise ``route_step: -1``.
+    Off-route entries record ``from_step``, the route step they were reached from (for route-progress checks).
+
+    Where Link enters a room decides which exits he can reach (the overworld tree mazes have separate lanes), so
+    when a crossing fails, the previous room is crossed again with a new explore seed (up to ``PATH_BACKTRACKS``
+    times) before giving up."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     game, room_info = Game(seed=chain, states_dir=str(states_dir)), game_rooms()
-    current = MapLocation(*game.load(source, fresh_room=True, seed=0).full_location)
-    manifest = []
-    for target in rooms:
+    sources = [source]
+    currents = [MapLocation(*game.load(source, fresh_room=True, seed=0).full_location)]
+    steps = [_manifest_step(out, source)]
+    manifest: List[dict] = []
+    retries = [0] * len(rooms)
+    i = 0
+    while i < len(rooms):
+        target, current = rooms[i], currents[i]
         tag = specialist_for(target.as_tuple()) or 'none'
         here_tag = specialist_for(current.as_tuple()) or 'none'
         exit_side = current.get_direction_to(target).name
         step = RouteStep(-1, current.level, current.value, False, '?', exit_side, here_tag)
         goal = RouteStep(-1, target.level, target.value, False, target.get_direction_to(current).name, '?', tag)
         started = time.time()
-        pre_entry, stats = cross_room(step, goal, source, chain, iterations, patience, states_dir=states_dir,
+        seed = chain + 1000 * retries[i]
+        pre_entry, stats = cross_room(step, goal, sources[i], seed, iterations, patience, states_dir=states_dir,
                                       rooms=room_info)
         label = f"[path] {current.level}:0x{current.value:02x} -> {goal.filename(chain)}"
         if pre_entry is None:
+            if i > 0 and retries[i - 1] < PATH_BACKTRACKS:
+                retries[i - 1] += 1
+                log(f"{label}: FAILED after {stats['attempts']} attempts ({stats['env_steps']} env steps); "
+                    f"re-crossing into 0x{rooms[i - 1].value:02x} with explore seed {chain + 1000 * retries[i - 1]}")
+                i -= 1
+                del sources[i + 1:], currents[i + 1:], steps[i + 1:], manifest[i:]
+                continue
             log(f"{label}: FAILED after {stats['attempts']} attempts ({stats['env_steps']} env steps)")
             break
         path = os.path.join(out, goal.filename(chain))
         os.makedirs(out, exist_ok=True)
         write_entry_state(game, pre_entry, path, goal.location)
-        manifest.append({'file': os.path.basename(path), 'chain': chain, 'from': source,
+        fields = path_route_fields(route, goal.level, goal.room, goal.entry)
+        if fields['off_route'] and steps[i] is not None:
+            fields['from_step'] = steps[i]
+        manifest.append({'file': os.path.basename(path), 'chain': chain, 'from': sources[i],
                          'specialist': tag, 'level': goal.level, 'room': f"0x{goal.room:02x}", 'in_cave': False,
-                         'entry': goal.entry, 'exit': None, 'alternate': False,
-                         **path_route_fields(route, goal.level, goal.room, goal.entry), **stats})
+                         'entry': goal.entry, 'exit': None, 'alternate': False, **fields, **stats,
+                         'explore_seed': seed})
         log(f"{label}: {stats['steps']} steps, {stats['env_steps']} env steps, {time.time() - started:.0f}s")
-        source, current = path, target
+        sources.append(path)
+        currents.append(target)
+        steps.append(fields['route_step'] if fields['route_step'] >= 0 else fields.get('from_step'))
+        i += 1
     _merge_manifest(out, manifest, command)
     return manifest
 
@@ -432,12 +473,19 @@ def audit(paths: List[str], loads: int = 9, states_dir: str = STATES_DIR) -> Lis
     return [audit_state(game, path, loads, full) for path in paths]
 
 
+def audit_problems(row: dict) -> List[str]:
+    """A row's problems.  Saving after entry only matters in a room that spawns monsters (the game-start base
+    state, for one, has no room entry before it)."""
+    return [p for p, bad in (('MISNAMED', not row['named_room_matches']),
+                             ('POST-ENTRY', not row['pre_entry'] and row['full_count'] > 0),
+                             ('SHORT', not row['full'])) if bad]
+
+
 def format_audit(rows: List[dict]) -> str:
     """One line per state; problems are flagged at the end of the line."""
     lines = []
     for r in rows:
-        problems = [p for p, bad in (('MISNAMED', not r['named_room_matches']), ('POST-ENTRY', not r['pre_entry']),
-                                     ('SHORT', not r['full'])) if bad]
+        problems = audit_problems(r)
         lines.append(f"{r['state']:14} L{r['level']}:{r['room'][2:]}{':cave' if r['in_cave'] else '     '} "
                      f"monsters {r['monsters_min']}-{r['monsters_max']}/{r['full_count']}  layouts {r['layouts']:2}  "
                      f"hearts {r['hearts']:4.1f}  triforce {r['triforce']}  {' '.join(problems)}")
@@ -508,7 +556,7 @@ def main(argv=None):
         paths = sorted({p for name in names for p in load_specialist(name).resolve_start_states(states_dir)})
     rows = audit(paths, args.loads, states_dir=states_dir)
     print(format_audit(rows))
-    bad = [r for r in rows if not (r['named_room_matches'] and r['pre_entry'] and r['full'])]
+    bad = [r for r in rows if audit_problems(r)]
     print(f"{len(rows)} states, {len(bad)} with problems")
     if args.output:
         with open(args.output, 'w', encoding='utf-8') as file:

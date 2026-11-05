@@ -17,7 +17,8 @@
   "seconds": 309.431127392,
   "steps": 164,
   "health": 0.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 1_43w_0 --rooms 1:0x33,1:0x23,1:0x22 --chain 0"
  },
  {
   "file": "1_23s_0.state",
@@ -37,7 +38,8 @@
   "seconds": 15.435624303,
   "steps": 35,
   "health": 1.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 1_43w_0 --rooms 1:0x33,1:0x23,1:0x22 --chain 0"
  },
  {
   "file": "1_33s_0.state",
@@ -57,7 +59,8 @@
   "seconds": 20.421183128,
   "steps": 29,
   "health": 2.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 1_43w_0 --rooms 1:0x33,1:0x23,1:0x22 --chain 0"
  },
  {
   "file": "2_6ds_0.state",
@@ -73,12 +76,15 @@
   "route": "milestone1",
   "route_step": -1,
   "off_route": true,
+  "from_step": 35,
   "env_steps": 7106,
   "attempts": 1,
-  "seconds": 26.449079937,
+  "seconds": 26.068835073,
   "steps": 15,
   "health": 4.0,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "explore_seed": 0,
+  "command": "python -m triforce.entry_states path --source 2_7ds_0 --rooms 2:0x6d --chain 0 --route milestone1"
  },
  {
   "file": "0_77cave_0.state",
@@ -97,7 +103,8 @@
   "seconds": 16.916850326,
   "steps": 13,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_77c_0.state",
@@ -116,7 +123,8 @@
   "seconds": 22.630705833,
   "steps": 23,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_67s_0.state",
@@ -135,7 +143,8 @@
   "seconds": 18.939830494,
   "steps": 10,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_78w_0.state",
@@ -154,7 +163,8 @@
   "seconds": 21.359032665,
   "steps": 15,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_68w_0.state",
@@ -173,7 +183,8 @@
   "seconds": 19.176432492,
   "steps": 58,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_58s_0.state",
@@ -192,7 +203,8 @@
   "seconds": 16.74342957,
   "steps": 27,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_48s_0.state",
@@ -211,7 +223,8 @@
   "seconds": 18.665678657,
   "steps": 67,
   "health": 2.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_38s_0.state",
@@ -230,7 +243,8 @@
   "seconds": 14.505637493,
   "steps": 48,
   "health": 1.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_37e_0.state",
@@ -249,7 +263,8 @@
   "seconds": 16.829714474,
   "steps": 79,
   "health": 2.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_73s_0.state",
@@ -268,7 +283,8 @@
   "seconds": 19.013421393,
   "steps": 68,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_72e_0.state",
@@ -287,7 +303,8 @@
   "seconds": 26.316295323,
   "steps": 13,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_73w_0.state",
@@ -306,7 +323,8 @@
   "seconds": 30.909083911,
   "steps": 101,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_74w_0.state",
@@ -325,7 +343,8 @@
   "seconds": 25.238470493,
   "steps": 26,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_73e_0.state",
@@ -344,7 +363,8 @@
   "seconds": 18.662734476,
   "steps": 75,
   "health": 2.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_63s_0.state",
@@ -363,7 +383,8 @@
   "seconds": 38.16666864,
   "steps": 36,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_53s_0.state",
@@ -382,7 +403,8 @@
   "seconds": 18.500474806,
   "steps": 37,
   "health": 1.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_52e_0.state",
@@ -401,7 +423,8 @@
   "seconds": 129.412661144,
   "steps": 161,
   "health": 0.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_42s_0.state",
@@ -420,7 +443,8 @@
   "seconds": 34.414753081,
   "steps": 79,
   "health": 2.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_43w_0.state",
@@ -439,7 +463,8 @@
   "seconds": 29.306089968,
   "steps": 87,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_44w_0.state",
@@ -458,7 +483,8 @@
   "seconds": 24.194197,
   "steps": 108,
   "health": 2.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_45w_0.state",
@@ -477,7 +503,8 @@
   "seconds": 51.892360853,
   "steps": 213,
   "health": 0.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_35s_0.state",
@@ -496,7 +523,8 @@
   "seconds": 39.713906304,
   "steps": 104,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_36w_0.state",
@@ -515,7 +543,8 @@
   "seconds": 107.680106926,
   "steps": 136,
   "health": 1.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_37c_0.state",
@@ -534,7 +563,8 @@
   "seconds": 22.884665845,
   "steps": 24,
   "health": 4.0,
-  "ending": "triforce-collected"
+  "ending": "triforce-collected",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_38w_0.state",
@@ -555,7 +585,8 @@
   "seconds": 17.774263994000002,
   "steps": 22,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_0 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "0_28s_0.state",
@@ -574,7 +605,8 @@
   "seconds": 16.382305047,
   "steps": 40,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_48n_0.state",
@@ -595,7 +627,8 @@
   "seconds": 20.464987101,
   "steps": 53,
   "health": 3.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_0 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "0_29w_0.state",
@@ -614,7 +647,8 @@
   "seconds": 20.545733457,
   "steps": 33,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_58n_0.state",
@@ -635,7 +669,8 @@
   "seconds": 19.356578864,
   "steps": 78,
   "health": 4.0,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_0 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "0_2aw_0.state",
@@ -654,7 +689,8 @@
   "seconds": 20.109251869,
   "steps": 26,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_59w_0.state",
@@ -675,7 +711,8 @@
   "seconds": 21.122784445,
   "steps": 34,
   "health": 3.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_0 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "0_2bw_0.state",
@@ -694,7 +731,8 @@
   "seconds": 17.077581673,
   "steps": 31,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_49s_0.state",
@@ -715,7 +753,8 @@
   "seconds": 16.316922817,
   "steps": 25,
   "health": 3.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_0 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "0_2cw_0.state",
@@ -734,7 +773,8 @@
   "seconds": 18.971511177,
   "steps": 37,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_39s_0.state",
@@ -755,7 +795,8 @@
   "seconds": 16.883125495,
   "steps": 22,
   "health": 3.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_0 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "0_2dw_0.state",
@@ -774,7 +815,8 @@
   "seconds": 21.81995027,
   "steps": 92,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_49n_0.state",
@@ -795,7 +837,8 @@
   "seconds": 20.670955255,
   "steps": 1,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_0 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "0_3dn_0.state",
@@ -814,7 +857,8 @@
   "seconds": 16.182555891,
   "steps": 55,
   "health": 2.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_59n_0.state",
@@ -835,7 +879,8 @@
   "seconds": 18.317800536,
   "steps": 38,
   "health": 2.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_0 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "0_4dn_0.state",
@@ -854,7 +899,8 @@
   "seconds": 14.057247295,
   "steps": 43,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_5aw_0.state",
@@ -875,7 +921,8 @@
   "seconds": 17.589615928,
   "steps": 26,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_0 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "0_5bw_0.state",
@@ -896,7 +943,8 @@
   "seconds": 19.853236125,
   "steps": 35,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_5aw_0 --rooms 0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "0_3cs_0.state",
@@ -915,7 +963,8 @@
   "seconds": 33.585318558,
   "steps": 87,
   "health": 1.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_5cw_0.state",
@@ -936,7 +985,8 @@
   "seconds": 20.009729276,
   "steps": 73,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_5aw_0 --rooms 0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "0_5dw_0.state",
@@ -957,7 +1007,8 @@
   "seconds": 19.768771352,
   "steps": 60,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_5aw_0 --rooms 0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "2_7ds_0.state",
@@ -976,7 +1027,8 @@
   "seconds": 12.416904825,
   "steps": 11,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_4ds_0.state",
@@ -997,7 +1049,8 @@
   "seconds": 16.076444228,
   "steps": 22,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_5aw_0 --rooms 0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "2_7ew_0.state",
@@ -1016,7 +1069,8 @@
   "seconds": 25.453495992,
   "steps": 11,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_4ce_0.state",
@@ -1037,7 +1091,8 @@
   "seconds": 18.915523549,
   "steps": 15,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_5aw_0 --rooms 0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 0 --route milestone1-fairy"
  },
  {
   "file": "2_6es_0.state",
@@ -1056,7 +1111,8 @@
   "seconds": 44.521002371,
   "steps": 142,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_5es_0.state",
@@ -1075,7 +1131,8 @@
   "seconds": 35.215549207,
   "steps": 122,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_4es_0.state",
@@ -1094,7 +1151,8 @@
   "seconds": 19.922359776,
   "steps": 56,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_3es_0.state",
@@ -1113,7 +1171,8 @@
   "seconds": 48.576613506,
   "steps": 180,
   "health": 0.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_2es_0.state",
@@ -1132,7 +1191,8 @@
   "seconds": 272.418768818,
   "steps": 224,
   "health": 1.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_1es_0.state",
@@ -1151,7 +1211,8 @@
   "seconds": 51.804494986,
   "steps": 110,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_0es_0.state",
@@ -1170,7 +1231,8 @@
   "seconds": 476.579454633,
   "steps": 309,
   "health": 1.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0 --start-step 42 --source 2_1es_0 --iterations 12000 --patience 500"
  },
  {
   "file": "1_22e_1.state",
@@ -1190,7 +1252,8 @@
   "seconds": 214.094878934,
   "steps": 183,
   "health": 0.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 1_43w_1 --rooms 1:0x33,1:0x23,1:0x22 --chain 1"
  },
  {
   "file": "1_23s_1.state",
@@ -1210,7 +1273,8 @@
   "seconds": 24.440253137,
   "steps": 111,
   "health": 0.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 1_43w_1 --rooms 1:0x33,1:0x23,1:0x22 --chain 1"
  },
  {
   "file": "1_33s_1.state",
@@ -1230,7 +1294,8 @@
   "seconds": 33.101712248,
   "steps": 150,
   "health": 2.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 1_43w_1 --rooms 1:0x33,1:0x23,1:0x22 --chain 1"
  },
  {
   "file": "2_6ds_1.state",
@@ -1246,12 +1311,15 @@
   "route": "milestone1",
   "route_step": -1,
   "off_route": true,
+  "from_step": 35,
   "env_steps": 6019,
   "attempts": 1,
-  "seconds": 23.420058465,
+  "seconds": 22.533877967,
   "steps": 15,
   "health": 4.0,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "explore_seed": 1,
+  "command": "python -m triforce.entry_states path --source 2_7ds_1 --rooms 2:0x6d --chain 1 --route milestone1"
  },
  {
   "file": "0_77cave_1.state",
@@ -1270,7 +1338,8 @@
   "seconds": 15.774533571,
   "steps": 17,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_77c_1.state",
@@ -1289,7 +1358,8 @@
   "seconds": 19.100197364,
   "steps": 13,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_67s_1.state",
@@ -1308,7 +1378,8 @@
   "seconds": 19.347967178,
   "steps": 20,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_78w_1.state",
@@ -1327,7 +1398,8 @@
   "seconds": 18.525334183,
   "steps": 22,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_68w_1.state",
@@ -1346,7 +1418,8 @@
   "seconds": 19.528248171,
   "steps": 43,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_58s_1.state",
@@ -1365,7 +1438,8 @@
   "seconds": 17.337700284,
   "steps": 29,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_48s_1.state",
@@ -1384,7 +1458,8 @@
   "seconds": 16.217269934,
   "steps": 44,
   "health": 2.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_38s_1.state",
@@ -1403,7 +1478,8 @@
   "seconds": 16.41259451,
   "steps": 51,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_37e_1.state",
@@ -1422,7 +1498,8 @@
   "seconds": 19.165428652,
   "steps": 78,
   "health": 1.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_73s_1.state",
@@ -1441,7 +1518,8 @@
   "seconds": 20.182932185,
   "steps": 56,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_72e_1.state",
@@ -1460,7 +1538,8 @@
   "seconds": 19.057478871,
   "steps": 20,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_73w_1.state",
@@ -1479,7 +1558,8 @@
   "seconds": 42.374448341,
   "steps": 122,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_74w_1.state",
@@ -1498,7 +1578,8 @@
   "seconds": 49.984223807,
   "steps": 33,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_73e_1.state",
@@ -1517,7 +1598,8 @@
   "seconds": 43.721378165,
   "steps": 168,
   "health": 1.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_63s_1.state",
@@ -1536,7 +1618,8 @@
   "seconds": 22.054335625,
   "steps": 42,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_53s_1.state",
@@ -1555,7 +1638,8 @@
   "seconds": 21.318837597,
   "steps": 51,
   "health": 2.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_52e_1.state",
@@ -1574,7 +1658,8 @@
   "seconds": 119.205338819,
   "steps": 197,
   "health": 1.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_42s_1.state",
@@ -1593,7 +1678,8 @@
   "seconds": 23.738809264,
   "steps": 86,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_43w_1.state",
@@ -1612,7 +1698,8 @@
   "seconds": 24.963544867,
   "steps": 105,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_44w_1.state",
@@ -1631,7 +1718,8 @@
   "seconds": 52.820941763,
   "steps": 150,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_45w_1.state",
@@ -1650,7 +1738,8 @@
   "seconds": 119.976899278,
   "steps": 266,
   "health": 2.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_35s_1.state",
@@ -1669,7 +1758,8 @@
   "seconds": 44.902604629,
   "steps": 156,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_36w_1.state",
@@ -1688,7 +1778,8 @@
   "seconds": 150.781806667,
   "steps": 83,
   "health": 1.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_37c_1.state",
@@ -1707,7 +1798,8 @@
   "seconds": 20.530134178,
   "steps": 33,
   "health": 4.0,
-  "ending": "triforce-collected"
+  "ending": "triforce-collected",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_38w_1.state",
@@ -1728,7 +1820,8 @@
   "seconds": 19.374608483,
   "steps": 27,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_1 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "0_28s_1.state",
@@ -1747,7 +1840,8 @@
   "seconds": 21.768696047,
   "steps": 78,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_48n_1.state",
@@ -1768,7 +1862,8 @@
   "seconds": 22.500852796,
   "steps": 57,
   "health": 3.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_1 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "0_29w_1.state",
@@ -1787,7 +1882,8 @@
   "seconds": 28.676478453,
   "steps": 24,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_58n_1.state",
@@ -1808,7 +1904,8 @@
   "seconds": 16.714550908,
   "steps": 29,
   "health": 3.0,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_1 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "0_2aw_1.state",
@@ -1827,7 +1924,8 @@
   "seconds": 17.726400725,
   "steps": 44,
   "health": 2.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_59w_1.state",
@@ -1848,7 +1946,8 @@
   "seconds": 17.441570261,
   "steps": 32,
   "health": 4.0,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_1 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "0_2bw_1.state",
@@ -1867,7 +1966,8 @@
   "seconds": 15.99282578,
   "steps": 46,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_49s_1.state",
@@ -1888,7 +1988,8 @@
   "seconds": 18.793212425,
   "steps": 44,
   "health": 3.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_1 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "0_2cw_1.state",
@@ -1907,7 +2008,8 @@
   "seconds": 21.089843837,
   "steps": 90,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_39s_1.state",
@@ -1928,7 +2030,8 @@
   "seconds": 13.955864234,
   "steps": 55,
   "health": 3.0,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_1 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "0_2dw_1.state",
@@ -1947,7 +2050,8 @@
   "seconds": 18.334069807,
   "steps": 50,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_49n_1.state",
@@ -1968,7 +2072,8 @@
   "seconds": 21.751332427,
   "steps": 1,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_1 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "0_3dn_1.state",
@@ -1987,7 +2092,8 @@
   "seconds": 19.645223132,
   "steps": 27,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_59n_1.state",
@@ -2008,7 +2114,8 @@
   "seconds": 17.206301231,
   "steps": 46,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_1 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "0_4dn_1.state",
@@ -2027,7 +2134,8 @@
   "seconds": 20.392556689,
   "steps": 24,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_5aw_1.state",
@@ -2048,7 +2156,8 @@
   "seconds": 16.145938216,
   "steps": 47,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_1 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "0_5bw_1.state",
@@ -2069,7 +2178,8 @@
   "seconds": 17.493315203,
   "steps": 63,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_5aw_1 --rooms 0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "0_3cs_1.state",
@@ -2088,7 +2198,8 @@
   "seconds": 21.081036787,
   "steps": 50,
   "health": 2.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_5cw_1.state",
@@ -2109,7 +2220,8 @@
   "seconds": 19.012550195,
   "steps": 80,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_5aw_1 --rooms 0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "0_5dw_1.state",
@@ -2130,7 +2242,8 @@
   "seconds": 21.577221602,
   "steps": 66,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_5aw_1 --rooms 0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "2_7ds_1.state",
@@ -2149,7 +2262,8 @@
   "seconds": 10.158413029,
   "steps": 49,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_4ds_1.state",
@@ -2170,7 +2284,8 @@
   "seconds": 21.116805095,
   "steps": 93,
   "health": 1.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_5aw_1 --rooms 0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "2_7ew_1.state",
@@ -2189,7 +2304,8 @@
   "seconds": 17.591881761,
   "steps": 14,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_4ce_1.state",
@@ -2210,7 +2326,8 @@
   "seconds": 21.250141138,
   "steps": 75,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_5aw_1 --rooms 0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 1 --route milestone1-fairy"
  },
  {
   "file": "2_6es_1.state",
@@ -2229,7 +2346,8 @@
   "seconds": 37.462980608,
   "steps": 181,
   "health": 1.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_5es_1.state",
@@ -2248,7 +2366,8 @@
   "seconds": 20.588895993,
   "steps": 81,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_4es_1.state",
@@ -2267,7 +2386,8 @@
   "seconds": 21.201190366,
   "steps": 109,
   "health": 1.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_3es_1.state",
@@ -2286,7 +2406,8 @@
   "seconds": 40.625219529,
   "steps": 102,
   "health": 2.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_2es_1.state",
@@ -2305,7 +2426,8 @@
   "seconds": 267.303664463,
   "steps": 252,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_1es_1.state",
@@ -2324,7 +2446,8 @@
   "seconds": 36.506290942,
   "steps": 138,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_0es_1.state",
@@ -2343,7 +2466,8 @@
   "seconds": 67.1466784,
   "steps": 278,
   "health": 0.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_22e_2.state",
@@ -2363,7 +2487,8 @@
   "seconds": 457.611101622,
   "steps": 138,
   "health": 1.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 1_43w_2 --rooms 1:0x33,1:0x23,1:0x22 --chain 2"
  },
  {
   "file": "1_23s_2.state",
@@ -2383,7 +2508,8 @@
   "seconds": 26.834007132,
   "steps": 113,
   "health": 0.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 1_43w_2 --rooms 1:0x33,1:0x23,1:0x22 --chain 2"
  },
  {
   "file": "1_33s_2.state",
@@ -2403,7 +2529,8 @@
   "seconds": 18.214123126,
   "steps": 45,
   "health": 1.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 1_43w_2 --rooms 1:0x33,1:0x23,1:0x22 --chain 2"
  },
  {
   "file": "2_6ds_2.state",
@@ -2419,12 +2546,15 @@
   "route": "milestone1",
   "route_step": -1,
   "off_route": true,
+  "from_step": 35,
   "env_steps": 8411,
   "attempts": 1,
-  "seconds": 31.132421619,
+  "seconds": 31.446187889,
   "steps": 11,
   "health": 4.0,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "explore_seed": 2,
+  "command": "python -m triforce.entry_states path --source 2_7ds_2 --rooms 2:0x6d --chain 2 --route milestone1"
  },
  {
   "file": "0_77cave_2.state",
@@ -2443,7 +2573,8 @@
   "seconds": 16.362320896,
   "steps": 11,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_77c_2.state",
@@ -2462,7 +2593,8 @@
   "seconds": 26.261439149,
   "steps": 13,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_67s_2.state",
@@ -2481,7 +2613,8 @@
   "seconds": 18.838357818,
   "steps": 7,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_78w_2.state",
@@ -2500,7 +2633,8 @@
   "seconds": 20.267115349,
   "steps": 13,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_68w_2.state",
@@ -2519,7 +2653,8 @@
   "seconds": 21.260511164,
   "steps": 116,
   "health": 2.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_58s_2.state",
@@ -2538,7 +2673,8 @@
   "seconds": 20.430272106,
   "steps": 29,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_48s_2.state",
@@ -2557,7 +2693,8 @@
   "seconds": 20.828992713,
   "steps": 39,
   "health": 2.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_38s_2.state",
@@ -2576,7 +2713,8 @@
   "seconds": 17.46918015,
   "steps": 63,
   "health": 2.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_37e_2.state",
@@ -2595,7 +2733,8 @@
   "seconds": 29.26275684,
   "steps": 83,
   "health": 1.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_73s_2.state",
@@ -2614,7 +2753,8 @@
   "seconds": 19.978665698,
   "steps": 47,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_72e_2.state",
@@ -2633,7 +2773,8 @@
   "seconds": 33.00454394,
   "steps": 10,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_73w_2.state",
@@ -2652,7 +2793,8 @@
   "seconds": 27.365040945,
   "steps": 64,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_74w_2.state",
@@ -2671,7 +2813,8 @@
   "seconds": 20.353215141,
   "steps": 32,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_73e_2.state",
@@ -2690,7 +2833,8 @@
   "seconds": 24.787346671999998,
   "steps": 87,
   "health": 0.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_63s_2.state",
@@ -2709,7 +2853,8 @@
   "seconds": 28.869670509,
   "steps": 52,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_53s_2.state",
@@ -2728,7 +2873,8 @@
   "seconds": 18.433371268,
   "steps": 72,
   "health": 0.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_52e_2.state",
@@ -2747,7 +2893,8 @@
   "seconds": 185.314522775,
   "steps": 145,
   "health": 1.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_42s_2.state",
@@ -2766,7 +2913,8 @@
   "seconds": 53.693330912,
   "steps": 72,
   "health": 2.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_43w_2.state",
@@ -2785,7 +2933,8 @@
   "seconds": 28.034482631,
   "steps": 35,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_44w_2.state",
@@ -2804,7 +2953,8 @@
   "seconds": 78.366349423,
   "steps": 182,
   "health": 1.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_45w_2.state",
@@ -2823,7 +2973,8 @@
   "seconds": 103.107743179,
   "steps": 242,
   "health": 0.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_35s_2.state",
@@ -2842,7 +2993,8 @@
   "seconds": 41.969407509,
   "steps": 116,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "1_36w_2.state",
@@ -2861,7 +3013,8 @@
   "seconds": 334.128167211,
   "steps": 103,
   "health": 2.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_37c_2.state",
@@ -2880,7 +3033,8 @@
   "seconds": 23.394852425,
   "steps": 10,
   "health": 4.0,
-  "ending": "triforce-collected"
+  "ending": "triforce-collected",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_38w_2.state",
@@ -2901,7 +3055,8 @@
   "seconds": 21.211552975,
   "steps": 51,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_2 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "0_28s_2.state",
@@ -2920,7 +3075,8 @@
   "seconds": 16.482192055,
   "steps": 69,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_48n_2.state",
@@ -2941,7 +3097,8 @@
   "seconds": 24.386607701,
   "steps": 93,
   "health": 3.0,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_2 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "0_29w_2.state",
@@ -2960,7 +3117,8 @@
   "seconds": 20.210285199,
   "steps": 47,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_58n_2.state",
@@ -2981,7 +3139,8 @@
   "seconds": 25.158332233,
   "steps": 137,
   "health": 4.0,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_2 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "0_2aw_2.state",
@@ -3000,7 +3159,8 @@
   "seconds": 20.884541313,
   "steps": 41,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_59w_2.state",
@@ -3021,7 +3181,8 @@
   "seconds": 16.880156336,
   "steps": 42,
   "health": 4.0,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_2 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "0_2bw_2.state",
@@ -3040,7 +3201,8 @@
   "seconds": 15.786575113,
   "steps": 44,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_49s_2.state",
@@ -3061,7 +3223,8 @@
   "seconds": 16.135026591,
   "steps": 28,
   "health": 3.5,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_2 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "0_2cw_2.state",
@@ -3080,7 +3243,8 @@
   "seconds": 21.161970559,
   "steps": 50,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_39s_2.state",
@@ -3101,7 +3265,8 @@
   "seconds": 17.348810382,
   "steps": 70,
   "health": 3.0,
-  "ending": "exit-wrong"
+  "ending": "exit-wrong",
+  "command": "python -m triforce.entry_states path --source 0_37c_2 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "0_2dw_2.state",
@@ -3120,7 +3285,8 @@
   "seconds": 19.029493435,
   "steps": 30,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_49n_2.state",
@@ -3141,7 +3307,8 @@
   "seconds": 21.221844291,
   "steps": 1,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_2 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "0_3dn_2.state",
@@ -3160,7 +3327,8 @@
   "seconds": 15.098760127,
   "steps": 62,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_59n_2.state",
@@ -3181,7 +3349,8 @@
   "seconds": 17.784283291,
   "steps": 56,
   "health": 3.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_2 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "0_4dn_2.state",
@@ -3200,7 +3369,8 @@
   "seconds": 17.020859984,
   "steps": 28,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_5aw_2.state",
@@ -3221,26 +3391,8 @@
   "seconds": 16.033174967,
   "steps": 26,
   "health": 3.5,
-  "ending": "exit-correct"
- },
- {
-  "file": "0_4ce_2.state",
-  "chain": 2,
-  "route_step": 33,
-  "from_step": 32,
-  "specialist": "ow-octorok",
-  "level": 0,
-  "room": "0x4c",
-  "in_cave": false,
-  "entry": "E",
-  "exit": "N",
-  "alternate": false,
-  "env_steps": 5453,
-  "attempts": 1,
-  "seconds": 21.569360501,
-  "steps": 99,
-  "health": 0.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_37c_2 --rooms 0:0x38,0:0x48,0:0x58,0:0x59,0:0x49,0:0x39,0:0x49,0:0x59,0:0x5a,0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "0_5bw_2.state",
@@ -3261,7 +3413,8 @@
   "seconds": 15.721573338,
   "steps": 86,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states path --source 0_5aw_2 --rooms 0:0x5b,0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "0_3cs_2.state",
@@ -3280,7 +3433,8 @@
   "seconds": 55.037396174,
   "steps": 200,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "0_5cw_2.state",
@@ -3296,13 +3450,37 @@
   "route": "milestone1-fairy",
   "route_step": 34,
   "off_route": false,
-  "env_steps": 7622,
+  "env_steps": 4692,
   "attempts": 1,
-  "seconds": 35.777788207,
-  "steps": 38,
-  "health": 4.0,
-  "ending": "exit-wrong",
-  "command": "python -m triforce.entry_states path --source 0_5bw_2 --rooms 0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy --iterations 6000 --patience 400"
+  "seconds": 20.294499758,
+  "steps": 57,
+  "health": 3.5,
+  "ending": "exit-correct",
+  "explore_seed": 1002,
+  "command": "python -m triforce.entry_states path --source 0_5bw_2 --rooms 0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
+ },
+ {
+  "file": "0_5dw_2.state",
+  "chain": 2,
+  "from": "/home/leculver/git/triforce2/triforce/states/0_5cw_2.state",
+  "specialist": "ow-moblin",
+  "level": 0,
+  "room": "0x5d",
+  "in_cave": false,
+  "entry": "W",
+  "exit": null,
+  "alternate": false,
+  "route": "milestone1-fairy",
+  "route_step": 35,
+  "off_route": false,
+  "env_steps": 4852,
+  "attempts": 1,
+  "seconds": 18.592119229,
+  "steps": 74,
+  "health": 3.0,
+  "ending": "exit-correct",
+  "explore_seed": 2,
+  "command": "python -m triforce.entry_states path --source 0_5bw_2 --rooms 0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "2_7ds_2.state",
@@ -3321,7 +3499,31 @@
   "seconds": 16.302371931,
   "steps": 7,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
+ },
+ {
+  "file": "0_4ds_2.state",
+  "chain": 2,
+  "from": "/home/leculver/git/triforce2/triforce/states/0_5dw_2.state",
+  "specialist": "ow-moblin",
+  "level": 0,
+  "room": "0x4d",
+  "in_cave": false,
+  "entry": "S",
+  "exit": null,
+  "alternate": false,
+  "route": "milestone1-fairy",
+  "route_step": 36,
+  "off_route": false,
+  "env_steps": 3575,
+  "attempts": 1,
+  "seconds": 14.833612744,
+  "steps": 28,
+  "health": 3.0,
+  "ending": "exit-correct",
+  "explore_seed": 2,
+  "command": "python -m triforce.entry_states path --source 0_5bw_2 --rooms 0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "2_7ew_2.state",
@@ -3340,7 +3542,31 @@
   "seconds": 22.746776888,
   "steps": 25,
   "health": 4.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
+ },
+ {
+  "file": "0_4ce_2.state",
+  "chain": 2,
+  "from": "/home/leculver/git/triforce2/triforce/states/0_4ds_2.state",
+  "specialist": "ow-octorok",
+  "level": 0,
+  "room": "0x4c",
+  "in_cave": false,
+  "entry": "E",
+  "exit": null,
+  "alternate": false,
+  "route": "milestone1-fairy",
+  "route_step": 37,
+  "off_route": false,
+  "env_steps": 4011,
+  "attempts": 1,
+  "seconds": 17.652934174,
+  "steps": 32,
+  "health": 4.0,
+  "ending": "exit-correct",
+  "explore_seed": 2,
+  "command": "python -m triforce.entry_states path --source 0_5bw_2 --rooms 0:0x5c,0:0x5d,0:0x4d,0:0x4c --chain 2 --route milestone1-fairy"
  },
  {
   "file": "2_6es_2.state",
@@ -3359,7 +3585,8 @@
   "seconds": 56.879088956,
   "steps": 111,
   "health": 1.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_5es_2.state",
@@ -3378,7 +3605,8 @@
   "seconds": 43.941959489,
   "steps": 73,
   "health": 3.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_4es_2.state",
@@ -3397,7 +3625,8 @@
   "seconds": 57.530952728,
   "steps": 157,
   "health": 2.5,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_3es_2.state",
@@ -3416,7 +3645,8 @@
   "seconds": 24.287408768,
   "steps": 102,
   "health": 1.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_2es_2.state",
@@ -3435,7 +3665,8 @@
   "seconds": 162.278190725,
   "steps": 207,
   "health": 2.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_1es_2.state",
@@ -3454,7 +3685,8 @@
   "seconds": 28.297300461,
   "steps": 138,
   "health": 2.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 0,1,2"
  },
  {
   "file": "2_0es_2.state",
@@ -3473,6 +3705,7 @@
   "seconds": 531.908362492,
   "steps": 329,
   "health": 1.0,
-  "ending": "exit-correct"
+  "ending": "exit-correct",
+  "command": "python -m triforce.entry_states build --chains 2 --start-step 42 --source 2_1es_2 --iterations 12000 --patience 500"
  }
 ]
