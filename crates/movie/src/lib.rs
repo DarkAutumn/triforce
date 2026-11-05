@@ -253,8 +253,6 @@ pub const ALL_DOMAINS: [Domain; 11] = [
     Domain::Apu,
 ];
 
-/// Domains the FCEUmm oracle produces.
-pub const ORACLE_MASK: u16 = 0x7F;
 /// Every domain (ladder self-diffs).
 pub const LADDER_MASK: u16 = 0x7FF;
 

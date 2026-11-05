@@ -1,5 +1,5 @@
 //! Zelda envs in a pool: adapters from `env::SpecialistEnv` and `env::ChainEnv` to [`crate::PoolEnv`], generic over
-//! `zelda::Nes` (zcore in production, the FCEUmm oracle in tests).
+//! `zelda::Nes` (zcore in production, wrappers over it in tests).
 //!
 //! - [`TrainEnv`]: one specialist's training episodes (pool/curriculum start states).
 //! - [`EvalEnv`]: evaluation episodes from a shared [`Jobs`](crate::Jobs) list of (start state, seed); reports an

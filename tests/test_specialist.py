@@ -1,7 +1,7 @@
 """``triforce.specialist``: the Python names over the native ``SpecialistConfig``.
 
 Config validation, defaults, the start-state selector and pool, RAM randomization and savestate capture are tested
-in Rust (``crates/env/src/config.rs``, ``start_states.rs``, ``crates/env/tests/oracle_env.rs``).
+in Rust (``crates/env/src/config.rs``, ``start_states.rs``, ``crates/env/tests/specialist_env.rs``).
 """
 
 import pickle

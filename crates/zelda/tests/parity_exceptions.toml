@@ -1,8 +1,0 @@
-# Allowed differences between the Rust session and the Python env parity fixtures (tests/parity.rs).
-# Each entry must also be logged in docs/decisions.md as an intentional Python bug fix.
-#
-# [[exception]]
-# room = "1_44"            # fixture name
-# step = 12                # step index (-1 = load / whole fixture)
-# field = "frames"
-# reason = "..."

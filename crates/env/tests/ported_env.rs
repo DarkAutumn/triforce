@@ -1,4 +1,4 @@
-//! `SpecialistEnv` tests on the named start states (zcore) that oracle_env.rs did not port yet,
+//! `SpecialistEnv` tests on the named start states (zcore) that specialist_env.rs did not port yet,
 //! ported from the Python tests before the Python game stack is deleted (plan step 16).  Every state comes from
 //! `common::load_named_state` (through `TfzStore`).
 //!
@@ -7,38 +7,38 @@
 //!
 //! | Python test | Rust |
 //! |---|---|
-//! | env::test_spaces_and_reset_contract | oracle_env.rs `spaces_and_reset_contract` |
-//! | env::test_random_legal_episode_ends_classified | oracle_env.rs (same name) |
-//! | env::test_correct_exit_is_success_with_health_scaled_reward | oracle_env.rs (same name) |
-//! | env::test_full_health_success_pays_full_terminal | oracle_env.rs (same name) |
-//! | env::test_wrong_exit_is_soft_failure | oracle_env.rs (same name) |
-//! | env::test_death_is_hard_failure | oracle_env.rs (same name) |
-//! | env::test_unlisted_ending_raises | oracle_env.rs (same name) |
-//! | env::test_max_steps_truncates_without_terminal_reward | oracle_env.rs (same name) |
-//! | env::test_no_room_progress_truncates_at_threshold_and_resets_shared_tracker | oracle_env.rs (same name) |
-//! | env::test_no_room_progress_disabled_preserves_position_timeout | oracle_env.rs (same name) |
-//! | env::test_no_room_progress_keeps_episode_cap | oracle_env.rs (same name) |
+//! | env::test_spaces_and_reset_contract | specialist_env.rs `spaces_and_reset_contract` |
+//! | env::test_random_legal_episode_ends_classified | specialist_env.rs (same name) |
+//! | env::test_correct_exit_is_success_with_health_scaled_reward | specialist_env.rs (same name) |
+//! | env::test_full_health_success_pays_full_terminal | specialist_env.rs (same name) |
+//! | env::test_wrong_exit_is_soft_failure | specialist_env.rs (same name) |
+//! | env::test_death_is_hard_failure | specialist_env.rs (same name) |
+//! | env::test_unlisted_ending_raises | specialist_env.rs (same name) |
+//! | env::test_max_steps_truncates_without_terminal_reward | specialist_env.rs (same name) |
+//! | env::test_no_room_progress_truncates_at_threshold_and_resets_shared_tracker | specialist_env.rs (same name) |
+//! | env::test_no_room_progress_disabled_preserves_position_timeout | specialist_env.rs (same name) |
+//! | env::test_no_room_progress_keeps_episode_cap | specialist_env.rs (same name) |
 //! | env::test_measured_ending_credits_threshold_action_before_check (6 params) | pure.rs `measured_ending_credits_threshold_action_before_check` |
-//! | env::test_masked_action_raises | oracle_env.rs (same name) |
+//! | env::test_masked_action_raises | specialist_env.rs (same name) |
 //! | env::test_close_keeps_borrowed_session | here `close_keeps_borrowed_session` |
-//! | env::test_start_state_outside_rooms_is_rejected | oracle_env.rs (same name) |
-//! | env::test_sword_cave_objective_and_exit | oracle_env.rs (same name) |
-//! | env::test_triforce_pickup_is_success_in_the_triforce_room | oracle_env.rs (same name) |
-//! | env::test_items_config_masks_bombs_even_when_link_has_them (2 params) | oracle_env.rs (same name) |
-//! | env::test_route_shutter_requires_combat_without_a_room_treasure | oracle_env.rs (same name) |
-//! | env::test_open_route_ignores_optional_combat (2 params) | oracle_env.rs (same name) |
-//! | env::test_route_room_only_offers_its_route_exit (2 params) | oracle_env.rs (same name) |
-//! | env::test_first_visit_to_0x73_follows_the_route_order | oracle_env.rs (same name) |
-//! | env::test_enter_room_success_needs_the_objective | oracle_env.rs (same name) |
-//! | env::test_after_dungeon_1_each_route_leaves_0x38_its_own_way (2 params) | oracle_env.rs (same name) |
-//! | env::test_a_room_the_routes_leave_differently_trains_both | oracle_env.rs (same name) |
-//! | env::test_fairy_pond_holds_the_exit_until_the_hearts_are_full | oracle_env.rs (same name) |
-//! | env::test_fairy_route_heads_to_the_pond_then_east (2 params) | oracle_env.rs (same name) |
-//! | env::test_wavefront_has_no_lane_below_the_bottom_tree_line | oracle_env.rs (same name) |
-//! | env::test_one_room_episode_ends_at_the_first_correct_exit (2 params) | oracle_env.rs (same name) |
-//! | env::test_curriculum_reset_preserves_the_first_shield_turn | oracle_env.rs (same name) |
-//! | nearby_items::test_nearest_clock_then_heart_then_exit_without_changing_task | oracle_env.rs (same name) |
-//! | nearby_items::test_nearer_exit_leaves_distant_helpful_drops | oracle_env.rs (same name) |
+//! | env::test_start_state_outside_rooms_is_rejected | specialist_env.rs (same name) |
+//! | env::test_sword_cave_objective_and_exit | specialist_env.rs (same name) |
+//! | env::test_triforce_pickup_is_success_in_the_triforce_room | specialist_env.rs (same name) |
+//! | env::test_items_config_masks_bombs_even_when_link_has_them (2 params) | specialist_env.rs (same name) |
+//! | env::test_route_shutter_requires_combat_without_a_room_treasure | specialist_env.rs (same name) |
+//! | env::test_open_route_ignores_optional_combat (2 params) | specialist_env.rs (same name) |
+//! | env::test_route_room_only_offers_its_route_exit (2 params) | specialist_env.rs (same name) |
+//! | env::test_first_visit_to_0x73_follows_the_route_order | specialist_env.rs (same name) |
+//! | env::test_enter_room_success_needs_the_objective | specialist_env.rs (same name) |
+//! | env::test_after_dungeon_1_each_route_leaves_0x38_its_own_way (2 params) | specialist_env.rs (same name) |
+//! | env::test_a_room_the_routes_leave_differently_trains_both | specialist_env.rs (same name) |
+//! | env::test_fairy_pond_holds_the_exit_until_the_hearts_are_full | specialist_env.rs (same name) |
+//! | env::test_fairy_route_heads_to_the_pond_then_east (2 params) | specialist_env.rs (same name) |
+//! | env::test_wavefront_has_no_lane_below_the_bottom_tree_line | specialist_env.rs (same name) |
+//! | env::test_one_room_episode_ends_at_the_first_correct_exit (2 params) | specialist_env.rs (same name) |
+//! | env::test_curriculum_reset_preserves_the_first_shield_turn | specialist_env.rs (same name) |
+//! | nearby_items::test_nearest_clock_then_heart_then_exit_without_changing_task | specialist_env.rs (same name) |
+//! | nearby_items::test_nearer_exit_leaves_distant_helpful_drops | specialist_env.rs (same name) |
 //! | quiet_enemy_penalty::test_quiet_fight_penalty_respects_grace_and_stops_without_targetable_enemies | here (same name) |
 
 mod common;

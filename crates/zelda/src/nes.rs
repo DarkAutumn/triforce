@@ -1,8 +1,7 @@
 //! The emulator surface the game model needs.
 //!
-//! Implemented by `zcore::ZCore` (shipping) and, in tests only, by a wrapper over the dev-only FCEUmm
-//! oracle (`oracle` crate, a dev-dependency). Everything above this trait — the game view, executor,
-//! session — is emulator-agnostic.
+//! Implemented by `zcore::ZCore` (shipping) and, in tests, by counting wrappers and scripted doubles.
+//! Everything above this trait — the game view, executor, session — is emulator-agnostic.
 
 pub trait Nes {
     /// A complete, restorable machine snapshot (cheap `Copy` state for zcore).

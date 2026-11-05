@@ -1,8 +1,8 @@
 # zcore
 
 A NES core for *The Legend of Zelda* (USA), subtracted from TetaNES's `tetanes-core` one verified
-stage at a time (see `UPSTREAM.md`). It reproduces FCEUmm (libretro `fceumm`, commit `e0f3086`)
-frame for frame, including the FCEUmm behaviours listed in `FCEUMM_QUIRKS.md`.
+stage at a time (see `UPSTREAM.md`), with hardware CPU/PPU/APU timing. Regressions are caught by
+`tf ladder-diff` against zcore's own goldens (repository README, "Emulator regression suite").
 
 The supported interface is [`ZCore`](crate::ZCore) with [`Rom`](crate::Rom),
 [`MachineState`](crate::MachineState) and the [`state_file`](crate::state_file) format:

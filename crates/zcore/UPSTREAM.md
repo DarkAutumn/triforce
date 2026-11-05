@@ -18,13 +18,16 @@ files alongside) cut down to what *The Legend of Zelda* needs, one verified subt
 | `98542624` | fceumm-compat | FQ-03 covers the end-of-VBlank clear of sprite 0 hit and overflow |
 
 The two `fix:` commits are hardware fixes suitable for upstream TetaNES; the `fceumm-compat` commits are
-off by default there. The quirks are documented in `FCEUMM_QUIRKS.md`.
+off by default there. Every quirk was removed again in plan step 18a (below); their history is in
+`docs/decisions.md` ("FCEUmm quirks: history").
 
 ## Ladder
 
-Each stage is checked with `tf ladder-diff target/ladder/s1-tetanes --backend zcore` (all 11 digest
+Each stage was checked with `tf ladder-diff target/ladder/s1-tetanes --backend zcore` (all 11 digest
 domains, cycles included, over the whole corpus, against the goldens of the S1 TetaNES backend; since every
-stage must be identical, that one golden set is the baseline for all of them) plus `cargo test -p zcore`.
+stage had to be identical, that one golden set was the baseline for all of them) plus `cargo test -p zcore`.
+The `tetanes` backend and `--backend` are gone; the same self-diff is now zcore's regression suite (README,
+"Emulator regression suite").
 
 | Stage | Change |
 |---|---|
@@ -74,3 +77,12 @@ Each FCEUmm quirk's hardware behaviour back, one commit per quirk, gated on the 
 | `zcore: restore hardware DMC reader and DMC DMA (FQ-11, FQ-12 removed)` | FQ-11, FQ-12 | `Dmc` is the hardware timer/reader again (no output unit), with `Dmc::next_event` in the APU deadline so a playing sample stays off the per-cycle path; `Bus::handle_dma` is TetaNES' full OAM+DMC loop; the DMC IRQ and `$4015` bits 4/7 are live. `FceuDmc` deleted; `TFZSTATE` v3. Nine DMC/DMA ROMs pass. | 2,584 / 4,908 |
 | `zcore: restore hardware VBlank flag and NMI timing (FQ-02..FQ-05 removed)` | FQ-02..FQ-05 | `Ppu::read_status` reads the live flags (race at line 241 dot 0, drops /NMI); `Bus::write_ctrl` sets /NMI = VBlank AND enable; `Ppu::start_vblank` raises it and the edge detector takes it. `status_at_instr`, `fceu_nmi`, `fceumm_nmi` deleted. Lazy PPU: `Ppu::next_event_clock` names both VBlank edges, `Bus::ppu_deadline` is in CPU master clocks and checked in `Bus::end_cycle` (where /NMI is polled), so the after-instruction catch-ups went. `TFZSTATE` v4. 13 ROMs and 2 unit tests pass. | 2,436-2,592 / 4,738-4,943 |
 | `zcore: restore hardware boot timing; frame boundary at VBlank start (FQ-01, FQ-06..FQ-08 removed)` | FQ-01, FQ-06, FQ-07, FQ-08 | `Bus::reset` spends the 7 reset cycles; `Ppu::reset` starts at line 0 dot 0; `dead_frames` deleted; the frame counter advances in `Ppu::start_vblank` (line 241 dot 1, the hardware-natural boundary; TetaNES used line 240 dot 0, FCEUmm line 240 dot 1), `fceumm_events` deleted, `tf`'s `overshoot_dots` measured from 241/1. `fceumm_compat_tests.rs` deleted (empty). `TFZSTATE` v5. 11 ROMs and 2 unit tests pass; the 12 still ignored need zero-filled power-on RAM (not a quirk). | 2,459-2,564 / 4,683-4,976 |
+
+## Plan step 18c: the FCEUmm oracle retired
+
+With every quirk restored, `oracle/`, `crates/oracle`, `tf`'s FCEUmm backend and its commands (`golden`,
+`diff`, `show`, `frame-lens`, `trace-diff`), the oracle goldens and the pixel allowlist were deleted
+(`docs/decisions.md`). zcore is checked against its own goldens (`tf ladder-golden`/`ladder-diff`, committed
+`corpus/golden/` for the short movies), its unit tests and the test ROMs; `tf trace` dumps one build's
+instructions per frame for comparing two builds. The default RGB palette in `machine.rs` keeps its FCEUmm
+attribution.

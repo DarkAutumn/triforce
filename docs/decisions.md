@@ -501,14 +501,14 @@ Format: date — what changed — why — evidence.
   there. The guard now applies to `level != 0` only.
 - **Manifest.** Concurrent `build`/`path` runs into one directory lock `entry_states.json` while merging; new
   entries record the exact `python -m triforce.entry_states ...` command (plan step 17.9).
-- **FQ-13 and two TetaNES fixes** (open-bus latch) landed in zcore before regeneration; see
-  `crates/zcore/FCEUMM_QUIRKS.md` and `UPSTREAM.md`.
+- **FQ-13 and two TetaNES fixes** (open-bus latch) landed in zcore before regeneration; see the FCEUmm quirk
+  history entry below and `crates/zcore/UPSTREAM.md`.
 - Results so far and the open chain-2 0x5c dead-end entry: `docs/experiments/round8.md`.
 
 ## 2026-11-05 — Plan step 18a: FCEUmm quirks restored to hardware behaviour
 
-One line per quirk; numbers and reasoning in `docs/experiments/round9.md`, mechanics in
-`crates/zcore/FCEUMM_QUIRKS.md` and `UPSTREAM.md`.
+One line per quirk; numbers and reasoning in `docs/experiments/round9.md`, mechanics in the FCEUmm quirk history
+entry below and `crates/zcore/UPSTREAM.md`.
 
 - 2026-11-05 FQ-13 restored: the PPU I/O latch decays per bit after 36 frames without a refresh (a model of the
   ~600 ms capacitor decay, not TetaNES' clear-every-VBlank); `TFZSTATE` v2 with a v1 decode path; gate kept it
@@ -527,3 +527,67 @@ One line per quirk; numbers and reasoning in `docs/experiments/round9.md`, mecha
   the first frame, and the frame boundary at the start of VBlank (line 241 dot 1, the hardware-natural point:
   the NMI handler runs in the next frame with its inputs); `TFZSTATE` v5; gate kept it (chain totals 30 and 31
   at seeds 0/1 vs 32/24). No `FQ-` test ignore is left; 12 ROMs need zero-filled power-on RAM (not a quirk).
+
+## 2026-11-05 — FCEUmm quirks: history (the `FCEUMM_QUIRKS.md` registry, retired in plan step 18c)
+
+- **What:** until step 18, zcore reproduced FCEUmm (libretro `fceumm` `e0f3086`, the core the promoted models were
+  trained on through stable-retro) wherever it differed from the hardware and the difference showed in the corpus.
+  Each difference was a numbered quirk, added behind TetaNES' `Config::fceumm_compat` (branch `bugs`), hard-wired
+  at ladder stage Z3 (`a2cc12d`), and listed in `crates/zcore/FCEUMM_QUIRKS.md` with FCEUmm file/line, hardware
+  behaviour and removal recipe, so the FCEUmm oracle corpus diffed at zero. Step 18a restored the hardware
+  behaviour for every one; step 18c deleted the registry with the oracle. The 13 quirks:
+
+  | ID | FCEUmm behaviour | Restored in |
+  |---|---|---|
+  | FQ-01 | Two dead PPU frames after reset (no VBlank/NMI) | `82d9666` |
+  | FQ-02 | No `$2002` read-before-VBlank suppression race | `403f09c` |
+  | FQ-03 | PPUSTATUS flags visible only at instruction boundaries | `403f09c` |
+  | FQ-04 | A `$2002` read never cancels an NMI; enabling NMI in VBlank gives a delayed NMI | `403f09c` |
+  | FQ-05 | NMI requested 12 dots after VBlank, taken at the next instruction start | `403f09c` |
+  | FQ-06 | 0-cycle CPU reset | `82d9666` |
+  | FQ-07 | PPU starts at scanline 240, one dot ahead | `82d9666` |
+  | FQ-08 | Frame boundary at line 240 dot 1 (now the start of VBlank, line 241 dot 1) | `82d9666` |
+  | FQ-09 | Odd-frame dot skip even with rendering off | `1d896d9` |
+  | FQ-10 | 512-cycle OAM DMA run inside `STA $4014` | `590328f` |
+  | FQ-11 | 4-read DMC DMA | `4b3a71b` |
+  | FQ-12 | DMC fetch timed by FCEUmm's per-instruction sound hook | `4b3a71b` |
+  | FQ-13 | The PPU I/O latch never decays | `fa207a5` |
+
+- **Gate (round 9):** each restore ran `scripts/port_gate.sh` (every promoted specialist at 20 episodes per start
+  state, five chain segments at 40 runs) against two runs of the FCEUmm-faithful build (chain totals 32 and 24,
+  floor 12). Chain totals after each restore: FQ-13 26, FQ-09 27, FQ-10 28, FQ-11+12 32, FQ-02..05 30/35 (seeds
+  0/1), FQ-01+06..08 30/31. Every restore met the keep rule; the dips (goriya's success at FQ-09 and FQ-11+12,
+  ow-zora and d2-rope at FQ-02..05 seed 0, ow-leever-peahat and stalfos-keese-gel damage at FQ-01+06..08) were
+  within or next to the baselines' spread (round9.md has every table). All 13 were kept: zcore has no FCEUmm
+  compat code left and no test ROM is ignored for a quirk.
+- **Upstream TetaNES bugs fixed along the way** (`aae5fa9`, found by `tf trace-diff` against FCEUmm at
+  `sword_cave_in_out` frame 300): the PPU's internal OAMADDR reset during sprite fetches went through
+  `write_oamaddr` and cleared the I/O latch; a `$2002` read OR-ed its status bits into the latch instead of driving
+  them. Both bugs are still in upstream TetaNES `a0a6b17f`; the fixes are hardware fixes, suitable for upstream.
+- **Open decision for Lee: power-on RAM fill.** zcore powers on work RAM, PRG-RAM and CHR-RAM filled with `$FF`
+  (`State::POWER_ON_RAM`), FCEUmm's fill and the one every corpus movie and start state was recorded with; real RAM
+  powers on unspecified, so it is not a quirk. Twelve test-ROM snapshots (`instr_timing` and eleven blargg 2005 APU
+  ROMs) were captured by TetaNES with zero-filled RAM: they pass with `$00` and stay `#[ignore]`d ("power-on RAM:
+  the snapshot needs zero-filled RAM; zcore powers on with $FF"). Switching to `$00` would un-ignore them but
+  changes the boot RAM, so the base movie, start states and trajectories would have to be regenerated again.
+
+## 2026-11-05 — Plan step 18c/18d: FCEUmm oracle retired; zcore self-diffs are the regression suite
+
+- **What (18c):** deleted `oracle/` (the patched FCEUmm build and `tforacle.c`) and `crates/oracle`; `tf`'s FCEUmm
+  backend and every command that compared against it (`golden`, `diff`, `show`, `frame-lens`, `trace-diff`, the
+  hidden `diff-one`/`golden-one`/`pixel-rows`/`end-room`); the oracle goldens in `corpus/golden/` and
+  `corpus/pixel-allowlist.toml`; the FCEUmm-fixture parity tests (`crates/{env,zelda}/tests/parity.rs`, their
+  `parity_exceptions.toml`, `crates/env/tests/fixtures/parity/`, `scripts/parity_actions.toml`) and
+  `zcore_matches_oracle_over_random_play`. The zcore RGB test no longer compares frame 600 of `title_idle_3600` with
+  the oracle golden; it checks the full 256x240 frame, the palette mapping and a non-backdrop pixel in row 0 or
+  239. Tests that ran on zcore under oracle-era names were renamed (`zelda` `tests/game.rs`, `env`
+  `tests/specialist_env.rs`, `pool` `tests/zelda.rs`). `tf corpus check` keeps the manifest, frame-count and
+  `power-on-to-d2` presence checks but no longer replays the D2 movies (recorded on FCEUmm timing, they no
+  longer reach Dungeon 2 on zcore). `tf trace` prints one zcore build's instructions per frame for diffing
+  two builds.
+- **What (18d):** `tf ladder-golden`/`ladder-diff` (all 11 digest domains, zcore only) are zcore's regression
+  suite: goldens of the whole corpus in `target/ladder/hardware` before a zcore change, `ladder-diff` after
+  (README "Emulator regression suite"). The seven `short` scripted movies' zcore goldens are committed in
+  `corpus/golden/` (~1.2 MB) so a fresh clone has a reference; `tf ladder-diff` with no argument uses them.
+- **Why:** every quirk is gone (entry above) and the promoted models passed the gates on hardware behaviour, so
+  FCEUmm is no longer the reference.

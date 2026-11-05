@@ -1,67 +1,19 @@
-//! The same sessions on zcore and on the FCEUmm oracle: identical RAM after every action.
+//! Sessions on zcore from the base movie's end: snapshot/restore replays random play exactly.
 #![cfg(feature = "zcore")]
 
 mod common;
 
-use common::repo;
-use std::path::PathBuf;
+use common::{open_core, repo};
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
+use zcore::ZCore;
 use zelda::actions::{NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS};
-use zelda::{Action, GameMap, LoadOptions, Nes, Session};
+use zelda::{Action, GameMap, LoadOptions, Session};
 
-/// `zelda::Nes` over the dev-only FCEUmm oracle (state = oracle savestate bytes): the reference this file
-/// compares zcore sessions against (the one oracle use left in the zelda tests; goes with the oracle, step 18c).
-pub struct OracleNes(pub oracle::Oracle);
+struct Play<'a>(&'a mut ZCore);
 
-impl Nes for OracleNes {
-    type State = Vec<u8>;
-
-    fn run_frame(&mut self, buttons: u8, _render: bool) {
-        self.0.run_frame(buttons);
-    }
-
-    fn ram(&self) -> &[u8; 0x800] {
-        self.0.ram()
-    }
-
-    fn prg_ram(&self) -> &[u8; 0x2000] {
-        self.0.prg_ram()
-    }
-
-    fn poke(&mut self, addr: u16, value: u8) {
-        self.0.poke(addr, value);
-    }
-
-    fn snapshot(&self) -> Vec<u8> {
-        self.0.save_state()
-    }
-
-    fn restore(&mut self, state: &Vec<u8>) {
-        self.0.load_state(state).expect("oracle load_state");
-    }
-}
-
-/// Opens the oracle, or None (with the reason on stderr) when the library or ROM is missing.
-fn open_oracle() -> Option<OracleNes> {
-    if !oracle::available() {
-        eprintln!("oracle library not built (oracle/fceumm/build.sh): skipping");
-        return None;
-    }
-    let rom = std::env::var_os("TRIFORCE_ROM")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| repo().join("roms/zelda.nes"));
-    if !rom.exists() {
-        eprintln!("ROM not found: set TRIFORCE_ROM or create roms/zelda.nes");
-        return None;
-    }
-    Some(OracleNes(oracle::Oracle::open(&rom).expect("open oracle")))
-}
-
-struct Play<'a, N: Nes>(&'a mut N);
-
-impl<N: Nes> movie::Playback for Play<'_, N> {
+impl movie::Playback for Play<'_> {
     fn run_frame(&mut self, buttons: u8) {
         self.0.run_frame(buttons, false);
     }
@@ -70,19 +22,11 @@ impl<N: Nes> movie::Playback for Play<'_, N> {
     }
 }
 
-fn movies() -> std::path::PathBuf {
-    repo().join("corpus/movies")
-}
-
-fn zcore() -> zcore::ZCore {
-    let bytes = std::fs::read(repo().join("roms/zelda.nes")).expect("roms/zelda.nes");
-    zcore::ZCore::power_on(zcore::Rom::from_ines(&bytes).expect("Zelda ROM"))
-}
-
 /// Plays `power_on_to_start` on `nes` and returns the machine state at its end.
-fn base<N: Nes>(nes: &mut N) -> N::State {
-    let m = movie::Movie::load(&movies().join("power_on_to_start.tfmovie")).unwrap();
-    movie::play(&mut Play(nes), &m, &movies()).unwrap();
+fn base(nes: &mut ZCore) -> zcore::MachineState {
+    let movies = repo().join("corpus/movies");
+    let m = movie::Movie::load(&movies.join("power_on_to_start.tfmovie")).unwrap();
+    movie::play(&mut Play(nes), &m, &movies).unwrap();
     nes.snapshot()
 }
 
@@ -97,43 +41,8 @@ fn random_action(mask: &zelda::ActionMask, rng: &mut ChaCha8Rng) -> Action {
 }
 
 #[test]
-#[ignore = "step 18: FCEUmm-recorded movie desyncs on hardware timing (FQ-01, FQ-06..FQ-08)"]
-fn zcore_matches_oracle_over_random_play() {
-    let _lock = oracle::lock();
-    let Some(mut o) = open_oracle() else { return };
-    let mut z = zcore();
-    let (ob, zb) = (base(&mut o), base(&mut z));
-    assert_eq!(o.ram(), z.ram(), "base state RAM");
-    let map = Arc::new(GameMap::builtin());
-    let mut os: Session<OracleNes> = Session::new(o, map.clone());
-    let mut zs = Session::new(z, map);
-    let opts = LoadOptions { randomize_rng: true, ..LoadOptions::default() };
-    for seed in 0..4u64 {
-        os.load(&ob, &opts, &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
-        zs.load(&zb, &opts, &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
-        assert_eq!(os.nes().ram(), zs.nes().ram(), "seed {seed}: after load");
-        let mut rng = ChaCha8Rng::seed_from_u64(100 + seed);
-        for step in 0..300 {
-            if zs.state().game_over() {
-                break;
-            }
-            assert_eq!(os.mask().to_flat(), zs.mask().to_flat(), "seed {seed} step {step}: mask");
-            let a = random_action(zs.mask(), &mut rng);
-            let (oc, zc) = (os.act(a), zs.act(a));
-            assert_eq!(format!("{oc:?}"), format!("{zc:?}"), "seed {seed} step {step}: change for {a:?}");
-            assert_eq!(os.nes().ram(), zs.nes().ram(), "seed {seed} step {step}: RAM after {a:?}");
-            assert_eq!(os.nes().prg_ram(), zs.nes().prg_ram(), "seed {seed} step {step}: PRG-RAM");
-            if zc.is_err() {
-                break;
-            }
-        }
-        assert_eq!(os.frame(), zs.frame(), "seed {seed}: frames");
-    }
-}
-
-#[test]
 fn zcore_snapshot_restore_is_exact() {
-    let mut z = zcore();
+    let Some(mut z) = open_core() else { return };
     let b = base(&mut z);
     let mut s = Session::new(z, Arc::new(GameMap::builtin()));
     s.load(&b, &LoadOptions::default(), &mut ChaCha8Rng::seed_from_u64(0)).unwrap();

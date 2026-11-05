@@ -12,7 +12,7 @@
 //! The recorded movie contains only frames and pokes; asserts and conditions are verified while
 //! recording.
 
-use crate::backend::Backend;
+use crate::zcore::Zcore;
 use crate::formats::{Movie, parse_hex_u16, parse_num_u8, poke_addr_allowed};
 use anyhow::{Context, Result, bail, ensure};
 
@@ -97,19 +97,13 @@ fn parse_line(line: &str) -> Result<Directive> {
     }
 }
 
-fn read_addr(b: &mut dyn Backend, addr: u16) -> u8 {
-    let mut buf = Vec::new();
-    if addr < 0x800 {
-        b.ram()[addr as usize]
-    } else {
-        b.read_domain(crate::formats::Domain::PrgRam, &mut buf);
-        buf[addr as usize - 0x6000]
-    }
+fn read_addr(b: &Zcore, addr: u16) -> u8 {
+    if addr < 0x800 { b.ram()[addr as usize] } else { b.prg_ram()[addr as usize - 0x6000] }
 }
 
 /// Run `directives` on `b`, appending to `movie` (which may already hold a prefix that `b` has
 /// already played).
-pub fn record(b: &mut dyn Backend, movie: &mut Movie, directives: &[Directive]) -> Result<()> {
+pub fn record(b: &mut Zcore, movie: &mut Movie, directives: &[Directive]) -> Result<()> {
     for d in directives {
         match d {
             &Directive::Hold { buttons, frames } => {
@@ -144,7 +138,7 @@ pub fn record(b: &mut dyn Backend, movie: &mut Movie, directives: &[Directive]) 
 }
 
 /// Run one frame on `b`, applying pending pokes for this frame first, and append it to `movie`.
-pub fn step(b: &mut dyn Backend, movie: &mut Movie, buttons: u8) {
+pub fn step(b: &mut Zcore, movie: &mut Movie, buttons: u8) {
     let frame = movie.inputs.len() as u32;
     // Pending pokes are the tail of the list tagged with this frame.
     let start = movie.pokes.iter().rposition(|p| p.frame != frame).map_or(0, |i| i + 1);

@@ -18,7 +18,6 @@ pub fn default_rom_path() -> PathBuf {
 }
 
 pub struct RomInfo {
-    pub path: PathBuf,
     pub bytes: Vec<u8>,
     pub payload_sha1: [u8; 20],
 }
@@ -38,7 +37,7 @@ pub fn load(path: Option<&Path>) -> Result<RomInfo> {
         path.display(),
         hex(&digest)
     );
-    Ok(RomInfo { path, bytes, payload_sha1: digest })
+    Ok(RomInfo { bytes, payload_sha1: digest })
 }
 
 pub fn hex(b: &[u8]) -> String {

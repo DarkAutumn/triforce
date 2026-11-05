@@ -31,9 +31,6 @@ The ROM isn't checked in. Put an uncompressed *Legend of Zelda (U)* ROM at `roms
 `$TRIFORCE_ROM` at it. The ROM payload (after the 16-byte iNES header) must have SHA-1
 `a12d74c73a0481599a5d832361d168f4737bbcf6`. ROM-dependent tests skip without it.
 
-Dev-only: `oracle/fceumm/build.sh` builds the FCEUmm reference emulator (`target/oracle/libtforacle.so`, GPL,
-never linked into shipping crates) that the `tf` tool and the oracle tests compare zcore against.
-
 ## Use
 
 ```bash
@@ -52,7 +49,7 @@ uv run training-gui.py                                          # live training 
 .venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states (start/build/path/audit)
 triforce promote <specialist> <run-id>
 triforce eval-chain --route milestone1 --runs 20 --parallel 20
-cargo run --release -p triforce-tools --bin tf -- --help        # movies, goldens, oracle diffs, ladder, bench
+cargo run --release -p triforce-tools --bin tf -- --help        # movies, zcore goldens/self-diff, trace, corpus, bench
 ```
 
 Training GUI charts use the plotted history (respecting **skip startup**). Success ranges use 10-percentage-point
@@ -63,3 +60,22 @@ the "no change" reference appears only when zero is within that range.
 `triforce.play` is the debugging tool: it drives the game through the same Rust code path as training
 (option executor, interrupts, masks, look-ahead) and prints the room, entities, legal actions and an ASCII
 tile map. `--screenshot`, `--ram`, `--set`, `--save-state` and `--capture` help build and inspect savestates.
+
+## Emulator regression suite
+
+zcore is checked against its own per-frame digests (`TFGOLDEN`, all 11 domains: RAM, PRG-RAM, CHR, nametables,
+palette, OAM, pixels, CPU, PPU, mapper and APU state) over the corpus movies. Around any zcore change:
+
+```bash
+alias tf='cargo run --release -q -p triforce-tools --bin tf --'
+tf ladder-golden -o target/ladder/hardware      # before the change: goldens of every corpus movie (~1.2M frames)
+# ... change zcore ...
+tf ladder-diff target/ladder/hardware           # after: "0 of N movies diverge", or each movie's first bad frame
+tf ladder-diff                                  # the committed goldens of the seven short movies (corpus/golden/)
+```
+
+A change meant to be invisible (refactor, speed-up) must leave `ladder-diff` at 0. A deliberate behaviour change
+will diverge: check that the divergence is the intended one (`tf trace MOVIE --frame K` before and after, then
+`diff` the outputs), then regenerate the goldens, including the committed ones
+(`tf ladder-golden --short -o corpus/golden`), and commit those with the change. A re-recorded movie makes its
+golden stale (`ladder-diff` says so); regenerate it the same way.

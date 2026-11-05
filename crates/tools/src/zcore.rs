@@ -1,12 +1,13 @@
-//! zcore as a `tf` backend (the subtraction ladder, plan step 9), through the `ZCore` API; the
-//! ladder-only domains read internals through `ZCore::bus`.
+//! zcore driven by `tf`: frames, pokes, the 11 digest domains and instruction traces. The
+//! machine-state domains (TFGOLDEN bits 7-10) read internals through the hidden `ZCore::bus`.
 
-use crate::backend::{Backend, TraceRow};
 use crate::formats::Domain;
 use anyhow::{Context, Result};
 use std::sync::mpsc;
+use zcore::bus::Bus;
+use zcore::mapper::Mapper;
 use zcore::memory::Src;
-use zcore::{Rom, ZCore};
+use zcore::{Rom, TraceRow, ZCore};
 
 pub struct Zcore {
     nes: ZCore,
@@ -18,27 +19,30 @@ impl Zcore {
         let rom = Rom::from_ines(rom).context("zcore ROM")?;
         Ok(Zcore { nes: ZCore::power_on(rom), render: true })
     }
-}
 
-impl Backend for Zcore {
-    fn name(&self) -> &'static str {
-        "zcore"
-    }
-
-    fn run_frame(&mut self, buttons: u8) {
+    pub fn run_frame(&mut self, buttons: u8) {
         self.nes.run_frame(buttons, self.render);
     }
 
-    fn set_render(&mut self, on: bool) -> bool {
+    /// Draw pixels on the following frames (default on).
+    pub fn set_render(&mut self, on: bool) {
         self.render = on;
-        true
     }
 
-    fn poke(&mut self, addr: u16, value: u8) {
+    pub fn poke(&mut self, addr: u16, value: u8) {
         self.nes.poke(addr, value);
     }
 
-    fn read_domain(&mut self, domain: Domain, out: &mut Vec<u8>) -> bool {
+    pub fn ram(&self) -> &[u8; 0x800] {
+        self.nes.ram()
+    }
+
+    pub fn prg_ram(&self) -> &[u8; 0x2000] {
+        self.nes.prg_ram()
+    }
+
+    /// Fill `out` with the bytes of a domain. Returns false for pixels of a frame that wasn't drawn.
+    pub fn read_domain(&self, domain: Domain, out: &mut Vec<u8>) -> bool {
         out.clear();
         let bus = self.nes.bus();
         match domain {
@@ -52,35 +56,82 @@ impl Backend for Zcore {
                 Some(px) => out.extend_from_slice(px),
                 None => return false,
             },
-            d => return crate::ladder_domains!(bus, d, out, zcore::mapper::Mapper::Sxrom),
+            Domain::Cpu | Domain::Ppu | Domain::Mapper | Domain::Apu => machine_domain(bus, domain, out),
         }
         true
     }
 
-    fn overshoot_dots(&self) -> Option<f64> {
-        // The frame boundary is the start of VBlank, line 241 dot 1.
-        let ppu = &self.nes.bus().ppu;
-        Some((i64::from(ppu.scanline) * 341 + i64::from(ppu.cycle) - (241 * 341 + 1)) as f64)
-    }
-
-    fn trace_frame(&mut self, buttons: u8) -> Vec<TraceRow> {
+    /// Run one frame while recording every instruction.
+    pub fn trace_frame(&mut self, buttons: u8) -> Vec<TraceRow> {
         let (tx, rx) = mpsc::channel();
-        self.nes.set_trace(Some(Box::new(move |r: &zcore::TraceRow| {
-            let row = TraceRow {
-                pc: r.pc,
-                opcode: r.opcode,
-                a: r.a,
-                x: r.x,
-                y: r.y,
-                p: r.p,
-                sp: r.sp,
-                cycle: u64::from(r.cycle),
-                scanline: r.scanline as i16,
-            };
-            tx.send(row).expect("trace receiver");
-        })));
+        self.nes.set_trace(Some(Box::new(move |r: &TraceRow| tx.send(*r).expect("trace receiver"))));
         self.run_frame(buttons);
         self.nes.set_trace(None);
         rx.try_iter().collect()
+    }
+}
+
+/// Machine-state domains, encoded field by field so the digests survive representation changes
+/// inside zcore: a change that alters any of these bytes changes emulated state, not just layout.
+fn machine_domain(bus: &Bus, domain: Domain, out: &mut Vec<u8>) {
+    match domain {
+        Domain::Cpu => {
+            let c = &bus.cpu;
+            out.extend_from_slice(&c.pc.to_le_bytes());
+            out.extend_from_slice(&[c.acc, c.x, c.y, c.status.bits(), c.sp]);
+            out.extend_from_slice(&c.cycle.to_le_bytes());
+        }
+        Domain::Ppu => {
+            let p = &bus.ppu;
+            out.extend_from_slice(&p.scanline.to_le_bytes());
+            out.extend_from_slice(&p.cycle.to_le_bytes());
+            out.push((p.frame_count & 1) as u8);
+            out.extend_from_slice(&p.scroll.v.to_le_bytes());
+            out.extend_from_slice(&p.scroll.t.to_le_bytes());
+            out.extend_from_slice(&p.scroll.fine_x.to_le_bytes());
+            out.push(u8::from(p.scroll.write_latch));
+            out.extend_from_slice(&[p.read_status_bits(), p.oamaddr, p.vram_buffer, p.open_bus]);
+        }
+        Domain::Mapper => {
+            let Mapper::Sxrom(m) = &bus.mapper else { unreachable!("Zelda is MMC1") };
+            let m = &m.mmc1;
+            out.extend_from_slice(&[
+                m.write_buffer,
+                m.shift_count,
+                u8::from(m.prg_ram_disabled),
+                u8::from(m.chr_mode),
+                u8::from(m.prg_mode),
+                u8::from(m.prg_bank_select),
+                m.mirroring as u8,
+                m.chr0,
+                m.chr1,
+                m.prg,
+            ]);
+        }
+        Domain::Apu => {
+            let a = &bus.apu;
+            let d = &a.dmc;
+            out.extend_from_slice(&d.cycle.to_le_bytes());
+            out.extend_from_slice(&d.counter.to_le_bytes());
+            out.extend_from_slice(&d.period.to_le_bytes());
+            out.extend_from_slice(&d.addr.to_le_bytes());
+            out.extend_from_slice(&d.sample_addr.to_le_bytes());
+            out.extend_from_slice(&d.bytes_remaining.to_le_bytes());
+            out.extend_from_slice(&d.sample_length.to_le_bytes());
+            out.extend_from_slice(&[
+                u8::from(d.irq_enabled),
+                u8::from(d.loops),
+                u8::from(d.buffer_empty),
+                u8::from(d.dma_pending),
+                d.init,
+                d.bits_remaining,
+            ]);
+            out.extend_from_slice(&[
+                u8::from(a.frame_counter.irq_pending),
+                u8::from(a.frame_counter.inhibit_irq),
+                u8::from(d.irq_pending),
+            ]);
+        }
+        _ => unreachable!("{} is not a machine-state domain", domain.name()),
     }
 }

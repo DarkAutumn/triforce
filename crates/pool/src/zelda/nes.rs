@@ -55,7 +55,7 @@ impl<S> PoolState<S> {
 ///   the next frame. Look-ahead frames (`run_frame(_, false)`) never render.
 /// - **Recording.** While recording, every frame's buttons and every poke append to an [`InputLog`]. Restoring
 ///   one of this log's own snapshots (the session's look-ahead) truncates the log back to it, so look-ahead
-///   frames and pokes never reach a movie (`OracleEmulator.load_state` semantics); restoring any other state
+///   frames and pokes never reach a movie (as the old Python recorder's `load_state` did); restoring any other state
 ///   (an episode's start state) begins a new log from it.
 pub struct PoolNes<N: Nes> {
     inner: N,

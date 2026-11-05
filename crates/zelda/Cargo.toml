@@ -13,12 +13,7 @@ zcore = { version = "0.1.0", path = "../zcore", optional = true }
 
 [dev-dependencies]
 movie = { path = "../movie" }
-oracle = { path = "../oracle" }
 rand_chacha = "0.10.0"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.154"
-toml = "1.2.0"
-zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [features]
 zcore = ["dep:zcore"]

@@ -7,7 +7,6 @@ members = [
     "crates/pool",
     "crates/triforce-py",
     "crates/tools",
-    "crates/oracle",
     "crates/movie",
 ]
 

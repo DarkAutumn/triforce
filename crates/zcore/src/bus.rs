@@ -269,7 +269,8 @@ pub mod size {
 }
 
 impl State {
-    /// Power-on fill of console and cart RAM: FCEUmm's, and what the corpus was recorded with.
+    /// Power-on fill of console and cart RAM ($FF, what the corpus and start states were recorded with; the
+    /// hardware leaves it unspecified, and twelve test ROMs need $00: an open decision in docs/decisions.md).
     pub const POWER_ON_RAM: u8 = 0xFF;
 
     /// A console with no cart.

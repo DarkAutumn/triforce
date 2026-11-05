@@ -9,39 +9,39 @@
 //! | core::test_from_indices_ignores_heads_that_do_not_apply | zelda src/actions.rs (same name) |
 //! | core::test_invalid_actions_are_rejected | zelda src/actions.rs (same name) |
 //! | core::test_mask_flat_round_trip | zelda src/actions.rs (same name) |
-//! | core::test_decodes_dungeon_savestate | here `decodes_dungeon_and_overworld_savestates` (oracle_game.rs covers it on the chain state without the bomb count) |
-//! | core::test_decodes_overworld_start | here `decodes_dungeon_and_overworld_savestates`; zelda oracle_game.rs `decodes_dungeon_and_overworld_states` |
+//! | core::test_decodes_dungeon_savestate | here `decodes_dungeon_and_overworld_savestates` (game.rs covers it on the chain state without the bomb count) |
+//! | core::test_decodes_overworld_start | here `decodes_dungeon_and_overworld_savestates`; zelda game.rs `decodes_dungeon_and_overworld_states` |
 //! | core::test_north_shutter_is_barred_not_a_wall | here `north_shutter_is_barred_not_a_wall` |
-//! | core::test_boomerang_stays_active_on_return_until_caught | zelda oracle_game.rs `boomerang_stays_active_until_caught` |
-//! | core::test_doorway_restricts_moves_and_weapons | zelda oracle_game.rs `masks` |
-//! | core::test_sword_and_beams_are_exclusive | zelda oracle_game.rs `masks` |
-//! | core::test_no_weapons_in_empty_room | zelda oracle_game.rs `masks` |
+//! | core::test_boomerang_stays_active_on_return_until_caught | zelda game.rs `boomerang_stays_active_until_caught` |
+//! | core::test_doorway_restricts_moves_and_weapons | zelda game.rs `masks` |
+//! | core::test_sword_and_beams_are_exclusive | zelda game.rs `masks` |
+//! | core::test_no_weapons_in_empty_room | zelda game.rs `masks` |
 //! | core::test_push_block_move_is_legal | here `push_block_move_is_legal` |
-//! | core::test_wall_move_costs_at_most_two_frames | zelda oracle_game.rs `executor_timing` |
-//! | core::test_timed_move_runs_requested_duration | zelda oracle_game.rs `executor_timing` |
-//! | core::test_wait_is_interrupted_in_combat | zelda oracle_game.rs `executor_timing` (`Interrupt` is a closed enum, so "reasons ⊆ Interrupt.ALL" holds by type) |
+//! | core::test_wall_move_costs_at_most_two_frames | zelda game.rs `executor_timing` |
+//! | core::test_timed_move_runs_requested_duration | zelda game.rs `executor_timing` |
+//! | core::test_wait_is_interrupted_in_combat | zelda game.rs `executor_timing` (`Interrupt` is a closed enum, so "reasons ⊆ Interrupt.ALL" holds by type) |
 //! | core::test_shield_collision_* (8 tests), core::test_magic_*, core::test_boomerang_disappearance_*, core::test_immune_clink_*, core::test_fireball_disappearance_*, core::test_unrelated_clink_*, core::test_real_before_trace_* | zelda src/blocks.rs unit tests (same names) |
 //! | core::test_executor_counts_every_collision_without_interrupting_or_replacing_callback | zelda src/executor.rs (same name, scripted `Nes` double) |
 //! | core::test_executor_counts_blocks_in_attack_settling_and_uncontrollable_frames | zelda src/executor.rs (same name) |
-//! | core::test_real_shield_block_can_coincide_with_a_heart_pickup | zelda oracle_game.rs `real_shield_blocks` |
-//! | core::test_real_projectile_block_counts_are_independent_of_option_duration | zelda oracle_game.rs `real_shield_blocks` |
+//! | core::test_real_shield_block_can_coincide_with_a_heart_pickup | zelda game.rs `real_shield_blocks` |
+//! | core::test_real_projectile_block_counts_are_independent_of_option_duration | zelda game.rs `real_shield_blocks` |
 //! | core::test_block_collection_preserves_real_seeded_timing_state_and_user_callback | here `block_collection_preserves_timing_state_and_frame_sink` |
 //! | core::test_push_block_opens | here `push_block_opens` |
-//! | core::test_scripted_walk_through_three_rooms | zelda oracle_game.rs `walk_three_rooms` |
-//! | core::test_beam_look_ahead_credits_firing_step | zelda oracle_game.rs `look_ahead` |
-//! | core::test_without_look_ahead_a_beam_emulates_only_real_frames | zelda oracle_game.rs `look_ahead` |
-//! | core::test_snapshot_restore_is_deterministic | zelda oracle_game.rs `snapshot_restore_is_deterministic` |
-//! | core::test_cave_person_line_blocks_north | zelda oracle_game.rs `caves` |
-//! | room_state::test_goriya_room_doors_trigger_and_hidden_item | zelda oracle_game.rs `room_states` |
-//! | room_state::test_key_rooms_hidden_and_carried | zelda oracle_game.rs `room_states` |
+//! | core::test_scripted_walk_through_three_rooms | zelda game.rs `walk_three_rooms` |
+//! | core::test_beam_look_ahead_credits_firing_step | zelda game.rs `look_ahead` |
+//! | core::test_without_look_ahead_a_beam_emulates_only_real_frames | zelda game.rs `look_ahead` |
+//! | core::test_snapshot_restore_is_deterministic | zelda game.rs `snapshot_restore_is_deterministic` |
+//! | core::test_cave_person_line_blocks_north | zelda game.rs `caves` |
+//! | room_state::test_goriya_room_doors_trigger_and_hidden_item | zelda game.rs `room_states` |
+//! | room_state::test_key_rooms_hidden_and_carried | zelda game.rs `room_states` |
 //! | room_state::test_cleared_boss_room_and_persisted_flags | here `cleared_boss_room_and_persisted_flags` |
 //! | room_state::test_push_block_progress | here `push_block_progress` |
 //! | room_state::test_bombing_the_south_wall_opens_it | here `bombing_the_south_wall_opens_it` |
-//! | room_state::test_sword_cave_ware | zelda oracle_game.rs `caves` |
-//! | room_state::test_overworld_rooms | here `overworld_rooms` (zelda oracle_game.rs covers the start room) |
+//! | room_state::test_sword_cave_ware | zelda game.rs `caves` |
+//! | room_state::test_overworld_rooms | here `overworld_rooms` (zelda game.rs covers the start room) |
 //! | room_state::test_map_and_compass_use_the_level_bit | here `map_and_compass_use_the_level_bit` |
-//! | room_entry::test_pre_entry_state_draws_a_new_layout_per_load_and_reproduces_per_seed | zelda oracle_game.rs `pre_entry_loads` (ChaCha8 seeds replace `random.seed`) |
-//! | room_entry::test_fresh_room_refills_a_room_the_game_remembers_as_cleared | here `fresh_room_refills_a_room_the_game_remembers_as_cleared` (zelda oracle_game.rs `pre_entry_loads` checks the same rule on poked flags) |
+//! | room_entry::test_pre_entry_state_draws_a_new_layout_per_load_and_reproduces_per_seed | zelda game.rs `pre_entry_loads` (ChaCha8 seeds replace `random.seed`) |
+//! | room_entry::test_fresh_room_refills_a_room_the_game_remembers_as_cleared | here `fresh_room_refills_a_room_the_game_remembers_as_cleared` (zelda game.rs `pre_entry_loads` checks the same rule on poked flags) |
 //!
 //! Every test skips when the ROM is missing.
 
@@ -417,7 +417,7 @@ fn map_and_compass_use_the_level_bit() {
 
 /// From 0x48 (entered from 0x58, where chain 0 killed 2 of the 4 monsters), walking S back into 0x58: the game
 /// remembers the kills and spawns only the 2 left unless the room's kill history is cleared before entry (the
-/// legacy state had 0x58 fully cleared; zelda oracle_game.rs `pre_entry_loads` covers a fully cleared room).
+/// legacy state had 0x58 fully cleared; zelda game.rs `pre_entry_loads` covers a fully cleared room).
 #[test]
 fn fresh_room_refills_a_room_the_game_remembers_as_cleared() {
     let Some(mut s) = session() else { return };

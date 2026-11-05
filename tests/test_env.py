@@ -1,7 +1,7 @@
 """The Python side of the native ``Env``: the gymnasium space, the Python action schema and the error types.
 
 The env's game behaviour (endings, rewards, objectives, routes, curriculum, capture) is tested in Rust
-(``crates/env/tests/oracle_env.rs``, ``ported_env.rs``); the wrapper's reset/step/restore contract in
+(``crates/env/tests/specialist_env.rs``, ``ported_env.rs``); the wrapper's reset/step/restore contract in
 ``tests/native/test_env.py``.
 """
 

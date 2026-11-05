@@ -23,5 +23,5 @@ zcore = { path = "../zcore" }
 zelda = { path = "../zelda", features = ["zcore"] }
 
 [[test]]
-name = "zelda_oracle"
+name = "zelda"
 required-features = ["zelda"]
