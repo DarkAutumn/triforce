@@ -1,0 +1,255 @@
+[
+  {
+    "name": "zapper_flip",
+    "frames": [
+      {
+        "number": 0,
+        "action": "ToggleZapperConnected"
+      },
+      {
+        "number": 0,
+        "action": {
+          "ZapperAim": [
+            10,
+            10
+          ]
+        }
+      },
+      {
+        "number": 4,
+        "hash": 8615630426075156747
+      },
+      {
+        "number": 5,
+        "action": "ZapperTrigger"
+      },
+      {
+        "number": 6,
+        "hash": 14878161860519346933
+      },
+      {
+        "number": 13,
+        "hash": 8615630426075156747
+      }
+    ]
+  },
+  {
+    "name": "zapper_light",
+    "frames": [
+      {
+        "number": 0,
+        "action": "ToggleZapperConnected"
+      },
+      {
+        "number": 0,
+        "action": {
+          "ZapperAim": [
+            128,
+            120
+          ]
+        }
+      },
+      {
+        "number": 30,
+        "action": {
+          "ZapperAim": [
+            8,
+            8
+          ]
+        }
+      },
+      {
+        "number": 60,
+        "audio_profile": [
+          [
+            272,
+            48
+          ],
+          [
+            545,
+            64
+          ],
+          [
+            552,
+            64
+          ],
+          [
+            583,
+            64
+          ],
+          [
+            584,
+            56
+          ],
+          [
+            522,
+            64
+          ],
+          [
+            571,
+            48
+          ],
+          [
+            583,
+            64
+          ],
+          [
+            48,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "zapper_stream",
+    "frames": [
+      {
+        "number": 0,
+        "action": "ToggleZapperConnected"
+      },
+      {
+        "number": 0,
+        "action": {
+          "ZapperAim": [
+            128,
+            120
+          ]
+        }
+      },
+      {
+        "number": 15,
+        "name": "before_trigger",
+        "hash": 2286419989648926811
+      },
+      {
+        "number": 20,
+        "action": "ZapperTrigger"
+      },
+      {
+        "number": 30,
+        "name": "after_trigger",
+        "hash": 5185756044584780983
+      }
+    ]
+  },
+  {
+    "name": "zapper_trigger",
+    "frames": [
+      {
+        "number": 0,
+        "action": "ToggleZapperConnected"
+      },
+      {
+        "number": 0,
+        "action": {
+          "ZapperAim": [
+            128,
+            120
+          ]
+        }
+      },
+      {
+        "number": 30,
+        "action": "ZapperTrigger"
+      },
+      {
+        "number": 60,
+        "audio_profile": [
+          [
+            78,
+            16
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            89,
+            48
+          ],
+          [
+            498,
+            64
+          ],
+          [
+            507,
+            56
+          ],
+          [
+            12,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            8
+          ]
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,120 @@
+//! PPU frame implementation.
+
+// The PPU's internal register and fetch state, whose meaning is the hardware's rather than this
+// crate's. Public for embedders and debuggers, not a stable surface - see the module docs on `ppu`.
+#![allow(missing_docs)]
+
+use crate::{
+    common::ResetKind,
+    memory::ConstArray,
+    ppu::{self, Ppu},
+};
+use serde::{Deserialize, Serialize};
+use std::ops::{Deref, DerefMut};
+
+/// PPU frame.
+// Keep it boxed: at 120 KiB (`FRAME` u16s), inline in `Ppu` it blows the stack wherever a
+// `Ppu`/`Bus`/`ControlDeck` is built or moved by value, and a save-state round trip clones through
+// several stack frames - un-boxed, `control_deck::tests::save_state_resumes_identically` overflows.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+#[must_use]
+pub struct Buffer(Box<ConstArray<u16, { ppu::size::FRAME }>>);
+
+impl std::fmt::Debug for Buffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Buffer({} elements)", self.0.len())
+    }
+}
+
+impl Default for Buffer {
+    fn default() -> Self {
+        Self(Box::new(ConstArray::new()))
+    }
+}
+
+impl Deref for Buffer {
+    type Target = [u16; ppu::size::FRAME];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Buffer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+/// PPU frame.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[must_use]
+#[repr(C)]
+pub struct Frame {
+    #[serde(skip)]
+    pub buffer: Buffer,
+    pub count: u32,
+}
+
+impl Default for Frame {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Frame {
+    pub fn new() -> Self {
+        Self {
+            count: 0,
+            buffer: Buffer::default(),
+        }
+    }
+
+    #[inline(always)]
+    pub const fn increment(&mut self) {
+        self.count = self.count.wrapping_add(1);
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub fn pixel(&self, x: u16, y: u16) -> u16 {
+        self.buffer[usize::from(x) + (usize::from(y) << 8)]
+    }
+
+    #[inline(always)]
+    pub fn set_pixel(&mut self, x: u16, y: u16, color: u16) {
+        self.buffer[usize::from(x) + (usize::from(y) << 8)] = color;
+    }
+
+    #[must_use]
+    pub fn pixel_brightness(&self, x: u16, y: u16) -> u32 {
+        let pixel = self.pixel(x, y);
+        let index = (pixel as usize) * 3;
+        let red = Ppu::NTSC_PALETTE[index];
+        let green = Ppu::NTSC_PALETTE[index + 1];
+        let blue = Ppu::NTSC_PALETTE[index + 2];
+        u32::from(red) + u32::from(green) + u32::from(blue)
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub const fn number(&self) -> u32 {
+        self.count
+    }
+
+    #[inline(always)]
+    pub const fn is_odd(&self) -> bool {
+        self.count & 0x01 == 0x01
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub fn buffer(&self) -> &[u16; ppu::size::FRAME] {
+        &self.buffer
+    }
+    pub fn reset(&mut self, _kind: ResetKind) {
+        self.count = 0;
+        self.buffer = Buffer::default();
+    }
+}

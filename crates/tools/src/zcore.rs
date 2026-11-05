@@ -1,21 +1,20 @@
-//! Stock/patched TetaNES (`../tetanes/tetanes-core`, branch `bugs`) as a `tf` backend. Dev-only:
-//! removed once zcore is imported (plan step 9, Z0).
+//! zcore as a `tf` backend (the subtraction ladder, plan step 9).
 
 use crate::backend::{Backend, TraceRow};
 use crate::formats::Domain;
 use anyhow::{Context, Result};
 use std::cell::RefCell;
-use tetanes_core::control_deck::{Config, ControlDeck, HeadlessMode};
-use tetanes_core::input::{JoypadBtnState, Player};
-use tetanes_core::memory::{RamState, Src};
-use tetanes_core::video::VideoFilter;
+use zcore::control_deck::{Config, ControlDeck, HeadlessMode};
+use zcore::input::{JoypadBtnState, Player};
+use zcore::memory::{RamState, Src};
+use zcore::video::VideoFilter;
 
-pub struct Tetanes {
+pub struct Zcore {
     deck: ControlDeck,
 }
 
-impl Tetanes {
-    pub fn open(rom: &[u8]) -> Result<Tetanes> {
+impl Zcore {
+    pub fn open(rom: &[u8]) -> Result<Zcore> {
         let mut cfg = Config::default();
         cfg.ram_state = RamState::AllOnes;
         cfg.sram_dir = None;
@@ -24,18 +23,18 @@ impl Tetanes {
         cfg.concurrent_dpad = true;
         cfg.fceumm_compat = true;
         let mut deck = ControlDeck::with_config(cfg);
-        deck.load_rom("zelda.nes", &mut &rom[..]).context("TetaNES load_rom")?;
+        deck.load_rom("zelda.nes", &mut &rom[..]).context("zcore load_rom")?;
         // Power-on spec (TFMOVIE v1): an empty, zero-filled battery, as the oracle does.
         let len = deck.sram().len();
         deck.set_sram(&vec![0u8; len]);
-        Ok(Tetanes { deck })
+        Ok(Zcore { deck })
     }
 
     fn set_buttons(&mut self, buttons: u8) {
         self.deck.joypad_mut(Player::One).buttons = JoypadBtnState::from_bits_truncate(buttons as u16);
     }
 
-    fn row(bus: &tetanes_core::bus::Bus) -> TraceRow {
+    fn row(bus: &zcore::bus::Bus) -> TraceRow {
         let c = &bus.cpu;
         TraceRow {
             pc: c.pc,
@@ -51,25 +50,14 @@ impl Tetanes {
     }
 }
 
-impl Backend for Tetanes {
+impl Backend for Zcore {
     fn name(&self) -> &'static str {
-        "tetanes"
+        "zcore"
     }
 
     fn run_frame(&mut self, buttons: u8) {
         self.set_buttons(buttons);
-        let _ = self.deck.clock_frame().expect("TetaNES clock_frame");
-        if std::env::var_os("TF_DBG").is_some() {
-            let bus = self.deck.bus();
-            eprintln!(
-                "frame {} boundary_dot {} sl {} cyc {} render {}",
-                self.deck.frame_number(),
-                bus.cpu.cycle as i64 * 3 - (bus.ppu.cycle as i64 - 1),
-                bus.ppu.scanline,
-                bus.ppu.cycle,
-                bus.ppu.mask_rendering_enabled
-            );
-        }
+        let _ = self.deck.clock_frame().expect("zcore clock_frame");
     }
 
     fn poke(&mut self, addr: u16, value: u8) {
@@ -91,15 +79,15 @@ impl Backend for Tetanes {
             Domain::Palette => out.extend((0x3F00..0x3F20u16).map(|a| bus.ppu_bus_peek(a))),
             Domain::Oam => out.extend((0..256).map(|i| bus.ppu.oamdata[i])),
             Domain::Pixels => out.extend(self.deck.frame_buffer_raw().iter().map(|&p| (p & 0x3F) as u8)),
-            _ => return false,
+            d => return crate::ladder_domains!(bus, d, out, zcore::mapper::Mapper::Sxrom),
         }
         true
     }
 
     fn overshoot_dots(&self) -> Option<f64> {
-        let fb: i64 = std::env::var("TF_FB_OFF").ok().and_then(|s| s.parse().ok()).unwrap_or(1);
+        // Frame boundary at line 240 dot 1 (FQ-08).
         let ppu = &self.deck.bus().ppu;
-        Some((i64::from(ppu.scanline) * 341 + i64::from(ppu.cycle) - (240 * 341 + fb)) as f64)
+        Some((i64::from(ppu.scanline) * 341 + i64::from(ppu.cycle) - (240 * 341 + 1)) as f64)
     }
 
     fn trace_frame(&mut self, buttons: u8) -> Vec<TraceRow> {
@@ -112,7 +100,7 @@ impl Backend for Tetanes {
                 rows.borrow_mut().push(Self::row(bus));
                 false
             });
-            let _ = r.expect("TetaNES clock_frame_until");
+            let _ = r.expect("zcore clock_frame_until");
             if self.deck.frame_number() != start {
                 break;
             }

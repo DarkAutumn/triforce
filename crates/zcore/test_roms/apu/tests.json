@@ -1,0 +1,1182 @@
+[
+  {
+    "name": "clock_jitter",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 951336095730925361
+      }
+    ]
+  },
+  {
+    "name": "dmc_basics",
+    "frames": [
+      {
+        "number": 30,
+        "hash": 11992147129660783512
+      }
+    ]
+  },
+  {
+    "name": "dmc_dma_2007_read",
+    "frames": [
+      {
+        "number": 30,
+        "hash": 11398877419118110174
+      }
+    ]
+  },
+  {
+    "name": "dmc_dma_2007_write",
+    "frames": [
+      {
+        "number": 35,
+        "hash": 10066428629761289066
+      }
+    ]
+  },
+  {
+    "name": "dmc_dma_4016_read",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 12668862607518231523
+      }
+    ]
+  },
+  {
+    "name": "dmc_dma_double_2007_read",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 3303528692302754891
+      }
+    ]
+  },
+  {
+    "name": "dmc_dma_read_write_2007",
+    "frames": [
+      {
+        "number": 25,
+        "hash": 10595698041155058010
+      }
+    ]
+  },
+  {
+    "name": "dmc_rates",
+    "frames": [
+      {
+        "number": 30,
+        "hash": 9588761239108989359
+      }
+    ]
+  },
+  {
+    "name": "dpcmletterbox",
+    "frames": [
+      {
+        "number": 10,
+        "hash": 9716310909309797997
+      }
+    ]
+  },
+  {
+    "name": "irq_flag",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 951336095730925361
+      }
+    ]
+  },
+  {
+    "name": "irq_flag_timing",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 951336095730925361
+      }
+    ]
+  },
+  {
+    "name": "irq_timing",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 951336095730925361
+      }
+    ]
+  },
+  {
+    "name": "len_ctr",
+    "frames": [
+      {
+        "number": 25,
+        "hash": 951336095730925361
+      }
+    ]
+  },
+  {
+    "name": "len_halt_timing",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 951336095730925361
+      }
+    ]
+  },
+  {
+    "name": "len_reload_timing",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 951336095730925361
+      }
+    ]
+  },
+  {
+    "name": "len_table",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 951336095730925361
+      }
+    ]
+  },
+  {
+    "name": "len_timing",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 14878161860519346933
+      }
+    ]
+  },
+  {
+    "name": "len_timing_mode0",
+    "frames": [
+      {
+        "number": 23,
+        "hash": 951336095730925361
+      }
+    ]
+  },
+  {
+    "name": "len_timing_mode1",
+    "frames": [
+      {
+        "number": 23,
+        "hash": 951336095730925361
+      }
+    ]
+  },
+  {
+    "name": "reset_len_ctrs_enabled",
+    "frames": [
+      {
+        "number": 20,
+        "action": {
+          "Reset": "Soft"
+        }
+      },
+      {
+        "number": 40,
+        "hash": 16014198644488276031
+      }
+    ]
+  },
+  {
+    "name": "reset_timing",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 951336095730925361
+      }
+    ]
+  },
+  {
+    "name": "test_1",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 12486489601112107272
+      }
+    ]
+  },
+  {
+    "name": "test_2",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 12486489601112107272
+      }
+    ]
+  },
+  {
+    "name": "test_3",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 12486489601112107272
+      }
+    ]
+  },
+  {
+    "name": "test_4",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 12486489601112107272
+      }
+    ]
+  },
+  {
+    "name": "test_5",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 12486489601112107272
+      }
+    ]
+  },
+  {
+    "name": "test_6",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 12486489601112107272
+      }
+    ]
+  },
+  {
+    "name": "test_7",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 12486489601112107272
+      }
+    ]
+  },
+  {
+    "name": "test_8",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 12486489601112107272
+      }
+    ]
+  },
+  {
+    "name": "test_9",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 12486489601112107272
+      }
+    ]
+  },
+  {
+    "name": "test_10",
+    "frames": [
+      {
+        "number": 20,
+        "hash": 12486489601112107272
+      }
+    ]
+  },
+  {
+    "name": "pal_clock_jitter",
+    "frames": [
+      {
+        "number": 0,
+        "action": {
+          "SetNesRegion": "Pal"
+        }
+      },
+      {
+        "number": 20,
+        "hash": 13813501042665481329
+      }
+    ]
+  },
+  {
+    "name": "pal_irq_flag_timing",
+    "frames": [
+      {
+        "number": 0,
+        "action": {
+          "SetNesRegion": "Pal"
+        }
+      },
+      {
+        "number": 20,
+        "hash": 15283534834975948636
+      }
+    ]
+  },
+  {
+    "name": "pal_len_halt_timing",
+    "frames": [
+      {
+        "number": 0,
+        "action": {
+          "SetNesRegion": "Pal"
+        }
+      },
+      {
+        "number": 20,
+        "hash": 3223047209937034573
+      }
+    ]
+  },
+  {
+    "name": "pal_len_reload_timing",
+    "frames": [
+      {
+        "number": 0,
+        "action": {
+          "SetNesRegion": "Pal"
+        }
+      },
+      {
+        "number": 20,
+        "hash": 14496598670261025093
+      }
+    ]
+  },
+  {
+    "name": "pal_len_timing_mode0",
+    "frames": [
+      {
+        "number": 0,
+        "action": {
+          "SetNesRegion": "Pal"
+        }
+      },
+      {
+        "number": 20,
+        "hash": 15415456214152333503
+      }
+    ]
+  },
+  {
+    "name": "pal_len_timing_mode1",
+    "frames": [
+      {
+        "number": 0,
+        "action": {
+          "SetNesRegion": "Pal"
+        }
+      },
+      {
+        "number": 20,
+        "hash": 16558599236285993505
+      }
+    ]
+  },
+  {
+    "name": "reset_4015_cleared",
+    "frames": [
+      {
+        "number": 20,
+        "action": {
+          "Reset": "Soft"
+        }
+      },
+      {
+        "number": 40,
+        "hash": 6079776310151228335
+      }
+    ]
+  },
+  {
+    "name": "reset_4017_timing",
+    "frames": [
+      {
+        "number": 20,
+        "action": {
+          "Reset": "Soft"
+        }
+      },
+      {
+        "number": 40,
+        "hash": 158964301043339763
+      }
+    ]
+  },
+  {
+    "name": "reset_4017_written",
+    "frames": [
+      {
+        "number": 20,
+        "action": {
+          "Reset": "Soft"
+        }
+      },
+      {
+        "number": 35,
+        "action": {
+          "Reset": "Soft"
+        }
+      },
+      {
+        "number": 50,
+        "hash": 16485921128453261162
+      }
+    ]
+  },
+  {
+    "name": "reset_irq_flag_cleared",
+    "frames": [
+      {
+        "number": 15,
+        "action": {
+          "Reset": "Soft"
+        }
+      },
+      {
+        "number": 20,
+        "hash": 2054987767744312757
+      }
+    ]
+  },
+  {
+    "name": "reset_works_immediately",
+    "frames": [
+      {
+        "number": 20,
+        "action": {
+          "Reset": "Soft"
+        }
+      },
+      {
+        "number": 30,
+        "hash": 15191020418456945175
+      }
+    ]
+  },
+  {
+    "name": "pal_irq_flag",
+    "frames": [
+      {
+        "number": 0,
+        "action": {
+          "SetNesRegion": "Pal"
+        }
+      },
+      {
+        "number": 20,
+        "hash": 13747417966407999092
+      }
+    ]
+  },
+  {
+    "name": "pal_irq_timing",
+    "frames": [
+      {
+        "number": 0,
+        "action": {
+          "SetNesRegion": "Pal"
+        }
+      },
+      {
+        "number": 20,
+        "hash": 7219648777380498854
+      }
+    ]
+  },
+  {
+    "name": "pal_len_ctr",
+    "frames": [
+      {
+        "number": 0,
+        "action": {
+          "SetNesRegion": "Pal"
+        }
+      },
+      {
+        "number": 25,
+        "hash": 6833095462741382586
+      }
+    ]
+  },
+  {
+    "name": "pal_len_table",
+    "frames": [
+      {
+        "number": 0,
+        "action": {
+          "SetNesRegion": "Pal"
+        }
+      },
+      {
+        "number": 20,
+        "hash": 2970567939215216479
+      }
+    ]
+  },
+  {
+    "name": "dmc",
+    "frames": [
+      {
+        "number": 1100,
+        "status": 0
+      }
+    ]
+  },
+  {
+    "name": "noise",
+    "frames": [
+      {
+        "number": 1600,
+        "status": 0
+      }
+    ]
+  },
+  {
+    "name": "square",
+    "frames": [
+      {
+        "number": 1400,
+        "status": 0
+      }
+    ]
+  },
+  {
+    "name": "triangle",
+    "frames": [
+      {
+        "number": 900,
+        "status": 0
+      }
+    ]
+  },
+  {
+    "name": "dmc_buffer_retained",
+    "frames": [
+      {
+        "number": 600,
+        "tones": 1
+      }
+    ]
+  },
+  {
+    "name": "dmc_latency",
+    "frames": [
+      {
+        "number": 600,
+        "tones": 1
+      }
+    ]
+  },
+  {
+    "name": "dmc_status",
+    "frames": [
+      {
+        "number": 600,
+        "tones": 1
+      }
+    ]
+  },
+  {
+    "name": "dmc_status_irq",
+    "frames": [
+      {
+        "number": 600,
+        "tones": 1
+      }
+    ]
+  },
+  {
+    "name": "apu_env",
+    "frames": [
+      {
+        "number": 300,
+        "audio_profile": [
+          [
+            35,
+            6
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            16,
+            539
+          ],
+          [
+            33,
+            580
+          ],
+          [
+            49,
+            580
+          ],
+          [
+            65,
+            582
+          ],
+          [
+            80,
+            582
+          ],
+          [
+            95,
+            580
+          ],
+          [
+            110,
+            580
+          ],
+          [
+            125,
+            582
+          ],
+          [
+            139,
+            582
+          ],
+          [
+            153,
+            580
+          ],
+          [
+            166,
+            580
+          ],
+          [
+            180,
+            584
+          ],
+          [
+            192,
+            580
+          ],
+          [
+            205,
+            581
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "dmc_pitch",
+    "frames": [
+      {
+        "number": 300,
+        "audio_profile": [
+          [
+            128,
+            414
+          ],
+          [
+            134,
+            975
+          ],
+          [
+            134,
+            975
+          ],
+          [
+            134,
+            960
+          ],
+          [
+            124,
+            731
+          ],
+          [
+            124,
+            731
+          ],
+          [
+            124,
+            731
+          ],
+          [
+            124,
+            731
+          ],
+          [
+            119,
+            670
+          ],
+          [
+            116,
+            627
+          ],
+          [
+            116,
+            627
+          ],
+          [
+            116,
+            627
+          ],
+          [
+            116,
+            627
+          ],
+          [
+            114,
+            845
+          ],
+          [
+            110,
+            1225
+          ],
+          [
+            110,
+            1230
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "lin_ctr",
+    "frames": [
+      {
+        "number": 300,
+        "audio_profile": [
+          [
+            47,
+            6
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            0
+          ],
+          [
+            4,
+            16
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            0
+          ],
+          [
+            4,
+            13
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            4,
+            13
+          ],
+          [
+            4,
+            13
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            4,
+            16
+          ],
+          [
+            149,
+            1206
+          ],
+          [
+            309,
+            1408
+          ],
+          [
+            359,
+            1695
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "noise_pitch",
+    "frames": [
+      {
+        "number": 300,
+        "audio_profile": [
+          [
+            251,
+            85
+          ],
+          [
+            356,
+            186
+          ],
+          [
+            386,
+            186
+          ],
+          [
+            364,
+            186
+          ],
+          [
+            324,
+            175
+          ],
+          [
+            382,
+            188
+          ],
+          [
+            375,
+            194
+          ],
+          [
+            381,
+            180
+          ],
+          [
+            378,
+            181
+          ],
+          [
+            375,
+            196
+          ],
+          [
+            364,
+            199
+          ],
+          [
+            397,
+            188
+          ],
+          [
+            379,
+            189
+          ],
+          [
+            387,
+            181
+          ],
+          [
+            376,
+            183
+          ],
+          [
+            363,
+            192
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "square_pitch",
+    "frames": [
+      {
+        "number": 300,
+        "audio_profile": [
+          [
+            379,
+            180
+          ],
+          [
+            592,
+            383
+          ],
+          [
+            591,
+            383
+          ],
+          [
+            592,
+            383
+          ],
+          [
+            591,
+            383
+          ],
+          [
+            592,
+            382
+          ],
+          [
+            591,
+            382
+          ],
+          [
+            592,
+            383
+          ],
+          [
+            591,
+            383
+          ],
+          [
+            592,
+            383
+          ],
+          [
+            591,
+            383
+          ],
+          [
+            592,
+            383
+          ],
+          [
+            591,
+            383
+          ],
+          [
+            592,
+            383
+          ],
+          [
+            591,
+            383
+          ],
+          [
+            592,
+            383
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sweep_cutoff",
+    "frames": [
+      {
+        "number": 300,
+        "audio_profile": [
+          [
+            35,
+            6
+          ],
+          [
+            1,
+            16
+          ],
+          [
+            1,
+            16
+          ],
+          [
+            1,
+            18
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            1,
+            16
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            240,
+            4558
+          ],
+          [
+            236,
+            101
+          ],
+          [
+            241,
+            115
+          ],
+          [
+            246,
+            122
+          ],
+          [
+            264,
+            200
+          ],
+          [
+            292,
+            417
+          ],
+          [
+            249,
+            1568
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sweep_sub",
+    "frames": [
+      {
+        "number": 300,
+        "audio_profile": [
+          [
+            156,
+            111
+          ],
+          [
+            335,
+            313
+          ],
+          [
+            332,
+            221
+          ],
+          [
+            332,
+            220
+          ],
+          [
+            331,
+            221
+          ],
+          [
+            331,
+            220
+          ],
+          [
+            332,
+            220
+          ],
+          [
+            331,
+            221
+          ],
+          [
+            332,
+            220
+          ],
+          [
+            292,
+            172
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "triangle_pitch",
+    "frames": [
+      {
+        "number": 300,
+        "audio_profile": [
+          [
+            312,
+            164
+          ],
+          [
+            484,
+            383
+          ],
+          [
+            485,
+            383
+          ],
+          [
+            484,
+            382
+          ],
+          [
+            485,
+            382
+          ],
+          [
+            484,
+            382
+          ],
+          [
+            485,
+            383
+          ],
+          [
+            484,
+            383
+          ],
+          [
+            485,
+            383
+          ],
+          [
+            484,
+            383
+          ],
+          [
+            485,
+            383
+          ],
+          [
+            484,
+            383
+          ],
+          [
+            485,
+            383
+          ],
+          [
+            485,
+            383
+          ],
+          [
+            485,
+            383
+          ],
+          [
+            484,
+            383
+          ]
+        ]
+      }
+    ]
+  }
+]

@@ -3,11 +3,12 @@
 mod backend;
 mod corpus;
 mod formats;
+mod ladder;
 mod oracle;
 mod palette;
 mod rom;
 mod script;
-mod tetanes;
+mod zcore;
 
 use anyhow::{Context, Result, bail, ensure};
 use backend::{Backend, apply_pokes, first_divergence, golden_of};
@@ -192,8 +193,8 @@ enum CorpusCmd {
 pub fn make_backend(name: &str, rom: &rom::RomInfo) -> Result<Box<dyn Backend>> {
     match name {
         "fceumm" | "oracle" => Ok(Box::new(oracle::Oracle::open(&rom.path)?)),
-        "tetanes" => Ok(Box::new(tetanes::Tetanes::open(&rom.bytes)?)),
-        _ => bail!("unknown backend {name:?} (available: fceumm, tetanes)"),
+        "zcore" => Ok(Box::new(zcore::Zcore::open(&rom.bytes)?)),
+        _ => bail!("unknown backend {name:?} (available: fceumm, zcore)"),
     }
 }
 
