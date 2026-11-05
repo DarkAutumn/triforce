@@ -17,3 +17,5 @@ triforce/_native*.so
 /roms/
 triforce/states/*.lock
 crates/zcore/test_results/
+.coverage
+htmlcov/
