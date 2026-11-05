@@ -180,10 +180,12 @@ Nearby-item shaping and the measured cutoff remain disabled in promoted configs 
   seeded with `(S, i)`. Without `--seed` the pool seed is random. Actions are sampled with Gumbel noise drawn per
   rollout as an `[n, T, NOISE_SIZE]` block from the collector's own generator (seeded from the torch RNG), indexed
   by (env, step), and the policy forward always has the same shape, so a row's action depends only on that env's
-  observation and noise: training is reproducible across `--threads` and scheduling (CPU and CUDA, tested).
-  Shared curriculum progress still depends on env completion order; this is not a promise of bitwise-identical
-  curriculum training, nor exact RNG continuation when resuming a checkpoint. (Python's `random` streams of the
-  old stack are not reproduced.)
+  observation and noise: rollouts don't depend on `--threads` or scheduling (CPU and CUDA, tested). On CPU
+  training is reproducible end to end. On CUDA the PPO update is not bit-reproducible (atomic-add backward
+  kernels), so long CUDA runs drift apart after some iterations even with the same seed (ow-moblin, 12 envs:
+  identical for 9 iterations, different in the 10th). Shared curriculum progress depends on env completion
+  order; this is not a promise of bitwise-identical curriculum training, nor exact RNG continuation when resuming
+  a checkpoint. (Python's `random` streams of the old stack are not reproduced.)
 - Live event logs (`events.py`, watched by `training-gui.py`): each training invocation gets
   `logs/<yymmdd>_<NNN>_<what>/` (gitignored; `--logs-dir` / `$TRIFORCE_LOGS_DIR`). `training.json` lists every
   specialist run in order with its status and is rewritten atomically. `<specialist>.jsonl` is an append-only

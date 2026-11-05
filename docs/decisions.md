@@ -604,7 +604,9 @@ entry below and `crates/zcore/UPSTREAM.md`.
   so `--seed` still fixes it), indexed by (env, step); the forward shape never changes, so a row's numbers don't
   depend on which other envs are ready. Episode events are folded into the metrics in env order after the rollout.
   Same seed ⇒ same gameplay and metrics whatever `--threads` or scheduling (tests: `test_train_cli` threads 1 vs N
-  on CPU and CUDA, `test_ppo::test_async_schedule_does_not_change_training` with a randomly scheduled pool).
+  on CPU and CUDA, `test_ppo::test_async_schedule_does_not_change_training` with a randomly scheduled pool). The
+  CUDA PPO update itself was never bit-reproducible (atomic-add backward kernels), so long CUDA runs still drift
+  apart after a number of iterations; CPU runs repeat exactly.
   `ZeldaPolicy.evaluate(..., noise=)` is the new sampling path; without noise it still uses `torch.multinomial`.
 - **Not changed:** per-env trajectories, rewards, bootstrap rule, frame-aware GAE and the PPO update. A seeded run
   draws different random actions than before this change (Gumbel noise instead of `multinomial`), so old seeded

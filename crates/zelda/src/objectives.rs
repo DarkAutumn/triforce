@@ -12,6 +12,7 @@ use crate::game_map::{GameMap, RouteStep};
 use crate::room::Target;
 use crate::room_state::{SecretTrigger, decode_room_state, room_flags};
 use rand::{Rng, RngExt};
+use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
@@ -115,6 +116,10 @@ type RouteKey = (
 );
 /// Exit targets and next rooms of the map objective.
 type MapObjective = (Vec<Target>, BTreeSet<MapLocation>);
+/// `closest_room` arguments besides the route sets: (location, keys, candidate targets).
+type ClosestKey = (MapLocation, i32, Vec<MapLocation>);
+/// How many `closest_room` results to remember before starting over.
+const CLOSEST_CACHE: usize = 64;
 
 /// Routes Link through the game (`GameCompletion`).
 #[derive(Clone, Debug)]
@@ -126,6 +131,9 @@ pub struct GameCompletion {
     last_route: Option<(RouteKey, MapObjective)>,
     collected_key_rooms: BTreeSet<MapLocation>,
     opened_doors: BTreeSet<(MapLocation, String)>,
+    /// `closest_room` results (each a Dijkstra per target, asked every step) for the current
+    /// `collected_key_rooms` / `opened_doors`; cleared whenever either changes.
+    closest: RefCell<Vec<(ClosestKey, Option<MapLocation>)>>,
     seeded_location: Option<MapLocation>,
     waypoints: Vec<Waypoint>,
 }
@@ -154,6 +162,7 @@ impl GameCompletion {
             last_route: None,
             collected_key_rooms: BTreeSet::new(),
             opened_doors: BTreeSet::new(),
+            closest: RefCell::new(Vec::new()),
             seeded_location: None,
             waypoints,
         })
@@ -242,6 +251,7 @@ impl GameCompletion {
                     && !state.is_door_locked(d)
                 {
                     self.opened_doors.insert(key);
+                    self.closest.get_mut().clear();
                 }
             }
         }
@@ -253,15 +263,19 @@ impl GameCompletion {
                 continue;
             }
             let flags = room_flags(state.ram(), loc.value);
-            if room.treasure.as_deref() == Some("key") && flags & FLAG_ITEM_TAKEN != 0 {
-                self.collected_key_rooms.insert(*loc);
+            if room.treasure.as_deref() == Some("key")
+                && flags & FLAG_ITEM_TAKEN != 0
+                && self.collected_key_rooms.insert(*loc)
+            {
+                self.closest.get_mut().clear();
             }
             for exit in room.exits.values() {
                 if let Some(d) = Direction::from_exit(&exit.direction)
                     && exit.locked
                     && flags & d.value() != 0
+                    && self.opened_doors.insert((*loc, exit.direction.clone()))
                 {
-                    self.opened_doors.insert((*loc, exit.direction.clone()));
+                    self.closest.get_mut().clear();
                 }
             }
         }
@@ -313,13 +327,17 @@ impl GameCompletion {
     }
 
     fn closest_room(&self, state: &GameView, targets: &[MapLocation]) -> Option<MapLocation> {
+        let key: ClosestKey = (state.full_location(), state.keys(), targets.to_vec());
+        if let Some((_, best)) = self.closest.borrow().iter().find(|(k, _)| *k == key) {
+            return *best;
+        }
         let mut best = None;
         let mut best_cost = usize::MAX;
         for &target in targets {
             let route = self.map.find_route(
-                state.full_location(),
+                key.0,
                 target,
-                state.keys(),
+                key.1,
                 &self.collected_key_rooms,
                 &self.opened_doors,
             );
@@ -331,6 +349,11 @@ impl GameCompletion {
                 best = Some(target);
             }
         }
+        let mut cache = self.closest.borrow_mut();
+        if cache.len() == CLOSEST_CACHE {
+            cache.clear();
+        }
+        cache.push((key, best));
         best
     }
 
@@ -423,8 +446,8 @@ impl GameCompletion {
             && prev.treasure().is_some()
             && state.treasure().is_none()
         {
-            if item.as_deref() == Some("key") {
-                self.collected_key_rooms.insert(loc);
+            if item.as_deref() == Some("key") && self.collected_key_rooms.insert(loc) {
+                self.closest.get_mut().clear();
             }
             item = None;
         }
