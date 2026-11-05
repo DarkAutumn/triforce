@@ -12,7 +12,7 @@
 //! (a $2001 enable change or a $2006 address still settling) goes through `ppu_clock`.
 
 use crate::{
-    bus::Bus,
+    bus::{Bus, FrameBuffer},
     memory::ConstArray,
     ppu::{Ppu, addr, cycle, is_palette, scroll::Scroll},
 };
@@ -42,6 +42,32 @@ impl Ppu {
         }
     }
 
+    /// The 8 pixels of a whole tile (dots `dot..dot + 8`, `dot` ≡ 1 mod 8) on which no sprite
+    /// lies, as [`Ppu::render_pixel`] draws them with rendering on, then the 8 shifts.
+    #[inline(always)]
+    fn render_bg_tile(&mut self, frame: &mut FrameBuffer, dot: u16) {
+        let fine_x = self.scroll.fine_x;
+        let (lo, hi) = (self.tile_shift_lo, self.tile_shift_hi);
+        let row = (usize::from(self.scanline) << 8) + usize::from(dot - 1);
+        let out = &mut frame[row..row + 8];
+        for (i, pixel) in (0u16..).zip(out.iter_mut()) {
+            let shift = 15 - fine_x - i;
+            let bg_color = u8::from(dot + i > self.mask_min_draw_bg_cycle)
+                * ((((hi >> shift) & 0x01) << 1) | ((lo >> shift) & 0x01)) as u8;
+            let palette = if fine_x + i < 8 {
+                self.prev_palette
+            } else {
+                self.curr_palette
+            };
+            let palette = u16::from(palette + bg_color);
+            *pixel = u16::from(
+                self.palette
+                    .peek(addr::PALETTE_START | ((palette & 0x03 > 0) as u16 * palette)),
+            );
+        }
+        self.shift_bg(8);
+    }
+
     /// Sprite evaluation over the visible-line dots `from..=to` (within 1-256), as
     /// [`Ppu::spr_eval_cycle`] runs it a dot at a time.
     #[inline]
@@ -54,20 +80,25 @@ impl Ppu {
             }
             dot = cycle::SPR_EVAL_START;
         }
-        while dot <= to {
-            if dot == cycle::SPR_EVAL_START {
-                self.spr_in_range = false;
-                self.spr_zero_in_range = false;
-                self.secondary_oamaddr = 0x00;
-                self.oam_eval_done = false;
-                self.oamaddr_hi = (self.oamaddr >> 2) & 0x3F;
-                self.oamaddr_lo = self.oamaddr & 0x03;
-            } else if dot == cycle::SPR_EVAL_END {
-                self.spr_zero_visible = self.spr_zero_in_range;
-                self.spr_count = self.secondary_oamaddr >> 2;
-            }
-            self.oam_eval_cycle(dot);
-            dot += 1;
+        if dot > to {
+            return;
+        }
+        if dot == cycle::SPR_EVAL_START {
+            self.spr_in_range = false;
+            self.spr_zero_in_range = false;
+            self.secondary_oamaddr = 0x00;
+            self.oam_eval_done = false;
+            self.oamaddr_hi = (self.oamaddr >> 2) & 0x3F;
+            self.oamaddr_lo = self.oamaddr & 0x03;
+        }
+        let end = to.min(cycle::SPR_EVAL_END0);
+        if dot <= end {
+            self.oam_eval_dots(dot, end);
+        }
+        if to == cycle::SPR_EVAL_END {
+            self.spr_zero_visible = self.spr_zero_in_range;
+            self.spr_count = self.secondary_oamaddr >> 2;
+            self.oam_eval_dots(cycle::SPR_EVAL_END, cycle::SPR_EVAL_END);
         }
     }
 }
@@ -84,6 +115,16 @@ const fn increment_x_by(scroll: &mut Scroll, n: u16) {
 }
 
 impl Bus {
+    /// A whole tile's four fetches (dots ≡ 1, 3, 5, 7 mod 8), after the reload on its first dot.
+    #[inline(always)]
+    fn fetch_tile(&mut self) {
+        self.ppu.reload_bg_shifters();
+        self.fetch_bg_nt_byte();
+        self.fetch_bg_attr_byte();
+        self.ppu.tile_lo = self.chr_read(self.ppu.tile_addr);
+        self.ppu.tile_hi = self.chr_read(self.ppu.tile_addr + 8);
+    }
+
     /// Clocks the PPU forward until it catches up to `clock` master cycles.
     #[inline]
     pub fn ppu_clock_to(&mut self, clock: u32) {
@@ -208,10 +249,17 @@ impl Bus {
             dot = end + 1;
         }
         while dot <= to && dot <= cycle::BG_PREFETCH_END {
-            self.bg_fetch_cycle(dot);
+            if dot & 0x07 == 1 && dot + 7 <= to {
+                self.fetch_tile();
+                self.ppu.shift_bg(8);
+                self.ppu.scroll.increment_x();
+                dot += 8;
+            } else {
+                self.bg_fetch_cycle(dot);
+                self.ppu.shift_bg(1);
+                dot += 1;
+            }
             self.ppu.oam_fetch = self.ppu.secondary_oamdata[0];
-            self.ppu.shift_bg(1);
-            dot += 1;
         }
         while dot <= to {
             // 337..=340: the dummy nametable fetches land on 337 and 339.
@@ -253,26 +301,28 @@ impl Bus {
         while dot <= to {
             if dot & 0x07 == 1 && dot + 7 <= to {
                 // A whole tile: its fetches only feed the next tile, so they go first.
-                self.ppu.reload_bg_shifters();
-                self.fetch_bg_nt_byte();
-                self.fetch_bg_attr_byte();
-                self.ppu.tile_lo = self.chr_read(self.ppu.tile_addr);
-                self.ppu.tile_hi = self.chr_read(self.ppu.tile_addr + 8);
+                self.fetch_tile();
                 if visible {
                     let (ppu, frame) = self.ppu_and_frame();
                     match frame {
                         Some(frame) => {
-                            for d in dot..dot + 8 {
-                                ppu.render_pixel(frame, d);
-                                ppu.shift_bg(1);
+                            let x = usize::from(dot - 1);
+                            if ppu.spr_cover[x..x + 8].iter().all(|&c| c == 0) {
+                                ppu.render_bg_tile(frame, dot);
+                            } else {
+                                for d in dot..dot + 8 {
+                                    ppu.render_pixel(frame, d);
+                                    ppu.shift_bg(1);
+                                }
                             }
                         }
-                        None => {
+                        None if ppu.spr_zero_visible && !ppu.status_spr_zero_hit => {
                             for d in dot..dot + 8 {
                                 ppu.headless_sprite_zero_hit(d);
                                 ppu.shift_bg(1);
                             }
                         }
+                        None => ppu.shift_bg(8),
                     }
                 } else {
                     self.ppu.shift_bg(8);
@@ -325,17 +375,36 @@ impl Bus {
         }
         // OAMADDR is held at $00 throughout.
         self.ppu.write_oamaddr(0x00);
-        let prerender = self.ppu.is_prerender_scanline;
-        for dot in from..=to {
-            if prerender && cycle::COPY_Y_RANGE.contains(&dot) {
-                self.ppu.scroll.copy_y();
+        if self.ppu.is_prerender_scanline {
+            // The pre-render line reloads Y from `t` part way through (280-304).
+            for dot in from..=to {
+                if cycle::COPY_Y_RANGE.contains(&dot) {
+                    self.ppu.scroll.copy_y();
+                }
+                match dot & 0x07 {
+                    1 => self.fetch_bg_nt_byte(),
+                    3 => self.fetch_bg_attr_byte(),
+                    4 => self.load_sprites(dot),
+                    _ => (),
+                }
             }
-            match dot & 0x07 {
-                1 => self.fetch_bg_nt_byte(),
-                3 => self.fetch_bg_attr_byte(),
-                4 => self.load_sprites(dot),
-                _ => (),
-            }
+            return;
+        }
+        // `v` holds still here, so of the garbage nametable and attribute fetches only the last
+        // of each leaves anything behind; and a slot past `spr_count` loads nothing (its fetches
+        // are the dummy tile $FF).
+        let first = |phase: u16| from + (phase.wrapping_sub(from) & 0x07);
+        let live = cycle::SPR_FETCH_START + 8 * u16::from(self.ppu.spr_count);
+        let mut dot = first(4);
+        while dot <= to && dot < live {
+            self.load_sprites(dot);
+            dot += 8;
+        }
+        if first(1) <= to {
+            self.fetch_bg_nt_byte();
+        }
+        if first(3) <= to {
+            self.fetch_bg_attr_byte();
         }
     }
 }

@@ -797,22 +797,33 @@ impl Ppu {
     /// OAM and step the OAM address.
     #[inline(always)]
     fn oam_eval_cycle(&mut self, cycle: u16) {
-        if cycle & 0x01 == 0x01 {
-            // Odd cycles are reads from OAM
-            self.oam_fetch = self.oamdata[self.oamaddr as usize];
-        } else {
-            // Local variables improve cache locality
-            let scanline = self.scanline;
-            let mut oam_eval_done = self.oam_eval_done;
-            let mut secondary_oamaddr = self.secondary_oamaddr;
-            let mut oam_fetch = self.oam_fetch;
-            let mut spr_in_range = self.spr_in_range;
-            let mut spr_zero_in_range = self.spr_zero_in_range;
+        self.oam_eval_dots(cycle, cycle);
+    }
 
-            let mut oamaddr_hi = self.oamaddr_hi;
-            let mut oamaddr_lo = self.oamaddr_lo;
-            let secondary_oamindex = secondary_oamaddr as usize & 0x1F;
-            debug_assert!(secondary_oamindex < self.secondary_oamdata.len());
+    /// Sprite evaluation over dots `from..=to` (within 65-256), the state held in locals for the
+    /// run and stored once at the end.
+    #[inline(always)]
+    fn oam_eval_dots(&mut self, from: u16, to: u16) {
+        let scanline = self.scanline;
+        let height = self.ctrl_spr_height;
+        let mut oamaddr = self.oamaddr;
+        let mut oam_eval_done = self.oam_eval_done;
+        let mut secondary_oamaddr = self.secondary_oamaddr;
+        let mut oam_fetch = self.oam_fetch;
+        let mut spr_in_range = self.spr_in_range;
+        let mut spr_zero_in_range = self.spr_zero_in_range;
+        let mut oamaddr_hi = self.oamaddr_hi;
+        let mut oamaddr_lo = self.oamaddr_lo;
+        let mut overflow_count = self.overflow_count;
+        let mut overflow = self.status_spr_overflow;
+
+        for dot in from..=to {
+            if dot & 0x01 == 0x01 {
+                // Odd cycles are reads from OAM
+                oam_fetch = self.oamdata[usize::from(oamaddr)];
+                continue;
+            }
+            let secondary_oamindex = usize::from(secondary_oamaddr) & 0x1F;
 
             // oamaddr rolled over, so we're done reading
             if oam_eval_done {
@@ -823,7 +834,6 @@ impl Ppu {
             } else {
                 // If previously not in range, interpret this byte as y
                 let y = u16::from(oam_fetch);
-                let height = self.ctrl_spr_height;
                 spr_in_range |= !spr_in_range && (y..y + height).contains(&scanline);
 
                 // Even cycles are writes to Secondary OAM
@@ -848,18 +858,18 @@ impl Ppu {
                 } else {
                     oam_fetch = self.secondary_oamdata[secondary_oamindex];
                     if spr_in_range {
-                        self.set_spr_overflow(true);
+                        overflow = true;
                         oamaddr_lo += 1;
                         if oamaddr_lo == 0x04 {
                             oamaddr_lo = 0x00;
                             oamaddr_hi = (oamaddr_hi + 1) & 0x3F;
                         }
 
-                        match self.overflow_count.cmp(&0) {
-                            Ordering::Equal => self.overflow_count = 3,
+                        match overflow_count.cmp(&0) {
+                            Ordering::Equal => overflow_count = 3,
                             Ordering::Greater => {
-                                self.overflow_count -= 1;
-                                let no_overflow = self.overflow_count == 0;
+                                overflow_count -= 1;
+                                let no_overflow = overflow_count == 0;
                                 oam_eval_done |= no_overflow;
                                 if no_overflow {
                                     oamaddr_lo = 0;
@@ -874,17 +884,19 @@ impl Ppu {
                     }
                 }
             }
-
-            self.oamaddr = (oamaddr_hi << 2) | (oamaddr_lo & 0x03);
-            self.oamaddr_hi = oamaddr_hi;
-            self.oamaddr_lo = oamaddr_lo;
-
-            self.oam_eval_done = oam_eval_done;
-            self.secondary_oamaddr = secondary_oamaddr;
-            self.oam_fetch = oam_fetch;
-            self.spr_in_range = spr_in_range;
-            self.spr_zero_in_range = spr_zero_in_range;
+            oamaddr = (oamaddr_hi << 2) | (oamaddr_lo & 0x03);
         }
+
+        self.oamaddr = oamaddr;
+        self.oamaddr_hi = oamaddr_hi;
+        self.oamaddr_lo = oamaddr_lo;
+        self.oam_eval_done = oam_eval_done;
+        self.secondary_oamaddr = secondary_oamaddr;
+        self.oam_fetch = oam_fetch;
+        self.spr_in_range = spr_in_range;
+        self.spr_zero_in_range = spr_zero_in_range;
+        self.overflow_count = overflow_count;
+        self.status_spr_overflow = overflow;
     }
 
     fn spr_eval_cycle(&mut self) {

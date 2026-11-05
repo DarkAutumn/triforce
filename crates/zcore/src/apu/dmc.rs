@@ -45,13 +45,6 @@ impl Dmc {
         }
     }
 
-    /// Whether a sample is playing, which keeps the APU clocked every cycle.
-    #[inline(always)]
-    #[must_use]
-    pub const fn should_clock(&self) -> bool {
-        self.bytes_remaining > 0
-    }
-
     /// $4013 DMC length
     pub const fn write_length(&mut self, val: u8) {
         self.sample_length = ((val as u16) << 4) | 1;

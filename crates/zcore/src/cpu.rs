@@ -377,36 +377,34 @@ impl Bus {
     }
 
     /// Handle CPU interrupt requests, if any are pending.
+    ///
+    /// <https://www.nesdev.org/wiki/CPU_interrupts>
+    ///
+    /// - `PREV_NMI` takes `NMI`: the internal signal goes high during φ1 of the cycle that follows
+    ///   the one where the edge is detected, and stays high until the NMI has been handled.
+    /// - The edge detector polls the NMI line during φ2 of each cycle (hence here in `end_cycle`)
+    ///   and raises `NMI` when it goes from low on the previous cycle to high on this one.
+    /// - The IRQ status at the end of the second-to-last cycle is what matters, so `PREV_RUN_IRQ`
+    ///   keeps the previous `RUN_IRQ`.
+    ///
+    /// Done on the flag byte's bits directly: it runs on every CPU cycle.
     #[inline(always)]
     fn handle_interrupts(&mut self) {
-        let nmi_pending = self.ppu.nmi_pending;
-        let irq_pending_apu = self.apu.irq_pending();
-
-        let status = self.cpu.status;
-        let flags = &mut self.cpu.irq_flags;
-
-        // https://www.nesdev.org/wiki/CPU_interrupts
-        //
-        // The internal signal goes high during φ1 of the cycle that follows the one where
-        // the edge is detected, and stays high until the NMI has been handled. NMI is handled only
-        // when `prev_nmi` is true.
-        flags.set(IrqFlags::PREV_NMI, flags.contains(IrqFlags::NMI));
-
-        // This edge detector polls the status of the NMI line during φ2 of each CPU cycle (i.e.,
-        // during the second half of each cycle, hence here in `end_cycle`) and raises an internal
-        // signal if the input goes from being high during one cycle to being low during the
-        // next.
-        let prev_nmi_pending = flags.contains(IrqFlags::PREV_NMI_PENDING);
-        if !prev_nmi_pending & nmi_pending {
-            flags.insert(IrqFlags::NMI);
-        }
-        flags.set(IrqFlags::PREV_NMI_PENDING, nmi_pending);
-
-        // The IRQ status at the end of the second-to-last cycle is what matters,
-        // so keep the second-to-last status.
-        flags.set(IrqFlags::PREV_RUN_IRQ, flags.contains(IrqFlags::RUN_IRQ));
-        let run_irq = irq_pending_apu & !status.intersects(Status::I);
-        flags.set(IrqFlags::RUN_IRQ, run_irq);
+        let nmi_pending = u8::from(self.ppu.nmi_pending);
+        let run_irq = u8::from(self.apu.irq_pending() & !self.cpu.status.intersects(Status::I));
+        let f = self.cpu.irq_flags.bits();
+        let nmi = f & IrqFlags::NMI.bits();
+        let prev_nmi_pending = (f >> 2) & 1;
+        let nmi_edge = !prev_nmi_pending & nmi_pending;
+        let kept = IrqFlags::DMA_DMC | IrqFlags::DMA_HALT | IrqFlags::DMA_DUMMY_READ;
+        let f = (f & kept.bits())
+            | nmi
+            | nmi_edge
+            | (nmi << 1)
+            | (nmi_pending << 2)
+            | (run_irq << 3)
+            | ((f & IrqFlags::RUN_IRQ.bits()) << 1);
+        self.cpu.irq_flags = IrqFlags::from_bits_retain(f);
     }
 
     /// Start a CPU cycle.
@@ -679,13 +677,15 @@ impl Bus {
         self.cpu.master_clock = self.cpu.master_clock.saturating_sub(self.ppu.master_clock);
         self.ppu.master_clock = 0;
         self.apu.clock_sync();
+        self.apu_deadline = 0;
         self.ppu_deadline = self.ppu.next_event_clock();
     }
 
     /// Runs instructions until the frame counter advances (FQ-08), then synchronizes.
     pub fn clock_frame(&mut self) {
-        // The PPU is caught up between frames; anything may have changed it since.
+        // The PPU is caught up between frames; anything may have changed it, or the APU, since.
         self.ppu_deadline = self.ppu.next_event_clock();
+        self.apu_deadline = 0;
         let frame = self.ppu.frame_number();
         while frame == self.ppu.frame_number() {
             self.step_instr();
@@ -696,6 +696,7 @@ impl Bus {
     /// Runs the CPU one instruction, leaving the PPU caught up with it.
     pub fn clock_instr(&mut self) {
         self.ppu_deadline = self.ppu.next_event_clock();
+        self.apu_deadline = 0;
         self.step_instr();
         self.ppu_sync();
     }

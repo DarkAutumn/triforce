@@ -82,14 +82,43 @@ impl Apu {
     }
 
     /// Clocks the APU one CPU cycle, doing the real work only when something could change.
-    pub fn clock_lazy(&mut self) {
+    ///
+    /// `deadline` is the caller's copy of [`Apu::next_clock`]: until `master_clock` reaches it
+    /// nothing but the two cycle counters moves, so that is all a cycle costs. Anything that
+    /// changes the APU from outside (a register access, a sync, a reset) must set it to 0.
+    #[inline(always)]
+    pub fn clock_lazy(&mut self, deadline: &mut u32) {
         self.cpu_cycle = self.cpu_cycle.wrapping_add(1);
         self.master_clock += 1;
+        if self.master_clock >= *deadline {
+            self.clock_due();
+            *deadline = self.next_clock();
+        }
+    }
+
+    /// The work of a cycle on which the frame counter or a length counter may move.
+    #[inline(never)]
+    fn clock_due(&mut self) {
         if self.master_clock == Self::CYCLE_SIZE - 1 {
             self.clock_sync();
         } else if self.should_clock() {
             self.clock_to(self.master_clock);
         }
+    }
+
+    /// The `master_clock` from which [`Apu::clock_lazy`] has work to do: the next cycle while a
+    /// register write or a frame counter block is pending, else the cycle before the frame
+    /// counter's next step (`FrameCounter::should_clock`) or the end of the cycle block.
+    #[must_use]
+    pub fn next_clock(&self) -> u32 {
+        let fc = &self.frame_counter;
+        let next = self.master_clock + 1;
+        if self.should_clock || fc.block_counter > 0 || fc.write_buffer.is_some() {
+            return next;
+        }
+        let step = fc.step_cycles[fc.step] - 1;
+        let due = (step.saturating_sub(fc.cycle) + self.clock).max(next);
+        due.min(Self::CYCLE_SIZE - 1)
     }
 
     /// Runs the frame counter up to the master clock and starts the next [`Apu::CYCLE_SIZE`]
@@ -104,8 +133,10 @@ impl Apu {
 
     #[inline(always)]
     fn should_clock(&mut self) -> bool {
-        // Clock every cycle while a DMC sample plays.
-        if self.dmc.should_clock() || self.should_clock {
+        // A length counter write is applied on the next cycle. (A playing DMC sample used to
+        // force every cycle too; with no sample reader since Z4 that changes nothing: the frame
+        // counter lands every step on the same cycle either way.)
+        if self.should_clock {
             self.should_clock = false;
             return true;
         }

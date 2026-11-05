@@ -80,6 +80,10 @@ pub struct Bus {
     pub(crate) instr_start_clock: u32,
     /// Whether `status_at_instr` has been taken for the current instruction yet.
     pub(crate) status_latched: bool,
+    /// [`Apu::next_clock`]: the APU's `master_clock` from which a cycle has work to do. Zero
+    /// (work on the next cycle, which recomputes it) after anything that changes the APU from
+    /// outside its cycle.
+    pub(crate) apu_deadline: u32,
 }
 
 impl Deref for Bus {
@@ -128,6 +132,7 @@ impl Bus {
             ppu_deadline: 0,
             instr_start_clock: 0,
             status_latched: true,
+            apu_deadline: 0,
         }
     }
 
@@ -182,6 +187,7 @@ impl Bus {
     pub fn reset(&mut self, kind: ResetKind) {
         self.frame.fill(0);
         self.state.reset_components(kind);
+        self.apu_deadline = 0;
         // Read straight off the bus so the components are not clocked during the reset itself.
         let lo = self.cpu_bus_read(Cpu::RESET_VECTOR);
         let hi = self.cpu_bus_read(Cpu::RESET_VECTOR + 1);
@@ -334,11 +340,12 @@ impl Bus {
         }
     }
 
-    /// Clocks everything the CPU's cycle drives: the board, the APU, input and the PPU.
+    /// Clocks everything the CPU's cycle drives: the board and the APU (the PPU catches up on its
+    /// own, see [`Bus::ppu_sync`]).
     #[inline(always)]
     pub fn cpu_clock(&mut self) {
-        self.mapper.clock();
-        self.apu.clock_lazy();
+        self.state.mapper.clock();
+        self.state.apu.clock_lazy(&mut self.apu_deadline);
     }
 }
 
@@ -356,7 +363,10 @@ impl Bus {
             self.ppu_register_read(addr & 0x2007)
         } else {
             match addr {
-                0x4015 => self.apu.read_status(),
+                0x4015 => {
+                    self.apu_deadline = 0;
+                    self.apu.read_status()
+                }
                 0x4016 => self.input_read(Player::One),
                 0x4017 => self.input_read(Player::Two),
                 _ => self.open_bus,
@@ -421,7 +431,10 @@ impl Bus {
             self.ppu_register_write(addr & 0x2007, val);
         } else {
             match addr {
-                0x4000..=0x4013 | 0x4015 | 0x4017 => self.apu.write(addr, val),
+                0x4000..=0x4013 | 0x4015 | 0x4017 => {
+                    self.apu_deadline = 0;
+                    self.apu.write(addr, val);
+                }
                 0x4016 => self.input.write(val),
                 // $4014: OAM DMA is handled by the CPU.
                 _ => (),
