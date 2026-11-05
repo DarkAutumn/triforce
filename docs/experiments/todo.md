@@ -13,7 +13,9 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
   ow-leever-peahat r23-more, boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1,
   d2-rope r35-east-curriculum, wallmaster r10 copy. Overworld families use both routes' rooms; D2 rooms have 3 states each.
 - **Lee's order (Nov 5):** first finish the Rust port (plan steps 17–18: `round8.md` "Open", the watch-mode
-  restore below, then retiring the FCEUmm oracle and quirks). Then a **performance and optimization** step:
+  restore below, then retiring the FCEUmm oracle and quirks). Then **raise test coverage** sensibly across the
+  emulation core, the Rust crates and the Python wrappers: a robust unit suite plus a few end-to-end tests, no
+  PPO training from scratch, suite stays fast. Then a **performance and optimization** step:
   baseline steps/s from the training runs in `logs/` (what `training-gui.py` shows), profile training on the
   new stack over the long haul (not startup), make it faster for the same number of envs, and write
   `docs/performance.md`. **Then continue with the experiments below** (the "Work in this order" list, then
