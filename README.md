@@ -7,7 +7,8 @@ room and plays the route end to end.
 - Working on the repo (people or agents): `AGENTS.md` (standing rules, workflow, how to resume), then the newest
   `docs/experiments/round*.md` and `docs/experiments/todo.md`.
 - Design and status: `docs/architecture.md` (modules and contracts), `docs/decisions.md` (departures from
-  the design), `docs/progress.md` (phase status).
+  the design), `docs/progress.md` (phase status), `docs/performance.md` (training throughput: benchmarks,
+  profiles, `scripts/train_bench.sh` / `scripts/profile_train.sh` / `scripts/rollout_timeline.py`).
 - Game knowledge: `docs/ram-catalog.md` (RAM features), `docs/route.md` (milestone route),
   `docs/specialists.md` (room families), `triforce/game.yaml` (room graph with `specialist:` tags),
   `triforce/routes.yaml` (route data).
