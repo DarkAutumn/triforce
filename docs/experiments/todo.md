@@ -6,20 +6,21 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Where it stands:** round 7 active (`round7.md`); items 1–7 and their prerequisites complete. East-first D2
-  r35 team carries the required 7e key into Dodongo: full main/fairy 1/3, post-D1 main/fairy 4/7, D2 19 (40 each).
-  Route/states/default curricula and model cutover are verified in main. Next: versioned full observation trial.
+- **Where it stands:** round 7 paused after completed r36 (`round7.md` §21); items 1–7 and prerequisites complete.
+  No observation cutover or model promotion: keep the current schema-1/r35 team. Its prior 40-run checks reached
+  Dodongo full main/fairy 1/3, post-D1 main/fairy 4/7, D2 19; these are not the fresh r36 baseline's results.
 - **Promoted now:** ow-zora / ow-start r24-fairy, ow-octorok r32-nearby-off, ow-moblin r26c-moblin,
   ow-leever-peahat r23-more, boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1,
   d2-rope r35-east-curriculum, wallmaster r10 copy. Overworld families use both routes' rooms; D2 rooms have 3 states each.
-- **Lee's pause request (Nov 4):** finish the current r36 observation-bundle experiment, record and commit
-  its result, then pause. Do not start the boomerang study or the swordless-start fix before Lee resumes work.
+- **Lee's pause request (Nov 4):** r36 is complete and recorded; pause after committing its result. No further
+  experiment, boomerang study, swordless-start fix or deferred observation work until Lee resumes work.
 
 ### Work in this order
 
 From Lee watching `play-zelda.py` after round 6 (Nov 3), sorted: first the measurement everything else needs,
 then clear bugs, then what decides how the next full retrain looks, then reward/target changes aimed at the
-chain's death rooms, then the big ablation. Round 7 items 1–7 complete; versioned observation comparison next.
+chain's death rooms, then the big ablation. Items 1–7 and the versioned observation comparison are complete;
+the remaining list is deferred until Lee resumes work.
 
 1. [x] **Track lingering (Lee: a standing requirement, see AGENTS.md).** Measure how long Link stays in a room
    without progress, in training, eval and chains, and investigate whenever it's long, even if success looks fine.
@@ -58,11 +59,11 @@ chain's death rooms, then the big ablation. Round 7 items 1–7 complete; versio
    decide, then implement with a full retrain.
    - **Done, round 7 §3:** source-backed audit and live boomerang/stun probe. Returning boomerang animation bounds
      had a real hex/decimal bug; fixed and regression-tested. Keep schema 1 for isolated experiments.
-   - [ ] **Bundled observation trial before the from-scratch item 8 study:** versioned chase target coordinates,
-     Link/monster boomerang position/phase and corrected harm semantics; compare a full retrain. No RNG, guessed
-     universal owner, redundant stun/clock flags or incidental timer rescaling. Schema 2 is implemented/verified
-     in dev (§21): 485 tests, native phase parity and CUDA/spawned evaluation. The matched full-team trial is
-     active on frozen sources; main remains schema 1 until selection.
+   - [x] **Bundled observation trial before the from-scratch item 8 study:** versioned chase target coordinates,
+     Link/monster boomerang position/phase and corrected harm semantics. Completed r36 (§21): twenty matched
+     fresh models, 12,400 evaluation episodes, 800 native chains, zero evaluation/chain errors. No cutover:
+     Zora success 55.5% → 38.4%; bundle full routes stall at 0x48 in 79/80 runs each. D2 requested-key arrivals
+     tie 7/80, full three-key arrivals 5/80 → 7/80. Keep current promoted schema-1/r35 team; schema 2 stays in dev.
    - **Full-study input prerequisite complete (§20):** retired six old Moblin curricula (297 snapshots) with
      three containers/no boomerang/no triforce in post-D1 rooms; preserved the valid four-heart 0_3dc path and
      installed verified current 0_3dn_2 coverage. All 14 Moblin goal replays and 41 default-track route audits pass.
@@ -223,6 +224,15 @@ chain's death rooms, then the big ablation. Round 7 items 1–7 complete; versio
      keep. Expect about a day of GPU.
 
 ### Other open items
+
+- [ ] **Scratch-team convergence and Zora stalls (r36 §21; deferred).** At the matched 2,007,040-action budget,
+  both fresh teams fail all full/post-D1 chains. Bundle Zora is worse in success, health and mean quiet time;
+  its full-route 0x48 stalls last 2,000 actions. Baseline post-D1 fairy has 58/80 stalls in 0x59; baseline D2
+  worst quiet gap is 2,978. Separate convergence/coverage from representation effects before drawing a general
+  observation conclusion. One training-seed pair is not seed-robust evidence. No further run started.
+- [ ] **Audit full D2 key carriage separately from milestone entry (r36 §21; deferred).** Both fresh teams
+  reach Dodongo with the requested 7e key 7/80 times, but only 5/80 baseline versus 7/80 bundle arrivals satisfy
+  the full-three-key audit. Keep both counters; do not silently count all milestone arrivals as full key carriage.
 
 - [ ] **Swordless departure from the starting area (Lee, Nov 4).** Lee observes runs where Link leaves without
   taking the sword; these runs cannot win and waste training. Reduce how often this happens. His original

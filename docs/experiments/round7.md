@@ -38,8 +38,10 @@ run experiments, log every result and commit each finished item. Aquamentus r30-
   carrying the required 7e key. Both routes/states/default curricula and the action-boundary fix are active in main.
 - Final canonical verification: **471 tests passed**, CUDA default-curriculum update completed; main's native
   promoted-team smoke reached Dodongo with three keys on two D2 seeds and the post-D1 fairy seed.
-- R36 observation-bundle comparison is active on frozen sources (§21); schema 2 is verified in dev, not main.
-  Lee requests recording/committing this experiment's result and then pausing; no next experiment starts.
+- R36 full observation comparison complete (§21): twenty fresh full-budget models, 12,400 evaluation episodes,
+  800 native chains, zero evaluation/chain errors. Bundle worsens Zora and stalls nearly every full chain;
+  D2 requested-key arrivals tie 7/80, all-three-key arrivals 5/80 → 7/80. No cutover/promotion; keep r35 team.
+- Main remains schema 1; schema 2 stays in dev. Experiment work is paused at Lee's request; no next study starts.
 
 ## 1. Shared lingering metric
 
@@ -1220,7 +1222,7 @@ refreshed D2 paths from §18 (all six native current-goal replays pass); default
 of the compatible route/model cutover. Evidence: route audits, inventory/goal reports, current path and
 retired inputs under the r35 evidence root. Completed throwaway audit scripts are removed; runtime stays frozen.
 
-## 21. Versioned observation full-team trial (r36, active)
+## 21. Versioned observation full-team trial (r36, complete; paused)
 
 Schema 2 is implemented/verified only in dev (`4d35155`): shared chase refresh/coordinates, Link/Goriya
 boomerang phases/position and corrected contact-hazard states. Native before/after weapon execution is
@@ -1241,7 +1243,7 @@ First schema-1 ow-start optimization hit actual CUDA OOM before completing an up
 26.12 MiB free, no candidate checkpoint. Failed attempt preserved separately under `schema1/failed-oom/`.
 Under Lee's standing actual-OOM permission, stopped the dedicated `play-zelda.py 3x2 --games 64` process
 group; observed 19,311 MiB GPU memory free afterward. Retry is fresh with unchanged settings, not loaded
-partial weights. Full-team results are pending; no treatment/source/data changes mid-run.
+partial weights. No treatment/source/data changes mid-run; completed results follow below.
 
 Protocol/evidence: `models/r36-observation-full-retrain-evidence/`. Lee's new swordless-start and finite
 training/player-stall requirements are recorded in `todo.md`, not implemented during this trial. Finish,
@@ -1265,4 +1267,80 @@ The recovery wrapper validates/keeps completed families and restarts only incomp
 Fresh Aquamentus metadata confirms source null, zero starting counters, seed 36, 490×4,096 target, eight
 workers/CUDA and the same frozen curriculum. Observed its first real update at iteration 1/4,096 actions.
 Interrupted work is excluded from candidate budgets; no partial checkpoint is loaded. Bundle work is unchanged.
+
+All twenty candidate training runs subsequently finished their full budgets. The GUI-series bridge exited
+normally after both ten-row plans completed. Bundle validation completed: 6,200 standalone episodes,
+400 native chains, zero errors. Rechecked all 6,541 recorded curriculum hashes and all ten matching family
+YAMLs across the frozen sources. Analysis excludes zero-action milestone markers from played-room linger
+statistics; all played rooms must have real measurements.
+
+Lee asked to wrap up and explicitly selected finishing the remaining comparison rather than stopping with
+an incomplete result. Replaced only baseline's serial post-training scheduling with four independent CLI
+jobs at a time: unchanged four-worker evaluations and six-worker chain blocks, at most twenty emulator
+workers. Five already completed evaluation files were validated/reused; interrupted console logs remain
+preserved, and new logs use `finalize-*`. No model, source, seed, curriculum, per-job setting or training
+budget changes. Complete the paired result, commit it, then pause; no promotion or subsequent experiment.
+
+### Completed comparison
+
+Both arms finished all ten fresh candidates: **40,140,800 candidate training actions**, excluding the
+preserved failed/interrupted attempts. Verified all twenty checkpoint schemas/counters and original training
+metadata. Forty evaluation outputs contain **12,400 episodes**; all 6,200 paired state/seed/start-health
+cases match between arms. All **800 native chain runs** completed without execution errors. The concurrent
+baseline finalizer completed in 936 seconds; it changed scheduling only, not any individual evaluation.
+
+Standalone results pool seeds 0/10,000. Each paired cell is **schema 1 / schema 2**. Physical HP is actual
+ending minus starting health; total HP adds wasted healing. Quiet means the longest no-progress stretch per
+episode, in policy actions. Neither success nor health alone is a sufficient promotion criterion.
+
+| Family | Success % | Physical HP Δ | Total HP Δ | Mean quiet | Worst quiet |
+|---|---:|---:|---:|---:|---:|
+| ow-start | 99.8 / 100.0 | +0.25 / +0.25 | +0.25 / +0.25 | 0.74 / 0.91 | 12 / 26 |
+| ow-octorok | 99.3 / 98.9 | −0.09 / −0.11 | −0.09 / −0.10 | 2.71 / 4.14 | 381 / 407 |
+| ow-zora | 55.5 / 38.4 | −0.62 / −0.87 | −0.62 / −0.85 | 194.32 / 333.11 | 2000 / 2000 |
+| stalfos-keese-gel | 93.9 / 91.4 | −0.23 / −0.29 | −0.20 / −0.27 | 21.89 / 17.35 | 1908 / 1581 |
+| goriya | 68.1 / 66.5 | −1.17 / −1.25 | −1.12 / −1.21 | 22.68 / 34.71 | 241 / 606 |
+| wallmaster | 95.0 / 99.2 | +0.20 / +0.24 | +0.61 / +0.60 | 18.99 / 6.20 | 240 / 105 |
+| boss-aquamentus | 100.0 / 94.2 | +0.51 / +0.28 | +0.52 / +0.29 | 3.36 / 16.67 | 14 / 387 |
+| ow-leever-peahat | 99.4 / 98.1 | −0.24 / −0.20 | −0.24 / −0.20 | 3.21 / 3.61 | 42 / 27 |
+| ow-moblin | 91.1 / 95.7 | −0.23 / −0.25 | −0.23 / −0.25 | 4.38 / 3.91 | 87 / 101 |
+| d2-rope | 91.1 / 90.5 | −0.37 / −0.45 | −0.29 / −0.39 | 17.01 / 16.26 | 628 / 593 |
+
+Native chains pool two disjoint 40-run blocks: **80 runs per segment/arm**. Requested-route success means
+Dodongo entry after the east-first 7e pickup with its key retained. Full three-key carriage is a separate
+audit, not silently equated with milestone entry. Each paired cell remains schema 1 / schema 2.
+
+| Segment | Requested-route successes | All three keys | Physical HP Δ/run | Total HP Δ/run | Worst quiet |
+|---|---:|---:|---:|---:|---:|
+| Full main | 0 / 0 | 0 / 0 | −2.98 / −0.11 | −2.94 / −0.11 | 2254 / 2000 |
+| Full fairy | 0 / 0 | 0 / 0 | −2.90 / −0.11 | −2.86 / −0.11 | 2254 / 2000 |
+| Post-D1 main | 0 / 0 | 0 / 0 | −3.86 / −3.96 | −3.83 / −3.86 | 1039 / 262 |
+| Post-D1 fairy | 0 / 0 | 0 / 0 | −2.06 / −4.00 | −2.05 / −3.84 | 2000 / 183 |
+| D2 | 7 / 7 | 5 / 7 | −3.74 / −3.73 | −3.43 / −3.51 | 2978 / 179 |
+
+The bundle's full routes both fail at Zora 0x48: 79 stuck, one death per 80-run route. Their identical
+results share the prefix before the route fork; they are not independent confirmations. Its post-D1 fairy
+route dies in 0x38 in all 80 runs; post-D1 main has 54 deaths and three wrong exits in 0x2d. The baseline
+gets farther but remains unreliable: full main loses 21 runs in Stalfos 0x74 and 15 in 0x53; post-D1 fairy
+has 58 stalls in Zora 0x59. The bundle's tiny full-chain HP loss is early-stall censoring, not safer play.
+
+D2 east-first entry is 79/80 baseline versus 80/80 bundle. All seven Dodongo entries in each arm pass the
+7e pickup/carry guard; only five baseline entries pass the full-three-key audit, versus seven bundle.
+Bundle D2 has shorter worst lingering but no arrival-count gain. Both teams still lose heavily in Rope
+0x3e and Goriya 0x5e/0x1e. No isolated-family mixing or additional experiment was run.
+
+**Decision:** no schema cutover and no model promotion. Preserve the current promoted schema-1/r35 team,
+not the fresh r36 baseline. Schema-2 code/candidates remain available in dev/evidence, not enabled in main.
+Wallmaster/Moblin show some standalone success gains, but the complete bundle does not improve the chain
+and regresses important success/health/linger measures. One matched training-seed pair is not proof that
+the added information is intrinsically harmful; evaluation seed blocks do not replace training-seed repeats.
+Fixed-budget scratch convergence and missing full key carriage are recorded for later, not investigated now.
+
+Evidence root: `models/r36-observation-full-retrain-evidence/`. `combined-results.json` contains exact pooled
+numbers, per-room results and failure counts; raw `schema*/chains/seed*/*.jsonl` retain every native run.
+`schema1/completion.json`, `schema1/finalization-state.json`, `schema2/completion-training.json` and
+`schema2/measured-report.json` retain completion/provenance; original and `finalize-*` logs are preserved.
+`triforce list` confirmed canonical promoted pointers unchanged. No new suite was run for this ledger-only
+closeout: verification is the completed native training/evaluation/chains and artifact/provenance checks above.
+All jobs are finished. **Paused as requested; no boomerang, swordless-start or other next experiment started.**
 
