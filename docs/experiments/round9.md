@@ -289,3 +289,51 @@ passes. Gate build: every quirk restored. `tf bench` 2,459-2,564 / 4,683-4,976.
 both baselines with success inside their range; at seed 1 both are back in range (−0.304, −0.044) and
 boss-aquamentus' health dips instead (+0.400 over 60 episodes, +0.650 at seed 0). Nothing is worse than both
 baselines in both runs; chain totals 30 and 31 (baselines 32/24, floor 12).
+
+## Step 18b: regenerated base movie, start states and trajectories on the hardware core
+
+- **Movies.** `tf movie script` and `tf movie random` record on zcore. `power_on_to_start` re-records with
+  identical inputs. `sword_cave_in_out` and `die_continue` now wait on game state (`until` directives): on
+  hardware timing the cave text ends, and Link dies, at different frames.
+- **States** (`target/step18/build_states.sh`, logs in `target/step18/logs/`): `start`, `build --chains 0,1,2`,
+  the D1 bow rooms, `milestone1-fairy` from `0_37c_<c>` and the 0x6d off-route states, into a fresh directory.
+  Three on-route crossings failed at default budgets and built at 12,000 iterations / patience 500
+  (`2_2es_0`, `2_0es_1`, `2_0es_2`, plus `2_1es_0`/`2_0es_0` after it); the chain-1 and chain-2 fairy routes
+  needed one `path` backtrack each at 0x5c. Same 181 files as step 17; `entry_states audit`: **0 problems**;
+  all 180 manifest entries record their command. The v1 state conversion of 18a is deleted (`TFZSTATE` v5).
+- **Trajectories**: all six curriculum specialists re-explored, 84/84 states solved (five needed 12,000 / 500;
+  `goriya` `2_1es_2` needed explore seed 2). Each training pool loads one track per start state.
+- `triforce/chain_hp.json` rebuilt from the 400 gate chains below.
+
+| Specialist | Old eval.json | FCEUmm baseline s0 / s1 | Hardware + new states s0 | s1 |
+|---|---:|---:|---:|---:|
+| boss-aquamentus | 100.0% / +0.692 | 100.0 / 98.3 | 100.0% / +0.625 | 100.0% / +0.658 |
+| d2-rope | 95.2% / −0.205 | 94.0 / 93.6 | 94.0% / −0.267 | 93.8% / −0.218 |
+| goriya | 76.7% / −0.769 | 78.3 / 77.9 | 79.6% / −0.760 | 77.1% / −0.729 |
+| ow-leever-peahat | 100.0% / −0.163 | 97.1 / 96.2 | 96.2% / −0.369 | 97.1% / −0.315 |
+| ow-moblin | 97.1% / −0.195 | 95.3 / 96.4 | 96.4% / −0.199 | 96.1% / −0.218 |
+| ow-octorok | 99.0% / −0.064 | 98.3 / 98.2 | 98.3% / −0.071 | 97.9% / −0.087 |
+| ow-start | 98.5% / +0.278 | 100.0 / 100.0 | 99.0% / +0.278 | 100.0% / +0.287 |
+| ow-zora | 97.4% / −0.147 | 95.4 / 95.4 | 96.1% / −0.157 | 95.9% / −0.158 |
+| stalfos-keese-gel | — | 96.8 / 95.7 | 96.7% / −0.038 | 96.8% / −0.026 |
+| wallmaster | 87.5% / −0.417 | 98.3 / 100.0 | 100.0% / +0.292 | 100.0% / +0.192 |
+
+| Segment | FCEUmm baseline s0 / s1 | Hardware, old states (boot+FQ-08 gate) s0 / s1 | Hardware + new states s0 / s1 |
+|---|---:|---:|---:|
+| Full milestone1 | 1 / 1 | 1 / 0 | 0 / 0 |
+| Full milestone1-fairy | 3 / 2 | 2 / 4 | 1 / 1 |
+| Post-D1 main | 7 / 3 | 4 / 3 | 5 / 0 |
+| Post-D1 fairy | 6 / 6 | 6 / 8 | 6 / 4 |
+| D2 | 15 / 12 | 17 / 16 | 16 / 9 |
+| **Total (of 200)** | 32 / 24 | 30 / 31 | 28 / 14 |
+
+Every specialist stays within the plan's 15-point gate and inside or near the FCEUmm baselines' spread. The
+chains are lower (42/400 vs 56/400) but the hardware core with the *old* states scored 61/400, so the dip
+comes with the regenerated start states (each `--from` segment starts from a different `0_37c_2`/`2_7ds_2`,
+and the chain-hp profile changed) or chance at 40 runs per segment. Not blocking; recorded as an open
+experiment in `todo.md` (larger chain samples on the new states, then fine-tune the team on hardware states).
+
+## Status
+
+Plan step 18 complete except Lee's sign-off items: no quirk was kept; the one open choice is the power-on RAM
+fill ($FF, FCEUmm's; 12 test ROMs pass only with $00) — see `docs/decisions.md`.

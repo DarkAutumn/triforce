@@ -115,17 +115,6 @@ pub struct MachineState {
     cycles: u64,
 }
 
-impl MachineState {
-    /// A machine state from its parts (state file decoding of older versions).
-    pub(crate) const fn from_parts(state: State, frame: u64, cycles: u64) -> Self {
-        Self {
-            state,
-            frame,
-            cycles,
-        }
-    }
-}
-
 /// One Zelda console.
 pub struct ZCore {
     rom: Arc<Rom>,

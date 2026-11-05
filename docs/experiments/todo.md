@@ -236,13 +236,15 @@ the remaining list is deferred until Lee resumes work.
 
 ### Other open items
 
-- [ ] **Rust port: restore main's watch mode on the native pool.** Main's `play-zelda.py --games N` (more games
-  than cells; a cell switches to a better hidden game only on a new room or a new run, with a fade), the fps
-  readout in the window title and `--benchmark SECONDS` (main commit `8cc3012`) were written against the old
-  process-pool `GameGrid`; the merged `play_grid.GameGrid` is one native chain pool. Re-implement them there
-  (`show`/`frame` per game, `set_render` only for shown games) and keep `tests/test_play_zelda.py` covering them.
-- [ ] **Rust port: finish plan step 17** (`round8.md` "Open"): chain-2 fairy 0x5c dead-end entry, ow-moblin
-  explore/eval, `entry_states audit`, manifest command backfill.
+- [x] **Rust port: restore main's watch mode on the native pool** (`1830be3`).
+- [x] **Rust port: finish plan step 17** (`round8.md`).
+- [ ] **Chains on the hardware core and regenerated states (round 9 §18b).** Specialist evals match the FCEUmm
+  baselines, but chain totals were 28/14 of 200 vs 32/24 on FCEUmm (and 30/31 on the hardware core with the old
+  states). Run larger samples (≥120 runs per segment) to see whether the dip is real; if it is, find the rooms
+  (per-room deaths/stalls from the chain jsonl) and fine-tune the affected specialists on the hardware states.
+- [ ] **Power-on RAM fill (Lee to decide).** zcore powers on with $FF (FCEUmm's fill); real RAM is indeterminate.
+  Twelve TetaNES test ROMs only match their screenshots with $00. Switching changes the base state (regenerate
+  states and trajectories again).
 - [ ] **Scratch-team convergence and Zora stalls (r36 §21; deferred).** At the matched 2,007,040-action budget,
   both fresh teams fail all full/post-D1 chains. Bundle Zora is worse in success, health and mean quiet time;
   its full-route 0x48 stalls last 2,000 actions. Baseline post-D1 fairy has 58/80 stalls in 0x59; baseline D2

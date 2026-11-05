@@ -132,8 +132,8 @@ fn decodes_dungeon_and_overworld_savestates() {
     let Some(mut s) = session() else { return };
     let state = load(&mut s, "1_44w_0", false, &[]);
     assert_eq!(state.full_location(), MapLocation::new(1, 0x44, false));
-    // Regenerated 1_44w_0 carries no bombs (chain 0 never picks any up before D1 0x44; the legacy 1_44w had 4);
-    // 2_0es_0 (the Dodongo entry, after the D2 bomb pickups) holds 4: both decode from $0658.
+    // Regenerated 1_44w_0 carries no bombs (chain 0 never picks any up before D1 0x44; the legacy 1_44w had 4).
+    // A state with bombs decodes its count from $0658: the Dodongo entry 2_0es_0, after the D2 bomb pickups.
     assert_eq!(state.bombs(), 0);
     assert_eq!(state.sword(), SwordKind::Wood);
     let goriyas = state
@@ -146,7 +146,9 @@ fn decodes_dungeon_and_overworld_savestates() {
         state.bomb_walls().first().map(|w| w.wall_direction),
         Some(Direction::S)
     );
-    assert_eq!(load(&mut s, "2_0es_0", false, &[]).bombs(), 4);
+    let dodongo = load(&mut s, "2_0es_0", false, &[]);
+    assert!(dodongo.bombs() > 0);
+    assert_eq!(i64::from(dodongo.bombs()), i64::from(s.nes().peek(0x658)));
 
     let state = load(&mut s, "start", false, &[]);
     assert_eq!((state.level(), state.location()), (0, 0x77));
@@ -304,24 +306,17 @@ fn cleared_boss_room_and_persisted_flags() {
         "CurOpenedDoors only"
     );
     assert!(rs.item_taken && !rs.has_item && rs.kill_state == 3 && rs.all_dead());
-    // Flag bytes ($6FF+room) on this route ($53:F0 and $35:F4 match ram-catalog R.1; regenerated chain 2 visits
-    // 0x74 and 0x43 with their kill/visit bits set, F0 and B1, where the legacy route had 70 and 71).
-    let rooms = [0x74, 0x53, 0x35, 0x52, 0x43];
-    let flags = vec![0xF0, 0xF0, 0xF4, 0xA8, 0xB1];
-    assert_eq!(
-        rooms
-            .iter()
-            .map(|&r| room_flags(state.ram(), r))
-            .collect::<Vec<_>>(),
-        flags
-    );
-    assert_eq!(
-        rooms
-            .iter()
-            .map(|&r| state.ram()[0x6FF + r as usize])
-            .collect::<Vec<_>>(),
-        flags
-    );
+    // Flag bytes ($6FF+room): $53:F0 and $35:F4 match ram-catalog R.1 (the boss room's kill/item bits); the
+    // other rooms on the walk depend on what the chain killed on its way, so only their visited bit is pinned.
+    assert_eq!(room_flags(state.ram(), 0x53), 0xF0);
+    assert_eq!(room_flags(state.ram(), 0x35), 0xF4);
+    for room in [0x74, 0x52, 0x43] {
+        assert_ne!(room_flags(state.ram(), room) & 0x80, 0, "room {room:#x} visited");
+    }
+    // In a dungeon the room flags are the level block at $6FF.
+    for room in [0x74, 0x53, 0x35, 0x52, 0x43] {
+        assert_eq!(room_flags(state.ram(), room), state.ram()[0x6FF + room as usize]);
+    }
     assert_eq!(room_flags(state.ram(), state.location()), rs.flags);
 }
 

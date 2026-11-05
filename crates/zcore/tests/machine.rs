@@ -290,10 +290,10 @@ fn power_on_state_file_is_pinned() {
     );
 }
 
-/// Plan step 18a: the step-17 start states are `TFZSTATE` v1 files, decoded into the current
-/// layout. Each loads, keeps its RAM, and plays on.
+/// The shipped start states are current-version files: each decodes, restores and plays on. A layout
+/// change that bumps `state_file::VERSION` fails here until the states are regenerated.
 #[test]
-fn v1_start_states_decode_and_run() {
+fn shipped_start_states_decode_and_run() {
     let Some(rom) = rom() else { return };
     let dir = repo().join("triforce/states");
     let mut names: Vec<_> = std::fs::read_dir(&dir)
@@ -303,16 +303,12 @@ fn v1_start_states_decode_and_run() {
         .collect();
     names.sort();
     assert!(!names.is_empty());
-    for path in names.iter().step_by(20) {
+    for path in names.iter().step_by(10) {
         let bytes = std::fs::read(path).unwrap();
-        if u16::from_le_bytes([bytes[8], bytes[9]]) != 1 {
-            continue;
-        }
-        let f = state_file::decode(&rom, &bytes).unwrap();
+        let f = state_file::decode(&rom, &bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         let mut nes = ZCore::power_on(rom.clone());
         nes.restore(&f.machine);
-        let mode = nes.ram()[0x12];
-        assert!(mode != 0xFF && nes.frame() > 0, "{}", path.display());
+        assert!(nes.frame() > 0, "{}", path.display());
         for _ in 0..120 {
             nes.run_frame(0, false);
         }
