@@ -548,10 +548,12 @@ fn is_level_transition<N: Nes>(m: &Machine<N>, start_location: Option<(u8, u8, b
 }
 
 #[cfg(test)]
-mod tests {
-    //! The scripted-shield executor tests of tests/test_core.py, on a scripted `Nes` double.
+pub(crate) mod tests {
+    //! The scripted-shield executor tests of tests/test_core.py, on a scripted `Nes` double, plus interrupt
+    //! precedence and option edge cases on RAM scripts.
     use super::*;
     use crate::blocks::tests::{parry_frame, shield_ram};
+    use crate::enums::enemy;
     use crate::game_map::GameMap;
     use std::sync::{Arc, Mutex};
 
@@ -663,5 +665,289 @@ mod tests {
             (4, 7, 1)
         );
         assert_eq!(result.projectile_blocks[0].frame, 6);
+    }
+
+    // --- interrupt detection and option edge cases ---
+
+    /// A playable dungeon frame: Link at (120, 140), full 3 hearts, nothing else.
+    pub(crate) fn playable() -> [u8; 0x800] {
+        let mut ram = [0u8; 0x800];
+        (ram[ADDR_LEVEL], ram[ADDR_MODE], ram[ADDR_LOCATION]) = (1, MODE_GAMEPLAY, 0x44);
+        (ram[ADDR_LINK_X], ram[ADDR_LINK_Y]) = (120, 140);
+        (ram[ADDR_HEARTS], ram[ADDR_PARTIAL_HEARTS]) = (0x22, 0xFF);
+        ram
+    }
+
+    fn interrupt(before: &[u8; 0x800], after: &[u8; 0x800]) -> Option<Interrupt> {
+        let b = FrameWatch::new(before);
+        detect_interrupt(&b, &FrameWatch::new(after), b.near)
+    }
+
+    /// Places object `slot` with `id` at (x, y).
+    fn object(ram: &mut [u8; 0x800], slot: usize, id: u8, x: u8, y: u8) {
+        (ram[OBJ_ID + slot], ram[OBJ_X + slot], ram[OBJ_Y + slot]) = (id, x, y);
+    }
+
+    #[test]
+    fn interrupts_follow_detection_precedence() {
+        let before = playable();
+        // Every change at once, then peel the highest-priority one off each time.
+        let mut after = playable();
+        after[ADDR_MODE] = MODE_DYING;
+        after[ADDR_LOCATION] = 0x45;
+        after[ADDR_HEARTS] = 0x21;
+        object(&mut after, 3, enemy::STALFOS, 120, 150);
+        after[INVENTORY.0 + 1] = 1;
+        after[ADDR_OPENED_DOORS] = 1;
+        let expected = [
+            (Interrupt::GameOver, ADDR_MODE),
+            (Interrupt::Transition, ADDR_LOCATION),
+            (Interrupt::Damage, ADDR_HEARTS),
+            (Interrupt::Spawn, OBJ_ID + 3),
+            (Interrupt::Item, INVENTORY.0 + 1),
+            (Interrupt::Door, ADDR_OPENED_DOORS),
+        ];
+        for (want, addr) in expected {
+            assert_eq!(interrupt(&before, &after), Some(want));
+            after[addr] = before[addr];
+        }
+        assert_eq!(interrupt(&before, &after), None);
+    }
+
+    #[test]
+    fn health_and_container_changes() {
+        let before = playable();
+        let mut after = playable();
+        after[ADDR_PARTIAL_HEARTS] = 0x7F;
+        assert_eq!(interrupt(&before, &after), Some(Interrupt::Damage));
+        let mut after = playable();
+        after[ADDR_HEARTS] = 0x12; // one container less, same filled hearts
+        assert_eq!(interrupt(&before, &after), Some(Interrupt::Damage));
+        let mut hurt = playable();
+        hurt[ADDR_HEARTS] = 0x21;
+        assert_eq!(interrupt(&hurt, &before), Some(Interrupt::Item), "healed");
+        let mut after = playable();
+        after[ADDR_HEARTS] = 0x32; // a new heart container
+        assert_eq!(interrupt(&before, &after), Some(Interrupt::Item));
+        let mut after = playable();
+        after[ADDR_TREASURE_FLAG] = 0xFF;
+        assert_eq!(
+            interrupt(&before, &after),
+            Some(Interrupt::Item),
+            "treasure taken"
+        );
+    }
+
+    #[test]
+    fn spawns_count_threats_only() {
+        let before = playable();
+        for id in NON_THREAT_IDS {
+            let mut after = playable();
+            object(&mut after, 2, id, 20, 20);
+            assert_eq!(interrupt(&before, &after), None, "{id:#x}");
+        }
+        let mut after = playable();
+        object(&mut after, 2, 0x53, 20, 20); // an octorok rock
+        assert_eq!(interrupt(&before, &after), Some(Interrupt::Spawn));
+        // A slot that empties is not a spawn.
+        let mut with = playable();
+        object(&mut with, 2, enemy::STALFOS, 20, 20);
+        assert_eq!(interrupt(&with, &before), None);
+    }
+
+    #[test]
+    fn enemy_near_fires_once_for_newly_close_spawned_threats() {
+        let mut before = playable();
+        object(&mut before, 4, enemy::STALFOS, 200, 200);
+        let approach = |x: u8, y: u8, spawn_state: u8| {
+            let mut ram = before;
+            (ram[OBJ_X + 4], ram[OBJ_Y + 4]) = (x, y);
+            ram[OBJ_SPAWN_STATE + 4] = spawn_state;
+            ram
+        };
+        // Strictly inside the 24-pixel radius.
+        assert_eq!(
+            interrupt(&before, &approach(120 + 23, 140, 0)),
+            Some(Interrupt::EnemyNear)
+        );
+        assert_eq!(interrupt(&before, &approach(120 + 24, 140, 0)), None);
+        assert_eq!(
+            interrupt(&before, &approach(120 + 16, 140 + 17, 0)),
+            Some(Interrupt::EnemyNear)
+        );
+        assert_eq!(interrupt(&before, &approach(120 + 17, 140 + 17, 0)), None);
+        // A monster still spawning doesn't count; a projectile ignores spawn state.
+        assert_eq!(interrupt(&before, &approach(120, 140, 1)), None);
+        let near = approach(120, 140, 0);
+        // Already near at the option start: no interrupt when it stays near.
+        let start = FrameWatch::new(&near);
+        assert_eq!(
+            detect_interrupt(&start, &FrameWatch::new(&near), start.near),
+            None
+        );
+        // Near at the start, away, then back: still the same enemy, not a new approach.
+        let away = FrameWatch::new(&before);
+        assert_eq!(
+            detect_interrupt(&away, &FrameWatch::new(&near), start.near),
+            None
+        );
+
+        let mut shot = playable();
+        object(&mut shot, 5, 0x53, 200, 200);
+        let mut close = shot;
+        (
+            close[OBJ_X + 5],
+            close[OBJ_Y + 5],
+            close[OBJ_SPAWN_STATE + 5],
+        ) = (125, 140, 3);
+        assert_eq!(interrupt(&shot, &close), Some(Interrupt::EnemyNear));
+    }
+
+    /// `Nes` double whose frames run a script over RAM.
+    pub(crate) struct Script {
+        pub(crate) ram: [u8; 0x800],
+        prg: [u8; 0x2000],
+        frame: u64,
+        pub(crate) buttons: Vec<u8>,
+        on_frame: fn(u64, &mut [u8; 0x800]),
+    }
+
+    impl Nes for Script {
+        type State = ([u8; 0x800], u64);
+
+        fn run_frame(&mut self, buttons: u8, _render: bool) {
+            self.buttons.push(buttons);
+            self.frame += 1;
+            (self.on_frame)(self.frame, &mut self.ram);
+        }
+
+        fn ram(&self) -> &[u8; 0x800] {
+            &self.ram
+        }
+
+        fn prg_ram(&self) -> &[u8; 0x2000] {
+            &self.prg
+        }
+
+        fn poke(&mut self, addr: u16, value: u8) {
+            self.ram[addr as usize] = value;
+        }
+
+        fn snapshot(&self) -> Self::State {
+            (self.ram, self.frame)
+        }
+
+        fn restore(&mut self, state: &Self::State) {
+            (self.ram, self.frame) = *state;
+        }
+    }
+
+    pub(crate) fn scripted(
+        ram: [u8; 0x800],
+        on_frame: fn(u64, &mut [u8; 0x800]),
+    ) -> Machine<Script> {
+        Machine::new(Script {
+            ram,
+            prg: [0; 0x2000],
+            frame: 0,
+            buttons: Vec::new(),
+            on_frame,
+        })
+    }
+
+    fn execute(m: &mut Machine<Script>, action: &str) -> Result<OptionResult, ZeldaError> {
+        let view = GameView::new(&m.ram_image(), m.frame, false, Arc::new(GameMap::builtin()));
+        Executor::<()>::default().execute(m, &Action::parse(action).unwrap(), &view, &mut |_, _| ())
+    }
+
+    #[test]
+    fn link_stunned_forever_is_an_error_after_the_frame_cap() {
+        let mut m = scripted(playable(), |_, ram| ram[ADDR_LINK_STATUS] = STUN_FLAG);
+        let err = Executor::<()>::default()
+            .gain_control(&mut m, &mut |_, _| ())
+            .unwrap_err();
+        assert_eq!(
+            err,
+            ZeldaError::LinkNeverControllable {
+                mode: MODE_GAMEPLAY
+            }
+        );
+        assert_eq!(err.to_string(), "Link never became controllable (mode=5)");
+        assert_eq!(m.frame, 1 + MAX_UNCONTROLLABLE_FRAMES as u64);
+    }
+
+    #[test]
+    fn game_over_ends_the_option_without_skipping() {
+        // Link dies on the third frame of a WAIT: the option stops there and never waits for control.
+        let mut m = scripted(playable(), |frame, ram| {
+            if frame >= 3 {
+                ram[ADDR_MODE] = MODE_DYING;
+                ram[ADDR_LINK_STATUS] = STUN_FLAG;
+            }
+        });
+        let result = execute(&mut m, "WAIT 16").unwrap();
+        assert_eq!(
+            (result.interrupt, result.control_frames, result.frames),
+            (Some(Interrupt::GameOver), 3, 3)
+        );
+        // An attack that ends in death returns once the animation wait is over.
+        let mut m = scripted(playable(), |_, ram| ram[ADDR_MODE] = MODE_GAME_OVER);
+        let result = execute(&mut m, "SWORD N").unwrap();
+        assert_eq!(
+            (result.interrupt, result.frames),
+            (None, result.control_frames)
+        );
+    }
+
+    #[test]
+    fn b_items_select_the_item_and_face_the_cardinal_part_of_a_diagonal() {
+        for (action, item, facing, pressed) in [
+            (
+                "BOOMERANG SW",
+                selected::BOOMERANG,
+                Direction::S,
+                buttons::DOWN | buttons::LEFT,
+            ),
+            (
+                "BOOMERANG NE",
+                selected::BOOMERANG,
+                Direction::N,
+                buttons::UP | buttons::RIGHT,
+            ),
+            ("ARROW W", selected::ARROWS, Direction::W, buttons::LEFT),
+            ("BOMB E", selected::BOMBS, Direction::E, buttons::RIGHT),
+        ] {
+            let mut ram = playable();
+            ram[Var::SelectedItem.addr() as usize] = 0x7;
+            let mut m = scripted(ram, |_, _| {});
+            execute(&mut m, action).unwrap();
+            assert_eq!(m.read(Var::SelectedItem.addr() as usize), item, "{action}");
+            assert_eq!(
+                m.read(Var::LinkDirection.addr() as usize),
+                facing.value(),
+                "{action}"
+            );
+            assert_eq!(m.nes.buttons[0], pressed | buttons::B, "{action}");
+        }
+        // The sword keeps the selected B item and presses A.
+        let mut ram = playable();
+        ram[Var::SelectedItem.addr() as usize] = 0x7;
+        let mut m = scripted(ram, |_, _| {});
+        execute(&mut m, "SWORD S").unwrap();
+        assert_eq!(m.read(Var::SelectedItem.addr() as usize), 0x7);
+        assert_eq!(m.nes.buttons[0], buttons::DOWN | buttons::A);
+    }
+
+    #[test]
+    fn level_change_before_the_room_id_changes_is_still_a_transition() {
+        // Between levels the level byte switches while $EB still holds the old room: not controllable yet.
+        let mut m = scripted(playable(), |_, _| {});
+        m.nes.ram[ADDR_LEVEL] = 2;
+        assert!(is_level_transition(&m, Some((1, 0x44, false))));
+        assert!(!is_level_transition(&m, Some((1, 0x45, false))));
+        assert!(!is_level_transition(&m, Some((1, 0x44, true))));
+        assert!(!is_level_transition(&m, None));
+        m.nes.ram[ADDR_MODE] = MODE_CAVE;
+        assert!(!is_level_transition(&m, Some((1, 0x44, false))));
     }
 }

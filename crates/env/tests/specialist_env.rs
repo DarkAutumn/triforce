@@ -568,10 +568,13 @@ fn max_steps_truncates_without_terminal_reward() {
         "{:?}",
         r.info.rewards
     );
-    assert!(matches!(
-        env.step(Action::parse("WAIT 8").unwrap()),
-        Err(EnvError::EpisodeFinished)
-    ));
+    let err = env.step(Action::parse("WAIT 8").unwrap()).unwrap_err();
+    assert!(matches!(err, EnvError::EpisodeFinished));
+    // The message Python's EpisodeFinishedError carries.
+    assert_eq!(
+        err.to_string(),
+        "step() called on a finished episode; call reset()"
+    );
 }
 
 #[test]

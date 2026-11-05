@@ -517,3 +517,173 @@ impl Staged {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Two keys per dtype, so offsets inside a dtype's storage matter; one scalar key (shape []).
+    fn layout() -> Arc<ObsLayout> {
+        Arc::new(ObsLayout::new(vec![
+            KeySpec::new("a", &[2], Dtype::I64),
+            KeySpec::new("x", &[2, 2], Dtype::F32),
+            KeySpec::new("m", &[3], Dtype::Bool),
+            KeySpec::new("b", &[], Dtype::I64),
+            KeySpec::new("y", &[1], Dtype::F32),
+            KeySpec::new("n", &[2], Dtype::Bool),
+        ]))
+    }
+
+    fn filled(layout: &Arc<ObsLayout>, base: i64) -> ObsData {
+        let mut d = ObsData::new(layout.clone());
+        let mut row = d.row();
+        row.i64(0).copy_from_slice(&[base, base + 1]);
+        row.f32(1).copy_from_slice(&[0.5, 1.5, 2.5, base as f32]);
+        row.bool(2).copy_from_slice(&[true, false, true]);
+        row.i64(3)[0] = base + 2;
+        row.f32(4)[0] = -1.0;
+        row.bool(5).copy_from_slice(&[false, true]);
+        d
+    }
+
+    #[test]
+    fn numpy_names_round_trip() {
+        for d in [Dtype::I64, Dtype::F32, Dtype::Bool] {
+            assert_eq!(Dtype::from_numpy(d.numpy()), Some(d));
+        }
+        assert_eq!(Dtype::from_numpy("float64"), None);
+        assert_eq!(Dtype::from_numpy("uint8"), None);
+    }
+
+    #[test]
+    fn keys_of_one_dtype_get_disjoint_ranges() {
+        let layout = layout();
+        assert_eq!(layout.key("y"), Some(4));
+        assert_eq!(layout.key("missing"), None);
+        assert_eq!(layout.keys()[3].len(), 1, "a scalar key holds one element");
+        assert!(KeySpec::new("e", &[0, 4], Dtype::F32).is_empty());
+        let d = filled(&layout, 10);
+        assert_eq!(d.i64(0), [10, 11]);
+        assert_eq!(d.i64(3), [12]);
+        assert_eq!(d.f32(1), [0.5, 1.5, 2.5, 10.0]);
+        assert_eq!(d.f32(4), [-1.0]);
+        assert_eq!(d.bool(2), [true, false, true]);
+        assert_eq!(d.bool(5), [false, true]);
+        // Keys a writer leaves alone keep their contents.
+        let mut again = d.clone();
+        again.row().i64(3)[0] = 99;
+        assert_eq!((again.i64(0), again.i64(3)), (&[10, 11][..], &[99][..]));
+    }
+
+    #[test]
+    #[should_panic(expected = "observation key \"x\" is float32, not int64")]
+    fn reading_a_key_as_another_dtype_panics() {
+        let mut d = ObsData::new(layout());
+        d.row().i64(1);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate observation key \"a\"")]
+    fn duplicate_keys_panic() {
+        ObsLayout::new(vec![
+            KeySpec::new("a", &[1], Dtype::I64),
+            KeySpec::new("a", &[1], Dtype::F32),
+        ]);
+    }
+
+    #[test]
+    #[should_panic(expected = "not a bool column")]
+    fn owned_columns_check_their_dtype() {
+        Column::I64(vec![1]).bool();
+    }
+
+    fn staged(layout: &Arc<ObsLayout>, base: i64, final_valid: bool, finished: bool) -> Staged {
+        Staged {
+            obs: filled(layout, base),
+            final_obs: filled(layout, base + 100),
+            outcome: crate::Outcome {
+                reward: 0.25,
+                frames: 9,
+                interrupt: 2,
+                terminated: final_valid,
+                truncated: false,
+                bootstrap: false,
+                policy: 0,
+            },
+            final_valid,
+            policy: if finished { -1 } else { 3 },
+            finished,
+        }
+    }
+
+    #[test]
+    fn written_rows_land_at_their_offsets_for_every_dtype() {
+        let layout = layout();
+        let mut b = Buffers::new(layout.clone(), 3);
+        assert_eq!(b.rows(), 3);
+        assert_eq!(b.layout(), &*layout);
+        b.batch().validate(&layout).unwrap();
+        b.batch().write(1, 7, &staged(&layout, 20, false, false));
+        assert_eq!(b.env_ids, [0, 7, 0]);
+        assert_eq!(
+            (b.reward[1], b.frames[1], b.interrupt[1], b.policy[1]),
+            (0.25, 9, 2, 3)
+        );
+        assert_eq!(b.obs[0].i64(), [0, 0, 20, 21, 0, 0]);
+        assert_eq!(b.obs[3].i64(), [0, 22, 0]);
+        assert_eq!(&b.obs[1].f32()[4..8], [0.5, 1.5, 2.5, 20.0]);
+        assert_eq!(b.obs[4].f32(), [0.0, -1.0, 0.0]);
+        assert_eq!(
+            b.obs[2].bool(),
+            [false, false, false, true, false, true, false, false, false]
+        );
+        assert_eq!(b.obs[5].bool(), [false, false, false, true, false, false]);
+        // No final observation unless it is valid.
+        assert_eq!(b.final_obs, Buffers::new(layout.clone(), 3).final_obs);
+
+        // A terminal row also writes its final observation.
+        b.batch().write(2, 8, &staged(&layout, 30, true, false));
+        assert_eq!(b.final_obs[0].i64(), [0, 0, 0, 0, 130, 131]);
+        assert!(b.final_valid[2] && b.terminated[2]);
+        assert_eq!(b.obs[0].i64()[4..], [30, 31]);
+
+        // A finished env's row keeps the old observation; its final observation is still written.
+        b.batch().write(1, 7, &staged(&layout, 40, true, true));
+        assert_eq!(b.obs[0].i64()[2..4], [20, 21]);
+        assert_eq!(b.final_obs[0].i64()[2..4], [140, 141]);
+        assert!(b.finished[1] && b.policy[1] == -1);
+    }
+
+    #[test]
+    fn validate_names_the_mismatched_column() {
+        let layout = layout();
+        let mut b = Buffers::new(layout.clone(), 2);
+        b.policy.pop();
+        assert_eq!(
+            b.batch().validate(&layout).unwrap_err(),
+            "policy has 1 rows, env_ids has 2"
+        );
+
+        let mut b = Buffers::new(layout.clone(), 2);
+        b.final_obs.pop();
+        assert_eq!(
+            b.batch().validate(&layout).unwrap_err(),
+            "final_obs has 5 columns, the layout has 6 keys"
+        );
+
+        let mut b = Buffers::new(layout.clone(), 2);
+        b.obs[1] = Column::I64(vec![0; 8]);
+        assert_eq!(
+            b.batch().validate(&layout).unwrap_err(),
+            "obs[\"x\"] is int64 x 8, expected float32 x 8 (2 rows of [2, 2])"
+        );
+
+        let mut b = Buffers::new(layout.clone(), 2);
+        b.final_obs[2] = Column::Bool(vec![false; 3]);
+        assert_eq!(
+            b.batch().validate(&layout).unwrap_err(),
+            "final_obs[\"m\"] is bool x 3, expected bool x 6 (2 rows of [3])"
+        );
+        assert_eq!(b.row_range(2, 1), 3..6);
+    }
+}

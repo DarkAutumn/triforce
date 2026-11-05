@@ -139,4 +139,149 @@ mod tests {
         assert_eq!(pending_room(ram(0x04, 1)), None);
         assert_eq!(pending_room(ram(0x0B, 0)), None);
     }
+
+    /// RAM-only `Nes` double (no frames run).
+    struct Ram([u8; 0x800], [u8; 0x2000]);
+
+    impl Nes for Ram {
+        type State = ();
+        fn run_frame(&mut self, _: u8, _: bool) {
+            unreachable!()
+        }
+        fn ram(&self) -> &[u8; 0x800] {
+            &self.0
+        }
+        fn prg_ram(&self) -> &[u8; 0x2000] {
+            &self.1
+        }
+        fn poke(&mut self, addr: u16, value: u8) {
+            match addr {
+                0..0x800 => self.0[addr as usize] = value,
+                _ => self.1[addr as usize - 0x6000] = value,
+            }
+        }
+        fn snapshot(&self) {}
+        fn restore(&mut self, _: &()) {}
+    }
+
+    fn ram() -> Ram {
+        Ram([0; 0x800], [0; 0x2000])
+    }
+
+    #[test]
+    fn pending_room_reads_next_room_while_scrolling_and_room_on_reveal() {
+        let mut nes = ram();
+        (
+            nes.0[LEVEL as usize],
+            nes.0[ROOM as usize],
+            nes.0[NEXT_ROOM as usize],
+        ) = (1, 0x73, 0x63);
+        let pending = |n: &Ram| pending_room(|a| n.peek(a));
+        nes.0[MODE as usize] = 0x07;
+        assert_eq!(pending(&nes), Some((1, 0x63)));
+        // Reveal/scroll complete: the room has already been switched.
+        nes.0[MODE as usize] = 0x03;
+        assert_eq!(pending(&nes), Some((1, 0x73)));
+        nes.0[MODE as usize] = 0x04;
+        assert_eq!(pending(&nes), Some((1, 0x73)));
+        // Once EnterRoom has run (updating), or in gameplay, nothing is pending.
+        nes.0[IS_UPDATING_MODE as usize] = 1;
+        assert_eq!(pending(&nes), None);
+        nes.0[MODE as usize] = 0x05;
+        assert_eq!(pending(&nes), None);
+    }
+
+    #[test]
+    fn every_transition_and_enter_mode_is_pre_entry() {
+        for mode in TRANSITION_MODES {
+            for updating in [0, 1] {
+                assert!(is_pre_entry(|a| match a {
+                    MODE => mode,
+                    IS_UPDATING_MODE => updating,
+                    _ => 0,
+                }));
+            }
+        }
+        for mode in ENTER_MODES {
+            assert!(is_pre_entry(|a| if a == MODE { mode } else { 0 }));
+        }
+        for mode in [0x00, 0x01, 0x05, 0x08, 0x11, 0x12] {
+            assert!(
+                !is_pre_entry(|a| if a == MODE { mode } else { 0 }),
+                "{mode:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn make_room_fresh_clears_only_that_rooms_history_and_kill_flags() {
+        let mut nes = ram();
+        let history = [0x44, 0x45, 0x44, 0x12, NO_ROOM, 0x00];
+        for (i, r) in history.iter().enumerate() {
+            nes.0[(ROOM_HISTORY + i as u16) as usize] = *r;
+        }
+        nes.0[(ROOM_FLAGS_UW + 0x44) as usize] = 0xFF;
+        nes.0[(ROOM_FLAGS_UW + 0x45) as usize] = 0xFF;
+        nes.0[(LEVEL_KILL_COUNTS + 0x44) as usize] = 3;
+        nes.0[(LEVEL_KILL_COUNTS + 0x45) as usize] = 2;
+        nes.0[(ROOM_FLAGS_OW + 0x44) as usize] = 0xFF;
+        make_room_fresh(&mut nes, 1, 0x44);
+        let read = |a: u16| nes.peek(a);
+        let after: Vec<u8> = (0..HISTORY_LENGTH)
+            .map(|i| read(ROOM_HISTORY + i))
+            .collect();
+        assert_eq!(after, [NO_ROOM, 0x45, NO_ROOM, 0x12, NO_ROOM, 0x00]);
+        // Dungeon: kill-count bits 6-7 and the level kill count go; doors/item bits stay.
+        assert_eq!(read(ROOM_FLAGS_UW + 0x44), 0x3F);
+        assert_eq!(read(LEVEL_KILL_COUNTS + 0x44), 0);
+        assert_eq!(
+            (read(ROOM_FLAGS_UW + 0x45), read(LEVEL_KILL_COUNTS + 0x45)),
+            (0xFF, 2)
+        );
+        assert_eq!(
+            read(ROOM_FLAGS_OW + 0x44),
+            0xFF,
+            "overworld flags untouched"
+        );
+
+        let mut nes = ram();
+        nes.0[(ROOM_FLAGS_OW + 0x77) as usize] = 0xFF;
+        nes.0[(LEVEL_KILL_COUNTS + 0x77) as usize] = 3;
+        make_room_fresh(&mut nes, 0, 0x77);
+        // Overworld: the kill count lives in bits 0-2.
+        assert_eq!(nes.peek(ROOM_FLAGS_OW + 0x77), 0xF8);
+        assert_eq!(nes.peek(LEVEL_KILL_COUNTS + 0x77), 3);
+    }
+
+    #[test]
+    fn randomize_spawn_uses_an_edge_cell_only_on_the_overworld() {
+        use rand::SeedableRng;
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(7);
+        let (mut cycles, mut cells) = (
+            std::collections::BTreeSet::new(),
+            std::collections::BTreeSet::new(),
+        );
+        for _ in 0..200 {
+            let mut nes = ram();
+            randomize_spawn(&mut nes, &mut rng);
+            let cycle = nes.peek(SPAWN_CYCLE);
+            let cell = nes.peek(EDGE_SPAWN_CELL);
+            assert!(cycle < SPAWN_CYCLE_LENGTH);
+            assert!(EDGE_CELLS.contains(&cell), "{cell:#x}");
+            cycles.insert(cycle);
+            cells.insert(cell);
+        }
+        assert_eq!(
+            cycles.len(),
+            SPAWN_CYCLE_LENGTH as usize,
+            "every cycle is reachable"
+        );
+        assert!(cells.len() > 25);
+
+        let mut nes = ram();
+        nes.0[LEVEL as usize] = 2;
+        nes.0[EDGE_SPAWN_CELL as usize] = 0x99;
+        randomize_spawn(&mut nes, &mut rng);
+        assert_eq!(nes.peek(EDGE_SPAWN_CELL), 0x99);
+    }
 }

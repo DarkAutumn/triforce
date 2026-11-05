@@ -484,3 +484,163 @@ impl fmt::Display for MapLocation {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ALL_DIRECTIONS: [Direction; 9] = [
+        Direction::None,
+        Direction::E,
+        Direction::W,
+        Direction::S,
+        Direction::N,
+        Direction::NE,
+        Direction::NW,
+        Direction::SE,
+        Direction::SW,
+    ];
+
+    #[test]
+    fn direction_values_and_names_round_trip() {
+        for d in ALL_DIRECTIONS {
+            assert_eq!(Direction::from_value(d.value()), Some(d));
+            assert_eq!(Direction::from_name(d.name()), Some(d));
+        }
+        for v in [3u8, 7, 11, 12, 0x10, 0xFF] {
+            assert_eq!(Direction::from_value(v), None, "{v}");
+        }
+        assert_eq!(Direction::from_name("north"), None);
+        // Diagonals and non-members are not RAM facings.
+        for v in [0u8, 5, 6, 9, 10, 3, 0x80] {
+            assert_eq!(Direction::from_ram_value(v), Direction::None, "{v}");
+        }
+        assert_eq!(Direction::from_ram_value(8), Direction::N);
+    }
+
+    #[test]
+    fn opposite_and_vector_only_apply_to_cardinals() {
+        for d in Direction::CARDINALS {
+            assert!(d.is_cardinal());
+            assert_eq!(d.opposite().opposite(), d);
+            let (x, y) = d.vector();
+            let (ox, oy) = d.opposite().vector();
+            assert_eq!((x + ox, y + oy), (0.0, 0.0));
+            assert_eq!(x.abs() + y.abs(), 1.0);
+        }
+        assert_eq!(Direction::N.vector(), (0.0, -1.0), "y grows downwards");
+        for d in [Direction::None, Direction::NE, Direction::SW] {
+            assert!(!d.is_cardinal());
+            assert_eq!(d.opposite(), Direction::None);
+            assert_eq!(d.vector(), (0.0, 0.0));
+        }
+        assert_eq!(Direction::from_exit("cave"), None);
+        assert_eq!(Direction::from_exit("W"), Some(Direction::W));
+    }
+
+    #[test]
+    fn action_kinds_round_trip_and_b_items() {
+        for (i, k) in ActionKind::ALL.into_iter().enumerate() {
+            assert_eq!(ActionKind::from_index(i), Some(k));
+            assert_eq!(k.index(), i);
+            assert_eq!(ActionKind::from_name(k.name()), Some(k));
+        }
+        assert_eq!(ActionKind::from_index(7), None);
+        assert_eq!(ActionKind::from_name("move"), None);
+        let b: Vec<_> = ActionKind::ALL
+            .into_iter()
+            .filter(|k| k.is_b_item())
+            .collect();
+        assert_eq!(
+            b,
+            [ActionKind::Bomb, ActionKind::Boomerang, ActionKind::Arrow]
+        );
+    }
+
+    #[test]
+    fn sword_values_above_magic_are_magic() {
+        assert_eq!(SwordKind::from_value(0), SwordKind::None);
+        assert_eq!(SwordKind::from_value(2), SwordKind::White);
+        assert_eq!(SwordKind::from_value(3), SwordKind::Magic);
+        assert_eq!(SwordKind::from_value(0xFF), SwordKind::Magic);
+    }
+
+    #[test]
+    fn position_tiles_floor_towards_negative() {
+        assert_eq!(Position::new(0, GAMEPLAY_START_Y).tile(), (0, 0));
+        assert_eq!(Position::new(7, GAMEPLAY_START_Y + 7).tile(), (0, 0));
+        assert_eq!(Position::new(8, GAMEPLAY_START_Y + 8).tile(), (1, 1));
+        // Above the play area (and left of it) rounds down, not towards zero.
+        assert_eq!(Position::new(-1, GAMEPLAY_START_Y - 1).tile(), (-1, -1));
+        assert_eq!(Position::new(-8, GAMEPLAY_START_Y - 9).tile(), (-1, -2));
+    }
+
+    #[test]
+    fn adjacent_rooms_stop_at_the_map_edge() {
+        let corner = MapLocation::new(1, 0x00, false);
+        assert_eq!(corner.location_in_direction(Direction::N), None);
+        assert_eq!(corner.location_in_direction(Direction::W), None);
+        assert_eq!(
+            corner.location_in_direction(Direction::E),
+            Some(MapLocation::new(1, 0x01, false))
+        );
+        assert_eq!(
+            corner.location_in_direction(Direction::S),
+            Some(MapLocation::new(1, 0x10, false))
+        );
+        let far = MapLocation::new(0, 0xFF, true);
+        assert_eq!(far.location_in_direction(Direction::S), None);
+        assert_eq!(far.location_in_direction(Direction::E), None);
+        assert_eq!(
+            far.location_in_direction(Direction::N),
+            Some(MapLocation::new(0, 0xEF, true)),
+            "level and cave flag carry over"
+        );
+        assert_eq!(far.location_in_direction(Direction::NW), None);
+        assert_eq!(
+            MapLocation::from_coordinates(2, 0xE, 0x7, false).value,
+            0x7E
+        );
+    }
+
+    #[test]
+    fn direction_between_rooms() {
+        let room = MapLocation::new(0, 0x77, false);
+        let at = |v: u8| MapLocation::new(0, v, false);
+        assert_eq!(room.direction_to(at(0x78)), Direction::E);
+        assert_eq!(room.direction_to(at(0x76)), Direction::W);
+        assert_eq!(room.direction_to(at(0x87)), Direction::S);
+        assert_eq!(room.direction_to(at(0x67)), Direction::N);
+        // Not adjacent (diagonal, two away, itself).
+        for v in [0x66, 0x79, 0x77] {
+            assert_eq!(room.direction_to(at(v)), Direction::None, "{v:#x}");
+        }
+        // Leaving a cave goes south; into a dungeon south, out of one north.
+        let cave = MapLocation::new(0, 0x77, true);
+        assert_eq!(cave.direction_to(room), Direction::S);
+        assert_eq!(room.direction_to(cave), Direction::None);
+        let dungeon = MapLocation::new(1, 0x73, false);
+        assert_eq!(
+            MapLocation::new(0, 0x37, false).direction_to(dungeon),
+            Direction::S
+        );
+        assert_eq!(
+            dungeon.direction_to(MapLocation::new(0, 0x37, false)),
+            Direction::N
+        );
+    }
+
+    #[test]
+    fn manhattan_distance_counts_level_and_cave_changes_as_one_room() {
+        let a = MapLocation::new(1, 0x00, false);
+        assert_eq!(a.manhattan_distance(MapLocation::new(1, 0x33, false)), 6);
+        assert_eq!(a.manhattan_distance(a), 0);
+        assert_eq!(a.manhattan_distance(MapLocation::new(2, 0xFF, false)), 1);
+        assert_eq!(a.manhattan_distance(MapLocation::new(1, 0xFF, true)), 1);
+        assert_eq!(a.to_string(), "(1, 0x00)");
+        assert_eq!(
+            MapLocation::new(0, 0x77, true).to_string(),
+            "(0, 0x77, cave)"
+        );
+    }
+}

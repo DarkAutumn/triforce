@@ -606,3 +606,158 @@ fn recorded_episodes_replay_to_the_same_machine() {
     assert!(nes.ram() == &ram, "RAM after replay");
     assert!(nes.prg_ram() == &prg_ram, "PRG-RAM after replay");
 }
+
+fn wait_action() -> [i64; 3] {
+    zelda::Action::parse("WAIT 8")
+        .unwrap()
+        .to_indices()
+        .map(|i| i as i64)
+}
+
+fn eval_jobs() -> Vec<EvalJob> {
+    [5u64, 6, 7]
+        .map(|seed| EvalJob {
+            start_state: START.into(),
+            seed,
+        })
+        .to_vec()
+}
+
+fn eval_env(
+    nes: Counted,
+    data: &Arc<GameData>,
+    jobs: Jobs<EvalJob>,
+    init: EnvInit,
+) -> EvalEnv<Counted, TfzStore> {
+    let opts = EnvOptions {
+        explicit_starts: true,
+        ..Default::default()
+    };
+    EvalEnv::new(
+        config(data, 4),
+        data.clone(),
+        nes,
+        TfzStore,
+        opts,
+        jobs,
+        init,
+        None,
+    )
+    .unwrap()
+}
+
+#[test]
+fn eval_jobs_are_shared_and_each_result_is_independent_of_the_env() {
+    let (Some(a), Some(b), Some(c)) = (open_core(), open_core(), open_core()) else {
+        return;
+    };
+    let data = data();
+    // Directly: one env plays every job in order.
+    let mut direct = eval_env(a, &data, Jobs::new(eval_jobs()), init());
+    let mut obs = ObsData::new(Arc::new(obs_layout()));
+    let mut events = Vec::new();
+    let mut expected = Vec::new();
+    while direct.reset(obs.row(), &mut events).unwrap().is_some() {
+        while !direct
+            .step(wait_action(), obs.row(), &mut events)
+            .map(|o| o.terminated || o.truncated)
+            .unwrap()
+        {}
+        for e in events.drain(..) {
+            match e {
+                ZeldaEvent::Eval(r) => expected.push(*r),
+                ZeldaEvent::Room(_) => panic!("room events are off by default"),
+                _ => {}
+            }
+        }
+    }
+    assert_eq!(expected.len(), 3);
+
+    // In a pool: two envs take jobs from one list; only env 0 reports rooms.
+    let jobs = Jobs::new(eval_jobs());
+    let mut cores = vec![b, c];
+    let pool = Pool::new(PoolOptions::new(2, 2, 0), |init| {
+        let index = init.index;
+        let mut env = eval_env(cores.remove(0), &data, jobs.clone(), init);
+        env.set_room_events(index == 0);
+        Ok::<_, EnvError>(pool::zelda::TaskEnv::Eval(env))
+    })
+    .unwrap();
+    let mut buffers = pool.buffers();
+    let mut finished = Vec::new();
+    while pool.active() > 0 {
+        let n = pool.recv(&mut buffers.batch(), 1, None).unwrap();
+        let mut send = Vec::new();
+        for row in 0..n {
+            if buffers.finished[row] {
+                finished.push(buffers.env_ids[row]);
+            } else {
+                send.push(buffers.env_ids[row] as usize);
+            }
+        }
+        pool.send(&send, &vec![wait_action(); send.len()]).unwrap();
+    }
+    finished.sort();
+    assert_eq!(finished, [0, 1], "both envs finish once the list is empty");
+    assert_eq!(jobs.remaining(), 0);
+    let (mut records, mut rooms) = (Vec::new(), Vec::new());
+    for (env, e) in pool.poll_events() {
+        match e {
+            ZeldaEvent::Eval(r) => records.push(*r),
+            ZeldaEvent::Room(r) => rooms.push((env, r)),
+            _ => {}
+        }
+    }
+    records.sort_by_key(|r| r.seed);
+    assert_eq!(
+        records, expected,
+        "every job played once, with the same result as directly"
+    );
+    assert!(
+        !rooms.is_empty() && rooms.iter().all(|(env, _)| *env == 0),
+        "{rooms:?}"
+    );
+    let (_, first) = &rooms[0];
+    assert_eq!(
+        (first.level, first.room, &*first.specialist),
+        (1, 0x73, SPECIALIST)
+    );
+}
+
+#[test]
+fn a_chain_specialist_outside_the_pool_policies_ends_the_run_as_error() {
+    let Some(nes) = open_core() else { return };
+    let data = data();
+    let route = Route::load(&data.map, "milestone1", None, None).unwrap();
+    let only: Vec<Arc<str>> = vec![Arc::from("boss-aquamentus")];
+    let mut env = ChainRunEnv::new(
+        data.clone(),
+        nes,
+        TfzStore,
+        route,
+        Jobs::new([0u64, 1]),
+        only,
+        init(),
+        None,
+    );
+    let first = data
+        .specialist_for(zelda::MapLocation::new(0, 0x77, false))
+        .unwrap()
+        .to_owned();
+    let mut obs = ObsData::new(Arc::new(obs_layout()));
+    let mut events = Vec::new();
+    // Every seed's run fails at once, so one reset drains the list: a run event per seed, then finished.
+    assert_eq!(env.reset(obs.row(), &mut events).unwrap(), None);
+    let reason = format!("specialist {first} has no policy in this pool");
+    let runs: Vec<(String, String)> = events
+        .iter()
+        .map(|e| match e {
+            ZeldaEvent::Run(r) => (r.result.clone(), r.reason.clone()),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(runs, vec![("error".to_owned(), reason); 2]);
+    events.clear();
+    assert_eq!(env.reset(obs.row(), &mut events).unwrap(), None);
+    assert!(events.is_empty(), "no seeds left: no run");
+}

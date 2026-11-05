@@ -104,3 +104,131 @@ impl FutureCreditLedger {
         self.predictions.retain(|p| !p.is_empty());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn prediction(frame: u64, hits: &[(u8, i32)], stuns: &[u8], items: &[i16]) -> Prediction {
+        Prediction {
+            frame,
+            enemy_hits: hits.to_vec(),
+            enemy_stuns: stuns.to_vec(),
+            items: items.to_vec(),
+        }
+    }
+
+    /// (hits, stuns, items) left after discounting the observations at `frame`.
+    fn discount(
+        ledger: &mut FutureCreditLedger,
+        frame: u64,
+        hits: &[(u8, i32)],
+        stuns: &[u8],
+        items: &[i16],
+    ) -> (Vec<(u8, i32)>, Vec<u8>, Vec<i16>) {
+        let (mut h, mut s, mut i) = (hits.to_vec(), stuns.to_vec(), items.to_vec());
+        ledger.discount(frame, &mut h, &mut s, &mut i);
+        (h, s, i)
+    }
+
+    #[test]
+    fn add_hit_accumulates_per_slot_in_insertion_order() {
+        let mut hits = Vec::new();
+        add_hit(&mut hits, 3, 1);
+        add_hit(&mut hits, 1, 2);
+        add_hit(&mut hits, 3, 4);
+        assert_eq!(hits, vec![(3, 5), (1, 2)]);
+    }
+
+    #[test]
+    fn empty_predictions_are_not_recorded() {
+        let mut ledger = FutureCreditLedger::default();
+        ledger.add_prediction(prediction(10, &[], &[], &[]));
+        assert!(ledger.predictions().is_empty());
+        ledger.add_prediction(prediction(10, &[], &[2], &[]));
+        assert_eq!(ledger.predictions().len(), 1);
+    }
+
+    #[test]
+    fn predicted_effects_are_not_credited_twice() {
+        let mut ledger = FutureCreditLedger::default();
+        ledger.add_prediction(prediction(100, &[(2, 3)], &[4], &[0x18]));
+        // The beam lands later: the observed hit, stun and pickup were credited at the firing step.
+        let left = discount(&mut ledger, 120, &[(2, 3), (5, 1)], &[4, 6], &[0x18, 0x22]);
+        assert_eq!(left, (vec![(5, 1)], vec![6], vec![0x22]));
+        assert!(
+            ledger.predictions().is_empty(),
+            "a fully observed prediction is consumed"
+        );
+        // Once consumed, the same effects are new again.
+        let left = discount(&mut ledger, 130, &[(2, 3)], &[4], &[0x18]);
+        assert_eq!(left, (vec![(2, 3)], vec![4], vec![0x18]));
+    }
+
+    #[test]
+    fn partial_hits_carry_the_remainder_either_way() {
+        let mut ledger = FutureCreditLedger::default();
+        ledger.add_prediction(prediction(0, &[(2, 3)], &[], &[]));
+        // Observed less than predicted: nothing new, 2 damage still predicted.
+        assert_eq!(discount(&mut ledger, 5, &[(2, 1)], &[], &[]).0, vec![]);
+        assert_eq!(ledger.predictions()[0].enemy_hits, vec![(2, 2)]);
+        // Observed more than what remains: only the excess is new.
+        assert_eq!(
+            discount(&mut ledger, 6, &[(2, 5)], &[], &[]).0,
+            vec![(2, 3)]
+        );
+        assert!(ledger.predictions().is_empty());
+    }
+
+    #[test]
+    fn duplicate_ids_are_matched_one_for_one() {
+        let mut ledger = FutureCreditLedger::default();
+        ledger.add_prediction(prediction(0, &[], &[3], &[0x18]));
+        let left = discount(&mut ledger, 1, &[], &[3, 3], &[0x18, 0x18]);
+        assert_eq!((left.1, left.2), (vec![3], vec![0x18]));
+    }
+
+    #[test]
+    fn each_prediction_discounts_its_own_share() {
+        let mut ledger = FutureCreditLedger::default();
+        ledger.add_prediction(prediction(0, &[(1, 1)], &[], &[]));
+        ledger.add_prediction(prediction(4, &[(1, 2)], &[], &[]));
+        assert_eq!(
+            discount(&mut ledger, 8, &[(1, 4)], &[], &[]).0,
+            vec![(1, 1)]
+        );
+        assert!(ledger.predictions().is_empty());
+    }
+
+    #[test]
+    fn predictions_expire_after_200_frames() {
+        let mut ledger = FutureCreditLedger::default();
+        ledger.add_prediction(prediction(1000, &[(2, 1)], &[], &[]));
+        // 199 frames later the prediction still applies.
+        assert_eq!(discount(&mut ledger, 1199, &[(2, 1)], &[], &[]).0, vec![]);
+
+        ledger.add_prediction(prediction(1000, &[(2, 1)], &[], &[]));
+        // 200 frames later it is dropped and the hit counts.
+        assert_eq!(
+            discount(&mut ledger, 1200, &[(2, 1)], &[], &[]).0,
+            vec![(2, 1)]
+        );
+        assert!(ledger.predictions().is_empty());
+    }
+
+    #[test]
+    fn unmatched_predictions_wait_and_clear_drops_them() {
+        let mut ledger = FutureCreditLedger::default();
+        ledger.add_prediction(prediction(0, &[(2, 1)], &[], &[]));
+        assert_eq!(
+            discount(&mut ledger, 10, &[(3, 1)], &[], &[]).0,
+            vec![(3, 1)]
+        );
+        assert_eq!(ledger.predictions().len(), 1);
+        ledger.clear();
+        assert_eq!(
+            discount(&mut ledger, 11, &[(2, 1)], &[], &[]).0,
+            vec![(2, 1)]
+        );
+    }
+}

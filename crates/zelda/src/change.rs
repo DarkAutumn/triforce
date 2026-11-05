@@ -260,3 +260,258 @@ fn observe_items(prev: &GameView, curr: &GameView, items: &mut Vec<i16>) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Damage/item/health observation and look-ahead credit on RAM images (no emulator).
+    use super::*;
+    use crate::enums::{enemy, item};
+    use crate::executor::tests::{Script, playable, scripted};
+    use crate::game_map::GameMap;
+    use crate::tables::{self, RAM_SIZE};
+
+    const SLOT: usize = 3;
+
+    fn image(ram: &[u8; 0x800]) -> [u8; RAM_SIZE] {
+        let mut out = [0u8; RAM_SIZE];
+        out[..0x800].copy_from_slice(ram);
+        out
+    }
+
+    fn view(ram: &[u8; 0x800], frame: u64) -> Arc<GameView> {
+        static MAP: std::sync::LazyLock<Arc<GameMap>> =
+            std::sync::LazyLock::new(|| Arc::new(GameMap::builtin()));
+        Arc::new(GameView::new(&image(ram), frame, false, MAP.clone()))
+    }
+
+    /// A Stalfos with `health` hearts in slot 3, far from Link.
+    fn with_stalfos(health: u8) -> [u8; 0x800] {
+        let mut ram = playable();
+        ram[tables::OBJ_ID.0 + SLOT] = enemy::STALFOS;
+        ram[tables::OBJ_HEALTH.0 + SLOT] = health << 4;
+        (
+            ram[tables::OBJ_POS_X.0 + SLOT],
+            ram[tables::OBJ_POS_Y.0 + SLOT],
+        ) = (40, 100);
+        ram
+    }
+
+    fn change(
+        m: &mut Machine<Script>,
+        prev: Arc<GameView>,
+        curr: Arc<GameView>,
+        ledger: &mut FutureCreditLedger,
+        look_ahead: bool,
+    ) -> Change {
+        let option = OptionResult {
+            frames: 4,
+            interrupt: None,
+            control_frames: 4,
+            projectile_blocks: Vec::new(),
+        };
+        Change::new(
+            m,
+            prev,
+            curr,
+            Action::parse("WAIT 4").unwrap(),
+            option,
+            ActionMask::default(),
+            ledger,
+            look_ahead,
+        )
+    }
+
+    fn observe(prev: &[u8; 0x800], curr: &[u8; 0x800], elapsed: u64) -> Change {
+        let mut m = scripted(*curr, |_, _| {});
+        let mut ledger = FutureCreditLedger::default();
+        change(
+            &mut m,
+            view(prev, 100),
+            view(curr, 100 + elapsed),
+            &mut ledger,
+            false,
+        )
+    }
+
+    #[test]
+    fn damage_kills_dying_enemies_and_new_stuns() {
+        let prev = with_stalfos(3);
+        let mut hurt = prev;
+        hurt[tables::OBJ_HEALTH.0 + SLOT] = 1 << 4;
+        assert_eq!(observe(&prev, &hurt, 4).enemies_hit, vec![(SLOT as u8, 2)]);
+
+        // Gone from its slot or in the death sparkle: credited with the health it had left.
+        let mut gone = prev;
+        gone[tables::OBJ_ID.0 + SLOT] = 0;
+        assert_eq!(observe(&prev, &gone, 4).enemies_hit, vec![(SLOT as u8, 3)]);
+        let mut dying = prev;
+        dying[tables::OBJ_SPAWN_STATE.0 + SLOT] = 0x10;
+        assert_eq!(observe(&prev, &dying, 4).enemies_hit, vec![(SLOT as u8, 3)]);
+        // A zero-health enemy still counts as one hit when it dies.
+        let weak = with_stalfos(0);
+        let mut killed = weak;
+        killed[tables::OBJ_ID.0 + SLOT] = 0;
+        assert_eq!(
+            observe(&weak, &killed, 4).enemies_hit,
+            vec![(SLOT as u8, 1)]
+        );
+        // Already dying before the step: nothing more to credit.
+        assert_eq!(observe(&dying, &gone, 4).enemies_hit, vec![]);
+
+        let mut stunned = prev;
+        stunned[tables::OBJ_STUN_TIMER.0 + SLOT] = 0x10;
+        assert_eq!(
+            observe(&prev, &stunned, 4).enemies_stunned,
+            vec![SLOT as u8]
+        );
+        let mut still = stunned;
+        still[tables::OBJ_STUN_TIMER.0 + SLOT] = 0x0C;
+        assert_eq!(observe(&stunned, &still, 4).enemies_stunned, vec![]);
+    }
+
+    #[test]
+    fn vanished_items_count_as_pickups_only_before_their_timer_runs_out() {
+        let mut prev = playable();
+        prev[tables::OBJ_ID.0 + 2] = 0x60;
+        prev[tables::OBJ_STATUS.0 + 2] = item::HEART as u8;
+        prev[tables::ITEM_TIMER.0 + 2] = 8;
+        let mut curr = prev;
+        curr[tables::OBJ_ID.0 + 2] = 0;
+        assert_eq!(observe(&prev, &curr, 7).items_gained, vec![item::HEART]);
+        assert_eq!(
+            observe(&prev, &curr, 8).items_gained,
+            vec![],
+            "expired, not taken"
+        );
+        assert_eq!(observe(&prev, &prev, 2).items_gained, vec![]);
+    }
+
+    #[test]
+    fn container_changes_count_whole_hearts() {
+        let prev = playable(); // 3 of 3 hearts
+        let mut up = prev;
+        up[Var::HeartsAndContainers.addr() as usize] = 0x33;
+        let c = observe(&prev, &up, 4);
+        assert_eq!((c.health_gained, c.health_lost), (1.0, 0.0));
+        let c = observe(&up, &prev, 4);
+        assert_eq!((c.health_gained, c.health_lost), (0.0, 1.0));
+        let mut half = prev;
+        half[Var::HeartsAndContainers.addr() as usize] = 0x21;
+        half[Var::PartialHearts.addr() as usize] = 0x7F;
+        let c = observe(&prev, &half, 4);
+        assert_eq!((c.health_gained, c.health_lost), (0.0, 1.5));
+    }
+
+    #[test]
+    fn changing_rooms_observes_nothing_and_drops_predictions() {
+        let prev = with_stalfos(3);
+        let mut next = prev;
+        next[Var::Location.addr() as usize] = 0x45;
+        next[tables::OBJ_ID.0 + SLOT] = 0;
+        let mut m = scripted(next, |_, _| {});
+        let mut ledger = FutureCreditLedger::default();
+        ledger.add_prediction(Prediction {
+            frame: 100,
+            enemy_hits: vec![(1, 1)],
+            ..Default::default()
+        });
+        let c = change(
+            &mut m,
+            view(&prev, 100),
+            view(&next, 104),
+            &mut ledger,
+            true,
+        );
+        assert!(c.changed_location() && c.enemies_hit.is_empty());
+        assert!(ledger.predictions().is_empty());
+    }
+
+    /// Beam fired at frame 0 of the script: it hits the Stalfos on frame 5 and ends on frame 8.
+    fn beam_script(frame: u64, ram: &mut [u8; 0x800]) {
+        if frame >= 5 {
+            ram[tables::OBJ_HEALTH.0 + SLOT] = 2 << 4;
+        }
+        if frame >= 8 {
+            ram[Var::BeamAnimation.addr() as usize] = 0;
+        }
+    }
+
+    #[test]
+    fn look_ahead_credits_the_firing_step_once() {
+        let prev = with_stalfos(3);
+        let mut fired = prev;
+        fired[Var::BeamAnimation.addr() as usize] = 16;
+        fired[Var::BombOrFlameAnimation.addr() as usize] = 0x05; // another slot, zeroed for the look-ahead
+        let mut m = scripted(fired, beam_script);
+        let mut ledger = FutureCreditLedger::default();
+        let c = change(
+            &mut m,
+            view(&prev, 100),
+            view(&fired, 104),
+            &mut ledger,
+            true,
+        );
+        assert_eq!(
+            c.enemies_hit,
+            vec![(SLOT as u8, 1)],
+            "credited when the beam leaves"
+        );
+        assert_eq!(ledger.predictions().len(), 1);
+        assert_eq!(ledger.predictions()[0].frame, 104);
+        // The look-ahead ran on a copy: the machine, its frame counter and the other slot are untouched.
+        assert_eq!(m.nes.ram, fired);
+        assert_eq!(m.frame, 0);
+        assert!(m.nes.buttons.iter().all(|&b| b == 0));
+
+        // The real hit lands on a later step: not rewarded again.
+        let mut landed = fired;
+        landed[tables::OBJ_HEALTH.0 + SLOT] = 2 << 4;
+        landed[Var::BeamAnimation.addr() as usize] = 0;
+        let mut m = scripted(landed, |_, _| {});
+        let c = change(
+            &mut m,
+            view(&fired, 104),
+            view(&landed, 112),
+            &mut ledger,
+            true,
+        );
+        assert_eq!(c.enemies_hit, vec![]);
+        assert!(ledger.predictions().is_empty());
+
+        // Without look-ahead the hit is credited when observed.
+        let mut ledger = FutureCreditLedger::default();
+        let mut m = scripted(fired, beam_script);
+        let c = change(
+            &mut m,
+            view(&prev, 100),
+            view(&fired, 104),
+            &mut ledger,
+            false,
+        );
+        assert!(c.enemies_hit.is_empty() && ledger.predictions().is_empty());
+        let c = change(
+            &mut m,
+            view(&fired, 104),
+            view(&landed, 112),
+            &mut ledger,
+            false,
+        );
+        assert_eq!(c.enemies_hit, vec![(SLOT as u8, 1)]);
+    }
+
+    #[test]
+    fn a_weapon_already_active_does_not_look_ahead_again() {
+        let mut fired = with_stalfos(3);
+        fired[Var::BeamAnimation.addr() as usize] = 16;
+        let mut m = scripted(fired, beam_script);
+        let mut ledger = FutureCreditLedger::default();
+        let c = change(
+            &mut m,
+            view(&fired, 100),
+            view(&fired, 104),
+            &mut ledger,
+            true,
+        );
+        assert!(c.enemies_hit.is_empty() && ledger.predictions().is_empty());
+    }
+}
