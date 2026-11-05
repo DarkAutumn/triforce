@@ -12,8 +12,13 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
 - **Promoted now:** ow-zora / ow-start r24-fairy, ow-octorok r32-nearby-off, ow-moblin r26c-moblin,
   ow-leever-peahat r23-more, boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1,
   d2-rope r35-east-curriculum, wallmaster r10 copy. Overworld families use both routes' rooms; D2 rooms have 3 states each.
-- **Lee's pause request (Nov 4):** r36 is complete and recorded; pause after committing its result. No further
-  experiment, boomerang study, swordless-start fix or deferred observation work until Lee resumes work.
+- **Lee's order (Nov 5):** first finish the Rust port (plan steps 17–18: `round8.md` "Open", the watch-mode
+  restore below, then retiring the FCEUmm oracle and quirks). Then a **performance and optimization** step:
+  baseline steps/s from the training runs in `logs/` (what `training-gui.py` shows), profile training on the
+  new stack over the long haul (not startup), make it faster for the same number of envs, and write
+  `docs/performance.md`. **Then continue with the experiments below** (the "Work in this order" list, then
+  "Other open items"), as before: log every result, commit each finished item, keep going. Side experiments
+  found during the port or the performance work go into "Other open items" instead of derailing the work.
 
 ### Work in this order
 
