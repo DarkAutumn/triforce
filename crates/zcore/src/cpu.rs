@@ -410,11 +410,13 @@ impl Bus {
     }
 
     /// Start a CPU cycle.
+    ///
+    /// The PPU is not clocked here: it runs behind and is caught up by [`Bus::ppu_sync`] when
+    /// something can observe it. That lands it on exactly the dots per-cycle clocking would have.
     #[inline(always)]
     pub(crate) fn start_cycle(&mut self, increment: u8) {
         self.cpu.master_clock = self.cpu.master_clock.wrapping_add(u32::from(increment));
         self.cpu.cycle = self.cpu.cycle.wrapping_add(1);
-        self.ppu_clock_to(self.cpu.master_clock - Cpu::PPU_OFFSET);
         self.cpu_clock();
     }
 
@@ -422,9 +424,39 @@ impl Bus {
     #[inline(always)]
     pub(crate) fn end_cycle(&mut self, increment: u8) {
         self.cpu.master_clock = self.cpu.master_clock.wrapping_add(u32::from(increment));
-        self.ppu_clock_to(self.cpu.master_clock - Cpu::PPU_OFFSET);
-
         self.handle_interrupts();
+    }
+
+    /// Catches the PPU up to where per-CPU-cycle clocking would have it now.
+    ///
+    /// Called before anything that observes or changes what the PPU does - a `$2000-$3FFF`
+    /// access, a board register write, a frame-boundary or NMI-request dot falling due, a trace
+    /// row - so it sees and changes the same dots it would have clocked one CPU cycle at a time.
+    #[inline(always)]
+    pub(crate) fn ppu_sync(&mut self) {
+        self.ppu_sync_to(self.cpu.master_clock.saturating_sub(Cpu::PPU_OFFSET));
+    }
+
+    /// [`Bus::ppu_sync`] to an explicit master clock.
+    ///
+    /// FQ-03: the first catch-up within an instruction stops at the instruction's start to take
+    /// `status_at_instr` there, as per-cycle clocking did before every opcode fetch.
+    #[inline(never)]
+    pub(crate) fn ppu_sync_to(&mut self, clock: u32) {
+        if !self.status_latched {
+            self.status_latched = true;
+            self.ppu_clock_to(self.instr_start_clock);
+            self.ppu.status_at_instr = self.ppu.read_status_bits();
+        }
+        self.ppu_clock_to(clock);
+        self.ppu_deadline = self.ppu.next_event_clock();
+    }
+
+    /// Whether a frame-boundary or NMI-request dot may have fallen due, so the PPU has to be
+    /// caught up before the CPU looks at `frame_count` or `fceu_nmi`.
+    #[inline(always)]
+    fn ppu_due(&self) -> bool {
+        self.cpu.master_clock.saturating_sub(Cpu::PPU_OFFSET) >= self.ppu_deadline
     }
 
     /// DMA as FCEUmm times it.
@@ -643,36 +675,50 @@ impl Bus {
     /// Runs all components up to master clock, synchronizing them.
     #[inline(always)]
     pub fn clock_sync(&mut self) {
-        self.ppu_clock_to(self.cpu.master_clock);
+        self.ppu_sync_to(self.cpu.master_clock);
         self.cpu.master_clock = self.cpu.master_clock.saturating_sub(self.ppu.master_clock);
         self.ppu.master_clock = 0;
         self.apu.clock_sync();
+        self.ppu_deadline = self.ppu.next_event_clock();
     }
 
     /// Runs instructions until the frame counter advances (FQ-08), then synchronizes.
     pub fn clock_frame(&mut self) {
+        // The PPU is caught up between frames; anything may have changed it since.
+        self.ppu_deadline = self.ppu.next_event_clock();
         let frame = self.ppu.frame_number();
         while frame == self.ppu.frame_number() {
-            self.clock_instr();
+            self.step_instr();
         }
         self.clock_sync();
     }
 
-    /// Runs the CPU one instruction.
-    #[inline(always)]
+    /// Runs the CPU one instruction, leaving the PPU caught up with it.
     pub fn clock_instr(&mut self) {
+        self.ppu_deadline = self.ppu.next_event_clock();
+        self.step_instr();
+        self.ppu_sync();
+    }
+
+    /// Runs the CPU one instruction, catching the PPU up only as far as the instruction needed.
+    #[inline(always)]
+    fn step_instr(&mut self) {
+        // FQ-03: FCEUmm raises and clears VBlank between instructions; `status_at_instr` is taken
+        // here, at the first catch-up (`ppu_sync_to`).
+        self.instr_start_clock = self.cpu.master_clock.saturating_sub(Cpu::PPU_OFFSET);
+        self.status_latched = false;
         if self.trace.is_some() {
+            self.ppu_sync();
             self.trace_instr();
         }
 
-        // FQ-03: FCEUmm raises and clears VBlank between instructions.
-        self.ppu.status_at_instr = self.ppu.read_status_bits();
         // FQ-12: FCEUmm's per-instruction DMC hook sees the instruction's base cycles already
-        // counted; a fetch it starts is spent after the instruction (FQ-11).
-        let base = Cpu::INSTR_REF[usize::from(self.peek(self.cpu.pc))].cycles;
-        let now = self.cpu.cycle.wrapping_add(u32::from(base));
-        let dmc_fetch = self.apu.dmc.fceu.hook(now);
+        // counted; a fetch it starts is spent after the instruction (FQ-11). The hook touches
+        // nothing the opcode fetch does, so it runs after it on the fetched opcode.
+        let start = self.cpu.cycle;
         let opcode = self.fetch_byte(); // Cycle 1
+        let base = Cpu::INSTR_REF[usize::from(opcode)].cycles;
+        let dmc_fetch = self.apu.dmc.fceu.hook(start.wrapping_add(u32::from(base)));
         let op = Cpu::OPS[usize::from(opcode)];
         self.cpu.addr_mode = op.addr_mode();
         self.cpu.operand = self.fetch_operand();
@@ -685,6 +731,10 @@ impl Bus {
         }
         if let Some(addr) = dmc_fetch {
             self.fceumm_dmc_fetch(addr);
+        }
+
+        if self.ppu_due() {
+            self.ppu_sync();
         }
 
         // FQ-05, FQ-04: FCEUmm takes a requested NMI at the next instruction boundary, and an NMI
@@ -700,6 +750,9 @@ impl Bus {
             .intersects(IrqFlags::PREV_RUN_IRQ | IrqFlags::PREV_NMI)
         {
             self.irq();
+            if self.ppu_due() {
+                self.ppu_sync();
+            }
         }
     }
 

@@ -25,6 +25,7 @@ pub mod ctrl;
 pub mod mask;
 pub mod scroll;
 pub mod sprite;
+mod span;
 pub mod status;
 
 /// Nametable Mirroring Mode
@@ -535,6 +536,30 @@ impl Ppu {
         self.frame_count & 1 == 1
     }
 
+    /// The master clock by which the PPU must be caught up for the CPU to see its next
+    /// frame-boundary (FQ-08, line 240 dot 1) or NMI-request (FQ-05, line 241 dot 13) dot.
+    ///
+    /// Counts dots from the current one assuming the odd-frame skip (FQ-09) happens on the way,
+    /// so it is never late; when it does not, the catch-up comes a dot early and this is asked
+    /// again.
+    #[must_use]
+    pub(crate) fn next_event_clock(&self) -> u32 {
+        const LINE: u32 = cycle::END as u32 + 1;
+        let frame = u32::from(self.prerender_scanline + 1) * LINE;
+        let pos = u32::from(self.scanline) * LINE + u32::from(self.cycle);
+        let dots_to = |line: u16, dot: u16| {
+            let target = u32::from(line) * LINE + u32::from(dot);
+            match (target + frame - pos) % frame {
+                0 => frame,
+                d => d,
+            }
+        };
+        let frame_end = dots_to(self.vblank_scanline - 1, 1);
+        let nmi = dots_to(self.vblank_scanline, 13);
+        let dots = frame_end.min(nmi) - 1;
+        self.master_clock + dots * u32::from(self.clock_divider)
+    }
+
     /// Load the passed given buffer with RGBA pixels from the current nametables.
     ///
     /// `chr` is `$0000-$2FFF` as the PPU currently sees it - pattern tables and nametables, banked
@@ -768,8 +793,11 @@ impl Ppu {
         self.open_bus = 0; // Clear open bus every frame
     }
 
-    fn oam_eval_cycle(&mut self) {
-        if self.cycle & 0x01 == 0x01 {
+    /// One dot of sprite evaluation (dots 65-256): odd dots read OAM, even dots write secondary
+    /// OAM and step the OAM address.
+    #[inline(always)]
+    fn oam_eval_cycle(&mut self, cycle: u16) {
+        if cycle & 0x01 == 0x01 {
             // Odd cycles are reads from OAM
             self.oam_fetch = self.oamdata[self.oamaddr as usize];
         } else {
@@ -885,14 +913,14 @@ impl Ppu {
                 self.oam_eval_done = false;
                 self.oamaddr_hi = (self.oamaddr >> 2) & 0x3F;
                 self.oamaddr_lo = self.oamaddr & 0x03;
-                self.oam_eval_cycle();
+                self.oam_eval_cycle(self.cycle);
             }
             cycle::SPR_EVAL_END => {
                 self.spr_zero_visible = self.spr_zero_in_range;
                 self.spr_count = self.secondary_oamaddr >> 2;
-                self.oam_eval_cycle();
+                self.oam_eval_cycle(self.cycle);
             }
-            cycle::SPR_EVAL_START1..=cycle::SPR_EVAL_END0 => self.oam_eval_cycle(),
+            cycle::SPR_EVAL_START1..=cycle::SPR_EVAL_END0 => self.oam_eval_cycle(self.cycle),
             _ => (),
         }
     }
@@ -914,8 +942,7 @@ impl Ppu {
     }
 
     #[inline]
-    fn pixel_palette(&mut self) -> u8 {
-        let cycle = self.cycle;
+    fn pixel_palette(&mut self, cycle: u16) -> u8 {
         let x = cycle - 1;
         let fine_x = self.scroll.fine_x;
         let bg_shift = 15 - fine_x;
@@ -974,16 +1001,13 @@ impl Ppu {
         palette + bg_color
     }
 
-    // Only reached under `HeadlessMode`, so it is kept out of `ppu_clock`'s code footprint
-    // entirely rather than inlined into a path that never runs it.
-    #[cold]
-    #[inline(never)]
-    fn headless_sprite_zero_hit(&mut self) {
+    /// Sprite 0 hit detection at one visible dot when no pixels are being drawn.
+    #[inline]
+    fn headless_sprite_zero_hit(&mut self, cycle: u16) {
         if !self.spr_zero_visible || self.status_spr_zero_hit {
             return;
         }
 
-        let cycle = self.cycle;
         let bg_mask = u8::from(cycle > self.mask_min_draw_bg_cycle);
         if (bg_mask == 0)
             | (cycle <= self.mask_min_draw_spr_cycle)
@@ -1018,17 +1042,17 @@ impl Ppu {
     }
 
     #[inline(always)]
-    fn render_pixel(&mut self, frame: &mut crate::bus::FrameBuffer) {
+    fn render_pixel(&mut self, frame: &mut crate::bus::FrameBuffer, cycle: u16) {
         let addr = self.scroll.addr();
         let color = if self.mask_rendering_enabled || !is_palette(addr) {
-            let palette = u16::from(self.pixel_palette());
+            let palette = u16::from(self.pixel_palette(cycle));
             self.palette
                 .peek(addr::PALETTE_START | ((palette & 0x03 > 0) as u16 * palette))
         } else {
             self.palette.peek(addr)
         };
 
-        frame[usize::from(self.cycle - 1) + (usize::from(self.scanline) << 8)] = u16::from(color);
+        frame[usize::from(cycle - 1) + (usize::from(self.scanline) << 8)] = u16::from(color);
     }
 
     /// One past the frame-buffer index of the last pixel rendered.
@@ -1345,9 +1369,9 @@ impl Bus {
     /// Each tile fetch takes 2 cycles.
     ///
     /// See: <https://wiki.nesdev.org/w/index.php/PPU_scrolling#Tile_and_attribute_fetching>
-    #[inline]
-    fn bg_fetch_cycle(&mut self) {
-        let phase = self.ppu.cycle & 0x07;
+    #[inline(always)]
+    fn bg_fetch_cycle(&mut self, cycle: u16) {
+        let phase = cycle & 0x07;
 
         // Uses conditional branches instead of a match, because it compiles to jump table and one
         // indirect jump per rendered dot accounts for half of branch mispredicts. Each test is
@@ -1358,7 +1382,7 @@ impl Bus {
             if phase == 0 && self.ppu.mask_prev_rendering_enabled {
                 self.ppu.scroll.increment_x();
                 // Increment Fine Y when we reach the end of the screen
-                if self.ppu.cycle == cycle::INC_Y {
+                if cycle == cycle::INC_Y {
                     self.ppu.scroll.increment_y();
                 }
             }
@@ -1376,12 +1400,10 @@ impl Bus {
         }
     }
 
-    // Out of line deliberately: it runs on 8 of every 341 dots, but inlined it was a large share
-    // of `ppu_clock`'s code footprint, and that function has to stay inside the uop cache.
+    /// Loads one sprite slot of the next scanline (dots 260, 268, ..., 316).
     #[inline(never)]
-    fn load_sprites(&mut self) {
+    fn load_sprites(&mut self, cycle: u16) {
         // Local variables improve cache locality
-        let cycle = self.ppu.cycle;
         let scanline = self.ppu.scanline;
         let spr_count = usize::from(self.ppu.spr_count);
 
@@ -1460,7 +1482,7 @@ impl Bus {
             3 => self.fetch_bg_attr_byte(), // Garbage attr fetch
             // Cycle 260, 268, etc. This is an approximation (each tile is actually loaded in 8
             // steps (e.g from 257 to 264))
-            4 => self.load_sprites(),
+            4 => self.load_sprites(self.ppu.cycle),
             _ => (),
         }
     }
@@ -1474,7 +1496,7 @@ impl Bus {
                 self.ppu.spr_eval_cycle();
             }
 
-            self.bg_fetch_cycle();
+            self.bg_fetch_cycle(self.ppu.cycle);
 
             if self.ppu.is_prerender_scanline && self.ppu.cycle <= 8 && self.ppu.oamaddr >= 0x08 {
                 // If OAMADDR is not less than eight when rendering starts, the eight bytes
@@ -1501,7 +1523,7 @@ impl Bus {
         } else {
             // 336
             if self.ppu.cycle <= cycle::BG_PREFETCH_END {
-                self.bg_fetch_cycle();
+                self.bg_fetch_cycle(self.ppu.cycle);
             } else {
                 // 337..=340: two dummy NT fetches of two dots each; the reads land on 337 and
                 // 339. MMC5 counts consecutive same-address NT reads to detect scanlines, so the
@@ -1562,7 +1584,12 @@ impl Bus {
         self.ppu.is_render_scanline = self.ppu.is_visible_scanline | self.ppu.is_prerender_scanline;
     }
 
-    /// Clocks the PPU a single dot.
+    /// Clocks the PPU a single dot, whatever state it is in.
+    ///
+    /// The general form of the dot loop; [`Bus::ppu_clock_to`] runs whole spans of dots through
+    /// specialised paths instead and comes here only for dots those do not cover (a $2001 or
+    /// $2006 update still settling).
+    #[inline(never)]
     pub fn ppu_clock(&mut self) {
         // === SCANLINE TRANSITION (cycle 340) ===
         if self.ppu.cycle >= cycle::END {
@@ -1601,10 +1628,11 @@ impl Bus {
             // Pixels should be put even if rendering is disabled, as this is what blanks out the
             // screen. Rendering disabled just means we don't evaluate/read bg/sprite info
             if self.ppu.is_visible_scanline {
+                let cycle = self.ppu.cycle;
                 let (ppu, frame) = self.ppu_and_frame();
                 match frame {
-                    Some(frame) => ppu.render_pixel(frame),
-                    None => ppu.headless_sprite_zero_hit(),
+                    Some(frame) => ppu.render_pixel(frame, cycle),
+                    None => ppu.headless_sprite_zero_hit(cycle),
                 }
             }
             self.ppu.tile_shift_lo <<= 1;
@@ -1647,16 +1675,6 @@ impl Bus {
             && self.ppu.ctrl_nmi_enabled
         {
             self.ppu.fceu_nmi = 1;
-        }
-    }
-
-    /// Clocks the PPU forward until it catches up to `clock` master cycles.
-    #[inline(always)]
-    pub fn ppu_clock_to(&mut self, clock: u32) {
-        let divider = u32::from(self.ppu.clock_divider);
-        while self.ppu.master_clock + divider <= clock {
-            self.ppu_clock();
-            self.ppu.master_clock += divider;
         }
     }
 

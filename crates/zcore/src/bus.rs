@@ -71,6 +71,15 @@ pub struct Bus {
     pub render: bool,
     /// Called before every instruction when set; see [`TraceHook`].
     pub(crate) trace: Option<TraceHook>,
+    /// The PPU runs behind the CPU and is caught up only when something can observe it (see
+    /// [`Bus::ppu_sync`]). Master clock at which it must be caught up between instructions,
+    /// because a frame-boundary or NMI-request dot may be due. Recomputed on every catch-up.
+    pub(crate) ppu_deadline: u32,
+    /// PPU catch-up target at the start of the current instruction: where FQ-03's
+    /// `status_at_instr` snapshot is taken.
+    pub(crate) instr_start_clock: u32,
+    /// Whether `status_at_instr` has been taken for the current instruction yet.
+    pub(crate) status_latched: bool,
 }
 
 impl Deref for Bus {
@@ -116,6 +125,9 @@ impl Bus {
                 .expect("FRAME pixels"),
             render: true,
             trace: None,
+            ppu_deadline: 0,
+            instr_start_clock: 0,
+            status_latched: true,
         }
     }
 
@@ -334,25 +346,35 @@ impl Bus {
     /// Route a read to whichever component owns `addr`, without moving the console.
     ///
     /// The address decode alone; [`Bus::read`] spends a CPU cycle and then comes through here.
+    #[inline(always)]
     pub(crate) fn cpu_bus_read(&mut self, addr: u16) -> u8 {
-        let addr = match addr {
-            0x0800..=0x1FFF => addr & 0x07FF,
-            0x2008..=0x3FFF => addr & 0x2007,
-            _ => addr,
+        self.open_bus = if addr < 0x2000 {
+            self.wram[usize::from(addr & 0x07FF)]
+        } else if addr >= 0x4100 {
+            self.prg_peek(addr)
+        } else if addr < 0x4000 {
+            self.ppu_register_read(addr & 0x2007)
+        } else {
+            match addr {
+                0x4015 => self.apu.read_status(),
+                0x4016 => self.input_read(Player::One),
+                0x4017 => self.input_read(Player::Two),
+                _ => self.open_bus,
+            }
         };
-        self.open_bus = match addr {
-            0x0000..=0x07FF => self.wram[usize::from(addr)],
-            0x4100..=0xFFFF => self.prg_peek(addr),
+        self.open_bus
+    }
+
+    /// A read of `$2000-$2007`, after catching the PPU up to it.
+    #[inline(never)]
+    fn ppu_register_read(&mut self, addr: u16) -> u8 {
+        self.ppu_sync();
+        match addr {
             0x2002 => self.ppu.read_status(),
             0x2004 => self.ppu.read_oamdata(),
             0x2007 => self.read_data(),
-            0x4015 => self.apu.read_status(),
-            0x4016 => self.input_read(Player::One),
-            0x4017 => self.input_read(Player::Two),
-            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 => self.ppu.open_bus,
-            _ => self.open_bus,
-        };
-        self.open_bus
+            _ => self.ppu.open_bus,
+        }
     }
 
     /// Route a read to whichever component owns `addr`, with no side effects at all.
@@ -380,22 +402,38 @@ impl Bus {
     /// Route a write to whichever component owns `addr`, without moving the console.
     ///
     /// [`Bus::write`] is the cycle-spending form.
+    #[inline(always)]
     pub(crate) fn cpu_bus_write(&mut self, addr: u16, val: u8) {
         self.open_bus = val;
-        let addr = match addr {
-            0x0800..=0x1FFF => addr & 0x07FF,
-            0x2008..=0x3FFF => addr & 0x2007,
-            _ => addr,
-        };
-        match addr {
-            0x0000..=0x07FF => self.wram[usize::from(addr)] = val,
-            0x4100..=0xFFFF => {
-                // Data store first, then let the board act on any register the write hit.
-                // Destructured so both fields can be borrowed at once.
-                let State { mapper, memory, .. } = &mut self.state;
-                memory.prg_write(addr, val);
-                mapper.write_register(memory, addr, val);
+        if addr < 0x2000 {
+            self.wram[usize::from(addr & 0x07FF)] = val;
+        } else if addr >= 0x4100 {
+            if addr >= 0x8000 {
+                // A board register: banking and mirroring change what the PPU fetches.
+                self.ppu_sync();
             }
+            // Data store first, then let the board act on any register the write hit.
+            // Destructured so both fields can be borrowed at once.
+            let State { mapper, memory, .. } = &mut self.state;
+            memory.prg_write(addr, val);
+            mapper.write_register(memory, addr, val);
+        } else if addr < 0x4000 {
+            self.ppu_register_write(addr & 0x2007, val);
+        } else {
+            match addr {
+                0x4000..=0x4013 | 0x4015 | 0x4017 => self.apu.write(addr, val),
+                0x4016 => self.input.write(val),
+                // $4014: OAM DMA is handled by the CPU.
+                _ => (),
+            }
+        }
+    }
+
+    /// A write to `$2000-$2007`, after catching the PPU up to it.
+    #[inline(never)]
+    fn ppu_register_write(&mut self, addr: u16, val: u8) {
+        self.ppu_sync();
+        match addr {
             0x2000 => self.write_ctrl(val),
             0x2001 => self.write_mask(val),
             0x2002 => self.ppu.open_bus = val,
@@ -403,11 +441,7 @@ impl Bus {
             0x2004 => self.ppu.write_oamdata(val),
             0x2005 => self.ppu.write_scroll(val),
             0x2006 => self.ppu.write_addr(val),
-            0x2007 => self.write_data(val),
-            0x4000..=0x4013 | 0x4015 | 0x4017 => self.apu.write(addr, val),
-            0x4016 => self.input.write(val),
-            0x4014 => (), // DMA handled by CPU
-            _ => (),
+            _ => self.write_data(val),
         }
     }
 }
