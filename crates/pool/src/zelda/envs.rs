@@ -204,7 +204,7 @@ where
         let (o, info) = self.env.reset(None, None)?;
         write_observation(&o, &mut obs);
         self.rooms.report_info(&info, events);
-        Ok(Some(Start { policy: 0 }))
+        Ok(Some(Start { policy: 0, job: 0 }))
     }
 
     fn step(
@@ -330,7 +330,10 @@ where
             room: info.room,
             start_health: info.health,
         });
-        Ok(Some(Start { policy: 0 }))
+        Ok(Some(Start {
+            policy: 0,
+            job: self.episode.as_ref().expect("episode started").job.seed as i64,
+        }))
     }
 
     fn step(
@@ -521,7 +524,10 @@ where
             let mut rng = ChaCha8Rng::seed_from_u64(seed);
             let status = self.chain.reset(Some(seed), &mut rng)?;
             if let Some(policy) = self.settle(status, &mut obs, events) {
-                return Ok(Some(Start { policy }));
+                return Ok(Some(Start {
+                    policy,
+                    job: seed as i64,
+                }));
             }
         }
         Ok(None)

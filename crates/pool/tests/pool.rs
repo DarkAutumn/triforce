@@ -135,6 +135,7 @@ impl PoolEnv for Fake {
         self.write(obs);
         Ok(Some(Start {
             policy: (self.index % 2) as i64,
+            job: self.index as i64 * 1000 + i64::from(self.episode),
         }))
     }
 
@@ -274,6 +275,21 @@ fn lockstep_is_deterministic_across_thread_counts() {
     }
     let reseeded = lockstep(3, 43, 40);
     assert!(one.0 != reseeded.0, "the seed changes the rows");
+}
+
+#[test]
+fn rows_carry_the_episode_job_and_decision_count() {
+    let (trace, _) = lockstep(3, 7, 30);
+    let mut restarted = false;
+    for b in &trace {
+        for row in 0..b.rows() {
+            let id = id(b, row);
+            assert_eq!(b.job[row], id[0] * 1000 + id[1], "job of env {} episode {}", id[0], id[1]);
+            assert_eq!(b.step[row], id[2], "decisions taken before the row's observation");
+            restarted |= b.final_valid[row] && b.step[row] == 0;
+        }
+    }
+    assert!(restarted, "an auto-reset row starts its count at 0");
 }
 
 #[test]

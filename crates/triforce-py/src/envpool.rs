@@ -475,6 +475,12 @@ impl<'py> Borrowed<'py> {
             Some(ColumnMut::Bool(c)) => c,
             _ => unreachable!("SCALAR_COLUMNS order"),
         };
+        let mut i64_col = || match scalars.next() {
+            Some(ColumnMut::I64(c)) => c,
+            _ => unreachable!("SCALAR_COLUMNS order"),
+        };
+        let job = i64_col();
+        let step = i64_col();
         Ok(Batch {
             env_ids,
             obs,
@@ -488,6 +494,8 @@ impl<'py> Borrowed<'py> {
             final_valid,
             policy,
             finished,
+            job,
+            step,
         })
     }
 }

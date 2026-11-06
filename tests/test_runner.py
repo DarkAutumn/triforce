@@ -110,7 +110,7 @@ def test_runs_record_rooms_and_end_cleanly(states_dir, models_dir, tmp_path):
         assert result.rooms[0].specialist == 'ow-start'
         assert result.steps == sum(r.steps for r in result.rooms) <= 40
         assert all(r.outcome != 'in-progress' for r in result.rooms)
-        assert result.rooms[-1].outcome in ('stuck', 'death', 'milestone')
+        assert result.rooms[-1].outcome in ('stuck', 'death', 'milestone', 'exit-wrong')
         room = result.rooms[0]
         assert room.hearts_dropped == room.hearts_taken + room.hearts_left + room.hearts_expired
 
@@ -126,6 +126,18 @@ def test_same_seed_same_run(states_dir, models_dir):
     assert [r.to_dict() for r in first] == [r.to_dict() for r in second]
 
 
+def test_sampled_runs_do_not_depend_on_envs_or_threads(states_dir, models_dir):
+    """Sampled actions are keyed to (run seed, decision), so a seed's run is the same on any env or thread."""
+    seeds = [3, 4, 5, 6]
+    runs = []
+    for parallel, threads in ((1, 1), (4, 1), (4, 4), (3, 2)):
+        runner = Runner(models_dir=models_dir, max_steps=40, parallel=parallel, threads=threads,
+                        states_dir=states_dir)
+        runs.append([r.to_dict() for r in runner.run_many(Route.load('milestone1'), seeds)])
+    assert all(run == runs[0] for run in runs[1:])
+    assert len({json.dumps(run['rooms']) for run in runs[0]}) > 1, "different seeds play different runs"
+
+
 def test_wrong_exit_into_untagged_room_is_a_failure(states_dir, models_dir):
     """Walking W out of 0x77 (the objective wants the sword cave) into untagged 0x76 ends the run as a gameplay
     failure."""
@@ -139,13 +151,13 @@ def test_wrong_exit_into_untagged_room_is_a_failure(states_dir, models_dir):
 
 
 def test_specialist_rows_are_batched_and_no_progress_ends_runs(states_dir, models_dir):
-    """Every waiting env of one specialist is one batch; a supplied config's no_progress_steps ends the run."""
+    """Every ready env of one specialist goes into one batch; a supplied config's no_progress_steps ends the run."""
     wait = ScriptedPolicy('WAIT 8')
     config = _native.SpecialistConfig.load('ow-start').replace(no_progress_steps=4)
     runner = Runner(models_dir=models_dir, networks={'ow-start': wait}, specialist_configs={'ow-start': config},
                     parallel=3, states_dir=states_dir)
     results = runner.run_many(Route.load('milestone1'), [0, 1, 2])
-    assert max(wait.batches) == 3
+    assert sum(wait.batches) == sum(result.steps for result in results) and max(wait.batches) <= 3
     for result in results:
         assert result.result == 'failure' and result.rooms[-1].outcome == 'stuck' and result.steps == 4
         assert 'no-room-progress' in result.reason and '4 quiet actions' in result.reason

@@ -7,9 +7,11 @@
 Training metrics mix start states and ``eval-chain`` plays the whole route; this measures one model in
 isolation.  Every seed savestate of the specialist (``SpecialistConfig.resolve_start_states``) is played
 ``--episodes-per-state`` times in a native ``EvalTask`` pool of ``--parallel`` envs (same rewards, end conditions
-and RAM randomization as training), episode ``i`` seeded with ``seed + i``; one batched network evaluation per
-step serves every env.  Actions are sampled unless ``--deterministic``.  The checkpoint defaults to the
-specialist's promoted model; results go to ``<checkpoint dir>/eval.json``, records sorted by seed.
+and RAM randomization as training), episode ``i`` seeded with ``seed + i``.  Envs run asynchronously: each one
+that is ready gets its action from a fixed-shape forward of the network (``inference.PoolInference``).  Actions are
+sampled unless ``--deterministic``, with Gumbel noise keyed to (episode seed, decision), so an episode plays the
+same whichever env or thread runs it.  The checkpoint defaults to the specialist's promoted model; results go to
+``<checkpoint dir>/eval.json``, records sorted by seed.
 ``mean_health_change`` is hearts at the episode's end minus hearts at its start (after hp randomization).
 Dropped hearts are kept per episode (``records[i]['hearts']``); ``mean_health_change_total``
 adds the hearts wasted by picking them up at (or near) full health, and ``hearts_dropped`` / ``hearts_taken`` /
@@ -25,11 +27,10 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import numpy as np
-import torch
 
 from . import _native, registry
+from .inference import PoolInference
 from .metrics import heart_change_total
-from .runner import infer_actions
 from .specialist import SpecialistConfig, load_specialist
 
 
@@ -38,16 +39,17 @@ def _room_key(room) -> str:
     return f"{level}:0x{location:02x}" + (":cave" if in_cave else "")
 
 
-def _load_network(checkpoint, device: str = 'cpu'):
+def _load_network(checkpoint):
     network, _ = registry.load_model(checkpoint)
-    network.eval()
-    return network.to(device)
+    return network.eval()
 
 
-def _play(pool, network, deterministic: bool, total: int,
+def _play(pool, network, deterministic: bool, total: int, device: str,
           on_episode: Optional[Callable[[dict, int, int], None]]) -> list[dict]:
-    """Steps the eval pool in lockstep until every job ran; returns the records in completion order."""
+    """Steps the eval pool asynchronously until every job ran; returns the records in completion order."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     buffers = pool.make_buffers()
+    inference = PoolInference([network], pool.num_envs, device, deterministic)
     records = []
 
     def collect():
@@ -58,11 +60,13 @@ def _play(pool, network, deterministic: bool, total: int,
                     on_episode(records[-1], len(records), total)
 
     while pool.active:
-        count = pool.recv(buffers, min_ready=pool.active)
+        count = pool.recv(buffers, min_ready=1)
         rows = np.flatnonzero(~buffers['finished'][:count])
         if len(rows):
+            envs = buffers['env_ids'][rows]
             obs = {key: value[rows] for key, value in buffers['obs'].items()}
-            pool.send(buffers['env_ids'][rows], infer_actions(network, obs, deterministic))
+            pool.send(envs, inference.actions(envs, obs, np.zeros(len(rows), np.int64), buffers['job'][rows],
+                                              buffers['step'][rows]))
         collect()
     collect()
     return records
@@ -127,11 +131,10 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     episode_states = [state for state in states for _ in range(episodes_per_state)]
     jobs = [(state, seed + index) for index, state in enumerate(episode_states)]
 
-    network = _load_network(checkpoint, device)
-    torch.manual_seed(seed)
+    network = _load_network(checkpoint)
     task = _native.EvalTask(config, jobs, states_dir=states_dir)
     with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed) as pool:
-        records = _play(pool, network, deterministic, len(jobs), on_episode)
+        records = _play(pool, network, deterministic, len(jobs), device, on_episode)
     records.sort(key=lambda r: r['seed'])
 
     count = len(records)

@@ -613,3 +613,21 @@ entry below and `crates/zcore/UPSTREAM.md`.
   runs don't replay bit for bit.
 - **Why:** the lockstep barrier left each env thread on-CPU ~25% of the time; ow-zora p16 went from 304 to
   ~1,500 steps/s (old stable-retro stack: ~920). Numbers and profiles: `docs/performance.md`.
+
+## 2026-11-05 — Asynchronous evaluation and chain runs; job-keyed sampling noise
+
+- **What:** `evaluate.py` and `runner.ChainPool` (behind `eval-chain`, `run.py`, `play_grid.py`) step their pools
+  asynchronously like training: each ready env acts at once (`recv(min_ready=1)`), through a fixed-shape forward
+  per policy over one row per env (`inference.PoolInference` → `RolloutPolicy`; a CUDA graph per specialist on
+  CUDA). `RolloutPolicy` moved from `ppo.py` to the new `triforce/inference.py`. Records and run results are
+  still sorted by seed; output formats are unchanged.
+- **Pool rows:** two new scalar columns, `job` (the episode's job key: an eval job's or chain run's seed, 0 for
+  training, -1 once finished; `pool::Start::job`) and `step` (decisions the episode took before the row's
+  observation).
+- **Determinism:** sampled actions use Gumbel noise from `inference.keyed_noise(job, step)` (a counter-based
+  SplitMix64 function), so a seed plays the same episode or run whichever env or thread picks it up. This replaces
+  the Python-cutover caveat (plan step 16) that sampled runs were reproducible only with `threads=1`.
+  `--deterministic` is zero noise (each head's argmax). Seeded sampled evaluations and chains draw different
+  random actions than before this change, so they don't replay older outputs.
+- **Why:** `scripts/port_gate.sh` went from 660 s to 304 s (10 evaluations 291 → 113 s, 5 chain segments
+  368 → 190 s); with `--device cuda` 179 s. Details in `docs/performance.md`.

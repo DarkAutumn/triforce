@@ -1,6 +1,7 @@
-# Training throughput (Nov 5)
+# Training and evaluation throughput (Nov 5)
 
-How fast the Rust port trains compared with the old stack, what limited it, what changed, and what limits it now.
+How fast the Rust port trains and evaluates compared with the old stack, what limited it, what changed, and what
+limits it now.
 Everything here is real `triforce.train` runs on the workstation: i9-10900X (10 cores, 20 hardware threads),
 RTX 4090, idle unless noted.
 
@@ -154,6 +155,46 @@ longer actions (17.6 and 13.6 frames/step).
   rollout's log-probs would no longer match the update's forward bit for bit); swapping SipHash for a faster
   hasher (below 0.4% once the route cache landed).
 
+## Evaluation and chain runs
+
+`evaluate.py` and `runner.py` (`ChainPool`, also behind `run.py`, `play_grid.py` and `eval-chain`) stepped their
+pools in lockstep too: `recv(min_ready=pool.active)`, one batched forward (per specialist for chains), `send`.
+They now use the same machinery as training:
+
+- Ready envs act at once (`recv(min_ready=1)`); records and run results are still sorted by seed.
+- Each policy (the evaluated network; each chain specialist) has a fixed-shape forward over one row per env
+  (`inference.PoolInference` → `RolloutPolicy`, a CUDA graph per specialist on CUDA; CPU works the same way).
+- Sampled actions use Gumbel noise keyed to the job instead of the env: the pool rows gained `job` (the eval
+  episode's or chain run's seed) and `step` (decisions the episode took) columns, and `inference.keyed_noise(job,
+  step)` is a counter-based (SplitMix64) function of them. A seed now plays the same episode or run whichever env
+  or thread picks it up; before, sampled chain runs were reproducible only with `--threads 1`. `--deterministic`
+  is zero noise (each head's argmax). Tests: `test_evaluate` (parallel/threads 3/1, 3/3, 2/2 give identical
+  records), `test_runner::test_sampled_runs_do_not_depend_on_envs_or_threads` (1/1, 4/1, 4/4, 3/2), and
+  `tests/test_inference.py` (a row's action doesn't depend on which rows share its batch). With the real promoted
+  models, `eval-chain --route milestone1 --from 2_7ds_2 --runs 20 --parallel 20` gave identical run results with
+  `--threads 1` and `--threads 20`.
+
+`scripts/port_gate.sh` (10 evaluations with `--parallel 16 --threads 16 --device cpu`, then five `eval-chain --runs
+40 --parallel 20 --device cpu` segments), wall time per step from the log files' modification times:
+
+| part | lockstep (`44403af`) | async, CPU (as the gate runs) | async, `--device cuda` |
+|---|---:|---:|---:|
+| 10 evaluations | 291 s | 113 s | 79 s |
+| goriya eval (240 episodes) | 72.8 s | 29.5 s | 18.6 s |
+| stalfos-keese-gel eval (720 episodes) | 67.0 s | 20.8 s | 13.7 s |
+| 5 chain segments | 368 s | 190 s | 100 s |
+| `eval-chain` full-main (40 runs) | 74.0 s | 39.3 s | 18.7 s |
+| `eval-chain` d2 (40 runs) | 77.2 s | 37.7 s | 22.7 s |
+| whole gate | 660 s | 304 s | 179 s |
+
+Outcomes stay in the same range (the sampling noise changed, so individual episodes differ from the lockstep
+run); the CPU and CUDA async gates produced identical eval summaries and chain counts. On CPU the fixed-shape
+forward of 16–20 rows costs 1.9–3.1 ms (1.2 ms for one row) against ~0.35 ms for the CUDA graph, which is why
+`--device cuda` is faster still (gate evaluations 113 s → 79 s). Torch's intra-op threads made
+little difference for CPU evaluation (goriya: 29.2 s default, 30.9 s with 1 thread, 26.7 s with 4). A chain
+segment waits for its longest runs (40 runs on 20 envs; run lengths vary several-fold, e.g. 134–1,547 steps on
+d2 seeds 100–105); how much of the chain time that tail is was not measured.
+
 ## What's left
 
 In order of size, for ow-zora p16:
@@ -170,4 +211,5 @@ In order of size, for ow-zora p16:
    (above).
 4. **The PPO update** (0.3 s per iteration, ~12% of it, envs idle): a fused Adam and fewer host syncs per
    minibatch would shave part of it.
-5. **Evaluation** (`evaluate.py`, `runner.py`) still steps its pools in lockstep; it wasn't part of this work.
+5. **Evaluation on CPU:** `port_gate.sh` passes `--device cpu` and `scripts/train_round.py`'s evaluations use
+   the default CPU; `--device cuda` takes the gate from 304 s to 179 s with the same results in this measurement.

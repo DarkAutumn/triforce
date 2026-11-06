@@ -35,8 +35,8 @@ def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tm
     config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=30)
     seen = []
 
-    def evaluate():
-        return evaluate_specialist(config, ckpt, episodes_per_state=5, parallel=3, threads=1, seed=5,
+    def evaluate(parallel=3, threads=1):
+        return evaluate_specialist(config, ckpt, episodes_per_state=5, parallel=parallel, threads=threads, seed=5,
                                    states_dir=states_dir, on_episode=lambda r, done, total: seen.append((done, total)))
 
     result = evaluate()
@@ -62,7 +62,10 @@ def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tm
     assert all('linger_max_steps' in stats for stats in result['by_state'].values())
     assert 'linger max/tail/worst' in format_report(result)
 
+    # Sampled actions are keyed to (episode seed, decision): the same records whichever env or thread plays them.
     assert evaluate()['records'] == records
+    assert evaluate(parallel=3, threads=3)['records'] == records
+    assert evaluate(parallel=2, threads=2)['records'] == records
 
 
 def test_linger_evaluation_aggregates_only_measured_records():

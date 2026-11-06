@@ -242,7 +242,7 @@ impl ColumnMut<'_> {
 }
 
 /// The scalar columns of a batch: name, dtype (each `[rows]`). Names match the [`Batch`] fields.
-pub const SCALAR_COLUMNS: [(&str, Dtype); 10] = [
+pub const SCALAR_COLUMNS: [(&str, Dtype); 12] = [
     ("env_ids", Dtype::I64),
     ("reward", Dtype::F32),
     ("frames", Dtype::I64),
@@ -253,6 +253,8 @@ pub const SCALAR_COLUMNS: [(&str, Dtype); 10] = [
     ("final_valid", Dtype::Bool),
     ("policy", Dtype::I64),
     ("finished", Dtype::Bool),
+    ("job", Dtype::I64),
+    ("step", Dtype::I64),
 ];
 
 /// Caller-owned output of [`crate::Pool::recv`]: `rows` = `env_ids.len()`, the most rows one call writes.
@@ -263,7 +265,8 @@ pub const SCALAR_COLUMNS: [(&str, Dtype); 10] = [
 /// terminal step produced, before the automatic reset. `reward`/`frames`/`interrupt`/`terminated`/`truncated`/
 /// `bootstrap` describe the step that produced the row (zero/false on an env's first row). `policy` is the
 /// policy (e.g. chain specialist) that acts on `obs`, -1 when finished. `finished`: the env has no episode left
-/// (its `obs` row is not written and it takes no more actions).
+/// (its `obs` row is not written and it takes no more actions). `job` is the episode's job key
+/// ([`crate::Start::job`], -1 when finished) and `step` how many decisions the episode took before `obs`.
 #[derive(Debug)]
 pub struct Batch<'a> {
     pub env_ids: &'a mut [i64],
@@ -280,6 +283,8 @@ pub struct Batch<'a> {
     pub final_valid: &'a mut [bool],
     pub policy: &'a mut [i64],
     pub finished: &'a mut [bool],
+    pub job: &'a mut [i64],
+    pub step: &'a mut [i64],
 }
 
 impl Batch<'_> {
@@ -300,6 +305,8 @@ impl Batch<'_> {
             ("final_valid", self.final_valid.len()),
             ("policy", self.policy.len()),
             ("finished", self.finished.len()),
+            ("job", self.job.len()),
+            ("step", self.step.len()),
         ];
         for (name, len) in scalars {
             if len != rows {
@@ -344,6 +351,8 @@ impl Batch<'_> {
         self.final_valid[row] = staged.final_valid;
         self.policy[row] = staged.policy;
         self.finished[row] = staged.finished;
+        self.job[row] = staged.job;
+        self.step[row] = staged.step;
         let keys = staged.obs.layout.keys.len();
         if !staged.finished {
             for (key, column) in (0..keys).zip(self.obs.iter_mut()) {
@@ -424,6 +433,8 @@ pub struct Buffers {
     pub final_valid: Vec<bool>,
     pub policy: Vec<i64>,
     pub finished: Vec<bool>,
+    pub job: Vec<i64>,
+    pub step: Vec<i64>,
 }
 
 impl Buffers {
@@ -450,6 +461,8 @@ impl Buffers {
             final_valid: vec![false; rows],
             policy: vec![0; rows],
             finished: vec![false; rows],
+            job: vec![0; rows],
+            step: vec![0; rows],
         }
     }
 
@@ -475,6 +488,8 @@ impl Buffers {
             final_valid: &mut self.final_valid,
             policy: &mut self.policy,
             finished: &mut self.finished,
+            job: &mut self.job,
+            step: &mut self.step,
         }
     }
 
@@ -503,6 +518,10 @@ pub(crate) struct Staged {
     pub final_valid: bool,
     pub policy: i64,
     pub finished: bool,
+    /// [`crate::Start::job`] of the current episode; -1 when finished.
+    pub job: i64,
+    /// Decisions taken in the current episode.
+    pub step: i64,
 }
 
 impl Staged {
@@ -514,6 +533,8 @@ impl Staged {
             final_valid: false,
             policy: 0,
             finished: false,
+            job: 0,
+            step: 0,
         }
     }
 }
@@ -613,6 +634,8 @@ mod tests {
             final_valid,
             policy: if finished { -1 } else { 3 },
             finished,
+            job: if finished { -1 } else { base + 1000 },
+            step: base / 10,
         }
     }
 
@@ -629,6 +652,7 @@ mod tests {
             (b.reward[1], b.frames[1], b.interrupt[1], b.policy[1]),
             (0.25, 9, 2, 3)
         );
+        assert_eq!((b.job[1], b.step[1]), (1020, 2));
         assert_eq!(b.obs[0].i64(), [0, 0, 20, 21, 0, 0]);
         assert_eq!(b.obs[3].i64(), [0, 22, 0]);
         assert_eq!(&b.obs[1].f32()[4..8], [0.5, 1.5, 2.5, 20.0]);
@@ -651,7 +675,7 @@ mod tests {
         b.batch().write(1, 7, &staged(&layout, 40, true, true));
         assert_eq!(b.obs[0].i64()[2..4], [20, 21]);
         assert_eq!(b.final_obs[0].i64()[2..4], [140, 141]);
-        assert!(b.finished[1] && b.policy[1] == -1);
+        assert!(b.finished[1] && b.policy[1] == -1 && b.job[1] == -1);
     }
 
     #[test]

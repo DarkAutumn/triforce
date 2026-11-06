@@ -50,7 +50,7 @@ class _Held:
     def __init__(self, until: float):
         self.until = until
         self.obs: Optional[Dict[str, np.ndarray]] = None
-        self.policy: Optional[np.ndarray] = None
+        self.keys: Optional[tuple] = None        # (policy, job, step) of ``obs``
         self.messages: List[dict] = []
 
 
@@ -217,7 +217,7 @@ class GameGrid:
                 if env in held:
                     hold = held[env]
                     hold.obs = {key: value[row].copy() for key, value in chain.buffers['obs'].items()}
-                    hold.policy = chain.buffers['policy'][row].copy()
+                    hold.keys = tuple(int(chain.buffers[k][row]) for k in ('policy', 'job', 'step'))
                     hold.messages += messages
                 else:
                     for message in messages:
@@ -252,8 +252,8 @@ class GameGrid:
         if not due:
             return
         obs = {key: np.stack([held[env].obs[key] for env in due]) for key in held[due[0]].obs}
-        policy = np.stack([held[env].policy for env in due])
-        actions = chain.policies.actions(obs, policy, chain.deterministic)
+        policy, job, step = (np.array(column) for column in zip(*(held[env].keys for env in due)))
+        actions = chain.inference.actions(np.asarray(due), obs, policy, job, step)
         for env in due:
             hold = held.pop(env)
             self._status.put({'game': env, 'event': 'start', 'seed': None})

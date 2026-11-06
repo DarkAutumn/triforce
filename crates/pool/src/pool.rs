@@ -50,6 +50,10 @@ pub trait PoolEnv: Send + 'static {
 pub struct Start {
     /// The policy that acts on the observation (e.g. a chain's specialist index; 0 for single-policy envs).
     pub policy: i64,
+    /// The episode's job key (an eval job's or chain run's seed; 0 when there is none). Rows report it with
+    /// the episode's decision count (`job` / `step` columns) so a caller can key per-decision randomness to the
+    /// job instead of the env that happens to play it.
+    pub job: i64,
 }
 
 /// What `step` returns besides the observation.
@@ -588,13 +592,16 @@ fn start<E: PoolEnv>(
     match guarded::<E, _>(id, || env.reset(slot.obs.row(), events))? {
         Some(s) => {
             slot.policy = s.policy;
+            slot.job = s.job;
             slot.finished = false;
         }
         None => {
             slot.policy = -1;
+            slot.job = -1;
             slot.finished = true;
         }
     }
+    slot.step = 0;
     Ok(())
 }
 
@@ -658,6 +665,7 @@ impl<E: PoolEnv> Worker<E> {
             start(env, id, slot, events)
         } else {
             slot.policy = outcome.policy;
+            slot.step += 1;
             slot.finished = false;
             Ok(())
         }

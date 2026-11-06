@@ -29,6 +29,7 @@ from torch import nn
 
 from .actions import NUM_KINDS
 from .demo import compute_demo_accuracy
+from .inference import RolloutPolicy
 from .metrics import RolloutMetrics
 from .model import MASK_KEY, NOISE_SIZE, gumbel_noise
 from .rollout_buffer import FRAMES_PER_DISCOUNT, RolloutBuffer
@@ -66,111 +67,6 @@ class IterationResult:
     total_steps: int          # env steps trained including any loaded checkpoint's steps
     rollout: RolloutMetrics
     stats: dict               # optimization stats + entropy per head + steps/sec
-
-
-def _flat_layout(spec: dict) -> tuple[dict, int]:
-    """Byte offsets of ``spec`` (name → (shape, numpy dtype)) packed into one buffer, 64-byte aligned."""
-    layout, offset = {}, 0
-    for name, (shape, dtype) in spec.items():
-        nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
-        layout[name] = (offset, nbytes, tuple(shape), torch.from_numpy(np.empty(0, dtype)).dtype)
-        offset += -(-nbytes // 64) * 64
-    return layout, offset
-
-
-def _flat_views(flat: torch.Tensor, layout: dict) -> dict:
-    """Typed tensor views into the byte buffer ``flat``."""
-    return {name: flat[offset:offset + nbytes].view(dtype).view(shape)
-            for name, (offset, nbytes, shape, dtype) in layout.items()}
-
-
-class RolloutPolicy:
-    """The rollout forward pass over a fixed batch of one row per env.
-
-    Holds its own eval-mode copy of the network on ``device`` (``load`` refreshes the weights in place), host
-    staging arrays (``obs`` per key including ``action_mask``, ``noise``; numpy views of one pinned buffer) that hold
-    each env's latest observation, and the outputs (``actions``, ``logp_ent_val``).  Every forward evaluates all
-    ``n`` rows, so a row's outputs depend only on its own observation and noise, not on which other envs are
-    waiting.  On CUDA the forward is captured once as a CUDA graph whose first and last nodes copy the staging in
-    and the outputs out (one transfer each way); ``launch`` queues it and ``wait`` blocks until the outputs are on
-    the host, so the caller can do bookkeeping in between.
-    """
-    # pylint: disable=too-many-instance-attributes
-
-    _NOISE = '_noise'
-
-    def __init__(self, network: nn.Module, observation: dict, device):
-        """``observation``: per-key ``[n, *shape]`` arrays (the pool's ``obs`` rows): shapes, dtypes and the
-        initial staged rows."""
-        self.device = torch.device(device)
-        self.network = copy.deepcopy(network).to(self.device).eval()
-        n = len(observation[MASK_KEY])
-        inputs = {key: (np.shape(value), np.asarray(value).dtype) for key, value in observation.items()}
-        inputs[self._NOISE] = ((n, NOISE_SIZE), np.float32)
-        in_layout, in_bytes = _flat_layout(inputs)
-        out_layout, out_bytes = _flat_layout({'actions': ((n, 3), np.int64), 'logp_ent_val': ((n, 3), np.float32)})
-        cuda = self.device.type == 'cuda'
-        self._host_in = torch.zeros(in_bytes, dtype=torch.uint8, pin_memory=cuda)
-        self._host_out = torch.zeros(out_bytes, dtype=torch.uint8, pin_memory=cuda)
-        host_in, host_out = _flat_views(self._host_in, in_layout), _flat_views(self._host_out, out_layout)
-        self.obs = {key: host_in[key].numpy() for key in observation}
-        for key, value in observation.items():
-            self.obs[key][...] = value
-        self.noise = host_in[self._NOISE].numpy()
-        self.actions, self.logp_ent_val = host_out['actions'].numpy(), host_out['logp_ent_val'].numpy()
-        self._graph = None
-        if cuda:
-            self._device_in, self._device_out = self._host_in.to(self.device), self._host_out.to(self.device)
-            self._done = torch.cuda.Event()
-            self._capture(_flat_views(self._device_in, in_layout), _flat_views(self._device_out, out_layout))
-        else:
-            self._views = (host_in, host_out)
-
-    @torch.no_grad()
-    def _forward(self, inputs: dict, outputs: dict):
-        obs = {key: value for key, value in inputs.items() if key not in (MASK_KEY, self._NOISE)}
-        out = self.network.evaluate(obs, inputs[MASK_KEY], noise=inputs[self._NOISE])
-        outputs['actions'].copy_(out.actions)
-        outputs['logp_ent_val'].copy_(torch.stack([out.log_prob, out.entropy, out.value], dim=-1))
-
-    def _capture(self, inputs: dict, outputs: dict):
-        def step():
-            self._device_in.copy_(self._host_in, non_blocking=True)
-            self._forward(inputs, outputs)
-            self._host_out.copy_(self._device_out, non_blocking=True)
-
-        stream = torch.cuda.Stream(self.device)
-        stream.wait_stream(torch.cuda.current_stream(self.device))
-        with torch.cuda.stream(stream):              # warm up kernels/allocations off the capture stream
-            for _ in range(3):
-                step()
-        torch.cuda.current_stream(self.device).wait_stream(stream)
-        self._graph = torch.cuda.CUDAGraph()
-        with torch.cuda.graph(self._graph):
-            step()
-
-    def load(self, network: nn.Module):
-        """Copies ``network``'s weights into the rollout copy (in place, so the captured graph sees them)."""
-        self.network.load_state_dict(network.state_dict())
-
-    def launch(self):
-        """Starts evaluating every staged row (on CPU: evaluates them)."""
-        if self._graph is None:
-            self._forward(*self._views)
-        else:
-            self._graph.replay()
-            self._done.record()
-
-    def wait(self) -> tuple[np.ndarray, np.ndarray]:
-        """(actions ``[n, 3]`` int64, ``[n, 3]`` log-prob/entropy/value) of the last ``launch``."""
-        if self._graph is not None:
-            self._done.synchronize()
-        return self.actions, self.logp_ent_val
-
-    @torch.no_grad()
-    def value(self, obs: dict) -> np.ndarray:
-        """Value estimates ``[k]`` of ``obs`` (per-key ``[k, *shape]``; eager, any batch size)."""
-        return self.network.get_value({k: v for k, v in obs.items() if k != MASK_KEY}).cpu().numpy()
 
 
 class Collector:

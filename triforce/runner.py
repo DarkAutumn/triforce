@@ -3,9 +3,11 @@
 The chain itself runs natively (``ChainTask`` in an ``EnvPool``): on every room entry the room's game.yaml
 ``specialist:`` tag picks who acts, specialists switch only on room transitions, and a run ends with a
 ``RunResult``.  This module owns the models: each pool row names its acting specialist (the ``policy`` column, an
-index into the loaded-model list) and the rows of one specialist are evaluated in one batch on ``device``.  A
-specialist without a promoted model ends the runs that need it as ``error`` with the registry's reason; an
-untagged room the route needs is an error too, a wrong exit into one a gameplay failure.
+index into the loaded-model list).  Envs run asynchronously; each specialist's ready rows go through a fixed-shape
+forward on ``device`` (``inference.PoolInference``), and sampled actions use Gumbel noise keyed to (run seed,
+decision), so a seed plays the same run whichever env or thread runs it.  A specialist without a promoted model
+ends the runs that need it as ``error`` with the registry's reason; an untagged room the route needs is an error
+too, a wrong exit into one a gameplay failure.
 """
 
 import json
@@ -16,6 +18,7 @@ import numpy as np
 import torch
 
 from . import _native
+from .inference import PoolInference
 from .registry import load_model, promoted_checkpoint
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import MapLocation
@@ -116,19 +119,13 @@ def write_jsonl(path: str, results: List[RunResult]):
             f.write(json.dumps(result.to_dict()) + '\n')
 
 
-def infer_actions(network, obs: dict, deterministic: bool) -> np.ndarray:
-    """``[rows, 3]`` int64 action head indices for a batch of observations (``obs`` key -> ``[rows, ...]``)."""
-    with torch.no_grad():
-        actions = network.get_action(obs, deterministic=deterministic)
-    return np.asarray(torch.as_tensor(actions).cpu(), dtype=np.int64).reshape(-1, 3)
-
-
 class Policies:
     """The specialists' networks for a chain pool, in policy-index order, plus why the others are missing.
 
     ``checkpoints`` (name -> checkpoint file or run dir) overrides the registry's promoted model; ``networks``
     (name -> anything with ``get_action(obs, deterministic=...)``) supplies a loaded policy directly;
-    ``specialist_configs`` (name -> config) replaces a specialist's canonical YAML at runtime."""
+    ``specialist_configs`` (name -> config) replaces a specialist's canonical YAML at runtime; ``device`` is where
+    the loaded networks run."""
 
     def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
@@ -138,6 +135,7 @@ class Policies:
         overrides = dict(checkpoints or {})
         configs = dict(specialist_configs or {})
         given = dict(networks or {})
+        self.device = device
         self.names: List[str] = []
         self.configs: List[SpecialistConfig] = []
         self.networks: list = []
@@ -158,20 +156,10 @@ class Policies:
             self.configs.append(configs.get(name) or load_specialist(name))
             self.networks.append(network)
 
-    def actions(self, obs: dict, policy: np.ndarray, deterministic: bool) -> np.ndarray:
-        """Actions for rows ``obs`` whose acting specialist is ``policy`` (indices into ``names``), one batch per
-        specialist."""
-        actions = np.zeros((len(policy), 3), dtype=np.int64)
-        for index in np.unique(policy):
-            rows = np.flatnonzero(policy == index)
-            subset = {key: value[rows] for key, value in obs.items()}
-            actions[rows] = infer_actions(self.networks[int(index)], subset, deterministic)
-        return actions
-
 
 class ChainPool:
     """An ``EnvPool`` of chain runs of one route (one run per seed, shared by ``num_envs`` envs) and the policies
-    acting in it.  ``run()`` plays every seed in lockstep; watchers drive ``recv`` / ``actions`` / ``send``
+    acting in it.  ``run()`` plays every seed asynchronously; watchers drive ``recv`` / ``actions`` / ``send``
     themselves."""
 
     def __init__(self, route: Route, seeds: Sequence[int], policies: Policies, num_envs: int = 1,
@@ -188,6 +176,7 @@ class ChainPool:
         num_envs = max(1, min(num_envs, len(seeds)))
         self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
         self.buffers = self.pool.make_buffers()
+        self.inference = PoolInference(policies.networks, num_envs, policies.device, deterministic)
 
     def recv(self, min_ready: Optional[int] = None, timeout: Optional[float] = None) -> int:
         """Rows ready (see ``EnvPool.recv``); they are in ``buffers``."""
@@ -198,9 +187,10 @@ class ChainPool:
         return np.flatnonzero(~self.buffers['finished'][:count])
 
     def actions(self, rows: np.ndarray) -> np.ndarray:
-        """Batched per-specialist actions for buffer rows ``rows``."""
-        obs = {key: value[rows] for key, value in self.buffers['obs'].items()}
-        return self.policies.actions(obs, self.buffers['policy'][rows], self.deterministic)
+        """Actions for buffer rows ``rows`` (see ``inference.PoolInference.actions``)."""
+        b = self.buffers
+        obs = {key: value[rows] for key, value in b['obs'].items()}
+        return self.inference.actions(b['env_ids'][rows], obs, b['policy'][rows], b['job'][rows], b['step'][rows])
 
     def send(self, env_ids, actions):
         """Queues one action per env."""
@@ -211,10 +201,10 @@ class ChainPool:
         return [(e['env'], RunResult.from_dict(e['result'])) for e in events if e['type'] == 'run']
 
     def run(self, on_result: Optional[Callable[[RunResult], None]] = None) -> List[RunResult]:
-        """Plays every seed in lockstep; returns the results sorted by seed."""
+        """Plays every seed (each ready env acts at once); returns the results sorted by seed."""
         results: List[RunResult] = []
         while self.pool.active:
-            count = self.recv(min_ready=self.pool.active)
+            count = self.recv(min_ready=1)
             rows = self.live_rows(count)
             if len(rows):
                 self.send(self.buffers['env_ids'][rows], self.actions(rows))
@@ -278,7 +268,6 @@ class Runner:
         seeds = list(seeds)
         if not seeds:
             return []
-        torch.manual_seed(seeds[0])
         with self.pool(route, seeds) as pool:
             return pool.run(on_result)
 

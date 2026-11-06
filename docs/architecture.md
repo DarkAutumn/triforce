@@ -27,15 +27,18 @@ flowchart LR
 | `crates/triforce-py` | `triforce._native` (PyO3): `Game`, `GameState`, `Change`, `Snapshot`, `Env`, `EnvPool` + `TrainTask`/`EvalTask`/`ChainTask`, `SpecialistConfig`, `Explorer`/`explore_states`, `route_steps`, `families`, `specialist_for`, `OBS_SPEC` and other constants, exception types. |
 | `crates/movie` | `TFMOVIE` input movies and `TFGOLDEN` per-frame digests. |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `demo.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `inference.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `demo.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
 Everything runs in one process. Each env owns its own `ZCore`; `Pool` pins envs round-robin to persistent OS
-threads and steps them without the GIL. Python sends a batch of actions, `recv(out, min_ready)` fills
-Python-owned buffers (obs per key, `mask`, `reward`, `frames`, `interrupt`, `terminated`, `truncated`,
-`bootstrap`, `final_obs`, `final_valid`), and one batched `network.evaluate` picks the next actions. Envs auto-reset
-after a terminal step; terminal infos, eval records, chain results and room-change events come from
+threads and steps them without the GIL. Python sends actions for the envs it has rows for, `recv(out, min_ready)`
+fills Python-owned buffers (obs per key, `mask`, `reward`, `frames`, `interrupt`, `terminated`, `truncated`,
+`bootstrap`, `final_obs`, `final_valid`, `policy`, `finished`, and `job`/`step`: the episode's job key — an eval
+job's or chain run's seed — and how many decisions the episode took before the row), and a fixed-shape forward per
+policy (`inference.RolloutPolicy`, one row per env; a CUDA graph on CUDA) picks the next actions. Training,
+evaluation and chains all run asynchronously (`recv(min_ready=1)`: ready envs act without waiting for the rest).
+Envs auto-reset after a terminal step; terminal infos, eval records, chain results and room-change events come from
 `poll_events()`. Env `i` seeds a `ChaCha8Rng` from `(seed, i)`. Rendering (full 256×240) is off by default and
 toggled per env with `set_render`; `frame(env, since)` copies the latest frame. Tools and tests that need a single
 game use `triforce._native.Game`.
@@ -237,7 +240,9 @@ Nearby-item shaping and the measured cutoff remain disabled in promoted configs 
   ends on entering its `terminal` room (both routes: level 2 room 0x0e); `stop_at` ends it earlier.
 - `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, deterministic=False,
   max_steps=50000, device='cpu', specialist_configs=None, networks=None, parallel=1, threads=None)` drives a
-  `ChainTask` pool with per-specialist batched inference: `run(route, seed) -> RunResult`, `run_many(route,
+  `ChainTask` pool asynchronously (`inference.PoolInference`: per-specialist fixed-shape forwards; sampled actions
+  use Gumbel noise keyed to (run seed, decision), so a seed's run doesn't depend on `--parallel`, `--threads` or
+  scheduling; `--deterministic` is each head's argmax): `run(route, seed) -> RunResult`, `run_many(route,
   seeds)`. On each room entry: `game.yaml` tag → specialist → promoted checkpoint (cached). Untagged room or
   missing model → `result='error'` with the reason. Per-room outcomes:
   `exit-correct`, `exit-wrong`, `death`, `stuck` (specialist `max_steps` in one room), `milestone`.

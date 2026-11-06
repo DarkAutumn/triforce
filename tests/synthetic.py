@@ -157,7 +157,8 @@ class ListPool:
             return out
         rows = {'obs': group(), 'final_obs': group(), 'env_ids': np.zeros(n, np.int64),
                 'reward': np.zeros(n, np.float32), 'frames': np.zeros(n, np.int64),
-                'interrupt': np.zeros(n, np.int64), 'policy': np.zeros(n, np.int64)}
+                'interrupt': np.zeros(n, np.int64), 'policy': np.zeros(n, np.int64),
+                'job': np.zeros(n, np.int64), 'step': np.zeros(n, np.int64)}
         for key in ('terminated', 'truncated', 'bootstrap', 'final_valid', 'finished'):
             rows[key] = np.zeros(n, bool)
         rows['mask'] = rows['obs']['action_mask']
