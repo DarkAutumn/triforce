@@ -113,3 +113,34 @@ specialist (ow-octorok 93.6–97.8% on A, 89.7–97.8% on B) are larger than the
 teams trail the untouched promoted team (74/360), so neither a 1M-step continuation nor the mask is an
 improvement. This first pass warm-started both arms from boomerang-trained models, which favours A; the
 item's preferred from-scratch comparison is recorded in `todo.md` with its cost.
+
+## 3. Swordless departures from the start screen (r38)
+
+Round 10 §1 found 10 of 120 full chains per route (8.3%, the same seeds on both routes) leaving 0x77 north
+without the sword; every one of them failed (on milestone1 they are all 10 deaths in 0:0x37). ow-start's
+evaluation agreed: `start` failed 4 of 60 sampled episodes (`exit-wrong`), its other states almost never.
+
+- **r38-start-only:** continue the promoted ow-start (r24-fairy) with `start` as its only start state
+  (`specialists/arms/r38-start-only/ow-start.yaml`), 16 envs, `--stop-success 0.99` (stopped at 34 updates,
+  139k steps). `start` 60/60, but the cave re-entry states `0_77c_*` dropped to 83–87% (`stuck`): training one
+  state let the others drift. Not kept.
+- **r38b-rebalance:** continue r38 on the canonical config (all ow-start states; the selector already doubles
+  the weight of failing states), `--stop-success 0.99` (stopped at 6 updates, 24k steps).
+
+| ow-start, 60 episodes per state | Overall | `start` | `0_77c_*` | Health change |
+|---|---:|---:|---:|---:|
+| r24-fairy (promoted) | 99.2% | 56/60 | 180/180 | +0.315 |
+| r38-start-only | 95.2% | 60/60 | 152/180 | +0.309 |
+| r38b-rebalance | 100.0% | 60/60 | 180/180 | +0.315 |
+
+Chains, 120 runs on §1's seeds, only ow-start swapped:
+
+| Segment | Swordless (promoted) | Swordless (r38b) | Success (promoted) | Success (r38b) |
+|---|---:|---:|---:|---:|
+| Full milestone1 | 10 | 0 | 3/120 | 7/120 |
+| Full milestone1-fairy | 10 | 0 | 6/120 | 8/120 |
+| Post-D1 fairy (ow-start plays the pond) | — | — | 18/120 | 18/120 |
+
+**Promoted r38b-rebalance** for ow-start: no swordless departures left in 240 full chains, the pond unchanged,
+and the full chains gain what the swordless runs used to lose. Lee's alternative (end training episodes on a
+swordless departure) wasn't needed: the existing `exit-wrong` ending plus targeted training was enough.
