@@ -261,6 +261,11 @@ the remaining list is deferred until Lee resumes work.
   training failed immediately on leaving the starting area swordless; that is an acceptable option, not a
   required implementation. Investigate the start specialist/task and chain behavior, then measure swordless
   departures before/after the chosen fix. Do not mistake later fairy-pond visits for the initial starting area.
+  - **Measured (round 10 §1):** 10 of 120 full chains on each route (8.3%, the same seeds on both) exit 0x77 north
+    without the sword; all 10 fail (on milestone1 they are all 10 deaths in 0:0x37). ow-start's eval agrees: the
+    `start` state fails 2 of 40 sampled episodes (`exit-wrong`), every other ow-start state 0/240. `start` is 1 of
+    ow-start's 10 start states. First try after item 8: continue ow-start with `start` as its only start state
+    (`--stop-success 0.99`), then 120 full chains per route.
 - [x] **Alternate-YAML experiment integrity (round 7 §4):** train/evaluate discarded supplied YAML overrides.
   Fixed and proved through real/spawned CLI paths. Round 6's r20-pt, r21/r22-chainhp and r25/r27-heart treatment
   comparisons are not valid treatment evidence; model/chain measurements remain real. Explicit rejections remain.
