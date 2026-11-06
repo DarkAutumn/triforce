@@ -4,15 +4,18 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/todo.md` "Next up" (where the work
 stands and what to try next, in order).
 
-## Where things stand (Nov 5)
+## Where things stand (Nov 6)
 
 - **The Rust port is merged** (`docs/decisions.md` 2026-11-05 entries; plan steps 1–18): the emulator is
   `crates/zcore` (Zelda-only NES core cut down from TetaNES, hardware timing, no FCEUmm quirks left), the game,
   env and pool logic is Rust (`crates/zelda`, `crates/env`, `crates/pool`), and Python drives it through
   `triforce._native` (`crates/triforce-py`). stable-retro and the Python game stack are gone. All start states
-  and trajectories were regenerated on zcore (`round8.md`, `round9.md`); the promoted team is unchanged.
-- **Order from here (Lee, Nov 5; `todo.md` "Next up"):** raise test coverage, then the performance and
-  optimization step (`docs/performance.md`), then continue the experiments in `todo.md`.
+  and trajectories were regenerated on zcore (`round8.md`, `round9.md`).
+- **Round 10 (`round10.md`) is the current round:** coverage and performance steps done (Nov 5), then the
+  `todo.md` experiments. ow-start r38b-rebalance is promoted (swordless departures fixed); everything else in the
+  team is unchanged. Training/eval now end `no-damage` after 600 actions without damage either way, and
+  `play-zelda.py --stall-steps` handles stalled games (§6). Open items need Lee's decisions (`todo.md` "Where it
+  stands").
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated, reconcile it with todo.md between experiments, log
   every result, check off completed backlog entries, commit each finished item and keep going.

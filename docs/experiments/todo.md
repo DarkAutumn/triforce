@@ -6,11 +6,14 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Where it stands (Nov 5):** the Rust port is done and merged (`round8.md`, `round9.md`): hardware-timing
-  zcore, regenerated states and trajectories, test coverage raised (`README.md` "Testing"), and training now
-  runs 1.8–2.7× faster than the old stack at the same env counts, evaluation/chains ~2× faster than lockstep
-  (`docs/performance.md`). The promoted team is the FCEUmm-trained one, unchanged. Round 10 starts the
-  experiments on the new stack: first the hardware-core chain baseline (below), then item 8.
+- **Where it stands (Nov 6):** the Rust port, coverage and performance steps are done (Nov 5); round 10
+  (`round10.md`) has run on the new stack. §1 hardware-core chain baseline (matches FCEUmm at 120 runs);
+  §2 item 8, boomerang usable vs masked: no effect, kept usable; §3 swordless departures fixed (ow-start
+  r38b promoted: 10/120 → 0/120 per route); §4 key-carriage audit (72/74 Dodongo arrivals keep all keys); §5
+  arrival health decides the D2 Goriya room, chain-hp Goriya retested properly: no effect; §6 finite stall
+  escape in training and the player; launcher hardening. Every "Work in this order" item is done. Open items
+  left need Lee: power-on RAM fill, the direction for arrival health, and whether to port observation schema 2
+  to Rust for the scratch-team question.
 - **Promoted now:** ow-zora r24-fairy, ow-start r38b-rebalance (round 10 §3), ow-octorok r32-nearby-off, ow-moblin r26c-moblin,
   ow-leever-peahat r23-more, boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1,
   d2-rope r35-east-curriculum, wallmaster r10 copy. Overworld families use both routes' rooms; D2 rooms have 3 states each.
@@ -257,6 +260,10 @@ the remaining list is deferred until Lee resumes work.
   its full-route 0x48 stalls last 2,000 actions. Baseline post-D1 fairy has 58/80 stalls in 0x59; baseline D2
   worst quiet gap is 2,978. Separate convergence/coverage from representation effects before drawing a general
   observation conclusion. One training-seed pair is not seed-robust evidence. No further run started.
+  - **Prerequisite (Nov 6):** schema 2 exists only in the old Python dev tree (`round4-dev` `4d35155`); the Rust
+    env is schema 1 (`OBS_SCHEMA_VERSION = 1`). Answering this means porting schema 2 into `crates/env`, then
+    two scratch teams at a larger budget (roughly 10 families × 2 arms × 5M steps, a day of GPU). Lee to decide
+    whether schema 2 is worth porting (r36: no better, Zora worse).
 - [ ] **Arrival health is the D2 loss (round 10 §5).** 2:0x5e kills 24/28 arrivals at ≤1 heart and 4/130 above 3;
   post-D1 main reaches it with 1.64 hearts (fairy 2.39) after ~2.3 hearts of overworld damage spread over
   0x2b/0x3d/0x4c/0x2a/0x2d, with almost no drops there. Already ruled out: crossing-room damage penalty (round 6),
