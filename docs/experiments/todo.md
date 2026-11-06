@@ -6,9 +6,11 @@ Ideas and problems found but not acted on yet, with the round that found them.
 
 Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
-- **Where it stands:** round 7 paused after completed r36 (`round7.md` §21); items 1–7 and prerequisites complete.
-  No observation cutover or model promotion: keep the current schema-1/r35 team. Its prior 40-run checks reached
-  Dodongo full main/fairy 1/3, post-D1 main/fairy 4/7, D2 19; these are not the fresh r36 baseline's results.
+- **Where it stands (Nov 5):** the Rust port is done and merged (`round8.md`, `round9.md`): hardware-timing
+  zcore, regenerated states and trajectories, test coverage raised (`README.md` "Testing"), and training now
+  runs 1.8–2.7× faster than the old stack at the same env counts, evaluation/chains ~2× faster than lockstep
+  (`docs/performance.md`). The promoted team is the FCEUmm-trained one, unchanged. Round 10 starts the
+  experiments on the new stack: first the hardware-core chain baseline (below), then item 8.
 - **Promoted now:** ow-zora / ow-start r24-fairy, ow-octorok r32-nearby-off, ow-moblin r26c-moblin,
   ow-leever-peahat r23-more, boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1,
   d2-rope r35-east-curriculum, wallmaster r10 copy. Overworld families use both routes' rooms; D2 rooms have 3 states each.
@@ -21,6 +23,7 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
   `docs/performance.md`. **Then continue with the experiments below** (the "Work in this order" list, then
   "Other open items"), as before: log every result, commit each finished item, keep going. Side experiments
   found during the port or the performance work go into "Other open items" instead of derailing the work.
+  (Port, coverage and performance steps: done Nov 5.)
 - **Long jobs (Lee, Nov 5):** a state build, explore or chain hunt can hang (one hung on Aquamentus before).
   Check any such job's progress at least every couple of hours and intervene early when a single state or room
   makes no progress (retry with another seed or source, record it, move on); **12 hours on any single task is a
