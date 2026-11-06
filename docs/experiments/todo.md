@@ -220,7 +220,7 @@ the remaining list is deferred until Lee resumes work.
      versus old 335/420/−0.338. All 131 native D2 arrivals depart east; all 34 Dodongo arrivals carry the 7e key.
      Both routes, 24 audited suffix states, 21 Rope/six D2 Goriya curricula and the promoted pointer are active
      in main at source 47788f7. Canonical CUDA training, six native main smoke runs and 471 tests pass.
-8. **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
+8. [x] **Boomerang after D1: does it help or hurt? (Lee: big but worth it; "get to the real bottom of this".)** Link
    picks the boomerang up in 0x44 (that stays) and uses it often afterwards. Question: from D1 complete (`0_37c_2`,
    back on the overworld) to the Dodongo room, are the models better with the boomerang usable or masked?
    - Arms: A = boomerang on; B = `items: {boomerang: off}` for every specialist that plays after D1: ow-octorok,
@@ -236,15 +236,19 @@ the remaining list is deferred until Lee resumes work.
      464 tests passed at that step; merged into main at 4cb8434.
    - Run it after items 1–7 settle (or as part of the full retrain item 3 may force), so it measures the setup we
      keep. Expect about a day of GPU.
+   - **Done, round 10 §2 (r37):** warm-started first pass, two training seeds per arm, 720 chain runs per arm.
+     No detectable effect (chains 18.2% masked vs 16.7% usable, p = 0.49; post-D1 evals slightly favour usable);
+     training-seed swings exceed the arm difference. Kept the boomerang usable; nothing promoted.
+   - **Open follow-up: the from-scratch comparison** the item prefers. r36's scratch teams failed every chain at
+     2M steps, so each family needs a much larger budget: roughly 7 families × 2 arms × ~5M steps ≈ 70M steps,
+     ~20 h at ~1,000 steps/s per run with two runs side by side. Worth it only alongside a planned full retrain.
 
 ### Other open items
 
 - [x] **Rust port: restore main's watch mode on the native pool** (`1830be3`).
 - [x] **Rust port: finish plan step 17** (`round8.md`).
-- [ ] **Chains on the hardware core and regenerated states (round 9 §18b).** Specialist evals match the FCEUmm
-  baselines, but chain totals were 28/14 of 200 vs 32/24 on FCEUmm (and 30/31 on the hardware core with the old
-  states). Run larger samples (≥120 runs per segment) to see whether the dip is real; if it is, find the rooms
-  (per-room deaths/stalls from the chain jsonl) and fine-tune the affected specialists on the hardware states.
+- [x] **Chains on the hardware core and regenerated states (round 9 §18b).** Round 10 §1: at 120 runs per
+  segment the team matches the FCEUmm rates; the round-9 dip was 40-run noise. No fine-tune needed.
 - [ ] **Power-on RAM fill (Lee to decide).** zcore powers on with $FF (FCEUmm's fill); real RAM is indeterminate.
   Twelve TetaNES test ROMs only match their screenshots with $00. Switching changes the base state (regenerate
   states and trajectories again).
