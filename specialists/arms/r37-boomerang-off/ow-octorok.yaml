@@ -1,0 +1,17 @@
+name: ow-octorok
+rooms: ['(0, 0x67)', '(0, 0x68)', '(0, 0x58)', '(0, 0x37)', '(0, 0x4c)', '(0, 0x3c)', '(0, 0x78)', '(0, 0x49)']
+start_states: ['0_67*_[0-9]', '0_68*_[0-9]', '0_58*_[0-9]', '0_37*_[0-9]', '0_4c*_[0-9]', '0_3c*_[0-9]', '0_78*_[0-9]',
+               '0_49*_[0-9]']
+success: [exit-correct, enter-room:1:0x73, enter-room:2:0x7d]
+reward_profile: default
+reward: {pbrs: true}
+obs: {objective: true}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
+items: {bombs: false, boomerang: false}   # r37 arm B: boomerang masked after D1
+one_room: true                          # round 5: per-room episodes (d1-melee trained 2.5-4x faster with them)
+max_steps: 2000
+warm_start: null
+notes: >-
+  0x37 (first visit) and 0x3c exit through the dungeon stairs: enter-room (1,0x73) / (2,0x7d).
+  Start states are the route-generated pre-entry states (<room><entry>_<chain>, triforce/entry_states.py).
+  milestone1-fairy adds 0x58 from N (exit E) and 0x49 both ways (N to the fairy pond, then S).
