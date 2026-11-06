@@ -86,6 +86,10 @@ pub struct RoomRecord {
     pub health_in: f64,
     pub health_out: f64,
     pub max_health: i32,
+    /// Keys Link carried on entering the room, and on leaving it (the milestone record's `keys_in` is the
+    /// Dodongo arrival's key count).
+    pub keys_in: i32,
+    pub keys_out: i32,
     /// in-progress, exit-correct, exit-wrong, death, stuck, milestone, error.
     pub outcome: String,
     pub hearts_dropped: u32,
@@ -118,6 +122,8 @@ impl RoomRecord {
             health_in: state.health(),
             health_out: state.health(),
             max_health: state.max_health(),
+            keys_in: state.keys(),
+            keys_out: state.keys(),
             outcome: outcome.to_owned(),
             hearts_dropped: 0,
             hearts_taken: 0,
@@ -141,6 +147,7 @@ impl RoomRecord {
             "index": self.index, "level": self.level, "room": self.room, "in_cave": self.in_cave,
             "specialist": self.specialist, "steps": self.steps, "frames": self.frames,
             "health_in": self.health_in, "health_out": self.health_out, "max_health": self.max_health,
+            "keys_in": self.keys_in, "keys_out": self.keys_out,
             "outcome": self.outcome, "hearts_dropped": self.hearts_dropped, "hearts_taken": self.hearts_taken,
             "hearts_healed": self.hearts_healed, "hearts_wasted": self.hearts_wasted,
             "hearts_left": self.hearts_left, "hearts_expired": self.hearts_expired,
@@ -416,6 +423,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         } else {
             state.health()
         };
+        record.keys_out = state.keys();
         record.hearts_dropped = h.dropped;
         record.hearts_taken = h.taken;
         record.hearts_left = h.left;

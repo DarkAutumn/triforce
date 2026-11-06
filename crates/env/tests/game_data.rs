@@ -17,6 +17,10 @@ fn copy_data() -> tempfile::TempDir {
     }
     for entry in std::fs::read_dir(repo.join("specialists")).unwrap() {
         let path = entry.unwrap().path();
+        // The families are the top-level YAML files; `specialists/arms/` holds experiment variants.
+        if path.extension().is_none_or(|e| e != "yaml") {
+            continue;
+        }
         std::fs::copy(
             &path,
             tmp.path()

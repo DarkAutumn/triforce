@@ -116,6 +116,8 @@ fn chain_summary_counts_failures_by_room() {
             health_in: 0.0,
             health_out: 0.0,
             max_health: 0,
+            keys_in: 0,
+            keys_out: 0,
             outcome: outcome.into(),
             hearts_dropped: 0,
             hearts_taken: 0,

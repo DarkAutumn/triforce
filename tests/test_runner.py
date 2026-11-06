@@ -87,6 +87,17 @@ def test_chain_summary_counts_failures_by_room():
     assert summary['failures'] == {'1:0x44 stalfos-keese-gel death': 2, '1:0x73 stalfos-keese-gel stuck': 1}
 
 
+def test_chain_summary_counts_keys_carried_into_the_milestone_separately():
+    def run(result, keys):
+        r = RunResult('milestone1', 0, result=result)
+        r.rooms.append(RoomRecord(0, 2, '0x0e', False, '-', outcome='milestone', keys_in=keys))
+        return r
+    summary = chain_summary([run('success', 3), run('success', 3), run('success', 1), run('success', None),
+                             run('failure', 3)])
+    assert summary['successes'] == 4
+    assert summary['arrival_keys'] == {'1': 1, '3': 2, 'unknown': 1}   # failures don't count; old records: unknown
+
+
 def test_policies_load_promoted_models_and_name_the_missing(models_dir, tmp_path):
     policies = Policies(models_dir)
     assert not policies.missing and policies.names == sorted(policies.names)

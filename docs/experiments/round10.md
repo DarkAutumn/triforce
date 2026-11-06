@@ -144,3 +144,20 @@ Chains, 120 runs on §1's seeds, only ow-start swapped:
 **Promoted r38b-rebalance** for ow-start: no swordless departures left in 240 full chains, the pond unchanged,
 and the full chains gain what the swordless runs used to lose. Lee's alternative (end training episodes on a
 swordless departure) wasn't needed: the existing `exit-wrong` ending plus targeted training was enough.
+
+## 4. D2 key carriage audit (r36 §21 follow-up)
+
+Chain room records now carry `keys_in`/`keys_out` (keys on entering and leaving each room), and `chain_summary`
+reports `arrival_keys`: successful runs counted by the keys Link carried into the Dodongo room (3 = every key on
+the route kept: 7e, 4e and 3e). Milestone arrivals and full key carriage are separate counters from now on.
+
+Current promoted team (with r38b ow-start), 120 runs per segment, seeds 100–219:
+
+| Segment | Dodongo arrivals | 3 keys | 2 keys |
+|---|---:|---:|---:|
+| Post-D1 main | 12/120 | 12 | 0 |
+| Post-D1 fairy | 18/120 | 16 | 2 |
+| D2 | 44/120 | 44 | 0 |
+
+72 of 74 arrivals carry all three keys; the two short ones are on the fairy route. Full key carriage is not
+where the team loses: reaching Dodongo is (Goriya rooms and 0x3e, §1).

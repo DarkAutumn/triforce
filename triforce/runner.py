@@ -72,6 +72,8 @@ class RoomRecord:
     health_in: float = 0.0
     health_out: float = 0.0
     max_health: int = 0
+    keys_in: Optional[int] = None   # keys carried on entering / leaving the room (None in pre-Nov-6 records)
+    keys_out: Optional[int] = None
     outcome: str = 'in-progress'    # exit-correct, exit-wrong, death, stuck, milestone, error
     # Dropped hearts during the visit: healed = real hearts gained, wasted = taken - healed, left = still on the
     # floor when the visit ended.
@@ -283,15 +285,25 @@ def parse_location(text: str) -> MapLocation:
 
 
 def chain_summary(results: List[RunResult]) -> dict:
-    """The milestone metric and a per-room failure breakdown."""
+    """The milestone metric, keys carried at the milestone and a per-room failure breakdown.
+
+    ``arrival_keys`` counts successful runs by the keys Link carried into the milestone room (the Dodongo room on
+    milestone1: 3 = every key on the route kept), so milestone arrivals and full key carriage stay separate
+    counters."""
     runs = len(results)
     successes = sum(r.result == 'success' for r in results)
     failures: Dict[str, int] = {}
+    arrival_keys: Dict[str, int] = {}
     for r in results:
         room = r.failed_room
         if room is not None:
             key = f"{room.level}:{room.room}{':cave' if room.in_cave else ''} {room.specialist} {room.outcome}"
             failures[key] = failures.get(key, 0) + 1
+        elif r.result == 'success' and r.rooms:
+            keys = r.rooms[-1].keys_in
+            label = 'unknown' if keys is None else str(keys)
+            arrival_keys[label] = arrival_keys.get(label, 0) + 1
     return {'runs': runs, 'successes': successes, 'success_rate': successes / runs if runs else 0.0,
+            'arrival_keys': dict(sorted(arrival_keys.items())),
             'failures': dict(sorted(failures.items(), key=lambda kv: -kv[1])),
             'errors': sorted({r.reason for r in results if r.result == 'error'})}

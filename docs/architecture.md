@@ -115,7 +115,9 @@ health rose. A heart heals `min(1, max_health − health)`, so one picked up at 
 "Total" heart change = real change (`health − start_health`) + `wasted`. `SpecialistEnv` puts the summary in the
 terminal `info['hearts']`; metrics log `health_change_total` and `hearts/{dropped,taken,left,wasted}` per
 episode; `evaluate` keeps it per episode and reports `mean_health_change_total` and `hearts_dropped/taken/left`
-overall, per room and per start state; runner `RoomRecord`s carry `hearts_dropped/taken/healed/wasted/left/expired`.
+overall, per room and per start state; runner `RoomRecord`s carry `hearts_dropped/taken/healed/wasted/left/expired`
+and `keys_in/keys_out` (keys carried into and out of the room; `chain_summary`'s `arrival_keys` counts milestone
+arrivals by keys carried, so full key carriage is reported separately from reaching Dodongo).
 
 ### Lingering (`crates/zelda/src/linger.rs`)
 
