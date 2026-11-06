@@ -11,7 +11,7 @@ use env::critic::{
 };
 use env::end_conditions::{
     BOSS_DEAD_AND_HEART, DEATH, EXIT_CORRECT, EXIT_WRONG, EndConditions, MAX_STEPS, NO_PROGRESS,
-    NO_ROOM_PROGRESS, STUCK, StepView, TRIFORCE_COLLECTED, WALLMASTERED, classify_ending,
+    NO_DAMAGE, NO_ROOM_PROGRESS, STUCK, StepView, TRIFORCE_COLLECTED, WALLMASTERED, classify_ending,
     enter_room_name,
 };
 use env::rewards::{
@@ -734,7 +734,7 @@ fn ends(
 
 fn conditions(success: &[&str], one_room: bool, no_progress: Option<u32>) -> EndConditions {
     let success: Vec<String> = success.iter().map(|s| s.to_string()).collect();
-    EndConditions::new(&[ROOM, EAST], &success, one_room, no_progress)
+    EndConditions::new(&[ROOM, EAST], &success, one_room, no_progress, None)
 }
 
 #[test]
@@ -881,6 +881,32 @@ fn no_room_progress_replaces_the_timeout() {
         ends(&mut c, &still, &[EAST], 30).as_deref(),
         Some(NO_ROOM_PROGRESS)
     );
+}
+
+#[test]
+fn no_damage_ends_attack_loops_that_never_connect() {
+    let base = Ram::new();
+    let swing = step(&base, &base, "SWORD E");
+    let success = vec![EXIT_CORRECT.to_owned()];
+    let mut c = EndConditions::new(&[ROOM, EAST], &success, false, Some(1000), Some(5));
+    let swings = |c: &mut EndConditions, n: usize| {
+        (0..n)
+            .map(|_| ends(c, &swing, &[EAST], 0))
+            .collect::<Vec<_>>()
+    };
+    assert!(swings(&mut c, 4).iter().all(Option::is_none));
+    // Damage dealt, damage taken and a new room each restart the count; a swing that misses doesn't.
+    for reset in [
+        hits(step(&base, &base, "SWORD E"), &[(1, 1)]),
+        step(&base, &base.with(Var::HeartsAndContainers, 0x21), "WAIT 8"),
+        step(&base, &base.room(EAST), "MOVE E 8"),
+    ] {
+        assert_eq!(ends(&mut c, &reset, &[EAST], 0), None);
+        assert!(swings(&mut c, 4).iter().all(Option::is_none));
+    }
+    assert_eq!(swings(&mut c, 1), [Some(NO_DAMAGE.to_owned())]);
+    c.clear();
+    assert!(swings(&mut c, 4).iter().all(Option::is_none), "reset starts over");
 }
 
 #[test]

@@ -128,7 +128,9 @@ impl PyEvalTask {
 /// Chain runs of `route`, one per seed. `configs` are the specialists that have policies (names or configs; a
 /// config replaces the canonical YAML), in policy-index order: each row's `policy` is the acting specialist's
 /// index here. A specialist in `missing` (name -> reason, e.g. no promoted model) ends a run that needs it as
-/// `error`; any other unlisted specialist does too.
+/// `error`; any other unlisted specialist does too. `stall_steps` (the watch player's stall budget, off by
+/// default): room events carry `stalled` once a room has gone that many actions without damage dealt or taken,
+/// and the run ends `stuck` at twice as many.
 #[pyclass(module = "triforce._native", name = "ChainTask", frozen)]
 pub struct PyChainTask {
     configs: Vec<Arc<SpecialistConfig>>,
@@ -137,6 +139,7 @@ pub struct PyChainTask {
     stop_at: Option<zelda::MapLocation>,
     start_from: Option<String>,
     max_steps: u64,
+    stall_steps: Option<u64>,
     missing: HashMap<String, String>,
     states_dir: Option<PathBuf>,
 }
@@ -145,7 +148,7 @@ pub struct PyChainTask {
 impl PyChainTask {
     #[new]
     #[pyo3(signature = (configs, route, seeds, stop_at=None, start_from=None, max_steps=50000, missing=None,
-                        states_dir=None))]
+                        states_dir=None, stall_steps=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -157,6 +160,7 @@ impl PyChainTask {
         max_steps: u64,
         missing: Option<HashMap<String, String>>,
         states_dir: Option<PathBuf>,
+        stall_steps: Option<u64>,
     ) -> PyResult<Self> {
         let configs = configs
             .iter()
@@ -180,6 +184,7 @@ impl PyChainTask {
             stop_at,
             start_from,
             max_steps,
+            stall_steps,
             missing: missing.unwrap_or_default(),
             states_dir,
         })
@@ -314,6 +319,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             let chain = env.chain_mut();
             chain.configs = configs.clone();
             chain.max_steps = t.max_steps;
+            chain.stall_steps = t.stall_steps;
             env.missing_mut().extend(t.missing.clone());
             Ok(TaskEnv::Chain(env))
         };
@@ -527,6 +533,7 @@ fn event_dict<'py>(
             d.set_item("room", r.room)?;
             d.set_item("health", r.health)?;
             d.set_item("max_health", r.max_health)?;
+            d.set_item("stalled", r.stalled)?;
         }
         ZeldaEvent::Movie(log) => {
             d.set_item("type", "movie")?;

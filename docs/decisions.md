@@ -631,3 +631,17 @@ entry below and `crates/zcore/UPSTREAM.md`.
   random actions than before this change, so they don't replay older outputs.
 - **Why:** `scripts/port_gate.sh` went from 660 s to 304 s (10 evaluations 291 → 113 s, 5 chain segments
   368 → 190 s); with `--device cuda` 179 s. Details in `docs/performance.md`.
+
+## 2026-11-06 — Finite stall escape: a no-damage counter for training and the watch player
+
+- **What:** one counter, actions in a room since entry or the last damage dealt or taken. Training/eval:
+  `no_damage_steps` (default 600, `null` = off) ends the episode `no-damage`, a bootstrapped soft-failure
+  truncation. Watch player: `play-zelda.py --stall-steps N` (default 300) makes a game N actions in without
+  damage eligible to give its cell to a game further along (the existing replacement/fade path), and ends its run
+  `stuck` at 2N, replacement or not. Chains record `no_damage_max` per visit; `eval-chain` keeps no stall budget.
+- **Why:** Lee (Nov 4) watched Goriya runs attack while standing still indefinitely (half a heart, clock or
+  stunned enemies) and required a finite timeout in training and the player, counting real damage either way,
+  not attack commands and not `LingerTracker`'s progress (which ignores damage taken).
+- **Evidence:** round 10 §6. 480 chains of the current team: 16 of 9,033 successful room visits had a 300-action
+  no-damage stretch and 10 had 600; all 18 `stuck` visits had ≥ 638. Goriya eval at 600: 12 of 480 episodes end
+  earlier (2 slow successes at 1,186/1,200 actions), success 78.1% → 77.7%, mean episode 134 → 117 actions.

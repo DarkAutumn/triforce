@@ -164,6 +164,15 @@ Legacy max-step truncations retain their existing nonbootstrapping behavior. Run
 `stuck` instead of the flat room budget, retaining the global run cap; it resets on every room exit.
 Nearby-item shaping and the measured cutoff remain disabled in promoted configs until their experiments.
 
+`no_damage_steps` (positive or null, **default 600**) ends an episode `no-damage` after that many actions in one
+room without damage dealt (an enemy hit, look-ahead credit included) or taken: a soft-failure truncation with
+`bootstrap_truncation=True`, like `no-room-progress`, so attack loops that never connect stop without a penalty.
+It is checked after the other conditions and coexists with the legacy timeout (50 still non-hitting steps →
+`stuck`). Chains use the same counter: `RoomRecord.no_damage_max` is each visit's longest such stretch, and
+`ChainEnv.stall_steps = N` (off by default; `ChainTask(stall_steps=)`, `ChainPool(stall_steps=)`, the watch
+player's `--stall-steps`, default 300) sets `stalled` on the room event after N actions and ends the run `stuck`
+at 2N. `eval-chain` leaves it off.
+
 ## Learning (`model.py`, `ppo.py`, `train.py`, `registry.py`)
 
 - Action heads: kind (K), direction (8), duration (4). Direction/duration log-probs and entropies count only

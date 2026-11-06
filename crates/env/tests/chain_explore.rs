@@ -127,6 +127,7 @@ fn chain_summary_counts_failures_by_room() {
             hearts_expired: 0,
             linger: None,
             blocks: 0,
+            no_damage_max: 0,
         }],
     };
     let s = chain_summary(&[

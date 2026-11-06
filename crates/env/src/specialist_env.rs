@@ -15,7 +15,7 @@ use crate::config::{GameData, SpecialistConfig};
 use crate::critic::{Critique, GameplayCritic};
 use crate::curriculum::{CurriculumInfo, CurriculumTag, SharedCurriculum};
 use crate::end_conditions::{
-    EndConditions, MAX_STEPS, NO_ROOM_PROGRESS, StepView, classify_ending,
+    EndConditions, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, StepView, classify_ending,
 };
 use crate::error::EnvError;
 use crate::objective::{Attached, attach};
@@ -51,7 +51,7 @@ pub struct TerminalInfo {
     pub linger: LingerSummary,
     pub linger_room: (u8, u8, bool),
     pub blocks: u32,
-    /// The ending was `no-room-progress` (bootstrap the value of the final observation).
+    /// The ending was `no-room-progress` or `no-damage` (bootstrap the value of the final observation).
     pub bootstrap_truncation: bool,
     pub curriculum: Option<CurriculumInfo>,
     pub episode_steps: u64,
@@ -252,6 +252,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             &config.success,
             config.one_room,
             config.no_progress_steps.map(|n| n as u32),
+            config.no_damage_steps.map(|n| n as u32),
         );
         Ok(SpecialistEnv {
             builder: ObservationBuilder::new(config.obs.objective),
@@ -507,7 +508,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             map: &self.data.map,
             linger_tail_steps: tail,
         });
-        let mut truncated = ending.as_deref() == Some(NO_ROOM_PROGRESS);
+        let mut truncated = matches!(ending.as_deref(), Some(NO_ROOM_PROGRESS | NO_DAMAGE));
         if ending.is_none() && self.session.steps >= self.config.max_steps as u64 {
             ending = Some(MAX_STEPS.to_owned());
             truncated = true;
@@ -549,7 +550,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             };
             self.done = true;
             terminal = Some(TerminalInfo {
-                bootstrap_truncation: ending == NO_ROOM_PROGRESS,
+                bootstrap_truncation: matches!(ending.as_str(), NO_ROOM_PROGRESS | NO_DAMAGE),
                 ending,
                 outcome,
                 start_state: state_label(&self.episode_state).to_owned(),

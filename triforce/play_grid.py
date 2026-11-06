@@ -6,7 +6,9 @@ Shown games render every frame into the pool's frame buffers (``show(game, on)``
 playing at the same pace without rendering) and ``frame(game, since)`` copies a game's latest one.
 ``emulated_frames()`` counts every game's emulated frames, shown or not.  Room/health changes and run results go
 through one status queue as dicts with ``game`` and ``event`` (``start``, ``room``, ``end``, ``crash``); ``room``
-carries ``rooms``, the rooms entered so far in the run (a change of the observation's room id: level, cave, room).
+carries ``rooms``, the rooms entered so far in the run (a change of the observation's room id: level, cave, room),
+and ``stalled``: with ``stall_steps`` set, the room has gone that many actions without damage dealt or taken (the
+run ends ``stuck`` at twice as many).
 After a run ends its game holds its result for ``RESULT_PAUSE`` seconds before the next seed plays (seeds are handed
 out in order to whichever game is free, so ``start`` carries no seed; ``end`` does).  A setup error (an error before
 the first step, e.g. a missing promoted model for the route's first room) stops the game instead of retrying in a
@@ -92,13 +94,14 @@ class GameGrid:
     messages.  ``shown``: the games that render (default all)."""
 
     def __init__(self, games: int, device: str, fps: float, models_dir=None, shown: Optional[Iterable[int]] = None,
-                 states_dir=None):
+                 states_dir=None, stall_steps: Optional[int] = None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.games = games
         self.device = device
         self.fps = fps
         self.models_dir = None if models_dir is None else str(models_dir)
         self.states_dir = states_dir
+        self.stall_steps = stall_steps
         self._shown = set(range(games)) if shown is None else set(shown)
         self._emulated = [0] * games
         self._status: queue.Queue = queue.Queue()
@@ -171,7 +174,7 @@ class GameGrid:
                 return
             seeds = range(self.games * SEEDS_PER_GAME)
             chain = ChainPool(route, seeds, policies, num_envs=self.games, threads=self.games, fps=self.fps,
-                              states_dir=self.states_dir)
+                              states_dir=self.states_dir, stall_steps=self.stall_steps)
         except Exception as err:  # pylint: disable=broad-exception-caught
             self._crash(err)
             return
@@ -244,7 +247,8 @@ class GameGrid:
         elif event['type'] == 'room':
             rooms[env].pending.append({'game': env, 'event': 'room', 'specialist': event['specialist'],
                                        'level': event['level'], 'room': event['room'],
-                                       'health': float(event['health']), 'max_health': int(event['max_health'])})
+                                       'health': float(event['health']), 'max_health': int(event['max_health']),
+                                       'stalled': bool(event['stalled'])})
 
     def _release(self, chain: ChainPool, held: Dict[int, _Held]) -> None:
         now = time.monotonic()

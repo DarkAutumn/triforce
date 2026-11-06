@@ -657,6 +657,26 @@ fn no_room_progress_disabled_preserves_position_timeout() {
 }
 
 #[test]
+fn no_damage_truncates_and_bootstraps() {
+    let Some(nes) = open_core() else { return };
+    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |c| {
+        c.no_damage_steps = Some(3);
+        c.max_steps = 100;
+    });
+    env.reset(Some(0), None).unwrap();
+    for step in 1..=3u32 {
+        let r = act(&mut env, "WAIT 8");
+        assert!(!r.terminated);
+        assert_eq!(r.truncated, step == 3);
+        if step == 3 {
+            let t = r.info.terminal.as_ref().unwrap();
+            assert_eq!((t.ending.as_str(), t.outcome), ("no-damage", "soft-failure"));
+            assert!(t.bootstrap_truncation);
+        }
+    }
+}
+
+#[test]
 fn no_room_progress_keeps_episode_cap() {
     let Some(nes) = open_core() else { return };
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |c| {

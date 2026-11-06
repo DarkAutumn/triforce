@@ -4,7 +4,7 @@
 //! | ending | default class |
 //! |---|---|
 //! | `exit-correct`, `enter-room:<l>:<r>`, `triforce-collected`, `boss-dead-and-heart` | success if listed |
-//! | `exit-wrong`, `max-steps`, `no-room-progress` | soft failure |
+//! | `exit-wrong`, `max-steps`, `no-room-progress`, `no-damage` | soft failure |
 //! | `death`, `wallmastered`, `stuck`, `no-progress` | hard failure |
 //!
 //! Any ending that is neither a listed success nor in the specialist's/central failure table is an
@@ -28,15 +28,17 @@ pub const STUCK: &str = "stuck";
 pub const NO_PROGRESS: &str = "no-progress";
 pub const NO_ROOM_PROGRESS: &str = "no-room-progress";
 pub const MAX_STEPS: &str = "max-steps";
+pub const NO_DAMAGE: &str = "no-damage";
 pub const ENTER_ROOM_PREFIX: &str = "enter-room:";
 
 pub const SUCCESS_KINDS: [&str; 3] = [EXIT_CORRECT, TRIFORCE_COLLECTED, BOSS_DEAD_AND_HEART];
 
 /// Central failure table; successes come only from each specialist's `success` list.
-pub const DEFAULT_FAILURES: [(&str, &str); 7] = [
+pub const DEFAULT_FAILURES: [(&str, &str); 8] = [
     (EXIT_WRONG, SOFT_FAILURE),
     (MAX_STEPS, SOFT_FAILURE),
     (NO_ROOM_PROGRESS, SOFT_FAILURE),
+    (NO_DAMAGE, SOFT_FAILURE),
     (DEATH, HARD_FAILURE),
     (WALLMASTERED, HARD_FAILURE),
     (STUCK, HARD_FAILURE),
@@ -169,6 +171,9 @@ pub enum EndCondition {
     },
     /// The shared linger tracker's tail reached the limit (a bootstrapping truncation).
     NoRoomProgress { no_progress_steps: u32 },
+    /// `limit` actions in one room without damage dealt (a hit, look-ahead credit included) or taken (a
+    /// bootstrapping truncation): ends attack loops that never connect.
+    NoDamage { limit: u32, quiet: u32 },
 }
 
 impl EndCondition {
@@ -194,6 +199,8 @@ impl EndCondition {
             *position_duration = 0;
             *last_progress = 0;
             entered_rooms.clear();
+        } else if let EndCondition::NoDamage { quiet, .. } = self {
+            *quiet = 0;
         }
     }
 
@@ -264,13 +271,23 @@ impl EndCondition {
             EndCondition::NoRoomProgress { no_progress_steps } => {
                 (v.linger_tail_steps >= *no_progress_steps).then(|| NO_ROOM_PROGRESS.to_owned())
             }
+            EndCondition::NoDamage { limit, quiet } => {
+                let damage = v.change.health_lost > 0.0 || !v.change.enemies_hit.is_empty();
+                if damage || prev.full_location() != curr.full_location() {
+                    *quiet = 0;
+                } else {
+                    *quiet += 1;
+                }
+                (*quiet >= *limit).then(|| NO_DAMAGE.to_owned())
+            }
         }
     }
 }
 
 /// The end conditions of a specialist, in priority order (`build_end_conditions`).  Triforce and heart-container
 /// conditions only for specialists that list them as success; `no_progress_steps` replaces Timeout with the
-/// shared-linger NoRoomProgress (which the env truncates rather than terminates).
+/// shared-linger NoRoomProgress (which the env truncates rather than terminates); `no_damage_steps` adds NoDamage
+/// last (also a truncation).
 #[derive(Clone, Debug)]
 pub struct EndConditions(pub Vec<EndCondition>);
 
@@ -280,6 +297,7 @@ impl EndConditions {
         success: &[String],
         one_room: bool,
         no_progress_steps: Option<u32>,
+        no_damage_steps: Option<u32>,
     ) -> EndConditions {
         let enter_rooms = success
             .iter()
@@ -304,6 +322,9 @@ impl EndConditions {
                 no_progress_steps: n,
             },
         });
+        if let Some(limit) = no_damage_steps {
+            list.push(EndCondition::NoDamage { limit, quiet: 0 });
+        }
         EndConditions(list)
     }
 
@@ -378,6 +399,7 @@ mod tests {
             &success,
             false,
             Some(5),
+            Some(7),
         );
         let kinds: Vec<&str> =
             c.0.iter()
@@ -389,6 +411,7 @@ mod tests {
                     EndCondition::RoomExit { .. } => "exit",
                     EndCondition::Timeout { .. } => "timeout",
                     EndCondition::NoRoomProgress { .. } => "no-room-progress",
+                    EndCondition::NoDamage { .. } => "no-damage",
                 })
                 .collect();
         assert_eq!(
@@ -399,7 +422,8 @@ mod tests {
                 "triforce",
                 "heart",
                 "exit",
-                "no-room-progress"
+                "no-room-progress",
+                "no-damage"
             ]
         );
     }

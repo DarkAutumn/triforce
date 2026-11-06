@@ -74,6 +74,7 @@ impl RoomWatch {
                     room: info.room.1,
                     health: info.health,
                     max_health: info.max_health,
+                    stalled: false,
                 },
                 events,
             );
@@ -489,6 +490,7 @@ where
                 room: state.location(),
                 health: state.health(),
                 max_health: state.max_health(),
+                stalled: self.chain.stalled(),
             };
             self.rooms.report(event, events);
         }

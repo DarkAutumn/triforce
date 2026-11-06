@@ -154,9 +154,9 @@ def test_window_shows_frames_status_and_tally(qapp):  # pylint: disable=redefine
     assert fake.polls == polls
 
 
-def _room(game, rooms, health):
+def _room(game, rooms, health, stalled=False):
     return {'game': game, 'event': 'room', 'specialist': 'ow-zora', 'level': 0, 'room': 0x38, 'rooms': rooms,
-            'health': health, 'max_health': 3}
+            'health': health, 'max_health': 3, 'stalled': stalled}
 
 
 def test_a_cell_changes_game_only_when_its_game_enters_a_room_or_restarts(qapp):  # pylint: disable=redefined-outer-name, unused-argument
@@ -197,6 +197,39 @@ def test_a_cell_changes_game_only_when_its_game_enters_a_room_or_restarts(qapp):
     window.tick()
     assert window.shown == [2, 3] and window.swaps == 2         # game 3 (3 rooms) is ahead of game 0 (2 rooms)
     window.shutdown()
+
+
+def test_a_stalled_game_offers_its_cell_when_it_turns_stalled(qapp):  # pylint: disable=redefined-outer-name, unused-argument
+    """A shown game whose room message turns ``stalled`` (no damage either way for --stall-steps) may lose its cell
+    mid-room to a hidden game that is ahead.  Staying stalled offers nothing more; stalling again does."""
+    fake = FakeGrid(games=3, messages=[_room(0, 4, 3.0), _room(1, 3, 2.0), _room(2, 2, 3.0)])
+    window = play_zelda.Window(fake, cols=2, rows=1, scale=1)
+    window.start()
+    window.tick()
+    fake.messages = [_room(2, 3, 3.0)]                  # hidden game 2 moves ahead of game 1, not of game 0
+    window.tick()
+    assert window.shown == [0, 1] and window.swaps == 0     # game 1 didn't change rooms or stall
+    fake.messages = [_room(0, 4, 3.0, stalled=True)]
+    window.tick()
+    assert window.shown == [0, 1] and window.swaps == 0     # game 2 is behind game 0
+    fake.messages = [_room(1, 3, 2.0, stalled=True)]
+    window.tick()
+    assert window.shown == [0, 2] and window.swaps == 1
+
+    fake.messages = [_room(1, 5, 2.0), _room(0, 4, 2.5, stalled=True)]    # hidden game 1 is ahead of game 0 now
+    window.tick()
+    assert window.shown == [0, 2] and window.swaps == 1     # but game 0 was already stalled
+    fake.messages = [_room(0, 4, 2.5), _room(0, 4, 2.5, stalled=True)]     # damage reset it, then it stalls again
+    window.tick()
+    assert window.shown == [1, 2] and window.swaps == 2
+    window.shutdown()
+
+
+def test_play_zelda_stall_steps_option():
+    assert play_zelda.parse_args([]).stall_steps == play_zelda.DEFAULT_STALL_STEPS
+    assert play_zelda.parse_args(['--stall-steps', '0']).stall_steps == 0
+    with pytest.raises(SystemExit):
+        play_zelda.parse_args(['--stall-steps', '-1'])
 
 
 def test_benchmark_measures_once_every_game_runs_and_every_cell_shows(qapp, monkeypatch, capsys):  # pylint: disable=redefined-outer-name, unused-argument
@@ -308,6 +341,25 @@ def test_game_grid_holds_a_result_before_the_next_run(states_dir, models_dir, mo
     assert events[first_end + 1:first_end + 3] == ['start', 'room']     # the next run's room after its start
     assert stamped[first_end + 2][1]['rooms'] == 1                       # counted from the new run's first room
     assert stamped[first_end + 1][0] - ends[0][0] >= 0.4                 # the result stayed up
+
+
+def test_game_grid_stall_budget_flags_the_room_then_ends_the_run(states_dir, models_dir):
+    """stall_steps=N: the start screen (nothing to hit or be hit by) reports ``stalled`` after N actions without
+    damage either way and the run ends ``stuck`` at 2N, before Link reaches the sword cave."""
+    grid = GameGrid(1, 'cpu', fps=0, models_dir=models_dir, states_dir=states_dir, stall_steps=1)
+    messages = []
+    try:
+        grid.start()
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline and not any(m['event'] == 'end' for m in messages):
+            messages += grid.poll_status()
+            time.sleep(0.005)
+    finally:
+        grid.stop()
+    rooms = [m for m in messages if m['event'] == 'room']
+    assert [(m['room'], m['stalled']) for m in rooms] == [(0x77, False), (0x77, True)], rooms
+    end = next(m for m in messages if m['event'] == 'end')
+    assert end['outcome'] == 'stuck' and 'stalled: 2 actions without damage either way (limit 2)' in end['reason']
 
 
 def test_game_grid_setup_error_stops_every_game(states_dir, tmp_path):

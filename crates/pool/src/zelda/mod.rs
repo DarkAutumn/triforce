@@ -101,6 +101,8 @@ pub struct RoomEvent {
     pub room: u8,
     pub health: f64,
     pub max_health: i32,
+    /// Chain runs only: the room has gone the stall budget without damage either way ([`env::chain::ChainEnv::stalled`]).
+    pub stalled: bool,
 }
 
 /// One evaluation episode (`evaluate._play`'s record).

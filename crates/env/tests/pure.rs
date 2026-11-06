@@ -580,7 +580,7 @@ fn measured_ending_credits_threshold_action_before_check() {
     };
 
     // build_end_conditions: no_progress_steps swaps Timeout for NoRoomProgress.
-    let conditions = EndConditions::new(&[], &[], false, Some(3));
+    let conditions = EndConditions::new(&[], &[], false, Some(3), None);
     assert!(matches!(
         conditions.0.last(),
         Some(EndCondition::NoRoomProgress {
@@ -594,16 +594,27 @@ fn measured_ending_credits_threshold_action_before_check() {
             .any(|c| matches!(c, EndCondition::Timeout { .. }))
     );
     assert!(matches!(
-        EndConditions::new(&[], &[], false, None).0.last(),
+        EndConditions::new(&[], &[], false, None, None).0.last(),
         Some(EndCondition::Timeout { .. })
     ));
     // Python's ValueErrors ('shared LingerTracker', 'positive') can't happen here: the env always passes its own
     // tracker's tail, and config validation rejects a non-positive no_progress_steps.
-    for bad in ["no_progress_steps: 0", "no_progress_steps: -1"] {
+    for bad in [
+        "no_progress_steps: 0",
+        "no_progress_steps: -1",
+        "no_damage_steps: 0",
+    ] {
         let text = format!("name: t\nrooms: ['(1, 0x73)']\nsuccess: [exit-correct]\n{bad}\n");
         let err = SpecialistConfig::from_yaml(&text, "t.yaml", None).unwrap_err();
-        assert!(err.0.contains("no_progress_steps"), "{err}");
+        let key = bad.split(':').next().unwrap();
+        assert!(err.0.contains(key), "{err}");
     }
+    // no_damage_steps: on by default (DEFAULT_NO_DAMAGE_STEPS), `null` turns it off.
+    let base = "name: t\nrooms: ['(1, 0x73)']\nsuccess: [exit-correct]\n";
+    let config = SpecialistConfig::from_yaml(base, "t.yaml", None).unwrap();
+    assert_eq!(config.no_damage_steps, Some(env::config::DEFAULT_NO_DAMAGE_STEPS));
+    let off = SpecialistConfig::from_yaml(&format!("{base}no_damage_steps: null\n"), "t.yaml", None).unwrap();
+    assert_eq!(off.no_damage_steps, None);
 
     for progress in ["hit", "pickup", "heart", "healing", "approach", "exit"] {
         // (shared tracker, the specialist's NoRoomProgress condition)

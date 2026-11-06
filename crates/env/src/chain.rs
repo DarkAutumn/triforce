@@ -5,9 +5,10 @@
 //! [`ChainStatus::Act`] with the acting specialist and its observation, and the caller supplies the action
 //! (batched inference lives above this crate).  A run ends with a [`RunResult`]: success on entering the route's
 //! terminal room (a `milestone` record with specialist `-`), failure on death, a wrong exit into an untagged
-//! room, the per-room budget (`no_progress_steps` quiet actions, else `max(max_steps, 2000)` steps) or the run
-//! cap; error on an unknown/untagged room the route needed, a masked action, a missing state or
-//! [`ChainEnv::fail`] (e.g. no promoted model).
+//! room, the per-room budget (`no_progress_steps` quiet actions, else `max(max_steps, 2000)` steps), the opt-in
+//! stall budget (`stall_steps`: twice that many actions without damage dealt or taken) or the run cap; error on
+//! an unknown/untagged room the route needed, a masked action, a missing state or [`ChainEnv::fail`] (e.g. no
+//! promoted model).
 
 use crate::config::{GameData, SpecialistConfig};
 use crate::error::EnvError;
@@ -101,6 +102,9 @@ pub struct RoomRecord {
     /// None until the visit starts tracking (the milestone record has none: `{}`).
     pub linger: Option<LingerSummary>,
     pub blocks: u32,
+    /// Longest stretch of the visit's actions without damage dealt (an enemy hit, look-ahead credit included) or
+    /// taken.
+    pub no_damage_max: u64,
 }
 
 impl RoomRecord {
@@ -133,6 +137,7 @@ impl RoomRecord {
             hearts_expired: 0,
             linger: None,
             blocks: 0,
+            no_damage_max: 0,
         }
     }
 
@@ -152,7 +157,7 @@ impl RoomRecord {
             "hearts_healed": self.hearts_healed, "hearts_wasted": self.hearts_wasted,
             "hearts_left": self.hearts_left, "hearts_expired": self.hearts_expired,
             "linger": self.linger.as_ref().map_or_else(|| json!({}), linger_json),
-            "blocks": self.blocks,
+            "blocks": self.blocks, "no_damage_max": self.no_damage_max,
         })
     }
 }
@@ -230,6 +235,11 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     pub max_steps: u64,
     /// Floor of the per-room step budget (`MIN_ROOM_STEPS`).
     pub min_room_steps: u64,
+    /// Player stall budget (`play-zelda.py`; None = off): after this many actions in a room without damage dealt
+    /// or taken [`ChainEnv::stalled`] turns true; after twice as many the run ends `stuck`.
+    pub stall_steps: Option<u64>,
+    /// Actions since entering the room or the last damage dealt or taken.
+    no_damage: u64,
     result: Option<RunResult>,
     objectives: Option<GameCompletion>,
     objective: Option<Objective>,
@@ -251,6 +261,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             route,
             max_steps: DEFAULT_MAX_STEPS,
             min_room_steps: MIN_ROOM_STEPS,
+            stall_steps: None,
+            no_damage: 0,
             result: None,
             objectives: None,
             objective: None,
@@ -283,6 +295,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     /// The specialist acting now.
     pub fn specialist(&self) -> Option<&str> {
         self.current.as_ref().map(|c| &*c.name)
+    }
+
+    /// The stall budget is set and the acting room has gone `stall_steps` actions without damage either way.
+    pub fn stalled(&self) -> bool {
+        self.stall_steps.is_some_and(|n| self.no_damage >= n)
     }
 
     /// Starts a run from the route's start state; `rng` draws the load's RNG bytes and spawn.
@@ -370,6 +387,12 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         record.blocks += change.blocks() as u32;
         record.steps += 1;
         record.frames += change.frames as u64;
+        if change.health_lost > 0.0 || !change.enemies_hit.is_empty() {
+            self.no_damage = 0;
+        } else {
+            self.no_damage += 1;
+        }
+        record.no_damage_max = record.no_damage_max.max(self.no_damage);
         result.steps += 1;
         result.frames += change.frames as u64;
         self.objective = Some(objective);
@@ -510,6 +533,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 "in-progress",
             ));
             self.hearts.reset(&HeartView::of(&state));
+            self.no_damage = 0;
             self.linger.reset(&LingerState::of(&state, &objective), || {
                 linger_wavefront(&state, &objective, None)
             });
@@ -555,6 +579,16 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             let room_steps = (config.max_steps as u64).max(self.min_room_steps);
             (steps >= room_steps).then(|| format!("{name} exceeded {room_steps} steps"))
         };
+        let stuck = stuck.or_else(|| {
+            let limit = 2 * self.stall_steps?;
+            (self.no_damage >= limit).then(|| {
+                format!(
+                    "{name} stalled: {} actions without damage either way (limit {limit}) in {}",
+                    self.no_damage,
+                    describe(location)
+                )
+            })
+        });
         let stuck = stuck.or_else(|| {
             (result.steps >= self.max_steps)
                 .then(|| format!("run exceeded {} steps", self.max_steps))

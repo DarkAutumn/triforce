@@ -368,6 +368,15 @@ fn default_max_steps() -> i64 {
     2000
 }
 
+/// Training/eval episodes end (`no-damage`, a bootstrapped truncation) after this many actions in one room without
+/// damage dealt or taken: no successful chain visit of the round-10 team went this long except 10 of 9,033 slow
+/// wanders; every `stuck` visit did (round 10 §6).
+pub const DEFAULT_NO_DAMAGE_STEPS: i64 = 600;
+
+fn default_no_damage_steps() -> Option<i64> {
+    Some(DEFAULT_NO_DAMAGE_STEPS)
+}
+
 /// One specialist task (design §3.3).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -401,6 +410,9 @@ pub struct SpecialistConfig {
     pub max_steps: i64,
     #[serde(default)]
     pub no_progress_steps: Option<i64>,
+    /// `null` turns the no-damage cutoff off.
+    #[serde(default = "default_no_damage_steps")]
+    pub no_damage_steps: Option<i64>,
     #[serde(default)]
     pub route: Option<String>,
     #[serde(default)]
@@ -485,6 +497,11 @@ impl SpecialistConfig {
             && n <= 0
         {
             return Err(fail("no_progress_steps", "must be > 0".into()));
+        }
+        if let Some(n) = self.no_damage_steps
+            && n <= 0
+        {
+            return Err(fail("no_damage_steps", "must be > 0 (null: off)".into()));
         }
         for (key, value) in [
             ("curriculum.fraction", self.curriculum.fraction),

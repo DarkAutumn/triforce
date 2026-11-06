@@ -284,7 +284,7 @@ the remaining list is deferred until Lee resumes work.
   Fixed and proved through real/spawned CLI paths. Round 6's r20-pt, r21/r22-chainhp and r25/r27-heart treatment
   comparisons are not valid treatment evidence; model/chain measurements remain real. Explicit rejections remain.
 - **0x53 (5-Stalfos key room):** 5 deaths in the full chain after the D1 Goriya room's 15.
-- [ ] **Finite stall escape in training and `play-zelda.py` (Lee, Nov 4; round 7 §9).** Lee still observes
+- [x] **Finite stall escape in training and `play-zelda.py` (Lee, Nov 4; round 7 §9).** Lee still observes
   half-heart/clock/stunned-enemy Goriya runs attacking while standing still indefinitely. Required:
   - **Training:** a finite no-progress timeout that stops such runs. It may be a while; endless attack loops
     must not survive merely because Link keeps selecting attacks. Choose/measure a suitable threshold.
@@ -297,6 +297,9 @@ the remaining list is deferred until Lee resumes work.
   - Earlier native Rope seed 15 also had clock-frozen one-HP foes, a closed required shutter and a 2,942-action
     quiet tail (last 1,000: 978 MOVE/11 SWORD). Clock is observed; this is not shadow-Link chasing or the repaired
     shutter objective. Implement only after the current experiment and Lee's requested pause/resumption.
+  - **Done, round 10 §6:** one no-damage counter (damage dealt or taken). Player `--stall-steps 300`: eligible
+    for replacement at 300, run ends `stuck` at 600. Training/eval `no_damage_steps` default 600 (bootstrapped
+    `no-damage` truncation). Thresholds from 9,033 successful chain visits (10 reach 600; every `stuck` does).
 - **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
   (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
 - **Bow route** (later): 0x43 N → 0x33 (key) → 0x23 (key) → 0x22 (push block, stairs to the bow cellar 0x7F).

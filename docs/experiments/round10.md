@@ -212,3 +212,30 @@ its own target (chain-hp evaluation) chp is no better (64.1% vs 67.0% pooled). T
 teach the Goriya model to survive five Goriyas without beams. The lever is arrival health (overworld damage, and
 the hearts d2-rope leaves on the floor in 2:0x7e/0x4e: 0.36 and 0.39 per visit), or a different fighting skill,
 not the reset health distribution. The refreshed `chain_hp.json` stays (no canonical config uses it).
+
+## 6. Finite stall escape (Lee, Nov 4)
+
+Lee watched Goriya runs attacking while standing still indefinitely and asked for a finite timeout in training
+and in `play-zelda.py`, counting real damage either way. Implemented as one counter (actions in a room since
+entry or the last damage dealt or taken; `docs/decisions.md` 2026-11-06, `docs/architecture.md`).
+
+Threshold, from 480 chains of the current team (seeds 100–219: full main 7, full fairy 8, post-D1 main 12, D2 44
+successes — identical to §3/§4, so recording the counter changes nothing):
+
+| Specialist | Successful visits | p50 | p99 | Max |
+|---|---:|---:|---:|---:|
+| goriya | 409 | 26 | 342 | 1,273 |
+| d2-rope | 1,355 | 12 | 110 | 2,686 |
+| wallmaster | 118 | 42 | 179 | 189 |
+| stalfos-keese-gel | 2,306 | 12 | 70 | 623 |
+| ow-octorok | 1,669 | 10 | 28 | 697 |
+| others (ow-zora, ow-moblin, ow-leever-peahat, ow-start, boss-aquamentus) | 3,176 | ≤ 14 | ≤ 59 | ≤ 74 |
+
+16 of 9,033 successful visits reached 300 and 10 reached 600 (slow d2-rope wanders in 2:0x6e, Goriya 2:0x1e); all
+18 `stuck` visits reached ≥ 638 (most ran to the 2,000/3,000-step budget).
+
+- **Player:** `--stall-steps 300` (default): eligible for replacement at 300, run ends `stuck` at 600.
+- **Training/eval:** `no_damage_steps` default 600, a bootstrapped truncation (`no-damage`, soft failure). Goriya
+  r31-block1 eval (40 per state, seed 0): 78.1% → 77.7%, −0.72 → −0.71, mean episode 134 → 117 actions; 12 of 480
+  episodes end earlier (8 stuck/max-steps, 2 deaths, 2 slow successes). Evaluations from here on include it;
+  earlier ones did not (the difference is these rare long stretches).

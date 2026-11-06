@@ -10,9 +10,11 @@
 All games play in one native chain pool, each on its own thread with one batched inference loop for the models
 (see triforce/play_grid.py).  When a game ends its result shows for a few seconds and the game starts the next
 seed; the seed shows once the run ends.  With more games than cells the rest play unseen (emulated, not rendered).
-A shown game can only lose its cell when it enters a new room or starts its next run (after its result has shown):
-then, if the best hidden game (most rooms entered this run, then most hearts) is ahead of it, that game fades in.
-Never mid-room, and shown games never move between cells.
+A shown game can only lose its cell when it enters a new room, starts its next run (after its result has shown) or
+stalls (--stall-steps actions in one room without damage dealt or taken): then, if the best hidden game (most
+rooms entered this run, then most hearts) is ahead of it, that game fades in.  Never otherwise mid-room, and shown
+games never move between cells.  A game that goes twice --stall-steps without damage either way ends STUCK and
+starts its next seed, replacement or not.
 """
 
 import argparse
@@ -38,6 +40,7 @@ TICK_MS = 16
 FPS_WINDOW = 2.0            # seconds per on-screen frame-rate reading (window title)
 BENCHMARK_SETTLE = 10.0     # seconds between every game running and the start of a --benchmark measurement
 FADE_SECONDS = 0.25         # a cell's fade to black, and back in, when a better game takes it
+DEFAULT_STALL_STEPS = 300   # actions in a room without damage either way (round 10 §6)
 
 BG = '#0e1116'
 STRIP = '#161a22'
@@ -72,6 +75,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--benchmark', type=float, default=None, metavar='SECONDS',
                         help="once every game is running, measure the on-screen frame rate this long, print it "
                              "and quit")
+    parser.add_argument('--stall-steps', type=int, default=DEFAULT_STALL_STEPS, metavar='N',
+                        help="a game N actions into a room without damage dealt or taken may give its cell to a "
+                             f"game further along; at 2N it ends STUCK (default {DEFAULT_STALL_STEPS}, 0 = off)")
     return parser
 
 
@@ -80,6 +86,8 @@ def parse_args(argv=None, parser: Optional[argparse.ArgumentParser] = None) -> a
     args = parser.parse_args(argv)
     if args.scale < 1:
         parser.error(f"--scale must be at least 1, got {args.scale}")
+    if args.stall_steps < 0:
+        parser.error(f"--stall-steps must be 0 (off) or positive, got {args.stall_steps}")
     cells = args.grid[0] * args.grid[1]
     args.games = cells if args.games is None else args.games
     if args.games < cells:
@@ -100,6 +108,7 @@ class GameState:
     def _clear_room(self):
         self.specialist = self.level = self.room = self.health = self.max_health = None
         self.rooms = 0
+        self.stalled = False
 
     def apply(self, message: dict):
         event = message.get('event')
@@ -114,6 +123,7 @@ class GameState:
             self.rooms = message.get('rooms', self.rooms)
             self.health = message.get('health')
             self.max_health = message.get('max_health')
+            self.stalled = bool(message.get('stalled', False))
         elif event == 'end':
             self.seed = message.get('seed', self.seed)
             self.outcome = message.get('outcome')
@@ -297,8 +307,9 @@ class Benchmark:
 
 class Window(QMainWindow):
     """The cells of GameViews fed by a GameGrid-like object (start / show / frame / poll_status / stop, ``games``).
-    Cell i starts on game i.  When a shown game enters a new room or starts its next run (a crashed one: RESULT_PAUSE
-    after the crash), its cell goes to the best hidden game if that one is ahead (``replacement``).  The window
+    Cell i starts on game i.  When a shown game enters a new room, stalls (its room message turns ``stalled``) or
+    starts its next run (a crashed one: RESULT_PAUSE after the crash), its cell goes to the best hidden game if that
+    one is ahead (``replacement``).  The window
     title shows the on-screen frame rate (frames painted per cell per second, every FPS_WINDOW seconds)."""
 
     def __init__(self, grid, cols: int, rows: int, scale: int, benchmark: Optional[float] = None):
@@ -355,7 +366,7 @@ class Window(QMainWindow):
         for message in self.grid.poll_status():
             game, event = message['game'], message.get('event')
             state = self.states[game]
-            rooms = state.rooms
+            rooms, stalled = state.rooms, state.stalled
             state.apply(message)
             changed.add(game)
             if event in ('end', 'crash'):
@@ -363,7 +374,8 @@ class Window(QMainWindow):
                 self.update_title()
             if event == 'crash':
                 self._crashed[game] = self.clock() + RESULT_PAUSE    # it never starts another run
-            if event == 'start' or (event == 'room' and state.rooms > rooms):
+            if (event == 'start' or (event == 'room' and state.rooms > rooms)
+                    or (event == 'room' and state.stalled and not stalled)):
                 offered.append(game)
         for game, due in list(self._crashed.items()):
             if self.clock() >= due:
@@ -448,7 +460,8 @@ def main(argv=None) -> int:
     # Ctrl-C: quit from the event loop, never from inside a tick (closing the window mid-tick left repaints queued
     # for a destroyed Wayland surface, which segfaults in QtWaylandClient).
     signal.signal(signal.SIGINT, lambda *_: QTimer.singleShot(0, app.quit))
-    grid = GameGrid(args.games, args.device, args.fps, args.models_dir, shown=range(cols * rows))
+    grid = GameGrid(args.games, args.device, args.fps, args.models_dir, shown=range(cols * rows),
+                    stall_steps=args.stall_steps or None)
     window = Window(grid, cols, rows, args.scale, benchmark=args.benchmark)
     app.aboutToQuit.connect(window.shutdown)
     window.start()
