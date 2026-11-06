@@ -83,3 +83,33 @@ chain gap comes from single-specialist training drift, not from the boomerang: a
 steps) against 10 for the promoted team; arm B's ow-moblin exits 0x5c the wrong way 5 times on the fairy route.
 Both continued teams also trail the untouched promoted team in the chains, so a 1M-step continuation on the new
 states is itself a noisy step. A second training seed per arm (seed 2) measures that noise before any conclusion.
+
+### Training seed 2 and the decision
+
+| Segment | Promoted (§1) | A s37 | A s2 | B s37 | B s2 | A pooled | B pooled | Fisher p |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Post-D1 main | 12/120 | 7 | 9 | 5 | 14 | 16/240 (6.7%) | 19/240 (7.9%) | 0.73 |
+| Post-D1 fairy | 18/120 | 10 | 19 | 13 | 13 | 29/240 (12.1%) | 26/240 (10.8%) | 0.77 |
+| D2 | 44/120 | 37 | 38 | 47 | 39 | 75/240 (31.2%) | 86/240 (35.8%) | 0.33 |
+| **Total** | 74/360 (20.6%) | 54 | 66 | 65 | 66 | 120/720 (16.7%) | 131/720 (18.2%) | 0.49 |
+
+Post-D1 evaluation (success, mean real heart change):
+
+| Specialist | A s37 | B s37 | A s2 | B s2 |
+|---|---:|---:|---:|---:|
+| ow-octorok | 93.6% −0.22 | 97.8% −0.11 | 97.8% −0.14 | 89.7% −0.17 |
+| ow-zora | 97.1% −0.19 | 94.8% −0.18 | 95.0% −0.21 | 97.1% −0.16 |
+| ow-leever-peahat | 97.1% −0.21 | 98.3% −0.20 | 99.2% −0.14 | 96.2% −0.21 |
+| ow-moblin | 97.5% −0.25 | 95.0% −0.21 | 95.8% −0.24 | 93.9% −0.23 |
+| ow-start | 100.0% +0.93 | 100.0% +0.93 | 100.0% +0.93 | 100.0% +0.93 |
+| d2-rope | 94.5% −0.28 | 92.1% −0.28 | 93.8% −0.29 | 93.8% −0.26 |
+| goriya | 80.0% −0.73 | 80.8% −0.88 | 78.3% −0.78 | 71.7% −1.06 |
+| **Pooled** | 95.1% −0.23 | 94.5% −0.20 | 95.1% −0.21 | 92.9% −0.22 |
+
+**Decision: keep the boomerang usable; nothing promoted.** Masking it after D1 makes no detectable difference in
+the chains (pooled 18.2% vs 16.7%, p = 0.49; the D2 segment leans to B, p = 0.33) and is slightly worse on
+post-D1 evaluations (one B seed's goriya 71.7% / −1.06, ow-octorok 89.7%). Training-seed swings within a
+specialist (ow-octorok 93.6–97.8% on A, 89.7–97.8% on B) are larger than the arm difference, and both continued
+teams trail the untouched promoted team (74/360), so neither a 1M-step continuation nor the mask is an
+improvement. This first pass warm-started both arms from boomerang-trained models, which favours A; the
+item's preferred from-scratch comparison is recorded in `todo.md` with its cost.
