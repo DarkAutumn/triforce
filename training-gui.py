@@ -765,6 +765,8 @@ def describe(event: dict) -> str:
         return f"{get('status')} · {fmt_steps(get('steps'))} steps · {fmt_duration(get('wall_seconds'))}"
     if kind == 'skipped':
         return str(get('reason', ''))
+    if kind == 'partial_set_aside':
+        return f"unfinished run kept as {get('run_dir')} ({get('train_status') or 'no summary'}); training fresh"
     if kind == 'eval_start':
         return f"{get('episodes')} episodes"
     if kind == 'eval_progress':

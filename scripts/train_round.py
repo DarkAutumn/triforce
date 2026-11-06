@@ -45,7 +45,9 @@ from triforce.events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir
 from triforce.metrics import read_jsonl
 from triforce.runner import write_jsonl
 from triforce.specialist import list_specialists, load_specialist
-from triforce.train import interrupt_on_sigterm
+from triforce.train import interrupt_on_sigterm, run_status
+
+COMPLETE = ('completed', 'early_stop')     # train_summary.json statuses of a finished run
 
 STOP_SUCCESS = 0.95
 STOP_PATIENCE = 5
@@ -139,11 +141,14 @@ def training_record(run_dir: Path) -> dict:
     """Iterations/steps/early stop/wall time from train_summary.json, plus the last-5 training success rate and
     the last start-state-balanced success rate."""
     record = {'iterations': None, 'steps': None, 'stopped_early': None, 'wall_seconds': None,
-              'steps_per_second': None, 'train_success_last5': None, 'train_balanced_last': None}
+              'steps_per_second': None, 'train_success_last5': None, 'train_balanced_last': None,
+              'train_status': None}
     summary_path = run_dir / 'train_summary.json'
     if summary_path.is_file():
         with open(summary_path, encoding='utf-8') as file:
-            record.update(json.load(file))
+            summary = json.load(file)
+        summary['train_status'] = summary.pop('status', None)    # record['status'] is the driver's
+        record.update(summary)
     metrics_path = run_dir / 'metrics.jsonl'
     if metrics_path.is_file():
         metrics = read_jsonl(str(metrics_path))
@@ -158,6 +163,15 @@ def training_record(run_dir: Path) -> dict:
     return record
 
 
+def set_aside(run_dir: Path) -> Path:
+    """Renames an incomplete run dir to ``<run>.partial-N`` (first free N) so a fresh run can take its place."""
+    n = 1
+    while (partial := run_dir.with_name(f"{run_dir.name}.partial-{n}")).exists():
+        n += 1
+    run_dir.rename(partial)
+    return partial
+
+
 def _tail(path: Path, lines: int = 20) -> str:
     if not path.is_file():
         return ''
@@ -166,22 +180,31 @@ def _tail(path: Path, lines: int = 20) -> str:
 
 
 def train_specialist(name: str, args, models: Path, log_dir: Path) -> dict:
-    """Trains (or skips) one specialist; returns its summary record.  record['status'] is 'ok' when there is a
-    checkpoint to evaluate.  Appends driver events (skipped, error, end on failure) to log_dir/<name>.jsonl after
-    the training subprocess is done with it."""
+    """Trains (or skips) one specialist; returns its summary record.  record['status'] is 'ok' when training
+    finished and there is a checkpoint to evaluate; only then is it promoted.  ``--skip-existing`` skips a run only
+    if it finished (train_summary.json status completed/early_stop); an interrupted or crashed run dir is set aside
+    as ``<run>.partial-N`` and the specialist trains fresh.  Appends driver events (skipped, error, end on failure)
+    to log_dir/<name>.jsonl after the training subprocess is done with it."""
     config = load_specialist(name)
     run_dir = registry.run_dir(name, args.round, models)
     ckpt = registry.checkpoint_path(name, args.round, models)
     record = {'status': 'ok', 'rooms': len(config.rooms), 'seed_states': len(config.resolve_start_states()),
               'run_dir': str(run_dir), 'checkpoint': str(ckpt)}
 
-    skipped = args.skip_existing and ckpt.is_file()
+    skipped = args.skip_existing and ckpt.is_file() and run_status(run_dir) in COMPLETE
+    partial = None
+    if args.skip_existing and run_dir.exists() and not skipped:
+        partial = set_aside(run_dir)
+        say(f"[round] {name}: {run_dir} did not finish ({run_status(partial) or 'no summary'}); kept as {partial}, "
+            f"training fresh")
     code = None
     if skipped:
         say(f"[round] {name}: {ckpt} exists; not retraining")
     else:
         code = train(name, args, models, run_dir, log_dir)
     events = EventLog(log_dir / f'{name}.jsonl', specialist=name, run_id=args.round)
+    if partial is not None:
+        events.emit('partial_set_aside', run_dir=str(partial), train_status=run_status(partial))
     if skipped:
         events.emit('skipped', reason='checkpoint exists (--skip-existing)', checkpoint=str(ckpt))
     elif code != 0:
@@ -196,7 +219,7 @@ def train_specialist(name: str, args, models: Path, log_dir: Path) -> dict:
         record['error'] = f"no checkpoint at {ckpt}"
         events.emit('end', status=record['status'], message=record['error'])
         return record
-    if not args.no_promote:
+    if not args.no_promote and record['status'] == 'ok':
         registry.promote(name, args.round, models)
     return record
 

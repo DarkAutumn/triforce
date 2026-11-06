@@ -375,11 +375,17 @@ the remaining list is deferred until Lee resumes work.
 
 ## Driver
 
-- [ ] **Harden long-lived launcher ownership/recovery (round 7 §21).** R36's baseline owner returned no output;
+- [x] **Harden long-lived launcher ownership/recovery (round 7 §21).** R36's baseline owner returned no output;
   its launcher was gone and Aquamentus had saved an interrupted 37-update checkpoint after six full families.
   Parent's temporary recovery validates/keeps full-budget families, preserves partial attempts and restarts
   incomplete families fresh. Make the permanent driver retain reliable ownership/completion reporting;
   never count an interrupted exit-zero checkpoint as a completed fixed-budget comparison.
+  - **Done (Nov 6):** `train_summary.json` records `status` (completed | early_stop | interrupted) and this run's
+    iterations/steps; an interrupted run exits 130, not 0 (`triforce train` also stopped exiting 1 on success).
+    `train_round.py` promotes only finished runs, and `--skip-existing` skips only finished runs: an unfinished run
+    dir becomes `<run>.partial-N` and the family trains fresh. The r37/r39 runners skip only finished summaries
+    (all 32 of their runs trained the full 245 updates). Detached launches that survive the tool shell:
+    `setsid nohup CMD >> LOG 2>&1 < /dev/null & disown`.
 
 - **Keep training GUI logs in the standard main `logs/` root (Lee, Nov 4).** R36's isolated arm logs were put
   under `models/r36-observation-full-retrain-evidence/logs/schema1|schema2`. Those producer paths stay stable,

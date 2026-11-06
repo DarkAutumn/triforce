@@ -60,11 +60,12 @@ def _cmd_list(args):
 def main(argv=None):
     """Entry point for the ``triforce`` console script."""
     argv = list(sys.argv[1:] if argv is None else argv)
-    passthrough = {'train': 'triforce.train', 'run': 'triforce.run', 'play': 'triforce.play',
-                   'evaluate': 'triforce.evaluate'}
+    passthrough = {'train': ('triforce.train', 'cli'), 'run': ('triforce.run', 'main'),
+                   'play': ('triforce.play', 'main'), 'evaluate': ('triforce.evaluate', 'main')}
     if argv and argv[0] in passthrough:
         import importlib  # pylint: disable=import-outside-toplevel
-        return importlib.import_module(passthrough[argv[0]]).main(argv[1:])
+        module, entry = passthrough[argv[0]]
+        return getattr(importlib.import_module(module), entry)(argv[1:])
 
     parser = argparse.ArgumentParser(prog='triforce')
     parser.add_argument('--models-dir', default=None)

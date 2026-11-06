@@ -36,7 +36,9 @@ running success_rate) and ``eval`` (specialist evaluation: success_rate, episode
 health_change_total, hearts_dropped / hearts_taken / hearts_left per episode, flat ``linger_*`` means/maxima,
 by_room, by_state, by_room_linger, by_state_linger, path; it runs on a
 background thread while the next specialist trains, so these can arrive after the next stream's ``start``) and
-``error`` (non-zero exit, failed evaluation).  The last line of every stream is ``end`` (status, plus a summary);
+``error`` (non-zero exit, failed evaluation), ``skipped`` (``--skip-existing`` and the run finished) and
+``partial_set_aside`` (run_dir, train_status: an unfinished run renamed ``<run>.partial-N`` before training fresh).
+The last line of every stream is ``end`` (status, plus a summary);
 nothing follows it.  A stream without ``end`` belongs to a run that is still going or was killed.
 """
 

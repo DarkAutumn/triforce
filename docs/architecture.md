@@ -183,7 +183,10 @@ at 2N. `eval-chain` leaves it off.
   Loading with a mismatched schema version raises.
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
-  records iterations, steps, `stopped_early`, wall time and steps/sec.
+  records `status` (completed | early_stop | interrupted), total and this run's (`iterations_trained`,
+  `steps_trained`) iterations/steps, `stopped_early`, wall time and steps/sec (`train.run_status(run_dir)`). An
+  interrupted run (SIGINT, or SIGTERM from `python -m triforce.train` / `triforce train`) saves its checkpoint and
+  summary and exits 130 (`train.EXIT_INTERRUPTED`), so it never passes for a finished fixed-budget run.
 - Training collects asynchronously from one `EnvPool(TrainTask(...), num_envs=--parallel, threads=--threads)`
   (`ppo.Collector`): `recv(min_ready=1)` → store each ready env's row in its own rows of the env-major
   `RolloutBuffer` → one `RolloutPolicy` forward over a fixed batch of one row per env (CUDA: a replayed CUDA
@@ -237,7 +240,9 @@ at 2N. `eval-chain` leaves it off.
   --specialist NAME` (or `triforce evaluate`) writes `eval.json` next to the checkpoint.
 - `scripts/train_round.py --round ID` trains every trainable specialist (route order), promotes and
   evaluates each, then runs `eval-chain`; summaries go to `models/<round>-summary.json` and
-  `models/<round>-chain-summary.json`.
+  `models/<round>-chain-summary.json`. Only a run that finished (exit 0, status completed/early_stop) is
+  promoted. `--skip-existing` skips finished runs only; an unfinished run dir is renamed `<run>.partial-N`
+  (`partial_set_aside` event) and the specialist trains fresh.
 
 ## Runner and CLI (`crates/env/src/chain.rs`, `runner.py`, `run.py`, `cli.py`)
 

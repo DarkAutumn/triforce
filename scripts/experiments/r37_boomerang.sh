@@ -21,7 +21,8 @@ train() {
   for s in $SPECS; do
     src=models/$s/$(cat models/$s/promoted)
     for arm in on off; do
-      [ -f models/$s/r37-boom-$arm$TAG/train_summary.json ] && continue
+      grep -qE '"status": "(completed|early_stop)"' models/$s/r37-boom-$arm$TAG/train_summary.json 2>/dev/null \
+        && continue     # finished; an interrupted run's summary says "interrupted"
       spec=$s; [ $arm = off ] && spec=$ARMB/$s.yaml
       timeout 3h $PY -m triforce.train --specialist "$spec" --load "$src" --parallel 10 --threads 10 \
         --iterations $ITERS --steps-per-update 4096 --device cuda --seed $SEED --run-id r37-boom-$arm$TAG \

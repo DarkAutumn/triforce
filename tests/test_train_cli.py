@@ -1,7 +1,15 @@
 """``python -m triforce.train`` against the native ``EnvPool`` (tiny rollouts from the base movie's start state)."""
 
+import argparse
+import importlib.util
 import json
+import os
+import signal
+import subprocess
+import sys
+import time
 from collections import Counter
+from pathlib import Path
 
 import pytest
 import torch
@@ -110,6 +118,8 @@ def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, l
     checkpoint = registry.load_checkpoint(run_dir)
     records = read_jsonl(str(run_dir / 'metrics.jsonl'))
     assert summary['stopped_early'] and checkpoint['iterations'] < 50
+    assert summary['status'] == train.run_status(run_dir) == 'early_stop'
+    assert summary['iterations_trained'] == summary['iterations']      # a fresh run
     assert summary['iterations'] == checkpoint['iterations'] == len(records)
     # Stops on the first iteration where every start state has min_episodes results (threshold 0).
     assert 'balanced_success_rate' in records[-1] and all('balanced_success_rate' not in r for r in records[:-1])
@@ -138,3 +148,67 @@ def test_train_error_is_logged_before_raising(states_dir, tmp_path):
     assert [e['event'] for e in events] == ['error', 'train_end']    # the caller owns 'end'
     assert str(error.value) in events[0]['message'] and 'Traceback' in events[0]['traceback']
     assert events[1]['status'] == 'error'
+
+
+def test_an_interrupted_run_saves_but_exits_130(states_dir, tmp_path):
+    """SIGTERM mid-run: the checkpoint and summary are saved, the summary says interrupted, the exit code is not 0,
+    so no driver mistakes a partial run for a finished fixed-budget one."""
+    command = [sys.executable, '-m', 'triforce.train', *_common(states_dir, tmp_path, '--parallel', '2',
+               '--steps-per-update', '32', '--iterations', '100000', '--device', 'cpu', '--run-id', 'cut',
+               '--events', str(tmp_path / 'stream.jsonl'))]
+    metrics = tmp_path / SPECIALIST / 'cut' / 'metrics.jsonl'
+    with subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                          env={**os.environ, 'TRIFORCE_STATES_DIR': str(states_dir)}) as process:
+        deadline = time.monotonic() + 120
+        while not (metrics.is_file() and metrics.read_text()) and time.monotonic() < deadline:
+            assert process.poll() is None, "training ended on its own"
+            time.sleep(0.05)
+        process.send_signal(signal.SIGTERM)
+        assert process.wait(timeout=120) == train.EXIT_INTERRUPTED
+    run_dir = metrics.parent
+    summary = json.loads((run_dir / 'train_summary.json').read_text())
+    assert summary['status'] == train.run_status(run_dir) == 'interrupted' and summary['iterations_trained'] >= 1
+    assert registry.load_checkpoint(run_dir)['iterations'] == summary['iterations']
+
+
+def _train_round():
+    spec = importlib.util.spec_from_file_location('train_round', Path(__file__).parents[1] / 'scripts' /
+                                                  'train_round.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_round_driver_retrains_unfinished_runs_and_promotes_only_finished_ones(tmp_path, monkeypatch):
+    round_ = _train_round()
+    monkeypatch.setattr(round_, 'say', lambda *_: None)
+    run_dir = registry.run_dir(SPECIALIST, 'r', tmp_path)
+    ckpt = registry.checkpoint_path(SPECIALIST, 'r', tmp_path)
+
+    def finish(status, code=0):
+        def fake(_name, _args, _models, directory, _log_dir):
+            directory.mkdir(parents=True)
+            ckpt.write_bytes(b'not a real checkpoint')
+            (directory / 'train_summary.json').write_text(json.dumps({'status': status, 'iterations': 3}))
+            calls.append(directory)
+            return code
+        return fake
+
+    calls = []
+    monkeypatch.setattr(round_, 'train', finish('interrupted', train.EXIT_INTERRUPTED))
+    args = argparse.Namespace(round='r', skip_existing=True, no_promote=False)
+    record = round_.train_specialist(SPECIALIST, args, tmp_path, tmp_path)
+    assert record['status'] == 'train-failed' and record['train_status'] == 'interrupted'
+    assert not (tmp_path / SPECIALIST / registry.PROMOTED_NAME).exists()     # never promoted
+
+    monkeypatch.setattr(round_, 'train', finish('completed'))
+    args.no_promote = True
+    record = round_.train_specialist(SPECIALIST, args, tmp_path, tmp_path)
+    assert calls == [run_dir, run_dir] and record['status'] == 'ok' and record['train_status'] == 'completed'
+    partial = run_dir.with_name('r.partial-1')
+    assert train.run_status(partial) == 'interrupted'                      # kept, not overwritten
+
+    round_.train_specialist(SPECIALIST, args, tmp_path, tmp_path)
+    assert calls == [run_dir, run_dir]                                     # finished: skipped
+    kinds = [e['event'] for e in read_jsonl(str(tmp_path / f'{SPECIALIST}.jsonl'))]
+    assert kinds.count('partial_set_aside') == 1 and kinds[-1] == 'skipped'

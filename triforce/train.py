@@ -9,8 +9,10 @@ Each iteration collects ``--steps-per-update`` env steps, split across ``--paral
 thread count), stepped asynchronously (``ppo.Collector``: each ready env gets its next action from a fixed-shape
 policy forward on ``--device``, a CUDA graph on CUDA), then runs one PPO update.  Output goes
 to ``<models>/<specialist>/<run-id>/``: ``ckpt.pt`` (see ``registry``), ``metrics.jsonl``, ``tb/``
-(TensorBoard), ``run.json`` (arguments and configs) and ``train_summary.json`` (iterations, steps, early
-stop, wall time).  ``--stop-success`` ends training once the start-state-balanced training success rate
+(TensorBoard), ``run.json`` (arguments and configs) and ``train_summary.json`` (``status`` completed | early_stop |
+interrupted, total and this run's iterations/steps, early stop, wall time).  An interrupted run (SIGINT, or SIGTERM
+from the command line) still saves its checkpoint and summary but exits 130, so a driver never mistakes it for a
+finished fixed-budget run.  ``--stop-success`` ends training once the start-state-balanced training success rate
 (``balanced_success_rate``, see ``EarlyStop``) stays at or above the threshold for ``--stop-patience``
 consecutive iterations.  Only episodes that started at a room entry count; ``--curriculum`` episodes are reported
 separately as ``curriculum/*``.
@@ -138,6 +140,26 @@ def interrupt_on_sigterm():
     def handler(signum, frame):  # pylint: disable=unused-argument
         raise KeyboardInterrupt(f"signal {signum}")
     signal.signal(signal.SIGTERM, handler)
+
+
+EXIT_INTERRUPTED = 130
+
+
+def run_status(run_dir) -> Optional[str]:
+    """``train_summary.json``'s status (completed | early_stop | interrupted), or None without a summary (a run that
+    crashed, is still running, or predates the field)."""
+    path = Path(run_dir) / 'train_summary.json'
+    if not path.is_file():
+        return None
+    with open(path, encoding='utf-8') as file:
+        return json.load(file).get('status')
+
+
+def cli(argv=None) -> int:
+    """``python -m triforce.train`` / ``triforce train``: trains, then exits 0, or ``EXIT_INTERRUPTED`` if the run was
+    interrupted (its checkpoint and summary are still saved)."""
+    interrupt_on_sigterm()
+    return EXIT_INTERRUPTED if run_status(main(argv)) == 'interrupted' else 0
 
 
 def resolve_warm_start(value: str, root) -> Path:
@@ -333,13 +355,15 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
     elapsed = time.time() - started
     trained = state['steps'] - start_steps
     sps = trained / elapsed if elapsed else 0.0
+    status = 'early_stop' if state['stopped_early'] else status
     with open(out_dir / 'train_summary.json', 'w', encoding='utf-8') as file:
-        json.dump({'iterations': state['iteration'], 'steps': state['steps'],
+        json.dump({'status': status, 'iterations': state['iteration'], 'steps': state['steps'],
+                   'iterations_trained': state['iteration'] - start_iteration, 'steps_trained': trained,
                    'stopped_early': state['stopped_early'], 'wall_seconds': elapsed,
                    'steps_per_second': sps}, file, indent=2)
-    print(f"[train] done: {state['iteration'] - start_iteration} iterations, {trained} steps in {elapsed:.1f}s "
-          f"({sps:.1f} steps/sec); checkpoint {ckpt}")
-    summary = {'status': 'early_stop' if state['stopped_early'] else status, 'iterations': state['iteration'],
+    print(f"[train] {'interrupted' if status == 'interrupted' else 'done'}: {state['iteration'] - start_iteration} "
+          f"iterations, {trained} steps in {elapsed:.1f}s ({sps:.1f} steps/sec); checkpoint {ckpt}")
+    summary = {'status': status, 'iterations': state['iteration'],
                'steps': state['steps'], 'wall_seconds': round(elapsed, 1), 'sps': round(sps, 1),
                'checkpoint': str(ckpt) if ckpt.is_file() else None}
     events.emit('train_end', **summary)
@@ -347,5 +371,4 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
 
 
 if __name__ == '__main__':
-    interrupt_on_sigterm()
-    main()
+    sys.exit(cli())

@@ -20,7 +20,8 @@ RUNS=$(for s in $SEEDS; do echo r39-ctl-s$s r39-chp-s$s; done)
 
 train() {
   for run in $RUNS; do
-    [ -f models/goriya/$run/train_summary.json ] && continue
+    grep -qE '"status": "(completed|early_stop)"' models/goriya/$run/train_summary.json 2>/dev/null \
+      && continue     # finished; an interrupted run's summary says "interrupted"
     seed=${run##*-s}; spec=goriya; [[ $run == *chp* ]] && spec=$ARM
     timeout 3h $PY -m triforce.train --specialist "$spec" --load "$SRC" --parallel 10 --threads 5 \
       --iterations $ITERS --steps-per-update 4096 --device cuda --seed $seed --run-id $run \
