@@ -11,7 +11,7 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
   runs 1.8–2.7× faster than the old stack at the same env counts, evaluation/chains ~2× faster than lockstep
   (`docs/performance.md`). The promoted team is the FCEUmm-trained one, unchanged. Round 10 starts the
   experiments on the new stack: first the hardware-core chain baseline (below), then item 8.
-- **Promoted now:** ow-zora / ow-start r24-fairy, ow-octorok r32-nearby-off, ow-moblin r26c-moblin,
+- **Promoted now:** ow-zora r24-fairy, ow-start r38b-rebalance (round 10 §3), ow-octorok r32-nearby-off, ow-moblin r26c-moblin,
   ow-leever-peahat r23-more, boss-aquamentus r30-exit, stalfos-keese-gel r25-skg-plain, goriya r31-block1,
   d2-rope r35-east-curriculum, wallmaster r10 copy. Overworld families use both routes' rooms; D2 rooms have 3 states each.
 - **Lee's order (Nov 5):** first finish the Rust port (plan steps 17–18: `round8.md` "Open", the watch-mode
@@ -260,7 +260,7 @@ the remaining list is deferred until Lee resumes work.
 - [ ] **Audit full D2 key carriage separately from milestone entry (r36 §21; deferred).** Both fresh teams
   reach Dodongo with the requested 7e key 7/80 times, but only 5/80 baseline versus 7/80 bundle arrivals satisfy
   the full-three-key audit. Keep both counters; do not silently count all milestone arrivals as full key carriage.
-- [ ] **Swordless departure from the starting area (Lee, Nov 4).** Lee observes runs where Link leaves without
+- [x] **Swordless departure from the starting area (Lee, Nov 4).** Lee observes runs where Link leaves without
   taking the sword; these runs cannot win and waste training. Reduce how often this happens. His original
   training failed immediately on leaving the starting area swordless; that is an acceptable option, not a
   required implementation. Investigate the start specialist/task and chain behavior, then measure swordless
@@ -270,6 +270,8 @@ the remaining list is deferred until Lee resumes work.
     `start` state fails 2 of 40 sampled episodes (`exit-wrong`), every other ow-start state 0/240. `start` is 1 of
     ow-start's 10 start states. First try after item 8: continue ow-start with `start` as its only start state
     (`--stop-success 0.99`), then 120 full chains per route.
+  - **Done, round 10 §3 (r38):** ow-start retrained on `start` then rebalanced on all its states; swordless
+    departures 10/120 → 0/120 on both routes, full-chain success 3→7 and 6→8 of 120; r38b-rebalance promoted.
 - [x] **Alternate-YAML experiment integrity (round 7 §4):** train/evaluate discarded supplied YAML overrides.
   Fixed and proved through real/spawned CLI paths. Round 6's r20-pt, r21/r22-chainhp and r25/r27-heart treatment
   comparisons are not valid treatment evidence; model/chain measurements remain real. Explicit rejections remain.
