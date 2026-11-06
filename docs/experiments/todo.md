@@ -257,9 +257,11 @@ the remaining list is deferred until Lee resumes work.
   its full-route 0x48 stalls last 2,000 actions. Baseline post-D1 fairy has 58/80 stalls in 0x59; baseline D2
   worst quiet gap is 2,978. Separate convergence/coverage from representation effects before drawing a general
   observation conclusion. One training-seed pair is not seed-robust evidence. No further run started.
-- [ ] **Audit full D2 key carriage separately from milestone entry (r36 §21; deferred).** Both fresh teams
+- [x] **Audit full D2 key carriage separately from milestone entry (r36 §21; deferred).** Both fresh teams
   reach Dodongo with the requested 7e key 7/80 times, but only 5/80 baseline versus 7/80 bundle arrivals satisfy
   the full-three-key audit. Keep both counters; do not silently count all milestone arrivals as full key carriage.
+  - **Done, round 10 §4 (`8456c51`):** chain records carry `keys_in/keys_out`; `chain_summary` reports
+    `arrival_keys`. Promoted team: 72 of 74 Dodongo arrivals carry all three keys (two fairy-route arrivals have two).
 - [x] **Swordless departure from the starting area (Lee, Nov 4).** Lee observes runs where Link leaves without
   taking the sword; these runs cannot win and waste training. Reduce how often this happens. His original
   training failed immediately on leaving the starting area swordless; that is an acceptable option, not a
