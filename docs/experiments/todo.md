@@ -303,8 +303,15 @@ the remaining list is deferred until Lee resumes work.
 
 ### Tried and dropped, or rejected
 
-- ~~Chain-matched hp~~ tested on goriya (within noise) and stalfos-keese-gel (worse); off everywhere. The option
-  (`ram_randomization.chain_hp`) stays for a later retry.
+- ~~Chain-matched hp~~ round 6's goriya/stalfos-keese-gel arms never applied it (round 7 §4). Retested properly on
+  goriya in round 10 §5 (r39, two seeds per arm, 1,200 chains per arm, refreshed profile): no effect (162 vs 161
+  successes, low-health Goriya deaths 52% in both). Off everywhere; the option stays.
+- [ ] **Arrival health is the D2 loss (round 10 §5).** 2:0x5e kills 24/28 arrivals at ≤1 heart and 4/130 above 3;
+  post-D1 main reaches it with 1.64 hearts (fairy 2.39) after ~2.3 hearts of overworld damage spread over
+  0x2b/0x3d/0x4c/0x2a/0x2d, with almost no drops there. Already ruled out: crossing-room damage penalty (round 6),
+  heart objective (round 6), nearby-item shaping (r32), chain-hp Goriya (r39). Untried: a Goriya skill that works
+  without beams (e.g. boomerang stun then melee, demonstrations), and d2-rope collecting the hearts it leaves in
+  2:0x7e/0x4e (0.36/0.39 per visit) by some other means than shaping. Needs Lee's direction before more GPU.
 - ~~Pass-through damage penalty~~ tested twice in round 6 (overworld, d2-rope): no chain gain; dropped (code
   removed). A damage-avoidance idea for later would need a different form.
 - ~~Heart objective~~ (`collect_hearts`) tested on stalfos-keese-gel and d2-rope (round 6 §10): more pickups on

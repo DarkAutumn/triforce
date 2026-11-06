@@ -161,3 +161,54 @@ Current promoted team (with r38b ow-start), 120 runs per segment, seeds 100–21
 
 72 of 74 arrivals carry all three keys; the two short ones are on the fairy route. Full key carriage is not
 where the team loses: reaching Dodongo is (Goriya rooms and 0x3e, §1).
+
+## 5. Goriya rooms: arrival health, and chain-matched hp done right (r39)
+
+**Where the chain loses.** With the current team, D2's Goriya room 2:0x5e kills 38 of 87 arrivals on post-D1 main
+and 27 of 107 on post-D1 fairy, but only 4 of 119 in the D2 segment (which starts at full health). Arrival health
+decides it:
+
+| 2:0x5e deaths by arrival hearts (of 4) | ≤1 | 1–2 | 2–3 | >3 |
+|---|---:|---:|---:|---:|
+| Post-D1 main | 24/28 | 14/42 | 0/12 | 0/5 |
+| Post-D1 fairy | 11/13 | 9/33 | 6/40 | 1/21 |
+| D2 segment | — | 0/2 | 1/13 | 3/104 |
+
+2:0x1e (Goriya) and 2:0x3e/2:0x2e (d2-rope) show the same slope. Post-D1 main leaves 0x37 with 4.00 hearts and
+reaches 2:0x5e with 1.64 on average; the overworld costs ~2.3 hearts spread over 0x2b, 0x3d, 0x4c, 0x2a and 0x2d,
+where almost no hearts drop. The fairy route arrives with 2.39. At full health Link fires sword beams; below it
+he must melee five Goriyas.
+
+**r39.** Round 6's chain-hp Goriya test (r21) never applied its treatment (round 7 §4), so chain-matched hp had
+not been tested on Goriya. `triforce/chain_hp.json` was refreshed from the current team's full and post-D1 chains
+(2:0x5e mean 2.15 hearts, 20% ≤1; the old profile mixed in D2-segment full-health arrivals, 2.66). Arms continue
+r31-block1 for 245 updates, 10 envs, two training seeds each: `ctl` (canonical config) and `chp`
+(`ram_randomization.chain_hp: 0.5`, `specialists/arms/r39-goriya-chainhp/`). Smoke before training: the chain-hp
+eval config starts 1:0x44 at 1.59 hearts (7% full) vs 2.12 (45%) canonical. Runner:
+`scripts/experiments/r39_goriya_chainhp.sh`; outputs `target/r39/`.
+
+Evaluation, 40 episodes per state (success, mean heart change):
+
+| Model | Canonical hp mix | Chain hp (`chain_hp: 1.0`) | 1:0x44 at chain hp | 2:0x5e at chain hp |
+|---|---:|---:|---:|---:|
+| r31-block1 (promoted) | 78.1% −0.72 | 68.5% −0.71 | 51.7% −0.65 | 78.3% −0.81 |
+| ctl s39 | 72.1% −1.10 | 63.3% −1.03 | 60.8% −0.75 | 75.8% −0.91 |
+| ctl s2 | 80.0% −0.80 | 70.6% −0.76 | 64.2% −0.68 | 79.2% −0.81 |
+| chp s39 | 78.1% −0.87 | 67.9% −0.84 | 54.2% −0.87 | 72.5% −0.95 |
+| chp s2 | 72.1% −0.90 | 60.2% −0.91 | 56.7% −0.69 | 69.2% −0.87 |
+
+Chains, 120 runs per segment, seeds 100–219, only goriya swapped (promoted = §3/§4 runs of the current team):
+
+| Model | Full main | Full fairy | Post-D1 main | Post-D1 fairy | D2 | Total | Goriya-room deaths at ≤2 hearts |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| promoted | 7 | 8 | 12 | 18 | 44 | 89/600 | 219/399 (55%) |
+| ctl s39 | 7 | 11 | 5 | 22 | 40 | 85/600 | 219/431 (51%) |
+| ctl s2 | 6 | 12 | 9 | 10 | 39 | 76/600 | 233/438 (53%) |
+| chp s39 | 2 | 13 | 9 | 22 | 36 | 82/600 | 225/413 (54%) |
+| chp s2 | 3 | 10 | 8 | 18 | 41 | 80/600 | 210/418 (50%) |
+
+**No effect; nothing promoted.** chp 162/1200 vs ctl 161/1200; the low-health death rate is 52% in both arms; at
+its own target (chain-hp evaluation) chp is no better (64.1% vs 67.0% pooled). Training at chain health does not
+teach the Goriya model to survive five Goriyas without beams. The lever is arrival health (overworld damage, and
+the hearts d2-rope leaves on the floor in 2:0x7e/0x4e: 0.36 and 0.39 per visit), or a different fighting skill,
+not the reset health distribution. The refreshed `chain_hp.json` stays (no canonical config uses it).
