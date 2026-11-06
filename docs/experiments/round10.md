@@ -43,3 +43,43 @@ Where runs end (rooms with at least one run ending there; outcome counts):
 
 Decision: no fine-tune on hardware states (R10b dropped); the Goriya rooms remain the chain's main loss, as in
 round 7. Next: item 8 (boomerang usable vs masked after D1).
+
+## 2. Item 8 (r37): boomerang usable vs masked after D1
+
+Setup (`scripts/experiments/r37_boomerang.sh`): every family that plays after D1 (ow-octorok, ow-zora,
+ow-leever-peahat, ow-moblin, ow-start, d2-rope, goriya) continues from its promoted model for 245 updates
+(1,003,520 steps), 10 envs, CUDA, training seed 37, in two arms trained side by side: **A** = the canonical yaml
+(boomerang usable), **B** = `specialists/arms/r37-boomerang-off/` (`items: {bombs: false, boomerang: false}`).
+Masking goriya also covers its D1 key room 0x23, where Link already has the boomerang; 0x44 is unaffected (no
+boomerang until it's picked up there). Each arm is evaluated under its own config (20 episodes per start state)
+and runs three post-D1 chain segments of 120 runs on seeds 100–219, the same seeds as §1's promoted baseline.
+
+### Training seed 37
+
+| Segment | Promoted (§1) | A: boomerang on | B: boomerang masked |
+|---|---:|---:|---:|
+| Post-D1 main | 12/120 | 7/120 | 5/120 |
+| Post-D1 fairy | 18/120 | 10/120 | 13/120 |
+| D2 | 44/120 | 37/120 | 47/120 |
+| **Total** | 74/360 | 54/360 | 65/360 |
+
+Evaluation over post-D1 start states only (`scripts/experiments/post_d1_eval.py`; success, mean real heart
+change per episode):
+
+| Specialist | Episodes | Promoted s0 | Promoted s1 | A: on | B: masked |
+|---|---:|---:|---:|---:|---:|
+| ow-octorok | 360 | 97.2% −0.12 | 96.7% −0.14 | 93.6% −0.22 | 97.8% −0.11 |
+| ow-zora | 420 | 96.0% −0.14 | 96.7% −0.14 | 97.1% −0.19 | 94.8% −0.18 |
+| ow-leever-peahat | 240 | 96.2% −0.37 | 97.1% −0.31 | 97.1% −0.21 | 98.3% −0.20 |
+| ow-moblin | 360 | 96.4% −0.20 | 96.1% −0.22 | 97.5% −0.25 | 95.0% −0.21 |
+| ow-start | 60 | 100.0% +0.93 | 100.0% +0.96 | 100.0% +0.93 | 100.0% +0.93 |
+| d2-rope | 420 | 94.0% −0.27 | 93.8% −0.22 | 94.5% −0.28 | 92.1% −0.28 |
+| goriya | 120 | 80.8% −0.80 | 82.5% −0.66 | 80.0% −0.73 | 80.8% −0.88 |
+| **Pooled** | | 95.1% −0.21 | 95.3% −0.19 | 95.1% −0.23 | 94.5% −0.20 |
+
+Reading: on post-D1 states the arms are indistinguishable (pooled 95.1% vs 94.5%, health −0.23 vs −0.20). The
+chain gap comes from single-specialist training drift, not from the boomerang: arm A's ow-octorok regressed
+(93.6% post-D1) and in the chain 0:0x4c ends 35 of arm A's post-D1 main runs (25 deaths, 10 stuck, 286 mean
+steps) against 10 for the promoted team; arm B's ow-moblin exits 0x5c the wrong way 5 times on the fairy route.
+Both continued teams also trail the untouched promoted team in the chains, so a 1M-step continuation on the new
+states is itself a noisy step. A second training seed per arm (seed 2) measures that noise before any conclusion.
