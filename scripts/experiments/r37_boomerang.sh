@@ -3,11 +3,14 @@
 # family from its promoted model with the same budget and seed; then each arm is evaluated under its own config
 # and on three post-D1 chain segments (120 runs each, seeds 100-219 like round 10 §1).
 #
-#   scripts/experiments/r37_boomerang.sh [train|eval|chains|all]
+#   SEED=N scripts/experiments/r37_boomerang.sh [train|eval|chains|all]
+# SEED is the training seed (default 37, run ids r37-boom-on/off; others get a -sN suffix and target/r37/sN).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
-OUT=target/r37
+SEED=${SEED:-37}
+TAG=$([ "$SEED" = 37 ] && echo "" || echo "-s$SEED")
+OUT=target/r37$([ "$SEED" = 37 ] || echo "/s$SEED")
 ARMB=specialists/arms/r37-boomerang-off
 SPECS="ow-octorok ow-zora ow-leever-peahat ow-moblin ow-start d2-rope goriya"
 ITERS=245            # 1,003,520 steps at 4,096 per update (round 7's continuation budget)
@@ -18,10 +21,10 @@ train() {
   for s in $SPECS; do
     src=models/$s/$(cat models/$s/promoted)
     for arm in on off; do
-      [ -f models/$s/r37-boom-$arm/train_summary.json ] && continue
+      [ -f models/$s/r37-boom-$arm$TAG/train_summary.json ] && continue
       spec=$s; [ $arm = off ] && spec=$ARMB/$s.yaml
       timeout 3h $PY -m triforce.train --specialist "$spec" --load "$src" --parallel 10 --threads 10 \
-        --iterations $ITERS --steps-per-update 4096 --device cuda --seed 37 --run-id r37-boom-$arm \
+        --iterations $ITERS --steps-per-update 4096 --device cuda --seed $SEED --run-id r37-boom-$arm$TAG \
         > $OUT/train-$s-$arm.log 2>&1 &
     done
     wait
@@ -33,7 +36,7 @@ evaluate() {
   for s in $SPECS; do
     for arm in on off; do
       spec=$s; [ $arm = off ] && spec=$ARMB/$s.yaml
-      timeout 1h $PY -m triforce.evaluate --specialist "$spec" --checkpoint models/$s/r37-boom-$arm \
+      timeout 1h $PY -m triforce.evaluate --specialist "$spec" --checkpoint models/$s/r37-boom-$arm$TAG \
         --episodes-per-state 20 --parallel 16 --threads 16 --device cpu --seed 0 \
         --output $OUT/eval-$s-$arm.json > $OUT/eval-$s-$arm.log 2>&1
     done
@@ -45,7 +48,7 @@ chains() {
   for arm in on off; do
     args=()
     for s in $SPECS; do
-      args+=(--checkpoint "$s=models/$s/r37-boom-$arm")
+      args+=(--checkpoint "$s=models/$s/r37-boom-$arm$TAG")
       [ $arm = off ] && args+=(--specialist-config "$ARMB/$s.yaml")
     done
     run() { n=$1; shift; timeout 2h $PY -m triforce.cli eval-chain --runs 120 --parallel 20 --device cpu \
