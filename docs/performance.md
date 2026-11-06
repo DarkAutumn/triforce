@@ -213,3 +213,8 @@ In order of size, for ow-zora p16:
    minibatch would shave part of it.
 5. **Evaluation on CPU:** `port_gate.sh` passes `--device cpu` and `scripts/train_round.py`'s evaluations use
    the default CPU; `--device cuda` takes the gate from 304 s to 179 s with the same results in this measurement.
+6. **Reset-bound specialists.** The round-10 r37 runs (10 envs each, two runs sharing the machine) trained
+   ow-octorok/ow-zora/ow-leever-peahat/ow-moblin at 850–1,650 steps/s but ow-start at 430–470: its episodes are a
+   handful of steps, so state loads, RNG/spawn randomization and the frames until Link is controllable dominate.
+   Profile an ow-start run before optimizing (state decode + `restore`, `gain_control` frames, observation
+   rebuild on reset).
