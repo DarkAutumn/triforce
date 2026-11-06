@@ -18,7 +18,7 @@ train() {
   for s in $SPECS; do
     src=models/$s/$(cat models/$s/promoted)
     for arm in on off; do
-      [ -f models/$s/r37-boom-$arm/ckpt.pt ] && continue
+      [ -f models/$s/r37-boom-$arm/train_summary.json ] && continue
       spec=$s; [ $arm = off ] && spec=$ARMB/$s.yaml
       timeout 3h $PY -m triforce.train --specialist "$spec" --load "$src" --parallel 10 --threads 10 \
         --iterations $ITERS --steps-per-update 4096 --device cuda --seed 37 --run-id r37-boom-$arm \
