@@ -1034,11 +1034,14 @@ impl Ppu {
     // second prefetched tile's attributes.
     #[inline(always)]
     fn reload_bg_shifters(&mut self) {
-        self.prev_palette = self.curr_palette;
-        self.curr_palette = self.next_palette;
-
+        // The tile bytes are read before the palette latches are written: the compiler loads the
+        // neighbouring fields in one wide read, which stalls on store forwarding if it follows the
+        // two narrow palette stores.
         self.tile_shift_lo |= u16::from(self.tile_lo);
         self.tile_shift_hi |= u16::from(self.tile_hi);
+
+        self.prev_palette = self.curr_palette;
+        self.curr_palette = self.next_palette;
     }
 
     #[inline]

@@ -64,13 +64,19 @@ enum Cmd {
         cmd: CorpusCmd,
     },
     /// zcore frames per second on one core, render on and off: random input on the start screen, or with
-    /// `--movie` the gameplay of corpus movies (base played untimed first).
+    /// `--movie`/`--agent` the gameplay of corpus movies (base played untimed first).
     Bench {
         #[arg(long, default_value_t = 20_000)]
         frames: usize,
         /// Corpus movie names to replay instead (e.g. chain-milestone1-137); repeatable.
         #[arg(long = "movie")]
         movies: Vec<String>,
+        /// Replay every corpus movie tagged `agent` (recorded chain runs of the trained models).
+        #[arg(long)]
+        agent: bool,
+        /// With movies: replay at most this many frames of each (0: all).
+        #[arg(long, default_value_t = 0)]
+        max_frames: usize,
         /// Only this render mode ("on" or "off"); default both.
         #[arg(long)]
         render: Option<String>,
@@ -147,7 +153,13 @@ fn run(cli: Cli) -> Result<i32> {
             CorpusCmd::Sync => corpus::sync(),
             CorpusCmd::Check => corpus::check(&rom),
         },
-        Cmd::Bench { frames, movies, render } => bench(&rom, frames, &movies, render.as_deref()),
+        Cmd::Bench { frames, mut movies, agent, max_frames, render } => {
+            if agent {
+                movies.extend(corpus::Manifest::load()?.movie.into_iter()
+                    .filter(|e| e.tags.iter().any(|t| t == "agent")).map(|e| e.name));
+            }
+            bench(&rom, frames, &movies, max_frames, render.as_deref())
+        }
     }
 }
 
@@ -275,8 +287,8 @@ fn trace(rom: &rom::RomInfo, movie_path: &Path, frame: usize, count: usize) -> R
 }
 
 /// The same seeded random input from the end of `power_on_to_start`, once drawing every frame and
-/// once drawing none.
-fn bench(rom: &rom::RomInfo, frames: usize, movies: &[String], only: Option<&str>) -> Result<i32> {
+/// once drawing none; or the given corpus movies (at most `max_frames` of each, 0: all).
+fn bench(rom: &rom::RomInfo, frames: usize, movies: &[String], max_frames: usize, only: Option<&str>) -> Result<i32> {
     let modes: Vec<bool> = match only {
         Some("on") => vec![true],
         Some("off") => vec![false],
@@ -303,17 +315,18 @@ fn bench(rom: &rom::RomInfo, frames: usize, movies: &[String], only: Option<&str
         for name in movies {
             let movie = Movie::load(&corpus::movie_path(name))?;
             let mut b = zcore::Zcore::open(&rom.bytes)?;
+            b.set_render(render); // the untimed base replay too, so a profile of the run is one mode
             replay::play_base(&mut b, &movie)?;
-            b.set_render(render);
             let index = movie.poke_index();
             let mut next = 0usize;
+            let n = if max_frames == 0 { movie.inputs.len() } else { movie.inputs.len().min(max_frames) };
             let t = std::time::Instant::now();
-            for k in 0..movie.inputs.len() {
+            for k in 0..n {
                 replay::apply_pokes(&mut b, &movie, &index, &mut next, k);
                 b.run_frame(movie.inputs[k]);
             }
             seconds += t.elapsed().as_secs_f64();
-            total += movie.inputs.len();
+            total += n;
         }
         println!("zcore: {:.0} frames/s (render {mode}, {} movies, {total} frames, 1 core)", total as f64 / seconds,
                  movies.len());
