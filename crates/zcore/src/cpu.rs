@@ -647,11 +647,11 @@ impl Bus {
         val
     }
 
-    /// Fetch opcode operand based on addressing mode.
+    /// Fetch opcode operand based on addressing mode (a constant in each [`Bus::exec`], so this folds away).
     #[inline(always)]
     #[must_use]
-    fn fetch_operand(&mut self) -> u16 {
-        match self.cpu.addr_mode {
+    fn fetch_operand(&mut self, mode: AddrMode) -> u16 {
+        match mode {
             AddrMode::ACC | AddrMode::IMP => self.acc_imp(),
             AddrMode::IMM | AddrMode::REL | AddrMode::ZP0 => self.imm_rel_zp(),
             AddrMode::ZPX => self.zpx(),
@@ -777,10 +777,7 @@ impl Bus {
 
         let pc = self.cpu.pc;
         let opcode = self.fetch_byte(); // Cycle 1
-        let op = Cpu::OPS[usize::from(opcode)];
-        self.cpu.addr_mode = op.addr_mode();
-        self.cpu.operand = self.fetch_operand();
-        op.run(self);
+        Cpu::EXEC[usize::from(opcode)](self);
 
         if self
             .cpu
@@ -795,6 +792,17 @@ impl Bus {
         if opcode == Cpu::JMP_ABS && self.cpu.pc == pc {
             self.skip_idle_loop(pc);
         }
+    }
+
+    /// One instruction after its opcode fetch, specialised per opcode: the addressing mode and the operation
+    /// are constants here, so the operand fetch is direct and the operation's call can be inlined, leaving
+    /// [`Cpu::EXEC`]'s one indirect call per instruction.
+    #[inline(always)]
+    pub(crate) fn exec<const OP: u8>(&mut self) {
+        let op = const { Cpu::OPS[OP as usize] };
+        self.cpu.addr_mode = op.addr_mode();
+        self.cpu.operand = self.fetch_operand(op.addr_mode());
+        op.run(self);
     }
 
     /// A `JMP` to itself in ROM (Zelda's wait for the next NMI, ~90% of a gameplay frame's
