@@ -322,11 +322,13 @@ def test_game_grid_holds_a_result_before_the_next_run(states_dir, models_dir, mo
     monkeypatch.setattr(play_grid, 'RESULT_PAUSE', 0.5)
     monkeypatch.setattr(play_grid, 'ChainPool', functools.partial(play_grid.ChainPool, max_steps=3))
     grid = GameGrid(1, 'cpu', fps=0, models_dir=models_dir, states_dir=states_dir)
-    stamped = []
+    stamped, frames = [], []      # (time, message); (time, latest frame number) sampled before each poll
     try:
         grid.start()
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline and sum(m['event'] == 'end' for _, m in stamped) < 2:
+            latest = grid.frame(0, 0)
+            frames.append((time.monotonic(), latest[0] if latest else 0))
             stamped += [(time.monotonic(), m) for m in grid.poll_status()]
             time.sleep(0.005)
     finally:
@@ -341,6 +343,11 @@ def test_game_grid_holds_a_result_before_the_next_run(states_dir, models_dir, mo
     assert events[first_end + 1:first_end + 3] == ['start', 'room']     # the next run's room after its start
     assert stamped[first_end + 2][1]['rooms'] == 1                       # counted from the new run's first room
     assert stamped[first_end + 1][0] - ends[0][0] >= 0.4                 # the result stayed up
+    # ... on the finished run's last frame: nothing new publishes while it shows, then the next run plays.
+    seen_end, next_start = ends[0][0], stamped[first_end + 1][0]
+    during = {n for t, n in frames if seen_end < t < next_start - 0.05}
+    assert len(during) == 1, during
+    assert max(n for t, n in frames if t > next_start) > during.pop()
 
 
 def test_game_grid_stall_budget_flags_the_room_then_ends_the_run(states_dir, models_dir):

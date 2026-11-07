@@ -130,7 +130,8 @@ impl PyEvalTask {
 /// index here. A specialist in `missing` (name -> reason, e.g. no promoted model) ends a run that needs it as
 /// `error`; any other unlisted specialist does too. `stall_steps` (the watch player's stall budget, off by
 /// default): room events carry `stalled` once a room has gone that many actions without damage dealt or taken,
-/// and the run ends `stuck` at twice as many.
+/// and the run ends `stuck` at twice as many. `hold_finished_frame`: a finished run keeps its env's last frame
+/// published (the next run doesn't publish) until `EnvPool.set_hold(env, False)`.
 #[pyclass(module = "triforce._native", name = "ChainTask", frozen)]
 pub struct PyChainTask {
     configs: Vec<Arc<SpecialistConfig>>,
@@ -140,6 +141,7 @@ pub struct PyChainTask {
     start_from: Option<String>,
     max_steps: u64,
     stall_steps: Option<u64>,
+    hold_finished_frame: bool,
     missing: HashMap<String, String>,
     states_dir: Option<PathBuf>,
 }
@@ -148,7 +150,7 @@ pub struct PyChainTask {
 impl PyChainTask {
     #[new]
     #[pyo3(signature = (configs, route, seeds, stop_at=None, start_from=None, max_steps=50000, missing=None,
-                        states_dir=None, stall_steps=None))]
+                        states_dir=None, stall_steps=None, hold_finished_frame=false))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -161,6 +163,7 @@ impl PyChainTask {
         missing: Option<HashMap<String, String>>,
         states_dir: Option<PathBuf>,
         stall_steps: Option<u64>,
+        hold_finished_frame: bool,
     ) -> PyResult<Self> {
         let configs = configs
             .iter()
@@ -185,6 +188,7 @@ impl PyChainTask {
             start_from,
             max_steps,
             stall_steps,
+            hold_finished_frame,
             missing: missing.unwrap_or_default(),
             states_dir,
         })
@@ -321,6 +325,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             chain.max_steps = t.max_steps;
             chain.stall_steps = t.stall_steps;
             env.missing_mut().extend(t.missing.clone());
+            env.set_hold_finished(t.hold_finished_frame);
             Ok(TaskEnv::Chain(env))
         };
         let pool = py.detach(|| Pool::new(opts, make)).map_err(pool_err)?;
@@ -712,6 +717,11 @@ impl PyEnvPool {
     /// Renders env `env`'s frames from its next emulated frame on (or stops).
     fn set_render(&self, env: usize, on: bool) -> PyResult<()> {
         self.pool.set_render(env, on).map_err(pool_err)
+    }
+
+    /// Holds env `env`'s latest frame (no new frames publish) until released with `on=False`.
+    fn set_hold(&self, env: usize, on: bool) -> PyResult<()> {
+        self.pool.set_hold(env, on).map_err(pool_err)
     }
 
     /// Paces env `env` at `fps` real frames per second (`<= 0`: unthrottled).

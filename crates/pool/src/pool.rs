@@ -486,6 +486,12 @@ impl<E: PoolEnv> Pool<E> {
         Ok(())
     }
 
+    /// Holds env `env`'s latest published frame (no new frames publish) until released (`on = false`).
+    pub fn set_hold(&self, env: usize, on: bool) -> Res<(), E> {
+        self.control(env)?.set_hold(on);
+        Ok(())
+    }
+
     /// Paces env `env` at `fps` real frames per second from its next frame (`<= 0`: unthrottled). An env paces
     /// alone only if it has its worker thread to itself (`threads == num_envs`); envs sharing a thread share its
     /// time.

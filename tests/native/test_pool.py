@@ -135,6 +135,33 @@ def test_chain_task_policies_and_room_events(states_dir):
         native.ChainTask([], 'no-such-route', seeds=[0])
 
 
+@pytest.mark.parametrize('hold', [True, False])
+def test_a_finished_chain_run_can_hold_its_last_frame(states_dir, hold):
+    """hold_finished_frame: after a run ends, the next run's reset publishes nothing (the screen keeps the finished
+    run's last frame) until set_hold(env, False).  Without it the reset's frames publish at once."""
+    task = native.ChainTask(['ow-start'], 'milestone1', seeds=[0, 1], max_steps=3, states_dir=str(states_dir),
+                            hold_finished_frame=hold)
+    with native.EnvPool(task, num_envs=1, seed=0) as pool:
+        pool.set_render(0, True)
+        buffers = pool.make_buffers()
+        pool.recv(buffers)
+        first_reset = pool.frame_counter(0)
+        assert first_reset > 0
+        rng = np.random.default_rng(0)
+        while not (runs := [e for e in pool.poll_events() if e['type'] == 'run']):
+            pool.send(np.array([0]), legal_actions(buffers['obs']['action_mask'][:1], rng))
+            pool.recv(buffers)
+        last_frame = first_reset + runs[0]['result']['frames']
+        if hold:
+            assert pool.frame_counter(0) == last_frame          # the next run reset already, unseen
+            pool.set_hold(0, False)
+            pool.send(np.array([0]), legal_actions(buffers['obs']['action_mask'][:1], rng))
+            pool.recv(buffers)
+            assert pool.frame_counter(0) > last_frame
+        else:
+            assert pool.frame_counter(0) == last_frame + first_reset    # the reset's frames replaced it
+
+
 def test_rendering_toggles_per_env(states_dir, tmp_path):
     with native.EnvPool(train_task(states_dir, tmp_path, max_steps=50), num_envs=2, threads=2, seed=0) as pool:
         buffers = pool.make_buffers()

@@ -375,6 +375,8 @@ where
 /// (`Runner.run(route, seed)`); each row's `policy` is the acting specialist's index in `policies`. A run ends
 /// with [`ZeldaEvent::Run`] (terminated, reward 0); a specialist listed in `missing` ends it as `error` with its
 /// reason (e.g. no promoted model). Rows carry no interrupt code. The env is finished when the seeds run out.
+/// With [`ChainRunEnv::set_hold_finished`] a finished run also holds the env's published frame on its last screen
+/// (the next run's reset and first frames don't publish) until the caller releases it with `Pool::set_hold`.
 pub struct ChainRunEnv<N: Nes, St: StateStore<N::State>> {
     chain: PoolChainEnv<N, St>,
     control: EnvControl,
@@ -382,6 +384,7 @@ pub struct ChainRunEnv<N: Nes, St: StateStore<N::State>> {
     policies: Vec<Arc<str>>,
     missing: HashMap<String, String>,
     rooms: RoomWatch,
+    hold_finished: bool,
 }
 
 impl<N, St> ChainRunEnv<N, St>
@@ -414,6 +417,7 @@ where
                 on: true,
                 last: None,
             },
+            hold_finished: false,
         }
     }
 
@@ -443,11 +447,19 @@ where
         self.rooms.on = on;
     }
 
+    /// Hold the published frame on each finished run's last screen (`play_grid`'s result pause).
+    pub fn set_hold_finished(&mut self, on: bool) {
+        self.hold_finished = on;
+    }
+
     fn frames(&self) -> u64 {
         self.chain.result().map_or(0, |r| r.frames)
     }
 
     fn end_run(&mut self, result: RunResult, events: &mut Vec<ZeldaEvent>) {
+        if self.hold_finished {
+            self.control.set_hold(true);
+        }
         events.push(ZeldaEvent::Run(Box::new(result)));
         end_recording(self.chain.session_mut().nes_mut(), events);
     }

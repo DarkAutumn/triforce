@@ -164,12 +164,14 @@ class ChainPool:
     """An ``EnvPool`` of chain runs of one route (one run per seed, shared by ``num_envs`` envs) and the policies
     acting in it.  ``run()`` plays every seed asynchronously; watchers drive ``recv`` / ``actions`` / ``send``
     themselves.  ``stall_steps`` (watch player only; None = off): room events carry ``stalled`` after that many
-    actions in a room without damage dealt or taken, and the run ends ``stuck`` at twice as many."""
+    actions in a room without damage dealt or taken, and the run ends ``stuck`` at twice as many.
+    ``hold_finished_frame`` (watch player): a finished run's last frame stays published until
+    ``pool.set_hold(env, False)``."""
 
     def __init__(self, route: Route, seeds: Sequence[int], policies: Policies, num_envs: int = 1,
                  threads: Optional[int] = None, seed: int = 0, fps: float = 0.0, deterministic: bool = False,
                  max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: bool = False,
-                 stall_steps: Optional[int] = None):
+                 stall_steps: Optional[int] = None, hold_finished_frame: bool = False):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.route = route
         self.policies = policies
@@ -177,7 +179,8 @@ class ChainPool:
         start_from = None if route.start_state == 'start' else route.start_state
         task = _native.ChainTask(policies.configs, route.name, [int(s) for s in seeds], stop_at=route.terminal,
                                  start_from=start_from, max_steps=max_steps, missing=policies.missing,
-                                 states_dir=None if states_dir is None else str(states_dir), stall_steps=stall_steps)
+                                 states_dir=None if states_dir is None else str(states_dir), stall_steps=stall_steps,
+                                 hold_finished_frame=hold_finished_frame)
         num_envs = max(1, min(num_envs, len(seeds)))
         self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
         self.buffers = self.pool.make_buffers()

@@ -1,5 +1,5 @@
-//! Per-env controls the pool shares with its env: the render flag, frame publishing (double buffer + counter),
-//! frame pacing and the record flag.
+//! Per-env controls the pool shares with its env: the render flag, frame publishing (double buffer + counter,
+//! optionally held on its latest frame), frame pacing and the record flag.
 
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -58,6 +58,8 @@ struct Shared {
     frame_bytes: usize,
     render: AtomicBool,
     record: AtomicBool,
+    /// Publishing is suspended: the front keeps the latest frame (a finished run's last screen).
+    hold: AtomicBool,
     fps: AtomicU64,
     pacer: Mutex<FramePacer>,
     /// The buffer the env renders into; swapped with the front on publish (allocated on first use).
@@ -85,6 +87,7 @@ impl EnvControl {
                 frame_bytes,
                 render: AtomicBool::new(false),
                 record: AtomicBool::new(false),
+                hold: AtomicBool::new(false),
                 fps: AtomicU64::new(fps.to_bits()),
                 pacer: Mutex::new(FramePacer::new(fps)),
                 back: Mutex::new(Vec::new()),
@@ -140,15 +143,27 @@ impl EnvControl {
         self.shared.fps.store(fps.to_bits(), Ordering::Relaxed);
     }
 
+    /// Holds the latest published frame (`publish` does nothing) until released.
+    pub fn set_hold(&self, on: bool) {
+        self.shared.hold.store(on, Ordering::Release);
+    }
+
+    pub fn holding(&self) -> bool {
+        self.shared.hold.load(Ordering::Acquire)
+    }
+
     /// The pool is shutting down: pacing no longer sleeps, and a long-running env may stop early.
     pub fn stopping(&self) -> bool {
         self.stop.load(Ordering::Relaxed)
     }
 
     /// Renders into the back buffer with `fill` (which returns false if it had no frame) and makes it the
-    /// latest frame. Returns whether a frame was published.
+    /// latest frame. Returns whether a frame was published (never while the frame is held).
     pub fn publish(&self, fill: impl FnOnce(&mut [u8]) -> bool) -> bool {
         let shared = &*self.shared;
+        if self.holding() {
+            return false;
+        }
         let mut back = shared.back.lock();
         back.resize(shared.frame_bytes, 0);
         if !fill(&mut back) {
@@ -266,5 +281,22 @@ mod tests {
         assert_eq!(c.frame_counter(), 2);
         assert_eq!(c.frame(1, &mut out), Some(2));
         assert_eq!(out, [5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn a_held_frame_stays_until_released() {
+        let c = EnvControl::standalone(0, 0.0, 1);
+        let mut out = [0u8; 1];
+        let frame = |v: u8| move |b: &mut [u8]| {
+            b[0] = v;
+            true
+        };
+        c.publish(frame(1));
+        c.set_hold(true);
+        assert!(!c.publish(frame(2)));
+        assert_eq!((c.frame(0, &mut out), out), (Some(1), [1]));
+        c.set_hold(false);
+        assert!(c.publish(frame(3)));
+        assert_eq!((c.frame(1, &mut out), out), (Some(2), [3]));
     }
 }

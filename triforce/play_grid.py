@@ -9,7 +9,8 @@ through one status queue as dicts with ``game`` and ``event`` (``start``, ``room
 carries ``rooms``, the rooms entered so far in the run (a change of the observation's room id: level, cave, room),
 and ``stalled``: with ``stall_steps`` set, the room has gone that many actions without damage dealt or taken (the
 run ends ``stuck`` at twice as many).
-After a run ends its game holds its result for ``RESULT_PAUSE`` seconds before the next seed plays (seeds are handed
+After a run ends its game holds its result for ``RESULT_PAUSE`` seconds, showing the run's last frame (the next
+run's reset publishes nothing until then), before the next seed plays (seeds are handed
 out in order to whichever game is free, so ``start`` carries no seed; ``end`` does).  A setup error (an error before
 the first step, e.g. a missing promoted model for the route's first room) stops the game instead of retrying in a
 loop.
@@ -174,7 +175,7 @@ class GameGrid:
                 return
             seeds = range(self.games * SEEDS_PER_GAME)
             chain = ChainPool(route, seeds, policies, num_envs=self.games, threads=self.games, fps=self.fps,
-                              states_dir=self.states_dir, stall_steps=self.stall_steps)
+                              states_dir=self.states_dir, stall_steps=self.stall_steps, hold_finished_frame=True)
         except Exception as err:  # pylint: disable=broad-exception-caught
             self._crash(err)
             return
@@ -260,6 +261,7 @@ class GameGrid:
         actions = chain.inference.actions(np.asarray(due), obs, policy, job, step)
         for env in due:
             hold = held.pop(env)
+            chain.pool.set_hold(env, False)         # the next run's frames show from its first action on
             self._status.put({'game': env, 'event': 'start', 'seed': None})
             for message in hold.messages:
                 self._status.put(message)
