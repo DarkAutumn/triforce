@@ -46,6 +46,8 @@ def test_parse_args_grid_scale_and_device():
     assert (args.grid, args.scale, args.device, args.fps, args.games) == ((4, 3), 2, 'cuda', play_grid.NES_FPS, 12)
     args = play_zelda.parse_args(['3x2', '--scale', '2', '--cpu', '--games', '64'])
     assert (args.grid, args.scale, args.device, args.games) == ((3, 2), 2, 'cpu', 64)
+    assert play_zelda.parse_args(['--fps', '60']).fps == play_grid.NES_FPS      # 60 always means 60.1
+    assert play_zelda.parse_args(['--fps', '70']).fps == 70
     assert play_zelda.parse_grid('8X12') == (8, 12)
     for bad in ('0x3', 'x3', '4*3', ''):
         with pytest.raises(argparse.ArgumentTypeError):

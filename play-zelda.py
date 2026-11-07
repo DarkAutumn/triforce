@@ -78,7 +78,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help=f"integer pixel scale of each game (default {DEFAULT_SCALE})")
     parser.add_argument('--cpu', action='store_true', help="run the models on the CPU instead of CUDA")
     parser.add_argument('--fps', type=float, default=NES_FPS,
-                        help=f"frame-rate cap per game (default the NES's {NES_FPS}; 0 = uncapped; keys u and +/-)")
+                        help=f"frame-rate cap per game (default the NES's {NES_FPS}, which 60 also means; "
+                             "0 = uncapped; keys u and +/-)")
     parser.add_argument('--models-dir', default=None, help="models root (default $TRIFORCE_MODELS_DIR or models/)")
     parser.add_argument('--benchmark', type=float, default=None, metavar='SECONDS',
                         help="once every game is running, measure the on-screen frame rate this long, print it "
@@ -101,6 +102,8 @@ def parse_args(argv=None, parser: Optional[argparse.ArgumentParser] = None) -> a
     if args.games < cells:
         parser.error(f"--games must be at least the {cells} cells of the grid, got {args.games}")
     args.device = 'cpu' if args.cpu else 'cuda'
+    if args.fps == 60:
+        args.fps = NES_FPS          # 60 always means the NES's 60.0988
     return args
 
 
