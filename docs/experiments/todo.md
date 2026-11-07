@@ -44,6 +44,11 @@ time end to end), not just the emulator. Iterate until further gains aren't wort
 because the real runs will be 6–12M steps per family (the old monolithic model took ~30M). Log it in
 `docs/performance.md`.
 
+**Exit criterion (Lee, Nov 7): the right `--parallel` for training.** Find where adding envs stops paying, from
+two sides: (1) pure throughput (steps/s against env count); (2) convergence: more envs can waste steps, so
+measure the steps and the wall time to reach a working level (around 90% success, not 99%) against env count.
+Recommend a setting (per specialist if it differs).
+
 ### Then: heart experiments (Lee, Nov 7; a series)
 
 Goal: Link picks up dropped items, hearts above all, far more than the current models do. Lee's original models
