@@ -579,10 +579,8 @@ impl Ppu {
         let pos = u32::from(self.scanline) * LINE + u32::from(self.cycle);
         let dots_to = |line: u16, dot: u16| {
             let target = u32::from(line) * LINE + u32::from(dot);
-            match (target + frame - pos) % frame {
-                0 => frame,
-                d => d,
-            }
+            // (target - pos) mod frame, in 1..=frame: both are below `frame`.
+            if target > pos { target - pos } else { target + frame - pos }
         };
         let vblank_start = dots_to(self.vblank_scanline, cycle::VBLANK);
         let vblank_end = dots_to(self.prerender_scanline, cycle::VBLANK);
