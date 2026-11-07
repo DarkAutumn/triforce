@@ -33,6 +33,18 @@ impl Zcore {
         self.nes.poke(addr, value);
     }
 
+    /// The machine as a `TFZSTATE` file.
+    pub fn save_state(&self) -> Vec<u8> {
+        zcore::state_file::encode(self.nes.rom(), &self.nes.snapshot(), 0)
+    }
+
+    /// Resume a [`Zcore::save_state`] file.
+    pub fn load_state(&mut self, bytes: &[u8]) -> Result<()> {
+        let file = zcore::state_file::decode(self.nes.rom(), bytes).map_err(|e| anyhow::anyhow!("{e}"))?;
+        self.nes.restore(&file.machine);
+        Ok(())
+    }
+
     pub fn ram(&self) -> &[u8; 0x800] {
         self.nes.ram()
     }

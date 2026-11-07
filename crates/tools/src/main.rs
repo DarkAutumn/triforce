@@ -64,7 +64,7 @@ enum Cmd {
         cmd: CorpusCmd,
     },
     /// zcore frames per second on one core, render on and off: random input on the start screen, or with
-    /// `--movie`/`--agent` the gameplay of corpus movies (base played untimed first).
+    /// `--movie`/`--agent` timed windows spread evenly over each corpus movie's whole length.
     Bench {
         #[arg(long, default_value_t = 20_000)]
         frames: usize,
@@ -74,9 +74,19 @@ enum Cmd {
         /// Replay every corpus movie tagged `agent` (recorded chain runs of the trained models).
         #[arg(long)]
         agent: bool,
-        /// With movies: replay at most this many frames of each (0: all).
-        #[arg(long, default_value_t = 0)]
-        max_frames: usize,
+        /// Replay every `*.json` recording in this directory (`scripts/record_bench_runs.py`: chain runs of the
+        /// current team recorded on the current core, which the corpus agent movies predate).
+        #[arg(long)]
+        recordings: Option<PathBuf>,
+        /// With movies: timed windows per movie, evenly spaced from its first to its last frame.
+        #[arg(long, default_value_t = 10)]
+        windows: usize,
+        /// With movies: frames per timed window.
+        #[arg(long, default_value_t = 500)]
+        window_frames: usize,
+        /// Window-start states, made by an untimed replay the first time (keyed by the state format).
+        #[arg(long, default_value = "target/bench-cache")]
+        cache: PathBuf,
         /// Only this render mode ("on" or "off"); default both.
         #[arg(long)]
         render: Option<String>,
@@ -153,12 +163,22 @@ fn run(cli: Cli) -> Result<i32> {
             CorpusCmd::Sync => corpus::sync(),
             CorpusCmd::Check => corpus::check(&rom),
         },
-        Cmd::Bench { frames, mut movies, agent, max_frames, render } => {
+        Cmd::Bench { frames, mut movies, agent, recordings, windows, window_frames, cache, render } => {
             if agent {
                 movies.extend(corpus::Manifest::load()?.movie.into_iter()
                     .filter(|e| e.tags.iter().any(|t| t == "agent")).map(|e| e.name));
             }
-            bench(&rom, frames, &movies, max_frames, render.as_deref())
+            let mut runs = movies.iter().map(|m| BenchRun::from_movie(m)).collect::<Result<Vec<_>>>()?;
+            if let Some(dir) = recordings {
+                let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir)?.filter_map(|e| e.ok().map(|e| e.path()))
+                    .filter(|p| p.extension().is_some_and(|e| e == "json")).collect();
+                paths.sort();
+                for p in paths {
+                    runs.push(BenchRun::from_recording(&p)?);
+                }
+            }
+            let w = Windows { count: windows.max(1), frames: window_frames.max(1), cache };
+            bench(&rom, frames, &runs, &w, render.as_deref())
         }
     }
 }
@@ -286,9 +306,115 @@ fn trace(rom: &rom::RomInfo, movie_path: &Path, frame: usize, count: usize) -> R
     Ok(0)
 }
 
+/// Timed windows of a movie bench.
+struct Windows {
+    count: usize,
+    frames: usize,
+    cache: PathBuf,
+}
+
+impl Windows {
+    /// First frames of the windows of a movie `len` frames long: evenly spaced, the last ending on its last frame.
+    fn starts(&self, len: usize) -> Vec<usize> {
+        if len <= self.count * self.frames {
+            return vec![0];
+        }
+        let span = len - self.frames;
+        (0..self.count).map(|i| if self.count == 1 { 0 } else { i * span / (self.count - 1) }).collect()
+    }
+}
+
+/// A gameplay run to bench: where it starts, one controller byte per frame, and the pokes made before frame k.
+struct BenchRun {
+    name: String,
+    origin: Origin,
+    inputs: Vec<u8>,
+    /// `(frame, addr, value)`, frames non-decreasing: written before input `frame` runs.
+    pokes: Vec<(usize, u16, u8)>,
+}
+
+enum Origin {
+    /// A corpus movie: power on and play its base movie.
+    Base(Movie),
+    /// A recording (`scripts/record_bench_runs.py`): a TFZSTATE start state.
+    State(Vec<u8>),
+}
+
+impl BenchRun {
+    fn from_movie(name: &str) -> Result<BenchRun> {
+        let movie = Movie::load(&corpus::movie_path(name))?;
+        let pokes = movie.pokes.iter().map(|p| (p.frame as usize, p.addr, p.value)).collect();
+        let inputs = movie.inputs.clone();
+        Ok(BenchRun { name: name.to_owned(), origin: Origin::Base(movie), inputs, pokes })
+    }
+
+    /// A recording: JSON with `origin` (state file path), `buttons` and `pokes` (`[frame, addr, value]`).
+    fn from_recording(path: &Path) -> Result<BenchRun> {
+        let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
+        let origin = std::fs::read(v["origin"].as_str().context("recording origin")?)?;
+        let inputs = v["buttons"].as_array().context("buttons")?.iter()
+            .map(|b| b.as_u64().map(|b| b as u8).context("button byte")).collect::<Result<_>>()?;
+        let pokes = v["pokes"].as_array().context("pokes")?.iter().map(|p| -> Result<_> {
+            let p = p.as_array().context("poke")?;
+            let n = |i: usize| p.get(i).and_then(serde_json::Value::as_u64).context("poke field");
+            Ok((n(0)? as usize, n(1)? as u16, n(2)? as u8))
+        }).collect::<Result<_>>()?;
+        let name = path.file_stem().context("recording name")?.to_string_lossy().into_owned();
+        Ok(BenchRun { name, origin: Origin::State(origin), inputs, pokes })
+    }
+
+    /// A machine at the run's frame 0.
+    fn start(&self, rom: &rom::RomInfo) -> Result<zcore::Zcore> {
+        let mut b = zcore::Zcore::open(&rom.bytes)?;
+        b.set_render(false);
+        match &self.origin {
+            Origin::Base(movie) => replay::play_base(&mut b, movie)?,
+            Origin::State(bytes) => b.load_state(bytes)?,
+        }
+        Ok(b)
+    }
+
+    /// Runs frames `from..to`, making the pokes due before each.
+    fn play(&self, b: &mut zcore::Zcore, from: usize, to: usize) {
+        let mut p = self.pokes.partition_point(|&(f, _, _)| f < from);
+        for k in from..to {
+            while p < self.pokes.len() && self.pokes[p].0 == k {
+                b.poke(self.pokes[p].1, self.pokes[p].2);
+                p += 1;
+            }
+            b.run_frame(self.inputs[k]);
+        }
+    }
+}
+
+/// The state at `start` of `run`, from the cache or else by replaying every window start of the run once and
+/// caching them.
+fn window_state(rom: &rom::RomInfo, run: &BenchRun, starts: &[usize], start: usize, w: &Windows)
+    -> Result<Vec<u8>> {
+    // Keyed by the state format and the machine's layout, so a cached start never decodes into another build's.
+    let key = format!("v{}-{}", ::zcore::state_file::VERSION, std::mem::size_of::<::zcore::MachineState>());
+    let path = |s: usize| w.cache.join(format!("{key}-{}-{s}.tfzstate", run.name));
+    if let Ok(bytes) = std::fs::read(path(start)) {
+        let mut probe = zcore::Zcore::open(&rom.bytes)?;
+        if probe.load_state(&bytes).is_ok() {
+            return Ok(bytes);
+        }
+    }
+    std::fs::create_dir_all(&w.cache)?;
+    let mut b = run.start(rom)?;
+    let mut k = 0usize;
+    for &s in starts {
+        run.play(&mut b, k, s);
+        k = s;
+        std::fs::write(path(s), b.save_state())?;
+    }
+    Ok(std::fs::read(path(start))?)
+}
+
 /// The same seeded random input from the end of `power_on_to_start`, once drawing every frame and
-/// once drawing none; or the given corpus movies (at most `max_frames` of each, 0: all).
-fn bench(rom: &rom::RomInfo, frames: usize, movies: &[String], max_frames: usize, only: Option<&str>) -> Result<i32> {
+/// once drawing none; or timed windows spread over the given runs, reported overall and by the level
+/// (overworld 0, dungeons 1-9) at each window's start.
+fn bench(rom: &rom::RomInfo, frames: usize, runs: &[BenchRun], w: &Windows, only: Option<&str>) -> Result<i32> {
     let modes: Vec<bool> = match only {
         Some("on") => vec![true],
         Some("off") => vec![false],
@@ -297,7 +423,7 @@ fn bench(rom: &rom::RomInfo, frames: usize, movies: &[String], max_frames: usize
     };
     for render in modes {
         let mode = if render { "on" } else { "off" };
-        if movies.is_empty() {
+        if runs.is_empty() {
             let movie = Movie::load(&corpus::movie_path("power_on_to_start"))?;
             let mut b = zcore::Zcore::open(&rom.bytes)?;
             replay::play_movie(&mut b, &movie)?;
@@ -311,25 +437,29 @@ fn bench(rom: &rom::RomInfo, frames: usize, movies: &[String], max_frames: usize
             println!("zcore: {:.0} frames/s (render {mode}, 1 core)", frames as f64 / dt);
             continue;
         }
-        let (mut total, mut seconds) = (0usize, 0f64);
-        for name in movies {
-            let movie = Movie::load(&corpus::movie_path(name))?;
-            let mut b = zcore::Zcore::open(&rom.bytes)?;
-            b.set_render(render); // the untimed base replay too, so a profile of the run is one mode
-            replay::play_base(&mut b, &movie)?;
-            let index = movie.poke_index();
-            let mut next = 0usize;
-            let n = if max_frames == 0 { movie.inputs.len() } else { movie.inputs.len().min(max_frames) };
-            let t = std::time::Instant::now();
-            for k in 0..n {
-                replay::apply_pokes(&mut b, &movie, &index, &mut next, k);
-                b.run_frame(movie.inputs[k]);
+        // level -> (frames, seconds)
+        let mut by_level: std::collections::BTreeMap<u8, (usize, f64)> = Default::default();
+        for run in runs {
+            let starts = w.starts(run.inputs.len());
+            for &start in &starts {
+                let state = window_state(rom, run, &starts, start, w)?;
+                let mut b = zcore::Zcore::open(&rom.bytes)?;
+                b.load_state(&state)?;
+                b.set_render(render);
+                let level = b.ram()[0x10];
+                let end = (start + w.frames).min(run.inputs.len());
+                let t = std::time::Instant::now();
+                run.play(&mut b, start, end);
+                let entry = by_level.entry(level).or_default();
+                entry.0 += end - start;
+                entry.1 += t.elapsed().as_secs_f64();
             }
-            seconds += t.elapsed().as_secs_f64();
-            total += n;
         }
-        println!("zcore: {:.0} frames/s (render {mode}, {} movies, {total} frames, 1 core)", total as f64 / seconds,
-                 movies.len());
+        let (total, seconds) = by_level.values().fold((0, 0.0), |(f, s), &(a, b)| (f + a, s + b));
+        let levels: Vec<String> = by_level.iter()
+            .map(|(l, (f, s))| format!("L{l} {:.0} ({f} frames)", *f as f64 / s)).collect();
+        println!("zcore: {:.0} frames/s (render {mode}, {} runs, {total} frames in windows, 1 core) | {}",
+                 total as f64 / seconds, runs.len(), levels.join(", "));
     }
     Ok(0)
 }
