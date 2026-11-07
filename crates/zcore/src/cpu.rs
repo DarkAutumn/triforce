@@ -184,6 +184,8 @@ impl Cpu {
     pub const RTI: u8 = 0x40;
     /// `RTS` opcode, return from subroutine.
     pub const RTS: u8 = 0x60;
+    /// `JMP` absolute opcode.
+    pub const JMP_ABS: u8 = 0x4C;
 
     /// Create a new CPU.
     pub fn new() -> Self {
@@ -771,6 +773,8 @@ impl Bus {
         if self.trace.is_some() {
             self.ppu_sync();
             self.trace_instr();
+        } else if self.irq_quiet {
+            self.skip_idle_loop();
         }
 
         let opcode = self.fetch_byte(); // Cycle 1
@@ -789,6 +793,56 @@ impl Bus {
         if !self.irq_quiet {
             self.irq_quiet = self.interrupts_quiet();
         }
+    }
+
+    /// A `JMP` to itself in ROM (Zelda's wait for the next NMI, ~90% of a gameplay frame's
+    /// instructions) only reads its own three bytes. While nothing can happen - interrupts quiet,
+    /// no DMA, and no PPU or APU/board deadline before the end - each iteration does nothing but
+    /// count: 3 CPU cycles, 3 APU ticks, `3 × (start + end)` master clocks, the operand fields and
+    /// open bus left at the target's high byte. This applies as many whole iterations as fit before
+    /// the nearer deadline at once; the ones that reach a deadline run as ordinary instructions,
+    /// so every observable state is the same as stepping them one cycle at a time.
+    #[inline(always)]
+    fn skip_idle_loop(&mut self) {
+        let pc = self.cpu.pc;
+        if pc < 0x8000 || pc > 0xFFFD || self.cpu.irq_flags.bits() != 0 || self.cpu.corrupted {
+            return;
+        }
+        if self.prg_peek(pc) != Cpu::JMP_ABS
+            || u16::from_le_bytes([self.prg_peek(pc + 1), self.prg_peek(pc + 2)]) != pc
+        {
+            return;
+        }
+        self.skip_jmp_self(pc);
+    }
+
+    #[inline(never)]
+    fn skip_jmp_self(&mut self, pc: u16) {
+        // A read is `start_cycles - 1` master clocks, the bus access, then `end_cycles + 1`.
+        let per_iteration = 3 * (u32::from(self.cpu.start_cycles) + u32::from(self.cpu.end_cycles));
+        // After its last cycle the APU counter must still be short of `tick_deadline` (checked
+        // after each tick) and the master clock short of `ppu_deadline` (checked at each end).
+        let by_apu = self
+            .tick_deadline
+            .saturating_sub(self.apu.master_clock)
+            .saturating_sub(1)
+            / 3;
+        let by_ppu = self
+            .ppu_deadline
+            .saturating_sub(self.cpu.master_clock)
+            .saturating_sub(1)
+            / per_iteration;
+        let n = by_apu.min(by_ppu);
+        if n == 0 {
+            return;
+        }
+        self.cpu.master_clock = self.cpu.master_clock.wrapping_add(n * per_iteration);
+        self.cpu.cycle = self.cpu.cycle.wrapping_add(3 * n);
+        self.apu.cpu_cycle = self.apu.cpu_cycle.wrapping_add(3 * n);
+        self.apu.master_clock += 3 * n;
+        self.open_bus = self.prg_peek(pc + 2);
+        self.cpu.addr_mode = AddrMode::ABS;
+        self.cpu.operand = pc;
     }
 }
 

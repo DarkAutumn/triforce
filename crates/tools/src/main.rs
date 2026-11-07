@@ -63,10 +63,17 @@ enum Cmd {
         #[command(subcommand)]
         cmd: CorpusCmd,
     },
-    /// zcore frames per second on one core, render on and off.
+    /// zcore frames per second on one core, render on and off: random input on the start screen, or with
+    /// `--movie` the gameplay of corpus movies (base played untimed first).
     Bench {
         #[arg(long, default_value_t = 20_000)]
         frames: usize,
+        /// Corpus movie names to replay instead (e.g. chain-milestone1-137); repeatable.
+        #[arg(long = "movie")]
+        movies: Vec<String>,
+        /// Only this render mode ("on" or "off"); default both.
+        #[arg(long)]
+        render: Option<String>,
     },
 }
 
@@ -140,7 +147,7 @@ fn run(cli: Cli) -> Result<i32> {
             CorpusCmd::Sync => corpus::sync(),
             CorpusCmd::Check => corpus::check(&rom),
         },
-        Cmd::Bench { frames } => bench(&rom, frames),
+        Cmd::Bench { frames, movies, render } => bench(&rom, frames, &movies, render.as_deref()),
     }
 }
 
@@ -269,20 +276,47 @@ fn trace(rom: &rom::RomInfo, movie_path: &Path, frame: usize, count: usize) -> R
 
 /// The same seeded random input from the end of `power_on_to_start`, once drawing every frame and
 /// once drawing none.
-fn bench(rom: &rom::RomInfo, frames: usize) -> Result<i32> {
-    let movie = Movie::load(&corpus::movie_path("power_on_to_start"))?;
-    for render in [true, false] {
-        let mut b = zcore::Zcore::open(&rom.bytes)?;
-        replay::play_movie(&mut b, &movie)?;
-        b.set_render(render);
-        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(1);
-        let t = std::time::Instant::now();
-        for _ in 0..frames {
-            b.run_frame(rng.random::<u8>() & !0x0C);
-        }
-        let dt = t.elapsed().as_secs_f64();
+fn bench(rom: &rom::RomInfo, frames: usize, movies: &[String], only: Option<&str>) -> Result<i32> {
+    let modes: Vec<bool> = match only {
+        Some("on") => vec![true],
+        Some("off") => vec![false],
+        None => vec![true, false],
+        Some(other) => anyhow::bail!("--render must be on or off, got {other:?}"),
+    };
+    for render in modes {
         let mode = if render { "on" } else { "off" };
-        println!("zcore: {:.0} frames/s (render {mode}, 1 core)", frames as f64 / dt);
+        if movies.is_empty() {
+            let movie = Movie::load(&corpus::movie_path("power_on_to_start"))?;
+            let mut b = zcore::Zcore::open(&rom.bytes)?;
+            replay::play_movie(&mut b, &movie)?;
+            b.set_render(render);
+            let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(1);
+            let t = std::time::Instant::now();
+            for _ in 0..frames {
+                b.run_frame(rng.random::<u8>() & !0x0C);
+            }
+            let dt = t.elapsed().as_secs_f64();
+            println!("zcore: {:.0} frames/s (render {mode}, 1 core)", frames as f64 / dt);
+            continue;
+        }
+        let (mut total, mut seconds) = (0usize, 0f64);
+        for name in movies {
+            let movie = Movie::load(&corpus::movie_path(name))?;
+            let mut b = zcore::Zcore::open(&rom.bytes)?;
+            replay::play_base(&mut b, &movie)?;
+            b.set_render(render);
+            let index = movie.poke_index();
+            let mut next = 0usize;
+            let t = std::time::Instant::now();
+            for k in 0..movie.inputs.len() {
+                replay::apply_pokes(&mut b, &movie, &index, &mut next, k);
+                b.run_frame(movie.inputs[k]);
+            }
+            seconds += t.elapsed().as_secs_f64();
+            total += movie.inputs.len();
+        }
+        println!("zcore: {:.0} frames/s (render {mode}, {} movies, {total} frames, 1 core)", total as f64 / seconds,
+                 movies.len());
     }
     Ok(0)
 }
