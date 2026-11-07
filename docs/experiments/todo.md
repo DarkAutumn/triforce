@@ -31,6 +31,44 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
   Check any such job's progress at least every couple of hours and intervene early when a single state or room
   makes no progress (retry with another seed or source, record it, move on); **12 hours on any single task is a
   hard stop**: kill it, log it in the round doc, and continue with other work.
+- **Lee's order (Nov 7):** next, **optimize the Rust emulation core** (below); then go straight back to the
+  **heart experiments** (below), a series, not one experiment.
+
+### Next: zcore speed (Lee, Nov 7)
+
+Make emulation faster with **perfect accuracy to the game**: nothing may change, checked before/after with the
+corpus goldens (`tf ladder-golden` / `ladder-diff`, 0 divergences), the start states and trajectories walked with
+varied actions, and the port gate. Free rein: profiling tools may be installed, and the architecture of the port
+(a piece-by-piece cut of TetaNES) may be rethought and redone. Profile the agent too (where training spends its
+time end to end), not just the emulator. Iterate until further gains aren't worth the effort; every bit counts
+because the real runs will be 6–12M steps per family (the old monolithic model took ~30M). Log it in
+`docs/performance.md`.
+
+### Then: heart experiments (Lee, Nov 7; a series)
+
+Goal: Link picks up dropped items, hearts above all, far more than the current models do. Lee's original models
+didn't take every item, but prioritized them far more. **This is solvable**: iterate until it works by the
+measure below, and only when out of reasonable ideas stop and report.
+
+- **Measure:** real health gained from pickups (`health_change` and hearts healed per visit/episode, not `total`,
+  which counts overhealing) is the main metric of this work, not overall success. Current health dominates
+  everything (Lee, speedrunner): on average +1 heart wins more often in the long run, even though 2M steps and a
+  few evaluations can't show that statistically in success rates. Report pickups taken/left/healed alongside.
+- **Starting ideas (Lee, Nov 7; try them all, none mandated, combine or replace as results suggest):**
+  - A fixed, rigid pickup reward (the current max step reward, `REWARD_MAXIMUM`) instead of today's 0.25–0.75
+    urgency-scaled `reward-gained-health`.
+  - Direction and distance to the nearest target (exit or item) in the observation: "a little bit cheating, but
+    almost certainly a big difference". A new observation schema, so every model retrains.
+  - Every dropped item is a shaping target, as in Lee's original (hearts, clocks, rupees, bombs, keys, fairies:
+    no dropped item is worthless), with hearts **not** a target while at max health. The model already sees
+    `hp_full` and each dropped item's kind and position (round 10 Q&A, Nov 7).
+- **What failed before and why it may have** (round 6 §10 `collect_hearts`; round 7 §9 r32 `nearby_items`, which
+  is Lee's design for hearts/clocks): both were short continuations of models already trained toward exits, drops
+  are rare in most families' training, the observation has no pointer to the target the shaping pulls toward, and
+  r32 pulled toward hearts even at full health. Train from scratch (or long enough) where the treatment needs it.
+- **Where it pays** (round 10 §5): d2-rope leaves 0.36/0.39 hearts per visit on the floor in 2:0x7e/0x4e, around
+  the Goriya room whose deaths are decided by arrival health.
+
 
 ### Work in this order
 
