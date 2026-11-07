@@ -1,5 +1,5 @@
 //! Per-env controls the pool shares with its env: the render flag, frame publishing (double buffer + counter,
-//! optionally held on its latest frame), frame pacing and the record flag.
+//! optionally held on its latest frame), frame pacing, pausing and the record flag.
 
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -60,6 +60,8 @@ struct Shared {
     record: AtomicBool,
     /// Publishing is suspended: the front keeps the latest frame (a finished run's last screen).
     hold: AtomicBool,
+    /// The env stops before its next real frame until unpaused (`pace` blocks).
+    pause: AtomicBool,
     fps: AtomicU64,
     pacer: Mutex<FramePacer>,
     /// The buffer the env renders into; swapped with the front on publish (allocated on first use).
@@ -80,6 +82,9 @@ pub struct EnvControl {
 }
 
 impl EnvControl {
+    /// How often a paused env checks whether it was resumed.
+    pub const PAUSE_POLL: Duration = Duration::from_millis(5);
+
     pub(crate) fn new(index: usize, fps: f64, frame_bytes: usize, stop: Arc<AtomicBool>) -> Self {
         EnvControl {
             shared: Arc::new(Shared {
@@ -88,6 +93,7 @@ impl EnvControl {
                 render: AtomicBool::new(false),
                 record: AtomicBool::new(false),
                 hold: AtomicBool::new(false),
+                pause: AtomicBool::new(false),
                 fps: AtomicU64::new(fps.to_bits()),
                 pacer: Mutex::new(FramePacer::new(fps)),
                 back: Mutex::new(Vec::new()),
@@ -152,6 +158,15 @@ impl EnvControl {
         self.shared.hold.load(Ordering::Acquire)
     }
 
+    /// Pauses (or resumes) the env before its next real frame ([`EnvControl::wait_while_paused`] blocks).
+    pub fn set_paused(&self, on: bool) {
+        self.shared.pause.store(on, Ordering::Release);
+    }
+
+    pub fn paused(&self) -> bool {
+        self.shared.pause.load(Ordering::Acquire)
+    }
+
     /// The pool is shutting down: pacing no longer sleeps, and a long-running env may stop early.
     pub fn stopping(&self) -> bool {
         self.stop.load(Ordering::Relaxed)
@@ -174,6 +189,19 @@ impl EnvControl {
         front.counter += 1;
         shared.counter.store(front.counter, Ordering::Release);
         true
+    }
+
+    /// Before a real frame: blocks while paused (polling every [`EnvControl::PAUSE_POLL`]; never once the pool is
+    /// stopping). A pause restarts the frame schedule, so the env doesn't rush to catch up afterwards.
+    pub fn wait_while_paused(&self) {
+        if !self.paused() {
+            return;
+        }
+        while self.paused() && !self.stopping() {
+            std::thread::park_timeout(Self::PAUSE_POLL);
+        }
+        let fps = self.fps();
+        *self.shared.pacer.lock() = FramePacer::new(fps);
     }
 
     /// Sleeps until the next frame is due at the current fps (no-op when unthrottled or stopping).
@@ -298,5 +326,24 @@ mod tests {
         c.set_hold(false);
         assert!(c.publish(frame(3)));
         assert_eq!((c.frame(1, &mut out), out), (Some(2), [3]));
+    }
+
+    #[test]
+    fn a_paused_env_waits_before_its_next_frame() {
+        let c = EnvControl::standalone(0, 0.0, 1);
+        c.set_paused(true);
+        let paced = Arc::new(AtomicBool::new(false));
+        let worker = {
+            let (c, paced) = (c.clone(), paced.clone());
+            std::thread::spawn(move || {
+                c.wait_while_paused();
+                paced.store(true, Ordering::SeqCst);
+            })
+        };
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(!paced.load(Ordering::SeqCst), "a paused env must not run its next frame");
+        c.set_paused(false);
+        worker.join().unwrap();
+        assert!(paced.load(Ordering::SeqCst));
     }
 }

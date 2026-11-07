@@ -46,7 +46,7 @@ cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 
 .venv/bin/python -m triforce.train --specialist ow-zora --parallel 16   # curriculum: on in ow-zora.yaml
 .venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist
 uv run training-gui.py                                          # live training monitor (newest logs/ folder)
-.venv/bin/python play-zelda.py 4x3                               # watch 12 games played by the promoted models (--cpu, --scale N)
+.venv/bin/python play-zelda.py 4x3                               # watch 12 games played by the promoted models (--cpu, --scale N; keys u/+/-/p)
 .venv/bin/python -m triforce.run --route milestone1 --seed 1   # --render (window) or --video out.mp4 (ffmpeg)
 .venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states (start/build/path/audit)
 triforce promote <specialist> <run-id>

@@ -14,6 +14,10 @@ run's reset publishes nothing until then), before the next seed plays (seeds are
 out in order to whichever game is free, so ``start`` carries no seed; ``end`` does).  A setup error (an error before
 the first step, e.g. a missing promoted model for the route's first room) stops the game instead of retrying in a
 loop.
+
+``set_fps(fps)`` changes every game's frame-rate cap (``<= 0``: uncapped, as fast as they run; ``NES_FPS`` is the
+console's own rate).  ``set_paused(True)`` stops every game before its next emulated frame (a step in progress
+stops mid-step) and stops the result-pause clock; ``set_paused(False)`` resumes both.
 """
 
 import queue
@@ -31,6 +35,7 @@ ROUTE = 'milestone1'
 RESULT_PAUSE = 3.0
 SEEDS_PER_GAME = 1000
 POLL_SECONDS = 0.02
+NES_FPS = 60.0988           # frames per second of an NTSC NES
 
 
 def end_message(game: int, seed: Optional[int], result: RunResult) -> tuple[dict, bool]:
@@ -109,6 +114,8 @@ class GameGrid:
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._pool = None
+        self._paused_at: Optional[float] = None     # when the current pause began (None: playing)
+        self._paused_total = 0.0                    # seconds of earlier pauses
         self._thread = threading.Thread(target=self._run, name='play_grid', daemon=True)
 
     def start(self) -> None:
@@ -135,9 +142,46 @@ class GameGrid:
                 return None
             return self._pool.frame(game, since=since)
 
+    def set_fps(self, fps: float) -> None:
+        """Every game's frame-rate cap from its next frame on (``<= 0``: uncapped)."""
+        with self._lock:
+            self.fps = fps
+            if self._pool is not None:
+                for game in range(self.games):
+                    self._pool.set_fps(game, fps)
+
+    def set_paused(self, on: bool) -> None:
+        """Pauses (or resumes) every game before its next emulated frame, and the result-pause clock with them."""
+        with self._lock:
+            now = time.monotonic()
+            if on and self._paused_at is None:
+                self._paused_at = now
+            elif not on and self._paused_at is not None:
+                self._paused_total += now - self._paused_at
+                self._paused_at = None
+            if self._pool is not None:
+                self._pool.set_paused(on)
+
+    @property
+    def paused(self) -> bool:
+        return self._paused_at is not None
+
+    def _now(self) -> float:
+        """Seconds of play: monotonic time minus every pause (frozen while paused)."""
+        with self._lock:
+            now = time.monotonic() if self._paused_at is None else self._paused_at
+            return now - self._paused_total
+
     def emulated_frames(self) -> list[int]:
         """Frames each game has emulated so far (shown or not), counted as its steps finish."""
         return list(self._emulated)
+
+    def frame_counters(self) -> list[int]:
+        """Frames each game has shown (published) so far; only shown games render, frame by frame."""
+        with self._lock:
+            if self._pool is None:
+                return [0] * self.games
+            return [self._pool.frame_counter(game) for game in range(self.games)]
 
     def poll_status(self) -> list[dict]:
         """Every status message received since the last call."""
@@ -184,6 +228,9 @@ class GameGrid:
                 self._pool = chain.pool
                 for game in self._shown:
                     chain.pool.set_render(game, True)
+                for game in range(self.games):
+                    chain.pool.set_fps(game, self.fps)      # in case set_fps ran while the pool was being built
+                chain.pool.set_paused(self._paused_at is not None)
             for game in range(self.games):
                 self._status.put({'game': game, 'event': 'start', 'seed': None})
             self._play(chain)
@@ -244,7 +291,7 @@ class GameGrid:
             if setup_error:
                 stopped.add(env)
             else:
-                held[env] = _Held(time.monotonic() + RESULT_PAUSE)
+                held[env] = _Held(self._now() + RESULT_PAUSE)
         elif event['type'] == 'room':
             rooms[env].pending.append({'game': env, 'event': 'room', 'specialist': event['specialist'],
                                        'level': event['level'], 'room': event['room'],
@@ -252,7 +299,7 @@ class GameGrid:
                                        'stalled': bool(event['stalled'])})
 
     def _release(self, chain: ChainPool, held: Dict[int, _Held]) -> None:
-        now = time.monotonic()
+        now = self._now()
         due = [env for env, hold in held.items() if hold.obs is not None and hold.until <= now]
         if not due:
             return

@@ -492,6 +492,13 @@ impl<E: PoolEnv> Pool<E> {
         Ok(())
     }
 
+    /// Pauses (or resumes) every env before its next real emulated frame.
+    pub fn set_paused(&self, on: bool) {
+        for control in &self.controls {
+            control.set_paused(on);
+        }
+    }
+
     /// Paces env `env` at `fps` real frames per second from its next frame (`<= 0`: unthrottled). An env paces
     /// alone only if it has its worker thread to itself (`threads == num_envs`); envs sharing a thread share its
     /// time.

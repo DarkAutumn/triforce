@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Watch a grid of Zelda games played live by the promoted specialist models (route milestone1, 60 fps).
+"""Watch a grid of Zelda games played live by the promoted specialist models (route milestone1, 60.1 fps).
 
-    .venv/bin/python play-zelda.py                     # 4x3 = 12 games, 3x scale, CUDA inference
-    .venv/bin/python play-zelda.py 8x6 --scale 2       # COLUMNSxROWS
+    .venv/bin/python play-zelda.py                     # 4x3 = 12 games, 2x scale, CUDA inference
+    .venv/bin/python play-zelda.py 8x6 --scale 1       # COLUMNSxROWS
     .venv/bin/python play-zelda.py 2x2 --cpu           # inference on the CPU
     .venv/bin/python play-zelda.py 3x2 --games 64      # 64 games, the 6 furthest along on screen
     .venv/bin/python play-zelda.py 3x2 --games 64 --benchmark 30   # print the frame rate on screen, then quit
+
+Keys: u uncaps the games' frame rate (as fast as they run) or caps it again at the NES's 60.1 fps; while capped,
++/- (keypad or the keys by the number row) raise/lower the cap in steps of 10 (60.1 -> 50 -> 40, 60.1 -> 70, ...);
+p pauses and resumes the games and the window.  The title shows how fast the shown games run: "36 fps of 60.1 max"
+(∞ when uncapped).  The window repaints at most about 60 times a second, so faster games skip frames on screen.
 
 All games play in one native chain pool, each on its own thread with one batched inference loop for the models
 (see triforce/play_grid.py).  When a game ends its result shows for a few seconds and the game starts the next
@@ -30,10 +35,12 @@ from PySide6.QtCore import QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QImage, QPainter, QPalette
 from PySide6.QtWidgets import QApplication, QGridLayout, QLayout, QMainWindow, QWidget
 
-from triforce.play_grid import FRAME_SHAPE, RESULT_PAUSE, GameGrid
+from triforce.play_grid import FRAME_SHAPE, NES_FPS, RESULT_PAUSE, GameGrid
 
 DEFAULT_GRID = '4x3'
-DEFAULT_SCALE = 3
+DEFAULT_SCALE = 2
+FPS_STEP = 10               # +/- change the frame-rate cap by this much
+MIN_FPS = 10
 STRIP_HEIGHT = 22
 SPACING = 4
 TICK_MS = 16
@@ -70,7 +77,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--scale', type=int, default=DEFAULT_SCALE,
                         help=f"integer pixel scale of each game (default {DEFAULT_SCALE})")
     parser.add_argument('--cpu', action='store_true', help="run the models on the CPU instead of CUDA")
-    parser.add_argument('--fps', type=float, default=60.0, help="frames per second per game (0 = unthrottled)")
+    parser.add_argument('--fps', type=float, default=NES_FPS,
+                        help=f"frame-rate cap per game (default the NES's {NES_FPS}; 0 = uncapped; keys u and +/-)")
     parser.add_argument('--models-dir', default=None, help="models root (default $TRIFORCE_MODELS_DIR or models/)")
     parser.add_argument('--benchmark', type=float, default=None, metavar='SECONDS',
                         help="once every game is running, measure the on-screen frame rate this long, print it "
@@ -94,6 +102,21 @@ def parse_args(argv=None, parser: Optional[argparse.ArgumentParser] = None) -> a
         parser.error(f"--games must be at least the {cells} cells of the grid, got {args.games}")
     args.device = 'cpu' if args.cpu else 'cuda'
     return args
+
+
+def step_cap(cap: float, step: int) -> float:
+    """The frame-rate cap after pressing + (``step`` 1) or - (-1): FPS_STEP apart, never below MIN_FPS, and 60 is
+    the NES's NES_FPS (60.1 -> 50 / 70, 50 -> 60.1)."""
+    level = 60 if cap == NES_FPS else round(cap)
+    level = max(MIN_FPS, level + step * FPS_STEP)
+    return NES_FPS if level == 60 else float(level)
+
+
+def cap_label(cap: float) -> str:
+    """'∞' uncapped, '60.1' for the NES rate, else the cap ('70')."""
+    if cap <= 0:
+        return '∞'
+    return f"{cap:.1f}" if cap == NES_FPS else f"{cap:g}"
 
 
 class GameState:
@@ -309,8 +332,10 @@ class Window(QMainWindow):
     """The cells of GameViews fed by a GameGrid-like object (start / show / frame / poll_status / stop, ``games``).
     Cell i starts on game i.  When a shown game enters a new room, stalls (its room message turns ``stalled``) or
     starts its next run (a crashed one: RESULT_PAUSE after the crash), its cell goes to the best hidden game if that
-    one is ahead (``replacement``).  The window
-    title shows the on-screen frame rate (frames painted per cell per second, every FPS_WINDOW seconds)."""
+    one is ahead (``replacement``).  The window title shows how fast the shown games run (the median of their frames
+    per second over FPS_WINDOW seconds; a game showing its result is left out) against the frame-rate cap.  Keys: u,
+    +/-, p (module docstring); ``now``
+    is the window's clock minus pauses, so fades and result timers stop while paused."""
 
     def __init__(self, grid, cols: int, rows: int, scale: int, benchmark: Optional[float] = None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
@@ -318,7 +343,7 @@ class Window(QMainWindow):
         self.grid = grid
         self.clock = time.monotonic
         self.states = [GameState() for _ in range(grid.games)]
-        self.views = [GameView(scale, clock=lambda: self.clock()) for _ in range(cols * rows)]
+        self.views = [GameView(scale, clock=lambda: self.now()) for _ in range(cols * rows)]
         self.shown = list(range(len(self.views)))       # the game each cell shows (or is fading to)
         for view, game in zip(self.views, self.shown):
             view.attach(game, self.states[game])
@@ -326,8 +351,11 @@ class Window(QMainWindow):
         self.swaps = 0
         self._crashed = {}      # crashed shown-or-hidden game -> when its cell may be offered
         self.fps: Optional[float] = None
-        self._painted = 0
-        self._rate_since = self.clock()
+        self.cap = grid.fps                 # the games' frame-rate cap (<= 0: uncapped)
+        self.paused = False
+        self._paused_at: Optional[float] = None
+        self._paused_total = 0.0
+        self._restart_rate()
         self.benchmark = Benchmark(benchmark) if benchmark else None
         self.benchmark_result: Optional[dict] = None
         self._shut_down = False
@@ -357,10 +385,61 @@ class Window(QMainWindow):
         self.grid.start()
         self.timer.start()
 
+    def now(self) -> float:
+        """The window's clock minus every pause (frozen while paused)."""
+        now = self.clock() if self._paused_at is None else self._paused_at
+        return now - self._paused_total
+
+    def set_paused(self, on: bool):
+        """Pauses the games (before their next emulated frame) and the window (no frames, messages, fades or
+        timers), or resumes both."""
+        if on == self.paused:
+            return
+        self.paused = on
+        if on:
+            self._paused_at = self.clock()
+        else:
+            self._paused_total += self.clock() - self._paused_at
+            self._paused_at = None
+            self._restart_rate()
+        self.grid.set_paused(on)
+        self.update_title()
+
+    def _restart_rate(self):
+        """Starts a new frame-rate window (after a cap change or a pause, so readings never mix two rates)."""
+        self._rate_since = self.now()
+        self._rate_frames = (self.grid.frame_counters(), set(self.shown))
+
+    def set_cap(self, cap: float):
+        """Sets the games' frame-rate cap (<= 0: uncapped)."""
+        self.cap = cap
+        self.grid.set_fps(cap)
+        self.fps = None
+        self._restart_rate()
+        self.update_title()
+
+    def handle_key(self, key) -> bool:
+        """u: uncap / cap at the NES rate; +/-: the cap in FPS_STEP steps (capped only); p: pause.  Returns whether
+        the key was one of these."""
+        if key == Qt.Key.Key_U:
+            self.set_cap(NES_FPS if self.cap <= 0 else 0.0)
+        elif key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal, Qt.Key.Key_Minus, Qt.Key.Key_Underscore):
+            if self.cap > 0:
+                self.set_cap(step_cap(self.cap, 1 if key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal) else -1))
+        elif key == Qt.Key.Key_P:
+            self.set_paused(not self.paused)
+        else:
+            return False
+        return True
+
+    def keyPressEvent(self, event):  # pylint: disable=invalid-name
+        if not self.handle_key(event.key()):
+            super().keyPressEvent(event)
+
     def tick(self):
         """Applies status messages, offers a better game to cells whose game just entered a new room or started its
-        next run, then shows any new frames."""
-        if self._shut_down:
+        next run, then shows any new frames.  Does nothing while paused."""
+        if self._shut_down or self.paused:
             return
         changed, offered = set(), []
         for message in self.grid.poll_status():
@@ -373,12 +452,12 @@ class Window(QMainWindow):
                 self.counts[state.outcome] = self.counts.get(state.outcome, 0) + 1
                 self.update_title()
             if event == 'crash':
-                self._crashed[game] = self.clock() + RESULT_PAUSE    # it never starts another run
+                self._crashed[game] = self.now() + RESULT_PAUSE    # it never starts another run
             if (event == 'start' or (event == 'room' and state.rooms > rooms)
                     or (event == 'room' and state.stalled and not stalled)):
                 offered.append(game)
         for game, due in list(self._crashed.items()):
-            if self.clock() >= due:
+            if self.now() >= due:
                 del self._crashed[game]
                 offered.append(game)
         self._offer(offered)
@@ -393,11 +472,16 @@ class Window(QMainWindow):
             if latest is not None:
                 view.set_frame(*latest)
                 view.painted += 1
-                self._painted += 1
-        now = self.clock()
+        now = self.now()
         if now - self._rate_since >= FPS_WINDOW:
-            self.fps = self._painted / len(self.views) / (now - self._rate_since)
-            self._painted, self._rate_since = 0, now
+            # The median of the shown games' frame rates; a game that showed nothing (its result on screen) is out.
+            counters = self.grid.frame_counters()
+            before, shown_before = self._rate_frames
+            rates = sorted((counters[game] - before[game]) / (now - self._rate_since)
+                           for game in set(self.shown) & shown_before if counters[game] > before[game])
+            if rates:
+                self.fps = rates[len(rates) // 2]
+            self._rate_since, self._rate_frames = now, (counters, set(self.shown))
             self.update_title()
         if self.benchmark is not None and self.benchmark_result is None:
             self.benchmark_result = self.benchmark.tick(self, now)
@@ -432,8 +516,10 @@ class Window(QMainWindow):
         errors = counts['error'] + counts['crash']
         if errors:
             title += f" · {errors} errors"
-        if self.fps is not None:
-            title += f" · {self.fps:.0f} fps"
+        fps = '–' if self.fps is None else f"{self.fps:.0f}"
+        title += f" · {fps} fps of {cap_label(self.cap)} max"
+        if self.paused:
+            title += " · paused"
         self.setWindowTitle(title)
 
     def shutdown(self):

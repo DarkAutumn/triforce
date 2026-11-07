@@ -162,6 +162,21 @@ def test_a_finished_chain_run_can_hold_its_last_frame(states_dir, hold):
             assert pool.frame_counter(0) == last_frame + first_reset    # the reset's frames replaced it
 
 
+def test_a_paused_pool_stops_before_the_next_frame(states_dir):
+    """set_paused(True): an env given its action doesn't emulate a frame until set_paused(False)."""
+    task = native.ChainTask(['ow-start'], 'milestone1', seeds=[0], states_dir=str(states_dir))
+    with native.EnvPool(task, num_envs=1, seed=0) as pool:
+        pool.set_render(0, True)
+        buffers = pool.make_buffers()
+        pool.recv(buffers)
+        before = pool.frame_counter(0)
+        pool.set_paused(True)
+        pool.send(np.array([0]), legal_actions(buffers['obs']['action_mask'][:1], np.random.default_rng(0)))
+        assert pool.recv(buffers, min_ready=1, timeout=0.3) == 0 and pool.frame_counter(0) == before
+        pool.set_paused(False)
+        assert pool.recv(buffers, min_ready=1, timeout=30) == 1 and pool.frame_counter(0) > before
+
+
 def test_rendering_toggles_per_env(states_dir, tmp_path):
     with native.EnvPool(train_task(states_dir, tmp_path, max_steps=50), num_envs=2, threads=2, seed=0) as pool:
         buffers = pool.make_buffers()

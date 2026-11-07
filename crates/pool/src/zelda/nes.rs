@@ -53,6 +53,8 @@ impl<S> PoolState<S> {
 /// - **Rendering.** The session renders every real frame (`Session::set_render(true)`); this wrapper renders it
 ///   only while the pool's render flag is set, read as each frame starts, so `Pool::set_render` takes effect from
 ///   the next frame. Look-ahead frames (`run_frame(_, false)`) never render.
+/// - **Pausing.** A real frame first waits while the pool is paused (`Pool::set_paused`), so a paused env stops
+///   before its next frame, mid-step if need be; look-ahead frames don't wait.
 /// - **Recording.** While recording, every frame's buttons and every poke append to an [`InputLog`]. Restoring
 ///   one of this log's own snapshots (the session's look-ahead) truncates the log back to it, so look-ahead
 ///   frames and pokes never reach a movie (as the old Python recorder's `load_state` did); restoring any other state
@@ -122,6 +124,9 @@ impl<N: Nes> Nes for PoolNes<N> {
     type State = PoolState<N::State>;
 
     fn run_frame(&mut self, buttons: u8, render: bool) {
+        if render && let Some(control) = &self.control {
+            control.wait_while_paused();
+        }
         let render = render && self.control.as_ref().is_some_and(EnvControl::render);
         self.inner.run_frame(buttons, render);
         self.rendered = render;

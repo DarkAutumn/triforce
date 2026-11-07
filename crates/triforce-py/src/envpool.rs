@@ -724,6 +724,11 @@ impl PyEnvPool {
         self.pool.set_hold(env, on).map_err(pool_err)
     }
 
+    /// Pauses (or resumes) every env before its next real emulated frame (a step in progress stops mid-step).
+    fn set_paused(&self, on: bool) {
+        self.pool.set_paused(on);
+    }
+
     /// Paces env `env` at `fps` real frames per second (`<= 0`: unthrottled).
     fn set_fps(&self, env: usize, fps: f64) -> PyResult<()> {
         self.pool.set_fps(env, fps).map_err(pool_err)

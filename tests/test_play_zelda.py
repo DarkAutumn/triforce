@@ -14,6 +14,7 @@ import torch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
+from PySide6.QtCore import Qt  # noqa: E402  pylint: disable=wrong-import-position
 from PySide6.QtGui import QColor  # noqa: E402  pylint: disable=wrong-import-position
 from PySide6.QtWidgets import QApplication  # noqa: E402  pylint: disable=wrong-import-position
 
@@ -42,7 +43,7 @@ def qapp():
 
 def test_parse_args_grid_scale_and_device():
     args = play_zelda.parse_args([])
-    assert (args.grid, args.scale, args.device, args.fps, args.games) == ((4, 3), 3, 'cuda', 60.0, 12)
+    assert (args.grid, args.scale, args.device, args.fps, args.games) == ((4, 3), 2, 'cuda', play_grid.NES_FPS, 12)
     args = play_zelda.parse_args(['3x2', '--scale', '2', '--cpu', '--games', '64'])
     assert (args.grid, args.scale, args.device, args.games) == ((3, 2), 2, 'cpu', 64)
     assert play_zelda.parse_grid('8X12') == (8, 12)
@@ -83,11 +84,14 @@ class FakeGrid:
 
     def __init__(self, games=2, messages=None):
         self.games = games
+        self.fps = play_grid.NES_FPS
+        self.paused = False
         self.shown = set()
         self.started = False
         self.stops = 0
         self.polls = 0
         self.emulated = [0] * games
+        self.counters = [0] * games     # frames shown (published) per game
         self.pixels = np.zeros(FRAME_SHAPE, dtype=np.uint8)
         self.pixels[:] = (10, 200, 30)
         self.framed = {0}       # games with a picture
@@ -112,6 +116,15 @@ class FakeGrid:
 
     def emulated_frames(self):
         return list(self.emulated)
+
+    def frame_counters(self):
+        return list(self.counters)
+
+    def set_fps(self, fps):
+        self.fps = fps
+
+    def set_paused(self, on):
+        self.paused = on
 
     def poll_status(self):
         self.polls += 1
@@ -138,12 +151,13 @@ def test_window_shows_frames_status_and_tally(qapp):  # pylint: disable=redefine
         assert part in text
     assert first.state.outcome == 'death' and first.state.rooms == 9
     assert second.image is None
-    assert '1 deaths' in window.windowTitle() and 'fps' not in window.windowTitle()
+    assert '1 deaths' in window.windowTitle() and window.windowTitle().endswith('– fps of 60.1 max')
 
     since = window._rate_since  # pylint: disable=protected-access
+    fake.counters = [240, 0]        # two seconds: game 0 showed 120 fps, game 1 nothing (out of the median)
     window.clock = lambda: since + play_zelda.FPS_WINDOW
     window.tick()
-    assert window.fps is not None and window.windowTitle().endswith(f"{window.fps:.0f} fps")
+    assert window.fps == 120 and window.windowTitle().endswith('120 fps of 60.1 max')
 
     window.close()
     assert fake.stops == 1
@@ -152,6 +166,48 @@ def test_window_shows_frames_status_and_tally(qapp):  # pylint: disable=redefine
     polls = fake.polls
     window.tick()       # a late tick (e.g. Ctrl-C mid-tick) must not touch the grid or queue repaints
     assert fake.polls == polls
+
+
+def test_frame_rate_cap_steps_by_ten_around_the_nes_rate():
+    nes, step = play_grid.NES_FPS, play_zelda.step_cap
+    assert [step(nes, -1), step(step(nes, -1), -1)] == [50, 40]
+    assert [step(nes, 1), step(step(nes, 1), 1)] == [70, 80]
+    assert step(50, 1) == step(70, -1) == nes             # 60 is always the NES's 60.0988
+    assert step(play_zelda.MIN_FPS, -1) == play_zelda.MIN_FPS
+    assert [play_zelda.cap_label(c) for c in (nes, 70.0, 0.0)] == ['60.1', '70', '∞']
+
+
+def test_keys_uncap_step_the_cap_and_pause(qapp):  # pylint: disable=redefined-outer-name, unused-argument
+    """u toggles uncapped / the NES rate, +/- (either key) step the cap only while capped, p pauses the games and
+    the window: no messages or frames are taken and fades stop until it resumes."""
+    keys = Qt.Key
+    fake = FakeGrid(games=3, messages=[])
+    clock = {'now': 0.0}
+    window = play_zelda.Window(fake, cols=1, rows=1, scale=1)
+    window.clock = lambda: clock['now']
+    window.start()
+    for key, cap in ((keys.Key_Minus, 50), (keys.Key_Minus, 40), (keys.Key_Plus, 50), (keys.Key_Equal,
+                     play_grid.NES_FPS), (keys.Key_U, 0.0), (keys.Key_Plus, 0.0), (keys.Key_U, play_grid.NES_FPS)):
+        assert window.handle_key(key)
+        assert window.cap == fake.fps == cap
+        if cap == 0.0:
+            assert 'of ∞ max' in window.windowTitle()
+    assert not window.handle_key(keys.Key_Q)
+
+    window.views[0].swap_to(1, window.states[1], 0)        # a fade in progress
+    clock['now'] = play_zelda.FADE_SECONDS / 2
+    alpha = window.views[0].fade_alpha()
+    assert window.handle_key(keys.Key_P) and fake.paused and window.windowTitle().endswith('· paused')
+    polls = fake.polls
+    clock['now'] += 60
+    fake.messages = [{'game': 0, 'event': 'start', 'seed': None}]
+    window.tick()
+    assert fake.polls == polls and window.views[0].fade_alpha() == alpha     # frozen
+    window.handle_key(keys.Key_P)
+    assert not fake.paused and not window.windowTitle().endswith('paused')
+    window.tick()
+    assert fake.polls == polls + 1 and window.views[0].fade_alpha() == alpha  # resumes where it stopped
+    window.shutdown()
 
 
 def _room(game, rooms, health, stalled=False):
