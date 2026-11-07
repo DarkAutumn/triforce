@@ -72,16 +72,17 @@ fn state_file_round_trips() {
 }
 
 /// The state is a flat `Copy` value: 19 KiB of cartridge arena (zero page, PRG-RAM, CHR-RAM,
-/// CIRAM), 2 KiB of work RAM, 256 bytes of OAM and the PPU's 256-byte sprite cover map, plus a
-/// few hundred bytes of registers and page tables. 24 KiB leaves room for that and nothing else:
-/// a ROM image (128 KiB) or a frame buffer (120 KiB) creeping back in fails here.
+/// CIRAM), 2 KiB of work RAM, 256 bytes of OAM and the PPU's 256-byte sprite cover map, the PPU's
+/// ~1.9 KiB per-scanline sprite-range cache, plus a few hundred bytes of registers and page tables.
+/// 26 KiB leaves room for that and nothing else: a ROM image (128 KiB) or a frame buffer (120 KiB)
+/// creeping back in fails here.
 #[test]
 fn machine_state_is_small_and_copy() {
     fn copy<T: Copy>() {}
     copy::<zcore::MachineState>();
     let size = std::mem::size_of::<zcore::MachineState>();
     eprintln!("size_of::<MachineState>() = {size}");
-    assert!(size <= 24 * 1024, "MachineState is {size} bytes");
+    assert!(size <= 26 * 1024, "MachineState is {size} bytes");
 }
 
 /// Snapshots are plain copies: restoring one and replaying gives the same frames, RAM and cycles.

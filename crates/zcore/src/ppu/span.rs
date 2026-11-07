@@ -350,6 +350,7 @@ impl Bus {
                     let addr = usize::from(dot) - 1;
                     let oamindex = (usize::from(ppu.oamaddr) & 0xF8) + addr;
                     ppu.oamdata[addr] = ppu.oamdata[oamindex];
+                    ppu.spr_range.valid = false;
                 }
             }
             if from == cycle::VBLANK {

@@ -264,6 +264,25 @@ pub struct Ppu {
     /// The frame each I/O latch bit was last refreshed (driven by a register access), indexed by
     /// bit: a bit left alone for [`Ppu::OPEN_BUS_DECAY_FRAMES`] has decayed to 0.
     pub open_bus_refreshed: [u32; 8],
+    /// Which sprites each visible scanline's evaluation finds in range. Derived from `oamdata` and
+    /// `ctrl_spr_height` when first needed and dropped by any OAM write; not emulated state (never serialized,
+    /// not digested), and it travels with every copy of the state it was built from.
+    #[serde(skip)]
+    pub(crate) spr_range: SpriteRange,
+}
+
+/// Per visible scanline, bit `n` set when sprite `n`'s Y puts that line in range (`y <= line < y + height`).
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct SpriteRange {
+    valid: bool,
+    height: u16,
+    lines: [u64; size::HEIGHT as usize],
+}
+
+impl Default for SpriteRange {
+    fn default() -> Self {
+        Self { valid: false, height: 0, lines: [0; size::HEIGHT as usize] }
+    }
 }
 
 impl Default for Ppu {
@@ -501,6 +520,7 @@ impl Ppu {
             color_bits_applied: 0,
 
             open_bus_refreshed: [0; 8],
+            spr_range: SpriteRange::default(),
         };
 
         // Decode both registers from zero rather than trusting the literals above: everything
@@ -949,14 +969,9 @@ impl Ppu {
                 // the same secondary OAM slot and steps to the next sprite. A run of them leaves
                 // only the last Y and the address.
                 let max = pairs.min(64 - u16::from(oamaddr_hi)) as u8;
-                let mut run = 0;
-                while run < max {
-                    let y = u16::from(self.oamdata[usize::from(oamaddr_hi + run) << 2]);
-                    if scanline.wrapping_sub(y) < height {
-                        break;
-                    }
-                    run += 1;
-                }
+                // The out-of-range run from `oamaddr_hi`: up to the next in-range sprite, at most `max`.
+                let ahead = self.sprites_in_range(scanline) >> oamaddr_hi;
+                let run = (ahead.trailing_zeros() as u8).min(max);
                 if run > 0 {
                     oam_fetch = self.oamdata[usize::from(oamaddr_hi + run - 1) << 2];
                     self.secondary_oamdata[usize::from(secondary_oamaddr) & 0x1F] = oam_fetch;
@@ -985,6 +1000,31 @@ impl Ppu {
         self.spr_zero_in_range = spr_zero_in_range;
         self.overflow_count = overflow_count;
         self.status_spr_overflow = overflow;
+    }
+
+    /// Bit `n` set when sprite `n` is in range on visible `scanline` (`scanline.wrapping_sub(y) < height`, as
+    /// evaluation tests it), from [`Ppu::spr_range`], rebuilt here after an OAM write or a height change.
+    #[inline(always)]
+    fn sprites_in_range(&mut self, scanline: u16) -> u64 {
+        debug_assert!(scanline < size::HEIGHT, "sprite evaluation runs on visible lines");
+        if !self.spr_range.valid || self.spr_range.height != self.ctrl_spr_height {
+            self.rebuild_sprite_range();
+        }
+        self.spr_range.lines[usize::from(scanline) % size::HEIGHT as usize]
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn rebuild_sprite_range(&mut self) {
+        let height = self.ctrl_spr_height;
+        let mut lines = [0u64; size::HEIGHT as usize];
+        for sprite in 0..64 {
+            let y = u16::from(self.oamdata[sprite << 2]);
+            for line in y..(y + height).min(size::HEIGHT) {
+                lines[usize::from(line)] |= 1 << sprite;
+            }
+        }
+        self.spr_range = SpriteRange { valid: true, height, lines };
     }
 
     fn spr_eval_cycle(&mut self) {
@@ -1296,6 +1336,7 @@ impl Ppu {
                 val &= 0xE3;
             }
             self.oamdata[self.oamaddr as usize] = val;
+            self.spr_range.valid = false;
             self.oamaddr = self.oamaddr.wrapping_add(1);
         }
     }
@@ -1364,6 +1405,7 @@ impl Ppu {
         if kind == ResetKind::Hard {
             self.oamaddr = 0x0000;
             self.oamdata = ConstArray::new();
+            self.spr_range.valid = false;
         }
         self.sprites = [Sprite::new(); 8];
         self.spr_cover = ConstArray::new();
@@ -1595,6 +1637,7 @@ impl Bus {
                 let addr = (self.ppu.cycle as usize) - 1;
                 let oamindex = (self.ppu.oamaddr as usize & 0xF8) + addr;
                 self.ppu.oamdata[addr] = self.ppu.oamdata[oamindex];
+                self.ppu.spr_range.valid = false;
             }
         } else if self.ppu.cycle <= cycle::SPR_FETCH_END {
             if self.ppu.mask_prev_rendering_enabled && self.ppu.cycle == cycle::SPR_FETCH_START {
