@@ -29,6 +29,21 @@ const fn overlap(from: u16, to: u16, lo: u16, hi: u16) -> u16 {
     b.saturating_sub(a) + (a <= b) as u16
 }
 
+/// Byte `i` of `SPREAD_BITS[b]` is bit `7 - i` of `b`: a tile row's pattern bits, one per pixel lane.
+static SPREAD_BITS: [u64; 256] = {
+    let mut table = [0u64; 256];
+    let mut b = 0;
+    while b < 256 {
+        let mut i = 0;
+        while i < 8 {
+            table[b] |= (((b >> (7 - i)) & 1) as u64) << (8 * i);
+            i += 1;
+        }
+        b += 1;
+    }
+    table
+};
+
 impl Ppu {
     /// Shifts the background tile registers by `n` dots.
     #[inline(always)]
@@ -54,25 +69,35 @@ impl Ppu {
     }
 
     /// The 8 pixels of a whole tile (dots `dot..dot + 8`, `dot` ≡ 1 mod 8) on which no sprite
-    /// lies, as [`Ppu::render_pixel`] draws them with rendering on, then the 8 shifts.
+    /// lies, as [`Ppu::render_pixel`] draws them with rendering on, then the 8 shifts. The
+    /// palette indexes are built in the 8 byte lanes of a `u64`, pixel `i` in lane `i`; lanes
+    /// never carry (a lane is at most `0x1F + 3`).
     #[inline(always)]
     fn render_bg_tile(&mut self, frame: &mut FrameBuffer, dot: u16, colors: &[u16; 32]) {
+        const LANES: u64 = 0x0101_0101_0101_0101;
         let fine_x = self.scroll.fine_x;
         // Pixel i takes bit 15 - fine_x - i of the shift registers: bit 7 - i of these.
-        let lo = (self.tile_shift_lo << fine_x) >> 8;
-        let hi = (self.tile_shift_hi << fine_x) >> 8;
+        let lo = usize::from(((self.tile_shift_lo << fine_x) >> 8) as u8);
+        let hi = usize::from(((self.tile_shift_hi << fine_x) >> 8) as u8);
+        let mut bg = SPREAD_BITS[lo] | (SPREAD_BITS[hi] << 1);
+        // Pixels at or left of `mask_min_draw_bg_cycle` draw no background.
+        let clipped = (self.mask_min_draw_bg_cycle + 1).saturating_sub(dot);
+        if clipped >= 8 {
+            bg = 0;
+        } else {
+            bg &= u64::MAX << (8 * clipped);
+        }
+        // The first 8 - fine_x pixels still come from the previous tile's palette.
+        let prev_lanes = 8 - fine_x;
+        let prev_mask = if prev_lanes >= 8 { u64::MAX } else { (1u64 << (8 * prev_lanes)) - 1 };
+        let prev = u64::from(self.prev_palette & 0x1F) * LANES;
+        let curr = u64::from(self.curr_palette & 0x1F) * LANES;
+        let index = ((prev & prev_mask) | (curr & !prev_mask)) + bg;
+
         let row = (usize::from(self.scanline) << 8) + usize::from(dot - 1);
-        let out = &mut frame[row..row + 8];
-        for (i, pixel) in (0u16..).zip(out.iter_mut()) {
-            let bit = 7 - i;
-            let bg_color = u16::from(dot + i > self.mask_min_draw_bg_cycle)
-                * ((((hi >> bit) & 0x01) << 1) | ((lo >> bit) & 0x01));
-            let palette = if fine_x + i < 8 {
-                self.prev_palette
-            } else {
-                self.curr_palette
-            };
-            *pixel = colors[usize::from(u16::from(palette) + bg_color) & 0x1F];
+        let out: &mut [u16; 8] = (&mut frame[row..row + 8]).try_into().expect("8 dots");
+        for (i, pixel) in out.iter_mut().enumerate() {
+            *pixel = colors[(index >> (8 * i)) as usize & 0x1F];
         }
         self.shift_bg(8);
     }
