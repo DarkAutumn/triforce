@@ -29,6 +29,7 @@ use std::sync::Arc;
 use zelda::executor::Interrupt;
 use zelda::hearts::HeartSummary;
 use zelda::linger::LingerSummary;
+use zelda::visits::{ITEM_KINDS, RoomVisit};
 
 /// `[kind, direction, duration]` head indices (`Action::from_indices`; heads that don't apply are ignored).
 pub type ZeldaAction = [i64; 3];
@@ -126,6 +127,8 @@ pub struct EvalRecord {
     pub hearts: HeartSummary,
     pub linger: LingerSummary,
     pub blocks: u32,
+    /// Every room visit, in order (`zelda::visits`).
+    pub visits: Vec<RoomVisit>,
 }
 
 impl EvalRecord {
@@ -137,9 +140,31 @@ impl EvalRecord {
             "seed": self.seed, "outcome": self.outcome, "ending": self.ending, "success": self.success,
             "steps": self.steps, "frames": self.frames, "start_health": self.start_health, "health": self.health,
             "max_health": self.max_health, "hearts": hearts_json(&self.hearts), "linger": linger_json(&self.linger),
-            "blocks": self.blocks,
+            "blocks": self.blocks, "visits": self.visits.iter().map(visit_json).collect::<Vec<_>>(),
         })
     }
+}
+
+/// Per-kind item counts without the zeros.
+fn item_counts(counts: &[u32; 6]) -> Value {
+    ITEM_KINDS
+        .iter()
+        .zip(counts)
+        .filter(|&(_, &n)| n > 0)
+        .map(|(&(kind, _), &n)| (kind.to_owned(), json!(n)))
+        .collect::<serde_json::Map<_, _>>()
+        .into()
+}
+
+/// One `visits` entry of the record dict.
+pub fn visit_json(v: &RoomVisit) -> Value {
+    json!({
+        "level": v.location.level, "room": v.location.value, "in_cave": v.location.in_cave, "steps": v.steps,
+        "frames": v.frames, "health_in": v.health_in, "health_out": v.health_out, "max_health": v.max_health,
+        "health_lost": v.health_lost, "health_gained": v.health_gained, "hits": v.hits, "hits_dealt": v.hits_dealt,
+        "drops": item_counts(&v.drops), "pickups": item_counts(&v.pickups), "keys_gained": v.keys_gained,
+        "exit": v.exit,
+    })
 }
 
 /// What Zelda pool envs report through `Pool::poll_events`.

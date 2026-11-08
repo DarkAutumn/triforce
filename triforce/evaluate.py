@@ -1,7 +1,7 @@
 """Evaluate one specialist on its own rooms: N episodes from every seed start state.
 
     python -m triforce.evaluate --specialist NAME [--checkpoint PATH | --run-id ID] [--models-dir DIR]
-        [--episodes-per-state 20] [--parallel 1] [--threads N] [--device cpu] [--seed 0] [--deterministic]
+        [--episodes-per-state 60] [--parallel 1] [--threads N] [--device cpu] [--seed 0] [--deterministic]
         [--output PATH]
 
 Training metrics mix start states and ``eval-chain`` plays the whole route; this measures one model in
@@ -18,6 +18,17 @@ adds the hearts wasted by picking them up at (or near) full health, and ``hearts
 ``hearts_left`` are means per episode (also per room and per start state).
 Lingering records retain longest quiet streak, terminal tail, visit time and boss/pickup milestones. Overall,
 room and start-state aggregates report mean longest/tail steps and frames plus the worst measured streak.
+
+``format: 2`` evaluations also keep every room visit (``zelda::visits``): ``records[i]['visits']`` lists the
+episode's visits in order (``level``, ``room``, ``in_cave``, ``steps``, ``frames``, ``health_in``/``health_out``,
+``max_health``, ``health_lost``/``health_gained`` summed over the visit, ``hits`` = steps that lost health,
+``hits_dealt``, ``drops``/``pickups`` per item kind (bombs, rupee, blue_rupee, heart, fairy, clock; zeros
+omitted), ``keys_gained`` and ``exit``: ``n``/``s``/``e``/``w`` or ``cave`` when Link left the room, else how
+the episode ended there, ``death``/``success``/``timeout``/``other``).  ``visited_rooms`` aggregates them per
+room entered (keyed like ``by_room``, which only knows start rooms): ``visits``, ``episodes``, ``deaths``,
+``death_rate``, ``exits`` and per-visit means (``steps_per_visit``, ``health_lost/gained/change_per_visit``,
+``hits_per_visit``, ``no_hit_rate``, ``hits_dealt_per_visit``, ``keys_per_visit``, ``drops_per_visit``,
+``pickups_per_visit``), tagged with the ``specialist``.  Readers merging several evaluations weight by visits.
 """
 
 import argparse
@@ -32,6 +43,11 @@ from . import _native, registry
 from .inference import PoolInference
 from .metrics import heart_change_total
 from .specialist import SpecialistConfig, load_specialist
+
+
+FORMAT = 2
+# Dropped-item kinds of the visit records (zelda::visits::ITEM_KINDS).
+ITEM_KINDS = ('bombs', 'rupee', 'blue_rupee', 'heart', 'fairy', 'clock')
 
 
 def _room_key(room) -> str:
@@ -116,7 +132,51 @@ def _group(records: list[dict], key) -> dict:
             for name, items in sorted(groups.items())}
 
 
-def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes_per_state: int = 20,
+def _room_visit_stats(visits: list[dict]) -> dict:
+    """Counts, exits and means over one room's visits."""
+    count = len(visits)
+
+    def mean(value) -> float:
+        return sum(value(visit) for visit in visits) / count
+
+    def items(field: str) -> dict:
+        totals = Counter()
+        for visit in visits:
+            totals.update(visit[field])
+        return {kind: totals[kind] / count for kind in ITEM_KINDS if totals[kind]}
+
+    deaths = sum(visit['exit'] == 'death' for visit in visits)
+    return {
+        'level': visits[0]['level'], 'room': visits[0]['room'], 'in_cave': visits[0]['in_cave'],
+        'visits': count, 'deaths': deaths, 'death_rate': deaths / count,
+        'steps_per_visit': mean(lambda v: v['steps']),
+        'health_lost_per_visit': mean(lambda v: v['health_lost']),
+        'health_gained_per_visit': mean(lambda v: v['health_gained']),
+        'health_change_per_visit': mean(lambda v: v['health_out'] - v['health_in']),
+        'hits_per_visit': mean(lambda v: v['hits']),
+        'no_hit_rate': mean(lambda v: v['hits'] == 0),
+        'hits_dealt_per_visit': mean(lambda v: v['hits_dealt']),
+        'keys_per_visit': mean(lambda v: v['keys_gained']),
+        'drops_per_visit': items('drops'),
+        'pickups_per_visit': items('pickups'),
+        'exits': dict(Counter(visit['exit'] for visit in visits)),
+    }
+
+
+def _visited_rooms(records: list[dict], specialist: str) -> dict:
+    """Per room any episode entered (``records[i]['visits']``): ``_room_visit_stats`` plus the number of
+    episodes that entered it and the evaluated specialist."""
+    rooms = {}
+    for index, record in enumerate(records):
+        for visit in record.get('visits', ()):
+            key = _room_key((visit['level'], visit['room'], visit['in_cave']))
+            rooms.setdefault(key, []).append((index, visit))
+    return {key: {**_room_visit_stats([visit for _, visit in entries]),
+                  'episodes': len({index for index, _ in entries}), 'specialist': specialist}
+            for key, entries in sorted(rooms.items())}
+
+
+def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes_per_state: int = 60,
                         parallel: int = 1, seed: int = 0, deterministic: bool = False,
                         on_episode: Optional[Callable[[dict, int, int], None]] = None, *,
                         threads: Optional[int] = None, device: str = 'cpu', states_dir=None) -> dict:
@@ -142,6 +202,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     count = len(records)
     hearts = _heart_stats(records)
     return {
+        'format': FORMAT,
         'specialist': config.name, 'checkpoint': str(checkpoint), 'episodes_per_state': episodes_per_state,
         'seed': seed, 'deterministic': deterministic, 'episodes': count,
         'success_rate': sum(r['success'] for r in records) / count,
@@ -161,6 +222,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         'endings': dict(Counter(r['ending'] for r in records)),
         'by_room': _group(records, lambda r: _room_key(r['room'])),
         'by_state': _group(records, lambda r: r['start_state']),
+        'visited_rooms': _visited_rooms(records, config.name),
         'records': records,
     }
 
@@ -201,7 +263,7 @@ def main(argv=None):
     parser.add_argument('--checkpoint', default=None, help="checkpoint file or run dir (default: promoted)")
     parser.add_argument('--run-id', default=None, help="evaluate <models>/<specialist>/<run-id>/ckpt.pt")
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
-    parser.add_argument('--episodes-per-state', type=int, default=20)
+    parser.add_argument('--episodes-per-state', type=int, default=60)
     parser.add_argument('--parallel', type=int, default=1, help="envs in the evaluation pool")
     parser.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
     parser.add_argument('--device', default='cpu', help="torch device for the network")

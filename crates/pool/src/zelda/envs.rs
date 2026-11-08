@@ -255,7 +255,7 @@ where
     St: StateStore<N::State>,
 {
     /// Every reset names its start state, so `opts.explicit_starts` usually holds; `opts.seed` is ignored (each
-    /// episode reseeds from its job).
+    /// episode reseeds from its job); room visits are always tracked (`EvalRecord::visits`).
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: Arc<SpecialistConfig>,
@@ -267,6 +267,10 @@ where
         init: EnvInit,
         rgb: Option<RgbFn<N>>,
     ) -> Result<Self, EnvError> {
+        let opts = EnvOptions {
+            track_visits: true,
+            ..opts
+        };
         let (env, control) = specialist_env(config, data, nes, store, opts, init, rgb)?;
         Ok(EvalEnv {
             env,
@@ -364,6 +368,7 @@ where
                 hearts: t.hearts,
                 linger: t.linger,
                 blocks: t.blocks,
+                visits: self.env.take_visits(),
             })));
             end_recording(self.env.session_mut().nes_mut(), events);
         }

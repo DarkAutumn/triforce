@@ -140,6 +140,7 @@ impl PyEnv {
             lenient_actions: !strict_actions,
             curriculum,
             seed,
+            track_visits: false,
         };
         let store = TfzStore::new(&data, rom.clone());
         let mut env = SpecialistEnv::new(config.clone(), data, ZCore::power_on(rom), store, opts)

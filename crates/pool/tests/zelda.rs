@@ -592,6 +592,29 @@ fn recorded_episodes_replay_to_the_same_machine() {
     assert_eq!(log.origin.as_deref(), Some(start));
     assert_eq!((record.start_state.as_str(), record.seed), (start, 11));
     assert!(record.steps > 0 && record.frames > 0);
+    // Room visits cover the episode: they start in the reset room and their steps, frames and health add up.
+    let (first, last) = (&record.visits[0], record.visits.last().unwrap());
+    let location = first.location;
+    assert_eq!(
+        (location.level, location.value, location.in_cave),
+        record.room
+    );
+    assert_eq!(
+        record.visits.iter().map(|v| v.steps as u64).sum::<u64>(),
+        record.steps
+    );
+    assert_eq!(
+        record.visits.iter().map(|v| v.frames).sum::<u64>(),
+        record.frames
+    );
+    assert_eq!(
+        (first.health_in, last.health_out),
+        (record.start_health, record.health)
+    );
+    assert_eq!(
+        record.to_json()["visits"].as_array().unwrap().len(),
+        record.visits.len()
+    );
     // Load randomization pokes come first; the log covers the gain-control frames and every step.
     assert!(log.pokes.iter().any(|p| p.0 == 0));
     assert!(log.buttons.len() as u64 >= record.frames);

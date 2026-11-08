@@ -6,7 +6,8 @@ import subprocess
 import sys
 
 from triforce import _native
-from triforce.evaluate import _group, _linger_stats, _room_key, evaluate_specialist, format_report
+from triforce.evaluate import (_group, _linger_stats, _room_key, _visited_rooms, evaluate_specialist,
+                               format_report)
 from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.observation import observation_space
 from triforce.registry import save_checkpoint
@@ -61,6 +62,15 @@ def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tm
     assert result['by_room']['0:0x77']['linger_max_steps'] == result['linger_max_steps']
     assert all('linger_max_steps' in stats for stats in result['by_state'].values())
     assert 'linger max/tail/worst' in format_report(result)
+    # Room visits (format 2): they cover each episode and visited_rooms counts every one.
+    assert result['format'] == 2
+    assert all(r['visits'] and sum(v['steps'] for v in r['visits']) == r['steps'] for r in records)
+    assert all((v['level'], v['room'], v['in_cave']) == tuple(r['room']) for r in records for v in r['visits'][:1])
+    assert all(r['visits'][-1]['health_out'] == r['health'] for r in records)
+    assert sum(stats['visits'] for stats in result['visited_rooms'].values()) == sum(len(r['visits'])
+                                                                                     for r in records)
+    assert result['visited_rooms']['0:0x77']['episodes'] == 5
+    assert result['visited_rooms']['0:0x77']['specialist'] == 'ow-start'
 
     # Sampled actions are keyed to (episode seed, decision): the same records whichever env or thread plays them.
     assert evaluate()['records'] == records
@@ -114,6 +124,45 @@ def test_room_and_state_groups_average_health_hearts_blocks_and_count_endings():
     states = _group(records, lambda r: r['start_state'])
     assert list(states) == ['0_77cave_0', '1_44w_0', '1_44w_1']
     assert states['1_44w_1']['hearts_dropped'] == 0 and states['1_44w_1']['health_change_total'] == -1.5
+
+
+def _visit(level, room, in_cave=False, *, steps=10, health_in=3.0, health_out=3.0, lost=0.0, gained=0.0, hits=0,
+           dealt=0, drops=None, pickups=None, keys=0, exit_='n'):
+    return {'level': level, 'room': room, 'in_cave': in_cave, 'steps': steps, 'frames': steps * 8,
+            'health_in': health_in, 'health_out': health_out, 'max_health': 3, 'health_lost': lost,
+            'health_gained': gained, 'hits': hits, 'hits_dealt': dealt, 'drops': drops or {},
+            'pickups': pickups or {}, 'keys_gained': keys, 'exit': exit_}
+
+
+def test_visited_rooms_average_every_visit_of_every_room():
+    records = [
+        {'visits': [_visit(1, 0x73, steps=20, health_out=2.0, lost=1.5, gained=0.5, hits=2, dealt=3,
+                           drops={'heart': 1, 'rupee': 2}, pickups={'heart': 1}, keys=1, exit_='n'),
+                    _visit(1, 0x63, health_in=2.0, health_out=0.0, lost=2.0, hits=1, exit_='death')]},
+        {'visits': [_visit(1, 0x73, steps=10, dealt=1, drops={'bombs': 1}, exit_='w'),
+                    _visit(1, 0x72, exit_='e'),
+                    _visit(1, 0x73, steps=30, exit_='timeout')]},
+        {'visits': [_visit(0, 0x77, True, exit_='cave')]},
+        {},                                                                 # a format-1 record: no visits
+    ]
+    rooms = _visited_rooms(records, 'goriya')
+    assert list(rooms) == ['0:0x77:cave', '1:0x63', '1:0x72', '1:0x73']
+    room = rooms['1:0x73']
+    assert (room['level'], room['room'], room['in_cave'], room['specialist']) == (1, 0x73, False, 'goriya')
+    assert (room['visits'], room['episodes'], room['deaths'], room['death_rate']) == (3, 2, 0, 0.0)
+    assert room['steps_per_visit'] == 20.0
+    assert (room['health_lost_per_visit'], room['health_gained_per_visit']) == (0.5, 0.5 / 3)
+    assert room['health_change_per_visit'] == -1 / 3
+    assert (room['hits_per_visit'], room['no_hit_rate'], room['hits_dealt_per_visit']) == (2 / 3, 2 / 3, 4 / 3)
+    assert room['keys_per_visit'] == 1 / 3
+    assert room['drops_per_visit'] == {'bombs': 1 / 3, 'rupee': 2 / 3, 'heart': 1 / 3}
+    assert room['pickups_per_visit'] == {'heart': 1 / 3}
+    assert room['exits'] == {'n': 1, 'w': 1, 'timeout': 1}
+    died = rooms['1:0x63']
+    assert (died['deaths'], died['death_rate'], died['health_change_per_visit']) == (1, 1.0, -2.0)
+    assert died['drops_per_visit'] == {} and died['no_hit_rate'] == 0.0
+    assert rooms['0:0x77:cave']['in_cave'] and rooms['0:0x77:cave']['exits'] == {'cave': 1}
+    assert _visited_rooms([{}], 'goriya') == {}
 
 
 def test_report_lists_rooms_worst_first_with_their_top_ending():

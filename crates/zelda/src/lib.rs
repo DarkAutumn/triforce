@@ -21,6 +21,7 @@ pub mod session;
 pub mod tables;
 pub mod tiles;
 pub mod vars;
+pub mod visits;
 
 pub use actions::{Action, ActionMask, MASK_SIZE, compute_action_mask};
 pub use change::Change;

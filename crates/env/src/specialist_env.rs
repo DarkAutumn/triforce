@@ -15,7 +15,8 @@ use crate::config::{GameData, SpecialistConfig};
 use crate::critic::{Critique, GameplayCritic};
 use crate::curriculum::{CurriculumInfo, CurriculumTag, SharedCurriculum};
 use crate::end_conditions::{
-    EndConditions, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, StepView, classify_ending,
+    DEATH, ENTER_ROOM_PREFIX, EXIT_CORRECT, EXIT_WRONG, EndConditions, MAX_STEPS, NO_DAMAGE, NO_PROGRESS,
+    NO_ROOM_PROGRESS, StepView, classify_ending,
 };
 use crate::error::EnvError;
 use crate::objective::{Attached, attach, needs_wavefront};
@@ -37,6 +38,10 @@ use zelda::game::GameView;
 use zelda::hearts::{HeartSummary, HeartTracker, HeartView};
 use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linger_wavefront};
 use zelda::objectives::{GameCompletion, start_route};
+use zelda::visits::{
+    EXIT_DEATH, EXIT_OTHER, EXIT_SUCCESS, EXIT_TIMEOUT, RoomVisit, VisitEnd, VisitStep, VisitTracker,
+    VisitView,
+};
 use zelda::{Action, LoadOptions, Nes, Session, SessionSnapshot};
 
 /// The terminal part of an info.
@@ -81,6 +86,19 @@ pub struct StepInfo {
     /// A first-entry state written this step.
     pub captured_state: Option<PathBuf>,
     pub terminal: Option<TerminalInfo>,
+}
+
+/// How an episode's ending ends its last room visit (`zelda::visits`): exit endings by leaving (the exit is the
+/// direction), the rest in place.
+pub fn visit_end(ending: &str, outcome: &str) -> VisitEnd {
+    match ending {
+        DEATH => VisitEnd::Ended(EXIT_DEATH),
+        EXIT_CORRECT | EXIT_WRONG => VisitEnd::Left,
+        _ if ending.starts_with(ENTER_ROOM_PREFIX) => VisitEnd::Left,
+        _ if outcome == SUCCESS => VisitEnd::Ended(EXIT_SUCCESS),
+        MAX_STEPS | NO_PROGRESS | NO_ROOM_PROGRESS | NO_DAMAGE => VisitEnd::Ended(EXIT_TIMEOUT),
+        _ => VisitEnd::Ended(EXIT_OTHER),
+    }
 }
 
 pub fn hearts_json(h: &HeartSummary) -> Value {
@@ -184,6 +202,8 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     pub rng: ChaCha8Rng,
     pub linger: LingerTracker,
     pub hearts: HeartTracker,
+    /// Per-room-visit statistics (only with `EnvOptions::track_visits`).
+    visits: Option<VisitTracker>,
     pool: Option<StartStatePool>,
     curriculum: Option<SharedCurriculum>,
     capture: Option<SavestateCapture>,
@@ -221,6 +241,8 @@ pub struct EnvOptions {
     pub curriculum: Option<SharedCurriculum>,
     /// Seeds the env RNG (load randomization, RAM randomization, start states, routes).
     pub seed: u64,
+    /// Record per-room-visit statistics ([`SpecialistEnv::take_visits`]; evaluation).
+    pub track_visits: bool,
 }
 
 impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
@@ -266,6 +288,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             rng: ChaCha8Rng::seed_from_u64(opts.seed),
             linger: LingerTracker::default(),
             hearts: HeartTracker::default(),
+            visits: opts.track_visits.then(VisitTracker::default),
             pool,
             curriculum,
             capture,
@@ -323,6 +346,11 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
 
     pub fn is_done(&self) -> bool {
         self.done
+    }
+
+    /// The room visits of the episode that just ended (empty without `EnvOptions::track_visits`).
+    pub fn take_visits(&mut self) -> Vec<RoomVisit> {
+        self.visits.as_mut().map_or_else(Vec::new, VisitTracker::take)
     }
 
     /// Starts an episode: `seed` reseeds the env RNG; `start_state` overrides the pool/curriculum.
@@ -432,6 +460,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.end_conditions.clear();
         self.start_health = state.health();
         self.hearts.reset(&HeartView::of(state));
+        if let Some(visits) = &mut self.visits {
+            visits.reset(&VisitView::of(state));
+        }
         self.linger
             .reset(&LingerState::of(state, &attached.objective), || {
                 linger_wavefront(state, &attached.objective, attached.wavefront.clone())
@@ -568,6 +599,10 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 reward_total: 0.0,
                 episode_rewards: IndexMap::new(),
             });
+        }
+        if let Some(visits) = &mut self.visits {
+            let end = terminal.as_ref().map_or(VisitEnd::Continue, |t| visit_end(&t.ending, t.outcome));
+            visits.update(&VisitView::of(&state), &VisitStep::of(&change), end);
         }
         let reward = rewards.value();
         self.reward_total += reward;

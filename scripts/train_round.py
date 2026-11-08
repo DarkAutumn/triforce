@@ -2,7 +2,7 @@
 """Train every specialist once, evaluate each on its own rooms, then evaluate the milestone route.
 
     python scripts/train_round.py --round round1 [--steps 2000000] [--steps-per-update 4096] [--parallel 16]
-        [--device cuda] [--models-dir models] [--specialists a,b] [--episodes-per-state 20]
+        [--device cuda] [--models-dir models] [--specialists a,b] [--episodes-per-state 60]
         [--chain-runs 20] [--chain-parallel 10] [--skip-existing] [--no-promote] [--train-args '...{name}...']
 
 Specialists (trainable, with seed start states; route order of ``milestone1``) train one at a time as
@@ -75,7 +75,7 @@ def parse_args(argv=None):
     parser.add_argument('--device', default='cuda', choices=['cpu', 'cuda'])
     parser.add_argument('--models-dir', default='models')
     parser.add_argument('--specialists', default=None, help="comma-separated names (default: all trainable)")
-    parser.add_argument('--episodes-per-state', type=int, default=20)
+    parser.add_argument('--episodes-per-state', type=int, default=60)
     parser.add_argument('--chain-runs', type=int, default=20)
     parser.add_argument('--chain-parallel', type=int, default=10)
     parser.add_argument('--skip-existing', action='store_true', help="don't retrain runs that have ckpt.pt")
