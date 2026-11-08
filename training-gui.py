@@ -180,6 +180,18 @@ def fmt_hearts_pair(real, total) -> str:
     return text if total is None or real is None else f"{text} / total {fmt_hearts_change(total)}"
 
 
+def fmt_room(rate, failures) -> str:
+    """A start room's eval line: '93% · 4 deaths of 60', or just the rate for logs without failure counts."""
+    if not failures:
+        return fmt_pct(rate)
+    kinds = failures.get('failures') or {}
+    if not kinds:
+        return f"{fmt_pct(rate)} of {failures['episodes']}"
+    what = ', '.join(f"{count} {ending}{'s' if count != 1 and not ending.endswith('s') else ''}"
+                     for ending, count in sorted(kinds.items(), key=lambda item: -item[1]))
+    return f"{fmt_pct(rate)} · {what} of {failures['episodes']}"
+
+
 def fmt_drops(dropped, taken, left) -> str:
     """Dropped-heart counts per episode, 'dropped 0.40 · taken 0.10 · left 0.30 /ep'."""
     return f"dropped {dropped:.2f} · taken {taken:.2f} · left {left:.2f} /ep"
@@ -1822,8 +1834,12 @@ class DetailPane(QWidget):
             rows = [
                 ('success', ev.get('success_rate'), f"{fmt_pct(ev.get('success_rate'))} of {ev.get('episodes')}",
                  rate_color(ev.get('success_rate'))),
-                ('health', ev.get('health'), f"{fmt_pct(ev.get('health'))} · "
-                 f"{fmt_hearts_pair(ev.get('health_change'), ev.get('health_change_total'))}",
+                # Hearts at the end / max hearts, averaged; episodes start with randomized hp, so the start figure
+                # (absent in older logs) is the comparison.
+                ('end health', ev.get('health'),
+                 (f"{fmt_pct(ev.get('health'))} (started {fmt_pct(ev['start_health'])})"
+                  if ev.get('start_health') is not None else fmt_pct(ev.get('health')))
+                 + f" · net {fmt_hearts_pair(ev.get('health_change'), ev.get('health_change_total'))}",
                  C.ok)]
             if ev.get('hearts_dropped') is not None:
                 rows.append(heart_drop_row('dropped hearts', ev['hearts_dropped'], ev['hearts_taken'],
@@ -1835,8 +1851,11 @@ class DetailPane(QWidget):
                  'Means are per episode; worst is the largest streak across evaluated episodes.', C.muted)]))
             by_room = ev.get('by_room') or {}
             if by_room:
-                sections.append(('bars', 'By room', [(room, value, fmt_pct(value), rate_color(value))
-                                                     for room, value in sorted(by_room.items())]))
+                # Success rate of the episodes that started in each room (a failure may happen in a later room).
+                failures = ev.get('by_room_failures') or {}
+                sections.append(('bars', 'By start room', [(room, value, fmt_room(value, failures.get(room)),
+                                                            rate_color(value))
+                                                           for room, value in sorted(by_room.items())]))
                 room_linger = ev.get('by_room_linger') or {}
                 sections.append(('text', 'No progress · by room (action steps)',
                                  [(f'{room}: {fmt_linger(room_linger.get(room) or {})}',

@@ -110,7 +110,9 @@ def _group(records: list[dict], key) -> dict:
                    **_heart_stats(items),
                    **_linger_stats(items),
                    **_block_stats(items),
-                   'endings': dict(Counter(r['ending'] for r in items))}
+                   'endings': dict(Counter(r['ending'] for r in items)),
+                   # how the unsuccessful episodes ended, e.g. {'death': 4}
+                   'failures': dict(Counter(r['ending'] for r in items if not r['success']))}
             for name, items in sorted(groups.items())}
 
 
@@ -145,6 +147,9 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         'success_rate': sum(r['success'] for r in records) / count,
         'mean_health_fraction': sum(r['health'] / r['max_health'] if r['max_health'] else 0.0
                                     for r in records) / count,
+        # the same at reset (hp is randomized there), so the end figure has something to compare with
+        'mean_start_health_fraction': sum(r['start_health'] / r['max_health'] if r['max_health'] else 0.0
+                                          for r in records) / count,
         'mean_health_change': sum(r['health'] - r['start_health'] for r in records) / count,
         'mean_health_change_total': hearts['health_change_total'],
         **hearts,

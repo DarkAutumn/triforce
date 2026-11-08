@@ -267,10 +267,13 @@ def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
         for group in ('by_room', 'by_state')}
     record.update({f'eval_{key}': value for key, value in {**linger, **linger_groups}.items()})
     events.emit('eval', success_rate=result['success_rate'], episodes=result['episodes'],
-                health=result['mean_health_fraction'], health_change=result['mean_health_change'],
+                health=result['mean_health_fraction'], start_health=result['mean_start_health_fraction'],
+                health_change=result['mean_health_change'],
                 health_change_total=result['mean_health_change_total'], hearts_dropped=result['hearts_dropped'],
                 hearts_taken=result['hearts_taken'], hearts_left=result['hearts_left'],
                 by_room=record['eval_by_room'],
+                by_room_failures={room: {'episodes': stats['episodes'], 'failures': stats['failures']}
+                                  for room, stats in result['by_room'].items()},
                 by_state={state: stats['success_rate'] for state, stats in result['by_state'].items()},
                 path=str(run_dir / 'eval.json'), **linger, **linger_groups)
     events.emit('end', **end_fields(record))
