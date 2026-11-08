@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Re-evaluate every promoted specialist model and replace its run's ``eval.json`` with a ``format: 2`` one.
 
-    python scripts/reeval_promoted.py [--specialists a,b] [--run-id ID] [--parallel 8] [--episodes-per-state 60]
+    python scripts/reeval_promoted.py [--specialists a,b] [--run-id ID] [--parallel 8] [--episodes-per-state 100]
         [--models-dir models] [--device cpu] [--output-dir DIR]
 
 For each specialist (``specialists/*.yaml``, or ``--specialists``) with a promoted model
@@ -53,7 +53,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n', maxsplit=1)[0])
     parser.add_argument('--specialists', default=None, help="comma-separated names (default: every promoted one)")
     parser.add_argument('--parallel', type=int, default=8, help="envs in each evaluation pool")
-    parser.add_argument('--episodes-per-state', type=int, default=60)
+    parser.add_argument('--episodes-per-state', type=int, default=100)
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
     parser.add_argument('--run-id', default=None, help="evaluate this run instead of the promoted one")
     parser.add_argument('--device', default='cpu', help="torch device for the network")

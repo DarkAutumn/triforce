@@ -1,7 +1,7 @@
 """Evaluate one specialist on its own rooms: N episodes from every seed start state.
 
     python -m triforce.evaluate --specialist NAME [--checkpoint PATH | --run-id ID] [--models-dir DIR]
-        [--episodes-per-state 60] [--parallel 1] [--threads N] [--device cpu] [--seed 0] [--deterministic]
+        [--episodes-per-state 100] [--parallel 1] [--threads N] [--device cpu] [--seed 0] [--deterministic]
         [--output PATH]
 
 Training metrics mix start states and ``eval-chain`` plays the whole route; this measures one model in
@@ -176,7 +176,7 @@ def _visited_rooms(records: list[dict], specialist: str) -> dict:
             for key, entries in sorted(rooms.items())}
 
 
-def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes_per_state: int = 60,
+def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes_per_state: int = 100,
                         parallel: int = 1, seed: int = 0, deterministic: bool = False,
                         on_episode: Optional[Callable[[dict, int, int], None]] = None, *,
                         threads: Optional[int] = None, device: str = 'cpu', states_dir=None) -> dict:
@@ -263,7 +263,7 @@ def main(argv=None):
     parser.add_argument('--checkpoint', default=None, help="checkpoint file or run dir (default: promoted)")
     parser.add_argument('--run-id', default=None, help="evaluate <models>/<specialist>/<run-id>/ckpt.pt")
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
-    parser.add_argument('--episodes-per-state', type=int, default=60)
+    parser.add_argument('--episodes-per-state', type=int, default=100)
     parser.add_argument('--parallel', type=int, default=1, help="envs in the evaluation pool")
     parser.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
     parser.add_argument('--device', default='cpu', help="torch device for the network")
