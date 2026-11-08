@@ -372,4 +372,4 @@ training round is running (CLAUDE.md; R31 is live).
 3. `triforce/emulator.py`, `session.py`, `frame_skip.py`, `state_change.py` (the whole engine surface).
 4. `triforce/observation.py`, `actions.py`, `model.py` (schemas).
 5. `triforce/ppo.py`, `rollout_buffer.py`, `ppo_worker.py` (training loop and IPC).
-6. `docs/experiments/round7.md` and `todo.md` for where the experiments stand.
+6. The newest `docs/experiments/round*.md` and `backlog.md` for where the experiments stand.

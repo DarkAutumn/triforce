@@ -5,7 +5,7 @@ No pixels reach a network. Each specialist owns a family of rooms; a runner pick
 room and plays the route end to end.
 
 - Working on the repo (people or agents): `AGENTS.md` (standing rules, workflow, how to resume), then the newest
-  `docs/experiments/round*.md` and `docs/experiments/todo.md`.
+  `docs/experiments/round*.md` and `docs/experiments/backlog.md`.
 - Design and status: `docs/architecture.md` (modules and contracts), `docs/decisions.md` (departures from
   the design), `docs/progress.md` (phase status), `docs/performance.md` (training throughput: benchmarks,
   profiles, `scripts/train_bench.sh` / `scripts/profile_train.sh` / `scripts/rollout_timeline.py`).

@@ -1,29 +1,33 @@
 # Agent instructions (triforce2)
 
 Read this first, then `README.md` (setup, commands), `docs/architecture.md` (modules), and the newest
-`docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/todo.md` "Next up" (where the work
-stands and what to try next, in order).
+`docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/backlog.md` (the experiment backlog,
+called `todo.md` before Nov 8; where the work stands and what to try next, in order).
 
-## Where things stand (Nov 7)
+## Where things stand (Nov 8)
 
 - **The Rust port is merged** (`docs/decisions.md` 2026-11-05 entries; plan steps 1–18): the emulator is
   `crates/zcore` (Zelda-only NES core cut down from TetaNES, hardware timing, no FCEUmm quirks left), the game,
   env and pool logic is Rust (`crates/zelda`, `crates/env`, `crates/pool`), and Python drives it through
   `triforce._native` (`crates/triforce-py`). stable-retro and the Python game stack are gone. All start states
   and trajectories were regenerated on zcore (`round8.md`, `round9.md`).
-- **Round 10 (`round10.md`) is the current round:** coverage and performance steps done (Nov 5), then the
-  `todo.md` experiments. ow-start r38b-rebalance is promoted (swordless departures fixed). Training/eval end
+- **Round 11 (`round11.md`) is the current round (Nov 8):** power-on RAM $00 (state file v6), every state and
+  trajectory regenerated, and a fresh retrain `r44-fresh` (8M steps, `--parallel 16`). Before that, round 10:
+  `backlog.md` experiments. ow-start r38b-rebalance is promoted (swordless departures fixed). Training/eval end
   `no-damage` after 600 actions without damage either way, and `play-zelda.py --stall-steps` handles stalled games
   (§6). Nov 7: zcore made 1.6× faster at the env level under an exact accuracy gate, and `--parallel 16` measured
   as the training setting (§7, `docs/performance.md`). Heart series done (§8–§10, Nov 8): **observation schema 2**
   (the `target` block, `obs.target`) on every route family, plus `reward.item_targets` in the dungeon families
   (d2-rope, goriya, stalfos-keese-gel, wallmaster, boss-aquamentus); hearts healed per chain run 0.45–0.59 →
   1.2–2.0, Dodongo arrivals per 120: D2 44 → 74, post-D1 12/18 → 43/61, full routes 3/6 → 27/46. Schema-1
-  checkpoints still load; `--load` with `obs.target` widens them. Waiting for Lee's next direction; remaining
-  heart ideas in `todo.md`. Open items need Lee's decisions (`todo.md` "Where it stands").
+  checkpoints still load; `--load` with `obs.target` widens them. Lee's order (Nov 8): **I.** finish the retrain
+  with the Moldorm room 2:0x3e split out of d2-rope into its own specialist; **II.** then train Dodongo's kill with
+  a bomb-stun and sword hits (`backlog.md` "Next: beat the Dungeon 2 boss"). Open items need Lee's decisions
+  (`backlog.md` "Where it stands").
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
-- Lee's experiment mode stands: keep the omp todo updated, reconcile it with todo.md between experiments, log
-  every result, check off completed backlog entries, commit each finished item and keep going.
+- Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
+  with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each
+  finished item and keep going.
 - **VRAM (Lee, Nov 3):** leave his running `play-zelda.py` alone unless an experiment crashes from CUDA memory
   exhaustion. If it does, kill the player without asking, then resume the experiment.
 
@@ -38,15 +42,14 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
 - **Commit after each finished item.** If an experiment makes no forward progress, ask whether to commit the code or
   only update the experiment ledger.
 - **Log every experiment** in `docs/experiments/roundN.md` (setup, numbers, what was promoted, what wasn't and why)
-  and every idea or problem found along the way in `docs/experiments/todo.md`.
+  and every idea or problem found along the way in `docs/experiments/backlog.md`.
 - **Families are by enemy, not by dungeon** (`docs/specialists.md`, `docs/decisions.md` 2026-11-03): a Red Goriya
   room needs the same skills anywhere. Group rooms by the enemies in them, but don't boil it down to one model per
   enemy type or per room beyond what Lee asks for. Current families: ow-start, ow-octorok, ow-zora,
   ow-leever-peahat, ow-moblin, stalfos-keese-gel, goriya, wallmaster, boss-aquamentus, d2-rope, boss-dodongo (tag
   only).
-- Rejected ideas stay rejected (marked in `todo.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee does
-  want the separate experiment of training and evaluating everything after D1 with the boomerang usable vs masked:
-  todo.md "Next up" item 8.)
+- Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
+  also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
   rather than keep them (originals are backed up in the old triforce repo). No 16-heart states: max hearts follow
   the route (3 through Dungeon 1, 4 after Aquamentus, +1 per later heart container). Boss rooms keep only the fight
@@ -57,7 +60,7 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
 - **The training GUI is for a colorblind user:** never red vs green. Good = blue, bad = red, purple in between.
 - A damage penalty for rooms Link only has to cross was tried twice (round 6) and dropped: it didn't help the
   chains, and a penalty like that could also discourage required bombing later.
-- Deferred by Lee: mapper (explore / entry_states) JSONL logs with their own GUI view (todo.md, Driver section);
+- Deferred by Lee: mapper (explore / entry_states) JSONL logs with their own GUI view (`backlog.md`, Driver section);
   the bow route in Dungeon 1 (rooms 0x33/0x23 train now; the bow room 0x22 has states but no specialist).
 
 ## Game mechanics that matter for training
