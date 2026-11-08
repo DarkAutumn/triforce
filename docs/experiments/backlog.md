@@ -69,7 +69,7 @@ Recommend a setting (per specialist if it differs).
   on the d2-first route below. Finished runs (ow-start, ow-octorok, ow-zora, stalfos-keese-gel, goriya) kept,
   not promoted.
 
-### Now: beat the Dungeon 2 boss, Dodongo (Lee, Nov 8)
+### Done (paused by Lee, Nov 8): beat the Dungeon 2 boss, Dodongo (round 12)
 
 Two ways to kill Dodongo: (1) make him swallow two bombs (works, wasteful); (2) **set a bomb in his path but just
 next to him, so he doesn't eat it and the smoke stuns him, then hit him with the sword while stunned (much
@@ -83,6 +83,28 @@ better)**. Train a model for (2).
 - A whole task of its own: expect plenty of experimentation and trial and error.
 - **The curriculum matters most:** it has to show how to do it against Dodongo's various movement patterns.
 - Mechanics (ASM-backed): `target/dodongo/README.md` (gitignored notes) and round 12.
+- [x] **Solved:** r45-dodongo (promoted) kills him in 300/300 eval fights, 0.13 hearts lost per fight, 86% by
+  bomb-stun + sword (67% with no swallow at all), 52% with one bomb, 2.5 bombs per fight. r46 (2M more steps;
+  swallow penalty 0.5 → 1.0) no better. Details: round12.md §4–§5.
+- **Paused by Lee** (Nov 8): the training changes coming next will change how this is trained. What I would have
+  done next to cut bombs per fight (the metric to minimize; 1 = perfect), in order:
+  1. **One-bomb curriculum.** Explore many more seeds (`python -m triforce.explore --specialist boss-dodongo
+     --seed S --variant --out <root>` for S in 10..40+), keep only tracks with exactly one BOMB and no swallow
+     (`target/dodongo/how_killed.py <root>/boss-dodongo` prints BOMB count and max BombHits per track), and
+     train from scratch on those against r45 (same budget). Today's 25 tracks spend 1–13 bombs (random
+     placement), so the demonstrations themselves are wasteful. Go-Explore could also rank successes by bombs
+     used (fewest) before health/steps for this specialist.
+  2. **The bomb in the observation.** Link's block has only `bomb_active`/`bomb_exploding`; the bomb's position
+     relative to Dodongo and its fuse time aren't visible, so the model can't judge "about to be eaten" vs "about
+     to stun" once placed, nor see that a second bomb (slot $11) is useless to Dodongo. Needs an observation
+     schema change (bomb x/y relative to Link, fuse fraction, which slot).
+  3. **A per-bomb penalty knob** (`penalty-bomb-used` is a fixed −0.25), raised for this room only. Doubling the
+     swallow penalty didn't help (r46-eat1), so reward size may not be the limit; try after 1–2.
+  4. **Measure the ceiling:** the fuse (48 frames) spans about one of Dodongo's partly random direction decisions
+     (every 16 px at 0.5 px/frame), so some misses are luck. A scripted placer using the probe geometry
+     (`target/dodongo/geometry.py`) over many seeds would show the best achievable one-bomb rate.
+  5. Low-health deaths: r46's few failures were deaths at 0.5–1.5 starting hearts; watch this in d2-first chains.
+  6. Small: a stun that ends and restarts inside one step is missed by the counter (2 of 300 records).
 
 ### Next (Lee, Nov 8): the d2-first route, then training improvements
 
