@@ -301,14 +301,21 @@ at 2N. `eval-chain` leaves it off.
 
 ## Runner and CLI (`crates/env/src/chain.rs`, `runner.py`, `run.py`, `cli.py`)
 
-- Routes (`triforce/routes.yaml`, `zelda::game_map`; Python `triforce._native.route_steps(route)`): `milestone1` and `milestone1-fairy` (milestone1 with
-  the post-D1 overworld replaced by the south road and the fairy pond; a spliced route is
-  `{base, replace: {from, to}, steps}`). `GameCompletion(route, step)` routes on one of them: only the route's
-  exits are correct on its rooms, and `waypoint:` steps are targets while they apply. Training episodes take the
-  route from the start state's name (`zelda::objectives::start_route`, `env::start_states::state_entry`); see
-  `docs/decisions.md` (second route) for the rule.
+- Routes (`triforce/routes.yaml`, `zelda::game_map`; Python `triforce._native.route_steps(route)`): `milestone1`,
+  `milestone1-fairy` (milestone1 with the post-D1 overworld replaced by the south road and the fairy pond; a spliced
+  route is `{base, replace: {from, to}, steps}`) and `d2first` (Dungeon 2 first, the 0x2c heart, the white sword,
+  Dungeon 1 last; `docs/routes/d2first.md`). `GameCompletion(route, step)` routes on one of them: only the route's
+  exits are correct on its rooms, the route's triforce steps are taken in route order, and `waypoint:` steps are
+  targets while they apply (`fairy`: the pond edge until the hearts are full; `heart`: a cave's heart container,
+  game.yaml `treasure_tile`; leaving its room other than into the cave before the heart, or taking the other ware,
+  is `missed`: no exit is correct any more). An overworld cave hidden behind a rock wall (game.yaml `bomb_secret`)
+  is entered through that wall's tiles. Training episodes take the route from the start state's name
+  (`zelda::objectives::start_route`, `env::start_states::state_entry`); see `docs/decisions.md` (second route) for
+  the rule.
 - `Route.load(name, stop_at=None)` reads `triforce/routes.yaml`. A route starts at the `start` savestate and
-  ends on entering its `terminal` room (both routes: level 2 room 0x0e); `stop_at` ends it earlier.
+  ends on entering its `terminal` room (milestone1 and milestone1-fairy: level 2 room 0x0e) or, without one, on
+  taking its last step's triforce (d2first: Dungeon 1's); `stop_at` ends it on entering that room instead. A missed
+  `heart` waypoint ends the run as a failure (room outcome `missed`).
 - `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, deterministic=False,
   max_steps=50000, device='cpu', specialist_configs=None, networks=None, parallel=1, threads=None)` drives a
   `ChainTask` pool asynchronously (`inference.PoolInference`: per-specialist fixed-shape forwards; sampled actions

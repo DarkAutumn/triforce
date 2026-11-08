@@ -1,0 +1,16 @@
+name: ow-boulder
+rooms: ['(0, 0x17)', '(0, 0x18)', '(0, 0x19)']
+start_states: ['0_17*_[0-9]*', '0_18*_[0-9]*', '0_19*_[0-9]*']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true}
+obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as ow-moblin)
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
+items: {bombs: false}
+one_room: true                          # round 5: per-room episodes
+max_steps: 600
+warm_start: null
+notes: >-
+  Falling-boulder rooms (Lee, Nov 8: hard to predict, can't be blocked). Not trained yet. d2first: 0x19, 0x18,
+  0x17 from E (0x17 leaves S). Each room has a boulder generator ($31) dropping boulders ($32) and a Zora in the
+  river. States: the d2first chains (`0_19e_1x`, `0_18e_1x`, `0_17e_1x`).

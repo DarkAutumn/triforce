@@ -105,7 +105,8 @@ fn families(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
     Ok(d)
 }
 
-/// game.yaml rooms: `(level, room, in_cave)` -> `{'enemies': {name: count}, 'treasure': str or None}`.
+/// game.yaml rooms: `(level, room, in_cave)` -> `{'enemies': {name: count}, 'treasure': str or None,
+/// 'requires_bombs': bool}`.
 #[pyfunction]
 fn game_rooms(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
     let data = context::data(py, None)?;
@@ -118,6 +119,7 @@ fn game_rooms(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
         }
         info.set_item("enemies", enemies)?;
         info.set_item("treasure", room.treasure.as_deref())?;
+        info.set_item("requires_bombs", room.requires_bombs)?;
         d.set_item((location.level, location.value, location.in_cave), info)?;
     }
     Ok(d)

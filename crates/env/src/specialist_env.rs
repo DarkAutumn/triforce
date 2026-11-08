@@ -436,6 +436,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             state_entry(&name),
             &mut self.rng,
             self.config.route.as_deref(),
+            |level| state.has_triforce(level),
         );
         self.route = route;
         self.route_step = step;

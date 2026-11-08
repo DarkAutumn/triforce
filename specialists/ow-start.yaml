@@ -1,5 +1,5 @@
 name: ow-start
-rooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']
+rooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)', '(0, 0x1c)', '(0, 0x1b)']
 start_states: ['start', '0_77*_[0-9]', '0_39*_[0-9]']
 success: [exit-correct]
 reward_profile: default

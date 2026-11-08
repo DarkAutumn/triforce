@@ -139,6 +139,38 @@ def test_window_overlays_selection_and_zoom(qapp, models, tmp_path):
     window.close()
 
 
+def test_route_plan_and_overlay(qapp, models):
+    plan = zelda_map.route_plan('d2first')
+    first = next(s for s in plan if (s['level'], s['room']) == (2, 0x7d))
+    assert (first['hearts'], first['sword'], first['triforce']) == (3, 'wood', [])
+    heart = next(s for s in plan if s['in_cave'] and s['room'] == 0x2c)
+    assert (heart['hearts'], heart['triforce'], heart['waypoint']) == (4, [2], 'heart')
+    aquamentus = next(s for s in plan if (s['level'], s['room']) == (1, 0x35))
+    assert (aquamentus['hearts'], aquamentus['sword'], aquamentus['items']) == (5, 'white', ['bombs', 'boomerang'])
+    assert plan[-1]['exit'] == 'triforce' and plan[-1]['hearts'] == 6
+    assert (0x1a, 0x0a) in zelda_map.route_segments(plan, 0) and (0x0a, 0x1a) in zelda_map.route_segments(plan, 0)
+    assert (0x3c, 0x2c) not in zelda_map.route_segments(plan, 0)          # walls between them: the route goes round
+    assert zelda_map.route_caves(plan, 0) == {0x77, 0x3c, 0x2c, 0x0a, 0x37}
+    rooms = zelda_map.route_rooms(plan, 0)
+    assert len(rooms[0x2c]) == 3 and len(rooms[0x1a]) == 2
+    assert '#' in zelda_map.step_text(heart) and 'waypoint heart' in zelda_map.step_text(heart)
+
+    window = zelda_map.MapWindow(models, {}, {}, route='d2first')
+    window.resize(1200, 800)
+    window.show()
+    qapp.processEvents()
+    assert 'route d2first' in window.windowTitle()
+    assert window.view.route_rooms[0x0a] and (0x0a, 0x1a) in window.view.route_segments
+    window.view.repaint()
+    html = window.room_html(0, 0x2c)
+    assert 'Route d2first' in html and 'waypoint heart' in html
+    window.tabs.setCurrentIndex(2)
+    assert set(window.view.route_rooms) == {0x7d, 0x7e, 0x6e, 0x5e, 0x4e, 0x3e, 0x2e, 0x1e, 0x0e, 0x0d}
+    window.close()
+    assert zelda_map.build_parser().parse_args(['--route', 'd2first']).route == 'd2first'
+    assert zelda_map.build_parser().parse_args([]).route is None
+
+
 def test_render_screens_caches_playfields(tmp_path):
     states_dir = tmp_path / 'states'
     states_dir.mkdir()

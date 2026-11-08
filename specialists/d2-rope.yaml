@@ -1,7 +1,7 @@
 name: d2-rope
-rooms: ['(2, 0x7d)', '(2, 0x6d)', '(2, 0x6e)', '(2, 0x4e)', '(2, 0x2e)', '(2, 0x7e)']
+rooms: ['(2, 0x7d)', '(2, 0x6d)', '(2, 0x6e)', '(2, 0x4e)', '(2, 0x2e)', '(2, 0x7e)', '(2, 0x0d)']
 start_states: ['2_7d*_[0-9]', '2_6d*_[0-9]', '2_6es_[0-9]', '2_4e*_[0-9]', '2_2e*_[0-9]', '2_7e*_[0-9]']
-success: [exit-correct]
+success: [exit-correct, triforce-collected]   # d2first: 0x0d ends on the D2 triforce
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # round 10 §8 (r40): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target (r40)

@@ -1,5 +1,45 @@
 rooms:
 - level: 0
+  location: '0x07'  # off-route neighbour of 0x17 (d2first, Nov 8): exits and enemies from the emulator
+  exits:
+    E:
+      level: 0
+      location: '0x08'
+    S:
+      level: 0
+      location: '0x17'
+    W:
+      level: 0
+      location: '0x06'
+  enemies:
+    RedLynel: 1
+  treasure: null
+- level: 0
+  location: '0x0a'
+  specialist: ow-lynel
+  exits:
+    S:
+      level: 0
+      location: '0x1a'
+    cave:  # white-sword cave: OW attr B cave index $12, cave person $6C (d2first, Nov 8; emulator-checked)
+      level: 0
+      location: '0x0a'
+      in_cave: true
+  enemies:  # loaded in the emulator (d2first, Nov 8); the cave mouth is at tiles (4, 2)
+    BlueLynel: 1
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x0a'
+  in_cave: true
+  specialist: ow-lynel
+  exits:
+    S:
+      level: 0
+      location: '0x0a'
+  enemies: null
+  treasure: white-sword  # middle ware $02; the old man hands it over only at 5+ heart containers
+- level: 0
   location: '0x0c'
   exits:
     E:
@@ -32,7 +72,21 @@ rooms:
   enemies: null
   treasure: null
 - level: 0
+  location: '0x16'  # off-route neighbour of 0x17 (d2first, Nov 8): exits and enemies from the emulator
+  exits:
+    E:
+      level: 0
+      location: '0x17'
+    W:
+      level: 0
+      location: '0x15'
+  enemies:
+    Unknown_31: 1  # boulder generator and boulders, as in 0x17
+    Unknown_32: 3
+  treasure: null
+- level: 0
   location: '0x17'
+  specialist: ow-boulder
   exits:
     N:
       level: 0
@@ -47,12 +101,13 @@ rooms:
       level: 0
       location: '0x16'
   enemies:
-    Unknown_31: 1
+    Unknown_31: 1  # $31 in the overworld: the falling-boulder generator (Z_04 boulder set); $32 the boulders
     Unknown_32: 2
     Zora: 1
   treasure: null
 - level: 0
   location: '0x18'
+  specialist: ow-boulder
   exits:
     E:
       level: 0
@@ -67,6 +122,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x19'
+  specialist: ow-boulder
   exits:
     E:
       level: 0
@@ -81,6 +137,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x1a'
+  specialist: ow-tektite
   exits:
     N:
       level: 0
@@ -97,16 +154,10 @@ rooms:
   treasure: null
 - level: 0
   location: '0x1b'
+  specialist: ow-start
+  # The mountain maze (Z_01 CheckMazes, MountainMazeDirs): only W leaves normally; E and S bring Link back into 0x1b
+  # and N reaches 0x0b only on the fourth N in a row (one N wrapping back checked in the emulator, d2first Nov 8).
   exits:
-    N:
-      level: 0
-      location: '0x0b'
-    E:
-      level: 0
-      location: '0x1c'
-    S:
-      level: 0
-      location: '0x2b'
     W:
       level: 0
       location: '0x1a'
@@ -114,6 +165,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x1c'
+  specialist: ow-start
   exits:
     N:
       level: 0
@@ -173,7 +225,21 @@ rooms:
     Peahat: 6
   treasure: null
 - level: 0
+  location: '0x26'  # off-route neighbour of 0x27 (d2first, Nov 8): exits and enemies from the emulator
+  exits:
+    E:
+      level: 0
+      location: '0x27'
+    S:
+      level: 0
+      location: '0x36'
+  enemies:
+    Peahat: 6
+    Zora: 1
+  treasure: null
+- level: 0
   location: '0x27'
+  specialist: ow-zora
   exits:
     N:
       level: 0
@@ -255,6 +321,11 @@ rooms:
 - level: 0
   location: '0x2c'
   specialist: ow-leever-peahat
+  # Secret (d2first, Nov 8; emulator-checked): OW attr B cave index $11, a rock wall tile object (Z_04 UpdateRockWall)
+  # at x=144 y=160, tiles (18-19, 12-13) in the middle rock.  A bomb there opens it (room flag $80) to the take-any
+  # cave: potion ($20) on the left, heart container ($1A) on the right.
+  requires_bombs: true    # Lee (Nov 8): the d2first heart needs a bomb here (BombLedger cheats one in)
+  bomb_secret: [18, 12]
   exits:
     N:
       level: 0
@@ -265,9 +336,24 @@ rooms:
     W:
       level: 0
       location: '0x2b'
+    cave:
+      level: 0
+      location: '0x2c'
+      in_cave: true
   enemies:
     RedTektite: 4
   treasure: null
+- level: 0
+  location: '0x2c'
+  in_cave: true
+  specialist: ow-leever-peahat
+  exits:
+    S:
+      level: 0
+      location: '0x2c'
+  enemies: null
+  treasure: heart-container  # right ware (x=152): max hearts +1; the left one is a potion
+  treasure_tile: [19, 11]
 - level: 0
   location: '0x2d'
   specialist: ow-zora
@@ -1317,6 +1403,7 @@ rooms:
 # Entry room 0x7d: S leaves the dungeon (omitted, like v1 objectives' "no south exit" convention).
 - level: 2
   location: '0x0d'
+  specialist: d2-rope  # d2first: the empty triforce room (like 1:0x36 in stalfos-keese-gel)
   exits:
     E:
       level: 2

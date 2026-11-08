@@ -4,6 +4,7 @@
     .venv/bin/python zelda-map.py                         # models/ (or $TRIFORCE_MODELS_DIR), screens/ cache
     .venv/bin/python zelda-map.py --models-dir /tmp/m     # another models root
     .venv/bin/python zelda-map.py --rerender              # rebuild every cached room screenshot
+    .venv/bin/python zelda-map.py --route d2first         # draw a routes.yaml route over the map
 
 One tab per level (Overworld, Dungeon 1-9).  Each level's rooms are stitched into one picture: a room with a
 savestate (``triforce/states``) shows its playfield as Link enters it, rendered once and cached as a PNG in
@@ -19,6 +20,11 @@ The statistics come from every promoted specialist's ``eval.json`` (``<models>/<
 detailed format (``"format": 2``, written by ``triforce.evaluate``): ``visited_rooms`` holds per-room means over
 every visit to a room during evaluation, not just the start rooms.  Rooms seen by several specialists are merged
 weighted by visits.  Reload (or F5) re-reads them.
+
+``--route NAME`` draws a ``routes.yaml`` route: its rooms outlined, arrows between consecutive rooms, each room's
+step numbers (``cave`` where the route takes a cave or dungeon stairs), and in the sidebar every step through the
+selected room with its entry and exit, specialist and what Link carries on entering it (max hearts, sword, items,
+triforce pieces, from the route's treasures in ``game.yaml``).
 """
 
 import argparse
@@ -34,12 +40,14 @@ from typing import Optional
 
 from PIL import Image
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QKeySequence, QPainter, QPalette, QPen, QPixmap, QShortcut
+from PySide6.QtGui import (QColor, QFont, QFontDatabase, QKeySequence, QPainter, QPalette, QPen, QPixmap, QPolygonF,
+                           QShortcut)
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QHBoxLayout, QLabel, QMainWindow, QPushButton,
                                QRadioButton, QScrollArea, QTabBar, QVBoxLayout, QWidget)
 
 from triforce import registry
-from triforce._native import Game, game_rooms, specialist_for
+from triforce._native import Game, game_rooms, routes, specialist_for
+from triforce._native import route_steps as native_route_steps
 from triforce.paths import STATES_DIR
 from triforce.specialist import list_specialists
 
@@ -71,6 +79,8 @@ MAX_SCALE = 8.0            # 8x the NES pixels
 FIT_MARGIN = 12            # px around the fitted map
 PAN_STEP = 0.1             # arrow keys pan this share of the view
 DRAG_THRESHOLD = 4         # px of movement that turns a click into a drag
+ROUTE_COLOR = QColor('#5ce1e6')    # route overlay: cyan, apart from the blue-purple-red stat scale and the selection
+WALK_EXITS = ('N', 'S', 'E', 'W')
 
 
 # --------------------------------------------------------------------------------------------------------- theme
@@ -380,6 +390,64 @@ def overlay_badge(overlay: str, room: int, stats: Optional[dict]) -> Optional[tu
     return None
 
 
+# --------------------------------------------------------------------------------------------------------- route
+
+def route_plan(route: str, rooms: Optional[dict] = None) -> list[dict]:
+    """The route's steps (``route_steps`` dicts) each with what Link carries on entering it: ``hearts`` (heart
+    containers), ``sword``, ``items`` and ``triforce`` (levels).  Progress follows the treasures (``game.yaml``) of
+    the steps that take them: a heart container, a sword, the boomerang or bombs; a ``triforce`` exit adds its piece.
+    A ``terminal`` step only enters its room."""
+    rooms = game_rooms() if rooms is None else rooms
+    hearts, sword, items, triforce = 3, 'none', [], []
+    plan = []
+    for step in native_route_steps(route):
+        plan.append({**step, 'hearts': hearts, 'sword': sword, 'items': list(items), 'triforce': list(triforce)})
+        if step['exit'] == 'terminal':
+            continue
+        treasure = (rooms.get((step['level'], step['room'], step['in_cave'])) or {}).get('treasure')
+        if treasure == 'heart-container':
+            hearts += 1
+        elif treasure in ('wood-sword', 'white-sword', 'magic-sword'):
+            sword = treasure.split('-')[0]
+        elif treasure in ('boomerang', 'bombs') and treasure not in items:
+            items.append(treasure)
+        if step['exit'] == 'triforce':
+            triforce.append(step['level'])
+    return plan
+
+
+def route_rooms(plan: list[dict], level: int) -> dict[int, list[int]]:
+    """Room -> the route step indices in it (its cave's included) on ``level``."""
+    result = defaultdict(list)
+    for step in plan:
+        if step['level'] == level:
+            result[step['room']].append(step['index'])
+    return dict(result)
+
+
+def route_segments(plan: list[dict], level: int) -> list[tuple[int, int]]:
+    """(from room, to room) of each walk between two rooms on ``level``: a step leaving N/S/E/W into the next step."""
+    return [(a['room'], b['room']) for a, b in zip(plan, plan[1:])
+            if a['level'] == b['level'] == level and not a['in_cave'] and not b['in_cave']
+            and a['exit'] in WALK_EXITS and a['room'] != b['room']]
+
+
+def route_caves(plan: list[dict], level: int) -> set[int]:
+    """Rooms on ``level`` where the route goes into a cave or down dungeon stairs."""
+    return {s['room'] for s in plan if s['level'] == level and not s['in_cave'] and s['exit'] == 'cave'}
+
+
+def step_text(step: dict) -> str:
+    """'#12 S→cave · ow-octorok · 3 ♥, wood sword, boomerang, triforce 2'."""
+    where = ' (cave)' if step['in_cave'] else ''
+    carried = [f"{step['hearts']} ♥", f"{step['sword']} sword", *step['items']]
+    if step['triforce']:
+        carried.append('triforce ' + '+'.join(str(level) for level in step['triforce']))
+    waypoint = f" · waypoint {step['waypoint']}" if step.get('waypoint') else ''
+    return (f"#{step['index']}{where} {step['entry']}→{step['exit']} · {step['specialist'] or 'none'} · "
+            f"{', '.join(carried)}{waypoint}")
+
+
 # -------------------------------------------------------------------------------------------------------- view
 
 class MapView(QWidget):
@@ -405,6 +473,9 @@ class MapView(QWidget):
         self._dragging = False
         self.font_ = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
         self.font_.setBold(True)
+        self.route_rooms: dict[int, list[int]] = {}     # room -> route step indices (--route)
+        self.route_segments: list[tuple[int, int]] = []
+        self.route_caves: set[int] = set()
 
     # model
     def set_level(self, bounds, tiles: dict[int, QPixmap], view: Optional[tuple] = None):
@@ -425,6 +496,11 @@ class MapView(QWidget):
 
     def set_selected(self, room: Optional[int]):
         self.selected = room
+        self.update()
+
+    def set_route(self, rooms: dict[int, list[int]], segments: list[tuple[int, int]], caves: set[int]):
+        """The route overlay of this level (``route_rooms``, ``route_segments``, ``route_caves``)."""
+        self.route_rooms, self.route_segments, self.route_caves = rooms, segments, caves
         self.update()
 
     # geometry
@@ -509,6 +585,7 @@ class MapView(QWidget):
                 painter.setPen(grid)
                 painter.drawRect(rect.adjusted(0, 0, -1, -1))
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.draw_route(painter, view)
         for room, (text, color) in self.badges.items():
             rect = self.tile_rect(room)
             if rect.intersects(view) and rect.width() >= 24:
@@ -521,6 +598,51 @@ class MapView(QWidget):
             painter.setPen(QPen(C.accent, 3))
             painter.drawRect(rect.adjusted(-1, -1, 1, 1))
         painter.end()
+
+    def draw_route(self, painter: QPainter, view: QRect):
+        """Route rooms outlined, an arrow per walk between rooms (back-and-forth walks side by side), step numbers in
+        each room's corner and 'cave' where the route goes underground."""
+        if not self.route_rooms:
+            return
+        width = max(2.0, min(6.0, TILE_W * self.scale * 0.02))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for room in self.route_rooms:
+            rect = QRectF(self.tile_rect(room)).adjusted(width, width, -width, -width)
+            if rect.intersects(QRectF(view)):
+                painter.setPen(QPen(with_alpha(C.bg, 160), width + 3))
+                painter.drawRect(rect)
+                painter.setPen(QPen(ROUTE_COLOR, width))
+                painter.drawRect(rect)
+        for a, b in self.route_segments:
+            start, end = QPointF(self.tile_rect(a).center()), QPointF(self.tile_rect(b).center())
+            delta = end - start
+            length = max(1.0, (delta.x() ** 2 + delta.y() ** 2) ** 0.5)
+            unit = QPointF(delta.x() / length, delta.y() / length)
+            side = QPointF(-unit.y(), unit.x()) * (width * 2.5)     # keep A->B and B->A apart
+            start, end = start + side + unit * length * 0.2, end + side - unit * length * 0.2
+            for pen in (QPen(with_alpha(C.bg, 160), width + 3), QPen(ROUTE_COLOR, width)):
+                painter.setPen(pen)
+                painter.drawLine(start, end)
+            head = width * 4
+            tip, back = end, end - unit * head
+            painter.setPen(QPen(with_alpha(C.bg, 160), 2))
+            painter.setBrush(ROUTE_COLOR)
+            painter.drawPolygon(QPolygonF([tip, back + QPointF(-unit.y(), unit.x()) * head * 0.6,
+                                           back - QPointF(-unit.y(), unit.x()) * head * 0.6]))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+        font = QFont(self.font_)
+        for room, steps in self.route_rooms.items():
+            rect = self.tile_rect(room)
+            if not rect.intersects(view) or rect.width() < 48:
+                continue
+            font.setPixelSize(max(9, min(20, round(rect.width() * 0.09))))
+            painter.setFont(font)
+            text = ' '.join(f'#{i}' for i in steps) + ('  cave' if room in self.route_caves else '')
+            box = QRectF(rect).adjusted(width * 2, width * 2, -width * 2, -width * 2)
+            painter.setPen(with_alpha(C.bg, 220))
+            painter.drawText(box.translated(1, 1), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, text)
+            painter.setPen(ROUTE_COLOR)
+            painter.drawText(box, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, text)
 
     def draw_badge(self, painter: QPainter, tile: QRect, text: str, color: QColor):
         """The value in a translucent rounded box centred on the tile."""
@@ -641,13 +763,16 @@ class MapWindow(QMainWindow):
     """Level tabs, overlay buttons and Reload on top; the map; the selected room's sidebar on the right."""
 
     def __init__(self, models_dir: Path, screens: dict[Key, Path], states: dict[Key, list[str]],
-                 rooms: Optional[dict] = None, run_id: Optional[str] = None):
+                 rooms: Optional[dict] = None, run_id: Optional[str] = None, route: Optional[str] = None):
         super().__init__()
-        self.setWindowTitle('Zelda map' + (f' ({run_id} where evaluated, else promoted)' if run_id else ''))
+        self.setWindowTitle('Zelda map' + (f' ({run_id} where evaluated, else promoted)' if run_id else '')
+                            + (f' · route {route}' if route else ''))
         self.models_dir = Path(models_dir)
         self.run_id = run_id
         self.states = states
         self.rooms = game_rooms() if rooms is None else rooms
+        self.route = route
+        self.plan = route_plan(route, self.rooms) if route else []
         self.pixmaps = {key: QPixmap(str(path)) for key, path in screens.items()}
         self.pixmaps = {key: pixmap for key, pixmap in self.pixmaps.items() if not pixmap.isNull()}
         self.stats: dict[Key, dict] = {}
@@ -755,6 +880,8 @@ class MapWindow(QMainWindow):
         bounds = level_bounds(level, self.level_rooms(level))
         view = self.view.view_state() if keep_view and bounds == self.view.bounds else self.views.get(level)
         self.view.set_level(bounds, tiles, view)
+        self.view.set_route(route_rooms(self.plan, level), route_segments(self.plan, level),
+                            route_caves(self.plan, level))
         self.update_badges()
         self.view.set_selected(self.selected.get(level))
         self.update_sidebar()
@@ -818,6 +945,9 @@ class MapWindow(QMainWindow):
             body = (html_rows(stats_rows(stats)) if stats
                     else '<p style="color:#8a93a6">No detailed eval data for this room.</p>')
             parts.append(html_section(f'{where} · eval (every visit)', body))
+        steps = [s for s in self.plan if (s['level'], s['room']) == (level, room)]
+        if steps:
+            parts.append(html_section(f'Route {self.route}', '<br>'.join(step_text(s) for s in steps)))
         return ''.join(parts)
 
 
@@ -832,6 +962,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--rerender', action='store_true', help="render every room screenshot again")
     parser.add_argument('--run-id', default=None,
                         help="use each specialist's <run-id>/eval.json where it exists, else the promoted run's")
+    parser.add_argument('--route', default=None, choices=routes(),
+                        help="draw this routes.yaml route over the map (default: none)")
     return parser
 
 
@@ -853,7 +985,7 @@ def main(argv=None) -> int:
     app.setApplicationName('zelda-map')
     apply_theme(app)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    window = MapWindow(registry.models_root(args.models_dir), screens, states, run_id=args.run_id)
+    window = MapWindow(registry.models_root(args.models_dir), screens, states, run_id=args.run_id, route=args.route)
     window.resize(1600, 900)
     window.show()
     return app.exec()

@@ -70,13 +70,13 @@ fn milestone_route_definition() {
     let map = GameMap::builtin();
     let route = Route::load(&map, "milestone1", None, None).unwrap();
     assert_eq!(route.start_state, "start");
-    assert_eq!(route.terminal, MapLocation::new(2, 0x0e, false));
+    assert_eq!(route.terminal, Some(MapLocation::new(2, 0x0e, false)));
     let stop = MapLocation::new(1, 0x73, false);
     assert_eq!(
         Route::load(&map, "milestone1", Some(stop), None)
             .unwrap()
             .terminal,
-        stop
+        Some(stop)
     );
     assert!(Route::load(&map, "no-such-route", None, None).is_err());
 }

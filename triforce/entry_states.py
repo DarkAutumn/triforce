@@ -3,7 +3,7 @@ start state.
 
     python -m triforce.entry_states start [--out DIR]
     python -m triforce.entry_states build [--chains 0,1] [--iterations 3000] [--patience 200] [--out DIR]
-                                          [--start-step N --source STATE]
+                                          [--start-step N --source STATE] [--route NAME]
     python -m triforce.entry_states path --source STATE --rooms 1:0x33,1:0x23,1:0x22 [--chain 2]
     python -m triforce.entry_states audit [--specialist NAME ...] [--states GLOB ...] [--loads 9]
 
@@ -53,8 +53,10 @@ from .zelda_enums import Direction, MapLocation
 DEFAULT_ROUTE = 'milestone1'
 MANIFEST = 'entry_states.json'
 START_STATE = 'start'
-NOT_ROOM_MONSTERS = ('Zora',)        # spawned by water rooms, not by the room's monster list
-BASE_HEARTS = 3                      # Link's containers at the start; each triforce piece's boss adds one
+# Not part of the room's monster list at entry: Zoras (spawned by water rooms) and the overworld boulders ($32, named
+# '32' natively and 'Unknown_32' in game.yaml), which the boulder generator ($31) drops later.
+NOT_ROOM_MONSTERS = ('Zora', 'Unknown_32', '32')
+BASE_HEARTS = 3                      # Link's containers at the start; each heart container on the route adds one
 
 # RAM (docs/ram-catalog.md; zelda::room_entry, zelda::room_state).
 MODE, IS_UPDATING_MODE, LEVEL, ROOM, NEXT_ROOM = 0x12, 0x11, 0x10, 0xEB, 0xEC
@@ -169,12 +171,16 @@ def write_start_state(out: str = STATES_DIR, max_frames: int = 600) -> str:
 
 # --- build ---
 
-def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE) -> SpecialistConfig:
+def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
+                rooms: Optional[dict] = None) -> SpecialistConfig:
     """A one-room task from ``source``: leave this step's room through an objective-correct exit (or pick up the
-    triforce)."""
+    triforce).  Bombs are usable only in a ``requires_bombs`` room (Dodongo, the 0x2c rock wall), where the bomb
+    rule keeps Link from running out."""
+    rooms = game_rooms() if rooms is None else rooms
+    bombs = bool(rooms.get(step.location.as_tuple(), {}).get('requires_bombs'))
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
-                            items={'bombs': False}, fresh_rooms=True, route=route)
+                            items={'bombs': bombs}, fresh_rooms=True, route=route)
 
 
 def refill_hearts(game: Game):
@@ -199,7 +205,7 @@ def follow_to(snapshot: Snapshot, target: MapLocation, states_dir: str = STATES_
 
 def cross_room(step: RouteStep, target: RouteStep, source: str, seed: int, iterations: int, patience: int,
                attempts: int = 3, states_dir: str = STATES_DIR, rooms: Optional[dict] = None,
-               objective: bool = False) -> tuple:
+               objective: bool = False, route: str = DEFAULT_ROUTE) -> tuple:
     """Explores until Link enters ``target``, including intended off-route destinations.
 
     Require the source key pickup and carried-key balance, allowing only the target door's key cost.
@@ -224,7 +230,8 @@ def cross_room(step: RouteStep, target: RouteStep, source: str, seed: int, itera
                         item_taken_room=(step.level, step.room) if key_required else None)
 
     for attempt in range(attempts):
-        explorer = Explorer(step_config(step, source), seed=seed * 1000 + attempt, states_dir=str(states_dir))
+        explorer = Explorer(step_config(step, source, route, rooms), seed=seed * 1000 + attempt,
+                            states_dir=str(states_dir))
         result = explorer.explore(source, iterations, 25, patience, accept=None if objective else accept)
         stats['env_steps'] += result.env_steps
         stats['attempts'] += 1
@@ -261,12 +268,12 @@ def write_entry_state(game: Game, pre_entry: Snapshot, path: str, expected: MapL
 
 
 def build_chain(chain: int, out: str, iterations: int, patience: int, log: Callable = print, start_step: int = 0,
-                source: str = START_STATE, states_dir: str = STATES_DIR) -> List[dict]:
-    """Plays the route from ``source`` (the entry state of route step ``start_step``; the game's 'start' by
+                source: str = START_STATE, states_dir: str = STATES_DIR, route: str = DEFAULT_ROUTE) -> List[dict]:
+    """Plays ``route`` from ``source`` (the entry state of route step ``start_step``; the game's 'start' by
     default), writing the entry state of every later step (and of alternates)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     game, rooms = Game(seed=chain, states_dir=str(states_dir)), game_rooms()
-    steps = route_steps()
+    steps = route_steps(route)
     alternates = alternate_steps(steps)
     os.makedirs(out, exist_ok=True)
     manifest = []
@@ -276,7 +283,7 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
         for goal, on_route in jobs:
             started = time.time()
             pre_entry, stats = cross_room(step, goal, source, chain, iterations, patience, states_dir=states_dir,
-                                          rooms=rooms, objective=on_route)
+                                          rooms=rooms, objective=on_route, route=route)
             label = f"[chain {chain}] step {step.index} {step.level}:0x{step.room:02x} -> {goal.filename(chain)}"
             if pre_entry is None:
                 log(f"{label}: FAILED after {stats['attempts']} attempts ({stats['env_steps']} env steps)")
@@ -285,7 +292,7 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
                 continue
             path = os.path.join(out, goal.filename(chain))
             write_entry_state(game, pre_entry, path, goal.location)
-            manifest.append({'file': os.path.basename(path), 'chain': chain, 'route_step': goal.index,
+            manifest.append({'file': os.path.basename(path), 'chain': chain, 'route': route, 'route_step': goal.index,
                              'from_step': step.index, 'specialist': goal.specialist, 'level': goal.level,
                              'room': f"0x{goal.room:02x}", 'in_cave': goal.in_cave, 'entry': goal.entry,
                              'exit': goal.exit, 'alternate': not on_route, **stats})
@@ -297,14 +304,15 @@ def build_chain(chain: int, out: str, iterations: int, patience: int, log: Calla
 
 
 def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_step: int = 0,
-          source: str = START_STATE, states_dir: str = STATES_DIR, command: Optional[str] = None) -> List[dict]:
+          source: str = START_STATE, states_dir: str = STATES_DIR, command: Optional[str] = None,
+          route: str = DEFAULT_ROUTE) -> List[dict]:
     """Runs one route chain per id (one thread each; exploration runs natively without the GIL) and merges them
     into ``entry_states.json`` (a rebuilt file replaces its old entry; ``command``, the invocation, is recorded in
     each entry)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def run(chain):
         return build_chain(chain, out, iterations, patience, log=lambda text: print(text, flush=True),
-                           start_step=start_step, source=source, states_dir=states_dir)
+                           start_step=start_step, source=source, states_dir=states_dir, route=route)
 
     with ThreadPoolExecutor(max_workers=len(chain_ids)) as pool:
         manifest = [entry for part in pool.map(run, chain_ids) for entry in part]
@@ -458,7 +466,7 @@ def audit_state(game: Game, path: str, loads: int = 9, full: Optional[dict] = No
         counts.add(len(monsters))
     level, room, in_cave = state.full_location
     full = full if full is not None else full_monster_counts()
-    expected = full.get((level, room))
+    expected = 0 if in_cave else full.get((level, room))       # a cave has no monsters of its own
     label = state_label(path)
     return {'state': label, 'path': str(path), 'level': level, 'room': f"0x{room:02x}",
             'in_cave': in_cave, 'named_room_matches': _named_room(label) in (None, (level, room)),
@@ -514,6 +522,9 @@ def main(argv=None):
     build_parser.add_argument('--start-step', type=int, default=0, help="route step index to start from")
     build_parser.add_argument('--source', default=START_STATE,
                               help="entry state of --start-step (default: 'start')")
+    build_parser.add_argument('--route', default=DEFAULT_ROUTE,
+                              help="routes.yaml route to play (d2first states use chains 10-12, see "
+                                   "docs/routes/d2first.md)")
     path_parser = sub.add_parser('path', help="entry states for rooms off the route, entered in order from --source")
     path_parser.add_argument('--source', required=True, help="a state in the room before the first of --rooms")
     path_parser.add_argument('--rooms', required=True, help="comma-separated rooms, e.g. 1:0x33,1:0x23,1:0x22")
@@ -545,7 +556,7 @@ def main(argv=None):
 
     if args.command == 'build':
         manifest = build([int(c) for c in args.chains.split(',')], args.out, args.iterations, args.patience,
-                         args.start_step, args.source, states_dir=states_dir, command=command)
+                         args.start_step, args.source, states_dir=states_dir, command=command, route=args.route)
         print(f"{len(manifest)} entry states in {args.out}")
         return 0
 

@@ -74,7 +74,7 @@ class RoomRecord:
     max_health: int = 0
     keys_in: Optional[int] = None   # keys carried on entering / leaving the room (None in pre-Nov-6 records)
     keys_out: Optional[int] = None
-    outcome: str = 'in-progress'    # exit-correct, exit-wrong, death, stuck, milestone, error
+    outcome: str = 'in-progress'    # exit-correct, exit-wrong, missed (heart waypoint), death, stuck, milestone, error
     # Dropped hearts during the visit: healed = real hearts gained, wasted = taken - healed, left = still on the
     # floor when the visit ended.
     hearts_dropped: int = 0

@@ -1,10 +1,10 @@
 //! Where Link should go next (`triforce/objectives.py`, live `GameCompletion` only).
 //!
 //! `GameCompletion` routes through the milestone: the sword first, then the route's waypoints while they apply,
-//! then each triforce, using `GameMap` Dijkstra with ties broken toward the route.  Persistent room flags seed
-//! which keys are taken and which locked doors are open.  Targets feed the PBRS wavefront; `next_rooms` decides
-//! which exits are correct.  The dead `ReachLocation`, `TreasureObjective`, `RoomWalk` and `OBJECTIVES` are not
-//! ported.
+//! then each triforce (the route's triforce steps in route order, then the closest one left), using `GameMap`
+//! Dijkstra with ties broken toward the route.  Persistent room flags seed which keys are taken and which locked
+//! doors are open.  Targets feed the PBRS wavefront; `next_rooms` decides which exits are correct.  The dead
+//! `ReachLocation`, `TreasureObjective`, `RoomWalk` and `OBJECTIVES` are not ported.
 
 use crate::enums::{Direction, MapLocation, SwordKind, Tile};
 use crate::game::GameView;
@@ -20,6 +20,11 @@ pub const FLAG_ITEM_TAKEN: u8 = 0x10;
 /// Pond fairy edge tiles (Z_04 UpdatePondFairy).
 pub const FAIRY_POND_TILES: [Tile; 3] = [(14, 14), (15, 14), (16, 14)];
 pub const CAVE_TREASURE_TILE: Tile = (0x0F, 0x0B);
+/// routes.yaml `waypoint: fairy`: stand at the pond edge until the hearts are full.
+pub const WAYPOINT_FAIRY: &str = "fairy";
+/// routes.yaml `waypoint: heart` (on a cave step): take the cave's heart container (game.yaml `treasure_tile`);
+/// done once the overworld room's item-taken flag is set.
+pub const WAYPOINT_HEART: &str = "heart";
 const COMBAT_SHUTTER_TRIGGERS: [SecretTrigger; 4] = [
     SecretTrigger::AllDead,
     SecretTrigger::Ringleader,
@@ -67,7 +72,7 @@ pub struct Objective {
     pub pbrs_targets: BTreeSet<Target>,
 }
 
-/// A route stop off the shortest path (routes.yaml `waypoint:`).
+/// A route stop off the shortest path (routes.yaml `waypoint:` [`WAYPOINT_FAIRY`] or [`WAYPOINT_HEART`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Waypoint {
     pub step: usize,
@@ -103,6 +108,17 @@ pub fn route_waypoints(steps: &[RouteStep]) -> Vec<Waypoint> {
     out
 }
 
+/// The waypoint's stop is over: the fairy pond filled every heart, or the heart cave's item was taken (the take-any
+/// cave sets its overworld room's item flag on either pick; the objective points at the heart container).
+fn waypoint_done(waypoint: &Waypoint, state: &GameView) -> bool {
+    if waypoint.kind == WAYPOINT_HEART {
+        let room = waypoint.location;
+        return state.level() == room.level
+            && room_flags(state.ram(), room.value) & FLAG_ITEM_TAKEN != 0;
+    }
+    state.full_location() == waypoint.location && state.health() >= state.max_health() as f64
+}
+
 fn overlap(tiles: Vec<Tile>) -> impl Iterator<Item = Target> {
     tiles.into_iter().map(Target::Tile)
 }
@@ -136,6 +152,11 @@ pub struct GameCompletion {
     closest: RefCell<Vec<(ClosestKey, Option<MapLocation>)>>,
     seeded_location: Option<MapLocation>,
     waypoints: Vec<Waypoint>,
+    /// Max hearts on entering the active `heart` waypoint's cave (to tell the heart container from the other ware).
+    heart_baseline: Option<i32>,
+    /// Why the route can't be finished any more: a `heart` waypoint missed (its room left without the heart
+    /// container, or the other ware taken).  The objective then has no correct exit.
+    missed: Option<String>,
 }
 
 impl GameCompletion {
@@ -165,6 +186,8 @@ impl GameCompletion {
             closest: RefCell::new(Vec::new()),
             seeded_location: None,
             waypoints,
+            heart_baseline: None,
+            missed: None,
         })
     }
 
@@ -172,13 +195,27 @@ impl GameCompletion {
         &self.route
     }
 
+    /// Why the route can't be finished any more (a missed `heart` waypoint: d2first needs 0x2c's heart container for
+    /// the white sword's 5 hearts), else None.
+    pub fn missed(&self) -> Option<&str> {
+        self.missed.as_deref()
+    }
+
     /// The objective for `state` (`prev` is the previous state of the episode, None at its start).
     pub fn objectives(&mut self, prev: Option<&GameView>, state: &GameView) -> Objective {
+        self.check_heart_waypoint(prev, state);
         if let Some(i) = self.active_waypoint(state)
-            && state.full_location() == self.waypoints[i].location
-            && state.health() >= state.max_health() as f64
+            && waypoint_done(&self.waypoints[i], state)
         {
             self.waypoints.remove(i);
+        }
+        if self.missed.is_some() {
+            return Objective {
+                kind: ObjectiveKind::Move,
+                targets: BTreeSet::new(),
+                next_rooms: BTreeSet::new(),
+                pbrs_targets: BTreeSet::new(),
+            };
         }
         self.update_exits(state);
         self.update_opened_doors(state);
@@ -212,6 +249,40 @@ impl GameCompletion {
             w.after.iter().all(|&l| state.has_triforce(l))
                 && w.before.is_none_or(|b| !state.has_triforce(b))
         })
+    }
+
+    /// An active `heart` waypoint is missed when Link leaves its overworld room other than into the cave before the
+    /// item is taken, or takes the cave's item without gaining a heart container (the potion).
+    fn check_heart_waypoint(&mut self, prev: Option<&GameView>, state: &GameView) {
+        if self.missed.is_some() {
+            return;
+        }
+        let Some(i) = self.active_waypoint(state) else {
+            return;
+        };
+        let waypoint = &self.waypoints[i];
+        if waypoint.kind != WAYPOINT_HEART {
+            return;
+        }
+        let cave = waypoint.location;
+        let room = MapLocation::new(cave.level, cave.value, false);
+        let here = state.full_location();
+        if here == cave && self.heart_baseline.is_none() {
+            self.heart_baseline = Some(state.max_health());
+        }
+        if waypoint_done(waypoint, state) {
+            if self.heart_baseline.is_some_and(|b| state.max_health() <= b) {
+                self.missed = Some(format!("took the other ware in {cave}, not the heart container"));
+            }
+            return;
+        }
+        if let Some(prev) = prev
+            && prev.full_location() == room
+            && here != room
+            && here != cave
+        {
+            self.missed = Some(format!("left {room} without the heart container"));
+        }
     }
 
     fn update_exits(&mut self, state: &GameView) {
@@ -311,7 +382,17 @@ impl GameCompletion {
         None
     }
 
+    /// The route's first triforce step not taken yet (d2first takes Dungeon 2's before Dungeon 1's), else the
+    /// closest triforce left.
     fn triforce_target(&self, state: &GameView) -> Option<MapLocation> {
+        let route_step = self.map.routes.get(&self.route).and_then(|steps| {
+            steps
+                .iter()
+                .find(|s| s.exit == "triforce" && !state.has_triforce(s.level))
+        });
+        if let Some(step) = route_step {
+            return Some(step.location());
+        }
         let targets: Vec<MapLocation> = self
             .map
             .find_rooms_with_treasure("triforce")
@@ -324,6 +405,19 @@ impl GameCompletion {
         } else {
             self.closest_room(state, &targets)
         }
+    }
+
+    /// The tiles that enter this overworld room's cave: the cave mouth, else the game.yaml `bomb_secret` rock wall
+    /// (2x2 tiles: bombed open, the opening is the entrance).
+    fn cave_tiles(&self, state: &GameView) -> Vec<Tile> {
+        if let Some(tile) = state.room().cave_tile {
+            return vec![tile];
+        }
+        self.map
+            .get(state.full_location())
+            .and_then(|r| r.bomb_secret)
+            .map(|(c, r)| vec![(c, r), (c + 1, r), (c, r + 1), (c + 1, r + 1)])
+            .unwrap_or_default()
     }
 
     fn closest_room(&self, state: &GameView, targets: &[MapLocation]) -> Option<MapLocation> {
@@ -368,6 +462,7 @@ impl GameCompletion {
         state: &GameView,
     ) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
         if let Some(i) = self.active_waypoint(state)
+            && self.waypoints[i].kind == WAYPOINT_FAIRY
             && state.full_location() == self.waypoints[i].location
         {
             return (
@@ -382,7 +477,8 @@ impl GameCompletion {
         if state.level() > 0 {
             return self.dungeon_room_objective(prev, state);
         }
-        if let Some(cave_tile) = state.room().cave_tile
+        let cave_tiles = self.cave_tiles(state);
+        if !cave_tiles.is_empty()
             && let Some(target) = self.target(state)
         {
             let cave_location = MapLocation::new(state.level(), state.location(), true);
@@ -392,7 +488,9 @@ impl GameCompletion {
                 .and_then(|r| r.exits.get("cave"));
             if let Some(exit) = cave_exit {
                 let dest = exit.destination;
-                if dest == target || dest.level == target.level {
+                // This cave is the target, or a level entrance into the target's level (an overworld cave never
+                // leads to another overworld cave: d2first's white-sword target must not pull Link into 0x2c's).
+                if dest == target || (dest.level != state.level() && dest.level == target.level) {
                     let next = if dest.level != state.level() {
                         dest
                     } else {
@@ -400,7 +498,7 @@ impl GameCompletion {
                     };
                     return (
                         ObjectiveKind::Cave,
-                        vec![Target::Tile(cave_tile)],
+                        cave_tiles.into_iter().map(Target::Tile).collect(),
                         vec![next],
                     );
                 }
@@ -418,11 +516,12 @@ impl GameCompletion {
                     Vec::new(),
                 );
             }
-            return (
-                ObjectiveKind::Treasure,
-                vec![Target::Tile(CAVE_TREASURE_TILE)],
-                Vec::new(),
-            );
+            let tile = self
+                .map
+                .get(state.full_location())
+                .and_then(|r| r.treasure_tile)
+                .unwrap_or(CAVE_TREASURE_TILE);
+            return (ObjectiveKind::Treasure, vec![Target::Tile(tile)], Vec::new());
         }
         let exits = state.room().exits.get(Direction::S).unwrap_or_default();
         (
@@ -556,10 +655,8 @@ impl GameCompletion {
         for next in &next_rooms {
             let d = loc.direction_to(*next);
             if d == Direction::None {
-                if next.in_cave != loc.in_cave
-                    && let Some(cave) = room.cave_tile
-                {
-                    targets.push(Target::Tile(cave));
+                if next.in_cave != loc.in_cave {
+                    targets.extend(self.cave_tiles(state).into_iter().map(Target::Tile));
                 }
                 continue;
             }
@@ -637,14 +734,17 @@ pub fn exit_is_correct_at(
     exit_span(map, from, d).is_none_or(|(lo, hi)| (lo..=hi).contains(&along_edge(link_tile, d)))
 }
 
-/// (route, step) for an episode starting in `location` entered from `entry` (`start_route`).  Several routes
-/// leaving the room differently: one at random from `rng` (Python's `random` stream is not reproduced).
+/// (route, step) for an episode starting in `location` entered from `entry` (`start_route`).  Only routes whose
+/// triforce steps before that step are exactly the pieces Link holds (`has_triforce`) apply (a milestone1 Dungeon 1
+/// state is not d2first's Dungeon 1, which comes after Dungeon 2), unless none does.  Several routes leaving the
+/// room differently: one at random from `rng` (Python's `random` stream is not reproduced).
 pub fn start_route<R: Rng + ?Sized>(
     map: &GameMap,
     location: MapLocation,
     entry: Option<&str>,
     rng: &mut R,
     route: Option<&str>,
+    has_triforce: impl Fn(u8) -> bool,
 ) -> (String, Option<usize>) {
     if let Some(route) = route {
         return (
@@ -652,9 +752,19 @@ pub fn start_route<R: Rng + ?Sized>(
             entry.and_then(|e| map.route_step_index(route, location, e)),
         );
     }
-    let candidates = entry
+    let mut candidates = entry
         .map(|e| map.routes_through(location, e))
         .unwrap_or_default();
+    let in_progress = |(name, i): &(String, usize)| {
+        map.routes[name]
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.exit == "triforce")
+            .all(|(j, s)| has_triforce(s.level) == (j < *i))
+    };
+    if candidates.iter().any(in_progress) {
+        candidates.retain(in_progress);
+    }
     if candidates.is_empty() {
         return (crate::game_map::DEFAULT_ROUTE.to_owned(), None);
     }
@@ -707,5 +817,16 @@ mod tests {
         assert_eq!(w[0].after, [1].into_iter().collect());
         assert_eq!(w[0].before, None); // milestone 1 ends on entering the D2 boss room, not a triforce
         assert!(route_waypoints(&map.routes["milestone1"]).is_empty());
+    }
+
+    #[test]
+    fn heart_waypoint_applies_between_the_d2_and_d1_triforces() {
+        let map = GameMap::builtin();
+        let w = route_waypoints(&map.routes["d2first"]);
+        assert_eq!(w.len(), 1);
+        assert_eq!(w[0].kind, WAYPOINT_HEART);
+        assert_eq!(w[0].location, MapLocation::new(0, 0x2c, true));
+        assert_eq!(w[0].after, [2].into_iter().collect());
+        assert_eq!(w[0].before, Some(1));
     }
 }

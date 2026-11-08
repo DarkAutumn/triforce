@@ -29,12 +29,15 @@ def configured_states():
 
 
 def _route_hearts(entry: dict) -> int:
-    """Max hearts after routed progress, including a completed off-route origin room."""
+    """Max hearts after routed progress (a heart container per step that takes one: bosses, d2first's 0x2c cave),
+    including a completed off-route origin room."""
     route_step = entry['route_step']
     if route_step < 0 and 'from_step' in entry:
         route_step = entry['from_step'] + 1
+    rooms = game_rooms()
     return BASE_HEARTS + sum(1 for step in route_steps(entry.get('route', DEFAULT_ROUTE))
-                             if step.index < route_step and step.specialist.startswith('boss-'))
+                             if step.index < route_step and step.exit != 'terminal'
+                             and rooms[step.location.as_tuple()]['treasure'] == 'heart-container')
 
 
 def walk_north_with_capture(game):
@@ -99,7 +102,7 @@ def test_game_rooms_reads_game_yaml():
     assert rooms[(1, 0x44, False)]['treasure'] == 'boomerang'
     assert rooms[(0, 0x17, False)]['enemies'] == {'Unknown_31': 1, 'Unknown_32': 2, 'Zora': 1}
     counts = full_monster_counts()
-    assert counts[(0, 0x17)] == 3                   # Zoras aren't part of the room's monster list
+    assert counts[(0, 0x17)] == 1                   # only the boulder generator: Zoras and boulders come later
     assert (0, 0x77) in counts
 
 
