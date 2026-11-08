@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QHBoxLayout, QLabel, 
 from triforce import registry
 from triforce._native import Game, game_rooms, specialist_for
 from triforce.paths import STATES_DIR
+from triforce.specialist import list_specialists
 
 ROOT = Path(__file__).resolve().parent
 SCREENS_DIR = ROOT / 'screens'
@@ -307,15 +308,20 @@ def read_eval(path: Path) -> tuple[str, Optional[dict]]:
     return 'detailed', data['visited_rooms']
 
 
-def load_evals(models_dir: Path) -> tuple[dict[Key, dict], list[dict]]:
+def load_evals(models_dir: Path, run_id: Optional[str] = None) -> tuple[dict[Key, dict], list[dict]]:
     """The merged per-room stats of every promoted specialist's detailed eval, and one source entry per promoted
-    specialist: {'specialist', 'run', 'status', 'rooms', 'visits'}."""
+    specialist: {'specialist', 'run', 'status', 'rooms', 'visits'}.  With ``run_id``, a specialist's
+    ``<run_id>/eval.json`` is used instead when it exists (e.g. a round trained with ``--no-promote``)."""
     per_room, sources = defaultdict(list), []
     root = Path(models_dir)
+    current = set(list_specialists())
     for directory in sorted(root.iterdir()) if root.is_dir() else ():
-        if not (directory / registry.PROMOTED_NAME).is_file():
+        # Current specialists only: models/ keeps the directories of retired families.
+        if directory.name not in current or not (directory / registry.PROMOTED_NAME).is_file():
             continue
         run = registry.promoted_run(directory.name, root)
+        if run_id and (directory / run_id / 'eval.json').is_file():
+            run = run_id
         status, rooms = read_eval(directory / run / 'eval.json')
         source = {'specialist': directory.name, 'run': run, 'status': status, 'rooms': 0, 'visits': 0}
         for stats in (rooms or {}).values():
@@ -624,10 +630,11 @@ class MapWindow(QMainWindow):
     """Level tabs, overlay buttons and Reload on top; the map; the selected room's sidebar on the right."""
 
     def __init__(self, models_dir: Path, screens: dict[Key, Path], states: dict[Key, list[str]],
-                 rooms: Optional[dict] = None):
+                 rooms: Optional[dict] = None, run_id: Optional[str] = None):
         super().__init__()
-        self.setWindowTitle('Zelda map')
+        self.setWindowTitle('Zelda map' + (f' ({run_id} where evaluated, else promoted)' if run_id else ''))
         self.models_dir = Path(models_dir)
+        self.run_id = run_id
         self.states = states
         self.rooms = game_rooms() if rooms is None else rooms
         self.pixmaps = {key: QPixmap(str(path)) for key, path in screens.items()}
@@ -711,7 +718,7 @@ class MapWindow(QMainWindow):
     # data
     def reload(self):
         """Re-reads every promoted specialist's eval.json."""
-        self.stats, self.sources = load_evals(self.models_dir)
+        self.stats, self.sources = load_evals(self.models_dir, self.run_id)
         self.status.setText(eval_status(self.sources))
         self.status.setToolTip('\n'.join(
             f"{s['specialist']} ({s['run']}): {s['status']}"
@@ -812,6 +819,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--screens-dir', type=Path, default=SCREENS_DIR,
                         help="room screenshot cache (default <repo>/screens)")
     parser.add_argument('--rerender', action='store_true', help="render every room screenshot again")
+    parser.add_argument('--run-id', default=None,
+                        help="use each specialist's <run-id>/eval.json where it exists, else the promoted run's")
     return parser
 
 
@@ -833,7 +842,7 @@ def main(argv=None) -> int:
     app.setApplicationName('zelda-map')
     apply_theme(app)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    window = MapWindow(registry.models_root(args.models_dir), screens, states)
+    window = MapWindow(registry.models_root(args.models_dir), screens, states, run_id=args.run_id)
     window.resize(1600, 900)
     window.show()
     return app.exec()
