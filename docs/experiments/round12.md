@@ -4,12 +4,17 @@ Lee, Nov 8: train a model that kills Dodongo the good way. Set a bomb in his pat
 doesn't eat it and the smoke stuns him; then hit him with the sword while he is stunned. The model gets bombs as it
 needs them (rules below). The curriculum over his movement patterns matters most.
 
-## Summary (in progress)
+## Summary
 
-- Mechanics verified by probes (§1). Env support, rewards and Lee's bomb rules are in (`f2141cf`, §2).
-- Curriculum: Go-Explore over 3 start states × 10 explore seeds, swallow kills removed: 25 stun-and-sword
-  tracks (§3, `a09d9bd`).
-- r45-dodongo is training (§4).
+- **Dodongo is beaten: r45-dodongo kills him in 300/300 evaluation fights** (100 per start state), losing 0.13
+  hearts per fight (90% of fights without a hit), in 32 actions. Promoted.
+- 86% of kills are the bomb-stun-and-sword kill Lee asked for (67% with no swallow at all); 14% are two-swallow
+  kills. 52% of fights take one bomb (the perfect kill); 2.5 bombs per fight on average (§4).
+- 2M more steps (r46-more) or a doubled swallow penalty (r46-eat1) didn't move these (§5).
+- Mechanics verified by probes (§1). Env support, rewards and Lee's bomb rules (`f2141cf`, §2). Curriculum:
+  Go-Explore over 3 start states × 10 explore seeds, swallow kills removed: 25 stun-and-sword tracks (§3).
+- Chain check: milestone1 ends on entering 0x0e; the d2-first route (next) plays through the kill and the
+  triforce, so its chains measure Dodongo in a run.
 
 ## 1. Mechanics (probes, `target/dodongo/`; disassembly `Z_04`)
 
@@ -50,3 +55,42 @@ needs them (rules below). The curriculum over his movement patterns matters most
 `train_round.py --round r45-dodongo --specialists boss-dodongo --steps 3000000 --parallel 16 --no-promote
 --chain-runs 0 --train-args "--stop-success 0.99"`, 25 tracks. Early (iteration 27, 110k steps): success
 0.33–0.53, health change about −1.5, ~22 bombs used per episode (18 of them cheated).
+
+Finished at 3M steps (733 iterations, 26 min at 16 envs); the curriculum had completed every track by about
+iteration 110 (episodes start at the room entry from then on). Eval (100 per state, sampled actions, under the
+current code: stunned Dodongo not `hurts_on_touch` (`70a7e26`), and the fixed counters (`106fa25`)):
+
+| | 2_0es_0 | 2_0es_1 | 2_0es_2 | all |
+|---|---|---|---|---|
+| success | 100% | 100% | 100% | 100% |
+| bombs used / cheated per fight | 2.32 / 0.07 | 2.50 / 0.49 | 2.67 / 0.67 | 2.50 / 0.41 |
+| stun kill rate (≥ 1 stun, no swallow) | 66% | 64% | 72% | 67% |
+
+Kill kinds over 300 (stuns, swallows): (1, 0) 202, (1, 1) 55 (a swallow, then a stun and the sword), (0, 2) 32
+and (1, 2) 9 (two-swallow kills), 2 odd ones (a stun that ended and restarted inside one step is the likely miss).
+Bombs per fight: 1 in 157, 2 in 56, 3 in 24, 4+ in 63. Hearts lost 0.127 per fight, 89.7% no-hit, 32.3 steps
+(about 300 frames). Deaths 0.
+
+The first counters (0→2 stun, 0→1 swallow between step ends) showed 51 kills with one swallow and no stun, which
+the ASM rules out (a stun only starts from state 0; the sword only kills in state 2): one step can hold the swallow,
+the bloat and the stun. Counting entries into state 2 and BombHits increments fixed it (`106fa25`).
+
+## 5. r46: more steps vs a doubled swallow penalty
+
+Both continue from r45 for 2M steps at 8 envs each, seed 46, side by side: `r46-more` (same rewards) and
+`r46-eat1` (`reward.boss_ate_bomb_penalty: 1.0`, `specialists/arms/r46-eat1/`, knob `5f0bef4`). Same eval:
+
+| run | success | stun kill rate | bombs / fight | 1-bomb fights | swallows / fight | two-swallow kills | hearts lost | no-hit | steps |
+|---|---|---|---|---|---|---|---|---|---|
+| r45-dodongo | 100% | 67.3% | 2.50 | 157 | 0.46 | 41 | 0.127 | 89.7% | 32.3 |
+| r46-more | 99.3% | 67.8% | 2.25 | 159 | 0.42 | 30 | 0.115 | 90.3% | 29.0 |
+| r46-eat1 | 98.7% | 65.9% | 2.16 | 153 | 0.45 | 32 | 0.128 | 89.0% | 30.4 |
+
+Within noise of each other; r46's failures are deaths at 0.5–1.5 starting hearts. Deterministic actions
+(r46-more) changed nothing (2.14 bombs, 159 one-bomb fights). r45 stays promoted (no deaths).
+
+Why it may plateau near half one-bomb kills: the fuse is 48 frames, in which Dodongo walks 24 px and passes a
+direction decision (every 16 px, partly random), so a placement is partly a bet on his next turn. The observation
+has his position, facing and the bomb's active/exploding flags but not the bomb's position. Ideas, not yet tried
+(backlog): curriculum tracks of one-bomb stun kills only (explore more seeds, keep 1-bomb tracks); the bomb's
+position and fuse in the observation (a schema change); a larger per-bomb penalty for this room.

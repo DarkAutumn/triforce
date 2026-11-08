@@ -1,0 +1,17 @@
+name: boss-dodongo
+rooms: ['(2, 0x0e)']
+start_states: ['2_0e*_[0-9]']
+success: [boss-dead-and-heart]             # kill Dodongo, then take the heart container (max hearts +1)
+reward_profile: default
+reward: {pbrs: true, item_targets: true, boss_ate_bomb_penalty: 1.0}   # r46-eat1: swallow penalty 0.5 -> 1.0
+obs: {objective: true, target: true}       # schema 2
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}
+items: {bombs: true}                       # the room is requires_bombs (game.yaml): never without a bomb here
+curriculum: {enabled: true}             # trajectories/boss-dodongo: bomb-stun + sword kills (round 12)
+one_room: true
+max_steps: 600
+warm_start: null
+notes: >-
+  Dodongo (round 12, Lee): place a bomb next to him, not in his mouth, so the explosion stuns him (about 5 s),
+  then kill him with one sword hit while stunned; take the heart container. Swallowing two bombs also kills him
+  but wastes bombs and is penalised (penalty-boss-ate-bomb); the stun pays reward-boss-stunned.
