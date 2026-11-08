@@ -1278,13 +1278,16 @@ fn target_observation_points_at_the_nearest_item() {
     let distance = at(&obs, "target_distance");
     assert!(distance > 0.0 && distance < 0.25, "{distance}");
 
+    // Explicit: the canonical stalfos-keese-gel yaml turns both options on.
     let (env, _, obs) = placed_env_configured(release(env), &drops, 157, 0x21, |c| {
         c.reward = item_targets();
+        c.obs.target = false;
     });
     assert!(obs.target.iter().all(|&x| x == 0.0), "{:?}", obs.target);
 
     // Without item targets the exit north is the target: the walk heads N, not toward the rupee.
     let (_, _, obs) = placed_env_configured(release(env), &drops, 157, 0x21, |c| {
+        c.reward = RewardConfig::default();
         c.obs.target = true;
     });
     assert_eq!(at(&obs, "target_is_item"), 0.0);
