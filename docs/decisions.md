@@ -684,3 +684,14 @@ entry below and `crates/zcore/UPSTREAM.md`.
   into fights (more damage after the fairy pond), while the pointer alone improved every overworld family.
 - **Evidence:** round 10 §9–§10: hearts healed per chain run 0.45–0.59 → 1.2–2.0; Dodongo arrivals per 120 runs
   D2 44 → 74, post-D1 12/18 → 43/61, full 3/6 → 27/46.
+
+## 2026-11-08 — Power-on RAM $00; fresh retrain of the whole team
+
+- **What:** zcore powers console and cart RAM on with $00 (was $FF, FCEUmm's fill). State files bump to version 6;
+  every start state and curriculum trajectory was regenerated, and the whole team retrains from scratch (round 11,
+  `r44-fresh`: 8M steps per family, `--parallel 16`, early stop only at 0.99 balanced success).
+- **Why:** Lee's call (Nov 8). The hardware leaves the fill unspecified; Zelda never reads RAM it hasn't written,
+  and twelve TetaNES test ROMs only pass with $00 (now un-ignored).
+- **Evidence:** round 11 §1: the old goldens diverge only in RAM/CHR at frame 0; the scripted movies re-record
+  byte-identical; the old team on the regenerated states reproduces its chain results exactly (74/43/61/27/46 of
+  120).
