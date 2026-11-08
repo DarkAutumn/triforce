@@ -491,3 +491,27 @@ fn target_block() {
         }
     }
 }
+
+/// Dodongo stunned by bomb smoke (ObjState 2) can't hurt Link, so `hurts_on_touch` drops; the stun timer ($3D+slot)
+/// shows in `stun`. Walking or bloated (1), he hurts.
+#[test]
+fn stunned_dodongo_does_not_hurt_on_touch() {
+    let Some(mut s) = session() else { return };
+    let (mut builder, _) = reset(&mut s, "2_0es_0");
+    let (change, obs) = wait_until_spawned(&mut s, &mut builder, 2);
+    let slot = (0..NUM_ENTITY_SLOTS)
+        .find(|&i| matches!(obs.entity_types[i], 0x31 | 0x32))
+        .expect("Dodongo in the room");
+    assert_eq!(obs.entity_features[slot][e("hurts_on_touch")], 1.0);
+    let mut with_state = |obj_state: u8, stun: u8| {
+        // Entity slot i is object slot i + 1 (slot 0 is Link).
+        s.nes_mut().poke(0xAC + 1 + slot as u16, obj_state);
+        s.nes_mut().poke(0x3D + 1 + slot as u16, stun);
+        let state = s.apply_ram(&[]).clone();
+        builder.build(&change, &state, &no_objective(), None, s.mask()).entity_features[slot]
+    };
+    let stunned = with_state(2, 0x80);
+    assert_eq!(stunned[e("hurts_on_touch")], 0.0);
+    assert_eq!(stunned[e("stun")], 1.0);
+    assert_eq!(with_state(1, 0)[e("hurts_on_touch")], 1.0);
+}

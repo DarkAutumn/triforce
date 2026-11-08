@@ -772,7 +772,9 @@ impl ObservationBuilder {
             let harmful = (monster && !matches!(t, 0x29 | 0x2E | 0x2F | 0x35 | 0x36 | 0x37))
                 || matches!(t, 0x49 | 0x4A)
                 || projectile;
-            f[e::HURTS_ON_TOUCH] = b(harmful && active && !dying && !clock);
+            // A stunned Dodongo (ObjState 2, the bomb smoke) can't hurt Link: that's when to stab him.
+            let stunned_dodongo = matches!(t, 0x31 | 0x32) && obj_state == 2;
+            f[e::HURTS_ON_TOUCH] = b(harmful && active && !dying && !clock && !stunned_dodongo);
             f[e::KILLABLE] = b(is_foe(t) && !matches!(t, 0x2B..=0x2D));
             f[e::PROJECTILE] = b(projectile);
             f[e::BLOCKABLE] = b(matches!(t, 0x53 | 0x5B | 0x5C));
