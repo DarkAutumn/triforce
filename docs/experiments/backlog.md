@@ -88,6 +88,7 @@ better)**. Train a model for (2).
    (Dungeon 2). Never take the fairy (too early in the run). After beating Dungeon 2: north to 0x2c, bomb the
    secret rock for the heart, then 0x1c, west to 0x1a, north one screen for the white sword, back south, east to
    0x17, then Dungeon 1, played with the white sword. Not started.
+
 ### Done (report to Lee): heart experiments (Lee, Nov 7; a series)
 
 Goal: Link picks up dropped items, hearts above all, far more than the current models do. Lee's original models
