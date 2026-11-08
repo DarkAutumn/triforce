@@ -75,6 +75,7 @@ impl RoomWatch {
                     health: info.health,
                     max_health: info.max_health,
                     stalled: false,
+                    bombs_cheated: info.bombs_cheated,
                 },
                 events,
             );
@@ -368,6 +369,8 @@ where
                 hearts: t.hearts,
                 linger: t.linger,
                 blocks: t.blocks,
+                bombs_used: t.bombs_used,
+                bombs_cheated: t.bombs_cheated,
                 visits: self.env.take_visits(),
             })));
             end_recording(self.env.session_mut().nes_mut(), events);
@@ -508,6 +511,7 @@ where
                 health: state.health(),
                 max_health: state.max_health(),
                 stalled: self.chain.stalled(),
+                bombs_cheated: self.chain.bombs_cheated(),
             };
             self.rooms.report(event, events);
         }

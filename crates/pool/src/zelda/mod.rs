@@ -106,6 +106,8 @@ pub struct RoomEvent {
     pub max_health: i32,
     /// Chain runs only: the room has gone the stall budget without damage either way ([`env::chain::ChainEnv::stalled`]).
     pub stalled: bool,
+    /// Cheated bombs placed so far in the episode or run ([`env::bombs`]; the watch player's footer).
+    pub bombs_cheated: u32,
 }
 
 /// One evaluation episode (`evaluate._play`'s record).
@@ -127,6 +129,8 @@ pub struct EvalRecord {
     pub hearts: HeartSummary,
     pub linger: LingerSummary,
     pub blocks: u32,
+    pub bombs_used: u32,
+    pub bombs_cheated: u32,
     /// Every room visit, in order (`zelda::visits`).
     pub visits: Vec<RoomVisit>,
 }
@@ -140,7 +144,8 @@ impl EvalRecord {
             "seed": self.seed, "outcome": self.outcome, "ending": self.ending, "success": self.success,
             "steps": self.steps, "frames": self.frames, "start_health": self.start_health, "health": self.health,
             "max_health": self.max_health, "hearts": hearts_json(&self.hearts), "linger": linger_json(&self.linger),
-            "blocks": self.blocks, "visits": self.visits.iter().map(visit_json).collect::<Vec<_>>(),
+            "blocks": self.blocks, "bombs": {"used": self.bombs_used, "cheated": self.bombs_cheated},
+            "visits": self.visits.iter().map(visit_json).collect::<Vec<_>>(),
         })
     }
 }
@@ -163,7 +168,7 @@ pub fn visit_json(v: &RoomVisit) -> Value {
         "frames": v.frames, "health_in": v.health_in, "health_out": v.health_out, "max_health": v.max_health,
         "health_lost": v.health_lost, "health_gained": v.health_gained, "hits": v.hits, "hits_dealt": v.hits_dealt,
         "drops": item_counts(&v.drops), "pickups": item_counts(&v.pickups), "keys_gained": v.keys_gained,
-        "exit": v.exit,
+        "bombs_used": v.bombs_used, "bombs_cheated": v.bombs_cheated, "exit": v.exit,
     })
 }
 

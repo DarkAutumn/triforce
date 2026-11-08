@@ -75,7 +75,11 @@ Two ways to kill Dodongo: (1) make him swallow two bombs (works, wasteful); (2) 
 next to him, so he doesn't eat it and the smoke stuns him, then hit him with the sword while stunned (much
 better)**. Train a model for (2).
 
-- Bombs are not a limit: the model gets infinite bombs, in training and in the room.
+- Bombs (Lee, Nov 8, replaces "infinite bombs"): counts stay natural, but Dodongo's room is `requires_bombs`
+  (game.yaml): whenever Link has none there he gets one *cheated* bomb (start, entry, after every action); placing
+  it counts as a cheated bomb used, leaving with it unused takes it back. Training, eval (per visit) and chains
+  report `bombs used` and `bombs cheated`; the watch player's footer shows a run's cheated bombs (not beaten
+  naturally). `crates/env/src/bombs.rs`, docs/architecture.md "Bombs".
 - A whole task of its own: expect plenty of experimentation and trial and error.
 - **The curriculum matters most:** it has to show how to do it against Dodongo's various movement patterns.
 - Mechanics (ASM-backed): `target/dodongo/README.md` (gitignored notes) and round 12.

@@ -98,7 +98,7 @@ fn every_route_room_has_a_specialist() {
 
 #[test]
 fn chain_summary_counts_failures_by_room() {
-    let run = |result: &str, room: &str, outcome: &str| RunResult {
+    let run = |result: &str, room: &str, outcome: &str, cheated: u32| RunResult {
         route: "milestone1".into(),
         seed: Some(0),
         result: result.into(),
@@ -128,13 +128,15 @@ fn chain_summary_counts_failures_by_room() {
             linger: None,
             blocks: 0,
             no_damage_max: 0,
+            bombs_used: cheated,
+            bombs_cheated: cheated,
         }],
     };
     let s = chain_summary(&[
-        run("success", "0x0e", "milestone"),
-        run("failure", "0x44", "death"),
-        run("failure", "0x44", "death"),
-        run("failure", "0x73", "stuck"),
+        run("success", "0x0e", "milestone", 2),
+        run("failure", "0x44", "death", 0),
+        run("failure", "0x44", "death", 1),
+        run("failure", "0x73", "stuck", 0),
     ]);
     assert_eq!(s["runs"], 4);
     assert_eq!(s["successes"], 1);
@@ -143,6 +145,7 @@ fn chain_summary_counts_failures_by_room() {
         s["failures"],
         serde_json::json!({"1:0x44 stalfos-keese-gel death": 2, "1:0x73 stalfos-keese-gel stuck": 1})
     );
+    assert_eq!((s["bombs_cheated"].as_u64(), s["runs_with_cheated_bombs"].as_u64()), (Some(3), Some(2)));
 }
 
 /// The chain tests, run in sequence on one emulator.

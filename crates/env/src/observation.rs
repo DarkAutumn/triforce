@@ -655,16 +655,18 @@ impl ObservationBuilder {
         self.build_state(state, objective, wavefront, mask, None, 0, None)
     }
 
-    /// The observation after a step; `objective` and `wavefront` belong to `change.state`.
+    /// The observation after a step to `state`: `change.state`, or the state a RAM fix-up after the action rebuilt
+    /// (the bomb rule, [`crate::bombs`]); `objective` and `wavefront` belong to `state`.
     pub fn build(
         &mut self,
         change: &Change,
+        state: &GameView,
         objective: &Objective,
         wavefront: Option<&Wavefront>,
         mask: &ActionMask,
     ) -> Observation {
         self.build_state(
-            &change.state,
+            state,
             objective,
             wavefront,
             mask,

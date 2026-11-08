@@ -132,6 +132,24 @@ overall, per room and per start state; runner `RoomRecord`s carry `hearts_droppe
 and `keys_in/keys_out` (keys carried into and out of the room; `chain_summary`'s `arrival_keys` counts milestone
 arrivals by keys carried, so full key carriage is reported separately from reaching Dodongo).
 
+### Bombs (`crates/env/src/bombs.rs`)
+
+Bomb counts ($658) stay natural (never refilled; `items: {bombs: ...}` only masks the action) except in rooms
+game.yaml tags `requires_bombs: true` (only Dodongo, 2:0x0e). `BombLedger`, shared by `SpecialistEnv` and
+`ChainEnv` (one per episode or run), runs at episode/run start and after every action, writes any change with
+`Session::apply_ram(&[(Var::Bombs, n)])` and carries the rebuilt state on (mask, observation; the action's `Change`
+keeps what the action did). In a `requires_bombs` room a count of 0 becomes 1, a *cheated* bomb, marked
+outstanding. Every fall of the count is a placement (`used`); a fall while the cheated bomb is outstanding (1 → 0)
+is a *cheated bomb used* (`cheated`; a bomb merely granted never counts), and the floor re-arms. A natural rise (a
+pickup) clears the mark. Leaving the room with the cheated bomb outstanding sets the count back to 0; a natural
+last bomb is never touched, and outside such rooms counts go up and down naturally. Reports: terminal
+`info['bombs'] = {used, cheated}` → training `bombs/used`, `bombs/cheated` per episode (progress events too);
+eval records `bombs` and per-visit `bombs_used`/`bombs_cheated` → `mean_bombs_used`/`mean_bombs_cheated` (overall,
+per room and start state) and `visited_rooms` `bombs_used_per_visit`/`bombs_cheated_per_visit` (zelda-map's
+sidebar); chain `RoomRecord.bombs_used/bombs_cheated` and `chain_summary`'s `bombs_cheated` total and
+`runs_with_cheated_bombs`; room events carry the run's `bombs_cheated`, shown in the watch player's footer
+(`cheated bombs N`, when > 0): such a game wasn't beaten naturally.
+
 ### Lingering (`crates/zelda/src/linger.rs`)
 
 `LingerTracker.reset(state)` / `update(change, hearts_taken=0)` measures progress without changing gameplay.

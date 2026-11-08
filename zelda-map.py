@@ -55,7 +55,8 @@ SIDE_ORDER = ('s', 'n', 'e', 'w', 'c', 'cave')     # which entry's savestate pic
 DETAILED_FORMAT = 2
 COUNT_KEYS = ('visits', 'episodes', 'deaths')
 MEAN_KEYS = ('steps_per_visit', 'health_lost_per_visit', 'health_gained_per_visit', 'health_change_per_visit',
-             'hits_per_visit', 'no_hit_rate', 'hits_dealt_per_visit', 'keys_per_visit')
+             'hits_per_visit', 'no_hit_rate', 'hits_dealt_per_visit', 'keys_per_visit', 'bombs_used_per_visit',
+             'bombs_cheated_per_visit')
 KIND_MEAN_KEYS = ('drops_per_visit', 'pickups_per_visit')
 ITEM_KINDS = ('heart', 'fairy', 'clock', 'rupee', 'blue_rupee', 'bombs')
 EXIT_ORDER = ('n', 's', 'e', 'w', 'cave', 'success', 'death', 'timeout', 'other')
@@ -607,7 +608,7 @@ def html_section(title: str, body: str) -> str:
 def stats_rows(stats: dict) -> list[tuple[str, str]]:
     """Sidebar rows for one room's merged eval stats."""
     contributors = ' · '.join(f'{name} {visits:,}' for name, visits in stats['specialists'])
-    return [
+    rows = [
         ('Evals (visits)', contributors),
         ('Visits', f"{stats['visits']:,}"),
         ('Episodes', f"{stats['episodes']:,}"),
@@ -624,6 +625,12 @@ def stats_rows(stats: dict) -> list[tuple[str, str]]:
         ('Pickups / visit', fmt_kinds(stats.get('pickups_per_visit'))),
         ('Exits', fmt_exits(stats.get('exits'))),
     ]
+    # Evaluations from before the bomb ledger have no bomb counts: show the rows only when some do.
+    if stats.get('bombs_used_per_visit') is not None:
+        rows.insert(-3, ('Bombs used / visit', fmt_num(stats['bombs_used_per_visit'])))
+    if stats.get('bombs_cheated_per_visit') is not None:
+        rows.insert(-3, ('Bombs cheated / visit', fmt_num(stats['bombs_cheated_per_visit'])))
+    return rows
 
 
 class MapWindow(QMainWindow):

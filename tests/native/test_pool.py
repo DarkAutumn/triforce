@@ -130,7 +130,7 @@ def test_chain_task_policies_and_room_events(states_dir):
         assert buffers['policy'][0] == 0
         events = pool.poll_events()
         assert events[0] == {'env': 0, 'type': 'room', 'specialist': 'ow-start', 'level': 0, 'room': 0x77,
-                             'health': 3.0, 'max_health': 3, 'stalled': False}
+                             'health': 3.0, 'max_health': 3, 'stalled': False, 'bombs_cheated': 0}
     with pytest.raises(native.ConfigError, match='Unknown route'):
         native.ChainTask([], 'no-such-route', seeds=[0])
 

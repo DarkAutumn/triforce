@@ -109,8 +109,8 @@ def _record(room, state, success, health, start_health, ending, hearts=None, **e
 def test_room_and_state_groups_average_health_hearts_blocks_and_count_endings():
     records = [
         _record((1, 0x44, False), '1_44w_0', True, 2.0, 3.0, 'exit-correct',
-                {'dropped': 2, 'taken': 1, 'left': 1, 'wasted': 0.5}, blocks=4),
-        _record((1, 0x44, False), '1_44w_1', False, 0.0, 1.5, 'death', blocks=0),
+                {'dropped': 2, 'taken': 1, 'left': 1, 'wasted': 0.5}, blocks=4, bombs={'used': 3, 'cheated': 2}),
+        _record((1, 0x44, False), '1_44w_1', False, 0.0, 1.5, 'death', blocks=0, bombs={'used': 1, 'cheated': 0}),
         _record((0, 0x77, True), '0_77cave_0', True, 3.0, 3.0, 'exit-correct', {'dropped': 1, 'taken': 1, 'left': 0}),
     ]
     rooms = _group(records, lambda r: _room_key(r['room']))
@@ -120,18 +120,21 @@ def test_room_and_state_groups_average_health_hearts_blocks_and_count_endings():
     assert room['health_change_total'] == (-1.0 + 0.5 - 1.5) / 2       # wasted hearts count as lost health
     assert (room['hearts_dropped'], room['hearts_taken'], room['hearts_left']) == (1.0, 0.5, 0.5)
     assert room['blocks'] == 2.0 and room['endings'] == {'exit-correct': 1, 'death': 1}
+    assert (room['mean_bombs_used'], room['mean_bombs_cheated']) == (2.0, 1.0)
     assert 'blocks' not in rooms['0:0x77:cave']                         # never measured, not zero
+    assert 'mean_bombs_used' not in rooms['0:0x77:cave']
     states = _group(records, lambda r: r['start_state'])
     assert list(states) == ['0_77cave_0', '1_44w_0', '1_44w_1']
     assert states['1_44w_1']['hearts_dropped'] == 0 and states['1_44w_1']['health_change_total'] == -1.5
 
 
 def _visit(level, room, in_cave=False, *, steps=10, health_in=3.0, health_out=3.0, lost=0.0, gained=0.0, hits=0,
-           dealt=0, drops=None, pickups=None, keys=0, exit_='n'):
+           dealt=0, drops=None, pickups=None, keys=0, exit_='n', bombs=0, cheated=0):
     return {'level': level, 'room': room, 'in_cave': in_cave, 'steps': steps, 'frames': steps * 8,
             'health_in': health_in, 'health_out': health_out, 'max_health': 3, 'health_lost': lost,
             'health_gained': gained, 'hits': hits, 'hits_dealt': dealt, 'drops': drops or {},
-            'pickups': pickups or {}, 'keys_gained': keys, 'exit': exit_}
+            'pickups': pickups or {}, 'keys_gained': keys, 'bombs_used': bombs, 'bombs_cheated': cheated,
+            'exit': exit_}
 
 
 def test_visited_rooms_average_every_visit_of_every_room():
@@ -143,10 +146,13 @@ def test_visited_rooms_average_every_visit_of_every_room():
                     _visit(1, 0x72, exit_='e'),
                     _visit(1, 0x73, steps=30, exit_='timeout')]},
         {'visits': [_visit(0, 0x77, True, exit_='cave')]},
+        # Dodongo: two fights, hearts lost and bombs per fight.
+        {'visits': [_visit(2, 0x0e, lost=1.0, bombs=3, cheated=1, exit_='success')]},
+        {'visits': [_visit(2, 0x0e, lost=2.0, bombs=1, cheated=1, exit_='death')]},
         {},                                                                 # a format-1 record: no visits
     ]
     rooms = _visited_rooms(records, 'goriya')
-    assert list(rooms) == ['0:0x77:cave', '1:0x63', '1:0x72', '1:0x73']
+    assert list(rooms) == ['0:0x77:cave', '1:0x63', '1:0x72', '1:0x73', '2:0x0e']
     room = rooms['1:0x73']
     assert (room['level'], room['room'], room['in_cave'], room['specialist']) == (1, 0x73, False, 'goriya')
     assert (room['visits'], room['episodes'], room['deaths'], room['death_rate']) == (3, 2, 0, 0.0)
@@ -162,6 +168,10 @@ def test_visited_rooms_average_every_visit_of_every_room():
     assert (died['deaths'], died['death_rate'], died['health_change_per_visit']) == (1, 1.0, -2.0)
     assert died['drops_per_visit'] == {} and died['no_hit_rate'] == 0.0
     assert rooms['0:0x77:cave']['in_cave'] and rooms['0:0x77:cave']['exits'] == {'cave': 1}
+    dodongo = rooms['2:0x0e']
+    assert (dodongo['health_lost_per_visit'], dodongo['bombs_used_per_visit'], dodongo['bombs_cheated_per_visit']) \
+        == (1.5, 2.0, 1.0)
+    assert room['bombs_used_per_visit'] == 0.0
     assert _visited_rooms([{}], 'goriya') == {}
 
 

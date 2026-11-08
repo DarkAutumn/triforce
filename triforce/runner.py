@@ -86,6 +86,10 @@ class RoomRecord:
     linger: dict = field(default_factory=dict)
     blocks: int = 0
     no_damage_max: Optional[int] = None     # longest stretch of actions without damage dealt or taken (None: older)
+    # Bombs placed during the visit, and cheated bombs placed (a requires-bombs room grants one when Link has none;
+    # crates/env/src/bombs.rs).  0 in older records.
+    bombs_used: int = 0
+    bombs_cheated: int = 0
 
 
 @dataclass
@@ -103,6 +107,11 @@ class RunResult:
     def failed_room(self) -> Optional[RoomRecord]:
         """The room the run ended in, if it didn't succeed."""
         return self.rooms[-1] if self.rooms and self.result != 'success' else None
+
+    @property
+    def bombs_cheated(self) -> int:
+        """Cheated bombs placed in the run: one or more means it wasn't beaten naturally."""
+        return sum(room.bombs_cheated for room in self.rooms)
 
     def to_dict(self) -> dict:
         """JSON-friendly dict."""
@@ -295,7 +304,8 @@ def chain_summary(results: List[RunResult]) -> dict:
 
     ``arrival_keys`` counts successful runs by the keys Link carried into the milestone room (the Dodongo room on
     milestone1: 3 = every key on the route kept), so milestone arrivals and full key carriage stay separate
-    counters."""
+    counters.  ``bombs_cheated`` totals the cheated bombs placed and ``runs_with_cheated_bombs`` counts the runs
+    that placed any."""
     runs = len(results)
     successes = sum(r.result == 'success' for r in results)
     failures: Dict[str, int] = {}
@@ -309,7 +319,9 @@ def chain_summary(results: List[RunResult]) -> dict:
             keys = r.rooms[-1].keys_in
             label = 'unknown' if keys is None else str(keys)
             arrival_keys[label] = arrival_keys.get(label, 0) + 1
+    cheated = [r.bombs_cheated for r in results]
     return {'runs': runs, 'successes': successes, 'success_rate': successes / runs if runs else 0.0,
             'arrival_keys': dict(sorted(arrival_keys.items())),
             'failures': dict(sorted(failures.items(), key=lambda kv: -kv[1])),
-            'errors': sorted({r.reason for r in results if r.result == 'error'})}
+            'errors': sorted({r.reason for r in results if r.result == 'error'}),
+            'bombs_cheated': sum(cheated), 'runs_with_cheated_bombs': sum(n > 0 for n in cheated)}

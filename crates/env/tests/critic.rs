@@ -246,6 +246,27 @@ fn boss_hits_scale_with_the_hit_count_and_replace_the_hit_reward() {
 }
 
 #[test]
+fn dodongo_stun_pays_and_a_swallowed_bomb_costs() {
+    let mut walking = Ram::new();
+    walking.enemy(1, enemy::DODONGO2, 112, 141);
+    let with_status = |status: u8| {
+        let mut ram = walking.clone();
+        ram.0[tables::OBJ_STATUS.0 + 1] = status;
+        ram
+    };
+    // The stun usually lands a step after the bomb (48-frame fuse): whatever the action, walking -> 2 pays.
+    let r = critique(&mut critic(), &step(&walking, &with_status(2), "MOVE N 8"));
+    assert_eq!(value(&r, "reward-boss-stunned"), REWARD_LARGE);
+    let r = critique(&mut critic(), &step(&walking, &with_status(1), "WAIT 8"));
+    assert_eq!(value(&r, "penalty-boss-ate-bomb"), -REWARD_MEDIUM);
+    // Staying stunned, or recovering, is neither.
+    let r = critique(&mut critic(), &step(&with_status(2), &with_status(2), "WAIT 8"));
+    assert!(!names(&r).iter().any(|n| n.contains("boss")), "{:?}", names(&r));
+    let r = critique(&mut critic(), &step(&with_status(2), &walking, "WAIT 8"));
+    assert!(!names(&r).iter().any(|n| n.contains("boss")), "{:?}", names(&r));
+}
+
+#[test]
 fn beam_hits_and_long_shots() {
     let mut base = Ram::new();
     base.enemy(3, enemy::STALFOS, 120, 60) // 81 pixels above Link

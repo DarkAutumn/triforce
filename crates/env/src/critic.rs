@@ -183,6 +183,7 @@ impl GameplayCritic {
             rewards.add(Outcome::reward("reward-gained-triforce", REWARD_MAXIMUM));
         }
         self.critique_attack(c, rewards);
+        self.critique_dodongo(c, rewards);
         self.critique_item_usage(c, rewards);
         self.critique_equipment_pickup(c, rewards);
         self.critique_puzzles(c, rewards);
@@ -448,6 +449,23 @@ impl GameplayCritic {
                     Outcome::reward("reward-bomb-hit", REWARD_MEDIUM),
                     change.hits() as f64,
                 );
+            }
+        }
+    }
+
+    /// Dodongo (round 12): only the sword hurts him, and only while a bomb's smoke has him stunned (ObjState 2);
+    /// a bomb he swallows instead (ObjState 1) wastes a bomb and the turn. Rewards the stun, penalises the
+    /// swallow; the kill itself is `reward-boss-hit` and the heart container ends the episode.
+    fn critique_dodongo(&mut self, c: &Critique, rewards: &mut StepRewards) {
+        let (prev, curr) = (&c.change.previous, &c.change.state);
+        for before in prev.enemies.iter().filter(|e| matches!(e.id, enemy::DODONGO | enemy::DODONGO2)) {
+            let Some(after) = curr.enemy_by_index(before.index).filter(|e| e.id == before.id) else {
+                continue;
+            };
+            match (before.status, after.status) {
+                (0, 2) => rewards.add(Outcome::reward("reward-boss-stunned", REWARD_LARGE)),
+                (0, 1) => rewards.add(Outcome::penalty("penalty-boss-ate-bomb", -REWARD_MEDIUM)),
+                _ => {}
             }
         }
     }

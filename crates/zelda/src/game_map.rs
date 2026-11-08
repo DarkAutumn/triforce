@@ -52,6 +52,9 @@ pub struct GameRoom {
     pub treasure: Option<String>,
     pub bomb_walls: Vec<String>,
     pub specialist: Option<String>,
+    /// `requires_bombs: true`: the room can't be beaten without a bomb (Dodongo), so a specialist acting in it is
+    /// never left with none (`env::bombs::BombLedger`).
+    pub requires_bombs: bool,
 }
 
 impl GameRoom {
@@ -301,6 +304,7 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
             treasure: as_string(get(entry, "treasure")),
             bomb_walls,
             specialist: as_string(get(entry, "specialist")),
+            requires_bombs: get(entry, "requires_bombs").and_then(Value::as_bool).unwrap_or(false),
         };
         rooms.insert(loc, room);
     }
@@ -354,6 +358,11 @@ impl GameMap {
 
     pub fn contains(&self, location: MapLocation) -> bool {
         self.rooms.contains_key(&location)
+    }
+
+    /// The room is tagged `requires_bombs` (an unknown room isn't).
+    pub fn requires_bombs(&self, location: MapLocation) -> bool {
+        self.rooms.get(&location).is_some_and(|r| r.requires_bombs)
     }
 
     /// Rooms in game.yaml order.
@@ -712,6 +721,14 @@ mod tests {
         );
         assert_eq!(map.rooms_for_specialist("wallmaster"), vec![loc(1, 0x45)]);
         assert_eq!(map.get(loc(0, 0x0c)).unwrap().specialist, None);
+    }
+
+    #[test]
+    fn only_dodongo_requires_bombs() {
+        let map = GameMap::builtin();
+        let tagged: Vec<_> = map.rooms().values().filter(|r| r.requires_bombs).map(|r| r.location).collect();
+        assert_eq!(tagged, vec![loc(2, 0x0e)]);
+        assert!(!map.requires_bombs(loc(9, 0x7f)));
     }
 
     #[test]

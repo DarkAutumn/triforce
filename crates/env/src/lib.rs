@@ -9,6 +9,7 @@
 //! [`explore`].  Emulator states are opaque (`zelda::Nes::State`); a [`start_states::StateStore`] loads and
 //! saves them.
 
+pub mod bombs;
 pub mod chain;
 pub mod config;
 pub mod critic;
@@ -22,6 +23,7 @@ pub mod rewards;
 pub mod specialist_env;
 pub mod start_states;
 
+pub use bombs::{BombLedger, BombStep};
 pub use chain::{ChainEnv, ChainStatus, RoomRecord, Route, RunResult};
 pub use config::{ConfigError, GameData, SpecialistConfig};
 pub use curriculum::{Curriculum, CurriculumSpec, SharedCurriculum};

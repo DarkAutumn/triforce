@@ -102,7 +102,7 @@ fn reset(s: &mut S, name: &str) -> (ObservationBuilder, Observation) {
 
 fn step(s: &mut S, builder: &mut ObservationBuilder, text: &str) -> (Change, Observation) {
     let change = s.act(Action::parse(text).unwrap()).unwrap();
-    let obs = builder.build(&change, &no_objective(), None, s.mask());
+    let obs = builder.build(&change, &change.state, &no_objective(), None, s.mask());
     (change, obs)
 }
 

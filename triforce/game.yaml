@@ -1326,6 +1326,7 @@ rooms:
 - level: 2
   location: '0x0e'
   specialist: boss-dodongo
+  requires_bombs: true    # Lee (Nov 8): Link always has a bomb here (BombLedger cheats one in when he has none)
   exits:
     S:
       level: 2

@@ -18,7 +18,7 @@ use env::rewards::{
     Outcome, PENALTY_TERMINAL_FAILURE, REWARD_MEDIUM, REWARD_TERMINAL_SUCCESS, StepRewards,
     TERMINAL_FAILURE_PENALTY_VALUE, success_reward_value,
 };
-use env::observation::{Observation, feature_names};
+use env::observation::{Observation, ObservationBuilder, feature_names};
 use env::specialist_env::{EnvOptions, SpecialistEnv, StepInfo, StepResult};
 use env::start_states::{SavestateCapture, ram_randomization_values};
 use env::{EnvError, StateStore};
@@ -1745,4 +1745,56 @@ fn capture_saves_first_entry_once_before_monsters_spawn() {
     let mut s = env.into_parts().0;
     s.nes_mut().restore(&machine);
     assert!(is_pre_entry(|a| s.nes().peek(a)));
+}
+
+/// game.yaml `requires_bombs` (Dodongo's room): with no bombs Link gets a cheated one; placing it counts one used and
+/// one cheated, a natural last bomb only one used, and either way the floor re-arms to 1. Outside such rooms the
+/// count is untouched. (Leaving the room with an unused cheated bomb: `env::bombs` unit tests.)
+#[test]
+fn requires_bombs_room_cheats_one_bomb_and_counts_it_when_placed() {
+    let Some(mut nes) = open_core() else { return };
+    let bomb = ActionKind::Bomb.index();
+    for (start, cheated) in [(0, 1), (1, 0)] {
+        let mut env = make_env(nes, "boss-dodongo", Some("2_0es_0"), |c| {
+            c.curriculum.enabled = false;
+            c.ram_randomization = RamRandomization {
+                bombs: Some((start, start)),
+                ..Default::default()
+            };
+        });
+        env.reset(Some(1), None).unwrap();
+        assert_eq!(state(&env).bombs(), 1, "start {start}");
+        assert_eq!((env.bombs.used, env.bombs.cheated), (0, 0), "granting doesn't count");
+        // Off the door tile, where items can't be used.
+        for _ in 0..4 {
+            if env.session().mask().kind[bomb] {
+                break;
+            }
+            act(&mut env, "MOVE N 16");
+        }
+        let place = ["BOMB N", "BOMB E", "BOMB W", "BOMB S"]
+            .into_iter()
+            .find(|t| env.session().mask().is_allowed(&Action::parse(t).unwrap()))
+            .expect("a bomb direction");
+        let r = act(&mut env, place);
+        assert_eq!((env.bombs.used, env.bombs.cheated), (1, cheated), "start {start}");
+        assert_eq!(r.info.bombs_cheated, cheated);
+        assert_eq!(state(&env).bombs(), 1, "the floor re-arms");
+        assert_eq!(r.obs.link, {
+            let mut b = ObservationBuilder::new(true, true);
+            b.reset(state(&env), objective(&env), None, env.session().mask()).link
+        }, "the observation sees the re-armed count");
+        nes = release(env);
+    }
+
+    let mut env = make_env(nes, "d2-rope", Some("2_2es_0"), |c| {
+        c.ram_randomization = RamRandomization {
+            bombs: Some((0, 0)),
+            ..Default::default()
+        };
+    });
+    env.reset(Some(0), None).unwrap();
+    act(&mut env, "WAIT 8");
+    assert_eq!(state(&env).bombs(), 0);
+    assert_eq!((env.bombs.used, env.bombs.cheated), (0, 0));
 }

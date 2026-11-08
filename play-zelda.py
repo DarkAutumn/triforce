@@ -135,6 +135,7 @@ class GameState:
         self.specialist = self.level = self.room = self.health = self.max_health = None
         self.rooms = 0
         self.stalled = False
+        self.bombs_cheated = 0      # cheated bombs placed this run (requires-bombs rooms: not beaten naturally)
 
     def apply(self, message: dict):
         event = message.get('event')
@@ -150,6 +151,7 @@ class GameState:
             self.health = message.get('health')
             self.max_health = message.get('max_health')
             self.stalled = bool(message.get('stalled', False))
+            self.bombs_cheated = int(message.get('bombs_cheated', self.bombs_cheated))
         elif event == 'end':
             self.seed = message.get('seed', self.seed)
             self.outcome = message.get('outcome')
@@ -172,6 +174,8 @@ class GameState:
         else:
             text = (f"{seed}{self.specialist}  L{self.level} 0x{self.room:02x}  "
                     f"♥ {self.health:g}/{self.max_health}")
+            if self.bombs_cheated:
+                text += f"  ·  cheated bombs {self.bombs_cheated}"
         if self.outcome in ('error', 'crash') and self.reason:
             text += f"  ·  {self.reason}"
         return text

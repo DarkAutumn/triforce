@@ -10,6 +10,7 @@
 //! an unknown/untagged room the route needed, a masked action, a missing state or [`ChainEnv::fail`] (e.g. no
 //! promoted model).
 
+use crate::bombs::BombLedger;
 use crate::config::{GameData, SpecialistConfig};
 use crate::error::EnvError;
 use crate::objective;
@@ -107,6 +108,9 @@ pub struct RoomRecord {
     /// Longest stretch of the visit's actions without damage dealt (an enemy hit, look-ahead credit included) or
     /// taken.
     pub no_damage_max: u64,
+    /// Bombs placed during the visit, and cheated bombs placed ([`crate::bombs`]).
+    pub bombs_used: u32,
+    pub bombs_cheated: u32,
 }
 
 impl RoomRecord {
@@ -140,6 +144,8 @@ impl RoomRecord {
             linger: None,
             blocks: 0,
             no_damage_max: 0,
+            bombs_used: 0,
+            bombs_cheated: 0,
         }
     }
 
@@ -160,6 +166,7 @@ impl RoomRecord {
             "hearts_left": self.hearts_left, "hearts_expired": self.hearts_expired,
             "linger": self.linger.as_ref().map_or_else(|| json!({}), linger_json),
             "blocks": self.blocks, "no_damage_max": self.no_damage_max,
+            "bombs_used": self.bombs_used, "bombs_cheated": self.bombs_cheated,
         })
     }
 }
@@ -185,6 +192,11 @@ impl RunResult {
         } else {
             None
         }
+    }
+
+    /// Cheated bombs placed in the run (its rooms' total).
+    pub fn bombs_cheated(&self) -> u32 {
+        self.rooms.iter().map(|r| r.bombs_cheated).sum()
     }
 
     /// `asdict(RunResult)`.
@@ -250,6 +262,8 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     prev_objective: Option<Objective>,
     hearts: HeartTracker,
     linger: LingerTracker,
+    /// The run's bombs: the cheated bomb of requires-bombs rooms and the counts ([`crate::bombs`]).
+    bombs: BombLedger,
     builder: ObservationBuilder,
 }
 
@@ -273,6 +287,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             prev_objective: None,
             hearts: HeartTracker::default(),
             linger: LingerTracker::default(),
+            bombs: BombLedger::default(),
             builder: ObservationBuilder::new(true, false),
         }
     }
@@ -304,6 +319,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.stall_steps.is_some_and(|n| self.no_damage >= n)
     }
 
+    /// Cheated bombs placed so far this run.
+    pub fn bombs_cheated(&self) -> u32 {
+        self.bombs.cheated
+    }
+
     /// Starts a run from the route's start state; `rng` draws the load's RNG bytes and spawn.
     pub fn reset(
         &mut self,
@@ -332,7 +352,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             fresh_room: true,
             ..Default::default()
         };
-        let state = self.session.load(&machine, &opts, rng)?.clone();
+        self.session.load(&machine, &opts, rng)?;
+        let state = self.bombs.begin(&mut self.session, &self.data.map);
         let (route, step) = start_route(
             &self.data.map,
             state.full_location(),
@@ -366,7 +387,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             return Ok(self.error(reason));
         }
         let change = self.session.act(action)?;
-        let state = change.state.clone();
+        // The bomb rule's state carries on (mask, observation); `change` keeps what the action did.
+        let (bombs, state) = self.bombs.after_action(&mut self.session, &self.data.map);
         let taken = self.hearts.taken;
         self.hearts.update(&HeartView::of(&state), change.frames);
         let prev_objective = self.objective.take().expect("run started");
@@ -387,6 +409,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let record = result.rooms.last_mut().expect("room record");
         record.linger = Some(summary);
         record.blocks += change.blocks() as u32;
+        record.bombs_used += bombs.used;
+        record.bombs_cheated += bombs.cheated;
         record.steps += 1;
         record.frames += change.frames as u64;
         if change.health_lost > 0.0 || !change.enemies_hit.is_empty() {
@@ -627,6 +651,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         match &self.change {
             Some(change) => self.builder.build(
                 change,
+                self.session.state(),
                 objective,
                 wavefront.as_ref(),
                 self.session.mask(),
@@ -680,12 +705,16 @@ pub fn chain_summary(results: &[RunResult]) -> Value {
         .collect();
     errors.sort();
     errors.dedup();
+    let cheated: Vec<u32> = results.iter().map(RunResult::bombs_cheated).collect();
     json!({
         "runs": runs,
         "successes": successes,
         "success_rate": if runs > 0 { successes as f64 / runs as f64 } else { 0.0 },
         "failures": failures.into_iter().map(|(k, v)| (k, json!(v))).collect::<serde_json::Map<_, _>>(),
         "errors": errors,
+        // Cheated bombs placed (requires-bombs rooms): runs that used any weren't beaten naturally.
+        "bombs_cheated": cheated.iter().sum::<u32>(),
+        "runs_with_cheated_bombs": cheated.iter().filter(|&&n| n > 0).count(),
     })
 }
 

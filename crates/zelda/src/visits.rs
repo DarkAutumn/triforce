@@ -4,7 +4,8 @@
 //! the episode's end. The step that changes rooms belongs to the room Link left. Drops count dropped items per
 //! kind as they appear (a new slot, or a slot whose lifetime timer went up, as `HeartTracker` counts hearts; items
 //! on the floor when a visit starts count too); pickups are `Change.items_gained`; hits are steps that lost
-//! health; keys are rises of the key count. The exit is the direction Link left in (`n`/`s`/`e`/`w`, `cave` for
+//! health; keys are rises of the key count; bombs are what the env's bomb ledger reports per step (placements, and
+//! cheated bombs placed: `env::bombs`). The exit is the direction Link left in (`n`/`s`/`e`/`w`, `cave` for
 //! stairs, caves and dungeon entrances), or how the episode ended in the room ([`VisitEnd`]).
 
 use crate::change::Change;
@@ -66,6 +67,9 @@ pub struct RoomVisit {
     /// Items picked up, per [`ITEM_KINDS`] index.
     pub pickups: [u32; 6],
     pub keys_gained: u32,
+    /// Bombs placed, and cheated bombs placed.
+    pub bombs_used: u32,
+    pub bombs_cheated: u32,
     pub exit: &'static str,
 }
 
@@ -105,6 +109,9 @@ pub struct VisitStep<'a> {
     pub health_gained: f64,
     pub hits_dealt: u32,
     pub items_gained: &'a [i16],
+    /// Bombs placed this step, and cheated bombs placed (set by the env; 0 from [`VisitStep::of`]).
+    pub bombs_used: u32,
+    pub bombs_cheated: u32,
 }
 
 impl VisitStep<'_> {
@@ -115,6 +122,8 @@ impl VisitStep<'_> {
             health_gained: change.health_gained,
             hits_dealt: change.hits() as u32,
             items_gained: &change.items_gained,
+            bombs_used: 0,
+            bombs_cheated: 0,
         }
     }
 }
@@ -164,6 +173,8 @@ impl VisitTracker {
             visit.hits += 1;
         }
         visit.hits_dealt += step.hits_dealt;
+        visit.bombs_used += step.bombs_used;
+        visit.bombs_cheated += step.bombs_cheated;
         for &id in step.items_gained {
             if let Some(kind) = kind_index(id) {
                 visit.pickups[kind] += 1;
@@ -212,6 +223,8 @@ impl VisitTracker {
             drops,
             pickups: [0; 6],
             keys_gained: 0,
+            bombs_used: 0,
+            bombs_cheated: 0,
             exit: EXIT_OTHER,
         });
         self.floor.clone_from(&state.items);
@@ -267,6 +280,8 @@ mod tests {
             health_gained: 0.0,
             hits_dealt,
             items_gained,
+            bombs_used: 0,
+            bombs_cheated: 0,
         }
     }
 

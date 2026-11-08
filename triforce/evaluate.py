@@ -15,7 +15,10 @@ same whichever env or thread runs it.  The checkpoint defaults to the specialist
 ``mean_health_change`` is hearts at the episode's end minus hearts at its start (after hp randomization).
 Dropped hearts are kept per episode (``records[i]['hearts']``); ``mean_health_change_total``
 adds the hearts wasted by picking them up at (or near) full health, and ``hearts_dropped`` / ``hearts_taken`` /
-``hearts_left`` are means per episode (also per room and per start state).
+``hearts_left`` are means per episode (also per room and per start state).  ``mean_bombs_used`` /
+``mean_bombs_cheated`` are bombs placed per episode and the cheated ones among them (``records[i]['bombs']``; a
+``requires_bombs`` room such as Dodongo's gives Link a bomb whenever he has none: crates/env/src/bombs.rs), also per
+room and per start state.
 Lingering records retain longest quiet streak, terminal tail, visit time and boss/pickup milestones. Overall,
 room and start-state aggregates report mean longest/tail steps and frames plus the worst measured streak.
 
@@ -23,12 +26,14 @@ room and start-state aggregates report mean longest/tail steps and frames plus t
 episode's visits in order (``level``, ``room``, ``in_cave``, ``steps``, ``frames``, ``health_in``/``health_out``,
 ``max_health``, ``health_lost``/``health_gained`` summed over the visit, ``hits`` = steps that lost health,
 ``hits_dealt``, ``drops``/``pickups`` per item kind (bombs, rupee, blue_rupee, heart, fairy, clock; zeros
-omitted), ``keys_gained`` and ``exit``: ``n``/``s``/``e``/``w`` or ``cave`` when Link left the room, else how
-the episode ended there, ``death``/``success``/``timeout``/``other``).  ``visited_rooms`` aggregates them per
+omitted), ``keys_gained``, ``bombs_used``/``bombs_cheated`` (bombs placed, cheated ones among them) and ``exit``:
+``n``/``s``/``e``/``w`` or ``cave`` when Link left the room, else how the episode ended there,
+``death``/``success``/``timeout``/``other``).  ``visited_rooms`` aggregates them per
 room entered (keyed like ``by_room``, which only knows start rooms): ``visits``, ``episodes``, ``deaths``,
 ``death_rate``, ``exits`` and per-visit means (``steps_per_visit``, ``health_lost/gained/change_per_visit``,
-``hits_per_visit``, ``no_hit_rate``, ``hits_dealt_per_visit``, ``keys_per_visit``, ``drops_per_visit``,
-``pickups_per_visit``), tagged with the ``specialist``.  Readers merging several evaluations weight by visits.
+``hits_per_visit``, ``no_hit_rate``, ``hits_dealt_per_visit``, ``keys_per_visit``, ``bombs_used_per_visit``,
+``bombs_cheated_per_visit``, ``drops_per_visit``, ``pickups_per_visit``), tagged with the ``specialist``.  Readers
+merging several evaluations weight by visits.
 """
 
 import argparse
@@ -116,6 +121,15 @@ def _block_stats(records: list[dict]) -> dict:
     return {'blocks': sum(measured) / len(measured)} if measured else {}
 
 
+def _bomb_stats(records: list[dict]) -> dict:
+    """Bombs placed and cheated bombs placed per episode, over records that count them."""
+    measured = [record['bombs'] for record in records if 'bombs' in record]
+    if not measured:
+        return {}
+    return {'mean_bombs_used': sum(b['used'] for b in measured) / len(measured),
+            'mean_bombs_cheated': sum(b['cheated'] for b in measured) / len(measured)}
+
+
 def _group(records: list[dict], key) -> dict:
     groups = {}
     for record in records:
@@ -126,6 +140,7 @@ def _group(records: list[dict], key) -> dict:
                    **_heart_stats(items),
                    **_linger_stats(items),
                    **_block_stats(items),
+                   **_bomb_stats(items),
                    'endings': dict(Counter(r['ending'] for r in items)),
                    # how the unsuccessful episodes ended, e.g. {'death': 4}
                    'failures': dict(Counter(r['ending'] for r in items if not r['success']))}
@@ -157,6 +172,8 @@ def _room_visit_stats(visits: list[dict]) -> dict:
         'no_hit_rate': mean(lambda v: v['hits'] == 0),
         'hits_dealt_per_visit': mean(lambda v: v['hits_dealt']),
         'keys_per_visit': mean(lambda v: v['keys_gained']),
+        'bombs_used_per_visit': mean(lambda v: v.get('bombs_used', 0)),
+        'bombs_cheated_per_visit': mean(lambda v: v.get('bombs_cheated', 0)),
         'drops_per_visit': items('drops'),
         'pickups_per_visit': items('pickups'),
         'exits': dict(Counter(visit['exit'] for visit in visits)),
@@ -216,6 +233,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         **hearts,
         **_linger_stats(records),
         **_block_stats(records),
+        **_bomb_stats(records),
         'mean_steps': sum(r['steps'] for r in records) / count,
         'mean_frames': sum(r['frames'] for r in records) / count,
         'outcomes': dict(Counter(r['outcome'] for r in records)),

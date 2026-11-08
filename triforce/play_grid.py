@@ -7,8 +7,9 @@ playing at the same pace without rendering) and ``frame(game, since)`` copies a 
 ``emulated_frames()`` counts every game's emulated frames, shown or not.  Room/health changes and run results go
 through one status queue as dicts with ``game`` and ``event`` (``start``, ``room``, ``end``, ``crash``); ``room``
 carries ``rooms``, the rooms entered so far in the run (a change of the observation's room id: level, cave, room),
-and ``stalled``: with ``stall_steps`` set, the room has gone that many actions without damage dealt or taken (the
-run ends ``stuck`` at twice as many).
+``stalled``: with ``stall_steps`` set, the room has gone that many actions without damage dealt or taken (the
+run ends ``stuck`` at twice as many), and ``bombs_cheated``: cheated bombs placed so far in the run (a
+``requires_bombs`` room gives Link a bomb whenever he has none; crates/env/src/bombs.rs).
 After a run ends its game holds its result for ``RESULT_PAUSE`` seconds, showing the run's last frame (the next
 run's reset publishes nothing until then), before the next seed plays (seeds are handed
 out in order to whichever game is free, so ``start`` carries no seed; ``end`` does).  A setup error (an error before
@@ -296,7 +297,8 @@ class GameGrid:
             rooms[env].pending.append({'game': env, 'event': 'room', 'specialist': event['specialist'],
                                        'level': event['level'], 'room': event['room'],
                                        'health': float(event['health']), 'max_health': int(event['max_health']),
-                                       'stalled': bool(event['stalled'])})
+                                       'stalled': bool(event['stalled']),
+                                       'bombs_cheated': int(event['bombs_cheated'])})
 
     def _release(self, chain: ChainPool, held: Dict[int, _Held]) -> None:
         now = self._now()

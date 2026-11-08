@@ -8,9 +8,10 @@
 //! Info contract: every step carries `frames`, `interrupt`, `action`, `rewards` (this step's terms), `room`,
 //! `health`, `max_health`, `steps`, `total_frames`, `specialist`, `route`; the terminal step adds
 //! [`TerminalInfo`] (`ending`, `outcome`, `start_state`, `start_health`, `hearts`, `linger`, `linger_room`,
-//! `blocks`, `bootstrap_truncation`, `curriculum`, plus `episode_steps`, `episode_frames`, `reward_total` and
-//! per-term episode totals `episode_rewards`).
+//! `blocks`, `bombs` (`used`, `cheated`: [`crate::bombs`]), `bootstrap_truncation`, `curriculum`, plus
+//! `episode_steps`, `episode_frames`, `reward_total` and per-term episode totals `episode_rewards`).
 
+use crate::bombs::BombLedger;
 use crate::config::{GameData, SpecialistConfig};
 use crate::critic::{Critique, GameplayCritic};
 use crate::curriculum::{CurriculumInfo, CurriculumTag, SharedCurriculum};
@@ -56,6 +57,9 @@ pub struct TerminalInfo {
     pub linger: LingerSummary,
     pub linger_room: (u8, u8, bool),
     pub blocks: u32,
+    /// Bombs placed, and cheated bombs placed ([`crate::bombs`]).
+    pub bombs_used: u32,
+    pub bombs_cheated: u32,
     /// The ending was `no-room-progress` or `no-damage` (bootstrap the value of the final observation).
     pub bootstrap_truncation: bool,
     pub curriculum: Option<CurriculumInfo>,
@@ -85,6 +89,8 @@ pub struct StepInfo {
     pub start_state: Option<String>,
     /// A first-entry state written this step.
     pub captured_state: Option<PathBuf>,
+    /// Cheated bombs placed so far this episode (not in the info dict; room events carry it).
+    pub bombs_cheated: u32,
     pub terminal: Option<TerminalInfo>,
 }
 
@@ -148,6 +154,7 @@ impl StepInfo {
                 json!([t.linger_room.0, t.linger_room.1, t.linger_room.2]),
             );
             o.insert("blocks".into(), json!(t.blocks));
+            o.insert("bombs".into(), json!({"used": t.bombs_used, "cheated": t.bombs_cheated}));
             if t.bootstrap_truncation {
                 o.insert("bootstrap_truncation".into(), json!(true));
             }
@@ -202,6 +209,7 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     pub rng: ChaCha8Rng,
     pub linger: LingerTracker,
     pub hearts: HeartTracker,
+    pub bombs: BombLedger,
     /// Per-room-visit statistics (only with `EnvOptions::track_visits`).
     visits: Option<VisitTracker>,
     pool: Option<StartStatePool>,
@@ -288,6 +296,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             rng: ChaCha8Rng::seed_from_u64(opts.seed),
             linger: LingerTracker::default(),
             hearts: HeartTracker::default(),
+            bombs: BombLedger::default(),
             visits: opts.track_visits.then(VisitTracker::default),
             pool,
             curriculum,
@@ -424,10 +433,11 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         );
         self.route = route;
         self.route_step = step;
-        self.begin_episode(&state, name)
+        self.begin_episode(name)
     }
 
-    /// Continues from a session snapshot (exact state, no RNG or RAM changes) as a new episode labelled `name`;
+    /// Continues from a session snapshot (exact state, no RNG or RAM randomization; the bomb rule applies) as a new
+    /// episode labelled `name`;
     /// objectives, critic and end conditions restart as at reset; the route stays.
     pub fn restore(
         &mut self,
@@ -437,15 +447,14 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.curriculum_tag = None;
         self.session
             .set_disabled_kinds(&self.config.items.disabled_kinds());
-        let state = self.session.restore(snapshot).clone();
-        self.begin_episode(&state, name.to_owned())
+        self.session.restore(snapshot);
+        self.begin_episode(name.to_owned())
     }
 
-    fn begin_episode(
-        &mut self,
-        state: &Arc<GameView>,
-        name: String,
-    ) -> Result<(Observation, StepInfo), EnvError> {
+    /// Starts an episode from the session's state (loaded or restored).
+    fn begin_episode(&mut self, name: String) -> Result<(Observation, StepInfo), EnvError> {
+        // A cheated bomb (requires-bombs room) is in the state everything below starts from.
+        let state = &self.bombs.begin(&mut self.session, &self.data.map);
         let mut gc = GameCompletion::new(self.data.map.clone(), &self.route, self.route_step)
             .map_err(|e| EnvError::Config(crate::ConfigError(e)))?;
         let attached = attach(
@@ -504,7 +513,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             )));
         }
         let change = self.session.act(action)?;
-        let state = change.state.clone();
+        // The bomb rule's state carries on (mask, observation); `change` keeps what the action did.
+        let (bombs, state) = self.bombs.after_action(&mut self.session, &self.data.map);
         let taken = self.hearts.taken;
         self.hearts.update(&HeartView::of(&state), change.frames);
         let prev = self.attached.take().expect("episode started");
@@ -593,6 +603,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 linger: self.linger.summary(),
                 linger_room: self.linger.start_room,
                 blocks: self.blocks,
+                bombs_used: self.bombs.used,
+                bombs_cheated: self.bombs.cheated,
                 curriculum,
                 episode_steps: 0,
                 episode_frames: 0,
@@ -602,7 +614,10 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         }
         if let Some(visits) = &mut self.visits {
             let end = terminal.as_ref().map_or(VisitEnd::Continue, |t| visit_end(&t.ending, t.outcome));
-            visits.update(&VisitView::of(&state), &VisitStep::of(&change), end);
+            let mut step = VisitStep::of(&change);
+            step.bombs_used = bombs.used;
+            step.bombs_cheated = bombs.cheated;
+            visits.update(&VisitView::of(&state), &step, end);
         }
         let reward = rewards.value();
         self.reward_total += reward;
@@ -630,6 +645,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         };
         let obs = self.builder.build(
             &change,
+            &state,
             &curr.objective,
             curr.wavefront.as_deref(),
             self.session.mask(),
@@ -666,6 +682,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             route: self.route.clone(),
             start_state: None,
             captured_state: None,
+            bombs_cheated: self.bombs.cheated,
             terminal: None,
         }
     }

@@ -22,6 +22,9 @@
 - ``hearts/dropped``, ``hearts/taken``, ``hearts/healed`` (health those pickups actually restored),
   ``hearts/left`` (still on the floor at the episode's end) and ``hearts/wasted``: dropped hearts per completed
   episode.
+- ``bombs/used`` and ``bombs/cheated``: bombs Link placed per completed episode, and of those the cheated ones (a
+  ``requires_bombs`` room such as Dodongo's gives Link a bomb whenever he has none; crates/env/src/bombs.rs), from
+  ``info['bombs']``.
 - ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['episode_frames']`` /
   ``info['episode_steps']``).
 - ``linger/max_steps``, ``linger/max_frames``, ``linger/tail_steps``, ``linger/tail_frames``: means of the
@@ -74,6 +77,8 @@ class RolloutMetrics:
         self.hearts_left = 0
         self.hearts_wasted = 0.0
         self.hearts_healed = 0.0
+        self.bombs_used = 0
+        self.bombs_cheated = 0
         self.episode_frames = 0
         self.episode_steps = 0
         self.interrupts = Counter()
@@ -161,6 +166,9 @@ class RolloutMetrics:
         self.hearts_left += hearts.get('left', 0)
         self.hearts_wasted += hearts.get('wasted', 0.0)
         self.hearts_healed += hearts.get('healed', 0.0)
+        bombs = info.get('bombs') or {}
+        self.bombs_used += bombs.get('used', 0)
+        self.bombs_cheated += bombs.get('cheated', 0)
         self.health_fraction += health / max_health if max_health > 0 else 0.0
         self.episode_frames += int(info.get('episode_frames', 0))
         self.episode_steps += int(info.get('episode_steps', 0))
@@ -209,6 +217,8 @@ class RolloutMetrics:
             result['hearts/left'] = self.hearts_left / eps
             result['hearts/wasted'] = self.hearts_wasted / eps
             result['hearts/healed'] = self.hearts_healed / eps
+            result['bombs/used'] = self.bombs_used / eps
+            result['bombs/cheated'] = self.bombs_cheated / eps
             result['episode_frames'] = self.episode_frames / eps
             result['episode_steps'] = self.episode_steps / eps
         if self.curriculum_episodes:

@@ -217,6 +217,19 @@ def _room(game, rooms, health, stalled=False):
             'health': health, 'max_health': 3, 'stalled': stalled}
 
 
+def test_footer_shows_cheated_bombs_once_placed():
+    """The footer names the run's cheated bombs (a requires-bombs room's free bomb, placed) only when there are any;
+    a new run starts from none."""
+    state = play_zelda.GameState()
+    state.apply(_room(0, 1, 3.0))
+    assert 'cheated' not in state.strip_text()
+    state.apply({**_room(0, 1, 3.0), 'bombs_cheated': 2})
+    assert 'cheated bombs 2' in state.strip_text()
+    state.apply({'game': 0, 'event': 'start', 'seed': 4})
+    state.apply(_room(0, 1, 3.0))
+    assert 'cheated' not in state.strip_text()
+
+
 def test_a_cell_changes_game_only_when_its_game_enters_a_room_or_restarts(qapp):  # pylint: disable=redefined-outer-name, unused-argument
     """4 games, 2 cells.  A hidden game that is further along (rooms entered, then hearts) takes a cell only when the
     cell's game enters a new room or starts its next run (after its result showed), never mid-room.  The cell fades
