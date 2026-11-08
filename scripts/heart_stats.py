@@ -22,8 +22,8 @@ def eval_rows(path: Path, data: dict):
         hurt = r['health'] < r['max_health'] and r['health'] > 0
         yield family, r.get('room', ''), {
             'dropped': h['dropped'], 'taken': h['taken'], 'healed': h['healed'], 'wasted': h['wasted'],
-            'left': h['left'], 'left_hurt': h['left'] if hurt else 0,
-            'health_change': r['health'] - r['start_health'], 'runs': 0}
+            'left': h['left'], 'left_hurt': h['left'] if hurt else 0, 'success': bool(r['success']),
+            'health_in': r['start_health'], 'health_change': r['health'] - r['start_health']}
 
 
 def chain_rows(path: Path):
@@ -35,7 +35,8 @@ def chain_rows(path: Path):
             yield v['specialist'], room, {
                 'dropped': v['hearts_dropped'], 'taken': v['hearts_taken'], 'healed': v['hearts_healed'],
                 'wasted': v['hearts_wasted'], 'left': v['hearts_left'],
-                'left_hurt': v['hearts_left'] if hurt else 0, 'health_change': v['health_out'] - v['health_in']}
+                'left_hurt': v['hearts_left'] if hurt else 0, 'success': v['outcome'] != 'death',
+                'health_in': v['health_in'], 'health_change': v['health_out'] - v['health_in']}
 
 
 def summarize(paths: list[Path], by_room: bool) -> None:
@@ -53,15 +54,16 @@ def summarize(paths: list[Path], by_room: bool) -> None:
         groups = defaultdict(list)
         for family, room, row in rows:
             groups[(family, room) if by_room else (family,)].append(row)
-        print(f"  {'group':24s} {unit:>8s} " + ' '.join(f'{f:>9s}' for f in FIELDS) + '   ΔHP/ep')
+        # ok: eval success / chain visits not ending in death; hp_in: mean health on entry.
+        print(f"  {'group':24s} {unit:>8s}     ok  hp_in " + ' '.join(f'{f:>9s}' for f in FIELDS) + '   ΔHP/ep')
         for key, rs in sorted(groups.items()):
             n = len(rs)
             sums = {f: sum(r[f] for r in rs) for f in FIELDS}
-            if not by_room and sums['dropped'] == 0 and len(paths) > 1 and unit == 'visits':
-                continue
+            ok = sum(r['success'] for r in rs) / n
+            hp_in = sum(r['health_in'] for r in rs) / n
             dhp = sum(r['health_change'] for r in rs) / n
-            print(f"  {' '.join(key):24s} {n:8d} " + ' '.join(f'{sums[f] / n:9.3f}' for f in FIELDS)
-                  + f'   {dhp:+.3f}')
+            print(f"  {' '.join(key):24s} {n:8d} {ok:6.1%} {hp_in:6.2f} "
+                  + ' '.join(f'{sums[f] / n:9.3f}' for f in FIELDS) + f'   {dhp:+.3f}')
 
 
 def main() -> None:
