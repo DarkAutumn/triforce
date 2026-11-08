@@ -1,4 +1,4 @@
-//! Structured (no-pixel) observations, schema v1 (`triforce/observation.py`, docs/architecture.md).
+//! Structured (no-pixel) observations, schema v2 (`triforce/observation.py`, docs/architecture.md).
 //!
 //! Categorical values are integer ids (`room_id`, `entity_types`, `grid`) or one-hots; magnitudes are scaled to
 //! [0, 1] (signed deltas to [-1, 1]).  Feature names, in order, come from [`feature_names`]; `OBS_SPEC` lists
@@ -10,10 +10,11 @@ use zelda::actions::{
     ActionMask, DIRECTIONS, DURATIONS, MASK_SIZE, direction_index, duration_index, is_directional,
     is_timed,
 };
-use zelda::enums::{ActionKind, Direction};
+use zelda::enums::{ActionKind, Direction, GAMEPLAY_START_Y};
 use zelda::executor::Interrupt;
 use zelda::game::GameView;
 use zelda::objectives::{Objective, ObjectiveKind};
+use zelda::room::Wavefront;
 use zelda::room_state::{
     DOOR_DIRECTIONS, DOOR_KINDS, ITEM_COMPASS, ITEM_HEART_CONTAINER, ITEM_KEY, ITEM_MAP,
     ITEM_TRIFORCE, NUM_ITEM_IDS, PUSH_BLOCK_STATES, RoomState, decode_room_state,
@@ -21,7 +22,7 @@ use zelda::room_state::{
 use zelda::tiles::{Grid, NUM_TILE_CLASSES, build_grid};
 use zelda::{Action, Change};
 
-pub const OBS_SCHEMA_VERSION: u32 = 1;
+pub const OBS_SCHEMA_VERSION: u32 = 2;
 
 /// NES object slots 1-$B, then the room item ("treasure").
 pub const NUM_ENTITY_SLOTS: usize = 12;
@@ -39,11 +40,16 @@ pub const LINK_SIZE: usize = 81;
 pub const ENTITY_FEATURE_SIZE: usize = 33;
 pub const HISTORY_SIZE: usize = 34;
 pub const OBJECTIVE_SIZE: usize = 10;
+pub const TARGET_SIZE: usize = 8;
 pub const GRID_ROWS: usize = 22;
 pub const GRID_COLS: usize = 32;
 
 const PLAY_Y0: f64 = 64.0;
 const PLAY_H: f64 = 176.0;
+/// Wavefront tiles that map `target_distance` to 1.
+const TARGET_DISTANCE_SCALE: f64 = 32.0;
+/// The longest descent `target` follows toward a target tile.
+const TARGET_WALK_CAP: usize = 512;
 const VELOCITY_SCALE: f32 = 4.0;
 const HISTORY_FRAMES_SCALE: f64 = 64.0;
 
@@ -244,13 +250,15 @@ pub struct FeatureNames {
     pub entity: Vec<String>,
     pub history: Vec<String>,
     pub objective: Vec<String>,
+    pub target: Vec<String>,
 }
 
 fn s(v: &[&str]) -> Vec<String> {
     v.iter().map(|x| x.to_string()).collect()
 }
 
-/// `ROOM_STATE_FEATURES`, `LINK_FEATURES`, `ENTITY_FEATURES`, `HISTORY_FEATURES`, `OBJECTIVE_FEATURES`.
+/// `ROOM_STATE_FEATURES`, `LINK_FEATURES`, `ENTITY_FEATURES`, `HISTORY_FEATURES`, `OBJECTIVE_FEATURES`,
+/// `TARGET_FEATURES`.
 pub static FEATURE_NAMES: LazyLock<FeatureNames> = LazyLock::new(build_feature_names);
 
 pub fn feature_names() -> &'static FeatureNames {
@@ -421,12 +429,24 @@ fn build_feature_names() -> FeatureNames {
         .collect();
     objective.extend(OBJECTIVE_KINDS.iter().map(|k| format!("objective_{k}")));
 
+    let mut target: Vec<String> = DIR_BITS
+        .iter()
+        .map(|(d, _)| format!("target_{}", d.name()))
+        .collect();
+    target.extend(s(&[
+        "target_distance",
+        "target_dx",
+        "target_dy",
+        "target_is_item",
+    ]));
+
     FeatureNames {
         room_state: rs,
         link,
         entity,
         history,
         objective,
+        target,
     }
 }
 
@@ -444,7 +464,7 @@ pub struct ObsKeySpec {
 }
 
 /// Every observation key, in `observation_space` order.
-pub const OBS_SPEC: [ObsKeySpec; 9] = [
+pub const OBS_SPEC: [ObsKeySpec; 10] = [
     ObsKeySpec {
         key: "room_id",
         shape: &[1],
@@ -510,6 +530,14 @@ pub const OBS_SPEC: [ObsKeySpec; 9] = [
         high: 1.0,
     },
     ObsKeySpec {
+        key: "target",
+        shape: &[TARGET_SIZE],
+        vocab: None,
+        dtype: "float32",
+        low: -1.0,
+        high: 1.0,
+    },
+    ObsKeySpec {
         key: "action_mask",
         shape: &[MASK_SIZE],
         vocab: None,
@@ -531,6 +559,8 @@ pub struct Observation {
     pub grid: Grid,
     pub history: [f32; HISTORY_SIZE],
     pub objective: [f32; OBJECTIVE_SIZE],
+    /// The walk to the nearest PBRS wavefront target (all zero with `obs.target` off).
+    pub target: [f32; TARGET_SIZE],
     pub action_mask: [bool; MASK_SIZE],
 }
 
@@ -589,6 +619,8 @@ fn entry_side_from_position(level: u8, x: i32, y: i32) -> Option<Direction> {
 #[derive(Clone, Debug)]
 pub struct ObservationBuilder {
     pub objective: bool,
+    /// Fill the `target` block (`obs.target`).
+    pub target: bool,
     prev_room: Option<(u8, bool, u8)>,
     prev_types: [i64; NUM_ENTITY_SLOTS],
     prev_xy: [[f32; 2]; NUM_ENTITY_SLOTS],
@@ -596,9 +628,10 @@ pub struct ObservationBuilder {
 }
 
 impl ObservationBuilder {
-    pub fn new(objective: bool) -> ObservationBuilder {
+    pub fn new(objective: bool, target: bool) -> ObservationBuilder {
         ObservationBuilder {
             objective,
+            target,
             prev_room: None,
             prev_types: [0; NUM_ENTITY_SLOTS],
             prev_xy: [[0.0; 2]; NUM_ENTITY_SLOTS],
@@ -606,30 +639,34 @@ impl ObservationBuilder {
         }
     }
 
-    /// The first observation of an episode (no previous action; velocities zero).
+    /// The first observation of an episode (no previous action; velocities zero).  `wavefront` is the PBRS
+    /// wavefront of `state` (the `target` block's source).
     pub fn reset(
         &mut self,
         state: &GameView,
         objective: &Objective,
+        wavefront: Option<&Wavefront>,
         mask: &ActionMask,
     ) -> Observation {
         self.prev_room = None;
         self.prev_types = [0; NUM_ENTITY_SLOTS];
         let p = state.link.position;
         self.entered_from = entry_side_from_position(state.level(), p.x, p.y);
-        self.build_state(state, objective, mask, None, 0, None)
+        self.build_state(state, objective, wavefront, mask, None, 0, None)
     }
 
-    /// The observation after a step; `objective` is the objective of `change.state`.
+    /// The observation after a step; `objective` and `wavefront` belong to `change.state`.
     pub fn build(
         &mut self,
         change: &Change,
         objective: &Objective,
+        wavefront: Option<&Wavefront>,
         mask: &ActionMask,
     ) -> Observation {
         self.build_state(
             &change.state,
             objective,
+            wavefront,
             mask,
             Some(&change.action),
             change.frames,
@@ -637,10 +674,12 @@ impl ObservationBuilder {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_state(
         &mut self,
         state: &GameView,
         objective: &Objective,
+        wavefront: Option<&Wavefront>,
         mask: &ActionMask,
         action: Option<&Action>,
         frames: u32,
@@ -664,6 +703,11 @@ impl ObservationBuilder {
             grid: build_grid(state, &rs),
             history: self.history(action, frames, interrupt, room_changed),
             objective: self.objective_features(state, objective),
+            target: if self.target {
+                target_features(state, wavefront)
+            } else {
+                [0.0; TARGET_SIZE]
+            },
             action_mask: mask.to_flat(),
         }
     }
@@ -835,6 +879,67 @@ impl ObservationBuilder {
 
 fn objective_kind_index(kind: ObjectiveKind) -> usize {
     kind as usize
+}
+
+/// Neighbour tile deltas in `DIR_BITS` order (N, S, W, E).
+const TARGET_STEPS: [(i32, i32); 4] = [(0, -1), (0, 1), (-1, 0), (1, 0)];
+
+/// The neighbour of `tile` with the lowest distance below `distance` (ties in N, S, W, E order): (direction
+/// index, tile, distance).
+fn descend(
+    wavefront: &Wavefront,
+    tile: (i32, i32),
+    distance: i32,
+) -> Option<(usize, (i32, i32), i32)> {
+    let mut best: Option<(usize, (i32, i32), i32)> = None;
+    for (i, (dx, dy)) in TARGET_STEPS.into_iter().enumerate() {
+        let next = (tile.0 + dx, tile.1 + dy);
+        if let Some(d) = wavefront.get(next)
+            && d < best.map_or(distance, |b| b.2)
+        {
+            best = Some((i, next, d));
+        }
+    }
+    best
+}
+
+/// The `target` block: the first step of the walk down `wavefront` from Link's tile (one-hot N, S, W, E), the
+/// walking distance / 32, the pixel offset from Link to the target tile the descent reaches (/256, /176) and
+/// whether that tile is one of a dropped item's.  Without a wavefront, or with Link's tile unreachable, only the
+/// distance is set (to 1).
+fn target_features(state: &GameView, wavefront: Option<&Wavefront>) -> [f32; TARGET_SIZE] {
+    let mut v = [0f32; TARGET_SIZE];
+    v[4] = 1.0;
+    let start = state.link.tile();
+    let Some((wavefront, distance)) = wavefront.and_then(|w| Some((w, w.get(start)?))) else {
+        return v;
+    };
+    v[4] = (distance as f64 / TARGET_DISTANCE_SCALE).min(1.0) as f32;
+    let (mut tile, mut d) = (start, distance);
+    for _ in 0..TARGET_WALK_CAP {
+        if d == 0 {
+            break;
+        }
+        let Some((i, next, next_d)) = descend(wavefront, tile, d) else {
+            break;
+        };
+        if tile == start {
+            v[i] = 1.0;
+        }
+        (tile, d) = (next, next_d);
+    }
+    if d != 0 {
+        return v;
+    }
+    let p = state.link.position;
+    let (x, y) = (tile.0 * 8, tile.1 * 8 + GAMEPLAY_START_Y);
+    v[5] = ((x - p.x) as f64 / 256.0).clamp(-1.0, 1.0) as f32;
+    v[6] = ((y - p.y) as f64 / PLAY_H).clamp(-1.0, 1.0) as f32;
+    v[7] = b(state
+        .items
+        .iter()
+        .any(|it| it.id >= 0 && it.link_overlap_tiles().contains(&tile)));
+    v
 }
 
 /// Side of the current room that leads back to the previous room.
@@ -1031,6 +1136,7 @@ mod tests {
         assert_eq!(n.entity.len(), ENTITY_FEATURE_SIZE);
         assert_eq!(n.history.len(), HISTORY_SIZE);
         assert_eq!(n.objective.len(), OBJECTIVE_SIZE);
+        assert_eq!(n.target.len(), TARGET_SIZE);
         for (offset, name) in [
             (r::DOOR_ANIMATING, "door_animating"),
             (r::KILL_STATE, "kill_state_0"),
@@ -1063,8 +1169,33 @@ mod tests {
         assert_eq!(n.history[h::INTERRUPT], "interrupt_damage");
         assert_eq!(n.history[h::ENTERED_FROM], "entered_from_N");
         assert_eq!(n.objective[4], "objective_NONE");
+        assert_eq!(
+            n.target,
+            [
+                "target_N",
+                "target_S",
+                "target_W",
+                "target_E",
+                "target_distance",
+                "target_dx",
+                "target_dy",
+                "target_is_item"
+            ]
+        );
         assert_eq!(ENTITY_VOCAB, 164);
         assert_eq!(ROOM_VOCAB, 2560);
+    }
+
+    #[test]
+    fn descent_takes_the_lowest_neighbour_n_s_w_e_first() {
+        // (5, 5) at 4: N and E both at 3 → N; W at 2 → W.
+        let w = Wavefront::from_distances([((5, 5), 4), ((5, 4), 3), ((6, 5), 3), ((5, 6), 5)]);
+        assert_eq!(descend(&w, (5, 5), 4), Some((0, (5, 4), 3)));
+        let w = Wavefront::from_distances([((5, 5), 4), ((5, 4), 3), ((4, 5), 2)]);
+        assert_eq!(descend(&w, (5, 5), 4), Some((2, (4, 5), 2)));
+        // Nothing lower: no step.
+        let w = Wavefront::from_distances([((5, 5), 0), ((5, 4), 1)]);
+        assert_eq!(descend(&w, (5, 5), 0), None);
     }
 
     #[test]

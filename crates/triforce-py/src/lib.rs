@@ -211,6 +211,10 @@ mod _native {
             "OBJECTIVE_FEATURES",
             pyo3::types::PyTuple::new(py, &names.objective)?,
         )?;
+        m.add(
+            "TARGET_FEATURES",
+            pyo3::types::PyTuple::new(py, &names.target)?,
+        )?;
         m.add("NUM_ENTITY_SLOTS", obs::NUM_ENTITY_SLOTS)?;
         m.add("ROOM_VOCAB", obs::ROOM_VOCAB)?;
         m.add("ENTITY_VOCAB", obs::ENTITY_VOCAB)?;

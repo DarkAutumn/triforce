@@ -176,6 +176,7 @@ pub fn obs_values(o: &Observation) -> Vec<(&'static str, Vec<f64>)> {
         ("grid", o.grid.iter().flatten().map(|&x| x as f64).collect()),
         ("history", f(&o.history)),
         ("objective", f(&o.objective)),
+        ("target", f(&o.target)),
         (
             "action_mask",
             o.action_mask.iter().map(|&x| x as u8 as f64).collect(),

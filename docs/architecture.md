@@ -22,7 +22,7 @@ flowchart LR
 |---|---|
 | `crates/zcore` | Zelda-only NES core (MMC1), cut down from TetaNES (`UPSTREAM.md`), hardware timing. `machine.rs`: `Rom::from_ines`, `ZCore` (`power_on`, `run_frame(buttons, render)`, `pixels`/`rgb`, `ram`/`prg_ram`, `poke`, `snapshot`/`restore` of a `Copy` `MachineState`). `state_file.rs`: `TFZSTATE` `.state` files; gzip (legacy stable-retro) files raise `StateFormatError`. |
 | `crates/zelda` | Game model and session, ported from the old Python stack: `vars`/`tables` (RAM variables, game data), `game.rs` (`GameView`: Link, enemies, items, projectiles), `room`/`room_state`/`tiles` (wavefront, doors, tile grid), `actions.rs` (`Action`, `ActionMask`, `compute_action_mask`), `executor.rs` (option executor: timed options, interrupts, uncontrollable skip), `blocks.rs` (shield collisions), `change.rs` + `ledger.rs` (`Change`, look-ahead `FutureCreditLedger`), `room_entry.rs`, `game_map.rs` (`game.yaml`/`routes.yaml`), `objectives.rs` (`GameCompletion`), `hearts.rs`, `linger.rs`, `session.rs` (`Session`). The `Nes` trait (`nes.rs`) abstracts the core so tests can run on zcore or a scripted double. |
-| `crates/env` | `config.rs` (`SpecialistConfig`, `GameData`, cross-file validation), `rewards.rs` + `critic.rs`, `end_conditions.rs`, `observation.rs` (`ObservationBuilder`, schema v1), `objective.rs`, `start_states.rs`, `curriculum.rs`, `specialist_env.rs` (`SpecialistEnv`), `chain.rs` (`ChainEnv`, `Route`, `RoomRecord`, `RunResult`), `explore.rs` (`Explorer`, `AcceptSpec`). |
+| `crates/env` | `config.rs` (`SpecialistConfig`, `GameData`, cross-file validation), `rewards.rs` + `critic.rs`, `end_conditions.rs`, `observation.rs` (`ObservationBuilder`, schema v2), `objective.rs`, `start_states.rs`, `curriculum.rs`, `specialist_env.rs` (`SpecialistEnv`), `chain.rs` (`ChainEnv`, `Route`, `RoomRecord`, `RunResult`), `explore.rs` (`Explorer`, `AcceptSpec`). |
 | `crates/pool` | Generic threaded `Pool<E: PoolEnv>` (`pool.rs`), buffer layout (`layout.rs`), frame pacing/render control (`control.rs`); `zelda/` holds the Train/Eval/ChainRun envs and pool events. |
 | `crates/triforce-py` | `triforce._native` (PyO3): `Game`, `GameState`, `Change`, `Snapshot`, `Env`, `EnvPool` + `TrainTask`/`EvalTask`/`ChainTask`, `SpecialistConfig`, `Explorer`/`explore_states`, `route_steps`, `families`, `specialist_for`, `OBS_SPEC` and other constants, exception types. |
 | `crates/movie` | `TFMOVIE` input movies and `TFGOLDEN` per-frame digests. |
@@ -56,7 +56,8 @@ game use `triforce._native.Game`.
 
 ## Observation (`crates/env/src/observation.rs`)
 
-`ObservationBuilder::new(objective)`, `reset(state, mask)`, `build(change, mask)`. Python sees the layout as
+`ObservationBuilder::new(objective, target)`, `reset(state, objective, wavefront, mask)`,
+`build(change, objective, wavefront, mask)`. Python sees the layout as
 `triforce._native.OBS_SPEC` (`key → {shape, vocab, dtype}`) plus `OBS_SCHEMA_VERSION`, `ROOM_VOCAB`,
 `ENTITY_VOCAB`, `NUM_TILE_CLASSES`, `NUM_ENTITY_SLOTS = 12` and the feature-name tuples;
 `triforce/observation.py` builds the `gymnasium.spaces.Dict` the policy uses.
@@ -71,10 +72,21 @@ game use `triforce._native.Game`.
 | `grid` | int64 [22, 32] | tile class per 8px tile, row-major |
 | `history` | float32 [34] | last action kind/dir/duration, frames since |
 | `objective` | float32 [10] | all zeros when `objective` is off |
+| `target` | float32 [8] | all zeros when `obs.target` is off |
 | `action_mask` | bool [91] | flat `ActionMask` |
 
 When the objective block is on, the env attaches the objective (`crates/env/src/objective.rs`) before calling
 the builder.
+
+Schema v2 added `target` (`TARGET_FEATURES`), filled only with `obs.target: true` (default false; the key always
+exists, so every specialist shares one layout). It reads the PBRS wavefront, which the env computes whenever
+`reward.pbrs` or `obs.target` is on (dropped items are targets as `reward.item_targets`/`nearby_items` say):
+`target_N/S/W/E` is a one-hot of the neighbour of Link's tile with the lowest distance below his own (ties
+N, S, W, E; all 0 on a target tile or unreachable), `target_distance` is Link's wavefront distance / 32 clamped
+to 1 (1 when unreachable or without a wavefront), `target_dx`/`target_dy` are the pixel offset from Link to the
+target tile the steepest descent reaches (/256, /176; 0 if none) and `target_is_item` says whether that tile
+belongs to a dropped item. Chains rebuild the same wavefront (the acting specialist's `reward` decides the item
+targets) only for specialists with `obs.target` on. Schema 1 checkpoints don't load under schema 2.
 
 Dungeon objectives fight for pending treasure or when every routed exit is closed by a living-monster shutter
 trigger (all-dead, ringleader, last-boss or clear-to-drop). An unrelated shutter or an open route exit does not

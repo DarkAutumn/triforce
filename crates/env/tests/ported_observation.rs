@@ -29,6 +29,7 @@ use rand_chacha::ChaCha8Rng;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use zelda::objectives::{Objective, ObjectiveKind};
+use zelda::room::Wavefront;
 use zelda::tiles::TileClass;
 use zelda::{Action, Change, GameMap, GameView, LoadOptions, MapLocation, Session, Var};
 
@@ -93,15 +94,15 @@ fn load(s: &mut S, name: &str) -> Arc<GameView> {
 
 /// `_reset`: a fresh builder (objective block off) and its first observation of `name`.
 fn reset(s: &mut S, name: &str) -> (ObservationBuilder, Observation) {
-    let mut builder = ObservationBuilder::new(false);
+    let mut builder = ObservationBuilder::new(false, false);
     let state = load(s, name);
-    let obs = builder.reset(&state, &no_objective(), s.mask());
+    let obs = builder.reset(&state, &no_objective(), None, s.mask());
     (builder, obs)
 }
 
 fn step(s: &mut S, builder: &mut ObservationBuilder, text: &str) -> (Change, Observation) {
     let change = s.act(Action::parse(text).unwrap()).unwrap();
-    let obs = builder.build(&change, &no_objective(), s.mask());
+    let obs = builder.build(&change, &no_objective(), None, s.mask());
     (change, obs)
 }
 
@@ -154,6 +155,7 @@ fn space_matches_contract() {
         "grid",
         "history",
         "objective",
+        "target",
         "action_mask",
     ]
     .into_iter()
@@ -161,7 +163,14 @@ fn space_matches_contract() {
     assert_eq!(keys, want);
     let n = feature_names();
     assert_eq!(n.entity[0], "presence");
-    for names in [&n.room_state, &n.link, &n.entity, &n.history, &n.objective] {
+    for names in [
+        &n.room_state,
+        &n.link,
+        &n.entity,
+        &n.history,
+        &n.objective,
+        &n.target,
+    ] {
         assert_eq!(names.iter().collect::<BTreeSet<_>>().len(), names.len());
     }
 }
@@ -172,10 +181,10 @@ fn every_savestate_builds_a_valid_observation() {
     let Some(mut s) = session() else { return };
     let names = named_states();
     assert!(names.len() > 100, "{}", names.len());
-    let mut builder = ObservationBuilder::new(false);
+    let mut builder = ObservationBuilder::new(false, false);
     for name in &names {
         let state = load(&mut s, name);
-        let obs = builder.reset(&state, &no_objective(), s.mask());
+        let obs = builder.reset(&state, &no_objective(), None, s.mask());
         let bad = obs_violations(&obs);
         assert!(bad.is_empty(), "{name}: {bad:?}");
         for (t, f) in obs.entity_types.iter().zip(&obs.entity_features) {
@@ -273,8 +282,8 @@ fn push_block_in_grid_and_room_state() {
         }
     }
     let state = s.apply_ram(&[(Var::LinkX, 96), (Var::LinkY, 125)]).clone();
-    let mut builder = ObservationBuilder::new(false);
-    let obs = builder.reset(&state, &no_objective(), s.mask());
+    let mut builder = ObservationBuilder::new(false, false);
+    let obs = builder.reset(&state, &no_objective(), None, s.mask());
     let mut cells = BTreeSet::new();
     for (row, cols) in obs.grid.iter().enumerate() {
         for (col, &c) in cols.iter().enumerate() {
@@ -432,14 +441,52 @@ fn objective_block() {
         ..no_objective()
     };
 
-    let off = ObservationBuilder::new(false).reset(&state, &objective, s.mask());
+    let off = ObservationBuilder::new(false, false).reset(&state, &objective, None, s.mask());
     assert!(off.objective.iter().all(|&x| x == 0.0));
 
-    let on = ObservationBuilder::new(true).reset(&state, &objective, s.mask());
+    let on = ObservationBuilder::new(true, false).reset(&state, &objective, None, s.mask());
     assert!(on.objective[o("next_room_E")] == 1.0 && on.objective[o("objective_MOVE")] == 1.0);
     assert_eq!(on.objective.iter().sum::<f32>(), 2.0);
     for ((key, a), (_, b)) in obs_values(&off).into_iter().zip(obs_values(&on)) {
         if key != "objective" {
+            assert_eq!(a, b, "{key}");
+        }
+    }
+}
+
+/// The `target` block walks the wavefront down from Link's tile: off → zeros; no wavefront → distance 1 only;
+/// a two-tile lane east → target_E, distance 2/32 and the pixel offset to the target tile.
+#[test]
+fn target_block() {
+    let Some(mut s) = session() else { return };
+    let state = load(&mut s, "1_44w_0");
+    let (tx, ty) = state.link.tile();
+    let wavefront = Wavefront::from_distances([
+        ((tx, ty), 2),
+        ((tx + 1, ty), 1),
+        ((tx + 2, ty), 0),
+        ((tx, ty - 1), 3),
+    ]);
+    let objective = no_objective();
+    let off =
+        ObservationBuilder::new(false, false).reset(&state, &objective, Some(&wavefront), s.mask());
+    assert!(off.target.iter().all(|&x| x == 0.0));
+
+    let none = ObservationBuilder::new(false, true).reset(&state, &objective, None, s.mask());
+    assert_eq!(none.target, [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]);
+
+    let on =
+        ObservationBuilder::new(false, true).reset(&state, &objective, Some(&wavefront), s.mask());
+    let t = |name: &str| on.target[feature_names().target.iter().position(|n| n == name).unwrap()];
+    assert_eq!(t("target_E"), 1.0);
+    assert_eq!(on.target[..4].iter().sum::<f32>(), 1.0);
+    assert_eq!(t("target_distance"), 2.0 / 32.0);
+    let p = state.link.position;
+    assert_eq!(t("target_dx"), ((tx + 2) * 8 - p.x) as f32 / 256.0);
+    assert!((t("target_dy") - (ty * 8 + 56 - p.y) as f32 / 176.0).abs() < 1e-6);
+    assert_eq!(t("target_is_item"), 0.0);
+    for ((key, a), (_, b)) in obs_values(&off).into_iter().zip(obs_values(&on)) {
+        if key != "target" {
             assert_eq!(a, b, "{key}");
         }
     }

@@ -12,6 +12,7 @@
 
 use crate::config::{GameData, SpecialistConfig};
 use crate::error::EnvError;
+use crate::objective;
 use crate::observation::{Observation, ObservationBuilder};
 use crate::specialist_env::linger_json;
 use crate::start_states::{StateStore, state_entry};
@@ -24,6 +25,7 @@ use zelda::game_map::GameMap;
 use zelda::hearts::{HeartTracker, HeartView};
 use zelda::linger::{LingerState, LingerStep, LingerSummary, LingerTracker, linger_wavefront};
 use zelda::objectives::{GameCompletion, Objective, exit_is_correct, start_route};
+use zelda::room::Wavefront;
 use zelda::{Action, Change, LoadOptions, MapLocation, Nes, Session};
 
 /// Default run cap.
@@ -271,7 +273,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             prev_objective: None,
             hearts: HeartTracker::default(),
             linger: LingerTracker::default(),
-            builder: ObservationBuilder::new(true),
+            builder: ObservationBuilder::new(true, false),
         }
     }
 
@@ -550,12 +552,18 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 let config = self.config_for(&name)?;
                 self.session
                     .set_disabled_kinds(&config.items.disabled_kinds());
-                self.builder = ObservationBuilder::new(config.obs.objective);
+                self.builder = ObservationBuilder::new(config.obs.objective, config.obs.target);
                 self.current = Some(Acting {
                     name: Arc::from(name.as_str()),
                     config,
                 });
-                obs = self.builder.reset(&state, &objective, self.session.mask());
+                let wavefront = self.target_wavefront(&objective);
+                obs = self.builder.reset(
+                    &state,
+                    &objective,
+                    wavefront.as_ref(),
+                    self.session.mask(),
+                );
             } else {
                 obs = self.build_obs(&objective);
             }
@@ -615,14 +623,31 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     }
 
     fn build_obs(&mut self, objective: &Objective) -> Observation {
+        let wavefront = self.target_wavefront(objective);
         match &self.change {
-            Some(change) => self.builder.build(change, objective, self.session.mask()),
+            Some(change) => self.builder.build(
+                change,
+                objective,
+                wavefront.as_ref(),
+                self.session.mask(),
+            ),
             // Same specialist, no step yet: only reachable at reset, where the switch branch runs instead.
             None => {
                 let state = self.session.state().clone();
-                self.builder.reset(&state, objective, self.session.mask())
+                self.builder
+                    .reset(&state, objective, wavefront.as_ref(), self.session.mask())
             }
         }
+    }
+
+    /// The wavefront the acting specialist's `target` observation reads (as its env attaches it, dropped items
+    /// per its `reward`); None unless its `obs.target` is on.
+    fn target_wavefront(&self, objective: &Objective) -> Option<Wavefront> {
+        let config = &self.current.as_ref()?.config;
+        if !config.obs.target {
+            return None;
+        }
+        objective::target_wavefront(objective, self.session.state(), &config.reward)
     }
 }
 
