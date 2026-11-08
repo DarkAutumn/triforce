@@ -189,6 +189,7 @@ def test_episode_metrics_merge():
     assert summary['health_change_total'] == pytest.approx(-0.25)               # (+0.5 + 1.5 - 2.5) / 2
     assert summary['hearts/dropped'] == 1.5 and summary['hearts/taken'] == 1.0
     assert summary['hearts/left'] == 0.5 and summary['hearts/wasted'] == 0.75
+    assert summary['hearts/healed'] == 0.25
     assert summary['episode_frames'] == 19.0 and summary['episode_steps'] == 1.5
     assert summary['rollout/steps'] == 4 and summary['rollout/frames'] == 42
     assert summary['interrupt/none'] == 0.5 and summary['interrupt/damage'] == 0.25

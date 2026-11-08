@@ -420,13 +420,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     ) -> Result<(Observation, StepInfo), EnvError> {
         let mut gc = GameCompletion::new(self.data.map.clone(), &self.route, self.route_step)
             .map_err(|e| EnvError::Config(crate::ConfigError(e)))?;
-        let attached = attach(
-            &mut gc,
-            None,
-            state,
-            self.config.reward.pbrs,
-            self.config.reward.nearby_items,
-        );
+        let attached = attach(&mut gc, None, state, &self.config.reward);
         self.objectives = Some(gc);
         self.critic.clear();
         self.end_conditions.clear();
@@ -478,8 +472,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             self.objectives.as_mut().expect("episode started"),
             Some(&change.previous),
             &state,
-            self.config.reward.pbrs,
-            self.config.reward.nearby_items,
+            &self.config.reward,
         );
         self.linger.update(
             &LingerState::of(&change.previous, &prev.objective),

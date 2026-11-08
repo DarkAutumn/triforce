@@ -355,6 +355,13 @@ fn health_changes() {
         value(&r, "reward-gained-health"),
         REWARD_SMALL + REWARD_MEDIUM * (0.5 / 3.0)
     ));
+    // `reward.fixed_pickup_reward`: the same pay however hurt Link was.
+    let mut fixed = critic();
+    fixed.fixed_pickup_reward = true;
+    for (from, to) in [(&hurt, hurt.with(Var::HeartsAndContainers, 0x21)), (&almost, full.clone())] {
+        let r = critique(&mut fixed, &step(from, &to, "WAIT 8"));
+        assert!(approx(value(&r, "reward-gained-health"), REWARD_MAXIMUM));
+    }
 
     // A heart container replaces the healing reward.
     let mut container = step(

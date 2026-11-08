@@ -110,6 +110,8 @@ pub struct GameplayCritic {
     pub pbrs: bool,
     pub block_reward: f64,
     pub quiet_enemy_penalty: f64,
+    /// `reward.fixed_pickup_reward`: health gained pays `REWARD_MAXIMUM` instead of the urgency scale.
+    pub fixed_pickup_reward: bool,
     correct_locations: HashSet<MapLocation>,
     room_combat_counts: HashMap<MapLocation, i32>,
     room_steps: u32,
@@ -124,6 +126,7 @@ impl GameplayCritic {
             pbrs,
             block_reward,
             quiet_enemy_penalty,
+            fixed_pickup_reward: false,
             correct_locations: HashSet::new(),
             room_combat_counts: HashMap::new(),
             room_steps: 0,
@@ -141,11 +144,13 @@ impl GameplayCritic {
                 config.name, config.reward_profile
             )));
         }
-        Ok(GameplayCritic::new(
+        let mut critic = GameplayCritic::new(
             config.reward.pbrs,
             config.reward.block_reward,
             config.reward.quiet_enemy_penalty,
-        ))
+        );
+        critic.fixed_pickup_reward = config.reward.fixed_pickup_reward;
+        Ok(critic)
     }
 
     /// Called at every episode start.
@@ -286,11 +291,13 @@ impl GameplayCritic {
             ));
         } else if change.health_gained != 0.0 {
             if !change.gained_triforce() {
-                let urgency = 1.0 - prev.health() / curr.max_health() as f64;
-                rewards.add(Outcome::reward(
-                    "reward-gained-health",
-                    REWARD_SMALL + REWARD_MEDIUM * urgency,
-                ));
+                let value = if self.fixed_pickup_reward {
+                    REWARD_MAXIMUM
+                } else {
+                    let urgency = 1.0 - prev.health() / curr.max_health() as f64;
+                    REWARD_SMALL + REWARD_MEDIUM * urgency
+                };
+                rewards.add(Outcome::reward("reward-gained-health", value));
             }
         } else if change.health_lost != 0.0 {
             let half_hearts = change.health_lost * 2.0;

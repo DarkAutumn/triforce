@@ -1110,19 +1110,31 @@ fn placed_env(
     y: u8,
     nearby: bool,
 ) -> (Env, SessionSnapshot<MachineState>) {
+    let reward = RewardConfig {
+        nearby_items: nearby,
+        ..Default::default()
+    };
+    placed_env_with(nes, drops, y, reward, 0x21)
+}
+
+/// [`placed_env`] with any reward block and `$66F` (hearts and containers: 0x21 two of three, 0x22 full).
+fn placed_env_with(
+    nes: ZCore,
+    drops: &[(i16, u8, u8)],
+    y: u8,
+    reward: RewardConfig,
+    hearts_and_containers: u8,
+) -> (Env, SessionSnapshot<MachineState>) {
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73e_0"), |c| {
         c.one_room = true;
-        c.reward = RewardConfig {
-            nearby_items: nearby,
-            ..Default::default()
-        };
+        c.reward = reward;
     });
     env.reset(Some(1), None).unwrap();
     let s = env.session_mut();
     s.apply_ram(&[
         (Var::LinkX, 120),
         (Var::LinkY, y),
-        (Var::HeartsAndContainers, 0x21),
+        (Var::HeartsAndContainers, hearts_and_containers),
         (Var::PartialHearts, 0xFF),
     ]);
     let nes = s.nes_mut();
@@ -1209,6 +1221,36 @@ fn nearer_exit_leaves_distant_helpful_drops() {
     assert_eq!(t.ending, "exit-correct");
     assert!(t.hearts.taken == 0 && t.hearts.left == 1, "{:?}", t.hearts);
     assert_eq!(info.health, 2.0);
+}
+
+fn item_targets() -> RewardConfig {
+    RewardConfig {
+        item_targets: true,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn item_targets_pull_toward_any_dropped_item() {
+    let Some(nes) = open_core() else { return };
+    // A rupee east of Link: no target without the option (the exit is north), the nearest target with it.
+    let drops = [(item::RUPEE, 152, 157)];
+    let (mut env, _) = placed_env_with(nes, &drops, 157, RewardConfig::default(), 0x21);
+    let off = movement_reward(&mut env, "E");
+    let (mut env, _) = placed_env_with(release(env), &drops, 157, item_targets(), 0x21);
+    let on = movement_reward(&mut env, "E");
+    assert!(off < 0.0 && on > 0.0, "off {off}, on {on}");
+}
+
+#[test]
+fn item_targets_skip_healing_drops_at_full_health() {
+    let Some(nes) = open_core() else { return };
+    let drops = [(item::HEART, 152, 157)];
+    let (mut env, _) = placed_env_with(nes, &drops, 157, item_targets(), 0x21);
+    let hurt = movement_reward(&mut env, "E");
+    let (mut env, _) = placed_env_with(release(env), &drops, 157, item_targets(), 0x22);
+    let full = movement_reward(&mut env, "E");
+    assert!(hurt > 0.0 && full < 0.0, "hurt {hurt}, full {full}");
 }
 
 // --- tests/test_rewards.py (emulator parts) ---

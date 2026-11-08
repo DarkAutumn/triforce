@@ -155,6 +155,11 @@ or inactive/burrowed/dying enemies. This is separate from the existing room-stal
 exits. Multi-source walking distance picks the nearer target; the task, accepted exits and observation schema do
 not change. This is not the old heart-only objective.
 
+`reward.item_targets` (default false) makes every dropped item (bombs, rupees, clock, heart, fairy; not the room's
+treasure) a PBRS target the same way, hearts and fairies only while Link is below max health (they only heal).
+`reward.fixed_pickup_reward` (default false) pays `reward-gained-health` a flat `REWARD_MAXIMUM` for any health
+gained instead of 0.25–0.75 scaled by how hurt Link was. Both are the round 10 §8 heart experiments' controls.
+
 `no_progress_steps` (positive or null, default null) replaces legacy positional/room timeout with the shared
 lingering tail. Training ends `no-room-progress` as a soft-failure **truncation** with no terminal penalty;
 success/death keep precedence and the absolute episode cap remains enforced. Its terminal info marks

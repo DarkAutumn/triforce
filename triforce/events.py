@@ -21,10 +21,10 @@ Events written by ``triforce.train`` (one specialist):
 - ``progress``: after every PPO iteration (~4 s at 4,096 steps): iteration, iterations, steps, target_steps,
   fraction, elapsed, sps, eta, and the iteration's headline metrics (``metrics``; ``health_change`` is the mean
   hearts at exit minus hearts at entry, signed; ``health_change_total`` adds the hearts wasted by picking up dropped
-  hearts at full health; ``hearts/dropped``, ``hearts/taken``, ``hearts/left``, ``hearts/wasted`` are dropped
-  hearts per episode, see ``triforce/hearts.py``; ``linger/max_steps``, ``linger/max_frames``,
-  ``linger/tail_steps``, ``linger/tail_frames`` are means and ``linger/worst_steps``, ``linger/worst_frames``
-  maxima over measured episodes, also under ``curriculum/linger/*``).
+  hearts at full health; ``hearts/dropped``, ``hearts/taken``, ``hearts/healed``, ``hearts/left``,
+  ``hearts/wasted`` are dropped hearts per episode, see ``triforce/hearts.py``; ``linger/max_steps``,
+  ``linger/max_frames``, ``linger/tail_steps``, ``linger/tail_frames`` are means and ``linger/worst_steps``,
+  ``linger/worst_frames`` maxima over measured episodes, also under ``curriculum/linger/*``).
 - ``checkpoint``: iteration, steps, path.
 - ``early_stop``: iteration, steps, balanced_success_rate.
 - ``error``: message, traceback.
@@ -57,7 +57,8 @@ SCHEMA_VERSION = 1
 
 # Metrics copied into progress events (when present).
 PROGRESS_METRICS = ('episodes', 'success_rate', 'balanced_success_rate', 'reward/total', 'health_change',
-                    'health_change_total', 'hearts/dropped', 'hearts/taken', 'hearts/left', 'hearts/wasted',
+                    'health_change_total', 'hearts/dropped', 'hearts/taken', 'hearts/healed', 'hearts/left',
+                    'hearts/wasted',
                     'health_at_exit', 'episode_steps', 'curriculum/episodes', 'curriculum/success_rate',
                     'curriculum/point_fraction', 'losses/approx_kl', 'charts/SPS')
 PROGRESS_METRICS += ('blocks', 'curriculum/blocks')

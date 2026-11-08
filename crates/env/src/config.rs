@@ -218,6 +218,14 @@ pub struct RewardConfig {
     pub nearby_items: bool,
     #[serde(default)]
     pub quiet_enemy_penalty: f64,
+    /// `reward-gained-health` is `REWARD_MAXIMUM` for any health gained, instead of 0.25–0.75 scaled by how hurt
+    /// Link was.
+    #[serde(default, deserialize_with = "de_bool")]
+    pub fixed_pickup_reward: bool,
+    /// Every dropped item (bombs, rupees, clock, heart, fairy) is a PBRS target alongside the room's targets;
+    /// hearts and fairies only while Link is below max health (they only heal).
+    #[serde(default, deserialize_with = "de_bool")]
+    pub item_targets: bool,
 }
 
 impl Default for RewardConfig {
@@ -227,6 +235,8 @@ impl Default for RewardConfig {
             block_reward: 1.0,
             nearby_items: false,
             quiet_enemy_penalty: 0.0,
+            fixed_pickup_reward: false,
+            item_targets: false,
         }
     }
 }
