@@ -150,6 +150,8 @@ pub struct GameplayCritic {
     pub quiet_enemy_penalty: f64,
     /// `reward.fixed_pickup_reward`: health gained pays `REWARD_MAXIMUM` instead of the urgency scale.
     pub fixed_pickup_reward: bool,
+    /// `reward.boss_ate_bomb_penalty`: `penalty-boss-ate-bomb` per swallowed bomb (positive magnitude).
+    pub boss_ate_bomb_penalty: f64,
     correct_locations: HashSet<MapLocation>,
     room_combat_counts: HashMap<MapLocation, i32>,
     room_steps: u32,
@@ -165,6 +167,7 @@ impl GameplayCritic {
             block_reward,
             quiet_enemy_penalty,
             fixed_pickup_reward: false,
+            boss_ate_bomb_penalty: REWARD_MEDIUM,
             correct_locations: HashSet::new(),
             room_combat_counts: HashMap::new(),
             room_steps: 0,
@@ -188,6 +191,7 @@ impl GameplayCritic {
             config.reward.quiet_enemy_penalty,
         );
         critic.fixed_pickup_reward = config.reward.fixed_pickup_reward;
+        critic.boss_ate_bomb_penalty = config.reward.boss_ate_bomb_penalty;
         Ok(critic)
     }
 
@@ -499,8 +503,8 @@ impl GameplayCritic {
         if t.stuns > 0 {
             rewards.add(Outcome::reward("reward-boss-stunned", REWARD_LARGE));
         }
-        if t.eats > 0 {
-            rewards.add(Outcome::penalty("penalty-boss-ate-bomb", -REWARD_MEDIUM));
+        if t.eats > 0 && self.boss_ate_bomb_penalty > 0.0 {
+            rewards.add(Outcome::penalty("penalty-boss-ate-bomb", -self.boss_ate_bomb_penalty));
         }
     }
 

@@ -264,6 +264,14 @@ fn dodongo_stun_pays_and_a_swallowed_bomb_costs() {
     // A swallow is the bomb-hit counter going up (the game raises it on the first bloated frame).
     let r = critique(&mut critic(), &step(&walking, &dodongo(1, 0, 1), "WAIT 8"));
     assert_eq!(value(&r, "penalty-boss-ate-bomb"), -REWARD_MEDIUM);
+    // `reward.boss_ate_bomb_penalty` sets the magnitude; 0 drops the term.
+    let mut strict = critic();
+    strict.boss_ate_bomb_penalty = 1.0;
+    let r = critique(&mut strict, &step(&walking, &dodongo(1, 0, 1), "WAIT 8"));
+    assert_eq!(value(&r, "penalty-boss-ate-bomb"), -1.0);
+    strict.boss_ate_bomb_penalty = 0.0;
+    let r = critique(&mut strict, &step(&walking, &dodongo(1, 0, 1), "WAIT 8"));
+    assert!(!names(&r).contains(&"penalty-boss-ate-bomb"));
     // Staying stunned (the timer set to $20 after the stun frame, then counting down), bloating on, or
     // recovering is neither.
     for (before, after) in [

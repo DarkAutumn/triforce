@@ -226,6 +226,9 @@ pub struct RewardConfig {
     /// hearts and fairies only while Link is below max health (they only heal).
     #[serde(default, deserialize_with = "de_bool")]
     pub item_targets: bool,
+    /// `penalty-boss-ate-bomb` per bomb a Dodongo swallows (round 12; the stun-and-sword kill wants none).
+    #[serde(default = "half")]
+    pub boss_ate_bomb_penalty: f64,
 }
 
 impl Default for RewardConfig {
@@ -237,6 +240,7 @@ impl Default for RewardConfig {
             quiet_enemy_penalty: 0.0,
             fixed_pickup_reward: false,
             item_targets: false,
+            boss_ate_bomb_penalty: 0.5,
         }
     }
 }
@@ -502,6 +506,9 @@ impl SpecialistConfig {
         }
         if self.reward.quiet_enemy_penalty < 0.0 {
             return Err(fail("reward.quiet_enemy_penalty", "must be >= 0".into()));
+        }
+        if self.reward.boss_ate_bomb_penalty < 0.0 {
+            return Err(fail("reward.boss_ate_bomb_penalty", "must be >= 0".into()));
         }
         self.ram_randomization
             .validate()
