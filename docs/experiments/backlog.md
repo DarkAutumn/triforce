@@ -84,14 +84,17 @@ better)**. Train a model for (2).
 - **The curriculum matters most:** it has to show how to do it against Dodongo's various movement patterns.
 - Mechanics (ASM-backed): `target/dodongo/README.md` (gitignored notes) and round 12.
 
-### Later, in order (Lee, Nov 8): training improvements, then the d2-first route
+### Next (Lee, Nov 8): the d2-first route, then training improvements
 
-1. Prove Dodongo can be beaten (above).
-2. Lee's ideas for improving training (to come).
-3. **The d2-first route**, then a full retrain on it. Start → room 0x58, go east → at 0x5d go north → to 0x3c
-   (Dungeon 2). Never take the fairy (too early in the run). After beating Dungeon 2: north to 0x2c, bomb the
-   secret rock for the heart, then 0x1c, west to 0x1a, north one screen for the white sword, back south, east to
-   0x17, then Dungeon 1, played with the white sword. Not started.
+1. Prove Dodongo can be beaten (above): r45 kills him 300/300 (round 12).
+2. **The d2-first route (next; Lee moved it ahead of the training ideas)**, mapped first so Lee can review it on
+   the map before any training. Start → 0x58, east along row 5 → at 0x5d north → 0x3c (Dungeon 2); never the
+   fairy. D2 as today (3 max hearts), skipping the magical boomerang (2:0x4f); kill Dodongo, take his heart
+   (4), take the triforce in 2:0x0d (warps out to 0x3c). Then north to 0x2c, bomb the secret rock for the heart
+   (5), and `1c -> 1a -> 0a (white sword) -> 1a -> 17 -> 27 -> 28 -> 38 -> 37` into Dungeon 1, played as today
+   (wooden boomerang pickup kept) but with the white sword; the route ends on taking the D1 triforce (6 hearts).
+   Mapping in progress (branch `d2first`); then a full retrain on it.
+3. Lee's ideas for improving training (to come).
 
 ### Done (report to Lee): heart experiments (Lee, Nov 7; a series)
 
