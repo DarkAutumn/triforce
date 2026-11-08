@@ -1,7 +1,9 @@
 //! Backward curriculum over explored trajectories (`triforce/curriculum.py`; Salimans & Chen 2018).
 //!
 //! `Explorer::write` stores one successful path per seed state as `<dir>/<state>/NNNN.state` plus
-//! `trajectory.json`.  Each trajectory has a start *point*: episodes start uniformly in `[point, point + stride)`,
+//! `trajectory.json`; more paths from the same seed state (other explore seeds, so other RNG draws: Dodongo's
+//! patterns) live beside it as `<dir>/<state>~s<seed>/` and are tracks of their own, keyed by directory name.
+//! Each trajectory has a start *point*: episodes start uniformly in `[point, point + stride)`,
 //! `stride = ceil(length / stages)`; the point starts one stride before the end.  Once `window` episodes of the
 //! current stage finish, the point moves a stride earlier if at least `threshold` of them succeeded, else the
 //! stage's counters restart.  A trajectory whose point reaches 0 is complete and no longer sampled.
@@ -69,7 +71,8 @@ pub struct CurriculumInfo {
     pub point: usize,
 }
 
-/// Seed state name -> savestate paths along its successful path (index 0 = room entry).
+/// Track name (its directory: the seed state, or `<state>~s<seed>` for a variant) -> savestate paths along its
+/// successful path (index 0 = room entry).
 pub fn load_trajectories(directory: &Path) -> Result<IndexMap<String, Vec<PathBuf>>, EnvError> {
     let mut tracks = IndexMap::new();
     let mut metas: Vec<PathBuf> = std::fs::read_dir(directory)
@@ -92,13 +95,15 @@ pub fn load_trajectories(directory: &Path) -> Result<IndexMap<String, Vec<PathBu
             .unwrap_or(false)
             && !paths.is_empty()
         {
-            let name = meta
-                .get("start_state")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| {
-                    EnvError::State(format!("{}: no start_state", meta_path.display()))
-                })?;
-            tracks.insert(name.to_owned(), paths);
+            if meta.get("start_state").and_then(|v| v.as_str()).is_none() {
+                return Err(EnvError::State(format!("{}: no start_state", meta_path.display())));
+            }
+            let name = meta_path
+                .parent()
+                .and_then(Path::file_name)
+                .map(|n| n.to_string_lossy().into_owned())
+                .expect("a trajectory file lives in a track directory");
+            tracks.insert(name, paths);
         }
     }
     Ok(tracks)
@@ -278,6 +283,22 @@ mod tests {
         assert_eq!(tracks.keys().collect::<Vec<_>>(), ["1_44w_0"]);
         assert_eq!(tracks["1_44w_0"].len(), 7);
         assert!(tracks["1_44w_0"][0].ends_with("0000.state"));
+    }
+
+    #[test]
+    fn variant_tracks_of_one_state_are_separate() {
+        let tmp = tempfile::tempdir().unwrap();
+        make_track(tmp.path(), "2_0es_0", 4, true);
+        let variant = tmp.path().join("2_0es_0~s3");
+        std::fs::create_dir_all(&variant).unwrap();
+        for i in 0..6 {
+            std::fs::write(variant.join(format!("{i:04}.state")), b"x").unwrap();
+        }
+        let meta = serde_json::json!({"start_state": "2_0es_0", "success": true});
+        std::fs::write(variant.join(TRAJECTORY_FILE), meta.to_string()).unwrap();
+        let tracks = load_trajectories(tmp.path()).unwrap();
+        assert_eq!(tracks.keys().collect::<Vec<_>>(), ["2_0es_0", "2_0es_0~s3"]);
+        assert_eq!((tracks["2_0es_0"].len(), tracks["2_0es_0~s3"].len()), (4, 6));
     }
 
     #[test]

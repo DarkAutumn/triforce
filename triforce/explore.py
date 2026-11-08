@@ -1,7 +1,7 @@
 """Go-Explore phase A: find one successful path per seed start state by restoring savestates.
 
     python -m triforce.explore --specialist NAME [--states 0_38s_0,0_48s_0] [--iterations 3000]
-        [--explore-steps 25] [--patience 300] [--parallel N] [--seed 0] [--out trajectories]
+        [--explore-steps 25] [--patience 300] [--parallel N] [--seed 0] [--variant] [--out trajectories]
 
 Plain PPO only learns what a random-ish policy stumbles into.  Here the emulator is a simulator we can rewind
 (Ecoffet et al., Go-Explore): keep an archive of *cells*, coarse summaries of the game state, each holding the
@@ -20,9 +20,16 @@ then runs the backward curriculum on them.
 
 The search itself is native (``triforce._native.explore_states`` / ``Explorer``); each start state gets a fresh
 explorer seeded with ``--seed``, so results don't depend on ``--parallel`` (threads).
+
+``--variant`` writes ``<out>/<specialist>/<state>~s<seed>`` instead: an extra track from the same seed state.
+The seed also draws the reset's RNG and spawn, so another seed is another room (for Dodongo, another movement
+pattern); the curriculum keeps every track directory as its own track.
 """
 
 import argparse
+import shutil
+import tempfile
+from pathlib import Path
 from typing import List, Optional
 
 from ._native import AcceptSpec, Explorer, ExploreResult, explore_states
@@ -33,13 +40,27 @@ __all__ = ['AcceptSpec', 'Explorer', 'ExploreResult', 'explore_specialist', 'mai
 
 def explore_specialist(specialist: str, out: str, states: Optional[List[str]] = None, iterations: int = 3000,
                        explore_steps: int = 25, patience: int = 300, parallel: int = 1, seed: int = 0,
-                       states_dir: Optional[str] = None) -> list:
+                       states_dir: Optional[str] = None, variant: bool = False) -> list:
     """Explores every seed start state (or ``states``) of ``specialist``, writing successes under
-    ``<out>/<specialist>/<state>``; returns [(ExploreResult, replayed)] in state order."""
+    ``<out>/<specialist>/<state>`` (``<state>~s<seed>`` with ``variant``); returns [(ExploreResult, replayed)] in
+    state order."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    return explore_states(specialist, str(out), states=states, iterations=iterations, explore_steps=explore_steps,
-                          patience=patience, parallel=parallel, seed=seed,
-                          states_dir=None if states_dir is None else str(states_dir))
+    def run(root: str) -> list:
+        return explore_states(specialist, root, states=states, iterations=iterations, explore_steps=explore_steps,
+                              patience=patience, parallel=parallel, seed=seed,
+                              states_dir=None if states_dir is None else str(states_dir))
+
+    if not variant:
+        return run(str(out))
+    with tempfile.TemporaryDirectory() as tmp:
+        results = run(tmp)
+        target_root = Path(out) / specialist
+        target_root.mkdir(parents=True, exist_ok=True)
+        for track in sorted((Path(tmp) / specialist).iterdir()):
+            target = target_root / f'{track.name}~s{seed}'
+            shutil.rmtree(target, ignore_errors=True)
+            shutil.move(str(track), target)
+    return results
 
 
 def main(argv=None):
@@ -52,12 +73,15 @@ def main(argv=None):
     parser.add_argument('--patience', type=int, default=300, help="iterations to keep improving after a success")
     parser.add_argument('--parallel', type=int, default=1, help="explorer threads")
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--variant', action='store_true',
+                        help="write <state>~s<seed>: an extra track beside the seed state's own")
     parser.add_argument('--out', default=str(TRAJECTORIES_DIR),
                         help="trajectories root (<out>/<specialist>/<state> is written)")
     args = parser.parse_args(argv)
 
     results = explore_specialist(args.specialist, args.out, args.states.split(',') if args.states else None,
-                                 args.iterations, args.explore_steps, args.patience, args.parallel, args.seed)
+                                 args.iterations, args.explore_steps, args.patience, args.parallel, args.seed,
+                                 variant=args.variant)
     for result, replayed in results:
         status = (f"success in {len(result.actions)} steps, health {result.health}"
                   + ("" if replayed else " (REPLAY MISMATCH)")) if result.success else "no success"
