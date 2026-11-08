@@ -269,9 +269,9 @@ pub mod size {
 }
 
 impl State {
-    /// Power-on fill of console and cart RAM ($FF, what the corpus and start states were recorded with; the
-    /// hardware leaves it unspecified, and twelve test ROMs need $00: an open decision in docs/decisions.md).
-    pub const POWER_ON_RAM: u8 = 0xFF;
+    /// Power-on fill of console and cart RAM: $00 (Lee, Nov 8). The hardware leaves it unspecified; Zelda never
+    /// reads RAM it hasn't written, and twelve test ROMs need $00 (docs/decisions.md 2026-11-08).
+    pub const POWER_ON_RAM: u8 = 0x00;
 
     /// A console with no cart.
     pub fn new() -> Self {
@@ -780,7 +780,7 @@ mod test {
         );
     }
 
-    /// A hard reset re-fills WRAM with the power-on $FF; a soft reset leaves it alone.
+    /// A hard reset re-fills WRAM with the power-on $00; a soft reset leaves it alone.
     #[test]
     fn reset() {
         let mut bus = Bus::default();
@@ -796,7 +796,7 @@ mod test {
         );
 
         bus.reset(ResetKind::Hard);
-        assert_eq!(bus.cpu_bus_peek(0x0001), 0xFF, "a hard reset refills WRAM");
+        assert_eq!(bus.cpu_bus_peek(0x0001), 0x00, "a hard reset refills WRAM");
     }
 
     /// A hard reset is a power cycle, so cart RAM comes back up in whatever state the console is
@@ -821,7 +821,7 @@ mod test {
             );
 
             bus.reset(ResetKind::Hard);
-            let expected = if battery_backed { 0x42 } else { 0xFF };
+            let expected = if battery_backed { 0x42 } else { 0x00 };
             assert!(
                 bus.memory
                     .region_ref(Src::PrgRam)

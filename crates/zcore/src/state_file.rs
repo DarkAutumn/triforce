@@ -18,8 +18,8 @@ use crate::machine::{MachineState, Rom};
 pub const MAGIC: &[u8; 8] = b"TFZSTATE";
 /// Current format version (2: the PPU I/O latch decay, FQ-13; 3: the hardware DMC reader,
 /// FQ-11/FQ-12; 4: no instruction-start PPUSTATUS snapshot or FCEUmm NMI request, FQ-03..FQ-05;
-/// 5: no dead frames after reset, FQ-01).
-pub const VERSION: u16 = 5;
+/// 5: no dead frames after reset, FQ-01; 6: power-on RAM $00, so every earlier state is stale).
+pub const VERSION: u16 = 6;
 const HEADER: usize = 8 + 2 + 20 + 1 + 4;
 
 /// A state file that can't be loaded for this ROM and build.

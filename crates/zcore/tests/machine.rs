@@ -334,10 +334,10 @@ fn trace_hook_observes_without_changing_anything() {
 fn power_on_state_file_is_pinned() {
     let Some(rom) = rom() else { return };
     let bytes = state_file::encode(&rom, &ZCore::power_on(rom.clone()).snapshot(), 0);
-    assert_eq!(state_file::VERSION, 5);
+    assert_eq!(state_file::VERSION, 6);
     assert_eq!(
         blake3::hash(&bytes).to_hex().as_str(),
-        "7fdbf9210403227ca21e3cfe211c86af0b1e8b6ecb7ab1b698bc822b1a97f1bd"
+        "fa9491132aea95ba8782ba8c9fdf3f7a1470b55596d89ce98ef65d6c31866bf2"
     );
 }
 

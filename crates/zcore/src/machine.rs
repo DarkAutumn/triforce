@@ -128,7 +128,7 @@ pub struct ZCore {
 }
 
 impl ZCore {
-    /// Power on: CPU RAM $FF, battery PRG-RAM zeroed, no frame run yet.
+    /// Power on: CPU RAM $00, battery PRG-RAM zeroed, no frame run yet.
     pub fn power_on(rom: Arc<Rom>) -> Self {
         let mut cart =
             Cart::from_rom("zelda.nes", &mut &rom.bytes[..]).expect("a validated Zelda ROM loads");

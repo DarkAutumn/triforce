@@ -438,7 +438,6 @@ pub(crate) mod tests {
         instr_rts,
         instr_special,
         instr_stack,
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         instr_timing,
         instr_zp,
         instr_zp_xy,
@@ -594,14 +593,12 @@ pub(crate) mod tests {
         // 6) Clearing enable bit in $4015 should clear length counter
         // 7) When disabled via $4015, length shouldn't allow reloading
         // 8) Halt bit should suspend length clocking
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_ctr,
         // Tests all length table entries.
         // 1) Passed
         // 2) Failed. Prints four bytes $II $ee $cc $02 that indicate the length
         // load value written (ll), the value that the emulator uses ($ee), and the
         // correct value ($cc).
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_table,
         // Tests basic operation of frame irq flag.
         // 1) Tests passed
@@ -611,7 +608,6 @@ pub(crate) mod tests {
         // 5) Reading flag clears it
         // 6) Writing $00 or $80 to $4017 doesn't affect flag
         // 7) Writing $40 or $c0 to $4017 clears flag
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         irq_flag,
         // Clock Jitter
         // ------------
@@ -634,7 +630,6 @@ pub(crate) mod tests {
         // 3) Frame irq is set too late
         // 4) Even jitter not handled properly
         // 5) Odd jitter not handled properly
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         clock_jitter,
         // Mode 0 Timing
         // -------------
@@ -673,7 +668,6 @@ pub(crate) mod tests {
         // 5) Second length is clocked too late
         // 6) Third length is clocked too soon
         // 7) Third length is clocked too late
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_timing_mode0,
         // Mode 1 Timing
         // -------------
@@ -709,7 +703,6 @@ pub(crate) mod tests {
         // 5) Second length is clocked too late
         // 6) Third length is clocked too soon
         // 7) Third length is clocked too late
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_timing_mode1,
         // Frame interrupt flag is set three times in a row 29831 clocks after
         // writing $4017 with $00.
@@ -718,7 +711,6 @@ pub(crate) mod tests {
         // 3) Flag first set too late
         // 4) Flag last set too soon
         // 5) Flag last set too late
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         irq_flag_timing,
         // IRQ handler is invoked at minimum 29833 clocks after writing $00 to
         // $4017.
@@ -726,7 +718,6 @@ pub(crate) mod tests {
         // 2) Too soon
         // 3) Too late
         // 4) Never occurred
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         irq_timing,
         // After reset or power-up, APU acts as if $4017 were written with $00 from
         // 9 to 12 clocks before first instruction begins.
@@ -734,7 +725,6 @@ pub(crate) mod tests {
         // 2) $4015 didn't read back as $00 at power-up
         // 3) Fourth step occurs too soon
         // 4) Fourth step occurs too late
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         reset_timing,
         // Changes to length counter halt occur after clocking length, not before.
         // 1) Passed tests
@@ -742,7 +732,6 @@ pub(crate) mod tests {
         // 3) Length should be clocked when halted at 14915
         // 4) Length should be clocked when unhalted at 14914
         // 5) Length shouldn't be clocked when unhalted at 14915
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_halt_timing,
         // Write to length counter reload should be ignored when made during length
         // counter clocking and the length counter is not zero.
@@ -751,7 +740,6 @@ pub(crate) mod tests {
         // 3) Reload just after length clock should work normally
         // 4) Reload during length clock when ctr = 0 should work normally
         // 5) Reload during length clock when ctr > 0 should be ignored
-        #[ignore = "power-on RAM: the snapshot needs zero-filled RAM; zcore powers on with $FF"]
         len_reload_timing,
         // Verifies timing of length counter clocks in both modes
         // 2) First length of mode 0 is too soon
