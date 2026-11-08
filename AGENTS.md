@@ -15,12 +15,12 @@ stands and what to try next, in order).
   `todo.md` experiments. ow-start r38b-rebalance is promoted (swordless departures fixed). Training/eval end
   `no-damage` after 600 actions without damage either way, and `play-zelda.py --stall-steps` handles stalled games
   (§6). Nov 7: zcore made 1.6× faster at the env level under an exact accuracy gate, and `--parallel 16` measured
-  as the training setting (§7, `docs/performance.md`). Heart series (§8–§9): **observation schema 2** (the
-  `target` block, `obs.target`) and `reward.item_targets`; d2-rope, goriya, stalfos-keese-gel, wallmaster and
-  boss-aquamentus are promoted schema-2 models with both (Dodongo arrivals per 120: D2 44 → 74, full routes 3/6 →
-  21/27). The overworld families and ow-start stay schema-1 models (they load unchanged; `--load` with
-  `obs.target` widens them); their widened models lost health on the fairy road. Next ideas: `todo.md` "Next: heart
-  experiments". Open items need Lee's decisions (`todo.md` "Where it stands").
+  as the training setting (§7, `docs/performance.md`). Heart series done (§8–§10, Nov 8): **observation schema 2**
+  (the `target` block, `obs.target`) on every route family, plus `reward.item_targets` in the dungeon families
+  (d2-rope, goriya, stalfos-keese-gel, wallmaster, boss-aquamentus); hearts healed per chain run 0.45–0.59 →
+  1.2–2.0, Dodongo arrivals per 120: D2 44 → 74, post-D1 12/18 → 43/61, full routes 3/6 → 27/46. Schema-1
+  checkpoints still load; `--load` with `obs.target` widens them. Waiting for Lee's next direction; remaining
+  heart ideas in `todo.md`. Open items need Lee's decisions (`todo.md` "Where it stands").
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated, reconcile it with todo.md between experiments, log
   every result, check off completed backlog entries, commit each finished item and keep going.

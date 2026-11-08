@@ -59,7 +59,7 @@ Recommend a setting (per specialist if it differs).
   don't depend on the env count (ow-leever-peahat, ow-moblin; 4–24 envs, 3 seeds, 30/30 reached), so wall time
   is lowest at 12–16. Same for every specialist measured; no per-specialist setting needed.
 
-### Next: heart experiments (Lee, Nov 7; a series)
+### Done (report to Lee): heart experiments (Lee, Nov 7; a series)
 
 Goal: Link picks up dropped items, hearts above all, far more than the current models do. Lee's original models
 didn't take every item, but prioritized them far more. **This is solvable**: iterate until it works by the
@@ -95,10 +95,16 @@ measure below, and only when out of reasonable ideas stop and report.
   health at the Goriya room 1:0x44, Aquamentus deaths 12 → 8; full main 16 → 21). The overworld families
   (ow-zora, ow-leever-peahat, ow-moblin) improve in evaluation and on the main road but lose health after the
   fairy pond; ow-octorok and ow-start lose arrivals. Not promoted.
-- [ ] **Next ideas:** (a) the overworld families on the fairy road: their fairy-road rooms (after the pond) are
-  where the widened models take more damage; train them longer or with the fairy road weighted, then re-check
-  both routes. (b) more drops in training (`$52A` drop cycle) where hearts are rare. (c) the Goriya rooms remain
-  the chain's main killer (1:0x44, 2:0x5e) but are not a pickup problem.
+- [x] **Step 3 done (r42/r43, round 10 §10, Nov 8):** the overworld families with the pointer alone (no item
+  targets): all four better, together post-D1 28/56 → 43/66 and full 21/27 → 26/34; promoted. ow-start pointer
+  only: promoted (neutral to positive, no swordless departures). Dungeon families keep item targets (pointer only
+  lost for stalfos-keese-gel and wallmaster). **Series result** (§10 table): hearts healed per run 0.45–0.59 →
+  1.2–2.0 on every segment, hearts left while hurt in D2/post-D1 0.6–0.9 → 0.07–0.17 per run; Dodongo arrivals
+  D2 44 → 74, post-D1 12/18 → 43/61, full 3/6 → 27/46 of 120.
+- [ ] **Remaining ideas (not run):** (a) more drops in training (`$52A` drop cycle) for families that rarely see
+  a heart; few drops on the route are left on the floor while hurt now except on the full routes (0.33–0.36 per
+  run). (b) The Goriya rooms remain the chain's main killer (1:0x44, 2:0x5e), not a pickup problem. (c) The fixed
+  pickup reward was never tried with the pointer (it added nothing on top of item targets without it).
 
 
 ### Work in this order

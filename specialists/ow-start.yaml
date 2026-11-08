@@ -4,7 +4,7 @@ start_states: ['start', '0_77*_[0-9]', '0_39*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true}
-obs: {objective: true}
+obs: {objective: true, target: true}       # schema 2 pointer, no item targets (round 10 §10, r43)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # 0x39: the pond only matters below full hearts
 items: {bombs: false}
 max_steps: 1000

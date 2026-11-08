@@ -370,3 +370,50 @@ canonical yamls now set `item_targets` and `obs.target`. The promoted team repro
 for run. Not promoted: ow-zora, ow-leever-peahat, ow-moblin (better main road, worse fairy road), ow-octorok (fewer
 arrivals), ow-start (slower departures, far fewer arrivals: 24/30 vs 45). Team now (Dodongo arrivals per 120): D2
 74, post-D1 main 28, post-D1 fairy 56, full main 21, full fairy 27 (round 10 §1: 44, 12, 18, 3, 6).
+
+## 10. The overworld with the pointer alone (r42)
+
+§9's widened overworld models lost health after the fairy pond. Overworld drops are mostly rupees and bombs and
+its enemies respawn, so the item targets there mostly pull Link into fights. r42 widens the same four promoted
+models with `obs.target` and **no** item targets (`specialists/arms/r42-pointer/`, 1M steps, seed 40; same script with
+`TAG=r42-pointer ITEM_TARGETS=0`).
+
+| family | eval success, ΔHP: promoted → r41 (items) → r42 (pointer) | own chain visits: deaths, ΔHP per visit (base → r42) | single-swap Dodongo arrivals: full main, full fairy, post-D1 main, post-D1 fairy |
+|---|---|---|---|
+| ow-zora | 94.8%, −0.18 → 96.9%, −0.14 → 98.0%, −0.10 | 0.32% → 0.15%, −0.204 → −0.107 | 24, 38, 45, 70 |
+| ow-moblin | 96.1%, −0.21 → 98.1%, −0.17 → 96.9%, −0.16 | 1.72% → 0.94%, −0.252 → −0.247 | 25, 30, 39, 52 |
+| ow-leever-peahat | 95.8%, −0.32 → 99.2%, −0.14 → 99.2%, −0.06 | 0.30% → 0.45%, −0.231 → −0.207 | 20, 27, 42, 56 |
+| ow-octorok | 97.9%, −0.08 → 98.3%, −0.04 → 98.8%, −0.05 | 0.69% → 0.54%, −0.055 → −0.049 | 13, 30, 37, 65 |
+| base (team after §9) | | | 21, 27, 28, 56 |
+
+All four together: post-D1 main 43, post-D1 fairy 66, full main 26, full fairy 34 (were 28, 56, 21, 27). ow-zora
+alone brings more runs to D2 on every segment and with more health (e.g. post-D1 fairy 119 runs at 0.69 of max
+vs 112 at 0.63). **Promoted** ow-zora, ow-moblin, ow-leever-peahat, ow-octorok `r42-pointer-s40`; their canonical
+yamls set `obs.target` only. The promoted team reproduces the post-D1 fairy and full main chains run for run.
+Reading: the pointer pays everywhere; item targets pay where drops are hearts and the enemies stay dead
+(dungeons), and cost health in the overworld.
+
+**r43, the pointer alone for the rest** (stalfos-keese-gel, wallmaster and Aquamentus widened again from their
+schema-1 runs, and ow-start; `specialists/arms/r43-pointer/`, `SOURCES=` the r41 starting runs; single swaps
+against the team above, base full main 26, full fairy 34): stalfos-keese-gel 19 / 30 and wallmaster 20 / 25 lose to
+their item-target models (kept); Aquamentus 25 / 41 with the same deaths in its room (18 vs 20 over 240 visits)
+and less healing (kept r41); ow-start 27 / 46, no swordless departures, the pond identical (in 0.91 → out 1.00 of
+max, 115 runs reach D2 at 0.66 vs 0.65), post-D1 fairy 61 vs 66 from downstream noise. **Promoted** ow-start
+`r43-pointer-s40` (`obs.target` only): every family on the route is now a schema-2 model.
+
+### Heart series result (§8–§10)
+
+The promoted team (`target/r43/final/`, 120 runs per segment, seeds 100–219) against §1:
+
+| segment | Dodongo arrivals | hearts healed per run | hearts left while hurt per run |
+|---|---:|---:|---:|
+| D2 | 44 → 74 | 0.59 → 1.23 | 0.92 → 0.07 |
+| post-D1 main | 12 → 43 | 0.45 → 1.59 | 0.62 → 0.17 |
+| post-D1 fairy | 18 → 61 | 0.57 → 1.95 | 0.84 → 0.13 |
+| full main | 3 → 27 | 0.53 → 1.42 | 0.38 → 0.33 |
+| full fairy | 6 → 46 | 0.57 → 1.81 | 0.46 → 0.36 |
+
+(Runs also go further now, so they see more drops.) What did it: the target observation everywhere (direction and
+distance to the nearest target), plus dropped items as shaping targets in the dungeons (d2-rope, goriya,
+stalfos-keese-gel, wallmaster, Aquamentus). The fixed pickup reward added nothing on top of the item targets, and
+item targets hurt in the overworld.

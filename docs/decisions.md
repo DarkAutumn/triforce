@@ -673,3 +673,14 @@ entry below and `crates/zcore/UPSTREAM.md`.
   little bit cheating, but almost certainly a big difference"; it was, and it also cut damage roughly tenfold.
 - **Evidence:** round 10 §8 (r40): d2-rope from scratch, 2 seeds per arm; D2 chain Dodongo arrivals 44 → 74–87 of
   120, healed per D2 run 0.45 → 1.2, Goriya arrival health 2.1 → 3.0; team full routes 3/6 → 16/29 of 120.
+
+## 2026-11-08 — Every route family on schema 2; item targets only in the dungeons
+
+- **What:** all promoted route specialists are schema-2 models with `obs.target` (widened from their schema-1
+  runs and continued 1M steps, or trained from scratch for d2-rope). `reward.item_targets` is on only for the
+  dungeon families (d2-rope, goriya, stalfos-keese-gel, wallmaster, boss-aquamentus); the overworld families and
+  ow-start use the pointer alone.
+- **Why:** in the overworld, drops are mostly rupees and bombs and enemies respawn; item targets there pulled Link
+  into fights (more damage after the fairy pond), while the pointer alone improved every overworld family.
+- **Evidence:** round 10 §9–§10: hearts healed per chain run 0.45–0.59 → 1.2–2.0; Dodongo arrivals per 120 runs
+  D2 44 → 74, post-D1 12/18 → 43/61, full 3/6 → 27/46.
