@@ -46,7 +46,8 @@ def write_eval(models, specialist, data):
 
 @pytest.fixture
 def models(tmp_path):
-    """goriya and d2-rope both visited 1:0x44; old has an old-format eval; none has no eval.json."""
+    """goriya and d2-rope both visited 1:0x44; ow-zora has an old-format eval; ow-start has no eval.json; d1-melee
+    is a retired family (not in specialists/)."""
     models = tmp_path / 'models'
     write_eval(models, 'goriya', {'format': 2, 'visited_rooms': {
         '1:0x44': room_stats('goriya', 1, 0x44, 30, deaths=3, change=-1.0, hits=2.0, drops={'heart': 0.5},
@@ -55,8 +56,9 @@ def models(tmp_path):
     write_eval(models, 'd2-rope', {'format': 2, 'visited_rooms': {
         '1:0x44': room_stats('d2-rope', 1, 0x44, 10, change=1.0, hits=0.0, drops={'rupee': 1.0},
                              exits={'n': 10})}})
-    write_eval(models, 'old', {'specialist': 'old', 'success_rate': 0.9})
-    write_eval(models, 'none', None)
+    write_eval(models, 'ow-zora', {'specialist': 'ow-zora', 'success_rate': 0.9})
+    write_eval(models, 'ow-start', None)
+    write_eval(models, 'd1-melee', {'format': 2, 'visited_rooms': {}})   # retired family: not a source
     (models / 'stray').mkdir()                  # no promoted model: not a source
     return models
 
@@ -76,7 +78,7 @@ def test_state_names_and_picture_choice(tmp_path):
 def test_load_evals_merges_rooms_by_visits(models):
     stats, sources = zelda_map.load_evals(models)
     assert {(s['specialist'], s['status']) for s in sources} == {
-        ('d2-rope', 'detailed'), ('goriya', 'detailed'), ('old', 'old format'), ('none', 'no eval.json')}
+        ('d2-rope', 'detailed'), ('goriya', 'detailed'), ('ow-zora', 'old format'), ('ow-start', 'no eval.json')}
     room = stats[(1, 0x44, False)]
     assert (room['visits'], room['episodes'], room['deaths']) == (40, 40, 3)
     assert room['death_rate'] == pytest.approx(3 / 40)
