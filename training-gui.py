@@ -105,7 +105,8 @@ QTabBar::tab:selected { color: #e7e9ee; border-bottom: 2px solid #4c8dff; }
 QTabBar::tab:hover { color: #e7e9ee; }
 QPlainTextEdit { background: #11141a; border: none; border-radius: 8px; color: #c9cfdb; padding: 6px;
                  selection-background-color: #2b4a80; }
-QComboBox { background: #161a22; border: 1px solid #262c38; border-radius: 6px; padding: 5px 10px; min-width: 300px; }
+QComboBox { background: #161a22; border: 1px solid #262c38; border-radius: 6px; padding: 5px 10px; min-width: 300px;
+            combobox-popup: 0; }
 QComboBox QAbstractItemView { background: #161a22; border: 1px solid #262c38; selection-background-color: #2b4a80; }
 QPushButton { background: #1d222d; border: 1px solid #262c38; border-radius: 6px; padding: 5px 14px; }
 QPushButton:hover { background: #232937; }
@@ -1670,6 +1671,17 @@ class BarList(QWidget):
                 p.drawText(QRectF(14, y, width - 28, height), int(Qt.TextFlag.TextWordWrap), text)
 
 
+class FolderCombo(QComboBox):
+    """The log folder dropdown. Its list is a scrolling list no taller than the window: Fusion's own popup grows to
+    fit every folder (``combobox-popup: 0`` in the stylesheet switches to the list popup, which honours
+    ``maxVisibleItems``), and with 100+ log folders it ran off the screen."""
+
+    def showPopup(self):
+        row = max(self.view().sizeHintForRow(0), self.fontMetrics().height() + 6)
+        self.setMaxVisibleItems(max(5, (self.window().height() - 40) // row))
+        super().showPopup()
+
+
 def scrolling(widget: QWidget) -> QScrollArea:
     area = QScrollArea()
     area.setWidgetResizable(True)
@@ -2074,7 +2086,7 @@ class Window(QMainWindow):
                                      "(few finished episodes, wild swings)")
         self.skip_startup.toggled.connect(self._skip_startup_toggled)
         top.addWidget(self.skip_startup)
-        self.combo = QComboBox()
+        self.combo = FolderCombo()
         self.combo.activated.connect(self._picked)
         top.addWidget(self.combo)
         open_button = QPushButton('Open…')
