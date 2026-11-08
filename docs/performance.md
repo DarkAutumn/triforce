@@ -1,4 +1,4 @@
-# Training and evaluation throughput (Nov 5)
+# Training and evaluation throughput (Nov 5–7)
 
 How fast the Rust port trains and evaluates compared with the old stack, what limited it, what changed, and what
 limits it now.
@@ -9,16 +9,18 @@ RTX 4090, idle unless noted.
 
 Settled steps/s for the same env counts (higher is better):
 
-| config        | old stack (logs) | new stack, lockstep | new stack, now | now / old |
-|---------------|-----------------:|--------------------:|---------------:|----------:|
-| goriya p8     |          452–471 |                 222 |          1,246 |     2.7×  |
-| d2-rope p8    |          492–536 |                 199 |          1,119 |     2.2×  |
-| ow-moblin p12 |          678–752 |                 261 |    1,563–1,607 |     2.2×  |
-| ow-zora p16   |          902–936 |                 304 |          1,631 |     1.8×  |
+| config        | old stack (logs) | new stack, lockstep | Nov 5 (`b73fc84`) | Nov 7, zcore work (`76272ea`) | Nov 7 / old |
+|---------------|-----------------:|--------------------:|------------------:|------------------------------:|------------:|
+| goriya p8     |          452–471 |                 222 |             1,246 |                         1,624 |        3.5× |
+| d2-rope p8    |          492–536 |                 199 |             1,119 |                         1,466 |        2.8× |
+| ow-moblin p12 |          678–752 |                 261 |       1,563–1,607 |                         2,093 |        2.9× |
+| ow-zora p16   |          902–936 |                 304 |             1,631 |                         2,177 |        2.4× |
 
-"Now" is commit `b73fc84` (`scripts/train_bench.sh route-cache 25`; ow-moblin was run three times). Run-to-run
+"Nov 5" is `scripts/train_bench.sh route-cache 25` (ow-moblin was run three times), "Nov 7" is
+`scripts/train_bench.sh zcore-final 25` after the emulator work in [zcore speed](#zcore-speed-nov-7). Run-to-run
 noise on these benches is about ±4%: the curriculum's shared progress depends on env completion order, so even
-seeded runs don't play the same episodes twice.
+seeded runs don't play the same episodes twice. These env counts are the historical ones, not the best:
+[How many envs](#how-many-envs---parallel) recommends `--parallel 16` for a run that has the machine to itself.
 
 ## How it's measured
 
@@ -155,6 +157,139 @@ longer actions (17.6 and 13.6 frames/step).
   rollout's log-probs would no longer match the update's forward bit for bit); swapping SipHash for a faster
   hasher (below 0.4% once the route cache landed).
 
+## zcore speed (Nov 7)
+
+The Nov 5 profiles put 92% of env-thread time in zcore, so the next step was the emulator itself. The rule was
+perfect accuracy: every change had to leave the game's behaviour bit for bit as it was.
+
+### Method
+
+- **Accuracy gate** (every change, before any timing; `target/opt/gate.sh`, gitignored):
+  - `tf ladder-diff` against goldens of the full movie corpus taken before the work (63 movies; per-frame digests
+    of RAM, PRG-RAM, CHR, CIRAM, palette, OAM, pixels and the CPU, PPU, mapper and APU state): 0 diverge;
+  - the zcore and tools tests;
+  - `scripts/state_walk.py`: every start state (481) stepped through the game path with seeded random legal actions,
+    18,728 per-step digests against the pre-work walk: 0 differ;
+  - a seeded CPU training run whose metrics digest must be identical.
+- **Core benchmark:** `tf bench --recordings target/bench-runs` replays 20 runs recorded with the promoted team
+  (`scripts/record_bench_runs.py`: full game on both routes, post-D1 and D2 segments) and times 10 windows of 500
+  frames spread over each run's whole length, headless and rendered, reported per level (L0 overworld, L1/L2 the
+  dungeons). The corpus agent movies can't be used for speed: they were recorded before hardware timing and
+  desync within a few thousand frames.
+- **Env benchmark:** `scripts/env_speed.py` loads every start state and steps it through `Game.act` with seeded
+  random legal actions (the game path training pays for: frame skip, look-ahead, observations), frames/s per room
+  family.
+- A/B: both builds interleaved, two repeats; `perf stat` user cycles for close calls (wall-clock frames/s moves
+  ±3% on the core bench and up to 9% per family on one env repeat).
+
+### Changes
+
+| commit | change | effect |
+|---|---|---|
+| `bd71234` | **Idle-loop skip.** 90% of the instructions in a gameplay frame were Zelda's `JMP $E45B` to itself, waiting for the NMI. A self-jump now applies whole loop iterations (3 cycles each) up to the next PPU/APU/IRQ deadline at once. | 3-movie corpus bench 4.8k → 12.4k headless frames/s |
+| `285bc5f` | Idle check only after a self-JMP; `next_event_clock` without a modulo | −12% cycles/frame |
+| `10089fb` | `reload_bg_shifters` stores reordered (a store-forwarding stall) | −1.5% cycles |
+| `415124c` | **Per-opcode monomorphized dispatch:** a 256-entry table of `Bus::exec::<OP>` functions, the addressing mode a constant in each | recordings −5.8% cycles (~+15% frames/s); env 3.99k → 4.28k frames/s |
+| `62377ce` | **Sprite-range cache:** sprite evaluation tested every sprite's Y on every line (~15k compares a frame); `Ppu::spr_range` keeps a per-line bitmask of in-range sprites, rebuilt after any OAM write or sprite-height change | recordings −10% cycles, +13% frames/s; env +11% |
+| `76272ea` | **Background tiles in u64 lanes:** a tile row without sprites renders its 8 pixels' palette indexes in the byte lanes of a `u64` (spread pattern bits, clip and palette masks) instead of per-pixel shifts and compares | rendered frames −15.5% cycles; training renders few frames, so env flat |
+
+### Before and after
+
+Env benchmark per family (`env_speed.py`, mean of 2 interleaved repeats; "before" is the module at `025e59e`,
+before any of the work). Both builds play exactly the same 166,577 frames and 10,811 steps.
+
+| family            | frames | before frames/s | after frames/s | speedup |
+|-------------------|-------:|----------------:|---------------:|--------:|
+| ow-octorok        | 31,912 |           2,816 |          4,634 |   1.65× |
+| stalfos-keese-gel | 34,250 |           3,346 |          5,686 |   1.70× |
+| ow-zora           | 23,989 |           2,625 |          4,003 |   1.52× |
+| d2-rope           | 18,159 |           2,630 |          4,063 |   1.55× |
+| ow-moblin         | 14,562 |           2,303 |          3,186 |   1.38× |
+| ow-leever-peahat  | 12,501 |           2,718 |          4,733 |   1.74× |
+| goriya            | 10,955 |           2,952 |          4,491 |   1.52× |
+| ow-start          |  9,592 |           3,491 |          6,776 |   1.94× |
+| wallmaster        |  3,680 |           3,223 |          5,763 |   1.79× |
+| boss-dodongo      |  2,343 |           2,051 |          3,177 |   1.55× |
+| boss-aquamentus   |  2,286 |           2,573 |          3,750 |   1.46× |
+| other             |  2,348 |           3,752 |          6,987 |   1.86× |
+| **all**           | 166,577 |       **2,832** |      **4,526** |  **1.60×** |
+
+Mean state load fell from 3.4 to 1.7 ms. The core bench over the recorded runs, by level, at `3de6f4b` (the first
+commit with it; the idle-loop skip already in) and at `76272ea` (mean of 2 and 4 runs):
+
+| level | headless `3de6f4b` | headless now | rendered `3de6f4b` | rendered now |
+|---|---:|---:|---:|---:|
+| L0 (29,500 frames) | 6,299 | 7,740 | 2,740 | 3,648 |
+| L1 (24,500 frames) | 5,283 | 6,557 | 2,601 | 3,467 |
+| L2 (37,000 frames) | 5,090 | 6,131 | 2,442 | 3,172 |
+| all | 5,483 | 6,696 | 2,575 | 3,392 |
+
+### Where the time goes now
+
+- **Env level:** perf over the env benchmark: 94.7% of samples in the native module, 1.3% in the Python
+  interpreter, under 1% in numpy; snapshot/restore and the look-ahead don't register apart from the frames they
+  emulate. Training is headless almost throughout: only each action's observed frame is drawn.
+- **Inside zcore** (headless recording windows; callgrind, perf): 1.5M host instructions per frame at IPC 2.48,
+  1.2% branch misses and few L1 misses, so the cost is instruction count, not stalls. The profile is flat:
+  `render_span` ~29% (per-line fetches, about 13k CHR reads a frame, most of them the eight sprite-slot fetches
+  every line; sprite evaluation; scroll steps), the per-cycle bookkeeping inlined into `clock_frame` ~18%
+  (master/APU counters, deadline compares, interrupt polling), the opcode functions ~25% together, PPU sync 3%,
+  DMA 1.5%. No single item is above ~5% of self cost.
+
+### Tried and not kept
+
+- **Deferring headless fetches** a span cut short mid-line (the CPU polling `$2002`) left behind, replaying them
+  only if something observed them: +5% cycles. Instruction stepping hands the console back after each
+  instruction, so a deferral never outlived one, and the unconditional skip it generalized gained nothing either
+  (54.86G vs 54.64G cycles).
+- **No PPU sync for OAM DMA's `$2004` puts in VBlank** (exact there: neither a visible nor the pre-render line,
+  same open-bus frame stamp): +1% cycles; the syncs it saved were cheap idle spans.
+- Not done, on purpose: skipping the eight sprite-slot fetches of a headless line (dead work for the pixels, but
+  it would leave different `sprites[]` in snapshots), and threaded/tail-call dispatch (needs the unstable
+  `become`).
+
+## How many envs (`--parallel`)
+
+`scripts/parallel_study.py` (results in `target/perf/parallel/nov7/`), at `76272ea`, one run at a time, 4,096
+steps per update throughout (so `T = 4096 / N` steps per env per rollout).
+
+**Throughput:** warm start from the promoted model, 20 iterations, median steps/s after the first 5 (as
+`train_bench.sh`; ±4% noise):
+
+| envs | ow-moblin | goriya | ow-zora |
+|---:|---:|---:|---:|
+| 4 | 853 | 753 | 783 |
+| 6 | 1,231 | 1,278 | 1,221 |
+| 8 | 1,682 | 1,663 | 1,729 |
+| 10 | 2,038 | 1,826 | 2,079 |
+| 12 | 1,860 | 1,982 | 2,132 |
+| 16 | 2,381 | 2,190 | 2,293 |
+| 20 | 2,478 | 2,457 | 2,413 |
+| 24 | 2,228 | 2,189 | 2,309 |
+| 32 | 2,338 | 2,453 | 2,793 |
+
+Near-linear up to 10 envs (one per physical core), then the hyper-threads add 16–35% more by 20; more envs than
+the 20 hardware threads (24, 32) don't help reliably.
+
+**Convergence:** from scratch (default yaml and curriculum, CUDA) until the start-state-balanced training
+success stays ≥ 90% for 5 iterations (`--stop-success 0.9`); seeds 1–3, all 30 runs reached it. Median of the
+three seeds:
+
+| envs | ow-leever-peahat steps | wall | ow-moblin steps | wall |
+|---:|---:|---:|---:|---:|
+| 4 | 242k | 349 s | 426k | 589 s |
+| 8 | 250k | 201 s | 315k | 230 s |
+| 12 | 209k | 139 s | 364k | 209 s |
+| 16 | 242k | 145 s | 344k | 188 s |
+| 24 | 261k | 160 s | 375k | 215 s |
+
+The steps needed don't depend on the env count within seed noise (per-seed spreads of 160–350k and 280–480k), so
+wall time follows throughput: it bottoms out at 12–16 envs and rises again at 24. Converging runs make fewer
+steps/s than warm ones (1.7–1.8k at 16 envs): a fresh policy's episodes are short, so resets weigh more.
+
+**Recommendation:** `--parallel 16` for a run that has the machine to itself (`train_round.py`'s default
+already). Two rounds side by side: 8 each.
+
 ## Evaluation and chain runs
 
 `evaluate.py` and `runner.py` (`ChainPool`, also behind `run.py`, `play_grid.py` and `eval-chain`) stepped their
@@ -199,9 +334,10 @@ d2 seeds 100–105); how much of the chain time that tail is was not measured.
 
 In order of size, for ow-zora p16:
 
-1. **Emulation.** 92% of env-thread time is zcore emulating real frames; nothing above it is worth chasing. Any
-   further env-side gain has to come from zcore itself (behaviour-neutral, checked with `tf ladder-golden` /
-   `ladder-diff`), and 16 env threads on 10 physical cores already share cores.
+1. **Emulation.** Still most of env-thread time (95% of the env benchmark). After the Nov 7 work the zcore profile
+   is flat (no single item above ~5%; see [zcore speed](#zcore-speed-nov-7)): further gains mean many small
+   changes or a rewrite of the dispatch, each held to the accuracy gate. 16 env threads on 10 physical cores
+   already share cores.
 2. **The end-of-rollout tail** (~1–1.5 ms of each env's ~7–8 ms per step, 15–20%). Every env must take exactly
    `T` steps and envs finish up to a second apart (workload differences between envs plus hyper-thread pairing), so
    the early finishers idle. Rebalancing steps between envs or starting the next rollout early would change what a

@@ -31,10 +31,10 @@ Goal until further notice: a set of specialists that carries the milestone-1 cha
   Check any such job's progress at least every couple of hours and intervene early when a single state or room
   makes no progress (retry with another seed or source, record it, move on); **12 hours on any single task is a
   hard stop**: kill it, log it in the round doc, and continue with other work.
-- **Lee's order (Nov 7):** next, **optimize the Rust emulation core** (below); then go straight back to the
-  **heart experiments** (below), a series, not one experiment.
+- **Lee's order (Nov 7):** first **optimize the Rust emulation core** (done Nov 7, below); then go straight back
+  to the **heart experiments** (below), a series, not one experiment.
 
-### Next: zcore speed (Lee, Nov 7)
+### Done: zcore speed (Lee, Nov 7)
 
 Make emulation faster with **perfect accuracy to the game**: nothing may change, checked before/after with the
 corpus goldens (`tf ladder-golden` / `ladder-diff`, 0 divergences), the start states and trajectories walked with
@@ -49,7 +49,17 @@ two sides: (1) pure throughput (steps/s against env count); (2) convergence: mor
 measure the steps and the wall time to reach a working level (around 90% success, not 99%) against env count.
 Recommend a setting (per specialist if it differs).
 
-### Then: heart experiments (Lee, Nov 7; a series)
+- [x] **Done (Nov 7; `docs/performance.md` "zcore speed" and "How many envs").** Idle-loop skip, per-opcode
+  dispatch, sprite-range cache, byte-lane tile rendering, smaller fixes (`bd71234`…`76272ea`), every one through
+  the accuracy gate (goldens 0/63, 481-state walk 0 differ, seeded training digest identical). Env benchmark
+  2,832 → 4,526 frames/s (1.60×; per family 1.38–1.94×); training steps/s +30–33% over Nov 5 at the same env
+  counts. The zcore profile is now flat (nothing above ~5%); three further attempts gained nothing.
+  **`--parallel 16`** for a run alone (`train_round.py`'s default), 8 each for two rounds side by side:
+  throughput rises near-linearly to 10 envs and flattens at 16–20, and the steps to reach 90% success from scratch
+  don't depend on the env count (ow-leever-peahat, ow-moblin; 4–24 envs, 3 seeds, 30/30 reached), so wall time
+  is lowest at 12–16. Same for every specialist measured; no per-specialist setting needed.
+
+### Next: heart experiments (Lee, Nov 7; a series)
 
 Goal: Link picks up dropped items, hearts above all, far more than the current models do. Lee's original models
 didn't take every item, but prioritized them far more. **This is solvable**: iterate until it works by the

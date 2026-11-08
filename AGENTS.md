@@ -4,7 +4,7 @@ Read this first, then `README.md` (setup, commands), `docs/architecture.md` (mod
 `docs/experiments/round*.md` (start with its Summary) plus `docs/experiments/todo.md` "Next up" (where the work
 stands and what to try next, in order).
 
-## Where things stand (Nov 6)
+## Where things stand (Nov 7)
 
 - **The Rust port is merged** (`docs/decisions.md` 2026-11-05 entries; plan steps 1–18): the emulator is
   `crates/zcore` (Zelda-only NES core cut down from TetaNES, hardware timing, no FCEUmm quirks left), the game,
@@ -14,8 +14,10 @@ stands and what to try next, in order).
 - **Round 10 (`round10.md`) is the current round:** coverage and performance steps done (Nov 5), then the
   `todo.md` experiments. ow-start r38b-rebalance is promoted (swordless departures fixed); everything else in the
   team is unchanged. Training/eval now end `no-damage` after 600 actions without damage either way, and
-  `play-zelda.py --stall-steps` handles stalled games (§6). Open items need Lee's decisions (`todo.md` "Where it
-  stands").
+  `play-zelda.py --stall-steps` handles stalled games (§6). Nov 7: zcore made 1.6× faster at the env level under
+  an exact accuracy gate, and `--parallel 16` measured as the training setting (§7, `docs/performance.md`). Next:
+  the heart-pickup experiment series (`todo.md` "Next: heart experiments"). Open items need Lee's decisions
+  (`todo.md` "Where it stands").
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated, reconcile it with todo.md between experiments, log
   every result, check off completed backlog entries, commit each finished item and keep going.
@@ -121,9 +123,10 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
 
 ```bash
 .venv/bin/python scripts/train_round.py --round r20-name --specialists goriya,wallmaster --no-promote \
-    --chain-runs 0 --parallel 10 --eval-parallel 3 --train-args "--load $PWD/models/goriya/r19-goriya-more"
+    --chain-runs 0 --parallel 16 --eval-parallel 3 --train-args "--load $PWD/models/goriya/r19-goriya-more"
 ```
 
-Event logs go to `logs/<yymmdd>_<NNN>_<round>/` (the GUI's input). Two rounds can run at once with
-`--parallel 8–12` each (20 cores). Then compare, `triforce promote <specialist> <run-id>`, run the chain segments,
+Event logs go to `logs/<yymmdd>_<NNN>_<round>/` (the GUI's input). `--parallel 16` is the measured best for a
+run alone; two rounds at once take `--parallel 8` each (20 hardware threads; `docs/performance.md` "How many
+envs"). Then compare, `triforce promote <specialist> <run-id>`, run the chain segments,
 write the results into the round doc, commit.

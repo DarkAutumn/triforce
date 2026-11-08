@@ -239,3 +239,21 @@ successes — identical to §3/§4, so recording the counter changes nothing):
   r31-block1 eval (40 per state, seed 0): 78.1% → 77.7%, −0.72 → −0.71, mean episode 134 → 117 actions; 12 of 480
   episodes end earlier (8 stuck/max-steps, 2 deaths, 2 slow successes). Evaluations from here on include it;
   earlier ones did not (the difference is these rare long stretches).
+
+## 7. zcore speed and the `--parallel` study (Lee, Nov 7)
+
+Full write-up: `docs/performance.md` "zcore speed (Nov 7)" and "How many envs (`--parallel`)".
+
+- **Emulator:** six kept changes (`bd71234`, `285bc5f`, `10089fb`, `415124c`, `62377ce`, `76272ea`), each through
+  the accuracy gate (goldens 0/63, 481-state walk 0 differ, seeded training digest identical). Env benchmark over
+  every start state: 2,832 → 4,526 frames/s (1.60×; ow-moblin 1.38× to ow-start 1.94×), with the same 166,577
+  frames and 10,811 steps played. Core bench over 20 recorded runs since `3de6f4b`: headless 5.5k → 6.7k, rendered
+  2.6k → 3.4k frames/s. Training (`train_bench.sh`, historical env counts) vs Nov 5: goriya p8 1,246 → 1,624,
+  d2-rope p8 1,119 → 1,466, ow-moblin p12 ~1,580 → 2,093, ow-zora p16 1,631 → 2,177 steps/s.
+- **Not kept:** deferring cut-short headless fetches (+5% cycles), skipping the PPU sync for OAM DMA's VBlank puts
+  (+1%), generalizing the headless fetch skip (0). The profile is flat at 1.5M host instructions per frame, IPC 2.48.
+- **`--parallel`** (`scripts/parallel_study.py nov7`): warm-start throughput for ow-moblin, goriya and ow-zora at
+  4–32 envs rises near-linearly to 10 and flattens at 16–20 (2.2–2.5k steps/s). From scratch to 90% balanced
+  success (ow-leever-peahat and ow-moblin, 4/8/12/16/24 envs, seeds 1–3, 30/30 reached): the steps don't depend on
+  the env count (medians 209–261k and 315–426k), and wall time is lowest at 12–16 (139–145 s and 188–209 s; at 4
+  envs 349 s and 589 s). Recommendation: `--parallel 16` alone, 8 each for two rounds side by side.

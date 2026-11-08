@@ -645,3 +645,17 @@ entry below and `crates/zcore/UPSTREAM.md`.
 - **Evidence:** round 10 §6. 480 chains of the current team: 16 of 9,033 successful room visits had a 300-action
   no-damage stretch and 10 had 600; all 18 `stuck` visits had ≥ 638. Goriya eval at 600: 12 of 480 episodes end
   earlier (2 slow successes at 1,186/1,200 actions), success 78.1% → 77.7%, mean episode 134 → 117 actions.
+
+## 2026-11-07 — zcore speed under a perfect-accuracy gate; `--parallel 16` for training
+
+- **What:** the emulator optimizations of Nov 7 (`bd71234`…`76272ea`: idle-loop skip, per-opcode dispatch,
+  sprite-range cache, byte-lane background tiles) are kept because each passed an exact gate: corpus goldens
+  0/63 diverging in every digest domain, the 481-state walk 0 of 18,728 digests differing, and an identical
+  seeded training digest. Training uses `--parallel 16` when a run has the machine to itself (`train_round.py`'s
+  default), 8 each when two rounds share it.
+- **Why:** Lee (Nov 7) asked for faster emulation with nothing about the game changing, and for the env count to
+  come out of both throughput and convergence. Changes that would alter state that's never observed (skipping
+  dead sprite-slot fetches) were left out on purpose.
+- **Evidence:** `docs/performance.md` "zcore speed" and "How many envs": env benchmark 1.60× (2,832 → 4,526
+  frames/s, same frames and steps); throughput flattens at 16–20 envs; steps to 90% success from scratch don't
+  depend on the env count (30/30 runs reached), so wall time is lowest at 12–16.
