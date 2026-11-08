@@ -46,8 +46,8 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
 - **Families are by enemy, not by dungeon** (`docs/specialists.md`, `docs/decisions.md` 2026-11-03): a Red Goriya
   room needs the same skills anywhere. Group rooms by the enemies in them, but don't boil it down to one model per
   enemy type or per room beyond what Lee asks for. Current families: ow-start, ow-octorok, ow-zora,
-  ow-leever-peahat, ow-moblin, stalfos-keese-gel, goriya, wallmaster, boss-aquamentus, d2-rope, boss-dodongo (tag
-  only).
+  ow-leever-peahat, ow-moblin, stalfos-keese-gel, goriya, wallmaster, boss-aquamentus, d2-rope, moldorm (2:0x3e,
+  split out of d2-rope by Lee, Nov 8), boss-dodongo (tag only).
 - Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones

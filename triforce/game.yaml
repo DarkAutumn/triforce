@@ -1393,7 +1393,7 @@ rooms:
   bomb_walls: [S]
 - level: 2
   location: '0x3e'
-  specialist: d2-rope
+  specialist: moldorm
   exits:
     N:
       level: 2

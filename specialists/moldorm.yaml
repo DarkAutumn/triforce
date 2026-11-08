@@ -1,0 +1,17 @@
+name: moldorm
+rooms: ['(2, 0x3e)']
+start_states: ['2_3e*_[0-9]']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true, item_targets: true}   # dungeon family: dropped items are shaping targets (round 10 §8)
+obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
+items: {bombs: false}
+curriculum: {enabled: true}              # trajectories/moldorm: the three 2_3es entry paths
+one_room: true
+max_steps: 3000
+warm_start: null
+notes: >-
+  The Moldorm room in Dungeon 2 (one Moldorm, key treasure; entered from 0x4e in the S, left N into 0x2e). Split out
+  of d2-rope in round 11 (Lee, Nov 8): it was d2-rope's deadliest room (10-13 deaths per 120 chain runs in round 10)
+  and a Moldorm needs other skills than Ropes.

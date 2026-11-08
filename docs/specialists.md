@@ -23,12 +23,13 @@ Grouping rule (design §3.1, revised by Lee on Nov 3, 2026):
 | `goriya` | Red Goriya | (1,0x44), (2,0x5e), (2,0x1e); off-route (1,0x23) | exit-correct. At 0x1e the correct exit is enter-room:(2,0x0e), the milestone terminal. | Every Red Goriya room, whatever the dungeon (was split between `d1-wallmaster` and `d2-goriya`). 0x44 (×3) drops the boomerang when all are dead; 0x5e (×5) has the ringleader trigger; 0x1e (×5) needs kill-all to open the N shutter; 0x23 (×3, key) is north of 0x33, before the bow room 0x22. |
 | `wallmaster` | Wallmaster | (1,0x45) | exit-correct. 0x45 exits N through a locked door. | Wallmasters need their own skills (v1's Wallmaster shaping, design §6); only 1 Wallmaster room is on the route so far. |
 | `boss-aquamentus` | Aquamentus | (1,0x35) | exit-correct after killing the boss and collecting the heart container; then E into 0x36. | Boss room per LevelInfoUW1 BossRoomId=$35. Round 7 trains the whole visit, not just the heart pickup. |
-| `d2-rope` | Rope (+ Moldorm) | (2,0x7d), (2,0x7e), (2,0x6e), (2,0x4e), (2,0x3e), (2,0x2e); off-route (2,0x6d) | exit-correct. 0x7d exits E into key room 0x7e, then 0x6e is entered from S. 0x2e requires kill-all to open the N shutter. | Backward curriculum covers all 21 entry states; r35 learned the east exit that ordinary warm continuation did not. Enemy-family membership is unchanged: 0x6d remains a Rope training room despite leaving the route. 0x7d is the empty entry room. 0x3e (Moldorm×1) is not a boss room (BossRoomId=$0E) and would be a one-room family, so it goes into the family of its neighbours 0x4e and 0x2e. |
+| `d2-rope` | Rope | (2,0x7d), (2,0x7e), (2,0x6e), (2,0x4e), (2,0x2e); off-route (2,0x6d) | exit-correct. 0x7d exits E into key room 0x7e, then 0x6e is entered from S. 0x2e requires kill-all to open the N shutter. | Backward curriculum covers its 18 entry states; r35 learned the east exit that ordinary warm continuation did not. Enemy-family membership is unchanged: 0x6d remains a Rope training room despite leaving the route. 0x7d is the empty entry room. |
+| `moldorm` | Moldorm | (2,0x3e) | exit-correct (N into 0x2e). | Split out of d2-rope in round 11 (Lee, Nov 8): one Moldorm, not a boss room (BossRoomId=$0E), and d2-rope's deadliest room in round 10's chains. Curriculum: the three 2_3es entry paths. |
 | `boss-dodongo` | Dodongo (`Dodongo2` $32) | (2,0x0e) | out of scope for milestone 1. The route ends on entry, and the predecessor's success is enter-room:(2,0x0e). | Tagged only so the runner never hits an untagged room (design §9). Not trained in milestone 1. Boss room per LevelInfoUW2 BossRoomId=$0E. |
 
 Rooms per family: `ow-start` 2(+1 fairy route), `ow-octorok` 6(+1, +1 fairy route), `ow-leever-peahat` 4,
 `ow-zora` 4(+2 fairy route), `ow-moblin` 2(+3 fairy route), `stalfos-keese-gel` 9(+1 off-route),
-`goriya` 3(+1 off-route), `wallmaster` 1, `d2-rope` 6(+1).
+`goriya` 3(+1 off-route), `wallmaster` 1, `d2-rope` 5(+1), `moldorm` 1.
 
 ## Changes from the design hypothesis (§3.1)
 

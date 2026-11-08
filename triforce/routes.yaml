@@ -44,7 +44,7 @@ milestone1:
 - {level: 2, room: '0x6e', specialist: d2-rope, entry: S, exit: N}
 - {level: 2, room: '0x5e', specialist: goriya, entry: S, exit: N}
 - {level: 2, room: '0x4e', specialist: d2-rope, entry: S, exit: N}
-- {level: 2, room: '0x3e', specialist: d2-rope, entry: S, exit: N}
+- {level: 2, room: '0x3e', specialist: moldorm, entry: S, exit: N}
 - {level: 2, room: '0x2e', specialist: d2-rope, entry: S, exit: N}
 - {level: 2, room: '0x1e', specialist: goriya, entry: S, exit: N}
 - {level: 2, room: '0x0e', specialist: boss-dodongo, entry: S, exit: terminal}
@@ -81,5 +81,6 @@ families:
   goriya: ['(1, 0x23)', '(1, 0x44)', '(2, 0x1e)', '(2, 0x5e)']
   wallmaster: ['(1, 0x45)']
   boss-aquamentus: ['(1, 0x35)']
-  d2-rope: ['(2, 0x2e)', '(2, 0x3e)', '(2, 0x4e)', '(2, 0x6d)', '(2, 0x6e)', '(2, 0x7d)', '(2, 0x7e)']
+  d2-rope: ['(2, 0x2e)', '(2, 0x4e)', '(2, 0x6d)', '(2, 0x6e)', '(2, 0x7d)', '(2, 0x7e)']
+  moldorm: ['(2, 0x3e)']
   boss-dodongo: ['(2, 0x0e)']
