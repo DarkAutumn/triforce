@@ -1,0 +1,15 @@
+name: ow-start
+rooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']
+start_states: ['start', '0_77*_[0-9]', '0_39*_[0-9]']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true}   # r42/r43: no item targets (round 10 §10)
+obs: {objective: true, target: true}       # r43-pointer: schema 2
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # 0x39: the pond only matters below full hearts
+items: {bombs: false}
+max_steps: 1000
+warm_start: null
+notes: >-
+  Rooms without enemies where Link walks to a spot. Start screen + sword cave: the correct exit depends on
+  progress (no sword -> cave; in the cave -> S once the sword is taken; with sword -> N, 0x78 E is the tagged
+  alternate). 0x39 (milestone1-fairy only): the fairy pond; stand at its edge until the hearts are full, then S.

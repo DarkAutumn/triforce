@@ -5,7 +5,7 @@ start_states: ['0_67*_[0-9]', '0_68*_[0-9]', '0_58*_[0-9]', '0_37*_[0-9]', '0_4c
 success: [exit-correct, enter-room:1:0x73, enter-room:2:0x7d]
 reward_profile: default
 reward: {pbrs: true}
-obs: {objective: true}
+obs: {objective: true, target: true}       # schema 2 pointer, no item targets (round 10 §10, r42)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
 items: {bombs: false}
 one_room: true                          # round 5: per-room episodes (d1-melee trained 2.5-4x faster with them)

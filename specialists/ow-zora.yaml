@@ -4,7 +4,7 @@ start_states: ['0_48*_[0-9]', '0_38*_[0-9]', '0_28*_[0-9]', '0_2d*_[0-9]', '0_59
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true}
-obs: {objective: true}
+obs: {objective: true, target: true}       # schema 2 pointer, no item targets (round 10 §10, r42)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
 items: {bombs: false}
 curriculum: {enabled: true}             # trajectories/ow-zora (round 2: 37% -> 97%)

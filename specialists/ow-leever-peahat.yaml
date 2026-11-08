@@ -4,7 +4,7 @@ start_states: ['0_29*_[0-9]', '0_2a*_[0-9]', '0_2b*_[0-9]', '0_2c*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true}
-obs: {objective: true}
+obs: {objective: true, target: true}       # schema 2 pointer, no item targets (round 10 §10, r42)
 ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
 items: {bombs: false}
 one_room: true                          # round 5: per-room episodes

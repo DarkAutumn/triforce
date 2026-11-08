@@ -41,17 +41,27 @@ seg_args() {
 
 yamls() {
   mkdir -p $ARM
-  local reward='reward: {pbrs: true}   # r42: no item targets (round 10 §10)'
+  local reward='reward: {pbrs: true}   # r42/r43: no item targets (round 10 §10)'
   [ "$ITEM_TARGETS" = 1 ] && reward="reward: {pbrs: true, item_targets: true}   # $TAG (round 10)"
   for f in $FAMILIES; do
-    sed -e "s/^reward: {pbrs: true}\$/$reward/" \
-        -e "s/^obs: {objective: true}\$/obs: {objective: true, target: true}       # $TAG: widened to schema 2/" \
+    # Whole lines: the canonical yaml may already carry item_targets / obs.target from an earlier promotion.
+    sed -e "s|^reward: .*\$|$reward|" \
+        -e "s|^obs: .*\$|obs: {objective: true, target: true}       # $TAG: schema 2|" \
         specialists/$f.yaml > $ARM/$f.yaml
     grep -q 'target: true' $ARM/$f.yaml || { echo "$f: obs line not rewritten" >&2; exit 1; }
+    [ "$ITEM_TARGETS" = 1 ] || ! grep -q 'item_targets' $ARM/$f.yaml || { echo "$f: item_targets left" >&2; exit 1; }
   done
 }
 
 finished() { grep -qE '"status": "(completed|early_stop)"' models/$1/$2/train_summary.json 2>/dev/null; }
+
+# The run each family starts from: its promoted run unless SOURCES ("family=run ...") names another (r43: the
+# schema-1 runs r41 widened, now that r41's models are promoted).
+source_of() {
+  local kv
+  for kv in ${SOURCES:-}; do [ "${kv%%=*}" = "$1" ] && { echo "${kv#*=}"; return; }; done
+  cat models/$1/promoted
+}
 
 train() {
   local pending=() job f s
@@ -59,7 +69,7 @@ train() {
   for ((i = 0; i < ${#pending[@]}; i += 2)); do
     for job in "${pending[@]:i:2}"; do
       f=${job%%:*}; s=${job#*:}
-      timeout 3h $PY -m triforce.train --specialist $ARM/$f.yaml --load models/$f/$(cat models/$f/promoted) \
+      timeout 3h $PY -m triforce.train --specialist $ARM/$f.yaml --load models/$f/$(source_of $f) \
         --parallel 8 --threads 10 --iterations $ITERS --steps-per-update 4096 --device cuda --seed $s \
         --run-id $TAG-s$s > $OUT/train-$f-s$s.log 2>&1 &
     done
