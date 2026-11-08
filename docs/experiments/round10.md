@@ -334,3 +334,39 @@ deaths (totals 104 / 108 vs 83 promoted, 85 / 76 controls).
 reproduces the "+ both" D2 chain run for run (120/120 identical). Observation schema 2 is merged into main
 (`ee72806`); the other families stay schema-1 models and load unchanged. Scripts: `r40_hearts.sh` (schema-1 arms),
 `r40_obs_eval.sh` (schema-2 evaluations and chains).
+
+## 9. Heart series step 2: the other families (r41)
+
+Setup (`scripts/experiments/r41_obs_families.sh`): each remaining schema-1 family's promoted model widened to the
+target observation with item targets (`specialists/arms/r41-obs/`), 245 updates (1,003,520 steps), seeds 40/41, two
+at a time at 8 envs. Each model evaluated with its arm yaml (20 episodes per state, seed 0) against the promoted
+model, then swapped alone into the segments where its family plays (120 runs, seeds 100–219) against the current
+team (§8 "+ both"). Drops are rare in these families' rooms, so the gains are mostly the pointer's lower damage.
+
+| family | eval success, ΔHP: promoted → s40 / s41 | own chain visits: deaths, ΔHP per visit (base → kept seed) | Dodongo arrivals, single swap s40 / s41 (base) |
+|---|---|---|---|
+| stalfos-keese-gel | 96.2%, −0.052 → 96.8%, −0.018 / 96.1%, −0.036 | 0.98% → 0.82%, −0.078 → −0.051 (s41) | full 16+34 / 24+32 (16+29) |
+| wallmaster | 100%, +0.27 → 95.0%, +0.19 / 98.3%, +0.26 | healed 0.37 → 0.53, ΔHP +0.55 → +0.71 (s40) | 19+23 / 22+26 |
+| boss-aquamentus | 100%, +0.58 → 100%, +0.68 / 100%, +0.69 | deaths 17.9% → 10.5%, ΔHP +0.44 → +0.72 (s40) | 11+32 / 11+31 |
+| ow-zora | 94.8%, −0.18 → 96.9%, −0.14 / 98.0%, −0.10 | 0.43% → 0%, −0.20 → −0.16 (s40) | 4 segments 127 / 126 (129) |
+| ow-leever-peahat | 95.8%, −0.32 → 99.2%, −0.14 / 97.9%, −0.13 | 0.30% → 0.30%, −0.25 → −0.28 | 140 / 131 (129) |
+| ow-moblin | 96.1%, −0.21 → 98.1%, −0.17 / — | 1.48% → 1.25%, −0.25 → −0.28 | 140 / 138 (129) |
+| ow-octorok | 97.9%, −0.08 → 98.3%, −0.04 / 98.0%, −0.08 | no change | 101 / 117 (129) |
+| ow-start | 100%, +0.28 → 100%, +0.28 / — (slower) | — | full 24 / 30 (45) |
+
+(Full = full main + full fairy; the overworld families' 4 segments add post-D1 main and fairy.)
+
+All six candidates together (skg s41, wallmaster s40, aquamentus s40, zora s40, leever-peahat s40, moblin s40)
+against the current team: D2 74 / 74, post-D1 main 52 / 28, post-D1 fairy 45 / 56, full main 12 / 16, full fairy
+25 / 29. The overworld models gain on the main road and lose on the fairy road: after the fairy pond, the widened
+ow-moblin loses −0.34 hearts per visit (was −0.24; 10 deaths vs 3) and ow-zora −0.30 (was −0.18), so Link
+reaches D2 on the fairy routes with 0.51–0.55 of max health instead of 0.63–0.75. Not kept.
+
+The three D1 families together: full main 21 (was 16), full fairy 27 (was 29); D1 is shared by both routes there:
+113 runs reach the Goriya room 1:0x44 (was 108) with 0.57 of max health (was 0.51), Aquamentus deaths 8 (was 12).
+
+**Promoted:** stalfos-keese-gel `r41-obs-s41`, wallmaster `r41-obs-s40`, boss-aquamentus `r41-obs-s40`; their
+canonical yamls now set `item_targets` and `obs.target`. The promoted team reproduces the trio's full-main chain run
+for run. Not promoted: ow-zora, ow-leever-peahat, ow-moblin (better main road, worse fairy road), ow-octorok (fewer
+arrivals), ow-start (slower departures, far fewer arrivals: 24/30 vs 45). Team now (Dodongo arrivals per 120): D2
+74, post-D1 main 28, post-D1 fairy 56, full main 21, full fairy 27 (round 10 §1: 44, 12, 18, 3, 6).

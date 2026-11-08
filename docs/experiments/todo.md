@@ -90,10 +90,15 @@ measure below, and only when out of reasonable ideas stop and report.
   The pointer alone gives success and less damage but no pickups. Goriya widened from the promoted model with
   both: fewer deaths. **Promoted** d2-rope `r40-obs-s41` and goriya `r40-goriya-obs-s41`: Dodongo arrivals per
   120 runs D2 44 → 74, post-D1 12/18 → 28/56, full routes 3/6 → 16/29.
-- [ ] **Step 2: the other families** with drops on the route (stalfos-keese-gel, the overworld families,
-  wallmaster, Aquamentus): widen each promoted model with `item_targets` + `obs.target`, 1M steps, and keep it
-  where pickups/health and the chains improve. Then idea: more drops in training (`$52A` drop cycle) if exposure
-  limits the families that rarely see a heart.
+- [x] **Step 2 done (r41, round 10 §9, Nov 8):** every other schema-1 family widened with both, 1M steps, 2 seeds.
+  Promoted stalfos-keese-gel `r41-obs-s41`, wallmaster `r41-obs-s40`, boss-aquamentus `r41-obs-s40` (D1: more
+  health at the Goriya room 1:0x44, Aquamentus deaths 12 → 8; full main 16 → 21). The overworld families
+  (ow-zora, ow-leever-peahat, ow-moblin) improve in evaluation and on the main road but lose health after the
+  fairy pond; ow-octorok and ow-start lose arrivals. Not promoted.
+- [ ] **Next ideas:** (a) the overworld families on the fairy road: their fairy-road rooms (after the pond) are
+  where the widened models take more damage; train them longer or with the fairy road weighted, then re-check
+  both routes. (b) more drops in training (`$52A` drop cycle) where hearts are rare. (c) the Goriya rooms remain
+  the chain's main killer (1:0x44, 2:0x5e) but are not a pickup problem.
 
 
 ### Work in this order

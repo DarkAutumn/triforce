@@ -3,8 +3,8 @@ rooms: ['(1, 0x35)']
 start_states: ['1_35*_[0-9]']
 success: [exit-correct]
 reward_profile: default
-reward: {pbrs: true}
-obs: {objective: true}
+reward: {pbrs: true, item_targets: true}   # round 10 §9 (r41): dropped items are shaping targets
+obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target (r41)
 ram_randomization: {hp: [0.75, max], full_hp: 0.5}
 items: {bombs: false}
 curriculum: {enabled: true}             # trajectories/boss-aquamentus includes kill, heart and E exit (round 7)
