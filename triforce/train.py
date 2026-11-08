@@ -26,7 +26,9 @@ Live progress goes to an event stream (``events.py``): ``--events FILE`` appends
 Weights come from ``--load`` or else the specialist's ``warm_start``: a checkpoint file, a run dir, or a specialist
 name (its promoted checkpoint; ``--load <own name>`` continues the promoted model).  Loading a checkpoint of the
 same specialist also restores the optimizer state and the iteration/step counters; a different specialist's
-checkpoint only supplies weights.
+checkpoint only supplies weights.  With ``obs.target`` on, a checkpoint from before the ``target`` block (schema 1)
+is widened to the current layout (``model.widen_policy``: the new inputs start at zero, so it acts exactly as
+before) and its optimizer state is dropped; with it off the checkpoint keeps its own layout.
 """
 
 import argparse
@@ -47,7 +49,7 @@ from ._native import CurriculumSpec, Env, EnvPool, TrainTask
 from .demo import collect_demo_batch, parse_demo_actions
 from .events import LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, new_log_dir
 from .metrics import MetricsLogger, format_summary
-from .model import ModelConfig, ZeldaPolicy
+from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
 from .observation import observation_space
 from .paths import STATES_DIR, TRAJECTORIES_DIR
 from .ppo import PPO, IterationResult, PPOConfig
@@ -179,9 +181,15 @@ def initial_model(args, config: SpecialistConfig, root):
         network = ZeldaPolicy(observation_space(), ModelConfig(grid_encoder=args.grid_encoder))
         return network, None, 0, 0, None
 
-    network, checkpoint = registry.load_model(source)
+    # obs.target wants the full layout: an older checkpoint without `target` is widened (zero-initialised inputs).
+    wanted = obs_spec_from_space(observation_space()) if config.obs.target else None
+    network, checkpoint = registry.load_model(source, obs_spec=wanted)
+    added = sorted(set(network.config.obs_spec) - set(checkpoint['model_config']['obs_spec']))
+    if added:
+        print(f"[train] widened {source} to the current observation layout ({added} start at zero, fresh optimizer)")
     if args.load and checkpoint['specialist'] == config.name:
-        return network, checkpoint.get('optimizer'), checkpoint['iterations'], checkpoint['steps'], source
+        optimizer = None if added else checkpoint.get('optimizer')
+        return network, optimizer, checkpoint['iterations'], checkpoint['steps'], source
     return network, None, 0, 0, source
 
 

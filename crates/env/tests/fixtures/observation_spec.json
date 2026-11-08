@@ -251,6 +251,16 @@
   "objective_FIGHT",
   "objective_ITEM"
  ],
+ "TARGET_FEATURES": [
+  "target_N",
+  "target_S",
+  "target_W",
+  "target_E",
+  "target_distance",
+  "target_dx",
+  "target_dy",
+  "target_is_item"
+ ],
  "spaces": {
   "action_mask": {
    "shape": [
@@ -324,6 +334,14 @@
    ],
    "dtype": "float32",
    "low": 0.0,
+   "high": 1.0
+  },
+  "target": {
+   "shape": [
+    8
+   ],
+   "dtype": "float32",
+   "low": -1.0,
    "high": 1.0
   }
  },

@@ -18,6 +18,7 @@ use env::rewards::{
     Outcome, PENALTY_TERMINAL_FAILURE, REWARD_MEDIUM, REWARD_TERMINAL_SUCCESS, StepRewards,
     TERMINAL_FAILURE_PENALTY_VALUE, success_reward_value,
 };
+use env::observation::{Observation, feature_names};
 use env::specialist_env::{EnvOptions, SpecialistEnv, StepInfo, StepResult};
 use env::start_states::{SavestateCapture, ram_randomization_values};
 use env::{EnvError, StateStore};
@@ -1125,9 +1126,23 @@ fn placed_env_with(
     reward: RewardConfig,
     hearts_and_containers: u8,
 ) -> (Env, SessionSnapshot<MachineState>) {
+    let (env, snapshot, _) = placed_env_configured(nes, drops, y, hearts_and_containers, |c| {
+        c.reward = reward
+    });
+    (env, snapshot)
+}
+
+/// [`placed_env_with`] with any config change; also returns the restored episode's first observation.
+fn placed_env_configured(
+    nes: ZCore,
+    drops: &[(i16, u8, u8)],
+    y: u8,
+    hearts_and_containers: u8,
+    update: impl FnOnce(&mut SpecialistConfig),
+) -> (Env, SessionSnapshot<MachineState>, Observation) {
     let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73e_0"), |c| {
         c.one_room = true;
-        c.reward = reward;
+        update(c);
     });
     env.reset(Some(1), None).unwrap();
     let s = env.session_mut();
@@ -1155,8 +1170,8 @@ fn placed_env_with(
     }
     s.apply_ram(&[]);
     let snapshot = env.session().snapshot();
-    env.restore(&snapshot, "1_73e_0").unwrap();
-    (env, snapshot)
+    let (obs, _) = env.restore(&snapshot, "1_73e_0").unwrap();
+    (env, snapshot, obs)
 }
 
 fn movement_reward(env: &mut Env, direction: &str) -> f64 {
@@ -1240,6 +1255,40 @@ fn item_targets_pull_toward_any_dropped_item() {
     let (mut env, _) = placed_env_with(release(env), &drops, 157, item_targets(), 0x21);
     let on = movement_reward(&mut env, "E");
     assert!(off < 0.0 && on > 0.0, "off {off}, on {on}");
+}
+
+/// `obs.target` points the observation at the nearest wavefront target: with `reward.item_targets` a rupee east of
+/// Link (the exit is north) → target_E, target_is_item and a positive dx; off → all zeros.
+#[test]
+fn target_observation_points_at_the_nearest_item() {
+    let Some(nes) = open_core() else { return };
+    let drops = [(item::RUPEE, 152, 157)];
+    let names = &feature_names().target;
+    let at = |obs: &Observation, name: &str| obs.target[names.iter().position(|n| n == name).unwrap()];
+    let (env, _, obs) = placed_env_configured(nes, &drops, 157, 0x21, |c| {
+        c.reward = item_targets();
+        c.obs.target = true;
+    });
+    assert_eq!(at(&obs, "target_E"), 1.0, "{:?}", obs.target);
+    assert_eq!(obs.target[..4].iter().sum::<f32>(), 1.0);
+    assert_eq!(at(&obs, "target_is_item"), 1.0);
+    // Same tile row: dy is only Link's offset inside his tile.
+    let (dx, dy) = (at(&obs, "target_dx"), at(&obs, "target_dy"));
+    assert!(dx > 0.0 && dy.abs() < 8.0 / 176.0, "{:?}", obs.target);
+    let distance = at(&obs, "target_distance");
+    assert!(distance > 0.0 && distance < 0.25, "{distance}");
+
+    let (env, _, obs) = placed_env_configured(release(env), &drops, 157, 0x21, |c| {
+        c.reward = item_targets();
+    });
+    assert!(obs.target.iter().all(|&x| x == 0.0), "{:?}", obs.target);
+
+    // Without item targets the exit north is the target: the walk heads N, not toward the rupee.
+    let (_, _, obs) = placed_env_configured(release(env), &drops, 157, 0x21, |c| {
+        c.obs.target = true;
+    });
+    assert_eq!(at(&obs, "target_is_item"), 0.0);
+    assert_eq!(at(&obs, "target_E"), 0.0, "{:?}", obs.target);
 }
 
 #[test]

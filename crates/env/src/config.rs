@@ -247,11 +247,17 @@ impl Default for RewardConfig {
 pub struct ObsConfig {
     #[serde(default = "yes", deserialize_with = "de_bool")]
     pub objective: bool,
+    /// Fill the `target` observation block: the walk to the nearest PBRS wavefront target (exit or item).
+    #[serde(default, deserialize_with = "de_bool")]
+    pub target: bool,
 }
 
 impl Default for ObsConfig {
     fn default() -> Self {
-        ObsConfig { objective: true }
+        ObsConfig {
+            objective: true,
+            target: false,
+        }
     }
 }
 

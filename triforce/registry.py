@@ -2,8 +2,10 @@
 
 A checkpoint is a dict with ``obs_schema_version``, ``action_schema_version``, ``specialist``, ``model_config``
 (including the observation layout, so the network can be rebuilt from it alone), ``state_dict``,
-``optimizer``, ``iterations``, ``steps``, ``metrics``.  Loading a checkpoint whose schema versions don't match
-the current code raises ``SchemaMismatchError``.
+``optimizer``, ``iterations``, ``steps``, ``metrics``.  Loading a checkpoint raises ``SchemaMismatchError`` unless
+its action schema is the current one and its observation schema is the current one or an older one whose layout
+(``model_config['obs_spec']``) is a subset of the current ``OBS_SPEC``: every key it reads still exists with the
+same shape and vocabulary (schema 1 is schema 2 without ``target``).  The network reads only its own keys.
 
 The models root is, in order: the ``root`` argument, ``$TRIFORCE_MODELS_DIR``, ``<repo>/models``.
 
@@ -18,7 +20,7 @@ from typing import Optional
 
 import torch
 
-from ._native import ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION
+from ._native import ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION, OBS_SPEC
 
 MODELS_DIR_ENV = 'TRIFORCE_MODELS_DIR'
 CHECKPOINT_NAME = 'ckpt.pt'
@@ -88,24 +90,52 @@ def _resolve(path) -> Path:
     return path / CHECKPOINT_NAME if path.is_dir() else path
 
 
+def _obs_layout_problem(checkpoint: dict) -> Optional[str]:
+    """Why an older checkpoint's observation layout can't read current observations (None if it can)."""
+    spec = (checkpoint.get('model_config') or {}).get('obs_spec')
+    if not spec:
+        return "no obs_spec in model_config"
+    for key, entry in spec.items():
+        current = OBS_SPEC.get(key)
+        if current is None:
+            return f"key '{key}' is not in the current observation"
+        if list(entry.get('shape', ())) != list(current['shape']) or entry.get('vocab') != current['vocab']:
+            return (f"key '{key}' is shape {list(entry.get('shape', ()))} vocab {entry.get('vocab')}, "
+                    f"current is shape {list(current['shape'])} vocab {current['vocab']}")
+    return None
+
+
 def load_checkpoint(path, check_schema: bool = True) -> dict:
-    """Loads a checkpoint (file or run directory).  Raises SchemaMismatchError on a version mismatch."""
+    """Loads a checkpoint (file or run directory).  Raises SchemaMismatchError when the action schema differs or
+    the observation schema is newer, or older with a layout that isn't a subset of the current one."""
     path = _resolve(path)
     checkpoint = torch.load(path, map_location='cpu', weights_only=False)
     if check_schema:
-        expected = {'obs_schema_version': obs_schema_version(), 'action_schema_version': ACTION_SCHEMA_VERSION}
-        for key, version in expected.items():
-            if checkpoint.get(key) != version:
-                raise SchemaMismatchError(f"{path}: {key} is {checkpoint.get(key)}, code expects {version}")
+        action = checkpoint.get('action_schema_version')
+        if action != ACTION_SCHEMA_VERSION:
+            raise SchemaMismatchError(f"{path}: action_schema_version is {action}, "
+                                      f"code expects {ACTION_SCHEMA_VERSION}")
+        obs = checkpoint.get('obs_schema_version')
+        if obs != obs_schema_version():
+            problem = (_obs_layout_problem(checkpoint) if isinstance(obs, int) and obs < obs_schema_version()
+                       else "not an older schema")
+            if problem is not None:
+                raise SchemaMismatchError(f"{path}: obs_schema_version is {obs}, code expects "
+                                          f"{obs_schema_version()} ({problem})")
     return checkpoint
 
 
-def load_model(path, check_schema: bool = True):
-    """Rebuilds the ``ZeldaPolicy`` stored in a checkpoint.  Returns (network, checkpoint)."""
-    from .model import ZeldaPolicy  # pylint: disable=import-outside-toplevel
+def load_model(path, check_schema: bool = True, obs_spec: Optional[dict] = None):
+    """Rebuilds the ``ZeldaPolicy`` stored in a checkpoint.  Returns (network, checkpoint).  With ``obs_spec`` (the
+    layout the caller wants) a checkpoint built for a smaller layout comes back widened to it
+    (``model.widen_policy``: new inputs start at zero); compare ``network.config.obs_spec`` with the checkpoint's
+    to tell."""
+    from .model import ZeldaPolicy, widen_policy  # pylint: disable=import-outside-toplevel
     checkpoint = load_checkpoint(path, check_schema)
     network = ZeldaPolicy(config=checkpoint['model_config'])
     network.load_state_dict(checkpoint['state_dict'])
+    if obs_spec is not None and obs_spec != network.config.obs_spec:
+        network = widen_policy(network, obs_spec)
     return network, checkpoint
 
 

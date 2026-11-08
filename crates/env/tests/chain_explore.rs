@@ -160,6 +160,7 @@ fn chain_runs() {
         no_room_progress_preserves_global_guard_and_disabled_budget,
         room_exit_resets_visit_clock,
         step_budget_records_health_after_native_fairy_healing,
+        target_observation_follows_the_acting_specialist,
     ] {
         nes = case(nes, &data);
     }
@@ -230,6 +231,34 @@ fn missing_model_is_an_error(nes: ZCore, data: &Arc<GameData>) -> ZCore {
         "a finished run takes no more steps"
     );
     c.into_parts().0.into_nes()
+}
+
+/// The chain fills `target` only for specialists with `obs.target` on, from the same wavefront their env uses.
+fn target_observation_follows_the_acting_specialist(mut nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    for on in [false, true] {
+        let mut c = chain(nes, data, milestone1(data));
+        c.configs.insert(
+            "ow-start".into(),
+            config(data, "ow-start", |c| c.obs.target = on),
+        );
+        let mut rng = ChaCha8Rng::seed_from_u64(0);
+        let mut status = c.reset(Some(0), &mut rng).unwrap();
+        for step in 0..3 {
+            let ChainStatus::Act { obs, .. } = status else {
+                panic!("expected Act")
+            };
+            if on {
+                // The start room's exit is reachable: a walking distance and one first step.
+                assert!(obs.target[4] > 0.0 && obs.target[4] < 1.0, "{step}: {:?}", obs.target);
+                assert_eq!(obs.target[..4].iter().sum::<f32>(), 1.0, "{step}: {:?}", obs.target);
+            } else {
+                assert!(obs.target.iter().all(|&x| x == 0.0), "{step}: {:?}", obs.target);
+            }
+            status = c.step(parse("WAIT 8")).unwrap();
+        }
+        nes = c.into_parts().0.into_nes();
+    }
+    nes
 }
 
 fn run_records_rooms_and_ends_cleanly(nes: ZCore, data: &Arc<GameData>) -> ZCore {

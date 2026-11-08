@@ -42,9 +42,10 @@ pub const ENTITY_FEATURES: usize = 4;
 pub const GRID: usize = 5;
 pub const HISTORY: usize = 6;
 pub const OBJECTIVE: usize = 7;
-pub const ACTION_MASK: usize = 8;
+pub const TARGET: usize = 8;
+pub const ACTION_MASK: usize = 9;
 
-/// The observation layout of `env::OBS_SPEC` (schema v1).
+/// The observation layout of `env::OBS_SPEC` (schema v2).
 pub fn obs_layout() -> ObsLayout {
     ObsLayout::new(
         OBS_SPEC
@@ -73,6 +74,7 @@ pub fn write_observation(obs: &Observation, row: &mut ObsRow<'_>) {
     }
     row.f32(HISTORY).copy_from_slice(&obs.history);
     row.f32(OBJECTIVE).copy_from_slice(&obs.objective);
+    row.f32(TARGET).copy_from_slice(&obs.target);
     row.bool(ACTION_MASK).copy_from_slice(&obs.action_mask);
 }
 
@@ -161,7 +163,7 @@ mod tests {
     use crate::layout::ObsData;
     use env::observation::{
         ENTITY_FEATURE_SIZE, GRID_ROWS, HISTORY_SIZE, LINK_SIZE, NUM_ENTITY_SLOTS, OBJECTIVE_SIZE,
-        ROOM_STATE_SIZE,
+        ROOM_STATE_SIZE, TARGET_SIZE,
     };
     use zelda::MASK_SIZE;
 
@@ -176,6 +178,7 @@ mod tests {
             (GRID, "grid"),
             (HISTORY, "history"),
             (OBJECTIVE, "objective"),
+            (TARGET, "target"),
             (ACTION_MASK, "action_mask"),
         ];
         assert_eq!(names.len(), OBS_SPEC.len());
@@ -209,6 +212,7 @@ mod tests {
             grid: [[0; GRID_COLS]; GRID_ROWS],
             history: [0.0; HISTORY_SIZE],
             objective: [0.0; OBJECTIVE_SIZE],
+            target: [0.0; TARGET_SIZE],
             action_mask: [false; MASK_SIZE],
         };
         obs.room_state.iter_mut().for_each(|v| *v = next());
@@ -219,6 +223,7 @@ mod tests {
             .for_each(|v| *v = next());
         obs.history.iter_mut().for_each(|v| *v = next());
         obs.objective.iter_mut().for_each(|v| *v = next());
+        obs.target.iter_mut().for_each(|v| *v = next());
         for (i, t) in obs.entity_types.iter_mut().enumerate() {
             *t = 100 + i as i64;
         }
@@ -244,6 +249,7 @@ mod tests {
         assert_eq!(data.i64(GRID), grid);
         assert_eq!(data.f32(HISTORY), obs.history);
         assert_eq!(data.f32(OBJECTIVE), obs.objective);
+        assert_eq!(data.f32(TARGET), obs.target);
         assert_eq!(data.bool(ACTION_MASK), obs.action_mask);
     }
 }

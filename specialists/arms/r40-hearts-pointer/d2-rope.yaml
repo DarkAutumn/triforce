@@ -1,0 +1,15 @@
+name: d2-rope
+rooms: ['(2, 0x7d)', '(2, 0x6d)', '(2, 0x6e)', '(2, 0x4e)', '(2, 0x3e)', '(2, 0x2e)', '(2, 0x7e)']
+start_states: ['2_7d*_[0-9]', '2_6d*_[0-9]', '2_6es_[0-9]', '2_4e*_[0-9]', '2_3e*_[0-9]', '2_2e*_[0-9]', '2_7e*_[0-9]']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true}
+obs: {objective: true, target: true}   # r40: the target observation without item targets
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
+items: {bombs: false}
+curriculum: {enabled: true}              # verified per-entry paths teach the east-first 0x7d exit (round 7)
+one_room: true                          # round 5: per-room episodes (one-room eval of r3: 91% vs 83% family)
+max_steps: 3000
+warm_start: null
+notes: >-
+  Route-generated pre-entry states (triforce/entry_states.py) cover 0x7d E -> key room 0x7e N -> 0x6e from S, then 0x4e, 0x3e and 0x2e. Off-route 0x6d remains in the Rope family with its existing states.

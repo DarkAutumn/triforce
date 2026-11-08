@@ -1,4 +1,4 @@
-//! Observation schema v1 against Python's (`fixtures/observation_spec.json`, dumped from
+//! Observation schema v2 against Python's (`fixtures/observation_spec.json`, dumped from
 //! `triforce.observation`: feature-name tuples, vocabularies and the gymnasium space of every key).
 
 use env::observation::{ENTITY_VOCAB, OBS_SPEC, ROOM_VOCAB, feature_names};
@@ -23,6 +23,7 @@ fn feature_names_and_spaces_match_python() {
     assert_eq!(n.entity, names("ENTITY_FEATURES"));
     assert_eq!(n.history, names("HISTORY_FEATURES"));
     assert_eq!(n.objective, names("OBJECTIVE_FEATURES"));
+    assert_eq!(n.target, names("TARGET_FEATURES"));
     assert_eq!(spec["ROOM_VOCAB"], ROOM_VOCAB);
     assert_eq!(spec["ENTITY_VOCAB"], ENTITY_VOCAB);
     let spaces = spec["spaces"].as_object().unwrap();

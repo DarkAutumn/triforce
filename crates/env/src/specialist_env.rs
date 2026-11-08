@@ -18,7 +18,7 @@ use crate::end_conditions::{
     EndConditions, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, StepView, classify_ending,
 };
 use crate::error::EnvError;
-use crate::objective::{Attached, attach};
+use crate::objective::{Attached, attach, needs_wavefront};
 use crate::observation::{Observation, ObservationBuilder};
 use crate::rewards::{SUCCESS, StepRewards, apply_terminal_rewards};
 use crate::start_states::{
@@ -255,7 +255,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             config.no_damage_steps.map(|n| n as u32),
         );
         Ok(SpecialistEnv {
-            builder: ObservationBuilder::new(config.obs.objective),
+            builder: ObservationBuilder::new(config.obs.objective, config.obs.target),
             specialist: Arc::from(config.name.as_str()),
             config,
             data,
@@ -420,7 +420,13 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     ) -> Result<(Observation, StepInfo), EnvError> {
         let mut gc = GameCompletion::new(self.data.map.clone(), &self.route, self.route_step)
             .map_err(|e| EnvError::Config(crate::ConfigError(e)))?;
-        let attached = attach(&mut gc, None, state, &self.config.reward);
+        let attached = attach(
+            &mut gc,
+            None,
+            state,
+            &self.config.reward,
+            needs_wavefront(&self.config),
+        );
         self.objectives = Some(gc);
         self.critic.clear();
         self.end_conditions.clear();
@@ -436,9 +442,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.reward_total = 0.0;
         self.episode_rewards.clear();
         self.done = false;
-        let obs = self
-            .builder
-            .reset(state, &attached.objective, self.session.mask());
+        let obs = self.builder.reset(
+            state,
+            &attached.objective,
+            attached.wavefront.as_deref(),
+            self.session.mask(),
+        );
         self.attached = Some(attached);
         let mut info = self.info(state);
         info.start_state = Some(name.clone());
@@ -473,6 +482,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             Some(&change.previous),
             &state,
             &self.config.reward,
+            needs_wavefront(&self.config),
         );
         self.linger.update(
             &LingerState::of(&change.previous, &prev.objective),
@@ -583,9 +593,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             }
             None => None,
         };
-        let obs = self
-            .builder
-            .build(&change, &curr.objective, self.session.mask());
+        let obs = self.builder.build(
+            &change,
+            &curr.objective,
+            curr.wavefront.as_deref(),
+            self.session.mask(),
+        );
         self.attached = Some(curr);
         let mut info = self.info(&state);
         info.frames = change.frames;
