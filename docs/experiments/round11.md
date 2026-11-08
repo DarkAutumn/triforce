@@ -45,3 +45,10 @@ re-evals below). Re-evaluated with format 2 at 60 per state: all 11 promoted mod
 health change -0.51 (promoted goriya 79.0%, -0.83). The round resumed from wallmaster (wallmaster,
 boss-aquamentus, ow-leever-peahat, ow-moblin, d2-rope, moldorm), GUI log folder `logs/261108_021_r44-fresh/`.
 `zelda-map.py --run-id r44-fresh` shows the r44 runs where they exist, else the promoted models.
+
+**Stopped for good (Lee, Nov 8).** Lee stopped the round during wallmaster (interrupted at 1.0M steps): the next
+full retrain comes after Dodongo is solved, on a new d2-first route (backlog.md "Later: the d2-first route").
+Finished r44-fresh runs, kept as evidence and not promoted: ow-start (early stop, 180k), ow-octorok (early stop at
+0.99, 6.65M), ow-zora, stalfos-keese-gel and goriya (8M each); their format-2 evals are in their run dirs. The
+promoted team is unchanged (round 10's, plus the interim moldorm = d2-rope r40-obs-s41). No chains were run for
+the r44 models.
