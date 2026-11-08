@@ -11,19 +11,17 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   env and pool logic is Rust (`crates/zelda`, `crates/env`, `crates/pool`), and Python drives it through
   `triforce._native` (`crates/triforce-py`). stable-retro and the Python game stack are gone. All start states
   and trajectories were regenerated on zcore (`round8.md`, `round9.md`).
-- **Round 11 (`round11.md`) is the current round (Nov 8):** power-on RAM $00 (state file v6), every state and
-  trajectory regenerated, and a fresh retrain `r44-fresh` (8M steps, `--parallel 16`). Before that, round 10:
-  `backlog.md` experiments. ow-start r38b-rebalance is promoted (swordless departures fixed). Training/eval end
-  `no-damage` after 600 actions without damage either way, and `play-zelda.py --stall-steps` handles stalled games
-  (§6). Nov 7: zcore made 1.6× faster at the env level under an exact accuracy gate, and `--parallel 16` measured
-  as the training setting (§7, `docs/performance.md`). Heart series done (§8–§10, Nov 8): **observation schema 2**
-  (the `target` block, `obs.target`) on every route family, plus `reward.item_targets` in the dungeon families
-  (d2-rope, goriya, stalfos-keese-gel, wallmaster, boss-aquamentus); hearts healed per chain run 0.45–0.59 →
-  1.2–2.0, Dodongo arrivals per 120: D2 44 → 74, post-D1 12/18 → 43/61, full routes 3/6 → 27/46. Schema-1
-  checkpoints still load; `--load` with `obs.target` widens them. Lee's order (Nov 8): **I.** finish the retrain
-  with the Moldorm room 2:0x3e split out of d2-rope into its own specialist; **II.** then train Dodongo's kill with
-  a bomb-stun and sword hits (`backlog.md` "Next: beat the Dungeon 2 boss"). Open items need Lee's decisions
-  (`backlog.md` "Where it stands").
+- **Round 11 (`round11.md`, Nov 8):** power-on RAM $00 (state file v6), every state and trajectory regenerated,
+  the Moldorm room split into its own specialist, per-room-visit evaluation (format 2, 100 episodes per start
+  state) with `zelda-map.py`. The fresh retrain `r44-fresh` was stopped by Lee; its finished runs are kept, not
+  promoted. Round 10 before it: ow-start r38b-rebalance (swordless departures fixed); `no-damage` endings after
+  600 actions without damage; zcore 1.6× faster under an exact accuracy gate; `--parallel 16`; the heart series
+  (§8–§10): **observation schema 2** (the `target` block, `obs.target`) on every route family plus
+  `reward.item_targets` in the dungeon families; Dodongo arrivals per 120: D2 44 → 74, post-D1 12/18 → 43/61,
+  full routes 3/6 → 27/46. Schema-1 checkpoints still load; `--load` with `obs.target` widens them.
+- **Now (Lee, Nov 8): beat Dodongo only** (round 12, `backlog.md` "Now"): bomb next to him so the smoke stuns
+  him, then the sword; infinite bombs; the curriculum over his movement patterns matters most. Then, in order:
+  Lee's training improvements, the d2-first route and a full retrain on it (`backlog.md` "Later").
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each

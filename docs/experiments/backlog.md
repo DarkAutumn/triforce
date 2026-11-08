@@ -60,14 +60,16 @@ Recommend a setting (per specialist if it differs).
   don't depend on the env count (ow-leever-peahat, ow-moblin; 4–24 envs, 3 seeds, 30/30 reached), so wall time
   is lowest at 12–16. Same for every specialist measured; no per-specialist setting needed.
 
-### Now: power-on RAM $00, regeneration and a fresh retrain (Lee, Nov 8; round 11)
+### Done (stopped): power-on RAM $00, regeneration and a fresh retrain (Lee, Nov 8; round 11)
 
 - [x] $00 fill, state version 6, states and trajectories regenerated (round 11 §1).
-- [ ] Fresh retrain `r44-fresh` (8M steps, `--parallel 16`, GUI logs). Lee (Nov 8): keep the finished ow-start,
-  ow-octorok and ow-zora runs; **split the Moldorm room 2:0x3e out of d2-rope into its own specialist**
-  (`moldorm`), then continue the round with the rest. Then chains, compare with the old team, promote.
+- [x] Moldorm room 2:0x3e split out of d2-rope into its own specialist (`moldorm`).
+- [x] Per-room-visit evaluation (format 2, 100 episodes per start state) and `zelda-map.py`.
+- [x] Fresh retrain `r44-fresh` **stopped by Lee** during wallmaster: the next full retrain comes after Dodongo,
+  on the d2-first route below. Finished runs (ow-start, ow-octorok, ow-zora, stalfos-keese-gel, goriya) kept,
+  not promoted.
 
-### Next: beat the Dungeon 2 boss, Dodongo (Lee, Nov 8)
+### Now: beat the Dungeon 2 boss, Dodongo (Lee, Nov 8)
 
 Two ways to kill Dodongo: (1) make him swallow two bombs (works, wasteful); (2) **set a bomb in his path but just
 next to him, so he doesn't eat it and the smoke stuns him, then hit him with the sword while stunned (much
@@ -76,7 +78,16 @@ better)**. Train a model for (2).
 - Bombs are not a limit: the model gets infinite bombs, in training and in the room.
 - A whole task of its own: expect plenty of experimentation and trial and error.
 - **The curriculum matters most:** it has to show how to do it against Dodongo's various movement patterns.
+- Mechanics (ASM-backed): `target/dodongo/README.md` (gitignored notes) and round 12.
 
+### Later, in order (Lee, Nov 8): training improvements, then the d2-first route
+
+1. Prove Dodongo can be beaten (above).
+2. Lee's ideas for improving training (to come).
+3. **The d2-first route**, then a full retrain on it. Start → room 0x58, go east → at 0x5d go north → to 0x3c
+   (Dungeon 2). Never take the fairy (too early in the run). After beating Dungeon 2: north to 0x2c, bomb the
+   secret rock for the heart, then 0x1c, west to 0x1a, north one screen for the white sword, back south, east to
+   0x17, then Dungeon 1, played with the white sword. Not started.
 ### Done (report to Lee): heart experiments (Lee, Nov 7; a series)
 
 Goal: Link picks up dropped items, hearts above all, far more than the current models do. Lee's original models
