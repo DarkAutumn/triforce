@@ -695,3 +695,18 @@ entry below and `crates/zcore/UPSTREAM.md`.
 - **Evidence:** round 11 §1: the old goldens diverge only in RAM/CHR at frame 0; the scripted movies re-record
   byte-identical; the old team on the regenerated states reproduces its chain results exactly (74/43/61/27/46 of
   120).
+
+## 2026-11-08 — The d2-first route; route-order triforces, heart waypoints, three new overworld families
+
+- **What:** `routes.yaml` gains `d2first` (Lee): wood sword, east along row 5 to Dungeon 2 at 3 hearts, Dodongo
+  and the D2 triforce, the 0x2c take-any cave's heart container (bomb the rock wall), the white sword at 0x0a, then
+  Dungeon 1 with the boomerang through the D1 triforce, where the route ends. Objectives take a route's triforce
+  steps in route order (milestone1 is unchanged: its only triforce step is D1's). `waypoint: heart` makes a cave's
+  heart container a stop; leaving its room without it, or taking the potion, is `missed` (no correct exit; a chain
+  run fails). game.yaml gains `bomb_secret` (the rock wall's tiles are the cave entrance) and `treasure_tile` (a
+  cave ware off the middle). 0x2c is `requires_bombs`. New families `ow-lynel` (0x0a and its cave), `ow-tektite`
+  (0x1a) and `ow-boulder` (0x17–0x19), not trained yet.
+- **Why:** Lee (Nov 8): a route that takes Dungeon 2 first, never the fairy, and reaches Dungeon 1 with the white
+  sword. The white sword needs 5 heart containers, hence the required heart; Lynels, Tektites and boulders need
+  their own skills.
+- **Evidence:** `docs/routes/d2first.md` (route table, emulator checks of every new room, the 0x2c secret, states).

@@ -3,7 +3,7 @@
 //! Key-aware Dijkstra over (room, keys, collected key rooms) with every shortest path, plus per-route successor
 //! tables used to break ties toward the route.  Iteration orders follow the YAML files, as the Python dicts do.
 
-use crate::enums::MapLocation;
+use crate::enums::{MapLocation, Tile};
 use indexmap::IndexMap;
 use serde_yaml_ng::Value;
 use std::cmp::Reverse;
@@ -52,9 +52,21 @@ pub struct GameRoom {
     pub treasure: Option<String>,
     pub bomb_walls: Vec<String>,
     pub specialist: Option<String>,
-    /// `requires_bombs: true`: the room can't be beaten without a bomb (Dodongo), so a specialist acting in it is
-    /// never left with none (`env::bombs::BombLedger`).
+    /// `requires_bombs: true`: the room can't be beaten without a bomb (Dodongo, the 0x2c secret), so a specialist
+    /// acting in it is never left with none (`env::bombs::BombLedger`).
     pub requires_bombs: bool,
+    /// `bomb_secret: [col, row]`: the top-left tile of an overworld rock wall hiding the room's cave (2x2 tiles,
+    /// Z_04 UpdateRockWall).  A bomb blast there opens the cave; walking into the opening enters it.
+    pub bomb_secret: Option<Tile>,
+    /// `treasure_tile: [col, row]`: where a cave's treasure lies when it isn't the middle ware (the 0x2c cave offers
+    /// a potion on the left and the heart container on the right).
+    pub treasure_tile: Option<Tile>,
+}
+
+/// A `[col, row]` game.yaml tile.
+fn tile(v: Option<&Value>) -> Option<Tile> {
+    let s = v?.as_sequence()?;
+    (s.len() == 2).then(|| (s[0].as_i64().unwrap_or(0) as i32, s[1].as_i64().unwrap_or(0) as i32))
 }
 
 impl GameRoom {
@@ -305,6 +317,8 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
             bomb_walls,
             specialist: as_string(get(entry, "specialist")),
             requires_bombs: get(entry, "requires_bombs").and_then(Value::as_bool).unwrap_or(false),
+            bomb_secret: tile(get(entry, "bomb_secret")),
+            treasure_tile: tile(get(entry, "treasure_tile")),
         };
         rooms.insert(loc, room);
     }
@@ -724,11 +738,44 @@ mod tests {
     }
 
     #[test]
-    fn only_dodongo_requires_bombs() {
+    fn dodongo_and_the_0x2c_secret_require_bombs() {
         let map = GameMap::builtin();
         let tagged: Vec<_> = map.rooms().values().filter(|r| r.requires_bombs).map(|r| r.location).collect();
-        assert_eq!(tagged, vec![loc(2, 0x0e)]);
+        assert_eq!(tagged, vec![loc(0, 0x2c), loc(2, 0x0e)]);
         assert!(!map.requires_bombs(loc(9, 0x7f)));
+        let room = map.get(loc(0, 0x2c)).unwrap();
+        assert_eq!(room.bomb_secret, Some((18, 12)));
+        assert_eq!(room.exits["cave"].destination, L::new(0, 0x2c, true));
+        let cave = map.get(L::new(0, 0x2c, true)).unwrap();
+        assert_eq!((cave.treasure.as_deref(), cave.treasure_tile), (Some("heart-container"), Some((19, 11))));
+        assert_eq!(map.get(START).unwrap().bomb_secret, None);
+    }
+
+    /// d2first: game start, D2 (its triforce), the 0x2c heart cave (a `heart` waypoint after D2, before D1), the
+    /// white sword at 0x0a, D1 ending on its triforce.  Every step leaves through an exit game.yaml has (caves and
+    /// triforces aside), into the next step's room.
+    #[test]
+    fn d2first_route_connects() {
+        let map = GameMap::builtin();
+        let steps = &map.routes["d2first"];
+        assert_eq!((steps[0].entry.as_str(), steps[0].location()), ("start", START));
+        let last = steps.last().unwrap();
+        assert_eq!((last.location(), last.exit.as_str()), (D1_TRIFORCE, "triforce"));
+        let triforces: Vec<u8> = steps.iter().filter(|s| s.exit == "triforce").map(|s| s.level).collect();
+        assert_eq!(triforces, [2, 1]);
+        for pair in steps.windows(2) {
+            let (step, next) = (&pair[0], &pair[1]);
+            if step.exit == "triforce" {
+                assert_eq!((next.location(), next.entry.as_str()), (loc(0, 0x3c), "cave"));
+                continue;
+            }
+            let exit = &map.get(step.location()).unwrap().exits[&step.exit];
+            assert_eq!(exit.destination, next.location(), "{step:?} -> {next:?}");
+        }
+        let hearts: Vec<_> = steps.iter().filter(|s| s.waypoint.is_some()).collect();
+        assert_eq!(hearts.len(), 1);
+        assert_eq!((hearts[0].location(), hearts[0].waypoint.as_deref()), (L::new(0, 0x2c, true), Some("heart")));
+        assert!(!steps.iter().any(|s| s.location() == loc(0, 0x39) || s.location() == loc(2, 0x4f)));
     }
 
     #[test]
@@ -796,6 +843,7 @@ mod tests {
         };
         assert_eq!(set(&locs("triforce")), set(&[D1_TRIFORCE, loc(2, 0x0d)]));
         assert_eq!(locs("wood-sword"), vec![L::new(0, 0x77, true)]);
+        assert_eq!(locs("white-sword"), vec![L::new(0, 0x0a, true)]);
         assert_eq!(locs("boomerang"), vec![loc(1, 0x44)]);
         assert!(locs("golden-banana").is_empty());
     }

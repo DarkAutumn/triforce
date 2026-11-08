@@ -4,7 +4,9 @@
 //! transitions.  The env owns no models: [`ChainEnv::reset`] and [`ChainEnv::step`] return
 //! [`ChainStatus::Act`] with the acting specialist and its observation, and the caller supplies the action
 //! (batched inference lives above this crate).  A run ends with a [`RunResult`]: success on entering the route's
-//! terminal room (a `milestone` record with specialist `-`), failure on death, a wrong exit into an untagged
+//! terminal room, or on taking the triforce of a route that ends with one (d2first; either way a `milestone` record
+//! with specialist `-`), failure on death, a missed `heart` waypoint (`missed`: d2first's 0x2c left without the heart
+//! container, or the potion taken), a wrong exit into an untagged
 //! room, the per-room budget (`no_progress_steps` quiet actions, else `max(max_steps, 2000)` steps), the opt-in
 //! stall budget (`stall_steps`: twice that many actions without damage dealt or taken) or the run cap; error on
 //! an unknown/untagged room the route needed, a masked action, a missing state or [`ChainEnv::fail`] (e.g. no
@@ -35,17 +37,20 @@ pub const DEFAULT_MAX_STEPS: u64 = 50_000;
 /// A chain room gets at least this many steps before it counts as stuck.
 pub const MIN_ROOM_STEPS: u64 = 2000;
 
-/// Where a route starts and which room ends it.
+/// Where a route starts and how it ends.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Route {
     pub name: String,
     pub start_state: String,
-    pub terminal: MapLocation,
+    /// Entering this room ends the run (milestone1: Dodongo's room); None for a route ending on a triforce.
+    pub terminal: Option<MapLocation>,
+    /// Taking this level's triforce ends the run (a route whose last step exits `triforce`, without `stop_at`).
+    pub final_triforce: Option<u8>,
 }
 
 impl Route {
-    /// A routes.yaml route; `stop_at` replaces the terminal room and `start_from` (a state such as `0_37c_2`) the
-    /// game start, for partial chain evals.
+    /// A routes.yaml route; `stop_at` replaces the route's end with a room to enter and `start_from` (a state such
+    /// as `0_37c_2`) the game start, for partial chain evals.
     pub fn load(
         map: &GameMap,
         name: &str,
@@ -64,16 +69,25 @@ impl Route {
                 "Route '{name}' must begin at the game start (entry: start)"
             ));
         }
-        let last = steps.iter().rev().find(|s| s.exit == "terminal");
-        if stop_at.is_none() && last.is_none() {
-            return Err(format!("Route '{name}' has no terminal room"));
-        }
-        let last = last.unwrap_or(&steps[steps.len() - 1]);
-        Ok(Route {
+        let route = |terminal, final_triforce| Route {
             name: name.to_owned(),
             start_state: start_from.unwrap_or("start").to_owned(),
-            terminal: stop_at.unwrap_or(last.location()),
-        })
+            terminal,
+            final_triforce,
+        };
+        if stop_at.is_some() {
+            return Ok(route(stop_at, None));
+        }
+        if let Some(last) = steps.iter().rev().find(|s| s.exit == "terminal") {
+            return Ok(route(Some(last.location()), None));
+        }
+        let last = &steps[steps.len() - 1];
+        if last.exit == "triforce" {
+            return Ok(route(None, Some(last.level)));
+        }
+        Err(format!(
+            "Route '{name}' has no terminal room and doesn't end on a triforce"
+        ))
     }
 }
 
@@ -95,7 +109,7 @@ pub struct RoomRecord {
     /// Dodongo arrival's key count).
     pub keys_in: i32,
     pub keys_out: i32,
-    /// in-progress, exit-correct, exit-wrong, death, stuck, milestone, error.
+    /// in-progress, exit-correct, exit-wrong, missed (a route `heart` waypoint missed), death, stuck, milestone, error.
     pub outcome: String,
     pub hearts_dropped: u32,
     pub hearts_taken: u32,
@@ -367,6 +381,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             state_entry(&self.route.start_state),
             rng,
             Some(&self.route.name),
+            |level| state.has_triforce(level),
         );
         let mut gc = match GameCompletion::new(self.data.map.clone(), &route, step) {
             Ok(gc) => gc,
@@ -441,6 +456,29 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             let result = self.result.as_mut().unwrap();
             result.result = "failure".into();
             result.reason = format!("died in {}", describe(state.full_location()));
+            return Ok(ChainStatus::Done(result.clone()));
+        }
+        if let Some(reason) = self.objectives.as_ref().and_then(|o| o.missed()).map(str::to_owned) {
+            self.result.as_mut().unwrap().rooms.last_mut().unwrap().outcome = "missed".into();
+            self.finish_record(&state);
+            let result = self.result.as_mut().unwrap();
+            result.result = "failure".into();
+            result.reason = reason;
+            return Ok(ChainStatus::Done(result.clone()));
+        }
+        if let Some(level) = self.route.final_triforce
+            && state.has_triforce(level)
+        {
+            self.result.as_mut().unwrap().rooms.last_mut().unwrap().outcome = "exit-correct".into();
+            self.finish_record(&state);
+            let result = self.result.as_mut().unwrap();
+            result.result = "success".into();
+            result.reason = format!("took the level {level} triforce");
+            let index = result.rooms.len();
+            let location = state.full_location();
+            result
+                .rooms
+                .push(RoomRecord::new(index, location, "-", &state, "milestone"));
             return Ok(ChainStatus::Done(result.clone()));
         }
         Ok(self.advance())
@@ -534,7 +572,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 self.finish_record(&state);
             }
             let result = self.result.as_mut().unwrap();
-            if location == self.route.terminal {
+            if Some(location) == self.route.terminal {
                 result.result = "success".into();
                 result.reason = format!("entered {}", describe(location));
                 let index = result.rooms.len();
@@ -736,7 +774,8 @@ mod tests {
     fn routes_load() {
         let map = GameMap::builtin();
         let r = Route::load(&map, "milestone1", None, None).unwrap();
-        assert_eq!(r.terminal, MapLocation::new(2, 0x0e, false));
+        assert_eq!(r.terminal, Some(MapLocation::new(2, 0x0e, false)));
+        assert_eq!(r.final_triforce, None);
         assert_eq!(r.start_state, "start");
         let r = Route::load(
             &map,
@@ -745,9 +784,15 @@ mod tests {
             Some("0_37c_2"),
         )
         .unwrap();
-        assert_eq!(r.terminal, MapLocation::new(1, 0x44, false));
+        assert_eq!(r.terminal, Some(MapLocation::new(1, 0x44, false)));
         assert_eq!(r.start_state, "0_37c_2");
         assert!(Route::load(&map, "nowhere", None, None).is_err());
+        // d2first ends on taking the Dungeon 1 triforce (no terminal room); stop_at still ends it at a room.
+        let r = Route::load(&map, "d2first", None, None).unwrap();
+        assert_eq!((r.terminal, r.final_triforce), (None, Some(1)));
+        let stop = MapLocation::new(2, 0x0e, false);
+        let r = Route::load(&map, "d2first", Some(stop), None).unwrap();
+        assert_eq!((r.terminal, r.final_triforce), (Some(stop), None));
         assert_eq!(
             describe(MapLocation::new(0, 0x77, true)),
             "(level 0, room 0x77, cave)"

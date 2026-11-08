@@ -11,6 +11,7 @@ from triforce import _native as native
 from triforce.specialist import list_specialists
 
 FAIRY = 'milestone1-fairy'
+D2FIRST = 'd2first'
 
 
 def step_key(step):
@@ -24,7 +25,7 @@ def find(route, room, entry):
 
 
 def test_routes_and_families():
-    assert {'milestone1', FAIRY} <= set(native.routes())
+    assert {'milestone1', FAIRY, D2FIRST} <= set(native.routes())
     assert sorted(native.families()) == list_specialists()
 
 
@@ -36,7 +37,7 @@ def test_milestone_route_runs_from_the_start_to_dodongo():
     assert (last['level'], last['room']) == (2, 0x0e)
 
 
-@pytest.mark.parametrize('route', ['milestone1', FAIRY])
+@pytest.mark.parametrize('route', ['milestone1', FAIRY, D2FIRST])
 def test_every_route_room_is_in_its_family(route):
     families = native.families()
     for step in native.route_steps(route):
@@ -64,6 +65,21 @@ def test_spliced_fairy_route_keeps_its_base_outside_the_replaced_steps():
     tail = len(main) - rejoin
     assert fairy[:first] == main[:first] and fairy[-tail:] == main[rejoin:]
     assert fairy[first]['exit'] == 'S' and any(s['waypoint'] == 'fairy' for s in fairy[first:-tail])
+
+
+def test_d2first_takes_d2_then_the_heart_and_white_sword_then_ends_on_the_d1_triforce():
+    steps = native.route_steps(D2FIRST)
+    rooms = [(s['level'], s['room'], s['in_cave']) for s in steps]
+    assert rooms[0] == (0, 0x77, False) and steps[0]['entry'] == 'start'
+    assert [(s['level'], s['room']) for s in steps if s['exit'] == 'triforce'] == [(2, 0x0d), (1, 0x36)]
+    assert steps[-1]['exit'] == 'triforce' and rooms[-1] == (1, 0x36, False)
+    order = [rooms.index(r) for r in [(2, 0x0e, False), (0, 0x2c, True), (0, 0x0a, True), (1, 0x44, False)]]
+    assert order == sorted(order)
+    assert next(s for s in steps if s['in_cave'] and s['room'] == 0x2c)['waypoint'] == 'heart'
+    assert (0, 0x39, False) not in rooms and (2, 0x4f, False) not in rooms     # never the fairy; no magic boomerang
+    rooms_info = native.game_rooms()
+    assert rooms_info[(0, 0x2c, False)]['requires_bombs'] and not rooms_info[(0, 0x2b, False)]['requires_bombs']
+    assert rooms_info[(0, 0x0a, True)]['treasure'] == 'white-sword'
 
 
 def test_alternates_replace_milestone_rooms():

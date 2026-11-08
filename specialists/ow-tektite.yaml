@@ -1,0 +1,17 @@
+name: ow-tektite
+rooms: ['(0, 0x1a)']
+start_states: ['0_1a*_[0-9]*']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true}
+obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as ow-moblin)
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chain arrives with partial hearts (round 5)
+items: {bombs: false}
+one_room: true                          # round 5: per-room episodes
+max_steps: 600
+warm_start: null
+notes: >-
+  Tektite rooms (Lee, Nov 8: their jump patterns are their own). Not trained yet. d2first: 0x1a (Red Tektite x6
+  and a Zora), crossed twice: from E to N (to the white sword at 0x0a), then from N to W. 0x2c (Red Tektite x4)
+  stays in ow-leever-peahat for milestone1 (docs/routes/d2first.md, open questions). States: the d2first chains
+  (`0_1ae_1x`, `0_1an_1x`).

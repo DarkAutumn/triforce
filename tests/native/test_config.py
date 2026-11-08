@@ -10,7 +10,7 @@ from triforce import _native as native
 def test_load_and_fields():
     config = native.SpecialistConfig.load('ow-start')
     assert config.name == 'ow-start'
-    assert config.rooms == [(0, 0x77, False), (0, 0x77, True), (0, 0x39, False)]
+    assert config.rooms == [(0, 0x77, False), (0, 0x77, True), (0, 0x39, False), (0, 0x1c, False), (0, 0x1b, False)]
     assert config.success == ['exit-correct']
     assert config.max_steps == 1000
     assert config.reward.pbrs is True and config.items.bombs is False

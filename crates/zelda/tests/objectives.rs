@@ -14,7 +14,7 @@ use zelda::objectives::{
     CAVE_TREASURE_TILE, GameCompletion, Objective, ObjectiveKind, exit_is_correct_at, tiles_in_span,
 };
 use zelda::room::Target;
-use zelda::room_entry::ROOM_FLAGS_UW;
+use zelda::room_entry::{ROOM_FLAGS_OW, ROOM_FLAGS_UW};
 use zelda::room_state::room_flags;
 use zelda::tables::{self, RAM_SIZE};
 use zelda::{Direction, GameMap, LoadOptions, MapLocation, Session, Var};
@@ -314,4 +314,131 @@ fn sword_cave_wants_the_sword_then_the_exit() {
     assert_eq!(objective.kind, ObjectiveKind::Move);
     assert!(!objective.next_rooms.iter().any(|r| r.in_cave));
     assert_targets_are_correct_exits(&map, &armed, &objective);
+}
+
+fn d2first(map: &Arc<GameMap>) -> GameCompletion {
+    GameCompletion::new(map.clone(), "d2first", None).unwrap()
+}
+
+/// Link holds only the Dungeon 2 triforce, with `hearts` heart containers (full).
+fn after_d2(ram: &mut [u8; RAM_SIZE], hearts: u8) {
+    set(ram, Var::Triforce, 0b10);
+    set(ram, Var::HeartsAndContainers, ((hearts - 1) << 4) | (hearts - 1));
+}
+
+/// d2first takes the route's triforces in route order: Dungeon 2's first, though Dungeon 1's is closer.
+#[test]
+fn d2first_takes_the_dungeon_2_triforce_first() {
+    let Some(images) = images(&["0_3cs_0"]) else {
+        return;
+    };
+    let map = Arc::new(GameMap::builtin());
+    let mut ram = images[0].clone();
+    set(&mut ram, Var::Triforce, 0);
+    let state = view(&map, &ram, 0);
+    let objective = d2first(&map).objectives(None, &state);
+    assert_eq!(objective.kind, ObjectiveKind::Cave);
+    assert_eq!(
+        objective.next_rooms.iter().copied().collect::<Vec<_>>(),
+        [loc(2, 0x7d)]
+    );
+    // milestone1 at the same point heads for Dungeon 1: not into the D2 stairs.
+    let objective = completion(&map).objectives(None, &state);
+    assert_ne!(objective.kind, ObjectiveKind::Cave);
+}
+
+/// After Dungeon 2: the bomb_secret rock wall of 0x2c is the cave entrance until the heart container is taken; the
+/// take-any cave points at the heart (right ware); then the white sword (5 hearts) leads north, never back into 0x2c's
+/// cave.
+#[test]
+fn d2first_heart_cave_then_white_sword() {
+    let Some(images) = images(&["0_2cw_0"]) else {
+        return;
+    };
+    let map = Arc::new(GameMap::builtin());
+    let cave = MapLocation::new(0, 0x2c, true);
+    let mut ram = images[0].clone();
+    clear_objects(&mut ram);
+    after_d2(&mut ram, 4);
+    let state = view(&map, &ram, 0);
+    assert_eq!(state.room().cave_tile, None, "the cave is hidden behind the rock wall");
+    let mut gc = d2first(&map);
+    let objective = gc.objectives(None, &state);
+    assert_eq!(objective.kind, ObjectiveKind::Cave);
+    assert_eq!(objective.next_rooms.iter().copied().collect::<Vec<_>>(), [cave]);
+    let secret: Vec<Target> = [(18, 12), (19, 12), (18, 13), (19, 13)]
+        .into_iter()
+        .map(Target::Tile)
+        .collect();
+    assert!(secret.iter().all(|t| objective.targets.contains(t)), "{:?}", objective.targets);
+
+    // Inside the cave (game mode $0B): the heart container on the right, not the middle ware.
+    let mut inside = ram.clone();
+    inside[0x12] = 0x0B;
+    set(&mut inside, Var::TreasureFlag, 0xFF);
+    let inside = view(&map, &inside, 0);
+    assert!(inside.in_cave());
+    let objective = gc.objectives(Some(&state), &inside);
+    assert_eq!(objective.kind, ObjectiveKind::Treasure);
+    assert_eq!(
+        objective.targets.iter().copied().collect::<Vec<_>>(),
+        [Target::Tile((19, 11))]
+    );
+
+    // Heart taken (item flag set, 5 containers): the white sword is next, north through 0x1c.
+    let mut taken = ram.clone();
+    after_d2(&mut taken, 5);
+    taken[ROOM_FLAGS_OW as usize + 0x2c] |= 0x10;
+    let taken = view(&map, &taken, 0);
+    let objective = gc.objectives(Some(&inside), &taken);
+    assert_eq!(objective.kind, ObjectiveKind::Move);
+    assert_eq!(
+        objective.next_rooms.iter().copied().collect::<Vec<_>>(),
+        [loc(0, 0x1c)]
+    );
+    assert_targets_are_correct_exits(&map, &taken, &objective);
+}
+
+/// Leaving 0x2c (not into its cave) before the heart container, or taking the potion instead, misses the d2first
+/// heart: no exit is correct any more (the chain ends the run on `missed`).
+#[test]
+fn d2first_missed_heart_has_no_correct_exit() {
+    let Some(images) = images(&["0_2cw_0"]) else {
+        return;
+    };
+    let map = Arc::new(GameMap::builtin());
+    let mut ram = images[0].clone();
+    clear_objects(&mut ram);
+    after_d2(&mut ram, 4);
+    let at_2c = view(&map, &ram, 0);
+    let mut north = ram.clone();
+    north[0xEB] = 0x1c;
+    let north = view(&map, &north, 0);
+    assert_eq!(north.full_location(), loc(0, 0x1c));
+
+    let mut gc = d2first(&map);
+    gc.objectives(None, &at_2c);
+    assert_eq!(gc.missed(), None);
+    let objective = gc.objectives(Some(&at_2c), &north);
+    assert!(gc.missed().is_some_and(|m| m.contains("without the heart container")));
+    assert!(objective.next_rooms.is_empty());
+
+    // The potion: the cave's item flag is set but the heart containers stayed at 4.
+    let mut inside = ram.clone();
+    inside[0x12] = 0x0B;
+    let inside = view(&map, &inside, 0);
+    let mut potion = inside.ram().clone();
+    potion[ROOM_FLAGS_OW as usize + 0x2c] |= 0x10;
+    let potion = view(&map, &potion, 0);
+    let mut gc = d2first(&map);
+    gc.objectives(None, &inside);
+    let objective = gc.objectives(Some(&inside), &potion);
+    assert!(gc.missed().is_some_and(|m| m.contains("not the heart container")));
+    assert!(objective.next_rooms.is_empty());
+
+    // milestone1 crosses 0x2c without the waypoint: nothing to miss.
+    let mut gc = completion(&map);
+    gc.objectives(None, &at_2c);
+    gc.objectives(Some(&at_2c), &north);
+    assert_eq!(gc.missed(), None);
 }
