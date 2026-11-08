@@ -5,8 +5,9 @@
 //! kind as they appear (a new slot, or a slot whose lifetime timer went up, as `HeartTracker` counts hearts; items
 //! on the floor when a visit starts count too); pickups are `Change.items_gained`; hits are steps that lost
 //! health; keys are rises of the key count; bombs are what the env's bomb ledger reports per step (placements, and
-//! cheated bombs placed: `env::bombs`). The exit is the direction Link left in (`n`/`s`/`e`/`w`, `cave` for
-//! stairs, caves and dungeon entrances), or how the episode ended in the room ([`VisitEnd`]).
+//! cheated bombs placed: `env::bombs`), boss stuns/eats what the env's `env::critic::BossTransitions` reports (Dodongo
+//! stunned by a bomb's smoke, or swallowing a bomb). The exit is the direction Link left in (`n`/`s`/`e`/`w`, `cave`
+//! for stairs, caves and dungeon entrances), or how the episode ended in the room ([`VisitEnd`]).
 
 use crate::change::Change;
 use crate::enums::{MapLocation, item};
@@ -70,6 +71,9 @@ pub struct RoomVisit {
     /// Bombs placed, and cheated bombs placed.
     pub bombs_used: u32,
     pub bombs_cheated: u32,
+    /// Dodongo stuns (a bomb's smoke) and bombs he swallowed.
+    pub boss_stuns: u32,
+    pub boss_eats: u32,
     pub exit: &'static str,
 }
 
@@ -112,6 +116,9 @@ pub struct VisitStep<'a> {
     /// Bombs placed this step, and cheated bombs placed (set by the env; 0 from [`VisitStep::of`]).
     pub bombs_used: u32,
     pub bombs_cheated: u32,
+    /// Dodongo stuns and swallowed bombs this step (set by the env; 0 from [`VisitStep::of`]).
+    pub boss_stuns: u32,
+    pub boss_eats: u32,
 }
 
 impl VisitStep<'_> {
@@ -124,6 +131,8 @@ impl VisitStep<'_> {
             items_gained: &change.items_gained,
             bombs_used: 0,
             bombs_cheated: 0,
+            boss_stuns: 0,
+            boss_eats: 0,
         }
     }
 }
@@ -175,6 +184,8 @@ impl VisitTracker {
         visit.hits_dealt += step.hits_dealt;
         visit.bombs_used += step.bombs_used;
         visit.bombs_cheated += step.bombs_cheated;
+        visit.boss_stuns += step.boss_stuns;
+        visit.boss_eats += step.boss_eats;
         for &id in step.items_gained {
             if let Some(kind) = kind_index(id) {
                 visit.pickups[kind] += 1;
@@ -225,6 +236,8 @@ impl VisitTracker {
             keys_gained: 0,
             bombs_used: 0,
             bombs_cheated: 0,
+            boss_stuns: 0,
+            boss_eats: 0,
             exit: EXIT_OTHER,
         });
         self.floor.clone_from(&state.items);
@@ -282,6 +295,8 @@ mod tests {
             items_gained,
             bombs_used: 0,
             bombs_cheated: 0,
+            boss_stuns: 0,
+            boss_eats: 0,
         }
     }
 

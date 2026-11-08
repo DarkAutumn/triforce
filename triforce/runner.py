@@ -90,6 +90,10 @@ class RoomRecord:
     # crates/env/src/bombs.rs).  0 in older records.
     bombs_used: int = 0
     bombs_cheated: int = 0
+    # Dodongo stuns (a bomb's smoke) and bombs he swallowed during the visit (crates/env/src/critic.rs
+    # BossTransitions).  0 in older records.
+    boss_stuns: int = 0
+    boss_eats: int = 0
 
 
 @dataclass

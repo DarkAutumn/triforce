@@ -130,6 +130,8 @@ fn chain_summary_counts_failures_by_room() {
             no_damage_max: 0,
             bombs_used: cheated,
             bombs_cheated: cheated,
+            boss_stuns: 0,
+            boss_eats: 0,
         }],
     };
     let s = chain_summary(&[

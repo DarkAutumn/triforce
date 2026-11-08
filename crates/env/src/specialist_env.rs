@@ -8,12 +8,13 @@
 //! Info contract: every step carries `frames`, `interrupt`, `action`, `rewards` (this step's terms), `room`,
 //! `health`, `max_health`, `steps`, `total_frames`, `specialist`, `route`; the terminal step adds
 //! [`TerminalInfo`] (`ending`, `outcome`, `start_state`, `start_health`, `hearts`, `linger`, `linger_room`,
-//! `blocks`, `bombs` (`used`, `cheated`: [`crate::bombs`]), `bootstrap_truncation`, `curriculum`, plus
-//! `episode_steps`, `episode_frames`, `reward_total` and per-term episode totals `episode_rewards`).
+//! `blocks`, `bombs` (`used`, `cheated`: [`crate::bombs`]), `boss` (`stuns`, `eats`: Dodongo stunned by a bomb's
+//! smoke or swallowing a bomb, [`BossTransitions`]), `bootstrap_truncation`, `curriculum`, plus `episode_steps`,
+//! `episode_frames`, `reward_total` and per-term episode totals `episode_rewards`).
 
 use crate::bombs::BombLedger;
 use crate::config::{GameData, SpecialistConfig};
-use crate::critic::{Critique, GameplayCritic};
+use crate::critic::{BossTransitions, Critique, GameplayCritic};
 use crate::curriculum::{CurriculumInfo, CurriculumTag, SharedCurriculum};
 use crate::end_conditions::{
     DEATH, ENTER_ROOM_PREFIX, EXIT_CORRECT, EXIT_WRONG, EndConditions, MAX_STEPS, NO_DAMAGE, NO_PROGRESS,
@@ -60,6 +61,8 @@ pub struct TerminalInfo {
     /// Bombs placed, and cheated bombs placed ([`crate::bombs`]).
     pub bombs_used: u32,
     pub bombs_cheated: u32,
+    /// Dodongo stuns and swallowed bombs ([`BossTransitions`]).
+    pub boss: BossTransitions,
     /// The ending was `no-room-progress` or `no-damage` (bootstrap the value of the final observation).
     pub bootstrap_truncation: bool,
     pub curriculum: Option<CurriculumInfo>,
@@ -155,6 +158,7 @@ impl StepInfo {
             );
             o.insert("blocks".into(), json!(t.blocks));
             o.insert("bombs".into(), json!({"used": t.bombs_used, "cheated": t.bombs_cheated}));
+            o.insert("boss".into(), json!({"stuns": t.boss.stuns, "eats": t.boss.eats}));
             if t.bootstrap_truncation {
                 o.insert("bootstrap_truncation".into(), json!(true));
             }
@@ -229,6 +233,7 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     route: String,
     route_step: Option<usize>,
     blocks: u32,
+    boss: BossTransitions,
     episode_steps: u64,
     episode_frames: u64,
     reward_total: f64,
@@ -313,6 +318,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             route: zelda::game_map::DEFAULT_ROUTE.to_owned(),
             route_step: None,
             blocks: 0,
+            boss: BossTransitions::default(),
             episode_steps: 0,
             episode_frames: 0,
             reward_total: 0.0,
@@ -477,6 +483,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 linger_wavefront(state, &attached.objective, attached.wavefront.clone())
             });
         self.blocks = 0;
+        self.boss = BossTransitions::default();
         self.episode_steps = 0;
         self.episode_frames = 0;
         self.reward_total = 0.0;
@@ -533,6 +540,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             || linger_wavefront(&state, &curr.objective, curr.wavefront.clone()),
         );
         self.blocks += change.blocks() as u32;
+        let boss = BossTransitions::of(&change);
+        self.boss += boss;
         let mut rewards = StepRewards::default();
         let tail = self.linger.tail_steps();
         self.critic.critique(
@@ -605,6 +614,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 blocks: self.blocks,
                 bombs_used: self.bombs.used,
                 bombs_cheated: self.bombs.cheated,
+                boss: self.boss,
                 curriculum,
                 episode_steps: 0,
                 episode_frames: 0,
@@ -617,6 +627,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             let mut step = VisitStep::of(&change);
             step.bombs_used = bombs.used;
             step.bombs_cheated = bombs.cheated;
+            step.boss_stuns = boss.stuns;
+            step.boss_eats = boss.eats;
             visits.update(&VisitView::of(&state), &step, end);
         }
         let reward = rewards.value();

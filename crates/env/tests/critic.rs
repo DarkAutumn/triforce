@@ -6,7 +6,7 @@ mod common;
 
 use env::SpecialistConfig;
 use env::critic::{
-    COMBAT_DECAY_THRESHOLD, Critique, GameplayCritic, ROOM_STEP_GRACE, ROOM_STEP_PENALTY_MAX,
+    BossTransitions, COMBAT_DECAY_THRESHOLD, Critique, GameplayCritic, ROOM_STEP_GRACE, ROOM_STEP_PENALTY_MAX,
     ROOM_STEP_PENALTY_MIN, ROOM_STEP_RAMP,
 };
 use env::end_conditions::{
@@ -264,6 +264,21 @@ fn dodongo_stun_pays_and_a_swallowed_bomb_costs() {
     assert!(!names(&r).iter().any(|n| n.contains("boss")), "{:?}", names(&r));
     let r = critique(&mut critic(), &step(&with_status(2), &walking, "WAIT 8"));
     assert!(!names(&r).iter().any(|n| n.contains("boss")), "{:?}", names(&r));
+}
+
+#[test]
+fn boss_transitions_count_each_dodongo() {
+    let mut walking = Ram::new();
+    walking.enemy(1, enemy::DODONGO, 112, 141).enemy(2, enemy::DODONGO2, 64, 141);
+    let mut after = walking.clone();
+    after.0[tables::OBJ_STATUS.0 + 1] = 2;
+    after.0[tables::OBJ_STATUS.0 + 2] = 1;
+    let change = step(&walking, &after, "WAIT 8");
+    assert_eq!(BossTransitions::of(&change), BossTransitions { stuns: 1, eats: 1 });
+    let r = critique(&mut critic(), &change);
+    assert_eq!(value(&r, "reward-boss-stunned"), REWARD_LARGE);
+    assert_eq!(value(&r, "penalty-boss-ate-bomb"), -REWARD_MEDIUM);
+    assert_eq!(BossTransitions::of(&step(&after, &walking, "WAIT 8")), BossTransitions::default());
 }
 
 #[test]

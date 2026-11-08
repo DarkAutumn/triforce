@@ -173,7 +173,7 @@ def test_episode_metrics_merge():
     hearts = {'dropped': 3, 'taken': 2, 'healed': 0.5, 'wasted': 1.5, 'left': 1, 'expired': 0}
     first.add_episode(info(2, 26, 20.5, {'move-closer': 0.5, 'success': 20.0}, ending='exit-correct',
                            outcome='success', health=2.0, max_health=4.0, start_health=1.5, hearts=hearts,
-                           bombs={'used': 3, 'cheated': 1}))
+                           bombs={'used': 3, 'cheated': 1}, boss={'stuns': 2, 'eats': 1}))
     first.add_steps([wait4], [4], [0])                                         # open episode, not counted
     second.add_steps([move16], [12], ['wall'])
     second.add_episode(info(1, 12, -20.0, {'failure': -20.0}, ending='link-died', outcome='hard-failure',
@@ -193,6 +193,8 @@ def test_episode_metrics_merge():
     assert summary['hearts/healed'] == 0.25
     # Bombs placed per episode, cheated ones among them; the second episode has no 'bombs': none.
     assert summary['bombs/used'] == 1.5 and summary['bombs/cheated'] == 0.5
+    # Dodongo stuns and swallowed bombs per episode; none without 'boss'.
+    assert summary['boss/stuns'] == 1.0 and summary['boss/eats'] == 0.5
     assert summary['episode_frames'] == 19.0 and summary['episode_steps'] == 1.5
     assert summary['rollout/steps'] == 4 and summary['rollout/frames'] == 42
     assert summary['interrupt/none'] == 0.5 and summary['interrupt/damage'] == 0.25

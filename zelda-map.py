@@ -56,7 +56,7 @@ DETAILED_FORMAT = 2
 COUNT_KEYS = ('visits', 'episodes', 'deaths')
 MEAN_KEYS = ('steps_per_visit', 'health_lost_per_visit', 'health_gained_per_visit', 'health_change_per_visit',
              'hits_per_visit', 'no_hit_rate', 'hits_dealt_per_visit', 'keys_per_visit', 'bombs_used_per_visit',
-             'bombs_cheated_per_visit')
+             'bombs_cheated_per_visit', 'boss_stuns_per_visit', 'boss_eats_per_visit')
 KIND_MEAN_KEYS = ('drops_per_visit', 'pickups_per_visit')
 ITEM_KINDS = ('heart', 'fairy', 'clock', 'rupee', 'blue_rupee', 'bombs')
 EXIT_ORDER = ('n', 's', 'e', 'w', 'cave', 'success', 'death', 'timeout', 'other')
@@ -630,6 +630,10 @@ def stats_rows(stats: dict) -> list[tuple[str, str]]:
         rows.insert(-3, ('Bombs used / visit', fmt_num(stats['bombs_used_per_visit'])))
     if stats.get('bombs_cheated_per_visit') is not None:
         rows.insert(-3, ('Bombs cheated / visit', fmt_num(stats['bombs_cheated_per_visit'])))
+    # Dodongo stuns and swallowed bombs: only in rooms where some happened (the boss room).
+    if stats.get('boss_stuns_per_visit') or stats.get('boss_eats_per_visit'):
+        rows.insert(-3, ('Boss stuns / visit', fmt_num(stats.get('boss_stuns_per_visit'))))
+        rows.insert(-3, ('Boss bombs eaten / visit', fmt_num(stats.get('boss_eats_per_visit'))))
     return rows
 
 

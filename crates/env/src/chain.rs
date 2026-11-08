@@ -12,6 +12,7 @@
 
 use crate::bombs::BombLedger;
 use crate::config::{GameData, SpecialistConfig};
+use crate::critic::BossTransitions;
 use crate::error::EnvError;
 use crate::objective;
 use crate::observation::{Observation, ObservationBuilder};
@@ -111,6 +112,9 @@ pub struct RoomRecord {
     /// Bombs placed during the visit, and cheated bombs placed ([`crate::bombs`]).
     pub bombs_used: u32,
     pub bombs_cheated: u32,
+    /// Dodongo stuns and swallowed bombs during the visit ([`BossTransitions`]).
+    pub boss_stuns: u32,
+    pub boss_eats: u32,
 }
 
 impl RoomRecord {
@@ -146,6 +150,8 @@ impl RoomRecord {
             no_damage_max: 0,
             bombs_used: 0,
             bombs_cheated: 0,
+            boss_stuns: 0,
+            boss_eats: 0,
         }
     }
 
@@ -167,6 +173,7 @@ impl RoomRecord {
             "linger": self.linger.as_ref().map_or_else(|| json!({}), linger_json),
             "blocks": self.blocks, "no_damage_max": self.no_damage_max,
             "bombs_used": self.bombs_used, "bombs_cheated": self.bombs_cheated,
+            "boss_stuns": self.boss_stuns, "boss_eats": self.boss_eats,
         })
     }
 }
@@ -411,6 +418,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         record.blocks += change.blocks() as u32;
         record.bombs_used += bombs.used;
         record.bombs_cheated += bombs.cheated;
+        let boss = BossTransitions::of(&change);
+        record.boss_stuns += boss.stuns;
+        record.boss_eats += boss.eats;
         record.steps += 1;
         record.frames += change.frames as u64;
         if change.health_lost > 0.0 || !change.enemies_hit.is_empty() {

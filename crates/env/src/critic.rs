@@ -90,6 +90,40 @@ fn equipment_value(state: &GameView, attr: &str) -> i32 {
     }
 }
 
+/// A step's Dodongo transitions (ObjState $AC+slot leaving 0, walking): `stuns` to 2 (a bomb's smoke stunned him;
+/// the sword can kill), `eats` to 1 (he swallowed a bomb). The critic rewards/penalises them; the envs total them
+/// per episode, visit and chain room (`boss: {stuns, eats}`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BossTransitions {
+    pub stuns: u32,
+    pub eats: u32,
+}
+
+impl BossTransitions {
+    pub fn of(change: &Change) -> Self {
+        let (prev, curr) = (&change.previous, &change.state);
+        let mut t = Self::default();
+        for before in prev.enemies.iter().filter(|e| matches!(e.id, enemy::DODONGO | enemy::DODONGO2)) {
+            let Some(after) = curr.enemy_by_index(before.index).filter(|e| e.id == before.id) else {
+                continue;
+            };
+            match (before.status, after.status) {
+                (0, 2) => t.stuns += 1,
+                (0, 1) => t.eats += 1,
+                _ => {}
+            }
+        }
+        t
+    }
+}
+
+impl std::ops::AddAssign for BossTransitions {
+    fn add_assign(&mut self, other: Self) {
+        self.stuns += other.stuns;
+        self.eats += other.eats;
+    }
+}
+
 /// What the critic sees after one step.
 pub struct Critique<'a> {
     pub change: &'a Change,
@@ -455,18 +489,14 @@ impl GameplayCritic {
 
     /// Dodongo (round 12): only the sword hurts him, and only while a bomb's smoke has him stunned (ObjState 2);
     /// a bomb he swallows instead (ObjState 1) wastes a bomb and the turn. Rewards the stun, penalises the
-    /// swallow; the kill itself is `reward-boss-hit` and the heart container ends the episode.
+    /// swallow ([`BossTransitions`]); the kill itself is `reward-boss-hit` and the heart container ends the episode.
     fn critique_dodongo(&mut self, c: &Critique, rewards: &mut StepRewards) {
-        let (prev, curr) = (&c.change.previous, &c.change.state);
-        for before in prev.enemies.iter().filter(|e| matches!(e.id, enemy::DODONGO | enemy::DODONGO2)) {
-            let Some(after) = curr.enemy_by_index(before.index).filter(|e| e.id == before.id) else {
-                continue;
-            };
-            match (before.status, after.status) {
-                (0, 2) => rewards.add(Outcome::reward("reward-boss-stunned", REWARD_LARGE)),
-                (0, 1) => rewards.add(Outcome::penalty("penalty-boss-ate-bomb", -REWARD_MEDIUM)),
-                _ => {}
-            }
+        let t = BossTransitions::of(c.change);
+        if t.stuns > 0 {
+            rewards.add(Outcome::reward("reward-boss-stunned", REWARD_LARGE));
+        }
+        if t.eats > 0 {
+            rewards.add(Outcome::penalty("penalty-boss-ate-bomb", -REWARD_MEDIUM));
         }
     }
 

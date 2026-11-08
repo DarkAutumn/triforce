@@ -131,6 +131,9 @@ pub struct EvalRecord {
     pub blocks: u32,
     pub bombs_used: u32,
     pub bombs_cheated: u32,
+    /// Dodongo stuns and swallowed bombs (`env::critic::BossTransitions`).
+    pub boss_stuns: u32,
+    pub boss_eats: u32,
     /// Every room visit, in order (`zelda::visits`).
     pub visits: Vec<RoomVisit>,
 }
@@ -145,6 +148,7 @@ impl EvalRecord {
             "steps": self.steps, "frames": self.frames, "start_health": self.start_health, "health": self.health,
             "max_health": self.max_health, "hearts": hearts_json(&self.hearts), "linger": linger_json(&self.linger),
             "blocks": self.blocks, "bombs": {"used": self.bombs_used, "cheated": self.bombs_cheated},
+            "boss": {"stuns": self.boss_stuns, "eats": self.boss_eats},
             "visits": self.visits.iter().map(visit_json).collect::<Vec<_>>(),
         })
     }
@@ -168,7 +172,8 @@ pub fn visit_json(v: &RoomVisit) -> Value {
         "frames": v.frames, "health_in": v.health_in, "health_out": v.health_out, "max_health": v.max_health,
         "health_lost": v.health_lost, "health_gained": v.health_gained, "hits": v.hits, "hits_dealt": v.hits_dealt,
         "drops": item_counts(&v.drops), "pickups": item_counts(&v.pickups), "keys_gained": v.keys_gained,
-        "bombs_used": v.bombs_used, "bombs_cheated": v.bombs_cheated, "exit": v.exit,
+        "bombs_used": v.bombs_used, "bombs_cheated": v.bombs_cheated, "boss_stuns": v.boss_stuns,
+        "boss_eats": v.boss_eats, "exit": v.exit,
     })
 }
 

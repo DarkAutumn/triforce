@@ -18,7 +18,10 @@ adds the hearts wasted by picking them up at (or near) full health, and ``hearts
 ``hearts_left`` are means per episode (also per room and per start state).  ``mean_bombs_used`` /
 ``mean_bombs_cheated`` are bombs placed per episode and the cheated ones among them (``records[i]['bombs']``; a
 ``requires_bombs`` room such as Dodongo's gives Link a bomb whenever he has none: crates/env/src/bombs.rs), also per
-room and per start state.
+room and per start state.  ``mean_boss_stuns`` / ``mean_boss_eats`` are Dodongo stuns (a bomb's smoke; the sword can
+kill him then) and bombs he swallowed per episode (``records[i]['boss']``: ``stuns``, ``eats``;
+crates/env/src/critic.rs ``BossTransitions``), and ``stun_kill_rate`` the share of successful episodes won by
+stun-and-sword alone (a stun, no swallow), also per room and per start state.
 Lingering records retain longest quiet streak, terminal tail, visit time and boss/pickup milestones. Overall,
 room and start-state aggregates report mean longest/tail steps and frames plus the worst measured streak.
 
@@ -26,13 +29,15 @@ room and start-state aggregates report mean longest/tail steps and frames plus t
 episode's visits in order (``level``, ``room``, ``in_cave``, ``steps``, ``frames``, ``health_in``/``health_out``,
 ``max_health``, ``health_lost``/``health_gained`` summed over the visit, ``hits`` = steps that lost health,
 ``hits_dealt``, ``drops``/``pickups`` per item kind (bombs, rupee, blue_rupee, heart, fairy, clock; zeros
-omitted), ``keys_gained``, ``bombs_used``/``bombs_cheated`` (bombs placed, cheated ones among them) and ``exit``:
+omitted), ``keys_gained``, ``bombs_used``/``bombs_cheated`` (bombs placed, cheated ones among them),
+``boss_stuns``/``boss_eats`` (Dodongo stunned, bombs swallowed) and ``exit``:
 ``n``/``s``/``e``/``w`` or ``cave`` when Link left the room, else how the episode ended there,
 ``death``/``success``/``timeout``/``other``).  ``visited_rooms`` aggregates them per
 room entered (keyed like ``by_room``, which only knows start rooms): ``visits``, ``episodes``, ``deaths``,
 ``death_rate``, ``exits`` and per-visit means (``steps_per_visit``, ``health_lost/gained/change_per_visit``,
 ``hits_per_visit``, ``no_hit_rate``, ``hits_dealt_per_visit``, ``keys_per_visit``, ``bombs_used_per_visit``,
-``bombs_cheated_per_visit``, ``drops_per_visit``, ``pickups_per_visit``), tagged with the ``specialist``.  Readers
+``bombs_cheated_per_visit``, ``boss_stuns_per_visit``, ``boss_eats_per_visit``, ``drops_per_visit``,
+``pickups_per_visit``), tagged with the ``specialist``.  Readers
 merging several evaluations weight by visits.
 """
 
@@ -130,6 +135,20 @@ def _bomb_stats(records: list[dict]) -> dict:
             'mean_bombs_cheated': sum(b['cheated'] for b in measured) / len(measured)}
 
 
+def _boss_stats(records: list[dict]) -> dict:
+    """Dodongo stuns and swallowed bombs per episode, over records that count them, and ``stun_kill_rate``: the share
+    of those that succeeded with at least one stun and no swallow (absent without a measured success)."""
+    measured = [record for record in records if 'boss' in record]
+    if not measured:
+        return {}
+    result = {'mean_boss_stuns': sum(r['boss']['stuns'] for r in measured) / len(measured),
+              'mean_boss_eats': sum(r['boss']['eats'] for r in measured) / len(measured)}
+    wins = [r['boss'] for r in measured if r['success']]
+    if wins:
+        result['stun_kill_rate'] = sum(b['stuns'] > 0 and b['eats'] == 0 for b in wins) / len(wins)
+    return result
+
+
 def _group(records: list[dict], key) -> dict:
     groups = {}
     for record in records:
@@ -141,6 +160,7 @@ def _group(records: list[dict], key) -> dict:
                    **_linger_stats(items),
                    **_block_stats(items),
                    **_bomb_stats(items),
+                   **_boss_stats(items),
                    'endings': dict(Counter(r['ending'] for r in items)),
                    # how the unsuccessful episodes ended, e.g. {'death': 4}
                    'failures': dict(Counter(r['ending'] for r in items if not r['success']))}
@@ -174,6 +194,8 @@ def _room_visit_stats(visits: list[dict]) -> dict:
         'keys_per_visit': mean(lambda v: v['keys_gained']),
         'bombs_used_per_visit': mean(lambda v: v.get('bombs_used', 0)),
         'bombs_cheated_per_visit': mean(lambda v: v.get('bombs_cheated', 0)),
+        'boss_stuns_per_visit': mean(lambda v: v.get('boss_stuns', 0)),
+        'boss_eats_per_visit': mean(lambda v: v.get('boss_eats', 0)),
         'drops_per_visit': items('drops'),
         'pickups_per_visit': items('pickups'),
         'exits': dict(Counter(visit['exit'] for visit in visits)),
@@ -234,6 +256,7 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
         **_linger_stats(records),
         **_block_stats(records),
         **_bomb_stats(records),
+        **_boss_stats(records),
         'mean_steps': sum(r['steps'] for r in records) / count,
         'mean_frames': sum(r['frames'] for r in records) / count,
         'outcomes': dict(Counter(r['outcome'] for r in records)),

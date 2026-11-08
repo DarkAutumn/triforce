@@ -150,6 +150,15 @@ sidebar); chain `RoomRecord.bombs_used/bombs_cheated` and `chain_summary`'s `bom
 `runs_with_cheated_bombs`; room events carry the run's `bombs_cheated`, shown in the watch player's footer
 (`cheated bombs N`, when > 0): such a game wasn't beaten naturally.
 
+Boss fights (`crates/env/src/critic.rs` `BossTransitions`): a Dodongo whose ObjState ($AC+slot) leaves 0 (walking)
+for 2 was *stunned* by a bomb's smoke (the sword can kill him then); for 1 he *ate* (swallowed) a bomb. The critic
+pays `reward-boss-stunned` / charges `penalty-boss-ate-bomb` from the same counts, and the envs total them: terminal
+`info['boss'] = {stuns, eats}` → training `boss/stuns`, `boss/eats` per episode (progress events too); eval records
+`boss` and per-visit `boss_stuns`/`boss_eats` → `mean_boss_stuns`/`mean_boss_eats` and `stun_kill_rate` (share of
+successful episodes with a stun and no swallow: stun-and-sword kills, not swallow kills; overall, per room and
+start state), `visited_rooms` `boss_stuns_per_visit`/`boss_eats_per_visit` (zelda-map's sidebar, when non-zero);
+chain `RoomRecord.boss_stuns/boss_eats`.
+
 ### Lingering (`crates/zelda/src/linger.rs`)
 
 `LingerTracker.reset(state)` / `update(change, hearts_taken=0)` measures progress without changing gameplay.

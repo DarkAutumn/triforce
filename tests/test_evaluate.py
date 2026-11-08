@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 from triforce import _native
-from triforce.evaluate import (_group, _linger_stats, _room_key, _visited_rooms, evaluate_specialist,
+from triforce.evaluate import (_boss_stats, _group, _linger_stats, _room_key, _visited_rooms, evaluate_specialist,
                                format_report)
 from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.observation import observation_space
@@ -128,13 +128,35 @@ def test_room_and_state_groups_average_health_hearts_blocks_and_count_endings():
     assert states['1_44w_1']['hearts_dropped'] == 0 and states['1_44w_1']['health_change_total'] == -1.5
 
 
+def test_boss_stats_tell_stun_kills_from_swallow_kills():
+    def fight(success, stuns, eats):
+        return {'success': success, 'boss': {'stuns': stuns, 'eats': eats}}
+
+    records = [
+        fight(True, 1, 0),      # stun and sword
+        fight(True, 2, 0),      # stun and sword, after a stun that wore off
+        fight(True, 0, 2),      # two swallowed bombs
+        fight(True, 1, 1),      # mixed: not a clean stun kill
+        fight(False, 1, 0),     # failures don't count toward the rate
+        {'success': True},      # an older record without the field: not measured
+    ]
+    stats = _boss_stats(records)
+    assert (stats['mean_boss_stuns'], stats['mean_boss_eats']) == (1.0, 0.6)
+    assert stats['stun_kill_rate'] == 0.5
+    assert _boss_stats([fight(False, 0, 1)]) == {'mean_boss_stuns': 0.0, 'mean_boss_eats': 1.0}
+    assert _boss_stats([{'success': True}]) == {}
+    rooms = _group([{**r, 'room': (2, 0x0e, False), 'start_state': '2_0es_0', 'health': 3.0, 'start_health': 3.0,
+                     'ending': 'success'} for r in records], lambda r: _room_key(r['room']))
+    assert rooms['2:0x0e']['stun_kill_rate'] == 0.5 and rooms['2:0x0e']['mean_boss_eats'] == 0.6
+
+
 def _visit(level, room, in_cave=False, *, steps=10, health_in=3.0, health_out=3.0, lost=0.0, gained=0.0, hits=0,
-           dealt=0, drops=None, pickups=None, keys=0, exit_='n', bombs=0, cheated=0):
+           dealt=0, drops=None, pickups=None, keys=0, exit_='n', bombs=0, cheated=0, stuns=0, eats=0):
     return {'level': level, 'room': room, 'in_cave': in_cave, 'steps': steps, 'frames': steps * 8,
             'health_in': health_in, 'health_out': health_out, 'max_health': 3, 'health_lost': lost,
             'health_gained': gained, 'hits': hits, 'hits_dealt': dealt, 'drops': drops or {},
             'pickups': pickups or {}, 'keys_gained': keys, 'bombs_used': bombs, 'bombs_cheated': cheated,
-            'exit': exit_}
+            'boss_stuns': stuns, 'boss_eats': eats, 'exit': exit_}
 
 
 def test_visited_rooms_average_every_visit_of_every_room():
@@ -146,9 +168,9 @@ def test_visited_rooms_average_every_visit_of_every_room():
                     _visit(1, 0x72, exit_='e'),
                     _visit(1, 0x73, steps=30, exit_='timeout')]},
         {'visits': [_visit(0, 0x77, True, exit_='cave')]},
-        # Dodongo: two fights, hearts lost and bombs per fight.
-        {'visits': [_visit(2, 0x0e, lost=1.0, bombs=3, cheated=1, exit_='success')]},
-        {'visits': [_visit(2, 0x0e, lost=2.0, bombs=1, cheated=1, exit_='death')]},
+        # Dodongo: two fights, hearts lost, bombs, stuns and swallows per fight.
+        {'visits': [_visit(2, 0x0e, lost=1.0, bombs=3, cheated=1, stuns=1, eats=0, exit_='success')]},
+        {'visits': [_visit(2, 0x0e, lost=2.0, bombs=1, cheated=1, stuns=0, eats=1, exit_='death')]},
         {},                                                                 # a format-1 record: no visits
     ]
     rooms = _visited_rooms(records, 'goriya')
@@ -171,7 +193,8 @@ def test_visited_rooms_average_every_visit_of_every_room():
     dodongo = rooms['2:0x0e']
     assert (dodongo['health_lost_per_visit'], dodongo['bombs_used_per_visit'], dodongo['bombs_cheated_per_visit']) \
         == (1.5, 2.0, 1.0)
-    assert room['bombs_used_per_visit'] == 0.0
+    assert (dodongo['boss_stuns_per_visit'], dodongo['boss_eats_per_visit']) == (0.5, 0.5)
+    assert room['bombs_used_per_visit'] == 0.0 and room['boss_stuns_per_visit'] == 0.0
     assert _visited_rooms([{}], 'goriya') == {}
 
 

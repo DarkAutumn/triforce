@@ -27,7 +27,8 @@ use rand_chacha::ChaCha8Rng;
 use std::collections::BTreeSet;
 use std::sync::{Arc, LazyLock};
 use zelda::actions::{MASK_SIZE, NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS};
-use zelda::enums::{SwordKind, item};
+use zelda::enums::{SwordKind, enemy, item};
+use zelda::tables;
 use zelda::objectives::{Objective, ObjectiveKind};
 use zelda::room::Target;
 use zelda::room_entry::is_pre_entry;
@@ -1797,4 +1798,53 @@ fn requires_bombs_room_cheats_one_bomb_and_counts_it_when_placed() {
     act(&mut env, "WAIT 8");
     assert_eq!(state(&env).bombs(), 0);
     assert_eq!((env.bombs.used, env.bombs.cheated), (0, 0));
+}
+
+/// Dodongo walking -> stunned (ObjState 2, a bomb's smoke) and walking -> bloated (1, a swallowed bomb) count once
+/// each in the terminal info's `boss` and in the room visit. The transitions are poked into RAM behind the session's
+/// cached state, so the action's `Change` sees the boss leave state 0.
+#[test]
+fn dodongo_stuns_and_swallows_count_per_episode_and_visit() {
+    let Some(nes) = open_core() else { return };
+    let opts = EnvOptions {
+        start_state: Some("2_0es_0".into()),
+        track_visits: true,
+        ..Default::default()
+    };
+    let mut env = make_env_with(nes, "boss-dodongo", opts, |c| {
+        c.curriculum.enabled = false;
+        c.max_steps = 40;
+    });
+    env.reset(Some(1), None).unwrap();
+    let walking = |env: &Env| {
+        state(env)
+            .enemies
+            .iter()
+            .find(|e| matches!(e.id, enemy::DODONGO | enemy::DODONGO2) && e.status == 0)
+            .map(|e| e.index as usize)
+    };
+    let mut slot = walking(&env);
+    while slot.is_none() {
+        act(&mut env, "WAIT 8");
+        slot = walking(&env);
+    }
+    let address = (tables::OBJ_STATUS.0 + slot.unwrap()) as u16;
+    let mut terminal = None;
+    for status in [2, 1] {
+        while walking(&env).is_none() {
+            act(&mut env, "WAIT 8");
+        }
+        env.session_mut().nes_mut().poke(address, status);
+        let r = act(&mut env, "WAIT 4");
+        assert_eq!(state(&env).enemy_by_index(slot.unwrap() as u8).map(|e| e.status), Some(status));
+        terminal = r.info.terminal;
+    }
+    while terminal.is_none() {
+        terminal = act(&mut env, "WAIT 8").info.terminal;
+    }
+    let t = terminal.unwrap();
+    assert_eq!((t.boss.stuns, t.boss.eats), (1, 1));
+    let visits = env.take_visits();
+    let total = visits.iter().fold((0, 0), |(s, e), v| (s + v.boss_stuns, e + v.boss_eats));
+    assert_eq!(total, (1, 1));
 }

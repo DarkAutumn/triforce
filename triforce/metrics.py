@@ -25,6 +25,8 @@
 - ``bombs/used`` and ``bombs/cheated``: bombs Link placed per completed episode, and of those the cheated ones (a
   ``requires_bombs`` room such as Dodongo's gives Link a bomb whenever he has none; crates/env/src/bombs.rs), from
   ``info['bombs']``.
+- ``boss/stuns`` and ``boss/eats``: Dodongo stuns (a bomb's smoke; the sword can kill him then) and bombs he
+  swallowed per completed episode, from ``info['boss']`` (crates/env/src/critic.rs ``BossTransitions``).
 - ``episode_frames`` and ``episode_steps``: mean per completed episode (``info['episode_frames']`` /
   ``info['episode_steps']``).
 - ``linger/max_steps``, ``linger/max_frames``, ``linger/tail_steps``, ``linger/tail_frames``: means of the
@@ -79,6 +81,8 @@ class RolloutMetrics:
         self.hearts_healed = 0.0
         self.bombs_used = 0
         self.bombs_cheated = 0
+        self.boss_stuns = 0
+        self.boss_eats = 0
         self.episode_frames = 0
         self.episode_steps = 0
         self.interrupts = Counter()
@@ -169,6 +173,9 @@ class RolloutMetrics:
         bombs = info.get('bombs') or {}
         self.bombs_used += bombs.get('used', 0)
         self.bombs_cheated += bombs.get('cheated', 0)
+        boss = info.get('boss') or {}
+        self.boss_stuns += boss.get('stuns', 0)
+        self.boss_eats += boss.get('eats', 0)
         self.health_fraction += health / max_health if max_health > 0 else 0.0
         self.episode_frames += int(info.get('episode_frames', 0))
         self.episode_steps += int(info.get('episode_steps', 0))
@@ -219,6 +226,8 @@ class RolloutMetrics:
             result['hearts/healed'] = self.hearts_healed / eps
             result['bombs/used'] = self.bombs_used / eps
             result['bombs/cheated'] = self.bombs_cheated / eps
+            result['boss/stuns'] = self.boss_stuns / eps
+            result['boss/eats'] = self.boss_eats / eps
             result['episode_frames'] = self.episode_frames / eps
             result['episode_steps'] = self.episode_steps / eps
         if self.curriculum_episodes:

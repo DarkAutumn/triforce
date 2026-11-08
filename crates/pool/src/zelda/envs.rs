@@ -371,6 +371,8 @@ where
                 blocks: t.blocks,
                 bombs_used: t.bombs_used,
                 bombs_cheated: t.bombs_cheated,
+                boss_stuns: t.boss.stuns,
+                boss_eats: t.boss.eats,
                 visits: self.env.take_visits(),
             })));
             end_recording(self.env.session_mut().nes_mut(), events);
