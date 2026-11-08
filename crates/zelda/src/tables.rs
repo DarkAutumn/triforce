@@ -19,6 +19,8 @@ pub const OBJ_ID: (usize, usize) = (0x34F, 0xC);
 pub const OBJ_SPAWN_STATE: (usize, usize) = (0x405, 0xC);
 pub const ITEM_TIMER: (usize, usize) = (0x3A8, 0xC);
 pub const OBJ_HEALTH: (usize, usize) = (0x485, 0xC);
+/// Dodongo_ObjBombHits: bombs a Dodongo has swallowed (raised on the first bloated frame; two kill him).
+pub const DODONGO_BOMB_HITS: (usize, usize) = (0x437, 0xC);
 /// PlayAreaTiles $6530, column-major `[32][22]`.
 pub const TILE_LAYOUT: (usize, usize) = (0xD30, 0x2C0);
 

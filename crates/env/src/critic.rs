@@ -17,7 +17,7 @@ use zelda::game::GameView;
 use zelda::objectives::{Objective, exit_is_correct};
 use zelda::room::{Target, Wavefront};
 use zelda::room_state::{SecretTrigger, decode_room_state};
-use zelda::{Change, GameMap, Var};
+use zelda::{Change, GameMap, Var, tables};
 
 pub const BEAM_DISTANCE_THRESHOLD: f32 = 48.0;
 pub const PBRS_SCALE: f64 = 20.0;
@@ -90,8 +90,10 @@ fn equipment_value(state: &GameView, attr: &str) -> i32 {
     }
 }
 
-/// A step's Dodongo transitions (ObjState $AC+slot leaving 0, walking): `stuns` to 2 (a bomb's smoke stunned him;
-/// the sword can kill), `eats` to 1 (he swallowed a bomb). The critic rewards/penalises them; the envs total them
+/// A step's Dodongo events: `stuns`, a bomb's smoke stunned him (ObjState $AC+slot entered 2; the sword can kill),
+/// `eats`, he swallowed a bomb (Dodongo_ObjBombHits $437+slot went up). Read from what changed, not from the
+/// state pair: one step can hold a swallow, the bloat and a stun (1 → 0 → 2), or a stun ending and a new one
+/// (the stun timer restarts at $20 and so goes *up*). The critic rewards/penalises them; the envs total them
 /// per episode, visit and chain room (`boss: {stuns, eats}`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct BossTransitions {
@@ -107,11 +109,13 @@ impl BossTransitions {
             let Some(after) = curr.enemy_by_index(before.index).filter(|e| e.id == before.id) else {
                 continue;
             };
-            match (before.status, after.status) {
-                (0, 2) => t.stuns += 1,
-                (0, 1) => t.eats += 1,
-                _ => {}
+            // The frame the smoke stuns him the timer is still 0; the next update sets it to $20 (not a new stun).
+            let restunned = before.stun_timer > 0 && after.stun_timer > before.stun_timer;
+            if after.status == 2 && (before.status != 2 || restunned) {
+                t.stuns += 1;
             }
+            let hits = |state: &GameView| state.ram()[tables::DODONGO_BOMB_HITS.0 + before.index as usize];
+            t.eats += hits(curr).saturating_sub(hits(prev)) as u32;
         }
         t
     }

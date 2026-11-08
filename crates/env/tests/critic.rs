@@ -245,40 +245,58 @@ fn boss_hits_scale_with_the_hit_count_and_replace_the_hit_reward() {
     assert_eq!(names(&r), ["reward-boss-hit"]);
 }
 
-#[test]
-fn dodongo_stun_pays_and_a_swallowed_bomb_costs() {
-    let mut walking = Ram::new();
-    walking.enemy(1, enemy::DODONGO2, 112, 141);
-    let with_status = |status: u8| {
-        let mut ram = walking.clone();
-        ram.0[tables::OBJ_STATUS.0 + 1] = status;
-        ram
-    };
-    // The stun usually lands a step after the bomb (48-frame fuse): whatever the action, walking -> 2 pays.
-    let r = critique(&mut critic(), &step(&walking, &with_status(2), "MOVE N 8"));
-    assert_eq!(value(&r, "reward-boss-stunned"), REWARD_LARGE);
-    let r = critique(&mut critic(), &step(&walking, &with_status(1), "WAIT 8"));
-    assert_eq!(value(&r, "penalty-boss-ate-bomb"), -REWARD_MEDIUM);
-    // Staying stunned, or recovering, is neither.
-    let r = critique(&mut critic(), &step(&with_status(2), &with_status(2), "WAIT 8"));
-    assert!(!names(&r).iter().any(|n| n.contains("boss")), "{:?}", names(&r));
-    let r = critique(&mut critic(), &step(&with_status(2), &walking, "WAIT 8"));
-    assert!(!names(&r).iter().any(|n| n.contains("boss")), "{:?}", names(&r));
+/// Dodongo in slot 1 with ObjState `status`, stun timer `stun` and `hits` bombs swallowed.
+fn dodongo(status: u8, stun: u8, hits: u8) -> Ram {
+    let mut ram = Ram::new();
+    ram.enemy(1, enemy::DODONGO2, 112, 141);
+    ram.0[tables::OBJ_STATUS.0 + 1] = status;
+    ram.0[tables::OBJ_STUN_TIMER.0 + 1] = stun;
+    ram.0[tables::DODONGO_BOMB_HITS.0 + 1] = hits;
+    ram
 }
 
 #[test]
-fn boss_transitions_count_each_dodongo() {
+fn dodongo_stun_pays_and_a_swallowed_bomb_costs() {
+    let walking = dodongo(0, 0, 0);
+    // The stun usually lands a step after the bomb (48-frame fuse): whatever the action, entering state 2 pays.
+    let r = critique(&mut critic(), &step(&walking, &dodongo(2, 0, 0), "MOVE N 8"));
+    assert_eq!(value(&r, "reward-boss-stunned"), REWARD_LARGE);
+    // A swallow is the bomb-hit counter going up (the game raises it on the first bloated frame).
+    let r = critique(&mut critic(), &step(&walking, &dodongo(1, 0, 1), "WAIT 8"));
+    assert_eq!(value(&r, "penalty-boss-ate-bomb"), -REWARD_MEDIUM);
+    // Staying stunned (the timer set to $20 after the stun frame, then counting down), bloating on, or
+    // recovering is neither.
+    for (before, after) in [
+        (dodongo(2, 0, 0), dodongo(2, 0x20, 0)),
+        (dodongo(2, 0x20, 0), dodongo(2, 0x1C, 0)),
+        (dodongo(1, 0, 1), dodongo(1, 0, 1)),
+        (dodongo(2, 2, 0), walking.clone()),
+    ] {
+        let r = critique(&mut critic(), &step(&before, &after, "WAIT 8"));
+        assert!(!names(&r).iter().any(|n| n.contains("boss")), "{:?}", names(&r));
+    }
+}
+
+/// Events inside one step still count: bloated, back to walking and stunned (1 -> 2 at the boundaries), a stun
+/// that ended and restarted (the timer goes up), and each of two Dodongos.
+#[test]
+fn boss_transitions_count_events_within_a_step() {
+    let of = |before: &Ram, after: &Ram| BossTransitions::of(&step(before, after, "WAIT 16"));
+    assert_eq!(of(&dodongo(1, 0, 1), &dodongo(2, 0, 1)), BossTransitions { stuns: 1, eats: 0 });
+    assert_eq!(of(&dodongo(0, 0, 0), &dodongo(2, 0x20, 1)), BossTransitions { stuns: 1, eats: 1 });
+    assert_eq!(of(&dodongo(2, 2, 0), &dodongo(2, 0x20, 0)), BossTransitions { stuns: 1, eats: 0 });
     let mut walking = Ram::new();
     walking.enemy(1, enemy::DODONGO, 112, 141).enemy(2, enemy::DODONGO2, 64, 141);
     let mut after = walking.clone();
     after.0[tables::OBJ_STATUS.0 + 1] = 2;
     after.0[tables::OBJ_STATUS.0 + 2] = 1;
+    after.0[tables::DODONGO_BOMB_HITS.0 + 2] = 1;
     let change = step(&walking, &after, "WAIT 8");
     assert_eq!(BossTransitions::of(&change), BossTransitions { stuns: 1, eats: 1 });
     let r = critique(&mut critic(), &change);
     assert_eq!(value(&r, "reward-boss-stunned"), REWARD_LARGE);
     assert_eq!(value(&r, "penalty-boss-ate-bomb"), -REWARD_MEDIUM);
-    assert_eq!(BossTransitions::of(&step(&after, &walking, "WAIT 8")), BossTransitions::default());
+    assert_eq!(of(&after, &walking), BossTransitions::default());
 }
 
 #[test]
