@@ -8,7 +8,7 @@ import torch
 
 from triforce import _native, registry
 from triforce.evaluate import evaluate_specialist
-from triforce.model import ModelConfig, ZeldaPolicy, obs_spec_from_space
+from triforce.model import NOISE_SIZE, ModelConfig, ZeldaPolicy, obs_spec_from_space, widen_policy
 from triforce.observation import observation_space
 from triforce.ppo import PPO, Collector, PPOConfig
 
@@ -109,6 +109,57 @@ def test_older_schema_checkpoint_trains_on_current_rows():
     collector.collect(network, 'cpu')
     assert 'objective' in collector.buffer.observation
     PPO(PPOConfig(num_epochs=1)).optimize(network, collector.buffer)
+
+
+def _random_observations(space, rows, seed):
+    space.seed(seed)
+    obs = {key: np.stack([space[key].sample() for _ in range(rows)]) for key in space}
+    obs['action_mask'][:] = True
+    return obs
+
+
+def test_widened_policy_acts_exactly_like_the_original_for_any_target(tmp_path):
+    torch.manual_seed(3)
+    full = obs_spec_from_space(observation_space())
+    old, _ = registry.load_model(_schema1_checkpoint(tmp_path))
+    wide, checkpoint = registry.load_model(tmp_path / 'ow-start' / 'schema1', obs_spec=full)
+    assert 'target' not in checkpoint['model_config']['obs_spec'] and wide.config.obs_spec == full
+    obs = _random_observations(observation_space(), 16, 1)
+    obs['target'] = np.random.default_rng(2).uniform(-1, 1, obs['target'].shape).astype(np.float32)
+    noise = torch.as_tensor(np.random.default_rng(4).gumbel(size=(16, NOISE_SIZE)), dtype=torch.float32)
+    with torch.no_grad():
+        a, b = old.evaluate(obs, noise=noise), wide.evaluate(obs, noise=noise)
+        assert torch.equal(a.actions, b.actions)
+        assert torch.allclose(a.log_prob, b.log_prob, atol=1e-5) and torch.allclose(a.value, b.value, atol=1e-5)
+        for x, y in zip(old(obs), wide(obs)):
+            assert torch.allclose(x, y, atol=1e-5)
+    # Without obs_spec (or with the checkpoint's own) nothing is widened.
+    assert registry.load_model(tmp_path / 'ow-start' / 'schema1')[0].config.obs_spec == old.config.obs_spec
+    with pytest.raises(ValueError, match="only new 1-D float vector keys"):
+        widen_policy(old, {**old.config.obs_spec, 'extra': {'shape': [2, 2], 'vocab': None}})
+    with pytest.raises(ValueError, match="'link'"):
+        widen_policy(old, {**full, 'link': {'shape': [80], 'vocab': None}})
+
+
+def test_widened_inputs_start_at_zero_and_train():
+    spec = obs_spec_from_space(synthetic.observation_space())
+    narrow = {k: v for k, v in spec.items() if k != 'history'}
+    torch.manual_seed(0)
+    network = widen_policy(ZeldaPolicy(config=ModelConfig(obs_spec=narrow, hidden_dim=32, grid_encoder='linear')),
+                           spec)
+    start = network.feature_dim - sum(spec[k]['shape'][0] for k in network.vector_keys)
+    for key in network.vector_keys:
+        if key == 'history':
+            break
+        start += spec[key]['shape'][0]
+    columns = slice(start, start + spec['history']['shape'][0])
+    towers = [network.mlp_extractor.policy_net[0].weight, network.mlp_extractor.value_net[0].weight]
+    assert all(w.requires_grad and torch.count_nonzero(w[:, columns]) == 0 for w in towers)
+    collector = Collector(synthetic.ListPool(synthetic.BanditEnv, 2), 16, 0.99, 0.95)
+    collector.collect(network, 'cpu')
+    PPO(PPOConfig(num_epochs=1)).optimize(network, collector.buffer)
+    towers = [network.mlp_extractor.policy_net[0].weight, network.mlp_extractor.value_net[0].weight]
+    assert all(torch.count_nonzero(w[:, columns]) > 0 for w in towers)
 
 
 @pytest.mark.parametrize('edit, match', [

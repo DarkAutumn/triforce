@@ -416,3 +416,45 @@ class ZeldaPolicy(nn.Module):
 def build_model(config: ModelConfig | dict, observation_space: Optional[spaces.Dict] = None) -> ZeldaPolicy:
     """Builds a policy from a checkpoint's model_config (obs_spec inside) or a config plus space."""
     return ZeldaPolicy(observation_space, config)
+
+
+_FIRST_LAYERS = ('mlp_extractor.policy_net.0.weight', 'mlp_extractor.value_net.0.weight')
+
+
+def widen_policy(network: ZeldaPolicy, obs_spec: dict) -> ZeldaPolicy:
+    """``network`` rebuilt for the larger layout ``obs_spec``: its own layout plus new float vector keys.  Every
+    weight is copied; the tower inputs of the new keys' features start at zero, so the widened network computes
+    exactly what ``network`` does whatever the new keys hold, and training can grow them from there."""
+    old_spec = network.config.obs_spec
+    for key, entry in old_spec.items():
+        if obs_spec.get(key) != entry:
+            raise ValueError(f"Can't widen: observation key '{key}' is {entry}, the new layout has "
+                             f"{obs_spec.get(key)}")
+    added = set(obs_spec) - set(old_spec)
+    bad = sorted(k for k in added if k in _SPECIAL_KEYS or obs_spec[k]['vocab'] is not None
+                 or len(obs_spec[k]['shape']) != 1)
+    if bad:
+        raise ValueError(f"Can't widen with {bad}: only new 1-D float vector keys can start at zero")
+    config = ModelConfig.from_dict({**network.config.to_dict(), 'obs_spec': obs_spec})
+    wide = ZeldaPolicy(config=config).to(next(network.parameters()).device)
+    # Feature columns: room, entities, grid, then the vector keys (sorted) in each network's layout.
+    prefix = network.feature_dim - sum(old_spec[k]['shape'][0] for k in network.vector_keys)
+    old_columns, new_columns = list(range(prefix)), list(range(prefix))
+    new_offsets, offset = {}, prefix
+    for key in wide.vector_keys:
+        new_offsets[key], offset = offset, offset + obs_spec[key]['shape'][0]
+    offset = prefix
+    for key in network.vector_keys:
+        size = old_spec[key]['shape'][0]
+        old_columns += range(offset, offset + size)
+        new_columns += range(new_offsets[key], new_offsets[key] + size)
+        offset += size
+    state = network.state_dict()
+    with torch.no_grad():
+        for name, value in wide.state_dict().items():
+            if name in _FIRST_LAYERS:
+                value.zero_()
+                value[:, new_columns] = state[name][:, old_columns]
+            else:
+                value.copy_(state[name])
+    return wide

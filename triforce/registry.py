@@ -125,12 +125,17 @@ def load_checkpoint(path, check_schema: bool = True) -> dict:
     return checkpoint
 
 
-def load_model(path, check_schema: bool = True):
-    """Rebuilds the ``ZeldaPolicy`` stored in a checkpoint.  Returns (network, checkpoint)."""
-    from .model import ZeldaPolicy  # pylint: disable=import-outside-toplevel
+def load_model(path, check_schema: bool = True, obs_spec: Optional[dict] = None):
+    """Rebuilds the ``ZeldaPolicy`` stored in a checkpoint.  Returns (network, checkpoint).  With ``obs_spec`` (the
+    layout the caller wants) a checkpoint built for a smaller layout comes back widened to it
+    (``model.widen_policy``: new inputs start at zero); compare ``network.config.obs_spec`` with the checkpoint's
+    to tell."""
+    from .model import ZeldaPolicy, widen_policy  # pylint: disable=import-outside-toplevel
     checkpoint = load_checkpoint(path, check_schema)
     network = ZeldaPolicy(config=checkpoint['model_config'])
     network.load_state_dict(checkpoint['state_dict'])
+    if obs_spec is not None and obs_spec != network.config.obs_spec:
+        network = widen_policy(network, obs_spec)
     return network, checkpoint
 
 

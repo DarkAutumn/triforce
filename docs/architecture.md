@@ -200,7 +200,11 @@ at 2N. `eval-chain` leaves it off.
   `specialist`, `model_config`, `state_dict`, `optimizer`, `iterations`, `steps`, `metrics`.
   Loading raises `SchemaMismatchError` on a different action schema, a newer observation schema, or an older one
   whose `model_config.obs_spec` isn't a subset of the current `OBS_SPEC` (same shape and vocabulary per key); the
-  network reads only the keys of its own `obs_spec` (`ZeldaPolicy._batch`).
+  network reads only the keys of its own `obs_spec` (`ZeldaPolicy._batch`). Training a specialist with
+  `obs.target` on from an older checkpoint (`--load` or `warm_start`) widens it to the current layout
+  (`model.widen_policy` via `registry.load_model(obs_spec=...)`): every weight is copied and the towers' input
+  columns for the new keys start at zero, so it acts exactly as before; the optimizer state starts fresh (the
+  iteration/step counters still continue for the same specialist) and the saved checkpoint has the new layout.
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
   records `status` (completed | early_stop | interrupted), total and this run's (`iterations_trained`,
