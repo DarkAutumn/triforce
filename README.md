@@ -47,6 +47,7 @@ cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 
 .venv/bin/python scripts/train_round.py --round round1          # train + evaluate every specialist
 uv run training-gui.py                                          # live training monitor (newest logs/ folder)
 .venv/bin/python play-zelda.py 4x3                               # watch 12 games played by the promoted models (--cpu, --scale N; keys u/+/-/p)
+.venv/bin/python zelda-map.py                                   # room map + per-room eval stats of the promoted models (--rerender)
 .venv/bin/python -m triforce.run --route milestone1 --seed 1   # --render (window) or --video out.mp4 (ffmpeg)
 .venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states (start/build/path/audit)
 triforce promote <specialist> <run-id>
@@ -58,6 +59,13 @@ Training GUI charts use the plotted history (respecting **skip startup**). Succe
 bands and ticks, enclosing every displayed success series and the early-stop/eval reference lines; any value below 25%
 restores the full 0–100% range. Health change encloses both real and total series with ±0.2 hearts of padding;
 the "no change" reference appears only when zero is within that range.
+
+`zelda-map.py` stitches each level's rooms (Overworld, Dungeon 1–9) into one zoomable map from the savestates'
+first playable frames (cached in `screens/`, gitignored; `--rerender` rebuilds them) and overlays per-room
+statistics: hits taken, hearts ± and death rate per visit. They come from the promoted models' `eval.json`
+`visited_rooms` (eval format 2, every room an evaluation episode visited), merged across specialists weighted by
+visits; older evals are skipped. Click a room for everything known about it; wheel zooms, drag or arrows pan,
+Home fits, F5 reloads.
 
 `triforce.play` is the debugging tool: it drives the game through the same Rust code path as training
 (option executor, interrupts, masks, look-ahead) and prints the room, entities, legal actions and an ASCII
