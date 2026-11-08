@@ -36,3 +36,12 @@ trajectories moved to `trajectories/moldorm`; until its retrained model exists, 
 d2-rope r40-obs-s41). The round resumed for the other eight families (stalfos-keese-gel restarted from scratch):
 `--specialists stalfos-keese-gel,goriya,wallmaster,boss-aquamentus,ow-leever-peahat,ow-moblin,d2-rope,moldorm`,
 same settings, GUI log folder `logs/261108_020_r44-fresh/`.
+
+**Second stop: per-room evaluation (Lee, Nov 8).** After goriya (8M) the round was stopped again to finish the
+per-room-visit evaluation started in another session (`cde10ca`: `zelda::visits`, eval `format: 2`) and the
+`zelda-map.py` room map (`6eb8a1c`). Evaluation now runs 100 episodes per start state (`20b2074`; 60 for the
+re-evals below). Re-evaluated with format 2 at 60 per state: all 11 promoted models and the finished r44 runs
+(ow-start 99.7%, ow-octorok 98.7%, ow-zora 97.9%, stalfos-keese-gel 98.1%); goriya r44 at 100 per state: 88.6%,
+health change -0.51 (promoted goriya 79.0%, -0.83). The round resumed from wallmaster (wallmaster,
+boss-aquamentus, ow-leever-peahat, ow-moblin, d2-rope, moldorm), GUI log folder `logs/261108_021_r44-fresh/`.
+`zelda-map.py --run-id r44-fresh` shows the r44 runs where they exist, else the promoted models.
