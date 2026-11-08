@@ -6,16 +6,21 @@
 # 100-219, every other family promoted; baseline: the promoted team's team-obs chains in target/r40).
 #
 #   scripts/experiments/r41_obs_families.sh [yamls|train|eval|chains|all]
+#
+# r42 (round 10 §10) reuses it for the overworld families with the target observation alone (no item targets):
+#   TAG=r42-pointer OUT=target/r42 ITEM_TARGETS=0 SEEDS=40 FAMILIES="ow-zora ..." scripts/experiments/r41_obs_families.sh
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 PY=.venv/bin/python
-OUT=target/r41
+TAG=${TAG:-r41-obs}
+OUT=${OUT:-target/r41}
+ITEM_TARGETS=${ITEM_TARGETS:-1}
 SEEDS=${SEEDS:-"40 41"}
 FAMILIES=${FAMILIES:-"stalfos-keese-gel ow-octorok ow-zora wallmaster boss-aquamentus ow-leever-peahat ow-moblin ow-start"}
 ITERS=${ITERS:-245}
 export TRIFORCE_MODELS_DIR=$PWD/models
 mkdir -p $OUT
-ARM=specialists/arms/r41-obs
+ARM=specialists/arms/$TAG
 
 segments_of() {  # family -> chain segments it plays
   case $1 in
@@ -36,12 +41,13 @@ seg_args() {
 
 yamls() {
   mkdir -p $ARM
+  local reward='reward: {pbrs: true}   # r42: no item targets (round 10 §10)'
+  [ "$ITEM_TARGETS" = 1 ] && reward="reward: {pbrs: true, item_targets: true}   # $TAG (round 10)"
   for f in $FAMILIES; do
-    sed -e 's/^reward: {pbrs: true}$/reward: {pbrs: true, item_targets: true}   # r41 (round 10 §9)/' \
-        -e 's/^obs: {objective: true}$/obs: {objective: true, target: true}       # r41: widened to schema 2/' \
+    sed -e "s/^reward: {pbrs: true}\$/$reward/" \
+        -e "s/^obs: {objective: true}\$/obs: {objective: true, target: true}       # $TAG: widened to schema 2/" \
         specialists/$f.yaml > $ARM/$f.yaml
-    grep -q 'item_targets: true' $ARM/$f.yaml && grep -q 'target: true' $ARM/$f.yaml \
-      || { echo "$f: reward/obs lines not rewritten" >&2; exit 1; }
+    grep -q 'target: true' $ARM/$f.yaml || { echo "$f: obs line not rewritten" >&2; exit 1; }
   done
 }
 
@@ -49,13 +55,13 @@ finished() { grep -qE '"status": "(completed|early_stop)"' models/$1/$2/train_su
 
 train() {
   local pending=() job f s
-  for s in $SEEDS; do for f in $FAMILIES; do finished $f r41-obs-s$s || pending+=($f:$s); done; done
+  for s in $SEEDS; do for f in $FAMILIES; do finished $f $TAG-s$s || pending+=($f:$s); done; done
   for ((i = 0; i < ${#pending[@]}; i += 2)); do
     for job in "${pending[@]:i:2}"; do
       f=${job%%:*}; s=${job#*:}
       timeout 3h $PY -m triforce.train --specialist $ARM/$f.yaml --load models/$f/$(cat models/$f/promoted) \
         --parallel 8 --threads 10 --iterations $ITERS --steps-per-update 4096 --device cuda --seed $s \
-        --run-id r41-obs-s$s > $OUT/train-$f-s$s.log 2>&1 &
+        --run-id $TAG-s$s > $OUT/train-$f-s$s.log 2>&1 &
     done
     wait
     for job in "${pending[@]:i:2}"; do
@@ -76,7 +82,7 @@ evaluate() {
   local f s
   for f in $FAMILIES; do
     ev $f-promoted $f models/$f/$(cat models/$f/promoted)
-    for s in $SEEDS; do ev $f-r41-obs-s$s $ARM/$f.yaml models/$f/r41-obs-s$s; done
+    for s in $SEEDS; do ev $f-$TAG-s$s $ARM/$f.yaml models/$f/$TAG-s$s; done
   done
 }
 
@@ -90,7 +96,7 @@ chains() {
         rm -f $out
         # shellcheck disable=SC2046
         timeout 2h $PY -m triforce.cli eval-chain --runs 120 --parallel 20 --device cuda --first-seed 100 \
-          $(seg_args $seg) --specialist-config $ARM/$f.yaml --checkpoint $f=models/$f/r41-obs-s$s \
+          $(seg_args $seg) --specialist-config $ARM/$f.yaml --checkpoint $f=models/$f/$TAG-s$s \
           --output $out > $OUT/chain-$f-s$s-$seg.log 2>&1
         echo "$(date +%T) $f s$s $seg: $(tail -1 $OUT/chain-$f-s$s-$seg.log | cut -c1-50)"
       done
