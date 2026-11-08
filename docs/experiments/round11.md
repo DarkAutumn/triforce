@@ -27,3 +27,12 @@ to 8M steps per family, through `scripts/train_round.py` with `logs/` for the tr
 order, with the canonical yamls (round 10 §8–§10: `obs.target` everywhere, item targets in the dungeon families).
 Early stop only at 0.99 balanced success for 5 updates (the round default 0.95 would stop before health is refined;
 round 10 §8). Not promoted automatically: the new team must beat the old one on the same chains first.
+
+**Stopped and resumed (Lee, Nov 8).** The first launch (`logs/261108_019_r44-fresh/`) trained ow-start (early stop
+at 0.99 after 180k steps; eval 100%), ow-octorok (8M; eval 98%) and ow-zora (8M; evaluated separately after the
+stop). Lee then had the round stopped right after ow-zora to **split the Moldorm room 2:0x3e out of d2-rope**
+into its own specialist `moldorm` (`0acabad`: yaml, game.yaml tag, routes.yaml family and step; its three 2_3es
+trajectories moved to `trajectories/moldorm`; until its retrained model exists, the promoted moldorm is a copy of
+d2-rope r40-obs-s41). The round resumed for the other eight families (stalfos-keese-gel restarted from scratch):
+`--specialists stalfos-keese-gel,goriya,wallmaster,boss-aquamentus,ow-leever-peahat,ow-moblin,d2-rope,moldorm`,
+same settings, GUI log folder `logs/261108_020_r44-fresh/`.
