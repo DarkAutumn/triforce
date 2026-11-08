@@ -659,3 +659,17 @@ entry below and `crates/zcore/UPSTREAM.md`.
 - **Evidence:** `docs/performance.md` "zcore speed" and "How many envs": env benchmark 1.60× (2,832 → 4,526
   frames/s, same frames and steps); throughput flattens at 16–20 envs; steps to 90% success from scratch don't
   depend on the env count (30/30 runs reached), so wall time is lowest at 12–16.
+
+## 2026-11-07 — Observation schema 2 (the target block); dropped items as shaping targets
+
+- **What:** observation schema 2 adds `target[8]` behind `obs.target` (walking direction to the nearest PBRS target,
+  its wavefront distance and pixel offset, whether it is a dropped item). `reward.item_targets` makes every dropped
+  item a PBRS target, hearts and fairies only below max health. Both are on for d2-rope and goriya, whose promoted
+  models (`r40-obs-s41`, `r40-goriya-obs-s41`) trained with them. Schema-1 checkpoints keep loading (their layout is
+  a subset; a network reads only its own keys) and `--load` with `obs.target` widens them, the new inputs starting
+  at zero, so families migrate one at a time instead of all retraining at once. `reward.fixed_pickup_reward` stays
+  off (no gain on top of item targets).
+- **Why:** Lee's heart series (Nov 7): health gained from pickups is the metric. Lee expected the pointer to be "a
+  little bit cheating, but almost certainly a big difference"; it was, and it also cut damage roughly tenfold.
+- **Evidence:** round 10 §8 (r40): d2-rope from scratch, 2 seeds per arm; D2 chain Dodongo arrivals 44 → 74–87 of
+  120, healed per D2 run 0.45 → 1.2, Goriya arrival health 2.1 → 3.0; team full routes 3/6 → 16/29 of 120.

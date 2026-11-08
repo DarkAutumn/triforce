@@ -83,6 +83,17 @@ measure below, and only when out of reasonable ideas stop and report.
   r32 pulled toward hearts even at full health. Train from scratch (or long enough) where the treatment needs it.
 - **Where it pays** (round 10 §5): d2-rope leaves 0.36/0.39 hearts per visit on the floor in 2:0x7e/0x4e, around
   the Goriya room whose deaths are decided by arrival health.
+- [x] **Step 1 done (r40, round 10 §8, Nov 7):** all three ideas tried on d2-rope from scratch (2 seeds each).
+  Item targets give the pickups (hearts left while hurt −70–80%); the fixed reward helps alone but adds nothing on
+  top. The target observation (schema 2, merged) turns them into health: d2-rope heals 1.2 hearts per D2 run
+  (was 0.45) and leaves almost none while hurt, eval ΔHP −0.05 (was −0.26), Goriya arrival 3.0 hearts (was 2.1).
+  The pointer alone gives success and less damage but no pickups. Goriya widened from the promoted model with
+  both: fewer deaths. **Promoted** d2-rope `r40-obs-s41` and goriya `r40-goriya-obs-s41`: Dodongo arrivals per
+  120 runs D2 44 → 74, post-D1 12/18 → 28/56, full routes 3/6 → 16/29.
+- [ ] **Step 2: the other families** with drops on the route (stalfos-keese-gel, the overworld families,
+  wallmaster, Aquamentus): widen each promoted model with `item_targets` + `obs.target`, 1M steps, and keep it
+  where pickups/health and the chains improve. Then idea: more drops in training (`$52A` drop cycle) if exposure
+  limits the families that rarely see a heart.
 
 
 ### Work in this order

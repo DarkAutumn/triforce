@@ -12,12 +12,14 @@ stands and what to try next, in order).
   `triforce._native` (`crates/triforce-py`). stable-retro and the Python game stack are gone. All start states
   and trajectories were regenerated on zcore (`round8.md`, `round9.md`).
 - **Round 10 (`round10.md`) is the current round:** coverage and performance steps done (Nov 5), then the
-  `todo.md` experiments. ow-start r38b-rebalance is promoted (swordless departures fixed); everything else in the
-  team is unchanged. Training/eval now end `no-damage` after 600 actions without damage either way, and
-  `play-zelda.py --stall-steps` handles stalled games (§6). Nov 7: zcore made 1.6× faster at the env level under
-  an exact accuracy gate, and `--parallel 16` measured as the training setting (§7, `docs/performance.md`). Next:
-  the heart-pickup experiment series (`todo.md` "Next: heart experiments"). Open items need Lee's decisions
-  (`todo.md` "Where it stands").
+  `todo.md` experiments. ow-start r38b-rebalance is promoted (swordless departures fixed). Training/eval end
+  `no-damage` after 600 actions without damage either way, and `play-zelda.py --stall-steps` handles stalled games
+  (§6). Nov 7: zcore made 1.6× faster at the env level under an exact accuracy gate, and `--parallel 16` measured
+  as the training setting (§7, `docs/performance.md`). Heart series step 1 (§8): **observation schema 2** (the
+  `target` block, `obs.target`) and `reward.item_targets`; d2-rope `r40-obs-s41` and goriya `r40-goriya-obs-s41`
+  promoted with both (full routes 3/6 → 16/29 of 120). The other families are still schema-1 models (they load
+  unchanged; `--load` with `obs.target` widens them). Next: step 2, the other families (`todo.md` "Next: heart
+  experiments"). Open items need Lee's decisions (`todo.md` "Where it stands").
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated, reconcile it with todo.md between experiments, log
   every result, check off completed backlog entries, commit each finished item and keep going.

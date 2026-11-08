@@ -257,3 +257,80 @@ Full write-up: `docs/performance.md` "zcore speed (Nov 7)" and "How many envs (`
   success (ow-leever-peahat and ow-moblin, 4/8/12/16/24 envs, seeds 1–3, 30/30 reached): the steps don't depend on
   the env count (medians 209–261k and 315–426k), and wall time is lowest at 12–16 (139–145 s and 188–209 s; at 4
   envs 349 s and 589 s). Recommendation: `--parallel 16` alone, 8 each for two rounds side by side.
+
+## 8. Heart pickups (r40; Lee, Nov 7)
+
+Goal: Link picks up dropped items, hearts above all; main metric real health gained (`hearts healed`,
+`health_change`), not success. Tools: `scripts/heart_stats.py` (dropped/taken/healed/wasted/left and **left while
+hurt**: hearts left on the floor in an episode or chain visit that ended below max health), training metric
+`hearts/healed`.
+
+**Baseline (promoted team, round 10 §1 chains, seeds 100–219):** d2-rope sees 0.40 dropped hearts per D2 visit and
+takes a third; it leaves 0.16 per visit while hurt (~0.9 hearts per D2 run), worst in the key room 2:0x7e (1.28
+drops per visit, 0.48 left while hurt) and 2:0x2e. Goriya takes nearly all its drops; overworld families rarely see
+one. Arrival health at the Goriya room 2:0x1e is 2.07 and a third of its visits die.
+
+**Controls (`85f0e81`, default off):** `reward.fixed_pickup_reward` (health gained pays `REWARD_MAXIMUM`, Lee's idea
+1) and `reward.item_targets` (every dropped item is a PBRS target, hearts and fairies only below max health, idea 3).
+**Idea 2, the target observation** (branch `r40-target-obs`, worktree `../triforce2-obs`): observation schema 2 adds
+`target[8]` behind `obs.target`: walking-direction one-hot, wavefront distance, pixel offset to the nearest PBRS
+target and whether it is a dropped item, from the same wavefront the shaping uses. Schema-1 checkpoints still load
+(their spec is a subset; they read only their own keys) and can be widened on `--load` (new inputs start at zero).
+
+**r40 arms:** d2-rope from scratch, 490 updates (2,007,040 steps), seeds 40/41, two at a time at 8 envs
+(`scripts/experiments/r40_hearts.sh`); base = canonical yaml, fixed, targets, both (fixed + targets), obs (targets +
+target observation). Each model: evaluation under the canonical yaml (20 episodes per state, seed 0, 420 episodes)
+and the D2 chain (120 runs, seeds 100–219, every other family promoted).
+
+| model | eval success | eval ΔHP | healed/ep | left hurt/ep | D2 wins /120 | healed/D2 run | 0x1e arrival hp | 0x1e survival |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| promoted (r35) | 93.6% | −0.26 | 0.086 | 0.179 | 44 | 0.45 | 2.07 | 66% |
+| base s40 / s41 | 87.1 / 87.6% | −0.45 / −0.40 | 0.165 / 0.162 | 0.105 / 0.074 | 27 / 25 | 0.82 / 0.49 | 2.19 / 1.60 | 75 / 57% |
+| fixed s40 / s41 | 90.5 / 88.6% | −0.39 / −0.43 | 0.206 / 0.205 | 0.050 / 0.031 | 36 / 23 | 0.85 / 0.75 | 2.40 / 2.00 | 76 / 73% |
+| targets s40 / s41 | 89.0 / 89.0% | −0.37 / −0.40 | 0.233 / 0.201 | 0.019 / 0.052 | 38 / 16 | 1.07 / 0.79 | 2.33 / 2.06 | 70 / 58% |
+| both s40 / s41 | 86.7 / 89.3% | −0.45 / −0.32 | 0.227 / 0.242 | 0.029 / 0.033 | 25 / 24 | 0.72 / 0.75 | 2.50 / 2.23 | 82 / 68% |
+| **obs s40 / s41** | **95.0 / 96.0%** | **−0.04 / −0.06** | 0.252 / 0.232 | 0.010 / 0.005 | **74 / 87** | 1.23 / 1.16 | **2.97 / 2.96** | 79 / 91% |
+
+(Healed per D2 run counts d2-rope's rooms only.) Readings:
+- Every treatment raises pickups over base. Item targets do most of it (hearts left while hurt −70–80%); the fixed
+  reward alone gives +25% healed but adds nothing on top of targets.
+- Only the target observation turns that into health: with the same shaping as `targets`, damage falls about
+  tenfold (ΔHP −0.37 → −0.05), success rises to 95–96%, and both 2M-step scratch models beat the long-trained
+  promoted d2-rope on every measure. In the D2 chain they heal 1.2 hearts per run (promoted 0.45), leave almost no
+  hearts while hurt (0.001 per visit), arrive at the Goriya room 2:0x1e with ~3 hearts instead of 2.07, and reach
+  Dodongo in 74 and 87 of 120 runs (promoted 44). Schema-1 scratch arms stay under the promoted model in the chain
+  (16–38).
+
+**Attribution, pointer only** (`r40-hearts-pointer`: target observation, no item targets, so it points at exits and
+enemies only; same budget and seeds): eval 95.5 / 95.5%, ΔHP −0.19 / −0.18, healed 0.061 / 0.094, left while hurt
+0.174 / 0.133; D2 61 / 57 of 120, healed per D2 run 0.32 / 0.45, Goriya arrival 2.16 / 2.28. The pointer by itself
+buys success and less damage but no pickups (healed and left-while-hurt at the promoted level). Item targets buy the
+pickups. Together the pointer also points at the hearts, which gives the best health by far.
+
+**Goriya** (`r40-goriya-obs`: the promoted r31-block1 widened to schema 2, item targets + target observation, 245
+updates = 1,003,520 steps, seeds 40/41; control: r39's `ctl` arms, the same continuation with the canonical yaml,
+§5). Dodongo arrivals per segment (120 runs, seeds 100–219, every other family promoted), and goriya over all five
+segments:
+
+| goriya | D2 | post-D1 main | post-D1 fairy | full main | full fairy | goriya-room deaths | healed per visit | eval success, ΔHP |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| promoted r31-block1 | 44 | 12 | 18 | 3 | 6 | 29.8% | 0.068 | 78.1%, −0.72 (r39 eval) |
+| r39 ctl s39 / s2 | 40 / 39 | 5 / 9 | 22 / 10 | 7 / 6 | 11 / 12 | 31.3 / 30.8% | 0.064 / 0.073 | 72.1 / 80.0%, −1.10 / −0.80 |
+| obs s40 / s41 | 42 / 51 | 6 / 10 | 29 / 25 | 11 / 5 | 16 / 17 | 28.3 / 25.1% | 0.065 / 0.095 | 82.9 / 80.4%, −0.72 / −0.72 |
+
+(r39 evaluated 40 episodes per state on CPU; these 20 on CUDA.) Goriya already took its drops; the gain is fewer
+deaths (totals 104 / 108 vs 83 promoted, 85 / 76 controls).
+
+**Team** (Dodongo arrivals per 120 runs):
+
+| team | D2 | post-D1 main | post-D1 fairy | full main | full fairy |
+|---|---:|---:|---:|---:|---:|
+| promoted (§1) | 44 | 12 | 18 | 3 | 6 |
+| + obs d2-rope s41 | 87 | 29 | 58 | 12 | 25 |
+| + obs d2-rope s41 + obs goriya s41 | 74 | 28 | 56 | 16 | 29 |
+
+**Promoted:** d2-rope `r40-obs-s41`, goriya `r40-goriya-obs-s41`; `specialists/d2-rope.yaml` and `goriya.yaml` now set
+`reward.item_targets` and `obs.target` (what they trained with). The promoted team with the canonical yamls
+reproduces the "+ both" D2 chain run for run (120/120 identical). Observation schema 2 is merged into main
+(`ee72806`); the other families stay schema-1 models and load unchanged. Scripts: `r40_hearts.sh` (schema-1 arms),
+`r40_obs_eval.sh` (schema-2 evaluations and chains).
