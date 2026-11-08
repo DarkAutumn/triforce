@@ -6,8 +6,10 @@ import numpy as np
 import pytest
 import torch
 
-from triforce import registry
-from triforce.model import ModelConfig, ZeldaPolicy
+from triforce import _native, registry
+from triforce.evaluate import evaluate_specialist
+from triforce.model import ModelConfig, ZeldaPolicy, obs_spec_from_space
+from triforce.observation import observation_space
 from triforce.ppo import PPO, Collector, PPOConfig
 
 from . import synthetic
@@ -58,6 +60,68 @@ def test_schema_mismatch_raises(tmp_path, key):
     with pytest.raises(registry.SchemaMismatchError):
         registry.promote('d1-test', 'old', root=tmp_path)
     assert registry.load_checkpoint(path, check_schema=False)[key] == checkpoint[key]
+
+
+SMALL = dict(hidden_dim=32, entity_d_model=32, entity_ff_dim=32, grid_out_dim=32)
+
+
+def _schema1_checkpoint(tmp_path, edit=None):
+    """A checkpoint saved as obs schema 1: the current layout without ``target`` (``edit`` changes the spec)."""
+    spec = obs_spec_from_space(observation_space())
+    del spec['target']
+    if edit:
+        edit(spec)
+    network = ZeldaPolicy(config=ModelConfig(obs_spec=spec, **SMALL))
+    path = registry.save_checkpoint('ow-start', 'schema1', network, root=tmp_path)
+    checkpoint = torch.load(path, weights_only=False)
+    checkpoint['obs_schema_version'] = 1
+    torch.save(checkpoint, path)
+    return path
+
+
+def test_older_schema_subset_checkpoint_reads_only_its_own_keys(tmp_path, states_dir):
+    assert registry.obs_schema_version() == 2
+    network, checkpoint = registry.load_model(_schema1_checkpoint(tmp_path))
+    assert checkpoint['obs_schema_version'] == 1 and 'target' not in network.config.obs_spec
+    # Eagerly on schema-2 observations: the target block is ignored.
+    space = observation_space()
+    space.seed(0)
+    obs = {key: np.stack([space[key].sample() for _ in range(3)]) for key in space}
+    obs['action_mask'][:] = True
+    actions = torch.as_tensor([[0, 2, 1]] * 3)
+    with torch.no_grad():
+        before = network.evaluate(obs, actions=actions).log_prob
+        obs['target'] = -obs['target'] + 0.5
+        assert torch.equal(before, network.evaluate(obs, actions=actions).log_prob)
+    # Through the native eval pool (PoolInference / RolloutPolicy over schema-2 rows).
+    config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=5)
+    result = evaluate_specialist(config, tmp_path / 'ow-start' / 'schema1', episodes_per_state=2, parallel=2,
+                                 threads=1, states_dir=states_dir)
+    assert result['episodes'] == 2 and all(0 < r['steps'] <= 5 for r in result['records'])
+
+
+def test_older_schema_checkpoint_trains_on_current_rows():
+    """``--load`` of an older model: the rollout and update see the pool's extra keys and ignore them."""
+    spec = obs_spec_from_space(synthetic.observation_space())
+    del spec['objective']
+    network = ZeldaPolicy(config=ModelConfig(obs_spec=spec, hidden_dim=32, grid_encoder='linear'))
+    collector = Collector(synthetic.ListPool(synthetic.BanditEnv, 2), 16, 0.99, 0.95)
+    collector.collect(network, 'cpu')
+    assert 'objective' in collector.buffer.observation
+    PPO(PPOConfig(num_epochs=1)).optimize(network, collector.buffer)
+
+
+@pytest.mark.parametrize('edit, match', [
+    (lambda spec: spec.update(extra={'shape': [3], 'vocab': None}), "'extra' is not in the current"),
+    (lambda spec: spec['link'].update(shape=[80]), "'link' is shape"),
+    (lambda spec: spec['entity_types'].update(vocab=100), "'entity_types' is shape"),
+])
+def test_older_schema_with_a_different_layout_is_rejected(tmp_path, edit, match):
+    path = _schema1_checkpoint(tmp_path, edit)
+    with pytest.raises(registry.SchemaMismatchError, match=match):
+        registry.load_checkpoint(path)
+    with pytest.raises(registry.SchemaMismatchError):
+        registry.promote('ow-start', 'schema1', root=tmp_path)
 
 
 def test_promote_round_trip_and_listing(tmp_path, monkeypatch):

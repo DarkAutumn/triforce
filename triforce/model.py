@@ -286,12 +286,16 @@ class ZeldaPolicy(nn.Module):
     # ------------------------------------------------------------------ inputs
 
     def _batch(self, obs) -> dict:
-        """Converts numpy/tensor observations to batched tensors on this module's device."""
+        """Converts numpy/tensor observations to batched tensors on this module's device.  Keys outside this
+        network's ``obs_spec`` (newer observation blocks an older checkpoint never saw) are dropped, except the
+        action mask."""
         device = self.kind_head.weight.device
         result = {}
         for key, value in obs.items():
-            tensor = torch.as_tensor(value, device=device)
             spec = self.config.obs_spec.get(key)
+            if spec is None and key != MASK_KEY:
+                continue
+            tensor = torch.as_tensor(value, device=device)
             if spec is not None and tensor.dim() == len(spec['shape']):
                 tensor = tensor.unsqueeze(0)
             result[key] = tensor

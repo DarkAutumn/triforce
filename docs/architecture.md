@@ -86,7 +86,8 @@ N, S, W, E; all 0 on a target tile or unreachable), `target_distance` is Link's 
 to 1 (1 when unreachable or without a wavefront), `target_dx`/`target_dy` are the pixel offset from Link to the
 target tile the steepest descent reaches (/256, /176; 0 if none) and `target_is_item` says whether that tile
 belongs to a dropped item. Chains rebuild the same wavefront (the acting specialist's `reward` decides the item
-targets) only for specialists with `obs.target` on. Schema 1 checkpoints don't load under schema 2.
+targets) only for specialists with `obs.target` on. Schema 1 checkpoints still load (their layout is schema 2
+without `target`, which the network drops from its input), so they act, evaluate and train next to schema 2 ones.
 
 Dungeon objectives fight for pending treasure or when every routed exit is closed by a living-monster shutter
 trigger (all-dead, ringleader, last-boss or clear-to-drop). An unrelated shutter or an open route exit does not
@@ -197,7 +198,9 @@ at 2N. `eval-chain` leaves it off.
 - GAE discount per step: `gamma ** (frames / 8)`, `gamma = 0.99`; `frames` stored in the rollout buffer.
 - Checkpoint (`models/<specialist>/<run-id>/ckpt.pt`): `obs_schema_version`, `action_schema_version`,
   `specialist`, `model_config`, `state_dict`, `optimizer`, `iterations`, `steps`, `metrics`.
-  Loading with a mismatched schema version raises.
+  Loading raises `SchemaMismatchError` on a different action schema, a newer observation schema, or an older one
+  whose `model_config.obs_spec` isn't a subset of the current `OBS_SPEC` (same shape and vocabulary per key); the
+  network reads only the keys of its own `obs_spec` (`ZeldaPolicy._batch`).
 - `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
   records `status` (completed | early_stop | interrupted), total and this run's (`iterations_trained`,
