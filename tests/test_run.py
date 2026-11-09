@@ -33,7 +33,7 @@ def _records(path):
 def test_failed_run_reports_rooms_and_exits_nonzero(models_dir, west_checkpoint, tmp_path, capsys):
     output = tmp_path / 'runs' / 'runner.jsonl'
     assert run.main(['--models-dir', str(models_dir), '--checkpoint', f'ow-start={west_checkpoint}', '--seed', '3',
-                     '--deterministic', '--output', str(output)]) == 1
+                     '--act', 'argmax', '--output', str(output)]) == 1
     lines = capsys.readouterr().out.splitlines()
     room, summary = lines
     assert room.split()[:4] == ['0', 'L0', '0x77', 'ow-start'] and 'exit-wrong' in room

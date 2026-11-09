@@ -17,7 +17,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 import torch
 
 from . import _native
-from .registry import load_model, promoted_checkpoint
+from .registry import act_mode, load_model, promoted_checkpoint
 from .replay import ReplayWriter, header, location_text, models_header
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import MapLocation
@@ -142,7 +142,9 @@ class Policies:
 
     ``checkpoints`` (name -> checkpoint file or run dir) overrides the registry's promoted model; ``networks``
     (name -> a ``ZeldaPolicy``) supplies a model directly; ``specialist_configs`` (name -> config) replaces a
-    specialist's canonical YAML at runtime.  ``checkpoints`` afterwards maps each loaded name to its file."""
+    specialist's canonical YAML at runtime.  ``checkpoints`` afterwards maps each loaded name to its file and
+    ``deterministic`` holds, per policy, whether its model acts by argmax (the run's act mode, ``registry``; a
+    given network samples)."""
 
     def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
@@ -155,9 +157,11 @@ class Policies:
         self.configs: List[SpecialistConfig] = []
         self.policies: list = []
         self.checkpoints: Dict[str, str] = {}
+        self.deterministic: List[bool] = []
         self.missing: Dict[str, str] = {}
         for name in sorted(set(names if names is not None else list_specialists()) | set(given) | set(configs)):
             network = given.get(name)
+            argmax = False
             if network is None:
                 try:
                     path = overrides.get(name) or promoted_checkpoint(name, models_dir)
@@ -167,9 +171,11 @@ class Policies:
                     self.missing[name] = str(err)
                     continue
                 self.checkpoints[name] = str(path)
+                argmax = act_mode(path) == 'argmax'
             self.names.append(name)
             self.configs.append(configs.get(name) or load_specialist(name))
             self.policies.append(network.to_native())
+            self.deterministic.append(argmax)
 
 
 class ChainPool:
@@ -178,16 +184,20 @@ class ChainPool:
     ``stall_steps`` (watch player only; None = off): room events carry ``stalled`` after that many actions in a
     room without damage dealt or taken, and the run ends ``stuck`` at twice as many.  ``hold_finished_frame``
     (watch player): a finished run's last frame stays published, and its env waits, until
-    ``pool.set_hold(env, False)``.  ``plays``: write every run to this replay file (``triforce.replay``)."""
+    ``pool.set_hold(env, False)``.  ``plays``: write every run to this replay file (``triforce.replay``).
+    ``deterministic``: None = each policy's act mode (``Policies.deterministic``), else argmax (True) or sampling
+    (False) for every policy."""
 
     def __init__(self, route: Route, seeds: Sequence[int], policies: Policies, num_envs: int = 1,
-                 threads: Optional[int] = None, seed: int = 0, fps: float = 0.0, deterministic: bool = False,
+                 threads: Optional[int] = None, seed: int = 0, fps: float = 0.0,
+                 deterministic: Optional[bool] = None,
                  max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: bool = False,
                  stall_steps: Optional[int] = None, hold_finished_frame: bool = False, plays=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.route = route
         self.policies = policies
-        self.deterministic = deterministic
+        self.deterministic = (list(policies.deterministic) if deterministic is None
+                              else [bool(deterministic)] * len(policies.policies))
         start_from = None if route.start_state == 'start' else route.start_state
         states_dir = None if states_dir is None else str(states_dir)
         task = _native.ChainTask(policies.configs, route.name, [int(s) for s in seeds], stop_at=route.terminal,
@@ -201,8 +211,8 @@ class ChainPool:
             task = {'configs': [config.to_json() for config in policies.configs], 'route': route.name,
                     'start_from': start_from, 'stop_at': location_text(route.terminal), 'max_steps': max_steps,
                     'stall_steps': stall_steps, 'missing': policies.missing}
-            models = models_header(policies.names, policies.policies, policies.checkpoints)
-            self.writer = ReplayWriter(plays, header('chain', task, models, deterministic, states_dir))
+            models = models_header(policies.names, policies.policies, policies.checkpoints, self.deterministic)
+            self.writer = ReplayWriter(plays, header('chain', task, models, states_dir))
         self._plays: Dict[int, dict] = {}
         self._results: Dict[int, dict] = {}
 
@@ -259,7 +269,8 @@ class Runner:
     ``run_many(route, seeds)`` for a batch on ``parallel`` envs."""
     # pylint: disable=too-many-instance-attributes
 
-    def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None, deterministic: bool = False,
+    def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
+                 deterministic: Optional[bool] = None,
                  max_steps: int = DEFAULT_MAX_STEPS,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
                  networks: Optional[Dict[str, object]] = None, parallel: int = 1, threads: Optional[int] = None,
@@ -269,6 +280,7 @@ class Runner:
         specialist_configs: specialist name → loaded config, replacing its canonical YAML at runtime.
         networks: specialist name → a ``ZeldaPolicy`` to act with instead of a checkpoint.
         parallel: envs in the chain pool; threads: its worker threads (default min(parallel, cores)).
+        deterministic: None = each model's act mode (registry), else argmax (True) or sampling (False) for all.
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.policies = Policies(models_dir, checkpoints, specialist_configs, networks)

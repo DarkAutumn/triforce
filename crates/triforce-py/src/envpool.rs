@@ -648,8 +648,9 @@ impl PyEnvPool {
         out: &Bound<'_, PyDict>,
         deterministic: bool,
     ) -> PyResult<usize> {
-        let nets = policies.iter().map(|p| p.inner.clone()).collect();
-        let actor = PolicyActor::new(&LAYOUT, nets, deterministic).map_err(PyValueError::new_err)?;
+        let nets: Vec<_> = policies.iter().map(|p| p.inner.clone()).collect();
+        let flags = vec![deterministic; nets.len()];
+        let actor = PolicyActor::new(&LAYOUT, nets, flags).map_err(PyValueError::new_err)?;
         let mut buffers = RolloutOut::borrow(out, self.pool.num_envs(), steps)?;
         let rollouts = py
             .detach(|| self.pool.rollout(steps, Arc::new(actor)))
@@ -660,18 +661,19 @@ impl PyEnvPool {
 
     /// Lets every env act on its own with the Rust `policies` (one `_native.Policy` per policy index), decision
     /// after decision on the worker threads, until the task's jobs run out (eval jobs, chain seeds). Sampled
-    /// with keyed noise (job, decision) unless `deterministic`. Returns at once; follow it with `poll_events`,
+    /// with keyed noise (job, decision) unless `deterministic` (a bool for every policy, or one per policy).
+    /// Returns at once; follow it with `poll_events`,
     /// `poll_plays`, `active` and `wait_idle`. A chain run that ends with `hold_finished_frame` parks its env
     /// until `set_hold(env, False)`. `record`: None, 'actions' or 'observations' (see `poll_plays`).
     /// `replay` {job: [n, 3] actions}: replay those recorded episodes instead (the policies score the recorded
     /// actions; a job outside `replay` or a replay running past its actions fails the env). After `play` the
     /// pool only plays (`rollout` and another `play` raise).
-    #[pyo3(signature = (policies, deterministic=false, record=None, replay=None))]
+    #[pyo3(signature = (policies, deterministic=None, record=None, replay=None))]
     fn play(
         &self,
         py: Python<'_>,
         policies: Vec<PyRef<'_, PyPolicy>>,
-        deterministic: bool,
+        deterministic: Option<&Bound<'_, PyAny>>,
         record: Option<&str>,
         replay: Option<HashMap<i64, Bound<'_, PyAny>>>,
     ) -> PyResult<()> {
@@ -685,9 +687,16 @@ impl PyEnvPool {
                 )));
             }
         };
-        let nets = policies.iter().map(|p| p.inner.clone()).collect();
+        let nets: Vec<_> = policies.iter().map(|p| p.inner.clone()).collect();
+        let flags: Vec<bool> = match deterministic {
+            None => vec![false; nets.len()],
+            Some(d) => match d.extract::<bool>() {
+                Ok(all) => vec![all; nets.len()],
+                Err(_) => d.extract()?,
+            },
+        };
         let actor = match replay {
-            None => PolicyActor::new(&LAYOUT, nets, deterministic),
+            None => PolicyActor::new(&LAYOUT, nets, flags),
             Some(plays) => {
                 let mut actions = HashMap::new();
                 for (job, a) in plays {

@@ -22,7 +22,8 @@ pub struct PolicyActor {
     features: usize,
     grid: usize,
     mask: usize,
-    deterministic: bool,
+    /// Per policy: argmax instead of keyed sampling.
+    deterministic: Vec<bool>,
     /// Replaying: each episode's (job's) recorded actions, by decision step.
     replay: Option<HashMap<i64, Vec<ZeldaAction>>>,
 }
@@ -33,8 +34,12 @@ pub struct ActorScratch {
 }
 
 impl PolicyActor {
-    /// `policies[p]` acts where the pool's policy column is `p`.
-    pub fn new(layout: &ObsLayout, policies: Vec<Arc<Policy>>, deterministic: bool) -> Result<PolicyActor, String> {
+    /// `policies[p]` acts where the pool's policy column is `p`, with argmax where `deterministic[p]` (one flag per
+    /// policy).
+    pub fn new(layout: &ObsLayout, policies: Vec<Arc<Policy>>, deterministic: Vec<bool>) -> Result<PolicyActor, String> {
+        if deterministic.len() != policies.len() {
+            return Err(format!("{} deterministic flags for {} policies", deterministic.len(), policies.len()));
+        }
         let key = |name: &str| layout.key(name).ok_or_else(|| format!("the pool's observations have no '{name}'"));
         let mut vectors = Vec::new();
         for p in &policies {
@@ -64,7 +69,8 @@ impl PolicyActor {
         policies: Vec<Arc<Policy>>,
         actions: HashMap<i64, Vec<ZeldaAction>>,
     ) -> Result<PolicyActor, String> {
-        let mut actor = PolicyActor::new(layout, policies, true)?;
+        let n = policies.len();
+        let mut actor = PolicyActor::new(layout, policies, vec![true; n])?;
         actor.replay = Some(actions);
         Ok(actor)
     }
@@ -129,7 +135,7 @@ impl Actor<ZeldaAction> for PolicyActor {
             })?;
             let index = |i: i64| usize::try_from(i).map_err(|_| format!("bad recorded action {action:?}"));
             Pick::Given([index(action[0])?, index(action[1])?, index(action[2])?])
-        } else if self.deterministic {
+        } else if self.deterministic[p] {
             Pick::Argmax
         } else {
             keyed_noise(job, step, noise);

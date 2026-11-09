@@ -7,7 +7,7 @@ import sys
 
 import numpy as np
 
-from triforce import _native, replay
+from triforce import _native, evaluate, replay
 from triforce.evaluate import (_boss_stats, _group, _linger_stats, _room_key, _visited_rooms, evaluate_specialist,
                                format_report)
 from triforce.model import ModelConfig, ZeldaPolicy
@@ -31,6 +31,26 @@ def test_evaluate_cli_uses_supplied_task_instead_of_reloading_its_name(states_di
     assert result['episodes'] == 1
     assert result['endings'] == {'max-steps': 1}
     assert result['records'][0]['steps'] == 1
+
+
+def test_evaluate_cli_logs_a_folder_the_training_gui_reads(states_dir, tmp_path, monkeypatch):
+    monkeypatch.setenv('TRIFORCE_STATES_DIR', str(states_dir))
+    checkpoint = save_checkpoint('ow-start', 'logged', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    config = tmp_path / 'short.yaml'
+    config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
+                      "start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 3\n")
+    logs = tmp_path / 'logs'
+    assert evaluate.main(['--specialist', str(config), '--checkpoint', str(checkpoint), '--episodes-per-state', '3',
+                          '--parallel', '2', '--output', str(tmp_path / 'eval.json'), '--logs-dir', str(logs)]) == 0
+    (folder,) = logs.iterdir()
+    plan = json.loads((folder / 'training.json').read_text())
+    assert (plan['kind'], plan['status'], plan['runs'][0]['status']) == ('eval', 'completed', 'ok')
+    events = [json.loads(line) for line in (folder / 'ow-start.jsonl').read_text().splitlines()]
+    assert [e['event'] for e in events][0] == 'eval_start' and [e['event'] for e in events][-2:] == ['eval', 'end']
+    assert events[0]['episodes'] == 3 and events[-2]['episodes'] == 3 and events[-1]['status'] == 'ok'
+    assert evaluate.main(['--specialist', str(config), '--checkpoint', str(checkpoint), '--episodes-per-state', '1',
+                          '--output', str(tmp_path / 'eval.json'), '--logs-dir', str(logs), '--no-log']) == 0
+    assert len(list(logs.iterdir())) == 1
 
 
 def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tmp_path):

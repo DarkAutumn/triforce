@@ -18,6 +18,7 @@ from typing import List, Optional
 import numpy as np
 
 from . import _native
+from .registry import ACT_CHOICES, act_override
 from .runner import Route, Runner, RunResult, parse_location, write_jsonl
 
 FRAME_RATE = 60.0988
@@ -140,7 +141,8 @@ def main(argv=None):
     view.add_argument('--render', action='store_true', help="show the game in a window with an overlay")
     view.add_argument('--video', metavar='PATH', help="write every frame of the run to this mp4 (needs ffmpeg)")
     parser.add_argument('--fps', type=float, default=60.0, help="with --render: frames per second (0 = unthrottled)")
-    parser.add_argument('--deterministic', action='store_true', help="argmax actions instead of sampling")
+    parser.add_argument('--act', choices=ACT_CHOICES, default='model',
+                        help="model: each model's act mode (registry); sample / argmax: that for every model")
     parser.add_argument('--stop-at', help="end the route on entering this room instead, e.g. 1:0x73")
     parser.add_argument('--from', dest='start_from', help="start from this savestate (e.g. 2_7ds_0), not the game start")
     parser.add_argument('--models-dir', default=None)
@@ -153,7 +155,7 @@ def main(argv=None):
         ffmpeg_command(args.video)      # fail before playing when ffmpeg is missing
     route = Route.load(args.route, parse_location(args.stop_at) if args.stop_at else None, args.start_from)
     overrides = dict(item.split('=', 1) for item in args.checkpoint)
-    runner = Runner(models_dir=args.models_dir, checkpoints=overrides, deterministic=args.deterministic)
+    runner = Runner(models_dir=args.models_dir, checkpoints=overrides, deterministic=act_override(args.act))
     if args.video:
         result, movie = record_movie(runner, route, args.seed)
         frames = write_video(movie, args.video)

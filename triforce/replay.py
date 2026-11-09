@@ -3,9 +3,10 @@ exact enough to replay it.
 
 A replay file is JSON lines.  The first line is the header: ``kind`` (``eval`` or ``chain``), ``task`` (what the
 pool was built from: the specialist config(s) as JSON, and for chains the route, ``start_from``, ``stop_at``,
-``max_steps``, ``stall_steps`` and ``missing``), ``models`` (in policy-index order: ``name``, ``checkpoint`` and
-the Rust network's ``hash``), ``backend`` (where the probabilities came from), ``code`` (``git describe --always
---dirty``), ``data`` (a hash of game.yaml and routes.yaml), ``deterministic`` and ``states_dir``.  Every further line
+``max_steps``, ``stall_steps`` and ``missing``), ``models`` (in policy-index order: ``name``, ``checkpoint``, the
+Rust network's ``hash`` and ``deterministic``, whether it acted by argmax), ``backend`` (where the probabilities came
+from), ``code`` (``git describe --always --dirty``), ``data`` (a hash of game.yaml and routes.yaml) and
+``states_dir``.  Every further line
 is one played episode: ``job`` (its key: the eval seed or the chain run seed), ``start_state`` (eval),
 ``actions`` (base64, one byte per head index, three per decision) and ``result`` (the eval record or the run
 result).
@@ -29,7 +30,7 @@ import numpy as np
 from . import _native
 
 BACKEND = 'rust-cpu'
-FORMAT = 1
+FORMAT = 2
 
 
 @lru_cache(maxsize=1)
@@ -70,16 +71,18 @@ def location_text(location) -> Optional[str]:
     return f"{location.level}:0x{location.value:02x}" + (':cave' if location.in_cave else '')
 
 
-def models_header(names: Iterable[str], policies: Iterable, checkpoints: dict) -> list:
-    """The ``models`` entry: per policy index, its name, checkpoint and Rust network hash."""
-    return [{'name': name, 'checkpoint': checkpoints.get(name), 'hash': f'{policy.hash:016x}'}
-            for name, policy in zip(names, policies)]
+def models_header(names: Iterable[str], policies: Iterable, checkpoints: dict, deterministic: Iterable[bool]) -> list:
+    """The ``models`` entry: per policy index, its name, checkpoint, Rust network hash and whether it acted by
+    argmax."""
+    return [{'name': name, 'checkpoint': checkpoints.get(name), 'hash': f'{policy.hash:016x}',
+             'deterministic': bool(argmax)}
+            for name, policy, argmax in zip(names, policies, deterministic)]
 
 
-def header(kind: str, task: dict, models: list, deterministic: bool, states_dir=None) -> dict:
+def header(kind: str, task: dict, models: list, states_dir=None) -> dict:
     """A replay file's first line."""
     return {'format': FORMAT, 'kind': kind, 'task': task, 'models': models, 'backend': BACKEND,
-            'code': code_version(), 'data': data_hash(), 'deterministic': bool(deterministic),
+            'code': code_version(), 'data': data_hash(),
             'states_dir': None if states_dir is None else str(states_dir)}
 
 

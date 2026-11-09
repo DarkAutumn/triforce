@@ -30,7 +30,6 @@ import shlex
 import subprocess
 import sys
 import threading
-import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -39,8 +38,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # pylint: disable=wrong-import-position
 from triforce import _native, registry
-from triforce.cli import eval_chain
-from triforce.evaluate import evaluate_specialist
+from triforce.cli import chain_progress_events, eval_chain
+from triforce.evaluate import eval_event, evaluate_specialist
 from triforce.events import LOGS_DIR_ENV, EventLog, TrainingPlan, new_log_dir
 from triforce.metrics import read_jsonl
 from triforce.runner import write_jsonl
@@ -230,20 +229,9 @@ def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
     trains."""
     events = EventLog(log_dir / f'{name}.jsonl', specialist=name, run_id=args.round)
     run_dir = Path(record['run_dir'])
-    events.emit('eval_start', checkpoint=record['checkpoint'], episodes_per_state=args.episodes_per_state,
-                episodes=args.episodes_per_state * record['seed_states'], parallel=args.eval_parallel)
-    progress = {'successes': 0, 'last': 0.0}
-
-    def on_episode(episode: dict, done: int, total: int):
-        progress['successes'] += bool(episode['success'])
-        now = time.monotonic()
-        if now - progress['last'] >= 1.0 or done == total:     # at most ~1 event/second
-            progress['last'] = now
-            events.emit('eval_progress', done=done, episodes=total, success_rate=progress['successes'] / done)
-
     try:
         result = evaluate_specialist(name, record['checkpoint'], args.episodes_per_state,
-                                     parallel=args.eval_parallel, seed=0, on_episode=on_episode)
+                                     parallel=args.eval_parallel, seed=0, events=events)
     except Exception as error:  # pylint: disable=broad-exception-caught
         record['status'] = 'eval-failed' if record['status'] == 'ok' else record['status']
         record['error'] = f"{type(error).__name__}: {error}"
@@ -253,29 +241,15 @@ def evaluate_record(name: str, record: dict, args, log_dir: Path) -> dict:
         return record
     with open(run_dir / 'eval.json', 'w', encoding='utf-8') as file:
         json.dump(result, file, indent=2)
+    fields = eval_event(result)
     record.update(eval_success_rate=result['success_rate'], eval_episodes=result['episodes'],
                   eval_health=result['mean_health_fraction'], eval_health_change=result['mean_health_change'],
                   eval_health_change_total=result['mean_health_change_total'],
                   eval_hearts_dropped=result['hearts_dropped'], eval_hearts_taken=result['hearts_taken'],
-                  eval_hearts_left=result['hearts_left'],
-                  eval_by_room={room: stats['success_rate'] for room, stats in result['by_room'].items()})
-    linger = {key: value for key, value in result.items() if key.startswith('linger_')}
-    linger_groups = {
-        f'{group}_linger': {name: {key: value for key, value in stats.items() if key.startswith('linger_')}
-                            for name, stats in result[group].items()
-                            if 'linger_max_steps' in stats}
-        for group in ('by_room', 'by_state')}
-    record.update({f'eval_{key}': value for key, value in {**linger, **linger_groups}.items()})
-    events.emit('eval', success_rate=result['success_rate'], episodes=result['episodes'],
-                health=result['mean_health_fraction'], start_health=result['mean_start_health_fraction'],
-                health_change=result['mean_health_change'],
-                health_change_total=result['mean_health_change_total'], hearts_dropped=result['hearts_dropped'],
-                hearts_taken=result['hearts_taken'], hearts_left=result['hearts_left'],
-                by_room=record['eval_by_room'],
-                by_room_failures={room: {'episodes': stats['episodes'], 'failures': stats['failures']}
-                                  for room, stats in result['by_room'].items()},
-                by_state={state: stats['success_rate'] for state, stats in result['by_state'].items()},
-                path=str(run_dir / 'eval.json'), **linger, **linger_groups)
+                  eval_hearts_left=result['hearts_left'], eval_by_room=fields['by_room'])
+    record.update({f'eval_{key}': value for key, value in fields.items()
+                   if key.startswith('linger_') or key in ('by_room_linger', 'by_state_linger')})
+    events.emit('eval', **fields, path=str(run_dir / 'eval.json'))
     events.emit('end', **end_fields(record))
     say(f"[round] {name}: eval success {result['success_rate']:.0%} over {result['episodes']} episodes")
     return record
@@ -407,7 +381,8 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
         events.emit('chain_start', runs=args.chain_runs, parallel=args.chain_parallel, overrides=overrides)
         try:
             results, chain = eval_chain(_native.DEFAULT_ROUTE, args.chain_runs, args.chain_parallel,
-                                        models_dir=str(models), overrides=overrides)
+                                        models_dir=str(models), overrides=overrides,
+                                        on_result=chain_progress_events(events, args.chain_runs))
             chain_path = models / f"{args.round}-chain.jsonl"
             chain_path.unlink(missing_ok=True)      # write_jsonl appends
             write_jsonl(str(chain_path), results)

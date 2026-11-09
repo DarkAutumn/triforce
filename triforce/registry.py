@@ -9,7 +9,11 @@ same shape and vocabulary (schema 1 is schema 2 without ``target``).  The networ
 
 The models root is, in order: the ``root`` argument, ``$TRIFORCE_MODELS_DIR``, ``<repo>/models``.
 
-CLI: ``python -m triforce.registry list <specialist>`` / ``promote <specialist> <run-id>``.
+How a run's model acts (better-play §6b) is ``<run dir>/act``: ``sample`` (keyed sampling, the default when the
+file is absent) or ``argmax``, chosen by evaluating both and set with ``promote --act``.  Chains, the watch player
+and evaluation follow it unless told otherwise.
+
+CLI: ``python -m triforce.registry list <specialist>`` / ``promote <specialist> <run-id> [--act MODE]``.
 """
 
 import argparse
@@ -25,6 +29,17 @@ from ._native import ACTION_SCHEMA_VERSION, OBS_SCHEMA_VERSION, OBS_SPEC
 MODELS_DIR_ENV = 'TRIFORCE_MODELS_DIR'
 CHECKPOINT_NAME = 'ckpt.pt'
 PROMOTED_NAME = 'promoted'
+ACT_NAME = 'act'
+ACT_MODES = ('sample', 'argmax')
+ACT_CHOICES = ('model',) + ACT_MODES
+
+
+def act_override(choice: str) -> Optional[bool]:
+    """A command line ``--act`` choice as a ``deterministic`` setting: None for ``model`` (each model's act mode),
+    else whether every model acts by argmax."""
+    if choice not in ACT_CHOICES:
+        raise ValueError(f"--act {choice!r} is not one of {ACT_CHOICES}")
+    return None if choice == 'model' else choice == 'argmax'
 
 
 class SchemaMismatchError(ValueError):
@@ -147,17 +162,40 @@ def list_runs(specialist: str, root=None) -> list[str]:
     return sorted(p.name for p in base.iterdir() if (p / CHECKPOINT_NAME).is_file())
 
 
-def promote(specialist: str, run_id: str, root=None) -> Path:
-    """Marks run_id as the specialist's promoted model (``<models>/<specialist>/promoted`` holds the id)."""
+def promote(specialist: str, run_id: str, root=None, act: Optional[str] = None) -> Path:
+    """Marks run_id as the specialist's promoted model (``<models>/<specialist>/promoted`` holds the id); ``act``
+    also sets how the run acts (``set_act_mode``)."""
     ckpt = checkpoint_path(specialist, run_id, root)
     if not ckpt.is_file():
         raise FileNotFoundError(f"No checkpoint for {specialist}/{run_id}: {ckpt}")
     load_checkpoint(ckpt)
+    if act is not None:
+        set_act_mode(ckpt, act)
     pointer = models_root(root) / specialist / PROMOTED_NAME
     tmp = pointer.with_suffix('.tmp')
     tmp.write_text(run_id + '\n', encoding='utf-8')
     os.replace(tmp, pointer)
     return pointer
+
+
+def act_mode(checkpoint) -> str:
+    """How the model in ``checkpoint`` (file or run dir) acts: its run dir's ``act``, ``sample`` without one."""
+    path = _resolve(checkpoint).parent / ACT_NAME
+    if not path.is_file():
+        return 'sample'
+    mode = path.read_text(encoding='utf-8').strip()
+    if mode not in ACT_MODES:
+        raise ValueError(f"{path}: act mode {mode!r} is not one of {ACT_MODES}")
+    return mode
+
+
+def set_act_mode(checkpoint, mode: str) -> Path:
+    """Sets how the model in ``checkpoint`` (file or run dir) acts; returns the ``act`` file."""
+    if mode not in ACT_MODES:
+        raise ValueError(f"act mode {mode!r} is not one of {ACT_MODES}")
+    path = _resolve(checkpoint).parent / ACT_NAME
+    path.write_text(mode + '\n', encoding='utf-8')
+    return path
 
 
 def promoted_run(specialist: str, root=None) -> str:
@@ -185,6 +223,7 @@ def main(argv=None):
     promote_parser = sub.add_parser('promote')
     promote_parser.add_argument('specialist')
     promote_parser.add_argument('run_id')
+    promote_parser.add_argument('--act', choices=ACT_MODES, default=None, help="also set how the run acts")
     args = parser.parse_args(argv)
 
     if args.command == 'list':
@@ -193,14 +232,14 @@ def main(argv=None):
         except FileNotFoundError:
             current = None
         for run_id in list_runs(args.specialist, args.models_dir):
-            ckpt = torch.load(checkpoint_path(args.specialist, run_id, args.models_dir), map_location='cpu',
-                              weights_only=False)
+            path = checkpoint_path(args.specialist, run_id, args.models_dir)
+            ckpt = torch.load(path, map_location='cpu', weights_only=False)
             mark = '*' if run_id == current else ' '
             success = ckpt.get('metrics', {}).get('success_rate')
             print(f"{mark} {run_id}  iterations={ckpt.get('iterations')} steps={ckpt.get('steps')} "
-                  f"success_rate={success}")
+                  f"success_rate={success} act={act_mode(path)}")
     else:
-        print(promote(args.specialist, args.run_id, args.models_dir))
+        print(promote(args.specialist, args.run_id, args.models_dir, args.act))
 
 
 if __name__ == '__main__':

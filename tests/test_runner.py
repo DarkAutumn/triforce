@@ -125,6 +125,25 @@ def test_same_seed_same_run(states_dir, models_dir):
     assert [r.to_dict() for r in first] == [r.to_dict() for r in second]
 
 
+def test_runs_act_the_way_each_model_is_registered(states_dir, models_dir, tmp_path):
+    """A run's ``act`` file (promote --act) makes that model act by argmax; the other models keep sampling, and
+    an explicit ``deterministic`` overrides every model."""
+    root = tmp_path / 'models'
+    shutil.copytree(models_dir, root)
+    registry.promote('ow-start', 'untrained', root=root, act='argmax')
+    policies = Policies(root)
+    assert [name for name, argmax in zip(policies.names, policies.deterministic) if argmax] == ['ow-start']
+
+    def start_rooms(deterministic):
+        """Each run's first room visit (the start room, ow-start's)."""
+        runner = Runner(models_dir=root, deterministic=deterministic, max_steps=30, parallel=2, states_dir=states_dir)
+        return [r.to_dict()['rooms'][0] for r in runner.run_many(Route.load('d2first'), [3, 4])]
+
+    registered, argmax, sampled = start_rooms(None), start_rooms(True), start_rooms(False)
+    assert all(room['specialist'] == 'ow-start' for room in registered)
+    assert registered == argmax and registered != sampled
+
+
 def test_sampled_runs_do_not_depend_on_envs_or_threads(states_dir, models_dir):
     """Sampled actions are keyed to (run seed, decision), so a seed's run is the same on any env or thread."""
     seeds = [3, 4, 5, 6]
@@ -216,7 +235,7 @@ def test_chain_cli_uses_supplied_specialist_config(states_dir, models_dir, tmp_p
                       "start_states: ['start']\nsuccess: [exit-correct]\nno_progress_steps: 2\nmax_steps: 100\n")
     output = tmp_path / 'chain.jsonl'
     subprocess.run([sys.executable, '-m', 'triforce.cli', '--models-dir', str(root), 'eval-chain',
-                    '--parallel', '2', '--runs', '2', '--deterministic', '--specialist-config', str(config),
+                    '--parallel', '2', '--runs', '2', '--act', 'argmax', '--specialist-config', str(config),
                     '--output', str(output)],
                    check=True, capture_output=True, text=True,
                    env={**os.environ, 'TRIFORCE_STATES_DIR': str(states_dir)})

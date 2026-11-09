@@ -262,7 +262,11 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   (`model.widen_policy` via `registry.load_model(obs_spec=...)`): every weight is copied and the towers' input
   columns for the new keys start at zero, so it acts exactly as before; the optimizer state starts fresh (the
   iteration/step counters still continue for the same specialist) and the saved checkpoint has the new layout.
-- `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id>` sets it.
+- `models/<specialist>/promoted` holds the promoted run id; `triforce promote <specialist> <run-id> [--act MODE]`
+  sets it. How a run's model acts is `<run dir>/act` (`registry.act_mode`): `sample` (keyed sampling; the default
+  without the file) or `argmax`, chosen by evaluating both (better-play §6b) and set with `promote --act`.
+  Evaluation, chains, `run` and the watch player follow it per model; their `--act sample|argmax` forces one mode
+  for every model (`--act model`, the default, follows the registry).
 - Metrics (design §12) go to TensorBoard and `metrics.jsonl` in the run directory; `train_summary.json`
   records `status` (completed | early_stop | interrupted), total and this run's (`iterations_trained`,
   `steps_trained`) iterations/steps, `stopped_early`, wall time and steps/sec (`train.run_status(run_dir)`). An
@@ -285,7 +289,10 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   `checkpoint`, `early_stop`, `error`, `train_end`; the round driver adds `eval_start`, `eval_progress` (≤1/s:
   done/episodes/running success_rate), `eval`) whose last line
   is `end`. `<specialist>.log` is its console output. `round.jsonl` / `round.log` cover the round (chain,
-  errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes `end`.
+  `chain_progress`, errors, `end`). SIGTERM is turned into an interrupt, so a killed run still saves and writes
+  `end`. Standalone `triforce.evaluate` and `eval-chain` log a folder of their own (`events.logged_job`: plan kind
+  `eval` / `chain`; `--no-log` skips it). `training-gui.py`'s [currently running] shows every live folder on the
+  machine: besides its logs root, the logs roots the running triforce processes use (worktrees, `--logs-dir`).
 - `train --stop-success R [--stop-patience 5]` (`EarlyStop`) ends training once the start-state-balanced
   success rate (mean over start states of each state's last 20 room-entry episodes; logged as
   `balanced_success_rate`) is ≥ R for that many consecutive iterations. The raw `success_rate` is biased toward
@@ -309,10 +316,12 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   `triforce/chain_hp.json`, the hearts Link entered each room with in chain runs. A specialist with
   `ram_randomization: {chain_hp: p}` draws its reset hp from its start room's list in a share `p` of room-entry
   resets (not curriculum starts); the rest keep the `hp` / `full_hp` draw.
-- `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=20, parallel=1, seed=0,
-  deterministic=False, *, threads=None, device='cpu')` plays every seed start state N times in one `EnvPool(EvalTask(...))` (episode i seeded `seed + i`; records sorted by seed) and
+- `evaluate.evaluate_specialist(specialist, checkpoint, episodes_per_state=100, parallel=1, seed=0,
+  deterministic=None, *, threads=None, states_dir=None, plays=None, events=None)` plays every seed start state N
+  times in one `EnvPool(EvalTask(...))` (episode i seeded `seed + i`; records sorted by seed; `deterministic` None
+  follows the run's act mode) and
   returns success rate, outcomes/endings and per-room/per-state breakdowns; `python -m triforce.evaluate
-  --specialist NAME` (or `triforce evaluate`) writes `eval.json` next to the checkpoint.
+  --specialist NAME [--act model|sample|argmax]` (or `triforce evaluate`) writes `eval.json` next to the checkpoint.
 - `scripts/train_round.py --round ID` trains every trainable specialist (route order), promotes and
   evaluates each, then runs `eval-chain`; summaries go to `models/<round>-summary.json` and
   `models/<round>-chain-summary.json`. Only a run that finished (exit 0, status completed/early_stop) is
@@ -366,11 +375,12 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   taking its last step's triforce (d2first: Dungeon 3's, since Nov 9); `stop_at` ends it on entering that room
   instead. A missed `heart` waypoint ends the run as a failure (room outcome `missed`); so does a retreat beyond
   `MAX_RETREATS` (3) per run (`retreat-limit`; `RunResult.retreats` counts them).
-- `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, deterministic=False,
+- `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, deterministic=None,
   max_steps=50000, specialist_configs=None, networks=None, parallel=1, threads=None)` lets a `ChainTask` pool play
-  (`EnvPool.play` with each specialist's Rust network; sampled actions use Gumbel noise keyed to (run seed,
-  decision), so a seed's run doesn't depend on `--parallel` or `--threads`; `--deterministic` is each head's
-  argmax): `run(route, seed) -> RunResult`, `run_many(route, seeds, plays=None)` (`plays`: a replay file). On each
+  (`EnvPool.play` with each specialist's Rust network and its act mode, `Policies.deterministic`; sampled actions
+  use Gumbel noise keyed to (run seed, decision), so a seed's run doesn't depend on `--parallel` or `--threads`;
+  argmax is each head's argmax; `deterministic` True/False forces one mode for all):
+  `run(route, seed) -> RunResult`, `run_many(route, seeds, on_result=None, plays=None)` (`plays`: a replay file). On each
   room entry: `game.yaml` tag → specialist → promoted checkpoint. Untagged room or missing model →
   `result='error'` with the reason. Per-room outcomes:
   `exit-correct`, `exit-wrong`, `retreat`, `retreat-limit`, `missed`, `death`, `stuck` (specialist `max_steps` in
@@ -378,10 +388,11 @@ or off). Evaluation (`EnvOptions.skip_look_ahead`) and chains run without it.
   Finalizing a room captures live ending health together with dropped-heart counts, including room/run budgets
   and measured cutoffs; death remains zero. `health_out` is never left at entry health on a timed-out visit.
 - `python -m triforce.run [--route d2first] [--seed N] [--render [--fps F] | --video PATH] [--from STATE]
-  [--stop-at L:0xRR] [--checkpoint S=PATH] [--deterministic]` prints one line per room and appends a JSON line to
+  [--stop-at L:0xRR] [--checkpoint S=PATH] [--act MODE]` prints one line per room and appends a JSON line to
   `runs/runner.jsonl`. `--render` shows one chain env with rendering on; `--video` records the run's inputs, then
   renders them through `ffmpeg` (`-r 60.0988`, H.264) and fails with `ffmpeg not found on PATH` without it.
-- `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE] [--stop-at L:0xRR] [--plays PATH]` → success
+- `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE] [--stop-at L:0xRR]
+  [--act MODE] [--plays PATH] [--logs-dir DIR | --no-log]` → success
   rate and per-room failure counts (`chain_summary`); `--from` starts mid-route at a route entry state (e.g.
   `2_7ds_0` Dungeon 2, `0_3cc_0` after it, `1_73s_0` Dungeon 1). `triforce promote <specialist> <run-id>`; `triforce list`;
   `triforce train|run|play|evaluate ...` forward to the module CLIs.
