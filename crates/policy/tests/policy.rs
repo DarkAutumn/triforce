@@ -19,7 +19,7 @@ fn config() -> ModelConfig {
     ModelConfig::from_json(&format!(
         r#"{{"room_embed_dim": 4, "entity_embed_dim": 4, "entity_d_model": 8, "entity_heads": 2,
             "entity_layers": 1, "entity_ff_dim": 16, "entity_out_dim": 8, "tile_embed_dim": 3,
-            "grid_encoder": "conv", "grid_channels": [4, 6, 6], "grid_out_dim": 8, "hidden_dim": 16,
+            "grid_channels": [4, 6, 6], "grid_out_dim": 8, "hidden_dim": 16,
             "obs_spec": {{"room_id": {{"shape": [1], "vocab": 10}},
                           "entity_types": {{"shape": [{SLOTS}], "vocab": 7}},
                           "entity_features": {{"shape": [{SLOTS}, {FEATURES}], "vocab": null}},

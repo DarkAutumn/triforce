@@ -36,7 +36,6 @@ def parse_args(argv=None):
     parser.add_argument('--states-dir', default=None, help="where bare state names resolve")
     parser.add_argument('--demo', action='append', required=True, help="demo trace file (repeatable)")
     parser.add_argument('--load', default=None, help="checkpoint to fine-tune instead of a fresh model")
-    parser.add_argument('--grid-encoder', default='conv', choices=['conv', 'linear'])
     parser.add_argument('--epochs', type=int, default=400)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--min-accuracy', type=float, default=0.95)
@@ -53,7 +52,7 @@ def main(argv=None):
     if args.load:
         network, _ = registry.load_model(args.load)
     else:
-        network = ZeldaPolicy(observation_space(), ModelConfig(grid_encoder=args.grid_encoder))
+        network = ZeldaPolicy(observation_space(), ModelConfig())
 
     config = load_specialist(args.specialist)
     env = Env(config, start_state=args.start_state, capture_dir=None, states_dir=args.states_dir)

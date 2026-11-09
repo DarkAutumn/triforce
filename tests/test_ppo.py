@@ -1,4 +1,4 @@
-"""PPO trainer: learning a synthetic dict-obs bandit, KL rollback/early stop, async pools, demo regularization."""
+"""PPO trainer: learning a synthetic dict-obs bandit, KL rollback/early stop, pool rollouts, demo regularization."""
 
 import copy
 import itertools
@@ -19,9 +19,9 @@ SMALL = ModelConfig(hidden_dim=64, entity_d_model=32, entity_ff_dim=64, entity_o
                     grid_out_dim=32)
 
 
-def _bandit_pool(n_envs=1, schedule_seed=None):
+def _bandit_pool(n_envs=1):
     seeds = itertools.count()
-    return synthetic.ListPool(lambda: synthetic.BanditEnv(seed=next(seeds)), n_envs, schedule_seed=schedule_seed)
+    return synthetic.ListPool(lambda: synthetic.BanditEnv(seed=next(seeds)), n_envs)
 
 
 def _seed(seed=0):
@@ -106,21 +106,6 @@ def test_pool_envs_fill_buffer_and_metrics():
     assert summary['rollout/steps'] == 64 and summary['episodes'] == 64     # one-step episodes, 2 × 32
     assert 0.0 <= summary['success_rate'] <= 1.0
     assert results[0].stats['charts/SPS'] > 0
-
-
-def test_async_schedule_does_not_change_training():
-    """Which envs happen to be ready together must not change actions, buffers, metrics or weights."""
-    runs = []
-    for schedule_seed in (None, 1, 2):
-        _seed(3)
-        network = ZeldaPolicy(synthetic.observation_space(), SMALL)
-        results = []
-        ppo = PPO(PPOConfig(target_steps=48, num_epochs=1))
-        ppo.train(network, _bandit_pool(3, schedule_seed), iterations=2, callback=results.append, seed=5)
-        runs.append(([r.rollout.summary() for r in results], network.state_dict()))
-    for summaries, weights in runs[1:]:
-        assert summaries == runs[0][0]
-        assert all(torch.equal(weights[k], runs[0][1][k]) for k in weights)
 
 
 def _demo_batch():

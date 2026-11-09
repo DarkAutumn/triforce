@@ -6,8 +6,7 @@ No vision.  Every observation block (built natively; ``observation.observation_s
 - ``entity_types`` + ``entity_features`` → type embedding, projection, 1–2 layer transformer encoder over the
   slots with a padding mask built from the presence feature (``entity_features[..., 0]``), mean-pooled over
   present slots.  An all-empty row unmasks slot 0 so attention never sees an all ``-inf`` row.
-- ``grid`` → tile-class embedding, then either a small conv stack or flatten + linear
-  (``ModelConfig.grid_encoder``: ``conv`` | ``linear``).
+- ``grid`` → tile-class embedding, then a small conv stack and a linear layer.
 - Every other float block (``room_state``, ``link``, ``history``, ``objective``) is concatenated as is.
 
 The concatenated features feed separate policy and value MLP towers (v1 ``MlpExtractor``).  Action heads are
@@ -21,9 +20,8 @@ When only one kind is legal, the kind head is excluded from log-prob and entropy
 
 Sampling uses ``torch.multinomial`` (the global torch RNG) unless the caller passes Gumbel ``noise`` (one row of
 ``NOISE_SIZE`` values per sample, see ``gumbel_noise``): then each head picks ``argmax(log_probs + noise)``, so a
-row's choice depends only on its own inputs and noise.  Training rollouts use that (``ppo.Collector``) to stay
-reproducible when envs are stepped asynchronously.  ``evaluate`` with noise does no host/device synchronization
-(CUDA-graph capturable); callers check the kind mask themselves.
+row's choice depends only on its own inputs and noise.  The agent itself acts with the Rust copy of this network
+(``to_native``, ``crates/policy``); torch is the learner.
 """
 
 import json
@@ -73,7 +71,6 @@ class ModelConfig:
     entity_ff_dim: int = 128
     entity_out_dim: int = 64
     tile_embed_dim: int = 4
-    grid_encoder: str = 'conv'
     grid_channels: tuple = (16, 32, 32)
     grid_out_dim: int = 128
     hidden_dim: int = 256
@@ -202,26 +199,19 @@ class EntityEncoder(nn.Module):
 
 
 class GridEncoder(nn.Module):
-    """Tile-class grid → vector.  ``conv``: 3 small conv layers; ``linear``: flatten + linear."""
+    """Tile-class grid → vector: tile embedding, 3 small conv layers, one linear layer."""
     def __init__(self, num_classes, height, width, config: ModelConfig):
         super().__init__()
         self.tile_embedding = nn.Embedding(num_classes, config.tile_embed_dim)
-        self.kind = config.grid_encoder
-        if self.kind == 'conv':
-            layers = []
-            channels = config.tile_embed_dim
-            for i, out_channels in enumerate(config.grid_channels):
-                stride = 1 if i == 0 else 2
-                layers += [layer_init(nn.Conv2d(channels, out_channels, 3, stride=stride, padding=1)), nn.ReLU()]
-                channels = out_channels
-            self.body = nn.Sequential(*layers, nn.Flatten())
-            with torch.no_grad():
-                flat = self.body(torch.zeros(1, config.tile_embed_dim, height, width)).shape[1]
-        elif self.kind == 'linear':
-            self.body = nn.Flatten()
-            flat = config.tile_embed_dim * height * width
-        else:
-            raise ValueError(f"grid_encoder must be 'conv' or 'linear', not {self.kind!r}")
+        layers = []
+        channels = config.tile_embed_dim
+        for i, out_channels in enumerate(config.grid_channels):
+            stride = 1 if i == 0 else 2
+            layers += [layer_init(nn.Conv2d(channels, out_channels, 3, stride=stride, padding=1)), nn.ReLU()]
+            channels = out_channels
+        self.body = nn.Sequential(*layers, nn.Flatten())
+        with torch.no_grad():
+            flat = self.body(torch.zeros(1, config.tile_embed_dim, height, width)).shape[1]
         self.head = nn.Sequential(layer_init(nn.Linear(flat, config.grid_out_dim)), nn.ReLU())
         self.output_dim = config.grid_out_dim
 

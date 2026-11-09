@@ -15,10 +15,12 @@ use numpy::{
     PyArray, PyArrayDyn, PyArrayMethods, PyReadonlyArrayDyn, PyReadwriteArrayDyn,
     PyUntypedArrayMethods,
 };
+use crate::policy::PyPolicy;
+use pool::rollout::EnvRollout;
 use pool::zelda::{
-    ChainRunEnv, EvalEnv, EvalJob, RgbFn, TaskEnv, TrainEnv, ZeldaAction, ZeldaEvent,
+    ChainRunEnv, EvalEnv, EvalJob, PolicyActor, RgbFn, TaskEnv, TrainEnv, ZeldaAction, ZeldaEvent,
 };
-use pool::{Batch, ColumnMut, Dtype, EnvInit, Jobs, Pool, PoolOptions, SCALAR_COLUMNS};
+use pool::{Batch, Column, ColumnMut, Dtype, EnvInit, Jobs, Pool, PoolOptions, SCALAR_COLUMNS};
 use pyo3::exceptions::{PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
@@ -349,6 +351,120 @@ fn as_int64<'py>(
     let np = py.import("numpy")?;
     let arr = np.getattr("ascontiguousarray")?.call1((obj, "int64"))?;
     Ok(arr.cast_into::<PyArrayDyn<i64>>()?.readonly())
+}
+
+/// A numpy array of `out[key]` with exactly `shape` and dtype `T`, borrowed for writing.
+fn rollout_array<'py, T: numpy::Element>(
+    d: &Bound<'py, PyDict>,
+    key: &str,
+    shape: &[usize],
+) -> PyResult<Option<PyReadwriteArrayDyn<'py, T>>> {
+    let Some(item) = d.get_item(key)? else {
+        return Ok(None);
+    };
+    let array = item.cast_into::<PyArrayDyn<T>>().map_err(|_| {
+        PyTypeError::new_err(format!("rollout buffer {key:?} has the wrong dtype"))
+    })?;
+    if array.shape() != shape {
+        return Err(PyValueError::new_err(format!(
+            "rollout buffer {key:?} is {:?}, expected {shape:?}",
+            array.shape()
+        )));
+    }
+    let rw = array
+        .try_readwrite()
+        .map_err(|e| PyValueError::new_err(format!("rollout buffer {key:?}: {e}")))?;
+    Ok(Some(rw))
+}
+
+fn required<T>(v: Option<T>, key: &str) -> PyResult<T> {
+    v.ok_or_else(|| PyKeyError::new_err(format!("rollout buffers need {key:?}")))
+}
+
+/// Copies each env's rollout into its env id row of the rollout buffers (see `EnvPool.rollout`).
+fn write_rollouts(
+    out: &Bound<'_, PyDict>,
+    n: usize,
+    steps: usize,
+    rollouts: &[(usize, EnvRollout<ZeldaAction>)],
+) -> PyResult<()> {
+    fn rows<T: Copy>(dst: &mut [T], env: usize, width: usize, src: &[T]) {
+        dst[env * width..env * width + src.len()].copy_from_slice(src);
+    }
+    let obs = out
+        .get_item("obs")?
+        .ok_or_else(|| PyKeyError::new_err("rollout buffers need 'obs'"))?
+        .cast_into::<PyDict>()?;
+    for (k, key) in LAYOUT.keys().iter().enumerate() {
+        let mut shape = vec![n, steps + 1];
+        shape.extend(&key.shape);
+        let width = (steps + 1) * key.len();
+        match key.dtype {
+            Dtype::I64 => {
+                let mut a = required(rollout_array::<i64>(&obs, &key.name, &shape)?, &key.name)?;
+                let dst = a.as_slice_mut()?;
+                for (env, r) in rollouts {
+                    let Column::I64(c) = &r.obs.columns[k] else { unreachable!() };
+                    rows(dst, *env, width, c);
+                }
+            }
+            Dtype::F32 => {
+                let mut a = required(rollout_array::<f32>(&obs, &key.name, &shape)?, &key.name)?;
+                let dst = a.as_slice_mut()?;
+                for (env, r) in rollouts {
+                    let Column::F32(c) = &r.obs.columns[k] else { unreachable!() };
+                    rows(dst, *env, width, c);
+                }
+            }
+            Dtype::Bool => {
+                let mut a = required(rollout_array::<bool>(&obs, &key.name, &shape)?, &key.name)?;
+                let dst = a.as_slice_mut()?;
+                for (env, r) in rollouts {
+                    let Column::Bool(c) = &r.obs.columns[k] else { unreachable!() };
+                    rows(dst, *env, width, c);
+                }
+            }
+        }
+    }
+    let mut starts = required(rollout_array::<f32>(out, "starts", &[n, steps + 1])?, "starts")?;
+    let mut actions = required(rollout_array::<i64>(out, "actions", &[n, steps, 3])?, "actions")?;
+    let mut lev = required(rollout_array::<f32>(out, "logp_ent_val", &[n, steps, 3])?, "logp_ent_val")?;
+    let mut rewards = required(rollout_array::<f32>(out, "rewards", &[n, steps])?, "rewards")?;
+    let mut frames = required(rollout_array::<f32>(out, "frames", &[n, steps])?, "frames")?;
+    let mut boot = required(rollout_array::<f32>(out, "bootstrap_value", &[n, steps])?, "bootstrap_value")?;
+    let mut interrupts = rollout_array::<i64>(out, "interrupts", &[n, steps])?;
+    let mut jobs = rollout_array::<i64>(out, "job", &[n, steps])?;
+    let mut decision_steps = rollout_array::<i64>(out, "step", &[n, steps])?;
+    let mut terminated = rollout_array::<bool>(out, "terminated", &[n, steps])?;
+    let mut truncated = rollout_array::<bool>(out, "truncated", &[n, steps])?;
+    for (env, r) in rollouts {
+        let starts_f: Vec<f32> = r.starts.iter().map(|&s| s as u8 as f32).collect();
+        rows(starts.as_slice_mut()?, *env, steps + 1, &starts_f);
+        let flat: Vec<i64> = r.actions.iter().flatten().copied().collect();
+        rows(actions.as_slice_mut()?, *env, steps * 3, &flat);
+        let d: Vec<f32> = r.decisions.iter().flat_map(|d| [d.log_prob, d.entropy, d.value]).collect();
+        rows(lev.as_slice_mut()?, *env, steps * 3, &d);
+        rows(rewards.as_slice_mut()?, *env, steps, &r.reward);
+        let f: Vec<f32> = r.frames.iter().map(|&f| f as f32).collect();
+        rows(frames.as_slice_mut()?, *env, steps, &f);
+        rows(boot.as_slice_mut()?, *env, steps, &r.bootstrap_value);
+        if let Some(a) = interrupts.as_mut() {
+            rows(a.as_slice_mut()?, *env, steps, &r.interrupt);
+        }
+        if let Some(a) = jobs.as_mut() {
+            rows(a.as_slice_mut()?, *env, steps, &r.job);
+        }
+        if let Some(a) = decision_steps.as_mut() {
+            rows(a.as_slice_mut()?, *env, steps, &r.step);
+        }
+        if let Some(a) = terminated.as_mut() {
+            rows(a.as_slice_mut()?, *env, steps, &r.terminated);
+        }
+        if let Some(a) = truncated.as_mut() {
+            rows(a.as_slice_mut()?, *env, steps, &r.truncated);
+        }
+    }
+    Ok(())
 }
 
 fn get_array<'py, T: numpy::Element>(
@@ -714,6 +830,34 @@ impl PyEnvPool {
             .collect::<PyResult<_>>()?;
         let actions: Vec<ZeldaAction> = flat.as_chunks::<3>().0.to_vec();
         self.pool.send(&ids, &actions).map_err(pool_err)
+    }
+
+    /// Rolls every active env out `steps` decisions on the worker threads, the Rust `policies` (one
+    /// `_native.Policy` per policy index) acting inside the pool with keyed noise (argmax with
+    /// `deterministic`), GIL released. Writes each env at its env id row of `out`:
+    /// `obs` {key: `[n, steps+1, *shape]`} for every observation key (row `steps`: where the next rollout
+    /// resumes), `starts` `[n, steps+1]` float32 (1 where the row starts an episode) and, per decision,
+    /// `actions` `[n, steps, 3]` int64, `logp_ent_val` `[n, steps, 3]` float32 (the Rust policy's log-prob,
+    /// entropy, value), `rewards`, `frames`, `bootstrap_value` `[n, steps]` float32, and optionally
+    /// `interrupts`, `job`, `step` int64 and `terminated`, `truncated` bool. Episode infos arrive through
+    /// `poll_events`. Returns the number of envs rolled out.
+    #[pyo3(signature = (policies, steps, out, deterministic=false))]
+    fn rollout(
+        &self,
+        py: Python<'_>,
+        policies: Vec<PyRef<'_, PyPolicy>>,
+        steps: usize,
+        out: &Bound<'_, PyDict>,
+        deterministic: bool,
+    ) -> PyResult<usize> {
+        let nets = policies.iter().map(|p| p.inner.clone()).collect();
+        let actor = PolicyActor::new(&LAYOUT, nets, deterministic).map_err(PyValueError::new_err)?;
+        let n = self.pool.num_envs();
+        let rollouts = py
+            .detach(|| self.pool.rollout(steps, Arc::new(actor)))
+            .map_err(pool_err)?;
+        write_rollouts(out, n, steps, &rollouts)?;
+        Ok(rollouts.len())
     }
 
     /// Renders env `env`'s frames from its next emulated frame on (or stops).

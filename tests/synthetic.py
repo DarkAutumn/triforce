@@ -1,5 +1,5 @@
 """Synthetic observation spaces, tiny fake envs and a Python stand-in for the native ``EnvPool`` (model/PPO tests
-without an emulator)."""
+without an emulator). The stand-in rolls out like the native pool: the Rust policy acts with keyed noise."""
 
 from collections import Counter
 
@@ -124,53 +124,80 @@ class BanditEnv:
 
 
 class ListPool:
-    """The native ``EnvPool`` protocol over Python gym-like envs (``reset`` / ``step``).
+    """The native ``EnvPool`` rollout protocol (``make_buffers``, ``rollout``, ``poll_events``) over Python gym-like
+    envs (``reset`` / ``step``), acting with the given ``_native.Policy``.
 
-    The first ``recv`` returns every env's reset observation (zero reward and frames); a terminal step resets in
-    the same row with ``final_obs`` / ``final_valid`` holding the terminal observation and ``bootstrap`` set for
-    ``info['bootstrap_truncation']`` truncations.  Each finished episode emits an ``episode`` event whose info adds
+    A terminal step resets the env at once; ``bootstrap_truncation`` truncations get the policy's value of the
+    final observation in ``bootstrap_value``. Each finished episode emits an ``episode`` event whose info adds
     ``episode_steps``, ``episode_frames``, ``reward_total`` and ``episode_rewards`` to the terminal step's info.
-
-    ``send`` steps the given envs at once; ``recv`` returns ready rows in ascending env order.  By default every
-    ready env is returned; with ``schedule_seed`` each ``recv`` returns a random subset of at least ``min_ready`` of
-    them (the rest stay ready), imitating asynchronous native workers.
+    Each episode's job key is ``env * 1_000_003 + episode``.
     """
 
-    def __init__(self, make_env, num_envs: int, schedule_seed=None):
+    def __init__(self, make_env, num_envs: int):
         self.envs = [make_env() for _ in range(num_envs)]
         self.num_envs = num_envs
-        self._ready = {}            # env -> its next row
-        self._started = False
+        self._obs = [None] * num_envs
+        self._job = [0] * num_envs
+        self._step = [0] * num_envs
+        self._episode_count = [0] * num_envs
         self._events = []
         self._episodes = [None] * num_envs
         self._space = getattr(self.envs[0], 'observation_space', None) or observation_space()
-        self._schedule = None if schedule_seed is None else np.random.default_rng(schedule_seed)
 
-    def make_buffers(self):
-        """Zeroed row buffers shaped like the native ones."""
+    def make_buffers(self, rows=None):
+        """Zeroed row buffers shaped like the native ones (only ``obs`` is used by the collector)."""
+        n = rows or self.num_envs
+        return {'obs': {key: np.zeros((n, *space.shape), dtype=space.dtype)
+                        for key, space in self._space.spaces.items()}}
+
+    def _begin(self, i):
+        obs, _ = self.envs[i].reset()
+        self._episodes[i] = {'steps': 0, 'frames': 0, 'reward': 0.0, 'rewards': Counter()}
+        self._job[i] = i * 1_000_003 + self._episode_count[i]
+        self._episode_count[i] += 1
+        self._step[i] = 0
+        self._obs[i] = obs
+
+    def _batch(self, observations):
+        return {key: np.stack([np.asarray(o[key]) for o in observations]) for key in self._space.spaces}
+
+    def rollout(self, policies, steps, out, deterministic=False):
+        """Steps every env ``steps`` decisions with ``policies[0]`` and writes the native rollout buffers."""
+        from triforce import _native  # pylint: disable=import-outside-toplevel
+        policy = policies[0]
         n = self.num_envs
+        for i in range(n):
+            if self._obs[i] is None:
+                self._begin(i)
 
-        def group():
-            out = {}
-            for key, space in self._space.spaces.items():
-                out[key] = np.zeros((n, *space.shape), dtype=space.dtype)
-            return out
-        rows = {'obs': group(), 'final_obs': group(), 'env_ids': np.zeros(n, np.int64),
-                'reward': np.zeros(n, np.float32), 'frames': np.zeros(n, np.int64),
-                'interrupt': np.zeros(n, np.int64), 'policy': np.zeros(n, np.int64),
-                'job': np.zeros(n, np.int64), 'step': np.zeros(n, np.int64)}
-        for key in ('terminated', 'truncated', 'bootstrap', 'final_valid', 'finished'):
-            rows[key] = np.zeros(n, bool)
-        rows['mask'] = rows['obs']['action_mask']
-        return rows
+        def store_obs(t):
+            for key, value in out['obs'].items():
+                value[:, t] = np.stack([np.asarray(o[key]) for o in self._obs]).reshape(value[:, t].shape)
+            out['starts'][:, t] = [float(s == 0) for s in self._step]
 
-    def _begin(self, env_index):
-        obs, _ = self.envs[env_index].reset()
-        self._episodes[env_index] = {'steps': 0, 'frames': 0, 'reward': 0.0, 'rewards': Counter()}
-        return obs
+        for t in range(steps):
+            store_obs(t)
+            batch = self._batch(self._obs)
+            if deterministic:
+                result = policy.evaluate(batch, deterministic=True)
+            else:
+                result = policy.evaluate(batch, noise=_native.keyed_noise(self._job, self._step, policy.noise_size))
+            out['actions'][:, t] = result['actions']
+            out['logp_ent_val'][:, t] = np.stack([result['log_prob'], result['entropy'], result['value']], -1)
+            for i in range(n):
+                action = tuple(int(a) for a in result['actions'][i])
+                reward, frames, bootstrap_obs, interrupt = self._advance(i, action)
+                out['rewards'][i, t] = reward
+                out['frames'][i, t] = frames
+                if 'interrupts' in out:
+                    out['interrupts'][i, t] = interrupt
+                out['bootstrap_value'][i, t] = 0.0 if bootstrap_obs is None else \
+                    float(policy.value(self._batch([bootstrap_obs]))[0])
+        store_obs(steps)
+        return n
 
-    def _step(self, i, action):
-        row = {'terminated': False, 'truncated': False, 'bootstrap': False, 'final_valid': False, 'final_obs': None}
+    def _advance(self, i, action):
+        """Steps env ``i``; (reward, frames, final observation of a bootstrapped truncation or None, interrupt)."""
         obs, reward, terminated, truncated, info = self.envs[i].step(action)
         frames = int(info.get('frames', 0))
         episode = self._episodes[i]
@@ -178,45 +205,18 @@ class ListPool:
         episode['frames'] += frames
         episode['reward'] += float(reward)
         episode['rewards'].update(info.get('rewards') or {})
+        self._step[i] += 1
+        bootstrap = None
         if terminated or truncated:
-            row.update(final_obs=obs, terminated=terminated, truncated=truncated, final_valid=True,
-                       bootstrap=bool(truncated and not terminated and info.get('bootstrap_truncation')))
+            if truncated and not terminated and info.get('bootstrap_truncation'):
+                bootstrap = obs
             self._events.append({'env': i, 'type': 'episode', 'info': {
                 **info, 'episode_steps': episode['steps'], 'episode_frames': episode['frames'],
                 'reward_total': episode['reward'], 'episode_rewards': dict(episode['rewards'])}})
-            obs = self._begin(i)
-        row.update(obs=obs, reward=reward, frames=frames)
-        return row
-
-    def recv(self, out, min_ready=None, timeout=None):
-        """Writes ready envs' rows (every env's reset on the first call) and returns how many (``timeout`` is
-        ignored: sent envs are ready at once)."""
-        if not self._started:
-            self._started = True
-            for i in range(self.num_envs):
-                self._ready[i] = {'obs': self._begin(i), 'reward': 0.0, 'frames': 0, 'terminated': False,
-                                  'truncated': False, 'bootstrap': False, 'final_valid': False, 'final_obs': None}
-        ids = sorted(self._ready)
-        if self._schedule is not None and len(ids) > 1:
-            least = min(len(ids), max(1, min_ready or len(ids)))
-            take = int(self._schedule.integers(least, len(ids) + 1))
-            ids = sorted(int(i) for i in self._schedule.choice(ids, take, replace=False))
-        for row, i in enumerate(ids):
-            result = self._ready.pop(i)
-            out['env_ids'][row] = i
-            for key, value in result['obs'].items():
-                out['obs'][key][row] = value
-            for key, value in (result['final_obs'] or {}).items():
-                out['final_obs'][key][row] = value
-            for key in ('reward', 'frames', 'terminated', 'truncated', 'bootstrap', 'final_valid'):
-                out[key][row] = result[key]
-        return len(ids)
-
-    def send(self, env_ids, actions):
-        """Steps each given env with its action."""
-        for i, action in zip(np.asarray(env_ids).tolist(), np.asarray(actions)):
-            assert i not in self._ready, f"env {i} is not awaiting an action"
-            self._ready[i] = self._step(i, tuple(int(x) for x in action))
+            self._begin(i)
+        else:
+            self._obs[i] = obs
+        return reward, frames, bootstrap, int(info.get('interrupt') or 0)
 
     def poll_events(self):
         """Episode events since the last call."""

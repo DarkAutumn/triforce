@@ -2,6 +2,7 @@
 
 use crate::control::EnvControl;
 use crate::layout::{Batch, BufferSpec, Buffers, ObsLayout, ObsRow, SCALAR_COLUMNS, Staged};
+use crate::rollout::{Actor, EnvRollout};
 use parking_lot::{Condvar, Mutex, MutexGuard};
 use rand_chacha::ChaCha8Rng;
 use rand_chacha::rand_core::SeedableRng;
@@ -191,9 +192,15 @@ impl<E: PoolEnv> Shared<E> {
     }
 }
 
-enum Cmd<A> {
+/// Work run on an env's worker thread with the env and its staging slot.
+type Job<E> = Box<
+    dyn FnOnce(&mut E, usize, &mut Staged, &mut Vec<<E as PoolEnv>::Event>) -> Res<(), E> + Send,
+>;
+
+enum Cmd<E: PoolEnv> {
     Reset(usize),
-    Step(usize, A),
+    Step(usize, E::Action),
+    Run(usize, Job<E>),
     Stop,
 }
 
@@ -206,7 +213,7 @@ enum Cmd<A> {
 /// and `poll_events` stay usable.
 pub struct Pool<E: PoolEnv> {
     shared: Arc<Shared<E>>,
-    senders: Vec<mpsc::Sender<Cmd<E::Action>>>,
+    senders: Vec<mpsc::Sender<Cmd<E>>>,
     workers: Vec<Thread>,
     handles: Mutex<Vec<JoinHandle<()>>>,
     controls: Vec<EnvControl>,
@@ -381,7 +388,76 @@ impl<E: PoolEnv> Pool<E> {
         Ok(())
     }
 
-    fn dispatch(&self, cmd: Cmd<E::Action>, env: usize) {
+    /// Rolls every active env out `steps` decisions with `actor` on the workers (docs/rust-actor.md) and returns
+    /// (env id, rollout) in env id order once all are done. Envs still resetting (a new pool) are waited for;
+    /// every active env is then idle (ready, or awaiting an action). Episodes continue across calls; finished
+    /// envs are skipped. Blocks: release the GIL around it.
+    pub fn rollout<Ac: Actor<E::Action> + 'static>(
+        &self,
+        steps: usize,
+        actor: Arc<Ac>,
+    ) -> Res<Vec<(usize, EnvRollout<E::Action>)>, E> {
+        let n = self.num_envs();
+        type Slots<A> = Arc<Mutex<Vec<Option<EnvRollout<A>>>>>;
+        let results: Slots<E::Action> = Arc::new(Mutex::new((0..n).map(|_| None).collect()));
+        let mut ids = Vec::new();
+        {
+            let mut st = self.shared.state.lock();
+            while !st.closed && st.status.contains(&Status::Running) {
+                self.shared.ready_cv.wait(&mut st);
+            }
+            if st.closed {
+                return Err(PoolError::Closed);
+            }
+            if let Some(e) = st.errors.pop_front() {
+                return Err(e);
+            }
+            for id in 0..n {
+                match st.status[id] {
+                    Status::Ready | Status::Waiting => ids.push(id),
+                    Status::Running => unreachable!("waited for running envs"),
+                    Status::Finished | Status::Failed => {}
+                }
+            }
+            st.ready.retain(|i| !ids.contains(i));
+            for &id in &ids {
+                st.status[id] = Status::Running;
+            }
+            st.running += ids.len();
+        }
+        for &id in &ids {
+            let actor = actor.clone();
+            let results = results.clone();
+            let job: Job<E> = Box::new(move |env, id, slot, events| {
+                let rollout = run_rollout(env, id, slot, events, steps, &*actor)?;
+                results.lock()[id] = Some(rollout);
+                Ok(())
+            });
+            self.dispatch(Cmd::Run(id, job), id);
+        }
+        {
+            let mut st = self.shared.state.lock();
+            loop {
+                if st.closed {
+                    return Err(PoolError::Closed);
+                }
+                if ids.iter().all(|&i| st.status[i] != Status::Running) {
+                    break;
+                }
+                self.shared.ready_cv.wait(&mut st);
+            }
+            if let Some(e) = st.errors.pop_front() {
+                return Err(e);
+            }
+        }
+        let mut results = results.lock();
+        Ok(ids
+            .iter()
+            .map(|&id| (id, results[id].take().expect("a finished rollout leaves its result")))
+            .collect())
+    }
+
+    fn dispatch(&self, cmd: Cmd<E>, env: usize) {
         if self.senders[env % self.senders.len()].send(cmd).is_err() {
             let message = "its worker thread has exited".to_owned();
             self.shared
@@ -618,16 +694,69 @@ fn start<E: PoolEnv>(
     Ok(())
 }
 
+enum Work<E: PoolEnv> {
+    Reset,
+    Step(E::Action),
+    Run(Job<E>),
+}
+
+/// One env's rollout on its worker: `steps` decisions by `actor`, each executed like [`Pool::send`] would
+/// (a terminal step resets the env at once).
+fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>>(
+    env: &mut E,
+    id: usize,
+    slot: &mut Staged,
+    events: &mut Vec<E::Event>,
+    steps: usize,
+    actor: &Ac,
+) -> Res<EnvRollout<E::Action>, E> {
+    let usage = |e: String| PoolError::Usage(format!("env {id}: {e}"));
+    let mut scratch = actor.scratch();
+    let mut out = EnvRollout::new(slot.obs.layout(), steps);
+    for _ in 0..steps {
+        if slot.finished {
+            return Err(PoolError::Usage(format!("env {id} has no episode left to roll out")));
+        }
+        out.obs.push(&slot.obs);
+        out.starts.push(slot.step == 0);
+        let (action, decision) = actor
+            .act(&slot.obs, slot.policy, slot.job, slot.step, &mut scratch)
+            .map_err(usage)?;
+        out.job.push(slot.job);
+        out.step.push(slot.step);
+        out.actions.push(action.clone());
+        out.decisions.push(decision);
+        let acting_policy = slot.policy;
+        Worker::<E>::execute(env, id, Some(action), slot, events)?;
+        let o = slot.outcome;
+        out.reward.push(o.reward);
+        out.frames.push(o.frames);
+        out.interrupt.push(o.interrupt);
+        out.terminated.push(o.terminated);
+        out.truncated.push(o.truncated);
+        let bootstrap_value = if o.bootstrap && slot.final_valid {
+            actor.value(&slot.final_obs, acting_policy, &mut scratch).map_err(usage)?
+        } else {
+            0.0
+        };
+        out.bootstrap_value.push(bootstrap_value);
+    }
+    out.obs.push(&slot.obs);
+    out.starts.push(slot.step == 0);
+    Ok(out)
+}
+
 impl<E: PoolEnv> Worker<E> {
-    fn run(mut self, rx: mpsc::Receiver<Cmd<E::Action>>) {
+    fn run(mut self, rx: mpsc::Receiver<Cmd<E>>) {
         let mut events = Vec::new();
         while let Ok(cmd) = rx.recv() {
             if self.stop.load(Ordering::SeqCst) {
                 break;
             }
-            let (id, action) = match cmd {
-                Cmd::Reset(id) => (id, None),
-                Cmd::Step(id, action) => (id, Some(action)),
+            let (id, work) = match cmd {
+                Cmd::Reset(id) => (id, Work::Reset),
+                Cmd::Step(id, action) => (id, Work::Step(action)),
+                Cmd::Run(id, job) => (id, Work::Run(job)),
                 Cmd::Stop => break,
             };
             let local = id / self.threads;
@@ -636,7 +765,17 @@ impl<E: PoolEnv> Worker<E> {
             };
             let result = {
                 let mut slot = self.shared.slots[id].lock();
-                Self::execute(env, id, action, &mut slot, &mut events)
+                match work {
+                    Work::Reset => Self::execute(env, id, None, &mut slot, &mut events),
+                    Work::Step(action) => Self::execute(env, id, Some(action), &mut slot, &mut events),
+                    Work::Run(job) => match catch_unwind(AssertUnwindSafe(|| job(env, id, &mut slot, &mut events))) {
+                        Ok(r) => r,
+                        Err(payload) => Err(PoolError::Panic {
+                            env: id,
+                            message: panic_message(&*payload),
+                        }),
+                    },
+                }
             };
             if !events.is_empty() {
                 self.shared

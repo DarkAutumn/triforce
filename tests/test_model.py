@@ -30,10 +30,9 @@ def _uniform_heads(model):
             head.bias.zero_()
 
 
-@pytest.mark.parametrize('grid_encoder', ['conv', 'linear'])
-def test_forward_backward_reaches_every_parameter(grid_encoder):
+def test_forward_backward_reaches_every_parameter():
     rng = np.random.default_rng(1)
-    model = _model(grid_encoder=grid_encoder, entity_layers=2)
+    model = _model(entity_layers=2)
     obs = _batch([synthetic.random_observation(rng, synthetic.random_mask(rng)) for _ in range(64)])
     out = model.evaluate(obs)
     assert out.actions.shape == (64, 3) and out.log_prob.shape == (64,) and out.value.shape == (64,)
@@ -157,7 +156,7 @@ def test_empty_kind_mask_raises():
 
 def test_config_round_trip_rebuilds_identical_network():
     rng = np.random.default_rng(9)
-    model = _model(grid_encoder='linear')
+    model = _model()
     clone = ZeldaPolicy(config=ModelConfig.from_dict(model.config.to_dict()))
     clone.load_state_dict(model.state_dict())
     obs = synthetic.random_observation(rng)

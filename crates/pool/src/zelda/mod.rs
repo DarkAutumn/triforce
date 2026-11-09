@@ -14,9 +14,11 @@
 //! real frame and publishes rendered frames through the pool's [`EnvControl`](crate::EnvControl) with an
 //! [`RgbFn`], then paces.
 
+mod actor;
 mod envs;
 mod nes;
 
+pub use actor::{ActorScratch, PolicyActor};
 pub use envs::{ChainRunEnv, EvalEnv, EvalJob, PoolChainEnv, PoolSpecialistEnv, TaskEnv, TrainEnv};
 pub use nes::{InputLog, PoolNes, PoolState, PoolStore, RgbFn};
 

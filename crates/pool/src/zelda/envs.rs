@@ -136,6 +136,9 @@ pub struct TrainEnv<N: Nes, St: StateStore<N::State>> {
     env: PoolSpecialistEnv<N, St>,
     control: EnvControl,
     rooms: RoomWatch,
+    /// Episode job keys: `mix(job_base + episodes)`, from the env's seed (keyed action noise, replays).
+    job_base: u64,
+    episodes: u64,
 }
 
 impl<N, St> TrainEnv<N, St>
@@ -153,11 +156,17 @@ where
         init: EnvInit,
         rgb: Option<RgbFn<N>>,
     ) -> Result<Self, EnvError> {
+        let seed = init.rng.get_seed();
+        let job_base = seed.iter().fold(policy::noise::mix(init.rng.get_stream()), |h, &b| {
+            policy::noise::mix(h ^ b as u64)
+        });
         let (env, control) = specialist_env(config, data, nes, store, opts, init, rgb)?;
         Ok(TrainEnv {
             env,
             control,
             rooms: RoomWatch::default(),
+            job_base,
+            episodes: 0,
         })
     }
 
@@ -206,7 +215,9 @@ where
         let (o, info) = self.env.reset(None, None)?;
         write_observation(&o, &mut obs);
         self.rooms.report_info(&info, events);
-        Ok(Some(Start { policy: 0, job: 0 }))
+        let job = (policy::noise::mix(self.job_base.wrapping_add(self.episodes)) >> 1) as i64;
+        self.episodes += 1;
+        Ok(Some(Start { policy: 0, job }))
     }
 
     fn step(

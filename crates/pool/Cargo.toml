@@ -8,11 +8,12 @@ license.workspace = true
 [features]
 default = ["zelda"]
 # Adapters that run `env::SpecialistEnv` / `env::ChainEnv` in a pool (generic over `zelda::Nes`).
-zelda = ["dep:env", "dep:zelda", "dep:serde_json"]
+zelda = ["dep:env", "dep:zelda", "dep:serde_json", "dep:policy"]
 
 [dependencies]
 env = { path = "../env", optional = true }
 parking_lot = "0.12.5"
+policy = { path = "../policy", optional = true }
 rand_chacha = "0.10.0"
 serde_json = { version = "1.0.154", features = ["preserve_order"], optional = true }
 zelda = { path = "../zelda", optional = true }

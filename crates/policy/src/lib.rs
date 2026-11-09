@@ -65,7 +65,6 @@ pub struct ModelConfig {
     pub entity_ff_dim: usize,
     pub entity_out_dim: usize,
     pub tile_embed_dim: usize,
-    pub grid_encoder: String,
     pub grid_channels: Vec<usize>,
     pub grid_out_dim: usize,
     pub hidden_dim: usize,
@@ -314,9 +313,6 @@ pub struct Policy {
 impl Policy {
     /// Builds the network from `model_config` and the `state_dict` (every weight must be used exactly once).
     pub fn new(config: ModelConfig, weights: HashMap<String, Tensor>) -> Result<Policy, PolicyError> {
-        if config.grid_encoder != "conv" {
-            return err(format!("grid_encoder '{}' is not supported (only 'conv')", config.grid_encoder));
-        }
         let hash = weights_hash(&config, &weights);
         let mut w = Weights(weights);
         let room = config.key(ROOM_KEY)?;

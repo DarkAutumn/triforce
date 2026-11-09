@@ -184,6 +184,40 @@ impl ObsData {
     }
 }
 
+/// Observations appended row by row, stored key by key (`[rows, *shape]` per key): a rollout's observations,
+/// copied out per key in one piece.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ObsColumns {
+    pub columns: Vec<Column>,
+    pub rows: usize,
+}
+
+impl ObsColumns {
+    pub fn new(layout: &ObsLayout, capacity: usize) -> ObsColumns {
+        let columns = layout
+            .keys
+            .iter()
+            .map(|k| match k.dtype {
+                Dtype::I64 => Column::I64(Vec::with_capacity(capacity * k.len())),
+                Dtype::F32 => Column::F32(Vec::with_capacity(capacity * k.len())),
+                Dtype::Bool => Column::Bool(Vec::with_capacity(capacity * k.len())),
+            })
+            .collect();
+        ObsColumns { columns, rows: 0 }
+    }
+
+    pub fn push(&mut self, obs: &ObsData) {
+        for (key, column) in self.columns.iter_mut().enumerate() {
+            match column {
+                Column::I64(c) => c.extend_from_slice(obs.i64(key)),
+                Column::F32(c) => c.extend_from_slice(obs.f32(key)),
+                Column::Bool(c) => c.extend_from_slice(obs.bool(key)),
+            }
+        }
+        self.rows += 1;
+    }
+}
+
 /// Write access to one observation, key by key (indices follow [`ObsLayout::keys`]). Each accessor panics if
 /// the key has another dtype. Keys the env doesn't write keep their previous contents.
 pub struct ObsRow<'a> {

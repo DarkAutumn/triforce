@@ -17,7 +17,7 @@ from . import synthetic
 
 def _trained(seed=0):
     torch.manual_seed(seed)
-    network = ZeldaPolicy(synthetic.observation_space(), ModelConfig(hidden_dim=32, grid_encoder='linear'))
+    network = ZeldaPolicy(synthetic.observation_space(), ModelConfig(hidden_dim=32, grid_channels=(4, 4, 4)))
     collector = Collector(synthetic.ListPool(synthetic.BanditEnv, 1), 32, 0.99, 0.95)
     collector.collect(network, 'cpu')
     ppo = PPO(PPOConfig(num_epochs=1))
@@ -34,7 +34,7 @@ def test_checkpoint_round_trip_restores_model_and_optimizer(tmp_path):
     loaded, checkpoint = registry.load_model(path.parent)
     assert checkpoint['specialist'] == 'd1-test' and checkpoint['iterations'] == 3 and checkpoint['steps'] == 96
     assert checkpoint['metrics'] == {'success_rate': 0.5}
-    assert loaded.config.grid_encoder == 'linear'
+    assert loaded.config.grid_channels == (4, 4, 4)
     obs = synthetic.random_observation(np.random.default_rng(0))
     actions = torch.as_tensor([[0, 2, 1]])
     with torch.no_grad():
@@ -104,7 +104,7 @@ def test_older_schema_checkpoint_trains_on_current_rows():
     """``--load`` of an older model: the rollout and update see the pool's extra keys and ignore them."""
     spec = obs_spec_from_space(synthetic.observation_space())
     del spec['objective']
-    network = ZeldaPolicy(config=ModelConfig(obs_spec=spec, hidden_dim=32, grid_encoder='linear'))
+    network = ZeldaPolicy(config=ModelConfig(obs_spec=spec, hidden_dim=32, grid_channels=(4, 4, 4)))
     collector = Collector(synthetic.ListPool(synthetic.BanditEnv, 2), 16, 0.99, 0.95)
     collector.collect(network, 'cpu')
     assert 'objective' in collector.buffer.observation
@@ -145,7 +145,7 @@ def test_widened_inputs_start_at_zero_and_train():
     spec = obs_spec_from_space(synthetic.observation_space())
     narrow = {k: v for k, v in spec.items() if k != 'history'}
     torch.manual_seed(0)
-    network = widen_policy(ZeldaPolicy(config=ModelConfig(obs_spec=narrow, hidden_dim=32, grid_encoder='linear')),
+    network = widen_policy(ZeldaPolicy(config=ModelConfig(obs_spec=narrow, hidden_dim=32, grid_channels=(4, 4, 4))),
                            spec)
     start = network.feature_dim - sum(spec[k]['shape'][0] for k in network.vector_keys)
     for key in network.vector_keys:

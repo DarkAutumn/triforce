@@ -23,6 +23,7 @@ pub mod control;
 pub mod jobs;
 pub mod layout;
 mod pool;
+pub mod rollout;
 #[cfg(feature = "zelda")]
 pub mod zelda;
 

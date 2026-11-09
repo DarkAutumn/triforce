@@ -106,8 +106,6 @@ def parse_args(argv=None):
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
     parser.add_argument('--save-every', type=int, default=10, help="checkpoint every N iterations (and at the end)")
     parser.add_argument('--learning-rate', type=float, default=PPOConfig.learning_rate)
-    parser.add_argument('--grid-encoder', default='conv', choices=['conv', 'linear'],
-                        help="new models only; a loaded checkpoint keeps its architecture")
     parser.add_argument('--start-state', default=None, help="pin every episode to this savestate (name or path)")
     parser.add_argument('--states-dir', default=None,
                         help="where bare start-state names resolve (default: $TRIFORCE_STATES_DIR or triforce/states)")
@@ -178,7 +176,7 @@ def initial_model(args, config: SpecialistConfig, root):
     else:
         source = str(resolve_warm_start(config.warm_start, root)) if config.warm_start else None
     if source is None:
-        network = ZeldaPolicy(observation_space(), ModelConfig(grid_encoder=args.grid_encoder))
+        network = ZeldaPolicy(observation_space(), ModelConfig())
         return network, None, 0, 0, None
 
     # obs.target wants the full layout: an older checkpoint without `target` is widened (zero-initialised inputs).
@@ -293,7 +291,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                    'start_steps': start_steps}, file, indent=2, default=str)
 
     print(f"[train] {specialist} run={run_id} dir={out_dir}")
-    print(f"[train] parameters={network.parameter_count():,} grid={network.config.grid_encoder} "
+    print(f"[train] parameters={network.parameter_count():,} "
           f"parallel={args.parallel} threads={args.threads} steps/update={args.steps_per_update} "
           f"device={args.device}"
           + (f" from={source}" if source else ""))

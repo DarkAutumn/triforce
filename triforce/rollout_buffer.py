@@ -1,6 +1,6 @@
 """Rollout storage for PPO (port of v1 ``ml_ppo_rollout_buffer``), with dict observations, factored actions,
-flat action masks, and frame-aware GAE.  ``ppo.Collector`` fills it from a native ``EnvPool``, each env its own
-rows as it steps (envs run asynchronously).
+flat action masks, and frame-aware GAE.  ``ppo.Collector`` fills it from a native ``EnvPool``'s ``rollout``: the
+pool's workers act with the Rust copy of the network and write every env's rows in one call.
 
 Layout (``n`` envs, ``T`` steps per env; index ``T`` holds the observation to resume from):
 
@@ -97,29 +97,45 @@ class RolloutBuffer:
         self.frames = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.returns = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.advantages = torch.zeros(n_envs, memory_length, dtype=torch.float32)
-        # numpy views of the same memory: cheap per-row stores while collecting
-        self._np = {'obs': {key: value.numpy() for key, value in self.observation.items()},
-                    'masks': self.masks.numpy(), 'dones': self.dones.numpy(), 'actions': self.actions.numpy(),
-                    'logp_ent_val': self.logp_ent_val.numpy()}
+        self.bootstrap_value = torch.zeros(n_envs, memory_length, dtype=torch.float32)
+        self.interrupts = torch.zeros(n_envs, memory_length, dtype=torch.int64)
 
-    def store_obs(self, envs, steps, obs: dict, dones):
-        """Stores env ``envs[k]``'s observation at step ``steps[k]`` (``obs``: per-key ``[k, *shape]`` arrays
-        including ``action_mask``) and whether it starts a new episode."""
-        for key, storage in self._np['obs'].items():
-            storage[envs, steps] = np.asarray(obs[key]).reshape(len(envs), *storage.shape[2:])
-        self._np['masks'][envs, steps] = obs[MASK_KEY]
-        self._np['dones'][envs, steps] = dones
+    def rollout_buffers(self) -> dict:
+        """numpy views of this buffer's memory in the layout ``EnvPool.rollout`` writes: ``obs`` (every key, the
+        mask included), ``starts`` (``dones``), ``actions``, ``logp_ent_val``, ``rewards`` (raw step rewards),
+        ``frames``, ``bootstrap_value``, ``interrupts``."""
+        obs = {key: value.numpy() for key, value in self.observation.items()}
+        obs[MASK_KEY] = self.masks.numpy()
+        return {'obs': obs, 'starts': self.dones.numpy(), 'actions': self.actions.numpy(),
+                'logp_ent_val': self.logp_ent_val.numpy(), 'rewards': self.rewards.numpy(),
+                'frames': self.frames.numpy(), 'bootstrap_value': self.bootstrap_value.numpy(),
+                'interrupts': self.interrupts.numpy()}
 
-    def store_policy(self, envs, steps, actions, logp_ent_val):
-        """Stores the actions env ``envs[k]`` took at step ``steps[k]`` with their ``[k, 3]`` log-prob, entropy
-        and value."""
-        self._np['actions'][envs, steps] = actions
-        self._np['logp_ent_val'][envs, steps] = logp_ent_val
+    @torch.no_grad()
+    def recompute(self, network, device, chunk: int = 4096):
+        """Replaces the actors' log-prob, entropy and value with ``network``'s (torch) over every stored step, and
+        returns the values ``[n]`` of the observations at index ``T``: the update then compares torch with torch,
+        never with the Rust actor's numerics."""
+        network.eval()
+        length = self.memory_length
+        obs = {key: value[:, :length].reshape(-1, *value.shape[2:]) for key, value in self.observation.items()}
+        masks = self.masks[:, :length].reshape(-1, MASK_SIZE)
+        actions = self.actions.reshape(-1, 3)
+        out = torch.empty(actions.shape[0], 3)
+        for begin in range(0, actions.shape[0], chunk):
+            rows = slice(begin, begin + chunk)
+            result = network.evaluate({k: v[rows].to(device) for k, v in obs.items()}, masks[rows].to(device),
+                                      actions[rows].to(device))
+            out[rows] = torch.stack([result.log_prob, result.entropy, result.value], dim=-1).cpu()
+        self.logp_ent_val.copy_(out.view(self.n_envs, length, 3))
+        last = {key: value[:, length].to(device) for key, value in self.observation.items()}
+        return network.get_value(last).cpu()
 
-    def store_results(self, rewards, frames):
-        """Stores every step's ``[n, T]`` learning rewards (bootstrap already added) and elapsed frames."""
-        self.rewards.copy_(torch.as_tensor(np.asarray(rewards, dtype=np.float32)))
-        self.frames.copy_(torch.as_tensor(np.asarray(frames, dtype=np.float32)))
+    def add_bootstrap(self):
+        """Adds each bootstrapped truncation's discounted final-observation value to its step's reward (design
+        §5.4: the trace stops at the done flag, the value of where the episode was cut off doesn't)."""
+        discount = torch.pow(torch.tensor(self.gamma), self.frames / FRAMES_PER_DISCOUNT)
+        self.rewards.add_(discount * self.bootstrap_value)
 
     def compute_returns(self, last_values):
         """Frame-aware GAE per env; ``last_values[i]`` is the value of env ``i``'s observation at index ``T``."""
