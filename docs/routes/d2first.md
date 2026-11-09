@@ -1,16 +1,16 @@
 # d2first: Dungeon 2 first, never the fairy — the route
 
 Lee's route (Nov 8), the only route since the reset the same day (`docs/decisions.md` 2026-11-08: milestone1 and
-milestone1-fairy removed); the Dungeon 1 bow detour joined it on Nov 9. Data: `triforce/routes.yaml` `d2first`, rooms
-in `triforce/game.yaml`. View it with
+milestone1-fairy removed); the Dungeon 1 bow detour joined it on Nov 9, and the same day the route went on from the
+D1 triforce to Dungeon 3 (the raft, Manhandla); it now ends on the D3 triforce. Data: `triforce/routes.yaml`
+`d2first`, rooms in `triforce/game.yaml`. View it with
 
 ```bash
 .venv/bin/python zelda-map.py --route d2first      # rooms outlined, arrows, step numbers; sidebar per step
 ```
 
-Not trained yet: next is a baseline retrain of every family from scratch with the current training setup, then
-Lee's training ideas. Everything below was checked in the emulator (rooms loaded through `Game.load`, mode 5)
-unless it says otherwise.
+The D1 part is trained (rounds 13–14); everything after the D1 triforce (steps 68–97) is not trained yet. Everything
+below was checked in the emulator (rooms loaded through `Game.load`, mode 5) unless it says otherwise.
 
 ## Route
 
@@ -39,7 +39,10 @@ Hearts are heart containers on entering the room; sword W = wood, Wh = white.
 | 51–55 | 1:63 53 52 42 43 | S→N, S→W, E→N, S→E, W→**N** | stalfos-keese-gel | 5 / Wh, 5 keys |
 | 56–63 | 1:33 23 22 7f(cellar) 22 23 33 43 | the bow detour (below): S→N (key), S→W (key), E→stairs, S→N (bow), stairs→E, W→S, N→S, N→E | stalfos-keese-gel, goriya, **trap-room**, **equipment-room** | 5 / Wh, bow |
 | 64–66 | 1:44 45 35 | W→E (boomerang), W→N, S→E | goriya, wallmaster, boss-aquamentus | 5 / Wh, bow |
-| 67 | 1:36 | W → triforce: **route ends** | stalfos-keese-gel | 6 / Wh |
+| 67 | 1:36 | W → triforce (warps to 0:37) | stalfos-keese-gel | 6 / Wh |
+| 68–79 | 0:37 38 48 58 57 56 55 65 64 63 73 74 | to Dungeon 3 (below): cave→E, W→S, N→S, N→W, E→W, E→W, E→S, N→W, E→W, E→S, N→E, W→cave | ow-octorok, ow-zora, **ow-leever**, ow-moblin, ow-tektite | 6 / Wh, triforce 2+1 |
+| 80–96 | 3:7c … 4d | Dungeon 3 (`docs/routes/d3.md`): the raft cellar 0x0f, the bomb wall into Manhandla 0x4d | **zol**, **darknut**, trap-room, equipment-room, **boss-manhandla** | 6 → 7 / Wh, raft |
+| 97 | 3:3d | S → triforce: **route ends** | zol | 7 / Wh |
 
 Choices and findings:
 - **Row 5 to D2:** 0x5d N → 0x4d W → 0x4c N → 0x3c. 0x3c's only exits are S and the stairs
@@ -153,14 +156,19 @@ this route).
 - **The objective follows the route step by step** (`zelda::objectives::GameCompletion`): on every room change it
   finds the step entering Link's room from the side he came in (`route_entry`: N/S/E/W, `S` into a cave, down
   stairs or down a cellar's, `cave` out of one or after the triforce's warp) with exactly the progress the route
-  has there (`StepProgress`: triforce pieces, sword and bow). A step leaving through a room edge makes that exit the
-  correct one (plus the alternate 0x78 at 0x77). Off the route — no matching step, e.g. 0x1a from N without the
-  white sword, or 0x22 out of the cellar without the bow — and on cave, stairs and triforce steps, the key-aware
-  shortest path to the target (sword, heart then bow waypoint, triforce in route order) decides, as before.
+  has there (`StepProgress`: triforce pieces, sword, bow and raft). A step leaving through a room edge makes that
+  exit the correct one (plus the alternate 0x78 at 0x77). Off the route — no matching step, e.g. 0x1a from N
+  without the white sword, or 0x22 out of the cellar without the bow — and on cave, stairs and triforce steps, the
+  key-aware shortest path to the target (sword, heart then bow or raft waypoint, triforce in route order) decides.
   One-room training (`start_route`) picks the step the same way from the start state's entry; rooms the route
-  crosses twice (0x77, 0x3c, 0x4c, 0x4d, 0x2c, 0x1a, 0x0a, 1:0x73, 0x43, 0x33, 0x23, 0x22) are entered from a
-  different side each time, so each step has its own start states and resets play every one.
-- `retreat: S` on step 35 (see below); routes end on their last triforce (no `terminal` exits any more).
+  crosses twice (0x77, 0x3c, 0x4c, 0x4d, 0x2c, 0x1a, 0x0a, 0x37, 0x38, 0x58, 1:0x73, 0x43, 0x33, 0x23, 0x22, 3:0x5b,
+  0x5a, 0x69; 3:0x59 three times) are entered from a different side each time, so each step has its own start
+  states and resets play every one.
+- `retreat: S` on step 35 (see below); routes end on their last triforce (no `terminal` exits any more): since Nov 9
+  the D3 triforce (`chain::Route::final_triforce` = 3; the D1 and D2 triforces warp Link on).
+- `treasure:` on a step (Nov 9, `game_map::TreasureRule`): `skip`, or `{if_bombs_below: N}`; without it the room's
+  treasure is taken as before. A step leaving through an intact game.yaml bomb wall targets the spot to bomb it
+  from (`objectives::bomb_spot`, `docs/routes/d3.md`).
 - An overworld cave never sends Link into another overworld cave's room. The heart waypoint reads the overworld
   room flags directly, so a Dungeon 1 state knows the heart was taken.
 - `entry_states build` (default route d2first); bombs are on in `requires_bombs` rooms while building.

@@ -16,12 +16,12 @@ def test_the_route_and_families():
     assert sorted(native.families()) == list_specialists()
 
 
-def test_the_route_runs_from_the_start_to_the_d1_triforce():
+def test_the_route_runs_from_the_start_to_the_d3_triforce():
     steps = native.route_steps()
     assert [s['index'] for s in steps] == list(range(len(steps)))
     first, last = steps[0], steps[-1]
     assert (first['level'], first['room'], first['entry'], first['specialist']) == (0, 0x77, 'start', 'ow-start')
-    assert (last['level'], last['room'], last['exit']) == (1, 0x36, 'triforce')
+    assert (last['level'], last['room'], last['exit']) == (3, 0x3d, 'triforce')
 
 
 def test_every_route_room_is_in_its_family():
@@ -38,7 +38,7 @@ def test_specialist_tags():
     assert native.specialist_for('(1, 0x45)') == 'wallmaster'
     assert native.specialist_for((0, 0x0c)) is None
     assert native.specialist_for((0, 0x2c)) == native.specialist_for((0, 0x2c, True)) == 'ow-tektite'
-    for room in [(0, 0x29), (0, 0x39), (0, 0x48), (0, 0x49), (2, 0x6d)]:     # milestone1-only rooms, untagged
+    for room in [(0, 0x29), (0, 0x39), (0, 0x49), (0, 0x66), (2, 0x6d), (3, 0x4a)]:     # off the route, untagged
         assert native.specialist_for(room) is None, room
     assert {tuple(r) for r in native.families()['goriya']} == {(1, 0x44, False), (1, 0x23, False),
                                                                 (2, 0x5e, False), (2, 0x1e, False)}
@@ -47,7 +47,7 @@ def test_specialist_tags():
 def test_d2_then_the_heart_and_white_sword_then_the_d1_triforce():
     steps = native.route_steps()
     rooms = [(s['level'], s['room'], s['in_cave']) for s in steps]
-    assert [(s['level'], s['room']) for s in steps if s['exit'] == 'triforce'] == [(2, 0x0d), (1, 0x36)]
+    assert [(s['level'], s['room']) for s in steps if s['exit'] == 'triforce'] == [(2, 0x0d), (1, 0x36), (3, 0x3d)]
     order = [rooms.index(r) for r in [(2, 0x0e, False), (0, 0x2c, True), (0, 0x0a, True), (1, 0x72, False),
                                       (1, 0x74, False), (1, 0x44, False)]]
     assert order == sorted(order)
@@ -70,8 +70,29 @@ def test_the_bow_detour_goes_north_from_0x43_and_back():
                       (0x43, False, 'N', 'E', 'stalfos-keese-gel'), (0x44, False, 'W', 'E', 'goriya')]
     assert steps[start + 4]['waypoint'] == 'bow'
     assert native.game_rooms()[(1, 0x7f, True)]['treasure'] == 'bow'
-    assert native.families()['trap-room'] == [(1, 0x22, False)]
-    assert native.families()['equipment-room'] == [(1, 0x7f, True)]
+    assert native.families()['trap-room'] == [(1, 0x22, False), (3, 0x4c, False), (3, 0x5a, False)]
+    assert native.families()['equipment-room'] == [(1, 0x7f, True), (3, 0x0f, True)]
+
+
+def test_dungeon_3_follows_lees_directions_with_the_treasure_rules():
+    steps = native.route_steps()
+    start = next(i for i, s in enumerate(steps) if (s['level'], s['room']) == (3, 0x7c))
+    walk = [(s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist']) for s in steps[start:]]
+    assert walk == [(0x7c, False, 'S', 'W', 'zol'), (0x7b, False, 'E', 'N', 'zol'), (0x6b, False, 'S', 'N', 'zol'),
+                    (0x5b, False, 'S', 'W', 'darknut'), (0x5a, False, 'E', 'W', 'trap-room'),
+                    (0x59, False, 'E', 'N', 'darknut'), (0x49, False, 'S', 'S', 'zol'),
+                    (0x59, False, 'N', 'S', 'darknut'), (0x69, False, 'N', 'cave', 'darknut'),
+                    (0x0f, True, 'S', 'N', 'equipment-room'), (0x69, False, 'cave', 'N', 'darknut'),
+                    (0x59, False, 'S', 'E', 'darknut'), (0x5a, False, 'W', 'E', 'trap-room'),
+                    (0x5b, False, 'W', 'N', 'darknut'), (0x4b, False, 'S', 'E', 'zol'),
+                    (0x4c, False, 'W', 'E', 'trap-room'), (0x4d, False, 'W', 'N', 'boss-manhandla'),
+                    (0x3d, False, 'S', 'triforce', 'zol')]
+    assert steps[start + 9]['waypoint'] == 'raft'
+    assert [(s['room'], s['entry'], s['treasure']) for s in steps if s['treasure']] == [
+        (0x5b, 'S', 'skip'), (0x69, 'N', 'skip'), (0x69, 'cave', 'skip'), (0x5b, 'W', 'if_bombs_below: 4')]
+    assert steps[start - 1]['room'] == 0x74 and steps[start - 1]['exit'] == 'cave'
+    rooms_info = native.game_rooms()
+    assert rooms_info[(3, 0x4c, False)]['requires_bombs'] and rooms_info[(3, 0x4d, False)]['requires_bombs']
 
 
 def test_alternates_replace_route_rooms():

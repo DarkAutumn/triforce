@@ -158,6 +158,59 @@ impl GameRoom {
     }
 }
 
+/// routes.yaml `treasure:` on a step: whether the route wants the room's game.yaml treasure on this visit.  The
+/// objective fights for a treasure that appears on the kills and walks to a visible one only when it does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TreasureRule {
+    /// Take it (the default, no `treasure:` key).
+    #[default]
+    Take,
+    /// `treasure: skip`: leave it (Dungeon 3's 0x69: pass its eight Darknuts to the stairs; 0x5b's first visit).
+    Skip,
+    /// `treasure: {if_bombs_below: N}`: take it only while Link holds fewer than N bombs (Dungeon 3's 0x5b bombs on
+    /// its last visit, Lee: D4 needs 2).
+    IfBombsBelow(u8),
+}
+
+impl TreasureRule {
+    /// The route wants the treasure while Link holds `bombs`.
+    pub fn wants(self, bombs: i32) -> bool {
+        match self {
+            TreasureRule::Take => true,
+            TreasureRule::Skip => false,
+            TreasureRule::IfBombsBelow(n) => bombs < i32::from(n),
+        }
+    }
+
+    /// The routes.yaml spelling (None for the default).
+    pub fn describe(self) -> Option<String> {
+        match self {
+            TreasureRule::Take => None,
+            TreasureRule::Skip => Some("skip".into()),
+            TreasureRule::IfBombsBelow(n) => Some(format!("if_bombs_below: {n}")),
+        }
+    }
+
+    fn parse(v: Option<&Value>) -> Result<TreasureRule, MapError> {
+        let Some(v) = v else {
+            return Ok(TreasureRule::Take);
+        };
+        if let Some(text) = v.as_str() {
+            return match text {
+                "take" => Ok(TreasureRule::Take),
+                "skip" => Ok(TreasureRule::Skip),
+                _ => err(format!("treasure: {text:?} (take, skip or {{if_bombs_below: N}})")),
+            };
+        }
+        match get(v, "if_bombs_below") {
+            Some(n) if v.as_mapping().is_some_and(|m| m.len() == 1) => {
+                Ok(TreasureRule::IfBombsBelow(as_u8(n, "treasure: if_bombs_below")?))
+            }
+            _ => err(format!("treasure: {v:?} (take, skip or {{if_bombs_below: N}})")),
+        }
+    }
+}
+
 /// One routes.yaml step.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RouteStep {
@@ -171,6 +224,8 @@ pub struct RouteStep {
     /// `retreat: S`: leaving through this exit instead is no failure (d2first's 0x0a before the white sword: back to
     /// 0x1a, whose objective sends Link in again).
     pub retreat: Option<String>,
+    /// `treasure:` ([`TreasureRule`]): whether this visit takes the room's treasure.
+    pub treasure: TreasureRule,
 }
 
 impl RouteStep {
@@ -259,6 +314,8 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         exit: as_string(get(v, "exit")).unwrap_or_default(),
         waypoint: as_string(get(v, "waypoint")).filter(|w| !w.is_empty()),
         retreat: as_string(get(v, "retreat")).filter(|r| !r.is_empty()),
+        treasure: TreasureRule::parse(get(v, "treasure"))
+            .map_err(|e| MapError(format!("{loc} {}: {}", as_string(get(v, "entry")).unwrap_or_default(), e.0)))?,
     })
 }
 
@@ -921,21 +978,23 @@ mod tests {
     }
 
     /// d2first: game start, D2 (its triforce), the 0x2c heart cave (a `heart` waypoint after D2, before D1), the
-    /// white sword at 0x0a, D1 ending on its triforce.  Every step leaves through an exit game.yaml has (caves and
-    /// triforces aside), into the next step's room.
+    /// white sword at 0x0a, D1 (the bow cellar) to its triforce, then Dungeon 3 (the raft cellar) ending on its
+    /// triforce.  Every step leaves through an exit game.yaml has (caves and triforces aside), into the next step's
+    /// room; a triforce warps Link out to its level's entrance.
     #[test]
     fn d2first_route_connects() {
         let map = GameMap::builtin();
         let steps = &map.routes["d2first"];
         assert_eq!((steps[0].entry.as_str(), steps[0].location()), ("start", START));
         let last = steps.last().unwrap();
-        assert_eq!((last.location(), last.exit.as_str()), (D1_TRIFORCE, "triforce"));
+        assert_eq!((last.location(), last.exit.as_str()), (loc(3, 0x3d), "triforce"));
         let triforces: Vec<u8> = steps.iter().filter(|s| s.exit == "triforce").map(|s| s.level).collect();
-        assert_eq!(triforces, [2, 1]);
+        assert_eq!(triforces, [2, 1, 3]);
         for pair in steps.windows(2) {
             let (step, next) = (&pair[0], &pair[1]);
             if step.exit == "triforce" {
-                assert_eq!((next.location(), next.entry.as_str()), (loc(0, 0x3c), "cave"));
+                let entrance = if step.level == 2 { 0x3c } else { 0x37 };
+                assert_eq!((next.location(), next.entry.as_str()), (loc(0, entrance), "cave"));
                 continue;
             }
             let exit = &map.get(step.location()).unwrap().exits[&step.exit];
@@ -945,7 +1004,10 @@ mod tests {
             .iter()
             .filter_map(|s| Some((s.location(), s.waypoint.as_deref()?)))
             .collect();
-        assert_eq!(waypoints, [(L::new(0, 0x2c, true), "heart"), (L::new(1, 0x7f, true), "bow")]);
+        assert_eq!(
+            waypoints,
+            [(L::new(0, 0x2c, true), "heart"), (L::new(1, 0x7f, true), "bow"), (L::new(3, 0x0f, true), "raft")]
+        );
         assert!(!steps.iter().any(|s| s.location() == loc(0, 0x39) || s.location() == loc(2, 0x4f)));
         let retreats: Vec<_> = steps.iter().filter(|s| s.retreat.is_some()).collect();
         assert_eq!(retreats.len(), 1);
@@ -953,6 +1015,38 @@ mod tests {
             (retreats[0].location(), retreats[0].exit.as_str(), retreats[0].retreat.as_deref()),
             (loc(0, 0x0a), "cave", Some("S"))
         );
+        let rules: Vec<_> = steps
+            .iter()
+            .filter(|s| s.treasure != TreasureRule::Take)
+            .map(|s| (s.location(), s.entry.as_str(), s.treasure))
+            .collect();
+        assert_eq!(
+            rules,
+            [
+                (loc(3, 0x5b), "S", TreasureRule::Skip),
+                (loc(3, 0x69), "N", TreasureRule::Skip),
+                (loc(3, 0x69), "cave", TreasureRule::Skip),
+                (loc(3, 0x5b), "W", TreasureRule::IfBombsBelow(4)),
+            ]
+        );
+    }
+
+    /// routes.yaml `treasure:` parses `skip`, `take` and `{if_bombs_below: N}`; anything else is a load error.
+    #[test]
+    fn treasure_rules_parse_and_reject_typos() {
+        let route = |rule: &str| format!("r:\n- {{level: 3, room: '0x5b', entry: S, exit: W, treasure: {rule}}}\n");
+        let rule = |text: &str| GameMap::from_yaml(GAME_YAML, &route(text)).map(|m| m.routes["r"][0].treasure);
+        assert_eq!(rule("skip").unwrap(), TreasureRule::Skip);
+        assert_eq!(rule("take").unwrap(), TreasureRule::Take);
+        assert_eq!(rule("{if_bombs_below: 4}").unwrap(), TreasureRule::IfBombsBelow(4));
+        for bad in ["leave", "{if_bombs_below: 300}", "{if_bombs_above: 4}", "{if_bombs_below: 4, x: 1}"] {
+            let e = rule(bad).unwrap_err().0;
+            assert!(e.contains("treasure") && e.contains("0x5b"), "{bad}: {e}");
+        }
+        let wants = |r: TreasureRule| [0, 3, 4, 8].map(|bombs| r.wants(bombs));
+        assert_eq!(wants(TreasureRule::Take), [true; 4]);
+        assert_eq!(wants(TreasureRule::Skip), [false; 4]);
+        assert_eq!(wants(TreasureRule::IfBombsBelow(4)), [true, true, false, false]);
     }
 
     /// Dungeon 1 fetches both key rooms' keys like the D1-first route did: 0x73 W, 0x72 back E, 0x73 E, 0x74 back
@@ -1126,14 +1220,20 @@ mod tests {
             map.route_next_rooms(L::new(0, 0x77, true), m),
             set(&[START])
         );
-        assert_eq!(map.route_next_rooms(loc(0, 0x38), m), set(&[loc(0, 0x37)]));
+        assert_eq!(map.route_next_rooms(loc(0, 0x38), m), set(&[loc(0, 0x37), loc(0, 0x48)]));
         assert_eq!(
             map.route_next_rooms(D1_START, m),
             set(&[loc(1, 0x72), loc(1, 0x74), loc(1, 0x63)])
         );
         assert_eq!(map.route_next_rooms(loc(2, 0x7d), m), set(&[loc(2, 0x7e)]));
         assert_eq!(map.route_next_rooms(loc(2, 0x7e), m), set(&[loc(2, 0x6e)]));
-        assert_eq!(map.route_next_rooms(loc(0, 0x37), m), set(&[D1_START]));
+        assert_eq!(map.route_next_rooms(loc(0, 0x37), m), set(&[D1_START, loc(0, 0x38)]));
+        assert_eq!(map.route_next_rooms(loc(0, 0x74), m), set(&[loc(3, 0x7c)]));
+        assert_eq!(
+            map.route_next_rooms(loc(3, 0x59), m),
+            set(&[loc(3, 0x49), loc(3, 0x69), loc(3, 0x5a)])
+        );
+        assert_eq!(map.route_next_rooms(loc(3, 0x4c), m), set(&[loc(3, 0x4d)]));
         assert_eq!(
             map.route_next_rooms(loc(0, 0x1a), m),
             set(&[loc(0, 0x0a), loc(0, 0x19)])

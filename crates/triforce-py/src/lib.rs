@@ -18,7 +18,7 @@ mod game;
 use pyo3::prelude::*;
 
 /// The route's room visits as dicts (`index`, `level`, `room`, `in_cave`, `entry`, `exit`, `specialist`,
-/// `waypoint`, `retreat`).
+/// `waypoint`, `retreat`, `treasure`: None to take the room's treasure, `skip` or `if_bombs_below: N`).
 #[pyfunction]
 #[pyo3(signature = (route=zelda::game_map::DEFAULT_ROUTE))]
 fn route_steps<'py>(
@@ -58,6 +58,7 @@ fn step_dict<'py>(
     d.set_item("specialist", specialist)?;
     d.set_item("waypoint", s.waypoint.as_deref())?;
     d.set_item("retreat", s.retreat.as_deref())?;
+    d.set_item("treasure", s.treasure.describe())?;
     Ok(d)
 }
 

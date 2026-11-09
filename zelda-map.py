@@ -395,7 +395,8 @@ def overlay_badge(overlay: str, room: int, stats: Optional[dict]) -> Optional[tu
 def route_plan(route: str, rooms: Optional[dict] = None) -> list[dict]:
     """The route's steps (``route_steps`` dicts) each with what Link carries on entering it: ``hearts`` (heart
     containers), ``sword``, ``items`` and ``triforce`` (levels).  Progress follows the treasures (``game.yaml``) of
-    the steps that take them: a heart container, a sword, the boomerang or bombs; a ``triforce`` exit adds its piece."""
+    the steps that take them: a heart container, a sword, the boomerang, bombs, the bow or the raft; a ``triforce`` exit
+    adds its piece."""
     rooms = game_rooms() if rooms is None else rooms
     hearts, sword, items, triforce = 3, 'none', [], []
     plan = []
@@ -406,7 +407,7 @@ def route_plan(route: str, rooms: Optional[dict] = None) -> list[dict]:
             hearts += 1
         elif treasure in ('wood-sword', 'white-sword', 'magic-sword'):
             sword = treasure.split('-')[0]
-        elif treasure in ('boomerang', 'bombs') and treasure not in items:
+        elif treasure in ('boomerang', 'bombs', 'bow', 'raft') and treasure not in items:
             items.append(treasure)
         if step['exit'] == 'triforce':
             triforce.append(step['level'])
@@ -442,6 +443,7 @@ def step_text(step: dict) -> str:
         carried.append('triforce ' + '+'.join(str(level) for level in step['triforce']))
     waypoint = f" · waypoint {step['waypoint']}" if step.get('waypoint') else ''
     waypoint += f" · retreat {step['retreat']}" if step.get('retreat') else ''
+    waypoint += f" · treasure {step['treasure']}" if step.get('treasure') else ''
     return (f"#{step['index']}{where} {step['entry']}→{step['exit']} · {step['specialist'] or 'none'} · "
             f"{', '.join(carried)}{waypoint}")
 

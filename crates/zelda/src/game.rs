@@ -722,6 +722,10 @@ impl GameView {
         self.byte(Var::Bow) != 0
     }
 
+    pub fn raft(&self) -> bool {
+        self.byte(Var::Raft) != 0
+    }
+
     pub fn rupees(&self) -> i32 {
         self.var(Var::Rupees)
     }

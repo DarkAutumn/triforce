@@ -1,16 +1,17 @@
 //! Where Link should go next (`triforce/objectives.py`, live `GameCompletion` only).
 //!
 //! `GameCompletion` follows the route step by step: in a room the route enters from the side Link came in, with the
-//! triforce pieces, sword and bow the route has there, the step's exit is the correct one (Dungeon 1's key rooms:
-//! 0x73 W, then E, then N).  Elsewhere (off the route, or a step leaving through a cave, stairs or a triforce) it
-//! routes through the milestone: the sword first, then the route's waypoints while they apply, then each triforce
+//! triforce pieces, sword, bow and raft the route has there, the step's exit is the correct one (Dungeon 1's key
+//! rooms: 0x73 W, then E, then N).  Elsewhere (off the route, or a step leaving through a cave, stairs or a triforce)
+//! it routes through the milestone: the sword first, then the route's waypoints while they apply, then each triforce
 //! (the route's triforce steps in route order, then the closest one left), using `GameMap` Dijkstra with ties broken
-//! toward the route.  Persistent room flags seed which keys are taken and which locked doors are open.  Targets feed
-//! the PBRS wavefront; `next_rooms` decides which exits are correct.  The dead `ReachLocation`,
-//! `TreasureObjective`, `RoomWalk` and `OBJECTIVES` are not ported.
+//! toward the route.  Persistent room flags seed which keys are taken and which locked doors are open.  A step's
+//! `treasure:` rule says whether its room's treasure is wanted on that visit; a step leaving through an intact bomb
+//! wall targets the spot to bomb it from.  Targets feed the PBRS wavefront; `next_rooms` decides which exits are
+//! correct.  The dead `ReachLocation`, `TreasureObjective`, `RoomWalk` and `OBJECTIVES` are not ported.
 
-use crate::enums::{Direction, MapLocation, SwordKind, Tile};
-use crate::game::GameView;
+use crate::enums::{Direction, MapLocation, Position, SwordKind, Tile};
+use crate::game::{BombWall, GameView};
 use crate::game_map::{GameMap, MAZE_STEP, RouteStep};
 use crate::room::Target;
 use crate::room_entry::ROOM_FLAGS_OW;
@@ -29,6 +30,9 @@ pub const WAYPOINT_HEART: &str = "heart";
 /// flag is set.  Without it the route's later steps don't match (`StepProgress::bow`), so the objective sends Link
 /// back down the stairs.
 pub const WAYPOINT_BOW: &str = "bow";
+/// routes.yaml `waypoint: raft` (on Dungeon 3's cellar step under 0x69): take the cellar's raft, as the bow
+/// (`StepProgress::raft`).
+pub const WAYPOINT_RAFT: &str = "raft";
 const COMBAT_SHUTTER_TRIGGERS: [SecretTrigger; 4] = [
     SecretTrigger::AllDead,
     SecretTrigger::Ringleader,
@@ -81,12 +85,13 @@ pub struct Objective {
 }
 
 /// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`), the sword
-/// earlier cave steps handed over and whether an earlier cellar step gave the bow.
+/// earlier cave steps handed over and whether earlier cellar steps gave the bow and the raft.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StepProgress {
     pub triforces: u8,
     pub sword: SwordKind,
     pub bow: bool,
+    pub raft: bool,
 }
 
 impl StepProgress {
@@ -94,6 +99,7 @@ impl StepProgress {
     pub fn matches(&self, state: &GameView) -> bool {
         state.sword() == self.sword
             && state.bow() == self.bow
+            && state.raft() == self.raft
             && (1..=8).all(|level| state.has_triforce(level) == (self.triforces & (1 << (level - 1)) != 0))
     }
 }
@@ -112,6 +118,7 @@ pub fn route_progress(map: &GameMap, steps: &[RouteStep]) -> Vec<StepProgress> {
         triforces: 0,
         sword: SwordKind::None,
         bow: false,
+        raft: false,
     };
     let mut out = Vec::with_capacity(steps.len());
     for step in steps {
@@ -128,6 +135,9 @@ pub fn route_progress(map: &GameMap, steps: &[RouteStep]) -> Vec<StepProgress> {
         }
         if treasure == Some("bow") {
             progress.bow = true;
+        }
+        if treasure == Some("raft") {
+            progress.raft = true;
         }
     }
     out
@@ -241,7 +251,8 @@ pub struct GameCompletion {
     step: Option<usize>,
     /// Remembered room treasure per visited room (`RoomMemory.item`).
     rooms: HashMap<MapLocation, Option<String>>,
-    last_route: Option<(RouteKey, MapObjective)>,
+    /// The last map objective, keyed by its route key and the intact bomb walls' direction bits.
+    last_route: Option<(RouteKey, u8, MapObjective)>,
     collected_key_rooms: BTreeSet<MapLocation>,
     opened_doors: BTreeSet<(MapLocation, String)>,
     /// `closest_room` results (each a Dijkstra per target, asked every step) for the current
@@ -790,15 +801,19 @@ impl GameCompletion {
         if item.as_deref() == Some("key") && self.collected_key_rooms.contains(&loc) {
             item = None;
         }
+        // The step's `treasure:` rule (routes.yaml), read live: 0x5b's bombs stop mattering once Link holds 4.
+        let wanted = self
+            .current_step(loc)
+            .is_none_or(|step| step.treasure.wants(state.bombs()));
         let mut kind = ObjectiveKind::None;
         let mut tiles = Vec::new();
         if let Some(treasure) = state.treasure() {
-            if !matches!(item.as_deref(), Some("map") | Some("compass")) {
+            if wanted && !matches!(item.as_deref(), Some("map") | Some("compass")) {
                 kind = ObjectiveKind::Treasure;
                 tiles.extend(overlap(treasure.link_overlap_tiles()));
             }
         } else if !state.enemies.is_empty()
-            && (item.is_some() || self.shutter_requires_combat(state))
+            && ((wanted && item.is_some()) || self.shutter_requires_combat(state))
         {
             kind = ObjectiveKind::Fight;
             let enemy_tiles: Vec<Tile> = if state.has_active_enemies() {
@@ -864,10 +879,16 @@ impl GameCompletion {
                 )
             }
         };
+        // Intact bomb walls change the exit targets (below) when they open; the cache key holds them.
+        let walls = state
+            .bomb_walls()
+            .iter()
+            .fold(0u8, |mask, w| mask | w.wall_direction.value());
         // A maze's next direction depends on MazeStep, which the cache key doesn't hold.
         if self.map.maze(loc).is_none()
-            && let Some((last, result)) = &self.last_route
+            && let Some((last, last_walls, result)) = &self.last_route
             && *last == key
+            && *last_walls == walls
         {
             return self.push_block_targets(state, result.clone());
         }
@@ -876,7 +897,7 @@ impl GameCompletion {
             RouteKey::Target(_, target, keys, collected, opened) => {
                 let mut next_rooms = self.map.find_next_rooms(loc, *target, *keys, collected, opened);
                 if next_rooms.is_empty() {
-                    self.last_route = Some((key, (Vec::new(), BTreeSet::new())));
+                    self.last_route = Some((key, walls, (Vec::new(), BTreeSet::new())));
                     return (Vec::new(), BTreeSet::new());
                 }
                 let route_next = self.map.route_next_rooms(loc, &self.route);
@@ -905,11 +926,13 @@ impl GameCompletion {
                         .into_iter()
                         .map(Target::Tile),
                 ),
+                // An intact game.yaml bomb wall (Dungeon 3's 0x4c E into Manhandla's room): where to bomb it from.
+                None if walls & d.value() != 0 => targets.push(Target::Tile(bomb_spot(d))),
                 None => targets.push(Target::Dir(d)),
             }
         }
         let result = (targets, next_rooms);
-        self.last_route = Some((key, result.clone()));
+        self.last_route = Some((key, walls, result.clone()));
         self.push_block_targets(state, result)
     }
 }
@@ -917,6 +940,21 @@ impl GameCompletion {
 /// game.yaml `span` of `location`'s exit in `direction`.
 pub fn exit_span(map: &GameMap, location: MapLocation, direction: Direction) -> Option<(i32, i32)> {
     map.get(location)?.exits.get(direction.name())?.span
+}
+
+/// Where Link stands to bomb the intact dungeon wall in `direction`: facing it, 16 px short of its hotspot
+/// (Z_07 `BombableWallHotspots`), so the bomb he places 16 px ahead (Z_01 `PlaceWeapon`) lands on the hotspot; the
+/// game opens the wall for a bomb within $18 px of it (Z_07 `UpdateBomb`).  Beside an E/W wall that also keeps Link
+/// out of the column the corner blade traps slide along (|dx| < 14 from x $D0 or $20; 0x4c has them).
+pub fn bomb_spot(direction: Direction) -> Tile {
+    let hotspot = BombWall::hotspot(direction);
+    let (dx, dy) = match direction {
+        Direction::N => (0, 16),
+        Direction::S => (0, -16),
+        Direction::W => (16, 0),
+        _ => (-16, 0),
+    };
+    Position::new(hotspot.x + dx, hotspot.y + dy).tile()
 }
 
 fn along_edge(tile: Tile, direction: Direction) -> i32 {
@@ -1107,18 +1145,42 @@ mod tests {
         assert_eq!(m(1, 0x22, false).direction_to(m(1, 0x7f, true)), Direction::None);
     }
 
+    /// The raft from Dungeon 3's cellar step on: 0x69 from N and the cellar without it, 0x69 back out of the cellar,
+    /// 0x59 from S and the D3 triforce room with it; nothing before Dungeon 3 has it.
     #[test]
-    fn heart_then_bow_waypoints_apply_between_the_d2_and_d1_triforces() {
+    fn route_progress_takes_the_raft_in_the_d3_cellar() {
+        let map = GameMap::builtin();
+        let steps = &map.routes["d2first"];
+        let progress = route_progress(&map, steps);
+        let raft = |room, in_cave, entry: &str| {
+            let i = steps
+                .iter()
+                .position(|s| s.location() == MapLocation::new(3, room, in_cave) && s.entry == entry)
+                .unwrap();
+            progress[i].raft
+        };
+        assert!(!raft(0x69, false, "N") && !raft(0x0f, true, "S") && !raft(0x59, false, "N"));
+        assert!(raft(0x69, false, "cave") && raft(0x59, false, "S") && raft(0x3d, false, "S"));
+        let first = progress.iter().position(|p| p.raft).unwrap();
+        assert_eq!(steps[first - 1].location(), MapLocation::new(3, 0x0f, true));
+        assert!(progress[first..].iter().all(|p| p.raft && p.bow && p.triforces == 0b011));
+    }
+
+    #[test]
+    fn waypoints_apply_between_their_triforces() {
         let map = GameMap::builtin();
         let w = route_waypoints(&map.routes["d2first"]);
-        assert_eq!(w.len(), 2);
-        assert_eq!(w[0].kind, WAYPOINT_HEART);
-        assert_eq!(w[0].location, MapLocation::new(0, 0x2c, true));
-        assert_eq!(w[1].kind, WAYPOINT_BOW);
-        assert_eq!(w[1].location, MapLocation::new(1, 0x7f, true));
-        for waypoint in &w {
-            assert_eq!(waypoint.after, [2].into_iter().collect());
-            assert_eq!(waypoint.before, Some(1));
-        }
+        let kinds: Vec<_> = w.iter().map(|w| (w.kind.as_str(), w.location, w.before)).collect();
+        assert_eq!(
+            kinds,
+            [
+                (WAYPOINT_HEART, MapLocation::new(0, 0x2c, true), Some(1)),
+                (WAYPOINT_BOW, MapLocation::new(1, 0x7f, true), Some(1)),
+                (WAYPOINT_RAFT, MapLocation::new(3, 0x0f, true), Some(3)),
+            ]
+        );
+        assert_eq!(w[0].after, [2].into_iter().collect());
+        assert_eq!(w[1].after, [2].into_iter().collect());
+        assert_eq!(w[2].after, [2, 1].into_iter().collect());
     }
 }

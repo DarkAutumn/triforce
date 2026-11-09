@@ -34,7 +34,10 @@ spawn (95%).
    only on its last visit and only if bombs < 4 (D4 will need 2). `requires_bombs` on the bomb-wall room and the
    boss room: Manhandla is killed with bombs dropped in his path (a perfect one kills him with one bomb and, with
    the streak primed, drops bombs).
-4. If Lee hasn't answered by then: extend the route after D1 to D3 and train to beat it.
+4. [x] **Route on to D3** (Nov 9; decisions 2026-11-09, `docs/routes/d3.md`): steps 68–97, treasure rules, bomb-wall
+   exits, families `ow-leever`, `zol`, `darknut`, `boss-manhandla`; states built (chains 0–2). Still to do: explore
+   curricula for the new/changed families (Manhandla tracks: count bombs vs sword kills), smoke `eval-chain --from
+   3_7cs_0`, then train them. Watch Manhandla hit/kill rewards (base kills count up to 24 per bomb, above).
 
 - [x] **Cheated items** (Lee, Nov 9; branch `cheats`): bombs, keys and rupees share one ledger
   (`crates/zelda/src/cheats.rs`, architecture.md "Cheated items"): a key is granted at a still-locked route door

@@ -802,3 +802,45 @@ entry below and `crates/zcore/UPSTREAM.md`.
   unused one back), `specialist_env::requires_bombs_room_cheats_one_bomb_and_counts_it_when_placed`,
   `game_map::tests::requires_rupees_is_an_optional_byte`, Python tests for the renamed metrics, aggregates,
   `chain_summary` and the footer.
+
+## 2026-11-09 — d2first goes on to Dungeon 3 and ends on its triforce; route-step treasure rules; bomb-wall exits
+
+- **What:** after the D1 triforce (which warps Link to 0:0x37) the route walks 0x37 E, 0x38 S, 0x48 S, 0x58 W, 0x57
+  W, 0x56 W, 0x55 S, 0x65 W, 0x64 W, 0x63 S, 0x73 E to 0x74 and into Dungeon 3, then Lee's directions (`W N N W W N
+  S S`, the raft cellar 3:0x0f, `N E E N E E` with 0x4c's E wall bombed, N): steps 68–97, ending on the D3 triforce
+  (`chain::Route::final_triforce` = 3). routes.yaml steps take `treasure: skip` or `treasure: {if_bombs_below: N}`
+  (`game_map::TreasureRule`, read live by `GameCompletion::dungeon_room_objective`; absent = take the treasure, as
+  before): 0x69 skips its bombs on both visits, 0x5b on its first, and on its last takes them only below 4 bombs.
+  `StepProgress` tracks the raft (`waypoint: raft` on the cellar step). A step leaving through an intact game.yaml
+  bomb wall targets its bomb spot (`objectives::bomb_spot`: 16 px short of the wall's Z_07 `BombableWallHotspots`
+  entry, so the bomb Link places 16 px ahead lands on it; the game wants it within $18 px); the map
+  objective's cache key holds the intact walls, so the doorway becomes the target once it opens. New families
+  `ow-leever` (0:0x48), `zol` (3:0x7c, 7b, 6b, 49, 4b, 3d), `darknut` (3:0x5b, 59, 69), `boss-manhandla` (3:0x4d);
+  `trap-room` gains 3:0x5a and 3:0x4c (and bombs, for 0x4c), `equipment-room` the raft cellar, the overworld families
+  0x57/0x64 (ow-octorok), 0x55/0x56/0x65 (ow-zora), 0x63/0x73 (ow-moblin), 0x74 (ow-tektite).
+- **Why:** Lee (Nov 9): route on to D3 after D1 and beat it; skip the Darknut room above the raft cellar's treasure;
+  take the central Darknut room's bombs only on its last visit and only below 4 bombs (D4 needs 2); Manhandla with
+  bombs. The default stays "take the room's treasure", so every earlier room behaves as before.
+- **Decisions made while Lee was away:**
+  - The overworld walk: every shortest way (11 rooms) passes 0x48 (0x37 leads only E, 0x38 only S toward D3) and
+    0x64 (its potion shop's mouth is open: walking in is a wrong exit). 0x55's W third is cut off from its E part
+    (tile columns 10–13 impassable in every row; found when Go-Explore stalled there), which rules out the ways
+    through 0x54/0x53; of the two left, the one through 0x57/0x56/0x55/0x65 meets one open cave (0x64), the one
+    through 0x68/0x67/0x66 two (0x66's shop too).
+  - Families by enemy: 0x48 (Red Leevers ×4 and a Zora) is a new `ow-leever` (Leevers burrow and surface by Link;
+    nothing else on the route does); Zol rooms are a new `zol` rather than `stalfos-keese-gel` (Zols are not D1's
+    Gels, and the trained D1 model stays untouched); D3's empty entrance hall and triforce room join `zol`, as D1's
+    and D2's join their dungeon's main family; the Darknut rooms are `darknut`; 0x5a (traps + Keese) and 0x4c (traps
+    + Zols + the bomb wall) are `trap-room`, which therefore has bombs on (0x22 and 0x5a get them too).
+  - `darknut` draws bombs 0–8 at reset (bombs stay unusable there), so 0x5b's last visit trains both sides of its
+    rule; route-true states reach it with 5 or 8 bombs, i.e. leaving N.
+  - `ow-tektite` succeeds on `enter-room:3:0x7c` like ow-octorok's dungeon stairs; `zol` on `triforce-collected`.
+  - `skip` ignores the treasure entirely (no fight, no pickup target) even when it shows; the stairs and exits are
+    the objective.
+- **Evidence:** `docs/routes/d3.md` "The route", `docs/routes/d2first.md`; tests
+  `objectives::d3_treasure_rules_skip_and_take_below_four_bombs`,
+  `objectives::d3_bomb_wall_exit_targets_its_bomb_spot_then_the_doorway` (zcore: one bomb from the spot opens
+  0x4c's wall, Link walks through into 0x4d), `objectives::tests::{route_progress_takes_the_raft_in_the_d3_cellar,
+  waypoints_apply_between_their_triforces}`, `game_map::tests::{d2first_route_connects,
+  treasure_rules_parse_and_reject_typos}`, `chain::tests::routes_load`,
+  `tests/test_game_map.py::test_dungeon_3_follows_lees_directions_with_the_treasure_rules`.

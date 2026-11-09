@@ -1,6 +1,6 @@
 //! `GameCompletion` objectives on real rooms with poked RAM: key collection (observed and seeded from room
-//! flags), treasure/fight precedence, caves, exit targets agreeing with exit correctness, the route's step order, and
-//! the bow detour's push block, stairs and cellar played in the emulator.
+//! flags), treasure/fight precedence, caves, exit targets agreeing with exit correctness, the route's step order, the
+//! bow detour's push block, stairs and cellar played in the emulator, and Dungeon 3's treasure rules and bomb wall.
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -12,7 +12,8 @@ use std::sync::Arc;
 use zelda::enums::SwordKind;
 use zelda::game::GameView;
 use zelda::objectives::{
-    CAVE_TREASURE_TILE, GameCompletion, Objective, ObjectiveKind, exit_is_correct_at, start_route, tiles_in_span,
+    CAVE_TREASURE_TILE, GameCompletion, Objective, ObjectiveKind, bomb_spot, exit_is_correct_at, start_route,
+    tiles_in_span,
 };
 use zelda::room::Target;
 use zelda::room_entry::{ROOM_FLAGS_OW, ROOM_FLAGS_UW};
@@ -607,4 +608,124 @@ fn bow_detour_block_stairs_cellar_and_back() {
     let objective = gc.objectives(Some(&top), &out);
     assert_eq!(gc.step(), Some(step + 2));
     assert_eq!(objective.next_rooms, [loc(1, 0x23)].into_iter().collect());
+}
+
+/// The GameCompletion of the route step entering 3:`room` from `entry` (as one-room training picks it).
+fn d3_step(map: &Arc<GameMap>, state: &GameView, room: u8, entry: &str) -> GameCompletion {
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let (route, step) = start_route(map, loc(3, room), Some(entry), &mut rng, None, state);
+    let step = step.unwrap_or_else(|| panic!("3:{room:#04x} from {entry} is a route step"));
+    assert_eq!(map.routes[&route][step].location(), loc(3, room));
+    GameCompletion::new(map.clone(), &route, Some(step)).unwrap()
+}
+
+/// Dungeon 3's route-step treasure rules (Lee, Nov 9).  0x69 from N (`treasure: skip`) heads for the stairs down to
+/// the raft cellar past its Darknuts, where the default rule (off the route) fights them for the bombs they guard;
+/// 0x5b from S (`skip`) leaves W at once; 0x5b from W (`if_bombs_below: 4`) fights for its bombs and takes them only
+/// while Link holds fewer than 4, else leaves N.
+#[test]
+fn d3_treasure_rules_skip_and_take_below_four_bombs() {
+    let Some(images) = images(&["3_69n_0", "3_5bs_0", "3_5bw_0"]) else {
+        return;
+    };
+    let map = Arc::new(GameMap::builtin());
+    let darknuts = view(&map, &images[0], 0);
+    assert!(!darknuts.enemies.is_empty() && darknuts.treasure().is_none());
+    let objective = d3_step(&map, &darknuts, 0x69, "N").objectives(None, &darknuts);
+    assert_eq!(objective.kind, ObjectiveKind::Move);
+    assert_eq!(objective.next_rooms, [MapLocation::new(3, 0x0f, true)].into_iter().collect());
+    assert_eq!(objective.pbrs_targets, tiles(&[(26, 10)]));
+    assert_eq!(completion(&map).objectives(None, &darknuts).kind, ObjectiveKind::Fight);
+
+    let central = view(&map, &images[1], 0);
+    assert!(!central.enemies.is_empty());
+    let objective = d3_step(&map, &central, 0x5b, "S").objectives(None, &central);
+    assert_eq!(objective.kind, ObjectiveKind::Move);
+    assert_eq!(objective.next_rooms, [loc(3, 0x5a)].into_iter().collect());
+
+    for (bombs, kind) in [
+        (0, ObjectiveKind::Fight),
+        (3, ObjectiveKind::Fight),
+        (4, ObjectiveKind::Move),
+        (8, ObjectiveKind::Move),
+    ] {
+        let mut ram = images[2].clone();
+        set(&mut ram, Var::Bombs, bombs);
+        let state = view(&map, &ram, 0);
+        assert!(!state.enemies.is_empty());
+        let objective = d3_step(&map, &state, 0x5b, "W").objectives(None, &state);
+        assert_eq!(objective.kind, kind, "{bombs} bombs");
+        let next = if kind == ObjectiveKind::Move { vec![loc(3, 0x4b)] } else { vec![] };
+        assert_eq!(objective.next_rooms, next.into_iter().collect(), "{bombs} bombs");
+    }
+    // The Darknuts dead and their bombs on the floor: taken below 4 bombs, left from 4 on.
+    for (bombs, kind) in [(3, ObjectiveKind::Treasure), (4, ObjectiveKind::Move)] {
+        let mut ram = images[2].clone();
+        clear_objects(&mut ram);
+        show_treasure(&mut ram, 120, 141);
+        set(&mut ram, Var::Bombs, bombs);
+        let state = view(&map, &ram, 0);
+        let objective = d3_step(&map, &state, 0x5b, "W").objectives(None, &state);
+        assert_eq!(objective.kind, kind, "{bombs} bombs, treasure showing");
+    }
+}
+
+/// Dungeon 3's 0x4c from W leaves E through an intact bomb wall into Manhandla's room: the objective's target is
+/// the wall's bomb spot (16 px short of its hotspot), a bomb placed from it facing E opens the wall, and the target
+/// becomes the open doorway, a correct exit into 0x4d that Link walks through.
+#[test]
+fn d3_bomb_wall_exit_targets_its_bomb_spot_then_the_doorway() {
+    let Some(nes) = open_core() else { return };
+    let map = Arc::new(GameMap::builtin());
+    let mut s = Session::new(Counted(nes, 0), map.clone());
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    s.load(&load_named_state("3_4cw_0"), &LoadOptions::default(), &mut rng)
+        .unwrap();
+    for _ in 0..30 {
+        if act(&mut s, "WAIT 8").interrupt.is_none() {
+            break;
+        }
+    }
+    let entered = s.state().clone();
+    let walls: Vec<Direction> = entered.bomb_walls().iter().map(|w| w.wall_direction).collect();
+    assert_eq!(walls, [Direction::E]);
+    let mut gc = d3_step(&map, &entered, 0x4c, "W");
+    let boss = loc(3, 0x4d);
+    let objective = gc.objectives(None, &entered);
+    assert_eq!(objective.kind, ObjectiveKind::Move);
+    assert_eq!(objective.next_rooms, [boss].into_iter().collect());
+    assert_eq!(objective.pbrs_targets, tiles(&[(24, 10)]));
+    assert_eq!(bomb_spot(Direction::E), (24, 10));
+
+    // On the bomb spot (16 px short of the hotspot (0xD0, 0x8D)) facing E with a bomb: the wall opens.
+    s.apply_ram(&[
+        (Var::LinkX, 0xC0),
+        (Var::LinkY, 0x8D),
+        (Var::LinkDirection, 1),
+        (Var::Bombs, 1),
+        (Var::HeartsAndContainers, 0x55),
+        (Var::PartialHearts, 0xFF),
+    ]);
+    assert_eq!(s.state().link.tile(), (24, 10));
+    act(&mut s, "BOMB E");
+    for _ in 0..10 {
+        if s.state().bomb_walls().is_empty() {
+            break;
+        }
+        act(&mut s, "WAIT 16");
+    }
+    let open = s.state().clone();
+    assert!(open.bomb_walls().is_empty(), "the bomb opened the E wall");
+    let objective = gc.objectives(Some(&entered), &open);
+    assert_eq!(objective.next_rooms, [boss].into_iter().collect());
+    assert_eq!(objective.pbrs_targets, tiles(&[(31, 10)]));
+    assert!(exit_is_correct_at(&map, loc(3, 0x4c), (31, 10), &objective, boss));
+    // Walk through (back on the doorway row: the Zols may have knocked him off it while the bomb ticked).
+    s.apply_ram(&[(Var::LinkX, 0xC0), (Var::LinkY, 0x8D)]);
+    for _ in 0..10 {
+        if act(&mut s, "MOVE E 16").changed_location() {
+            break;
+        }
+    }
+    assert_eq!(s.state().full_location(), boss);
 }

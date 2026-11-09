@@ -51,7 +51,7 @@ class ScriptedPolicy:
 def test_route_definition():
     route = Route.load('d2first')
     assert route.start_state == 'start'
-    assert route.terminal is None                   # the route ends on taking the D1 triforce
+    assert route.terminal is None                   # the route ends on taking the D3 triforce
     assert Route.load('d2first', parse_location('1:0x73')).terminal == MapLocation(1, 0x73, False)
     assert Route.load('d2first', start_from='2_7ds_0').start_state == '2_7ds_0'
     with pytest.raises(RunnerError, match='Unknown route'):

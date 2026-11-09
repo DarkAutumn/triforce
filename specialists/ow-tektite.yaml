@@ -1,7 +1,7 @@
 name: ow-tektite
-rooms: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)']
-start_states: ['0_1a*_[0-9]', '0_2c*_[0-9]']
-success: [exit-correct]
+rooms: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)']
+start_states: ['0_1a*_[0-9]', '0_2c*_[0-9]', '0_74*_[0-9]']
+success: [exit-correct, enter-room:3:0x7c]
 reward_profile: default
 reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as ow-moblin)
@@ -15,4 +15,5 @@ notes: >-
   crossed twice: from E to N (to the white sword at 0x0a), then from N to W; from N without the white sword (a
   retreat from 0x0a) the objective sends Link back N. 0x2c (Red Tektite x4, Lee Nov 8): from E bomb the rock wall
   and enter the take-any cave, take the heart container (right ware; the potion or leaving without it is
-  `missed`), then N out of the room.
+  `missed`), then N out of the room. 0x74 (one Red Tektite; Nov 9): from W into Dungeon 3's open entrance
+  (enter-room 3:0x7c).

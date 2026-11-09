@@ -1,18 +1,22 @@
 name: trap-room
-rooms: ['(1, 0x22)']
-start_states: ['1_22*_[0-9]']
+rooms: ['(1, 0x22)', '(3, 0x5a)', '(3, 0x4c)']
+start_states: ['1_22*_[0-9]', '3_5a*_[0-9]', '3_4c*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # as the dungeon families (round 10 §8): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
 ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chains arrive with partial hearts (round 5)
-items: {bombs: false}
+items: {bombs: true}                    # Dungeon 3's 0x4c is requires_bombs: bomb its E wall into Manhandla's room
 curriculum: {enabled: true}             # trajectories/trap-room (Go-Explore paths per start state)
 one_room: true
 max_steps: 600
 warm_start: null
 notes: >-
-  Blade-trap rooms (Lee, Nov 9), whatever the dungeon: no monsters, traps ($49) that slide at Link when he lines up
-  with them and can't be killed. Dungeon 1's 0x22 (the bow detour, docs/routes/d2first.md): from E, push the west
+  Blade-trap rooms (Lee, Nov 9), whatever the dungeon: traps ($49) that slide at Link when he lines up with them and
+  can't be killed. Dungeon 1's 0x22 (the bow detour, docs/routes/d2first.md; no monsters): from E, push the west
   block of the diamond N or S (the objective points at the push spots while it is pending), then take the stairs
   in the middle down to the bow cellar; back from the cellar (Link comes out below the reset block), leave E.
+  Dungeon 3 (Nov 9, docs/routes/d3.md): 0x5a (4 Blue Keese, the compass) crossed E to W and back W to E; 0x4c
+  (2 Zols, the map) from W: bomb the E wall (the objective points at the spot to bomb it from, facing the wall 16 px
+  short of its hotspot, out of the right-hand traps' column) and go through into Manhandla's room. Bombs are on for
+  the family because of 0x4c (a cheated bomb if Link has none).

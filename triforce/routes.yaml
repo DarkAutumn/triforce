@@ -1,21 +1,26 @@
-# The route (docs/routes/d2first.md; Lee, Nov 8: the only route; the bow detour, Nov 9).
+# The route (docs/routes/d2first.md; Lee, Nov 8: the only route; the bow detour and Dungeon 3, Nov 9).
 # entry = side of the room Link enters from (start = game start, cave = emerging from a cave/dungeon stairs/cellar or
 # the triforce's warp); exit = direction Link leaves (cave = enter the cave, dungeon stairs or cellar stairs in this
 # room; triforce = level ends on pickup, Z_01 TakeItem -> GameMode $12 -> OW; terminal = the route ends on entering
-# this room; a route without a terminal step ends on its last step's triforce).
+# this room; a route without a terminal step ends on its last step's triforce).  An exit through an intact bomb wall
+# (game.yaml `bomb_walls`) sends Link to the spot to bomb it from.
 # The objective follows the steps: in a room the route enters from the side Link came in, with the triforce pieces,
-# sword and bow the route has there, the step's exit is the correct one (zelda::objectives).
+# sword, bow and raft the route has there, the step's exit is the correct one (zelda::objectives).
 # `waypoint: heart` (cave step): take the cave's heart container; leaving its room without it is `missed`.
-# `waypoint: bow` (cellar step): take the cellar's bow; until then the objective leads back to it.
+# `waypoint: bow` / `waypoint: raft` (cellar step): take the cellar's item; until then the objective leads back to it.
 # `retreat: S`: leaving through that exit instead ends a one-room episode as `retreat` (neutral) and lets a chain
 # run go on (the next room's objective sends Link back).
+# `treasure:` whether this visit takes the room's game.yaml treasure (fights for it when the kills make it appear):
+# absent = take it, `skip` = leave it, `{if_bombs_below: N}` = take it only while Link holds fewer than N bombs.
 # in_cave rooms follow v1 game.yaml: same (level, location) with in_cave: true.  An underworld item cellar is an
-# in_cave room too, under its own room id (Dungeon 1's bow cellar 0x7f under 0x22), left N up its ladder.
+# in_cave room too, under its own room id (Dungeon 1's bow cellar 0x7f under 0x22, Dungeon 3's raft cellar 0x0f
+# under 0x69), left N up its ladder.
 #
 # d2first: wood sword, east along row 5 to Dungeon 2 (3 hearts), Dodongo, his heart container and the D2 triforce
 # (warps Link to 0x3c); round to 0x2c, bomb its rock wall for the take-any cave's heart container (5 hearts), the
 # white sword at 0x0a, then west and south to Dungeon 1 (both key rooms, the bow cellar and the boomerang) through
-# Aquamentus (6 hearts); the route ends on taking the D1 triforce.  Never the fairy.
+# Aquamentus (6 hearts) to the D1 triforce (warps Link to 0x37); then east, south and west to Dungeon 3 (0x74), the
+# raft cellar, Manhandla (7 hearts); the route ends on taking the D3 triforce.  Never the fairy.
 d2first:
 - {level: 0, room: '0x77', specialist: ow-start, entry: start, exit: cave}
 - {level: 0, room: '0x77', in_cave: true, specialist: ow-start, entry: S, exit: S}
@@ -90,24 +95,65 @@ d2first:
 - {level: 1, room: '0x45', specialist: wallmaster, entry: W, exit: N}
 - {level: 1, room: '0x35', specialist: boss-aquamentus, entry: S, exit: E}
 - {level: 1, room: '0x36', specialist: stalfos-keese-gel, entry: W, exit: triforce}
+# To Dungeon 3 (Nov 9): a shortest walk (11 rooms from 0x37).  0x38 S into the Leever room 0x48 is forced (0x37
+# leads only E, 0x38 only N/S/W), 0x74 is entered only from 0x73, and every shortest way passes 0x64 (its potion
+# shop's mouth is open: walking in is a wrong exit).  0x55's W third (the coast below 0x45) is walled off from its E
+# part without the ladder, so the walk turns S there; via 0x55 it meets one open cave (0x64), via 0x68/0x67/0x66 two.
+- {level: 0, room: '0x37', specialist: ow-octorok, entry: cave, exit: E}
+- {level: 0, room: '0x38', specialist: ow-zora, entry: W, exit: S}
+- {level: 0, room: '0x48', specialist: ow-leever, entry: N, exit: S}
+- {level: 0, room: '0x58', specialist: ow-octorok, entry: N, exit: W}
+- {level: 0, room: '0x57', specialist: ow-octorok, entry: E, exit: W}
+- {level: 0, room: '0x56', specialist: ow-zora, entry: E, exit: W}
+- {level: 0, room: '0x55', specialist: ow-zora, entry: E, exit: S}
+- {level: 0, room: '0x65', specialist: ow-zora, entry: N, exit: W}
+- {level: 0, room: '0x64', specialist: ow-octorok, entry: E, exit: W}
+- {level: 0, room: '0x63', specialist: ow-moblin, entry: E, exit: S}
+- {level: 0, room: '0x73', specialist: ow-moblin, entry: N, exit: E}
+- {level: 0, room: '0x74', specialist: ow-tektite, entry: W, exit: cave}
+# Dungeon 3 (Lee, Nov 9; docs/routes/d3.md): W N N W W N S S (stairs: the raft) N E E N E E (bomb the E wall) N.
+# Treasure rules: 0x5b (the central Darknut room) takes its bombs only on its last visit and only below 4 bombs
+# (D4 needs 2); 0x69 (8 Darknuts above the raft cellar) leaves its bombs: straight to the stairs.
+- {level: 3, room: '0x7c', specialist: zol, entry: S, exit: W}
+- {level: 3, room: '0x7b', specialist: zol, entry: E, exit: N}
+- {level: 3, room: '0x6b', specialist: zol, entry: S, exit: N}
+- {level: 3, room: '0x5b', specialist: darknut, entry: S, exit: W, treasure: skip}
+- {level: 3, room: '0x5a', specialist: trap-room, entry: E, exit: W}
+- {level: 3, room: '0x59', specialist: darknut, entry: E, exit: N}
+- {level: 3, room: '0x49', specialist: zol, entry: S, exit: S}
+- {level: 3, room: '0x59', specialist: darknut, entry: N, exit: S}
+- {level: 3, room: '0x69', specialist: darknut, entry: N, exit: cave, treasure: skip}
+- {level: 3, room: '0x0f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: raft}
+- {level: 3, room: '0x69', specialist: darknut, entry: cave, exit: N, treasure: skip}
+- {level: 3, room: '0x59', specialist: darknut, entry: S, exit: E}
+- {level: 3, room: '0x5a', specialist: trap-room, entry: W, exit: E}
+- {level: 3, room: '0x5b', specialist: darknut, entry: W, exit: N, treasure: {if_bombs_below: 4}}
+- {level: 3, room: '0x4b', specialist: zol, entry: S, exit: E}
+- {level: 3, room: '0x4c', specialist: trap-room, entry: W, exit: E}
+- {level: 3, room: '0x4d', specialist: boss-manhandla, entry: W, exit: N}
+- {level: 3, room: '0x3d', specialist: zol, entry: S, exit: triforce}
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}
 # Families by enemy (docs/specialists.md): the route's rooms and the alternate 0x78.
 families:
   ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)']
-  ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x58)', '(0, 0x67)', '(0, 0x68)', '(0, 0x78)']
-  ow-zora: ['(0, 0x27)', '(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x59)', '(0, 0x5a)']
-  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)']
+  ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x57)', '(0, 0x58)', '(0, 0x64)', '(0, 0x67)', '(0, 0x68)', '(0, 0x78)']
+  ow-zora: ['(0, 0x27)', '(0, 0x28)', '(0, 0x2d)', '(0, 0x38)', '(0, 0x55)', '(0, 0x56)', '(0, 0x59)', '(0, 0x5a)', '(0, 0x65)']
+  ow-moblin: ['(0, 0x3d)', '(0, 0x4d)', '(0, 0x5b)', '(0, 0x5c)', '(0, 0x5d)', '(0, 0x63)', '(0, 0x73)']
+  ow-leever: ['(0, 0x48)']
   ow-lynel: ['(0, 0x0a)', '(0, 0x0a, cave)']
-  ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)']
+  ow-tektite: ['(0, 0x1a)', '(0, 0x2c)', '(0, 0x2c, cave)', '(0, 0x74)']
   ow-boulder: ['(0, 0x17)', '(0, 0x18)', '(0, 0x19)']
   stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)']
   goriya: ['(1, 0x23)', '(1, 0x44)', '(2, 0x1e)', '(2, 0x5e)']
-  trap-room: ['(1, 0x22)']
-  equipment-room: ['(1, 0x7f, cave)']
+  trap-room: ['(1, 0x22)', '(3, 0x4c)', '(3, 0x5a)']
+  equipment-room: ['(1, 0x7f, cave)', '(3, 0x0f, cave)']
   wallmaster: ['(1, 0x45)']
   boss-aquamentus: ['(1, 0x35)']
   d2-rope: ['(2, 0x0d)', '(2, 0x2e)', '(2, 0x4e)', '(2, 0x6e)', '(2, 0x7d)', '(2, 0x7e)']
   moldorm: ['(2, 0x3e)']
   boss-dodongo: ['(2, 0x0e)']
+  zol: ['(3, 0x3d)', '(3, 0x49)', '(3, 0x4b)', '(3, 0x6b)', '(3, 0x7b)', '(3, 0x7c)']
+  darknut: ['(3, 0x59)', '(3, 0x5b)', '(3, 0x69)']
+  boss-manhandla: ['(3, 0x4d)']

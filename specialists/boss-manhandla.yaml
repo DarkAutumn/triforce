@@ -1,0 +1,20 @@
+name: boss-manhandla
+rooms: ['(3, 0x4d)']
+start_states: ['3_4d*_[0-9]']
+success: [exit-correct]                    # kill, take the heart container, leave N to the triforce room 0x3d
+reward_profile: default
+reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8)
+obs: {objective: true, target: true}       # schema 2
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}
+items: {bombs: true}                       # the room is requires_bombs (game.yaml): never without a bomb here
+curriculum: {enabled: true}             # trajectories/boss-manhandla (Go-Explore, plus --variant seeds)
+one_room: true
+max_steps: 1000
+warm_start: null
+notes: >-
+  Manhandla (Dungeon 3, Nov 9): one $3C object, a base and four hands, which speeds up as hands die. Lee: kill him
+  with bombs dropped into his path (a bomb does $40 to the base, enough to kill it, and each hand dies to one; a
+  well-placed one kills him outright). Entered from W through 0x4c's bombed wall; the N and S shutters open and the
+  heart container appears when he dies; success is the N exit to the triforce room (the heart first). Backlog
+  (kill streaks): once the base's HP is 0 every damaging hit counts as a kill (up to 24 per bomb), so watch hit/kill
+  rewards here. Copied from boss-dodongo (max_steps 1000: a bomb kill needs him to walk into the blast).

@@ -71,7 +71,7 @@ fn route_definition() {
     let map = GameMap::builtin();
     let route = Route::load(&map, "d2first", None, None).unwrap();
     assert_eq!(route.start_state, "start");
-    assert_eq!((route.terminal, route.final_triforce), (None, Some(1)));
+    assert_eq!((route.terminal, route.final_triforce), (None, Some(3)));
     let stop = MapLocation::new(1, 0x73, false);
     assert_eq!(
         Route::load(&map, "d2first", Some(stop), None)

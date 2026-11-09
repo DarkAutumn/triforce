@@ -1,0 +1,21 @@
+name: darknut
+rooms: ['(3, 0x5b)', '(3, 0x59)', '(3, 0x69)']
+start_states: ['3_5b*_[0-9]', '3_59*_[0-9]', '3_69*_[0-9]']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true, item_targets: true}   # dungeon family (round 10 §8): dropped items are shaping targets
+obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
+# hp as every dungeon family; bombs drawn 0-8 so 0x5b's last visit trains both sides of its treasure rule (take the
+# bombs only below 4); bombs stay unusable here (items), so the count matters only to that rule.
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8]}
+items: {bombs: false}
+curriculum: {enabled: true}             # trajectories/darknut (Go-Explore paths per start state)
+one_room: true
+max_steps: 2000
+warm_start: null
+notes: >-
+  Darknut rooms (Nov 9): shielded in front, hit only from the side or back. Dungeon 3 (docs/routes/d3.md): the central
+  room 0x5b (3 Darknuts, bombs when all are dead) S to W (treasure skipped) and later W to N (its bombs taken only
+  if Link holds fewer than 4: routes.yaml `treasure: {if_bombs_below: 4}`); 0x59 (5 Darknuts, kill-all S shutter)
+  E to N, N to S (kill them all: the shutter) and S to E; 0x69 (8 Darknuts, bombs) N to the stairs down to the raft
+  cellar and back up N, never fighting for its treasure (Lee: `treasure: skip`). Copied from goriya.

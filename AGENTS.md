@@ -32,7 +32,12 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 - **The bow detour (Lee, Nov 9; `docs/decisions.md` 2026-11-09, `docs/routes/d2first.md`):** from 0x43 N through
   0x33 and 0x23 to the blade-trap room 0x22 (push the west block N or S), down its stairs into the bow cellar 0x7f
   (an `in_cave` sub-room, side view), and back the same way to 0x43 → 0x44. New families `trap-room` (0x22) and
-  `equipment-room` (the cellar); states and curricula rebuilt from the detour on; not trained yet.
+  `equipment-room` (the cellar); states and curricula rebuilt from the detour on; trained in round 14.
+- **On to Dungeon 3 (Lee, Nov 9; `docs/decisions.md` 2026-11-09, `docs/routes/d3.md`):** after the D1 triforce
+  (warp to 0x37) the route walks 0x37 E … 0x55 S, 0x65, 0x64, 0x63, 0x73 to 0x74 and through Dungeon 3 by Lee's
+  directions (the raft cellar 0x0f, 0x4c's bomb wall, Manhandla) and **ends on the D3 triforce** (steps 68–97).
+  routes.yaml steps take `treasure: skip` / `{if_bombs_below: 4}` (Lee's treasure rules for 0x69 and 0x5b). New
+  families `ow-leever`, `zol`, `darknut`, `boss-manhandla`; states built; curricula not explored, not trained yet.
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each
@@ -43,9 +48,9 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 ## Goal
 
 Specialist PPO models (one per room family) that carry the `d2first` chain (`triforce/routes.yaml`) from the game
-start through Dungeon 2, the 0x2c heart cave, the white sword and Dungeon 1's bow to the Dungeon 1 triforce (the
-route ends on taking it). Lee owns the direction; the standing invitation is to come up with ideas, test them, keep
-what helps, and log everything.
+start through Dungeon 2, the 0x2c heart cave, the white sword and Dungeon 1 (the bow) to Dungeon 3 (the raft,
+Manhandla) and its triforce (the route ends on taking it). Lee owns the direction; the standing invitation is to come
+up with ideas, test them, keep what helps, and log everything.
 
 ## Lee's standing rules
 
@@ -56,20 +61,22 @@ what helps, and log everything.
 - **Families are by enemy, not by dungeon** (`docs/specialists.md`, `docs/decisions.md` 2026-11-03): a Red Goriya
   room needs the same skills anywhere. Group rooms by the enemies in them, but don't boil it down to one model per
   enemy type or per room beyond what Lee asks for. Families are the d2first route's rooms (`routes.yaml`
-  `families`): ow-start, ow-octorok, ow-zora, ow-moblin, ow-tektite (0x1a, 0x2c and its heart cave), ow-lynel,
-  ow-boulder, stalfos-keese-gel, goriya, trap-room (1:0x22), equipment-room (the bow cellar 1:0x7f), wallmaster,
-  boss-aquamentus, d2-rope, moldorm (2:0x3e), boss-dodongo.
+  `families`): ow-start, ow-octorok, ow-zora, ow-moblin, ow-leever (0x48), ow-tektite (0x1a, 0x2c and its heart
+  cave, 0x74), ow-lynel, ow-boulder, stalfos-keese-gel, goriya, trap-room (1:0x22, 3:0x5a, 3:0x4c), equipment-room
+  (the item cellars 1:0x7f, 3:0x0f), wallmaster, boss-aquamentus, d2-rope, moldorm (2:0x3e), boss-dodongo, zol,
+  darknut, boss-manhandla.
 - Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
   rather than keep them (originals are backed up in the old triforce repo). No 16-heart states: max hearts follow
-  the route (3 through Dungeon 2, 4 after Dodongo, 5 after the 0x2c heart cave, 6 after Aquamentus). States are
-  chains 0–2, `<level>_<room><entry>_<chain>`. Boss rooms keep only the fight entry. Build states with
-  `python -m triforce.entry_states build|path` and check them with `... audit`.
+  the route (3 through Dungeon 2, 4 after Dodongo, 5 after the 0x2c heart cave, 6 after Aquamentus, 7 after
+  Manhandla). States are chains 0–2, `<level>_<room><entry>_<chain>`. Boss rooms keep only the fight entry. Build
+  states with `python -m triforce.entry_states build|path` and check them with `... audit`.
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`). The beam look-ahead must credit the firing step.
-- **Bombs** are on only where the route needs them: Dodongo (`boss-dodongo`) and the 0x2c rock wall (`ow-tektite`),
-  both `requires_bombs` in game.yaml; everywhere else `items: {bombs: false}`.
+- **Bombs** are on only where the route needs them: Dodongo (`boss-dodongo`), the 0x2c rock wall (`ow-tektite`), D3's
+  0x4c bomb wall (`trap-room`) and Manhandla (`boss-manhandla`), all `requires_bombs` in game.yaml; everywhere else
+  `items: {bombs: false}`.
 - **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`): a neutral one-room ending,
   and a chain run goes on (0x1a sends Link back N). Whether a model learns to use it is open.
 - **The training GUI is for a colorblind user:** never red vs green. Good = blue, bad = red, purple in between.
@@ -125,8 +132,9 @@ what helps, and log everything.
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
   that wins 3% more but takes twice the damage loses in a chain.
 - **Chain segments** (20–40 runs each): full `triforce eval-chain --runs 20 --parallel 10` (route `d2first`, the
-  default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`; Dungeon 1 `--from 1_73s_0`. Per-room hp
-  loss and deaths come from the chain jsonl (`RoomRecord` also has `hearts_dropped/taken/left/...`).
+  default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`; Dungeon 1 `--from 1_73s_0`; after
+  Dungeon 1 `--from 0_37c_0`; Dungeon 3 `--from 3_7cs_0`. Per-room hp loss and deaths come from the chain jsonl
+  (`RoomRecord` also has `hearts_dropped/taken/left/...`).
 - **Trajectories (curriculum) must stay inside the family's rooms.** Re-explore (`python -m triforce.explore
   --specialist NAME --states ...`) whenever a family's rooms change; a trajectory that runs into another family's
   room crashes training. `--out` is the trajectories *root* (explore appends `<specialist>/<state>`): from a

@@ -830,7 +830,8 @@ mod tests {
     fn routes_load() {
         let map = GameMap::builtin();
         let r = Route::load(&map, "d2first", None, None).unwrap();
-        assert_eq!((r.terminal, r.final_triforce), (None, Some(1)));
+        // d2first ends on taking the Dungeon 3 triforce (Nov 9), not Dungeon 1's.
+        assert_eq!((r.terminal, r.final_triforce), (None, Some(3)));
         assert_eq!(r.start_state, "start");
         let stop = MapLocation::new(2, 0x0e, false);
         let r = Route::load(&map, "d2first", Some(stop), Some("2_7ds_0")).unwrap();

@@ -1276,6 +1276,7 @@ rooms:
     wares: [red-potion, heart-container]
 - level: 0
   location: '0x48'
+  specialist: ow-leever  # d2first to Dungeon 3 (Nov 9)
   exits:
     N:
       level: 0
@@ -1521,6 +1522,9 @@ rooms:
   treasure: null
 - level: 0
   location: '0x55'
+  specialist: ow-zora  # d2first to Dungeon 3 (Nov 9): from E leaves S
+  # Two parts (Nov 9, tile grid at mode 5): tile columns 10-13 are impassable in every row, so the W edge (and the
+  # S edge's left lanes) can't be reached from the E edge, the dock or the S edge's right lanes, and back.
   exits:
     E:
       level: 0
@@ -1541,6 +1545,7 @@ rooms:
       location: '0x45'
 - level: 0
   location: '0x56'
+  specialist: ow-zora  # d2first to Dungeon 3 (Nov 9)
   exits:
     N:
       level: 0
@@ -1563,6 +1568,7 @@ rooms:
     rupees: 10
 - level: 0
   location: '0x57'
+  specialist: ow-octorok  # d2first to Dungeon 3 (Nov 9)
   exits:
     E:
       level: 0
@@ -1796,6 +1802,7 @@ rooms:
     rupees: 100
 - level: 0
   location: '0x63'
+  specialist: ow-moblin  # d2first to Dungeon 3 (Nov 9)
   exits:
     N:
       level: 0
@@ -1822,6 +1829,7 @@ rooms:
     costs: 20
 - level: 0
   location: '0x64'
+  specialist: ow-octorok  # d2first to Dungeon 3 (Nov 9); its potion shop's mouth is open (not a route exit)
   exits:
     N:
       level: 0
@@ -1844,6 +1852,7 @@ rooms:
     wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
 - level: 0
   location: '0x65'
+  specialist: ow-zora  # d2first to Dungeon 3 (Nov 9)
   exits:
     N:
       level: 0
@@ -2131,6 +2140,7 @@ rooms:
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
 - level: 0
   location: '0x73'
+  specialist: ow-moblin  # d2first to Dungeon 3 (Nov 9)
   exits:
     N:
       level: 0
@@ -2147,6 +2157,7 @@ rooms:
   edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
 - level: 0
   location: '0x74'
+  specialist: ow-tektite  # d2first: the Dungeon 3 entrance (Nov 9)
   exits:
     W:
       level: 0
@@ -2902,6 +2913,7 @@ rooms:
   push_block_opens: N  # the shutter (trigger 4); not `push_block` (that one gates stairs)
 - level: 3
   location: '0x3d'  # the triforce room
+  specialist: zol  # d2first ends on this triforce (Nov 9)
   exits:
     S:
       level: 3
@@ -2910,6 +2922,7 @@ rooms:
   treasure: triforce
 - level: 3
   location: '0x49'
+  specialist: zol
   exits:
     E:
       level: 3
@@ -2941,6 +2954,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 3
   location: '0x4b'
+  specialist: zol
   exits:
     N:
       level: 3
@@ -2963,6 +2977,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 3
   location: '0x4c'  # blade traps and Zols (Lee: "trap/gel room"); its E wall is bombable into the boss room
+  specialist: trap-room
   requires_bombs: true    # Lee (Nov 9): the E wall is bombed open into the boss room
   exits:
     E:  # bomb wall
@@ -2981,6 +2996,7 @@ rooms:
   bomb_walls: [E]
 - level: 3
   location: '0x4d'  # Manhandla (one $3C object, five slots: the body and four heads)
+  specialist: boss-manhandla
   requires_bombs: true    # Lee (Nov 9): the plan kills Manhandla with bombs dropped into his path
   exits:
     N:  # shutter
@@ -2999,6 +3015,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 3
   location: '0x59'
+  specialist: darknut
   exits:
     N:
       level: 3
@@ -3016,6 +3033,7 @@ rooms:
   trigger: kill-all  # attr F & 7 = 1
 - level: 3
   location: '0x5a'  # blade traps and Keese
+  specialist: trap-room
   exits:
     N:
       level: 3
@@ -3032,6 +3050,7 @@ rooms:
   treasure: compass
 - level: 3
   location: '0x5b'  # the central Darknut room; its bombs appear when the Darknuts are dead
+  specialist: darknut
   exits:
     N:
       level: 3
@@ -3084,6 +3103,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 3
   location: '0x69'  # Darknuts; stairs at tiles (26-27, 10-11) down to the raft cellar 0x0f
+  specialist: darknut
   exits:
     N:
       level: 3
@@ -3099,6 +3119,7 @@ rooms:
   stairs: [26, 10]
 - level: 3
   location: '0x6b'
+  specialist: zol
   exits:
     N:
       level: 3
@@ -3112,6 +3133,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 3
   location: '0x7b'
+  specialist: zol
   exits:
     N:
       level: 3
@@ -3124,6 +3146,7 @@ rooms:
   treasure: key
 - level: 3
   location: '0x7c'  # the entrance room (OW 0x74, cave index 3); S leaves the dungeon (omitted, as in D2)
+  specialist: zol
   exits:
     W:
       level: 3
@@ -3133,6 +3156,7 @@ rooms:
 - level: 3
   location: '0x0f'
   in_cave: true  # the raft cellar under 0x69 (mode 9, side view); see the cellar note in d3.md
+  specialist: equipment-room
   exits:
     N:  # up the left ladder (attr A = attr B = $69)
       level: 3
