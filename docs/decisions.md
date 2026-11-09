@@ -773,3 +773,32 @@ entry below and `crates/zcore/UPSTREAM.md`.
   emulator), tests `game_map::tests::{mazes_load_with_their_loops, maze_sequences_follow_check_mazes,
   maze_exit_direction_follows_maze_step, maze_yaml_and_routes_are_checked, whole_overworld_is_mapped,
   d3_boss_room_and_lees_route}`.
+
+## 2026-11-09 — Cheated items: one ledger for bombs, keys and rupees
+
+- **What:** `env::bombs::BombLedger` became `zelda::cheats::CheatLedger` over a closed set of items (`CheatItem`:
+  bombs, keys, rupees), one rule for all: where the room needs an item (`cheats::needs`: a bomb in `requires_bombs`
+  rooms; a key when the route step's edge exit is a still-locked door and no key treasure of the room is left to
+  take first; the new game.yaml `requires_rupees: N`, which no room sets yet) a count below the need is topped up
+  and the top-up is granted; falls use the grant first (cheated uses), natural rises repay it, leaving the room takes
+  back what is still granted. Metrics renamed to one scheme, no aliases: training `cheated/<item>` (`bombs/used`
+  stays), eval `cheated: {…}` records, per-visit `cheated_<item>`, `mean_cheated_<item>`,
+  `cheated_<item>_per_visit`, chain `RoomRecord.cheated_<item>`, `chain_summary` `cheated_<item>` /
+  `runs_with_cheated_<item>`, room events `cheated`; the watch player's footer reads `cheated: 2 bombs, 1 key`.
+  Chain `keys_in/keys_out` and visit `keys_gained` count natural keys only.
+- **Why:** Lee (Nov 9): the route always has enough keys, but a model can spend one on the wrong locked door (D3's
+  0x4b) and strand the run; shops on later routes need rupees. "Well designed, not ad hoc": one mechanism, not a
+  copy per item. Bomb behaviour is unchanged.
+- **Decisions made while Lee was away:** the key need asks the route step (`GameCompletion::route_edge_exit`, the
+  step the objective will pick for the state), so off-route rooms get no key; the magic key needs none; a door whose
+  opening animation runs (`$54` 6–8, `$55` bit) is no longer locked, since the game spends the key a few frames
+  before the tiles change (measured on 1:0x33: without it a second key was granted and taken back on leaving); the
+  rupee need waits while a rupee change is pending (`$67D`/`$67E`); a natural rise repays the grant unit for unit
+  (bombs: a pickup over the cheated bomb makes it natural, as before); `used` is tracked per item but only bombs
+  used is reported; zelda-map shows a cheated row only when non-zero.
+- **Evidence:** tests `cheats::tests` (grant, use, natural gain, take-back, the key-treasure-first rule, rupees,
+  independence), `specialist_env::locked_route_exit_cheats_a_key_once_the_rooms_key_is_taken` (1:0x33 on zcore:
+  no key while the treasure key is left, one after, the N door takes it as one cheated key, leaving S takes an
+  unused one back), `specialist_env::requires_bombs_room_cheats_one_bomb_and_counts_it_when_placed`,
+  `game_map::tests::requires_rupees_is_an_optional_byte`, Python tests for the renamed metrics, aggregates,
+  `chain_summary` and the footer.

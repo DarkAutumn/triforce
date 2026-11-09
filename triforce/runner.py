@@ -85,10 +85,13 @@ class RoomRecord:
     linger: dict = field(default_factory=dict)
     blocks: int = 0
     no_damage_max: Optional[int] = None     # longest stretch of actions without damage dealt or taken (None: older)
-    # Bombs placed during the visit, and cheated bombs placed (a requires-bombs room grants one when Link has none;
-    # crates/env/src/bombs.rs).  0 in older records.
+    # Bombs placed during the visit, and cheated items used (a room that needs an item Link lacks grants it: a bomb
+    # in requires-bombs rooms, a key at a locked route door, rupees in requires-rupees shops;
+    # crates/zelda/src/cheats.rs).  0 in older records.
     bombs_used: int = 0
-    bombs_cheated: int = 0
+    cheated_bombs: int = 0
+    cheated_keys: int = 0
+    cheated_rupees: int = 0
     # Dodongo stuns (a bomb's smoke) and bombs he swallowed during the visit (crates/env/src/critic.rs
     # BossTransitions).  0 in older records.
     boss_stuns: int = 0
@@ -113,9 +116,9 @@ class RunResult:
         return self.rooms[-1] if self.rooms and self.result != 'success' else None
 
     @property
-    def bombs_cheated(self) -> int:
-        """Cheated bombs placed in the run: one or more means it wasn't beaten naturally."""
-        return sum(room.bombs_cheated for room in self.rooms)
+    def cheated(self) -> Dict[str, int]:
+        """Cheated items used in the run, per item (``_native.CHEAT_ITEMS``): any means it wasn't beaten naturally."""
+        return {item: sum(getattr(room, f'cheated_{item}') for room in self.rooms) for item in _native.CHEAT_ITEMS}
 
     def to_dict(self) -> dict:
         """JSON-friendly dict."""
@@ -308,8 +311,8 @@ def chain_summary(results: List[RunResult]) -> dict:
 
     ``arrival_keys`` counts successful runs by the keys Link carried into the milestone room (a ``stop_at`` room,
     or the room of the route's last triforce), so milestone arrivals and full key carriage stay separate
-    counters.  ``bombs_cheated`` totals the cheated bombs placed and ``runs_with_cheated_bombs`` counts the runs
-    that placed any."""
+    counters.  ``cheated_<item>`` totals the cheated items used (bombs, keys, rupees) and ``runs_with_cheated_<item>``
+    counts the runs that used any."""
     runs = len(results)
     successes = sum(r.result == 'success' for r in results)
     failures: Dict[str, int] = {}
@@ -323,9 +326,12 @@ def chain_summary(results: List[RunResult]) -> dict:
             keys = r.rooms[-1].keys_in
             label = 'unknown' if keys is None else str(keys)
             arrival_keys[label] = arrival_keys.get(label, 0) + 1
-    cheated = [r.bombs_cheated for r in results]
-    return {'runs': runs, 'successes': successes, 'success_rate': successes / runs if runs else 0.0,
-            'arrival_keys': dict(sorted(arrival_keys.items())),
-            'failures': dict(sorted(failures.items(), key=lambda kv: -kv[1])),
-            'errors': sorted({r.reason for r in results if r.result == 'error'}),
-            'bombs_cheated': sum(cheated), 'runs_with_cheated_bombs': sum(n > 0 for n in cheated)}
+    cheated = [r.cheated for r in results]
+    summary = {'runs': runs, 'successes': successes, 'success_rate': successes / runs if runs else 0.0,
+               'arrival_keys': dict(sorted(arrival_keys.items())),
+               'failures': dict(sorted(failures.items(), key=lambda kv: -kv[1])),
+               'errors': sorted({r.reason for r in results if r.result == 'error'})}
+    for item in _native.CHEAT_ITEMS:
+        summary[f'cheated_{item}'] = sum(c[item] for c in cheated)
+        summary[f'runs_with_cheated_{item}'] = sum(c[item] > 0 for c in cheated)
+    return summary

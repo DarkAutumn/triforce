@@ -4,6 +4,7 @@
 
 pub mod actions;
 pub mod blocks;
+pub mod cheats;
 pub mod change;
 pub mod enums;
 pub mod executor;

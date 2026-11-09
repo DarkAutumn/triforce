@@ -10,7 +10,7 @@ use crate::game::{FRAME_BYTES, FRAME_SHAPE, rgb};
 use env::SharedCurriculum;
 use env::chain::Route;
 use env::config::{GameData, SpecialistConfig, parse_room};
-use env::specialist_env::EnvOptions;
+use env::specialist_env::{EnvOptions, cheated_json};
 use numpy::{
     PyArray, PyArrayDyn, PyArrayMethods, PyReadonlyArrayDyn, PyReadwriteArrayDyn,
     PyUntypedArrayMethods,
@@ -130,8 +130,8 @@ impl PyEvalTask {
 /// index here. A specialist in `missing` (name -> reason, e.g. no promoted model) ends a run that needs it as
 /// `error`; any other unlisted specialist does too. `stall_steps` (the watch player's stall budget, off by
 /// default): room events carry `stalled` once a room has gone that many actions without damage dealt or taken,
-/// and the run ends `stuck` at twice as many; room events also carry `bombs_cheated`, the run's cheated bombs placed
-/// so far (`env::bombs`). `hold_finished_frame`: a finished run keeps its env's last frame
+/// and the run ends `stuck` at twice as many; room events also carry `cheated` (`{bombs, keys, rupees}`), the run's
+/// cheated items used so far (`zelda::cheats`). `hold_finished_frame`: a finished run keeps its env's last frame
 /// published (the next run doesn't publish) until `EnvPool.set_hold(env, False)`.
 #[pyclass(module = "triforce._native", name = "ChainTask", frozen)]
 pub struct PyChainTask {
@@ -540,7 +540,7 @@ fn event_dict<'py>(
             d.set_item("health", r.health)?;
             d.set_item("max_health", r.max_health)?;
             d.set_item("stalled", r.stalled)?;
-            d.set_item("bombs_cheated", r.bombs_cheated)?;
+            d.set_item("cheated", json_to_py(py, &cheated_json(&r.cheated))?)?;
         }
         ZeldaEvent::Movie(log) => {
             d.set_item("type", "movie")?;

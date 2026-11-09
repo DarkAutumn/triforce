@@ -12,7 +12,6 @@
 //! an unknown/untagged room the route needed, a masked action, a missing state or [`ChainEnv::fail`] (e.g. no
 //! promoted model).
 
-use crate::bombs::BombLedger;
 use crate::config::{GameData, SpecialistConfig};
 use crate::critic::BossTransitions;
 use crate::error::EnvError;
@@ -24,6 +23,7 @@ use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
+use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::game::GameView;
 use zelda::game_map::GameMap;
 use zelda::hearts::{HeartTracker, HeartView};
@@ -103,8 +103,8 @@ pub struct RoomRecord {
     pub health_in: f64,
     pub health_out: f64,
     pub max_health: i32,
-    /// Keys Link carried on entering the room, and on leaving it (the milestone record's `keys_in` is the
-    /// Dodongo arrival's key count).
+    /// Keys Link carried on entering the room, and on leaving it, without cheated ones (the milestone record's
+    /// `keys_in` is the Dodongo arrival's key count).
     pub keys_in: i32,
     pub keys_out: i32,
     /// in-progress, exit-correct, exit-wrong, retreat (the route step's `retreat` exit), retreat-limit (one retreat
@@ -123,20 +123,23 @@ pub struct RoomRecord {
     /// Longest stretch of the visit's actions without damage dealt (an enemy hit, look-ahead credit included) or
     /// taken.
     pub no_damage_max: u64,
-    /// Bombs placed during the visit, and cheated bombs placed ([`crate::bombs`]).
+    /// Bombs placed during the visit, and cheated items used (`zelda::cheats`; JSON `cheated_bombs`, `cheated_keys`,
+    /// `cheated_rupees`).
     pub bombs_used: u32,
-    pub bombs_cheated: u32,
+    pub cheated: ItemCounts,
     /// Dodongo stuns and swallowed bombs during the visit ([`BossTransitions`]).
     pub boss_stuns: u32,
     pub boss_eats: u32,
 }
 
 impl RoomRecord {
+    /// `keys`: Link's natural keys (`CheatLedger::natural`).
     fn new(
         index: usize,
         location: MapLocation,
         specialist: &str,
         state: &GameView,
+        keys: i32,
         outcome: &str,
     ) -> Self {
         RoomRecord {
@@ -150,8 +153,8 @@ impl RoomRecord {
             health_in: state.health(),
             health_out: state.health(),
             max_health: state.max_health(),
-            keys_in: state.keys(),
-            keys_out: state.keys(),
+            keys_in: keys,
+            keys_out: keys,
             outcome: outcome.to_owned(),
             hearts_dropped: 0,
             hearts_taken: 0,
@@ -163,7 +166,7 @@ impl RoomRecord {
             blocks: 0,
             no_damage_max: 0,
             bombs_used: 0,
-            bombs_cheated: 0,
+            cheated: ItemCounts::default(),
             boss_stuns: 0,
             boss_eats: 0,
         }
@@ -176,7 +179,7 @@ impl RoomRecord {
 
     /// `asdict(RoomRecord)`.
     pub fn to_json(&self) -> Value {
-        json!({
+        let mut m = json!({
             "index": self.index, "level": self.level, "room": self.room, "in_cave": self.in_cave,
             "specialist": self.specialist, "steps": self.steps, "frames": self.frames,
             "health_in": self.health_in, "health_out": self.health_out, "max_health": self.max_health,
@@ -185,10 +188,14 @@ impl RoomRecord {
             "hearts_healed": self.hearts_healed, "hearts_wasted": self.hearts_wasted,
             "hearts_left": self.hearts_left, "hearts_expired": self.hearts_expired,
             "linger": self.linger.as_ref().map_or_else(|| json!({}), linger_json),
-            "blocks": self.blocks, "no_damage_max": self.no_damage_max,
-            "bombs_used": self.bombs_used, "bombs_cheated": self.bombs_cheated,
+            "blocks": self.blocks, "no_damage_max": self.no_damage_max, "bombs_used": self.bombs_used,
             "boss_stuns": self.boss_stuns, "boss_eats": self.boss_eats,
-        })
+        });
+        let o = m.as_object_mut().expect("object");
+        for item in CheatItem::ALL {
+            o.insert(format!("cheated_{}", item.name()), json!(self.cheated[item]));
+        }
+        m
     }
 }
 
@@ -218,9 +225,13 @@ impl RunResult {
         }
     }
 
-    /// Cheated bombs placed in the run (its rooms' total).
-    pub fn bombs_cheated(&self) -> u32 {
-        self.rooms.iter().map(|r| r.bombs_cheated).sum()
+    /// Cheated items used in the run (its rooms' total).
+    pub fn cheated(&self) -> ItemCounts {
+        let mut total = ItemCounts::default();
+        for room in &self.rooms {
+            total += room.cheated;
+        }
+        total
     }
 
     /// `asdict(RunResult)`.
@@ -288,8 +299,8 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     prev_objective: Option<Objective>,
     hearts: HeartTracker,
     linger: LingerTracker,
-    /// The run's bombs: the cheated bomb of requires-bombs rooms and the counts ([`crate::bombs`]).
-    bombs: BombLedger,
+    /// The run's cheated bombs, keys and rupees (`zelda::cheats`).
+    cheats: CheatLedger,
     builder: ObservationBuilder,
 }
 
@@ -314,7 +325,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             prev_objective: None,
             hearts: HeartTracker::default(),
             linger: LingerTracker::default(),
-            bombs: BombLedger::default(),
+            cheats: CheatLedger::default(),
             builder: ObservationBuilder::new(true, false),
         }
     }
@@ -346,9 +357,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.stall_steps.is_some_and(|n| self.no_damage >= n)
     }
 
-    /// Cheated bombs placed so far this run.
-    pub fn bombs_cheated(&self) -> u32 {
-        self.bombs.cheated
+    /// Cheated items used so far this run.
+    pub fn cheated(&self) -> ItemCounts {
+        self.cheats.cheated
     }
 
     /// Starts a run from the route's start state; `rng` draws the load's RNG bytes and spawn.
@@ -381,7 +392,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             ..Default::default()
         };
         self.session.load(&machine, &opts, rng)?;
-        let state = self.bombs.begin(&mut self.session, &self.data.map);
+        let state = self.session.state().clone();
         let (route, step) = start_route(
             &self.data.map,
             state.full_location(),
@@ -394,6 +405,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             Ok(gc) => gc,
             Err(reason) => return Ok(self.error(reason)),
         };
+        let state = self.cheats.begin(&mut self.session, &gc);
         self.objective = Some(gc.objectives(None, &state));
         self.objectives = Some(gc);
         Ok(self.advance())
@@ -416,8 +428,12 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             return Ok(self.error(reason));
         }
         let change = self.session.act(action)?;
-        // The bomb rule's state carries on (mask, observation); `change` keeps what the action did.
-        let (bombs, state) = self.bombs.after_action(&mut self.session, &self.data.map);
+        // The cheated items' state carries on (mask, observation); `change` keeps what the action did.
+        let (cheats, state) = self.cheats.after_action(
+            &mut self.session,
+            self.objectives.as_ref().expect("run started"),
+            change.previous.full_location(),
+        );
         let taken = self.hearts.taken;
         self.hearts.update(&HeartView::of(&state), change.frames);
         let prev_objective = self.objective.take().expect("run started");
@@ -438,8 +454,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let record = result.rooms.last_mut().expect("room record");
         record.linger = Some(summary);
         record.blocks += change.blocks() as u32;
-        record.bombs_used += bombs.used;
-        record.bombs_cheated += bombs.cheated;
+        record.bombs_used += cheats.used.bombs;
+        record.cheated += cheats.cheated;
         let boss = BossTransitions::of(&change);
         record.boss_stuns += boss.stuns;
         record.boss_eats += boss.eats;
@@ -478,6 +494,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         {
             self.result.as_mut().unwrap().rooms.last_mut().unwrap().outcome = "exit-correct".into();
             self.finish_record(&state);
+            let keys = self.cheats.natural(CheatItem::Keys, &state);
             let result = self.result.as_mut().unwrap();
             result.result = "success".into();
             result.reason = format!("took the level {level} triforce");
@@ -485,7 +502,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             let location = state.full_location();
             result
                 .rooms
-                .push(RoomRecord::new(index, location, "-", &state, "milestone"));
+                .push(RoomRecord::new(index, location, "-", &state, keys, "milestone"));
             return Ok(ChainStatus::Done(result.clone()));
         }
         Ok(self.advance())
@@ -527,7 +544,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         } else {
             state.health()
         };
-        record.keys_out = state.keys();
+        record.keys_out = self.cheats.natural(CheatItem::Keys, state);
         record.hearts_dropped = h.dropped;
         record.hearts_taken = h.taken;
         record.hearts_left = h.left;
@@ -603,6 +620,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                     return Ok(ChainStatus::Done(result.clone()));
                 }
             }
+            let keys = self.cheats.natural(CheatItem::Keys, &state);
             let result = self.result.as_mut().unwrap();
             if Some(location) == self.route.terminal {
                 result.result = "success".into();
@@ -610,7 +628,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 let index = result.rooms.len();
                 result
                     .rooms
-                    .push(RoomRecord::new(index, location, "-", &state, "milestone"));
+                    .push(RoomRecord::new(index, location, "-", &state, keys, "milestone"));
                 return Ok(ChainStatus::Done(result.clone()));
             }
             let room = map.get(location);
@@ -636,6 +654,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
                 location,
                 &name,
                 &state,
+                keys,
                 "in-progress",
             ));
             self.hearts.reset(&HeartView::of(&state));
@@ -785,17 +804,22 @@ pub fn chain_summary(results: &[RunResult]) -> Value {
         .collect();
     errors.sort();
     errors.dedup();
-    let cheated: Vec<u32> = results.iter().map(RunResult::bombs_cheated).collect();
-    json!({
+    let cheated: Vec<ItemCounts> = results.iter().map(RunResult::cheated).collect();
+    let mut summary = json!({
         "runs": runs,
         "successes": successes,
         "success_rate": if runs > 0 { successes as f64 / runs as f64 } else { 0.0 },
         "failures": failures.into_iter().map(|(k, v)| (k, json!(v))).collect::<serde_json::Map<_, _>>(),
         "errors": errors,
-        // Cheated bombs placed (requires-bombs rooms): runs that used any weren't beaten naturally.
-        "bombs_cheated": cheated.iter().sum::<u32>(),
-        "runs_with_cheated_bombs": cheated.iter().filter(|&&n| n > 0).count(),
-    })
+    });
+    // Cheated items used (`zelda::cheats`): runs that used any weren't beaten naturally.
+    let o = summary.as_object_mut().expect("object");
+    for item in CheatItem::ALL {
+        let name = item.name();
+        o.insert(format!("cheated_{name}"), json!(cheated.iter().map(|c| c[item]).sum::<u32>()));
+        o.insert(format!("runs_with_cheated_{name}"), json!(cheated.iter().filter(|c| c[item] > 0).count()));
+    }
+    summary
 }
 
 #[cfg(test)]

@@ -8,11 +8,11 @@
 //! Info contract: every step carries `frames`, `interrupt`, `action`, `rewards` (this step's terms), `room`,
 //! `health`, `max_health`, `steps`, `total_frames`, `specialist`, `route`; the terminal step adds
 //! [`TerminalInfo`] (`ending`, `outcome`, `start_state`, `start_health`, `hearts`, `linger`, `linger_room`,
-//! `blocks`, `bombs` (`used`, `cheated`: [`crate::bombs`]), `boss` (`stuns`, `eats`: Dodongo stunned by a bomb's
-//! smoke or swallowing a bomb, [`BossTransitions`]), `bootstrap_truncation`, `curriculum`, plus `episode_steps`,
+//! `blocks`, `bombs` (`used`: bombs placed), `cheated` (`bombs`, `keys`, `rupees`: cheated items used,
+//! `zelda::cheats`), `boss` (`stuns`, `eats`: Dodongo stunned by a bomb's smoke or swallowing a bomb,
+//! [`BossTransitions`]), `bootstrap_truncation`, `curriculum`, plus `episode_steps`,
 //! `episode_frames`, `reward_total` and per-term episode totals `episode_rewards`).
 
-use crate::bombs::BombLedger;
 use crate::config::{GameData, SpecialistConfig};
 use crate::critic::{BossTransitions, Critique, GameplayCritic};
 use crate::curriculum::{CurriculumInfo, CurriculumTag, SharedCurriculum};
@@ -35,6 +35,7 @@ use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use zelda::cheats::{CheatItem, CheatLedger, ItemCounts};
 use zelda::executor::Interrupt;
 use zelda::game::GameView;
 use zelda::hearts::{HeartSummary, HeartTracker, HeartView};
@@ -58,9 +59,9 @@ pub struct TerminalInfo {
     pub linger: LingerSummary,
     pub linger_room: (u8, u8, bool),
     pub blocks: u32,
-    /// Bombs placed, and cheated bombs placed ([`crate::bombs`]).
+    /// Bombs placed, and cheated items used (`zelda::cheats`).
     pub bombs_used: u32,
-    pub bombs_cheated: u32,
+    pub cheated: ItemCounts,
     /// Dodongo stuns and swallowed bombs ([`BossTransitions`]).
     pub boss: BossTransitions,
     /// The ending was `no-room-progress` or `no-damage` (bootstrap the value of the final observation).
@@ -92,8 +93,8 @@ pub struct StepInfo {
     pub start_state: Option<String>,
     /// A first-entry state written this step.
     pub captured_state: Option<PathBuf>,
-    /// Cheated bombs placed so far this episode (not in the info dict; room events carry it).
-    pub bombs_cheated: u32,
+    /// Cheated items used so far this episode (not in the info dict; room events carry it).
+    pub cheated: ItemCounts,
     pub terminal: Option<TerminalInfo>,
 }
 
@@ -120,6 +121,11 @@ pub fn linger_json(s: &LingerSummary) -> Value {
            "tail_frames": s.tail_frames, "steps": s.steps, "frames": s.frames,
            "boss_kill_steps": s.boss_kill_steps, "boss_kill_frames": s.boss_kill_frames,
            "heart_container_steps": s.heart_container_steps, "heart_container_frames": s.heart_container_frames})
+}
+
+/// `{bombs, keys, rupees}`: cheated items used (`zelda::cheats`).
+pub fn cheated_json(c: &ItemCounts) -> Value {
+    Value::Object(CheatItem::ALL.iter().map(|&item| (item.name().to_owned(), json!(c[item]))).collect())
 }
 
 impl StepInfo {
@@ -157,7 +163,8 @@ impl StepInfo {
                 json!([t.linger_room.0, t.linger_room.1, t.linger_room.2]),
             );
             o.insert("blocks".into(), json!(t.blocks));
-            o.insert("bombs".into(), json!({"used": t.bombs_used, "cheated": t.bombs_cheated}));
+            o.insert("bombs".into(), json!({"used": t.bombs_used}));
+            o.insert("cheated".into(), cheated_json(&t.cheated));
             o.insert("boss".into(), json!({"stuns": t.boss.stuns, "eats": t.boss.eats}));
             if t.bootstrap_truncation {
                 o.insert("bootstrap_truncation".into(), json!(true));
@@ -213,7 +220,8 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     pub rng: ChaCha8Rng,
     pub linger: LingerTracker,
     pub hearts: HeartTracker,
-    pub bombs: BombLedger,
+    /// Cheated bombs, keys and rupees (`zelda::cheats`).
+    pub cheats: CheatLedger,
     /// Per-room-visit statistics (only with `EnvOptions::track_visits`).
     visits: Option<VisitTracker>,
     pool: Option<StartStatePool>,
@@ -301,7 +309,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             rng: ChaCha8Rng::seed_from_u64(opts.seed),
             linger: LingerTracker::default(),
             hearts: HeartTracker::default(),
-            bombs: BombLedger::default(),
+            cheats: CheatLedger::default(),
             visits: opts.track_visits.then(VisitTracker::default),
             pool,
             curriculum,
@@ -443,9 +451,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.begin_episode(name)
     }
 
-    /// Continues from a session snapshot (exact state, no RNG or RAM randomization; the bomb rule applies) as a new
-    /// episode labelled `name`;
-    /// objectives, critic and end conditions restart as at reset; the route stays.
+    /// Continues from a session snapshot (exact state, no RNG or RAM randomization; the cheated-items rule applies)
+    /// as a new episode labelled `name`; objectives, critic and end conditions restart as at reset; the route stays.
     pub fn restore(
         &mut self,
         snapshot: &SessionSnapshot<N::State>,
@@ -460,10 +467,10 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
 
     /// Starts an episode from the session's state (loaded or restored).
     fn begin_episode(&mut self, name: String) -> Result<(Observation, StepInfo), EnvError> {
-        // A cheated bomb (requires-bombs room) is in the state everything below starts from.
-        let state = &self.bombs.begin(&mut self.session, &self.data.map);
         let mut gc = GameCompletion::new(self.data.map.clone(), &self.route, self.route_step)
             .map_err(|e| EnvError::Config(crate::ConfigError(e)))?;
+        // The cheated items (a bomb, a key, rupees the room needs) are in the state everything below starts from.
+        let state = &self.cheats.begin(&mut self.session, &gc);
         let attached = attach(
             &mut gc,
             None,
@@ -477,7 +484,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.start_health = state.health();
         self.hearts.reset(&HeartView::of(state));
         if let Some(visits) = &mut self.visits {
-            visits.reset(&VisitView::of(state));
+            visits.reset(&natural_visit_view(&self.cheats, state));
         }
         self.linger
             .reset(&LingerState::of(state, &attached.objective), || {
@@ -521,8 +528,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             )));
         }
         let change = self.session.act(action)?;
-        // The bomb rule's state carries on (mask, observation); `change` keeps what the action did.
-        let (bombs, state) = self.bombs.after_action(&mut self.session, &self.data.map);
+        // The cheated items' state carries on (mask, observation); `change` keeps what the action did.
+        let (cheats, state) = self.cheats.after_action(
+            &mut self.session,
+            self.objectives.as_ref().expect("episode started"),
+            change.previous.full_location(),
+        );
         let taken = self.hearts.taken;
         self.hearts.update(&HeartView::of(&state), change.frames);
         let prev = self.attached.take().expect("episode started");
@@ -613,8 +624,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 linger: self.linger.summary(),
                 linger_room: self.linger.start_room,
                 blocks: self.blocks,
-                bombs_used: self.bombs.used,
-                bombs_cheated: self.bombs.cheated,
+                bombs_used: self.cheats.used.bombs,
+                cheated: self.cheats.cheated,
                 boss: self.boss,
                 curriculum,
                 episode_steps: 0,
@@ -626,11 +637,11 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         if let Some(visits) = &mut self.visits {
             let end = terminal.as_ref().map_or(VisitEnd::Continue, |t| visit_end(&t.ending, t.outcome));
             let mut step = VisitStep::of(&change);
-            step.bombs_used = bombs.used;
-            step.bombs_cheated = bombs.cheated;
+            step.bombs_used = cheats.used.bombs;
+            step.cheated = cheats.cheated;
             step.boss_stuns = boss.stuns;
             step.boss_eats = boss.eats;
-            visits.update(&VisitView::of(&state), &step, end);
+            visits.update(&natural_visit_view(&self.cheats, &state), &step, end);
         }
         let reward = rewards.value();
         self.reward_total += reward;
@@ -695,8 +706,16 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             route: self.route.clone(),
             start_state: None,
             captured_state: None,
-            bombs_cheated: self.bombs.cheated,
+            cheated: self.cheats.cheated,
             terminal: None,
         }
+    }
+}
+
+/// The visit tracker's view of `state` with Link's natural keys (a cheated key is no key gained).
+fn natural_visit_view(cheats: &CheatLedger, state: &GameView) -> VisitView {
+    VisitView {
+        keys: cheats.natural(CheatItem::Keys, state),
+        ..VisitView::of(state)
     }
 }

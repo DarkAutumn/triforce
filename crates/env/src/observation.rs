@@ -658,7 +658,7 @@ impl ObservationBuilder {
     }
 
     /// The observation after a step to `state`: `change.state`, or the state a RAM fix-up after the action rebuilt
-    /// (the bomb rule, [`crate::bombs`]); `objective` and `wavefront` belong to `state`.
+    /// (the cheated items, `zelda::cheats`); `objective` and `wavefront` belong to `state`.
     pub fn build(
         &mut self,
         change: &Change,

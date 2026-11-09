@@ -27,11 +27,13 @@ use rand_chacha::ChaCha8Rng;
 use std::collections::BTreeSet;
 use std::sync::{Arc, LazyLock};
 use zelda::actions::{MASK_SIZE, NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS};
+use zelda::cheats::CheatItem;
 use zelda::enums::{SwordKind, enemy, item};
 use zelda::tables;
-use zelda::objectives::{Objective, ObjectiveKind};
+use zelda::objectives::{FLAG_ITEM_TAKEN, Objective, ObjectiveKind};
 use zelda::room::Target;
 use zelda::room_entry::is_pre_entry;
+use zelda::room_state::room_flags_addr;
 use zelda::{
     Action, ActionKind, ActionMask, Change, Direction, GameView, LoadOptions, MapLocation, Nes,
     Session, SessionSnapshot, Var,
@@ -837,6 +839,7 @@ fn open_route_ignores_optional_combat() {
 
 /// 0x43 is crossed twice (the bow detour, Lee, Nov 9): from W the route goes N to the Stalfos key room 0x33, back
 /// from N (with the bow) through the locked E door to 0x44; with or without a key the objective offers only that exit.
+/// Without one, the locked route exit grants a cheated key (`zelda::cheats`).
 #[test]
 fn route_room_only_offers_its_route_exit() {
     let Some(mut nes) = open_core() else { return };
@@ -849,7 +852,9 @@ fn route_room_only_offers_its_route_exit() {
                 };
             });
             env.reset(Some(0), None).unwrap();
-            assert_eq!(state(&env).keys() as i64, keys);
+            let cheated_key = wanted == 0x44 && keys == 0;
+            assert_eq!(state(&env).keys() as i64, keys + cheated_key as i64, "{start_state} keys {keys}");
+            assert_eq!(env.cheats.granted(CheatItem::Keys), cheated_key as i32);
             assert_eq!(state(&env).bow(), wanted == 0x44, "{start_state}");
             assert_eq!(next_rooms(&env), rooms(&[(1, wanted)]), "{start_state} keys {keys}");
             nes = release(env);
@@ -1739,7 +1744,7 @@ fn capture_saves_first_entry_once_before_monsters_spawn() {
 
 /// game.yaml `requires_bombs` (Dodongo's room): with no bombs Link gets a cheated one; placing it counts one used and
 /// one cheated, a natural last bomb only one used, and either way the floor re-arms to 1. Outside such rooms the
-/// count is untouched. (Leaving the room with an unused cheated bomb: `env::bombs` unit tests.)
+/// count is untouched. (Leaving the room with an unused cheated bomb: `zelda::cheats` unit tests.)
 #[test]
 fn requires_bombs_room_cheats_one_bomb_and_counts_it_when_placed() {
     let Some(mut nes) = open_core() else { return };
@@ -1754,7 +1759,7 @@ fn requires_bombs_room_cheats_one_bomb_and_counts_it_when_placed() {
         });
         env.reset(Some(1), None).unwrap();
         assert_eq!(state(&env).bombs(), 1, "start {start}");
-        assert_eq!((env.bombs.used, env.bombs.cheated), (0, 0), "granting doesn't count");
+        assert_eq!((env.cheats.used.bombs, env.cheats.cheated.bombs), (0, 0), "granting doesn't count");
         // Off the door tile, where items can't be used.
         for _ in 0..4 {
             if env.session().mask().kind[bomb] {
@@ -1767,8 +1772,8 @@ fn requires_bombs_room_cheats_one_bomb_and_counts_it_when_placed() {
             .find(|t| env.session().mask().is_allowed(&Action::parse(t).unwrap()))
             .expect("a bomb direction");
         let r = act(&mut env, place);
-        assert_eq!((env.bombs.used, env.bombs.cheated), (1, cheated), "start {start}");
-        assert_eq!(r.info.bombs_cheated, cheated);
+        assert_eq!((env.cheats.used.bombs, env.cheats.cheated.bombs), (1, cheated), "start {start}");
+        assert_eq!(r.info.cheated.bombs, cheated);
         assert_eq!(state(&env).bombs(), 1, "the floor re-arms");
         assert_eq!(r.obs.link, {
             let mut b = ObservationBuilder::new(true, true);
@@ -1786,7 +1791,7 @@ fn requires_bombs_room_cheats_one_bomb_and_counts_it_when_placed() {
     env.reset(Some(0), None).unwrap();
     act(&mut env, "WAIT 8");
     assert_eq!(state(&env).bombs(), 0);
-    assert_eq!((env.bombs.used, env.bombs.cheated), (0, 0));
+    assert_eq!((env.cheats.used.bombs, env.cheats.cheated.bombs), (0, 0));
 }
 
 /// Dodongo walking -> stunned (ObjState 2, a bomb's smoke) and walking -> bloated (1, a swallowed bomb) count once
@@ -1836,4 +1841,73 @@ fn dodongo_stuns_and_swallows_count_per_episode_and_visit() {
     let visits = env.take_visits();
     let total = visits.iter().fold((0, 0), |(s, e), v| (s + v.boss_stuns, e + v.boss_eats));
     assert_eq!(total, (1, 1));
+}
+
+/// Cheated keys (`zelda::cheats`): Dungeon 1's 0x33 entered from S leaves N through a locked door and holds a key
+/// (the room's treasure). With no keys Link gets none while that key is left; once it is taken (the room's
+/// item-taken flag) a cheated key appears without counting as a key gained. Opening the N door with it counts one
+/// cheated key used and no second key is granted while the door opens; leaving S with it unused takes it back.
+#[test]
+fn locked_route_exit_cheats_a_key_once_the_rooms_key_is_taken() {
+    let Some(mut nes) = open_core() else { return };
+    for through_door in [true, false] {
+        let opts = EnvOptions {
+            start_state: Some("1_33s_0".into()),
+            track_visits: true,
+            ..Default::default()
+        };
+        let mut env = make_env_with(nes, "stalfos-keese-gel", opts, |c| {
+            c.curriculum.enabled = false;
+            c.ram_randomization = RamRandomization {
+                keys: Some((0, 0)),
+                ..Default::default()
+            };
+        });
+        env.reset(Some(1), None).unwrap();
+        assert!(state(&env).is_door_locked(Direction::N), "the route exit is locked");
+        assert_eq!(state(&env).keys(), 0, "the room's key treasure comes first");
+        act(&mut env, "WAIT 8");
+        assert_eq!((state(&env).keys(), env.cheats.granted(CheatItem::Keys)), (0, 0));
+
+        // The treasure key taken (and spent elsewhere: Link has none).
+        let ram = state(&env).ram();
+        let flags = room_flags_addr(ram, 0x33).expect("level flags");
+        let taken = ram[flags] | FLAG_ITEM_TAKEN;
+        env.session_mut().nes_mut().poke(flags as u16, taken);
+        act(&mut env, "WAIT 8");
+        assert_eq!(state(&env).keys(), 1, "a cheated key");
+        assert_eq!((env.cheats.granted(CheatItem::Keys), env.cheats.cheated.keys), (1, 0), "granting doesn't count");
+
+        let terminal = if through_door {
+            // Past the room's middle blocks: Link stands in the N doorway's column, below the door.
+            env.session_mut().apply_ram(&[(Var::LinkX, 0x78), (Var::LinkY, 0x5D)]);
+            for _ in 0..10 {
+                if state(&env).keys() == 0 {
+                    break;
+                }
+                act(&mut env, "MOVE N 4");
+            }
+            assert_eq!(env.cheats.cheated.keys, 1, "the door took the cheated key");
+            let mut terminal = None;
+            while terminal.is_none() {
+                assert_eq!((state(&env).keys(), env.cheats.granted(CheatItem::Keys)), (0, 0), "no second key");
+                terminal = act(&mut env, "MOVE N 16").info.terminal;
+            }
+            assert_eq!(state(&env).location(), 0x23, "through the opened door");
+            terminal
+        } else {
+            let mut terminal = None;
+            while terminal.is_none() {
+                terminal = act(&mut env, "MOVE S 16").info.terminal;
+            }
+            assert_eq!(state(&env).location(), 0x43);
+            assert_eq!(state(&env).keys(), 0, "the unused cheated key is taken back");
+            terminal
+        };
+        let cheated = through_door as u32;
+        assert_eq!(terminal.unwrap().cheated.keys, cheated);
+        let visits = env.take_visits();
+        assert_eq!(visits.iter().map(|v| (v.keys_gained, v.cheated.keys)).collect::<Vec<_>>(), [(0, cheated)]);
+        nes = release(env);
+    }
 }

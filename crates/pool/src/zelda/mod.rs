@@ -23,9 +23,10 @@ pub use nes::{InputLog, PoolNes, PoolState, PoolStore, RgbFn};
 use crate::layout::{Dtype, KeySpec, ObsLayout, ObsRow};
 use env::chain::RunResult;
 use env::observation::{GRID_COLS, OBS_SPEC, Observation};
-use env::specialist_env::{StepInfo, hearts_json, linger_json};
+use env::specialist_env::{StepInfo, cheated_json, hearts_json, linger_json};
 use serde_json::{Value, json};
 use std::sync::Arc;
+use zelda::cheats::{CheatItem, ItemCounts};
 use zelda::executor::Interrupt;
 use zelda::hearts::HeartSummary;
 use zelda::linger::LingerSummary;
@@ -106,8 +107,8 @@ pub struct RoomEvent {
     pub max_health: i32,
     /// Chain runs only: the room has gone the stall budget without damage either way ([`env::chain::ChainEnv::stalled`]).
     pub stalled: bool,
-    /// Cheated bombs placed so far in the episode or run ([`env::bombs`]; the watch player's footer).
-    pub bombs_cheated: u32,
+    /// Cheated items used so far in the episode or run (`zelda::cheats`; the watch player's footer).
+    pub cheated: ItemCounts,
 }
 
 /// One evaluation episode (`evaluate._play`'s record).
@@ -130,7 +131,7 @@ pub struct EvalRecord {
     pub linger: LingerSummary,
     pub blocks: u32,
     pub bombs_used: u32,
-    pub bombs_cheated: u32,
+    pub cheated: ItemCounts,
     /// Dodongo stuns and swallowed bombs (`env::critic::BossTransitions`).
     pub boss_stuns: u32,
     pub boss_eats: u32,
@@ -147,7 +148,7 @@ impl EvalRecord {
             "seed": self.seed, "outcome": self.outcome, "ending": self.ending, "success": self.success,
             "steps": self.steps, "frames": self.frames, "start_health": self.start_health, "health": self.health,
             "max_health": self.max_health, "hearts": hearts_json(&self.hearts), "linger": linger_json(&self.linger),
-            "blocks": self.blocks, "bombs": {"used": self.bombs_used, "cheated": self.bombs_cheated},
+            "blocks": self.blocks, "bombs": {"used": self.bombs_used}, "cheated": cheated_json(&self.cheated),
             "boss": {"stuns": self.boss_stuns, "eats": self.boss_eats},
             "visits": self.visits.iter().map(visit_json).collect::<Vec<_>>(),
         })
@@ -167,14 +168,18 @@ fn item_counts(counts: &[u32; 6]) -> Value {
 
 /// One `visits` entry of the record dict.
 pub fn visit_json(v: &RoomVisit) -> Value {
-    json!({
+    let mut m = json!({
         "level": v.location.level, "room": v.location.value, "in_cave": v.location.in_cave, "steps": v.steps,
         "frames": v.frames, "health_in": v.health_in, "health_out": v.health_out, "max_health": v.max_health,
         "health_lost": v.health_lost, "health_gained": v.health_gained, "hits": v.hits, "hits_dealt": v.hits_dealt,
         "drops": item_counts(&v.drops), "pickups": item_counts(&v.pickups), "keys_gained": v.keys_gained,
-        "bombs_used": v.bombs_used, "bombs_cheated": v.bombs_cheated, "boss_stuns": v.boss_stuns,
-        "boss_eats": v.boss_eats, "exit": v.exit,
-    })
+        "bombs_used": v.bombs_used, "boss_stuns": v.boss_stuns, "boss_eats": v.boss_eats, "exit": v.exit,
+    });
+    let o = m.as_object_mut().expect("object");
+    for item in CheatItem::ALL {
+        o.insert(format!("cheated_{}", item.name()), json!(v.cheated[item]));
+    }
+    m
 }
 
 /// What Zelda pool envs report through `Pool::poll_events`.

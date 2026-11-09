@@ -275,13 +275,14 @@ pub fn item_position_for_room(ram: &[u8; RAM_SIZE], attr_f: u8, item_id: u8) -> 
 
 /// Room flag byte of `room_id` in the current level's block (Z_07:GetRoomFlags).
 pub fn room_flags(ram: &[u8; RAM_SIZE], room_id: u8) -> u8 {
+    room_flags_addr(ram, room_id).map_or(0, |addr| ram[addr])
+}
+
+/// The RAM address of `room_id`'s flag byte in the current level's block, when the block pointer is set.
+pub fn room_flags_addr(ram: &[u8; RAM_SIZE], room_id: u8) -> Option<usize> {
     let addr =
         sram(ram, WORLD_FLAGS_ADDR) as usize | (sram(ram, WORLD_FLAGS_ADDR + 1) as usize) << 8;
-    if 0 < addr && addr < 0x800 {
-        ram[addr + (room_id & 0x7F) as usize]
-    } else {
-        0
-    }
+    (0 < addr && addr < 0x800).then(|| addr + (room_id & 0x7F) as usize)
 }
 
 /// Decodes the current room from the RAM image.
