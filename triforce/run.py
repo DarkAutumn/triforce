@@ -16,10 +16,8 @@ from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
-import torch
 
 from . import _native
-from .actions import Action
 from .runner import Route, Runner, RunResult, parse_location, write_jsonl
 
 FRAME_RATE = 60.0988
@@ -36,7 +34,7 @@ def ffmpeg_command(path: str) -> List[str]:
 
 
 class PygameWindow:
-    """Shows the game screen with an overlay (active specialist, room, health, last action).  Watching only."""
+    """Shows the game screen with an overlay (active specialist, room, health).  Watching only."""
     SCALE = 3
 
     def __init__(self):
@@ -67,19 +65,14 @@ class PygameWindow:
 def watch(runner: Runner, route: Route, seed: int, fps: float) -> RunResult:
     """Plays one run in a one-env chain pool with rendering on, showing every new frame."""
     window = PygameWindow()
-    torch.manual_seed(seed)
     with runner.pool(route, [seed], num_envs=1, threads=1, fps=fps) as chain:
         chain.pool.set_render(0, True)
-        counter, frame, room, action = 0, None, '', '-'
+        chain.play()
+        counter, frame, room = 0, None, ''
         results: List[RunResult] = []
-        while chain.pool.active:
-            count = chain.recv(min_ready=1, timeout=1 / 60)
-            rows = chain.live_rows(count)
-            if len(rows):
-                actions = chain.actions(rows)
-                action = str(Action.from_indices(*actions[0]))
-                chain.send(chain.buffers['env_ids'][rows], actions)
-            events = chain.pool.poll_events()
+        while not results:
+            chain.pool.wait_idle(timeout=1 / 60)
+            events = chain.poll_events()
             for event in events:
                 if event['type'] == 'room':
                     room = (f"{event['specialist']}  L{event['level']} 0x{event['room']:02x}  "
@@ -88,8 +81,7 @@ def watch(runner: Runner, route: Route, seed: int, fps: float) -> RunResult:
             latest = chain.pool.frame(0, since=counter)
             if latest is not None:
                 counter, frame = latest
-            window.show(frame, [room, action])
-        results += [result for _, result in chain.results(chain.pool.poll_events())]
+            window.show(frame, [room])
     return results[0]
 
 
@@ -104,20 +96,12 @@ def _state_bytes(origin: str, states_dir=None) -> bytes:
 
 def record_movie(runner: Runner, route: Route, seed: int) -> tuple[RunResult, dict]:
     """Plays one run with its inputs recorded.  Returns (the run, its ``movie`` event)."""
-    torch.manual_seed(seed)
     with runner.pool(route, [seed], num_envs=1, threads=1, record=True) as chain:
-        results: List[RunResult] = []
-        movies: List[dict] = []
-        while True:
-            count = chain.recv(min_ready=1) if chain.pool.active else 0
-            events = chain.pool.poll_events()
-            results += [result for _, result in chain.results(events)]
-            movies += [event for event in events if event['type'] == 'movie']
-            if not count:
-                break
-            rows = chain.live_rows(count)
-            if len(rows):
-                chain.send(chain.buffers['env_ids'][rows], chain.actions(rows))
+        chain.play()
+        chain.pool.wait_idle()
+        events = chain.poll_events()
+    results = [result for _, result in chain.results(events)]
+    movies = [event for event in events if event['type'] == 'movie']
     if len(results) != 1 or len(movies) != 1:
         raise RuntimeError(f"seed {seed}: expected one run and one recording, got {len(results)} and {len(movies)}")
     return results[0], movies[0]
@@ -160,7 +144,6 @@ def main(argv=None):
     parser.add_argument('--stop-at', help="end the route on entering this room instead, e.g. 1:0x73")
     parser.add_argument('--from', dest='start_from', help="start from this savestate (e.g. 2_7ds_0), not the game start")
     parser.add_argument('--models-dir', default=None)
-    parser.add_argument('--device', default='cpu', help="torch device for the specialists' networks")
     parser.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST=PATH',
                         help="use this checkpoint instead of the promoted one")
     parser.add_argument('--output', default=os.path.join('runs', 'runner.jsonl'))
@@ -170,8 +153,7 @@ def main(argv=None):
         ffmpeg_command(args.video)      # fail before playing when ffmpeg is missing
     route = Route.load(args.route, parse_location(args.stop_at) if args.stop_at else None, args.start_from)
     overrides = dict(item.split('=', 1) for item in args.checkpoint)
-    runner = Runner(models_dir=args.models_dir, checkpoints=overrides, deterministic=args.deterministic,
-                    device=args.device)
+    runner = Runner(models_dir=args.models_dir, checkpoints=overrides, deterministic=args.deterministic)
     if args.video:
         result, movie = record_movie(runner, route, args.seed)
         frames = write_video(movie, args.video)

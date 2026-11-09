@@ -5,7 +5,9 @@ import os
 import subprocess
 import sys
 
-from triforce import _native
+import numpy as np
+
+from triforce import _native, replay
 from triforce.evaluate import (_boss_stats, _group, _linger_stats, _room_key, _visited_rooms, evaluate_specialist,
                                format_report)
 from triforce.model import ModelConfig, ZeldaPolicy
@@ -76,6 +78,41 @@ def test_evaluate_specialist_covers_every_seed_state_reproducibly(states_dir, tm
     assert evaluate()['records'] == records
     assert evaluate(parallel=3, threads=3)['records'] == records
     assert evaluate(parallel=2, threads=2)['records'] == records
+
+
+REPLAY_IN_A_FRESH_PROCESS = """
+import sys, numpy as np
+from triforce import replay
+head, plays = replay.read(sys.argv[1])
+np.save(sys.argv[2], np.concatenate([np.stack([r['log_prob'], r['entropy'], r['value']])
+                                     for r in (replay.replay(head, p) for p in plays)], axis=1))
+"""
+
+
+def test_evaluation_plays_replay_exactly_here_and_in_a_fresh_process(states_dir, tmp_path):
+    """An eval's replay file (seed + start state + actions per episode) replays every episode to the same record
+    and the same per-decision probabilities and values, bit for bit, in this process and in a new one."""
+    ckpt = save_checkpoint('ow-start', 'untrained', ZeldaPolicy(observation_space(), SMALL), root=tmp_path)
+    config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=25)
+    path = tmp_path / 'plays.jsonl'
+    result = evaluate_specialist(config, ckpt, episodes_per_state=4, parallel=3, threads=2, seed=11,
+                                 states_dir=states_dir, plays=path)
+    head, plays = replay.read(path)
+    assert head['kind'] == 'eval' and head['models'][0]['checkpoint'] == str(ckpt)
+    assert sorted((p['start_state'], p['job']) for p in plays) == [('start', s) for s in range(11, 15)]
+    records = {r['seed']: r for r in result['records']}
+    here = []
+    for play in sorted(plays, key=lambda p: p['job']):
+        again = replay.replay(head, play)
+        assert [e['record'] for e in again['events'] if e['type'] == 'eval'] == [records[play['job']]] \
+            == [play['result']]
+        here.append(np.stack([again['log_prob'], again['entropy'], again['value']]))
+    out = tmp_path / 'fresh.npy'
+    subprocess.run([sys.executable, '-c', REPLAY_IN_A_FRESH_PROCESS, str(path), str(out)], check=True,
+                   capture_output=True, text=True, env={**os.environ, 'TRIFORCE_STATES_DIR': str(states_dir)})
+    order = sorted(range(len(plays)), key=lambda i: plays[i]['job'])
+    fresh = np.split(np.load(out), np.cumsum([len(plays[i]['actions']) for i in range(len(plays))])[:-1], axis=1)
+    assert all(fresh[i].tobytes() == here[k].tobytes() for k, i in enumerate(order))
 
 
 def test_linger_evaluation_aggregates_only_measured_records():

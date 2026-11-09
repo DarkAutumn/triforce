@@ -1,6 +1,7 @@
-//! Rollouts inside the pool: each worker picks its envs' actions itself with an [`Actor`] (the policy network in
-//! Rust) and steps them `steps` decisions in a row, so the caller makes one call per rollout instead of one round
-//! trip per step (docs/rust-actor.md).
+//! Acting inside the pool: each worker picks its envs' actions itself with an [`Actor`] (the policy network in
+//! Rust). [`crate::Pool::rollout`] steps every env `steps` decisions and returns them in one call (training);
+//! [`crate::Pool::play`] lets every env act on its own until its jobs run out (evaluation, chains, the watch
+//! player), optionally recording each episode as a [`Play`] (docs/rust-actor.md).
 
 use crate::layout::{ObsColumns, ObsData, ObsLayout};
 
@@ -69,6 +70,46 @@ impl<A> EnvRollout<A> {
             bootstrap_value: Vec::with_capacity(steps),
             job: Vec::with_capacity(steps),
             step: Vec::with_capacity(steps),
+        }
+    }
+
+    pub fn steps(&self) -> usize {
+        self.actions.len()
+    }
+}
+
+/// What [`crate::Pool::play`] keeps of each episode.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Record {
+    /// Nothing.
+    #[default]
+    Off,
+    /// Per decision: the acting policy, the action and the actor's [`Decision`].
+    Actions,
+    /// The same plus the observation each decision acted on.
+    Observations,
+}
+
+/// One episode as played: decision `t` acted on `obs` row `t` with policy `policy[t]`, chose `actions[t]` and
+/// the actor reported `decisions[t]`. `job` is the episode's key ([`crate::Start::job`]): with the task's job
+/// list it identifies the episode, and replaying `actions` reproduces it.
+#[derive(Clone, Debug)]
+pub struct Play<A> {
+    pub job: i64,
+    pub policy: Vec<i64>,
+    pub actions: Vec<A>,
+    pub decisions: Vec<Decision>,
+    pub obs: Option<ObsColumns>,
+}
+
+impl<A> Play<A> {
+    pub(crate) fn new(job: i64, layout: Option<&ObsLayout>) -> Play<A> {
+        Play {
+            job,
+            policy: Vec::new(),
+            actions: Vec::new(),
+            decisions: Vec::new(),
+            obs: layout.map(|l| ObsColumns::new(l, 0)),
         }
     }
 

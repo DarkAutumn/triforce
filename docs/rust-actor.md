@@ -40,8 +40,11 @@ The learner recomputes `logp_old` and values with its own torch network over the
    forward → action → step) and writes the rollout buffers (obs, mask, action, log-prob, value, reward, frames,
    dones, bootstrap observations, episode events); Python gets them in one call with the GIL released. GAE stays
    in Python (cheap, and the learner recomputes values anyway).
-3. **Evaluation, chains and the watch player** use the same in-pool policy (one network per specialist in a chain).
-   The per-step `recv`/`send` path and `triforce/inference.py`'s Python forward go away.
+3. **Evaluation, chains and the watch player** use the same in-pool policy (one network per specialist in a chain):
+   `Pool::play(actor, record)` makes every env act on its own, one decision per turn on its worker (envs sharing a
+   thread take turns), until its jobs run out. A chain run that ends with `hold_finished_frame` parks its env
+   until `set_hold(env, false)` (the watch player's result pause). Python only follows events (`wait_idle`,
+   `poll_events`, `poll_plays`). The per-step `recv`/`send` path and `triforce/inference.py` are gone.
 4. **Deferred look-ahead (Lee's continuation queue).** Beam/bomb/arrow/boomerang look-ahead
    (`zelda::change::predict`, `FutureCreditLedger`) leaves the step loop: the step records what it needs (the
    snapshot at the firing step, the weapon), and the predictions, the credit ledger and the rewards are settled per
@@ -50,10 +53,14 @@ The learner recomputes `logp_old` and values with its own torch network over the
    penalty) and the chain stall check do; they switch to observed effects (a hit lands a few steps after the shot;
    their thresholds are hundreds of steps). Checking them only at rollout ends was considered and rejected: it
    would make episodes depend on rollout length and env count, and eval/chains/play have no rollouts.
-5. **Replay records.** A play (watch player, eval, chain run) can be stored as: code version (git hash and the
-   game/route data hash), model hash(es), start state, reset seed and load options, and the action list (about 3
-   bytes per action), plus its results (rooms reached, how it ended, stats). Replaying feeds the recorded actions
-   and recomputes the policy at every step, so the probabilities shown match the ones at the time.
+5. **Replay records** (`triforce/replay.py`, built). `play(record='actions')` returns each finished episode as a
+   `Play` (job key, per decision the acting policy, the action and the policy's log-prob/entropy/value, optionally
+   the observations). Eval (`--plays`), `eval-chain --plays` and `play-zelda.py --plays` write replay files: a
+   header (kind, the task's configs and options, model checkpoints and hashes, backend, `git describe`, the
+   game/route data hash) and one line per episode (job, start state, base64 actions, the result).
+   `replay.replay(header, play)` rebuilds the task for that job and plays it with a replaying actor
+   (`PolicyActor::replay`: the recorded action at each step, scored by the policy), returning every decision's
+   log-prob/entropy/value (bit for bit the original's) and observations; a replay that outlives its actions raises.
 6. **Search for training** (later; better-play §2): a second job type on the same worker queue, run over states
    the rollout visited ("Reanalyse"): Gumbel-top-k candidates, K futures with perturbed RNG, the policy as the
    rollout policy, value at the leaves. Needs a full `SpecialistEnv` snapshot (critic, objectives, trackers, end

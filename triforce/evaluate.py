@@ -1,17 +1,17 @@
 """Evaluate one specialist on its own rooms: N episodes from every seed start state.
 
     python -m triforce.evaluate --specialist NAME [--checkpoint PATH | --run-id ID] [--models-dir DIR]
-        [--episodes-per-state 100] [--parallel 1] [--threads N] [--device cpu] [--seed 0] [--deterministic]
-        [--output PATH]
+        [--episodes-per-state 100] [--parallel 1] [--threads N] [--seed 0] [--deterministic]
+        [--output PATH] [--plays PATH]
 
 Training metrics mix start states and ``eval-chain`` plays the whole route; this measures one model in
 isolation.  Every seed savestate of the specialist (``SpecialistConfig.resolve_start_states``) is played
 ``--episodes-per-state`` times in a native ``EvalTask`` pool of ``--parallel`` envs (same rewards, end conditions
-and RAM randomization as training), episode ``i`` seeded with ``seed + i``.  Envs run asynchronously: each one
-that is ready gets its action from a fixed-shape forward of the network (``inference.PoolInference``).  Actions are
-sampled unless ``--deterministic``, with Gumbel noise keyed to (episode seed, decision), so an episode plays the
-same whichever env or thread runs it.  The checkpoint defaults to the specialist's promoted model; results go to
-``<checkpoint dir>/eval.json``, records sorted by seed.
+and RAM randomization as training), episode ``i`` seeded with ``seed + i``.  The network acts inside the pool
+(``EnvPool.play`` with its Rust copy, docs/rust-actor.md); actions are sampled unless ``--deterministic``, with
+Gumbel noise keyed to (episode seed, decision), so an episode plays the same whichever env or thread runs it.
+``--plays`` keeps every episode in a replay file (``triforce.replay``).  The checkpoint defaults to the
+specialist's promoted model; results go to ``<checkpoint dir>/eval.json``, records sorted by seed.
 ``mean_health_change`` is hearts at the episode's end minus hearts at its start (after hp randomization).
 Dropped hearts are kept per episode (``records[i]['hearts']``); ``mean_health_change_total``
 adds the hearts wasted by picking them up at (or near) full health, and ``hearts_dropped`` / ``hearts_taken`` /
@@ -51,11 +51,9 @@ from collections import Counter
 from pathlib import Path
 from typing import Callable, Optional
 
-import numpy as np
-
 from . import _native, registry
-from .inference import PoolInference
 from .metrics import heart_change_total
+from .replay import ReplayWriter, header, models_header
 from .specialist import SpecialistConfig, load_specialist
 
 
@@ -69,37 +67,29 @@ def _room_key(room) -> str:
     return f"{level}:0x{location:02x}" + (":cave" if in_cave else "")
 
 
-def _load_network(checkpoint):
-    network, _ = registry.load_model(checkpoint)
-    return network.eval()
-
-
-def _play(pool, network, deterministic: bool, total: int, device: str,
-          on_episode: Optional[Callable[[dict, int, int], None]]) -> list[dict]:
-    """Steps the eval pool asynchronously until every job ran; returns the records in completion order."""
+def _play(pool, policy, deterministic: bool, total: int, on_episode: Optional[Callable[[dict, int, int], None]],
+          writer: Optional[ReplayWriter]) -> list[dict]:
+    """Lets the eval pool play until every job ran; returns the records in completion order."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    buffers = pool.make_buffers()
-    inference = PoolInference([network], pool.num_envs, device, deterministic)
     records = []
-
-    def collect():
+    plays: dict[int, dict] = {}
+    unwritten: dict[int, dict] = {}
+    pool.play([policy], deterministic=deterministic, record=None if writer is None else 'actions')
+    while True:
+        idle = pool.wait_idle(timeout=0.1)
         for event in pool.poll_events():
             if event['type'] == 'eval':
                 records.append(event['record'])
+                unwritten[int(event['record']['seed'])] = event['record']
                 if on_episode is not None:
                     on_episode(records[-1], len(records), total)
-
-    while pool.active:
-        count = pool.recv(buffers, min_ready=1)
-        rows = np.flatnonzero(~buffers['finished'][:count])
-        if len(rows):
-            envs = buffers['env_ids'][rows]
-            obs = {key: value[rows] for key, value in buffers['obs'].items()}
-            pool.send(envs, inference.actions(envs, obs, np.zeros(len(rows), np.int64), buffers['job'][rows],
-                                              buffers['step'][rows]))
-        collect()
-    collect()
-    return records
+        if writer is not None:    # a play is reported before its episode's event
+            plays.update((int(play['job']), play) for play in pool.poll_plays())
+            for seed in sorted(plays.keys() & unwritten.keys()):
+                record = unwritten.pop(seed)
+                writer.write(plays.pop(seed), record, start_state=record['start_state'])
+        if idle:
+            return records
 
 
 def _heart_stats(records: list[dict]) -> dict:
@@ -227,11 +217,11 @@ def _visited_rooms(records: list[dict], specialist: str) -> dict:
 def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes_per_state: int = 100,
                         parallel: int = 1, seed: int = 0, deterministic: bool = False,
                         on_episode: Optional[Callable[[dict, int, int], None]] = None, *,
-                        threads: Optional[int] = None, device: str = 'cpu', states_dir=None) -> dict:
+                        threads: Optional[int] = None, states_dir=None, plays=None) -> dict:
     """Plays every seed start state `episodes_per_state` times on `parallel` envs and returns the summary dict
     (see module doc).  ``on_episode(record, done, total)`` is called as each episode finishes (completion order).
-    ``threads``: the pool's worker threads (default min(parallel, cores)); ``device``: where the network runs;
-    ``states_dir``: where start states resolve (default the states directory)."""
+    ``threads``: the pool's worker threads (default min(parallel, cores)); ``states_dir``: where start states
+    resolve (default the states directory); ``plays``: a replay file to write."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     config = load_specialist(specialist) if isinstance(specialist, str) else specialist
     states_dir = None if states_dir is None else str(states_dir)
@@ -241,10 +231,18 @@ def evaluate_specialist(specialist: str | SpecialistConfig, checkpoint, episodes
     episode_states = [state for state in states for _ in range(episodes_per_state)]
     jobs = [(state, seed + index) for index, state in enumerate(episode_states)]
 
-    network = _load_network(checkpoint)
+    policy = registry.load_model(checkpoint)[0].to_native()
+    writer = None
+    if plays is not None:
+        models = models_header([config.name], [policy], {config.name: str(checkpoint)})
+        writer = ReplayWriter(plays, header('eval', {'config': config.to_json()}, models, deterministic, states_dir))
     task = _native.EvalTask(config, jobs, states_dir=states_dir)
-    with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed) as pool:
-        records = _play(pool, network, deterministic, len(jobs), device, on_episode)
+    try:
+        with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=threads, seed=seed) as pool:
+            records = _play(pool, policy, deterministic, len(jobs), on_episode, writer)
+    finally:
+        if writer is not None:
+            writer.close()
     records.sort(key=lambda r: r['seed'])
 
     count = len(records)
@@ -316,10 +314,10 @@ def main(argv=None):
     parser.add_argument('--episodes-per-state', type=int, default=100)
     parser.add_argument('--parallel', type=int, default=1, help="envs in the evaluation pool")
     parser.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
-    parser.add_argument('--device', default='cpu', help="torch device for the network")
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--deterministic', action='store_true', help="argmax actions instead of sampling")
     parser.add_argument('--output', default=None, help="JSON output (default: <checkpoint dir>/eval.json)")
+    parser.add_argument('--plays', default=None, help="write every episode to this replay file (triforce/replay.py)")
     args = parser.parse_args(argv)
 
     config = load_specialist(args.specialist)
@@ -335,7 +333,7 @@ def main(argv=None):
         raise FileNotFoundError(checkpoint)
 
     result = evaluate_specialist(config, checkpoint, args.episodes_per_state, args.parallel, args.seed,
-                                 args.deterministic, threads=args.threads, device=args.device)
+                                 args.deterministic, threads=args.threads, plays=args.plays)
     output = Path(args.output) if args.output else checkpoint.parent / 'eval.json'
     output.parent.mkdir(parents=True, exist_ok=True)
     with open(output, 'w', encoding='utf-8') as file:

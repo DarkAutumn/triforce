@@ -105,6 +105,10 @@ pub struct RoomEvent {
     pub specialist: Arc<str>,
     pub level: u8,
     pub room: u8,
+    /// In an overworld cave or an underworld cellar.
+    pub in_cave: bool,
+    /// Rooms entered so far in the episode or run, this one included (a cave or cellar counts as a room).
+    pub rooms: u32,
     pub health: f64,
     pub max_health: i32,
     /// Chain runs only: the room has gone the stall budget without damage either way ([`env::chain::ChainEnv::stalled`]).

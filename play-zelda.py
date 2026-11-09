@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Watch a grid of Zelda games played live by the promoted specialist models (route d2first, 60.1 fps).
 
-    .venv/bin/python play-zelda.py                     # 4x3 = 12 games, 2x scale, CUDA inference
+    .venv/bin/python play-zelda.py                     # 4x3 = 12 games, 2x scale
     .venv/bin/python play-zelda.py 8x6 --scale 1       # COLUMNSxROWS
-    .venv/bin/python play-zelda.py 2x2 --cpu           # inference on the CPU
+    .venv/bin/python play-zelda.py 2x2 --plays runs/plays.jsonl   # keep every run in a replay file
     .venv/bin/python play-zelda.py 3x2 --games 64      # 64 games, the 6 furthest along on screen
     .venv/bin/python play-zelda.py 3x2 --games 64 --benchmark 30   # print the frame rate on screen, then quit
 
@@ -12,8 +12,8 @@ Keys: u uncaps the games' frame rate (as fast as they run) or caps it again at t
 p pauses and resumes the games and the window.  The title shows how fast the shown games run: "36 fps of 60.1 max"
 (∞ when uncapped).  The window repaints at most about 60 times a second, so faster games skip frames on screen.
 
-All games play in one native chain pool, each on its own thread with one batched inference loop for the models
-(see triforce/play_grid.py).  When a game ends its result shows for a few seconds and the game starts the next
+All games play in one native chain pool, each on its own thread, the models acting inside the pool (their Rust
+copies; see triforce/play_grid.py).  When a game ends its result shows for a few seconds and the game starts the next
 seed; the seed shows once the run ends.  With more games than cells the rest play unseen (emulated, not rendered).
 A shown game can only lose its cell when it enters a new room, starts its next run (after its result has shown) or
 stalls (--stall-steps actions in one room without damage dealt or taken): then, if the best hidden game (most
@@ -30,7 +30,6 @@ import sys
 import time
 from typing import Optional
 
-import torch
 from PySide6.QtCore import QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QImage, QPainter, QPalette
 from PySide6.QtWidgets import QApplication, QGridLayout, QLayout, QMainWindow, QWidget
@@ -76,7 +75,6 @@ def build_parser() -> argparse.ArgumentParser:
                         help="games to play (default: one per cell); the cells show the ones furthest along")
     parser.add_argument('--scale', type=int, default=DEFAULT_SCALE,
                         help=f"integer pixel scale of each game (default {DEFAULT_SCALE})")
-    parser.add_argument('--cpu', action='store_true', help="run the models on the CPU instead of CUDA")
     parser.add_argument('--fps', type=float, default=NES_FPS,
                         help=f"frame-rate cap per game (default the NES's {NES_FPS}, which 60 also means; "
                              "0 = uncapped; keys u and +/-)")
@@ -87,6 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--stall-steps', type=int, default=DEFAULT_STALL_STEPS, metavar='N',
                         help="a game N actions into a room without damage dealt or taken may give its cell to a "
                              f"game further along; at 2N it ends STUCK (default {DEFAULT_STALL_STEPS}, 0 = off)")
+    parser.add_argument('--plays', default=None, metavar='PATH',
+                        help="keep every run in this replay file (triforce/replay.py)")
     return parser
 
 
@@ -101,7 +101,6 @@ def parse_args(argv=None, parser: Optional[argparse.ArgumentParser] = None) -> a
     args.games = cells if args.games is None else args.games
     if args.games < cells:
         parser.error(f"--games must be at least the {cells} cells of the grid, got {args.games}")
-    args.device = 'cpu' if args.cpu else 'cuda'
     if args.fps == 60:
         args.fps = NES_FPS          # 60 always means the NES's 60.0988
     return args
@@ -551,16 +550,14 @@ class Window(QMainWindow):
 def main(argv=None) -> int:
     parser = build_parser()
     args = parse_args(argv, parser)
-    if args.device == 'cuda' and not torch.cuda.is_available():
-        parser.error("CUDA is not available; use --cpu")
     cols, rows = args.grid
     app = QApplication(sys.argv[:1])
     app.setApplicationName('play-zelda')
     # Ctrl-C: quit from the event loop, never from inside a tick (closing the window mid-tick left repaints queued
     # for a destroyed Wayland surface, which segfaults in QtWaylandClient).
     signal.signal(signal.SIGINT, lambda *_: QTimer.singleShot(0, app.quit))
-    grid = GameGrid(args.games, args.device, args.fps, args.models_dir, shown=range(cols * rows),
-                    stall_steps=args.stall_steps or None)
+    grid = GameGrid(args.games, args.fps, args.models_dir, shown=range(cols * rows),
+                    stall_steps=args.stall_steps or None, plays=args.plays)
     window = Window(grid, cols, rows, args.scale, benchmark=args.benchmark)
     app.aboutToQuit.connect(window.shutdown)
     window.start()

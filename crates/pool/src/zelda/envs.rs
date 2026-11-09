@@ -50,7 +50,8 @@ fn head_indices(action: ZeldaAction) -> Result<[usize; 3], EnvError> {
     Ok(out)
 }
 
-/// Room events: reports when the (specialist, level, room, health, max health) tuple changes.
+/// Room events: reports when the (specialist, room, health, max health, ...) tuple changes, numbering the rooms
+/// (overworld caves and underworld cellars included) entered so far in the episode or run.
 #[derive(Default)]
 struct RoomWatch {
     on: bool,
@@ -58,28 +59,39 @@ struct RoomWatch {
 }
 
 impl RoomWatch {
-    fn report(&mut self, event: RoomEvent, events: &mut Vec<ZeldaEvent>) {
-        if self.on && self.last.as_ref() != Some(&event) {
+    /// Reports `event` (its `rooms` filled in here) if anything changed.
+    fn report(&mut self, mut event: RoomEvent, events: &mut Vec<ZeldaEvent>) {
+        if !self.on {
+            return;
+        }
+        event.rooms = match &self.last {
+            None => 1,
+            Some(last) if (last.level, last.room, last.in_cave) != (event.level, event.room, event.in_cave) => {
+                last.rooms + 1
+            }
+            Some(last) => last.rooms,
+        };
+        if self.last.as_ref() != Some(&event) {
             self.last = Some(event.clone());
             events.push(ZeldaEvent::Room(event));
         }
     }
 
     fn report_info(&mut self, info: &StepInfo, events: &mut Vec<ZeldaEvent>) {
-        if self.on {
-            self.report(
-                RoomEvent {
-                    specialist: info.specialist.clone(),
-                    level: info.room.0,
-                    room: info.room.1,
-                    health: info.health,
-                    max_health: info.max_health,
-                    stalled: false,
-                    cheated: info.cheated,
-                },
-                events,
-            );
-        }
+        self.report(
+            RoomEvent {
+                specialist: info.specialist.clone(),
+                level: info.room.0,
+                room: info.room.1,
+                in_cave: info.room.2,
+                rooms: 0,
+                health: info.health,
+                max_health: info.max_health,
+                stalled: false,
+                cheated: info.cheated,
+            },
+            events,
+        );
     }
 }
 
@@ -521,6 +533,8 @@ where
                 specialist,
                 level: state.level(),
                 room: state.location(),
+                in_cave: state.in_cave(),
+                rooms: 0,
                 health: state.health(),
                 max_health: state.max_health(),
                 stalled: self.chain.stalled(),
@@ -641,5 +655,55 @@ where
             TaskEnv::Eval(e) => e.step(action, obs, events),
             TaskEnv::Chain(e) => e.step(action, obs, events),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn event(room: u8, in_cave: bool, health: f64) -> RoomEvent {
+        RoomEvent {
+            specialist: Arc::from("ow-start"),
+            level: 0,
+            room,
+            in_cave,
+            rooms: 0,
+            health,
+            max_health: 3,
+            stalled: false,
+            cheated: Default::default(),
+        }
+    }
+
+    /// (rooms, health) of each event reported for `sent`.
+    fn reported(watch: &mut RoomWatch, sent: &[RoomEvent]) -> Vec<(u32, f64)> {
+        let mut events = Vec::new();
+        for e in sent {
+            watch.report(e.clone(), &mut events);
+        }
+        events
+            .iter()
+            .map(|e| match e {
+                ZeldaEvent::Room(r) => (r.rooms, r.health),
+                _ => unreachable!(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn room_events_number_the_rooms_entered_caves_included() {
+        let mut watch = RoomWatch { on: true, last: None };
+        let sent = [
+            event(0x77, false, 3.0),
+            event(0x77, false, 3.0), // nothing changed: no event
+            event(0x77, false, 2.5), // a hit, same room
+            event(0x77, true, 2.5),  // the cave under it
+            event(0x77, false, 2.5), // back out
+            event(0x76, false, 2.5),
+        ];
+        assert_eq!(reported(&mut watch, &sent), [(1, 3.0), (1, 2.5), (2, 2.5), (3, 2.5), (4, 2.5)]);
+        watch.last = None; // begin_episode: a new run counts from its first room
+        assert_eq!(reported(&mut watch, &[event(0x76, false, 3.0)]), [(1, 3.0)]);
     }
 }

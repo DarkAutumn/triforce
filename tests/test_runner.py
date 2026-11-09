@@ -1,8 +1,8 @@
 """Runner, registry hand-off and chain-eval summary on the native chain pool with untrained or scripted networks.
 
 The chain's game rules (untagged rooms, step budgets, retreats, visit clocks) are tested natively in
-``crates/env/tests/chain_explore.rs``; these tests cover the Python side: routes, results, batched per-specialist
-inference, missing models, determinism and the ``eval-chain`` command line."""
+``crates/env/tests/chain_explore.rs``; these tests cover the Python side: routes, results, missing models,
+determinism, replay files and the ``eval-chain`` command line."""
 
 import json
 import os
@@ -14,38 +14,27 @@ import numpy as np
 import pytest
 import torch
 
-from triforce import _native, registry, run
+from triforce import _native, registry, replay, run
 from triforce.actions import Action
+from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.runner import Policies, Route, RoomRecord, Runner, RunnerError, RunResult, chain_summary, \
     parse_location, write_jsonl
 from triforce.zelda_enums import ActionKind, MapLocation
 
-NUM_KINDS, NUM_DIRECTIONS, NUM_DURATIONS = len(_native.ACTION_KINDS), len(_native.DIRECTIONS), len(_native.DURATIONS)
 
-
-class ScriptedPolicy:
-    """A network stand-in: ``action`` where the row's mask allows it, else ``fallback``; records batch sizes."""
-
-    def __init__(self, action: str, fallback: str = 'WAIT 8'):
-        self.action = Action.parse(action).to_indices()
-        self.fallback = Action.parse(fallback).to_indices()
-        self.batches = []
-
-    @staticmethod
-    def allowed(mask, indices) -> bool:
-        """Whether the flat mask allows ``[kind, direction, duration]``."""
-        kind, direction, duration = (int(i) for i in indices)
-        dirs = mask[NUM_KINDS + kind * NUM_DIRECTIONS:NUM_KINDS + (kind + 1) * NUM_DIRECTIONS]
-        base = NUM_KINDS + NUM_KINDS * NUM_DIRECTIONS
-        durs = mask[base + kind * NUM_DURATIONS:base + (kind + 1) * NUM_DURATIONS]
-        return bool(mask[kind]) and (not dirs.any() or bool(dirs[direction])) \
-            and (not durs.any() or bool(durs[duration]))
-
-    def get_action(self, obs, deterministic=False):  # pylint: disable=unused-argument
-        masks = np.asarray(obs['action_mask'])
-        self.batches.append(len(masks))
-        return torch.as_tensor(np.stack([self.action if self.allowed(m, self.action) else self.fallback
-                                         for m in masks]))
+def scripted(action: str, fallback: str = 'WAIT 8') -> ZeldaPolicy:
+    """A network that plays ``action`` where the mask allows it, else ``fallback`` (zeroed weights, head biases
+    100 for ``action`` and 50 for ``fallback``)."""
+    spec = {k: {'shape': list(v['shape']), 'vocab': v['vocab']} for k, v in _native.OBS_SPEC.items()}
+    network = ZeldaPolicy(config=ModelConfig(obs_spec=spec))
+    with torch.no_grad():
+        for head in (network.kind_head, network.direction_head, network.duration_head):
+            head.weight.zero_()
+            head.bias.zero_()
+        for indices, bias in ((Action.parse(fallback).to_indices(), 50.0), (Action.parse(action).to_indices(), 100.0)):
+            for head, index in zip((network.kind_head, network.direction_head, network.duration_head), indices):
+                head.bias[int(index)] = bias
+    return network
 
 
 def test_route_definition():
@@ -166,23 +155,19 @@ def test_sampled_runs_do_not_depend_on_envs_or_threads(states_dir, models_dir):
 def test_wrong_exit_into_untagged_room_is_a_failure(states_dir, models_dir):
     """Walking W out of 0x77 (the objective wants the sword cave) into untagged 0x76 ends the run as a gameplay
     failure."""
-    west = ScriptedPolicy('MOVE W 16')
-    runner = Runner(models_dir=models_dir, max_steps=200, networks={'ow-start': west}, states_dir=states_dir)
+    runner = Runner(models_dir=models_dir, max_steps=200, networks={'ow-start': scripted('MOVE W 16')},
+                    states_dir=states_dir)
     result = runner.run(Route.load('d2first'), seed=0)
     assert result.result == 'failure'
     assert 'untagged' in result.reason and '0x76' in result.reason
     assert (result.rooms[-1].room, result.rooms[-1].outcome) == ('0x77', 'exit-wrong')
-    assert west.batches and set(west.batches) == {1}
 
 
-def test_specialist_rows_are_batched_and_no_progress_ends_runs(states_dir, models_dir):
-    """Every ready env of one specialist goes into one batch; a supplied config's no_progress_steps ends the run."""
-    wait = ScriptedPolicy('WAIT 8')
+def test_supplied_config_no_progress_ends_runs(states_dir, models_dir):
     config = _native.SpecialistConfig.load('ow-start').replace(no_progress_steps=4)
-    runner = Runner(models_dir=models_dir, networks={'ow-start': wait}, specialist_configs={'ow-start': config},
-                    parallel=3, states_dir=states_dir)
+    runner = Runner(models_dir=models_dir, networks={'ow-start': scripted('WAIT 8')},
+                    specialist_configs={'ow-start': config}, parallel=3, states_dir=states_dir)
     results = runner.run_many(Route.load('d2first'), [0, 1, 2])
-    assert sum(wait.batches) == sum(result.steps for result in results) and max(wait.batches) <= 3
     for result in results:
         assert result.result == 'failure' and result.rooms[-1].outcome == 'stuck' and result.steps == 4
         assert 'no-room-progress' in result.reason and '4 quiet actions' in result.reason
@@ -191,13 +176,44 @@ def test_specialist_rows_are_batched_and_no_progress_ends_runs(states_dir, model
 
 
 def test_run_cap_ends_runs(states_dir, models_dir):
-    wait = ScriptedPolicy('WAIT 8')
     config = _native.SpecialistConfig.load('ow-start').replace(no_progress_steps=20)
-    runner = Runner(models_dir=models_dir, max_steps=5, networks={'ow-start': wait},
+    runner = Runner(models_dir=models_dir, max_steps=5, networks={'ow-start': scripted('WAIT 8')},
                     specialist_configs={'ow-start': config}, states_dir=states_dir)
     result = runner.run(Route.load('d2first'), seed=0)
     assert result.result == 'failure' and result.rooms[-1].outcome == 'stuck'
     assert result.steps == 5 and result.reason == 'run exceeded 5 steps'
+
+
+def test_chain_runs_replay_exactly_from_their_replay_file(states_dir, models_dir, tmp_path):
+    """Every run of a chain eval is kept as seed + actions; replaying one gives the same run and, decision by
+    decision, the same probabilities and values, bit for bit.  A replay that outlives its actions raises."""
+    path = tmp_path / 'plays.jsonl'
+    runner = Runner(models_dir=models_dir, max_steps=40, parallel=3, threads=2, states_dir=states_dir)
+    results = runner.run_many(Route.load('d2first'), [3, 4, 5], plays=path)
+    head, plays = replay.read(path)
+    assert head['kind'] == 'chain' and head['backend'] == replay.BACKEND and head['models'][0]['checkpoint']
+    assert sorted(play['job'] for play in plays) == [3, 4, 5]
+    by_seed = {result.seed: result.to_dict() for result in results}
+    for play in plays:
+        assert play['result'] == by_seed[play['job']] and len(play['actions']) == play['result']['steps']
+        again = replay.replay(head, play)
+        assert np.array_equal(again['actions'], play['actions'])
+        runs = [e['result'] for e in again['events'] if e['type'] == 'run']
+        assert runs == [play['result']]
+    # Probabilities: a fresh play of seed 4 (recorded in the pool, one env) against the replay's, bit for bit.
+    with runner.pool(Route.load('d2first'), [4], num_envs=1) as chain:
+        chain.pool.play(runner.policies.policies, record='actions')
+        chain.pool.wait_idle()
+        original = chain.pool.poll_plays()[0]
+    recorded = next(p for p in plays if p['job'] == 4)
+    assert np.array_equal(original['actions'], recorded['actions'])
+    again = replay.replay(head, recorded, observations=True)
+    for key in ('log_prob', 'entropy', 'value', 'policy'):
+        assert again[key].tobytes() == original[key].tobytes(), key
+    assert len(again['obs']['room_id']) == len(recorded['actions'])
+    short = {**plays[0], 'actions': plays[0]['actions'][:-1]}
+    with pytest.raises(Exception, match='went on past its'):
+        replay.replay(head, short)
 
 
 def test_chain_cli_uses_supplied_specialist_config(states_dir, models_dir, tmp_path):

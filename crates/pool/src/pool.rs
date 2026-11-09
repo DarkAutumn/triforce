@@ -1,8 +1,9 @@
-//! The pool: envs pinned to persistent worker threads, a ready queue and caller-owned batch buffers.
+//! The pool: envs pinned to persistent worker threads that act with an in-pool [`Actor`] (rollouts and plays),
+//! or step on caller-sent actions through a ready queue and caller-owned batch buffers.
 
 use crate::control::EnvControl;
 use crate::layout::{Batch, BufferSpec, Buffers, ObsLayout, ObsRow, SCALAR_COLUMNS, Staged};
-use crate::rollout::{Actor, EnvRollout};
+use crate::rollout::{Actor, EnvRollout, Play, Record};
 use parking_lot::{Condvar, Mutex, MutexGuard};
 use rand_chacha::ChaCha8Rng;
 use rand_chacha::rand_core::SeedableRng;
@@ -144,12 +145,14 @@ impl<X: fmt::Display + fmt::Debug> std::error::Error for PoolError<X> {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Status {
-    /// A reset or step is queued or running.
+    /// A reset, step or job is queued or running (a playing env stays running until it parks or finishes).
     Running,
     /// In the ready queue.
     Ready,
     /// Returned by `recv`, awaiting `send`.
     Waiting,
+    /// A playing env whose finished run holds its frame: it waits for `set_hold(env, false)`.
+    Parked,
     Finished,
     Failed,
 }
@@ -161,6 +164,8 @@ struct State<X> {
     inactive: usize,
     errors: VecDeque<PoolError<X>>,
     closed: bool,
+    /// [`Pool::play`] was called: envs act on their own; `recv`, `send` and `rollout` are refused.
+    playing: bool,
 }
 
 struct Shared<E: PoolEnv> {
@@ -168,20 +173,30 @@ struct Shared<E: PoolEnv> {
     ready_cv: Condvar,
     slots: Vec<Mutex<Staged>>,
     events: Mutex<Vec<(usize, E::Event)>>,
+    controls: Vec<EnvControl>,
+    /// A parked env's play job (locked after `state`, never before).
+    parked: Mutex<Vec<Option<Job<E>>>>,
+    plays: Mutex<Vec<(usize, Play<E::Action>)>>,
 }
 
 impl<E: PoolEnv> Shared<E> {
-    fn finish(&self, env: usize, result: Result<(), PoolError<E::Error>>) {
+    /// Settles a job that left its env ready, finished or failed.
+    fn finish(&self, env: usize, result: Res<Flow, E>) {
         let mut st = self.state.lock();
         if st.status[env] != Status::Running {
             return;
         }
         st.running -= 1;
         match result {
-            Ok(()) => {
+            Ok(Flow::Ready) => {
                 st.status[env] = Status::Ready;
                 st.ready.push_back(env);
             }
+            Ok(Flow::Done) => {
+                st.status[env] = Status::Finished;
+                st.inactive += 1;
+            }
+            Ok(Flow::Again | Flow::Park) => unreachable!("the worker requeues or parks these"),
             Err(e) => {
                 st.status[env] = Status::Failed;
                 st.inactive += 1;
@@ -192,10 +207,25 @@ impl<E: PoolEnv> Shared<E> {
     }
 }
 
+/// Where a job left its env.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Flow {
+    /// Ready for the caller (a reset, a step, a finished rollout).
+    Ready,
+    /// Playing: run the job again (after the thread's other queued work).
+    Again,
+    /// Playing, but the env holds its frame after a run: park the job until `set_hold(env, false)`.
+    Park,
+    /// No episode is left.
+    Done,
+}
+
 /// Work run on an env's worker thread with the env and its staging slot.
-type Job<E> = Box<
-    dyn FnOnce(&mut E, usize, &mut Staged, &mut Vec<<E as PoolEnv>::Event>) -> Res<(), E> + Send,
->;
+trait Work<E: PoolEnv>: Send {
+    fn run(&mut self, env: &mut E, id: usize, slot: &mut Staged, events: &mut Vec<E::Event>) -> Res<Flow, E>;
+}
+
+type Job<E> = Box<dyn Work<E>>;
 
 enum Cmd<E: PoolEnv> {
     Reset(usize),
@@ -204,19 +234,20 @@ enum Cmd<E: PoolEnv> {
     Stop,
 }
 
-/// A threaded pool of envs with batched, caller-driven actions.
+/// A threaded pool of envs.
 ///
-/// Every env resets on creation and becomes ready with its first observation. [`Pool::recv`] hands out ready
-/// rows; [`Pool::send`] gives each returned env its next action. After a terminal step the env resets at once
-/// (same row: the final observation in `final_obs`, the next episode's first in `obs`). All methods take
-/// `&self` and may be called from several threads: one `recv` at a time, while `send`, `frame`, `set_render`
-/// and `poll_events` stay usable.
+/// Every env resets on creation. Envs act with an in-pool [`Actor`]: [`Pool::rollout`] steps each one a fixed
+/// number of decisions and returns them (training); [`Pool::play`] lets each act on its own until its jobs run
+/// out (evaluation, chains, the watch player). Without an actor, [`Pool::recv`] hands out ready rows and
+/// [`Pool::send`] gives each returned env its next action. After a terminal step the env resets at once (same
+/// row: the final observation in `final_obs`, the next episode's first in `obs`). All methods take `&self` and
+/// may be called from several threads: one `recv` at a time, while `send`, `frame`, `set_render` and
+/// `poll_events` stay usable.
 pub struct Pool<E: PoolEnv> {
     shared: Arc<Shared<E>>,
     senders: Vec<mpsc::Sender<Cmd<E>>>,
     workers: Vec<Thread>,
     handles: Mutex<Vec<JoinHandle<()>>>,
-    controls: Vec<EnvControl>,
     layout: Arc<ObsLayout>,
     stop: Arc<AtomicBool>,
     /// Serializes `recv`; holds its scratch list of env ids.
@@ -272,10 +303,14 @@ impl<E: PoolEnv> Pool<E> {
                 inactive: 0,
                 errors: VecDeque::new(),
                 closed: false,
+                playing: false,
             }),
             ready_cv: Condvar::new(),
             slots: (0..n).map(|_| Mutex::new(Staged::new(&layout))).collect(),
             events: Mutex::new(Vec::new()),
+            controls,
+            parked: Mutex::new((0..n).map(|_| None).collect()),
+            plays: Mutex::new(Vec::new()),
         });
         let mut per_thread: Vec<Vec<Option<E>>> = (0..threads).map(|_| Vec::new()).collect();
         for (i, env) in envs.into_iter().enumerate() {
@@ -286,7 +321,6 @@ impl<E: PoolEnv> Pool<E> {
             senders: Vec::with_capacity(threads),
             workers: Vec::with_capacity(threads),
             handles: Mutex::new(Vec::with_capacity(threads)),
-            controls,
             layout,
             stop,
             recv_scratch: Mutex::new(Vec::with_capacity(n)),
@@ -299,6 +333,7 @@ impl<E: PoolEnv> Pool<E> {
                 envs,
                 shared: pool.shared.clone(),
                 stop: pool.stop.clone(),
+                requeue: tx.clone(),
             };
             let handle = std::thread::Builder::new()
                 .name(format!("pool-{t}"))
@@ -315,7 +350,7 @@ impl<E: PoolEnv> Pool<E> {
     }
 
     pub fn num_envs(&self) -> usize {
-        self.controls.len()
+        self.shared.controls.len()
     }
 
     pub fn threads(&self) -> usize {
@@ -360,6 +395,9 @@ impl<E: PoolEnv> Pool<E> {
             if st.closed {
                 return Err(PoolError::Closed);
             }
+            if st.playing {
+                return Err(PoolError::Usage("the pool is playing; send is off".into()));
+            }
             for &id in env_ids {
                 match st.status.get(id) {
                     Some(Status::Waiting) => {}
@@ -388,6 +426,34 @@ impl<E: PoolEnv> Pool<E> {
         Ok(())
     }
 
+    /// Waits for envs still resetting (a new pool), then claims every idle env (ready, or awaiting an action)
+    /// for a job: they are running from here on. `play`: the pool plays from here on.
+    fn claim_idle(&self, what: &str, play: bool) -> Res<Vec<usize>, E> {
+        let mut st = self.shared.state.lock();
+        if st.playing {
+            return Err(PoolError::Usage(format!("the pool is playing; {what} is off")));
+        }
+        while !st.closed && st.status.contains(&Status::Running) {
+            self.shared.ready_cv.wait(&mut st);
+        }
+        if st.closed {
+            return Err(PoolError::Closed);
+        }
+        if let Some(e) = st.errors.pop_front() {
+            return Err(e);
+        }
+        let ids: Vec<usize> = (0..self.num_envs())
+            .filter(|&id| matches!(st.status[id], Status::Ready | Status::Waiting))
+            .collect();
+        st.ready.clear();
+        for &id in &ids {
+            st.status[id] = Status::Running;
+        }
+        st.running += ids.len();
+        st.playing = play;
+        Ok(ids)
+    }
+
     /// Rolls every active env out `steps` decisions with `actor` on the workers (docs/rust-actor.md) and returns
     /// (env id, rollout) in env id order once all are done. Envs still resetting (a new pool) are waited for;
     /// every active env is then idle (ready, or awaiting an action). Episodes continue across calls; finished
@@ -398,42 +464,15 @@ impl<E: PoolEnv> Pool<E> {
         actor: Arc<Ac>,
     ) -> Res<Vec<(usize, EnvRollout<E::Action>)>, E> {
         let n = self.num_envs();
-        type Slots<A> = Arc<Mutex<Vec<Option<EnvRollout<A>>>>>;
-        let results: Slots<E::Action> = Arc::new(Mutex::new((0..n).map(|_| None).collect()));
-        let mut ids = Vec::new();
-        {
-            let mut st = self.shared.state.lock();
-            while !st.closed && st.status.contains(&Status::Running) {
-                self.shared.ready_cv.wait(&mut st);
-            }
-            if st.closed {
-                return Err(PoolError::Closed);
-            }
-            if let Some(e) = st.errors.pop_front() {
-                return Err(e);
-            }
-            for id in 0..n {
-                match st.status[id] {
-                    Status::Ready | Status::Waiting => ids.push(id),
-                    Status::Running => unreachable!("waited for running envs"),
-                    Status::Finished | Status::Failed => {}
-                }
-            }
-            st.ready.retain(|i| !ids.contains(i));
-            for &id in &ids {
-                st.status[id] = Status::Running;
-            }
-            st.running += ids.len();
-        }
+        let results: Results<E::Action> = Arc::new(Mutex::new((0..n).map(|_| None).collect()));
+        let ids = self.claim_idle("rollout", false)?;
         for &id in &ids {
-            let actor = actor.clone();
-            let results = results.clone();
-            let job: Job<E> = Box::new(move |env, id, slot, events| {
-                let rollout = run_rollout(env, id, slot, events, steps, &*actor)?;
-                results.lock()[id] = Some(rollout);
-                Ok(())
-            });
-            self.dispatch(Cmd::Run(id, job), id);
+            let job = RolloutWork {
+                steps,
+                actor: actor.clone(),
+                results: results.clone(),
+            };
+            self.dispatch(Cmd::Run(id, Box::new(job)), id);
         }
         {
             let mut st = self.shared.state.lock();
@@ -455,6 +494,59 @@ impl<E: PoolEnv> Pool<E> {
             .iter()
             .map(|&id| (id, results[id].take().expect("a finished rollout leaves its result")))
             .collect())
+    }
+
+    /// Lets every env act with `actor` on its own, decision after decision on its worker, until its jobs run out
+    /// (an eval or chain job list; a training env never runs out). Returns at once: watch progress with
+    /// [`Pool::poll_events`], [`Pool::poll_plays`] and [`Pool::active`], wait with [`Pool::wait_idle`]. Envs
+    /// sharing a thread take turns one decision at a time. An env whose finished run holds its frame
+    /// ([`EnvControl::holding`], the watch player's result pause) parks before the next run's first decision
+    /// until [`Pool::set_hold`]`(env, false)`. `record` keeps every episode as a [`Play`]. From here on the
+    /// pool only plays: `recv`, `send`, `rollout` and another `play` are refused.
+    pub fn play<Ac: Actor<E::Action> + 'static>(&self, actor: Arc<Ac>, record: Record) -> Res<(), E> {
+        let ids = self.claim_idle("play", true)?;
+        for &id in &ids {
+            let job = PlayWork::<E, Ac> {
+                scratch: actor.scratch(),
+                actor: actor.clone(),
+                shared: self.shared.clone(),
+                record,
+                play: None,
+            };
+            self.dispatch(Cmd::Run(id, Box::new(job)), id);
+        }
+        Ok(())
+    }
+
+    /// Blocks until no env is running (every one finished, failed or parked) or `timeout` passes; returns
+    /// whether none is. An env failure is returned (once) as an error.
+    pub fn wait_idle(&self, timeout: Option<Duration>) -> Res<bool, E> {
+        let deadline = timeout.map(|t| Instant::now() + t);
+        let mut st = self.shared.state.lock();
+        loop {
+            if st.closed {
+                return Err(PoolError::Closed);
+            }
+            if let Some(e) = st.errors.pop_front() {
+                return Err(e);
+            }
+            if st.running == 0 {
+                return Ok(true);
+            }
+            match deadline {
+                None => self.shared.ready_cv.wait(&mut st),
+                Some(d) => {
+                    if self.shared.ready_cv.wait_until(&mut st, d).timed_out() {
+                        return Ok(st.running == 0);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Drains the episodes recorded by [`Pool::play`] since the last call, as (env, play) in completion order.
+    pub fn poll_plays(&self) -> Vec<(usize, Play<E::Action>)> {
+        std::mem::take(&mut *self.shared.plays.lock())
     }
 
     fn dispatch(&self, cmd: Cmd<E>, env: usize) {
@@ -488,6 +580,9 @@ impl<E: PoolEnv> Pool<E> {
         loop {
             if st.closed {
                 return Err(PoolError::Closed);
+            }
+            if st.playing {
+                return Err(PoolError::Usage("the pool is playing; recv is off".into()));
             }
             if let Some(e) = st.errors.pop_front() {
                 return Err(e);
@@ -551,7 +646,8 @@ impl<E: PoolEnv> Pool<E> {
     }
 
     pub fn control(&self, env: usize) -> Res<&EnvControl, E> {
-        self.controls
+        self.shared
+            .controls
             .get(env)
             .ok_or_else(|| PoolError::Usage(self.bad_env(env)))
     }
@@ -563,14 +659,26 @@ impl<E: PoolEnv> Pool<E> {
     }
 
     /// Holds env `env`'s latest published frame (no new frames publish) until released (`on = false`).
+    /// Releasing a parked env (see [`Pool::play`]) lets it act again.
     pub fn set_hold(&self, env: usize, on: bool) -> Res<(), E> {
-        self.control(env)?.set_hold(on);
+        let control = self.control(env)?;
+        // Under the state lock: a worker parks only while the hold is on, checked under the same lock.
+        let mut st = self.shared.state.lock();
+        control.set_hold(on);
+        if on || st.status[env] != Status::Parked {
+            return Ok(());
+        }
+        let job = self.shared.parked.lock()[env].take().expect("a parked env keeps its job");
+        st.status[env] = Status::Running;
+        st.running += 1;
+        drop(st);
+        self.dispatch(Cmd::Run(env, job), env);
         Ok(())
     }
 
     /// Pauses (or resumes) every env before its next real emulated frame.
     pub fn set_paused(&self, on: bool) {
-        for control in &self.controls {
+        for control in &self.shared.controls {
             control.set_paused(on);
         }
     }
@@ -591,7 +699,7 @@ impl<E: PoolEnv> Pool<E> {
 
     /// Bytes of one frame (`frame_shape` product).
     pub fn frame_bytes(&self) -> usize {
-        self.controls[0].frame_bytes()
+        self.shared.controls[0].frame_bytes()
     }
 
     /// Copies env `env`'s latest frame into `out` if it is newer than counter `since` (0: any); returns its
@@ -632,6 +740,8 @@ impl<E: PoolEnv> Pool<E> {
         for handle in handles {
             let _ = handle.join();
         }
+        // Parked play jobs hold the shared state; dropping them breaks the cycle.
+        self.shared.parked.lock().iter_mut().for_each(|job| *job = None);
     }
 }
 
@@ -648,6 +758,8 @@ struct Worker<E: PoolEnv> {
     envs: Vec<Option<E>>,
     shared: Arc<Shared<E>>,
     stop: Arc<AtomicBool>,
+    /// This thread's own queue: a playing env's next decision goes behind the thread's other work.
+    requeue: mpsc::Sender<Cmd<E>>,
 }
 
 fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
@@ -694,10 +806,28 @@ fn start<E: PoolEnv>(
     Ok(())
 }
 
-enum Work<E: PoolEnv> {
+/// A worker's unit of work.
+enum Task<E: PoolEnv> {
     Reset,
     Step(E::Action),
     Run(Job<E>),
+}
+
+type Results<A> = Arc<Mutex<Vec<Option<EnvRollout<A>>>>>;
+
+/// [`Pool::rollout`]'s job for one env.
+struct RolloutWork<E: PoolEnv, Ac> {
+    steps: usize,
+    actor: Arc<Ac>,
+    results: Results<E::Action>,
+}
+
+impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for RolloutWork<E, Ac> {
+    fn run(&mut self, env: &mut E, id: usize, slot: &mut Staged, events: &mut Vec<E::Event>) -> Res<Flow, E> {
+        let rollout = run_rollout(env, id, slot, events, self.steps, &*self.actor)?;
+        self.results.lock()[id] = Some(rollout);
+        Ok(Flow::Ready)
+    }
 }
 
 /// One env's rollout on its worker: `steps` decisions by `actor`, each executed like [`Pool::send`] would
@@ -746,6 +876,54 @@ fn run_rollout<E: PoolEnv, Ac: Actor<E::Action>>(
     Ok(out)
 }
 
+/// [`Pool::play`]'s job for one env: one decision per run, then again (or park, or done).
+struct PlayWork<E: PoolEnv, Ac: Actor<E::Action>> {
+    actor: Arc<Ac>,
+    scratch: Ac::Scratch,
+    shared: Arc<Shared<E>>,
+    record: Record,
+    /// The episode being recorded.
+    play: Option<Play<E::Action>>,
+}
+
+impl<E: PoolEnv, Ac: Actor<E::Action>> Work<E> for PlayWork<E, Ac> {
+    fn run(&mut self, env: &mut E, id: usize, slot: &mut Staged, events: &mut Vec<E::Event>) -> Res<Flow, E> {
+        if slot.finished {
+            return Ok(Flow::Done);
+        }
+        let (action, decision) = self
+            .actor
+            .act(&slot.obs, slot.policy, slot.job, slot.step, &mut self.scratch)
+            .map_err(|e| PoolError::Usage(format!("env {id}: {e}")))?;
+        if self.record != Record::Off {
+            let layout = (self.record == Record::Observations).then(|| slot.obs.layout());
+            let play = self.play.get_or_insert_with(|| Play::new(slot.job, layout));
+            play.policy.push(slot.policy);
+            play.actions.push(action.clone());
+            play.decisions.push(decision);
+            if let Some(obs) = play.obs.as_mut() {
+                obs.push(&slot.obs);
+            }
+        }
+        Worker::<E>::execute(env, id, Some(action), slot, events)?;
+        let o = slot.outcome;
+        self.shared.controls[id].add_emulated_frames(o.frames.max(0) as u64);
+        if !(o.terminated || o.truncated) {
+            return Ok(Flow::Again);
+        }
+        if let Some(play) = self.play.take() {
+            self.shared.plays.lock().push((id, play));
+        }
+        Ok(if slot.finished {
+            Flow::Done
+        } else if self.shared.controls[id].holding() {
+            Flow::Park
+        } else {
+            Flow::Again
+        })
+    }
+}
+
 impl<E: PoolEnv> Worker<E> {
     fn run(mut self, rx: mpsc::Receiver<Cmd<E>>) {
         let mut events = Vec::new();
@@ -753,28 +931,34 @@ impl<E: PoolEnv> Worker<E> {
             if self.stop.load(Ordering::SeqCst) {
                 break;
             }
-            let (id, work) = match cmd {
-                Cmd::Reset(id) => (id, Work::Reset),
-                Cmd::Step(id, action) => (id, Work::Step(action)),
-                Cmd::Run(id, job) => (id, Work::Run(job)),
+            let (id, task) = match cmd {
+                Cmd::Reset(id) => (id, Task::Reset),
+                Cmd::Step(id, action) => (id, Task::Step(action)),
+                Cmd::Run(id, job) => (id, Task::Run(job)),
                 Cmd::Stop => break,
             };
             let local = id / self.threads;
             let Some(env) = self.envs[local].as_mut() else {
                 continue;
             };
-            let result = {
+            let (result, job) = {
                 let mut slot = self.shared.slots[id].lock();
-                match work {
-                    Work::Reset => Self::execute(env, id, None, &mut slot, &mut events),
-                    Work::Step(action) => Self::execute(env, id, Some(action), &mut slot, &mut events),
-                    Work::Run(job) => match catch_unwind(AssertUnwindSafe(|| job(env, id, &mut slot, &mut events))) {
-                        Ok(r) => r,
-                        Err(payload) => Err(PoolError::Panic {
-                            env: id,
-                            message: panic_message(&*payload),
-                        }),
-                    },
+                match task {
+                    Task::Reset => (Self::execute(env, id, None, &mut slot, &mut events).map(|()| Flow::Ready), None),
+                    Task::Step(action) => (
+                        Self::execute(env, id, Some(action), &mut slot, &mut events).map(|()| Flow::Ready),
+                        None,
+                    ),
+                    Task::Run(mut job) => {
+                        let result = catch_unwind(AssertUnwindSafe(|| job.run(env, id, &mut slot, &mut events)))
+                            .unwrap_or_else(|payload| {
+                                Err(PoolError::Panic {
+                                    env: id,
+                                    message: panic_message(&*payload),
+                                })
+                            });
+                        (result, Some(job))
+                    }
                 }
             };
             if !events.is_empty() {
@@ -786,11 +970,33 @@ impl<E: PoolEnv> Worker<E> {
             if result.is_err() {
                 Self::drop_env(self.envs[local].take());
             }
-            self.shared.finish(id, result);
+            match (result, job) {
+                (Ok(Flow::Again), Some(job)) => self.again(id, job),
+                (Ok(Flow::Park), Some(job)) => self.park(id, job),
+                (result, _) => self.shared.finish(id, result),
+            }
         }
         for env in self.envs.iter_mut() {
             Self::drop_env(env.take());
         }
+    }
+
+    /// Queues a playing env's next decision behind this thread's other work.
+    fn again(&self, id: usize, job: Job<E>) {
+        let _ = self.requeue.send(Cmd::Run(id, job));
+    }
+
+    /// Parks a playing env while its frame is held (see [`Pool::set_hold`], which checks under the same lock).
+    fn park(&self, id: usize, job: Job<E>) {
+        let mut st = self.shared.state.lock();
+        if !self.shared.controls[id].holding() {
+            drop(st);
+            return self.again(id, job);
+        }
+        st.status[id] = Status::Parked;
+        st.running -= 1;
+        self.shared.parked.lock()[id] = Some(job);
+        self.shared.ready_cv.notify_all();
     }
 
     fn drop_env(env: Option<E>) {

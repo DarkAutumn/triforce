@@ -10,7 +10,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import torch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
@@ -21,7 +20,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402  pylint: disable=wrong-
 from triforce import play_grid  # noqa: E402  pylint: disable=wrong-import-position
 from triforce._native import FRAME_SHAPE  # noqa: E402  pylint: disable=wrong-import-position
 from triforce.play_grid import GameGrid, end_message  # noqa: E402  pylint: disable=wrong-import-position
-from triforce.runner import RoomRecord, Route, Runner, RunResult  # noqa: E402  pylint: disable=wrong-import-position
+from triforce.runner import RoomRecord, RunResult  # noqa: E402  pylint: disable=wrong-import-position
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,11 +40,11 @@ def qapp():
     return QApplication.instance() or QApplication([])
 
 
-def test_parse_args_grid_scale_and_device():
+def test_parse_args_grid_scale_and_games():
     args = play_zelda.parse_args([])
-    assert (args.grid, args.scale, args.device, args.fps, args.games) == ((4, 3), 2, 'cuda', play_grid.NES_FPS, 12)
-    args = play_zelda.parse_args(['3x2', '--scale', '2', '--cpu', '--games', '64'])
-    assert (args.grid, args.scale, args.device, args.games) == ((3, 2), 2, 'cpu', 64)
+    assert (args.grid, args.scale, args.fps, args.games, args.plays) == ((4, 3), 2, play_grid.NES_FPS, 12, None)
+    args = play_zelda.parse_args(['3x2', '--scale', '2', '--games', '64', '--plays', 'p.jsonl'])
+    assert (args.grid, args.scale, args.games, args.plays) == ((3, 2), 2, 64, 'p.jsonl')
     assert play_zelda.parse_args(['--fps', '60']).fps == play_grid.NES_FPS      # 60 always means 60.1
     assert play_zelda.parse_args(['--fps', '70']).fps == 70
     assert play_zelda.parse_grid('8X12') == (8, 12)
@@ -55,15 +54,6 @@ def test_parse_args_grid_scale_and_device():
     for bad in (['--scale', '0'], ['3x2', '--games', '5']):
         with pytest.raises(SystemExit):
             play_zelda.parse_args(bad)
-
-
-def test_main_refuses_cuda_without_a_gpu(monkeypatch):
-    monkeypatch.setattr(torch.cuda, 'is_available', lambda: False)
-    before = QApplication.instance()
-    with pytest.raises(SystemExit) as stop:
-        play_zelda.main(['2x1'])
-    assert stop.value.code == 2
-    assert QApplication.instance() is before
 
 
 def test_only_setup_errors_stop_a_cell():
@@ -332,24 +322,6 @@ def test_benchmark_measures_once_every_game_runs_and_every_cell_shows(qapp, monk
     window.shutdown()
 
 
-def test_rooms_entered_are_counted_from_each_steps_room_id():
-    rooms = play_grid._Rooms()  # pylint: disable=protected-access
-    message = {'game': 0, 'event': 'room', 'specialist': 'ow-start', 'level': 0, 'room': 0x77, 'health': 3.0,
-               'max_health': 3}
-    rooms.pending.append(dict(message))
-    assert [m['rooms'] for m in rooms.row(119)] == [1]                     # the run's first room
-    assert not rooms.row(119)                                              # same room, nothing changed
-    rooms.pending.append(dict(message, health=2.5))
-    assert [m['rooms'] for m in rooms.row(119)] == [1]                     # hit, same room
-    entered = rooms.row(375)                                               # a cave: no room event of its own
-    assert [(m['rooms'], m['health']) for m in entered] == [(2, 2.5)]
-    rooms.pending.append(dict(message, health=0.0))
-    assert [m['rooms'] for m in rooms.flush()] == [2]                      # the run's last step, before its end
-    rooms.new_run()
-    rooms.pending.append(dict(message))
-    assert [m['rooms'] for m in rooms.row(375)] == [1]                     # a new run counts from its first room
-
-
 def _collect(grid, until, seconds=90.0):
     """Status messages until ``until(messages)`` holds (or the deadline)."""
     messages = []
@@ -361,7 +333,7 @@ def _collect(grid, until, seconds=90.0):
 
 
 def test_game_grid_streams_only_shown_games(states_dir, models_dir):
-    grid = GameGrid(2, 'cpu', fps=0, models_dir=models_dir, shown=[0], states_dir=states_dir)
+    grid = GameGrid(2, fps=0, models_dir=models_dir, shown=[0], states_dir=states_dir)
     try:
         grid.start()
         messages = _collect(grid, lambda m: grid.frame(0, 0) is not None and min(grid.emulated_frames()) > 0 and {
@@ -394,7 +366,7 @@ def test_game_grid_streams_only_shown_games(states_dir, models_dir):
 def test_game_grid_holds_a_result_before_the_next_run(states_dir, models_dir, monkeypatch):
     monkeypatch.setattr(play_grid, 'RESULT_PAUSE', 0.5)
     monkeypatch.setattr(play_grid, 'ChainPool', functools.partial(play_grid.ChainPool, max_steps=3))
-    grid = GameGrid(1, 'cpu', fps=0, models_dir=models_dir, states_dir=states_dir)
+    grid = GameGrid(1, fps=0, models_dir=models_dir, states_dir=states_dir)
     stamped, frames = [], []      # (time, message); (time, latest frame number) sampled before each poll
     try:
         grid.start()
@@ -426,7 +398,7 @@ def test_game_grid_holds_a_result_before_the_next_run(states_dir, models_dir, mo
 def test_game_grid_stall_budget_flags_the_room_then_ends_the_run(states_dir, models_dir):
     """stall_steps=N: the start screen (nothing to hit or be hit by) reports ``stalled`` after N actions without
     damage either way and the run ends ``stuck`` at 2N, before Link reaches the sword cave."""
-    grid = GameGrid(1, 'cpu', fps=0, models_dir=models_dir, states_dir=states_dir, stall_steps=1)
+    grid = GameGrid(1, fps=0, models_dir=models_dir, states_dir=states_dir, stall_steps=1)
     messages = []
     try:
         grid.start()
@@ -443,7 +415,7 @@ def test_game_grid_stall_budget_flags_the_room_then_ends_the_run(states_dir, mod
 
 
 def test_game_grid_setup_error_stops_every_game(states_dir, tmp_path):
-    grid = GameGrid(2, 'cpu', fps=0, models_dir=tmp_path, states_dir=states_dir)
+    grid = GameGrid(2, fps=0, models_dir=tmp_path, states_dir=states_dir)
     grid.start()
     messages = _collect(grid, lambda m: sum(x['event'] == 'end' for x in m) == 2, seconds=30)
     grid.stop()
@@ -451,10 +423,3 @@ def test_game_grid_setup_error_stops_every_game(states_dir, tmp_path):
     assert sorted(m['game'] for m in ends) == [0, 1]
     assert all(m['outcome'] == 'error' and 'ow-start' in m['reason'] for m in ends)
     assert grid.stopped
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason='no CUDA')
-def test_runner_runs_on_cuda(states_dir, models_dir):
-    result = Runner(models_dir=models_dir, max_steps=40, device='cuda', states_dir=states_dir).run(
-        Route.load('d2first'), seed=1)
-    assert result.result in ('failure', 'success')

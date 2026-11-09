@@ -2,7 +2,7 @@
 """Re-evaluate every promoted specialist model and replace its run's ``eval.json`` with a ``format: 2`` one.
 
     python scripts/reeval_promoted.py [--specialists a,b] [--run-id ID] [--parallel 8] [--episodes-per-state 100]
-        [--models-dir models] [--device cpu] [--output-dir DIR]
+        [--models-dir models] [--output-dir DIR]
 
 For each specialist (``specialists/*.yaml``, or ``--specialists``) with a promoted model
 (``<models>/<name>/promoted``), runs ``triforce.evaluate.evaluate_specialist`` on the promoted checkpoint and writes
@@ -56,7 +56,6 @@ def main(argv=None):
     parser.add_argument('--episodes-per-state', type=int, default=100)
     parser.add_argument('--models-dir', default=None, help=f"default ${registry.MODELS_DIR_ENV} or ./models")
     parser.add_argument('--run-id', default=None, help="evaluate this run instead of the promoted one")
-    parser.add_argument('--device', default='cpu', help="torch device for the network")
     parser.add_argument('--output-dir', default=None,
                         help="write <dir>/<name>/<run-id>/eval.json instead of into the models directory")
     args = parser.parse_args(argv)
@@ -80,8 +79,7 @@ def main(argv=None):
         try:
             checkpoint = root / name / run_id
             start = time.monotonic()
-            result = evaluate_specialist(name, checkpoint, args.episodes_per_state, args.parallel,
-                                         device=args.device)
+            result = evaluate_specialist(name, checkpoint, args.episodes_per_state, args.parallel)
             out_root = Path(args.output_dir) if args.output_dir else root
             output = out_root / name / run_id / 'eval.json'
             _write(result, output)

@@ -15,7 +15,6 @@ import pytest
 import torch
 
 from triforce import _native
-from triforce.inference import keyed_noise as python_keyed_noise
 from triforce.model import ModelConfig, ZeldaPolicy
 
 from .conftest import REPO_STATES_DIR, require_state
@@ -164,11 +163,6 @@ print(native.hash)
     expect = np.concatenate([here['log_prob'], here['value'], here['actions'].ravel()])
     assert np.load(tmp_path / 'out.npy').tobytes() == expect.tobytes()
     assert int(result.stdout.strip()) == native.hash
-
-
-def test_keyed_noise_matches_python():
-    jobs, steps = [0, 5, -3, 2**40], [0, 7, 11, 3]
-    np.testing.assert_allclose(_native.keyed_noise(jobs, steps, 19), python_keyed_noise(jobs, steps), atol=1e-6)
 
 
 def test_hash_tracks_the_weights_and_mismatches_are_errors(network):

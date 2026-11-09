@@ -68,6 +68,7 @@ struct Shared {
     back: Mutex<Vec<u8>>,
     front: Mutex<Front>,
     counter: AtomicU64,
+    emulated: AtomicU64,
 }
 
 /// One env's controls, shared between the pool (caller side) and the env (worker side). Cheap to clone.
@@ -102,6 +103,7 @@ impl EnvControl {
                     counter: 0,
                 }),
                 counter: AtomicU64::new(0),
+                emulated: AtomicU64::new(0),
             }),
             stop,
         }
@@ -240,6 +242,15 @@ impl EnvControl {
     /// Frames published so far (0: none yet).
     pub fn frame_counter(&self) -> u64 {
         self.shared.counter.load(Ordering::Acquire)
+    }
+
+    /// Frames emulated by the env's finished decisions so far, shown or not (counted by [`crate::Pool::play`]).
+    pub fn emulated_frames(&self) -> u64 {
+        self.shared.emulated.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn add_emulated_frames(&self, frames: u64) {
+        self.shared.emulated.fetch_add(frames, Ordering::Relaxed);
     }
 
     /// Copies the latest frame into `out` if it is newer than `since`; returns its counter.

@@ -3,23 +3,22 @@
 The chain itself runs natively (``ChainTask`` in an ``EnvPool``): on every room entry the room's game.yaml
 ``specialist:`` tag picks who acts, specialists switch only on room transitions, and a run ends with a
 ``RunResult``.  This module owns the models: each pool row names its acting specialist (the ``policy`` column, an
-index into the loaded-model list).  Envs run asynchronously; each specialist's ready rows go through a fixed-shape
-forward on ``device`` (``inference.PoolInference``), and sampled actions use Gumbel noise keyed to (run seed,
-decision), so a seed plays the same run whichever env or thread runs it.  A specialist without a promoted model
-ends the runs that need it as ``error`` with the registry's reason; an untagged room the route needs is an error
-too, a wrong exit into one a gameplay failure.
+index into the loaded-model list), and the specialists act inside the pool (``EnvPool.play`` with their Rust
+networks, docs/rust-actor.md).  Sampled actions use Gumbel noise keyed to (run seed, decision), so a seed plays the
+same run whichever env or thread runs it.  A specialist without a promoted model ends the runs that need it as
+``error`` with the registry's reason; an untagged room the route needs is an error too, a wrong exit into one a
+gameplay failure.  With ``plays`` set every run is kept in a replay file (``triforce.replay``).
 """
 
 import json
 from dataclasses import asdict, dataclass, field
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
-import numpy as np
 import torch
 
 from . import _native
-from .inference import PoolInference
 from .registry import load_model, promoted_checkpoint
+from .replay import ReplayWriter, header, location_text, models_header
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import MapLocation
 
@@ -139,25 +138,23 @@ def write_jsonl(path: str, results: List[RunResult]):
 
 
 class Policies:
-    """The specialists' networks for a chain pool, in policy-index order, plus why the others are missing.
+    """The specialists' Rust networks for a chain pool, in policy-index order, plus why the others are missing.
 
     ``checkpoints`` (name -> checkpoint file or run dir) overrides the registry's promoted model; ``networks``
-    (name -> anything with ``get_action(obs, deterministic=...)``) supplies a loaded policy directly;
-    ``specialist_configs`` (name -> config) replaces a specialist's canonical YAML at runtime; ``device`` is where
-    the loaded networks run."""
+    (name -> a ``ZeldaPolicy``) supplies a model directly; ``specialist_configs`` (name -> config) replaces a
+    specialist's canonical YAML at runtime.  ``checkpoints`` afterwards maps each loaded name to its file."""
 
     def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
-                 networks: Optional[Dict[str, object]] = None, device: str = 'cpu',
-                 names: Optional[Iterable[str]] = None):
+                 networks: Optional[Dict[str, object]] = None, names: Optional[Iterable[str]] = None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         overrides = dict(checkpoints or {})
         configs = dict(specialist_configs or {})
         given = dict(networks or {})
-        self.device = device
         self.names: List[str] = []
         self.configs: List[SpecialistConfig] = []
-        self.networks: list = []
+        self.policies: list = []
+        self.checkpoints: Dict[str, str] = {}
         self.missing: Dict[str, str] = {}
         for name in sorted(set(names if names is not None else list_specialists()) | set(given) | set(configs)):
             network = given.get(name)
@@ -169,82 +166,86 @@ class Policies:
                 except FileNotFoundError as err:
                     self.missing[name] = str(err)
                     continue
-                network.eval()
-                network.to(device)
+                self.checkpoints[name] = str(path)
             self.names.append(name)
             self.configs.append(configs.get(name) or load_specialist(name))
-            self.networks.append(network)
+            self.policies.append(network.to_native())
 
 
 class ChainPool:
     """An ``EnvPool`` of chain runs of one route (one run per seed, shared by ``num_envs`` envs) and the policies
-    acting in it.  ``run()`` plays every seed asynchronously; watchers drive ``recv`` / ``actions`` / ``send``
-    themselves.  ``stall_steps`` (watch player only; None = off): room events carry ``stalled`` after that many
-    actions in a room without damage dealt or taken, and the run ends ``stuck`` at twice as many.
-    ``hold_finished_frame`` (watch player): a finished run's last frame stays published until
-    ``pool.set_hold(env, False)``."""
+    acting in it.  ``run()`` plays every seed; watchers call ``play()`` and follow ``poll_events()`` themselves.
+    ``stall_steps`` (watch player only; None = off): room events carry ``stalled`` after that many actions in a
+    room without damage dealt or taken, and the run ends ``stuck`` at twice as many.  ``hold_finished_frame``
+    (watch player): a finished run's last frame stays published, and its env waits, until
+    ``pool.set_hold(env, False)``.  ``plays``: write every run to this replay file (``triforce.replay``)."""
 
     def __init__(self, route: Route, seeds: Sequence[int], policies: Policies, num_envs: int = 1,
                  threads: Optional[int] = None, seed: int = 0, fps: float = 0.0, deterministic: bool = False,
                  max_steps: int = DEFAULT_MAX_STEPS, states_dir=None, record: bool = False,
-                 stall_steps: Optional[int] = None, hold_finished_frame: bool = False):
+                 stall_steps: Optional[int] = None, hold_finished_frame: bool = False, plays=None):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.route = route
         self.policies = policies
         self.deterministic = deterministic
         start_from = None if route.start_state == 'start' else route.start_state
+        states_dir = None if states_dir is None else str(states_dir)
         task = _native.ChainTask(policies.configs, route.name, [int(s) for s in seeds], stop_at=route.terminal,
                                  start_from=start_from, max_steps=max_steps, missing=policies.missing,
-                                 states_dir=None if states_dir is None else str(states_dir), stall_steps=stall_steps,
+                                 states_dir=states_dir, stall_steps=stall_steps,
                                  hold_finished_frame=hold_finished_frame)
         num_envs = max(1, min(num_envs, len(seeds)))
         self.pool = _native.EnvPool(task, num_envs=num_envs, threads=threads, seed=seed, fps=fps, record=record)
-        self.buffers = self.pool.make_buffers()
-        self.inference = PoolInference(policies.networks, num_envs, policies.device, deterministic)
+        self.writer = None
+        if plays is not None:
+            task = {'configs': [config.to_json() for config in policies.configs], 'route': route.name,
+                    'start_from': start_from, 'stop_at': location_text(route.terminal), 'max_steps': max_steps,
+                    'stall_steps': stall_steps, 'missing': policies.missing}
+            models = models_header(policies.names, policies.policies, policies.checkpoints)
+            self.writer = ReplayWriter(plays, header('chain', task, models, deterministic, states_dir))
+        self._plays: Dict[int, dict] = {}
+        self._results: Dict[int, dict] = {}
 
-    def recv(self, min_ready: Optional[int] = None, timeout: Optional[float] = None) -> int:
-        """Rows ready (see ``EnvPool.recv``); they are in ``buffers``."""
-        return self.pool.recv(self.buffers, min_ready=min_ready, timeout=timeout)
+    def play(self):
+        """Every env starts acting on its own (``EnvPool.play``)."""
+        self.pool.play(self.policies.policies, deterministic=self.deterministic,
+                       record=None if self.writer is None else 'actions')
 
-    def live_rows(self, count: int) -> np.ndarray:
-        """Indices of the first ``count`` rows that await an action (not finished)."""
-        return np.flatnonzero(~self.buffers['finished'][:count])
+    def poll_events(self) -> List[dict]:
+        """The pool's events since the last call; with ``plays`` set, writes each finished run's replay line."""
+        events = self.pool.poll_events()
+        if self.writer is not None:
+            self._plays.update((int(play['job']), play) for play in self.pool.poll_plays())
+            for event in events:
+                if event['type'] == 'run' and event['result']['steps'] > 0:
+                    self._results[int(event['result']['seed'])] = event['result']
+            for seed in sorted(self._plays.keys() & self._results.keys()):
+                self.writer.write(self._plays.pop(seed), self._results.pop(seed))
+        return events
 
-    def actions(self, rows: np.ndarray) -> np.ndarray:
-        """Actions for buffer rows ``rows`` (see ``inference.PoolInference.actions``)."""
-        b = self.buffers
-        obs = {key: value[rows] for key, value in b['obs'].items()}
-        return self.inference.actions(b['env_ids'][rows], obs, b['policy'][rows], b['job'][rows], b['step'][rows])
-
-    def send(self, env_ids, actions):
-        """Queues one action per env."""
-        self.pool.send(env_ids, actions)
-
-    def results(self, events: Iterable[dict]) -> List[Tuple[int, RunResult]]:
+    @staticmethod
+    def results(events: Iterable[dict]) -> List[Tuple[int, RunResult]]:
         """(env, RunResult) of every ``run`` event in ``events``."""
         return [(e['env'], RunResult.from_dict(e['result'])) for e in events if e['type'] == 'run']
 
     def run(self, on_result: Optional[Callable[[RunResult], None]] = None) -> List[RunResult]:
-        """Plays every seed (each ready env acts at once); returns the results sorted by seed."""
+        """Plays every seed; returns the results sorted by seed."""
         results: List[RunResult] = []
-        while self.pool.active:
-            count = self.recv(min_ready=1)
-            rows = self.live_rows(count)
-            if len(rows):
-                self.send(self.buffers['env_ids'][rows], self.actions(rows))
-            for _, result in self.results(self.pool.poll_events()):
+        self.play()
+        while True:
+            idle = self.pool.wait_idle(timeout=0.1)
+            for _, result in self.results(self.poll_events()):
                 results.append(result)
                 if on_result is not None:
                     on_result(result)
-        for _, result in self.results(self.pool.poll_events()):
-            results.append(result)
-            if on_result is not None:
-                on_result(result)
-        return sorted(results, key=lambda r: (r.seed is None, r.seed))
+            if idle:
+                return sorted(results, key=lambda r: (r.seed is None, r.seed))
 
     def close(self):
-        """Stops the pool's worker threads (idempotent)."""
+        """Stops the pool's worker threads and closes the replay file (idempotent)."""
         self.pool.close()
+        if self.writer is not None:
+            self.writer.close()
 
     def __enter__(self):
         return self
@@ -259,19 +260,18 @@ class Runner:
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, models_dir=None, checkpoints: Optional[Dict[str, str]] = None, deterministic: bool = False,
-                 max_steps: int = DEFAULT_MAX_STEPS, device: str = 'cpu',
+                 max_steps: int = DEFAULT_MAX_STEPS,
                  specialist_configs: Optional[Dict[str, SpecialistConfig]] = None,
                  networks: Optional[Dict[str, object]] = None, parallel: int = 1, threads: Optional[int] = None,
                  states_dir=None):
         """
         checkpoints: specialist name → checkpoint path, overriding the registry's promoted model.
-        device: torch device for the specialists' networks ('cpu' or 'cuda').
         specialist_configs: specialist name → loaded config, replacing its canonical YAML at runtime.
-        networks: specialist name → a loaded policy (``get_action(obs, deterministic=...)``), e.g. a scripted one.
+        networks: specialist name → a ``ZeldaPolicy`` to act with instead of a checkpoint.
         parallel: envs in the chain pool; threads: its worker threads (default min(parallel, cores)).
         """
         # pylint: disable=too-many-arguments, too-many-positional-arguments
-        self.policies = Policies(models_dir, checkpoints, specialist_configs, networks, device)
+        self.policies = Policies(models_dir, checkpoints, specialist_configs, networks)
         self.deterministic = deterministic
         self.max_steps = max_steps
         self.parallel = parallel
@@ -280,19 +280,20 @@ class Runner:
 
     def pool(self, route: Route, seeds: Sequence[int], **kwargs) -> ChainPool:
         """A chain pool over this runner's policies (``kwargs``: ``num_envs``, ``threads``, ``fps``, ``seed``,
-        ``record``)."""
+        ``record``, ``plays``)."""
         kwargs.setdefault('num_envs', self.parallel)
         kwargs.setdefault('threads', self.threads)
         return ChainPool(route, seeds, self.policies, deterministic=self.deterministic, max_steps=self.max_steps,
                          states_dir=self.states_dir, **kwargs)
 
     def run_many(self, route: Route, seeds: Sequence[int],
-                 on_result: Optional[Callable[[RunResult], None]] = None) -> List[RunResult]:
-        """Plays route once per seed; results sorted by seed.  Never raises for gameplay failures."""
+                 on_result: Optional[Callable[[RunResult], None]] = None, plays=None) -> List[RunResult]:
+        """Plays route once per seed; results sorted by seed.  Never raises for gameplay failures.  ``plays``: a
+        replay file to write."""
         seeds = list(seeds)
         if not seeds:
             return []
-        with self.pool(route, seeds) as pool:
+        with self.pool(route, seeds, plays=plays) as pool:
             return pool.run(on_result)
 
     def run(self, route: Route, seed: Optional[int] = None) -> RunResult:

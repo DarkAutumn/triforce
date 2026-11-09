@@ -1,11 +1,13 @@
 //! The policy network as the pool's [`Actor`]: `policy::Policy` per specialist index, reading the Zelda
-//! observation layout. Sampling uses keyed Gumbel noise (job, decision step), argmax when deterministic.
+//! observation layout. Sampling uses keyed Gumbel noise (job, decision step), argmax when deterministic. A
+//! replaying actor takes each decision's action from a recorded play instead and scores it.
 
 use super::ZeldaAction;
 use crate::layout::{ObsData, ObsLayout};
 use crate::rollout::{Actor, Decision};
 use policy::noise::keyed_noise;
 use policy::{Input, Pick, Policy};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Most float vector keys a policy may read (stack array of slices, no allocation per decision).
@@ -21,6 +23,8 @@ pub struct PolicyActor {
     grid: usize,
     mask: usize,
     deterministic: bool,
+    /// Replaying: each episode's (job's) recorded actions, by decision step.
+    replay: Option<HashMap<i64, Vec<ZeldaAction>>>,
 }
 
 pub struct ActorScratch {
@@ -39,9 +43,6 @@ impl PolicyActor {
             }
             vectors.push(p.vector_keys().iter().map(|k| key(k)).collect::<Result<Vec<_>, _>>()?);
         }
-        if policies.is_empty() {
-            return Err("an actor needs at least one policy".into());
-        }
         Ok(PolicyActor {
             room: key("room_id")?,
             types: key("entity_types")?,
@@ -51,7 +52,21 @@ impl PolicyActor {
             vectors,
             policies,
             deterministic,
+            replay: None,
         })
+    }
+
+    /// Replays recorded episodes: decision `t` of the episode keyed `job` takes `actions[job][t]` (and reports
+    /// the policy's log-prob, entropy and value for it). An episode outside `actions`, or one that runs past
+    /// its recorded actions (the replay diverged), fails the env.
+    pub fn replay(
+        layout: &ObsLayout,
+        policies: Vec<Arc<Policy>>,
+        actions: HashMap<i64, Vec<ZeldaAction>>,
+    ) -> Result<PolicyActor, String> {
+        let mut actor = PolicyActor::new(layout, policies, true)?;
+        actor.replay = Some(actions);
+        Ok(actor)
     }
 
     fn policy(&self, policy: i64) -> Result<usize, String> {
@@ -102,7 +117,19 @@ impl Actor<ZeldaAction> for PolicyActor {
         let mut vectors: [&[f32]; MAX_VECTORS] = [&[]; MAX_VECTORS];
         let input = input(self, p, obs, &mut vectors);
         let noise = &mut s.noise[..net.noise_size()];
-        let pick = if self.deterministic {
+        let pick = if let Some(replay) = &self.replay {
+            let recorded = replay
+                .get(&job)
+                .ok_or_else(|| format!("no recorded play of job {job}"))?;
+            let action = usize::try_from(step).ok().and_then(|t| recorded.get(t)).ok_or_else(|| {
+                format!(
+                    "the replay of job {job} went on past its {} recorded decisions",
+                    recorded.len()
+                )
+            })?;
+            let index = |i: i64| usize::try_from(i).map_err(|_| format!("bad recorded action {action:?}"));
+            Pick::Given([index(action[0])?, index(action[1])?, index(action[2])?])
+        } else if self.deterministic {
             Pick::Argmax
         } else {
             keyed_noise(job, step, noise);

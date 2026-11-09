@@ -27,21 +27,24 @@ flowchart LR
 | `crates/triforce-py` | `triforce._native` (PyO3): `Game`, `GameState`, `Change`, `Snapshot`, `Env`, `EnvPool` + `TrainTask`/`EvalTask`/`ChainTask`, `SpecialistConfig`, `Explorer`/`explore_states`, `route_steps`, `families`, `specialist_for`, `OBS_SPEC` and other constants, exception types. |
 | `crates/movie` | `TFMOVIE` input movies and `TFGOLDEN` per-frame digests. |
 | `crates/tools` | The `tf` CLI (below). |
-| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `inference.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `demo.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
+| `triforce/` (Python) | `ppo.py`, `rollout_buffer.py`, `metrics.py`, `model.py`, `train.py`, `evaluate.py`, `runner.py`, `replay.py`, `run.py`, `cli.py`, `play.py`, `play_grid.py`, `explore.py`, `entry_states.py`, `chain_hp.py`, `events.py`, `registry.py`, `demo.py`; thin `observation.py` (gym space from `OBS_SPEC`), `actions.py` (`Action`, `ActionMask` flat-mask view), `zelda_enums.py` (`ActionKind`, `Direction`, `MapLocation`), `specialist.py`, `paths.py` (`STATES_DIR`, `TRAJECTORIES_DIR`). |
 
 ## Processes and threads
 
 Everything runs in one process. Each env owns its own `ZCore`; `Pool` pins envs round-robin to persistent OS
-threads and steps them without the GIL. Python sends actions for the envs it has rows for, `recv(out, min_ready)`
-fills Python-owned buffers (obs per key, `mask`, `reward`, `frames`, `interrupt`, `terminated`, `truncated`,
-`bootstrap`, `final_obs`, `final_valid`, `policy`, `finished`, and `job`/`step`: the episode's job key — an eval
-job's or chain run's seed — and how many decisions the episode took before the row), and a fixed-shape forward per
-policy (`inference.RolloutPolicy`, one row per env; a CUDA graph on CUDA) picks the next actions. Training,
-evaluation and chains all run asynchronously (`recv(min_ready=1)`: ready envs act without waiting for the rest).
-Envs auto-reset after a terminal step; terminal infos, eval records, chain results and room-change events come from
-`poll_events()`. Env `i` seeds a `ChaCha8Rng` from `(seed, i)`. Rendering (full 256×240) is off by default and
-toggled per env with `set_render`; `frame(env, since)` copies the latest frame. Tools and tests that need a single
-game use `triforce._native.Game`.
+threads and steps them without the GIL. The agent acts inside the pool (`docs/rust-actor.md`): each worker picks its
+envs' actions with the Rust copy of the network (`crates/policy`, one per specialist; `ZeldaPolicy.to_native()`),
+sampling with Gumbel noise keyed to (episode job, decision) or taking each head's argmax. The job is an eval job's
+or chain run's seed, or a per-episode key in training, so an episode plays the same on any env or thread.
+Training makes one `rollout(policies, T, buffers)` call per rollout: every env steps `T` decisions and the buffers
+get, per env, the `T + 1` observations, the actions, the Rust policy's log-prob/entropy/value, rewards, frames,
+episode starts and bootstrap values. Evaluation, chains and the watch player call `play(policies)`: every env acts
+on its own until its jobs run out (`active`, `wait_idle`); with `record` each finished episode comes back from
+`poll_plays()` (actions, per-decision log-prob/entropy/value, optionally the observations), which
+`triforce/replay.py` keeps as replay files. Envs auto-reset after a terminal step; terminal infos, eval records,
+chain results and room-change events come from `poll_events()`. Env `i` seeds a `ChaCha8Rng` from `(seed, i)`.
+Rendering (full 256×240) is off by default and toggled per env with `set_render`; `frame(env, since)` copies the
+latest frame. Tools and tests that need a single game use `triforce._native.Game`.
 
 ## Core
 
@@ -259,22 +262,16 @@ at 2N. `eval-chain` leaves it off.
   `steps_trained`) iterations/steps, `stopped_early`, wall time and steps/sec (`train.run_status(run_dir)`). An
   interrupted run (SIGINT, or SIGTERM from `python -m triforce.train` / `triforce train`) saves its checkpoint and
   summary and exits 130 (`train.EXIT_INTERRUPTED`), so it never passes for a finished fixed-budget run.
-- Training collects asynchronously from one `EnvPool(TrainTask(...), num_envs=--parallel, threads=--threads)`
-  (`ppo.Collector`): `recv(min_ready=1)` → store each ready env's row in its own rows of the env-major
-  `RolloutBuffer` → one `RolloutPolicy` forward over a fixed batch of one row per env (CUDA: a replayed CUDA
-  graph of a private copy of the network) → `send` actions to the ready envs only. A rollout ends when every env
-  has `T = steps_per_update / parallel` steps; finished envs wait for the rest. Bootstrap values
-  (`V(final_obs)`) are computed in one batch at the end of the rollout. See `docs/performance.md`.
+- Training collects from one `EnvPool(TrainTask(...), num_envs=--parallel, threads=--threads)` (`ppo.Collector`):
+  one `rollout` call per iteration, every env stepping `T = steps_per_update / parallel` decisions with the
+  network's Rust copy on its own worker. The learner then recomputes log-probs, entropies and values with torch
+  (`RolloutBuffer.recompute`), so the PPO update never mixes Rust and torch numerics; a bootstrapped truncation uses
+  the Rust value of its final observation. See `docs/rust-actor.md`.
 - `train --seed S` seeds model initialization and PPO RNGs, and the pool: env `i` draws from a `ChaCha8Rng`
-  seeded with `(S, i)`. Without `--seed` the pool seed is random. Actions are sampled with Gumbel noise drawn per
-  rollout as an `[n, T, NOISE_SIZE]` block from the collector's own generator (seeded from the torch RNG), indexed
-  by (env, step), and the policy forward always has the same shape, so a row's action depends only on that env's
-  observation and noise: rollouts don't depend on `--threads` or scheduling (CPU and CUDA, tested). On CPU
-  training is reproducible end to end. On CUDA the PPO update is not bit-reproducible (atomic-add backward
-  kernels), so long CUDA runs drift apart after some iterations even with the same seed (ow-moblin, 12 envs:
-  identical for 9 iterations, different in the 10th). Shared curriculum progress depends on env completion
-  order; this is not a promise of bitwise-identical curriculum training, nor exact RNG continuation when resuming
-  a checkpoint. (Python's `random` streams of the old stack are not reproduced.)
+  seeded with `(S, i)`, which also keys its episodes' noise. Without `--seed` the pool seed is random. Rollouts
+  don't depend on `--threads` (tested bit for bit). On CUDA the PPO update is not bit-reproducible (atomic-add
+  backward kernels), so long CUDA runs drift apart after some iterations even with the same seed. Shared
+  curriculum progress depends on env completion order; rerunning a whole training run bit for bit is not a goal.
 - Live event logs (`events.py`, watched by `training-gui.py`): each training invocation gets
   `logs/<yymmdd>_<NNN>_<what>/` (gitignored; `--logs-dir` / `$TRIFORCE_LOGS_DIR`). `training.json` lists every
   specialist run in order with its status and is rewritten atomically. `<specialist>.jsonl` is an append-only
@@ -364,21 +361,21 @@ at 2N. `eval-chain` leaves it off.
   instead. A missed `heart` waypoint ends the run as a failure (room outcome `missed`); so does a retreat beyond
   `MAX_RETREATS` (3) per run (`retreat-limit`; `RunResult.retreats` counts them).
 - `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, deterministic=False,
-  max_steps=50000, device='cpu', specialist_configs=None, networks=None, parallel=1, threads=None)` drives a
-  `ChainTask` pool asynchronously (`inference.PoolInference`: per-specialist fixed-shape forwards; sampled actions
-  use Gumbel noise keyed to (run seed, decision), so a seed's run doesn't depend on `--parallel`, `--threads` or
-  scheduling; `--deterministic` is each head's argmax): `run(route, seed) -> RunResult`, `run_many(route,
-  seeds)`. On each room entry: `game.yaml` tag → specialist → promoted checkpoint (cached). Untagged room or
-  missing model → `result='error'` with the reason. Per-room outcomes:
+  max_steps=50000, specialist_configs=None, networks=None, parallel=1, threads=None)` lets a `ChainTask` pool play
+  (`EnvPool.play` with each specialist's Rust network; sampled actions use Gumbel noise keyed to (run seed,
+  decision), so a seed's run doesn't depend on `--parallel` or `--threads`; `--deterministic` is each head's
+  argmax): `run(route, seed) -> RunResult`, `run_many(route, seeds, plays=None)` (`plays`: a replay file). On each
+  room entry: `game.yaml` tag → specialist → promoted checkpoint. Untagged room or missing model →
+  `result='error'` with the reason. Per-room outcomes:
   `exit-correct`, `exit-wrong`, `retreat`, `retreat-limit`, `missed`, `death`, `stuck` (specialist `max_steps` in
   one room), `milestone`.
   Finalizing a room captures live ending health together with dropped-heart counts, including room/run budgets
   and measured cutoffs; death remains zero. `health_out` is never left at entry health on a timed-out visit.
 - `python -m triforce.run [--route d2first] [--seed N] [--render [--fps F] | --video PATH] [--from STATE]
-  [--stop-at L:0xRR] [--checkpoint S=PATH] [--deterministic] [--device D]` prints one line per room and appends a JSON line to
+  [--stop-at L:0xRR] [--checkpoint S=PATH] [--deterministic]` prints one line per room and appends a JSON line to
   `runs/runner.jsonl`. `--render` shows one chain env with rendering on; `--video` records the run's inputs, then
   renders them through `ffmpeg` (`-r 60.0988`, H.264) and fails with `ffmpeg not found on PATH` without it.
-- `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--device D] [--from STATE] [--stop-at L:0xRR]` → success
+- `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE] [--stop-at L:0xRR] [--plays PATH]` → success
   rate and per-room failure counts (`chain_summary`); `--from` starts mid-route at a route entry state (e.g.
   `2_7ds_0` Dungeon 2, `0_3cc_0` after it, `1_73s_0` Dungeon 1). `triforce promote <specialist> <run-id>`; `triforce list`;
   `triforce train|run|play|evaluate ...` forward to the module CLIs.

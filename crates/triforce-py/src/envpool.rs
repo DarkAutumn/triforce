@@ -16,7 +16,7 @@ use numpy::{
     PyUntypedArrayMethods,
 };
 use crate::policy::PyPolicy;
-use pool::rollout::EnvRollout;
+use pool::rollout::{EnvRollout, Play, Record};
 use pool::zelda::{
     ChainRunEnv, EvalEnv, EvalJob, PolicyActor, RgbFn, TaskEnv, TrainEnv, ZeldaAction, ZeldaEvent,
 };
@@ -653,6 +653,8 @@ fn event_dict<'py>(
             d.set_item("specialist", &*r.specialist)?;
             d.set_item("level", r.level)?;
             d.set_item("room", r.room)?;
+            d.set_item("in_cave", r.in_cave)?;
+            d.set_item("rooms", r.rooms)?;
             d.set_item("health", r.health)?;
             d.set_item("max_health", r.max_health)?;
             d.set_item("stalled", r.stalled)?;
@@ -664,6 +666,36 @@ fn event_dict<'py>(
             d.set_item("buttons", PyBytes::new(py, &log.buttons))?;
             d.set_item("pokes", log.pokes.clone())?;
         }
+    }
+    Ok(d)
+}
+
+/// A recorded episode as a dict (see `EnvPool.poll_plays`).
+fn play_dict<'py>(py: Python<'py>, env: usize, play: &Play<ZeldaAction>) -> PyResult<Bound<'py, PyDict>> {
+    let n = play.steps();
+    let d = PyDict::new(py);
+    d.set_item("env", env)?;
+    d.set_item("job", play.job)?;
+    d.set_item("policy", PyArray::from_slice(py, &play.policy))?;
+    let actions: Vec<i64> = play.actions.iter().flatten().copied().collect();
+    d.set_item("actions", PyArray::from_vec(py, actions).reshape([n, 3])?)?;
+    let column = |f: fn(&pool::rollout::Decision) -> f32| -> Vec<f32> { play.decisions.iter().map(f).collect() };
+    d.set_item("log_prob", PyArray::from_vec(py, column(|d| d.log_prob)))?;
+    d.set_item("entropy", PyArray::from_vec(py, column(|d| d.entropy)))?;
+    d.set_item("value", PyArray::from_vec(py, column(|d| d.value)))?;
+    if let Some(obs) = &play.obs {
+        let o = PyDict::new(py);
+        for (key, column) in LAYOUT.keys().iter().zip(&obs.columns) {
+            let mut shape = vec![n];
+            shape.extend(&key.shape);
+            let array = match column {
+                Column::I64(c) => PyArray::from_slice(py, c).reshape(shape)?.into_any(),
+                Column::F32(c) => PyArray::from_slice(py, c).reshape(shape)?.into_any(),
+                Column::Bool(c) => PyArray::from_slice(py, c).reshape(shape)?.into_any(),
+            };
+            o.set_item(&key.name, array)?;
+        }
+        d.set_item("obs", o)?;
     }
     Ok(d)
 }
@@ -860,6 +892,90 @@ impl PyEnvPool {
         Ok(rollouts.len())
     }
 
+    /// Lets every env act on its own with the Rust `policies` (one `_native.Policy` per policy index), decision
+    /// after decision on the worker threads, until the task's jobs run out (eval jobs, chain seeds). Sampled
+    /// with keyed noise (job, decision) unless `deterministic`. Returns at once; follow it with `poll_events`,
+    /// `poll_plays`, `active` and `wait_idle`. A chain run that ends with `hold_finished_frame` parks its env
+    /// until `set_hold(env, False)`. `record`: None, 'actions' or 'observations' (see `poll_plays`).
+    /// `replay` {job: [n, 3] actions}: replay those recorded episodes instead (the policies score the recorded
+    /// actions; a job outside `replay` or a replay running past its actions fails the env). After `play` the
+    /// pool only plays (`recv`, `send`, `rollout` raise).
+    #[pyo3(signature = (policies, deterministic=false, record=None, replay=None))]
+    fn play(
+        &self,
+        py: Python<'_>,
+        policies: Vec<PyRef<'_, PyPolicy>>,
+        deterministic: bool,
+        record: Option<&str>,
+        replay: Option<HashMap<i64, Bound<'_, PyAny>>>,
+    ) -> PyResult<()> {
+        let record = match record {
+            None => Record::Off,
+            Some("actions") => Record::Actions,
+            Some("observations") => Record::Observations,
+            Some(other) => {
+                return Err(PyValueError::new_err(format!(
+                    "record must be None, 'actions' or 'observations', not {other:?}"
+                )));
+            }
+        };
+        let nets = policies.iter().map(|p| p.inner.clone()).collect();
+        let actor = match replay {
+            None => PolicyActor::new(&LAYOUT, nets, deterministic),
+            Some(plays) => {
+                let mut actions = HashMap::new();
+                for (job, a) in plays {
+                    let a = as_int64(py, &a)?;
+                    if a.shape().len() != 2 || a.shape()[1] != 3 {
+                        return Err(PyValueError::new_err(format!(
+                            "replay actions of job {job} must be [n, 3], got {:?}",
+                            a.shape()
+                        )));
+                    }
+                    let flat = a.as_slice().map_err(|e| PyValueError::new_err(e.to_string()))?;
+                    actions.insert(job, flat.as_chunks::<3>().0.to_vec());
+                }
+                PolicyActor::replay(&LAYOUT, nets, actions)
+            }
+        }
+        .map_err(PyValueError::new_err)?;
+        py.detach(|| self.pool.play(Arc::new(actor), record))
+            .map_err(pool_err)
+    }
+
+    /// Waits (GIL released) until no env is running (all finished, failed or parked) or `timeout` seconds pass;
+    /// returns whether none is. Raises an env's failure.
+    #[pyo3(signature = (timeout=None))]
+    fn wait_idle(&self, py: Python<'_>, timeout: Option<f64>) -> PyResult<bool> {
+        let deadline = timeout.map(|t| Instant::now() + Duration::from_secs_f64(t.max(0.0)));
+        let tick = Duration::from_millis(50);
+        loop {
+            let wait = match deadline {
+                Some(d) => d.saturating_duration_since(Instant::now()).min(tick),
+                None => tick,
+            };
+            if py.detach(|| self.pool.wait_idle(Some(wait))).map_err(pool_err)? {
+                return Ok(true);
+            }
+            if deadline.is_some_and(|d| Instant::now() >= d) {
+                return Ok(false);
+            }
+            py.check_signals()?;
+        }
+    }
+
+    /// Episodes `play(record=...)` finished since the last call, as dicts: `env`, `job` (the episode's key: an
+    /// eval job's seed, a chain run's seed), per decision `policy` [n] int64, `actions` [n, 3] int64,
+    /// `log_prob`, `entropy`, `value` [n] float32 (the acting policy's), and with 'observations' `obs`
+    /// {key: [n, *shape]} (what each decision saw).
+    fn poll_plays<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let list = PyList::empty(py);
+        for (env, play) in self.pool.poll_plays() {
+            list.append(play_dict(py, env, &play)?)?;
+        }
+        Ok(list)
+    }
+
     /// Renders env `env`'s frames from its next emulated frame on (or stops).
     fn set_render(&self, env: usize, on: bool) -> PyResult<()> {
         self.pool.set_render(env, on).map_err(pool_err)
@@ -922,6 +1038,11 @@ impl PyEnvPool {
     /// Frames env `env` has published (0: none yet).
     fn frame_counter(&self, env: usize) -> PyResult<u64> {
         self.pool.frame_counter(env).map_err(pool_err)
+    }
+
+    /// Frames env `env` has emulated in `play` so far, shown or not.
+    fn emulated_frames(&self, env: usize) -> PyResult<u64> {
+        Ok(self.pool.control(env).map_err(pool_err)?.emulated_frames())
     }
 
     /// Events since the last call, as dicts with `env` and `type`: `episode` (`info`: the terminal step's info),

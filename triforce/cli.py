@@ -8,16 +8,17 @@ import sys
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
                deterministic: bool = False, stop_at=None, first_seed: int = 0, start_from=None,
-               specialist_configs=None, threads=None, device: str = 'cpu'):
+               specialist_configs=None, threads=None, plays=None):
     """Runs the route once per seed in one chain pool of ``parallel`` envs (``threads`` worker threads), with
-    optional checkpoint overrides and loaded specialist configs.  Returns (results sorted by seed, summary)."""
+    optional checkpoint overrides and loaded specialist configs; ``plays``: a replay file to write.  Returns
+    (results sorted by seed, summary)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     from .runner import Route, Runner, chain_summary, parse_location  # pylint: disable=import-outside-toplevel
     route = Route.load(route_name, parse_location(stop_at) if stop_at else None, start_from)
     seeds = list(range(first_seed, first_seed + runs))
-    runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic, device=device,
+    runner = Runner(models_dir=models_dir, checkpoints=overrides, deterministic=deterministic,
                     specialist_configs=specialist_configs, parallel=parallel, threads=threads)
-    results = runner.run_many(route, seeds)
+    results = runner.run_many(route, seeds, plays=plays)
     return results, chain_summary(results)
 
 
@@ -29,7 +30,7 @@ def _cmd_eval_chain(args):
     results, summary = eval_chain(args.route, args.runs, args.parallel, args.models_dir, overrides,
                                   args.deterministic, args.stop_at, args.first_seed, args.start_from,
                                   specialist_configs={config.name: config for config in configs},
-                                  threads=args.threads, device=args.device)
+                                  threads=args.threads, plays=args.plays)
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     write_jsonl(args.output, results)
     print(json.dumps(summary, indent=2))
@@ -86,7 +87,6 @@ def main(argv=None):
     chain.add_argument('--runs', type=int, default=20)
     chain.add_argument('--parallel', type=int, default=1, help="envs in the chain pool")
     chain.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
-    chain.add_argument('--device', default='cpu', help="torch device for the specialists' networks")
     chain.add_argument('--first-seed', type=int, default=0)
     chain.add_argument('--deterministic', action='store_true')
     chain.add_argument('--stop-at', help="end the route on entering this room, e.g. 1:0x73")
@@ -96,6 +96,8 @@ def main(argv=None):
     chain.add_argument('--specialist-config', action='append', default=[], metavar='YAML',
                        help="override specialist config, selected by config.name (repeatable YAML paths)")
     chain.add_argument('--output', default=os.path.join('runs', 'eval-chain.jsonl'))
+    chain.add_argument('--plays', default=None, metavar='PATH',
+                       help="write every run to this replay file (triforce/replay.py)")
 
     args = parser.parse_args(argv)
     return {'promote': _cmd_promote, 'eval-chain': _cmd_eval_chain, 'list': _cmd_list}[args.command](args)

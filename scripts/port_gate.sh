@@ -19,12 +19,12 @@ mkdir -p "$OUT/eval" "$OUT/chains"
 SPECIALISTS=$(for f in specialists/*.yaml; do s=$(basename "$f" .yaml); if [ -f "models/$s/promoted" ]; then echo "$s"; fi; done)
 for s in $SPECIALISTS; do
   timeout 1h $PY -m triforce.evaluate --specialist "$s" --models-dir models --episodes-per-state 20 --parallel 16 \
-    --threads 16 --device cpu --seed "$SEED" --output "$OUT/eval/$s.json" > "$OUT/eval/$s.log" 2>&1
+    --threads 16 --seed "$SEED" --output "$OUT/eval/$s.json" > "$OUT/eval/$s.log" 2>&1
 done
 
 chain() {
   local name=$1; shift
-  timeout 2h $PY -m triforce.cli eval-chain --runs 40 --parallel 20 --device cpu --first-seed "$SEED" \
+  timeout 2h $PY -m triforce.cli eval-chain --runs 40 --parallel 20 --first-seed "$SEED" \
     --output "$OUT/chains/$name.jsonl" "$@" > "$OUT/chains/$name.log" 2>&1
 }
 chain full
