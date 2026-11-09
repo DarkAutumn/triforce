@@ -880,3 +880,16 @@ entry below and `crates/zcore/UPSTREAM.md`.
   profile (`docs/rust-actor.md` item 4).
 - **Evidence:** tests: thread-invariant rollouts and plays, replays bit for bit (also in a fresh process), the same
   game, endings, linger and visits with the look-ahead on or off.
+
+## 2026-11-09 — Training overlaps the update with the next rollout; the deferred look-ahead is not built
+
+- **What:** `PPO.train` runs the next rollout during the PPO update, with the pre-update weights (one update of
+  policy lag). The learner recomputes `logp_old` with its current network (the acting policy's log-prob made the KL
+  early stop spend its budget on the lag). The policy forward got AVX kernels (0.77 → 0.31 ms/observation).
+- **Why (Lee):** a ~1.5× estimate; "yes, overlap rollout with ppo update. It only becomes a question sub-20%
+  speedup. It only becomes iffy sub 15% speedup." Measured +20–45% (`docs/performance.md`, Nov 9).
+- **Deferred look-ahead (VII.5b), decided by that rule:** not built. It only fills idle worker time (the rollout
+  barrier, 13–32% of a p16 rollout) with look-ahead work (12–35% of step time in beam/bomb rooms, little
+  elsewhere), and the overlapped update now uses spare cores too; expected well under 15% for a deferred critic,
+  settlement queue, separate emulators and helper threads. Backlog, with the barrier's other fix (more envs than
+  threads, work-stealing).

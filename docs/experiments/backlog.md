@@ -7,9 +7,12 @@ round docs still call it that.)
 
 1. **Rust actor** (`docs/rust-actor.md`, decisions 2026-11-09): the policy's forward pass in Rust, rollouts in
    one call, eval/chains/play-zelda on the in-pool policy, replayable plays (seed + actions, with probabilities),
-   endings on observed effects. **Done**; next: profile the new stack end to end (forward pass, rollout barrier,
-   learner), then GPU vs CPU inference. The deferred look-ahead in training waits for that profile (Lee:
-   "profile first, then decide").
+   endings on observed effects. **Done.** Profile done (`docs/performance.md`, Nov 9): AVX policy kernels and the
+   rollout overlapped with the PPO update (+20–45% training). Next: GPU vs CPU inference (mass play). The deferred
+   look-ahead was not built (Lee's rule: sub-15% is iffy; decisions 2026-11-09).
+   - Perf leftovers, each expected under 15%: the rollout barrier (workers idle 13–32% of a p16 rollout waiting
+     for the slowest env: more envs than threads with work-stealing envs, or the deferred look-ahead); the PPO
+     update's kernel-launch overhead (~17k launches per update; fewer host syncs, fused Adam, CUDA graphs).
 2. **Fresh retrain** on the new stack (the team trained with Python inference is not loaded).
 3. **Better play** (`~/Downloads/triforce-better-play.md`, written without the source: take the ideas, adapt the
    prescriptions): §0 yardstick, §1a outcome fine-tuning + §3 best-of-N self-distillation, §6b entropy annealing
