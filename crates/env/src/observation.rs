@@ -878,7 +878,10 @@ impl ObservationBuilder {
         v[4 + objective_kind_index(objective.kind)] = 1.0;
         let location = state.full_location();
         for next in &objective.next_rooms {
-            let direction = location.direction_to(*next).value();
+            let direction = state
+                .game_map()
+                .exit_direction(location, *next, state.peek(zelda::game_map::MAZE_STEP))
+                .value();
             for (i, (_, bit)) in DIR_BITS.iter().enumerate() {
                 if direction & bit != 0 {
                     v[i] = 1.0;

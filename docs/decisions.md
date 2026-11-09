@@ -758,3 +758,18 @@ entry below and `crates/zcore/UPSTREAM.md`.
   `game_map::tests::bow_cellar_hangs_under_0x22`, `objectives::tests::route_progress_takes_the_bow_in_the_cellar`,
   `specialist_env::route_room_only_offers_its_route_exit`,
   `tests/test_game_map.py::test_the_bow_detour_goes_north_from_0x43_and_back`.
+
+## 2026-11-09 — Whole overworld, the mazes and Dungeon 3 mapped (data only)
+
+- **What:** game.yaml now holds every overworld room 0x00–0x7f (exits walked in the emulator, ROM monster lists,
+  `entrance:` cave/secret blocks, `edge_spawn`, `raft_exits`) and Dungeon 3 (18 rooms + the raft cellar 3:0x0f, bomb
+  walls as exits, `trigger`). The mazes 0x1b (N×4 → 0x0b) and 0x61 (N W S W → 0x60) live in code
+  (`game_map::MAZES`), mirrored by game.yaml `maze:` blocks checked at load; a synthetic `maze` exit and
+  `GameMap::exit_direction` (MazeStep $52F) let objectives and the observation point at the sequence's next
+  direction; a routes.yaml step through a maze's sequence is a load error. 3:0x4c and 3:0x4d are `requires_bombs`
+  (Lee). No route, family or tag changed; existing entries kept verbatim.
+- **Why:** Lee (Nov 9): map the world before the D3 route; the mazes never change, so code owns them.
+- **Evidence:** `docs/routes/overworld.md`, `docs/routes/d3.md` (Lee's D3 directions walked end to end in the
+  emulator), tests `game_map::tests::{mazes_load_with_their_loops, maze_sequences_follow_check_mazes,
+  maze_exit_direction_follows_maze_step, maze_yaml_and_routes_are_checked, whole_overworld_is_mapped,
+  d3_boss_room_and_lees_route}`.
