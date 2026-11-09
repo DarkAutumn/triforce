@@ -19,6 +19,57 @@ Findings from round 13 worth a look (not started): health attrition after D2 (Li
 hearts); the Goriya/Moldorm rooms; Lynel deaths on the way back out with the white sword; the near-cave Lynel
 spawn (95%).
 
+## Queued by Lee (Nov 9), in order
+
+1. **The bow** (in progress, round 14): D1 detour to the trap room 0x22 and the bow cellar 0x7f; new families
+   `trap-room` and `equipment-room`.
+2. **Map the whole overworld** into game.yaml (exits, enemies, caves, secrets) with a map image; the two **maze
+   rooms**: 0x1b (E and S loop back, W leaves, N five times reaches 0x0b — d2first.md says four: verify) and 0x61
+   the Lost Woods (E leaves to 0x62, N and S loop back, N W S W leaves to 0x60). Special-case them in code, record
+   them in the yaml. (Mapping started in branch `mapping`.)
+3. **Map Dungeon 3**: enter, reach the central Darknut room; W until you can't, N for a key, S for the raft (stairs);
+   back to the central room; N for a key; E into the trap/gel room; bomb its E wall into Manhandla's room; the
+   triforce is N of it. Lee's directions: `W N N W W N S S (stairs: raft) N E E N E E (bomb E)`, possibly off by one.
+   Treasure rules: skip the Darknut room above the raft room's treasure; take the central Darknut room's (bombs)
+   only on its last visit and only if bombs < 4 (D4 will need 2). `requires_bombs` on the bomb-wall room and the
+   boss room: Manhandla is killed with bombs dropped in his path (a perfect one kills him with one bomb and, with
+   the streak primed, drops bombs).
+4. If Lee hasn't answered by then: extend the route after D1 to D3 and train to beat it.
+
+### Kill streaks and forced drops (researched Nov 9; implement later)
+
+Lee's idea: when Link is about to make the 10th kill without taking damage, light up part of the observation so the
+model kills that enemy with a bomb, which forces a bomb drop (fewer cheated bombs). Decision: the research is done
+now (it is cheap and the facts are needed to design the feature); implementation waits until this item is picked
+up, after D3. The ASM facts (scout DropStreaks, `history://DropStreaks`; Z_01 5742–6014, Z_04 11030–11196,
+Z_07 5446–5488), with corrections to the folk version:
+
+- RAM: `$627 WorldKillCount` (kills since Link was last hurt; `Var::KillStreak` already maps it, unused by the
+  observation), `$50 HelpDropCount` (counts kills up to 10 and stops), `$51 HelpDropValue` (0: the forced drop
+  is 5 rupees; non-zero: bombs), `$52A WorldKillCycle` (drop-table column 0–9, advanced per kill, never reset).
+  Damage to Link (`Link_BeHarmed`, also on death) clears `$627`, `$50`, `$51`; nothing else does (rooms, stairs
+  and caves don't).
+- **Arming:** only the kill that takes `$50` from 9 to 10 decides the forced item: a **bomb** kill sets `$51`
+  (bombs), any other weapon leaves 5 rupees. A bomb kill after the count is already 10 changes nothing.
+- **Spending:** the next drop-capable death (any weapon) gets the forced item instead of the table roll and clears
+  `$50`/`$51` — including the 10th kill itself if that enemy can drop. No-drop deaths (Gel `$14/$15`, Keese
+  `$1B–$1D`, Like Like `$17`, the dead dummy `$5D`, a Stalfos/Gibdo in slot 1 carrying the room item) consume
+  nothing, so the armed drop waits for the next capable kill (Lee's Keese example holds).
+- **Fairy:** no flag — a drop-capable death while `$627 == 16` drops a fairy and overrides the forced bomb (losing
+  it); `$627` keeps counting past 16, so the fairy comes once per damage-free streak.
+- Normal drops: four rows (by enemy type) × 10 columns (`$52A`) with a per-row chance (31/59/41/41%); only row 2
+  (slow Octoroks, Moblin `$03`, Lynel `$01`, Vire, Red Goriya, Darknut `$0B`, Wizzrobe `$24`, Gibdo) has bombs
+  (columns 1, 6, 8). All bosses use row 3.
+- **Dodongo** forces bombs on a sword kill (sets `$50 = $51 = $0A`): his stun-and-sword kill always drops bombs
+  unless the fairy (`$627 == 16`) wins. **Manhandla** (5 objects): each hand's death counts as a kill (with the bomb
+  damage type if a bomb killed it) but only the last hand drops; one bomb killing four hands adds ~4 to `$50`, so
+  it arms bombs only if the count was ~6–9 before (unverified: whether the base counts again on later hits).
+- **Proposed features** (Link block, a schema change): `help_count = $50/10`, `bomb_prime = ($50 == 9)` (the next
+  kill should be a bomb kill), `help_armed = ($50 >= 10)`, `help_is_bomb = ($51 != 0)`, `fairy_next = ($627 == 15)`
+  / `fairy_armed = ($627 == 16)`, and per entity `can_drop`. Rewards: a small bonus for a bomb kill that arms bombs
+  (`$51` 0 → 1) in families that will need bombs, and for picking up a forced bomb drop (already a PBRS item target).
+  Measure by cheated bombs per run (they should fall).
+
 ## Next up (history before the d2-first reset)
 
 Goal then: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
