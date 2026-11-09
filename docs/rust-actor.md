@@ -48,11 +48,15 @@ The learner recomputes `logp_old` and values with its own torch network over the
 4. **Deferred look-ahead (Lee's continuation queue).** Beam/bomb/arrow/boomerang look-ahead
    (`zelda::change::predict`, `FutureCreditLedger`) leaves the step loop: the step records what it needs (the
    snapshot at the firing step, the weapon), and the predictions, the credit ledger and the rewards are settled per
-   env, in order, by whichever worker is idle, before the rollout returns. Prerequisite: nothing that steers the
-   step loop may read predicted effects. Today `stuck`, `no-damage`, linger (`no-room-progress`, the stall
-   penalty) and the chain stall check do; they switch to observed effects (a hit lands a few steps after the shot;
-   their thresholds are hundreds of steps). Checking them only at rollout ends was considered and rejected: it
-   would make episodes depend on rollout length and env count, and eval/chains/play have no rollouts.
+   env, in order, by whichever worker is idle, before the rollout returns. Prerequisite (built): nothing that steers
+   the step loop reads predicted effects. `stuck`, `no-damage`, linger (`no-room-progress`), the chain stall check
+   and the visit metrics count `Change.observed` (a hit counts on the step it lands), so the look-ahead changes
+   rewards only, and evaluation and chains skip it (`EnvOptions.skip_look_ahead`; 12–35% of step time in
+   beam/bomb rooms under attack-heavy play). Checking endings only at rollout ends was considered and rejected: it
+   would make episodes depend on rollout length and env count, and eval/chains/play have no rollouts. **The
+   deferral itself waits for the profile (Lee, Nov 9: "profile first, then decide"):** it needs a deferred critic
+   (per-env queue of unsettled steps, Episode events after settlement), separate emulators for predictions and
+   helper threads, and only pays if training leaves cores or barrier time idle.
 5. **Replay records** (`triforce/replay.py`, built). `play(record='actions')` returns each finished episode as a
    `Play` (job key, per decision the acting policy, the action and the policy's log-prob/entropy/value, optionally
    the observations). Eval (`--plays`), `eval-chain --plays` and `play-zelda.py --plays` write replay files: a
@@ -83,12 +87,14 @@ The learner recomputes `logp_old` and values with its own torch network over the
 
 ## Order of work
 
-1. `crates/policy` + the weight export + parity, batch-invariance and determinism tests.
+1. `crates/policy` + the weight export + parity, batch-invariance and determinism tests. (Done.)
 2. The rollout API; the collector uses it; `logp_old`/value recomputed by the learner; old per-step Python
-   inference removed from training.
-3. Eval, chains and play-zelda on the in-pool policy; replay records and the replay API with probabilities.
-4. Endings on observed effects; the deferred look-ahead on the worker queue.
-5. Fresh retrain of the team (baseline on the new stack), then better-play §0, §1a + §3, §6b, §2, §1b/§5/§6a.
+   inference removed from training. (Done.)
+3. Eval, chains and play-zelda on the in-pool policy; replay records and the replay API with probabilities. (Done;
+   the per-step `recv`/`send` path is gone.)
+4. Endings on observed effects (done); the deferred look-ahead on the worker queue (after the profile).
+5. Profile end to end; GPU vs CPU inference; fresh retrain of the team (baseline on the new stack), then
+   better-play §0, §1a + §3, §6b, §2, §1b/§5/§6a.
 
 ## Open: GPU vs CPU inference (Lee, Nov 9; a major step)
 

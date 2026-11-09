@@ -7,7 +7,9 @@ round docs still call it that.)
 
 1. **Rust actor** (`docs/rust-actor.md`, decisions 2026-11-09): the policy's forward pass in Rust, rollouts in
    one call, eval/chains/play-zelda on the in-pool policy, replayable plays (seed + actions, with probabilities),
-   the deferred look-ahead (endings on observed effects first). Parity, batch/thread-invariance and replay tests.
+   endings on observed effects. **Done**; next: profile the new stack end to end (forward pass, rollout barrier,
+   learner), then GPU vs CPU inference. The deferred look-ahead in training waits for that profile (Lee:
+   "profile first, then decide").
 2. **Fresh retrain** on the new stack (the team trained with Python inference is not loaded).
 3. **Better play** (`~/Downloads/triforce-better-play.md`, written without the source: take the ideas, adapt the
    prescriptions): §0 yardstick, §1a outcome fine-tuning + §3 best-of-N self-distillation, §6b entropy annealing

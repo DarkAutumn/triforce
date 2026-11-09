@@ -860,3 +860,23 @@ entry below and `crates/zcore/UPSTREAM.md`.
 - **Rejected:** checking `stuck`/`no-damage` only at rollout ends (episodes would depend on rollout length; eval
   and chains have no rollouts); GPU inference from Rust (cross-worker batching and kernel-launch overhead for a
   ~5 MFLOP network; the CPU forward is small next to a ~1.9 ms env step); loading old checkpoints (fresh retrain).
+
+## 2026-11-09 — The Rust actor as built: one acting path, replay files, observed endings
+
+- **What:**
+  - The pool acts only through an in-pool actor: `rollout` for training, `play` for evaluation, chains and the
+    watch player. The per-step `recv`/`send` path, `triforce/inference.py` and the `--device`/`--cpu` options of
+    evaluate, run, eval-chain and play-zelda are gone (no caller left).
+  - The `linear` grid encoder is gone: Rust runs the current conv architecture only.
+  - Replay files (`triforce/replay.py`; `evaluate --plays`, `eval-chain --plays`, `play-zelda.py --plays`): the
+    task, model checkpoints and hashes, backend, `git describe`, a game/route data hash, and per episode its key
+    and base64 actions. A replay recomputes every decision's log-prob, entropy and value bit for bit.
+  - Endings, linger, the chain stall counter and visit metrics count observed effects only (`Change.observed`); the
+    look-ahead feeds rewards and nothing else, so evaluation and chains skip it.
+- **Why:** one way to act (Lee: inference in Rust, no per-step round trips); plays that replay exactly; the
+  look-ahead costs 12–35% of step time in beam/bomb rooms under attack-heavy play and only rewards need it.
+- **Deferred look-ahead in training (Lee, Nov 9):** "profile first, then decide". Moving the training look-ahead
+  off the step loop needs a deferred critic, separate emulators and helper threads; it is decided from the VII.7
+  profile (`docs/rust-actor.md` item 4).
+- **Evidence:** tests: thread-invariant rollouts and plays, replays bit for bit (also in a fresh process), the same
+  game, endings, linger and visits with the look-ahead on or off.
