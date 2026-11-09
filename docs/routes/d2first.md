@@ -51,7 +51,8 @@ Choices and findings:
   back E, 0x73 E, 0x74 back W, 0x73 N. The objective follows the route's steps (below), so 0x73 sends Link W,
   then E, then N. The boomerang pickup at 0x44 stays.
 - **0x1b is the mountain maze** (`Z_01 CheckMazes`): W is its only normal exit; E and S bring Link back into
-  0x1b and N reaches 0x0b only on the fourth N in a row. game.yaml now lists only W (it had N/E/S from v1).
+  0x1b and N reaches 0x0b only on the fourth N in a row (four Ns from inside 0x1b; walked in the emulator, Nov 9).
+  game.yaml lists N/E/S as exits back into 0x1b plus a `maze:` block (`docs/routes/overworld.md`).
 
 ## The 0x2c secret
 

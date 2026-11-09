@@ -12,6 +12,80 @@ use std::path::Path;
 
 pub const LOCKED_COST: i32 = 4;
 pub const DEFAULT_ROUTE: &str = "d2first";
+/// The exit key a maze room gets for its sequence (`exits['maze']`, destination = [`Maze::destination`]).
+pub const MAZE_EXIT: &str = "maze";
+/// `MazeStep` ($52F): how many directions of a maze's sequence Link has matched in a row (Z_01 CheckMazes).
+pub const MAZE_STEP: u16 = 0x52F;
+
+/// An overworld maze room (Z_01 CheckMazes, `ForestMazeDirs`/`MountainMazeDirs`).  Leaving through `free` leaves
+/// normally at any step.  Leaving through the sequence's next direction advances `MazeStep` and brings Link back into
+/// the room, except on the sequence's last direction, which leads to `destination`.  Any other direction resets
+/// `MazeStep` to 0 and brings Link back.  `CheckMazes` resets `MazeStep` whenever Link leaves any other overworld
+/// room, so he always enters a maze at step 0.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Maze {
+    pub room: MapLocation,
+    pub sequence: &'static [Direction],
+    pub destination: MapLocation,
+    pub free: Direction,
+}
+
+/// The two mazes; they never change, so they live in code (game.yaml's `maze:` blocks must agree, checked at load).
+pub const MAZES: [Maze; 2] = [
+    // The mountain (Lost Hills): four Ns in a row from inside 0x1b reach 0x0b; W leaves to 0x1a.
+    Maze {
+        room: MapLocation::new(0, 0x1b, false),
+        sequence: &[Direction::N, Direction::N, Direction::N, Direction::N],
+        destination: MapLocation::new(0, 0x0b, false),
+        free: Direction::W,
+    },
+    // The Lost Woods: N, W, S, W from inside 0x61 reach 0x60 on the last W; E leaves to 0x62.
+    Maze {
+        room: MapLocation::new(0, 0x61, false),
+        sequence: &[Direction::N, Direction::W, Direction::S, Direction::W],
+        destination: MapLocation::new(0, 0x60, false),
+        free: Direction::E,
+    },
+];
+
+impl Maze {
+    /// The maze of `location`, if it is one.
+    pub fn at(location: MapLocation) -> Option<&'static Maze> {
+        MAZES.iter().find(|m| m.room == location)
+    }
+
+    /// The direction that advances the sequence at `step` (`MazeStep`); a step past the end counts as 0.
+    pub fn next_direction(&self, step: u8) -> Direction {
+        self.sequence
+            .get(step as usize)
+            .copied()
+            .unwrap_or(self.sequence[0])
+    }
+
+    /// Where leaving through `direction` at `step` takes Link and the `MazeStep` after it (CheckMazes): the
+    /// destination on the sequence's last direction, the room's real neighbour through `free` (step kept), else
+    /// back into the maze (step + 1 on a match, 0 otherwise).
+    pub fn leave(&self, direction: Direction, step: u8) -> (MapLocation, u8) {
+        let step = if (step as usize) < self.sequence.len() { step } else { 0 };
+        if direction == self.next_direction(step) {
+            if step as usize + 1 == self.sequence.len() {
+                return (self.destination, step);
+            }
+            return (self.room, step + 1);
+        }
+        if direction == self.free {
+            let (dx, dy): (i32, i32) = match direction {
+                Direction::E => (1, 0),
+                Direction::W => (-1, 0),
+                Direction::S => (0, 1),
+                _ => (0, -1),
+            };
+            let value = self.room.value as i32 + dx + 16 * dy;
+            return (MapLocation::new(0, value as u8, false), step);
+        }
+        (self.room, 0)
+    }
+}
 
 /// Bundled `triforce/game.yaml`.
 pub const GAME_YAML: &str = include_str!("../../../triforce/game.yaml");
@@ -46,7 +120,7 @@ pub struct RoomExit {
 #[derive(Clone, Debug, PartialEq)]
 pub struct GameRoom {
     pub location: MapLocation,
-    /// Exits by key ('N', 'S', 'E', 'W', 'cave') in file order.
+    /// Exits by key ('N', 'S', 'E', 'W', 'cave') in file order; a maze room also gets [`MAZE_EXIT`] last.
     pub exits: IndexMap<String, RoomExit>,
     pub enemies: IndexMap<String, i64>,
     pub treasure: Option<String>,
@@ -65,6 +139,8 @@ pub struct GameRoom {
     /// room's stairs only when pushed one of these ways (Dungeon 1's 0x22: its west block, N or S; pushed E it
     /// closes the way until the room is re-entered).  The objective sends Link to a push spot while it is pending.
     pub push_block: Vec<Direction>,
+    /// The room's maze ([`MAZES`]; game.yaml `maze:` must describe it).
+    pub maze: Option<&'static Maze>,
 }
 
 /// A `[col, row]` game.yaml tile.
@@ -289,6 +365,26 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                     .collect()
             })
             .unwrap_or_default();
+        let maze = parse_maze(entry, loc)?;
+        if let Some(maze) = maze {
+            for exit in exits.values() {
+                if Direction::from_exit(&exit.direction).is_some_and(|d| d != maze.free) && exit.destination != loc {
+                    return err(format!(
+                        "{loc}: maze exit {} must loop back into the room (the sequence is `maze:`)",
+                        exit.direction
+                    ));
+                }
+            }
+            exits.insert(
+                MAZE_EXIT.to_owned(),
+                RoomExit {
+                    direction: MAZE_EXIT.to_owned(),
+                    destination: maze.destination,
+                    locked: false,
+                    span: None,
+                },
+            );
+        }
         let room = GameRoom {
             location: loc,
             exits,
@@ -312,10 +408,54 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
                 })
                 .transpose()?
                 .unwrap_or_default(),
+            maze,
         };
         rooms.insert(loc, room);
     }
     Ok(rooms)
+}
+
+/// game.yaml `maze:` (`sequence`, `destination`, `free`), which must match the built-in [`MAZES`] entry: every maze
+/// room has the block and no other room does.
+fn parse_maze(entry: &Value, loc: MapLocation) -> Result<Option<&'static Maze>, MapError> {
+    let builtin = Maze::at(loc);
+    let Some(block) = get(entry, "maze") else {
+        return match builtin {
+            Some(_) => err(format!("{loc}: a maze room needs its game.yaml `maze:` block")),
+            None => Ok(None),
+        };
+    };
+    let Some(maze) = builtin else {
+        return err(format!("{loc}: `maze:` on a room that isn't a maze (Z_01 CheckMazes: 0x1b, 0x61)"));
+    };
+    let direction = |v: &Value| {
+        v.as_str()
+            .and_then(Direction::from_exit)
+            .ok_or_else(|| MapError(format!("{loc}: maze: bad direction {v:?}")))
+    };
+    let sequence = get(block, "sequence")
+        .and_then(Value::as_sequence)
+        .map(|s| s.iter().map(direction).collect::<Result<Vec<_>, _>>())
+        .transpose()?
+        .unwrap_or_default();
+    let destination = get(block, "destination")
+        .map(|d| -> Result<MapLocation, MapError> {
+            Ok(MapLocation::new(
+                as_u8(&d["level"], "maze destination level")?,
+                hex(&d["location"], "maze destination location")?,
+                false,
+            ))
+        })
+        .transpose()?;
+    let free = get(block, "free").map(direction).transpose()?;
+    if sequence != maze.sequence || destination != Some(maze.destination) || free != Some(maze.free) {
+        return err(format!(
+            "{loc}: game.yaml maze (sequence {sequence:?}, destination {destination:?}, free {free:?}) disagrees with \
+             Z_01 CheckMazes ({:?}, {}, {:?})",
+            maze.sequence, maze.destination, maze.free
+        ));
+    }
+    Ok(Some(maze))
 }
 
 /// (room, keys held, collected key rooms bitmask).
@@ -339,6 +479,21 @@ impl GameMap {
     pub fn from_yaml(game: &str, routes: &str) -> Result<GameMap, MapError> {
         let rooms = parse_rooms(game)?;
         let (routes, alternates) = parse_routes(routes)?;
+        let steps = routes.iter().flat_map(|(name, steps)| steps.iter().map(move |s| (name.as_str(), s)));
+        let alternate_steps = alternates.iter().flat_map(|a| a.with.iter().map(|s| ("alternates", s)));
+        for (route, step) in steps.chain(alternate_steps) {
+            let Some(maze) = rooms.get(&step.location()).and_then(|r| r.maze) else {
+                continue;
+            };
+            let loops = Direction::from_exit(&step.exit).is_some_and(|d| d != maze.free);
+            if step.exit == MAZE_EXIT || loops {
+                return err(format!(
+                    "routes.yaml: {route}: a step leaves the maze {} through {:?}; routes through a maze's sequence \
+                     are unsupported (the envs don't handle a room visit that loops back into itself)",
+                    maze.room, step.exit
+                ));
+            }
+        }
         let mut map = GameMap {
             rooms,
             routes,
@@ -375,6 +530,20 @@ impl GameMap {
     /// Rooms in game.yaml order.
     pub fn rooms(&self) -> &IndexMap<MapLocation, GameRoom> {
         &self.rooms
+    }
+
+    /// The maze `location` is, if any ([`MAZES`]).
+    pub fn maze(&self, location: MapLocation) -> Option<&'static Maze> {
+        self.rooms.get(&location).and_then(|r| r.maze)
+    }
+
+    /// The edge Link leaves `from` through toward the neighbouring room `to`: a maze's next sequence direction (given
+    /// `MazeStep`, RAM [`MAZE_STEP`]) when `to` is the maze's destination, else the side `to` lies on.
+    pub fn exit_direction(&self, from: MapLocation, to: MapLocation, maze_step: u8) -> Direction {
+        match self.maze(from) {
+            Some(maze) if to == maze.destination => maze.next_direction(maze_step),
+            _ => from.direction_to(to),
+        }
     }
 
     pub fn rooms_for_specialist(&self, name: &str) -> Vec<MapLocation> {
@@ -497,6 +666,9 @@ impl GameMap {
                         continue;
                     }
                     (LOCKED_COST, cur_keys - 1)
+                } else if exit.direction == MAZE_EXIT {
+                    // One room transition per direction of the sequence.
+                    (room.maze.map_or(1, |m| m.sequence.len() as i32), cur_keys)
                 } else {
                     (1, cur_keys)
                 };
@@ -710,7 +882,8 @@ mod tests {
     fn dodongo_and_the_0x2c_secret_require_bombs() {
         let map = GameMap::builtin();
         let tagged: Vec<_> = map.rooms().values().filter(|r| r.requires_bombs).map(|r| r.location).collect();
-        assert_eq!(tagged, vec![loc(0, 0x2c), loc(2, 0x0e)]);
+        // Dungeon 3's bombed E wall into the boss room and Manhandla (Lee, Nov 9) are off the route so far.
+        assert_eq!(tagged, vec![loc(0, 0x2c), loc(2, 0x0e), loc(3, 0x4c), loc(3, 0x4d)]);
         assert!(!map.requires_bombs(loc(9, 0x7f)));
         let room = map.get(loc(0, 0x2c)).unwrap();
         assert_eq!(room.bomb_secret, Some((18, 12)));
@@ -842,7 +1015,7 @@ mod tests {
                 .map(|r| r.location)
                 .collect::<Vec<_>>()
         };
-        assert_eq!(set(&locs("triforce")), set(&[D1_TRIFORCE, loc(2, 0x0d)]));
+        assert_eq!(set(&locs("triforce")), set(&[D1_TRIFORCE, loc(2, 0x0d), loc(3, 0x3d)]));
         assert_eq!(locs("wood-sword"), vec![L::new(0, 0x77, true)]);
         assert_eq!(locs("white-sword"), vec![L::new(0, 0x0a, true)]);
         assert_eq!(locs("boomerang"), vec![loc(1, 0x44)]);
@@ -972,5 +1145,154 @@ mod tests {
         assert_eq!(map.route_next_rooms(loc(1, 0x22), DEFAULT_ROUTE), set(&[cellar, loc(1, 0x23)]));
         assert_eq!(map.route_next_rooms(cellar, DEFAULT_ROUTE), set(&[loc(1, 0x22)]));
         assert_eq!(map.route_next_rooms(loc(1, 0x43), DEFAULT_ROUTE), set(&[loc(1, 0x33), loc(1, 0x44)]));
+    }
+
+    fn exits_of(map: &GameMap, at: L) -> Vec<(String, L)> {
+        map.get(at).unwrap().exits.iter().map(|(k, e)| (k.clone(), e.destination)).collect()
+    }
+
+    /// The mazes' loops are plain exits back into the room; the sequence is the synthetic `maze` exit.
+    #[test]
+    fn mazes_load_with_their_loops() {
+        let map = GameMap::builtin();
+        let (hills, woods) = (loc(0, 0x1b), loc(0, 0x61));
+        assert_eq!(map.maze(hills), Some(&MAZES[0]));
+        assert_eq!(map.maze(woods), Some(&MAZES[1]));
+        assert_eq!(map.maze(loc(0, 0x1a)), None);
+        let own = |d: &str, at: L| (d.to_owned(), at);
+        assert_eq!(
+            exits_of(&map, hills),
+            [own("N", hills), own("E", hills), own("S", hills), own("W", loc(0, 0x1a)), own(MAZE_EXIT, loc(0, 0x0b))]
+        );
+        assert_eq!(
+            exits_of(&map, woods),
+            [own("N", woods), own("E", loc(0, 0x62)), own("S", woods), own("W", woods), own(MAZE_EXIT, loc(0, 0x60))]
+        );
+    }
+
+    /// Z_01 CheckMazes as walked in the emulator (mapping, Nov 9): four Ns from inside 0x1b reach 0x0b (not five);
+    /// N, W, S, W from inside 0x61 reach 0x60; a wrong direction restarts the sequence without counting itself.
+    #[test]
+    fn maze_sequences_follow_check_mazes() {
+        let walk = |maze: &Maze, dirs: &[Direction]| {
+            let mut step = 0;
+            let mut rooms = Vec::new();
+            for &d in dirs {
+                let (room, next) = maze.leave(d, step);
+                rooms.push(room.value);
+                step = next;
+                if room != maze.room {
+                    break;
+                }
+            }
+            rooms
+        };
+        use Direction::{E, N, S, W};
+        let (hills, woods) = (&MAZES[0], &MAZES[1]);
+        assert_eq!(walk(hills, &[N, N, N, N]), [0x1b, 0x1b, 0x1b, 0x0b]);
+        assert_eq!(walk(hills, &[N, N, S, N, N, N, N]), [0x1b, 0x1b, 0x1b, 0x1b, 0x1b, 0x1b, 0x0b]);
+        assert_eq!(walk(hills, &[N, N, E]), [0x1b, 0x1b, 0x1b]);
+        assert_eq!(walk(hills, &[N, N, W]), [0x1b, 0x1b, 0x1a]);
+        assert_eq!(hills.leave(W, 2), (loc(0, 0x1a), 2));
+        assert_eq!(walk(woods, &[N, W, S, W]), [0x61, 0x61, 0x61, 0x60]);
+        assert_eq!(walk(woods, &[W, N, S]), [0x61, 0x61, 0x61]);
+        assert_eq!(walk(woods, &[N, W, S, E]), [0x61, 0x61, 0x61, 0x62]);
+        assert_eq!(walk(woods, &[N, N, W, S, W]), [0x61; 5]);
+        assert_eq!(walk(woods, &[N, W, S, S, N, W, S, W]), [0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x60]);
+    }
+
+    /// Toward a maze's destination the exit is the sequence's next direction for MazeStep; other neighbours keep
+    /// their side; a path into the destination costs the whole sequence.
+    #[test]
+    fn maze_exit_direction_follows_maze_step() {
+        let map = GameMap::builtin();
+        let (woods, lost) = (loc(0, 0x61), loc(0, 0x60));
+        let dirs: Vec<_> = (0..4).map(|s| map.exit_direction(woods, lost, s)).collect();
+        assert_eq!(dirs, [Direction::N, Direction::W, Direction::S, Direction::W]);
+        assert_eq!(map.exit_direction(woods, loc(0, 0x62), 2), Direction::E);
+        assert_eq!(map.exit_direction(loc(0, 0x1b), loc(0, 0x0b), 3), Direction::N);
+        assert_eq!(map.exit_direction(loc(0, 0x1b), loc(0, 0x1a), 1), Direction::W);
+        assert_eq!(map.exit_direction(loc(0, 0x62), woods, 0), Direction::W);
+        assert_eq!(map.find_path(woods, lost), Some(vec![woods, lost]));
+        assert_eq!(map.find_path(loc(0, 0x1b), loc(0, 0x0b)), Some(vec![loc(0, 0x1b), loc(0, 0x0b)]));
+    }
+
+    /// game.yaml's `maze:` blocks must match the game, and a route may not leave through a maze's sequence.
+    #[test]
+    fn maze_yaml_and_routes_are_checked() {
+        let wrong = GAME_YAML.replacen("sequence: [N, W, S, W]", "sequence: [N, W, S, S]", 1);
+        let e = GameMap::from_yaml(&wrong, ROUTES_YAML).unwrap_err().0;
+        assert!(e.contains("disagrees with Z_01 CheckMazes"), "{e}");
+        let missing = GAME_YAML.replacen("  maze:  # Z_01 CheckMazes ForestMazeDirs", "  maze_unused:  #", 1);
+        let e = GameMap::from_yaml(&missing, ROUTES_YAML).unwrap_err().0;
+        assert!(e.contains("needs its game.yaml `maze:` block"), "{e}");
+        let through = ROUTES_YAML.replacen(
+            "- {level: 0, room: '0x1b', specialist: ow-start, entry: E, exit: W}",
+            "- {level: 0, room: '0x1b', specialist: ow-start, entry: E, exit: maze}",
+            1,
+        );
+        assert_ne!(through, ROUTES_YAML);
+        let e = GameMap::from_yaml(GAME_YAML, &through).unwrap_err().0;
+        assert!(e.contains("unsupported"), "{e}");
+    }
+
+    /// Every overworld room is mapped; edge exits lead to the neighbouring room (a maze's loops to itself); each
+    /// dungeon has its entrance cave; 0x1f's gap in the north wall reaches 0x0f.
+    #[test]
+    fn whole_overworld_is_mapped() {
+        let map = GameMap::builtin();
+        let mut entrances = Vec::new();
+        for room in 0..0x80u8 {
+            let at = loc(0, room);
+            let r = map.get(at).unwrap_or_else(|| panic!("{at} missing"));
+            for exit in r.exits.values() {
+                let Some(d) = Direction::from_exit(&exit.direction) else {
+                    if exit.direction == "cave" && exit.destination.level > 0 {
+                        entrances.push((exit.destination.level, room));
+                    }
+                    continue;
+                };
+                let neighbour = at.direction_to(exit.destination) == d;
+                assert!(neighbour || (r.maze.is_some() && exit.destination == at), "{at} {d:?}");
+                assert!(map.contains(exit.destination), "{at} {d:?}");
+            }
+        }
+        entrances.sort();
+        assert_eq!(
+            entrances,
+            [(1, 0x37), (2, 0x3c), (3, 0x74), (4, 0x45), (5, 0x0b), (6, 0x22), (7, 0x42), (8, 0x6d), (9, 0x05)]
+        );
+        assert_eq!(map.get(loc(0, 0x1f)).unwrap().exits["N"].destination, loc(0, 0x0f));
+        assert_eq!(map.get(loc(0, 0x74)).unwrap().exits["cave"].destination, loc(3, 0x7c));
+    }
+
+    /// Dungeon 3: the boss room (Manhandla) between the bombed E wall of 0x4c and the triforce room 0x3d; Lee's
+    /// directions from the entrance (W N N W W N S S, the raft cellar, N E E N E E, N) follow real exits.
+    #[test]
+    fn d3_boss_room_and_lees_route() {
+        let map = GameMap::builtin();
+        let boss = map.get(loc(3, 0x4d)).unwrap();
+        let exits: Vec<_> = boss.exits.iter().map(|(k, e)| (k.as_str(), e.destination, e.locked)).collect();
+        assert_eq!(
+            exits,
+            [("N", loc(3, 0x3d), false), ("S", loc(3, 0x5d), false), ("W", loc(3, 0x4c), false)]
+        );
+        assert_eq!(boss.bomb_walls, ["W"]);
+        assert_eq!((boss.enemies.get("Manhandla"), boss.treasure.as_deref()), (Some(&1), Some("heart-container")));
+        assert_eq!(map.get(loc(3, 0x4c)).unwrap().bomb_walls, ["E"]);
+        assert_eq!(map.get(loc(3, 0x3d)).unwrap().treasure.as_deref(), Some("triforce"));
+        let cellar = L::new(3, 0x0f, true);
+        assert_eq!(map.get(cellar).unwrap().treasure.as_deref(), Some("raft"));
+        let mut at = loc(3, 0x7c);
+        let mut rooms = vec![at.value];
+        for exit in ["W", "N", "N", "W", "W", "N", "S", "S", "cave", "N", "N", "E", "E", "N", "E", "E", "N"] {
+            at = map.get(at).unwrap().exits[exit].destination;
+            rooms.push(at.value);
+        }
+        assert_eq!(
+            rooms,
+            [0x7c, 0x7b, 0x6b, 0x5b, 0x5a, 0x59, 0x49, 0x59, 0x69, 0x0f, 0x69, 0x59, 0x5a, 0x5b, 0x4b, 0x4c, 0x4d, 0x3d]
+        );
+        assert_eq!(map.get(loc(3, 0x5b)).unwrap().treasure.as_deref(), Some("bombs"));
     }
 }

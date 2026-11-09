@@ -1,4 +1,131 @@
 rooms:
+# --- Overworld (level 0): every room 0x00-0x7f (mapping, Nov 9; docs/routes/overworld.md) ---
+# Exits: Link walked out of every 8px lane of every edge in the emulator (room-id retarget, Link teleported
+# to the first spot inside the edge he fits, walking straight out).  Enemies: the ROM room list (attr C/D +
+# LevelInfo FoeCounts, Z_05:1698-1826) plus Zora when attr A bit 3 is set; existing entries keep their data.
+# `entrance`: the cave index (attr B >> 2), what is inside (OW block E wares/prices, Z_01:111-161) and how it
+# opens (open mouth, bomb/burn/push tile object, armos, recorder); every entrance was walked into in the
+# emulator (secret flag $80 set to reveal hidden ones) and leads where the index says.
+- level: 0
+  location: '0x00'
+  exits:
+    E:
+      level: 0
+      location: '0x01'
+    S:
+      level: 0
+      location: '0x10'
+  enemies: null
+  treasure: null
+  # No entrance in quest 1: the rock wall (bomb it) secret is quest 2 only (attr F >> 6 = 2).
+- level: 0
+  location: '0x01'
+  exits:
+    E:
+      level: 0
+      location: '0x02'
+    S:
+      level: 0
+      location: '0x11'
+    W:
+      level: 0
+      location: '0x00'
+  enemies:
+    RedLynel: 4
+  treasure: null
+  entrance:  # cave index $17 (OW attr B >> 2); rock wall (bomb it) at x=144 y=80
+    cave: '0x17'
+    contents: door-repair
+    how: bomb
+    tile: [18, 2]
+    costs: 20
+- level: 0
+  location: '0x02'
+  exits:
+    E:
+      level: 0
+      location: '0x03'
+    S:
+      level: 0
+      location: '0x12'
+    W:
+      level: 0
+      location: '0x01'
+  enemies:
+    RedLynel: 4
+  treasure: null
+  # No entrance in quest 1: the rock wall (bomb it) secret is quest 2 only (attr F >> 6 = 2).
+- level: 0
+  location: '0x03'
+  exits:
+    S:
+      level: 0
+      location: '0x13'
+    W:
+      level: 0
+      location: '0x02'
+  enemies:
+    Unknown_31: 1  # boulder generator ($1F)
+    Unknown_32: 3
+  treasure: null
+  entrance:  # cave index $17 (OW attr B >> 2); rock wall (bomb it) at x=112 y=128
+    cave: '0x17'
+    contents: door-repair
+    how: bomb
+    tile: [14, 8]
+    costs: 20
+- level: 0
+  location: '0x04'
+  exits:
+    E:
+      level: 0
+      location: '0x05'
+  enemies:
+    BlueLynel: 6
+  treasure: null
+  entrance:  # cave index $1A (OW attr B >> 2)
+    cave: '0x1a'
+    contents: potion-shop
+    how: open
+    tile: [24, 2]
+    wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
+- level: 0
+  location: '0x05'
+  exits:
+    E:
+      level: 0
+      location: '0x06'
+    W:
+      level: 0
+      location: '0x04'
+    cave:  # Dungeon 9 entrance: LevelInfoUW9 StartRoomId
+      level: 9
+      location: '0x76'
+  enemies:
+    BlueLynel: 2
+    BlueLeever: 1
+    RedLynel: 2
+    RedLeever: 1
+  treasure: null
+  entrance:  # cave index $09 (OW attr B >> 2); rock wall (bomb it) at x=80 y=160
+    cave: '0x09'
+    contents: level-9
+    how: bomb
+    tile: [10, 12]
+- level: 0
+  location: '0x06'
+  exits:
+    E:
+      level: 0
+      location: '0x07'
+    W:
+      level: 0
+      location: '0x05'
+  enemies:
+    Peahat: 2
+    RedLynel: 2
+    BlueLynel: 2
+  treasure: null
 - level: 0
   location: '0x07'  # off-route neighbour of 0x17 (d2first, Nov 8): exits and enemies from the emulator
   exits:
@@ -13,6 +140,33 @@ rooms:
       location: '0x06'
   enemies:
     RedLynel: 1
+  treasure: null
+  entrance:  # cave index $17 (OW attr B >> 2); rock wall (bomb it) at x=160 y=128
+    cave: '0x17'
+    contents: door-repair
+    how: bomb
+    tile: [20, 8]
+    costs: 20
+- level: 0
+  location: '0x08'
+  exits:
+    E:
+      level: 0
+      location: '0x09'
+    W:
+      level: 0
+      location: '0x07'
+  enemies:
+    Unknown_31: 1  # boulder generator ($1F)
+    Unknown_32: 3
+  treasure: null
+- level: 0
+  location: '0x09'
+  exits:
+    W:
+      level: 0
+      location: '0x08'
+  enemies: null
   treasure: null
 - level: 0
   location: '0x0a'
@@ -29,6 +183,13 @@ rooms:
     BlueLynel: 1
     Zora: 1
   treasure: null
+  entrance:  # cave index $12 (OW attr B >> 2)
+    cave: '0x12'
+    contents: white-sword
+    how: open
+    tile: [4, 2]
+    wares: [white-sword]
+    needs_hearts: 5
 - level: 0
   location: '0x0a'
   in_cave: true
@@ -39,6 +200,23 @@ rooms:
       location: '0x0a'
   enemies: null
   treasure: white-sword  # middle ware $02; the old man hands it over only at 5+ heart containers
+- level: 0
+  location: '0x0b'
+  exits:
+    S:
+      level: 0
+      location: '0x1b'
+    cave:  # Dungeon 5 entrance: LevelInfoUW5 StartRoomId
+      level: 5
+      location: '0x76'
+  enemies:
+    RedLeever: 1
+  treasure: null
+  entrance:  # cave index $05 (OW attr B >> 2); the armos at x=176 y=128 also hides stairs to the same place (emulator-checked)
+    cave: '0x05'
+    contents: level-5
+    how: open
+    tile: [14, 8]
 - level: 0
   location: '0x0c'
   exits:
@@ -51,6 +229,12 @@ rooms:
   enemies:
     RedTektite: 6
   treasure: null
+  entrance:  # cave index $1E (OW attr B >> 2)
+    cave: '0x1e'
+    contents: shop
+    how: open
+    tile: [16, 2]
+    wares: [[magic-shield, 160], [key, 100], [blue-candle, 60]]  # [item, rupees], left to right
 - level: 0
   location: '0x0d'
   exits:
@@ -63,6 +247,12 @@ rooms:
   enemies:
     RedTektite: 6
   treasure: null
+  entrance:  # cave index $1A (OW attr B >> 2); rock wall (bomb it) at x=144 y=80
+    cave: '0x1a'
+    contents: potion-shop
+    how: bomb
+    tile: [18, 2]
+    wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
 - level: 0
   location: '0x0e'
   exits:
@@ -71,6 +261,138 @@ rooms:
       location: '0x1e'
   enemies: null
   treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  entrance:  # cave index $18 (OW attr B >> 2)
+    cave: '0x18'
+    contents: letter
+    how: open
+    tile: [10, 8]
+    wares: [letter]
+- level: 0
+  location: '0x0f'
+  exits:
+    S:
+      level: 0
+      location: '0x1f'
+  enemies: null
+  treasure: null
+  entrance:  # cave index $22 (OW attr B >> 2)
+    cave: '0x22'
+    contents: secret-rupees
+    how: open
+    tile: [16, 8]
+    rupees: 100
+- level: 0
+  location: '0x10'
+  exits:
+    N:
+      level: 0
+      location: '0x00'
+    E:
+      level: 0
+      location: '0x11'
+  enemies:
+    BlueLynel: 4
+  treasure: null
+  entrance:  # cave index $16 (OW attr B >> 2); rock wall (bomb it) at x=144 y=80
+    cave: '0x16'
+    contents: money-game
+    how: bomb
+    tile: [18, 2]
+    stakes: 10
+- level: 0
+  location: '0x11'
+  exits:
+    N:
+      level: 0
+      location: '0x01'
+    W:
+      level: 0
+      location: '0x10'
+  enemies:
+    Peahat: 2
+    RedLynel: 2
+    BlueLynel: 2
+  treasure: null
+- level: 0
+  location: '0x12'
+  exits:
+    N:
+      level: 0
+      location: '0x02'
+    E:
+      level: 0
+      location: '0x13'
+  enemies:
+    BlueLynel: 6
+  treasure: null
+  entrance:  # cave index $1F (OW attr B >> 2); rock wall (bomb it) at x=128 y=80
+    cave: '0x1f'
+    contents: shop
+    how: bomb
+    tile: [16, 2]
+    wares: [[magic-shield, 90], [food, 100], [heart, 10]]  # [item, rupees], left to right
+- level: 0
+  location: '0x13'
+  exits:
+    N:
+      level: 0
+      location: '0x03'
+    E:
+      level: 0
+      location: '0x14'
+    W:
+      level: 0
+      location: '0x12'
+  enemies:
+    BlueLynel: 2
+    RedLynel: 2
+  treasure: null
+  entrance:  # cave index $21 (OW attr B >> 2); rock wall (bomb it) at x=32 y=80
+    cave: '0x21'
+    contents: secret-rupees
+    how: bomb
+    tile: [4, 2]
+    rupees: 30
+- level: 0
+  location: '0x14'
+  exits:
+    E:
+      level: 0
+      location: '0x15'
+    S:
+      level: 0
+      location: '0x24'
+    W:
+      level: 0
+      location: '0x13'
+  enemies:
+    RedLynel: 4
+  treasure: null
+  entrance:  # cave index $17 (OW attr B >> 2); rock wall (bomb it) at x=192 y=80
+    cave: '0x17'
+    contents: door-repair
+    how: bomb
+    tile: [24, 2]
+    costs: 20
+- level: 0
+  location: '0x15'
+  exits:
+    E:
+      level: 0
+      location: '0x16'
+    S:
+      level: 0
+      location: '0x25'
+    W:
+      level: 0
+      location: '0x14'
+  enemies:
+    Peahat: 2
+    RedLynel: 2
+    BlueLynel: 2
+  treasure: null
+  # No entrance in quest 1: the rock wall (bomb it) secret is quest 2 only (attr F >> 6 = 2).
 - level: 0
   location: '0x16'  # off-route neighbour of 0x17 (d2first, Nov 8): exits and enemies from the emulator
   exits:
@@ -84,6 +406,12 @@ rooms:
     Unknown_31: 1  # boulder generator and boulders, as in 0x17
     Unknown_32: 3
   treasure: null
+  entrance:  # cave index $16 (OW attr B >> 2); rock wall (bomb it) at x=96 y=80
+    cave: '0x16'
+    contents: money-game
+    how: bomb
+    tile: [12, 2]
+    stakes: 10
 - level: 0
   location: '0x17'
   specialist: ow-boulder
@@ -120,6 +448,7 @@ rooms:
     Unknown_32: 3
     Zora: 1
   treasure: null
+  # No entrance in quest 1: the rock wall (bomb it) secret is quest 2 only (attr F >> 6 = 2).
 - level: 0
   location: '0x19'
   specialist: ow-boulder
@@ -135,6 +464,7 @@ rooms:
     Unknown_32: 3
     Zora: 1
   treasure: null
+  # No entrance in quest 1: the rock wall (bomb it) secret is quest 2 only (attr F >> 6 = 2).
 - level: 0
   location: '0x1a'
   specialist: ow-tektite
@@ -157,12 +487,28 @@ rooms:
   specialist: ow-start
   # The mountain maze (Z_01 CheckMazes, MountainMazeDirs): only W leaves normally; E and S bring Link back into 0x1b
   # and N reaches 0x0b only on the fourth N in a row (one N wrapping back checked in the emulator, d2first Nov 8).
+  # Mapping (Nov 9): all four Ns walked in the emulator ($52F MazeStep 0 -> 1 -> 2 -> 3, the 4th N enters 0x0b).
   exits:
+    N:  # maze: back into 0x1b (MazeStep + 1; the 4th N in a row leads to 0x0b, `maze:`)
+      level: 0
+      location: '0x1b'
+    E:  # maze: back into 0x1b (MazeStep reset)
+      level: 0
+      location: '0x1b'
+    S:  # maze: back into 0x1b (MazeStep reset)
+      level: 0
+      location: '0x1b'
     W:
       level: 0
       location: '0x1a'
   enemies: null
   treasure: null
+  maze:  # Z_01 CheckMazes MountainMazeDirs (crates/zelda game_map::MAZES)
+    sequence: [N, N, N, N]
+    destination:
+      level: 0
+      location: '0x0b'
+    free: W
 - level: 0
   location: '0x1c'
   specialist: ow-start
@@ -181,6 +527,10 @@ rooms:
       location: '0x1b'
   enemies: null
   treasure: null
+  entrance:  # cave index $15 (OW attr B >> 2); the armos at x=176 y=128 hides stairs (Z_04 armos table)
+    cave: '0x15'
+    contents: hint
+    how: armos
 - level: 0
   location: '0x1d'
   exits:
@@ -199,6 +549,11 @@ rooms:
   enemies:
     Peahat: 6
   treasure: null
+  entrance:  # cave index $14 (OW attr B >> 2); rock at x=48 y=144: push it N with the power bracelet
+    cave: '0x14'
+    contents: any-road
+    how: push
+    tile: [10, 6]
 - level: 0
   location: '0x1e'
   exits:
@@ -215,15 +570,129 @@ rooms:
     RedTektite: 6
     Zora: 1
   treasure: null
+  entrance:  # cave index $17 (OW attr B >> 2); rock wall (bomb it) at x=192 y=80
+    cave: '0x17'
+    contents: door-repair
+    how: bomb
+    tile: [24, 2]
+    costs: 20
 - level: 0
   location: '0x1f'
   exits:
+    N:  # a gap in the rock wall at x=$80 only (Z_07 L2299-2318 false-wall exception; mapping, emulator-checked)
+      level: 0
+      location: '0x0f'
     W:
       level: 0
       location: '0x1e'
   enemies:
     Peahat: 6
   treasure: null
+  entrance:  # cave index $16 (OW attr B >> 2)
+    cave: '0x16'
+    contents: money-game
+    how: open
+    tile: [12, 8]
+    stakes: 10
+- level: 0
+  location: '0x20'
+  exits:
+    E:
+      level: 0
+      location: '0x21'
+    S:
+      level: 0
+      location: '0x30'
+  enemies:
+    Ghini: 1
+  treasure: null
+- level: 0
+  location: '0x21'
+  exits:
+    S:
+      level: 0
+      location: '0x31'
+    W:
+      level: 0
+      location: '0x20'
+  enemies:
+    Ghini: 1
+  treasure: null
+  entrance:  # cave index $13 (OW attr B >> 2); gravestone at x=144 y=144 (quest 1): push it; ROM only, not walked
+    cave: '0x13'
+    contents: magic-sword
+    how: push
+    wares: [magic-sword]
+    needs_hearts: 12
+- level: 0
+  location: '0x22'
+  exits:
+    S:
+      level: 0
+      location: '0x32'
+    cave:  # Dungeon 6 entrance: LevelInfoUW6 StartRoomId
+      level: 6
+      location: '0x79'
+  enemies:
+    RedLynel: 1
+  treasure: null
+  entrance:  # cave index $06 (OW attr B >> 2); the armos at x=48 y=128 also hides stairs to the same place (emulator-checked)
+    cave: '0x06'
+    contents: level-6
+    how: open
+    tile: [14, 8]
+- level: 0
+  location: '0x23'
+  exits:
+    E:
+      level: 0
+      location: '0x24'
+    S:
+      level: 0
+      location: '0x33'
+  enemies:
+    RedLynel: 4
+  treasure: null
+  entrance:  # cave index $14 (OW attr B >> 2); rock at x=48 y=144: push it N with the power bracelet
+    cave: '0x14'
+    contents: any-road
+    how: push
+    tile: [8, 10]
+- level: 0
+  location: '0x24'
+  exits:
+    N:
+      level: 0
+      location: '0x14'
+    E:
+      level: 0
+      location: '0x25'
+    W:
+      level: 0
+      location: '0x23'
+  enemies: null
+  treasure: power-bracelet  # under the armos at x=$E0 (Z_04 armos table)
+- level: 0
+  location: '0x25'
+  exits:
+    N:
+      level: 0
+      location: '0x15'
+    S:
+      level: 0
+      location: '0x35'
+    W:
+      level: 0
+      location: '0x24'
+  enemies:
+    Peahat: 4
+  treasure: null
+  entrance:  # cave index $1D (OW attr B >> 2)
+    cave: '0x1d'
+    contents: shop
+    how: open
+    tile: [20, 2]
+    wares: [[magic-shield, 130], [bombs, 20], [wood-arrow, 80]]  # [item, rupees], left to right
 - level: 0
   location: '0x26'  # off-route neighbour of 0x27 (d2first, Nov 8): exits and enemies from the emulator
   exits:
@@ -237,6 +706,12 @@ rooms:
     Peahat: 6
     Zora: 1
   treasure: null
+  entrance:  # cave index $1F (OW attr B >> 2); rock wall (bomb it) at x=48 y=80
+    cave: '0x1f'
+    contents: shop
+    how: bomb
+    tile: [6, 2]
+    wares: [[magic-shield, 90], [food, 100], [heart, 10]]  # [item, rupees], left to right
 - level: 0
   location: '0x27'
   specialist: ow-zora
@@ -254,6 +729,12 @@ rooms:
     Peahat: 6
     Zora: 1
   treasure: null
+  entrance:  # cave index $1A (OW attr B >> 2); rock wall (bomb it) at x=224 y=80
+    cave: '0x1a'
+    contents: potion-shop
+    how: bomb
+    tile: [28, 2]
+    wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
 - level: 0
   location: '0x28'
   specialist: ow-zora
@@ -271,6 +752,12 @@ rooms:
     Peahat: 6
     Zora: 1
   treasure: null
+  entrance:  # cave index $21 (OW attr B >> 2); tree (burn it) at x=208 y=160
+    cave: '0x21'
+    contents: secret-rupees
+    how: burn
+    tile: [26, 12]
+    rupees: 30
 - level: 0
   location: '0x29'
   exits:
@@ -340,6 +827,12 @@ rooms:
   enemies:
     RedTektite: 4
   treasure: null
+  entrance:  # cave index $11 (OW attr B >> 2); rock wall (bomb it) at x=144 y=160
+    cave: '0x11'
+    contents: take-any
+    how: bomb
+    tile: [18, 12]
+    wares: [red-potion, heart-container]
 - level: 0
   location: '0x2c'
   in_cave: true
@@ -372,6 +865,12 @@ rooms:
     RedOctorok: 3
     Zora: 1
   treasure: null
+  entrance:  # cave index $21 (OW attr B >> 2); rock wall (bomb it) at x=80 y=80
+    cave: '0x21'
+    contents: secret-rupees
+    how: bomb
+    tile: [10, 2]
+    rupees: 30
 - level: 0
   location: '0x2e'
   exits:
@@ -383,6 +882,126 @@ rooms:
       location: '0x2d'
   enemies:
     BlueSlowOctorok: 4
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x2f'
+  exits: null
+  enemies: null
+  treasure: null
+  raft_exits:  # sailing off the pier needs the raft (Z_04 UpdateDock; emulator-checked); not in the graph
+    S:
+      level: 0
+      location: '0x3f'
+  entrance:  # cave index $11 (OW attr B >> 2)
+    cave: '0x11'
+    contents: take-any
+    how: open
+    tile: [12, 8]
+    wares: [red-potion, heart-container]
+- level: 0
+  location: '0x30'
+  exits:
+    N:
+      level: 0
+      location: '0x20'
+    E:
+      level: 0
+      location: '0x31'
+    S:
+      level: 0
+      location: '0x40'
+  enemies:
+    Ghini: 1
+  treasure: null
+- level: 0
+  location: '0x31'
+  exits:
+    N:
+      level: 0
+      location: '0x21'
+    E:
+      level: 0
+      location: '0x32'
+    S:
+      level: 0
+      location: '0x41'
+    W:
+      level: 0
+      location: '0x30'
+  enemies:
+    Ghini: 1
+  treasure: null
+- level: 0
+  location: '0x32'
+  exits:
+    N:
+      level: 0
+      location: '0x22'
+    E:
+      level: 0
+      location: '0x33'
+    W:
+      level: 0
+      location: '0x31'
+  enemies:
+    Peahat: 2
+    RedLynel: 2
+    BlueLynel: 2
+  treasure: null
+- level: 0
+  location: '0x33'
+  exits:
+    N:
+      level: 0
+      location: '0x23'
+    W:
+      level: 0
+      location: '0x32'
+  enemies: null
+  treasure: null
+  entrance:  # cave index $1A (OW attr B >> 2); rock wall (bomb it) at x=160 y=80
+    cave: '0x1a'
+    contents: potion-shop
+    how: bomb
+    tile: [20, 2]
+    wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
+- level: 0
+  location: '0x34'
+  exits:
+    S:
+      level: 0
+      location: '0x44'
+  enemies:
+    BlueLeever: 4
+  treasure: null
+  entrance:  # cave index $20 (OW attr B >> 2); the armos at x=64 y=128 hides stairs (Z_04 armos table)
+    cave: '0x20'
+    contents: shop
+    how: armos
+    wares: [[key, 80], [blue-ring, 250], [food, 60]]  # [item, rupees], left to right
+- level: 0
+  location: '0x35'
+  exits:
+    N:
+      level: 0
+      location: '0x25'
+    E:
+      level: 0
+      location: '0x36'
+  enemies:
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x36'
+  exits:
+    N:
+      level: 0
+      location: '0x26'
+    W:
+      level: 0
+      location: '0x35'
+  enemies:
     Zora: 1
   treasure: null
 - level: 0
@@ -398,6 +1017,11 @@ rooms:
   enemies:
     RedOctorok: 1
   treasure: null
+  entrance:  # cave index $01 (OW attr B >> 2)
+    cave: '0x01'
+    contents: level-1
+    how: open
+    tile: [14, 8]
 - level: 0
   location: '0x38'
   specialist: ow-zora
@@ -470,6 +1094,11 @@ rooms:
   enemies:
     RedSlowOctorok: 1  # ROM obj template $0A and RAM ObjType $0A in 0_3cs (v1 had BlueSlowOctorok)
   treasure: null
+  entrance:  # cave index $02 (OW attr B >> 2)
+    cave: '0x02'
+    contents: level-2
+    how: open
+    tile: [14, 8]
 - level: 0
   location: '0x3d'
   specialist: ow-moblin
@@ -483,6 +1112,11 @@ rooms:
   enemies:
     BlueMoblin: 4
   treasure: null
+  entrance:  # cave index $21 (OW attr B >> 2); the armos at x=144 y=128 hides stairs (Z_04 armos table)
+    cave: '0x21'
+    contents: secret-rupees
+    how: armos
+    rupees: 30
 - level: 0
   location: '0x3e'
   exits:
@@ -510,6 +1144,100 @@ rooms:
     BlueSlowOctorok: 1
     Zora: 1
   treasure: null
+  raft_exits:  # sailing from the dock needs the raft (Z_04 UpdateDock; emulator-checked); not in the graph
+    N:
+      level: 0
+      location: '0x2f'
+- level: 0
+  location: '0x40'
+  exits:
+    N:
+      level: 0
+      location: '0x30'
+    E:
+      level: 0
+      location: '0x41'
+    S:
+      level: 0
+      location: '0x50'
+  enemies:
+    Ghini: 1
+  treasure: null
+- level: 0
+  location: '0x41'
+  exits:
+    N:
+      level: 0
+      location: '0x31'
+    W:
+      level: 0
+      location: '0x40'
+  enemies:
+    Ghini: 1
+  treasure: null
+- level: 0
+  location: '0x42'
+  exits:
+    S:
+      level: 0
+      location: '0x52'
+    cave:  # Dungeon 7 entrance: LevelInfoUW7 StartRoomId
+      level: 7
+      location: '0x79'
+  enemies:
+    RedMoblin: 1
+  treasure: null
+  entrance:  # cave index $07 (OW attr B >> 2); the recorder drains the pond; stairs at tiles (12, 10) (emulator: B with the recorder selected)
+    cave: '0x07'
+    contents: level-7
+    how: recorder
+    tile: [12, 10]
+- level: 0
+  location: '0x43'
+  exits:
+    S:
+      level: 0
+      location: '0x53'
+  enemies:
+    Unknown_47: 1  # pond fairy ($2F)
+  treasure: null
+- level: 0
+  location: '0x44'
+  exits:
+    N:
+      level: 0
+      location: '0x34'
+    S:
+      level: 0
+      location: '0x54'
+  enemies:
+    BlueOctorok: 4
+    Zora: 1
+  treasure: null
+  entrance:  # cave index $1D (OW attr B >> 2)
+    cave: '0x1d'
+    contents: shop
+    how: open
+    tile: [8, 2]
+    wares: [[magic-shield, 130], [bombs, 20], [wood-arrow, 80]]  # [item, rupees], left to right
+- level: 0
+  location: '0x45'
+  exits:
+    cave:  # Dungeon 4 entrance: LevelInfoUW4 StartRoomId
+      level: 4
+      location: '0x71'
+  enemies:
+    Peahat: 1
+  treasure: null
+  raft_exits:  # sailing off the pier needs the raft (Z_04 UpdateDock; emulator-checked); not in the graph
+    S:
+      level: 0
+      location: '0x55'
+  entrance:  # cave index $04 (OW attr B >> 2)
+    cave: '0x04'
+    contents: level-4
+    how: open
+    tile: [16, 8]
 - level: 0
   location: '0x46'
   exits:
@@ -522,6 +1250,12 @@ rooms:
   enemies:
     Zora: 1
   treasure: null
+  entrance:  # cave index $1F (OW attr B >> 2); tree (burn it) at x=144 y=176
+    cave: '0x1f'
+    contents: shop
+    how: burn
+    tile: [18, 14]
+    wares: [[magic-shield, 90], [food, 100], [heart, 10]]  # [item, rupees], left to right
 - level: 0
   location: '0x47'
   exits:
@@ -534,6 +1268,12 @@ rooms:
   enemies:
     Zora: 1
   treasure: null
+  entrance:  # cave index $11 (OW attr B >> 2); tree (burn it) at x=176 y=176
+    cave: '0x11'
+    contents: take-any
+    how: burn
+    tile: [22, 14]
+    wares: [red-potion, heart-container]
 - level: 0
   location: '0x48'
   exits:
@@ -550,6 +1290,12 @@ rooms:
     Zora: 1
     RedLeever: 4
   treasure: null
+  entrance:  # cave index $21 (OW attr B >> 2); tree (burn it) at x=208 y=96
+    cave: '0x21'
+    contents: secret-rupees
+    how: burn
+    tile: [26, 4]
+    rupees: 30
 - level: 0
   location: '0x49'
   exits:
@@ -566,6 +1312,11 @@ rooms:
     BlueSlowOctorok: 1
     RedOctorok: 5
   treasure: null
+  entrance:  # cave index $14 (OW attr B >> 2); rock at x=48 y=144: push it N with the power bracelet
+    cave: '0x14'
+    contents: any-road
+    how: push
+    tile: [10, 6]
 - level: 0
   location: '0x4a'
   exits:
@@ -581,6 +1332,12 @@ rooms:
   enemies:
     BlueTektite: 6
   treasure: null
+  entrance:  # cave index $1D (OW attr B >> 2)
+    cave: '0x1d'
+    contents: shop
+    how: open
+    tile: [22, 2]
+    wares: [[magic-shield, 130], [bombs, 20], [wood-arrow, 80]]  # [item, rupees], left to right
 - level: 0
   location: '0x4b'
   exits:
@@ -596,6 +1353,13 @@ rooms:
   enemies:
     RedMoblin: 6
   treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  entrance:  # cave index $1A (OW attr B >> 2); tree (burn it) at x=176 y=96
+    cave: '0x1a'
+    contents: potion-shop
+    how: burn
+    tile: [22, 4]
+    wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
 - level: 0
   location: '0x4c'
   specialist: ow-octorok
@@ -629,6 +1393,13 @@ rooms:
   enemies:
     BlueMoblin: 4
   treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  entrance:  # cave index $1F (OW attr B >> 2); tree (burn it) at x=208 y=160
+    cave: '0x1f'
+    contents: shop
+    how: burn
+    tile: [26, 12]
+    wares: [[magic-shield, 90], [food, 100], [heart, 10]]  # [item, rupees], left to right
 - level: 0
   location: '0x4e'
   exits:
@@ -637,6 +1408,116 @@ rooms:
       location: '0x4d'
   enemies:
     BlueMoblin: 4
+  treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  entrance:  # cave index $23 (OW attr B >> 2); the armos at x=160 y=128 hides stairs (Z_04 armos table)
+    cave: '0x23'
+    contents: secret-rupees
+    how: armos
+    rupees: 10
+- level: 0
+  location: '0x4f'
+  exits:
+    N:
+      level: 0
+      location: '0x3f'
+    S:
+      level: 0
+      location: '0x5f'
+  enemies:
+    RedSlowOctorok: 2
+    BlueOctorok: 3
+    Zora: 1
+  treasure: null
+- level: 0
+  location: '0x50'
+  exits:
+    N:
+      level: 0
+      location: '0x40'
+    S:
+      level: 0
+      location: '0x60'
+  enemies:
+    RedLynel: 5
+  treasure: null
+- level: 0
+  location: '0x51'
+  exits:
+    E:
+      level: 0
+      location: '0x52'
+    S:
+      level: 0
+      location: '0x61'
+  enemies:
+    BlueMoblin: 5
+  treasure: null
+  entrance:  # cave index $23 (OW attr B >> 2); tree (burn it) at x=144 y=160
+    cave: '0x23'
+    contents: secret-rupees
+    how: burn
+    tile: [18, 12]
+    rupees: 10
+- level: 0
+  location: '0x52'
+  exits:
+    N:
+      level: 0
+      location: '0x42'
+    E:
+      level: 0
+      location: '0x53'
+    S:
+      level: 0
+      location: '0x62'
+    W:
+      level: 0
+      location: '0x51'
+  enemies:
+    BlueMoblin: 2
+    RedMoblin: 2
+  treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+- level: 0
+  location: '0x53'
+  exits:
+    N:
+      level: 0
+      location: '0x43'
+    E:
+      level: 0
+      location: '0x54'
+    S:
+      level: 0
+      location: '0x63'
+    W:
+      level: 0
+      location: '0x52'
+  enemies:
+    BlueMoblin: 3
+    RedMoblin: 2
+  treasure: null
+  # No entrance in quest 1: the tree (burn it) secret is quest 2 only (attr F >> 6 = 2).
+- level: 0
+  location: '0x54'
+  exits:
+    N:
+      level: 0
+      location: '0x44'
+    E:
+      level: 0
+      location: '0x55'
+    S:
+      level: 0
+      location: '0x64'
+    W:
+      level: 0
+      location: '0x53'
+  enemies:
+    RedOctorok: 2
+    BlueOctorok: 2
+    Zora: 1
   treasure: null
 - level: 0
   location: '0x55'
@@ -654,6 +1535,10 @@ rooms:
     BlueOctorok: 1
     Zora: 1
   treasure: null
+  raft_exits:  # sailing from the dock needs the raft (Z_04 UpdateDock; emulator-checked); not in the graph
+    N:
+      level: 0
+      location: '0x45'
 - level: 0
   location: '0x56'
   exits:
@@ -670,6 +1555,12 @@ rooms:
     BlueOctorok: 4
     Zora: 1
   treasure: null
+  entrance:  # cave index $23 (OW attr B >> 2); tree (burn it) at x=160 y=160
+    cave: '0x23'
+    contents: secret-rupees
+    how: burn
+    tile: [20, 12]
+    rupees: 10
 - level: 0
   location: '0x57'
   exits:
@@ -683,6 +1574,7 @@ rooms:
     BlueOctorok: 2
     RedOctorok: 2
   treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
 - level: 0
   location: '0x58'
   specialist: ow-octorok
@@ -703,6 +1595,7 @@ rooms:
     BlueOctorok: 2
     RedOctorok: 2
   treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
 - level: 0
   location: '0x59'
   specialist: ow-zora
@@ -763,6 +1656,13 @@ rooms:
     BlueMoblin: 2
     RedMoblin: 2
   treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  entrance:  # cave index $23 (OW attr B >> 2); tree (burn it) at x=32 y=160
+    cave: '0x23'
+    contents: secret-rupees
+    how: burn
+    tile: [4, 12]
+    rupees: 10
 - level: 0
   location: '0x5c'
   specialist: ow-moblin
@@ -779,6 +1679,7 @@ rooms:
   enemies:
     BlueMoblin: 4
   treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
 - level: 0
   location: '0x5d'
   specialist: ow-moblin
@@ -798,6 +1699,7 @@ rooms:
   enemies:
     BlueMoblin: 4
   treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
 # 0x5e and 0x6d are not in the v1 data; added in round 6 when 0x5d joined a route.  Untagged, exits only
 # (overworld screen edges are two-way: the rooms whose exits lead here), enemies unknown.
 - level: 0
@@ -808,17 +1710,12 @@ rooms:
       location: '0x5d'
   enemies: {}
   treasure: null
-- level: 0
-  location: '0x6d'
-  exits:
-    N:
-      level: 0
-      location: '0x5d'
-    W:
-      level: 0
-      location: '0x6c'
-  enemies: {}
-  treasure: null
+  entrance:  # cave index $1E (OW attr B >> 2)
+    cave: '0x1e'
+    contents: shop
+    how: open
+    tile: [14, 2]
+    wares: [[magic-shield, 160], [key, 100], [blue-candle, 60]]  # [item, rupees], left to right
 - level: 0
   location: '0x5f'
   exits:
@@ -833,6 +1730,96 @@ rooms:
     RedOctorok: 3
     Zora: 1
   treasure: heart-container
+- level: 0
+  location: '0x60'
+  exits:
+    N:
+      level: 0
+      location: '0x50'
+    E:
+      level: 0
+      location: '0x61'
+  enemies:
+    Peahat: 2
+    RedLynel: 2
+    BlueLynel: 2
+  treasure: null
+- level: 0
+  location: '0x61'
+  exits:
+    N:  # maze: loops back into the room (and restarts the sequence)
+      level: 0
+      location: '0x61'
+    E:
+      level: 0
+      location: '0x62'
+    S:  # maze: loops back into the room (and restarts the sequence)
+      level: 0
+      location: '0x61'
+    W:  # maze: loops back into the room (and restarts the sequence)
+      level: 0
+      location: '0x61'
+  enemies:
+    BlueMoblin: 5
+  treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  maze:  # Z_01 CheckMazes ForestMazeDirs (crates/zelda game_map::MAZES)
+    sequence: [N, W, S, W]
+    destination:
+      level: 0
+      location: '0x60'
+    free: E
+- level: 0
+  location: '0x62'
+  exits:
+    N:
+      level: 0
+      location: '0x52'
+    E:
+      level: 0
+      location: '0x63'
+    S:
+      level: 0
+      location: '0x72'
+    W:
+      level: 0
+      location: '0x61'
+  enemies:
+    BlueMoblin: 5
+  treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  entrance:  # cave index $22 (OW attr B >> 2); tree (burn it) at x=128 y=96
+    cave: '0x22'
+    contents: secret-rupees
+    how: burn
+    tile: [16, 4]
+    rupees: 100
+- level: 0
+  location: '0x63'
+  exits:
+    N:
+      level: 0
+      location: '0x53'
+    E:
+      level: 0
+      location: '0x64'
+    S:
+      level: 0
+      location: '0x73'
+    W:
+      level: 0
+      location: '0x62'
+  enemies:
+    BlueMoblin: 1
+    RedSlowOctorok: 2
+    RedMoblin: 3
+  treasure: null
+  entrance:  # cave index $17 (OW attr B >> 2); tree (burn it) at x=96 y=160
+    cave: '0x17'
+    contents: door-repair
+    how: burn
+    tile: [12, 12]
+    costs: 20
 - level: 0
   location: '0x64'
   exits:
@@ -849,6 +1836,12 @@ rooms:
     BlueSlowOctorok: 2
     RedOctorok: 3
   treasure: null
+  entrance:  # cave index $1A (OW attr B >> 2)
+    cave: '0x1a'
+    contents: potion-shop
+    how: open
+    tile: [14, 2]
+    wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
 - level: 0
   location: '0x65'
   exits:
@@ -885,6 +1878,12 @@ rooms:
     RedOctorok: 2
     BlueOctorok: 2
   treasure: null
+  entrance:  # cave index $1E (OW attr B >> 2)
+    cave: '0x1e'
+    contents: shop
+    how: open
+    tile: [14, 2]
+    wares: [[magic-shield, 160], [key, 100], [blue-candle, 60]]  # [item, rupees], left to right
 - level: 0
   location: '0x67'
   specialist: ow-octorok
@@ -901,6 +1900,12 @@ rooms:
   enemies:
     BlueOctorok: 4
   treasure: null
+  entrance:  # cave index $21 (OW attr B >> 2); rock wall (bomb it) at x=112 y=80
+    cave: '0x21'
+    contents: secret-rupees
+    how: bomb
+    tile: [14, 2]
+    rupees: 30
 - level: 0
   location: '0x68'
   specialist: ow-octorok
@@ -920,6 +1925,13 @@ rooms:
   enemies:
     BlueOctorok: 4
   treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  entrance:  # cave index $17 (OW attr B >> 2); tree (burn it) at x=32 y=160
+    cave: '0x17'
+    contents: door-repair
+    how: burn
+    tile: [4, 12]
+    costs: 20
 - level: 0
   location: '0x69'
   exits:
@@ -953,6 +1965,12 @@ rooms:
     RedOctorok: 2
     Zora: 1
   treasure: null
+  entrance:  # cave index $17 (OW attr B >> 2); tree (burn it) at x=192 y=160
+    cave: '0x17'
+    contents: door-repair
+    how: burn
+    tile: [24, 12]
+    costs: 20
 - level: 0
   location: '0x6b'
   exits:
@@ -973,6 +1991,13 @@ rooms:
     RedMoblin: 3
     RedSlowOctorok: 2
   treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  entrance:  # cave index $22 (OW attr B >> 2); tree (burn it) at x=128 y=160
+    cave: '0x22'
+    contents: secret-rupees
+    how: burn
+    tile: [16, 12]
+    rupees: 100
 - level: 0
   location: '0x6c'
   exits:
@@ -987,6 +2012,45 @@ rooms:
       location: '0x6b'
   enemies:
     RedMoblin: 4
+  treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  # No entrance in quest 1: the tree (burn it) secret is quest 2 only (attr F >> 6 = 2).
+- level: 0
+  location: '0x6d'
+  exits:
+    N:
+      level: 0
+      location: '0x5d'
+    E:  # mapping (Nov 9): walked in the emulator
+      level: 0
+      location: '0x6e'
+    W:
+      level: 0
+      location: '0x6c'
+    cave:  # Dungeon 8 entrance (mapping, Nov 9): burn the tree; LevelInfoUW8 StartRoomId
+      level: 8
+      location: '0x7e'
+  enemies: {}
+  treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  entrance:  # cave index $08 (OW attr B >> 2); tree (burn it) at x=160 y=96
+    cave: '0x08'
+    contents: level-8
+    how: burn
+    tile: [20, 4]
+- level: 0
+  location: '0x6e'
+  exits:
+    E:
+      level: 0
+      location: '0x6f'
+    W:
+      level: 0
+      location: '0x6d'
+  enemies:
+    BlueMoblin: 1
+    RedSlowOctorok: 2
+    RedMoblin: 3
   treasure: null
 - level: 0
   location: '0x6f'
@@ -1005,6 +2069,99 @@ rooms:
     RedOctorok: 4
     Zora: 1
   treasure: null
+  entrance:  # cave index $1D (OW attr B >> 2)
+    cave: '0x1d'
+    contents: shop
+    how: open
+    tile: [6, 2]
+    wares: [[magic-shield, 130], [bombs, 20], [wood-arrow, 80]]  # [item, rupees], left to right
+- level: 0
+  location: '0x70'
+  exits:
+    E:
+      level: 0
+      location: '0x71'
+  enemies:
+    Peahat: 4
+  treasure: null
+  entrance:  # cave index $1C (OW attr B >> 2)
+    cave: '0x1c'
+    contents: pay-hint
+    how: open
+    tile: [22, 2]
+    prices: [10, 30, 50]
+- level: 0
+  location: '0x71'
+  exits:
+    N:
+      level: 0
+      location: '0x61'
+    E:
+      level: 0
+      location: '0x72'
+    W:
+      level: 0
+      location: '0x70'
+  enemies:
+    BlueMoblin: 5
+  treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  entrance:  # cave index $21 (OW attr B >> 2); rock wall (bomb it) at x=80 y=80
+    cave: '0x21'
+    contents: secret-rupees
+    how: bomb
+    tile: [10, 2]
+    rupees: 30
+- level: 0
+  location: '0x72'
+  exits:
+    N:
+      level: 0
+      location: '0x62'
+    E:
+      level: 0
+      location: '0x73'
+    W:
+      level: 0
+      location: '0x71'
+  enemies:
+    BlueMoblin: 3
+    RedMoblin: 1
+  treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+- level: 0
+  location: '0x73'
+  exits:
+    N:
+      level: 0
+      location: '0x63'
+    E:
+      level: 0
+      location: '0x74'
+    W:
+      level: 0
+      location: '0x72'
+  enemies:
+    BlueMoblin: 4
+  treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+- level: 0
+  location: '0x74'
+  exits:
+    W:
+      level: 0
+      location: '0x73'
+    cave:  # Dungeon 3 entrance: LevelInfoUW3 StartRoomId
+      level: 3
+      location: '0x7c'
+  enemies:
+    RedTektite: 1
+  treasure: null
+  entrance:  # cave index $03 (OW attr B >> 2)
+    cave: '0x03'
+    contents: level-3
+    how: open
+    tile: [16, 8]
 - level: 0
   location: '0x75'
   exits:
@@ -1020,6 +2177,11 @@ rooms:
     RedLeever: 1
     Zora: 1
   treasure: null
+  entrance:  # cave index $19 (OW attr B >> 2)
+    cave: '0x19'
+    contents: hint
+    how: open
+    tile: [4, 2]
 - level: 0
   location: '0x76'
   exits:
@@ -1035,6 +2197,12 @@ rooms:
   enemies:
     RedTektite: 4
   treasure: null
+  entrance:  # cave index $16 (OW attr B >> 2); rock wall (bomb it) at x=96 y=80
+    cave: '0x16'
+    contents: money-game
+    how: bomb
+    tile: [12, 2]
+    stakes: 10
 - level: 0
   location: '0x77'
   specialist: ow-start
@@ -1054,6 +2222,12 @@ rooms:
       in_cave: true
   enemies: null
   treasure: null
+  entrance:  # cave index $10 (OW attr B >> 2)
+    cave: '0x10'
+    contents: wood-sword
+    how: open
+    tile: [8, 2]
+    wares: [wood-sword]
 - level: 0
   location: '0x77'
   in_cave: true
@@ -1080,6 +2254,13 @@ rooms:
   enemies:
     BlueOctorok: 4
   treasure: null
+  edge_spawn: true  # its monsters walk in from the screen edges (attr F bit 3)
+  entrance:  # cave index $1A (OW attr B >> 2); tree (burn it) at x=64 y=160
+    cave: '0x1a'
+    contents: potion-shop
+    how: burn
+    tile: [8, 12]
+    wares: [[blue-potion, 40], [red-potion, 68]]  # [item, rupees], left to right
 - level: 0
   location: '0x79'
   exits:
@@ -1092,6 +2273,11 @@ rooms:
   enemies:
     BlueTektite: 5
   treasure: null
+  entrance:  # cave index $14 (OW attr B >> 2); rock at x=128 y=144: push it N with the power bracelet
+    cave: '0x14'
+    contents: any-road
+    how: push
+    tile: [18, 10]
 - level: 0
   location: '0x7a'
   exits:
@@ -1120,6 +2306,12 @@ rooms:
     RedLeever: 6
     Zora: 1
   treasure: null
+  entrance:  # cave index $11 (OW attr B >> 2); rock wall (bomb it) at x=144 y=80
+    cave: '0x11'
+    contents: take-any
+    how: bomb
+    tile: [18, 2]
+    wares: [red-potion, heart-container]
 - level: 0
   location: '0x7c'
   exits:
@@ -1133,6 +2325,12 @@ rooms:
     RedLeever: 6
     Zora: 1
   treasure: null
+  entrance:  # cave index $16 (OW attr B >> 2); rock wall (bomb it) at x=96 y=80
+    cave: '0x16'
+    contents: money-game
+    how: bomb
+    tile: [12, 2]
+    stakes: 10
 - level: 0
   location: '0x7d'
   exits:
@@ -1146,6 +2344,12 @@ rooms:
     BlueSlowOctorok: 4
     Zora: 1
   treasure: null
+  entrance:  # cave index $17 (OW attr B >> 2); rock wall (bomb it) at x=96 y=80
+    cave: '0x17'
+    contents: door-repair
+    how: bomb
+    tile: [12, 2]
+    costs: 20
 - level: 0
   location: '0x7e'
   exits:
@@ -1653,3 +2857,286 @@ rooms:
   enemies:
     Rope: 5
   treasure: key
+# --- Dungeon 3 (level 3) (mapping, Nov 9; docs/routes/d3.md) ---
+# Rooms: LevelInfoUW3 SubmenuMapMask (rotation $0C) over LevelBlockUW1Q1; doors from attr A/B (N A>>5, S A>>2,
+# W B>>5, E B>>2; 0 open, 1 wall, 4 bomb, 5/6 key, 7 shutter), enemies from attr C/D + FoeCounts, item from
+# attr E & $1F, `trigger` from attr F & 7 (Z_05 CheckSecretTrigger).  Every room was loaded in the emulator
+# (room-id retarget from 0x7c) and Lee's route was walked there (docs/routes/d3.md).  Bomb walls are exits
+# here (marked `# bomb wall`, also in `bomb_walls`): the boss room's only open way in is 0x4c's E wall.
+- level: 3
+  location: '0x2a'
+  exits:
+    E:  # shutter
+      level: 3
+      location: '0x2b'
+  enemies:
+    BlueKeese: 8
+  treasure: key
+  trigger: kill-all  # attr F & 7 = 1
+- level: 3
+  location: '0x2b'  # an old man (UW person $4B; Unknown_75 by the repo enum names)
+  exits:
+    S:
+      level: 3
+      location: '0x3b'
+    W:
+      level: 3
+      location: '0x2a'
+  enemies:
+    Unknown_75: 1
+  treasure: null
+- level: 3
+  location: '0x3b'  # blade traps and Zols; pushing the block (attr D $40) opens the N shutter (secret trigger 4)
+  exits:
+    N:  # shutter
+      level: 3
+      location: '0x2b'
+    S:
+      level: 3
+      location: '0x4b'
+      locked: true
+  enemies:  # plus four blade traps ($49, projectiles)
+    Zol: 2
+  treasure: null
+  trigger: push-block  # attr F & 7 = 4
+  push_block_opens: N  # the shutter (trigger 4); not `push_block` (that one gates stairs)
+- level: 3
+  location: '0x3d'  # the triforce room
+  exits:
+    S:
+      level: 3
+      location: '0x4d'
+  enemies: null
+  treasure: triforce
+- level: 3
+  location: '0x49'
+  exits:
+    E:
+      level: 3
+      location: '0x4a'
+    S:
+      level: 3
+      location: '0x59'
+  enemies:
+    Bubble: 3
+    Zol: 2
+    BlueKeese: 3
+  treasure: key
+- level: 3
+  location: '0x4a'
+  exits:
+    E:
+      level: 3
+      location: '0x4b'
+      locked: true
+    S:
+      level: 3
+      location: '0x5a'
+    W:
+      level: 3
+      location: '0x49'
+  enemies:
+    BlueKeese: 5
+  treasure: bombs
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 3
+  location: '0x4b'
+  exits:
+    N:
+      level: 3
+      location: '0x3b'
+      locked: true
+    E:
+      level: 3
+      location: '0x4c'
+      locked: true
+    S:
+      level: 3
+      location: '0x5b'
+    W:
+      level: 3
+      location: '0x4a'
+      locked: true
+  enemies:
+    Zol: 3
+  treasure: key
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 3
+  location: '0x4c'  # blade traps and Zols (Lee: "trap/gel room"); its E wall is bombable into the boss room
+  requires_bombs: true    # Lee (Nov 9): the E wall is bombed open into the boss room
+  exits:
+    E:  # bomb wall
+      level: 3
+      location: '0x4d'
+    S:
+      level: 3
+      location: '0x5c'
+    W:
+      level: 3
+      location: '0x4b'
+      locked: true
+  enemies:  # plus four blade traps ($49, projectiles)
+    Zol: 2
+  treasure: map
+  bomb_walls: [E]
+- level: 3
+  location: '0x4d'  # Manhandla (one $3C object, five slots: the body and four heads)
+  requires_bombs: true    # Lee (Nov 9): the plan kills Manhandla with bombs dropped into his path
+  exits:
+    N:  # shutter
+      level: 3
+      location: '0x3d'
+    S:  # shutter
+      level: 3
+      location: '0x5d'
+    W:  # bomb wall
+      level: 3
+      location: '0x4c'
+  enemies:
+    Manhandla: 1
+  treasure: heart-container
+  bomb_walls: [W]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 3
+  location: '0x59'
+  exits:
+    N:
+      level: 3
+      location: '0x49'
+    E:
+      level: 3
+      location: '0x5a'
+      locked: true
+    S:  # shutter
+      level: 3
+      location: '0x69'
+  enemies:
+    BlueDarknut: 5
+  treasure: null
+  trigger: kill-all  # attr F & 7 = 1
+- level: 3
+  location: '0x5a'  # blade traps and Keese
+  exits:
+    N:
+      level: 3
+      location: '0x4a'
+    E:
+      level: 3
+      location: '0x5b'
+    W:
+      level: 3
+      location: '0x59'
+      locked: true
+  enemies:  # plus four blade traps ($49, projectiles)
+    BlueKeese: 4
+  treasure: compass
+- level: 3
+  location: '0x5b'  # the central Darknut room; its bombs appear when the Darknuts are dead
+  exits:
+    N:
+      level: 3
+      location: '0x4b'
+    E:  # bomb wall
+      level: 3
+      location: '0x5c'
+    S:
+      level: 3
+      location: '0x6b'
+    W:
+      level: 3
+      location: '0x5a'
+  enemies:
+    BlueDarknut: 3
+  treasure: bombs
+  bomb_walls: [E]
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 3
+  location: '0x5c'
+  exits:
+    N:
+      level: 3
+      location: '0x4c'
+    E:  # shutter
+      level: 3
+      location: '0x5d'
+    W:  # bomb wall
+      level: 3
+      location: '0x5b'
+  enemies:
+    BlueDarknut: 3
+  treasure: null
+  bomb_walls: [W]
+  trigger: kill-all  # attr F & 7 = 1
+- level: 3
+  location: '0x5d'
+  exits:
+    N:  # shutter
+      level: 3
+      location: '0x4d'
+    W:  # shutter
+      level: 3
+      location: '0x5c'
+  enemies:
+    Bubble: 3
+    Zol: 2
+    BlueKeese: 3
+  treasure: 5-rupees
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 3
+  location: '0x69'  # Darknuts; stairs at tiles (26-27, 10-11) down to the raft cellar 0x0f
+  exits:
+    N:
+      level: 3
+      location: '0x59'
+    cave:  # the stairs; CheckWarps finds cellar $0F (see d3.md)
+      level: 3
+      location: '0x0f'
+      in_cave: true
+  enemies:
+    BlueDarknut: 8
+  treasure: bombs
+  trigger: kill-all-item  # attr F & 7 = 7
+  stairs: [26, 10]
+- level: 3
+  location: '0x6b'
+  exits:
+    N:
+      level: 3
+      location: '0x5b'
+    S:
+      level: 3
+      location: '0x7b'
+  enemies:
+    Zol: 5
+  treasure: key
+  trigger: kill-all-item  # attr F & 7 = 7
+- level: 3
+  location: '0x7b'
+  exits:
+    N:
+      level: 3
+      location: '0x6b'
+    E:
+      level: 3
+      location: '0x7c'
+  enemies:
+    Zol: 6
+  treasure: key
+- level: 3
+  location: '0x7c'  # the entrance room (OW 0x74, cave index 3); S leaves the dungeon (omitted, as in D2)
+  exits:
+    W:
+      level: 3
+      location: '0x7b'
+  enemies: null
+  treasure: null
+- level: 3
+  location: '0x0f'
+  in_cave: true  # the raft cellar under 0x69 (mode 9, side view); see the cellar note in d3.md
+  exits:
+    N:  # up the left ladder (attr A = attr B = $69)
+      level: 3
+      location: '0x69'
+  enemies:  # the cellar's keese (emulator; not the attr C/D list)
+    BlueKeese: 4
+  treasure: raft

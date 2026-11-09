@@ -11,7 +11,7 @@
 
 use crate::enums::{Direction, MapLocation, SwordKind, Tile};
 use crate::game::GameView;
-use crate::game_map::{GameMap, RouteStep};
+use crate::game_map::{GameMap, MAZE_STEP, RouteStep};
 use crate::room::Target;
 use crate::room_entry::ROOM_FLAGS_OW;
 use crate::room_state::{SecretTrigger, decode_room_state, room_flags};
@@ -844,7 +844,9 @@ impl GameCompletion {
                 )
             }
         };
-        if let Some((last, result)) = &self.last_route
+        // A maze's next direction depends on MazeStep, which the cache key doesn't hold.
+        if self.map.maze(loc).is_none()
+            && let Some((last, result)) = &self.last_route
             && *last == key
         {
             return self.push_block_targets(state, result.clone());
@@ -870,7 +872,7 @@ impl GameCompletion {
         let room = state.room();
         let mut targets = Vec::new();
         for next in &next_rooms {
-            let d = loc.direction_to(*next);
+            let d = self.map.exit_direction(loc, *next, state.peek(MAZE_STEP));
             if d == Direction::None {
                 if next.in_cave != loc.in_cave {
                     targets.extend(self.cave_tiles(state).into_iter().map(Target::Tile));

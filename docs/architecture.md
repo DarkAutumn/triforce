@@ -135,7 +135,8 @@ arrivals by keys carried, so full key carriage is reported separately from reach
 ### Bombs (`crates/env/src/bombs.rs`)
 
 Bomb counts ($658) stay natural (never refilled; `items: {bombs: ...}` only masks the action) except in rooms
-game.yaml tags `requires_bombs: true` (only Dodongo, 2:0x0e). `BombLedger`, shared by `SpecialistEnv` and
+game.yaml tags `requires_bombs: true` (Dodongo 2:0x0e, the 0x2c rock wall, and off the route so far Dungeon 3's
+bombed wall 3:0x4c and Manhandla's room 3:0x4d). `BombLedger`, shared by `SpecialistEnv` and
 `ChainEnv` (one per episode or run), runs at episode/run start and after every action, writes any change with
 `Session::apply_ram(&[(Var::Bombs, n)])` and carries the rebuilt state on (mask, observation; the action's `Change`
 keeps what the action did). In a `requires_bombs` room a count of 0 becomes 1, a *cheated* bomb, marked
@@ -328,6 +329,13 @@ at 2N. `eval-chain` leaves it off.
   `N` room). Underworld stairs ($70 top-left tiles, `Room::stairs_tiles`) are the targets into a cellar; in a room
   with game.yaml `push_block: [dirs]` they are replaced, while the block is pending, by the tiles Link pushes it
   from in those directions, and `reward-pushed-block` pays for a push in a listed direction.
+- **Overworld mazes** (`zelda::game_map::MAZES`, Z_01 CheckMazes; `docs/routes/overworld.md`): 0x1b (N, N, N, N to
+  0x0b; W leaves) and 0x61 (N, W, S, W to 0x60; E leaves). They live in code; game.yaml's `maze:` blocks must match
+  them (load error otherwise) and list the looping edges as exits back into the room. A maze room gets a synthetic
+  exit `maze` to its destination costing the sequence's length in the Dijkstra; `GameMap::exit_direction` turns
+  "toward the destination" into the sequence's next direction for `MazeStep` ($52F), used by the objective's exit
+  targets (no route cache in a maze room) and the observation's objective direction. A routes.yaml step leaving
+  through a maze's sequence is a load error: the envs don't model a room visit that loops back into itself.
 - `Route.load(name, stop_at=None)` reads `triforce/routes.yaml`. A route starts at the `start` savestate and ends on
   taking its last step's triforce (d2first: Dungeon 1's); `stop_at` ends it on entering that room instead. A missed
   `heart` waypoint ends the run as a failure (room outcome `missed`); so does a retreat beyond `MAX_RETREATS` (3)
