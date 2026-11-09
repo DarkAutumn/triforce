@@ -61,9 +61,19 @@ Z_07 5446–5488), with corrections to the folk version:
   (slow Octoroks, Moblin `$03`, Lynel `$01`, Vire, Red Goriya, Darknut `$0B`, Wizzrobe `$24`, Gibdo) has bombs
   (columns 1, 6, 8). All bosses use row 3.
 - **Dodongo** forces bombs on a sword kill (sets `$50 = $51 = $0A`): his stun-and-sword kill always drops bombs
-  unless the fairy (`$627 == 16`) wins. **Manhandla** (5 objects): each hand's death counts as a kill (with the bomb
-  damage type if a bomb killed it) but only the last hand drops; one bomb killing four hands adds ~4 to `$50`, so
-  it arms bombs only if the count was ~6–9 before (unverified: whether the base counts again on later hits).
+  unless the fairy (`$627 == 16`) wins. **Manhandla** (Lee partly right; scout ManhandlaHits, `history://ManhandlaHits`,
+  Z_04 7968–8054, Z_01 5996–6014, 6108–6157, Z_07 4783–4835): four hands (slots 1–4) and a base (slot 5, HP `$40`).
+  The base "revives": `Manhandla_CheckCollisions` zeroes its invincibility timer after every check and writes its
+  metastate back to 0, and HP is never restored — so once a bomb (`$40` damage) takes it to 0, **every later
+  damaging hit is a fresh kill** through `HandleMonsterDied` (`$627`++, `$50`++). A bomb damages only in state `$13`,
+  24 frames, with no per-bomb hit bookkeeping: the base can be hit **once per frame, up to 24 times per bomb** while
+  it is within 24 px and alive (a sword swing up to 8 per swing once its HP is 0). Each hand dies once (bomb damage
+  = hand HP). Only the last hand drops (row 3); the base and the other hands become `$5D` (no drop). So: a bomb
+  that kills all hands *in the same frame* (detonation within ~7 px of the base centre) counts only 5 (base once +
+  4 hands) and arms bombs only if the streak was ≥ 5 before; a bomb whose hands die over several frames counts
+  4 + (frames the base was hit), up to 28, so `$50` crosses 9 → 10 on a bomb hit and the last hand drops a forced
+  bomb — the usual one-bomb kill. It fails if Link is hurt before the last hand's death spark ends, if `$627` is
+  exactly 16 then (fairy), or if a sword hit made the 9 → 10 crossing (5 rupees). Not yet verified by a RAM trace.
 - **Proposed features** (Link block, a schema change): `help_count = $50/10`, `bomb_prime = ($50 == 9)` (the next
   kill should be a bomb kill), `help_armed = ($50 >= 10)`, `help_is_bomb = ($51 != 0)`, `fairy_next = ($627 == 15)`
   / `fairy_armed = ($627 == 16)`, and per entity `can_drop`. Rewards: a small bonus for a bomb kill that arms bombs
