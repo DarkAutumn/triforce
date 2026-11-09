@@ -67,3 +67,16 @@ By Lynel spawn (100 episodes each from a track's room-entry state with that spaw
 No retreats. Failures are deaths, mostly at low starting health (1–2 hearts: 8 of the 18 in the main eval) but 4
 at full health. So the room is passable for every spawn without the pirouette; the mid-strip spawn (55% of entries)
 is the weakest, and the way back out with the white sword loses more runs than the way in.
+
+## 5. Lynel room: the baseline ow-lynel (r47-base-ow, no curriculum, 8M)
+
+Eval **98.4%**, health change −0.28 (r48 with the curriculum, 4M steps: 98.0%, −0.29). Entry 98/98/99%, the cave
+100%, the way back 97/96/98%; 3 retreats in 300 entries (soft failures). Per spawn: mid-strip **98%**, corridor
+**100%**, near-cave **95%** (2 retreats, 3 deaths). So the plain setup learns the room as well as the curriculum
+does; the curriculum only got there in half the steps. Neither needed the pirouette, and with retreat a soft
+failure the model almost never leaves. The baseline run stays the team's ow-lynel (it is the baseline).
+
+Conclusion for now (Lee's goal: get through the room, however): reached, ~98% one-room for every spawn. Left
+open: deaths at full health (a few per 100 on the way back with the white sword), whether a neutral retreat for
+the near-cave spawn only would help (95% there), and how the room does in chains, where Link arrives with whatever
+health 0x1a left him.
