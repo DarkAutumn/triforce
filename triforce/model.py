@@ -26,6 +26,7 @@ reproducible when envs are stepped asynchronously.  ``evaluate`` with noise does
 (CUDA-graph capturable); callers check the kind mask themselves.
 """
 
+import json
 from dataclasses import asdict, dataclass, field, fields
 from typing import Optional
 
@@ -411,6 +412,14 @@ class ZeldaPolicy(nn.Module):
     def parameter_count(self) -> int:
         """Trainable parameter count."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def to_native(self):
+        """The same network as a Rust ``_native.Policy`` (``crates/policy``): the config and float32 copies of the
+        weights. Rollouts, evaluation and replays act with it; torch stays the learner."""
+        from ._native import Policy  # pylint: disable=import-outside-toplevel
+        weights = {name: value.detach().to('cpu', torch.float32).contiguous().numpy()
+                   for name, value in self.state_dict().items()}
+        return Policy(json.dumps(self.config.to_dict()), weights)
 
 
 def build_model(config: ModelConfig | dict, observation_space: Optional[spaces.Dict] = None) -> ZeldaPolicy:

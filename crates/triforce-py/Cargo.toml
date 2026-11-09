@@ -15,6 +15,7 @@ indexmap = "2.14.2"
 movie = { path = "../movie" }
 numpy = "0.30"
 parking_lot = "0.12.5"
+policy = { path = "../policy" }
 pool = { path = "../pool" }
 pyo3 = { version = "0.30", features = ["abi3-py312"] }
 rand = "0.10.3"

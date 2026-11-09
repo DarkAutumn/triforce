@@ -604,6 +604,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "policy"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pool"
 version = "0.1.0"
 dependencies = [
@@ -1049,6 +1057,7 @@ dependencies = [
  "movie",
  "numpy",
  "parking_lot",
+ "policy",
  "pool",
  "pyo3",
  "rand",

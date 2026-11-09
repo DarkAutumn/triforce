@@ -14,6 +14,7 @@ mod envs;
 mod errors;
 mod explore;
 mod game;
+mod policy;
 
 use pyo3::prelude::*;
 
@@ -174,6 +175,8 @@ mod _native {
     use crate::explore::{PyAcceptSpec, PyExploreResult, PyExplorer, explore_states};
     #[pymodule_export]
     use crate::game::{PyChange, PyGame, PyGameState, PySnapshot};
+    #[pymodule_export]
+    use crate::policy::{PyPolicy, keyed_noise};
 
     #[pymodule_init]
     fn init(m: &Bound<'_, PyModule>) -> PyResult<()> {
