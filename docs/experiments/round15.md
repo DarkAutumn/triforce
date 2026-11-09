@@ -36,3 +36,9 @@ blocks / 0 hits; a back stab takes HP $40 → $20 and counts a hit. Darknut trai
 
 0x59 from E 98–99%, **from N 83–86% (−2 hearts)**, from S 100%; 0x5b from S 99–100%, from W 93–96%; 0x69 from N
 96–100% (−0.9), from the cellar 100%. The weak entries are where Link meets the Darknuts head-on.
+
+## 3. Stopped
+
+The r55 continuation of darknut and boss-manhandla (8M more steps each) was cancelled by Lee (Nov 9): the 8M-step
+r54 models are the baseline; Lee has new ideas for improving training to discuss first. The promoted team is r54's
+(plus earlier rounds for unchanged families).
