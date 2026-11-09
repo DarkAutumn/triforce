@@ -3,7 +3,18 @@
 Ideas and problems found but not acted on yet, with the round that found them. (Named `todo.md` until Nov 8; older
 round docs still call it that.)
 
-## Now (Lee, Nov 8): baseline retrain on d2first
+## Now (Lee, Nov 9): Rust actor, then better play
+
+1. **Rust actor** (`docs/rust-actor.md`, decisions 2026-11-09): the policy's forward pass in Rust, rollouts in
+   one call, eval/chains/play-zelda on the in-pool policy, replayable plays (seed + actions, with probabilities),
+   the deferred look-ahead (endings on observed effects first). Parity, batch/thread-invariance and replay tests.
+2. **Fresh retrain** on the new stack (the team trained with Python inference is not loaded).
+3. **Better play** (`~/Downloads/triforce-better-play.md`, written without the source: take the ideas, adapt the
+   prescriptions): §0 yardstick, §1a outcome fine-tuning + §3 best-of-N self-distillation, §6b entropy annealing
+   and deterministic eval, §2 Gumbel expert iteration (training only; starting with boss-dodongo), §1b/§5/§6a.
+   Baselines: rounds 13–15.
+
+## Before (Lee, Nov 8): baseline retrain on d2first (done)
 
 Goal until further notice: a set of specialists that carries the `d2first` chain from the game start to the Dungeon 1
 triforce (Dungeon 2 and Dodongo first, the 0x2c heart cave, the white sword; `docs/routes/d2first.md`). The reset
