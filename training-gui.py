@@ -10,6 +10,9 @@
     uv run training-gui.py /data/triforce-logs      # another logs root
 
 Picking a folder in the dropdown stops the automatic switching; picking [currently running] turns it back on.
+[currently running] covers every live training on this machine, not only the logs root's: the logs roots of the
+running triforce processes (``process_log_roots``: worktrees, ``--logs-dir``, ``$TRIFORCE_LOGS_DIR``) are scanned
+too, and their folders are listed with their location.
 
 Reads ``training.json`` (the plan, rewritten atomically) and tails ``round.jsonl`` plus every ``<specialist>.jsonl``
 twice a second; see ``triforce/events.py`` for the format.  Self-contained (PEP 723 inline dependencies): it does
@@ -831,6 +834,54 @@ def find_log_dirs(root: Path) -> list[Path]:
                       reverse=True)
     except OSError:
         return []
+
+
+TRIFORCE_ARGS = ('triforce.', 'train_round.py')
+
+
+def process_log_roots() -> set[Path]:
+    """Where the triforce Python processes running on this machine write their event logs (Linux ``/proc``; empty
+    elsewhere): each one's ``--logs-dir``, its ``--log-dir``'s parent, its ``$TRIFORCE_LOGS_DIR``, and ``logs/`` of
+    the checkout it runs from (its working directory for ``-m triforce...``, the script's checkout otherwise).
+    Only existing directories."""
+    roots: set[Path] = set()
+    try:
+        entries = [entry for entry in Path('/proc').iterdir() if entry.name.isdigit()]
+    except OSError:
+        return roots
+    for entry in entries:
+        try:
+            args = [arg.decode(errors='replace') for arg in (entry / 'cmdline').read_bytes().split(b'\0') if arg]
+            if not args or not Path(args[0]).name.startswith('python') \
+                    or not any(key in arg for arg in args[1:] for key in TRIFORCE_ARGS):
+                continue
+            cwd = Path(os.readlink(entry / 'cwd'))
+            environ = (entry / 'environ').read_bytes().split(b'\0')
+        except OSError:
+            continue
+        found = [cwd / 'logs']
+        for index, arg in enumerate(args):
+            value = args[index + 1] if index + 1 < len(args) else None
+            if arg == '--logs-dir' and value:
+                found.append(cwd / value)
+            elif arg.startswith('--logs-dir='):
+                found.append(cwd / arg.split('=', 1)[1])
+            elif arg == '--log-dir' and value:
+                found.append((cwd / value).parent)
+            elif arg.endswith('.py') and not arg.startswith('-'):
+                script = (cwd / arg).parent
+                found.append((script.parent if script.name == 'scripts' else script) / 'logs')
+        for item in environ:
+            if item.startswith(LOGS_DIR_ENV.encode() + b'='):
+                found.append(cwd / item.split(b'=', 1)[1].decode(errors='replace'))
+        for path in found:
+            try:
+                path = path.resolve()
+            except OSError:
+                continue
+            if path.is_dir():
+                roots.add(path)
+    return roots
 
 
 class LiveScanner:
@@ -2151,8 +2202,12 @@ class Window(QMainWindow):
         return [view.dir for view in self.views if view.dir is not None]
 
     def _scan(self):
-        """Lists the log folders (dropdown) and finds the live ones; [currently running] is greyed when none is."""
+        """Lists the log folders (dropdown) and finds the live ones; [currently running] is greyed when none is.
+        Besides the root's folders: the live folders of the other logs roots running processes use."""
         dirs = find_log_dirs(self.root)
+        root = self.root.resolve()
+        others = [path for other in sorted(process_log_roots()) if other != root for path in find_log_dirs(other)]
+        dirs += [path for path in self.scanner.live(others) if path not in dirs]
         if not self.live_mode:
             dirs += [shown for shown in self._shown_dirs() if shown not in dirs]   # a folder outside root
         self.live_dirs = self.scanner.live(dirs)
@@ -2162,7 +2217,8 @@ class Window(QMainWindow):
             self.combo.clear()
             self.combo.addItem(LIVE_LABEL, LIVE_KEY)
             for path in dirs:
-                self.combo.addItem(path.name, str(path))
+                label = path.name if path.parent.resolve() == root else f"{path.name}  ({path.parent})"
+                self.combo.addItem(label, str(path))
             self.combo.blockSignals(False)
         self.combo.model().item(0).setEnabled(bool(self.live_dirs))
         self._sync_combo()
