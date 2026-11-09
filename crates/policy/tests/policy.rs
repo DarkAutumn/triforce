@@ -201,3 +201,43 @@ fn bad_inputs_are_errors() {
     w.remove("value_head.bias");
     assert!(Policy::new(config(), w).is_err());
 }
+
+#[test]
+fn joint_log_probs_match_scoring_each_action() {
+    let p = policy();
+    assert_eq!(p.joint_size(), KINDS * DIRS * DURS);
+    for (seed, masked) in [(6, false), (7, true)] {
+        let mut o = obs(seed);
+        if masked {
+            // Kind 0: directions 1 and 3, no duration; kind 2: every direction, duration 1; kind 1 illegal.
+            o.mask = vec![false; MASK];
+            o.mask[0] = true;
+            o.mask[2] = true;
+            o.mask[KINDS + 1] = true;
+            o.mask[KINDS + 3] = true;
+            for d in 0..DIRS {
+                o.mask[KINDS + 2 * DIRS + d] = true;
+            }
+            o.mask[KINDS + KINDS * DIRS + 2 * DURS + 1] = true;
+        }
+        let v = [&o.history[..], &o.link[..]];
+        let mut s = p.scratch();
+        let mut joint = vec![0f32; p.joint_size()];
+        let value = p.joint_log_probs(&input(&o, &v), &mut s, &mut joint).unwrap();
+        let mut total = 0f64;
+        for (i, &lp) in joint.iter().enumerate() {
+            let action = p.joint_action(i);
+            assert_eq!(p.joint_index(action), i);
+            if lp == f32::NEG_INFINITY {
+                continue;
+            }
+            total += (lp as f64).exp();
+            let scored = p.evaluate(&input(&o, &v), Pick::Given(action), &mut s).unwrap();
+            assert_eq!(scored.log_prob.to_bits(), lp.to_bits(), "{action:?}");
+            assert_eq!(scored.value.to_bits(), value.to_bits());
+        }
+        assert!((total - 1.0).abs() < 1e-5, "{total}");
+        let legal = joint.iter().filter(|v| v.is_finite()).count();
+        assert_eq!(legal, if masked { 2 + DIRS } else { KINDS * DIRS * DURS });
+    }
+}

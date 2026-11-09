@@ -30,7 +30,7 @@ use crate::start_states::{
     state_label, verify_start_room,
 };
 use indexmap::IndexMap;
-use rand::SeedableRng;
+use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -46,7 +46,8 @@ use zelda::visits::{
     EXIT_DEATH, EXIT_OTHER, EXIT_SUCCESS, EXIT_TIMEOUT, RoomVisit, VisitEnd, VisitStep, VisitTracker,
     VisitView,
 };
-use zelda::{Action, LoadOptions, Nes, Session, SessionSnapshot};
+use zelda::vars::RNG_VARS;
+use zelda::{Action, LoadOptions, Nes, Session, SessionCheckpoint, SessionSnapshot};
 
 /// The terminal part of an info.
 #[derive(Clone, Debug, PartialEq)]
@@ -206,6 +207,29 @@ pub struct StepResult {
     pub terminated: bool,
     pub truncated: bool,
     pub info: StepInfo,
+}
+
+/// An exact mid-episode checkpoint of a [`SpecialistEnv`] (search): the session's [`SessionCheckpoint`] and every
+/// per-episode tracker `step` reads or writes. Room visits, the start-state pool, the curriculum and capture are
+/// not in it: simulated steps don't touch them.
+#[derive(Clone, Debug)]
+pub struct EnvSnapshot<S> {
+    session: SessionCheckpoint<S>,
+    linger: LingerTracker,
+    hearts: HeartTracker,
+    cheats: CheatLedger,
+    critic: GameplayCritic,
+    end_conditions: EndConditions,
+    builder: ObservationBuilder,
+    objectives: Option<GameCompletion>,
+    attached: Option<Attached>,
+    done: bool,
+    blocks: u32,
+    boss: BossTransitions,
+    episode_steps: u64,
+    episode_frames: u64,
+    reward_total: f64,
+    episode_rewards: IndexMap<&'static str, f64>,
 }
 
 /// One specialist's task (`ZeldaEnv`).
@@ -545,6 +569,72 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     }
 
     pub fn step(&mut self, action: Action) -> Result<StepResult, EnvError> {
+        self.step_as(action, false)
+    }
+
+    /// An exact checkpoint of the episode in progress, for [`SpecialistEnv::load`].
+    pub fn save(&self) -> EnvSnapshot<N::State> {
+        EnvSnapshot {
+            session: self.session.checkpoint(),
+            linger: self.linger.clone(),
+            hearts: self.hearts.clone(),
+            cheats: self.cheats.clone(),
+            critic: self.critic.clone(),
+            end_conditions: self.end_conditions.clone(),
+            builder: self.builder.clone(),
+            objectives: self.objectives.clone(),
+            attached: self.attached.clone(),
+            done: self.done,
+            blocks: self.blocks,
+            boss: self.boss,
+            episode_steps: self.episode_steps,
+            episode_frames: self.episode_frames,
+            reward_total: self.reward_total,
+            episode_rewards: self.episode_rewards.clone(),
+        }
+    }
+
+    /// Returns to `snapshot` exactly (same episode, no side effects): the next `step` is the step that would have
+    /// followed `save`.
+    pub fn load(&mut self, snapshot: &EnvSnapshot<N::State>) {
+        self.session.resume(&snapshot.session);
+        self.linger.clone_from(&snapshot.linger);
+        self.hearts.clone_from(&snapshot.hearts);
+        self.cheats.clone_from(&snapshot.cheats);
+        self.critic.clone_from(&snapshot.critic);
+        self.end_conditions.clone_from(&snapshot.end_conditions);
+        self.builder.clone_from(&snapshot.builder);
+        self.objectives.clone_from(&snapshot.objectives);
+        self.attached.clone_from(&snapshot.attached);
+        self.done = snapshot.done;
+        self.blocks = snapshot.blocks;
+        self.boss = snapshot.boss;
+        self.episode_steps = snapshot.episode_steps;
+        self.episode_frames = snapshot.episode_frames;
+        self.reward_total = snapshot.reward_total;
+        self.episode_rewards.clone_from(&snapshot.episode_rewards);
+    }
+
+    /// Simulation mode for search (`Session::set_simulating`): no rendering, frame sink or pre-entry capture.
+    pub fn set_simulating(&mut self, on: bool) {
+        self.session.set_simulating(on);
+    }
+
+    /// Redraws the 12 RNG bytes (1..=255, as a reset's randomization) from a generator seeded with `key` alone (a
+    /// search future), never the env's own.
+    pub fn perturb_rng(&mut self, key: u64) {
+        let mut rng = ChaCha8Rng::seed_from_u64(key);
+        let values = RNG_VARS.map(|var| (var, rng.random_range(1..=255u8)));
+        self.session.apply_ram(&values);
+    }
+
+    /// `step` without side effects outside the episode (search): the same rewards, endings and observation, but
+    /// no curriculum or start-state pool record, room visits or capture. Undo it with [`SpecialistEnv::load`].
+    pub fn simulate(&mut self, action: Action) -> Result<StepResult, EnvError> {
+        self.step_as(action, true)
+    }
+
+    fn step_as(&mut self, action: Action, sim: bool) -> Result<StepResult, EnvError> {
         if self.done {
             return Err(EnvError::EpisodeFinished);
         }
@@ -632,6 +722,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             );
             self.hearts.finish(Some(&HeartView::of(&state)));
             let curriculum = match &self.curriculum_tag {
+                _ if sim => None,
                 Some(tag) => Some(
                     self.curriculum
                         .as_ref()
@@ -671,7 +762,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 episode_rewards: IndexMap::new(),
             });
         }
-        if let Some(visits) = &mut self.visits {
+        if !sim && let Some(visits) = &mut self.visits {
             let end = terminal.as_ref().map_or(VisitEnd::Continue, |t| visit_end(&t.ending, t.outcome));
             let mut step = VisitStep::of(&change);
             step.bombs_used = cheats.used.bombs;
@@ -693,7 +784,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         }
 
         let captured = match &mut self.capture {
-            Some(capture) => {
+            Some(capture) if !sim => {
                 let session = &self.session;
                 capture.on_step(
                     &change,
@@ -702,7 +793,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                     &self.store,
                 )?
             }
-            None => None,
+            _ => None,
         };
         let obs = self.builder.build(
             &change,

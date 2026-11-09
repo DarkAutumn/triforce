@@ -11,10 +11,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Most float vector keys a policy may read (stack array of slices, no allocation per decision).
-const MAX_VECTORS: usize = 16;
+pub(super) const MAX_VECTORS: usize = 16;
 
 pub struct PolicyActor {
-    policies: Vec<Arc<Policy>>,
+    pub(super) policies: Vec<Arc<Policy>>,
     /// Per policy: layout key index of each of its vector keys, in its order.
     vectors: Vec<Vec<usize>>,
     room: usize,
@@ -23,14 +23,14 @@ pub struct PolicyActor {
     grid: usize,
     mask: usize,
     /// Per policy: argmax instead of keyed sampling.
-    deterministic: Vec<bool>,
+    pub(super) deterministic: Vec<bool>,
     /// Replaying: each episode's (job's) recorded actions, by decision step.
     replay: Option<HashMap<i64, Vec<ZeldaAction>>>,
 }
 
 pub struct ActorScratch {
-    scratches: Vec<policy::Scratch>,
-    noise: Vec<f32>,
+    pub(super) scratches: Vec<policy::Scratch>,
+    pub(super) noise: Vec<f32>,
 }
 
 impl PolicyActor {
@@ -75,7 +75,7 @@ impl PolicyActor {
         Ok(actor)
     }
 
-    fn policy(&self, policy: i64) -> Result<usize, String> {
+    pub(super) fn policy(&self, policy: i64) -> Result<usize, String> {
         usize::try_from(policy)
             .ok()
             .filter(|&p| p < self.policies.len())
@@ -84,7 +84,12 @@ impl PolicyActor {
 }
 
 /// The observation as the network's input; `vectors` holds the vector slices.
-fn input<'a>(a: &PolicyActor, p: usize, obs: &'a ObsData, vectors: &'a mut [&'a [f32]; MAX_VECTORS]) -> Input<'a> {
+pub(super) fn input<'a>(
+    a: &PolicyActor,
+    p: usize,
+    obs: &'a ObsData,
+    vectors: &'a mut [&'a [f32]; MAX_VECTORS],
+) -> Input<'a> {
     let keys = &a.vectors[p];
     for (slot, &k) in vectors.iter_mut().zip(keys) {
         *slot = obs.f32(k);

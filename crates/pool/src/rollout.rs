@@ -34,6 +34,49 @@ pub trait Actor<A>: Send + Sync {
     fn value(&self, obs: &ObsData, policy: i64, scratch: &mut Self::Scratch) -> Result<f32, String>;
 }
 
+/// Plans decisions with the env in hand (search, `crate::zelda::GumbelSearch`), ahead of the [`Actor`]: a
+/// [`crate::Pool::rollout_planned`] decision the planner takes acts with its action; one it passes on (`Ok(None)`)
+/// is the actor's as in a plain rollout. Shared by every worker; each keeps its own [`Planner::Scratch`]. The
+/// planner must leave the env exactly where it found it.
+pub trait Planner<E: crate::PoolEnv>: Send + Sync {
+    type Scratch: Send;
+
+    fn scratch(&self) -> Self::Scratch;
+
+    /// The action for `obs` (decision `step` of the episode keyed `job`, policy `policy`), the policy's
+    /// [`Decision`] for it and the planner's [`SearchRow`]; None to let the actor decide.
+    #[allow(clippy::type_complexity)]
+    fn plan(
+        &self,
+        env: &mut E,
+        obs: &ObsData,
+        policy: i64,
+        job: i64,
+        step: i64,
+        scratch: &mut Self::Scratch,
+    ) -> Result<Option<(E::Action, Decision, SearchRow<E::Action>)>, PlanError<E::Error>>;
+}
+
+/// Why a [`Planner`] failed: the env's error, or the planner's own (policy, arguments).
+#[derive(Debug)]
+pub enum PlanError<X> {
+    Env(X),
+    Usage(String),
+}
+
+/// What a [`Planner`] reports for one searched decision.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SearchRow<A> {
+    /// The improved policy over the joint actions (0 for illegal ones).
+    pub policy: Vec<f32>,
+    /// The candidates the search considered (fewer than asked when fewer actions are legal).
+    pub candidates: Vec<A>,
+    /// Each candidate's mean return estimate; NaN where it was never evaluated.
+    pub q: Vec<f32>,
+    /// The search's root value estimate.
+    pub value: f32,
+}
+
 /// One env's rollout of `steps` decisions. Row `t` of `obs` is the observation decision `t` acted on; row
 /// `steps` is the one the next rollout resumes from. `starts[t]`: row `t` is the first observation of an episode.
 /// Per decision: the action and the actor's [`Decision`], and what the step did (reward, frames, interrupt,
@@ -53,6 +96,9 @@ pub struct EnvRollout<A> {
     /// The episode key and decision index of each decision.
     pub job: Vec<i64>,
     pub step: Vec<i64>,
+    /// [`crate::Pool::rollout_planned`] only (empty otherwise): each decision's [`SearchRow`], None where the
+    /// planner passed it on to the actor.
+    pub search: Vec<Option<SearchRow<A>>>,
 }
 
 impl<A> EnvRollout<A> {
@@ -70,6 +116,7 @@ impl<A> EnvRollout<A> {
             bootstrap_value: Vec::with_capacity(steps),
             job: Vec::with_capacity(steps),
             step: Vec::with_capacity(steps),
+            search: Vec::new(),
         }
     }
 

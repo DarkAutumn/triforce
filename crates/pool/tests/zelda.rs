@@ -13,7 +13,7 @@ use pool::zelda::{
     obs_layout, write_observation,
 };
 use parking_lot::Mutex;
-use pool::{Column, EnvControl, EnvInit, Jobs, ObsData, Pool, PoolEnv, PoolOptions};
+use pool::{Column, EnvControl, EnvInit, Jobs, ObsData, Pool, PoolEnv, PoolOptions, SearchEnv};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::{HashMap, VecDeque};
@@ -762,4 +762,82 @@ fn a_chain_specialist_outside_the_pool_policies_ends_the_run_as_error() {
     events.clear();
     assert_eq!(env.reset(obs.row(), &mut events).unwrap(), None);
     assert!(events.is_empty(), "no seeds left: no run");
+}
+
+/// One search's worth of simulation in `env` (search's `SearchEnv` calls): `futures` futures of up to `depth` random
+/// steps each, attacks preferred, from the saved state with the RNG bytes redrawn.
+fn simulate_futures<E>(env: &mut E, obs: &ObsData, rng: &mut ChaCha8Rng, futures: u64, depth: usize)
+where
+    E: SearchEnv<Action = ZeldaAction, Error = EnvError>,
+{
+    let mut sim = ObsData::new(Arc::new(obs_layout()));
+    let snapshot = env.begin_search().unwrap();
+    for f in 0..futures {
+        env.load(&snapshot);
+        env.perturb(f);
+        let mut mask: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
+        for _ in 0..depth {
+            let action = random_action(&prefer_attacks(ActionMask::from_flat(&mask)), rng, None);
+            let o = env.simulate(action.to_indices().map(|i| i as i64), sim.row()).unwrap();
+            if o.terminated || o.truncated {
+                break;
+            }
+            mask = sim.bool(ACTION_MASK).try_into().unwrap();
+        }
+    }
+    env.end_search(&snapshot);
+}
+
+#[test]
+fn a_search_leaves_the_env_exactly_where_it_was() {
+    let (Some(nes_a), Some(nes_b)) = (open_core(), open_core()) else { return };
+    let data = data();
+    let opts = || EnvOptions {
+        start_state: Some("1_44w_0".into()),
+        ..Default::default()
+    };
+    let config = goriya_full_health(&data);
+    let (init_a, init_b) = (init(), init());
+    let (control_a, control_b) = (init_a.control.clone(), init_b.control.clone());
+    for control in [&control_a, &control_b] {
+        control.set_recording(true);
+        control.set_render(true);
+    }
+    let mut a = TrainEnv::new(config.clone(), data.clone(), nes_a, TfzStore, opts(), init_a, Some(rgb)).unwrap();
+    let mut b = TrainEnv::new(config, data.clone(), nes_b, TfzStore, opts(), init_b, Some(rgb)).unwrap();
+    let (mut obs_a, mut obs_b) = (ObsData::new(Arc::new(obs_layout())), ObsData::new(Arc::new(obs_layout())));
+    let (mut events_a, mut events_b) = (Vec::new(), Vec::new());
+    a.reset(obs_a.row(), &mut events_a).unwrap();
+    b.reset(obs_b.row(), &mut events_b).unwrap();
+    let (mut sim_rng, mut rng) = (ChaCha8Rng::seed_from_u64(5), ChaCha8Rng::seed_from_u64(6));
+    let (mut predicted, mut episodes) = (0, 0);
+    for step in 0..60 {
+        predicted += !a.env().session().ledger().predictions().is_empty() as usize;
+        let published = control_a.frame_counter();
+        simulate_futures(&mut a, &obs_a, &mut sim_rng, 3, 4);
+        assert_eq!(control_a.frame_counter(), published, "simulated frames are never published");
+        let flat: [bool; MASK_SIZE] = obs_b.bool(ACTION_MASK).try_into().unwrap();
+        let action = random_action(&prefer_attacks(ActionMask::from_flat(&flat)), &mut rng, None);
+        let action = action.to_indices().map(|i| i as i64);
+        let oa = a.step(action, obs_a.row(), &mut events_a).unwrap();
+        let ob = b.step(action, obs_b.row(), &mut events_b).unwrap();
+        assert_eq!(oa, ob, "step {step}");
+        assert!(control_a.frame_counter() > published, "real frames are published");
+        assert!(obs_a == obs_b, "step {step} observation");
+        let (sa, sb) = (a.env().session(), b.env().session());
+        assert_eq!(format!("{:?}", sa.ledger()), format!("{:?}", sb.ledger()), "step {step} ledger");
+        assert_eq!((sa.frame(), sa.total_frames, sa.steps), (sb.frame(), sb.total_frames, sb.steps));
+        assert!(sa.nes().ram() == sb.nes().ram(), "step {step} RAM");
+        assert_eq!(format!("{events_a:?}"), format!("{events_b:?}"), "step {step} events");
+        if oa.terminated || oa.truncated {
+            episodes += 1;
+            a.reset(obs_a.row(), &mut events_a).unwrap();
+            b.reset(obs_b.row(), &mut events_b).unwrap();
+            assert!(obs_a == obs_b);
+        }
+        events_a.clear();
+        events_b.clear();
+    }
+    assert!(predicted > 0, "searches started with look-ahead credit pending");
+    assert!(episodes > 0, "an episode ended (its movie and terminal info matched)");
 }

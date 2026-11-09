@@ -17,10 +17,12 @@
 mod actor;
 mod envs;
 mod nes;
+mod search;
 
 pub use actor::{ActorScratch, PolicyActor};
 pub use envs::{ChainRunEnv, EvalEnv, EvalJob, PoolChainEnv, PoolSpecialistEnv, TaskEnv, TrainEnv};
 pub use nes::{InputLog, PoolNes, PoolState, PoolStore, RgbFn};
+pub use search::{FRAMES_PER_DISCOUNT, GumbelSearch, SearchConfig, SearchScratch, considered_visits};
 
 use crate::layout::{Dtype, KeySpec, ObsLayout, ObsRow};
 use env::chain::RunResult;

@@ -18,7 +18,8 @@ use numpy::{
 use crate::policy::PyPolicy;
 use pool::rollout::{EnvRollout, Play, Record};
 use pool::zelda::{
-    ChainRunEnv, EvalEnv, EvalJob, PolicyActor, RgbFn, TaskEnv, TrainEnv, ZeldaAction, ZeldaEvent,
+    ChainRunEnv, EvalEnv, EvalJob, GumbelSearch, PolicyActor, RgbFn, SearchConfig, TaskEnv, TrainEnv, ZeldaAction,
+    ZeldaEvent,
 };
 use pool::{Column, Dtype, EnvInit, Jobs, Pool, PoolOptions};
 use pyo3::exceptions::{PyKeyError, PyTypeError, PyValueError};
@@ -383,6 +384,28 @@ fn rollout_array<'py, T: numpy::Element>(
     Ok(Some(rw))
 }
 
+/// `EnvPool.rollout`'s `search` dict as a [`SearchConfig`] (missing keys keep their defaults).
+fn search_config(d: &Bound<'_, PyDict>) -> PyResult<SearchConfig> {
+    let mut c = SearchConfig::default();
+    for (key, value) in d.iter() {
+        let key: String = key.extract()?;
+        match key.as_str() {
+            "candidates" => c.candidates = value.extract()?,
+            "simulations" => c.simulations = value.extract()?,
+            "futures" => c.futures = value.extract()?,
+            "depth" => c.depth = value.extract()?,
+            "gamma" => c.gamma = value.extract()?,
+            "c_visit" => c.c_visit = value.extract()?,
+            "c_scale" => c.c_scale = value.extract()?,
+            "fraction" => c.fraction = value.extract()?,
+            "perturb_rng" => c.perturb_rng = value.extract()?,
+            other => return Err(PyValueError::new_err(format!("unknown search setting {other:?}"))),
+        }
+    }
+    c.validate().map_err(PyValueError::new_err)?;
+    Ok(c)
+}
+
 fn required<T>(v: Option<T>, key: &str) -> PyResult<T> {
     v.ok_or_else(|| PyKeyError::new_err(format!("rollout buffers need {key:?}")))
 }
@@ -409,10 +432,112 @@ struct RolloutOut<'py> {
     decision_steps: Option<PyReadwriteArrayDyn<'py, i64>>,
     terminated: Option<PyReadwriteArrayDyn<'py, bool>>,
     truncated: Option<PyReadwriteArrayDyn<'py, bool>>,
+    search: SearchOut<'py>,
+}
+
+/// Joint actions of the search's improved policy: `kind * 32 + direction * 4 + duration` (7 kinds × 8 directions
+/// × 4 durations).
+const JOINT: usize = zelda::actions::NUM_KINDS * zelda::actions::NUM_DIRECTIONS * zelda::actions::NUM_DURATIONS;
+
+/// The optional search buffers (`search_*`); `k` candidates per row.
+struct SearchOut<'py> {
+    k: usize,
+    mask: Option<PyReadwriteArrayDyn<'py, bool>>,
+    policy: Option<PyReadwriteArrayDyn<'py, f32>>,
+    q: Option<PyReadwriteArrayDyn<'py, f32>>,
+    actions: Option<PyReadwriteArrayDyn<'py, i64>>,
+    value: Option<PyReadwriteArrayDyn<'py, f32>>,
+}
+
+impl<'py> SearchOut<'py> {
+    /// `k`: the search's candidates; None (no search) takes it from the `search_q`/`search_actions` buffers.
+    fn borrow(out: &Bound<'py, PyDict>, n: usize, steps: usize, k: Option<usize>) -> PyResult<SearchOut<'py>> {
+        let k = match k {
+            Some(k) => k,
+            None => {
+                let mut k = 0;
+                for key in ["search_q", "search_actions"] {
+                    if let Some(item) = out.get_item(key)? {
+                        let shape: Vec<usize> = item.getattr("shape")?.extract()?;
+                        k = shape.get(2).copied().unwrap_or(0);
+                    }
+                }
+                k
+            }
+        };
+        Ok(SearchOut {
+            k,
+            mask: rollout_array(out, "search_mask", &[n, steps])?,
+            policy: rollout_array(out, "search_policy", &[n, steps, JOINT])?,
+            q: rollout_array(out, "search_q", &[n, steps, k])?,
+            actions: rollout_array(out, "search_actions", &[n, steps, k, 3])?,
+            value: rollout_array(out, "search_value", &[n, steps])?,
+        })
+    }
+
+    /// Env `env`'s rows: a searched row its `SearchRow`, every other row unsearched (mask false, policy 0, Q NaN,
+    /// candidates -1, value 0).
+    fn write(&mut self, env: usize, steps: usize, r: &EnvRollout<ZeldaAction>) -> PyResult<()> {
+        let k = self.k;
+        let row = |t: usize| r.search.get(t).and_then(Option::as_ref);
+        if let Some(a) = self.mask.as_mut() {
+            let dst = &mut a.as_slice_mut()?[env * steps..(env + 1) * steps];
+            for (t, d) in dst.iter_mut().enumerate() {
+                *d = row(t).is_some();
+            }
+        }
+        if let Some(a) = self.policy.as_mut() {
+            let dst = &mut a.as_slice_mut()?[env * steps * JOINT..(env + 1) * steps * JOINT];
+            for (t, d) in dst.as_chunks_mut::<JOINT>().0.iter_mut().enumerate() {
+                match row(t) {
+                    Some(s) if s.policy.len() == JOINT => d.copy_from_slice(&s.policy),
+                    Some(s) => {
+                        return Err(PyValueError::new_err(format!(
+                            "the policy has {} joint actions, search_policy holds {JOINT}",
+                            s.policy.len()
+                        )));
+                    }
+                    None => d.fill(0.0),
+                }
+            }
+        }
+        if k == 0 {
+            return self.write_value(env, steps, r);
+        }
+        if let Some(a) = self.q.as_mut() {
+            let dst = &mut a.as_slice_mut()?[env * steps * k..(env + 1) * steps * k];
+            for (t, d) in dst.chunks_exact_mut(k).enumerate() {
+                d.fill(f32::NAN);
+                if let Some(s) = row(t) {
+                    d[..s.q.len()].copy_from_slice(&s.q);
+                }
+            }
+        }
+        if let Some(a) = self.actions.as_mut() {
+            let dst = &mut a.as_slice_mut()?[env * steps * k * 3..(env + 1) * steps * k * 3];
+            for (t, d) in dst.chunks_exact_mut(k * 3).enumerate() {
+                d.fill(-1);
+                if let Some(s) = row(t) {
+                    d[..s.candidates.len() * 3].copy_from_slice(s.candidates.as_flattened());
+                }
+            }
+        }
+        self.write_value(env, steps, r)
+    }
+
+    fn write_value(&mut self, env: usize, steps: usize, r: &EnvRollout<ZeldaAction>) -> PyResult<()> {
+        if let Some(a) = self.value.as_mut() {
+            let dst = &mut a.as_slice_mut()?[env * steps..(env + 1) * steps];
+            for (t, d) in dst.iter_mut().enumerate() {
+                *d = r.search.get(t).and_then(Option::as_ref).map_or(0.0, |s| s.value);
+            }
+        }
+        Ok(())
+    }
 }
 
 impl<'py> RolloutOut<'py> {
-    fn borrow(out: &Bound<'py, PyDict>, n: usize, steps: usize) -> PyResult<RolloutOut<'py>> {
+    fn borrow(out: &Bound<'py, PyDict>, n: usize, steps: usize, search_k: Option<usize>) -> PyResult<RolloutOut<'py>> {
         let obs = out
             .get_item("obs")?
             .ok_or_else(|| PyKeyError::new_err("rollout buffers need 'obs'"))?
@@ -442,6 +567,7 @@ impl<'py> RolloutOut<'py> {
             decision_steps: rollout_array(out, "step", &[n, steps])?,
             terminated: rollout_array(out, "terminated", &[n, steps])?,
             truncated: rollout_array(out, "truncated", &[n, steps])?,
+            search: SearchOut::borrow(out, n, steps, search_k)?,
         })
     }
 
@@ -488,6 +614,7 @@ impl<'py> RolloutOut<'py> {
             if let Some(a) = self.truncated.as_mut() {
                 rows(a.as_slice_mut()?, *env, steps, &r.truncated);
             }
+            self.search.write(*env, steps, r)?;
         }
         Ok(())
     }
@@ -666,7 +793,17 @@ impl PyEnvPool {
     /// entropy, value), `rewards`, `frames`, `bootstrap_value` `[n, steps]` float32, and optionally
     /// `interrupts`, `job`, `step` int64 and `terminated`, `truncated` bool. Episode infos arrive through
     /// `poll_events`. Returns the number of envs rolled out.
-    #[pyo3(signature = (policies, steps, out, deterministic=false))]
+    ///
+    /// `search` (train pools only; docs/rust-actor.md "Search"): None, or a dict of Gumbel search settings
+    /// (`candidates` 8, `simulations` 16, `futures` 4, `depth` 6, `gamma` 0.99, `c_visit` 50.0, `c_scale` 0.1,
+    /// `fraction` 1.0, `perturb_rng` True). A searched decision executes the search's action (`actions`;
+    /// `logp_ent_val` is the policy's log-prob, entropy and value of it). Optional search buffers, written whenever
+    /// present (unsearched rows: false, 0, NaN, -1, 0): `search_mask` `[n, steps]` bool, `search_policy`
+    /// `[n, steps, 224]` float32 (the improved policy over joint actions `kind * 32 + direction * 4 + duration`),
+    /// `search_q` `[n, steps, k]` float32 (each candidate's mean return, NaN if never evaluated),
+    /// `search_actions` `[n, steps, k, 3]` int64 (the candidates), `search_value` `[n, steps]` float32 (the
+    /// search's root value).
+    #[pyo3(signature = (policies, steps, out, deterministic=false, search=None))]
     fn rollout(
         &self,
         py: Python<'_>,
@@ -674,14 +811,24 @@ impl PyEnvPool {
         steps: usize,
         out: &Bound<'_, PyDict>,
         deterministic: bool,
+        search: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<usize> {
         let nets: Vec<_> = policies.iter().map(|p| p.inner.clone()).collect();
         let flags = vec![deterministic; nets.len()];
-        let actor = PolicyActor::new(&LAYOUT, nets, flags).map_err(PyValueError::new_err)?;
-        let mut buffers = RolloutOut::borrow(out, self.pool.num_envs(), steps)?;
-        let rollouts = py
-            .detach(|| self.pool.rollout(steps, Arc::new(actor)))
-            .map_err(pool_err)?;
+        let actor = Arc::new(PolicyActor::new(&LAYOUT, nets, flags).map_err(PyValueError::new_err)?);
+        let search = search.map(search_config).transpose()?;
+        if search.is_some() && !matches!(self.kind, Kind::Train) {
+            return Err(PyValueError::new_err("search needs a TrainTask pool"));
+        }
+        let mut buffers = RolloutOut::borrow(out, self.pool.num_envs(), steps, search.as_ref().map(|s| s.candidates))?;
+        let rollouts = match search {
+            None => py.detach(|| self.pool.rollout(steps, actor)),
+            Some(config) => {
+                let planner = GumbelSearch::new(&LAYOUT, actor.clone(), config).map_err(PyValueError::new_err)?;
+                py.detach(|| self.pool.rollout_planned(steps, actor, Arc::new(planner)))
+            }
+        }
+        .map_err(pool_err)?;
         buffers.write(&rollouts)?;
         Ok(rollouts.len())
     }

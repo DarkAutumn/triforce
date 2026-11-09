@@ -36,6 +36,24 @@ pub struct SessionSnapshot<S> {
     pub steps: u64,
 }
 
+/// Everything needed to continue a session mid-episode exactly (search): the snapshot plus the real-frame counter
+/// (the ledger's discount and expiry read it), the credit ledger and the current state and mask.
+#[derive(Clone, Debug)]
+pub struct SessionCheckpoint<S> {
+    snapshot: SessionSnapshot<S>,
+    frame: u64,
+    ledger: FutureCreditLedger,
+    state: Option<Arc<GameView>>,
+    mask: ActionMask,
+}
+
+/// What simulation mode put aside (`Session::set_simulating`).
+struct Stash<N: Nes> {
+    sink: Option<FrameSink<N>>,
+    render: bool,
+    capture_pre_entry: bool,
+}
+
 /// Loads states and executes actions (`GameSession`).
 pub struct Session<N: Nes> {
     machine: Machine<N>,
@@ -51,6 +69,8 @@ pub struct Session<N: Nes> {
     disabled_kinds: Vec<ActionKind>,
     /// Simulate fired weapons forward to credit their hits to the firing step.
     pub look_ahead: bool,
+    /// Simulation mode (search) holds the frame sink, render flag and pre-entry capture flag here.
+    stash: Option<Stash<N>>,
 }
 
 impl<N: Nes> Session<N> {
@@ -66,6 +86,7 @@ impl<N: Nes> Session<N> {
             steps: 0,
             disabled_kinds: Vec::new(),
             look_ahead: true,
+            stash: None,
         }
     }
 
@@ -227,6 +248,57 @@ impl<N: Nes> Session<N> {
         self.ledger.clear();
         self.rebuild();
         self.state()
+    }
+
+    /// An exact checkpoint of the session mid-episode (unlike `snapshot`, it keeps the frame counter and the
+    /// credit ledger, so `resume` continues bit-identically).
+    pub fn checkpoint(&self) -> SessionCheckpoint<N::State> {
+        SessionCheckpoint {
+            snapshot: self.snapshot(),
+            frame: self.machine.frame,
+            ledger: self.ledger.clone(),
+            state: self.state.clone(),
+            mask: self.mask,
+        }
+    }
+
+    /// Returns to `checkpoint` exactly (no emulation, no rebuild).
+    pub fn resume(&mut self, checkpoint: &SessionCheckpoint<N::State>) {
+        let s = &checkpoint.snapshot;
+        self.machine.nes.restore(&s.machine);
+        self.executor.was_in_cave = s.was_in_cave;
+        self.executor.just_exited_cave = s.just_exited_cave;
+        self.total_frames = s.total_frames;
+        self.steps = s.steps;
+        self.machine.frame = checkpoint.frame;
+        self.ledger.clone_from(&checkpoint.ledger);
+        self.state.clone_from(&checkpoint.state);
+        self.mask = checkpoint.mask;
+    }
+
+    /// Simulation mode (search): frames don't render or reach the frame sink (no publishing, pacing or pause
+    /// waits) and no pre-entry snapshots are kept. Turning it off puts all three back.
+    pub fn set_simulating(&mut self, on: bool) {
+        match (on, self.stash.is_some()) {
+            (true, false) => {
+                self.stash = Some(Stash {
+                    sink: self.machine.sink.take(),
+                    render: std::mem::replace(&mut self.machine.render, false),
+                    capture_pre_entry: std::mem::replace(&mut self.executor.capture_pre_entry, false),
+                });
+            }
+            (false, true) => {
+                let stash = self.stash.take().expect("simulating");
+                self.machine.sink = stash.sink;
+                self.machine.render = stash.render;
+                self.executor.capture_pre_entry = stash.capture_pre_entry;
+            }
+            _ => {}
+        }
+    }
+
+    pub fn simulating(&self) -> bool {
+        self.stash.is_some()
     }
 
     /// Executes one option and returns what changed.
