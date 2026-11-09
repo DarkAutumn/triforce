@@ -143,6 +143,7 @@ impl PyEnv {
             track_visits: false,
             skip_look_ahead: false,
             shaping: None,
+            start_weights: None,
         };
         let store = TfzStore::new(&data, rom.clone());
         let mut env = SpecialistEnv::new(config.clone(), data, ZCore::power_on(rom), store, opts)

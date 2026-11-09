@@ -21,6 +21,12 @@ Expert iteration (better-play §2, docs/rust-actor.md "Search"): with ``search``
 share of the decisions, executes its choice and reports its improved policy π' over the joint actions.  Those rows
 train the policy by distillation, ``search_coeff · CE(π', π_θ)``, instead of the PPO ratio term (their action is no
 sample of π); value loss, entropy bonus and GAE cover every row as before.
+
+Prioritized level replay (better-play §5, ``plr.PrioritizedReplay``): with ``plr`` each finished rollout scores its
+room-entry episodes by positive value loss and sets the pool's seed-state weights (``EnvPool.set_start_weights``)
+before the next rollout starts.  One rollout of lag: the scores come from the update's input (values recomputed
+before it), and an env that resets at a rollout's last step has drawn its start state under the previous weights; the
+first rollout uses the pool's own failure-weighted draws.
 """
 
 import copy
@@ -36,6 +42,7 @@ from torch import nn
 
 from .demo import compute_demo_accuracy
 from .metrics import RolloutMetrics
+from .plr import PrioritizedReplay
 from .rollout_buffer import RolloutBuffer
 
 
@@ -73,6 +80,12 @@ class PPOConfig:
     # of the distillation loss CE(π', π_θ) on searched rows.
     search: Optional[dict] = None
     search_coeff: float = 1.0
+    # Prioritized level replay (better-play §5): seed start states weighted by learning potential (``plr``), with
+    # rank temperature β, staleness share ρ and uniform share u.
+    plr: bool = False
+    plr_beta: float = 0.1
+    plr_rho: float = 0.1
+    plr_uniform: float = 0.1
 
     def to_dict(self) -> dict:
         """Plain-data form for checkpoints/logs."""
@@ -99,18 +112,22 @@ class Collector:
     buffers (the GIL is released while the pool steps); ``finish(network, device)`` waits for it, then computes
     values, bootstrap rewards, returns and advantages and makes it ``buffer``. The other buffer stays untouched,
     so an update can read it meanwhile.  ``collect`` is both in a row.  ``search``: the pool's search settings
-    (``EnvPool.rollout(search=...)``); the buffers then keep ``search_mask`` and ``search_policy``.
+    (``EnvPool.rollout(search=...)``); the buffers then keep ``search_mask`` and ``search_policy``.  ``jobs``: the
+    buffers keep each row's episode ``job`` key.  ``episodes``: the finished rollout's ``episode`` events.
     """
 
-    def __init__(self, pool, memory_length: int, gamma: float, lam: float, search: Optional[dict] = None):
+    def __init__(self, pool, memory_length: int, gamma: float, lam: float, search: Optional[dict] = None,
+                 jobs: bool = False):
+        # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.pool = pool
         self.n_envs = pool.num_envs
         self.search = search
         self._buffers = [RolloutBuffer(memory_length, self.n_envs, pool.obs_spec, gamma, lam,
-                                       search=search is not None) for _ in range(2)]
+                                       search=search is not None, jobs=jobs) for _ in range(2)]
         self._views = [buffer.rollout_buffers() for buffer in self._buffers]
         self._next = 0
         self.buffer = self._buffers[1]
+        self.episodes: list = []
         self._thread: Optional[threading.Thread] = None
         self._result: dict = {}
         self.rollout_seconds = 0.0
@@ -149,7 +166,7 @@ class Collector:
         self.rollout_seconds = self._result['seconds']
         buffer = self.buffer = self._buffers[self._next]
         self._next = 1 - self._next
-        events = [e for e in self.pool.poll_events() if e['type'] == 'episode']
+        events = self.episodes = [e for e in self.pool.poll_events() if e['type'] == 'episode']
         last_values = buffer.recompute(network, device)
         buffer.add_bootstrap()
         buffer.compute_returns(last_values)
@@ -288,7 +305,9 @@ class PPO:
             pool.set_shaping(scale)
             return scale
 
-        collector = Collector(pool, steps_per_env, cfg.gamma, cfg.lam, cfg.search)
+        plr = PrioritizedReplay(pool.start_states, beta=cfg.plr_beta, rho=cfg.plr_rho,
+                                uniform=cfg.plr_uniform) if cfg.plr else None
+        collector = Collector(pool, steps_per_env, cfg.gamma, cfg.lam, cfg.search, jobs=plr is not None)
         start = time.time()
         steps_this_run = 0
         shaping = shaping_for(1)
@@ -300,6 +319,12 @@ class PPO:
                 wait_time = time.time() - wait_start
                 buffer = collector.buffer
                 rollout_shaping = shaping
+                plr_stats = {}
+                if plr is not None:     # this rollout's scores weigh the next rollout's seed states
+                    scored = plr.update(buffer.jobs.numpy(), buffer.advantages.numpy(), collector.episodes)
+                    weights = plr.weights()
+                    pool.set_start_weights(weights)
+                    plr_stats = {**plr.stats(weights), 'plr/scored_episodes': scored}
                 # The next rollout acts with these weights while the update below changes them.
                 if iteration < iterations:
                     shaping = shaping_for(iteration + 1)
@@ -323,6 +348,7 @@ class PPO:
                 stats['charts/optimize_seconds'] = time.time() - optimize_start
                 if rollout_shaping is not None:
                     stats['charts/shaping_scale'] = rollout_shaping
+                stats.update(plr_stats)
 
                 if callback is not None:
                     if callback(IterationResult(iteration, self.total_steps, rollout, stats)) is False:

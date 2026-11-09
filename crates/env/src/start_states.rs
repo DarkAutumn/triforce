@@ -3,6 +3,8 @@
 //! - Seed states: the config's savestate globs; the room is verified from RAM after loading.
 //! - [`ProbabilisticSelector`]: round-robin until a full window of results covers every state, then sampling
 //!   weighted by recent results (recency decay 0.9, failures ×2, damage ×1.5, last 128 results).
+//! - [`StartWeights`]: a training pool's shared seed-state weights (prioritized level replay); while set, seed draws
+//!   follow them instead of the selector's result memory.
 //! - Harvested states (`<harvested dir>/*.state`) mix with seed states at `harvested_fraction`.
 //! - [`SavestateCapture`]: the first entry of each (room, side) is saved as `<level>_<room><side>.state`.
 //! - [`ram_randomization_values`]: reset-time hp/bombs/keys.
@@ -12,9 +14,11 @@
 
 use crate::config::{SpecialistConfig, format_room, glob};
 use crate::error::EnvError;
+use parking_lot::RwLock;
 use rand::{Rng, RngExt};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use zelda::enums::Direction;
 use zelda::{Change, MapLocation, SessionSnapshot, Var};
 
@@ -128,6 +132,36 @@ impl ProbabilisticSelector {
     }
 }
 
+/// Seed-state weights shared by a training pool's envs (prioritized level replay, better-play §5;
+/// `EnvPool.set_start_weights`): seed-state label → weight.  While set, every seed draw follows them (the env's RNG,
+/// [`weighted_index`]) instead of the selector's result memory, which keeps recording; unset (the default), draws are
+/// exactly the selector's.  Harvested states, curriculum starts and the per-reset RAM randomization are unaffected.
+#[derive(Clone, Debug, Default)]
+pub struct StartWeights(Arc<RwLock<Option<HashMap<String, f64>>>>);
+
+impl StartWeights {
+    /// Sets (or with None clears) the weights; the caller checks them (≥ 0, not all 0).  Resets after the call use
+    /// them.
+    pub fn set(&self, weights: Option<HashMap<String, f64>>) {
+        *self.0.write() = weights;
+    }
+
+    /// Fills `out` with each state's weight (by label, missing ones 0); false while unset or if all are 0.
+    fn fill(&self, states: &[String], out: &mut Vec<f64>) -> bool {
+        let guard = self.0.read();
+        let Some(weights) = guard.as_ref() else {
+            return false;
+        };
+        out.clear();
+        out.extend(
+            states
+                .iter()
+                .map(|s| weights.get(state_label(s)).copied().unwrap_or(0.0)),
+        );
+        out.iter().any(|w| *w > 0.0)
+    }
+}
+
 /// Seed + harvested start states for one specialist.
 #[derive(Clone, Debug)]
 pub struct StartStatePool {
@@ -135,6 +169,10 @@ pub struct StartStatePool {
     harvested_fraction: f64,
     pub seed: Option<ProbabilisticSelector>,
     pub harvested: Option<ProbabilisticSelector>,
+    /// Shared seed-state weights (training pools); None or unset = the seed selector's own weights.
+    pub weights: Option<StartWeights>,
+    /// The seed draw's weights under `weights` (reused across resets).
+    drawn: Vec<f64>,
     resets: u64,
 }
 
@@ -157,6 +195,8 @@ impl StartStatePool {
                 Some(ProbabilisticSelector::new(seeds, MEMORY_SIZE)?)
             },
             harvested: None,
+            weights: None,
+            drawn: Vec::new(),
             resets: 0,
         };
         pool.scan_harvested();
@@ -196,7 +236,13 @@ impl StartStatePool {
         {
             return h.next(rng);
         }
-        self.seed.as_mut().expect("seed states").next(rng)
+        let seed = self.seed.as_mut().expect("seed states");
+        if let Some(weights) = &self.weights
+            && weights.fill(&seed.states, &mut self.drawn)
+        {
+            return seed.states[weighted_index(rng, &self.drawn)].clone();
+        }
+        seed.next(rng)
     }
 
     /// Feeds an episode result back to whichever selector owns the state.
@@ -477,6 +523,50 @@ mod tests {
             StartStatePool::new(&none, &seeds),
             Err(EnvError::StartState(_))
         ));
+    }
+
+    /// Unset shared weights draw exactly what the selector draws (same RNG, same sequence); set weights decide every
+    /// seed draw while results keep recording; cleared, the selector draws again.
+    #[test]
+    fn pool_follows_shared_start_weights() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["1_73e_0", "1_73s_0", "1_73w_0"] {
+            std::fs::write(dir.path().join(format!("{name}.state")), b"x").unwrap();
+        }
+        let text = format!(
+            "name: t\nrooms: ['(1, 0x73)']\nsuccess: exit-correct\nstart_states: ['1_73*_[0-9]']\n\
+             harvested_states: {}\n",
+            dir.path().join("none").display()
+        );
+        let config = SpecialistConfig::from_yaml(&text, "t.yaml", None).unwrap();
+        let mut plain = StartStatePool::new(&config, dir.path()).unwrap();
+        let mut shared = StartStatePool::new(&config, dir.path()).unwrap();
+        let weights = StartWeights::default();
+        shared.weights = Some(weights.clone());
+        let (mut r1, mut r2) = (rng(), rng());
+        for i in 0..400 {
+            let (a, b) = (plain.next(&mut r1), shared.next(&mut r2));
+            assert_eq!(a, b, "draw {i}");
+            let failed = a.ends_with("1_73s_0.state");
+            plain.record(&a, !failed, i % 3 == 0);
+            shared.record(&b, !failed, i % 3 == 0);
+        }
+
+        weights.set(Some(HashMap::from([
+            ("1_73w_0".to_owned(), 2.0),
+            ("1_73e_0".to_owned(), 0.0),
+        ])));
+        let picks: Vec<String> = (0..200).map(|_| shared.next(&mut r2)).collect();
+        assert!(picks.iter().all(|p| state_label(p) == "1_73w_0"), "{picks:?}");
+        shared.record(&picks[0], false, false);
+        let selector = shared.seed.as_ref().unwrap();
+        assert_eq!(selector.memory.back().unwrap().state, picks[0]);
+
+        weights.set(None);
+        let mut unweighted = shared.clone();
+        unweighted.weights = None;
+        let mut r3 = r2.clone();
+        assert!((0..50).all(|_| unweighted.next(&mut r3) == shared.next(&mut r2)));
     }
 
     #[test]

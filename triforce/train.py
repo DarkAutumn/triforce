@@ -5,7 +5,7 @@
         [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
         [--ent-anneal SHARE] [--shaping-anneal N] [--best-of-n RUNS [--best-keep K] [--best-every N]
         [--best-coeff C] [--best-parallel P]] [--sil-coeff C [--sil-value-coeff B] [--sil-capacity ROWS]]
-        [--search JSON [--search-coeff C]]
+        [--search JSON [--search-coeff C]] [--plr [--plr-beta B] [--plr-rho R] [--plr-uniform U]]
 
 Each iteration collects ``--steps-per-update`` env steps, split across ``--parallel`` envs of one native
 ``EnvPool`` (``--threads`` worker threads, default ``min(parallel, cpu count)``; results do not depend on the
@@ -37,6 +37,11 @@ training decisions (``EnvPool.rollout(search=JSON)``, e.g. ``'{"candidates":4,"s
 policy by distillation, ``C · CE(π', π_θ)`` toward the search's improved policy (C = ``--search-coeff``), in place of
 the PPO ratio term; value loss, entropy bonus and GAE cover every row (``losses/search_ce``, ``charts/search_rows``,
 ``charts/search_agreement``).  Searched decisions cost about 100× a plain one.
+``--plr`` (prioritized level replay, §5; ``plr.PrioritizedReplay``): after each rollout the seed start states are
+scored by their episodes' positive value loss (mean max(GAE advantage, 0)) and the pool draws the next rollout's seed
+states by rank-prioritized scores (temperature ``--plr-beta``) mixed with staleness (``--plr-rho``) and uniform
+(``--plr-uniform``) sampling instead of its failure-weighted draws (``plr/entropy``, ``plr/top_state``,
+``plr/weight/<state>``, ``plr/scored_episodes``).  Curriculum and harvested starts are unaffected.
 ``--curriculum`` starts a share of episodes along trajectories found by ``triforce.explore`` (backward
 curriculum, native ``CurriculumSpec``); its shared progress file is ``<run dir>/curriculum.json``.
 
@@ -173,6 +178,12 @@ def parse_args(argv=None):
                              "\"fraction\":0.25}'; searched rows train by distillation toward the search's policy")
     parser.add_argument('--search-coeff', type=float, default=PPOConfig.search_coeff,
                         help="weight of the search distillation loss CE(pi', pi)")
+    parser.add_argument('--plr', action='store_true',
+                        help="prioritized level replay (better-play §5): draw seed start states by their recent "
+                             "positive value loss (rank-prioritized, plus staleness and uniform shares)")
+    parser.add_argument('--plr-beta', type=float, default=PPOConfig.plr_beta, help="PLR rank temperature")
+    parser.add_argument('--plr-rho', type=float, default=PPOConfig.plr_rho, help="PLR staleness share")
+    parser.add_argument('--plr-uniform', type=float, default=PPOConfig.plr_uniform, help="PLR uniform share")
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--stop-success', type=float, default=None,
                         help="stop early once training success_rate >= this for --stop-patience iterations")
@@ -337,7 +348,8 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                            ent_anneal=args.ent_anneal, shaping_anneal=args.shaping_anneal,
                            demo_bc_coeff=args.demo_bc_coeff if demo_batch is not None else 0.0,
                            sil_coeff=args.sil_coeff, sil_value_coeff=args.sil_value_coeff,
-                           sil_capacity=args.sil_capacity, search=args.search, search_coeff=args.search_coeff)
+                           sil_capacity=args.sil_capacity, search=args.search, search_coeff=args.search_coeff,
+                           plr=args.plr, plr_beta=args.plr_beta, plr_rho=args.plr_rho, plr_uniform=args.plr_uniform)
     ppo = PPO(ppo_config, device=args.device, optimizer_state=optimizer_state, demo_batch=demo_batch)
 
     # Built before the 'start' event so bad start states or trajectories fail the run up front.

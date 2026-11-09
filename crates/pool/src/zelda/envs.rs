@@ -151,6 +151,8 @@ pub struct TrainEnv<N: Nes, St: StateStore<N::State>> {
     /// Episode job keys: `mix(job_base + episodes)`, from the env's seed (keyed action noise, replays).
     job_base: u64,
     episodes: u64,
+    /// The current episode's job key (reported with [`ZeldaEvent::Episode`]).
+    job: i64,
 }
 
 impl<N, St> TrainEnv<N, St>
@@ -179,6 +181,7 @@ where
             rooms: RoomWatch::default(),
             job_base,
             episodes: 0,
+            job: 0,
         })
     }
 
@@ -227,9 +230,9 @@ where
         let (o, info) = self.env.reset(None, None)?;
         write_observation(&o, &mut obs);
         self.rooms.report_info(&info, events);
-        let job = (policy::noise::mix(self.job_base.wrapping_add(self.episodes)) >> 1) as i64;
+        self.job = (policy::noise::mix(self.job_base.wrapping_add(self.episodes)) >> 1) as i64;
         self.episodes += 1;
-        Ok(Some(Start { policy: 0, job }))
+        Ok(Some(Start { policy: 0, job: self.job }))
     }
 
     fn step(
@@ -243,7 +246,10 @@ where
         let outcome = specialist_outcome(&r);
         self.rooms.report_info(&r.info, events);
         if r.info.terminal.is_some() {
-            events.push(ZeldaEvent::Episode(Box::new(r.info)));
+            events.push(ZeldaEvent::Episode {
+                info: Box::new(r.info),
+                job: self.job,
+            });
             end_recording(self.env.session_mut().nes_mut(), events);
         }
         Ok(outcome)

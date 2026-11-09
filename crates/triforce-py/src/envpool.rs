@@ -11,6 +11,7 @@ use env::SharedCurriculum;
 use env::chain::Route;
 use env::config::{GameData, SpecialistConfig, parse_room};
 use env::specialist_env::{EnvOptions, ShapingDial, cheated_json};
+use env::start_states::{StartWeights, state_label};
 use numpy::{
     PyArray, PyArrayDyn, PyArrayMethods, PyReadonlyArrayDyn, PyReadwriteArrayDyn,
     PyUntypedArrayMethods,
@@ -226,6 +227,9 @@ pub struct PyEnvPool {
     kind: Kind,
     /// The train pool's shared shaping scale (None for eval and chain pools).
     shaping: Option<ShapingDial>,
+    /// The train pool's shared seed-state weights and its seed-state labels (None for eval and chain pools and a
+    /// train pool pinned to one `start_state`).
+    start_weights: Option<(StartWeights, Vec<String>)>,
 }
 
 fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult<PyEnvPool> {
@@ -240,12 +244,22 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             .transpose()?;
         let store = TfzStore::new(&data, rom.clone());
         let shaping = ShapingDial::new(t.config.reward.shaping_scale);
+        let start_weights = t.start_state.is_none().then(|| {
+            let states = t
+                .config
+                .resolve_start_states(&data.states_dir)
+                .iter()
+                .map(|p| state_label(&p.to_string_lossy()).to_owned())
+                .collect();
+            (StartWeights::default(), states)
+        });
         let make = |init: EnvInit| {
             let opts = EnvOptions {
                 start_state: t.start_state.clone(),
                 capture_dir: t.capture_dir.clone(),
                 curriculum: curriculum.clone(),
                 shaping: Some(shaping.clone()),
+                start_weights: start_weights.as_ref().map(|(w, _)| w.clone()),
                 ..Default::default()
             };
             let mut env = TrainEnv::new(
@@ -267,6 +281,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             policies: vec![t.config.name.clone()],
             kind: Kind::Train,
             shaping: Some(shaping),
+            start_weights,
         });
     }
     if let Ok(t) = task.cast::<PyEvalTask>() {
@@ -299,6 +314,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             policies: vec![t.config.name.clone()],
             kind: Kind::Eval,
             shaping: None,
+            start_weights: None,
         });
     }
     if let Ok(t) = task.cast::<PyChainTask>() {
@@ -344,6 +360,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             policies: t.configs.iter().map(|c| c.name.clone()).collect(),
             kind: Kind::Chain,
             shaping: None,
+            start_weights: None,
         });
     }
     Err(PyTypeError::new_err(
@@ -628,9 +645,10 @@ fn event_dict<'py>(
     let d = PyDict::new(py);
     d.set_item("env", env)?;
     match event {
-        ZeldaEvent::Episode(info) => {
+        ZeldaEvent::Episode { info, job } => {
             d.set_item("type", "episode")?;
             d.set_item("info", json_to_py(py, &info.to_json())?)?;
+            d.set_item("job", job)?;
         }
         ZeldaEvent::Eval(record) => {
             d.set_item("type", "eval")?;
@@ -757,6 +775,45 @@ impl PyEnvPool {
             return Err(PyValueError::new_err(format!("shaping scale {scale} is not in [0, 1]")));
         }
         dial.set(scale);
+        Ok(())
+    }
+
+    /// The seed start states (labels) a train pool's resets draw from (what `set_start_weights` weighs); empty for
+    /// eval and chain pools and a train pool pinned to one `start_state`.
+    #[getter]
+    fn start_states(&self) -> Vec<String> {
+        self.start_weights
+            .as_ref()
+            .map_or_else(Vec::new, |(_, states)| states.clone())
+    }
+
+    /// Sets the train pool's seed-state weights (prioritized level replay): {seed state label: weight}, every weight
+    /// finite and ≥ 0, not all 0 (unlisted states get 0); None goes back to each env's failure-weighted draws.
+    /// Resets after the call draw their seed state by these weights; harvested states and curriculum starts don't
+    /// change, and health/items stay randomized per reset.
+    #[pyo3(signature = (weights))]
+    fn set_start_weights(&self, weights: Option<HashMap<String, f64>>) -> PyResult<()> {
+        let (shared, states) = self.start_weights.as_ref().ok_or_else(|| {
+            PyValueError::new_err("set_start_weights needs a TrainTask pool that draws its start states")
+        })?;
+        if let Some(weights) = &weights {
+            for (state, w) in weights {
+                if !states.contains(state) {
+                    return Err(PyValueError::new_err(format!(
+                        "{state:?} is not a seed start state of this pool ({states:?})"
+                    )));
+                }
+                if !(w.is_finite() && *w >= 0.0) {
+                    return Err(PyValueError::new_err(format!(
+                        "start weight {w} of {state:?} is not a finite number >= 0"
+                    )));
+                }
+            }
+            if !weights.values().any(|w| *w > 0.0) {
+                return Err(PyValueError::new_err("start weights are all 0"));
+            }
+        }
+        shared.set(weights);
         Ok(())
     }
 
@@ -994,7 +1051,8 @@ impl PyEnvPool {
         Ok(self.pool.control(env).map_err(pool_err)?.emulated_frames())
     }
 
-    /// Events since the last call, as dicts with `env` and `type`: `episode` (`info`: the terminal step's info),
+    /// Events since the last call, as dicts with `env` and `type`: `episode` (`info`: the terminal step's info, `job`:
+    /// the episode's job key, its rollout rows' `job`),
     /// `eval` (`record`), `run` (`result`: the RunResult dict), `room` (`specialist`, `level`, `room`, `in_cave`,
     /// `rooms`: rooms entered so far in the episode or run, `health`, `max_health`, `stalled`, `cheated`) and
     /// `movie` (`origin`, `buttons`, `pokes`).

@@ -77,9 +77,10 @@ class RolloutBuffer:
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, memory_length: int, n_envs: int, observation_space, gamma: float, lam: float,
-                 search: bool = False):
+                 search: bool = False, jobs: bool = False):
         """``observation_space``: a ``spaces.Dict``, or a pool's ``obs_spec`` (key → ``{'shape', 'dtype'}``).
-        ``search``: also keep the search's ``search_mask`` and ``search_policy``."""
+        ``search``: also keep the search's ``search_mask`` and ``search_policy``; ``jobs``: each row's episode
+        ``job`` key (prioritized level replay)."""
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.memory_length = memory_length
         self.n_envs = n_envs
@@ -105,11 +106,13 @@ class RolloutBuffer:
         self.last_values = torch.zeros(n_envs, dtype=torch.float32)
         self.search_mask = torch.zeros(n_envs, memory_length, dtype=torch.bool) if search else None
         self.search_policy = torch.zeros(n_envs, memory_length, JOINT_SIZE, dtype=torch.float32) if search else None
+        self.jobs = torch.zeros(n_envs, memory_length, dtype=torch.int64) if jobs else None
 
     def rollout_buffers(self) -> dict:
         """numpy views of this buffer's memory in the layout ``EnvPool.rollout`` writes: ``obs`` (every key, the
         mask included), ``starts`` (``dones``), ``actions``, ``logp_ent_val``, ``rewards`` (raw step rewards),
-        ``frames``, ``bootstrap_value``, ``interrupts``, and with search ``search_mask`` and ``search_policy``."""
+        ``frames``, ``bootstrap_value``, ``interrupts``, with search ``search_mask`` and ``search_policy``, and with
+        jobs ``job``."""
         obs = {key: value.numpy() for key, value in self.observation.items()}
         obs[MASK_KEY] = self.masks.numpy()
         views = {'obs': obs, 'starts': self.dones.numpy(), 'actions': self.actions.numpy(),
@@ -119,6 +122,8 @@ class RolloutBuffer:
         if self.search_mask is not None:
             views['search_mask'] = self.search_mask.numpy()
             views['search_policy'] = self.search_policy.numpy()
+        if self.jobs is not None:
+            views['job'] = self.jobs.numpy()
         return views
 
     @torch.no_grad()

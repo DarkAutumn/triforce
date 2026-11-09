@@ -26,8 +26,8 @@ use crate::observation::{Observation, ObservationBuilder};
 use crate::rewards::{Outcome, SUCCESS, StepRewards, apply_terminal_rewards};
 use std::sync::atomic::{AtomicU64, Ordering};
 use crate::start_states::{
-    SavestateCapture, StartStatePool, StateStore, ram_randomization_values, state_entry,
-    state_label, verify_start_room,
+    SavestateCapture, StartStatePool, StartWeights, StateStore, ram_randomization_values,
+    state_entry, state_label, verify_start_room,
 };
 use indexmap::IndexMap;
 use rand::{RngExt, SeedableRng};
@@ -313,6 +313,9 @@ pub struct EnvOptions {
     pub skip_look_ahead: bool,
     /// The shaping scale's source; None reads `reward.shaping_scale` from the config.
     pub shaping: Option<ShapingDial>,
+    /// Seed-state weights shared with the other envs of a training pool (prioritized level replay); None or unset =
+    /// the start-state pool's own failure-weighted draws.
+    pub start_weights: Option<StartWeights>,
 }
 
 impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
@@ -326,7 +329,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let mut session = Session::new(nes, data.map.clone());
         session.look_ahead = !opts.skip_look_ahead;
         let pool = if opts.start_state.is_none() && !opts.explicit_starts {
-            Some(StartStatePool::new(&config, &data.states_dir)?)
+            let mut pool = StartStatePool::new(&config, &data.states_dir)?;
+            pool.weights = opts.start_weights;
+            Some(pool)
         } else {
             None
         };

@@ -252,12 +252,21 @@ fn train_env_rows_match_the_env_played_directly() {
         .poll_events()
         .into_iter()
         .filter_map(|(_, e)| match e {
-            ZeldaEvent::Episode(info) => Some(info),
+            ZeldaEvent::Episode { info, job } => Some((info, job)),
             _ => None,
         })
         .collect();
     assert_eq!(ended.len(), episodes);
-    assert!(ended.iter().all(|i| i.terminal.is_some()));
+    assert!(ended.iter().all(|(i, _)| i.terminal.is_some()));
+    // Each episode event carries the job key of its rows (the terminal row's).
+    let terminal_jobs: Vec<i64> = expected
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.terminated || e.truncated)
+        .map(|(i, _)| r.job[i])
+        .collect();
+    assert_eq!(ended.iter().map(|(_, j)| *j).collect::<Vec<_>>(), terminal_jobs);
+    assert!(terminal_jobs.windows(2).all(|w| w[0] != w[1]));
 }
 
 #[test]

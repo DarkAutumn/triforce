@@ -20,7 +20,7 @@ use env::rewards::{
 };
 use env::observation::{Observation, ObservationBuilder, feature_names};
 use env::specialist_env::{EnvOptions, ShapingDial, SpecialistEnv, StepInfo, StepResult};
-use env::start_states::{SavestateCapture, ram_randomization_values};
+use env::start_states::{SavestateCapture, StartWeights, ram_randomization_values, state_label};
 use env::{EnvError, StateStore};
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -2034,4 +2034,26 @@ fn shaping_scale_and_frame_penalty() {
     dial.set(0.5);
     let r = act(&mut env, "MOVE E 8");
     assert!((r.reward - full.reward * 0.5).abs() < 1e-9, "{} vs {}", r.reward, full.reward);
+}
+
+/// Prioritized level replay: a pool's shared start weights decide every non-curriculum reset's seed state.
+#[test]
+fn shared_start_weights_pick_the_start_state() {
+    let Some(nes) = open_core() else { return };
+    let specialist = "stalfos-keese-gel";
+    let seeds = data().specialists[specialist].resolve_start_states(&data().states_dir);
+    assert!(seeds.len() > 2, "{seeds:?}");
+    let target = state_label(&seeds[seeds.len() / 2].to_string_lossy()).to_owned();
+    let weights = StartWeights::default();
+    weights.set(Some(std::collections::HashMap::from([(target.clone(), 1.0)])));
+    let opts = EnvOptions {
+        start_weights: Some(weights),
+        ..Default::default()
+    };
+    let mut env = make_env_with(nes, specialist, opts, |c| c.harvested_fraction = 0.0);
+    for _ in 0..6 {
+        let (_, info) = env.reset(None, None).unwrap();
+        let start = info.start_state.expect("start state");
+        assert_eq!(state_label(&start), target);
+    }
 }

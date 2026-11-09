@@ -254,6 +254,25 @@ minibatch's searched rows instead (`ZeldaPolicy.joint_log_probs`: the factorized
 same as the Rust `Policy.joint_log_probs`). Value loss, entropy bonus and GAE cover every row. Stats after the update,
 over the batch's searched rows: `losses/search_ce`, `charts/search_agreement` (argmax π' = argmax π_θ) and
 `charts/search_rows` (their share of the batch). Off (default), the update is bit for bit the plain PPO one.
+`--plr` (`PPOConfig.plr`, prioritized level replay, Jiang et al. 2021; §5, `triforce/plr.py`) replaces the seed
+start-state draw of the start-state pool (`crates/env/src/start_states.rs`: each env's `ProbabilisticSelector`,
+favouring its own recent failures and damage) with weights shared by the whole train pool: `StartWeights` (one
+`Arc<RwLock<…>>` handed to every env through `EnvOptions::start_weights`), set by `EnvPool.set_start_weights({state:
+weight} | None)` over `EnvPool.start_states` (the seed state labels; ValueError on eval/chain pools, unknown states,
+negative or all-zero weights). While set, every seed draw is `weighted_index` over them with the env's RNG; the
+selector keeps recording results, and unset its draws are exactly today's. Harvested states, backward-curriculum
+starts and the per-reset health/item randomization are untouched: a cell is a seed state, not a (state, health,
+items) combination. The scorer attributes rows to episodes by job key (`RolloutBuffer.jobs` from the rollout's `job`
+column; `poll_events` episode events carry the `job` and the `info['start_state']`), and scores each finished
+room-entry episode by its positive value loss, the mean over its steps of max(GAE advantage, 0) from the learner's
+recomputed values (an episode spanning rollouts sums its rows from each). A state's score S is an EMA over its
+episodes (α = 0.3), and the weights are (1 − u)·((1 − ρ)·P_S + ρ·P_C) + u/|states| with P_S ∝ rank(S)^(−1/β) (rank 1 =
+highest; ties share the best rank; unscored states take the top score) and P_C ∝ episodes scored so far − the count
+when the state was last scored (uniform while all are 0); `--plr-beta` β, `--plr-rho` ρ, `--plr-uniform` u default to
+0.1 each. `PPO.train` sets them after each rollout's `compute_returns`, before the next rollout starts, so there is one
+rollout of lag (the first rollout draws as without PLR; an env resetting at a rollout's last step drew under the
+previous weights). Stats: `plr/entropy` (nats), `plr/top_state` (largest weight), `plr/weight/<state>`,
+`plr/scored_episodes`.
 
 `no_progress_steps` (positive or null, default null) replaces legacy positional/room timeout with the shared
 lingering tail. Training ends `no-room-progress` as a soft-failure **truncation** with no terminal penalty;
