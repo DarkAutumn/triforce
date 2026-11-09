@@ -22,7 +22,7 @@ pub const REWARD_TERMINAL_SUCCESS: &str = "reward-terminal-success";
 pub const PENALTY_TERMINAL_FAILURE: &str = "penalty-terminal-failure";
 
 /// Every reward and penalty term name the critic and terminal rewards can produce, rewards first (metrics).
-pub const REWARD_TERMS: [&str; 53] = [
+pub const REWARD_TERMS: [&str; 54] = [
     "reward-gained-sword",
     "reward-gained-arrows",
     "reward-gained-bow",
@@ -75,6 +75,7 @@ pub const REWARD_TERMS: [&str; 53] = [
     "penalty-lost-beams",
     "penalty-room-stalling",
     "penalty-pbrs-movement",
+    "penalty-frames",
     PENALTY_TERMINAL_FAILURE,
 ];
 
@@ -190,6 +191,13 @@ impl StepRewards {
     /// Drops every reward (penalties stay).
     pub fn remove_rewards(&mut self) {
         self.outcomes.retain(|o| !o.is_reward());
+    }
+
+    /// Multiplies every outcome (rewards and penalties) by `factor` (`reward.shaping_scale`, outcome fine-tuning).
+    pub fn scale_all(&mut self, factor: f64) {
+        for o in &mut self.outcomes {
+            o.value *= factor;
+        }
     }
 
     /// Scales positive rewards by `factor` except those whose names start with an exempt prefix.

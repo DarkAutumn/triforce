@@ -47,6 +47,9 @@ class PPOConfig:
     # Share of a train() call's iterations, at its end, over which ent_coeff falls linearly to 0 (better-play §6b:
     # less sampling noise in the final policy).  0 = constant.
     ent_anneal: float = 0.0
+    # Iterations over which the pool's shaping scale (``EnvPool.shaping``, every non-terminal reward/penalty) falls
+    # linearly from its starting value to 0, then stays 0 (better-play §1a outcome fine-tuning).  0 = untouched.
+    shaping_anneal: int = 0
     vf_coeff: float = 0.5
     max_grad_norm: float = 0.5
     epsilon: float = 1e-5
@@ -199,9 +202,20 @@ class PPO:
             random.seed(seed)
             np.random.seed(seed % (1 << 32))
 
+        # Iteration k (1-based) rolls out with shaping start * max(0, 1 - (k-1)/N); set before its collector.start.
+        shaping_start = pool.shaping if cfg.shaping_anneal > 0 and hasattr(pool, 'set_shaping') else None
+
+        def shaping_for(k: int) -> Optional[float]:
+            if shaping_start is None:
+                return None
+            scale = shaping_start * max(0.0, 1.0 - (k - 1) / cfg.shaping_anneal)
+            pool.set_shaping(scale)
+            return scale
+
         collector = Collector(pool, steps_per_env, cfg.gamma, cfg.lam)
         start = time.time()
         steps_this_run = 0
+        shaping = shaping_for(1)
         collector.start(network)
         try:
             for iteration in range(1, iterations + 1):
@@ -209,8 +223,10 @@ class PPO:
                 rollout = collector.finish(network, self.device)
                 wait_time = time.time() - wait_start
                 buffer = collector.buffer
+                rollout_shaping = shaping
                 # The next rollout acts with these weights while the update below changes them.
                 if iteration < iterations:
+                    shaping = shaping_for(iteration + 1)
                     collector.start(network)
 
                 batch_steps = buffer.memory_length * buffer.n_envs
@@ -229,6 +245,8 @@ class PPO:
                 stats['charts/rollout_seconds'] = rollout_time
                 stats['charts/rollout_wait_seconds'] = wait_time
                 stats['charts/optimize_seconds'] = time.time() - optimize_start
+                if rollout_shaping is not None:
+                    stats['charts/shaping_scale'] = rollout_shaping
 
                 if callback is not None:
                     if callback(IterationResult(iteration, self.total_steps, rollout, stats)) is False:

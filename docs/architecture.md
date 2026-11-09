@@ -223,6 +223,14 @@ treasure) a PBRS target the same way, hearts and fairies only while Link is belo
 gained instead of 0.25–0.75 scaled by how hurt Link was. Both are the round 10 §8 heart experiments' controls.
 `reward.boss_ate_bomb_penalty` (default 0.5, ≥ 0; 0 drops the term) is `penalty-boss-ate-bomb` per step in which a
 Dodongo swallowed a bomb (round 12).
+`reward.shaping_scale` (default 1.0, in [0, 1]) multiplies every term the critic produces each step, rewards and
+penalties alike; the terminal terms (`reward-terminal-success`, already health-scaled, and
+`penalty-terminal-failure`) are never scaled. `reward.frame_penalty` (default 0, ≥ 0; e.g. 0.001/8) adds an unscaled
+`penalty-frames` of −frame_penalty × the step's emulated frames. A train pool shares one scale across its envs
+(`ShapingDial`; `EnvPool.shaping` / `EnvPool.set_shaping`), starting at `reward.shaping_scale`;
+`triforce.train --shaping-anneal N` (`PPOConfig.shaping_anneal`) lowers it linearly to 0 over the first N iterations
+(iteration k rolls out at start × max(0, 1 − (k−1)/N)) and reports it as `charts/shaping_scale` (better-play §1a
+outcome fine-tuning: after normal training, the policy optimizes the true outcome).
 
 `no_progress_steps` (positive or null, default null) replaces legacy positional/room timeout with the shared
 lingering tail. Training ends `no-room-progress` as a soft-failure **truncation** with no terminal penalty;

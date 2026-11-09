@@ -10,7 +10,7 @@ use crate::game::{FRAME_BYTES, FRAME_SHAPE, rgb};
 use env::SharedCurriculum;
 use env::chain::Route;
 use env::config::{GameData, SpecialistConfig, parse_room};
-use env::specialist_env::{EnvOptions, cheated_json};
+use env::specialist_env::{EnvOptions, ShapingDial, cheated_json};
 use numpy::{
     PyArray, PyArrayDyn, PyArrayMethods, PyReadonlyArrayDyn, PyReadwriteArrayDyn,
     PyUntypedArrayMethods,
@@ -223,6 +223,8 @@ pub struct PyEnvPool {
     curriculum: Option<SharedCurriculum>,
     policies: Vec<String>,
     kind: Kind,
+    /// The train pool's shared shaping scale (None for eval and chain pools).
+    shaping: Option<ShapingDial>,
 }
 
 fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult<PyEnvPool> {
@@ -236,11 +238,13 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             .map(|c| c.open(Some(&t.run_dir.join("curriculum.json"))))
             .transpose()?;
         let store = TfzStore::new(&data, rom.clone());
+        let shaping = ShapingDial::new(t.config.reward.shaping_scale);
         let make = |init: EnvInit| {
             let opts = EnvOptions {
                 start_state: t.start_state.clone(),
                 capture_dir: t.capture_dir.clone(),
                 curriculum: curriculum.clone(),
+                shaping: Some(shaping.clone()),
                 ..Default::default()
             };
             let mut env = TrainEnv::new(
@@ -261,6 +265,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             curriculum,
             policies: vec![t.config.name.clone()],
             kind: Kind::Train,
+            shaping: Some(shaping),
         });
     }
     if let Ok(t) = task.cast::<PyEvalTask>() {
@@ -292,6 +297,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             curriculum: None,
             policies: vec![t.config.name.clone()],
             kind: Kind::Eval,
+            shaping: None,
         });
     }
     if let Ok(t) = task.cast::<PyChainTask>() {
@@ -336,6 +342,7 @@ fn build(py: Python<'_>, task: &Bound<'_, PyAny>, opts: PoolOptions) -> PyResult
             curriculum: None,
             policies: t.configs.iter().map(|c| c.name.clone()).collect(),
             kind: Kind::Chain,
+            shaping: None,
         });
     }
     Err(PyTypeError::new_err(
@@ -604,6 +611,26 @@ impl PyEnvPool {
     #[getter]
     fn policies(&self) -> Vec<String> {
         self.policies.clone()
+    }
+
+    /// The train pool's shaping scale (every non-terminal reward and penalty is multiplied by it); None for eval
+    /// and chain pools.
+    #[getter]
+    fn shaping(&self) -> Option<f64> {
+        self.shaping.as_ref().map(ShapingDial::get)
+    }
+
+    /// Sets the train pool's shaping scale (in [0, 1]); steps taken after the call use it.
+    fn set_shaping(&self, scale: f64) -> PyResult<()> {
+        let dial = self
+            .shaping
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("set_shaping needs a TrainTask pool"))?;
+        if !(0.0..=1.0).contains(&scale) {
+            return Err(PyValueError::new_err(format!("shaping scale {scale} is not in [0, 1]")));
+        }
+        dial.set(scale);
+        Ok(())
     }
 
     /// 'train', 'eval' or 'chain'.

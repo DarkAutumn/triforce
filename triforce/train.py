@@ -3,6 +3,7 @@
     python -m triforce.train --specialist stalfos-keese-gel [--load CKPT] [--parallel N] [--threads N]
         [--iterations N] [--steps-per-update N] [--device cpu|cuda] [--run-id ID] [--models-dir DIR]
         [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
+        [--ent-anneal SHARE] [--shaping-anneal N]
 
 Each iteration collects ``--steps-per-update`` env steps, split across ``--parallel`` envs of one native
 ``EnvPool`` (``--threads`` worker threads, default ``min(parallel, cpu count)``; results do not depend on the
@@ -16,6 +17,9 @@ finished fixed-budget run.  ``--stop-success`` ends training once the start-stat
 (``balanced_success_rate``, see ``EarlyStop``) stays at or above the threshold for ``--stop-patience``
 consecutive iterations.  Only episodes that started at a room entry count; ``--curriculum`` episodes are reported
 separately as ``curriculum/*``.
+``--shaping-anneal N`` (outcome fine-tuning, better-play §1a) lowers the pool's shaping scale (``reward.shaping_scale``:
+every non-terminal reward and penalty is multiplied by it) linearly to 0 over the first N iterations, then keeps it
+at 0, so the policy optimizes the health-scaled terminal outcome (plus ``reward.frame_penalty``, if set).
 ``--curriculum`` starts a share of episodes along trajectories found by ``triforce.explore`` (backward
 curriculum, native ``CurriculumSpec``); its shared progress file is ``<run dir>/curriculum.json``.
 
@@ -108,6 +112,8 @@ def parse_args(argv=None):
     parser.add_argument('--learning-rate', type=float, default=PPOConfig.learning_rate)
     parser.add_argument('--ent-anneal', type=float, default=PPOConfig.ent_anneal,
                         help="share of the iterations, at the end, over which the entropy bonus falls to 0")
+    parser.add_argument('--shaping-anneal', type=int, default=PPOConfig.shaping_anneal,
+                        help="iterations over which the shaping scale falls linearly to 0 (outcome fine-tuning)")
     parser.add_argument('--start-state', default=None, help="pin every episode to this savestate (name or path)")
     parser.add_argument('--states-dir', default=None,
                         help="where bare start-state names resolve (default: $TRIFORCE_STATES_DIR or triforce/states)")
@@ -279,7 +285,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                                         require_success=not args.demo_allow_incomplete)
 
     ppo_config = PPOConfig(target_steps=args.steps_per_update, learning_rate=args.learning_rate,
-                           ent_anneal=args.ent_anneal,
+                           ent_anneal=args.ent_anneal, shaping_anneal=args.shaping_anneal,
                            demo_bc_coeff=args.demo_bc_coeff if demo_batch is not None else 0.0)
     ppo = PPO(ppo_config, device=args.device, optimizer_state=optimizer_state, demo_batch=demo_batch)
 

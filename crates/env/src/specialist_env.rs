@@ -23,7 +23,8 @@ use crate::end_conditions::{
 use crate::error::EnvError;
 use crate::objective::{Attached, attach, needs_wavefront};
 use crate::observation::{Observation, ObservationBuilder};
-use crate::rewards::{SUCCESS, StepRewards, apply_terminal_rewards};
+use crate::rewards::{Outcome, SUCCESS, StepRewards, apply_terminal_rewards};
+use std::sync::atomic::{AtomicU64, Ordering};
 use crate::start_states::{
     SavestateCapture, StartStatePool, StateStore, ram_randomization_values, state_entry,
     state_label, verify_start_room,
@@ -246,6 +247,25 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     episode_frames: u64,
     reward_total: f64,
     episode_rewards: IndexMap<&'static str, f64>,
+    shaping: Option<ShapingDial>,
+}
+
+/// A shaping scale shared by a training pool's envs (f64 bits): the trainer lowers it between rollouts.
+#[derive(Clone, Debug)]
+pub struct ShapingDial(Arc<AtomicU64>);
+
+impl ShapingDial {
+    pub fn new(scale: f64) -> Self {
+        ShapingDial(Arc::new(AtomicU64::new(scale.to_bits())))
+    }
+
+    pub fn get(&self) -> f64 {
+        f64::from_bits(self.0.load(Ordering::Relaxed))
+    }
+
+    pub fn set(&self, scale: f64) {
+        self.0.store(scale.to_bits(), Ordering::Relaxed);
+    }
 }
 
 /// How a `SpecialistEnv` is built (the optional `ZeldaEnv.__init__` arguments).
@@ -267,6 +287,8 @@ pub struct EnvOptions {
     /// Skip the weapon look-ahead: it only credits rewards on the firing step (endings and metrics count observed
     /// effects), so evaluation, which ignores rewards, turns it off.
     pub skip_look_ahead: bool,
+    /// The shaping scale's source; None reads `reward.shaping_scale` from the config.
+    pub shaping: Option<ShapingDial>,
 }
 
 impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
@@ -310,6 +332,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             store,
             start_state: opts.start_state,
             strict_actions: !opts.lenient_actions,
+            shaping: opts.shaping,
             rng: ChaCha8Rng::seed_from_u64(opts.seed),
             linger: LingerTracker::default(),
             hearts: HeartTracker::default(),
@@ -571,6 +594,16 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             },
             &mut rewards,
         );
+        let scale = self.shaping.as_ref().map_or(self.config.reward.shaping_scale, ShapingDial::get);
+        if scale != 1.0 {
+            rewards.scale_all(scale);
+        }
+        if self.config.reward.frame_penalty > 0.0 {
+            rewards.add(Outcome::penalty(
+                "penalty-frames",
+                -self.config.reward.frame_penalty * change.frames as f64,
+            ));
+        }
         let mut ending = self.end_conditions.check(&StepView {
             change: &change,
             prev_objective: &prev.objective,
