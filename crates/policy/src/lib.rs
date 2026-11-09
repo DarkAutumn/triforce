@@ -12,7 +12,7 @@
 pub mod kernels;
 pub mod noise;
 
-use kernels::{argmax, dot, layer_norm, linear, masked_log_softmax, relu, tanh};
+use kernels::{argmax, axpy, dot, layer_norm, linear, masked_log_softmax, relu, tanh};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -172,8 +172,10 @@ struct EncoderLayer {
     norm2: Norm,
 }
 
+/// A 3×3 convolution (padding 1) with its weights as `[cin][ky][kx][cout]`: each tap adds one input value times a
+/// row of `cout` weights into the output channels (vectorized over them), taps in that order.
 struct Conv {
-    w: Vec<f32>,
+    w_t: Vec<f32>,
     b: Vec<f32>,
     cin: usize,
     cout: usize,
@@ -182,6 +184,102 @@ struct Conv {
     w_in: usize,
     h_out: usize,
     w_out: usize,
+}
+
+impl Conv {
+    /// One layer with ReLU: `src` `[cin][h_in][w_in]` → `dst` `[cout][h_out][w_out]`. Each output channel is its
+    /// bias plus the taps in `[cin][ky][kx]` order (taps outside the padded border add nothing), whichever path:
+    /// the common channel counts keep the accumulators in registers.
+    fn apply(&self, src: &[f32], dst: &mut [f32], acc: &mut [f32]) {
+        #[cfg(target_arch = "x86_64")]
+        if std::is_x86_feature_detected!("avx") {
+            match self.cout {
+                // SAFETY: AVX is available (checked above).
+                16 => return unsafe { self.apply_avx::<2>(src, dst) },
+                32 => return unsafe { self.apply_avx::<4>(src, dst) },
+                _ => {}
+            }
+        }
+        self.apply_any(src, dst, &mut acc[..self.cout]);
+    }
+
+    /// Output (oy, ox)'s taps inside the border: (first input row, ky range, first input column, kx range).
+    #[inline(always)]
+    fn window(&self, oy: usize, ox: usize) -> (usize, std::ops::Range<usize>, usize, std::ops::Range<usize>) {
+        let (y0, x0) = (oy * self.stride, ox * self.stride);
+        // Tap k reads row y0 + k - 1: inside for 1 - y0 <= k < h_in + 1 - y0.
+        let ky = 1usize.saturating_sub(y0)..3.min(self.h_in + 1 - y0);
+        let kx = 1usize.saturating_sub(x0)..3.min(self.w_in + 1 - x0);
+        (y0, ky, x0, kx)
+    }
+
+    #[inline(always)]
+    fn store(&self, dst: &mut [f32], oy: usize, ox: usize, acc: &[f32]) {
+        let out_plane = self.h_out * self.w_out;
+        for (co, &v) in acc.iter().enumerate() {
+            dst[co * out_plane + oy * self.w_out + ox] = v.max(0.0);
+        }
+    }
+
+    /// `cout == 8 * N` with AVX: `N` registers of 8 output channels each. Per lane exactly `apply_any`'s
+    /// arithmetic (a product, then a sum, taps in order; no fused multiply-add), so the bits are the same.
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx")]
+    unsafe fn apply_avx<const N: usize>(&self, src: &[f32], dst: &mut [f32]) {
+        use std::arch::x86_64::{__m256, _mm256_add_ps, _mm256_loadu_ps, _mm256_mul_ps, _mm256_set1_ps, _mm256_storeu_ps};
+        assert_eq!(self.cout, 8 * N);
+        assert!(self.w_t.len() >= self.cin * 9 * self.cout && self.b.len() == self.cout);
+        let plane = self.h_in * self.w_in;
+        let w = self.w_t.as_ptr();
+        let mut out = [0f32; 8];
+        for oy in 0..self.h_out {
+            for ox in 0..self.w_out {
+                let (y0, ky, x0, kx) = self.window(oy, ox);
+                // SAFETY: every pointer below stays inside `b` / `w_t` (lengths asserted above).
+                let mut acc: [__m256; N] = std::array::from_fn(|n| unsafe { _mm256_loadu_ps(self.b.as_ptr().add(8 * n)) });
+                for ci in 0..self.cin {
+                    for ky in ky.clone() {
+                        let row = ci * plane + (y0 + ky - 1) * self.w_in + x0;
+                        for kx in kx.clone() {
+                            let v = _mm256_set1_ps(src[row + kx - 1]);
+                            let tap = unsafe { w.add((ci * 9 + ky * 3 + kx) * self.cout) };
+                            for (n, a) in acc.iter_mut().enumerate() {
+                                *a = _mm256_add_ps(*a, _mm256_mul_ps(v, unsafe { _mm256_loadu_ps(tap.add(8 * n)) }));
+                            }
+                        }
+                    }
+                }
+                let out_plane = self.h_out * self.w_out;
+                for (n, a) in acc.iter().enumerate() {
+                    unsafe { _mm256_storeu_ps(out.as_mut_ptr(), *a) };
+                    for (l, &v) in out.iter().enumerate() {
+                        dst[(8 * n + l) * out_plane + oy * self.w_out + ox] = v.max(0.0);
+                    }
+                }
+            }
+        }
+    }
+
+    fn apply_any(&self, src: &[f32], dst: &mut [f32], acc: &mut [f32]) {
+        let cout = self.cout;
+        let plane = self.h_in * self.w_in;
+        for oy in 0..self.h_out {
+            for ox in 0..self.w_out {
+                let (y0, ky, x0, kx) = self.window(oy, ox);
+                acc.copy_from_slice(&self.b);
+                for ci in 0..self.cin {
+                    for ky in ky.clone() {
+                        let row = ci * plane + (y0 + ky - 1) * self.w_in + x0;
+                        for kx in kx.clone() {
+                            let tap = ci * 9 + ky * 3 + kx;
+                            axpy(acc, src[row + kx - 1], &self.w_t[tap * cout..(tap + 1) * cout]);
+                        }
+                    }
+                }
+                self.store(dst, oy, ox, acc);
+            }
+        }
+    }
 }
 
 struct Tower {
@@ -267,7 +365,7 @@ pub struct Scratch {
     pooled: Vec<f32>,
     grid_a: Vec<f32>,
     grid_b: Vec<f32>,
-    patch: Vec<f32>,
+    conv_acc: Vec<f32>,
     features: Vec<f32>,
     tower_a: Vec<f32>,
     tower_b: Vec<f32>,
@@ -383,8 +481,16 @@ impl Policy {
             let stride = if i == 0 { 1 } else { 2 };
             let (h_out, w_out) = ((h + 2 - 3) / stride + 1, (wd + 2 - 3) / stride + 1);
             let name = format!("grid_encoder.body.{}", 2 * i);
+            // torch's [cout][cin][3][3] → [cin][3][3][cout].
+            let w_torch = w.take(&format!("{name}.weight"), &[cout, cin, 3, 3])?;
+            let mut w_t = vec![0f32; w_torch.len()];
+            for co in 0..cout {
+                for tap in 0..cin * 9 {
+                    w_t[tap * cout + co] = w_torch[co * cin * 9 + tap];
+                }
+            }
             convs.push(Conv {
-                w: w.take(&format!("{name}.weight"), &[cout, cin, 3, 3])?,
+                w_t,
                 b: w.take(&format!("{name}.bias"), &[cout])?,
                 cin,
                 cout,
@@ -509,7 +615,7 @@ impl Policy {
             .map(|c| (c.cin * c.h_in * c.w_in).max(c.cout * c.h_out * c.w_out))
             .max()
             .unwrap_or(0);
-        let patch = self.convs.iter().map(|c| c.cin * 9).max().unwrap_or(0);
+        let conv_acc = self.convs.iter().map(|c| c.cout).max().unwrap_or(0);
         Scratch {
             tokens: vec![0.0; self.slots * d],
             qkv: vec![0.0; self.slots * 3 * d],
@@ -521,7 +627,7 @@ impl Policy {
             pooled: vec![0.0; d],
             grid_a: vec![0.0; grid_max],
             grid_b: vec![0.0; grid_max],
-            patch: vec![0.0; patch],
+            conv_acc: vec![0.0; conv_acc],
             features: vec![0.0; self.policy_tower.layers[0].inp],
             tower_a: vec![0.0; hidden],
             tower_b: vec![0.0; hidden],
@@ -678,35 +784,7 @@ impl Policy {
             } else {
                 (&s.grid_b[..], &mut s.grid_a[..])
             };
-            let plane = conv.h_in * conv.w_in;
-            let patch = &mut s.patch[..conv.cin * 9];
-            for oy in 0..conv.h_out {
-                for ox in 0..conv.w_out {
-                    // The 3×3 patch in the weight's [cin][kh][kw] order, zero outside the padded border.
-                    for ci in 0..conv.cin {
-                        for ky in 0..3 {
-                            for kx in 0..3 {
-                                let y = (oy * conv.stride + ky) as isize - 1;
-                                let x = (ox * conv.stride + kx) as isize - 1;
-                                patch[ci * 9 + ky * 3 + kx] = if y < 0
-                                    || x < 0
-                                    || y >= conv.h_in as isize
-                                    || x >= conv.w_in as isize
-                                {
-                                    0.0
-                                } else {
-                                    src[ci * plane + y as usize * conv.w_in + x as usize]
-                                };
-                            }
-                        }
-                    }
-                    let out_plane = conv.h_out * conv.w_out;
-                    for co in 0..conv.cout {
-                        let v = dot(&conv.w[co * conv.cin * 9..(co + 1) * conv.cin * 9], patch) + conv.b[co];
-                        dst[co * out_plane + oy * conv.w_out + ox] = v.max(0.0);
-                    }
-                }
-            }
+            conv.apply(src, dst, &mut s.conv_acc);
             src_is_a = !src_is_a;
         }
         let last = self.convs.last().expect("conv grid encoder has layers");
@@ -850,4 +928,33 @@ fn weights_hash(config: &ModelConfig, weights: &HashMap<String, Tensor>) -> u64 
         }
     }
     h
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn conv_paths_give_the_same_bits() {
+        for (cin, cout, stride, h, w) in [(4, 16, 1, 22, 32), (16, 32, 2, 22, 32), (32, 32, 2, 11, 16), (3, 16, 2, 5, 7)] {
+            let (h_out, w_out) = ((h - 1) / stride + 1, (w - 1) / stride + 1);
+            let conv = Conv {
+                w_t: (0..cin * 9 * cout).map(|i| (i as f32 * 0.377).sin()).collect(),
+                b: (0..cout).map(|i| (i as f32 * 0.9).cos() * 0.1).collect(),
+                cin,
+                cout,
+                stride,
+                h_in: h,
+                w_in: w,
+                h_out,
+                w_out,
+            };
+            let src: Vec<f32> = (0..cin * h * w).map(|i| (i as f32 * 0.113).cos()).collect();
+            let (mut fast, mut portable) = (vec![0f32; cout * h_out * w_out], vec![0f32; cout * h_out * w_out]);
+            conv.apply(&src, &mut fast, &mut vec![0f32; cout]);
+            conv.apply_any(&src, &mut portable, &mut vec![0f32; cout]);
+            let bits = |v: &[f32]| v.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+            assert_eq!(bits(&fast), bits(&portable), "{cin}->{cout} stride {stride}");
+        }
+    }
 }
