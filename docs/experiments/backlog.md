@@ -3,9 +3,21 @@
 Ideas and problems found but not acted on yet, with the round that found them. (Named `todo.md` until Nov 8; older
 round docs still call it that.)
 
-## Next up
+## Now (Lee, Nov 8): baseline retrain on d2first
 
-Goal until further notice: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
+Goal until further notice: a set of specialists that carries the `d2first` chain from the game start to the Dungeon 1
+triforce (Dungeon 2 and Dodongo first, the 0x2c heart cave, the white sword; `docs/routes/d2first.md`). The reset
+onto it is done (below, "d2-first route" item 2). In order:
+
+1. **Baseline:** retrain every family from scratch on d2first with the **current** training setup
+   (`scripts/train_round.py`, all 14 specialists, including the untrained ow-lynel, ow-tektite and ow-boulder), then
+   a chain baseline (full route plus the segments in AGENTS.md). Log it as round 13. The old milestone1 models stay
+   on disk for comparison only.
+2. **Then Lee's training ideas** (to come), measured against that baseline.
+
+## Next up (history before the d2-first reset)
+
+Goal then: a set of specialists that carries the milestone-1 chain to the Dungeon 2 boss (Dodongo).
 
 - **Where it stands (Nov 6):** the Rust port, coverage and performance steps are done (Nov 5); round 10
   (`round10.md`) has run on the new stack. §1 hardware-core chain baseline (matches FCEUmm at 120 runs);
@@ -106,17 +118,20 @@ better)**. Train a model for (2).
   5. Low-health deaths: r46's few failures were deaths at 0.5–1.5 starting hearts; watch this in d2-first chains.
   6. Small: a stun that ends and restarts inside one step is missed by the counter (2 of 300 records).
 
-### Next (Lee, Nov 8): the d2-first route, then training improvements
+### Done (Lee, Nov 8): the d2-first route, mapped and reset onto
 
 1. Prove Dodongo can be beaten (above): r45 kills him 300/300 (round 12).
-2. **The d2-first route (next; Lee moved it ahead of the training ideas)**, mapped first so Lee can review it on
-   the map before any training. Start → 0x58, east along row 5 → at 0x5d north → 0x3c (Dungeon 2); never the
-   fairy. D2 as today (3 max hearts), skipping the magical boomerang (2:0x4f); kill Dodongo, take his heart
-   (4), take the triforce in 2:0x0d (warps out to 0x3c). Then north to 0x2c, bomb the secret rock for the heart
-   (5), and `1c -> 1a -> 0a (white sword) -> 1a -> 17 -> 27 -> 28 -> 38 -> 37` into Dungeon 1, played as today
-   (wooden boomerang pickup kept) but with the white sword; the route ends on taking the D1 triforce (6 hearts).
-   Mapping in progress (branch `d2first`); then a full retrain on it.
-3. Lee's ideas for improving training (to come).
+2. [x] **The d2-first route**, mapped first so Lee could review it on the map (merged `ac03202`). Start → 0x58,
+   east along row 5 → at 0x5d north → 0x3c (Dungeon 2); never the fairy. D2 as before (3 max hearts), skipping
+   the magical boomerang (2:0x4f); kill Dodongo, take his heart (4), take the triforce in 2:0x0d (warps out to
+   0x3c). Then round to 0x2c, bomb the secret rock for the heart (5), and `1c -> 1a -> 0a (white sword) -> 1a -> 17
+   -> 27 -> 28 -> 38 -> 37` into Dungeon 1 (both key rooms, wooden boomerang pickup kept) with the white sword;
+   the route ends on taking the D1 triforce (6 hearts).
+   - [x] **Reset done (Nov 8, `docs/decisions.md`):** d2first is the only route; milestone1/milestone1-fairy, the
+     fairy waypoint and ow-leever-peahat removed; 0x2c to ow-tektite; route-step objectives (D1 key rooms in
+     order); `retreat` at 0x0a; every state rebuilt (chains 0–2) and every curriculum re-explored.
+   - [ ] **Retrain pending:** the baseline retrain with the current setup ("Now" above), then Lee's training ideas.
+3. Lee's ideas for improving training (to come, after the baseline).
 
 ### Done (report to Lee): heart experiments (Lee, Nov 7; a series)
 

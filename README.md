@@ -9,7 +9,7 @@ room and plays the route end to end.
 - Design and status: `docs/architecture.md` (modules and contracts), `docs/decisions.md` (departures from
   the design), `docs/progress.md` (phase status), `docs/performance.md` (training throughput: benchmarks,
   profiles, `scripts/train_bench.sh` / `scripts/profile_train.sh` / `scripts/rollout_timeline.py`).
-- Game knowledge: `docs/ram-catalog.md` (RAM features), `docs/route.md` (milestone route),
+- Game knowledge: `docs/ram-catalog.md` (RAM features), `docs/routes/d2first.md` (the route; `docs/route.md` is the old milestone1 route),
   `docs/specialists.md` (room families), `triforce/game.yaml` (room graph with `specialist:` tags),
   `triforce/routes.yaml` (route data).
 - Data: start states in `triforce/states/` (`TFZSTATE` files, `$TRIFORCE_STATES_DIR` overrides), curriculum
@@ -48,10 +48,10 @@ cargo test --release --workspace --features zelda/zcore        # Rust tests (~1 
 uv run training-gui.py                                          # live training monitor (newest logs/ folder)
 .venv/bin/python play-zelda.py 4x3                               # watch 12 games played by the promoted models (--cpu, --scale N; keys u/+/-/p)
 .venv/bin/python zelda-map.py                                   # room map + per-room eval stats of the promoted models (--rerender)
-.venv/bin/python -m triforce.run --route milestone1 --seed 1   # --render (window) or --video out.mp4 (ffmpeg)
+.venv/bin/python -m triforce.run --seed 1                      # --render (window) or --video out.mp4 (ffmpeg)
 .venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states (start/build/path/audit)
 triforce promote <specialist> <run-id>
-triforce eval-chain --route milestone1 --runs 20 --parallel 20
+triforce eval-chain --runs 20 --parallel 20                     # route d2first
 cargo run --release -p triforce-tools --bin tf -- --help        # movies, zcore goldens/self-diff, trace, corpus, bench
 ```
 

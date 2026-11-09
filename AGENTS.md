@@ -19,9 +19,16 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   (§8–§10): **observation schema 2** (the `target` block, `obs.target`) on every route family plus
   `reward.item_targets` in the dungeon families; Dodongo arrivals per 120: D2 44 → 74, post-D1 12/18 → 43/61,
   full routes 3/6 → 27/46. Schema-1 checkpoints still load; `--load` with `obs.target` widens them.
-- **Now (Lee, Nov 8): beat Dodongo only** (round 12, `backlog.md` "Now"): bomb next to him so the smoke stuns
-  him, then the sword; infinite bombs; the curriculum over his movement patterns matters most. Then, in order:
-  Lee's training improvements, the d2-first route and a full retrain on it (`backlog.md` "Later").
+- **The d2-first reset (Lee, Nov 8; `docs/decisions.md` 2026-11-08):** `d2first` is the only route
+  (`docs/routes/d2first.md`): game start → Dungeon 2 (Dodongo, his heart, the D2 triforce) → the 0x2c heart cave →
+  the white sword at 0x0a → Dungeon 1 (both key rooms, the boomerang) → the D1 triforce, where the route ends.
+  `milestone1`, `milestone1-fairy`, the fairy waypoint, `ow-leever-peahat` and every D1-first start state are gone;
+  all states were rebuilt on d2first as chains 0–2 and every curriculum re-explored. The objective follows the
+  route's steps (the entry side and progress pick the step: 0x73 W, then E, then N). Round 12 before it beat Dodongo
+  (r45, 300/300 on milestone1 states). The existing models are milestone1-trained and stay on disk; the baseline
+  retrain replaces them.
+- **Now (Lee, Nov 8), in order:** (1) a baseline retrain of every family from scratch on d2first with the
+  **current** training setup, plus a chain baseline (`backlog.md` "Now"); (2) only then Lee's training ideas.
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each
@@ -31,9 +38,10 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 
 ## Goal
 
-Specialist PPO models (one per room family) that carry the milestone-1 chain (`triforce/routes.yaml`) from the game
-start to the Dungeon 2 boss room (Dodongo, 2:0x0e; the milestone ends on entering it). Lee owns the direction; the
-standing invitation is to come up with ideas, test them, keep what helps, and log everything.
+Specialist PPO models (one per room family) that carry the `d2first` chain (`triforce/routes.yaml`) from the game
+start through Dungeon 2, the 0x2c heart cave and the white sword to the Dungeon 1 triforce (the route ends on taking
+it). Lee owns the direction; the standing invitation is to come up with ideas, test them, keep what helps, and log
+everything.
 
 ## Lee's standing rules
 
@@ -43,19 +51,23 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
   and every idea or problem found along the way in `docs/experiments/backlog.md`.
 - **Families are by enemy, not by dungeon** (`docs/specialists.md`, `docs/decisions.md` 2026-11-03): a Red Goriya
   room needs the same skills anywhere. Group rooms by the enemies in them, but don't boil it down to one model per
-  enemy type or per room beyond what Lee asks for. Current families: ow-start, ow-octorok, ow-zora,
-  ow-leever-peahat, ow-moblin, stalfos-keese-gel, goriya, wallmaster, boss-aquamentus, d2-rope, moldorm (2:0x3e,
-  split out of d2-rope by Lee, Nov 8), boss-dodongo (tag only), and for the d2first route (Lee, Nov 8; not trained
-  yet) ow-lynel, ow-tektite, ow-boulder (`docs/routes/d2first.md`).
+  enemy type or per room beyond what Lee asks for. Families are the d2first route's rooms (`routes.yaml`
+  `families`): ow-start, ow-octorok, ow-zora, ow-moblin, ow-tektite (0x1a, 0x2c and its heart cave), ow-lynel,
+  ow-boulder, stalfos-keese-gel, goriya, wallmaster, boss-aquamentus, d2-rope, moldorm (2:0x3e), boss-dodongo.
+  Only D1's bow-side rooms 0x33/0x23 (off 0x43) are off the route.
 - Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
   rather than keep them (originals are backed up in the old triforce repo). No 16-heart states: max hearts follow
-  the route (3 through Dungeon 1, 4 after Aquamentus, +1 per later heart container). Boss rooms keep only the fight
-  entry. Build states with `python -m triforce.entry_states build|path` and check them with `... audit`.
+  the route (3 through Dungeon 2, 4 after Dodongo, 5 after the 0x2c heart cave, 6 after Aquamentus). States are
+  chains 0–2, `<level>_<room><entry>_<chain>`. Boss rooms keep only the fight entry. Build states with
+  `python -m triforce.entry_states build|path` and check them with `... audit`.
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`). The beam look-ahead must credit the firing step.
-- **Bombs are off for milestone 1** (`items: {bombs: off}`); bomb skill comes with the Dodongo work.
+- **Bombs** are on only where the route needs them: Dodongo (`boss-dodongo`) and the 0x2c rock wall (`ow-tektite`),
+  both `requires_bombs` in game.yaml; everywhere else `items: {bombs: false}`.
+- **0x0a before the white sword:** leaving S is a `retreat` (routes.yaml `retreat: S`): a neutral one-room ending,
+  and a chain run goes on (0x1a sends Link back N). Whether a model learns to use it is open.
 - **The training GUI is for a colorblind user:** never red vs green. Good = blue, bad = red, purple in between.
 - A damage penalty for rooms Link only has to cross was tried twice (round 6) and dropped: it didn't help the
   chains, and a penalty like that could also discourage required bombing later.
@@ -109,10 +121,9 @@ standing invitation is to come up with ideas, test them, keep what helps, and lo
 - **Compare models fairly:** re-evaluate the old model under the *current* yaml (hp distribution, one_room) before
   comparing, and rank by success **and** `mean_health_change` (per-room numbers are in `eval.json` `by_room`). A model
   that wins 3% more but takes twice the damage loses in a chain.
-- **Chain segments** (20–40 runs each): full `triforce eval-chain --runs 20 --parallel 10`; after Dungeon 1
-  `--from 0_37c_2`; Dungeon 2 `--from 2_7ds_2`. Per-room hp loss and deaths come from the chain jsonl
-  (`RoomRecord` also has `hearts_dropped/taken/left/...`). Two routes (Lee): `milestone1` and
-  `milestone1-fairy` (south road past the fairy pond after D1; `--route milestone1-fairy`); evaluate both.
+- **Chain segments** (20–40 runs each): full `triforce eval-chain --runs 20 --parallel 10` (route `d2first`, the
+  default); Dungeon 2 `--from 2_7ds_0`; after Dungeon 2 `--from 0_3cc_0`; Dungeon 1 `--from 1_73s_0`. Per-room hp
+  loss and deaths come from the chain jsonl (`RoomRecord` also has `hearts_dropped/taken/left/...`).
 - **Trajectories (curriculum) must stay inside the family's rooms.** Re-explore (`python -m triforce.explore
   --specialist NAME --states ...`) whenever a family's rooms change; a trajectory that runs into another family's
   room crashes training. `--out` is the trajectories *root* (explore appends `<specialist>/<state>`): from a

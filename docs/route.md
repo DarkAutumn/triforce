@@ -1,4 +1,7 @@
-# Milestone 1 route
+# Milestone 1 route (historical)
+
+**Superseded (Nov 8):** the route is now `d2first` (`docs/routes/d2first.md`); `milestone1` and
+`milestone1-fairy` were removed from `triforce/routes.yaml`. The room data below is still useful background.
 
 Start of game → wooden sword → Dungeon 1 (Aquamentus + triforce) → overworld → Dungeon 2 → entering the D2 boss room (design §1).
 The machine-readable version is `triforce/routes.yaml` (runtime data for the runner and objectives). Specialist tags are in `triforce/game.yaml`.

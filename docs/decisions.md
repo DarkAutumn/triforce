@@ -710,3 +710,26 @@ entry below and `crates/zcore/UPSTREAM.md`.
   sword. The white sword needs 5 heart containers, hence the required heart; Lynels, Tektites and boulders need
   their own skills.
 - **Evidence:** `docs/routes/d2first.md` (route table, emulator checks of every new room, the 0x2c secret, states).
+
+## 2026-11-08 — Reset onto d2first: one route, route-step objectives, `retreat`
+
+- **What:** `d2first` is the only route (Lee). `milestone1`, `milestone1-fairy`, spliced routes (`base`/`replace`),
+  the fairy waypoint, `terminal` exits and the `ow-leever-peahat` family (0x29–0x2b, milestone1 only) are gone;
+  0x39, 0x48, 0x49 and 2:0x6d are untagged; 0x2c and its heart cave moved to `ow-tektite` (with bombs). Dungeon 1
+  follows milestone1's key-room path (0x73 W, 0x72 back, 0x73 E, 0x74 back, 0x73 N) although Link carries D2's
+  keys. `GameCompletion` now follows the route step by step: the step entering Link's room from the side he came
+  in, with the route's progress there (triforce pieces and sword), decides the correct exit (plus alternates
+  replacing its next room); off the route (or on cave/stairs/triforce steps) the key-aware shortest path to the
+  target still applies. `start_route` picks the step the same way. A route step may name a `retreat` exit: 0x0a
+  before the white sword may leave S (Lee) — a one-room episode ends `retreat` with the new `neutral` outcome (no
+  terminal reward or penalty, no wrong-exit penalty), a chain records the room as `retreat` and goes on (0x1a
+  without the white sword is off the route, so its objective sends Link back N). Every start state was rebuilt on
+  d2first as chains 0–2 (plus D1's bow-side rooms 0x33/0x23/0x22 via `entry_states path` from `1_43w_N`), and every
+  curriculum re-explored. The heart waypoint reads the overworld room flags directly, so a Dungeon 1 state knows the
+  heart was taken.
+- **Why:** Lee (Nov 8): reset onto the d2-first route and retrain every family from scratch on it — first a baseline
+  with the current training setup, then his training ideas. One route means no route-only machinery to keep.
+- **Evidence:** `docs/routes/d2first.md` (Lee's answers, states, explore results); tests
+  `objectives::dungeon_1_entrance_follows_the_route_steps`, `lynel_room_retreat_and_return`,
+  `specialist_env::the_d1_entrance_follows_the_route_steps`, `leaving_the_lynel_room_south_is_a_neutral_retreat`,
+  `chain_explore::lynel_retreat_continues_the_run`.

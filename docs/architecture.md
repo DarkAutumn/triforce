@@ -301,21 +301,24 @@ at 2N. `eval-chain` leaves it off.
 
 ## Runner and CLI (`crates/env/src/chain.rs`, `runner.py`, `run.py`, `cli.py`)
 
-- Routes (`triforce/routes.yaml`, `zelda::game_map`; Python `triforce._native.route_steps(route)`): `milestone1`,
-  `milestone1-fairy` (milestone1 with the post-D1 overworld replaced by the south road and the fairy pond; a spliced
-  route is `{base, replace: {from, to}, steps}`) and `d2first` (Dungeon 2 first, the 0x2c heart, the white sword,
-  Dungeon 1 last; `docs/routes/d2first.md`). `GameCompletion(route, step)` routes on one of them: only the route's
-  exits are correct on its rooms, the route's triforce steps are taken in route order, and `waypoint:` steps are
-  targets while they apply (`fairy`: the pond edge until the hearts are full; `heart`: a cave's heart container,
-  game.yaml `treasure_tile`; leaving its room other than into the cave before the heart, or taking the other ware,
-  is `missed`: no exit is correct any more). An overworld cave hidden behind a rock wall (game.yaml `bomb_secret`)
-  is entered through that wall's tiles. Training episodes take the route from the start state's name
-  (`zelda::objectives::start_route`, `env::start_states::state_entry`); see `docs/decisions.md` (second route) for
-  the rule.
-- `Route.load(name, stop_at=None)` reads `triforce/routes.yaml`. A route starts at the `start` savestate and
-  ends on entering its `terminal` room (milestone1 and milestone1-fairy: level 2 room 0x0e) or, without one, on
+- The route (`triforce/routes.yaml`, `zelda::game_map`; Python `triforce._native.route_steps()`,
+  `_native.DEFAULT_ROUTE`): `d2first`, the only route since Nov 8 (Dungeon 2 first, the 0x2c heart, the white
+  sword, Dungeon 1 last; `docs/routes/d2first.md`). `GameCompletion(route, step)` follows it step by step: the step
+  entering Link's room from the side he came in with the route's progress there (triforce pieces, sword) makes its
+  edge exit the correct one (plus alternates replacing its next room); off the route and on cave, stairs and
+  triforce steps the key-aware shortest path to the target decides (the route's triforce steps in route order,
+  ties broken toward the route), and `waypoint: heart` steps are targets while they apply (a cave's heart
+  container, game.yaml `treasure_tile`; leaving its room other than into the cave before the heart, or taking the
+  other ware, is `missed`: no exit is correct any more). A step's `retreat` exit (0x0a S before the white sword) is
+  no wrong exit: a one-room episode ends `retreat` (outcome from the specialist's `endings:`, default `neutral`:
+  no terminal reward or penalty), a chain records the room as `retreat` and goes on. An overworld cave hidden
+  behind a rock wall (game.yaml `bomb_secret`) is entered through that wall's tiles. Training episodes take their
+  step from the start state's name and Link's progress (`zelda::objectives::start_route`,
+  `env::start_states::state_entry`).
+- `Route.load(name, stop_at=None)` reads `triforce/routes.yaml`. A route starts at the `start` savestate and ends on
   taking its last step's triforce (d2first: Dungeon 1's); `stop_at` ends it on entering that room instead. A missed
-  `heart` waypoint ends the run as a failure (room outcome `missed`).
+  `heart` waypoint ends the run as a failure (room outcome `missed`); so does a retreat beyond `MAX_RETREATS` (3)
+  per run (`retreat-limit`; `RunResult.retreats` counts them).
 - `env::ChainEnv` plays one route run; `runner.Runner(models_dir=None, checkpoints=None, deterministic=False,
   max_steps=50000, device='cpu', specialist_configs=None, networks=None, parallel=1, threads=None)` drives a
   `ChainTask` pool asynchronously (`inference.PoolInference`: per-specialist fixed-shape forwards; sampled actions
@@ -323,16 +326,17 @@ at 2N. `eval-chain` leaves it off.
   scheduling; `--deterministic` is each head's argmax): `run(route, seed) -> RunResult`, `run_many(route,
   seeds)`. On each room entry: `game.yaml` tag → specialist → promoted checkpoint (cached). Untagged room or
   missing model → `result='error'` with the reason. Per-room outcomes:
-  `exit-correct`, `exit-wrong`, `death`, `stuck` (specialist `max_steps` in one room), `milestone`.
+  `exit-correct`, `exit-wrong`, `retreat`, `retreat-limit`, `missed`, `death`, `stuck` (specialist `max_steps` in
+  one room), `milestone`.
   Finalizing a room captures live ending health together with dropped-heart counts, including room/run budgets
   and measured cutoffs; death remains zero. `health_out` is never left at entry health on a timed-out visit.
-- `python -m triforce.run --route milestone1 [--seed N] [--render [--fps F] | --video PATH] [--from STATE]
+- `python -m triforce.run [--route d2first] [--seed N] [--render [--fps F] | --video PATH] [--from STATE]
   [--stop-at L:0xRR] [--checkpoint S=PATH] [--deterministic] [--device D]` prints one line per room and appends a JSON line to
   `runs/runner.jsonl`. `--render` shows one chain env with rendering on; `--video` records the run's inputs, then
   renders them through `ffmpeg` (`-r 60.0988`, H.264) and fails with `ffmpeg not found on PATH` without it.
-- `triforce eval-chain --route milestone1 --runs 20 [--parallel N] [--threads T] [--device D] [--from STATE] [--stop-at L:0xRR]` → success
+- `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--device D] [--from STATE] [--stop-at L:0xRR]` → success
   rate and per-room failure counts (`chain_summary`); `--from` starts mid-route at a route entry state (e.g.
-  `0_37c_2`, after Dungeon 1). `triforce promote <specialist> <run-id>`; `triforce list`;
+  `2_7ds_0` Dungeon 2, `0_3cc_0` after it, `1_73s_0` Dungeon 1). `triforce promote <specialist> <run-id>`; `triforce list`;
   `triforce train|run|play|evaluate ...` forward to the module CLIs.
 - Chain config overrides: repeat `eval-chain --specialist-config /path/to/arm.yaml`. Each YAML's `name` selects
   its family. `Runner` / `eval_chain(..., specialist_configs={name: loaded_config})` accept the same loaded

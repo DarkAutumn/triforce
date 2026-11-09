@@ -1,13 +1,15 @@
-# d2first: Dungeon 2 first, never the fairy
+# d2first: Dungeon 2 first, never the fairy — the route
 
-Lee's route (Nov 8). Data: `triforce/routes.yaml` `d2first`, rooms in `triforce/game.yaml`. View it with
+Lee's route (Nov 8), the only route since the reset the same day (`docs/decisions.md` 2026-11-08: milestone1 and
+milestone1-fairy removed). Data: `triforce/routes.yaml` `d2first`, rooms in `triforce/game.yaml`. View it with
 
 ```bash
 .venv/bin/python zelda-map.py --route d2first      # rooms outlined, arrows, step numbers; sidebar per step
 ```
 
-Not trained. Everything below was checked in the emulator (rooms loaded through `Game.load`, mode 5) unless it
-says otherwise.
+Not trained yet: next is a baseline retrain of every family from scratch with the current training setup, then
+Lee's training ideas. Everything below was checked in the emulator (rooms loaded through `Game.load`, mode 5)
+unless it says otherwise.
 
 ## Route
 
@@ -24,25 +26,27 @@ Hearts are heart containers on entering the room; sword W = wood, Wh = white.
 | 22 | 2:0e | S → W (Dodongo, heart container) | boss-dodongo | 3 / W |
 | 23 | 2:0d | E → triforce (warps to 0:3c) | d2-rope | 4 / W |
 | 24–28 | 0:3c, 4c, 4d, 3d, 2d | cave→S, N→E, W→N, S→N, S→W | ow-octorok, ow-moblin, ow-zora | 4 / W, triforce 2 |
-| 29–31 | 0:2c, 2c cave, 2c | E→cave (bomb the rock wall), S→S (`waypoint: heart`), cave→N | ow-leever-peahat | 4 → 5 / W |
+| 29–31 | 0:2c, 2c cave, 2c | E→cave (bomb the rock wall), S→S (`waypoint: heart`), cave→N | ow-tektite | 4 → 5 / W |
 | 32–33 | 0:1c, 1b | S→W, E→W | ow-start | 5 / W |
 | 34 | 0:1a | E→N | ow-tektite | 5 / W |
-| 35–37 | 0:0a, 0a cave, 0a | S→cave, S→S (white sword), cave→S | ow-lynel | 5 / W → Wh |
+| 35–37 | 0:0a, 0a cave, 0a | S→cave (`retreat: S`), S→S (white sword), cave→S | ow-lynel | 5 / W → Wh |
 | 38 | 0:1a | N→W | ow-tektite | 5 / Wh |
 | 39–41 | 0:19, 18, 17 | E→W, E→W, E→S | ow-boulder | 5 / Wh |
 | 42–44 | 0:27, 28, 38 | N→E, W→S, N→W | ow-zora | 5 / Wh |
 | 45 | 0:37 | E → cave (D1 stairs) | ow-octorok | 5 / Wh |
-| 46–54 | 1:73 63 53 52 42 43 44 45 35 | S→N, then as milestone1 from 0x63 | stalfos-keese-gel, goriya, wallmaster, boss-aquamentus | 5 / Wh, boomerang at 0x44 |
-| 55 | 1:36 | W → triforce: **route ends** | stalfos-keese-gel | 6 / Wh |
+| 46–50 | 1:73, 72, 73, 74, 73 | S→W, E→E (key), W→E, W→W (key), E→N | stalfos-keese-gel | 5 / Wh, 3 → 5 keys |
+| 51–58 | 1:63 53 52 42 43 44 45 35 | S→N, then as before from 0x63 | stalfos-keese-gel, goriya, wallmaster, boss-aquamentus | 5 / Wh, boomerang at 0x44 |
+| 59 | 1:36 | W → triforce: **route ends** | stalfos-keese-gel | 6 / Wh |
 
 Choices and findings:
-- **Row 5 to D2:** 0x5d N → 0x4d W → 0x4c N → 0x3c, as milestone1-fairy. 0x3c's only exits are S and the stairs
+- **Row 5 to D2:** 0x5d N → 0x4d W → 0x4c N → 0x3c. 0x3c's only exits are S and the stairs
   (rows 0–2 are wall; the gap at row 3, cols 25–26 is an alcove), so 0x3d → 0x3c doesn't exist.
 - **After D2:** the triforce puts Link on 0x3c, which has no N exit, so 0x3c → 0x2c goes round: 0x3c S, 0x4c E,
   0x4d N, 0x3d N, 0x2d W, 0x2c (Lee confirmed, Nov 8).
-- **Dungeon 1:** Link carries D2's three keys (0x7e, 0x4e, 0x3e) into D1, so the objective (key-aware shortest path)
-  goes 0x73 N directly; milestone1's detours to the key rooms 0x72 and 0x74 are skipped. The boomerang pickup at
-  0x44 stays. Keys: 3 → 2 (0x73 N) → 3 (0x53) → 2 (0x52 N) → 1 (0x43 E) → 2 (0x45) → 1 (0x45 N).
+- **Dungeon 1 (Lee, Nov 8):** Link carries D2's three keys (0x7e, 0x4e, 0x3e) into D1, so the key-aware shortest
+  path would go 0x73 N directly; the route still takes both key rooms like the old D1-first route: 0x73 W, 0x72
+  back E, 0x73 E, 0x74 back W, 0x73 N. The objective follows the route's steps (below), so 0x73 sends Link W,
+  then E, then N. The boomerang pickup at 0x44 stays.
 - **0x1b is the mountain maze** (`Z_01 CheckMazes`): W is its only normal exit; E and S bring Link back into
   0x1b and N reaches 0x0b only on the fourth N in a row. game.yaml now lists only W (it had N/E/S from v1).
 
@@ -55,7 +59,7 @@ Choices and findings:
 - Cave wares (`CaveItemIds` $422): $20 (potion, x=88) / none / **$1A heart container (x=152)**. Taking the right
   one raises max hearts 4 → 5; the left one leaves them at 4. Either sets 0x2c's item-taken flag ($10).
 - game.yaml: 0x2c `requires_bombs: true`, `bomb_secret: [18, 12]`, `cave` exit; (0x2c, cave) `treasure:
-  heart-container`, `treasure_tile: [19, 11]`. ow-leever-peahat has bombs on (`items: {bombs: true}`).
+  heart-container`, `treasure_tile: [19, 11]`. ow-tektite (the room's family) has bombs on (`items: {bombs: true}`).
 - Objective: until the heart is taken (`waypoint: heart`, active after the D2 triforce and before D1's) the rock
   wall tiles are the cave entrance and the cave's target is the right ware. Leaving 0x2c other than into the cave
   before the heart, or taking the potion, is `missed`: no exit is correct (training: exit-wrong), and a chain run
@@ -75,51 +79,74 @@ Choices and findings:
 | 0:27 | Peahat ×6, Zora ×1 | ow-zora (same as 0x28) |
 | 0:28 (re-checked) | Peahat ×6, Zora ×1 | ow-zora |
 | 0:38 (re-checked) | RedOctorok ×5, BlueSlowOctorok ×1, Zora ×1 | ow-zora |
-| 0:2c cave | potion / heart container | ow-leever-peahat (a cave goes with its room, like 0x77's) |
+| 0:2c, 2c cave | RedTektite ×4; potion / heart container | **ow-tektite** (Lee, Nov 8; was ow-leever-peahat) |
 | 2:0d | none (triforce) | d2-rope (like 1:36 in stalfos-keese-gel) |
 | 0:07, 16, 26 | RedLynel; boulders; Peahat ×6 + Zora | untagged neighbours (game.yaml only) |
 
-New families (Lee, Nov 8): `ow-lynel`, `ow-tektite`, `ow-boulder`, configs in `specialists/` from the ow-moblin
-template, untrained; their start-state globs (`*_[0-9]*`) take the d2first states.
+New families (Lee, Nov 8): `ow-lynel`, `ow-tektite`, `ow-boulder`. `ow-leever-peahat` is gone with milestone1 (its
+other rooms 0x29–0x2b are not on this route).
 
 ## Code
 
-- Objectives take the route's triforce steps in route order (milestone1 unchanged: D1 is its only triforce step).
-- An overworld cave never sends Link into another overworld cave's room (the white-sword target no longer matches
-  0x2c's cave).
-- `start_route` keeps only routes whose triforces before the start step match Link's pieces (a milestone1 D1 state
-  never gets d2first's objective, and back).
-- Chain runs of a route without a `terminal` step end on its last triforce (`Route.terminal` is optional,
-  `Route.final_triforce`).
-- `entry_states build --route NAME`; bombs are on in `requires_bombs` rooms while building.
-- `zelda-map.py --route NAME`.
+- **The objective follows the route step by step** (`zelda::objectives::GameCompletion`): on every room change it
+  finds the step entering Link's room from the side he came in (`route_entry`: N/S/E/W, `S` into a cave or down
+  stairs, `cave` out of one or after the triforce's warp) with exactly the progress the route has there
+  (`StepProgress`: triforce pieces and sword). A step leaving through a room edge makes that exit the correct one
+  (plus the alternate 0x78 at 0x77). Off the route — no matching step, e.g. 0x1a from N without the white sword —
+  and on cave, stairs and triforce steps, the key-aware shortest path to the target (sword, heart waypoint,
+  triforce in route order) decides, as before. One-room training (`start_route`) picks the step the same way from
+  the start state's entry; rooms the route crosses twice (0x77, 0x3c, 0x4c, 0x4d, 0x2c, 0x1a, 0x0a, 1:0x73) are
+  entered from a different side each time, so each step has its own start states and resets play every one.
+- `retreat: S` on step 35 (see below); routes end on their last triforce (no `terminal` exits any more).
+- An overworld cave never sends Link into another overworld cave's room. The heart waypoint reads the overworld
+  room flags directly, so a Dungeon 1 state knows the heart was taken.
+- `entry_states build` (default route d2first); bombs are on in `requires_bombs` rooms while building.
 
 ## States
 
-Chains 10, 11, 12 (`python -m triforce.entry_states build --route d2first --chains 10,11,12`), named
-`<level>_<room><entry>_<chain>` as usual. The two-digit chain keeps them out of the existing families'
-`*_[0-9]` start-state globs, so no current training changes when they land; the new families' globs take them.
-Bombs: natural counts along the route (0 until D2, 8 at Dodongo from D2 pickups, the cheated bomb only where
-`requires_bombs`), keys as carried (3 from D2).
+Rebuilt after the reset (Nov 8) as chains 0, 1, 2 (`python -m triforce.entry_states build --chains 0,1,2`, route
+d2first by default), named `<level>_<room><entry>_<chain>`; the D1-first states and the old d2first chains 10–12
+are gone (a copy of the old directory is in the gitignored `target/states-milestone1/`). Bombs: natural counts
+along the route (0 until D2, D2 pickups after, the cheated bomb only where `requires_bombs`); keys as carried (3
+from D2, 5 after D1's key rooms).
 
-168 states, 56 per chain: every step after the game start (55) plus the 0x78 alternate. Chain 11's Moldorm crossing
-(2:0x3e) needed a second build from `2_3es_11` with `--iterations 8000 --patience 400`; chains 10 and 12 rebuilt
-Dungeon 1 from `1_73s_1x` after the route's D1 change. `entry_states audit --states '*_1[0-9]'`: 168 states, 0
-problems (the audit now gives caves no monsters of their own and leaves the boulders out of a room's entry
-count, like Zoras); the default audit of every configured state: 202, 0 problems. Max hearts in the states:
-3 through D2 (`2_0es_1x`), 4 after Dodongo (`2_0de_1x`), 5 after the 0x2c cave (`0_2cc_1x`) through Aquamentus
-(`1_35s_1x`), 6 in `1_36w_1x`. Dodongo and the rock wall were both done by Go-Explore with natural bombs.
+190 files: `start` plus 63 per chain: every step after the game start (59) plus the 0x78 alternate, and Dungeon 1's
+bow-side rooms (`entry_states path --source 1_43w_N --rooms 1:0x33,1:0x23,1:0x22 --chain N`: `1_33s_N`,
+`1_23s_N`, `1_22e_N`). Chain 1 stopped at the Moldorm crossing (2:0x3e) and chain 2 at the Goriya shutter room
+(2:0x1e) with the default 3000 iterations; both finished from there with `--start-step 19 --source 2_3es_1` /
+`--start-step 21 --source 2_1es_2 --iterations 8000 --patience 400`. The bow room 0x22 needed one re-crossing in
+chain 0. `entry_states audit` (every configured state, `--loads 3`): 187 states, 0 problems; the shipped-state
+test checks each state's max hearts against the route: 3 through D2, 4 after Dodongo, 5 after the 0x2c cave
+through Aquamentus, 6 in `1_36w_N`. Dodongo and the rock wall were both done by Go-Explore with natural bombs.
 
-## Open questions for Lee
+Curriculum trajectories (gitignored; the milestone1 ones moved to `target/trajectories-milestone1/`), re-explored
+with `python -m triforce.explore --specialist NAME --parallel 16 --out <repo>/trajectories`: ow-zora 18/18,
+ow-moblin 18/18, d2-rope 18/18, wallmaster 3/3, boss-aquamentus 3/3, goriya 10/12 then the two `2_1es_0/1`
+with `--iterations 12000 --patience 400` (12/12), moldorm 0/3 then 3/3 with the same settings, boss-dodongo 3/3 plus
+`--variant` seeds 1–9 (3/3 each): 30 tracks, of which 4 swallow kills (max BombHits > 0, `target/dodongo/how_killed.py`:
+`2_0es_1`, `2_0es_1~s6`, `2_0es_0~s3`, `2_0es_2~s3`) were dropped, leaving 26 (every start state still has tracks).
+The other families have no curriculum.
 
-1. **D1 without the key detours:** with D2's 3 keys the route skips 0x72/0x74 (see above). Keep, or force
-   milestone1's exact D1 path (the objective would need route-order visits)?
-2. **0x2c's family:** 0x2c is a Tektite room (RedTektite ×4). It stays in ow-leever-peahat because milestone1 uses
-   it; move it (and its cave) to ow-tektite?
-3. **Lynel pirouette:** the usual human play at 0x0a is to leave and re-enter until the Lynel spawns somewhere
-   better (not between the water and the cave door). May the model do that?
-4. **Bombs in milestone1's 0x2c:** `requires_bombs` also gives Link a cheated bomb when milestone1 crosses 0x2c
-   (W→E), and ow-leever-peahat now has bombs; the cave there is a wrong exit. Fine?
-5. **Shared rooms:** where d2first and milestone1 enter a room from the same side with the same triforce pieces
-   but leave differently (0x58 from S: N vs E), one-room training picks a route at random, as with the fairy route.
-6. The d2first states are outside the existing families' globs; include them when retraining on d2first?
+## Lee's answers (Nov 8)
+
+1. **Dungeon 1 grabs both keys**: route-step objectives (above), in one-room training and in chains.
+2. **0x2c (and its cave) belongs to `ow-tektite`.** ow-leever-peahat is removed.
+3. **The old routes are removed**, with their states, the fairy waypoint, spliced routes, terminal exits and the
+   tests and defaults that named them. The only alternate left is 0x78 (it branches from 0x77, a d2first room). The
+   Dungeon 1 bow-side rooms 0x33/0x23 (and the bow room 0x22) branch from 0x43, a d2first room, so they stay: tagged
+   in stalfos-keese-gel / goriya (0x22 untagged), states rebuilt with `entry_states path` from `1_43w_N`.
+4. **Lynel re-entry is allowed** — current design (Lee's follow-up, Nov 8):
+   - Step 35 (0x0a from S, before the white sword) has `retreat: S`: leaving S is not a wrong exit but a `retreat`.
+   - **One-room training** (ow-lynel): the episode ends with the ending `retreat` (re-entry can't happen in a
+     one-room episode). Its outcome is configurable per specialist through `endings:`; the default is the new
+     `neutral` outcome (no terminal reward or penalty, no wrong-location penalty), but **ow-lynel ships
+     `endings: {retreat: soft-failure}`** for the first baseline, the same as a wrong exit, so a model can't learn
+     to leave and reset for no reason.
+   - **Chains**: the run continues (room outcome `retreat`); 0x1a without the white sword is off the route, so its
+     objective sends Link back N. Runs count retreats (`RunResult.retreats`); the fourth (`MAX_RETREATS` = 3) ends
+     the run as a failure, room outcome `retreat-limit`.
+   - **Open:** whether a model can learn to use the retreat well. Lee will study Lynel spawn positions after the
+     baseline and may switch ow-lynel's retreat to neutral, possibly only when the Lynel blocks the way to the cave.
+5. **States**: every state rebuilt on d2first as chains 0, 1, 2 (below).
+6. **Rooms crossed twice**: picking among the matching route steps at random is right; with the entry side and
+   progress every step of such a room has its own states, so every step is reachable in training.
