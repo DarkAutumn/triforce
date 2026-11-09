@@ -721,9 +721,11 @@ entry below and `crates/zcore/UPSTREAM.md`.
   in, with the route's progress there (triforce pieces and sword), decides the correct exit (plus alternates
   replacing its next room); off the route (or on cave/stairs/triforce steps) the key-aware shortest path to the
   target still applies. `start_route` picks the step the same way. A route step may name a `retreat` exit: 0x0a
-  before the white sword may leave S (Lee) — a one-room episode ends `retreat` with the new `neutral` outcome (no
-  terminal reward or penalty, no wrong-exit penalty), a chain records the room as `retreat` and goes on (0x1a
-  without the white sword is off the route, so its objective sends Link back N). Every start state was rebuilt on
+  before the white sword may leave S (Lee) — a one-room episode ends `retreat`, whose outcome each specialist sets
+  in `endings:` (default the new `neutral` outcome: no terminal reward or penalty; `ow-lynel` ships with
+  `soft-failure`, like a wrong exit, for the first baseline); a chain records the room as `retreat` and goes on
+  (0x1a without the white sword is off the route, so its objective sends Link back N), up to 3 retreats per run
+  (the 4th ends it `retreat-limit`). Every start state was rebuilt on
   d2first as chains 0–2 (plus D1's bow-side rooms 0x33/0x23/0x22 via `entry_states path` from `1_43w_N`), and every
   curriculum re-explored. The heart waypoint reads the overworld room flags directly, so a Dungeon 1 state knows the
   heart was taken.
