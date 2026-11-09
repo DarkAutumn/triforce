@@ -18,9 +18,9 @@ mod game;
 use pyo3::prelude::*;
 
 /// The route's room visits as dicts (`index`, `level`, `room`, `in_cave`, `entry`, `exit`, `specialist`,
-/// `waypoint`).
+/// `waypoint`, `retreat`).
 #[pyfunction]
-#[pyo3(signature = (route="milestone1"))]
+#[pyo3(signature = (route=zelda::game_map::DEFAULT_ROUTE))]
 fn route_steps<'py>(
     py: Python<'py>,
     route: &str,
@@ -57,6 +57,7 @@ fn step_dict<'py>(
     });
     d.set_item("specialist", specialist)?;
     d.set_item("waypoint", s.waypoint.as_deref())?;
+    d.set_item("retreat", s.retreat.as_deref())?;
     Ok(d)
 }
 
@@ -183,6 +184,7 @@ mod _native {
             zelda::actions::ACTION_SCHEMA_VERSION,
         )?;
         m.add("MASK_SIZE", zelda::MASK_SIZE)?;
+        m.add("DEFAULT_ROUTE", zelda::game_map::DEFAULT_ROUTE)?;
         m.add("FRAME_SHAPE", (240usize, 256usize, 3usize))?;
         let spec = PyDict::new(py);
         for k in obs::OBS_SPEC {

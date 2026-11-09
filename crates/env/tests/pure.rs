@@ -8,11 +8,11 @@ use env::config::{GameData, SpecialistConfig, format_room, parse_room};
 use env::critic::{Critique, GameplayCritic};
 use env::curriculum::{Curriculum, CurriculumSpec, TRAJECTORY_FILE, Track};
 use env::end_conditions::{
-    DEFAULT_FAILURES, EndCondition, EndConditions, StepView, classify_ending, enter_room_name,
+    DEFAULT_ENDINGS, EndCondition, EndConditions, StepView, classify_ending, enter_room_name,
     parse_enter_room, validate_success_kind,
 };
 use env::rewards::{
-    HARD_FAILURE, Outcome, REWARD_MAXIMUM, REWARD_MEDIUM, SOFT_FAILURE, SUCCESS, StepRewards,
+    HARD_FAILURE, NEUTRAL, Outcome, REWARD_MAXIMUM, REWARD_MEDIUM, SOFT_FAILURE, SUCCESS, StepRewards,
     apply_terminal_rewards, success_reward_value,
 };
 use indexmap::IndexMap;
@@ -120,6 +120,13 @@ fn hard_failure_drops_rewards_soft_keeps_them() {
     soft.add(Outcome::reward("reward-hit", 0.25));
     apply_terminal_rewards(&mut soft, "exit-wrong", SOFT_FAILURE, true, 3.0, 3.0);
     assert!(approx(soft.value(), -19.75), "{}", soft.value());
+
+    // A neutral ending (a retreat) keeps the step's rewards and adds nothing.
+    let mut neutral = StepRewards::default();
+    neutral.add(Outcome::reward("reward-hit", 0.25));
+    apply_terminal_rewards(&mut neutral, "retreat", NEUTRAL, true, 3.0, 3.0);
+    assert_eq!(terms(&neutral), [("reward-hit", 0.25)]);
+    assert_eq!(neutral.outcome, Some(NEUTRAL));
 }
 
 #[test]
@@ -156,10 +163,12 @@ fn classification_is_deny_by_default() {
         classify_ending("exit-wrong", &success, &overrides),
         Ok(HARD_FAILURE)
     );
-    let failures: HashSet<&str> = DEFAULT_FAILURES.iter().map(|(e, _)| *e).collect();
+    let others: HashSet<&str> = DEFAULT_ENDINGS.iter().map(|(e, _)| *e).collect();
     for kind in ["exit-correct", "triforce-collected", "boss-dead-and-heart"] {
-        assert!(!failures.contains(kind), "{kind}");
+        assert!(!others.contains(kind), "{kind}");
     }
+    // A retreat (routes.yaml `retreat`) is neither success nor failure.
+    assert_eq!(classify_ending("retreat", &success, &none), Ok(NEUTRAL));
 }
 
 #[test]
@@ -222,6 +231,7 @@ fn critique(critic: &mut GameplayCritic, change: &Change, map: &GameMap) -> Step
         targets: BTreeSet::new(),
         next_rooms: BTreeSet::new(),
         pbrs_targets: BTreeSet::new(),
+        retreats: BTreeSet::new(),
     };
     let c = Critique {
         change,
@@ -499,9 +509,9 @@ fn config_rooms_match_game_yaml_tags_and_routes() {
 fn every_route_room_belongs_to_its_family() {
     let data = GameData::load(&common::repo()).unwrap();
     let routes = routes();
-    let steps = routes["milestone1"]
+    let steps = routes["d2first"]
         .as_sequence()
-        .expect("milestone1 route");
+        .expect("d2first route");
     assert!(!steps.is_empty());
     for step in steps {
         let level = step["level"].as_u64().unwrap() as u8;
@@ -563,6 +573,7 @@ fn measured_ending_credits_threshold_action_before_check() {
         targets: BTreeSet::new(),
         next_rooms: BTreeSet::new(),
         pbrs_targets: BTreeSet::new(),
+        retreats: BTreeSet::new(),
     };
     // Python's pbrs_wavefront {t: t}: a tile's distance is its column.
     let wavefront = Arc::new(Wavefront::from_distances((0..10).map(|x| ((x, 0), x))));

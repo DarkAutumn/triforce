@@ -25,7 +25,7 @@ def test_constants():
     assert spec['grid']['vocab'] == native.NUM_TILE_CLASSES
     assert native.INTERRUPTS[0] == 'none' and 'damage' in native.INTERRUPTS
     assert 'reward-terminal-success' in native.REWARD_TERMS
-    assert native.OUTCOMES == ('success', 'hard-failure', 'soft-failure')
+    assert native.OUTCOMES == ('success', 'hard-failure', 'soft-failure', 'neutral')
     assert native.ACTION_KINDS[0] == 'MOVE' and len(native.DIRECTIONS) == 8 and native.DURATIONS == (4, 8, 16, 32)
 
 
@@ -46,11 +46,11 @@ def test_exception_classes():
 
 
 def test_routes_and_families():
-    steps = native.route_steps('milestone1')
+    steps = native.route_steps('d2first')
     assert steps[0]['entry'] == 'start' and (steps[0]['level'], steps[0]['room']) == (0, 0x77)
     assert steps[0]['specialist'] == 'ow-start'
     assert [s['index'] for s in steps] == list(range(len(steps)))
-    assert 'milestone1-fairy' in native.routes()
+    assert native.routes() == ['d2first'] and native.DEFAULT_ROUTE == 'd2first'
     families = native.families()
     assert (0, 0x77, False) in families['ow-start']
     assert native.specialist_for((1, 0x44)) == 'goriya'

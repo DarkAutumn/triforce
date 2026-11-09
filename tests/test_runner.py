@@ -1,6 +1,6 @@
 """Runner, registry hand-off and chain-eval summary on the native chain pool with untrained or scripted networks.
 
-The chain's game rules (untagged rooms, step budgets, fairy healing, visit clocks) are tested natively in
+The chain's game rules (untagged rooms, step budgets, retreats, visit clocks) are tested natively in
 ``crates/env/tests/chain_explore.rs``; these tests cover the Python side: routes, results, batched per-specialist
 inference, missing models, determinism and the ``eval-chain`` command line."""
 
@@ -48,19 +48,18 @@ class ScriptedPolicy:
                                          for m in masks]))
 
 
-def test_milestone_route_definition():
-    route = Route.load('milestone1')
+def test_route_definition():
+    route = Route.load('d2first')
     assert route.start_state == 'start'
-    assert route.terminal == MapLocation(2, 0x0e, False)
-    assert Route.load('milestone1', parse_location('1:0x73')).terminal == MapLocation(1, 0x73, False)
-    assert Route.load('milestone1', start_from='0_37c_2').start_state == '0_37c_2'
+    assert route.terminal is None                   # the route ends on taking the D1 triforce
+    assert Route.load('d2first', parse_location('1:0x73')).terminal == MapLocation(1, 0x73, False)
+    assert Route.load('d2first', start_from='2_7ds_0').start_state == '2_7ds_0'
     with pytest.raises(RunnerError, match='Unknown route'):
         Route.load('no-such-route')
 
 
-@pytest.mark.parametrize('route', ['milestone1', 'milestone1-fairy'])
-def test_every_route_room_has_a_specialist(route):
-    for step in _native.route_steps(route):
+def test_every_route_room_has_a_specialist():
+    for step in _native.route_steps('d2first'):
         location = (step['level'], step['room'], step['in_cave'])
         assert _native.specialist_for(location) == step['specialist'], step
 
@@ -68,7 +67,7 @@ def test_every_route_room_has_a_specialist(route):
 def test_run_result_round_trips_the_native_dict(tmp_path):
     room = RoomRecord(0, 1, '0x44', False, 'stalfos-keese-gel', steps=3, outcome='death',
                       linger={'max_steps': 2, 'tail_steps': 1})
-    result = RunResult('milestone1', 4, 'failure', 'died', 3, 90, [room])
+    result = RunResult('d2first', 4, 'failure', 'died', 3, 90, retreats=1, rooms=[room])
     assert RunResult.from_dict(result.to_dict()) == result
     path = tmp_path / 'runs.jsonl'
     write_jsonl(str(path), [result, result])
@@ -78,7 +77,7 @@ def test_run_result_round_trips_the_native_dict(tmp_path):
 
 def test_chain_summary_counts_failures_by_room():
     def run(result, room, outcome):
-        r = RunResult('milestone1', 0, result=result)
+        r = RunResult('d2first', 0, result=result)
         r.rooms.append(RoomRecord(0, 1, room, False, 'stalfos-keese-gel', outcome=outcome))
         return r
     summary = chain_summary([run('success', '0x0e', 'milestone'), run('failure', '0x44', 'death'),
@@ -89,7 +88,7 @@ def test_chain_summary_counts_failures_by_room():
 
 def test_chain_summary_counts_keys_carried_into_the_milestone_separately():
     def run(result, keys):
-        r = RunResult('milestone1', 0, result=result)
+        r = RunResult('d2first', 0, result=result)
         r.rooms.append(RoomRecord(0, 2, '0x0e', False, '-', outcome='milestone', keys_in=keys))
         return r
     summary = chain_summary([run('success', 3), run('success', 3), run('success', 1), run('success', None),
@@ -107,14 +106,14 @@ def test_policies_load_promoted_models_and_name_the_missing(models_dir, tmp_path
 
 
 def test_missing_promoted_model_is_an_error(states_dir, tmp_path):
-    result = Runner(models_dir=tmp_path, states_dir=states_dir).run(Route.load('milestone1'), seed=0)
+    result = Runner(models_dir=tmp_path, states_dir=states_dir).run(Route.load('d2first'), seed=0)
     assert result.result == 'error' and result.steps == 0
     assert 'ow-start' in result.reason
 
 
 def test_runs_record_rooms_and_end_cleanly(states_dir, models_dir, tmp_path):
     runner = Runner(models_dir=models_dir, max_steps=40, parallel=2, states_dir=states_dir)
-    results = runner.run_many(Route.load('milestone1'), [5, 3, 4])
+    results = runner.run_many(Route.load('d2first'), [5, 3, 4])
     assert [r.seed for r in results] == [3, 4, 5]
     for result in results:
         assert result.result in ('failure', 'success')
@@ -132,8 +131,8 @@ def test_runs_record_rooms_and_end_cleanly(states_dir, models_dir, tmp_path):
 
 def test_same_seed_same_run(states_dir, models_dir):
     runner = Runner(models_dir=models_dir, max_steps=30, parallel=2, threads=1, states_dir=states_dir)
-    first = runner.run_many(Route.load('milestone1'), [7, 8])
-    second = runner.run_many(Route.load('milestone1'), [7, 8])
+    first = runner.run_many(Route.load('d2first'), [7, 8])
+    second = runner.run_many(Route.load('d2first'), [7, 8])
     assert [r.to_dict() for r in first] == [r.to_dict() for r in second]
 
 
@@ -144,7 +143,7 @@ def test_sampled_runs_do_not_depend_on_envs_or_threads(states_dir, models_dir):
     for parallel, threads in ((1, 1), (4, 1), (4, 4), (3, 2)):
         runner = Runner(models_dir=models_dir, max_steps=40, parallel=parallel, threads=threads,
                         states_dir=states_dir)
-        runs.append([r.to_dict() for r in runner.run_many(Route.load('milestone1'), seeds)])
+        runs.append([r.to_dict() for r in runner.run_many(Route.load('d2first'), seeds)])
     assert all(run == runs[0] for run in runs[1:])
     assert len({json.dumps(run['rooms']) for run in runs[0]}) > 1, "different seeds play different runs"
 
@@ -154,7 +153,7 @@ def test_wrong_exit_into_untagged_room_is_a_failure(states_dir, models_dir):
     failure."""
     west = ScriptedPolicy('MOVE W 16')
     runner = Runner(models_dir=models_dir, max_steps=200, networks={'ow-start': west}, states_dir=states_dir)
-    result = runner.run(Route.load('milestone1'), seed=0)
+    result = runner.run(Route.load('d2first'), seed=0)
     assert result.result == 'failure'
     assert 'untagged' in result.reason and '0x76' in result.reason
     assert (result.rooms[-1].room, result.rooms[-1].outcome) == ('0x77', 'exit-wrong')
@@ -167,7 +166,7 @@ def test_specialist_rows_are_batched_and_no_progress_ends_runs(states_dir, model
     config = _native.SpecialistConfig.load('ow-start').replace(no_progress_steps=4)
     runner = Runner(models_dir=models_dir, networks={'ow-start': wait}, specialist_configs={'ow-start': config},
                     parallel=3, states_dir=states_dir)
-    results = runner.run_many(Route.load('milestone1'), [0, 1, 2])
+    results = runner.run_many(Route.load('d2first'), [0, 1, 2])
     assert sum(wait.batches) == sum(result.steps for result in results) and max(wait.batches) <= 3
     for result in results:
         assert result.result == 'failure' and result.rooms[-1].outcome == 'stuck' and result.steps == 4
@@ -181,7 +180,7 @@ def test_run_cap_ends_runs(states_dir, models_dir):
     config = _native.SpecialistConfig.load('ow-start').replace(no_progress_steps=20)
     runner = Runner(models_dir=models_dir, max_steps=5, networks={'ow-start': wait},
                     specialist_configs={'ow-start': config}, states_dir=states_dir)
-    result = runner.run(Route.load('milestone1'), seed=0)
+    result = runner.run(Route.load('d2first'), seed=0)
     assert result.result == 'failure' and result.rooms[-1].outcome == 'stuck'
     assert result.steps == 5 and result.reason == 'run exceeded 5 steps'
 
@@ -221,7 +220,7 @@ def test_video_needs_ffmpeg(monkeypatch):
 @pytest.mark.skipif(shutil.which('ffmpeg') is None, reason='no ffmpeg')
 def test_video_replays_every_frame_of_the_run(states_dir, models_dir, tmp_path):
     runner = Runner(models_dir=models_dir, max_steps=6, states_dir=states_dir)
-    result, movie = run.record_movie(runner, Route.load('milestone1'), seed=2)
+    result, movie = run.record_movie(runner, Route.load('d2first'), seed=2)
     assert result.steps == 6 and movie['origin'] == 'start'
     assert len(movie['buttons']) >= result.frames
     path = tmp_path / 'run.mp4'

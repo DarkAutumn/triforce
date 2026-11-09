@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{MachineState, MemStore, TfzStore, ZCore, open_core};
+use common::{MachineState, TfzStore, ZCore, open_core};
 use env::StateStore;
 use env::chain::{ChainEnv, ChainStatus, RoomRecord, Route, RunResult, chain_summary};
 use env::config::{GameData, SpecialistConfig};
@@ -13,7 +13,7 @@ use env::specialist_env::{EnvOptions, SpecialistEnv};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
-use zelda::{Action, GameMap, LoadOptions, MapLocation, Session, Var};
+use zelda::{Action, GameMap, MapLocation, Session};
 
 fn data() -> Arc<GameData> {
     common::game_data()
@@ -46,8 +46,8 @@ fn chain(nes: ZCore, data: &Arc<GameData>, route: Route) -> ChainEnv<ZCore, TfzS
     ChainEnv::new(data.clone(), nes, TfzStore::new(), route)
 }
 
-fn milestone1(data: &GameData) -> Route {
-    Route::load(&data.map, "milestone1", None, None).unwrap()
+fn d2first(data: &GameData) -> Route {
+    Route::load(&data.map, "d2first", None, None).unwrap()
 }
 
 /// The config of `name` with `edit` applied.
@@ -66,14 +66,14 @@ fn parse(a: &str) -> Action {
 }
 
 #[test]
-fn milestone_route_definition() {
+fn route_definition() {
     let map = GameMap::builtin();
-    let route = Route::load(&map, "milestone1", None, None).unwrap();
+    let route = Route::load(&map, "d2first", None, None).unwrap();
     assert_eq!(route.start_state, "start");
-    assert_eq!(route.terminal, Some(MapLocation::new(2, 0x0e, false)));
+    assert_eq!((route.terminal, route.final_triforce), (None, Some(1)));
     let stop = MapLocation::new(1, 0x73, false);
     assert_eq!(
-        Route::load(&map, "milestone1", Some(stop), None)
+        Route::load(&map, "d2first", Some(stop), None)
             .unwrap()
             .terminal,
         Some(stop)
@@ -99,12 +99,13 @@ fn every_route_room_has_a_specialist() {
 #[test]
 fn chain_summary_counts_failures_by_room() {
     let run = |result: &str, room: &str, outcome: &str, cheated: u32| RunResult {
-        route: "milestone1".into(),
+        route: "d2first".into(),
         seed: Some(0),
         result: result.into(),
         reason: String::new(),
         steps: 0,
         frames: 0,
+        retreats: 0,
         rooms: vec![RoomRecord {
             index: 0,
             level: 1,
@@ -164,7 +165,7 @@ fn chain_runs() {
         no_room_progress_threshold_replaces_flat_budget,
         no_room_progress_preserves_global_guard_and_disabled_budget,
         room_exit_resets_visit_clock,
-        step_budget_records_health_after_native_fairy_healing,
+        lynel_retreat_continues_the_run,
         target_observation_follows_the_acting_specialist,
     ] {
         nes = case(nes, &data);
@@ -185,7 +186,7 @@ fn untagged_room_stops_with_clear_error(nes: ZCore, data: &Arc<GameData>) -> ZCo
         states_dir: data.states_dir.clone(),
         trajectories_dir: data.trajectories_dir.clone(),
     });
-    let mut c = chain(nes, &untagged, milestone1(data));
+    let mut c = chain(nes, &untagged, d2first(data));
     let r = drive(&mut c, 0, random_policy);
     assert_eq!(r.result, "error");
     assert!(
@@ -197,7 +198,7 @@ fn untagged_room_stops_with_clear_error(nes: ZCore, data: &Arc<GameData>) -> ZCo
 }
 
 fn wrong_exit_into_untagged_room_is_a_failure(nes: ZCore, data: &Arc<GameData>) -> ZCore {
-    let mut c = chain(nes, data, milestone1(data));
+    let mut c = chain(nes, data, d2first(data));
     c.max_steps = 200;
     let r = drive(&mut c, 0, |_, _| parse("MOVE W 16"));
     assert_eq!(r.result, "failure");
@@ -215,7 +216,7 @@ fn wrong_exit_into_untagged_room_is_a_failure(nes: ZCore, data: &Arc<GameData>) 
 }
 
 fn missing_model_is_an_error(nes: ZCore, data: &Arc<GameData>) -> ZCore {
-    let mut c = chain(nes, data, milestone1(data));
+    let mut c = chain(nes, data, d2first(data));
     let mut rng = ChaCha8Rng::seed_from_u64(0);
     let status = c.reset(Some(0), &mut rng).unwrap();
     let ChainStatus::Act {
@@ -241,7 +242,7 @@ fn missing_model_is_an_error(nes: ZCore, data: &Arc<GameData>) -> ZCore {
 /// The chain fills `target` only for specialists with `obs.target` on, from the same wavefront their env uses.
 fn target_observation_follows_the_acting_specialist(mut nes: ZCore, data: &Arc<GameData>) -> ZCore {
     for on in [false, true] {
-        let mut c = chain(nes, data, milestone1(data));
+        let mut c = chain(nes, data, d2first(data));
         c.configs.insert(
             "ow-start".into(),
             config(data, "ow-start", |c| c.obs.target = on),
@@ -267,7 +268,7 @@ fn target_observation_follows_the_acting_specialist(mut nes: ZCore, data: &Arc<G
 }
 
 fn run_records_rooms_and_ends_cleanly(nes: ZCore, data: &Arc<GameData>) -> ZCore {
-    let mut c = chain(nes, data, milestone1(data));
+    let mut c = chain(nes, data, d2first(data));
     c.max_steps = 150;
     let r = drive(&mut c, 3, random_policy);
     assert!(r.result == "failure" || r.result == "success", "{r:?}");
@@ -286,7 +287,7 @@ fn run_records_rooms_and_ends_cleanly(nes: ZCore, data: &Arc<GameData>) -> ZCore
 }
 
 fn same_seed_same_run(nes: ZCore, data: &Arc<GameData>) -> ZCore {
-    let mut c = chain(nes, data, milestone1(data));
+    let mut c = chain(nes, data, d2first(data));
     c.max_steps = 60;
     let first = drive(&mut c, 7, random_policy);
     let second = drive(&mut c, 7, random_policy);
@@ -299,7 +300,7 @@ fn no_room_progress_threshold_replaces_flat_budget(
     nes: ZCore,
     data: &Arc<GameData>,
 ) -> ZCore {
-    let mut c = chain(nes, data, milestone1(data));
+    let mut c = chain(nes, data, d2first(data));
     c.min_room_steps = 2;
     c.max_steps = 20;
     c.configs.insert(
@@ -331,7 +332,7 @@ fn no_room_progress_preserves_global_guard_and_disabled_budget(
     data: &Arc<GameData>,
 ) -> ZCore {
     for enabled in [false, true] {
-        let mut c = chain(nes, data, milestone1(data));
+        let mut c = chain(nes, data, d2first(data));
         c.min_room_steps = 3;
         c.max_steps = 5;
         c.configs.insert(
@@ -361,7 +362,7 @@ fn no_room_progress_preserves_global_guard_and_disabled_budget(
 }
 
 fn room_exit_resets_visit_clock(nes: ZCore, data: &Arc<GameData>) -> ZCore {
-    let route = Route::load(&data.map, "milestone1", None, Some("0_77cave_0")).unwrap();
+    let route = Route::load(&data.map, "d2first", None, Some("0_77cave_0")).unwrap();
     let mut c = chain(nes, data, route);
     c.max_steps = 100;
     c.configs.insert(
@@ -389,63 +390,33 @@ fn room_exit_resets_visit_clock(nes: ZCore, data: &Arc<GameData>) -> ZCore {
     c.into_parts().0.into_nes()
 }
 
-fn step_budget_records_health_after_native_fairy_healing(
-    mut nes: ZCore,
-    data: &Arc<GameData>,
-) -> ZCore {
-    for room_budget in [true, false] {
-        // A pond state at one heart of four.
-        let mut session = Session::new(nes, data.map.clone());
-        let state = TfzStore::new().load("0_39s_2").unwrap();
-        let opts = LoadOptions {
-            randomize_rng: false,
-            ..Default::default()
-        };
-        session
-            .load(&state, &opts, &mut ChaCha8Rng::seed_from_u64(0))
-            .unwrap();
-        session.apply_ram(&[(Var::HeartsAndContainers, 0x30), (Var::PartialHearts, 0xFF)]);
-        let store = MemStore::default();
-        store
-            .0
-            .borrow_mut()
-            .insert("0_39s_2".into(), zelda::Nes::snapshot(session.nes()));
-        nes = session.into_nes();
-
-        let route = Route::load(&data.map, "milestone1-fairy", None, Some("0_39s_2")).unwrap();
-        let mut c = ChainEnv::new(data.clone(), nes, store, route);
-        c.min_room_steps = if room_budget { 12 } else { 100 };
-        c.max_steps = if room_budget { 100 } else { 12 };
-        c.configs.insert(
-            "ow-start".into(),
-            config(data, "ow-start", |c| {
-                c.no_progress_steps = None;
-                c.max_steps = if room_budget { 12 } else { 100 };
-            }),
-        );
-        let (north, wait) = (parse("MOVE N 8"), parse("WAIT 8"));
-        let r = drive(&mut c, 0, |s, _| {
-            if s.mask().is_allowed(&north) {
-                north
-            } else {
-                wait
-            }
-        });
-        let record = r.rooms.last().unwrap();
-        assert_eq!(
-            (r.result.as_str(), record.outcome.as_str(), r.steps),
-            ("failure", "stuck", 12)
-        );
-        let state = c.session().state();
-        assert_eq!((state.health(), state.max_health()), (4.0, 4));
-        assert_eq!((record.health_in, record.health_out), (1.0, 4.0));
-        nes = c.into_parts().0.into_nes();
-    }
-    nes
+/// Leaving 0x0a S before the white sword (routes.yaml `retreat: S`, Lee Nov 8) doesn't end the run: the visit ends as
+/// `retreat`, the run goes on in 0x1a, whose objective sends Link back N (a correct exit).  A retreat beyond the
+/// run's cap (`MAX_RETREATS` = 3; 1 here) ends the run as a failure, `retreat-limit`.
+fn lynel_retreat_continues_the_run(nes: ZCore, data: &Arc<GameData>) -> ZCore {
+    assert_eq!(env::chain::MAX_RETREATS, 3);
+    let route = Route::load(&data.map, "d2first", None, Some("0_0as_0")).unwrap();
+    let mut c = chain(nes, data, route);
+    c.max_steps = 400;
+    c.max_retreats = 1;
+    let (south, north, wait) = (parse("MOVE S 16"), parse("MOVE N 16"), parse("WAIT 8"));
+    let r = drive(&mut c, 0, |s, _| {
+        let want = if s.state().full_location() == MapLocation::new(0, 0x0a, false) { south } else { north };
+        if s.mask().is_allowed(&want) { want } else { wait }
+    });
+    let rooms: Vec<_> = r.rooms.iter().map(|x| (x.room.as_str(), x.specialist.as_str(), x.outcome.as_str())).collect();
+    assert_eq!(rooms[0], ("0x0a", "ow-lynel", "retreat"), "{r:?}");
+    assert_eq!(rooms[1], ("0x1a", "ow-tektite", "exit-correct"), "{r:?}");
+    assert_eq!(r.retreats, 2, "{r:?}");
+    assert_eq!(rooms.last().unwrap(), &("0x0a", "ow-lynel", "retreat-limit"), "{r:?}");
+    assert_eq!(r.result, "failure");
+    assert!(r.reason.starts_with("retreat-limit"), "{}", r.reason);
+    assert_eq!(r.to_json()["retreats"], 2);
+    c.into_parts().0.into_nes()
 }
 
-/// `test_explore_finds_replays_and_writes_a_curriculum_trajectory`: 0x38 from the south, the W exit ~15 steps
-/// away past Octoroks and the Zora; the written trajectory feeds a curriculum env.
+/// `test_explore_finds_replays_and_writes_a_curriculum_trajectory`: 0x38 from the north, the W exit past Octoroks
+/// and the Zora; the written trajectory feeds a curriculum env.
 #[test]
 fn explore_finds_replays_and_writes_a_curriculum_trajectory() {
     let Some(nes) = open_core() else { return };
@@ -453,12 +424,12 @@ fn explore_finds_replays_and_writes_a_curriculum_trajectory() {
     let tmp = tempfile::tempdir().unwrap();
     let config = data.specialists["ow-zora"].clone();
     let mut explorer = Explorer::new(&config, data.clone(), nes, TfzStore::new(), 0).unwrap();
-    let result = explorer.explore("0_38s_0", 400, 25, 20, None).unwrap();
+    let result = explorer.explore("0_38n_0", 400, 25, 20, None).unwrap();
     assert!(result.success, "{result:?}");
     assert_eq!(result.ending.as_deref(), Some("exit-correct"));
     assert!(!result.actions.is_empty() && result.actions.len() as u64 <= result.env_steps);
 
-    let dir = tmp.path().join("0_38s_0");
+    let dir = tmp.path().join("0_38n_0");
     assert!(
         explorer.write(&result, &dir).unwrap(),
         "replaying the actions reproduces the success"
@@ -468,7 +439,7 @@ fn explore_finds_replays_and_writes_a_curriculum_trajectory() {
             .unwrap();
     assert_eq!(meta["success"], true);
     assert_eq!(meta["steps"], result.actions.len());
-    let paths = &load_trajectories(tmp.path()).unwrap()["0_38s_0"];
+    let paths = &load_trajectories(tmp.path()).unwrap()["0_38n_0"];
     assert_eq!(paths.len(), result.actions.len());
     assert!(paths[0].ends_with("0000.state"));
 
@@ -513,5 +484,5 @@ fn explore_finds_replays_and_writes_a_curriculum_trajectory() {
         }
     }
     let terminal = terminal.expect("episode ended");
-    assert_eq!(terminal.curriculum.unwrap().track, "0_38s_0");
+    assert_eq!(terminal.curriculum.unwrap().track, "0_38n_0");
 }

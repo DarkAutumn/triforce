@@ -4,7 +4,7 @@
 (actions, frames, interrupt codes) and ``add_episode`` every terminal info (the pool's ``episode`` events).
 ``RolloutMetrics.summary()`` turns them into the flat metric dict logged per iteration:
 
-- ``episodes``, ``success_rate``, ``outcome/<success|hard-failure|soft-failure>`` (fractions),
+- ``episodes``, ``success_rate``, ``outcome/<success|hard-failure|soft-failure|neutral>`` (fractions),
   ``ending/<end-condition>`` (fractions) — from ``info['outcome']`` / ``info['ending']``.  These and every other
   per-episode metric count only episodes that started at a room entry (seed/harvested start states).
   ``RolloutMetrics.start_results`` also counts them per (start state, success) for ``train.EarlyStop``; it is

@@ -73,6 +73,7 @@ fn no_objective() -> Objective {
         targets: BTreeSet::new(),
         next_rooms: BTreeSet::new(),
         pbrs_targets: BTreeSet::new(),
+        retreats: BTreeSet::new(),
     }
 }
 

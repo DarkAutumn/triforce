@@ -36,21 +36,24 @@ use zelda::{Action, Change, LoadOptions, MapLocation, Nes, Session};
 pub const DEFAULT_MAX_STEPS: u64 = 50_000;
 /// A chain room gets at least this many steps before it counts as stuck.
 pub const MIN_ROOM_STEPS: u64 = 2000;
+/// Retreats (route steps' `retreat` exits) a run may take; one more ends it as `retreat-limit` (Lee, Nov 8: a chain
+/// must not loop on re-entering 0x0a forever).
+pub const MAX_RETREATS: u32 = 3;
 
 /// Where a route starts and how it ends.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Route {
     pub name: String,
     pub start_state: String,
-    /// Entering this room ends the run (milestone1: Dodongo's room); None for a route ending on a triforce.
+    /// Entering this room ends the run (`stop_at`, a partial chain eval); None: the route's end.
     pub terminal: Option<MapLocation>,
-    /// Taking this level's triforce ends the run (a route whose last step exits `triforce`, without `stop_at`).
+    /// Taking this level's triforce ends the run (the route's last step exits `triforce`; None with `stop_at`).
     pub final_triforce: Option<u8>,
 }
 
 impl Route {
     /// A routes.yaml route; `stop_at` replaces the route's end with a room to enter and `start_from` (a state such
-    /// as `0_37c_2`) the game start, for partial chain evals.
+    /// as `2_7ds_0`) the game start, for partial chain evals.
     pub fn load(
         map: &GameMap,
         name: &str,
@@ -78,16 +81,11 @@ impl Route {
         if stop_at.is_some() {
             return Ok(route(stop_at, None));
         }
-        if let Some(last) = steps.iter().rev().find(|s| s.exit == "terminal") {
-            return Ok(route(Some(last.location()), None));
-        }
         let last = &steps[steps.len() - 1];
         if last.exit == "triforce" {
             return Ok(route(None, Some(last.level)));
         }
-        Err(format!(
-            "Route '{name}' has no terminal room and doesn't end on a triforce"
-        ))
+        Err(format!("Route '{name}' doesn't end on a triforce"))
     }
 }
 
@@ -109,7 +107,9 @@ pub struct RoomRecord {
     /// Dodongo arrival's key count).
     pub keys_in: i32,
     pub keys_out: i32,
-    /// in-progress, exit-correct, exit-wrong, missed (a route `heart` waypoint missed), death, stuck, milestone, error.
+    /// in-progress, exit-correct, exit-wrong, retreat (the route step's `retreat` exit), retreat-limit (one retreat
+    /// more than `MAX_RETREATS`: the run ends), missed (a route `heart` waypoint missed), death, stuck, milestone,
+    /// error.
     pub outcome: String,
     pub hearts_dropped: u32,
     pub hearts_taken: u32,
@@ -202,6 +202,9 @@ pub struct RunResult {
     pub reason: String,
     pub steps: u64,
     pub frames: u64,
+    /// Rooms left through a route step's `retreat` exit (0x0a S before the white sword); the
+    /// `MAX_RETREATS + 1`-th ends the run (`retreat-limit`).
+    pub retreats: u32,
     pub rooms: Vec<RoomRecord>,
 }
 
@@ -224,7 +227,7 @@ impl RunResult {
     pub fn to_json(&self) -> Value {
         json!({
             "route": self.route, "seed": self.seed, "result": self.result, "reason": self.reason,
-            "steps": self.steps, "frames": self.frames,
+            "steps": self.steps, "frames": self.frames, "retreats": self.retreats,
             "rooms": self.rooms.iter().map(RoomRecord::to_json).collect::<Vec<_>>(),
         })
     }
@@ -270,6 +273,8 @@ pub struct ChainEnv<N: Nes, St: StateStore<N::State>> {
     pub max_steps: u64,
     /// Floor of the per-room step budget (`MIN_ROOM_STEPS`).
     pub min_room_steps: u64,
+    /// Retreats a run may take (`MAX_RETREATS`); one more ends it as `retreat-limit`.
+    pub max_retreats: u32,
     /// Player stall budget (`play-zelda.py`; None = off): after this many actions in a room without damage dealt
     /// or taken [`ChainEnv::stalled`] turns true; after twice as many the run ends `stuck`.
     pub stall_steps: Option<u64>,
@@ -298,6 +303,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             route,
             max_steps: DEFAULT_MAX_STEPS,
             min_room_steps: MIN_ROOM_STEPS,
+            max_retreats: MAX_RETREATS,
             stall_steps: None,
             no_damage: 0,
             result: None,
@@ -358,6 +364,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             reason: String::new(),
             steps: 0,
             frames: 0,
+            retreats: 0,
             rooms: Vec::new(),
         });
         self.current = None;
@@ -381,7 +388,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             state_entry(&self.route.start_state),
             rng,
             Some(&self.route.name),
-            |level| state.has_triforce(level),
+            &state,
         );
         let mut gc = match GameCompletion::new(self.data.map.clone(), &route, step) {
             Ok(gc) => gc,
@@ -560,16 +567,41 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             new_room = true;
             let mut correct = None;
             if record_location.is_some() {
-                let ok = match (&self.change, &self.prev_objective) {
+                let (ok, retreat) = match (&self.change, &self.prev_objective) {
                     (Some(change), Some(prev)) => {
-                        exit_is_correct(&map, &change.previous, prev, location)
+                        let ok = exit_is_correct(&map, &change.previous, prev, location);
+                        (ok, !ok && prev.retreats.contains(&location))
                     }
-                    _ => false,
+                    _ => (false, false),
                 };
-                correct = Some(ok);
-                let record = self.result.as_mut().unwrap().rooms.last_mut().unwrap();
-                record.outcome = if ok { "exit-correct" } else { "exit-wrong" }.into();
+                correct = Some(ok || retreat);
+                let limit = retreat && self.result.as_ref().unwrap().retreats >= self.max_retreats;
+                let result = self.result.as_mut().unwrap();
+                if retreat {
+                    result.retreats += 1;
+                }
+                let record = result.rooms.last_mut().unwrap();
+                record.outcome = if ok {
+                    "exit-correct"
+                } else if limit {
+                    "retreat-limit"
+                } else if retreat {
+                    "retreat"
+                } else {
+                    "exit-wrong"
+                }
+                .into();
                 self.finish_record(&state);
+                if limit {
+                    let result = self.result.as_mut().unwrap();
+                    let from = result.rooms.last().unwrap().specialist.clone();
+                    result.result = "failure".into();
+                    result.reason = format!(
+                        "retreat-limit: {from} retreated {} times (at most {} per run)",
+                        result.retreats, self.max_retreats
+                    );
+                    return Ok(ChainStatus::Done(result.clone()));
+                }
             }
             let result = self.result.as_mut().unwrap();
             if Some(location) == self.route.terminal {
@@ -773,26 +805,14 @@ mod tests {
     #[test]
     fn routes_load() {
         let map = GameMap::builtin();
-        let r = Route::load(&map, "milestone1", None, None).unwrap();
-        assert_eq!(r.terminal, Some(MapLocation::new(2, 0x0e, false)));
-        assert_eq!(r.final_triforce, None);
-        assert_eq!(r.start_state, "start");
-        let r = Route::load(
-            &map,
-            "milestone1",
-            Some(MapLocation::new(1, 0x44, false)),
-            Some("0_37c_2"),
-        )
-        .unwrap();
-        assert_eq!(r.terminal, Some(MapLocation::new(1, 0x44, false)));
-        assert_eq!(r.start_state, "0_37c_2");
-        assert!(Route::load(&map, "nowhere", None, None).is_err());
-        // d2first ends on taking the Dungeon 1 triforce (no terminal room); stop_at still ends it at a room.
         let r = Route::load(&map, "d2first", None, None).unwrap();
         assert_eq!((r.terminal, r.final_triforce), (None, Some(1)));
+        assert_eq!(r.start_state, "start");
         let stop = MapLocation::new(2, 0x0e, false);
-        let r = Route::load(&map, "d2first", Some(stop), None).unwrap();
+        let r = Route::load(&map, "d2first", Some(stop), Some("2_7ds_0")).unwrap();
         assert_eq!((r.terminal, r.final_triforce), (Some(stop), None));
+        assert_eq!(r.start_state, "2_7ds_0");
+        assert!(Route::load(&map, "nowhere", None, None).is_err());
         assert_eq!(
             describe(MapLocation::new(0, 0x77, true)),
             "(level 0, room 0x77, cave)"

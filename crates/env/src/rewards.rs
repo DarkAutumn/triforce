@@ -13,8 +13,10 @@ pub const TERMINAL_SUCCESS_REWARD_VALUE: f64 = 20.0;
 pub const SUCCESS: &str = "success";
 pub const HARD_FAILURE: &str = "hard-failure";
 pub const SOFT_FAILURE: &str = "soft-failure";
+/// Neither success nor failure: no terminal reward or penalty (`retreat`).
+pub const NEUTRAL: &str = "neutral";
 /// Terminal outcome classes (deny-by-default classification, `end_conditions::classify_ending`).
-pub const OUTCOMES: [&str; 3] = [SUCCESS, HARD_FAILURE, SOFT_FAILURE];
+pub const OUTCOMES: [&str; 4] = [SUCCESS, HARD_FAILURE, SOFT_FAILURE, NEUTRAL];
 
 pub const REWARD_TERMINAL_SUCCESS: &str = "reward-terminal-success";
 pub const PENALTY_TERMINAL_FAILURE: &str = "penalty-terminal-failure";
@@ -117,7 +119,7 @@ pub struct StepRewards {
     outcomes: Vec<Outcome>,
     /// End-condition name on the last step.
     pub ending: Option<String>,
-    /// SUCCESS / HARD_FAILURE / SOFT_FAILURE on the last step.
+    /// SUCCESS / HARD_FAILURE / SOFT_FAILURE / NEUTRAL on the last step.
     pub outcome: Option<&'static str>,
 }
 
@@ -211,7 +213,7 @@ pub fn success_reward_value(health: f64, max_health: f64) -> f64 {
 }
 
 /// Records the ending/outcome and adds the terminal reward: success + health-scaled reward; hard failure drops
-/// the step's rewards (penalties kept) and adds −20; soft failure adds −20; truncation adds nothing.
+/// the step's rewards (penalties kept) and adds −20; soft failure adds −20; neutral and truncation add nothing.
 pub fn apply_terminal_rewards(
     rewards: &mut StepRewards,
     ending: &str,
@@ -231,7 +233,7 @@ pub fn apply_terminal_rewards(
             REWARD_TERMINAL_SUCCESS,
             success_reward_value(health, max_health),
         ));
-    } else {
+    } else if outcome != NEUTRAL {
         if outcome == HARD_FAILURE {
             rewards.remove_rewards();
         }

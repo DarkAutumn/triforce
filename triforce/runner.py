@@ -34,15 +34,16 @@ class RunnerError(RuntimeError):
 
 @dataclass
 class Route:
-    """Where a route starts and which room ends it."""
+    """Where a route starts and which room ends it (``terminal``; None: the route ends on its last triforce)."""
     name: str
     start_state: str
-    terminal: MapLocation
+    terminal: Optional[MapLocation] = None
 
     @staticmethod
     def load(name: str, stop_at: Optional[MapLocation] = None, start_from: Optional[str] = None) -> 'Route':
-        """Loads a route from routes.yaml.  ``stop_at`` replaces the terminal room and ``start_from`` (a savestate,
-        e.g. a route entry state like ``0_37c_2``) the game start, for partial chain evals."""
+        """Loads a route from routes.yaml.  ``stop_at`` ends it on entering that room instead of on its last step's
+        triforce, and ``start_from`` (a savestate, e.g. a route entry state like ``2_7ds_0``) replaces the game
+        start, for partial chain evals."""
         try:
             steps = _native.route_steps(name)
         except _native.ConfigError as err:
@@ -51,12 +52,9 @@ class Route:
             raise RunnerError(f"Unknown route '{name}'")
         if steps[0]['entry'] != 'start':
             raise RunnerError(f"Route '{name}' must begin at the game start (entry: start)")
-        terminals = [s for s in steps if s['exit'] == 'terminal']
-        if stop_at is None and not terminals:
-            raise RunnerError(f"Route '{name}' has no terminal room")
-        last = terminals[-1] if terminals else steps[-1]
-        terminal = stop_at or MapLocation(last['level'], last['room'], last['in_cave'])
-        return Route(name, start_from or 'start', terminal)
+        if stop_at is None and steps[-1]['exit'] != 'triforce':
+            raise RunnerError(f"Route '{name}' doesn't end on a triforce")
+        return Route(name, start_from or 'start', stop_at)
 
 
 @dataclass
@@ -74,7 +72,8 @@ class RoomRecord:
     max_health: int = 0
     keys_in: Optional[int] = None   # keys carried on entering / leaving the room (None in pre-Nov-6 records)
     keys_out: Optional[int] = None
-    outcome: str = 'in-progress'    # exit-correct, exit-wrong, missed (heart waypoint), death, stuck, milestone, error
+    outcome: str = 'in-progress'    # exit-correct, exit-wrong, retreat, retreat-limit, missed (heart waypoint), death,
+    #                                 stuck, milestone, error
     # Dropped hearts during the visit: healed = real hearts gained, wasted = taken - healed, left = still on the
     # floor when the visit ended.
     hearts_dropped: int = 0
@@ -105,6 +104,7 @@ class RunResult:
     reason: str = ''
     steps: int = 0
     frames: int = 0
+    retreats: int = 0               # rooms left through a route step's `retreat` exit (4 end the run: retreat-limit)
     rooms: List[RoomRecord] = field(default_factory=list)
 
     @property
@@ -306,8 +306,8 @@ def parse_location(text: str) -> MapLocation:
 def chain_summary(results: List[RunResult]) -> dict:
     """The milestone metric, keys carried at the milestone and a per-room failure breakdown.
 
-    ``arrival_keys`` counts successful runs by the keys Link carried into the milestone room (the Dodongo room on
-    milestone1: 3 = every key on the route kept), so milestone arrivals and full key carriage stay separate
+    ``arrival_keys`` counts successful runs by the keys Link carried into the milestone room (a ``stop_at`` room,
+    or the room of the route's last triforce), so milestone arrivals and full key carriage stay separate
     counters.  ``bombs_cheated`` totals the cheated bombs placed and ``runs_with_cheated_bombs`` counts the runs
     that placed any."""
     runs = len(results)

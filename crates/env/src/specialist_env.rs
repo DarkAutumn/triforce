@@ -18,7 +18,7 @@ use crate::critic::{BossTransitions, Critique, GameplayCritic};
 use crate::curriculum::{CurriculumInfo, CurriculumTag, SharedCurriculum};
 use crate::end_conditions::{
     DEATH, ENTER_ROOM_PREFIX, EXIT_CORRECT, EXIT_WRONG, EndConditions, MAX_STEPS, NO_DAMAGE, NO_PROGRESS,
-    NO_ROOM_PROGRESS, StepView, classify_ending,
+    NO_ROOM_PROGRESS, RETREAT, StepView, classify_ending,
 };
 use crate::error::EnvError;
 use crate::objective::{Attached, attach, needs_wavefront};
@@ -102,7 +102,7 @@ pub struct StepInfo {
 pub fn visit_end(ending: &str, outcome: &str) -> VisitEnd {
     match ending {
         DEATH => VisitEnd::Ended(EXIT_DEATH),
-        EXIT_CORRECT | EXIT_WRONG => VisitEnd::Left,
+        EXIT_CORRECT | EXIT_WRONG | RETREAT => VisitEnd::Left,
         _ if ending.starts_with(ENTER_ROOM_PREFIX) => VisitEnd::Left,
         _ if outcome == SUCCESS => VisitEnd::Ended(EXIT_SUCCESS),
         MAX_STEPS | NO_PROGRESS | NO_ROOM_PROGRESS | NO_DAMAGE => VisitEnd::Ended(EXIT_TIMEOUT),
@@ -436,7 +436,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             state_entry(&name),
             &mut self.rng,
             self.config.route.as_deref(),
-            |level| state.has_triforce(level),
+            &state,
         );
         self.route = route;
         self.route_step = step;

@@ -11,7 +11,7 @@ use std::collections::{BTreeSet, BinaryHeap, HashMap};
 use std::path::Path;
 
 pub const LOCKED_COST: i32 = 4;
-pub const DEFAULT_ROUTE: &str = "milestone1";
+pub const DEFAULT_ROUTE: &str = "d2first";
 
 /// Bundled `triforce/game.yaml`.
 pub const GAME_YAML: &str = include_str!("../../../triforce/game.yaml");
@@ -85,6 +85,9 @@ pub struct RouteStep {
     pub entry: String,
     pub exit: String,
     pub waypoint: Option<String>,
+    /// `retreat: S`: leaving through this exit instead is no failure (d2first's 0x0a before the white sword: back to
+    /// 0x1a, whose objective sends Link in again).
+    pub retreat: Option<String>,
 }
 
 impl RouteStep {
@@ -110,7 +113,7 @@ type RouteTable = (
 #[derive(Debug)]
 pub struct GameMap {
     rooms: IndexMap<MapLocation, GameRoom>,
-    /// Routes in routes.yaml order (plain lists first, then spliced routes).
+    /// Routes in routes.yaml order.
     pub routes: IndexMap<String, Vec<RouteStep>>,
     /// routes.yaml `alternates`, in file order.
     pub alternates: Vec<Alternate>,
@@ -172,15 +175,8 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         entry: as_string(get(v, "entry")).unwrap_or_default(),
         exit: as_string(get(v, "exit")).unwrap_or_default(),
         waypoint: as_string(get(v, "waypoint")).filter(|w| !w.is_empty()),
+        retreat: as_string(get(v, "retreat")).filter(|r| !r.is_empty()),
     })
-}
-
-fn find_step(steps: &[RouteStep], spec: &Value, start: usize) -> Result<usize, MapError> {
-    let loc = step_location(spec)?;
-    let entry = as_string(get(spec, "entry")).unwrap_or_default();
-    (start..steps.len())
-        .find(|&i| steps[i].location() == loc && steps[i].entry == entry)
-        .ok_or_else(|| MapError(format!("routes.yaml: no step {spec:?} after step {start}")))
 }
 
 type Routes = IndexMap<String, Vec<RouteStep>>;
@@ -201,26 +197,6 @@ fn parse_routes(text: &str) -> Result<(Routes, Vec<Alternate>), MapError> {
                 name.to_owned(),
                 list.iter().map(parse_step).collect::<Result<Vec<_>, _>>()?,
             );
-        }
-    }
-    for (name, value) in map {
-        if value.is_mapping() && value.get("base").is_some() {
-            let base_name = value["base"].as_str().unwrap_or_default();
-            let base = routes
-                .get(base_name)
-                .ok_or_else(|| MapError(format!("unknown base route {base_name}")))?;
-            let first = find_step(base, &value["replace"]["from"], 0)?;
-            let last = find_step(base, &value["replace"]["to"], first)?;
-            let middle = value["steps"]
-                .as_sequence()
-                .map(|s| s.as_slice())
-                .unwrap_or_default();
-            let mut steps = base[..first].to_vec();
-            for s in middle {
-                steps.push(parse_step(s)?);
-            }
-            steps.extend_from_slice(&base[last..]);
-            routes.insert(name.as_str().unwrap_or_default().to_owned(), steps);
         }
     }
     let mut alternates = Vec::new();
@@ -587,30 +563,6 @@ impl GameMap {
             .collect()
     }
 
-    /// Index of the first step of `route` in `location` entered from `entry`.
-    pub fn route_step_index(
-        &self,
-        route: &str,
-        location: MapLocation,
-        entry: &str,
-    ) -> Option<usize> {
-        self.routes
-            .get(route)?
-            .iter()
-            .position(|s| s.entry == entry && s.location() == location)
-    }
-
-    /// (route, step) for every route entering `location` from `entry`.
-    pub fn routes_through(&self, location: MapLocation, entry: &str) -> Vec<(String, usize)> {
-        self.routes
-            .keys()
-            .filter_map(|name| {
-                self.route_step_index(name, location, entry)
-                    .map(|i| (name.clone(), i))
-            })
-            .collect()
-    }
-
     fn route_table(&self, main: &[RouteStep], alternates: &[Alternate]) -> RouteTable {
         let visited: BTreeSet<MapLocation> = main.iter().map(RouteStep::location).collect();
         let alternates: Vec<&Alternate> = alternates
@@ -776,6 +728,36 @@ mod tests {
         assert_eq!(hearts.len(), 1);
         assert_eq!((hearts[0].location(), hearts[0].waypoint.as_deref()), (L::new(0, 0x2c, true), Some("heart")));
         assert!(!steps.iter().any(|s| s.location() == loc(0, 0x39) || s.location() == loc(2, 0x4f)));
+        let retreats: Vec<_> = steps.iter().filter(|s| s.retreat.is_some()).collect();
+        assert_eq!(retreats.len(), 1);
+        assert_eq!(
+            (retreats[0].location(), retreats[0].exit.as_str(), retreats[0].retreat.as_deref()),
+            (loc(0, 0x0a), "cave", Some("S"))
+        );
+    }
+
+    /// Dungeon 1 fetches both key rooms' keys like the D1-first route did: 0x73 W, 0x72 back E, 0x73 E, 0x74 back
+    /// W, then 0x73 N (Lee, Nov 8), although Link carries Dungeon 2's keys.
+    #[test]
+    fn d2first_dungeon_1_visits_both_key_rooms() {
+        let map = GameMap::builtin();
+        let d1: Vec<_> = map.routes["d2first"]
+            .iter()
+            .filter(|s| s.level == 1)
+            .take(6)
+            .map(|s| (s.room, s.entry.as_str(), s.exit.as_str()))
+            .collect();
+        assert_eq!(
+            d1,
+            [
+                (0x73, "S", "W"),
+                (0x72, "E", "E"),
+                (0x73, "W", "E"),
+                (0x74, "W", "W"),
+                (0x73, "E", "N"),
+                (0x63, "S", "N"),
+            ]
+        );
     }
 
     #[test]
@@ -925,71 +907,31 @@ mod tests {
             map.route_next_rooms(L::new(0, 0x77, true), m),
             set(&[START])
         );
-        assert_eq!(
-            map.route_next_rooms(loc(0, 0x38), m),
-            set(&[loc(0, 0x37), loc(0, 0x28)])
-        );
+        assert_eq!(map.route_next_rooms(loc(0, 0x38), m), set(&[loc(0, 0x37)]));
         assert_eq!(
             map.route_next_rooms(D1_START, m),
             set(&[loc(1, 0x72), loc(1, 0x74), loc(1, 0x63)])
         );
         assert_eq!(map.route_next_rooms(loc(2, 0x7d), m), set(&[loc(2, 0x7e)]));
         assert_eq!(map.route_next_rooms(loc(2, 0x7e), m), set(&[loc(2, 0x6e)]));
-        assert!(map.route_step_index(m, loc(2, 0x6e), "S").is_some());
-        assert!(map.route_step_index(m, loc(2, 0x6e), "W").is_none());
+        assert_eq!(map.route_next_rooms(loc(0, 0x37), m), set(&[D1_START]));
         assert_eq!(
-            map.route_next_rooms(loc(0, 0x37), m),
-            set(&[D1_START, loc(0, 0x38)])
+            map.route_next_rooms(loc(0, 0x1a), m),
+            set(&[loc(0, 0x0a), loc(0, 0x19)])
         );
         assert!(map.route_next_rooms(loc(0, 0x0c), m).is_empty());
+        assert!(map.route_next_rooms(loc(0, 0x49), m).is_empty());
     }
 
+    /// Only the d2-first route's rooms (and the Dungeon 1 bow rooms off 0x43) have a specialist.
     #[test]
-    fn spliced_route_keeps_its_base_outside_the_replaced_steps() {
+    fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
-        let (main, fairy) = (&map.routes["milestone1"], &map.routes["milestone1-fairy"]);
-        let first = map
-            .route_step_index("milestone1", loc(0, 0x38), "W")
-            .unwrap();
-        let rejoin = map
-            .route_step_index("milestone1", loc(0, 0x4c), "E")
-            .unwrap();
-        let tail = main.len() - rejoin;
-        assert_eq!(fairy[..first], main[..first]);
-        assert_eq!(fairy[fairy.len() - tail..], main[rejoin..]);
-        assert_eq!(fairy[first].exit, "S");
-        assert!(
-            fairy[first..fairy.len() - tail]
-                .iter()
-                .any(|s| s.waypoint.as_deref() == Some("fairy"))
-        );
-    }
-
-    #[test]
-    fn route_successors_are_per_route() {
-        let map = GameMap::builtin();
-        let f = "milestone1-fairy";
-        assert_eq!(
-            map.route_next_rooms(loc(0, 0x38), f),
-            set(&[loc(0, 0x37), loc(0, 0x48)])
-        );
-        assert_eq!(
-            map.route_next_rooms(loc(0, 0x49), f),
-            set(&[loc(0, 0x39), loc(0, 0x59)])
-        );
-        assert_eq!(
-            map.route_next_rooms(loc(0, 0x59), f),
-            set(&[loc(0, 0x49), loc(0, 0x5a)])
-        );
-        assert!(map.route_next_rooms(loc(0, 0x49), DEFAULT_ROUTE).is_empty());
-        assert_eq!(map.route_next_rooms(loc(2, 0x7d), f), set(&[loc(2, 0x7e)]));
-        assert_eq!(map.route_next_rooms(loc(2, 0x7e), f), set(&[loc(2, 0x6e)]));
-        assert!(map.route_step_index(f, loc(2, 0x6e), "S").is_some());
-        assert!(map.route_step_index(f, loc(2, 0x6e), "W").is_none());
-        let idx = map.route_step_index(f, loc(0, 0x49), "N").unwrap();
-        assert_eq!(
-            map.routes_through(loc(0, 0x49), "N"),
-            vec![(f.to_owned(), idx)]
-        );
+        let mut route: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
+        route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
+        route.extend([loc(1, 0x33), loc(1, 0x23)]);
+        let tagged: BTreeSet<L> = map.rooms().values().filter(|r| r.specialist.is_some()).map(|r| r.location).collect();
+        assert_eq!(tagged, route);
+        assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE]);
     }
 }

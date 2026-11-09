@@ -5,8 +5,9 @@
 //! PBRS on the previous state's wavefront.
 
 use crate::config::{ConfigError, SpecialistConfig};
+use crate::end_conditions::RETREAT;
 use crate::rewards::{
-    Outcome, REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL,
+    NEUTRAL, Outcome, REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL,
     REWARD_TINY, StepRewards,
 };
 use std::collections::{HashMap, HashSet};
@@ -152,6 +153,9 @@ pub struct GameplayCritic {
     pub fixed_pickup_reward: bool,
     /// `reward.boss_ate_bomb_penalty`: `penalty-boss-ate-bomb` per swallowed bomb (positive magnitude).
     pub boss_ate_bomb_penalty: f64,
+    /// The `retreat` ending is neutral (the default; `endings: {retreat: ...}` can make it a failure): leaving through
+    /// a route step's `retreat` exit then costs no `penalty-wrong-location` either.
+    pub neutral_retreat: bool,
     correct_locations: HashSet<MapLocation>,
     room_combat_counts: HashMap<MapLocation, i32>,
     room_steps: u32,
@@ -168,6 +172,7 @@ impl GameplayCritic {
             quiet_enemy_penalty,
             fixed_pickup_reward: false,
             boss_ate_bomb_penalty: REWARD_MEDIUM,
+            neutral_retreat: true,
             correct_locations: HashSet::new(),
             room_combat_counts: HashMap::new(),
             room_steps: 0,
@@ -192,6 +197,7 @@ impl GameplayCritic {
         );
         critic.fixed_pickup_reward = config.reward.fixed_pickup_reward;
         critic.boss_ate_bomb_penalty = config.reward.boss_ate_bomb_penalty;
+        critic.neutral_retreat = config.endings.get(RETREAT).is_none_or(|outcome| outcome == NEUTRAL);
         Ok(critic)
     }
 
@@ -524,7 +530,7 @@ impl GameplayCritic {
                 rewards.add(Outcome::reward("reward-new-location", REWARD_MAXIMUM));
                 self.correct_locations.insert(curr);
             }
-        } else {
+        } else if !(self.neutral_retreat && c.prev_objective.retreats.contains(&curr)) {
             rewards.add(Outcome::penalty("penalty-wrong-location", -REWARD_SMALL));
         }
     }

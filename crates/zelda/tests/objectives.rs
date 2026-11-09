@@ -1,5 +1,5 @@
 //! `GameCompletion` objectives on real rooms with poked RAM: key collection (observed and seeded from room
-//! flags), treasure/fight precedence, caves, and exit targets agreeing with exit correctness.
+//! flags), treasure/fight precedence, caves, exit targets agreeing with exit correctness, and the route's step order.
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -11,7 +11,7 @@ use std::sync::Arc;
 use zelda::enums::SwordKind;
 use zelda::game::GameView;
 use zelda::objectives::{
-    CAVE_TREASURE_TILE, GameCompletion, Objective, ObjectiveKind, exit_is_correct_at, tiles_in_span,
+    CAVE_TREASURE_TILE, GameCompletion, Objective, ObjectiveKind, exit_is_correct_at, start_route, tiles_in_span,
 };
 use zelda::room::Target;
 use zelda::room_entry::{ROOM_FLAGS_OW, ROOM_FLAGS_UW};
@@ -19,7 +19,7 @@ use zelda::room_state::room_flags;
 use zelda::tables::{self, RAM_SIZE};
 use zelda::{Direction, GameMap, LoadOptions, MapLocation, Session, Var};
 
-const ROUTE: &str = "milestone1";
+const ROUTE: &str = "d2first";
 
 fn loc(level: u8, room: u8) -> MapLocation {
     MapLocation::new(level, room, false)
@@ -92,10 +92,7 @@ fn unknown_route_names_the_known_ones() {
     let map = Arc::new(GameMap::builtin());
     let err = GameCompletion::new(map, "nope", None).unwrap_err();
     assert!(err.starts_with("Unknown route 'nope'"), "{err}");
-    assert!(
-        err.contains("\"milestone1\"") && err.contains("\"milestone1-fairy\""),
-        "{err}"
-    );
+    assert!(err.contains("\"d2first\""), "{err}");
 }
 
 #[test]
@@ -121,6 +118,7 @@ fn exit_spans_bound_targets_and_correct_exits() {
         targets: Default::default(),
         next_rooms: [to].into_iter().collect(),
         pbrs_targets: Default::default(),
+        retreats: Default::default(),
     };
     assert!(
         !exit_is_correct_at(&map, from, (31, 10), &objective, loc(0, 0x4b)),
@@ -316,19 +314,15 @@ fn sword_cave_wants_the_sword_then_the_exit() {
     assert_targets_are_correct_exits(&map, &armed, &objective);
 }
 
-fn d2first(map: &Arc<GameMap>) -> GameCompletion {
-    GameCompletion::new(map.clone(), "d2first", None).unwrap()
-}
-
 /// Link holds only the Dungeon 2 triforce, with `hearts` heart containers (full).
 fn after_d2(ram: &mut [u8; RAM_SIZE], hearts: u8) {
     set(ram, Var::Triforce, 0b10);
     set(ram, Var::HeartsAndContainers, ((hearts - 1) << 4) | (hearts - 1));
 }
 
-/// d2first takes the route's triforces in route order: Dungeon 2's first, though Dungeon 1's is closer.
+/// The route's triforces in route order: Dungeon 2's first, though Dungeon 1's is closer.
 #[test]
-fn d2first_takes_the_dungeon_2_triforce_first() {
+fn the_dungeon_2_triforce_comes_first() {
     let Some(images) = images(&["0_3cs_0"]) else {
         return;
     };
@@ -336,23 +330,20 @@ fn d2first_takes_the_dungeon_2_triforce_first() {
     let mut ram = images[0].clone();
     set(&mut ram, Var::Triforce, 0);
     let state = view(&map, &ram, 0);
-    let objective = d2first(&map).objectives(None, &state);
+    let objective = completion(&map).objectives(None, &state);
     assert_eq!(objective.kind, ObjectiveKind::Cave);
     assert_eq!(
         objective.next_rooms.iter().copied().collect::<Vec<_>>(),
         [loc(2, 0x7d)]
     );
-    // milestone1 at the same point heads for Dungeon 1: not into the D2 stairs.
-    let objective = completion(&map).objectives(None, &state);
-    assert_ne!(objective.kind, ObjectiveKind::Cave);
 }
 
 /// After Dungeon 2: the bomb_secret rock wall of 0x2c is the cave entrance until the heart container is taken; the
 /// take-any cave points at the heart (right ware); then the white sword (5 hearts) leads north, never back into 0x2c's
 /// cave.
 #[test]
-fn d2first_heart_cave_then_white_sword() {
-    let Some(images) = images(&["0_2cw_0"]) else {
+fn heart_cave_then_white_sword() {
+    let Some(images) = images(&["0_2ce_0"]) else {
         return;
     };
     let map = Arc::new(GameMap::builtin());
@@ -362,7 +353,7 @@ fn d2first_heart_cave_then_white_sword() {
     after_d2(&mut ram, 4);
     let state = view(&map, &ram, 0);
     assert_eq!(state.room().cave_tile, None, "the cave is hidden behind the rock wall");
-    let mut gc = d2first(&map);
+    let mut gc = completion(&map);
     let objective = gc.objectives(None, &state);
     assert_eq!(objective.kind, ObjectiveKind::Cave);
     assert_eq!(objective.next_rooms.iter().copied().collect::<Vec<_>>(), [cave]);
@@ -399,11 +390,11 @@ fn d2first_heart_cave_then_white_sword() {
     assert_targets_are_correct_exits(&map, &taken, &objective);
 }
 
-/// Leaving 0x2c (not into its cave) before the heart container, or taking the potion instead, misses the d2first
-/// heart: no exit is correct any more (the chain ends the run on `missed`).
+/// Leaving 0x2c (not into its cave) before the heart container, or taking the potion instead, misses the heart: no
+/// exit is correct any more (the chain ends the run on `missed`).
 #[test]
-fn d2first_missed_heart_has_no_correct_exit() {
-    let Some(images) = images(&["0_2cw_0"]) else {
+fn missed_heart_has_no_correct_exit() {
+    let Some(images) = images(&["0_2ce_0"]) else {
         return;
     };
     let map = Arc::new(GameMap::builtin());
@@ -416,7 +407,7 @@ fn d2first_missed_heart_has_no_correct_exit() {
     let north = view(&map, &north, 0);
     assert_eq!(north.full_location(), loc(0, 0x1c));
 
-    let mut gc = d2first(&map);
+    let mut gc = completion(&map);
     gc.objectives(None, &at_2c);
     assert_eq!(gc.missed(), None);
     let objective = gc.objectives(Some(&at_2c), &north);
@@ -430,15 +421,97 @@ fn d2first_missed_heart_has_no_correct_exit() {
     let mut potion = inside.ram().clone();
     potion[ROOM_FLAGS_OW as usize + 0x2c] |= 0x10;
     let potion = view(&map, &potion, 0);
-    let mut gc = d2first(&map);
+    let mut gc = completion(&map);
     gc.objectives(None, &inside);
     let objective = gc.objectives(Some(&inside), &potion);
     assert!(gc.missed().is_some_and(|m| m.contains("not the heart container")));
     assert!(objective.next_rooms.is_empty());
+}
 
-    // milestone1 crosses 0x2c without the waypoint: nothing to miss.
-    let mut gc = completion(&map);
-    gc.objectives(None, &at_2c);
-    gc.objectives(Some(&at_2c), &north);
-    assert_eq!(gc.missed(), None);
+/// `ram` as if Link were in overworld/level room `room` (the room byte poked).
+fn in_room(ram: &[u8; RAM_SIZE], room: u8) -> Box<[u8; RAM_SIZE]> {
+    let mut ram = Box::new(*ram);
+    ram[0xEB] = room;
+    ram
+}
+
+/// Dungeon 1 follows the route's steps through the entrance 0x73 (Lee, Nov 8): W to the key room 0x72, back in from
+/// W then E to the key room 0x74, back in from E then N, though Link carries Dungeon 2's keys and the shortest way
+/// to the triforce is N from the start.
+#[test]
+fn dungeon_1_entrance_follows_the_route_steps() {
+    let Some(images) = images(&["1_73s_0", "1_73w_0", "1_73e_0"]) else {
+        return;
+    };
+    let map = Arc::new(GameMap::builtin());
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let from_s = view(&map, &images[0], 0);
+    assert!(from_s.keys() > 0 && from_s.has_triforce(2), "Link brings Dungeon 2's keys and triforce");
+    // Off the route (no step), the key-aware shortest way: N.
+    let shortest = completion(&map).objectives(None, &from_s);
+    assert_eq!(shortest.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(1, 0x63)]);
+    // From S (a training reset): the first visit's step, W.
+    let (route, step) = start_route(&map, loc(1, 0x73), Some("S"), &mut rng, None, &from_s);
+    assert_eq!(route, ROUTE);
+    let mut gc = GameCompletion::new(map.clone(), &route, step).unwrap();
+    let objective = gc.objectives(None, &from_s);
+    assert_eq!(objective.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(1, 0x72)]);
+    assert_targets_are_correct_exits(&map, &from_s, &objective);
+    // Back from 0x72 (entered from W): E.  Back from 0x74 (entered from E): N.
+    for (image, came_from, next) in [(&images[1], 0x72, 0x74), (&images[2], 0x74, 0x63)] {
+        let state = view(&map, image, 0);
+        let prev = in_room(image, came_from);
+        let prev = view(&map, &prev, 0);
+        let mut gc = completion(&map);
+        let objective = gc.objectives(Some(&prev), &state);
+        assert_eq!(
+            objective.next_rooms.iter().copied().collect::<Vec<_>>(),
+            [loc(1, next)],
+            "0x73 from 0x{came_from:02x}"
+        );
+        assert_targets_are_correct_exits(&map, &state, &objective);
+        let (_, start) = start_route(&map, loc(1, 0x73), state_entry_of(came_from), &mut rng, None, &state);
+        assert_eq!(start, gc.step(), "a reset in the same room plays the same step");
+    }
+}
+
+/// The entry of 1:0x73 from its key-room neighbour.
+fn state_entry_of(neighbour: u8) -> Option<&'static str> {
+    Some(if neighbour == 0x72 { "W" } else { "E" })
+}
+
+/// 0x0a before the white sword: the cave is the objective and S (back to 0x1a) a retreat.  In 0x1a from N without
+/// the white sword Link is off the route (the step leaving W needs it), so the objective sends him back N; with it,
+/// W.
+#[test]
+fn lynel_room_retreat_and_return() {
+    let Some(images) = images(&["0_0as_0"]) else {
+        return;
+    };
+    let map = Arc::new(GameMap::builtin());
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let at_0a = view(&map, &images[0], 0);
+    assert_eq!(at_0a.sword(), SwordKind::Wood);
+    let (route, step) = start_route(&map, loc(0, 0x0a), Some("S"), &mut rng, None, &at_0a);
+    let mut gc = GameCompletion::new(map.clone(), &route, step).unwrap();
+    let objective = gc.objectives(None, &at_0a);
+    assert_eq!(objective.kind, ObjectiveKind::Cave);
+    assert_eq!(
+        objective.next_rooms.iter().copied().collect::<Vec<_>>(),
+        [MapLocation::new(0, 0x0a, true)]
+    );
+    assert_eq!(objective.retreats.iter().copied().collect::<Vec<_>>(), [loc(0, 0x1a)]);
+
+    let back = in_room(&images[0], 0x1a);
+    let back = view(&map, &back, 0);
+    let objective = gc.objectives(Some(&at_0a), &back);
+    assert_eq!(gc.step(), None);
+    assert_eq!(objective.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(0, 0x0a)]);
+    assert!(objective.retreats.is_empty());
+
+    let mut armed = in_room(&images[0], 0x1a);
+    set(&mut armed, Var::Sword, 2);
+    let armed = view(&map, &armed, 0);
+    let objective = completion(&map).objectives(Some(&at_0a), &armed);
+    assert_eq!(objective.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(0, 0x19)]);
 }

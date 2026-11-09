@@ -356,6 +356,7 @@ fn no_objective() -> Objective {
         targets: BTreeSet::new(),
         next_rooms: BTreeSet::new(),
         pbrs_targets: BTreeSet::new(),
+        retreats: BTreeSet::new(),
     }
 }
 
@@ -827,14 +828,11 @@ fn route_shutter_requires_combat_without_a_room_treasure() {
 
 #[test]
 fn open_route_ignores_optional_combat() {
-    let Some(mut nes) = open_core() else { return };
-    for (start_state, next_room) in [("2_6es_0", 0x5e), ("2_6ds_0", 0x6e)] {
-        let mut env = make_env(nes, "d2-rope", Some(start_state), |_| {});
-        env.reset(Some(0), None).unwrap();
-        assert_eq!(objective(&env).kind, ObjectiveKind::Move, "{start_state}");
-        assert_eq!(next_rooms(&env), rooms(&[(2, next_room)]), "{start_state}");
-        nes = release(env);
-    }
+    let Some(nes) = open_core() else { return };
+    let mut env = make_env(nes, "d2-rope", Some("2_6es_0"), |_| {});
+    env.reset(Some(0), None).unwrap();
+    assert_eq!(objective(&env).kind, ObjectiveKind::Move);
+    assert_eq!(next_rooms(&env), rooms(&[(2, 0x5e)]));
 }
 
 /// 0x43's route exit is the locked E door to 0x44.  Without a key the shortest path to the triforce goes N for the
@@ -856,24 +854,31 @@ fn route_room_only_offers_its_route_exit() {
     }
 }
 
-/// Entering Dungeon 1 with no keys, 0x72 (W) and 0x74 (E) are equally short key detours; the route takes 0x72 first.
+/// Dungeon 1's entrance 0x73 follows the route's steps (Lee, Nov 8): entered from S (with Dungeon 2's keys: the
+/// shortest way is N) the key room 0x72 W comes first, back from it (from W) the key room 0x74 E, back from that (from
+/// E) N.  Each step has its own start states, so one-room training resets play every one of them.
 #[test]
-fn first_visit_to_0x73_follows_the_route_order() {
-    let Some(nes) = open_core() else { return };
-    let mut env = make_env(nes, "stalfos-keese-gel", Some("1_73s_0"), |_| {});
-    env.reset(Some(0), None).unwrap();
-    assert_eq!(state(&env).keys(), 0);
-    assert_eq!(next_rooms(&env), rooms(&[(1, 0x72)]));
+fn the_d1_entrance_follows_the_route_steps() {
+    let Some(mut nes) = open_core() else { return };
+    for (start_state, step, wanted) in [("1_73s_0", 46, 0x72), ("1_73w_0", 48, 0x74), ("1_73e_0", 50, 0x63)] {
+        let mut env = make_env(nes, "stalfos-keese-gel", Some(start_state), |_| {});
+        let (_, info) = env.reset(Some(0), None).unwrap();
+        assert!(state(&env).keys() > 0, "{start_state}: Link carries keys from Dungeon 2");
+        assert_eq!(env.route(), ("d2first", Some(step)), "{start_state}");
+        assert_eq!(info.route, "d2first");
+        assert_eq!(next_rooms(&env), rooms(&[(1, wanted)]), "{start_state}");
+        nes = release(env);
+    }
 }
 
-/// ow-octorok lists enter-room:1:0x73 (the D1 stairs in 0x37) as success.  After Dungeon 1 (0_37c_2: Link just came
-/// out of those stairs with the triforce) the objective wants E, so walking back down is exit-wrong.
+/// ow-octorok lists enter-room:2:0x7d (the D2 stairs in 0x3c) as success.  After Dungeon 2 (0_3cc_0: the triforce
+/// put Link next to those stairs) the objective wants S, so walking back down is exit-wrong.
 #[test]
 fn enter_room_success_needs_the_objective() {
     let Some(nes) = open_core() else { return };
-    let mut env = make_env(nes, "ow-octorok", Some("0_37c_2"), |_| {});
+    let mut env = make_env(nes, "ow-octorok", Some("0_3cc_0"), |_| {});
     env.reset(Some(0), None).unwrap();
-    assert_eq!(next_rooms(&env), rooms(&[(0, 0x38)]));
+    assert_eq!(next_rooms(&env), rooms(&[(0, 0x4c)]));
     let mut info = None;
     for action in ["MOVE S 16", "MOVE S 16", "MOVE N 16", "MOVE N 16"] {
         let r = act(&mut env, action);
@@ -884,83 +889,64 @@ fn enter_room_success_needs_the_objective() {
         }
     }
     let info = info.unwrap();
-    assert_eq!(info.room, (1, 0x73, false));
+    assert_eq!(info.room, (2, 0x7d, false));
     assert_eq!(
         (info.ending(), info.outcome()),
         (Some("exit-wrong"), Some("soft-failure"))
     );
 }
 
-/// 0x38 from W, just out of Dungeon 1: milestone1 goes N toward D2, milestone1-fairy S toward the fairy pond.
+/// Rooms the route crosses twice train both crossings: the entry side picks the step (0x4c from E goes N to the D2
+/// stairs room, from N E; 0x3c from S takes the stairs, out of them after the triforce S).
 #[test]
-fn after_dungeon_1_each_route_leaves_0x38_its_own_way() {
+fn a_room_the_route_crosses_twice_trains_both_steps() {
     let Some(mut nes) = open_core() else { return };
-    for (route, wanted) in [("milestone1", 0x28), ("milestone1-fairy", 0x48)] {
-        let mut env = make_env(nes, "ow-zora", Some("0_38w_2"), |c| {
-            c.route = Some(route.into())
-        });
-        let (_, info) = env.reset(Some(0), None).unwrap();
-        assert_eq!(info.route, route);
-        assert_eq!(next_rooms(&env), rooms(&[(0, wanted)]), "{route}");
+    for (start_state, step, wanted) in [
+        ("0_4ce_0", 12, (0, 0x3c)),
+        ("0_4cn_0", 25, (0, 0x4d)),
+        ("0_3cs_0", 13, (2, 0x7d)),
+        ("0_3cc_0", 24, (0, 0x4c)),
+    ] {
+        let mut env = make_env(nes, "ow-octorok", Some(start_state), |_| {});
+        env.reset(Some(0), None).unwrap();
+        assert_eq!(env.route(), ("d2first", Some(step)), "{start_state}");
+        assert_eq!(next_rooms(&env), rooms(&[wanted]), "{start_state}");
         nes = release(env);
     }
 }
 
-/// Without a pinned route, 0x38-from-W resets play either route; rooms where the routes agree play milestone1.
+/// 0x0a before the white sword: leaving S (back to 0x1a, to re-enter for a better Lynel spawn; Lee, Nov 8) ends the
+/// one-room episode as `retreat`.  ow-lynel ships it as a soft failure (like a wrong exit, `endings: {retreat:
+/// soft-failure}`); without the override it is neutral: no terminal reward or penalty, no wrong-exit penalty.
 #[test]
-fn a_room_the_routes_leave_differently_trains_both() {
-    let Some(nes) = open_core() else { return };
-    let mut env = make_env(nes, "ow-zora", Some("0_38w_2"), |_| {});
-    let mut seen = BTreeSet::new();
-    for seed in 0..16 {
-        let (_, info) = env.reset(Some(seed), None).unwrap();
-        seen.insert((info.route.clone(), next_rooms(&env)));
-    }
-    let want: BTreeSet<_> = [
-        ("milestone1".to_owned(), rooms(&[(0, 0x28)])),
-        ("milestone1-fairy".to_owned(), rooms(&[(0, 0x48)])),
-    ]
-    .into_iter()
-    .collect();
-    assert_eq!(seen, want);
-    let mut env = make_env(release(env), "ow-octorok", Some("0_37c_2"), |_| {});
-    let (_, info) = env.reset(Some(0), None).unwrap();
-    assert_eq!(info.route, "milestone1");
-}
-
-/// 0x39 (milestone1-fairy's waypoint): below full hearts no exit is correct and the pond edge is the target; walking
-/// N to it fills every heart (Z_04 UpdatePondFairy), and then S is the exit.
-#[test]
-fn fairy_pond_holds_the_exit_until_the_hearts_are_full() {
-    let Some(nes) = open_core() else { return };
-    let mut env = make_env(nes, "ow-start", Some("0_39s_2"), |c| {
-        c.ram_randomization = hp(0.25, 0.25)
-    });
-    let (_, info) = env.reset(Some(0), None).unwrap();
-    assert_eq!(info.route, "milestone1-fairy");
-    assert!(state(&env).health() < state(&env).max_health() as f64);
-    assert_eq!(objective(&env).kind, ObjectiveKind::Treasure);
-    assert!(next_rooms(&env).is_empty());
-    for _ in 0..12 {
-        let r = act(&mut env, "MOVE N 8");
-        assert!(!(r.terminated || r.truncated), "{:?}", r.info.ending());
-        if state(&env).is_health_full() {
-            break;
-        }
-    }
-    assert_eq!(state(&env).health(), state(&env).max_health() as f64);
-    assert_eq!(next_rooms(&env), rooms(&[(0, 0x49)]));
-}
-
-/// 0x49 from S goes N to the pond; back from the pond (from N) the waypoint is done and the route goes S/E.
-#[test]
-fn fairy_route_heads_to_the_pond_then_east() {
+fn leaving_the_lynel_room_south_is_a_retreat() {
     let Some(mut nes) = open_core() else { return };
-    for (start_state, wanted) in [("0_49s_2", 0x39), ("0_49n_2", 0x59)] {
-        let mut env = make_env(nes, "ow-octorok", Some(start_state), |_| {});
-        let (_, info) = env.reset(Some(0), None).unwrap();
-        assert_eq!(info.route, "milestone1-fairy", "{start_state}");
-        assert_eq!(next_rooms(&env), rooms(&[(0, wanted)]), "{start_state}");
+    for neutral in [false, true] {
+        let mut env = make_env(nes, "ow-lynel", Some("0_0as_0"), |c| {
+            if neutral {
+                c.endings.shift_remove("retreat");
+            }
+        });
+        env.reset(Some(0), None).unwrap();
+        assert_eq!(objective(&env).retreats, rooms(&[(0, 0x1a)]));
+        let mut info = None;
+        for _ in 0..20 {
+            let r = act(&mut env, "MOVE S 16");
+            let done = r.terminated || r.truncated;
+            let terminated = r.terminated;
+            info = Some(r.info);
+            if done {
+                assert!(terminated);
+                break;
+            }
+        }
+        let info = info.unwrap();
+        assert_eq!(info.room, (0, 0x1a, false));
+        let outcome = if neutral { "neutral" } else { "soft-failure" };
+        assert_eq!((info.ending(), info.outcome()), (Some("retreat"), Some(outcome)));
+        assert_eq!(has_term(&info, PENALTY_TERMINAL_FAILURE), !neutral);
+        assert_eq!(has_term(&info, "penalty-wrong-location"), !neutral);
+        assert!(!has_term(&info, "reward-terminal-success"));
         nes = release(env);
     }
 }
@@ -1561,7 +1547,7 @@ fn damage_penalty_and_reward_halving() {
 #[test]
 fn stalling_penalty_fires_in_zora_room() {
     let Some(nes) = open_core() else { return };
-    let mut env = make_env(nes, "ow-zora", Some("0_38s_0"), |_| {});
+    let mut env = make_env(nes, "ow-zora", Some("0_38n_0"), |_| {});
     env.reset(Some(0), None).unwrap();
     let script = ["WAIT 8", "WAIT 8", "MOVE E 4", "MOVE W 4"];
     for i in 0..300 {

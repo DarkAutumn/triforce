@@ -6,11 +6,12 @@
 //! | `exit-correct`, `enter-room:<l>:<r>`, `triforce-collected`, `boss-dead-and-heart` | success if listed |
 //! | `exit-wrong`, `max-steps`, `no-room-progress`, `no-damage` | soft failure |
 //! | `death`, `wallmastered`, `stuck`, `no-progress` | hard failure |
+//! | `retreat` (the route step's `retreat` exit: 0x0a S before the white sword) | neutral |
 //!
-//! Any ending that is neither a listed success nor in the specialist's/central failure table is an
+//! Any ending that is neither a listed success nor in the specialist's/central table is an
 //! `UnclassifiedEndingError`.
 
-use crate::rewards::{HARD_FAILURE, OUTCOMES, SOFT_FAILURE, SUCCESS};
+use crate::rewards::{HARD_FAILURE, NEUTRAL, OUTCOMES, SOFT_FAILURE, SUCCESS};
 use indexmap::IndexMap;
 use std::collections::HashSet;
 use std::fmt;
@@ -29,12 +30,13 @@ pub const NO_PROGRESS: &str = "no-progress";
 pub const NO_ROOM_PROGRESS: &str = "no-room-progress";
 pub const MAX_STEPS: &str = "max-steps";
 pub const NO_DAMAGE: &str = "no-damage";
+pub const RETREAT: &str = "retreat";
 pub const ENTER_ROOM_PREFIX: &str = "enter-room:";
 
 pub const SUCCESS_KINDS: [&str; 3] = [EXIT_CORRECT, TRIFORCE_COLLECTED, BOSS_DEAD_AND_HEART];
 
-/// Central failure table; successes come only from each specialist's `success` list.
-pub const DEFAULT_FAILURES: [(&str, &str); 8] = [
+/// Central table of the other endings; successes come only from each specialist's `success` list.
+pub const DEFAULT_ENDINGS: [(&str, &str); 9] = [
     (EXIT_WRONG, SOFT_FAILURE),
     (MAX_STEPS, SOFT_FAILURE),
     (NO_ROOM_PROGRESS, SOFT_FAILURE),
@@ -43,6 +45,7 @@ pub const DEFAULT_FAILURES: [(&str, &str); 8] = [
     (WALLMASTERED, HARD_FAILURE),
     (STUCK, HARD_FAILURE),
     (NO_PROGRESS, HARD_FAILURE),
+    (RETREAT, NEUTRAL),
 ];
 
 /// An episode ended for a reason the specialist doesn't classify.
@@ -98,7 +101,7 @@ pub fn validate_success_kind(kind: &str) -> Result<String, String> {
     Ok(kind.to_owned())
 }
 
-/// success / hard-failure / soft-failure for an ending (deny-by-default).
+/// success / hard-failure / soft-failure / neutral for an ending (deny-by-default).
 pub fn classify_ending(
     ending: &str,
     success: &[String],
@@ -112,7 +115,7 @@ pub fn classify_ending(
             UnclassifiedEndingError(format!("Bad outcome {outcome:?} for ending {ending:?}"))
         });
     }
-    if let Some((_, outcome)) = DEFAULT_FAILURES.iter().find(|(e, _)| *e == ending) {
+    if let Some((_, outcome)) = DEFAULT_ENDINGS.iter().find(|(e, _)| *e == ending) {
         return Ok(outcome);
     }
     let mut sorted = success.to_vec();
@@ -234,6 +237,9 @@ impl EndCondition {
                 }
                 let location = curr.full_location();
                 if !v.exit_is_correct(location) {
+                    if v.prev_objective.retreats.contains(&location) {
+                        return Some(RETREAT.to_owned());
+                    }
                     return Some(EXIT_WRONG.to_owned());
                 }
                 if enter_rooms.contains(&location) {

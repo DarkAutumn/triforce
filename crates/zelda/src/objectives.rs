@@ -1,15 +1,19 @@
 //! Where Link should go next (`triforce/objectives.py`, live `GameCompletion` only).
 //!
-//! `GameCompletion` routes through the milestone: the sword first, then the route's waypoints while they apply,
-//! then each triforce (the route's triforce steps in route order, then the closest one left), using `GameMap`
-//! Dijkstra with ties broken toward the route.  Persistent room flags seed which keys are taken and which locked
-//! doors are open.  Targets feed the PBRS wavefront; `next_rooms` decides which exits are correct.  The dead
-//! `ReachLocation`, `TreasureObjective`, `RoomWalk` and `OBJECTIVES` are not ported.
+//! `GameCompletion` follows the route step by step: in a room the route enters from the side Link came in, with the
+//! triforce pieces and sword the route has there, the step's exit is the correct one (Dungeon 1's key rooms: 0x73
+//! W, then E, then N).  Elsewhere (off the route, or a step leaving through a cave or a triforce) it routes through
+//! the milestone: the sword first, then the route's waypoints while they apply, then each triforce (the route's
+//! triforce steps in route order, then the closest one left), using `GameMap` Dijkstra with ties broken toward the
+//! route.  Persistent room flags seed which keys are taken and which locked doors are open.  Targets feed the PBRS
+//! wavefront; `next_rooms` decides which exits are correct.  The dead `ReachLocation`, `TreasureObjective`,
+//! `RoomWalk` and `OBJECTIVES` are not ported.
 
 use crate::enums::{Direction, MapLocation, SwordKind, Tile};
 use crate::game::GameView;
 use crate::game_map::{GameMap, RouteStep};
 use crate::room::Target;
+use crate::room_entry::ROOM_FLAGS_OW;
 use crate::room_state::{SecretTrigger, decode_room_state, room_flags};
 use rand::{Rng, RngExt};
 use std::cell::RefCell;
@@ -17,11 +21,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 pub const FLAG_ITEM_TAKEN: u8 = 0x10;
-/// Pond fairy edge tiles (Z_04 UpdatePondFairy).
-pub const FAIRY_POND_TILES: [Tile; 3] = [(14, 14), (15, 14), (16, 14)];
 pub const CAVE_TREASURE_TILE: Tile = (0x0F, 0x0B);
-/// routes.yaml `waypoint: fairy`: stand at the pond edge until the hearts are full.
-pub const WAYPOINT_FAIRY: &str = "fairy";
 /// routes.yaml `waypoint: heart` (on a cave step): take the cave's heart container (game.yaml `treasure_tile`);
 /// done once the overworld room's item-taken flag is set.
 pub const WAYPOINT_HEART: &str = "heart";
@@ -70,9 +70,78 @@ pub struct Objective {
     pub next_rooms: BTreeSet<MapLocation>,
     /// Targets of the PBRS wavefront (no dropped items unless the env adds them).
     pub pbrs_targets: BTreeSet<Target>,
+    /// Rooms Link may fall back into without failing (routes.yaml `retreat` on the current step: leaving 0x0a S
+    /// before the white sword, to re-enter it).  Not correct exits either: no exit reward, the episode or room
+    /// visit ends as `retreat`.
+    pub retreats: BTreeSet<MapLocation>,
 }
 
-/// A route stop off the shortest path (routes.yaml `waypoint:` [`WAYPOINT_FAIRY`] or [`WAYPOINT_HEART`]).
+/// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`) and the
+/// sword earlier cave steps handed over.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StepProgress {
+    pub triforces: u8,
+    pub sword: SwordKind,
+}
+
+impl StepProgress {
+    /// Link holds exactly this progress.
+    pub fn matches(&self, state: &GameView) -> bool {
+        state.sword() == self.sword
+            && (1..=8).all(|level| state.has_triforce(level) == (self.triforces & (1 << (level - 1)) != 0))
+    }
+}
+
+/// The sword a game.yaml cave treasure is (`SWORD_UPGRADES`), else None.
+fn sword_treasure(treasure: &str) -> Option<SwordKind> {
+    SWORD_UPGRADES
+        .iter()
+        .position(|(_, t, _)| *t == treasure)
+        .map(|i| SWORD_UPGRADES.get(i + 1).map_or(SwordKind::Magic, |u| u.0))
+}
+
+/// [`StepProgress`] on entering each of `steps`.
+pub fn route_progress(map: &GameMap, steps: &[RouteStep]) -> Vec<StepProgress> {
+    let mut progress = StepProgress {
+        triforces: 0,
+        sword: SwordKind::None,
+    };
+    let mut out = Vec::with_capacity(steps.len());
+    for step in steps {
+        out.push(progress);
+        if step.exit == "triforce" && (1..=8).contains(&step.level) {
+            progress.triforces |= 1 << (step.level - 1);
+        }
+        if step.in_cave
+            && let Some(sword) = map
+                .get(step.location())
+                .and_then(|r| r.treasure.as_deref())
+                .and_then(sword_treasure)
+        {
+            progress.sword = progress.sword.max(sword);
+        }
+    }
+    out
+}
+
+/// The routes.yaml entry of `curr` when Link comes from `prev`: the side he crossed (N/S/E/W), `S` into a cave or
+/// down a level's stairs, `cave` out of a cave or a level (stairs, or the triforce's warp) onto the overworld.
+/// None for a jump that isn't one room (a Wallmaster's drag).
+pub fn route_entry(prev: MapLocation, curr: MapLocation) -> Option<&'static str> {
+    if curr.in_cave && !prev.in_cave {
+        return Some("S");
+    }
+    if curr.level == 0 && (prev.in_cave || prev.level != 0) {
+        return Some("cave");
+    }
+    if curr.level != prev.level {
+        return Some("S");
+    }
+    let side = curr.direction_to(prev);
+    side.is_cardinal().then(|| side.name())
+}
+
+/// A route stop off the shortest path (routes.yaml `waypoint:` [`WAYPOINT_HEART`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Waypoint {
     pub step: usize,
@@ -108,28 +177,39 @@ pub fn route_waypoints(steps: &[RouteStep]) -> Vec<Waypoint> {
     out
 }
 
-/// The waypoint's stop is over: the fairy pond filled every heart, or the heart cave's item was taken (the take-any
-/// cave sets its overworld room's item flag on either pick; the objective points at the heart container).
+/// The heart waypoint's stop is over: the cave's item was taken (the take-any cave sets its overworld room's item
+/// flag on either pick; the objective points at the heart container).  Overworld room flags stay in RAM in every
+/// level, so a Dungeon 1 state knows the heart was taken.
 fn waypoint_done(waypoint: &Waypoint, state: &GameView) -> bool {
-    if waypoint.kind == WAYPOINT_HEART {
-        let room = waypoint.location;
-        return state.level() == room.level
-            && room_flags(state.ram(), room.value) & FLAG_ITEM_TAKEN != 0;
-    }
-    state.full_location() == waypoint.location && state.health() >= state.max_health() as f64
+    let room = waypoint.location;
+    let flags = if room.level == 0 {
+        state.ram()[ROOM_FLAGS_OW as usize + (room.value & 0x7F) as usize]
+    } else if state.level() == room.level {
+        room_flags(state.ram(), room.value)
+    } else {
+        return false;
+    };
+    flags & FLAG_ITEM_TAKEN != 0
 }
 
 fn overlap(tiles: Vec<Tile>) -> impl Iterator<Item = Target> {
     tiles.into_iter().map(Target::Tile)
 }
 
-type RouteKey = (
-    MapLocation,
-    MapLocation,
-    i32,
-    BTreeSet<MapLocation>,
-    BTreeSet<(MapLocation, String)>,
-);
+/// What the map objective's next rooms come from: the route step Link plays in this room, or the shortest way to
+/// the target (location, target, keys, collected key rooms, opened doors).
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum RouteKey {
+    /// (room, step, the room the step leaves toward).
+    Step(MapLocation, usize, MapLocation),
+    Target(
+        MapLocation,
+        MapLocation,
+        i32,
+        BTreeSet<MapLocation>,
+        BTreeSet<(MapLocation, String)>,
+    ),
+}
 /// Exit targets and next rooms of the map objective.
 type MapObjective = (Vec<Target>, BTreeSet<MapLocation>);
 /// `closest_room` arguments besides the route sets: (location, keys, candidate targets).
@@ -142,6 +222,11 @@ const CLOSEST_CACHE: usize = 64;
 pub struct GameCompletion {
     map: Arc<GameMap>,
     route: String,
+    /// What Link holds on entering each route step (`route_progress`).
+    progress: Vec<StepProgress>,
+    /// The route step Link is playing (`route_step_at`): the episode's start step, then the step of every room he
+    /// enters; None off the route.
+    step: Option<usize>,
     /// Remembered room treasure per visited room (`RoomMemory.item`).
     rooms: HashMap<MapLocation, Option<String>>,
     last_route: Option<(RouteKey, MapObjective)>,
@@ -160,7 +245,8 @@ pub struct GameCompletion {
 }
 
 impl GameCompletion {
-    /// `step` is the route step the episode starts at: waypoints before it are done.
+    /// `step` is the route step the episode starts at: waypoints before it are done, and its exit is the correct one
+    /// until Link leaves the room.
     pub fn new(
         map: Arc<GameMap>,
         route: &str,
@@ -179,6 +265,8 @@ impl GameCompletion {
         Ok(GameCompletion {
             map: map.clone(),
             route: route.to_owned(),
+            progress: route_progress(&map, steps),
+            step,
             rooms: HashMap::new(),
             last_route: None,
             collected_key_rooms: BTreeSet::new(),
@@ -195,6 +283,77 @@ impl GameCompletion {
         &self.route
     }
 
+    /// The route step Link is playing, None off the route.
+    pub fn step(&self) -> Option<usize> {
+        self.step
+    }
+
+    /// The step of the route that enters Link's room from `entry` with exactly Link's progress (`StepProgress`);
+    /// of several, the first at or after the current step.  None off the route: Link entered from another side, or
+    /// lacks what the route has there (0x1a from N without the white sword is a retreat from 0x0a, not the step
+    /// leaving W).
+    fn route_step_at(&self, state: &GameView, entry: &str) -> Option<usize> {
+        let here = state.full_location();
+        let mut matching = self.map.routes[&self.route]
+            .iter()
+            .enumerate()
+            .filter(|(i, s)| s.location() == here && s.entry == entry && self.progress[*i].matches(state))
+            .map(|(i, _)| i);
+        let first = matching.next()?;
+        let current = self.step.unwrap_or(0);
+        Some(if first >= current {
+            first
+        } else {
+            matching.find(|&i| i >= current).unwrap_or(first)
+        })
+    }
+
+    /// The current step when Link is in its room, else None.
+    fn current_step(&self, location: MapLocation) -> Option<&RouteStep> {
+        let step = &self.map.routes[&self.route][self.step?];
+        (step.location() == location).then_some(step)
+    }
+
+    /// The room behind the current step's game.yaml exit `exit` (a direction or `cave`).
+    fn step_exit(&self, location: MapLocation, exit: &str) -> Option<MapLocation> {
+        Some(self.map.get(location)?.exits.get(exit)?.destination)
+    }
+
+    /// The current step and the room it leaves toward, when it leaves through a room edge (N/S/E/W).  None off the
+    /// route or when the step leaves through a cave, stairs or a triforce (the room objective handles those).
+    fn edge_step(&self, location: MapLocation) -> Option<(usize, MapLocation)> {
+        let step = self.current_step(location)?;
+        Direction::from_exit(&step.exit)?;
+        Some((self.step?, self.step_exit(location, &step.exit)?))
+    }
+
+    /// The rooms an edge step leaves toward: its exit's room `next` plus any alternate replacing that room which
+    /// borders this one (0x77 N to 0x67, or E to 0x78).
+    fn step_next_rooms(&self, location: MapLocation, next: MapLocation) -> BTreeSet<MapLocation> {
+        let mut rooms: BTreeSet<MapLocation> = [next].into_iter().collect();
+        let Some(room) = self.map.get(location) else {
+            return rooms;
+        };
+        for alternate in &self.map.alternates {
+            if alternate.replaces.contains(&next)
+                && let Some(first) = alternate.with.first()
+                && room.neighbors().any(|n| n == first.location())
+            {
+                rooms.insert(first.location());
+            }
+        }
+        rooms
+    }
+
+    /// The room behind the current step's `retreat` exit (routes.yaml), if Link is in its room.
+    fn retreats(&self, location: MapLocation) -> BTreeSet<MapLocation> {
+        self.current_step(location)
+            .and_then(|step| step.retreat.as_deref())
+            .and_then(|exit| self.step_exit(location, exit))
+            .into_iter()
+            .collect()
+    }
+
     /// Why the route can't be finished any more (a missed `heart` waypoint: d2first needs 0x2c's heart container for
     /// the white sword's 5 hearts), else None.
     pub fn missed(&self) -> Option<&str> {
@@ -203,6 +362,12 @@ impl GameCompletion {
 
     /// The objective for `state` (`prev` is the previous state of the episode, None at its start).
     pub fn objectives(&mut self, prev: Option<&GameView>, state: &GameView) -> Objective {
+        if let Some(prev) = prev
+            && prev.full_location() != state.full_location()
+        {
+            self.step = route_entry(prev.full_location(), state.full_location())
+                .and_then(|entry| self.route_step_at(state, entry));
+        }
         self.check_heart_waypoint(prev, state);
         if let Some(i) = self.active_waypoint(state)
             && waypoint_done(&self.waypoints[i], state)
@@ -215,6 +380,7 @@ impl GameCompletion {
                 targets: BTreeSet::new(),
                 next_rooms: BTreeSet::new(),
                 pbrs_targets: BTreeSet::new(),
+                retreats: BTreeSet::new(),
             };
         }
         self.update_exits(state);
@@ -241,6 +407,7 @@ impl GameCompletion {
             targets: tiles.into_iter().collect(),
             next_rooms: next_rooms.into_iter().collect(),
             pbrs_targets: pbrs,
+            retreats: self.retreats(state.full_location()),
         }
     }
 
@@ -461,16 +628,6 @@ impl GameCompletion {
         prev: Option<&GameView>,
         state: &GameView,
     ) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
-        if let Some(i) = self.active_waypoint(state)
-            && self.waypoints[i].kind == WAYPOINT_FAIRY
-            && state.full_location() == self.waypoints[i].location
-        {
-            return (
-                ObjectiveKind::Treasure,
-                FAIRY_POND_TILES.iter().map(|&t| Target::Tile(t)).collect(),
-                Vec::new(),
-            );
-        }
         if state.in_cave() {
             return self.cave_objective(state);
         }
@@ -614,42 +771,48 @@ impl GameCompletion {
                     .collect(),
             );
         }
-        let Some(target) = self.target(state) else {
-            return (Vec::new(), BTreeSet::new());
+        let edge_step = self.edge_step(loc);
+        let key = match edge_step {
+            Some((step, next)) => RouteKey::Step(loc, step, next),
+            None => {
+                let Some(target) = self.target(state) else {
+                    return (Vec::new(), BTreeSet::new());
+                };
+                if loc == target {
+                    return (Vec::new(), BTreeSet::new());
+                }
+                RouteKey::Target(
+                    loc,
+                    target,
+                    state.keys(),
+                    self.collected_key_rooms.clone(),
+                    self.opened_doors.clone(),
+                )
+            }
         };
-        if loc == target {
-            return (Vec::new(), BTreeSet::new());
-        }
-        let key: RouteKey = (
-            loc,
-            target,
-            state.keys(),
-            self.collected_key_rooms.clone(),
-            self.opened_doors.clone(),
-        );
         if let Some((last, result)) = &self.last_route
             && *last == key
         {
             return result.clone();
         }
-        let mut next_rooms = self.map.find_next_rooms(
-            loc,
-            target,
-            state.keys(),
-            &self.collected_key_rooms,
-            &self.opened_doors,
-        );
-        if next_rooms.is_empty() {
-            self.last_route = Some((key, (Vec::new(), BTreeSet::new())));
-            return (Vec::new(), BTreeSet::new());
-        }
-        let route_next = self.map.route_next_rooms(loc, &self.route);
-        if !route_next.is_empty() {
-            let both: BTreeSet<MapLocation> =
-                next_rooms.intersection(&route_next).copied().collect();
-            let candidates = if both.is_empty() { route_next } else { both };
-            next_rooms = self.map.route_first(loc, &candidates, &self.route);
-        }
+        let next_rooms = match &key {
+            RouteKey::Step(_, _, next) => self.step_next_rooms(loc, *next),
+            RouteKey::Target(_, target, keys, collected, opened) => {
+                let mut next_rooms = self.map.find_next_rooms(loc, *target, *keys, collected, opened);
+                if next_rooms.is_empty() {
+                    self.last_route = Some((key, (Vec::new(), BTreeSet::new())));
+                    return (Vec::new(), BTreeSet::new());
+                }
+                let route_next = self.map.route_next_rooms(loc, &self.route);
+                if !route_next.is_empty() {
+                    let both: BTreeSet<MapLocation> =
+                        next_rooms.intersection(&route_next).copied().collect();
+                    let candidates = if both.is_empty() { route_next } else { both };
+                    next_rooms = self.map.route_first(loc, &candidates, &self.route);
+                }
+                next_rooms
+            }
+        };
         let room = state.room();
         let mut targets = Vec::new();
         for next in &next_rooms {
@@ -734,54 +897,51 @@ pub fn exit_is_correct_at(
     exit_span(map, from, d).is_none_or(|(lo, hi)| (lo..=hi).contains(&along_edge(link_tile, d)))
 }
 
-/// (route, step) for an episode starting in `location` entered from `entry` (`start_route`).  Only routes whose
-/// triforce steps before that step are exactly the pieces Link holds (`has_triforce`) apply (a milestone1 Dungeon 1
-/// state is not d2first's Dungeon 1, which comes after Dungeon 2), unless none does.  Several routes leaving the
-/// room differently: one at random from `rng` (Python's `random` stream is not reproduced).
+/// (route, step) for an episode starting in `location` entered from `entry` (`start_route`): the steps of `route`
+/// (of every route without one) entering the room from `entry` with exactly Link's progress (`StepProgress`: the
+/// triforce pieces and sword he holds), any step entering it from `entry` when none has his progress.  Steps
+/// leaving the room differently: one at random from `rng` (Python's `random` stream is not reproduced).  No step:
+/// `route` (else the default route) and None.
 pub fn start_route<R: Rng + ?Sized>(
     map: &GameMap,
     location: MapLocation,
     entry: Option<&str>,
     rng: &mut R,
     route: Option<&str>,
-    has_triforce: impl Fn(u8) -> bool,
+    state: &GameView,
 ) -> (String, Option<usize>) {
-    if let Some(route) = route {
-        return (
-            route.to_owned(),
-            entry.and_then(|e| map.route_step_index(route, location, e)),
-        );
-    }
-    let mut candidates = entry
-        .map(|e| map.routes_through(location, e))
-        .unwrap_or_default();
-    let in_progress = |(name, i): &(String, usize)| {
-        map.routes[name]
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| s.exit == "triforce")
-            .all(|(j, s)| has_triforce(s.level) == (j < *i))
+    let fallback = route.unwrap_or(crate::game_map::DEFAULT_ROUTE);
+    let Some(entry) = entry else {
+        return (fallback.to_owned(), None);
     };
-    if candidates.iter().any(in_progress) {
-        candidates.retain(in_progress);
+    let mut candidates: Vec<(&str, usize, bool)> = Vec::new();
+    for (name, steps) in &map.routes {
+        if route.is_some_and(|r| r != name) {
+            continue;
+        }
+        let progress = route_progress(map, steps);
+        for (i, step) in steps.iter().enumerate() {
+            if step.location() == location && step.entry == entry {
+                candidates.push((name, i, progress[i].matches(state)));
+            }
+        }
     }
-    if candidates.is_empty() {
-        return (crate::game_map::DEFAULT_ROUTE.to_owned(), None);
+    if candidates.iter().any(|c| c.2) {
+        candidates.retain(|c| c.2);
     }
     let exits: BTreeSet<&str> = candidates
         .iter()
-        .map(|(name, i)| map.routes[name][*i].exit.as_str())
+        .map(|(name, i, _)| map.routes[*name][*i].exit.as_str())
         .collect();
-    let (name, index) = if exits.len() > 1 {
-        candidates[rng.random_range(0..candidates.len())].clone()
-    } else {
-        candidates
+    let chosen = match exits.len() {
+        0 => return (fallback.to_owned(), None),
+        1 => candidates
             .iter()
             .find(|c| c.0 == crate::game_map::DEFAULT_ROUTE)
-            .unwrap_or(&candidates[0])
-            .clone()
+            .unwrap_or(&candidates[0]),
+        _ => &candidates[rng.random_range(0..candidates.len())],
     };
-    (name, Some(index))
+    (chosen.0.to_owned(), Some(chosen.1))
 }
 
 #[cfg(test)]
@@ -798,6 +958,7 @@ mod tests {
             targets: BTreeSet::new(),
             next_rooms: [to].into_iter().collect(),
             pbrs_targets: BTreeSet::new(),
+            retreats: BTreeSet::new(),
         };
         for (row, correct) in [(3, true), (4, true), (15, false), (16, false)] {
             assert_eq!(
@@ -808,15 +969,42 @@ mod tests {
         }
     }
 
+    /// d2first: no sword before the 0x77 cave, the wood sword through the white-sword cave, the D2 triforce from the
+    /// warp to 0x3c on, and both pieces nowhere (the route ends on taking D1's).
     #[test]
-    fn fairy_waypoint_applies_after_d1() {
+    fn route_progress_follows_swords_and_triforces() {
         let map = GameMap::builtin();
-        let w = route_waypoints(&map.routes["milestone1-fairy"]);
-        assert_eq!(w.len(), 1);
-        assert_eq!(w[0].location, MapLocation::new(0, 0x39, false));
-        assert_eq!(w[0].after, [1].into_iter().collect());
-        assert_eq!(w[0].before, None); // milestone 1 ends on entering the D2 boss room, not a triforce
-        assert!(route_waypoints(&map.routes["milestone1"]).is_empty());
+        let steps = &map.routes["d2first"];
+        let progress = route_progress(&map, steps);
+        let at = |level, room, in_cave, entry: &str| {
+            let i = steps
+                .iter()
+                .position(|s| s.location() == MapLocation::new(level, room, in_cave) && s.entry == entry)
+                .unwrap();
+            (progress[i].triforces, progress[i].sword)
+        };
+        assert_eq!(at(0, 0x77, false, "start"), (0, SwordKind::None));
+        assert_eq!(at(0, 0x77, true, "S"), (0, SwordKind::None));
+        assert_eq!(at(0, 0x77, false, "cave"), (0, SwordKind::Wood));
+        assert_eq!(at(2, 0x0d, false, "E"), (0, SwordKind::Wood));
+        assert_eq!(at(0, 0x3c, false, "cave"), (0b10, SwordKind::Wood));
+        assert_eq!(at(0, 0x0a, false, "S"), (0b10, SwordKind::Wood));
+        assert_eq!(at(0, 0x0a, false, "cave"), (0b10, SwordKind::White));
+        assert_eq!(at(0, 0x1a, false, "N"), (0b10, SwordKind::White));
+        assert_eq!(at(1, 0x36, false, "W"), (0b10, SwordKind::White));
+    }
+
+    #[test]
+    fn route_entry_names_the_side_crossed() {
+        let m = MapLocation::new;
+        assert_eq!(route_entry(m(0, 0x77, false), m(0, 0x67, false)), Some("S"));
+        assert_eq!(route_entry(m(0, 0x1b, false), m(0, 0x1a, false)), Some("E"));
+        assert_eq!(route_entry(m(1, 0x73, false), m(1, 0x72, false)), Some("E"));
+        assert_eq!(route_entry(m(0, 0x0a, false), m(0, 0x0a, true)), Some("S"));
+        assert_eq!(route_entry(m(0, 0x0a, true), m(0, 0x0a, false)), Some("cave"));
+        assert_eq!(route_entry(m(0, 0x37, false), m(1, 0x73, false)), Some("S"));
+        assert_eq!(route_entry(m(2, 0x0d, false), m(0, 0x3c, false)), Some("cave"));
+        assert_eq!(route_entry(m(1, 0x45, false), m(1, 0x73, false)), None); // a Wallmaster's drag
     }
 
     #[test]
