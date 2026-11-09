@@ -54,3 +54,21 @@ carries the bow. Re-evaluated before continuing: stalfos-keese-gel 98.3% (0x43 f
 - Full route: 9/120. Deaths: D2 0x5e 16, Moldorm 12, 0x1e 8; 0x0a 5; D1 0x35 6, 0x33 5, 0x72 5, 0x43 4, 0x63 4, ...
   The detour adds four D1 rooms of attrition on the way to Aquamentus.
 - boss-aquamentus retrained from 0.15 of max health: r53 (results below).
+
+## 5. Aquamentus from low health (r53) and the chains with the bow
+
+`boss-aquamentus` continued from r47 with `hp: [0.15, max]` (was `[0.75, max]`): eval 99%, health change +0.89;
+starts at ≤ 2 hearts won 58/61. Promoted. Chains (120 runs, seeds 100–219), with round 13 (no detour) for comparison:
+
+| segment | round 13 | round 14 |
+|---|---|---|
+| D1 from its entrance, full health (`--from 1_73s_0`) | 115 (96%) | **108 (90%)**, bow 117+ |
+| from D2's exit (`--from 0_3cc_0`, 4 hearts) | 35 (29%) | 19 (16%) |
+| full route | 25 (21%) | 13 (11%) |
+
+The detour costs D1 about 6 points at full health (0x44 5, 0x35 3, single deaths at 0x22/0x43/0x33). From the
+low-health arrivals of a real run it costs much more: post-D2 runs now die in 0x33 (12), 0x44 (12), 0x23 (10), 0x43
+(9) on top of the overworld (0x0a 9, 0x27 7). Link reaches D1 with ~2 of 5 hearts and the detour adds four fights
+before Aquamentus; there is no healing anywhere between 0x2c and the D1 triforce. Health attrition is now the
+route's main problem (with D2's Goriya/Moldorm rooms): a candidate for Lee's training ideas (and for the kill-streak
+fairy, backlog).
