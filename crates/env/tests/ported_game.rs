@@ -132,10 +132,10 @@ fn decodes_dungeon_and_overworld_savestates() {
     let Some(mut s) = session() else { return };
     let state = load(&mut s, "1_44w_0", false, &[]);
     assert_eq!(state.full_location(), MapLocation::new(1, 0x44, false));
-    // Regenerated 1_44w_0 carries no bombs (chain 0 never picks any up before D1 0x44; the legacy 1_44w had 4).
-    // A state with bombs decodes its count from $0658: the Dodongo entry 2_0es_0, after the D2 bomb pickups.
-    assert_eq!(state.bombs(), 0);
-    assert_eq!(state.sword(), SwordKind::Wood);
+    // On d2first Link reaches D1 0x44 with the white sword and what is left of Dungeon 2's bombs (decoded from
+    // $0658): one in chain 0.
+    assert_eq!(state.bombs(), 1);
+    assert_eq!(state.sword(), SwordKind::White);
     let goriyas = state
         .enemies
         .iter()
@@ -310,7 +310,7 @@ fn cleared_boss_room_and_persisted_flags() {
     // other rooms on the walk depend on what the chain killed on its way, so only their visited bit is pinned.
     assert_eq!(room_flags(state.ram(), 0x53), 0xF0);
     assert_eq!(room_flags(state.ram(), 0x35), 0xF4);
-    for room in [0x74, 0x52, 0x43] {
+    for room in [0x74, 0x52] {
         assert_ne!(room_flags(state.ram(), room) & 0x80, 0, "room {room:#x} visited");
     }
     // In a dungeon the room flags are the level block at $6FF.
@@ -410,19 +410,19 @@ fn map_and_compass_use_the_level_bit() {
 
 // --- tests/test_room_entry.py ---
 
-/// From 0x48 (entered from 0x58, where chain 0 killed 2 of the 4 monsters), walking S back into 0x58: the game
-/// remembers the kills and spawns only the 2 left unless the room's kill history is cleared before entry (the
-/// legacy state had 0x58 fully cleared; zelda game.rs `pre_entry_loads` covers a fully cleared room).
+/// From 0x59 (entered from 0x58, where chain 0 killed 1 of the 4 Octoroks), walking W back into 0x58: the game
+/// remembers the kills and spawns only the 3 left unless the room's kill history is cleared before entry (zelda
+/// game.rs `pre_entry_loads` covers a fully cleared room).
 #[test]
 fn fresh_room_refills_a_room_the_game_remembers_as_cleared() {
     let Some(mut s) = session() else { return };
-    load(&mut s, "0_48s_0", false, &[]);
+    load(&mut s, "0_59w_0", false, &[]);
     s.set_capture_pre_entry(true);
-    let changes = act_until(&mut s, "MOVE S 16", |c| c.changed_location(), 10);
+    let changes = act_until(&mut s, "MOVE W 16", |c| c.changed_location(), 12);
     s.set_capture_pre_entry(false);
     let last = changes.last().unwrap();
     assert_eq!(last.state.full_location(), MapLocation::new(0, 0x58, false));
-    assert_eq!(last.state.enemies.len(), 2);
+    assert_eq!(last.state.enemies.len(), 3);
     let pre_entry = s.last_pre_entry().expect("captured").machine.clone();
 
     s.nes_mut().restore(&pre_entry);
@@ -434,7 +434,7 @@ fn fresh_room_refills_a_room_the_game_remembers_as_cleared() {
         ..Default::default()
     };
     let state = s.load(&pre_entry, &opts, &mut rng()).unwrap();
-    assert_eq!(state.enemies.len(), 2);
+    assert_eq!(state.enemies.len(), 3);
     opts.fresh_room = true;
     let state = s.load(&pre_entry, &opts, &mut rng()).unwrap();
     assert_eq!(state.enemies.len(), 4);

@@ -8,7 +8,7 @@ from triforce.runner import RoomRecord, RunResult, write_jsonl
 
 def _run(seed, *rooms):
     """A run whose rooms are (level, room, in_cave, health_in)."""
-    return RunResult('milestone1', seed, 'failure', rooms=[
+    return RunResult('d2first', seed, 'failure', rooms=[
         RoomRecord(i, level, room, in_cave, 'ow-start', health_in=health)
         for i, (level, room, in_cave, health) in enumerate(rooms)])
 

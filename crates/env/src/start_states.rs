@@ -486,7 +486,7 @@ mod tests {
         assert_eq!(state_entry("start"), Some("start"));
         assert_eq!(state_entry("/a/1_44w_0.state"), Some("W"));
         assert_eq!(state_entry("0_77cave_2"), Some("S"));
-        assert_eq!(state_entry("0_37c_2"), Some("cave"));
+        assert_eq!(state_entry("0_3cc_2"), Some("cave"));
         assert_eq!(state_entry("0_38s"), None);
         assert_eq!(state_entry("0_3Gs_1"), None);
         assert_eq!(state_entry("0012"), None);

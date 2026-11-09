@@ -1,7 +1,8 @@
 name: ow-lynel
 rooms: ['(0, 0x0a)', '(0, 0x0a, cave)']
-start_states: ['0_0a*_[0-9]*']
+start_states: ['0_0a*_[0-9]']
 success: [exit-correct]
+endings: {retreat: soft-failure}           # Lee (Nov 8): a retreat counts as a wrong exit for the first baseline
 reward_profile: default
 reward: {pbrs: true}
 obs: {objective: true, target: true}       # schema 2 pointer, no item targets (as ow-moblin)
@@ -11,8 +12,9 @@ one_room: true                          # round 5: per-room episodes
 max_steps: 600
 warm_start: null
 notes: >-
-  Lynel rooms (Lee, Nov 8: very hard monsters, the main enemy of many later rooms). Not trained yet. d2first: 0x0a
-  (Blue Lynel and a Zora) with the white-sword cave: enter the cave, take the sword (needs 5 heart containers),
-  leave S. The usual human play is to leave and re-enter until the Lynel spawns somewhere better (not between the
-  water and the cave door); whether the model may do that is an open question (docs/routes/d2first.md). States:
-  the d2first chains (`0_0as_1x`, `0_0acave_1x`, `0_0ac_1x`).
+  Lynel rooms (Lee, Nov 8: very hard monsters, the main enemy of many later rooms). 0x0a (Blue Lynel and a Zora)
+  with the white-sword cave: enter the cave, take the sword (needs 5 heart containers), leave S. Leaving S before
+  the sword (to re-enter for a better Lynel spawn) ends the episode as `retreat` (routes.yaml `retreat: S`); the
+  ending is configurable and is a soft failure (like a wrong exit, with its wrong-location penalty) for the first
+  baseline. Lee will study Lynel spawns and may make it neutral, possibly only when the Lynel blocks the way
+  (docs/routes/d2first.md).

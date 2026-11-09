@@ -36,7 +36,7 @@ def _route_hearts(entry: dict) -> int:
         route_step = entry['from_step'] + 1
     rooms = game_rooms()
     return BASE_HEARTS + sum(1 for step in route_steps(entry.get('route', DEFAULT_ROUTE))
-                             if step.index < route_step and step.exit != 'terminal'
+                             if step.index < route_step
                              and rooms[step.location.as_tuple()]['treasure'] == 'heart-container')
 
 

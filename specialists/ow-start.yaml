@@ -1,6 +1,6 @@
 name: ow-start
-rooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)', '(0, 0x1c)', '(0, 0x1b)']
-start_states: ['start', '0_77*_[0-9]', '0_39*_[0-9]']
+rooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x1c)', '(0, 0x1b)']
+start_states: ['start', '0_77*_[0-9]', '0_1c*_[0-9]', '0_1b*_[0-9]']
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true}
@@ -12,4 +12,4 @@ warm_start: null
 notes: >-
   Rooms without enemies where Link walks to a spot. Start screen + sword cave: the correct exit depends on
   progress (no sword -> cave; in the cave -> S once the sword is taken; with sword -> N, 0x78 E is the tagged
-  alternate). 0x39 (milestone1-fairy only): the fairy pond; stand at its edge until the hearts are full, then S.
+  alternate). 0x1c (from S, leave W) and the mountain maze 0x1b (from E, leave W) after the 0x2c heart cave.

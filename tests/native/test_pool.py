@@ -110,7 +110,7 @@ def test_eval_task_records(states_dir):
 
 
 def test_chain_task_missing_models(states_dir):
-    task = native.ChainTask([], 'milestone1', seeds=[0, 1, 2], states_dir=str(states_dir),
+    task = native.ChainTask([], 'd2first', seeds=[0, 1, 2], states_dir=str(states_dir),
                             missing={'ow-start': 'no promoted model for ow-start'})
     with native.EnvPool(task, num_envs=2, seed=0) as pool:
         buffers = pool.make_buffers()
@@ -122,7 +122,7 @@ def test_chain_task_missing_models(states_dir):
 
 
 def test_chain_task_policies_and_room_events(states_dir):
-    task = native.ChainTask(['ow-start'], 'milestone1', seeds=[3], states_dir=str(states_dir))
+    task = native.ChainTask(['ow-start'], 'd2first', seeds=[3], states_dir=str(states_dir))
     assert task.policies == ['ow-start']
     with native.EnvPool(task, num_envs=1, seed=0) as pool:
         buffers = pool.make_buffers()
@@ -139,7 +139,7 @@ def test_chain_task_policies_and_room_events(states_dir):
 def test_a_finished_chain_run_can_hold_its_last_frame(states_dir, hold):
     """hold_finished_frame: after a run ends, the next run's reset publishes nothing (the screen keeps the finished
     run's last frame) until set_hold(env, False).  Without it the reset's frames publish at once."""
-    task = native.ChainTask(['ow-start'], 'milestone1', seeds=[0, 1], max_steps=3, states_dir=str(states_dir),
+    task = native.ChainTask(['ow-start'], 'd2first', seeds=[0, 1], max_steps=3, states_dir=str(states_dir),
                             hold_finished_frame=hold)
     with native.EnvPool(task, num_envs=1, seed=0) as pool:
         pool.set_render(0, True)
@@ -164,7 +164,7 @@ def test_a_finished_chain_run_can_hold_its_last_frame(states_dir, hold):
 
 def test_a_paused_pool_stops_before_the_next_frame(states_dir):
     """set_paused(True): an env given its action doesn't emulate a frame until set_paused(False)."""
-    task = native.ChainTask(['ow-start'], 'milestone1', seeds=[0], states_dir=str(states_dir))
+    task = native.ChainTask(['ow-start'], 'd2first', seeds=[0], states_dir=str(states_dir))
     with native.EnvPool(task, num_envs=1, seed=0) as pool:
         pool.set_render(0, True)
         buffers = pool.make_buffers()

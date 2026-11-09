@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Train every specialist once, evaluate each on its own rooms, then evaluate the milestone route.
+"""Train every specialist once, evaluate each on its own rooms, then evaluate the route.
 
     python scripts/train_round.py --round round1 [--steps 2000000] [--steps-per-update 4096] [--parallel 16]
         [--device cuda] [--models-dir models] [--specialists a,b] [--episodes-per-state 100]
         [--chain-runs 20] [--chain-parallel 10] [--skip-existing] [--no-promote] [--train-args '...{name}...']
 
-Specialists (trainable, with seed start states; route order of ``milestone1``) train one at a time as
+Specialists (trainable, with seed start states; route order of the route, ``d2first``) train one at a time as
 ``python -m triforce.train ... --run-id <round> --stop-success 0.95 --stop-patience 5`` with the log teed to
 ``<models>/<name>/<round>/train.log``.  Each trained run is promoted and evaluated with
 ``triforce.evaluate`` (``eval.json`` in the run dir).  Then ``eval-chain`` runs the route with every promoted
@@ -88,8 +88,8 @@ def parse_args(argv=None):
 
 
 def route_order() -> list[str]:
-    """Specialist names in order of first appearance on milestone1."""
-    return list(dict.fromkeys(step['specialist'] for step in _native.route_steps('milestone1')))
+    """Specialist names in order of first appearance on the route."""
+    return list(dict.fromkeys(step['specialist'] for step in _native.route_steps(_native.DEFAULT_ROUTE)))
 
 
 def default_specialists() -> list[str]:
@@ -403,11 +403,11 @@ def _run_round(args, names, models: Path, log_dir: Path, plan: TrainingPlan, eve
         if args.no_promote:
             overrides = {name: str(registry.checkpoint_path(name, args.round, models)) for name in names
                          if registry.checkpoint_path(name, args.round, models).is_file()}
-        say(f"[round] eval-chain milestone1: {args.chain_runs} runs, {args.chain_parallel} envs")
+        say(f"[round] eval-chain {_native.DEFAULT_ROUTE}: {args.chain_runs} runs, {args.chain_parallel} envs")
         events.emit('chain_start', runs=args.chain_runs, parallel=args.chain_parallel, overrides=overrides)
         try:
-            results, chain = eval_chain('milestone1', args.chain_runs, args.chain_parallel, models_dir=str(models),
-                                        overrides=overrides)
+            results, chain = eval_chain(_native.DEFAULT_ROUTE, args.chain_runs, args.chain_parallel,
+                                        models_dir=str(models), overrides=overrides)
             chain_path = models / f"{args.round}-chain.jsonl"
             chain_path.unlink(missing_ok=True)      # write_jsonl appends
             write_jsonl(str(chain_path), results)

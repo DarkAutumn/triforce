@@ -10,7 +10,7 @@ from triforce import _native as native
 def test_load_and_fields():
     config = native.SpecialistConfig.load('ow-start')
     assert config.name == 'ow-start'
-    assert config.rooms == [(0, 0x77, False), (0, 0x77, True), (0, 0x39, False), (0, 0x1c, False), (0, 0x1b, False)]
+    assert config.rooms == [(0, 0x77, False), (0, 0x77, True), (0, 0x1c, False), (0, 0x1b, False)]
     assert config.success == ['exit-correct']
     assert config.max_steps == 1000
     assert config.reward.pbrs is True and config.items.bombs is False
@@ -41,7 +41,7 @@ def test_replace_revalidates():
 def test_build_from_fields():
     config = native.SpecialistConfig(name='entry-step-3', rooms=[(0, 0x67)], start_states=['0_67s_0'],
                                      success=['exit-correct', 'triforce-collected'], max_steps=3000,
-                                     items={'bombs': False}, route='milestone1')
+                                     items={'bombs': False}, route='d2first')
     assert config.rooms == [(0, 0x67, False)] and config.items.bombs is False and config.items.arrows is True
     with pytest.raises(native.ConfigError, match='rooms'):
         native.SpecialistConfig(name='x', rooms=[], success=['exit-correct'])

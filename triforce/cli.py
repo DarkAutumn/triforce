@@ -66,6 +66,7 @@ def main(argv=None):
         import importlib  # pylint: disable=import-outside-toplevel
         module, entry = passthrough[argv[0]]
         return getattr(importlib.import_module(module), entry)(argv[1:])
+    from ._native import DEFAULT_ROUTE  # pylint: disable=import-outside-toplevel
 
     parser = argparse.ArgumentParser(prog='triforce')
     parser.add_argument('--models-dir', default=None)
@@ -81,7 +82,7 @@ def main(argv=None):
     promote.add_argument('run_id')
 
     chain = sub.add_parser('eval-chain', help="run the route N times; the milestone metric")
-    chain.add_argument('--route', default='milestone1')
+    chain.add_argument('--route', default=DEFAULT_ROUTE)
     chain.add_argument('--runs', type=int, default=20)
     chain.add_argument('--parallel', type=int, default=1, help="envs in the chain pool")
     chain.add_argument('--threads', type=int, default=None, help="pool worker threads (default min(parallel, cores))")
@@ -90,7 +91,7 @@ def main(argv=None):
     chain.add_argument('--deterministic', action='store_true')
     chain.add_argument('--stop-at', help="end the route on entering this room, e.g. 1:0x73")
     chain.add_argument('--from', dest='start_from', help="start from this savestate instead of the game start, "
-                                                         "e.g. a route entry state like 0_37c_2")
+                                                         "e.g. a route entry state like 2_7ds_0")
     chain.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST=PATH')
     chain.add_argument('--specialist-config', action='append', default=[], metavar='YAML',
                        help="override specialist config, selected by config.name (repeatable YAML paths)")

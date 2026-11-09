@@ -68,7 +68,7 @@ def test_main_refuses_cuda_without_a_gpu(monkeypatch):
 
 def test_only_setup_errors_stop_a_cell():
     def run(result, steps, last_outcome):
-        return RunResult('milestone1', 3, result=result, reason='why', steps=steps,
+        return RunResult('d2first', 3, result=result, reason='why', steps=steps,
                          rooms=[RoomRecord(0, 0, '0x77', False, 'ow-start', outcome=last_outcome)])
 
     message, setup_error = end_message(1, 3, run('error', 0, 'error'))          # e.g. no promoted model
@@ -454,5 +454,5 @@ def test_game_grid_setup_error_stops_every_game(states_dir, tmp_path):
 @pytest.mark.skipif(not torch.cuda.is_available(), reason='no CUDA')
 def test_runner_runs_on_cuda(states_dir, models_dir):
     result = Runner(models_dir=models_dir, max_steps=40, device='cuda', states_dir=states_dir).run(
-        Route.load('milestone1'), seed=1)
+        Route.load('d2first'), seed=1)
     assert result.result in ('failure', 'success')

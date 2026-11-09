@@ -273,7 +273,6 @@ rooms:
   treasure: null
 - level: 0
   location: '0x29'
-  specialist: ow-leever-peahat
   exits:
     E:
       level: 0
@@ -286,7 +285,6 @@ rooms:
   treasure: null
 - level: 0
   location: '0x2a'
-  specialist: ow-leever-peahat
   exits:
     E:
       level: 0
@@ -302,7 +300,6 @@ rooms:
   treasure: null
 - level: 0
   location: '0x2b'
-  specialist: ow-leever-peahat
   exits:
     E:
       level: 0
@@ -320,7 +317,7 @@ rooms:
   treasure: null
 - level: 0
   location: '0x2c'
-  specialist: ow-leever-peahat
+  specialist: ow-tektite
   # Secret (d2first, Nov 8; emulator-checked): OW attr B cave index $11, a rock wall tile object (Z_04 UpdateRockWall)
   # at x=144 y=160, tiles (18-19, 12-13) in the middle rock.  A bomb there opens it (room flag $80) to the take-any
   # cave: potion ($20) on the left, heart container ($1A) on the right.
@@ -346,7 +343,7 @@ rooms:
 - level: 0
   location: '0x2c'
   in_cave: true
-  specialist: ow-leever-peahat
+  specialist: ow-tektite
   exits:
     S:
       level: 0
@@ -421,7 +418,6 @@ rooms:
   treasure: null
 - level: 0
   location: '0x39'
-  specialist: ow-start
   exits:
     S:
       level: 0
@@ -540,7 +536,6 @@ rooms:
   treasure: null
 - level: 0
   location: '0x48'
-  specialist: ow-zora
   exits:
     N:
       level: 0
@@ -557,7 +552,6 @@ rooms:
   treasure: null
 - level: 0
   location: '0x49'
-  specialist: ow-octorok
   exits:
     N:
       level: 0
@@ -804,7 +798,7 @@ rooms:
   enemies:
     BlueMoblin: 4
   treasure: null
-# 0x5e and 0x6d are not in the v1 data; added in round 6 when 0x5d joined milestone1-fairy.  Untagged, exits only
+# 0x5e and 0x6d are not in the v1 data; added in round 6 when 0x5d joined a route.  Untagged, exits only
 # (overworld screen edges are two-way: the rooms whose exits lead here), enemies unknown.
 - level: 0
   location: '0x5e'
@@ -1571,7 +1565,6 @@ rooms:
   treasure: key
 - level: 2
   location: '0x6d'
-  specialist: d2-rope
   exits:
     E:
       level: 2

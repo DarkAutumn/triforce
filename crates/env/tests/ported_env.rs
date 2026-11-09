@@ -26,14 +26,14 @@
 //! | env::test_triforce_pickup_is_success_in_the_triforce_room | specialist_env.rs (same name) |
 //! | env::test_items_config_masks_bombs_even_when_link_has_them (2 params) | specialist_env.rs (same name) |
 //! | env::test_route_shutter_requires_combat_without_a_room_treasure | specialist_env.rs (same name) |
-//! | env::test_open_route_ignores_optional_combat (2 params) | specialist_env.rs (same name) |
+//! | env::test_open_route_ignores_optional_combat (2 params) | specialist_env.rs (same name; 0x6d left the route) |
 //! | env::test_route_room_only_offers_its_route_exit (2 params) | specialist_env.rs (same name) |
-//! | env::test_first_visit_to_0x73_follows_the_route_order | specialist_env.rs (same name) |
+//! | env::test_first_visit_to_0x73_follows_the_route_order | specialist_env.rs `the_d1_entrance_follows_the_route_steps` |
 //! | env::test_enter_room_success_needs_the_objective | specialist_env.rs (same name) |
-//! | env::test_after_dungeon_1_each_route_leaves_0x38_its_own_way (2 params) | specialist_env.rs (same name) |
-//! | env::test_a_room_the_routes_leave_differently_trains_both | specialist_env.rs (same name) |
-//! | env::test_fairy_pond_holds_the_exit_until_the_hearts_are_full | specialist_env.rs (same name) |
-//! | env::test_fairy_route_heads_to_the_pond_then_east (2 params) | specialist_env.rs (same name) |
+//! | env::test_after_dungeon_1_each_route_leaves_0x38_its_own_way (2 params) | dropped with milestone1 (Nov 8) |
+//! | env::test_a_room_the_routes_leave_differently_trains_both | specialist_env.rs `a_room_the_route_crosses_twice_trains_both_steps` |
+//! | env::test_fairy_pond_holds_the_exit_until_the_hearts_are_full | dropped with milestone1-fairy (Nov 8) |
+//! | env::test_fairy_route_heads_to_the_pond_then_east (2 params) | dropped with milestone1-fairy (Nov 8) |
 //! | env::test_wavefront_has_no_lane_below_the_bottom_tree_line | specialist_env.rs (same name) |
 //! | env::test_one_room_episode_ends_at_the_first_correct_exit (2 params) | specialist_env.rs (same name) |
 //! | env::test_curriculum_reset_preserves_the_first_shield_turn | specialist_env.rs (same name) |

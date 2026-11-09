@@ -82,7 +82,7 @@ fn decodes_dungeon_and_overworld_states(s: &mut S) {
     load(s, "1_44w_0", &[]);
     let st = s.state().clone();
     assert_eq!(st.full_location(), MapLocation::new(1, 0x44, false));
-    assert_eq!(st.sword(), SwordKind::Wood);
+    assert_eq!(st.sword(), SwordKind::White); // d2first: the white sword before Dungeon 1
     assert_eq!(
         st.enemies
             .iter()

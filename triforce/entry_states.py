@@ -1,10 +1,10 @@
-"""Pre-entry start states: write the game's start state, generate the rest along the milestone route, and audit any
+"""Pre-entry start states: write the game's start state, generate the rest along the route, and audit any
 start state.
 
     python -m triforce.entry_states start [--out DIR]
     python -m triforce.entry_states build [--chains 0,1] [--iterations 3000] [--patience 200] [--out DIR]
                                           [--start-step N --source STATE] [--route NAME]
-    python -m triforce.entry_states path --source STATE --rooms 1:0x33,1:0x23,1:0x22 [--chain 2]
+    python -m triforce.entry_states path --source STATE --rooms 1:0x33,1:0x23,1:0x22 [--chain 2] [--route NAME]
     python -m triforce.entry_states audit [--specialist NAME ...] [--states GLOB ...] [--loads 9]
 
 A start state saved after the game created the room's monsters always replays the same spawn layout, and if Link
@@ -43,14 +43,13 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Callable, List, Optional
 
-from ._native import AcceptSpec, Explorer, Game, Snapshot, game_rooms, route_alternates
+from ._native import DEFAULT_ROUTE, AcceptSpec, Explorer, Game, Snapshot, game_rooms, route_alternates
 from ._native import route_steps as native_route_steps
 from ._native import specialist_for
 from .paths import BASE_MOVIE, STATES_DIR
 from .specialist import SpecialistConfig, list_specialists, load_specialist
 from .zelda_enums import Direction, MapLocation
 
-DEFAULT_ROUTE = 'milestone1'
 MANIFEST = 'entry_states.json'
 START_STATE = 'start'
 # Not part of the room's monster list at entry: Zoras (spawned by water rooms) and the overworld boulders ($32, named
@@ -219,7 +218,7 @@ def cross_room(step: RouteStep, target: RouteStep, source: str, seed: int, itera
     rooms = game_rooms() if rooms is None else rooms
     source_room = rooms.get((step.level, step.room, step.in_cave))
     # Only dungeon rooms hold keys as room treasure. game.yaml also lists 'key' for overworld 0x5a (its room-item
-    # byte), which no exploration can satisfy: the milestone1-fairy build stopped there.
+    # byte), which no exploration can satisfy.
     key_required = step.level != 0 and source_room is not None and source_room['treasure'] == 'key'
     initial = Game(seed=0, states_dir=str(states_dir)).load(source, randomize_rng=False, fresh_room=True)
     minimum_keys = initial.keys + int(key_required and not room_flags(initial, step.room) & FLAG_ITEM_TAKEN)
@@ -522,9 +521,7 @@ def main(argv=None):
     build_parser.add_argument('--start-step', type=int, default=0, help="route step index to start from")
     build_parser.add_argument('--source', default=START_STATE,
                               help="entry state of --start-step (default: 'start')")
-    build_parser.add_argument('--route', default=DEFAULT_ROUTE,
-                              help="routes.yaml route to play (d2first states use chains 10-12, see "
-                                   "docs/routes/d2first.md)")
+    build_parser.add_argument('--route', default=DEFAULT_ROUTE, help="routes.yaml route to play")
     path_parser = sub.add_parser('path', help="entry states for rooms off the route, entered in order from --source")
     path_parser.add_argument('--source', required=True, help="a state in the room before the first of --rooms")
     path_parser.add_argument('--rooms', required=True, help="comma-separated rooms, e.g. 1:0x33,1:0x23,1:0x22")
@@ -532,7 +529,8 @@ def main(argv=None):
     path_parser.add_argument('--iterations', type=int, default=3000)
     path_parser.add_argument('--patience', type=int, default=200)
     path_parser.add_argument('--out', default=str(STATES_DIR))
-    path_parser.add_argument('--route', default=None, help="routes.yaml route the rooms belong to (manifest step)")
+    path_parser.add_argument('--route', default=DEFAULT_ROUTE,
+                             help="routes.yaml route the rooms belong to (manifest step)")
     audit_parser = sub.add_parser('audit', help="check start states (default: every specialist's)")
     audit_parser.add_argument('--specialist', action='append', default=None)
     audit_parser.add_argument('--states', action='append', default=None, help="savestate glob(s)")

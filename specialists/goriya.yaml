@@ -1,7 +1,7 @@
 name: goriya
 rooms: ['(1, 0x44)', '(1, 0x23)', '(2, 0x5e)', '(2, 0x1e)']
 start_states: ['1_44*_[0-9]', '1_23*_[0-9]', '2_5e*_[0-9]', '2_1e*_[0-9]']
-success: [exit-correct, enter-room:2:0x0e]
+success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true}   # round 10 §8 (r40): dropped items are shaping targets
 obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target (r40)
@@ -14,5 +14,5 @@ warm_start: null
 notes: >-
   Red Goriya rooms, whatever the dungeon (was split between d1-wallmaster and d2-goriya). Dungeon 1: the 3-Goriya
   room whose boomerang appears when all are dead (Link has no boomerang yet) and the 3-Goriya key room north of the
-  Stalfos key room (off the milestone route). Dungeon 2: the 5-Goriya room and the 5-Goriya room whose N shutter opens
-  only once all are dead (the episode ends on entering the Dodongo room, milestone 1's end).
+  Stalfos key room (off the route, toward the bow). Dungeon 2: the 5-Goriya room and the 5-Goriya room whose N
+  shutter opens only once all are dead (N leads into the Dodongo room).

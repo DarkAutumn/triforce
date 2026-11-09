@@ -4,7 +4,7 @@
 
 The corpus agent movies were recorded on the FCEUmm-era core and desync on zcore's hardware timing after a few
 thousand frames, so they no longer show gameplay. This plays ``--runs`` seeded chain runs on each of four
-segments (full milestone1, full milestone1-fairy, post-D1 fairy from 0_37c_2, D2 from 2_7ds_2) with every input
+segments of the route (full, D2 from 2_7ds_0, after D2 from 0_3cc_0, D1 from 1_73s_0) with every input
 and poke recorded, and writes each as OUT_DIR/<segment>-<seed>.json: the origin state file, one controller byte
 per frame and the pokes, plus the run's outcome.
 """
@@ -18,8 +18,8 @@ from triforce import _native
 from triforce.run import record_movie
 from triforce.runner import Route, Runner
 
-SEGMENTS = [('full-main', 'milestone1', None), ('full-fairy', 'milestone1-fairy', None),
-            ('postd1-fairy', 'milestone1-fairy', '0_37c_2'), ('d2', 'milestone1', '2_7ds_2')]
+SEGMENTS = [('full', _native.DEFAULT_ROUTE, None), ('d2', _native.DEFAULT_ROUTE, '2_7ds_0'),
+            ('post-d2', _native.DEFAULT_ROUTE, '0_3cc_0'), ('d1', _native.DEFAULT_ROUTE, '1_73s_0')]
 
 
 def origin_path(origin: str) -> str:

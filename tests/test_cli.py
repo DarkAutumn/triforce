@@ -78,7 +78,7 @@ def test_eval_chain_stopping_in_the_start_room_succeeds_without_acting(models_di
     output = tmp_path / 'nested' / 'chain.jsonl'
     assert cli.main(['--models-dir', str(models_dir), 'eval-chain', '--runs', '2', '--stop-at', '0:0x77',
                      '--output', str(output)]) == 0
-    assert 'route milestone1: 2/2 = 100%' in capsys.readouterr().out
+    assert 'route d2first: 2/2 = 100%' in capsys.readouterr().out
     runs = [json.loads(line) for line in output.read_text().splitlines()]
     assert [(r['seed'], r['result'], r['steps']) for r in runs] == [(0, 'success', 0), (1, 'success', 0)]
     # A second evaluation appends to the same file.

@@ -259,7 +259,7 @@ fn train_env_rows_match_the_env_played_directly() {
 fn chain_runs_in_a_pool_match_direct_runs() {
     let Some(nes) = open_core() else { return };
     let data = data();
-    let route = Route::load(&data.map, "milestone1", None, None).unwrap();
+    let route = Route::load(&data.map, "d2first", None, None).unwrap();
     let seeds = [3u64, 4];
     let cap = 80;
 
@@ -365,7 +365,7 @@ fn chain_runs_in_a_pool_match_direct_runs() {
 fn a_chain_specialist_without_a_model_ends_the_run_as_error() {
     let Some(nes) = open_core() else { return };
     let data = data();
-    let route = Route::load(&data.map, "milestone1", None, None).unwrap();
+    let route = Route::load(&data.map, "d2first", None, None).unwrap();
     let policies: Vec<Arc<str>> = data
         .families
         .keys()
@@ -751,7 +751,7 @@ fn eval_jobs_are_shared_and_each_result_is_independent_of_the_env() {
 fn a_chain_specialist_outside_the_pool_policies_ends_the_run_as_error() {
     let Some(nes) = open_core() else { return };
     let data = data();
-    let route = Route::load(&data.map, "milestone1", None, None).unwrap();
+    let route = Route::load(&data.map, "d2first", None, None).unwrap();
     let only: Vec<Arc<str>> = vec![Arc::from("boss-aquamentus")];
     let mut env = ChainRunEnv::new(
         data.clone(),

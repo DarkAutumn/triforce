@@ -1,6 +1,6 @@
 #!/bin/bash
-# Behaviour gate for emulator changes (plan step 18): evaluate every promoted specialist and run the five chain
-# segments on the current build of triforce._native, then summarise against round 8 (docs/experiments/round8.md).
+# Behaviour gate for emulator changes (plan step 18): evaluate every promoted specialist and run the four chain
+# segments of the route on the current build of triforce._native; compare two labels (before and after a change).
 #
 #   scripts/port_gate.sh LABEL [SEED]
 #
@@ -15,7 +15,8 @@ PY=.venv/bin/python
 export TRIFORCE_MODELS_DIR=$PWD/models
 mkdir -p "$OUT/eval" "$OUT/chains"
 
-SPECIALISTS="boss-aquamentus wallmaster goriya d2-rope stalfos-keese-gel ow-leever-peahat ow-start ow-zora ow-octorok ow-moblin"
+# Every specialist with a promoted model.
+SPECIALISTS=$(for f in specialists/*.yaml; do s=$(basename "$f" .yaml); if [ -f "models/$s/promoted" ]; then echo "$s"; fi; done)
 for s in $SPECIALISTS; do
   timeout 1h $PY -m triforce.evaluate --specialist "$s" --models-dir models --episodes-per-state 20 --parallel 16 \
     --threads 16 --device cpu --seed "$SEED" --output "$OUT/eval/$s.json" > "$OUT/eval/$s.log" 2>&1
@@ -26,11 +27,10 @@ chain() {
   timeout 2h $PY -m triforce.cli eval-chain --runs 40 --parallel 20 --device cpu --first-seed "$SEED" \
     --output "$OUT/chains/$name.jsonl" "$@" > "$OUT/chains/$name.log" 2>&1
 }
-chain full-main --route milestone1
-chain full-fairy --route milestone1-fairy
-chain postd1-main --route milestone1 --from 0_37c_2
-chain postd1-fairy --route milestone1-fairy --from 0_37c_2
-chain d2 --route milestone1 --from 2_7ds_2
+chain full
+chain d2 --from 2_7ds_0
+chain post-d2 --from 0_3cc_0
+chain d1 --from 1_73s_0
 
 $PY - "$OUT" <<'EOF'
 import json, os, sys

@@ -1,4 +1,4 @@
-"""Run a route with trained specialists: ``python -m triforce.run --route milestone1 [--seed N] [--render]
+"""Run a route with trained specialists: ``python -m triforce.run [--route d2first] [--seed N] [--render]
 [--video PATH]``.
 
 Prints one line per room (specialist, outcome, health) and appends the run as a JSON line to ``--output``.
@@ -150,7 +150,7 @@ def write_video(movie: dict, path: str, states_dir=None) -> int:
 def main(argv=None):
     """CLI entry point."""
     parser = argparse.ArgumentParser(prog='python -m triforce.run', description=__doc__.split('\n\n', maxsplit=1)[0])
-    parser.add_argument('--route', default='milestone1')
+    parser.add_argument('--route', default=_native.DEFAULT_ROUTE)
     parser.add_argument('--seed', type=int, default=0)
     view = parser.add_mutually_exclusive_group()
     view.add_argument('--render', action='store_true', help="show the game in a window with an overlay")
@@ -158,7 +158,7 @@ def main(argv=None):
     parser.add_argument('--fps', type=float, default=60.0, help="with --render: frames per second (0 = unthrottled)")
     parser.add_argument('--deterministic', action='store_true', help="argmax actions instead of sampling")
     parser.add_argument('--stop-at', help="end the route on entering this room instead, e.g. 1:0x73")
-    parser.add_argument('--from', dest='start_from', help="start from this savestate (e.g. 0_37c_2), not the game start")
+    parser.add_argument('--from', dest='start_from', help="start from this savestate (e.g. 2_7ds_0), not the game start")
     parser.add_argument('--models-dir', default=None)
     parser.add_argument('--device', default='cpu', help="torch device for the specialists' networks")
     parser.add_argument('--checkpoint', action='append', default=[], metavar='SPECIALIST=PATH',

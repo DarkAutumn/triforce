@@ -892,7 +892,7 @@ mod tests {
     fn defaults_bools_and_max_parse() {
         let c = minimal(
             "reward: {pbrs: false}\nobs: {objective: true}\nram_randomization: {hp: [0.5, max], bombs: [0, 4]}\n\
-             route: milestone1\nendings: {exit-wrong: hard-failure}\n",
+             route: d2first\nendings: {exit-wrong: hard-failure, retreat: soft-failure}\n",
         )
         .unwrap();
         assert!(!c.reward.pbrs && c.obs.objective);
@@ -940,7 +940,7 @@ mod tests {
                 assert_eq!(data.specialist_for(*room), Some(name.as_str()));
             }
         }
-        for step in &data.map.routes["milestone1"] {
+        for step in &data.map.routes[zelda::game_map::DEFAULT_ROUTE] {
             let name = step.specialist.as_deref().unwrap();
             assert!(data.specialists[name].rooms.contains(&step.location()));
         }

@@ -1,4 +1,4 @@
-"""Many live games at once for ``play-zelda.py``: one native chain pool (route ``milestone1`` with the promoted
+"""Many live games at once for ``play-zelda.py``: one native chain pool (the default route with the promoted
 specialists), one worker thread per game paced at ``fps`` frames per second, and a Python inference thread that
 batches every waiting game's action per specialist on ``device``.
 
@@ -32,7 +32,7 @@ from . import _native
 from .runner import ChainPool, Policies, Route, RunResult
 
 FRAME_SHAPE = _native.FRAME_SHAPE   # rows, columns, RGB
-ROUTE = 'milestone1'
+ROUTE = _native.DEFAULT_ROUTE
 RESULT_PAUSE = 3.0
 SEEDS_PER_GAME = 1000
 POLL_SECONDS = 0.02
@@ -97,7 +97,7 @@ class _Rooms:
 
 
 class GameGrid:
-    """Plays ``games`` games of route ``milestone1`` in one chain pool and exposes their latest frames and status
+    """Plays ``games`` games of the default route in one chain pool and exposes their latest frames and status
     messages.  ``shown``: the games that render (default all)."""
 
     def __init__(self, games: int, device: str, fps: float, models_dir=None, shown: Optional[Iterable[int]] = None,

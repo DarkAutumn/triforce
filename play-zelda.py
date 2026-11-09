@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Watch a grid of Zelda games played live by the promoted specialist models (route milestone1, 60.1 fps).
+"""Watch a grid of Zelda games played live by the promoted specialist models (route d2first, 60.1 fps).
 
     .venv/bin/python play-zelda.py                     # 4x3 = 12 games, 2x scale, CUDA inference
     .venv/bin/python play-zelda.py 8x6 --scale 1       # COLUMNSxROWS

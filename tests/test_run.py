@@ -39,7 +39,7 @@ def test_failed_run_reports_rooms_and_exits_nonzero(models_dir, west_checkpoint,
     assert room.split()[:4] == ['0', 'L0', '0x77', 'ow-start'] and 'exit-wrong' in room
     assert summary.startswith('failure: ow-start left the route into untagged (level 0, room 0x76)')
     record, = _records(output)
-    assert (record['route'], record['seed'], record['result']) == ('milestone1', 3, 'failure')
+    assert (record['route'], record['seed'], record['result']) == ('d2first', 3, 'failure')
     assert [r['outcome'] for r in record['rooms']] == ['exit-wrong']
 
 
@@ -77,6 +77,6 @@ def test_watching_a_run_plays_the_same_run(states_dir, models_dir, monkeypatch):
     monkeypatch.setenv('SDL_VIDEODRIVER', 'dummy')
     monkeypatch.setenv('SDL_AUDIODRIVER', 'dummy')
     runner = Runner(models_dir=models_dir, max_steps=12, states_dir=states_dir)
-    route = Route.load('milestone1')
+    route = Route.load('d2first')
     watched = run.watch(runner, route, seed=4, fps=0)
     assert watched.steps == 12 and watched.to_dict() == runner.run(route, 4).to_dict()
