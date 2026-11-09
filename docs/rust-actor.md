@@ -82,3 +82,16 @@ The learner recomputes `logp_old` and values with its own torch network over the
 3. Eval, chains and play-zelda on the in-pool policy; replay records and the replay API with probabilities.
 4. Endings on observed effects; the deferred look-ahead on the worker queue.
 5. Fresh retrain of the team (baseline on the new stack), then better-play §0, §1a + §3, §6b, §2, §1b/§5/§6a.
+
+## Open: GPU vs CPU inference (Lee, Nov 9; a major step)
+
+Training runs 8–24 envs, but the watch player may run hundreds of games at once (~128+, no training), where a CPU
+forward per game could become the bottleneck. Measure both on the Rust side (CPU `crates/policy` vs a GPU
+backend, e.g. libtorch via `tch` or another GPU crate) for both workloads, and decide by the numbers:
+
+- GPU better for both → drop the CPU path and use the GPU backend.
+- GPU better for mass play only, CPU better for training → keep both backends.
+- CPU better for both → CPU only.
+
+Either way the determinism contract holds per backend (Rust ↔ Rust bit for bit on the same backend, machine and
+binary); a replay record names the backend its probabilities came from.
