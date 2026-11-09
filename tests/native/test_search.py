@@ -118,7 +118,11 @@ def test_joint_log_probs_match_torch(states_dir, tmp_path):
     with torch.no_grad():
         scored = torch_net.evaluate({k: v for k, v in picked.items() if k != 'action_mask'},
                                     picked['action_mask'], actions=torch.from_numpy(actions))
+        torch_joint = torch_net.joint_log_probs(obs).numpy()
     np.testing.assert_allclose(joint[rows, index], scored.log_prob.numpy(), atol=1e-5, rtol=0)
     np.testing.assert_allclose(value, policy.value(obs), atol=0, rtol=0)
     # Each row is a distribution over its legal joint actions.
     np.testing.assert_allclose(np.exp(joint).sum(axis=1), 1.0, atol=1e-5)
+    # The learner's ZeldaPolicy.joint_log_probs: the same legal set and log-probs.
+    assert (np.isfinite(torch_joint) == np.isfinite(joint)).all()
+    np.testing.assert_allclose(torch_joint[rows, index], joint[rows, index], atol=1e-5, rtol=0)

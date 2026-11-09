@@ -3,7 +3,7 @@
 Kept from v1: KL early stop, KL rollback (weights *and* optimizer state restored when KL exceeds
 ``kl_rollback × target_kl``), checkpointable optimizer state, per-minibatch advantage normalization, legacy
 time-limit termination, optional demo-regularization (behavior-cloning loss on a fixed demo batch), optional
-self-imitation learning (``SilReplay``; Oh et al., 2018).
+self-imitation learning (``SilReplay``; Oh et al., 2018), optional Gumbel expert iteration (``PPOConfig.search``).
 
 Changed for v2: dict observations, factored (kind, direction, duration) actions, flat masks, frame-aware GAE
 (see ``rollout_buffer``), and ``train`` counts PPO *iterations* (one rollout + one optimization each).
@@ -16,6 +16,11 @@ Nov 9): that rollout acts with the weights from before the update, one update be
 step's log-prob, entropy and value with its current torch network (``RolloutBuffer.recompute``), so the update never
 mixes the Rust actor's numerics in and its KL budget isn't spent on the lag. Opted-in no-progress truncations add
 ``gamma ** (frames / 8) * V(final_obs)`` (the actor's value) to that step's reward without crossing the reset.
+
+Expert iteration (better-play §2, docs/rust-actor.md "Search"): with ``search`` the pool runs a Gumbel search on a
+share of the decisions, executes its choice and reports its improved policy π' over the joint actions.  Those rows
+train the policy by distillation, ``search_coeff · CE(π', π_θ)``, instead of the PPO ratio term (their action is no
+sample of π); value loss, entropy bonus and GAE cover every row as before.
 """
 
 import copy
@@ -64,6 +69,10 @@ class PPOConfig:
     sil_coeff: float = 0.0
     sil_value_coeff: float = 0.01
     sil_capacity: int = 32768
+    # Gumbel expert iteration (better-play §2): ``EnvPool.rollout``'s ``search`` settings (None = off) and the weight
+    # of the distillation loss CE(π', π_θ) on searched rows.
+    search: Optional[dict] = None
+    search_coeff: float = 1.0
 
     def to_dict(self) -> dict:
         """Plain-data form for checkpoints/logs."""
@@ -89,13 +98,16 @@ class Collector:
     ``start(network)`` exports the network's weights and rolls out on a background thread into the spare of two
     buffers (the GIL is released while the pool steps); ``finish(network, device)`` waits for it, then computes
     values, bootstrap rewards, returns and advantages and makes it ``buffer``. The other buffer stays untouched,
-    so an update can read it meanwhile.  ``collect`` is both in a row.
+    so an update can read it meanwhile.  ``collect`` is both in a row.  ``search``: the pool's search settings
+    (``EnvPool.rollout(search=...)``); the buffers then keep ``search_mask`` and ``search_policy``.
     """
 
-    def __init__(self, pool, memory_length: int, gamma: float, lam: float):
+    def __init__(self, pool, memory_length: int, gamma: float, lam: float, search: Optional[dict] = None):
         self.pool = pool
         self.n_envs = pool.num_envs
-        self._buffers = [RolloutBuffer(memory_length, self.n_envs, pool.obs_spec, gamma, lam) for _ in range(2)]
+        self.search = search
+        self._buffers = [RolloutBuffer(memory_length, self.n_envs, pool.obs_spec, gamma, lam,
+                                       search=search is not None) for _ in range(2)]
         self._views = [buffer.rollout_buffers() for buffer in self._buffers]
         self._next = 0
         self.buffer = self._buffers[1]
@@ -112,8 +124,9 @@ class Collector:
 
         def run():
             began = time.time()
+            search = {} if self.search is None else {'search': self.search}
             try:
-                self.pool.rollout([policy], self._buffers[index].memory_length, self._views[index])
+                self.pool.rollout([policy], self._buffers[index].memory_length, self._views[index], **search)
             except BaseException as err:  # pylint: disable=broad-exception-caught
                 self._result['error'] = err
             self._result['seconds'] = time.time() - began
@@ -275,7 +288,7 @@ class PPO:
             pool.set_shaping(scale)
             return scale
 
-        collector = Collector(pool, steps_per_env, cfg.gamma, cfg.lam)
+        collector = Collector(pool, steps_per_env, cfg.gamma, cfg.lam, cfg.search)
         start = time.time()
         steps_this_run = 0
         shaping = shaping_for(1)
@@ -321,7 +334,10 @@ class PPO:
     # ------------------------------------------------------------------ optimization
 
     def optimize(self, network: nn.Module, buffer: RolloutBuffer) -> dict:
-        """One PPO update over the buffer.  Returns loss/KL/entropy stats."""
+        """One PPO update over the buffer.  Returns loss/KL/entropy stats.
+
+        Rows the search chose (``buffer.search_mask``) train the policy by distillation toward the search's π'
+        instead of the clipped ratio term (and stay out of its KL/clipfrac stats)."""
         # pylint: disable=too-many-locals, too-many-statements, too-many-branches
         cfg = self.config
         optimizer = self.setup_optimizer(network)
@@ -334,6 +350,7 @@ class PPO:
         b_advantages, b_returns = batch['advantages'], batch['returns']
         batch_size = b_actions.shape[0]
         minibatch_size = max(1, batch_size // cfg.minibatches)
+        b_searched, b_search_policy = batch.get('search_mask'), batch.get('search_policy')    # None without search
 
         demo = None
         if self.demo_batch is not None and cfg.demo_bc_coeff > 0:
@@ -373,19 +390,27 @@ class PPO:
                 mb_obs = {k: v[mb] for k, v in b_obs.items()}
                 out = network.evaluate(mb_obs, b_masks[mb], b_actions[mb])
 
-                logratio = out.log_prob - b_logprobs[mb]
+                # The PPO term covers the rows the policy sampled; searched rows executed the search's choice.
+                pg_rows, searched = slice(None), None
+                if b_searched is not None:
+                    searched = mb[b_searched[mb]]
+                    pg_rows = ~b_searched[mb]
+                logratio = out.log_prob[pg_rows] - b_logprobs[mb][pg_rows]
                 ratio = logratio.exp()
-                with torch.no_grad():
-                    old_approx_kl = (-logratio).mean()
-                    approx_kl = ((ratio - 1) - logratio).mean()
-                    clipfracs.append(((ratio - 1.0).abs() > cfg.clip_coeff).float().mean().item())
+                if logratio.numel():
+                    with torch.no_grad():
+                        old_approx_kl = (-logratio).mean()
+                        approx_kl = ((ratio - 1) - logratio).mean()
+                        clipfracs.append(((ratio - 1.0).abs() > cfg.clip_coeff).float().mean().item())
 
-                mb_adv = b_advantages[mb]
-                if cfg.norm_advantages and mb_adv.numel() > 1:
-                    mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
+                    mb_adv = b_advantages[mb][pg_rows]
+                    if cfg.norm_advantages and mb_adv.numel() > 1:
+                        mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
-                pg_loss = torch.max(-mb_adv * ratio,
-                                    -mb_adv * torch.clamp(ratio, 1 - cfg.clip_coeff, 1 + cfg.clip_coeff)).mean()
+                    pg_loss = torch.max(-mb_adv * ratio,
+                                        -mb_adv * torch.clamp(ratio, 1 - cfg.clip_coeff, 1 + cfg.clip_coeff)).mean()
+                else:
+                    pg_loss = torch.zeros((), device=self.device)
 
                 new_value = out.value.view(-1)
                 if cfg.clip_val_loss:
@@ -396,6 +421,10 @@ class PPO:
 
                 entropy_loss = out.entropy.mean()
                 loss = pg_loss - self.ent_coeff * entropy_loss + cfg.vf_coeff * v_loss
+                if searched is not None and searched.numel():
+                    joint = network.joint_log_probs({k: v[searched] for k, v in b_obs.items()}, b_masks[searched])
+                    search_ce = search_cross_entropy(b_search_policy[searched], joint)
+                    loss = loss + cfg.search_coeff * search_ce
                 if demo is not None:
                     rows = demo[2].shape[0]
                     if rows > minibatch_size:   # a large batch (best-of-N runs): a minibatch-sized sample each time
@@ -437,6 +466,17 @@ class PPO:
             if demo is not None:
                 demo_accuracy = compute_demo_accuracy(network.get_action(demo[0], demo[1], deterministic=True),
                                                       demo[2])
+            search_stats = {}
+            if b_searched is not None:
+                # After the update, over every searched row: CE(π', π_θ) and how often their argmaxes agree.
+                searched = b_searched.nonzero().squeeze(-1)
+                search_stats['charts/search_rows'] = searched.numel() / batch_size
+                if searched.numel():
+                    joint = network.joint_log_probs({k: v[searched] for k, v in b_obs.items()}, b_masks[searched])
+                    target = b_search_policy[searched]
+                    search_stats['losses/search_ce'] = search_cross_entropy(target, joint).item()
+                    search_stats['charts/search_agreement'] = float(
+                        (target.argmax(dim=-1) == joint.argmax(dim=-1)).float().mean())
         network.train()
         network.to('cpu')
 
@@ -469,4 +509,11 @@ class PPO:
             stats['losses/sil_value_loss'] = sil_value_loss.item()
             stats['charts/sil_rows'] = float(len(sil))
             stats['charts/sil_positive_share'] = sil_positive_share
+        stats.update(search_stats)
         return stats
+
+
+def search_cross_entropy(target: torch.Tensor, joint_log_probs: torch.Tensor) -> torch.Tensor:
+    """Mean over rows of CE(π', π_θ) = −Σ_j π'_j log π_θ(j): ``target`` π' ``[B, J]`` (0 off the legal actions),
+    ``joint_log_probs`` ``[B, J]`` (``ZeldaPolicy.joint_log_probs``, −inf where illegal; those j are skipped)."""
+    return -(target * torch.where(target > 0, joint_log_probs, 0.0)).sum(dim=-1).mean()

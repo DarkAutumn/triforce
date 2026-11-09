@@ -37,6 +37,8 @@ DIAGONAL_KINDS = frozenset({ActionKind.BOOMERANG})
 # Flat mask layout: [kind (K) | direction (K×D) | duration (K×U)].
 MASK_SIZE = NUM_KINDS + NUM_KINDS * NUM_DIRECTIONS + NUM_KINDS * NUM_DURATIONS
 assert MASK_SIZE == _native.MASK_SIZE, "actions.py and the native action schema disagree"
+# Joint actions (the search's improved policy, ZeldaPolicy.joint_log_probs): kind * 32 + direction * 4 + duration.
+JOINT_SIZE = NUM_KINDS * NUM_DIRECTIONS * NUM_DURATIONS
 
 
 @dataclass(frozen=True)

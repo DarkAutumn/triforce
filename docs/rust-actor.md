@@ -148,7 +148,9 @@ ratio on those rows). Unsearched decisions are exactly a plain rollout's (`fract
 
 `Policy.joint_log_probs(obs)` → (`[B, 224]` log-probs, `-inf` illegal; `[B]` values): one trunk pass per row, bit
 for bit what `evaluate(actions=...)` gives each joint action (log p(kind), 0 with one legal kind, + log p(direction |
-kind) + log p(duration | kind)); the learner's torch side computes the same factorization.
+kind) + log p(duration | kind)); the learner's torch side computes the same factorization
+(`ZeldaPolicy.joint_log_probs`). Training uses it through `triforce.train --search JSON` (`PPOConfig.search`;
+docs/architecture.md): searched rows are distilled toward π', the rest train by PPO.
 
 **One evaluation.** Q of a future = Σ_t Γ_t r_t + Γ_d·V(leaf), Γ = γ^(frames/8) accumulated over the simulated
 steps (the candidate, then d policy decisions sampled with keyed noise, argmax when `deterministic`). V = 0 after a

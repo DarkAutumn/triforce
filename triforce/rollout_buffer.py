@@ -11,6 +11,8 @@ Layout (``n`` envs, ``T`` steps per env; index ``T`` holds the observation to re
 - ``actions``: int64 ``[n, T, 3]`` (kind, direction, duration).
 - ``logp_ent_val``: ``[n, T, 3]``.
 - ``rewards``, ``frames``, ``returns``, ``advantages``: ``[n, T]``.
+- With ``search`` (expert iteration, ``ppo.PPOConfig.search``): ``search_mask`` bool ``[n, T]`` (the row was
+  searched) and ``search_policy`` ``[n, T, JOINT_SIZE]`` (the search's improved policy π' over the joint actions).
 
 Frame-aware GAE (design §5.4).  Steps take different numbers of frames, so step ``t`` that lasted ``f_t``
 frames uses ``gamma_t = gamma ** (f_t / FRAMES_PER_DISCOUNT)`` and ``lambda_t = lambda ** (f_t /
@@ -25,7 +27,7 @@ import numpy as np
 import torch
 from gymnasium import spaces
 
-from .actions import MASK_SIZE
+from .actions import JOINT_SIZE, MASK_SIZE
 from .model import MASK_KEY
 
 FRAMES_PER_DISCOUNT = 8.0
@@ -74,8 +76,10 @@ class RolloutBuffer:
     """Env-major rollout storage for ``n_envs`` envs × ``memory_length`` steps."""
     # pylint: disable=too-many-instance-attributes
 
-    def __init__(self, memory_length: int, n_envs: int, observation_space, gamma: float, lam: float):
-        """``observation_space``: a ``spaces.Dict``, or a pool's ``obs_spec`` (key → ``{'shape', 'dtype'}``)."""
+    def __init__(self, memory_length: int, n_envs: int, observation_space, gamma: float, lam: float,
+                 search: bool = False):
+        """``observation_space``: a ``spaces.Dict``, or a pool's ``obs_spec`` (key → ``{'shape', 'dtype'}``).
+        ``search``: also keep the search's ``search_mask`` and ``search_policy``."""
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.memory_length = memory_length
         self.n_envs = n_envs
@@ -99,17 +103,23 @@ class RolloutBuffer:
         self.bootstrap_value = torch.zeros(n_envs, memory_length, dtype=torch.float32)
         self.interrupts = torch.zeros(n_envs, memory_length, dtype=torch.int64)
         self.last_values = torch.zeros(n_envs, dtype=torch.float32)
+        self.search_mask = torch.zeros(n_envs, memory_length, dtype=torch.bool) if search else None
+        self.search_policy = torch.zeros(n_envs, memory_length, JOINT_SIZE, dtype=torch.float32) if search else None
 
     def rollout_buffers(self) -> dict:
         """numpy views of this buffer's memory in the layout ``EnvPool.rollout`` writes: ``obs`` (every key, the
         mask included), ``starts`` (``dones``), ``actions``, ``logp_ent_val``, ``rewards`` (raw step rewards),
-        ``frames``, ``bootstrap_value``, ``interrupts``."""
+        ``frames``, ``bootstrap_value``, ``interrupts``, and with search ``search_mask`` and ``search_policy``."""
         obs = {key: value.numpy() for key, value in self.observation.items()}
         obs[MASK_KEY] = self.masks.numpy()
-        return {'obs': obs, 'starts': self.dones.numpy(), 'actions': self.actions.numpy(),
-                'logp_ent_val': self.logp_ent_val.numpy(), 'rewards': self.rewards.numpy(),
-                'frames': self.frames.numpy(), 'bootstrap_value': self.bootstrap_value.numpy(),
-                'interrupts': self.interrupts.numpy()}
+        views = {'obs': obs, 'starts': self.dones.numpy(), 'actions': self.actions.numpy(),
+                 'logp_ent_val': self.logp_ent_val.numpy(), 'rewards': self.rewards.numpy(),
+                 'frames': self.frames.numpy(), 'bootstrap_value': self.bootstrap_value.numpy(),
+                 'interrupts': self.interrupts.numpy()}
+        if self.search_mask is not None:
+            views['search_mask'] = self.search_mask.numpy()
+            views['search_policy'] = self.search_policy.numpy()
+        return views
 
     @torch.no_grad()
     def recompute(self, network, device, chunk: int = 4096):
@@ -154,7 +164,7 @@ class RolloutBuffer:
                                self.last_values, self.gamma, 1.0)
 
     def flatten(self, device) -> dict:
-        """Batch tensors [n·T, ...] for optimization."""
+        """Batch tensors [n·T, ...] for optimization (``search_mask``/``search_policy`` only with search)."""
         length = self.memory_length
         batch = {'obs': {key: value[:, :length].reshape(-1, *value.shape[2:]).to(device)
                          for key, value in self.observation.items()}}
@@ -164,4 +174,7 @@ class RolloutBuffer:
         batch['values'] = self.logp_ent_val[:, :, 2].reshape(-1).to(device)
         batch['advantages'] = self.advantages.reshape(-1).to(device)
         batch['returns'] = self.returns.reshape(-1).to(device)
+        if self.search_mask is not None:
+            batch['search_mask'] = self.search_mask.reshape(-1).to(device)
+            batch['search_policy'] = self.search_policy.reshape(-1, JOINT_SIZE).to(device)
         return batch

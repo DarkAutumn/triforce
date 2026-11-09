@@ -5,6 +5,7 @@
         [--stop-success RATE [--stop-patience N]] [--curriculum TRAJECTORIES_DIR] [--events JSONL | --logs-dir DIR]
         [--ent-anneal SHARE] [--shaping-anneal N] [--best-of-n RUNS [--best-keep K] [--best-every N]
         [--best-coeff C] [--best-parallel P]] [--sil-coeff C [--sil-value-coeff B] [--sil-capacity ROWS]]
+        [--search JSON [--search-coeff C]]
 
 Each iteration collects ``--steps-per-update`` env steps, split across ``--parallel`` envs of one native
 ``EnvPool`` (``--threads`` worker threads, default ``min(parallel, cpu count)``; results do not depend on the
@@ -30,6 +31,12 @@ become the behavior-cloning batch, weighted ``--best-coeff`` (the demo-regulariz
 critic's value V(s) go into a FIFO replay of ``--sil-capacity`` rows; every minibatch adds
 ``C · (−log π(a|s) · max(0, R − V) + ½ β · max(0, R − V)²)`` over a minibatch-sized uniform sample of it
 (β = ``--sil-value-coeff``; ``losses/sil_*``, ``charts/sil_rows``, ``charts/sil_positive_share``).  0 = off.
+``--search JSON`` (Gumbel expert iteration, §2; docs/rust-actor.md "Search"): the pool searches a share of the
+training decisions (``EnvPool.rollout(search=JSON)``, e.g. ``'{"candidates":4,"simulations":8,"futures":2,"depth":3,
+"fraction":0.25}'``; missing keys take the Rust defaults) and executes the search's choice.  Those rows train the
+policy by distillation, ``C · CE(π', π_θ)`` toward the search's improved policy (C = ``--search-coeff``), in place of
+the PPO ratio term; value loss, entropy bonus and GAE cover every row (``losses/search_ce``, ``charts/search_rows``,
+``charts/search_agreement``).  Searched decisions cost about 100× a plain one.
 ``--curriculum`` starts a share of episodes along trajectories found by ``triforce.explore`` (backward
 curriculum, native ``CurriculumSpec``); its shared progress file is ``<run dir>/curriculum.json``.
 
@@ -105,6 +112,17 @@ class EarlyStop:
         return self.streak >= self.patience
 
 
+def _search_settings(text: str) -> dict:
+    """``--search``: a JSON object of ``EnvPool.rollout`` search settings (the pool validates the keys)."""
+    try:
+        settings = json.loads(text)
+    except json.JSONDecodeError as err:
+        raise argparse.ArgumentTypeError(f"not JSON: {err}") from err
+    if not isinstance(settings, dict):
+        raise argparse.ArgumentTypeError("expected a JSON object")
+    return settings
+
+
 def parse_args(argv=None):
     """Command line."""
     parser = argparse.ArgumentParser(prog='python -m triforce.train', description=__doc__.split('\n\n')[0])
@@ -149,6 +167,12 @@ def parse_args(argv=None):
     parser.add_argument('--sil-value-coeff', type=float, default=PPOConfig.sil_value_coeff,
                         help="SIL value-term weight (beta)")
     parser.add_argument('--sil-capacity', type=int, default=PPOConfig.sil_capacity, help="SIL replay rows (FIFO)")
+    parser.add_argument('--search', type=_search_settings, default=None, metavar='JSON',
+                        help="Gumbel expert iteration (better-play §2): EnvPool.rollout search settings as a JSON "
+                             "object, e.g. '{\"candidates\":4,\"simulations\":8,\"futures\":2,\"depth\":3,"
+                             "\"fraction\":0.25}'; searched rows train by distillation toward the search's policy")
+    parser.add_argument('--search-coeff', type=float, default=PPOConfig.search_coeff,
+                        help="weight of the search distillation loss CE(pi', pi)")
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--stop-success', type=float, default=None,
                         help="stop early once training success_rate >= this for --stop-patience iterations")
@@ -313,7 +337,7 @@ def _train(args, specialist: str, run_id: str, root, out_dir: Path, events: Even
                            ent_anneal=args.ent_anneal, shaping_anneal=args.shaping_anneal,
                            demo_bc_coeff=args.demo_bc_coeff if demo_batch is not None else 0.0,
                            sil_coeff=args.sil_coeff, sil_value_coeff=args.sil_value_coeff,
-                           sil_capacity=args.sil_capacity)
+                           sil_capacity=args.sil_capacity, search=args.search, search_coeff=args.search_coeff)
     ppo = PPO(ppo_config, device=args.device, optimizer_state=optimizer_state, demo_batch=demo_batch)
 
     # Built before the 'start' event so bad start states or trajectories fail the run up front.
