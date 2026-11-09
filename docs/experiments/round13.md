@@ -80,3 +80,39 @@ Conclusion for now (Lee's goal: get through the room, however): reached, ~98% on
 open: deaths at full health (a few per 100 on the way back with the white sword), whether a neutral retreat for
 the near-cave spawn only would help (95% there), and how the room does in chains, where Link arrives with whatever
 health 0x1a left him.
+
+## 6. Baseline team (r47, all promoted)
+
+| family | eval success | health change | steps (early stop at 0.99) |
+|---|---|---|---|
+| ow-start | 99.6% | +0.00 | 0.25M (stop) |
+| ow-octorok | 98.3% | −0.07 | 8M |
+| ow-zora | 98.9% | −0.16 | 8M |
+| ow-moblin | 96.3% | −0.16 | 8M |
+| ow-tektite | 98.7% | +0.05 | 8M |
+| ow-lynel | 98.4% | −0.28 | 8M |
+| ow-boulder | 99.9% | −0.20 | 1.4M (stop) |
+| d2-rope | 98.3% | +0.29 | 6.4M (stop) |
+| goriya | 91.2% | −0.41 | 8M |
+| moldorm | 85.0% | −0.29 | 8M |
+| boss-dodongo | 98.7% | +0.91 | 0.22M (stop) |
+| stalfos-keese-gel | 99.4% | −0.01 | 0.66M (stop) |
+| wallmaster | 99.7% | +0.10 | 0.87M (stop) |
+| boss-aquamentus | 100% | +0.63 | 0.83M (stop) |
+
+(Early-stop/step pairs from the train logs; the two streams ran ~13 h in all, 18:50–08:00.)
+
+### Chains (120 runs, seeds 100–219, `triforce eval-chain`, default route d2first)
+
+- **Full route: 0/120.** 66 runs reached Dodongo, killed him (1 bomb, ~10 steps) and took the heart, then stood
+  in the room until the 2000-step budget: boss-dodongo's success was still the heart pickup (milestone1 ended
+  there), so it never learned the W exit to the triforce room. Fixed (`c65b5f9`: success `exit-correct`, tracks
+  re-explored through the exit: 26 after dropping 4 swallow kills) and retrained as r49 (§7). The other 54 died
+  in D2: 0x5e Goriya 16, 0x1e Goriya 12, Moldorm 8, 0x4e 4, 0x7e 3, 0x2e 2, 0x6e 1; and on the way: 0x4c 4,
+  0x5b 3, 0x4d 1.
+- **From D2's exit (`--from 0_3cc_0`, 4 hearts) to the D1 triforce: 35/120 (29%).** No retreats at 0x0a. Deaths:
+  D1 0x44 16, 0x63 11, 0x35 7, 0x52 5, 0x42 5, 0x72 2, 0x74 2, 0x53 2, 0x43 2; overworld 0x0a 9, 0x27 7, 0x38 6,
+  0x1a 4, 0x18 3, 0x19 2, 0x17 2. Health is the story: Link has ~4 of 5 hearts at 0x0a, ~2.6 at 0x17/0x27 and
+  ~2.0 entering D1 (no healing on the way), where the deaths pile up (per-room table: `target/r47/rooms.py`).
+- **From D1's entrance (`--from 1_73s_0`, full 5 hearts): 115/120 (96%).** Aquamentus 3 deaths, 0x63 1, one
+  wallmaster stall. So D1 itself is solved at full health; the post-D2 overworld's attrition is what loses runs.
