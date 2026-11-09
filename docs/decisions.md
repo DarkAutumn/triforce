@@ -844,3 +844,19 @@ entry below and `crates/zcore/UPSTREAM.md`.
   waypoints_apply_between_their_triforces}`, `game_map::tests::{d2first_route_connects,
   treasure_rules_parse_and_reject_typos}`, `chain::tests::routes_load`,
   `tests/test_game_map.py::test_dungeon_3_follows_lees_directions_with_the_treasure_rules`.
+
+## 2026-11-09 — Inference moves to Rust; rollouts in one call; search only for training
+
+- **What:** a Rust CPU forward pass of the policy (`crates/policy`, current model config only), run by the pool's
+  workers: training collects a whole rollout per call, eval/chains/the watch player use the same in-pool policy.
+  The learner, GUIs and scripting stay in Python (`docs/all-rust.md`). The look-ahead's credit settles off the step
+  loop on idle workers (Lee's continuation queue) once the endings use observed effects only. Plays can be stored
+  as seed + actions and replayed with the probabilities shown at the time. Search (better-play §2) is a training
+  job only; the agent always acts from the policy. Design: `docs/rust-actor.md`.
+- **Why (Lee):** one call per rollout instead of per step; search needs many inferences per real step; plays must
+  replay exactly (play-zelda recording results and actions, not observations).
+- **Determinism:** Rust ↔ Rust bit for bit (batch- and thread-invariant), Python ↔ Rust within tolerance; episodes
+  and plays reproduce, whole training runs don't (non-goal). The learner recomputes `logp_old`/values itself.
+- **Rejected:** checking `stuck`/`no-damage` only at rollout ends (episodes would depend on rollout length; eval
+  and chains have no rollouts); GPU inference from Rust (cross-worker batching and kernel-launch overhead for a
+  ~5 MFLOP network; the CPU forward is small next to a ~1.9 ms env step); loading old checkpoints (fresh retrain).
