@@ -516,3 +516,27 @@ fn stunned_dodongo_does_not_hurt_on_touch() {
     assert_eq!(stunned[e("stun")], 1.0);
     assert_eq!(with_state(1, 0)[e("hurts_on_touch")], 1.0);
 }
+
+/// A monster that was just hit (invincibility timer) or is stunned skips the collision with Link (Z_01
+/// CheckMonsterCollisions / CheckLinkCollision), so `hurts_on_touch` drops; an always-invincible one (ObjAttr bit 5)
+/// still hurts. Round 13: Link passes the 0x0a Lynel while he flashes from a sword hit.
+#[test]
+fn flashing_or_stunned_monsters_do_not_hurt_on_touch() {
+    let Some(mut s) = session() else { return };
+    let (mut builder, _) = reset(&mut s, "0_0as_0");
+    let (change, obs) = wait_until_spawned(&mut s, &mut builder, 1);
+    let slot = (0..NUM_ENTITY_SLOTS).find(|&i| obs.entity_types[i] == 0x01).expect("the Blue Lynel");
+    assert_eq!(obs.entity_features[slot][e("hurts_on_touch")], 1.0);
+    let object = 1 + slot as u16; // entity slot i is object slot i + 1 (slot 0 is Link)
+    let mut with = |invincible: u8, attr: u8, stun: u8| {
+        s.nes_mut().poke(0x4F0 + object, invincible);
+        s.nes_mut().poke(0x4BF + object, attr);
+        s.nes_mut().poke(0x3D + object, stun);
+        let state = s.apply_ram(&[]).clone();
+        builder.build(&change, &state, &no_objective(), None, s.mask()).entity_features[slot][e("hurts_on_touch")]
+    };
+    assert_eq!(with(8, 0, 0), 0.0, "hit-flashing");
+    assert_eq!(with(0, 0, 8), 0.0, "stunned");
+    assert_eq!(with(8, 0x20, 0), 1.0, "always invincible");
+    assert_eq!(with(0, 0, 0), 1.0);
+}

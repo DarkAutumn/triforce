@@ -65,6 +65,8 @@ const OBJ_HP: usize = 0x485;
 const OBJ_LIFETIME: usize = 0x3A8;
 const OBJ_INVINCIBILITY_TIMER: usize = 0x4F0;
 const OBJ_INVINCIBILITY_MASK: usize = 0x4B2;
+/// ObjAttr; bit 5 = always invincible (such a monster still hurts Link while its invincibility timer runs).
+const OBJ_ATTR: usize = 0x4BF;
 const OBJ_SHOVE_DIR: usize = 0xC0;
 const OBJ_SHOVE_DISTANCE: usize = 0xD3;
 const LINK_GRID_OFFSET: usize = 0x394;
@@ -774,7 +776,13 @@ impl ObservationBuilder {
                 || projectile;
             // A stunned Dodongo (ObjState 2, the bomb smoke) can't hurt Link: that's when to stab him.
             let stunned_dodongo = matches!(t, 0x31 | 0x32) && obj_state == 2;
-            f[e::HURTS_ON_TOUCH] = b(harmful && active && !dying && !clock && !stunned_dodongo);
+            // Z_01 CheckMonsterCollisions/CheckLinkCollision: a monster whose stun timer runs, or that was just hit
+            // (invincibility timer, unless it is always invincible), skips the collision with Link: Link can walk
+            // through it (round 13: hit a Lynel once, then pass him while he flashes).
+            let flashing = at(OBJ_INVINCIBILITY_TIMER, i) > 0 && at(OBJ_ATTR, i) & 0x20 == 0;
+            let harmless = monster && (at(OBJ_STUN, i) > 0 || flashing);
+            f[e::HURTS_ON_TOUCH] =
+                b(harmful && active && !dying && !clock && !stunned_dodongo && !harmless);
             f[e::KILLABLE] = b(is_foe(t) && !matches!(t, 0x2B..=0x2D));
             f[e::PROJECTILE] = b(projectile);
             f[e::BLOCKABLE] = b(matches!(t, 0x53 | 0x5B | 0x5C));
