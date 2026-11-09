@@ -114,7 +114,9 @@ class RolloutBuffer:
     def recompute(self, network, device, chunk: int = 4096):
         """Replaces the actors' log-prob, entropy and value with ``network``'s (torch) over every stored step, and
         returns the values ``[n]`` of the observations at index ``T``: the update then compares torch with torch,
-        never with the Rust actor's numerics."""
+        never with the Rust actor's numerics.  Rollouts run one update behind the learner (``ppo.PPO.train``); the
+        log-prob is the learner's current policy's, not the acting one's (measured: with the acting policy's, the
+        KL early stop spends its budget on that lag and learning halves)."""
         network.eval()
         length = self.memory_length
         obs = {key: value[:, :length].reshape(-1, *value.shape[2:]) for key, value in self.observation.items()}

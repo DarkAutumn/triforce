@@ -45,7 +45,9 @@ def test_ppo_learns_dict_obs_bandit():
     network = ZeldaPolicy(synthetic.observation_space(), SMALL)
     ppo = PPO(PPOConfig(target_steps=256, learning_rate=2e-3, num_epochs=4, ent_coeff=0.0, target_kl=0.05))
     history = []
-    ppo.train(network, _bandit_pool(), iterations=10,
+    # Rollouts run one update behind (overlapped with the update), so the last rollout shows the policy after
+    # iterations - 2 updates.
+    ppo.train(network, _bandit_pool(), iterations=14,
               callback=lambda result: history.append(result.rollout.summary()['reward/total']))
     assert _greedy_bandit_actions(network) == synthetic.BANDIT_TARGETS
     assert history[-1] > 0.9 and np.mean(history[:2]) < 0.5

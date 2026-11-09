@@ -1,20 +1,24 @@
 #!/bin/bash
-# Training throughput benchmark: real `triforce.train` runs warm-started from the promoted models (curriculum and
-# yaml as configured), CUDA, 4,096 steps per update, one run at a time. Settled steps/s = median of the per-
-# iteration charts/SPS-equivalent (steps / iteration wall time) after the first 5 iterations.
+# Training throughput benchmark: real `triforce.train` runs warm-started from the promoted models (or fresh models
+# with START=fresh; curriculum and yaml as configured), CUDA, 4,096 steps per update, one run at a time. Settled
+# steps/s = median of the per-iteration charts/SPS-equivalent (steps / iteration wall time) after the first 5
+# iterations.
 #
-#   scripts/train_bench.sh LABEL [ITERATIONS]      -> target/perf/LABEL/<specialist>-p<N>/ and summary.txt
+#   scripts/train_bench.sh LABEL [ITERATIONS] [promoted|fresh]   -> target/perf/LABEL/<specialist>-p<N>/ and summary.txt
 set -uo pipefail
 cd "$(dirname "$0")/.."
 LABEL=${1:?label}
 ITERS=${2:-25}
+START=${3:-promoted}
 OUT=target/perf/$LABEL
 mkdir -p "$OUT"
 for spec in goriya:8 d2-rope:8 ow-moblin:12 ow-zora:16; do
   s=${spec%%:*}; p=${spec##*:}
   dir=$OUT/$s-p$p
   rm -rf "$dir"; mkdir -p "$dir"
-  timeout 2h .venv/bin/python -m triforce.train --specialist "$s" --load "models/$s/$(cat models/$s/promoted)" --parallel "$p" --iterations "$ITERS" \
+  load=()
+  if [ "$START" = promoted ]; then load=(--load "models/$s/$(cat models/$s/promoted)"); fi
+  timeout 2h .venv/bin/python -m triforce.train --specialist "$s" "${load[@]}" --parallel "$p" --iterations "$ITERS" \
     --steps-per-update 4096 --device cuda --seed 1 --models-dir "$dir/models" --logs-dir "$dir/logs" \
     --run-id bench > "$dir/train.log" 2>&1
 done

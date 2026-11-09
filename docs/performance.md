@@ -1,9 +1,47 @@
-# Training and evaluation throughput (Nov 5–7)
+# Training and evaluation throughput (Nov 5–9)
 
 How fast the Rust port trains and evaluates compared with the old stack, what limited it, what changed, and what
 limits it now.
 Everything here is real `triforce.train` runs on the workstation: i9-10900X (10 cores, 20 hardware threads),
 RTX 4090, idle unless noted.
+
+## The Rust actor (Nov 9)
+
+Since `docs/rust-actor.md` the policy acts inside the pool (Rust CPU forward, one `rollout` call per iteration) and
+the sections below about the Python forward, `recv`/`send` and CUDA graphs are history.
+
+**Training,** `scripts/train_bench.sh LABEL 25 fresh` (fresh models: the promoted ones are pre-refactor and don't
+load, so these numbers aren't comparable with the warm-started tables below; same machine load):
+
+| config | synchronous (`ff194b8`) | rollout overlapped with the update | gain |
+|---|---:|---:|---:|
+| goriya p8 | 1,551 | 2,247 | +45% |
+| d2-rope p8 | 1,640 | 2,185 | +33% |
+| ow-moblin p12 | 1,761 | 2,135 | +21% |
+| ow-zora p16 | 2,138 | 2,570 | +20% |
+
+- **Where an iteration went (synchronous, goriya p16):** rollout ~47%, PPO update ~35% (0.8 s: 40 minibatch
+  steps, ~17k kernel launches; launch-bound, the GPU itself busy ~0.27 s), torch recompute of log-probs and
+  values ~8%.
+- **Overlap (Lee, Nov 9: "yes"):** `PPO.train` starts the next rollout on a thread (the pool releases the GIL)
+  with the weights from before the update, into the second of two buffers, then updates. The rollout runs one
+  update behind. `logp_old` stays the learner's recomputed one: with the acting policy's log-prob the KL early stop
+  spent its budget on the lag (1 epoch per update) and a bandit learned half as fast; recomputed, it learns as
+  fast as synchronous. The gain is smaller with more envs because the rollout then takes every core the update's
+  launch thread wants.
+- **Policy forward** (`ff194b8`): 0.77 → 0.31 ms per observation, one thread. The conv is a direct 3×3 with the
+  output channels in AVX registers; Linear does four rows per pass. Same bits on the AVX and portable paths
+  (tested). Rollouts +11–17%. The forward was ~18% of rollout CPU before this change, emulation ~67%.
+- **Rollout barrier:** every env takes exactly `T` steps, and per-env rollout times differ, so workers idle
+  13–32% of a goriya p16 rollout waiting for the slowest env (measured per env). 32 envs on 16 threads: +9%; 20
+  envs on 20 threads: +11% (rollout alone). Candidates: more envs than threads with work-stealing, or the deferred
+  look-ahead (`docs/rust-actor.md` item 4; the look-ahead is 12–35% of step time in beam/bomb rooms).
+- **Tried, not kept:** `torch.compile` of the update's `evaluate` (0.42–0.59 s vs 0.50–0.82 s per update, inside the
+  noise, plus ~40 s compile); `cudnn.benchmark` (no gain); building everything with `target-cpu=x86-64-v3`
+  (the forward gained a little, the emulator nothing).
+
+**Evaluation** (look-ahead off, untrained policy, `evaluate_specialist`, 16 envs): goriya 3,275 steps/s, ow-octorok
+4,467 steps/s.
 
 ## Results
 

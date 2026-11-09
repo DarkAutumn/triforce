@@ -89,9 +89,9 @@ def test_collect_layout_dones_frames_and_resume():
     pool = synthetic.ListPool(CountingEnv, 2)
     model = ZeldaPolicy(synthetic.observation_space(), ModelConfig(hidden_dim=32))
     collector = Collector(pool, 7, 0.99, 0.95)
-    buffer = collector.buffer
 
     metrics = collector.collect(model, 'cpu')
+    buffer = collector.buffer
     env = pool.envs[1]
     assert env.resets == 3                     # initial + after steps 3 and 6
     assert buffer.dones[1].tolist() == [1, 0, 0, 1, 0, 0, 1, 0]   # row 0 starts the first episode
@@ -101,8 +101,12 @@ def test_collect_layout_dones_frames_and_resume():
     assert metrics.episodes == 4 and metrics.steps == 14 and metrics.episode_frames == 96
     assert metrics.frames == 2 * (4 + 8 + 12 + 4 + 8 + 12 + 4)
 
-    # Resuming continues the open episode from the stored last observation without resetting.
+    # Resuming continues the open episode from the stored last observation without resetting, into the other
+    # buffer: the first stays as it was (an update may still be reading it).
+    first, first_dones = buffer, buffer.dones.clone()
     collector.collect(model, 'cpu')
+    buffer = collector.buffer
+    assert buffer is not first and torch.equal(first.dones, first_dones)
     assert env.resets == 5                      # boundaries after 2 carried-over steps and 3 more
     assert buffer.dones[1].tolist() == [0, 0, 1, 0, 0, 1, 0, 0]
     assert buffer.frames[1].tolist() == [8, 12, 4, 8, 12, 4, 8]
@@ -110,10 +114,13 @@ def test_collect_layout_dones_frames_and_resume():
     flat = buffer.flatten('cpu')
     assert flat['obs']['entity_features'].shape == (14, 12, synthetic.ENTITY_FEATURES)
     assert flat['masks'].shape == (14, MASK_SIZE) and flat['actions'].shape == (14, 3)
-    # Value stored per step matches a fresh evaluation of the stored observation.
+    # Log-prob, entropy and value are torch's for the stored observations.
     with torch.no_grad():
-        values = model.get_value({k: v[1, :7] for k, v in buffer.observation.items()})
+        obs = {k: v[1, :7] for k, v in buffer.observation.items()}
+        values = model.get_value(obs)
+        logp = model.evaluate(obs, buffer.masks[1, :7], buffer.actions[1]).log_prob
     assert torch.allclose(values, buffer.logp_ent_val[1, :, 2], atol=1e-5)
+    assert torch.allclose(logp, buffer.logp_ent_val[1, :, 0], atol=1e-5)
 
 
 def test_opted_in_truncation_uses_final_value_and_stops_trace_across_reset():

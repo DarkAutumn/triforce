@@ -10,13 +10,16 @@ Changed for v2: dict observations, factored (kind, direction, duration) actions,
 Rollouts come from a native ``EnvPool`` (``TrainTask``) in one call per rollout (``Collector``): the pool's worker
 threads step their envs ``T`` decisions each, acting with the Rust copy of the network (``ZeldaPolicy.to_native``)
 and keyed Gumbel noise (per episode job and decision), and write the env-major buffer (docs/rust-actor.md). Envs
-auto-reset and episodes continue across rollouts. The learner then recomputes every step's log-prob, entropy and
-value with torch, so the update never mixes the Rust actor's numerics in. Opted-in no-progress truncations add
+auto-reset and episodes continue across rollouts. ``train`` overlaps each PPO update with the next rollout (Lee,
+Nov 9): that rollout acts with the weights from before the update, one update behind. The learner recomputes every
+step's log-prob, entropy and value with its current torch network (``RolloutBuffer.recompute``), so the update never
+mixes the Rust actor's numerics in and its KL budget isn't spent on the lag. Opted-in no-progress truncations add
 ``gamma ** (frames / 8) * V(final_obs)`` (the actor's value) to that step's reward without crossing the reset.
 """
 
 import copy
 import random
+import threading
 import time
 from dataclasses import asdict, dataclass
 from typing import Callable, Optional
@@ -65,23 +68,62 @@ class IterationResult:
 
 
 class Collector:
-    """Rollouts from a native pool into an env-major ``RolloutBuffer``, one ``EnvPool.rollout`` call each.
+    """Rollouts from a native pool into env-major ``RolloutBuffer``s, one ``EnvPool.rollout`` call each.
 
     ``pool`` is a native ``EnvPool`` over a ``TrainTask`` (or anything with its ``num_envs`` / ``obs_spec`` /
     ``rollout`` / ``poll_events`` interface).  Episodes continue across rollouts; the noise that samples each
     action is keyed by the episode's job and decision step (the pool's seed decides the job keys).
+
+    ``start(network)`` exports the network's weights and rolls out on a background thread into the spare of two
+    buffers (the GIL is released while the pool steps); ``finish(network, device)`` waits for it, then computes
+    values, bootstrap rewards, returns and advantages and makes it ``buffer``. The other buffer stays untouched,
+    so an update can read it meanwhile.  ``collect`` is both in a row.
     """
 
     def __init__(self, pool, memory_length: int, gamma: float, lam: float):
         self.pool = pool
         self.n_envs = pool.num_envs
-        self.buffer = RolloutBuffer(memory_length, self.n_envs, pool.obs_spec, gamma, lam)
-        self.views = self.buffer.rollout_buffers()
+        self._buffers = [RolloutBuffer(memory_length, self.n_envs, pool.obs_spec, gamma, lam) for _ in range(2)]
+        self._views = [buffer.rollout_buffers() for buffer in self._buffers]
+        self._next = 0
+        self.buffer = self._buffers[1]
+        self._thread: Optional[threading.Thread] = None
+        self._result: dict = {}
+        self.rollout_seconds = 0.0
 
-    def collect(self, network: nn.Module, device) -> RolloutMetrics:
-        """Fills the buffer with ``memory_length`` steps per env and computes returns and advantages."""
-        buffer = self.buffer
-        self.pool.rollout([network.to_native()], buffer.memory_length, self.views)
+    def start(self, network: nn.Module):
+        """Starts the next rollout with ``network``'s current weights."""
+        if self._thread is not None:
+            raise RuntimeError("a rollout is already running")
+        policy, index = network.to_native(), self._next
+        self._result = {}
+
+        def run():
+            began = time.time()
+            try:
+                self.pool.rollout([policy], self._buffers[index].memory_length, self._views[index])
+            except BaseException as err:  # pylint: disable=broad-exception-caught
+                self._result['error'] = err
+            self._result['seconds'] = time.time() - began
+
+        self._thread = threading.Thread(target=run, name='rollout', daemon=True)
+        self._thread.start()
+
+    def wait(self):
+        """Waits for the running rollout (if any); re-raises its error."""
+        if self._thread is None:
+            return
+        self._thread.join()
+        self._thread = None
+        if 'error' in self._result:
+            raise self._result['error']
+
+    def finish(self, network: nn.Module, device) -> RolloutMetrics:
+        """Waits for the rollout ``start`` began and readies its buffer (now ``buffer``) for an update."""
+        self.wait()
+        self.rollout_seconds = self._result['seconds']
+        buffer = self.buffer = self._buffers[self._next]
+        self._next = 1 - self._next
         events = [e for e in self.pool.poll_events() if e['type'] == 'episode']
         last_values = buffer.recompute(network, device)
         buffer.add_bootstrap()
@@ -93,6 +135,11 @@ class Collector:
         for event in sorted(events, key=lambda e: e['env']):     # stable: per env in step order
             metrics.add_episode(event['info'])
         return metrics
+
+    def collect(self, network: nn.Module, device) -> RolloutMetrics:
+        """One rollout, waited for: ``start`` then ``finish``."""
+        self.start(network)
+        return self.finish(network, device)
 
 
 class PPO:
@@ -148,29 +195,38 @@ class PPO:
             np.random.seed(seed % (1 << 32))
 
         collector = Collector(pool, steps_per_env, cfg.gamma, cfg.lam)
-        buffer = collector.buffer
         start = time.time()
         steps_this_run = 0
-        for iteration in range(1, iterations + 1):
-            collect_start = time.time()
-            rollout = collector.collect(network, self.device)
-            collect_time = time.time() - collect_start
+        collector.start(network)
+        try:
+            for iteration in range(1, iterations + 1):
+                wait_start = time.time()
+                rollout = collector.finish(network, self.device)
+                wait_time = time.time() - wait_start
+                buffer = collector.buffer
+                # The next rollout acts with these weights while the update below changes them.
+                if iteration < iterations:
+                    collector.start(network)
 
-            batch_steps = buffer.memory_length * buffer.n_envs
-            steps_this_run += batch_steps
-            self.total_steps += batch_steps
+                batch_steps = buffer.memory_length * buffer.n_envs
+                steps_this_run += batch_steps
+                self.total_steps += batch_steps
 
-            optimize_start = time.time()
-            stats = self.optimize(network, buffer)
-            elapsed = time.time() - start
-            stats['charts/SPS'] = steps_this_run / elapsed if elapsed > 0 else 0.0
-            stats['charts/rollout_SPS'] = batch_steps / collect_time if collect_time > 0 else 0.0
-            stats['charts/rollout_seconds'] = collect_time
-            stats['charts/optimize_seconds'] = time.time() - optimize_start
+                optimize_start = time.time()
+                stats = self.optimize(network, buffer)
+                elapsed = time.time() - start
+                rollout_time = collector.rollout_seconds
+                stats['charts/SPS'] = steps_this_run / elapsed if elapsed > 0 else 0.0
+                stats['charts/rollout_SPS'] = batch_steps / rollout_time if rollout_time > 0 else 0.0
+                stats['charts/rollout_seconds'] = rollout_time
+                stats['charts/rollout_wait_seconds'] = wait_time
+                stats['charts/optimize_seconds'] = time.time() - optimize_start
 
-            if callback is not None:
-                if callback(IterationResult(iteration, self.total_steps, rollout, stats)) is False:
-                    break
+                if callback is not None:
+                    if callback(IterationResult(iteration, self.total_steps, rollout, stats)) is False:
+                        break
+        finally:
+            collector.wait()    # a rollout started for an iteration that won't run is discarded
         return network
 
     # ------------------------------------------------------------------ optimization
