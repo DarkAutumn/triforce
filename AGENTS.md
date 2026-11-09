@@ -21,14 +21,18 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
   full routes 3/6 → 27/46. Schema-1 checkpoints still load; `--load` with `obs.target` widens them.
 - **The d2-first reset (Lee, Nov 8; `docs/decisions.md` 2026-11-08):** `d2first` is the only route
   (`docs/routes/d2first.md`): game start → Dungeon 2 (Dodongo, his heart, the D2 triforce) → the 0x2c heart cave →
-  the white sword at 0x0a → Dungeon 1 (both key rooms, the boomerang) → the D1 triforce, where the route ends.
-  `milestone1`, `milestone1-fairy`, the fairy waypoint, `ow-leever-peahat` and every D1-first start state are gone;
-  all states were rebuilt on d2first as chains 0–2 and every curriculum re-explored. The objective follows the
-  route's steps (the entry side and progress pick the step: 0x73 W, then E, then N). Round 12 before it beat Dodongo
-  (r45, 300/300 on milestone1 states). The existing models are milestone1-trained and stay on disk; the baseline
-  retrain replaces them.
+  the white sword at 0x0a → Dungeon 1 (both key rooms, the bow detour, the boomerang) → the D1 triforce, where the
+  route ends. `milestone1`, `milestone1-fairy`, the fairy waypoint, `ow-leever-peahat` and every D1-first start
+  state are gone; all states were rebuilt on d2first as chains 0–2 and every curriculum re-explored. The objective
+  follows the route's steps (the entry side and progress pick the step: 0x73 W, then E, then N). Round 12 before it
+  beat Dodongo (r45, 300/300 on milestone1 states). The existing models are milestone1-trained and stay on disk; the
+  baseline retrain replaces them.
 - **Now (Lee, Nov 9):** the d2first baseline is set (round 13: every family retrained from scratch with the
   current setup; full route 25/120, post-D2 29%, D1 from full health 96%). Next: Lee's training ideas.
+- **The bow detour (Lee, Nov 9; `docs/decisions.md` 2026-11-09, `docs/routes/d2first.md`):** from 0x43 N through
+  0x33 and 0x23 to the blade-trap room 0x22 (push the west block N or S), down its stairs into the bow cellar 0x7f
+  (an `in_cave` sub-room, side view), and back the same way to 0x43 → 0x44. New families `trap-room` (0x22) and
+  `equipment-room` (the cellar); states and curricula rebuilt from the detour on; not trained yet.
 - **Long jobs:** check a build/explore/chain hunt every couple of hours; 12 hours on one task is a hard stop.
 - Lee's experiment mode stands: keep the omp todo updated (Lee's numbered phases, e.g. I./II.), reconcile it
   with `backlog.md` between experiments, log every result, check off completed backlog entries, commit each
@@ -39,9 +43,9 @@ called `todo.md` before Nov 8; where the work stands and what to try next, in or
 ## Goal
 
 Specialist PPO models (one per room family) that carry the `d2first` chain (`triforce/routes.yaml`) from the game
-start through Dungeon 2, the 0x2c heart cave and the white sword to the Dungeon 1 triforce (the route ends on taking
-it). Lee owns the direction; the standing invitation is to come up with ideas, test them, keep what helps, and log
-everything.
+start through Dungeon 2, the 0x2c heart cave, the white sword and Dungeon 1's bow to the Dungeon 1 triforce (the
+route ends on taking it). Lee owns the direction; the standing invitation is to come up with ideas, test them, keep
+what helps, and log everything.
 
 ## Lee's standing rules
 
@@ -53,8 +57,8 @@ everything.
   room needs the same skills anywhere. Group rooms by the enemies in them, but don't boil it down to one model per
   enemy type or per room beyond what Lee asks for. Families are the d2first route's rooms (`routes.yaml`
   `families`): ow-start, ow-octorok, ow-zora, ow-moblin, ow-tektite (0x1a, 0x2c and its heart cave), ow-lynel,
-  ow-boulder, stalfos-keese-gel, goriya, wallmaster, boss-aquamentus, d2-rope, moldorm (2:0x3e), boss-dodongo.
-  Only D1's bow-side rooms 0x33/0x23 (off 0x43) are off the route.
+  ow-boulder, stalfos-keese-gel, goriya, trap-room (1:0x22), equipment-room (the bow cellar 1:0x7f), wallmaster,
+  boss-aquamentus, d2-rope, moldorm (2:0x3e), boss-dodongo.
 - Rejected ideas stay rejected (marked in `backlog.md`), e.g. skipping the optional D1 boomerang *pickup*. (Lee
   also had the boomerang usable vs masked after D1 tested: round 10 §2, no effect; the boomerang stays.)
 - **Start states** (`triforce/states/`, `TFZSTATE` files) must be clean pre-entry states: delete bad ones
@@ -71,8 +75,7 @@ everything.
 - **The training GUI is for a colorblind user:** never red vs green. Good = blue, bad = red, purple in between.
 - A damage penalty for rooms Link only has to cross was tried twice (round 6) and dropped: it didn't help the
   chains, and a penalty like that could also discourage required bombing later.
-- Deferred by Lee: mapper (explore / entry_states) JSONL logs with their own GUI view (`backlog.md`, Driver section);
-  the bow route in Dungeon 1 (rooms 0x33/0x23 train now; the bow room 0x22 has states but no specialist).
+- Deferred by Lee: mapper (explore / entry_states) JSONL logs with their own GUI view (`backlog.md`, Driver section).
 
 ## Game mechanics that matter for training
 

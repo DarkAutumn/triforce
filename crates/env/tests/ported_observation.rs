@@ -374,6 +374,27 @@ fn sword_cave_exposes_ware_and_fires() {
     assert!(obs.room_state[r("in_cave")] == 1.0 && obs.room_state[r("cave_ware_1")] == 1.0);
 }
 
+/// The bow cellar under 1:0x22 (mode 9, side view): the room state says cellar, the walkways and ladders are the
+/// walkable cells (the left ladder from the top row down to the floor, the floor, the bow's walkway), the four Blue
+/// Keese are killable monsters, the bow fills the treasure slot, and at the top of the ladder Link can only climb N
+/// (out) or S (down).
+#[test]
+fn bow_cellar_observation() {
+    let Some(mut s) = session() else { return };
+    let (_, obs) = reset(&mut s, "1_7fcave_0");
+    assert!(obs_violations(&obs).is_empty(), "{:?}", obs_violations(&obs));
+    assert!(obs.room_state[r("in_cellar")] == 1.0 && obs.room_state[r("in_cave")] == 0.0);
+    assert!(grid_all(&obs, 0..18, 6..8, TileClass::Walkable));
+    assert!(grid_all(&obs, 17..18, 4..28, TileClass::Walkable));
+    assert!(grid_all(&obs, 11..12, 14..28, TileClass::Walkable));
+    assert!(grid_all(&obs, 2..11, 8..14, TileClass::Wall));
+    assert_eq!(obs.entity_types[..4], [0x1B; 4]);
+    assert!(obs.entity_features[..4].iter().all(|f| f[e("killable")] == 1.0));
+    assert_eq!(obs.entity_types[TREASURE_SLOT], ITEM_TYPE_BASE + 0x0A);
+    let moves = s.mask().directions(zelda::ActionKind::Move);
+    assert_eq!(moves, [zelda::Direction::N, zelda::Direction::S]);
+}
+
 #[test]
 fn velocity_is_position_delta() {
     let Some(mut s) = session() else { return };

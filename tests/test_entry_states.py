@@ -104,6 +104,7 @@ def test_game_rooms_reads_game_yaml():
     counts = full_monster_counts()
     assert counts[(0, 0x17)] == 1                   # only the boulder generator: Zoras and boulders come later
     assert (0, 0x77) in counts
+    assert counts[(1, 0x7f)] == 4                   # the bow cellar's Blue Keese (an underworld in_cave room)
 
 
 def test_pre_entry_snapshot_is_written_fresh_and_audits_clean(game, tmp_path):

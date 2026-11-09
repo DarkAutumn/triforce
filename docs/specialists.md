@@ -1,7 +1,7 @@
 # Specialist families (the d2first route)
 
-The families cover the rooms of the route, `d2first` (`docs/routes/d2first.md`; Lee's reset, Nov 8), plus the
-route's alternate 0x78 and Dungeon 1's bow-side rooms off 0x43. The enemy data comes from ROM decode, v1 data and
+The families cover the rooms of the route, `d2first` (`docs/routes/d2first.md`; Lee's reset, Nov 8; the Dungeon 1
+bow detour since Nov 9), plus the route's alternate 0x78. The enemy data comes from ROM decode, v1 data and
 emulator checks. Room tags are in `triforce/game.yaml` (`specialist:`), and the same lists are in
 `triforce/routes.yaml` under `families:`; the specialist configs must agree (checked at load).
 
@@ -24,8 +24,10 @@ Grouping rule (design §3.1, revised by Lee on Nov 3, 2026):
 | `ow-tektite` | Tektite | (0,0x1a), (0,0x2c), (0,0x2c cave) | exit-correct. 0x1a: from E N to 0x0a, from N W (from N without the white sword: back N). 0x2c: bomb the rock wall, take the heart container in the take-any cave, out N. | Lee (Nov 8): Tektites' jump patterns are their own. 0x1a RedTektite×6 and a Zora; 0x2c RedTektite×4 (moved here from `ow-leever-peahat`, Lee Nov 8). 0x2c is `requires_bombs`, so the family has bombs. |
 | `ow-lynel` | Lynel | (0,0x0a), (0,0x0a cave) | exit-correct: into the white-sword cave, take the sword (5 hearts), out S. Leaving S before the sword is a neutral `retreat`. | Lee (Nov 8): Lynels are very hard and the main enemy of many later rooms. |
 | `ow-boulder` | Falling boulders | (0,0x19), (0,0x18), (0,0x17) | exit-correct | Lee (Nov 8): boulders are hard to predict and can't be blocked. A boulder generator ($31), its boulders ($32) and a Zora. |
-| `stalfos-keese-gel` | Stalfos / Keese / Gel | (1,0x73), (1,0x72), (1,0x74), (1,0x63), (1,0x53), (1,0x52), (1,0x42), (1,0x43), (1,0x36); off-route (1,0x33) | exit-correct. 0x73 three times: W (key room 0x72), then E (key room 0x74), then N. At 0x36 the "exit" is triforce-collected, the route's end. | Was `d1-melee`. Includes the key rooms and all 4 D1 locked doors except 0x45 N. 0x36 (triforce room) and 0x73 (entrance hall) have no enemies and go to the nearest family. 0x33 (Stalfos×3, key) is north of 0x43, on the way to the bow; trained, used by a later route. |
-| `goriya` | Red Goriya | (2,0x5e), (2,0x1e), (1,0x44); off-route (1,0x23) | exit-correct | Every Red Goriya room, whatever the dungeon. 0x5e (×5) has the ringleader trigger; 0x1e (×5) needs kill-all to open the N shutter into Dodongo's room; 0x44 (×3) drops the boomerang when all are dead; 0x23 (×3, key) is north of 0x33, before the bow room 0x22. |
+| `stalfos-keese-gel` | Stalfos / Keese / Gel | (1,0x73), (1,0x72), (1,0x74), (1,0x63), (1,0x53), (1,0x52), (1,0x42), (1,0x43), (1,0x33), (1,0x36) | exit-correct. 0x73 three times: W (key room 0x72), then E (key room 0x74), then N. 0x43 twice: from W N (the bow detour), from N E. 0x33 twice: from S N, from N S. At 0x36 the "exit" is triforce-collected, the route's end. | Was `d1-melee`. Includes the key rooms and all D1 locked doors on the way except 0x45 N. 0x36 (triforce room) and 0x73 (entrance hall) have no enemies and go to the nearest family. 0x33 (Stalfos×3, key) is north of 0x43, on the bow detour. |
+| `goriya` | Red Goriya | (2,0x5e), (2,0x1e), (1,0x44), (1,0x23) | exit-correct. 0x23 twice: from S W (to the trap room), from W S. | Every Red Goriya room, whatever the dungeon. 0x5e (×5) has the ringleader trigger; 0x1e (×5) needs kill-all to open the N shutter into Dodongo's room; 0x44 (×3) drops the boomerang when all are dead; 0x23 (×3) drops its key when all are dead, north of 0x33 on the bow detour. |
+| `trap-room` | Blade traps | (1,0x22) | exit-correct. From E: push the west block N or S, take the stairs down to the bow cellar; out of the cellar: E. | Lee (Nov 9): blade-trap rooms (more later). No monsters: four traps ($49) that slide at Link when he lines up with them and can't be killed. |
+| `equipment-room` | Blue Keese | (1,0x7f cellar) | exit-correct: take the bow, then up the left ladder to 0x22 (leaving without it is a wrong exit). | Lee (Nov 9): every item cellar ("all equipment rooms are pretty much the same"): side view, walkways and ladders, four Blue Keese. |
 | `wallmaster` | Wallmaster | (1,0x45) | exit-correct. 0x45 exits N through a locked door. | Wallmasters need their own skills (v1's Wallmaster shaping, design §6). |
 | `boss-aquamentus` | Aquamentus | (1,0x35) | exit-correct after killing the boss and collecting the heart container; then E into 0x36. | Boss room per LevelInfoUW1 BossRoomId=$35. |
 | `d2-rope` | Rope | (2,0x7d), (2,0x7e), (2,0x6e), (2,0x4e), (2,0x2e), (2,0x0d) | exit-correct; triforce-collected at 0x0d. 0x7d exits E into key room 0x7e, then 0x6e is entered from S. 0x2e requires kill-all to open the N shutter. | 0x7d is the empty entry room; 0x0d, the empty triforce room, joins like 1:0x36 joined stalfos-keese-gel. Off-route 0x6d left the family with the reset. |
@@ -33,7 +35,7 @@ Grouping rule (design §3.1, revised by Lee on Nov 3, 2026):
 | `boss-dodongo` | Dodongo (`Dodongo2` $32) | (2,0x0e) | boss-dead-and-heart: kill him (bomb stun, then the sword) and take the heart container. | Round 12. Boss room per LevelInfoUW2 BossRoomId=$0E; `requires_bombs`. |
 
 Rooms per family: `ow-start` 4, `ow-octorok` 7 (one an alternate), `ow-zora` 6, `ow-moblin` 5, `ow-tektite` 3,
-`ow-lynel` 2, `ow-boulder` 3, `stalfos-keese-gel` 9 (+1 off-route), `goriya` 3 (+1 off-route), `wallmaster` 1,
+`ow-lynel` 2, `ow-boulder` 3, `stalfos-keese-gel` 10, `goriya` 4, `trap-room` 1, `equipment-room` 1, `wallmaster` 1,
 `boss-aquamentus` 1, `d2-rope` 6, `moldorm` 1, `boss-dodongo` 1.
 
 Removed with the reset (Nov 8): `ow-leever-peahat` (0x29, 0x2a, 0x2b: milestone1 only; 0x2c went to `ow-tektite`),
@@ -48,10 +50,9 @@ the fairy pond 0x39 (ow-start), 0x48 (ow-zora), 0x49 (ow-octorok) and 2:0x6d (d2
 | `d1-triforce` | Merged into `d1-melee`, now `stalfos-keese-gel` | Single non-boss room |
 | `d2-*` | `d2-rope`; D2's Goriya rooms joined `goriya`; the Moldorm room its own `moldorm` | From the D2 ROM decode. D2's route has no locked doors or block pushes; it collects the 0x7e key. |
 | `ow-leever-peahat` | Removed with milestone1 (Nov 8) | Its rooms 0x29–0x2b are not on d2first; 0x2c is a Tektite room |
-| — | Added `ow-moblin`, `ow-lynel`, `ow-tektite`, `ow-boulder` | Moblin-only rooms; Lee (Nov 8) for the other three |
+| — | Added `ow-moblin`, `ow-lynel`, `ow-tektite`, `ow-boulder`; `trap-room`, `equipment-room` (Nov 9) | Moblin-only rooms; Lee (Nov 8) for the next three; Lee (Nov 9) for the bow detour's trap room and cellar |
 
 ## Start states
 
 Every route room has route-generated pre-entry states (`python -m triforce.entry_states build`, chains 0–2,
-`entry_states.json`). Dungeon 1's off-route rooms toward the bow (0x33, 0x23 and the bow room 0x22) get theirs from
-`entry_states path --source 1_43w_N --rooms 1:0x33,1:0x23,1:0x22 --chain N`.
+`entry_states.json`); the bow detour's (Nov 9) were built from `1_43w_N` with `--start-step 55`.

@@ -1,7 +1,8 @@
 # d2first: Dungeon 2 first, never the fairy — the route
 
 Lee's route (Nov 8), the only route since the reset the same day (`docs/decisions.md` 2026-11-08: milestone1 and
-milestone1-fairy removed). Data: `triforce/routes.yaml` `d2first`, rooms in `triforce/game.yaml`. View it with
+milestone1-fairy removed); the Dungeon 1 bow detour joined it on Nov 9. Data: `triforce/routes.yaml` `d2first`, rooms
+in `triforce/game.yaml`. View it with
 
 ```bash
 .venv/bin/python zelda-map.py --route d2first      # rooms outlined, arrows, step numbers; sidebar per step
@@ -35,8 +36,10 @@ Hearts are heart containers on entering the room; sword W = wood, Wh = white.
 | 42–44 | 0:27, 28, 38 | N→E, W→S, N→W | ow-zora | 5 / Wh |
 | 45 | 0:37 | E → cave (D1 stairs) | ow-octorok | 5 / Wh |
 | 46–50 | 1:73, 72, 73, 74, 73 | S→W, E→E (key), W→E, W→W (key), E→N | stalfos-keese-gel | 5 / Wh, 3 → 5 keys |
-| 51–58 | 1:63 53 52 42 43 44 45 35 | S→N, then as before from 0x63 | stalfos-keese-gel, goriya, wallmaster, boss-aquamentus | 5 / Wh, boomerang at 0x44 |
-| 59 | 1:36 | W → triforce: **route ends** | stalfos-keese-gel | 6 / Wh |
+| 51–55 | 1:63 53 52 42 43 | S→N, S→W, E→N, S→E, W→**N** | stalfos-keese-gel | 5 / Wh, 5 keys |
+| 56–63 | 1:33 23 22 7f(cellar) 22 23 33 43 | the bow detour (below): S→N (key), S→W (key), E→stairs, S→N (bow), stairs→E, W→S, N→S, N→E | stalfos-keese-gel, goriya, **trap-room**, **equipment-room** | 5 / Wh, bow |
+| 64–66 | 1:44 45 35 | W→E (boomerang), W→N, S→E | goriya, wallmaster, boss-aquamentus | 5 / Wh, bow |
+| 67 | 1:36 | W → triforce: **route ends** | stalfos-keese-gel | 6 / Wh |
 
 Choices and findings:
 - **Row 5 to D2:** 0x5d N → 0x4d W → 0x4c N → 0x3c. 0x3c's only exits are S and the stairs
@@ -67,6 +70,61 @@ Choices and findings:
 - 0x0a's cave (attr B $4B, index $12, person $6C) holds the white sword ($02) in the middle; the old man hands it
   over only at 5+ containers (`objectives::SWORD_UPGRADES`).
 
+## The bow detour (Lee, Nov 9)
+
+From 0x43 (entered from W) the route goes N through the Stalfos key room 0x33 and the Goriya key room 0x23 into the
+blade-trap room 0x22, pushes its west block, takes the stairs down to the item cellar 0x7f for the bow, climbs back
+out and returns the same way (0x22 E, 0x23 S, 0x33 S) to 0x43, which it leaves E to 0x44 as before.
+
+| Step | Room | Entry → exit | Family | Notes |
+|---|---|---|---|---|
+| 55 | 1:0x43 | W → N | stalfos-keese-gel | was W → E; N door open (attr A N type 0) |
+| 56 | 1:0x33 | S → N | stalfos-keese-gel | Stalfos ×3, key (visible); N door locked (key door, shared with 0x23 S) |
+| 57 | 1:0x23 | S → W | goriya | Red Goriya ×3, key when all are dead (trigger AllDeadItem); W door locked (shared with 0x22 E) |
+| 58 | 1:0x22 | E → stairs (`cave`) | **trap-room** | push the west block N or S, then the stairs |
+| 59 | 1:0x7f (cellar, `in_cave`) | S → N | **equipment-room** | `waypoint: bow`: take the bow, then up the left ladder |
+| 60 | 1:0x22 | stairs (`cave`) → E | trap-room | Link comes out at (96, 173), below the (reset) block |
+| 61 | 1:0x23 | W → S | goriya | doors stay open (room flags) |
+| 62 | 1:0x33 | N → S | stalfos-keese-gel | |
+| 63 | 1:0x43 | N → E | stalfos-keese-gel | locked E door to 0x44 (as before) |
+
+Keys: +1 (0x33) −1 (0x33 N door) +1 (0x23) −1 (0x23 W door), so Link leaves the detour with the keys he brought.
+
+Mechanics (emulator, rooms loaded through `Game.load` and read at mode 5, the cellar at mode 9; disassembly
+`Z_01 InitTrap_Full`/`UpdateTrap_Full`, `Z_04 UpdateBlock`, `Z_05 CheckWarps`/`CheckSubroom`/`InitMode9_*`):
+- **0x22** has no monsters: a trap generator ($4A) makes four blade traps ($49, object slots 1–4) in the corners
+  (32, 93), (32, 189), (208, 93), (208, 189). A trap slides at Link when he lines up with it (|dy| < 14:
+  horizontally, else |dx| < 14: vertically), only inward (`TrapAllowedDirs`), fast (1.75 px/frame) to near the
+  room's centre line ($78 / $90) and slowly (0.5 px/frame) back. They hurt on touch, can't be harmed and are not
+  monsters (room state `enemies_remaining` 0); the observation shows them as entities `0x49` with `hurts_on_touch`
+  1, `killable` 0. A scripted path along the bottom (door, W to x 176, S to y 173, W 144, S 181, W 112, N 173,
+  W 96, then N to push) went through unhurt in 20 of 20 seeds with raw input (`target/traps/path.py`).
+- **The stairs** (tiles $70 $72 / $71 $73) are there from the start at tiles (16, 10)–(17, 11), the centre of a
+  diamond of eight blocks ($B0–$B3); the room's secret trigger is none (attr F & 7 = 0). The west block, tiles
+  (12, 10)–(13, 11) at (96, 144), is the room's push block (attr D bit $40, object $68 in slot $B). `UpdateBlock`
+  moves it after 16 frames of pushing toward it while aligned, in **any** direction (the room needs no kills:
+  `RoomAllDead`). Pushed **N** (from below, Link at (96, 157) walks half into it, y 149) or **S** (from above, Link at
+  (96, 125)) it opens the way: (12, 10) → (14, 10) → the stairs. Pushed **E** it lands on (14, 10) and walls the
+  stairs in for the rest of the visit (it moves once; re-entering the room resets it). W needs Link inside the
+  diamond. A MOVE must last 16+ frames (`MOVE N 16`): a released button resets the push timer.
+- **Down the stairs:** standing square-aligned on the top-left stairs tile (Link at (128, 141)) starts mode $10, then
+  mode 9 with RoomId = the cellar ($7F, `LevelInfo_CellarRoomIdArray`; CellarSourceRoomId $527 = $22). Mode 9 lays
+  the cellar out (submodes 0–8, IsUpdatingMode 0, the old room's tiles still in RAM) and walks Link down to (48, 93),
+  the top of the left ladder; it is playable once IsUpdatingMode is 1 (about 100 frames).
+- **The cellar 0x7f** is side view: walkable tiles are the walkways ($24) and ladders ($6F), the rest ($F3
+  background, $FA brick) blocks, so the ordinary tile collision is the whole movement model (no gravity). Left
+  ladder: columns 6–7 from the top row down to the floor (row 17, columns 4–27); right ladder: columns 22–23, rows
+  12–17, up to the bow's walkway (row 11, columns 14–27). The bow lies at (128, 144) (Link takes it at (128, 141));
+  four Blue Keese ($1B) spawn with it. Its item-taken flag is 0x7f's.
+- **Out:** pressing up at the top of the left ladder (Y < $40, X < $80: room A = attr A $22) leaves through mode $A
+  (RoomId already $22) to 0x22, Link at (96, 173) below the west block, which is pending again.
+
+Code (`docs/architecture.md`): a cellar is a sub-room like a cave (`MapLocation.in_cave`, under its own room id),
+entered `S` and left `cave` like a cave; `GameView::in_cellar` (mode 9); the executor skips mode 9's entry; the
+cellar's exit is its top row (N); 0x22's objective points at the push spots (game.yaml `push_block: [N, S]`) while
+the block is pending, then at the stairs; `reward-pushed-block` pays for a push in a listed direction;
+`StepProgress` tracks the bow, so 0x22/0x23/0x33/0x43 without it are off the route and lead back to the cellar.
+
 ## New rooms and families
 
 | Room | Enemies (emulator) | Family |
@@ -82,21 +140,25 @@ Choices and findings:
 | 0:2c, 2c cave | RedTektite ×4; potion / heart container | **ow-tektite** (Lee, Nov 8; was ow-leever-peahat) |
 | 2:0d | none (triforce) | d2-rope (like 1:36 in stalfos-keese-gel) |
 | 0:07, 16, 26 | RedLynel; boulders; Peahat ×6 + Zora | untagged neighbours (game.yaml only) |
+| 1:22 | 4 blade traps ($49), no monsters; push block, stairs | **trap-room** (new, Nov 9) |
+| 1:7f (cellar under 0x22) | Blue Keese ×4; the bow | **equipment-room** (new, Nov 9) |
 
-New families (Lee, Nov 8): `ow-lynel`, `ow-tektite`, `ow-boulder`. `ow-leever-peahat` is gone with milestone1 (its
-other rooms 0x29–0x2b are not on this route).
+New families (Lee, Nov 8): `ow-lynel`, `ow-tektite`, `ow-boulder`; (Lee, Nov 9) `trap-room` (blade-trap rooms) and
+`equipment-room` (item cellars). `ow-leever-peahat` is gone with milestone1 (its other rooms 0x29–0x2b are not on
+this route).
 
 ## Code
 
 - **The objective follows the route step by step** (`zelda::objectives::GameCompletion`): on every room change it
-  finds the step entering Link's room from the side he came in (`route_entry`: N/S/E/W, `S` into a cave or down
-  stairs, `cave` out of one or after the triforce's warp) with exactly the progress the route has there
-  (`StepProgress`: triforce pieces and sword). A step leaving through a room edge makes that exit the correct one
-  (plus the alternate 0x78 at 0x77). Off the route — no matching step, e.g. 0x1a from N without the white sword —
-  and on cave, stairs and triforce steps, the key-aware shortest path to the target (sword, heart waypoint,
-  triforce in route order) decides, as before. One-room training (`start_route`) picks the step the same way from
-  the start state's entry; rooms the route crosses twice (0x77, 0x3c, 0x4c, 0x4d, 0x2c, 0x1a, 0x0a, 1:0x73) are
-  entered from a different side each time, so each step has its own start states and resets play every one.
+  finds the step entering Link's room from the side he came in (`route_entry`: N/S/E/W, `S` into a cave, down
+  stairs or down a cellar's, `cave` out of one or after the triforce's warp) with exactly the progress the route
+  has there (`StepProgress`: triforce pieces, sword and bow). A step leaving through a room edge makes that exit the
+  correct one (plus the alternate 0x78 at 0x77). Off the route — no matching step, e.g. 0x1a from N without the
+  white sword, or 0x22 out of the cellar without the bow — and on cave, stairs and triforce steps, the key-aware
+  shortest path to the target (sword, heart then bow waypoint, triforce in route order) decides, as before.
+  One-room training (`start_route`) picks the step the same way from the start state's entry; rooms the route
+  crosses twice (0x77, 0x3c, 0x4c, 0x4d, 0x2c, 0x1a, 0x0a, 1:0x73, 0x43, 0x33, 0x23, 0x22) are entered from a
+  different side each time, so each step has its own start states and resets play every one.
 - `retreat: S` on step 35 (see below); routes end on their last triforce (no `terminal` exits any more).
 - An overworld cave never sends Link into another overworld cave's room. The heart waypoint reads the overworld
   room flags directly, so a Dungeon 1 state knows the heart was taken.
@@ -127,14 +189,23 @@ with `--iterations 12000 --patience 400` (12/12), moldorm 0/3 then 3/3 with the 
 `2_0es_1`, `2_0es_1~s6`, `2_0es_0~s3`, `2_0es_2~s3`) were dropped, leaving 26 (every start state still has tracks).
 The other families have no curriculum.
 
+**The bow detour (Nov 9):** every state from step 56 on was rebuilt per chain with `python -m triforce.entry_states
+build --chains N --start-step 55 --source 1_43w_N` (default 3000 iterations; Go-Explore crossed 0x22 in 4–8k env
+steps per chain; 0x23 → 0x22 took 50–88k), 12 per chain: `1_33s`, `1_23s`, `1_22e`, `1_7fcave`, `1_22c`, `1_23w`,
+`1_33n`, `1_43n`, `1_44w`, `1_45w`, `1_35s`, `1_36w` (the old path-built `1_33s/1_23s/1_22e` and the D1 states after
+them are in the gitignored `target/states-pre-bow/`). Link carries 4 keys through the detour (3 into 0x44) and the
+bow from `1_22c` on. Now 205 files (`start` plus 68 per chain); `entry_states audit --loads 3`: 205 states, 0
+problems (the cellar spawns its 4 Keese). Trajectories (old D1 ones in `target/trajectories-pre-bow/`): trap-room
+6/6, equipment-room 3/3, wallmaster 3/3, boss-aquamentus 3/3, goriya's D1 states 9/9 (`1_23s`, `1_23w`, `1_44w`).
+
 ## Lee's answers (Nov 8)
 
 1. **Dungeon 1 grabs both keys**: route-step objectives (above), in one-room training and in chains.
 2. **0x2c (and its cave) belongs to `ow-tektite`.** ow-leever-peahat is removed.
 3. **The old routes are removed**, with their states, the fairy waypoint, spliced routes, terminal exits and the
    tests and defaults that named them. The only alternate left is 0x78 (it branches from 0x77, a d2first room). The
-   Dungeon 1 bow-side rooms 0x33/0x23 (and the bow room 0x22) branch from 0x43, a d2first room, so they stay: tagged
-   in stalfos-keese-gel / goriya (0x22 untagged), states rebuilt with `entry_states path` from `1_43w_N`.
+   Dungeon 1 bow-side rooms 0x33/0x23 (and the bow room 0x22) branch from 0x43, a d2first room, so they stayed
+   (until Nov 9 off the route, states from `entry_states path`); since Nov 9 they are the route's bow detour.
 4. **Lynel re-entry is allowed** — current design (Lee's follow-up, Nov 8):
    - Step 35 (0x0a from S, before the white sword) has `retreat: S`: leaving S is not a wrong exit but a `retreat`.
    - **One-room training** (ow-lynel): the episode ends with the ending `retreat` (re-entry can't happen in a

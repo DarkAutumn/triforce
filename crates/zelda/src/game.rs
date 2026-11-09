@@ -14,6 +14,7 @@ use crate::vars::Var;
 use std::sync::{Arc, OnceLock};
 
 pub const MODE_GAME_OVER: u8 = 8;
+pub const MODE_CELLAR: u8 = 9;
 pub const MODE_CAVE: u8 = 11;
 pub const MODE_DYING: u8 = 17;
 
@@ -413,8 +414,18 @@ impl GameView {
         self.mode() == MODE_CAVE
     }
 
+    /// In an underworld item cellar (mode 9, side view: walkways and ladders; up the left ladder leads out).
+    pub fn in_cellar(&self) -> bool {
+        self.mode() == MODE_CELLAR
+    }
+
+    /// The room; `in_cave` marks a sub-room, an overworld cave or an underworld cellar.
     pub fn full_location(&self) -> MapLocation {
-        MapLocation::new(self.level(), self.location(), self.in_cave())
+        MapLocation::new(
+            self.level(),
+            self.location(),
+            self.in_cave() || self.in_cellar(),
+        )
     }
 
     pub fn game_over(&self) -> bool {
@@ -599,10 +610,12 @@ impl GameView {
                 return true;
             }
         }
-        if self.level() > 0 && direction == Direction::N && py <= OW_EDGE_N {
+        // A cellar has no doorways or room bounds (Z_07 Walker_Move skips both in mode 9): only its tiles block.
+        let underworld_room = self.level() > 0 && !self.in_cellar();
+        if underworld_room && direction == Direction::N && py <= OW_EDGE_N {
             return px == DOORWAY_REQUIRED_X && self.is_door_open(Direction::N);
         }
-        if self.level() > 0 && doorway_dir == 0 && at_dungeon_bound(px, py, direction) {
+        if underworld_room && doorway_dir == 0 && at_dungeon_bound(px, py, direction) {
             return self.can_pass_doorway(px, py, direction);
         }
         let room = self.room();

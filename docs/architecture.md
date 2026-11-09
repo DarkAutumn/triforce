@@ -303,18 +303,31 @@ at 2N. `eval-chain` leaves it off.
 
 - The route (`triforce/routes.yaml`, `zelda::game_map`; Python `triforce._native.route_steps()`,
   `_native.DEFAULT_ROUTE`): `d2first`, the only route since Nov 8 (Dungeon 2 first, the 0x2c heart, the white
-  sword, Dungeon 1 last; `docs/routes/d2first.md`). `GameCompletion(route, step)` follows it step by step: the step
-  entering Link's room from the side he came in with the route's progress there (triforce pieces, sword) makes its
-  edge exit the correct one (plus alternates replacing its next room); off the route and on cave, stairs and
-  triforce steps the key-aware shortest path to the target decides (the route's triforce steps in route order,
-  ties broken toward the route), and `waypoint: heart` steps are targets while they apply (a cave's heart
-  container, game.yaml `treasure_tile`; leaving its room other than into the cave before the heart, or taking the
-  other ware, is `missed`: no exit is correct any more). A step's `retreat` exit (0x0a S before the white sword) is
-  no wrong exit: a one-room episode ends `retreat` (outcome from the specialist's `endings:`, default `neutral`:
-  no terminal reward or penalty), a chain records the room as `retreat` and goes on. An overworld cave hidden
-  behind a rock wall (game.yaml `bomb_secret`) is entered through that wall's tiles. Training episodes take their
-  step from the start state's name and Link's progress (`zelda::objectives::start_route`,
-  `env::start_states::state_entry`).
+  sword, Dungeon 1 last with the bow detour; `docs/routes/d2first.md`). `GameCompletion(route, step)` follows it step
+  by step: the step entering Link's room from the side he came in with the route's progress there (triforce pieces,
+  sword, bow) makes its edge exit the correct one (plus alternates replacing its next room); off the route and on
+  cave, stairs and triforce steps the key-aware shortest path to the target decides (the route's triforce steps in
+  route order, ties broken toward the route), and `waypoint:` steps are targets while they apply (`heart`: a cave's
+  heart container, game.yaml `treasure_tile`; leaving its room other than into the cave before the heart, or taking
+  the other ware, is `missed`: no exit is correct any more; `bow`: the bow cellar's bow). A step's `retreat` exit
+  (0x0a S before the white sword) is no wrong exit: a one-room episode ends `retreat` (outcome from the specialist's
+  `endings:`, default `neutral`: no terminal reward or penalty), a chain records the room as `retreat` and goes on.
+  An overworld cave hidden behind a rock wall (game.yaml `bomb_secret`) is entered through that wall's tiles.
+  Training episodes take their step from the start state's name and Link's progress
+  (`zelda::objectives::start_route`, `env::start_states::state_entry`).
+- **Underworld item cellars** (mode 9; Dungeon 1's bow cellar 0x7f under 0x22) are sub-rooms like caves:
+  `GameView::full_location` sets `in_cave` in a cave (mode $B) or a cellar (`in_cellar`, mode 9), whose
+  `MapLocation` keeps the cellar's own room id (game.yaml/routes.yaml `in_cave: true`, state files
+  `1_7fcave_N`). Entering one is route entry `S`, leaving it `cave`; `direction_to` from a cellar is N (up its
+  ladder) and into any sub-room None. The executor treats mode 9 before IsUpdatingMode turns on (the cellar laid out
+  over the old room's tiles, Link walking down the ladder) as uncontrollable, so no state is observed mid-entry. A
+  cellar is side view, but its walkways ($24) and ladders ($6F) are ordinary walkable tiles, so the grid, wavefront
+  and action mask need nothing new; `can_link_move` skips the underworld doorway/bound rules there (the game does).
+  `Room` gives a cellar one exit, N: the walkable top-row tiles of its ladder. In a sub-room the objective is its
+  treasure while the route wants it there (the sword, the heart, the bow), else that exit (a cellar's game.yaml
+  `N` room). Underworld stairs ($70 top-left tiles, `Room::stairs_tiles`) are the targets into a cellar; in a room
+  with game.yaml `push_block: [dirs]` they are replaced, while the block is pending, by the tiles Link pushes it
+  from in those directions, and `reward-pushed-block` pays for a push in a listed direction.
 - `Route.load(name, stop_at=None)` reads `triforce/routes.yaml`. A route starts at the `start` savestate and ends on
   taking its last step's triforce (d2first: Dungeon 1's); `stop_at` ends it on entering that room instead. A missed
   `heart` waypoint ends the run as a failure (room outcome `missed`); so does a retreat beyond `MAX_RETREATS` (3)

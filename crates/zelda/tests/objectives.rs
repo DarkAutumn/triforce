@@ -1,5 +1,6 @@
 //! `GameCompletion` objectives on real rooms with poked RAM: key collection (observed and seeded from room
-//! flags), treasure/fight precedence, caves, exit targets agreeing with exit correctness, and the route's step order.
+//! flags), treasure/fight precedence, caves, exit targets agreeing with exit correctness, the route's step order, and
+//! the bow detour's push block, stairs and cellar played in the emulator.
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -17,7 +18,7 @@ use zelda::room::Target;
 use zelda::room_entry::{ROOM_FLAGS_OW, ROOM_FLAGS_UW};
 use zelda::room_state::room_flags;
 use zelda::tables::{self, RAM_SIZE};
-use zelda::{Direction, GameMap, LoadOptions, MapLocation, Session, Var};
+use zelda::{Action, ActionKind, Direction, GameMap, LoadOptions, MapLocation, Session, Var};
 
 const ROUTE: &str = "d2first";
 
@@ -514,4 +515,96 @@ fn lynel_room_retreat_and_return() {
     let armed = view(&map, &armed, 0);
     let objective = completion(&map).objectives(Some(&at_0a), &armed);
     assert_eq!(objective.next_rooms.iter().copied().collect::<Vec<_>>(), [loc(0, 0x19)]);
+}
+
+fn act<N: zelda::Nes>(s: &mut Session<N>, text: &str) -> zelda::Change {
+    s.act(Action::parse(text).unwrap()).unwrap()
+}
+
+fn tiles(targets: &[(i32, i32)]) -> std::collections::BTreeSet<Target> {
+    targets.iter().map(|&t| Target::Tile(t)).collect()
+}
+
+/// The bow detour in the emulator (Lee, Nov 9).  In 1:0x22 from E the objective points at the west block's push
+/// spots while it is pending (pushing N Link stands half inside its lower row, pushing S above it), then at the
+/// stairs; down them the bow cellar (1:0x7f, an in_cave room under its own id) is a Treasure objective with MOVE N/S
+/// legal at the top of its left ladder; with the bow the way out is up that ladder (its N exit, the top row) to 0x22,
+/// where the step out of the cellar leaves E.
+#[test]
+fn bow_detour_block_stairs_cellar_and_back() {
+    let Some(nes) = open_core() else { return };
+    let map = Arc::new(GameMap::builtin());
+    let mut s = Session::new(Counted(nes, 0), map.clone());
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    s.load(&load_named_state("1_22e_0"), &LoadOptions::default(), &mut rng)
+        .unwrap();
+    for _ in 0..30 {
+        if act(&mut s, "WAIT 8").interrupt.is_none() {
+            break;
+        }
+    }
+    let entered = s.state().clone();
+    assert!(entered.push_block_pending() && !entered.bow());
+    let (route, step) = start_route(&map, loc(1, 0x22), Some("E"), &mut rng, None, &entered);
+    let step = step.expect("0x22 from E is a route step");
+    assert_eq!(map.routes[&route][step].exit, "cave");
+    let mut gc = GameCompletion::new(map.clone(), &route, Some(step)).unwrap();
+    let cellar = MapLocation::new(1, 0x7f, true);
+    let objective = gc.objectives(None, &entered);
+    assert_eq!(objective.next_rooms, [cellar].into_iter().collect());
+    assert_eq!(objective.pbrs_targets, tiles(&[(12, 11), (12, 8)]));
+
+    // Pushed S from above, the block opens the way: the stairs (top-left tile) are the target.
+    let above = s
+        .apply_ram(&[(Var::LinkX, 96), (Var::LinkY, 125), (Var::DoorwayDir, 0)])
+        .clone();
+    act(&mut s, "MOVE S 32");
+    act(&mut s, "WAIT 16");
+    assert!(!s.state().push_block_pending());
+    let pushed = s.state().clone();
+    let objective = gc.objectives(Some(&above), &pushed);
+    assert_eq!(objective.pbrs_targets, tiles(&[(16, 10)]));
+
+    // Down the stairs: the cellar is controllable once laid out, Link at the top of its left ladder.
+    let beside = s.apply_ram(&[(Var::LinkX, 112), (Var::LinkY, 141)]).clone();
+    act(&mut s, "MOVE E 16");
+    let below = s.state().clone();
+    assert_eq!(below.full_location(), cellar);
+    assert!(below.in_cellar() && !below.in_cave() && below.peek(0x11) == 1);
+    assert_eq!((below.link.position.x, below.link.position.y), (48, 93));
+    let objective = gc.objectives(Some(&beside), &below);
+    assert_eq!(gc.step(), Some(step + 1));
+    assert_eq!(objective.kind, ObjectiveKind::Treasure);
+    assert!(objective.next_rooms.is_empty());
+    let bow = below.treasure().expect("the bow");
+    assert!(bow.link_overlap_tiles().into_iter().all(|t| objective.targets.contains(&Target::Tile(t))));
+    assert_eq!(s.mask().directions(ActionKind::Move), [Direction::N, Direction::S]);
+    assert_eq!(below.room().exits.get(Direction::N), Some(&[(6, 0)][..]));
+
+    // On the bow's walkway: taken, the ladder out is the target.
+    s.apply_ram(&[(Var::LinkX, 128), (Var::LinkY, 141)]);
+    act(&mut s, "WAIT 4");
+    let armed = s.state().clone();
+    assert!(armed.bow());
+    let objective = gc.objectives(Some(&below), &armed);
+    assert_eq!(objective.kind, ObjectiveKind::Move);
+    assert_eq!(objective.next_rooms, [loc(1, 0x22)].into_iter().collect());
+    assert_eq!(objective.pbrs_targets, tiles(&[(6, 0)]));
+    assert!(exit_is_correct_at(&map, cellar, (6, 0), &objective, loc(1, 0x22)));
+
+    // Up the ladder: back in 0x22 below the reset block, the step out of the cellar leaves E.
+    s.apply_ram(&[(Var::LinkX, 48), (Var::LinkY, 93)]);
+    let top = s.state().clone();
+    for _ in 0..10 {
+        if act(&mut s, "MOVE N 16").changed_location() {
+            break;
+        }
+    }
+    let out = s.state().clone();
+    assert_eq!(out.full_location(), loc(1, 0x22));
+    assert_eq!((out.link.position.x, out.link.position.y), (96, 173));
+    assert!(out.push_block_pending());
+    let objective = gc.objectives(Some(&top), &out);
+    assert_eq!(gc.step(), Some(step + 2));
+    assert_eq!(objective.next_rooms, [loc(1, 0x23)].into_iter().collect());
 }

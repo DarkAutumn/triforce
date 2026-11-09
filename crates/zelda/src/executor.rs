@@ -48,6 +48,7 @@ pub const INTERRUPT_RADIUS: i32 = 24;
 const ADDR_LEVEL: usize = 0x10;
 const ADDR_MODE: usize = 0x12;
 const ADDR_LOCATION: usize = 0xEB;
+const ADDR_IS_UPDATING_MODE: usize = 0x11;
 const ADDR_LINK_X: usize = 0x70;
 const ADDR_LINK_Y: usize = 0x84;
 const ADDR_LINK_STATUS: usize = 0xAC;
@@ -377,7 +378,7 @@ impl<S> Executor<S> {
     ) -> Result<OptionResult, ZeldaError> {
         self.last_pre_entry = None;
         let start = m.frame;
-        let location = (state.level(), state.location(), state.in_cave());
+        let location = (state.level(), state.location(), state.full_location().in_cave);
         self.blocks = Some(Vec::new());
         let result = (|| {
             let interrupt = if matches!(action.kind, ActionKind::Move | ActionKind::Wait) {
@@ -510,6 +511,7 @@ impl<S> Executor<S> {
                 continue;
             }
             if SCROLLING_MODES.contains(&mode)
+                || is_cellar_entry(m)
                 || m.read(ADDR_LINK_STATUS) & STUN_FLAG != 0
                 || is_level_transition(m, start_location)
             {
@@ -534,6 +536,12 @@ impl<S> Executor<S> {
         self.step(m, 0, 1);
         Ok(())
     }
+}
+
+/// Mode 9 still entering its cellar: the cellar is laid out over the room above's tiles and Link walks down its
+/// ladder (Z_05 InitMode9_EnterCellar / InitMode9_WalkCellar) until IsUpdatingMode turns on.
+fn is_cellar_entry<N: Nes>(m: &Machine<N>) -> bool {
+    m.read(ADDR_MODE) == MODE_UNDERGROUND && m.read(ADDR_IS_UPDATING_MODE) == 0
 }
 
 fn is_level_transition<N: Nes>(m: &Machine<N>, start_location: Option<(u8, u8, bool)>) -> bool {

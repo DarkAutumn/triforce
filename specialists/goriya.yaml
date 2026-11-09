@@ -13,6 +13,6 @@ max_steps: 2000
 warm_start: null
 notes: >-
   Red Goriya rooms, whatever the dungeon (was split between d1-wallmaster and d2-goriya). Dungeon 1: the 3-Goriya
-  room whose boomerang appears when all are dead (Link has no boomerang yet) and the 3-Goriya key room north of the
-  Stalfos key room (off the route, toward the bow). Dungeon 2: the 5-Goriya room and the 5-Goriya room whose N
-  shutter opens only once all are dead (N leads into the Dodongo room).
+  room whose boomerang appears when all are dead (Link has no boomerang yet) and the 3-Goriya key room 0x23 north
+  of the Stalfos key room, crossed twice on the bow detour (S to W, then W to S; Nov 9). Dungeon 2: the 5-Goriya
+  room and the 5-Goriya room whose N shutter opens only once all are dead (N leads into the Dodongo room).

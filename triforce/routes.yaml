@@ -1,19 +1,21 @@
-# The route (docs/routes/d2first.md; Lee, Nov 8: the only route).
-# entry = side of the room Link enters from (start = game start, cave = emerging from a cave/dungeon stairs or the
-# triforce's warp); exit = direction Link leaves (cave = enter the cave/dungeon stairs in this room; triforce = level
-# ends on pickup, Z_01 TakeItem -> GameMode $12 -> OW; terminal = the route ends on entering this room; a route
-# without a terminal step ends on its last step's triforce).
-# The objective follows the steps: in a room the route enters from the side Link came in, with the triforce pieces
-# and sword the route has there, the step's exit is the correct one (zelda::objectives).
+# The route (docs/routes/d2first.md; Lee, Nov 8: the only route; the bow detour, Nov 9).
+# entry = side of the room Link enters from (start = game start, cave = emerging from a cave/dungeon stairs/cellar or
+# the triforce's warp); exit = direction Link leaves (cave = enter the cave, dungeon stairs or cellar stairs in this
+# room; triforce = level ends on pickup, Z_01 TakeItem -> GameMode $12 -> OW; terminal = the route ends on entering
+# this room; a route without a terminal step ends on its last step's triforce).
+# The objective follows the steps: in a room the route enters from the side Link came in, with the triforce pieces,
+# sword and bow the route has there, the step's exit is the correct one (zelda::objectives).
 # `waypoint: heart` (cave step): take the cave's heart container; leaving its room without it is `missed`.
+# `waypoint: bow` (cellar step): take the cellar's bow; until then the objective leads back to it.
 # `retreat: S`: leaving through that exit instead ends a one-room episode as `retreat` (neutral) and lets a chain
 # run go on (the next room's objective sends Link back).
-# in_cave rooms follow v1 game.yaml: same (level, location) with in_cave: true.
+# in_cave rooms follow v1 game.yaml: same (level, location) with in_cave: true.  An underworld item cellar is an
+# in_cave room too, under its own room id (Dungeon 1's bow cellar 0x7f under 0x22), left N up its ladder.
 #
 # d2first: wood sword, east along row 5 to Dungeon 2 (3 hearts), Dodongo, his heart container and the D2 triforce
 # (warps Link to 0x3c); round to 0x2c, bomb its rock wall for the take-any cave's heart container (5 hearts), the
-# white sword at 0x0a, then west and south to Dungeon 1 (both key rooms and the boomerang) through Aquamentus
-# (6 hearts); the route ends on taking the D1 triforce.  Never the fairy.
+# white sword at 0x0a, then west and south to Dungeon 1 (both key rooms, the bow cellar and the boomerang) through
+# Aquamentus (6 hearts); the route ends on taking the D1 triforce.  Never the fairy.
 d2first:
 - {level: 0, room: '0x77', specialist: ow-start, entry: start, exit: cave}
 - {level: 0, room: '0x77', in_cave: true, specialist: ow-start, entry: S, exit: S}
@@ -73,7 +75,17 @@ d2first:
 - {level: 1, room: '0x53', specialist: stalfos-keese-gel, entry: S, exit: W}
 - {level: 1, room: '0x52', specialist: stalfos-keese-gel, entry: E, exit: N}
 - {level: 1, room: '0x42', specialist: stalfos-keese-gel, entry: S, exit: E}
-- {level: 1, room: '0x43', specialist: stalfos-keese-gel, entry: W, exit: E}
+# The bow detour (Lee, Nov 9): 0x43 N through both north key rooms to the blade-trap room 0x22, push its west block N
+# or S, down the stairs for the bow, back out and the same way back to 0x43.
+- {level: 1, room: '0x43', specialist: stalfos-keese-gel, entry: W, exit: N}
+- {level: 1, room: '0x33', specialist: stalfos-keese-gel, entry: S, exit: N}
+- {level: 1, room: '0x23', specialist: goriya, entry: S, exit: W}
+- {level: 1, room: '0x22', specialist: trap-room, entry: E, exit: cave}
+- {level: 1, room: '0x7f', in_cave: true, specialist: equipment-room, entry: S, exit: N, waypoint: bow}
+- {level: 1, room: '0x22', specialist: trap-room, entry: cave, exit: E}
+- {level: 1, room: '0x23', specialist: goriya, entry: W, exit: S}
+- {level: 1, room: '0x33', specialist: stalfos-keese-gel, entry: N, exit: S}
+- {level: 1, room: '0x43', specialist: stalfos-keese-gel, entry: N, exit: E}
 - {level: 1, room: '0x44', specialist: goriya, entry: W, exit: E}
 - {level: 1, room: '0x45', specialist: wallmaster, entry: W, exit: N}
 - {level: 1, room: '0x35', specialist: boss-aquamentus, entry: S, exit: E}
@@ -81,8 +93,7 @@ d2first:
 # Equal-length alternates (tagged in game.yaml so the runner never hits an untagged room):
 alternates:
 - {replaces: [{level: 0, room: '0x67'}], with: [{level: 0, room: '0x78', specialist: ow-octorok, entry: W, exit: N}], note: '0x77 E->0x78 N->0x68 instead of 0x77 N->0x67 E->0x68'}
-# Families by enemy (docs/specialists.md): the route's rooms, the alternate 0x78, and Dungeon 1's bow-side rooms
-# 0x33 and 0x23 north of the route's 0x43 (off the route; states from `entry_states path`).
+# Families by enemy (docs/specialists.md): the route's rooms and the alternate 0x78.
 families:
   ow-start: ['(0, 0x1b)', '(0, 0x1c)', '(0, 0x77)', '(0, 0x77, cave)']
   ow-octorok: ['(0, 0x37)', '(0, 0x3c)', '(0, 0x4c)', '(0, 0x58)', '(0, 0x67)', '(0, 0x68)', '(0, 0x78)']
@@ -93,6 +104,8 @@ families:
   ow-boulder: ['(0, 0x17)', '(0, 0x18)', '(0, 0x19)']
   stalfos-keese-gel: ['(1, 0x33)', '(1, 0x36)', '(1, 0x42)', '(1, 0x43)', '(1, 0x52)', '(1, 0x53)', '(1, 0x63)', '(1, 0x72)', '(1, 0x73)', '(1, 0x74)']
   goriya: ['(1, 0x23)', '(1, 0x44)', '(2, 0x1e)', '(2, 0x5e)']
+  trap-room: ['(1, 0x22)']
+  equipment-room: ['(1, 0x7f, cave)']
   wallmaster: ['(1, 0x45)']
   boss-aquamentus: ['(1, 0x35)']
   d2-rope: ['(2, 0x0d)', '(2, 0x2e)', '(2, 0x4e)', '(2, 0x6e)', '(2, 0x7d)', '(2, 0x7e)']

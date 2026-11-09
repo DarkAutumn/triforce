@@ -462,8 +462,15 @@ the remaining list is deferred until Lee resumes work.
     `no-damage` truncation). Thresholds from 9,033 successful chain visits (10 reach 600; every `stuck` does).
 - **Promote by damage too.** A model that wins 3% more but takes twice the damage is worse in a chain
   (ow-leever-peahat r9a vs r3). Evaluate at chain-like hp and rank by success and `mean_health_change`.
-- **Bow route** (later): 0x43 N → 0x33 (key) → 0x23 (key) → 0x22 (push block, stairs to the bow cellar 0x7F).
-  Needs a route/objective for the bow and a specialist for 0x22 and the cellar.
+- [x] **Bow route (Lee, Nov 9): mapped; training next.** On the route since Nov 9 (`docs/routes/d2first.md` "The
+  bow detour", `docs/decisions.md` 2026-11-09): 0x43 N → 0x33 (key) → 0x23 (key) → 0x22 (push the west block N or
+  S, stairs) → the bow cellar 0x7f → back to 0x43 → 0x44. New families `trap-room` and `equipment-room` with states
+  and curricula; **next: train them** (and retrain stalfos-keese-gel / goriya / the families after the detour on the
+  rebuilt states, which now carry the bow).
+- **0x22 pushed the wrong way** (open, Nov 9): pushed E the west block walls the stairs in until 0x22 is
+  re-entered; the objective then still points at the unreachable stairs (no wavefront path, no PBRS gradient). If
+  trained models do this, consider sending Link out E and back in (the route's 0x23 from W without the bow is off
+  the route and already leads back W).
 - **play-zelda GUI** (uncommitted, Lee trying it; see AGENTS.md): `--games N` with best-hidden-game swaps on room
   change / restart and a fade, fps in the window title, `--benchmark`. Offscreen 3x2 measurements: 6 games 55.8
   fps per cell, 32 games 56.9 (every game still emulating at 60). The cap is the GUI's 16 ms tick (about 57 ticks

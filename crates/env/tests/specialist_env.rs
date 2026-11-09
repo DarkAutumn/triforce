@@ -835,22 +835,25 @@ fn open_route_ignores_optional_combat() {
     assert_eq!(next_rooms(&env), rooms(&[(2, 0x5e)]));
 }
 
-/// 0x43's route exit is the locked E door to 0x44.  Without a key the shortest path to the triforce goes N for the
-/// Stalfos room's key (0x33, off the route); the objective still only accepts 0x44.
+/// 0x43 is crossed twice (the bow detour, Lee, Nov 9): from W the route goes N to the Stalfos key room 0x33, back
+/// from N (with the bow) through the locked E door to 0x44; with or without a key the objective offers only that exit.
 #[test]
 fn route_room_only_offers_its_route_exit() {
     let Some(mut nes) = open_core() else { return };
-    for keys in [0, 1] {
-        let mut env = make_env(nes, "stalfos-keese-gel", Some("1_43w_0"), |c| {
-            c.ram_randomization = RamRandomization {
-                keys: Some((keys, keys)),
-                ..Default::default()
-            };
-        });
-        env.reset(Some(0), None).unwrap();
-        assert_eq!(state(&env).keys() as i64, keys);
-        assert_eq!(next_rooms(&env), rooms(&[(1, 0x44)]), "keys {keys}");
-        nes = release(env);
+    for (start_state, wanted) in [("1_43w_0", 0x33), ("1_43n_0", 0x44)] {
+        for keys in [0, 1] {
+            let mut env = make_env(nes, "stalfos-keese-gel", Some(start_state), |c| {
+                c.ram_randomization = RamRandomization {
+                    keys: Some((keys, keys)),
+                    ..Default::default()
+                };
+            });
+            env.reset(Some(0), None).unwrap();
+            assert_eq!(state(&env).keys() as i64, keys);
+            assert_eq!(state(&env).bow(), wanted == 0x44, "{start_state}");
+            assert_eq!(next_rooms(&env), rooms(&[(1, wanted)]), "{start_state} keys {keys}");
+            nes = release(env);
+        }
     }
 }
 

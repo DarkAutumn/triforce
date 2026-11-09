@@ -1,0 +1,18 @@
+name: trap-room
+rooms: ['(1, 0x22)']
+start_states: ['1_22*_[0-9]']
+success: [exit-correct]
+reward_profile: default
+reward: {pbrs: true, item_targets: true}   # as the dungeon families (round 10 §8): dropped items are shaping targets
+obs: {objective: true, target: true}       # schema 2: direction/distance to the nearest target
+ram_randomization: {hp: [0.15, max], full_hp: 0.5}   # chains arrive with partial hearts (round 5)
+items: {bombs: false}
+curriculum: {enabled: true}             # trajectories/trap-room (Go-Explore paths per start state)
+one_room: true
+max_steps: 600
+warm_start: null
+notes: >-
+  Blade-trap rooms (Lee, Nov 9), whatever the dungeon: no monsters, traps ($49) that slide at Link when he lines up
+  with them and can't be killed. Dungeon 1's 0x22 (the bow detour, docs/routes/d2first.md): from E, push the west
+  block of the diamond N or S (the objective points at the push spots while it is pending), then take the stairs
+  in the middle down to the bow cellar; back from the cellar (Link comes out below the reset block), leave E.

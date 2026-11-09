@@ -12,5 +12,6 @@ max_steps: 3000
 warm_start: null
 notes: >-
   Rooms whose enemies are Stalfos, Keese and Gels (was d1-melee): Dungeon 1's route rooms plus the empty entrance
-  hall and the triforce room (ends on pickup), and the Stalfos key room north of the Gel map room (off the
-  route, on the way to the bow). Start states are pre-entry states from triforce/entry_states.py.
+  hall and the triforce room (ends on pickup), including the Stalfos key room 0x33 north of the Gel map room,
+  crossed twice on the bow detour (S to N, then N to S; Nov 9). Start states are pre-entry states from
+  triforce/entry_states.py.

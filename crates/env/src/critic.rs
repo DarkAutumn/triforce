@@ -12,7 +12,7 @@ use crate::rewards::{
 };
 use std::collections::{HashMap, HashSet};
 use zelda::enums::{
-    ActionKind, AnimationKind, AnimationState, MapLocation, SwordKind, Tile, enemy,
+    ActionKind, AnimationKind, AnimationState, Direction, MapLocation, SwordKind, Tile, enemy,
 };
 use zelda::game::GameView;
 use zelda::objectives::{Objective, exit_is_correct};
@@ -34,6 +34,8 @@ pub const COMBAT_DECAY_RATE: f64 = 0.5;
 
 /// Reward profiles `reward_profile` may name.
 pub const REWARD_PROFILES: [&str; 1] = ["default"];
+/// ObjDir of the push block (object slot $B): the direction it was pushed (Z_04 UpdateBlock0Idle).
+const PUSH_BLOCK_DIRECTION: u16 = 0x98 + 0x0B;
 
 /// Equipment pickups, in `_EQUIPMENT_ATTRS` order: (name, value).
 const EQUIPMENT: [(&str, &str, f64); 20] = [
@@ -298,13 +300,21 @@ impl GameplayCritic {
                 _ => {}
             }
         }
+        // A block that opens a door or stairs, or the one a game.yaml `push_block` room needs pushed one of its ways
+        // (Dungeon 1's 0x22: the stairs are there from the start, walled in by blocks).
+        let pushed = Direction::from_value(curr.peek(PUSH_BLOCK_DIRECTION));
+        let route_block = curr
+            .game_map()
+            .get(location)
+            .is_some_and(|r| pushed.is_some_and(|d| r.push_block.contains(&d)));
         if after.has_push_block
             && before.block_push_complete == 0
             && after.block_push_complete > 0
-            && matches!(
-                after.secret_trigger,
-                SecretTrigger::BlockDoor | SecretTrigger::BlockStairs
-            )
+            && (route_block
+                || matches!(
+                    after.secret_trigger,
+                    SecretTrigger::BlockDoor | SecretTrigger::BlockStairs
+                ))
         {
             self.reward_puzzle(
                 location,

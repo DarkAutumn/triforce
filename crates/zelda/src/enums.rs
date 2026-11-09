@@ -396,7 +396,8 @@ impl Position {
     }
 }
 
-/// A room: level, room id ($EB, row in the high nibble) and whether Link is in its cave.
+/// A room: level, room id ($EB, row in the high nibble) and whether Link is in a sub-room: an overworld cave (mode
+/// $B, same room id) or an underworld item cellar (mode 9; the cellar's own room id, e.g. Dungeon 1's 0x7f under 0x22).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MapLocation {
     pub level: u8,
@@ -439,16 +440,25 @@ impl MapLocation {
             .then(|| MapLocation::from_coordinates(self.level, x, y, self.in_cave))
     }
 
-    /// Direction of movement from this room to `next` (`get_direction_to`).
+    /// Direction of movement from this room to `next` (`get_direction_to`): out of a cave S, out of a cellar N (up
+    /// its ladder).
     pub fn direction_to(self, next: MapLocation) -> Direction {
         if self.in_cave && !next.in_cave {
-            return Direction::S;
+            return if self.level == 0 {
+                Direction::S
+            } else {
+                Direction::N
+            };
         }
         if self.level == 0 && next.level != 0 {
             return Direction::S;
         }
         if self.level != 0 && next.level == 0 {
             return Direction::N;
+        }
+        if next.in_cave && !self.in_cave {
+            // Into a cave or down a cellar's stairs: no edge (a cellar's room id isn't a neighbour).
+            return Direction::None;
         }
         if self.manhattan_distance(next) == 1 {
             if self.x() < next.x() {

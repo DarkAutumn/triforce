@@ -59,6 +59,21 @@ def test_d2_then_the_heart_and_white_sword_then_the_d1_triforce():
     assert rooms_info[(0, 0x0a, True)]['treasure'] == 'white-sword'
 
 
+def test_the_bow_detour_goes_north_from_0x43_and_back():
+    steps = native.route_steps()
+    start = next(i for i, s in enumerate(steps) if (s['level'], s['room'], s['entry']) == (1, 0x43, 'W'))
+    detour = [(s['room'], s['in_cave'], s['entry'], s['exit'], s['specialist']) for s in steps[start:start + 10]]
+    assert detour == [(0x43, False, 'W', 'N', 'stalfos-keese-gel'), (0x33, False, 'S', 'N', 'stalfos-keese-gel'),
+                      (0x23, False, 'S', 'W', 'goriya'), (0x22, False, 'E', 'cave', 'trap-room'),
+                      (0x7f, True, 'S', 'N', 'equipment-room'), (0x22, False, 'cave', 'E', 'trap-room'),
+                      (0x23, False, 'W', 'S', 'goriya'), (0x33, False, 'N', 'S', 'stalfos-keese-gel'),
+                      (0x43, False, 'N', 'E', 'stalfos-keese-gel'), (0x44, False, 'W', 'E', 'goriya')]
+    assert steps[start + 4]['waypoint'] == 'bow'
+    assert native.game_rooms()[(1, 0x7f, True)]['treasure'] == 'bow'
+    assert native.families()['trap-room'] == [(1, 0x22, False)]
+    assert native.families()['equipment-room'] == [(1, 0x7f, True)]
+
+
 def test_alternates_replace_route_rooms():
     main = {(s['level'], s['room'], s['in_cave']) for s in native.route_steps()}
     alternates = native.route_alternates()

@@ -3,7 +3,7 @@
 //! Key-aware Dijkstra over (room, keys, collected key rooms) with every shortest path, plus per-route successor
 //! tables used to break ties toward the route.  Iteration orders follow the YAML files, as the Python dicts do.
 
-use crate::enums::{MapLocation, Tile};
+use crate::enums::{Direction, MapLocation, Tile};
 use indexmap::IndexMap;
 use serde_yaml_ng::Value;
 use std::cmp::Reverse;
@@ -61,6 +61,10 @@ pub struct GameRoom {
     /// `treasure_tile: [col, row]`: where a cave's treasure lies when it isn't the middle ware (the 0x2c cave offers
     /// a potion on the left and the heart container on the right).
     pub treasure_tile: Option<Tile>,
+    /// `push_block: [N, S]`: the room's push block (room attr D bit $40, Z_04 UpdateBlock) opens the way to the
+    /// room's stairs only when pushed one of these ways (Dungeon 1's 0x22: its west block, N or S; pushed E it
+    /// closes the way until the room is re-entered).  The objective sends Link to a push spot while it is pending.
+    pub push_block: Vec<Direction>,
 }
 
 /// A `[col, row]` game.yaml tile.
@@ -295,6 +299,19 @@ fn parse_rooms(text: &str) -> Result<IndexMap<MapLocation, GameRoom>, MapError> 
             requires_bombs: get(entry, "requires_bombs").and_then(Value::as_bool).unwrap_or(false),
             bomb_secret: tile(get(entry, "bomb_secret")),
             treasure_tile: tile(get(entry, "treasure_tile")),
+            push_block: get(entry, "push_block")
+                .and_then(Value::as_sequence)
+                .map(|s| {
+                    s.iter()
+                        .map(|d| {
+                            d.as_str()
+                                .and_then(Direction::from_exit)
+                                .ok_or_else(|| MapError(format!("{loc}: push_block: bad direction {d:?}")))
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .transpose()?
+                .unwrap_or_default(),
         };
         rooms.insert(loc, room);
     }
@@ -724,9 +741,11 @@ mod tests {
             let exit = &map.get(step.location()).unwrap().exits[&step.exit];
             assert_eq!(exit.destination, next.location(), "{step:?} -> {next:?}");
         }
-        let hearts: Vec<_> = steps.iter().filter(|s| s.waypoint.is_some()).collect();
-        assert_eq!(hearts.len(), 1);
-        assert_eq!((hearts[0].location(), hearts[0].waypoint.as_deref()), (L::new(0, 0x2c, true), Some("heart")));
+        let waypoints: Vec<_> = steps
+            .iter()
+            .filter_map(|s| Some((s.location(), s.waypoint.as_deref()?)))
+            .collect();
+        assert_eq!(waypoints, [(L::new(0, 0x2c, true), "heart"), (L::new(1, 0x7f, true), "bow")]);
         assert!(!steps.iter().any(|s| s.location() == loc(0, 0x39) || s.location() == loc(2, 0x4f)));
         let retreats: Vec<_> = steps.iter().filter(|s| s.retreat.is_some()).collect();
         assert_eq!(retreats.len(), 1);
@@ -923,15 +942,35 @@ mod tests {
         assert!(map.route_next_rooms(loc(0, 0x49), m).is_empty());
     }
 
-    /// Only the d2-first route's rooms (and the Dungeon 1 bow rooms off 0x43) have a specialist.
+    /// Only the d2-first route's rooms (the bow detour included) and its alternate have a specialist.
     #[test]
     fn only_route_rooms_are_tagged() {
         let map = GameMap::builtin();
         let mut route: BTreeSet<L> = map.routes[DEFAULT_ROUTE].iter().map(RouteStep::location).collect();
         route.extend(map.alternates.iter().flat_map(|a| a.with.iter().map(RouteStep::location)));
-        route.extend([loc(1, 0x33), loc(1, 0x23)]);
+        assert!(route.contains(&L::new(1, 0x7f, true)) && route.contains(&loc(1, 0x22)));
         let tagged: BTreeSet<L> = map.rooms().values().filter(|r| r.specialist.is_some()).map(|r| r.location).collect();
         assert_eq!(tagged, route);
         assert_eq!(map.routes.keys().collect::<Vec<_>>(), [DEFAULT_ROUTE]);
+    }
+
+    /// The bow detour: 0x22's stairs lead into the cellar (an in_cave room under its own id) and its ladder back;
+    /// 0x22 marks its west block's push directions; the shortest way from 0x43 to the bow runs N through both key rooms.
+    #[test]
+    fn bow_cellar_hangs_under_0x22() {
+        let map = GameMap::builtin();
+        let cellar = L::new(1, 0x7f, true);
+        let room = map.get(loc(1, 0x22)).unwrap();
+        assert_eq!(room.exits["cave"].destination, cellar);
+        assert_eq!(room.push_block, [Direction::N, Direction::S]);
+        assert_eq!(map.get(cellar).unwrap().exits["N"].destination, loc(1, 0x22));
+        assert_eq!(map.get(cellar).unwrap().treasure.as_deref(), Some("bow"));
+        assert_eq!(
+            map.find_path(loc(1, 0x43), cellar).unwrap(),
+            [loc(1, 0x43), loc(1, 0x33), loc(1, 0x23), loc(1, 0x22), cellar]
+        );
+        assert_eq!(map.route_next_rooms(loc(1, 0x22), DEFAULT_ROUTE), set(&[cellar, loc(1, 0x23)]));
+        assert_eq!(map.route_next_rooms(cellar, DEFAULT_ROUTE), set(&[loc(1, 0x22)]));
+        assert_eq!(map.route_next_rooms(loc(1, 0x43), DEFAULT_ROUTE), set(&[loc(1, 0x33), loc(1, 0x44)]));
     }
 }

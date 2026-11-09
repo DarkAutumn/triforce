@@ -50,8 +50,9 @@ class Direction(Enum):
 
 
 class MapLocation:
-    """A room: level (0 = overworld), room byte (high nibble row, low nibble column) and whether Link is in its
-    cave.  Equal to ``(level, room)`` and ``(level, room, in_cave)`` tuples."""
+    """A room: level (0 = overworld), room byte (high nibble row, low nibble column) and whether Link is in a
+    sub-room: an overworld cave or an underworld item cellar (the cellar's own room id, e.g. 1:0x7f under 1:0x22).
+    Equal to ``(level, room)`` and ``(level, room, in_cave)`` tuples."""
     __slots__ = ('level', 'value', 'in_cave', 'x', 'y', '_hash')
 
     def __init__(self, level: int, location: int, in_cave: bool):
@@ -99,9 +100,10 @@ class MapLocation:
         return MapLocation(level, (y << 4) | x, in_cave)
 
     def get_direction_to(self, next_room):
-        """The exit direction from this room into the adjacent ``next_room`` (NONE if not adjacent)."""
+        """The exit direction from this room into the adjacent ``next_room`` (NONE if not adjacent): out of a cave S,
+        out of an underworld cellar N (up its ladder)."""
         if self.in_cave and not next_room.in_cave:
-            return Direction.S
+            return Direction.S if self.level == 0 else Direction.N
         if self.level == 0 and next_room.level != 0:
             return Direction.S
         if self.level != 0 and next_room.level == 0:

@@ -433,9 +433,10 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
 # --- audit ---
 
 def full_monster_counts() -> dict:
-    """(level, room) -> monsters a fresh entry creates, from game.yaml (Zoras excluded)."""
+    """(level, room) -> monsters a fresh entry creates, from game.yaml (Zoras excluded).  Overworld caves have none of
+    their own; an underworld cellar (in_cave, its own room id) has its Keese."""
     return {(level, room): sum(n for name, n in info['enemies'].items() if name not in NOT_ROOM_MONSTERS)
-            for (level, room, in_cave), info in game_rooms().items() if not in_cave}
+            for (level, room, in_cave), info in game_rooms().items() if not in_cave or level != 0}
 
 
 def state_label(path: str) -> str:
@@ -465,7 +466,7 @@ def audit_state(game: Game, path: str, loads: int = 9, full: Optional[dict] = No
         counts.add(len(monsters))
     level, room, in_cave = state.full_location
     full = full if full is not None else full_monster_counts()
-    expected = 0 if in_cave else full.get((level, room))       # a cave has no monsters of its own
+    expected = 0 if in_cave and level == 0 else full.get((level, room))     # an overworld cave has no monsters
     label = state_label(path)
     return {'state': label, 'path': str(path), 'level': level, 'room': f"0x{room:02x}",
             'in_cave': in_cave, 'named_room_matches': _named_room(label) in (None, (level, room)),

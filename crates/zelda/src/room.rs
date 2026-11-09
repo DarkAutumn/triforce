@@ -16,6 +16,8 @@ pub const SOUTH_DOOR_TILE: Tile = (0xF, 0x12);
 
 pub const TOP_CAVE_TILE: u8 = 0xF3;
 pub const BOTTOM_CAVE_TILE: u8 = 0x24;
+/// The top-left tile of an underworld stairs square ($70 $72 over $71 $73).
+pub const STAIRS_TOP_LEFT_TILE: u8 = 0x70;
 
 /// Tiles with value < threshold are walkable (Z_05.asm:6446-6450).
 pub const OW_FIRST_UNWALKABLE: u8 = 0x89;
@@ -169,14 +171,28 @@ impl Room {
         room.loaded = tiles
             .iter()
             .any(|&t| t < threshold || (overworld && ow_override(t)));
-        if !overworld {
+        if !overworld && !location.in_cave {
             room.compute_corridor_tiles();
         }
         room.exits = room.exit_tiles();
-        room.cave_tile = (0..COLS)
-            .flat_map(|x| (0..ROWS).map(move |y| (x, y)))
-            .find(|&(x, y)| tiles[index(x, y)] == TOP_CAVE_TILE);
+        // Underworld rooms have no cave mouths ($F3 is a cellar's background).
+        room.cave_tile = overworld
+            .then(|| {
+                (0..COLS)
+                    .flat_map(|x| (0..ROWS).map(move |y| (x, y)))
+                    .find(|&(x, y)| tiles[index(x, y)] == TOP_CAVE_TILE)
+            })
+            .flatten();
         room
+    }
+
+    /// The top-left tiles of the room's stairs squares (tiles $70-$73; Z_05 CheckWarps sends Link down from a
+    /// square-aligned stand on one): where Link enters an underworld cellar.
+    pub fn stairs_tiles(&self) -> Vec<Tile> {
+        (0..COLS)
+            .flat_map(|x| (0..ROWS).map(move |y| (x, y)))
+            .filter(|&(x, y)| self.tiles[index(x, y)] == STAIRS_TOP_LEFT_TILE)
+            .collect()
     }
 
     pub fn threshold(&self) -> u8 {
@@ -408,6 +424,13 @@ impl Room {
             exits.set(Direction::S, row(ROWS - 2), true);
             exits.set(Direction::E, col(COLS - 1), true);
             exits.set(Direction::W, col(0), true);
+        } else if self.location.in_cave {
+            // An item cellar: up the ladder out of the top row (Z_05 CheckSubroom: Y < $40 moving up).
+            let top: Vec<Tile> = (0..COLS - 1)
+                .map(|x| (x, 0))
+                .filter(|&(x, y)| self.is_tile_walkable(x, y) && self.is_tile_walkable(x + 1, y))
+                .collect();
+            exits.set(Direction::N, top, true);
         } else {
             for direction in [Direction::N, Direction::S, Direction::W, Direction::E] {
                 let (c, r) = door_tile(direction);

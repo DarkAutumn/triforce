@@ -1174,11 +1174,19 @@ rooms:
   treasure: null
 - level: 1
   location: '0x22'
+  specialist: trap-room  # the bow detour (Lee, Nov 9); emulator-checked through Game.load at mode 5
   exits:
     E:
       level: 1
       location: '0x23'
       locked: true
+    cave:  # stairs (tiles $70-$73, 2x2 at tiles (16, 10)) down to the bow cellar (LevelInfo_CellarRoomIdArray $7F)
+      level: 1
+      location: '0x7f'
+      in_cave: true
+  # Four blade traps ($49, projectiles, not monsters) in the corners; the stairs sit inside a diamond of blocks.
+  # Pushing the west block (top-left tile (12, 10)) N or S opens it (E walls the stairs in until re-entry).
+  push_block: [N, S]
   enemies: null
   treasure: null
 - level: 1
@@ -1389,6 +1397,17 @@ rooms:
   enemies:
     Stalfos: 5
   treasure: key
+- level: 1
+  location: '0x7f'
+  in_cave: true  # the bow cellar under 0x22 (mode 9, side view): walkways and ladders, 4 Blue Keese
+  specialist: equipment-room
+  exits:
+    N:  # up the left ladder (x < $80: room A, attr A = $22); Link comes out at (96, 173), below the west block
+      level: 1
+      location: '0x22'
+  enemies:
+    BlueKeese: 4
+  treasure: bow  # on the upper walkway, (128, 144); its item-taken flag is 0x7f's
 # --- Dungeon 2 (level 2) ---
 # Derived from rom.nes LevelBlockUW1Q1 (bins.xml offset 100096) + LevelInfoUW2 (offset 103672):
 # doors from attr A/B (Z_05 FindDoorTypeByDoorBit), enemies from attr C/D + LevelInfo_FoeCounts

@@ -370,7 +370,8 @@ pub fn decode_room_state(ram: &[u8; RAM_SIZE]) -> RoomState {
         }
     } else if underworld {
         let attr_item = attr_e & 0x1F;
-        if attr_item != ITEM_NONE_ATTR && !item_taken && !in_cellar {
+        // A cellar's attr E names its item too (the bow cellar 0x7f: $0A); only its attrs A/B are destinations.
+        if attr_item != ITEM_NONE_ATTR && !item_taken {
             item_id = Some(attr_item);
             hidden_until_clear = matches!(
                 trigger,

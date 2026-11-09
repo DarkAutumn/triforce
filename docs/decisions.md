@@ -735,3 +735,26 @@ entry below and `crates/zcore/UPSTREAM.md`.
   `objectives::dungeon_1_entrance_follows_the_route_steps`, `lynel_room_retreat_and_return`,
   `specialist_env::the_d1_entrance_follows_the_route_steps`, `leaving_the_lynel_room_south_is_a_neutral_retreat`,
   `chain_explore::lynel_retreat_continues_the_run`.
+
+## 2026-11-09 — The bow detour on d2first; underworld cellars as sub-rooms; `trap-room` and `equipment-room`
+
+- **What:** d2first's Dungeon 1 now detours for the bow (Lee): 0x43 from W goes N (was E) through 0x33 and 0x23 to
+  the blade-trap room 0x22, pushes its west block N or S, takes the stairs down to the item cellar 0x7f for the bow
+  (`waypoint: bow`), climbs out and goes back 0x22 E → 0x23 S → 0x33 S → 0x43 E → 0x44 (steps 55–63). A cellar is
+  modelled as a sub-room like a cave: `MapLocation.in_cave` under the cellar's own room id (`GameView::in_cellar`,
+  mode 9; game.yaml/routes.yaml `in_cave: true`), entered `S`, left `cave`, exit N up its ladder (`Room` exit: the
+  top row). The executor skips mode 9's entry (until IsUpdatingMode turns on); `can_link_move` skips the doorway and
+  room-bound rules in a cellar (as the game does); a cellar's room state now carries its attr-E item, so the bow
+  fills the treasure slot. `StepProgress` tracks the bow, so the detour's rooms without it are off the route and lead
+  back to the cellar. game.yaml `push_block: [N, S]` on 0x22: while the block is pending the objective points at the
+  push spots instead of the walled-in stairs; `reward-pushed-block` pays for a push in a listed direction (0x22 has
+  no block secret trigger: its stairs are there from the start). New families `trap-room` (0x22) and
+  `equipment-room` (the cellar); 0x33/0x23 stay in stalfos-keese-gel/goriya, now on the route twice each.
+- **Why:** Lee (Nov 9): add the bow to the route; blade-trap rooms and item cellars ("all equipment rooms are
+  pretty much the same") get their own families. A sub-room flag reuses every cave rule (entries, exits, state
+  names `1_7fcave_N`, Python `:cave` keys) instead of a second location kind.
+- **Evidence:** `docs/routes/d2first.md` "The bow detour" (emulator and disassembly checks); tests
+  `objectives::bow_detour_block_stairs_cellar_and_back`, `ported_observation::bow_cellar_observation`,
+  `game_map::tests::bow_cellar_hangs_under_0x22`, `objectives::tests::route_progress_takes_the_bow_in_the_cellar`,
+  `specialist_env::route_room_only_offers_its_route_exit`,
+  `tests/test_game_map.py::test_the_bow_detour_goes_north_from_0x43_and_back`.

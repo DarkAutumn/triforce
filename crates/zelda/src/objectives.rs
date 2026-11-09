@@ -1,13 +1,13 @@
 //! Where Link should go next (`triforce/objectives.py`, live `GameCompletion` only).
 //!
 //! `GameCompletion` follows the route step by step: in a room the route enters from the side Link came in, with the
-//! triforce pieces and sword the route has there, the step's exit is the correct one (Dungeon 1's key rooms: 0x73
-//! W, then E, then N).  Elsewhere (off the route, or a step leaving through a cave or a triforce) it routes through
-//! the milestone: the sword first, then the route's waypoints while they apply, then each triforce (the route's
-//! triforce steps in route order, then the closest one left), using `GameMap` Dijkstra with ties broken toward the
-//! route.  Persistent room flags seed which keys are taken and which locked doors are open.  Targets feed the PBRS
-//! wavefront; `next_rooms` decides which exits are correct.  The dead `ReachLocation`, `TreasureObjective`,
-//! `RoomWalk` and `OBJECTIVES` are not ported.
+//! triforce pieces, sword and bow the route has there, the step's exit is the correct one (Dungeon 1's key rooms:
+//! 0x73 W, then E, then N).  Elsewhere (off the route, or a step leaving through a cave, stairs or a triforce) it
+//! routes through the milestone: the sword first, then the route's waypoints while they apply, then each triforce
+//! (the route's triforce steps in route order, then the closest one left), using `GameMap` Dijkstra with ties broken
+//! toward the route.  Persistent room flags seed which keys are taken and which locked doors are open.  Targets feed
+//! the PBRS wavefront; `next_rooms` decides which exits are correct.  The dead `ReachLocation`,
+//! `TreasureObjective`, `RoomWalk` and `OBJECTIVES` are not ported.
 
 use crate::enums::{Direction, MapLocation, SwordKind, Tile};
 use crate::game::GameView;
@@ -23,8 +23,12 @@ use std::sync::Arc;
 pub const FLAG_ITEM_TAKEN: u8 = 0x10;
 pub const CAVE_TREASURE_TILE: Tile = (0x0F, 0x0B);
 /// routes.yaml `waypoint: heart` (on a cave step): take the cave's heart container (game.yaml `treasure_tile`);
-/// done once the overworld room's item-taken flag is set.
+/// done once the overworld room's item-taken flag is set.  Leaving its room without it is `missed`.
 pub const WAYPOINT_HEART: &str = "heart";
+/// routes.yaml `waypoint: bow` (on Dungeon 1's cellar step): take the cellar's bow; done once the cellar's item-taken
+/// flag is set.  Without it the route's later steps don't match (`StepProgress::bow`), so the objective sends Link
+/// back down the stairs.
+pub const WAYPOINT_BOW: &str = "bow";
 const COMBAT_SHUTTER_TRIGGERS: [SecretTrigger; 4] = [
     SecretTrigger::AllDead,
     SecretTrigger::Ringleader,
@@ -76,18 +80,20 @@ pub struct Objective {
     pub retreats: BTreeSet<MapLocation>,
 }
 
-/// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`) and the
-/// sword earlier cave steps handed over.
+/// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`), the sword
+/// earlier cave steps handed over and whether an earlier cellar step gave the bow.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StepProgress {
     pub triforces: u8,
     pub sword: SwordKind,
+    pub bow: bool,
 }
 
 impl StepProgress {
     /// Link holds exactly this progress.
     pub fn matches(&self, state: &GameView) -> bool {
         state.sword() == self.sword
+            && state.bow() == self.bow
             && (1..=8).all(|level| state.has_triforce(level) == (self.triforces & (1 << (level - 1)) != 0))
     }
 }
@@ -105,6 +111,7 @@ pub fn route_progress(map: &GameMap, steps: &[RouteStep]) -> Vec<StepProgress> {
     let mut progress = StepProgress {
         triforces: 0,
         sword: SwordKind::None,
+        bow: false,
     };
     let mut out = Vec::with_capacity(steps.len());
     for step in steps {
@@ -112,26 +119,31 @@ pub fn route_progress(map: &GameMap, steps: &[RouteStep]) -> Vec<StepProgress> {
         if step.exit == "triforce" && (1..=8).contains(&step.level) {
             progress.triforces |= 1 << (step.level - 1);
         }
-        if step.in_cave
-            && let Some(sword) = map
-                .get(step.location())
-                .and_then(|r| r.treasure.as_deref())
-                .and_then(sword_treasure)
-        {
+        let treasure = step
+            .in_cave
+            .then(|| map.get(step.location()).and_then(|r| r.treasure.as_deref()))
+            .flatten();
+        if let Some(sword) = treasure.and_then(sword_treasure) {
             progress.sword = progress.sword.max(sword);
+        }
+        if treasure == Some("bow") {
+            progress.bow = true;
         }
     }
     out
 }
 
-/// The routes.yaml entry of `curr` when Link comes from `prev`: the side he crossed (N/S/E/W), `S` into a cave or
-/// down a level's stairs, `cave` out of a cave or a level (stairs, or the triforce's warp) onto the overworld.
-/// None for a jump that isn't one room (a Wallmaster's drag).
+/// The routes.yaml entry of `curr` when Link comes from `prev`: the side he crossed (N/S/E/W), `S` into a cave, down
+/// a level's stairs or down a cellar's, `cave` out of a cave, a cellar or a level (stairs, or the triforce's warp)
+/// onto the overworld.  None for a jump that isn't one room (a Wallmaster's drag).
 pub fn route_entry(prev: MapLocation, curr: MapLocation) -> Option<&'static str> {
     if curr.in_cave && !prev.in_cave {
         return Some("S");
     }
-    if curr.level == 0 && (prev.in_cave || prev.level != 0) {
+    if prev.in_cave && !curr.in_cave {
+        return Some("cave");
+    }
+    if curr.level == 0 && prev.level != 0 {
         return Some("cave");
     }
     if curr.level != prev.level {
@@ -453,7 +465,7 @@ impl GameCompletion {
     }
 
     fn update_exits(&mut self, state: &GameView) {
-        if state.in_cave() || self.rooms.contains_key(&state.full_location()) {
+        if state.full_location().in_cave || self.rooms.contains_key(&state.full_location()) {
             return;
         }
         let mut item = self
@@ -574,9 +586,13 @@ impl GameCompletion {
         }
     }
 
-    /// The tiles that enter this overworld room's cave: the cave mouth, else the game.yaml `bomb_secret` rock wall
-    /// (2x2 tiles: bombed open, the opening is the entrance).
+    /// The tiles that enter this room's sub-room.  Overworld: the cave mouth, else the game.yaml `bomb_secret` rock
+    /// wall (2x2 tiles: bombed open, the opening is the entrance).  Underworld: the stairs down to the cellar (the top-
+    /// left tile of each stairs square).
     fn cave_tiles(&self, state: &GameView) -> Vec<Tile> {
+        if state.level() > 0 {
+            return state.room().stairs_tiles();
+        }
         if let Some(tile) = state.room().cave_tile {
             return vec![tile];
         }
@@ -585,6 +601,39 @@ impl GameCompletion {
             .and_then(|r| r.bomb_secret)
             .map(|(c, r)| vec![(c, r), (c + 1, r), (c, r + 1), (c + 1, r + 1)])
             .unwrap_or_default()
+    }
+
+    /// While a game.yaml `push_block` room's block is pending, its stairs are walled in: the stairs targets become
+    /// the tiles Link pushes it from (Link's top-left tile; pushing N he stands half inside the block's lower row, as
+    /// the game lets him, pushing S on top of it, E and W beside it).  The push itself needs 16 frames of pressing.
+    fn push_block_targets(&self, state: &GameView, objective: MapObjective) -> MapObjective {
+        let (targets, rooms) = objective;
+        let Some(room) = self.map.get(state.full_location()) else {
+            return (targets, rooms);
+        };
+        if room.push_block.is_empty() || !state.push_block_pending() {
+            return (targets, rooms);
+        }
+        let stairs: Vec<Target> = state.room().stairs_tiles().into_iter().map(Target::Tile).collect();
+        if !targets.iter().any(|t| stairs.contains(t)) {
+            return (targets, rooms);
+        }
+        let block = state.push_block_tiles();
+        let (col, row) = (
+            block.iter().map(|t| t.0).min().unwrap_or(0),
+            block.iter().map(|t| t.1).min().unwrap_or(0),
+        );
+        let mut out: Vec<Target> = targets.into_iter().filter(|t| !stairs.contains(t)).collect();
+        for direction in &room.push_block {
+            let spot = match direction {
+                Direction::N => (col, row + 1),
+                Direction::S => (col, row - 2),
+                Direction::E => (col - 2, row),
+                _ => (col + 2, row),
+            };
+            out.push(Target::Tile(spot));
+        }
+        (out, rooms)
     }
 
     fn closest_room(&self, state: &GameView, targets: &[MapLocation]) -> Option<MapLocation> {
@@ -628,8 +677,8 @@ impl GameCompletion {
         prev: Option<&GameView>,
         state: &GameView,
     ) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
-        if state.in_cave() {
-            return self.cave_objective(state);
+        if state.full_location().in_cave {
+            return self.subroom_objective(state);
         }
         if state.level() > 0 {
             return self.dungeon_room_objective(prev, state);
@@ -664,7 +713,8 @@ impl GameCompletion {
         (ObjectiveKind::None, Vec::new(), Vec::new())
     }
 
-    fn cave_objective(&self, state: &GameView) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
+    /// In a cave or a cellar: its treasure while the route wants it here, then the way out.
+    fn subroom_objective(&self, state: &GameView) -> (ObjectiveKind, Vec<Target>, Vec<MapLocation>) {
         if self.should_collect_treasure(state) {
             if let Some(treasure) = state.treasure() {
                 return (
@@ -680,12 +730,22 @@ impl GameCompletion {
                 .unwrap_or(CAVE_TREASURE_TILE);
             return (ObjectiveKind::Treasure, vec![Target::Tile(tile)], Vec::new());
         }
-        let exits = state.room().exits.get(Direction::S).unwrap_or_default();
-        (
-            ObjectiveKind::Move,
-            exits.iter().map(|&t| Target::Tile(t)).collect(),
-            vec![MapLocation::new(state.level(), state.location(), false)],
-        )
+        let (targets, rooms) = self.subroom_exit(state);
+        (ObjectiveKind::Move, targets, rooms.into_iter().collect())
+    }
+
+    /// The way out of a sub-room: a cave's S edge to its overworld room, a cellar's ladder (N, the top row) to the
+    /// room its game.yaml exit names.
+    fn subroom_exit(&self, state: &GameView) -> MapObjective {
+        let loc = state.full_location();
+        let (direction, rooms) = if state.in_cellar() {
+            let rooms = self.map.get(loc).map(|r| r.neighbors().collect()).unwrap_or_default();
+            (Direction::N, rooms)
+        } else {
+            (Direction::S, [MapLocation::new(loc.level, loc.value, false)].into_iter().collect())
+        };
+        let exits = state.room().exits.get(direction).unwrap_or_default();
+        (exits.iter().map(|&t| Target::Tile(t)).collect(), rooms)
     }
 
     fn dungeon_room_objective(
@@ -748,7 +808,7 @@ impl GameCompletion {
             return false;
         }
         for room in &next_rooms {
-            if room.level != state.level() || room.in_cave != state.in_cave() {
+            if room.level != state.level() || room.in_cave != state.full_location().in_cave {
                 return false;
             }
             let d = state.full_location().direction_to(*room);
@@ -762,14 +822,8 @@ impl GameCompletion {
 
     fn map_objective(&mut self, state: &GameView) -> (Vec<Target>, BTreeSet<MapLocation>) {
         let loc = state.full_location();
-        if state.in_cave() {
-            let exits = state.room().exits.get(Direction::S).unwrap_or_default();
-            return (
-                exits.iter().map(|&t| Target::Tile(t)).collect(),
-                [MapLocation::new(state.level(), state.location(), false)]
-                    .into_iter()
-                    .collect(),
-            );
+        if loc.in_cave {
+            return self.subroom_exit(state);
         }
         let edge_step = self.edge_step(loc);
         let key = match edge_step {
@@ -793,7 +847,7 @@ impl GameCompletion {
         if let Some((last, result)) = &self.last_route
             && *last == key
         {
-            return result.clone();
+            return self.push_block_targets(state, result.clone());
         }
         let next_rooms = match &key {
             RouteKey::Step(_, _, next) => self.step_next_rooms(loc, *next),
@@ -834,7 +888,7 @@ impl GameCompletion {
         }
         let result = (targets, next_rooms);
         self.last_route = Some((key, result.clone()));
-        result
+        self.push_block_targets(state, result)
     }
 }
 
@@ -994,6 +1048,25 @@ mod tests {
         assert_eq!(at(1, 0x36, false, "W"), (0b10, SwordKind::White));
     }
 
+    /// The bow from the cellar step on: 0x43 from W and 0x22 from E without it, 0x22 out of the cellar, 0x43 from N
+    /// and the triforce room with it.
+    #[test]
+    fn route_progress_takes_the_bow_in_the_cellar() {
+        let map = GameMap::builtin();
+        let steps = &map.routes["d2first"];
+        let progress = route_progress(&map, steps);
+        let bow = |room, in_cave, entry: &str| {
+            let i = steps
+                .iter()
+                .position(|s| s.location() == MapLocation::new(1, room, in_cave) && s.entry == entry)
+                .unwrap();
+            progress[i].bow
+        };
+        assert!(!bow(0x43, false, "W") && !bow(0x22, false, "E") && !bow(0x7f, true, "S"));
+        assert!(bow(0x22, false, "cave") && bow(0x43, false, "N") && bow(0x36, false, "W"));
+        assert!(progress[..steps.len() - 1].iter().zip(&progress[1..]).all(|(a, b)| a.bow <= b.bow));
+    }
+
     #[test]
     fn route_entry_names_the_side_crossed() {
         let m = MapLocation::new;
@@ -1005,16 +1078,25 @@ mod tests {
         assert_eq!(route_entry(m(0, 0x37, false), m(1, 0x73, false)), Some("S"));
         assert_eq!(route_entry(m(2, 0x0d, false), m(0, 0x3c, false)), Some("cave"));
         assert_eq!(route_entry(m(1, 0x45, false), m(1, 0x73, false)), None); // a Wallmaster's drag
+        // Down 0x22's stairs into the bow cellar (its own room id) and up its ladder again.
+        assert_eq!(route_entry(m(1, 0x22, false), m(1, 0x7f, true)), Some("S"));
+        assert_eq!(route_entry(m(1, 0x7f, true), m(1, 0x22, false)), Some("cave"));
+        assert_eq!(m(1, 0x7f, true).direction_to(m(1, 0x22, false)), Direction::N);
+        assert_eq!(m(1, 0x22, false).direction_to(m(1, 0x7f, true)), Direction::None);
     }
 
     #[test]
-    fn heart_waypoint_applies_between_the_d2_and_d1_triforces() {
+    fn heart_then_bow_waypoints_apply_between_the_d2_and_d1_triforces() {
         let map = GameMap::builtin();
         let w = route_waypoints(&map.routes["d2first"]);
-        assert_eq!(w.len(), 1);
+        assert_eq!(w.len(), 2);
         assert_eq!(w[0].kind, WAYPOINT_HEART);
         assert_eq!(w[0].location, MapLocation::new(0, 0x2c, true));
-        assert_eq!(w[0].after, [2].into_iter().collect());
-        assert_eq!(w[0].before, Some(1));
+        assert_eq!(w[1].kind, WAYPOINT_BOW);
+        assert_eq!(w[1].location, MapLocation::new(1, 0x7f, true));
+        for waypoint in &w {
+            assert_eq!(waypoint.after, [2].into_iter().collect());
+            assert_eq!(waypoint.before, Some(1));
+        }
     }
 }
