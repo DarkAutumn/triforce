@@ -46,3 +46,24 @@ Two rounds side by side at 8 envs each (`docs/performance.md`), 8M steps per fam
 `train_round.py --round r47-base-ow --specialists ow-start,ow-octorok,ow-zora,ow-moblin,ow-tektite,ow-lynel,ow-boulder`
 and `--round r47-base-dg --specialists d2-rope,goriya,moldorm,boss-dodongo,stalfos-keese-gel,wallmaster,boss-aquamentus`
 (`--steps 8000000 --parallel 8 --eval-parallel 3 --no-promote --chain-runs 0 --train-args "--stop-success 0.99"`).
+
+## 4. Lynel room experiment r48-lynel-curriculum
+
+Ahead of the round's own ow-lynel (which trains late in the overworld stream), a separate run at 4 envs: the
+ow-lynel yaml plus a curriculum over the 24 explored tracks (12 entry tracks covering all three spawns, 6 cave, 6
+way back; `specialists/arms/r48-lynel-curriculum/`), 4M steps, retreat still a soft failure. The curriculum
+completed by iteration ~120; training success 0.95–1.0 after that, retreats ~0–1%.
+
+Eval (100 per state, current yaml: hp [0.15, max], full_hp 0.5): **98.0%**, health change −0.29.
+
+| state | success | health change | failures |
+|---|---|---|---|
+| 0_0as_0/1/2 (entry from 0x1a, wood sword) | 99 / 100 / 97% | −0.37 / −0.45 / −0.54 | 4 deaths |
+| 0_0acave_0/1/2 (take the white sword) | 100% | 0 | — |
+| 0_0ac_0/1/2 (cave → S, white sword) | 94 / 95 / 97% | −0.53 / −0.28 / −0.41 | 14 deaths |
+
+By Lynel spawn (100 episodes each from a track's room-entry state with that spawn baked in,
+`target/lynel/spawnstates/`): mid-strip **93%** (−0.58), corridor **100%** (−0.15), near-cave **96%** (−0.53).
+No retreats. Failures are deaths, mostly at low starting health (1–2 hearts: 8 of the 18 in the main eval) but 4
+at full health. So the room is passable for every spawn without the pirouette; the mid-strip spawn (55% of entries)
+is the weakest, and the way back out with the white sword loses more runs than the way in.
