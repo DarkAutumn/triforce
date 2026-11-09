@@ -116,3 +116,32 @@ health 0x1a left him.
   ~2.0 entering D1 (no healing on the way), where the deaths pile up (per-room table: `target/r47/rooms.py`).
 - **From D1's entrance (`--from 1_73s_0`, full 5 hearts): 115/120 (96%).** Aquamentus 3 deaths, 0x63 1, one
   wallmaster stall. So D1 itself is solved at full health; the post-D2 overworld's attrition is what loses runs.
+
+## 7. r49: Dodongo with the W exit; the full-route baseline
+
+`boss-dodongo` retrained from scratch with success `exit-correct` (26 tracks through kill, heart and W exit), same
+settings: early stop at 3.7M steps; eval **99.7%**, health change +0.97, 2.03 bombs per fight, stun-kill rate
+78%, 0.29 swallows per fight. Promoted (`r49-dodongo-exit`; the rest of the team is r47).
+
+**Full d2first route, start to the D1 triforce: 25/120 (21%)**, 0 retreats, 24 cheated bombs over the 120 runs
+(Dodongo's room and 0x2c). Funnel (runs reaching each point):
+
+| point | runs |
+|---|---|
+| D2 entrance (2:0x7d) | 112 |
+| Dodongo (2:0x0e) | 66 |
+| D2 triforce room (2:0x0d) | 65 |
+| 0x2c heart cave | 65 |
+| white sword cave (0x0a) | 62 |
+| D1 entrance (1:0x73) | 51 |
+| Aquamentus (1:0x35) | 28 |
+| D1 triforce | 25 |
+
+Where runs die: Dungeon 2 before Dodongo (46: Goriya rooms 0x5e 16 and 0x1e 12, Moldorm 8, rope rooms 10), the
+way to D2 (8: 0x4c, 0x5b), the post-D2 overworld (11: 0x1a, 0x0a, 0x38, ...), D1 (26: 0x44 7, 0x52/0x42/0x35 3
+each, ...). Per-room table: `target/r47/rooms-full-r49.txt`. Dodongo, the 0x2c cave, the triforce rooms and the
+white-sword cave lose almost nothing; the Lynel room loses 3 of 65.
+
+**Baseline for Lee's training ideas:** full route 21%; the losses are D2's Goriya and Moldorm rooms (one-room
+91% and 85%, the weakest families) and health attrition from 0x2c to D1 (no healing on the way; D1 at full health
+is 96%).
