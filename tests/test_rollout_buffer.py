@@ -72,9 +72,9 @@ class CountingEnv(synthetic.BanditEnv):
         return obs, reward, self.t == 3, False, info
 
 
-def test_buffer_layout_from_space_and_pool_rows():
+def test_buffer_layout_from_space_and_pool_spec():
     space = RolloutBuffer(7, 2, synthetic.observation_space(), 0.99, 0.95)
-    rows = RolloutBuffer(7, 2, synthetic.ListPool(synthetic.BanditEnv, 2).make_buffers()['obs'], 0.99, 0.95)
+    rows = RolloutBuffer(7, 2, synthetic.ListPool(synthetic.BanditEnv, 2).obs_spec, 0.99, 0.95)
     for buffer in (space, rows):
         assert 'action_mask' not in buffer.observation
         assert buffer.observation['grid'].dtype == torch.int64 and buffer.observation['grid'].shape == (2, 8, 22, 32)

@@ -1,5 +1,5 @@
 //! `EnvPool` over `pool::Pool` with the Zelda adapters: `TrainTask`, `EvalTask` and `ChainTask` envs on
-//! worker threads, stepped in lockstep or asynchronously by a caller that runs batched inference.
+//! worker threads, acting with the Rust policy inside the pool (`rollout`, `play`; docs/rust-actor.md).
 
 use crate::config::{PySpecialistConfig, extract_config, room_value};
 use crate::context::{self, TfzStore};
@@ -20,7 +20,7 @@ use pool::rollout::{EnvRollout, Play, Record};
 use pool::zelda::{
     ChainRunEnv, EvalEnv, EvalJob, PolicyActor, RgbFn, TaskEnv, TrainEnv, ZeldaAction, ZeldaEvent,
 };
-use pool::{Batch, Column, ColumnMut, Dtype, EnvInit, Jobs, Pool, PoolOptions, SCALAR_COLUMNS};
+use pool::{Column, Dtype, EnvInit, Jobs, Pool, PoolOptions};
 use pyo3::exceptions::{PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
@@ -211,13 +211,12 @@ enum Kind {
     Chain,
 }
 
-/// A threaded pool of Zelda envs with caller-driven batched actions.
+/// A threaded pool of Zelda envs whose agent acts inside the pool with the Rust policy.
 ///
-/// Buffers come from `make_buffers()` (Python-owned numpy arrays; nothing is referenced after a call
-/// returns). `recv(out, min_ready)` releases the GIL until `min_ready` envs are ready, writes their rows in
-/// env-id order and returns the row count; `send(env_ids, actions)` gives each returned env its next action
-/// (`[kind, direction, duration]` head indices). Terminal steps reset in the same row (`final_obs` /
-/// `final_valid` keep the terminal observation).
+/// `rollout(policies, steps, out)` steps every env `steps` decisions and writes them into Python-owned numpy
+/// buffers (training); `play(policies)` lets every env act on its own until the task's jobs run out (evaluation,
+/// chains, the watch player), with `wait_idle`, `poll_events` and `poll_plays` to follow it. Both release the
+/// GIL. Terminal steps reset the env at once.
 #[pyclass(module = "triforce._native", name = "EnvPool", frozen)]
 pub struct PyEnvPool {
     pool: Pool<Task>,
@@ -381,250 +380,109 @@ fn required<T>(v: Option<T>, key: &str) -> PyResult<T> {
     v.ok_or_else(|| PyKeyError::new_err(format!("rollout buffers need {key:?}")))
 }
 
-/// Copies each env's rollout into its env id row of the rollout buffers (see `EnvPool.rollout`).
-fn write_rollouts(
-    out: &Bound<'_, PyDict>,
-    n: usize,
+/// One observation key's rollout buffer.
+enum ObsArray<'py> {
+    I64(PyReadwriteArrayDyn<'py, i64>),
+    F32(PyReadwriteArrayDyn<'py, f32>),
+    Bool(PyReadwriteArrayDyn<'py, bool>),
+}
+
+/// The rollout buffers of `EnvPool.rollout`, checked and borrowed before the rollout runs.
+struct RolloutOut<'py> {
     steps: usize,
-    rollouts: &[(usize, EnvRollout<ZeldaAction>)],
-) -> PyResult<()> {
-    fn rows<T: Copy>(dst: &mut [T], env: usize, width: usize, src: &[T]) {
-        dst[env * width..env * width + src.len()].copy_from_slice(src);
-    }
-    let obs = out
-        .get_item("obs")?
-        .ok_or_else(|| PyKeyError::new_err("rollout buffers need 'obs'"))?
-        .cast_into::<PyDict>()?;
-    for (k, key) in LAYOUT.keys().iter().enumerate() {
-        let mut shape = vec![n, steps + 1];
-        shape.extend(&key.shape);
-        let width = (steps + 1) * key.len();
-        match key.dtype {
-            Dtype::I64 => {
-                let mut a = required(rollout_array::<i64>(&obs, &key.name, &shape)?, &key.name)?;
-                let dst = a.as_slice_mut()?;
-                for (env, r) in rollouts {
-                    let Column::I64(c) = &r.obs.columns[k] else { unreachable!() };
-                    rows(dst, *env, width, c);
-                }
-            }
-            Dtype::F32 => {
-                let mut a = required(rollout_array::<f32>(&obs, &key.name, &shape)?, &key.name)?;
-                let dst = a.as_slice_mut()?;
-                for (env, r) in rollouts {
-                    let Column::F32(c) = &r.obs.columns[k] else { unreachable!() };
-                    rows(dst, *env, width, c);
-                }
-            }
-            Dtype::Bool => {
-                let mut a = required(rollout_array::<bool>(&obs, &key.name, &shape)?, &key.name)?;
-                let dst = a.as_slice_mut()?;
-                for (env, r) in rollouts {
-                    let Column::Bool(c) = &r.obs.columns[k] else { unreachable!() };
-                    rows(dst, *env, width, c);
-                }
-            }
-        }
-    }
-    let mut starts = required(rollout_array::<f32>(out, "starts", &[n, steps + 1])?, "starts")?;
-    let mut actions = required(rollout_array::<i64>(out, "actions", &[n, steps, 3])?, "actions")?;
-    let mut lev = required(rollout_array::<f32>(out, "logp_ent_val", &[n, steps, 3])?, "logp_ent_val")?;
-    let mut rewards = required(rollout_array::<f32>(out, "rewards", &[n, steps])?, "rewards")?;
-    let mut frames = required(rollout_array::<f32>(out, "frames", &[n, steps])?, "frames")?;
-    let mut boot = required(rollout_array::<f32>(out, "bootstrap_value", &[n, steps])?, "bootstrap_value")?;
-    let mut interrupts = rollout_array::<i64>(out, "interrupts", &[n, steps])?;
-    let mut jobs = rollout_array::<i64>(out, "job", &[n, steps])?;
-    let mut decision_steps = rollout_array::<i64>(out, "step", &[n, steps])?;
-    let mut terminated = rollout_array::<bool>(out, "terminated", &[n, steps])?;
-    let mut truncated = rollout_array::<bool>(out, "truncated", &[n, steps])?;
-    for (env, r) in rollouts {
-        let starts_f: Vec<f32> = r.starts.iter().map(|&s| s as u8 as f32).collect();
-        rows(starts.as_slice_mut()?, *env, steps + 1, &starts_f);
-        let flat: Vec<i64> = r.actions.iter().flatten().copied().collect();
-        rows(actions.as_slice_mut()?, *env, steps * 3, &flat);
-        let d: Vec<f32> = r.decisions.iter().flat_map(|d| [d.log_prob, d.entropy, d.value]).collect();
-        rows(lev.as_slice_mut()?, *env, steps * 3, &d);
-        rows(rewards.as_slice_mut()?, *env, steps, &r.reward);
-        let f: Vec<f32> = r.frames.iter().map(|&f| f as f32).collect();
-        rows(frames.as_slice_mut()?, *env, steps, &f);
-        rows(boot.as_slice_mut()?, *env, steps, &r.bootstrap_value);
-        if let Some(a) = interrupts.as_mut() {
-            rows(a.as_slice_mut()?, *env, steps, &r.interrupt);
-        }
-        if let Some(a) = jobs.as_mut() {
-            rows(a.as_slice_mut()?, *env, steps, &r.job);
-        }
-        if let Some(a) = decision_steps.as_mut() {
-            rows(a.as_slice_mut()?, *env, steps, &r.step);
-        }
-        if let Some(a) = terminated.as_mut() {
-            rows(a.as_slice_mut()?, *env, steps, &r.terminated);
-        }
-        if let Some(a) = truncated.as_mut() {
-            rows(a.as_slice_mut()?, *env, steps, &r.truncated);
-        }
-    }
-    Ok(())
+    obs: Vec<ObsArray<'py>>,
+    starts: PyReadwriteArrayDyn<'py, f32>,
+    actions: PyReadwriteArrayDyn<'py, i64>,
+    lev: PyReadwriteArrayDyn<'py, f32>,
+    rewards: PyReadwriteArrayDyn<'py, f32>,
+    frames: PyReadwriteArrayDyn<'py, f32>,
+    boot: PyReadwriteArrayDyn<'py, f32>,
+    interrupts: Option<PyReadwriteArrayDyn<'py, i64>>,
+    jobs: Option<PyReadwriteArrayDyn<'py, i64>>,
+    decision_steps: Option<PyReadwriteArrayDyn<'py, i64>>,
+    terminated: Option<PyReadwriteArrayDyn<'py, bool>>,
+    truncated: Option<PyReadwriteArrayDyn<'py, bool>>,
 }
 
-fn get_array<'py, T: numpy::Element>(
-    d: &Bound<'py, PyDict>,
-    key: &str,
-) -> PyResult<Bound<'py, PyArrayDyn<T>>> {
-    let item = d
-        .get_item(key)?
-        .ok_or_else(|| PyKeyError::new_err(format!("buffers have no {key:?}")))?;
-    item.cast_into::<PyArrayDyn<T>>().map_err(|_| {
-        PyTypeError::new_err(format!(
-            "buffer {key:?} must be a numpy array of the dtype make_buffers() uses"
-        ))
-    })
-}
-
-/// The readwrite borrows of a buffer dict, by dtype, plus where each batch column comes from.
-struct Borrowed<'py> {
-    i64s: Vec<PyReadwriteArrayDyn<'py, i64>>,
-    f32s: Vec<PyReadwriteArrayDyn<'py, f32>>,
-    bools: Vec<PyReadwriteArrayDyn<'py, bool>>,
-    /// Column order: obs keys, final_obs keys, then `SCALAR_COLUMNS`; (dtype, index in its vector).
-    order: Vec<(Dtype, usize)>,
-}
-
-impl<'py> Borrowed<'py> {
-    fn push(&mut self, d: &Bound<'py, PyDict>, key: &str, dtype: Dtype) -> PyResult<()> {
-        let rw = |e: numpy::BorrowError| PyValueError::new_err(format!("buffer {key:?}: {e}"));
-        let slot = match dtype {
-            Dtype::I64 => {
-                self.i64s
-                    .push(get_array::<i64>(d, key)?.try_readwrite().map_err(rw)?);
-                self.i64s.len() - 1
-            }
-            Dtype::F32 => {
-                self.f32s
-                    .push(get_array::<f32>(d, key)?.try_readwrite().map_err(rw)?);
-                self.f32s.len() - 1
-            }
-            Dtype::Bool => {
-                self.bools
-                    .push(get_array::<bool>(d, key)?.try_readwrite().map_err(rw)?);
-                self.bools.len() - 1
-            }
-        };
-        self.order.push((dtype, slot));
-        Ok(())
-    }
-
-    fn new(out: &Bound<'py, PyDict>) -> PyResult<Borrowed<'py>> {
-        let mut b = Borrowed {
-            i64s: Vec::new(),
-            f32s: Vec::new(),
-            bools: Vec::new(),
-            order: Vec::new(),
-        };
-        for group in ["obs", "final_obs"] {
-            let d = out
-                .get_item(group)?
-                .ok_or_else(|| PyKeyError::new_err(format!("buffers have no {group:?}")))?;
-            let d = d.cast_into::<PyDict>()?;
-            for key in LAYOUT.keys() {
-                b.push(&d, &key.name, key.dtype)?;
-            }
+impl<'py> RolloutOut<'py> {
+    fn borrow(out: &Bound<'py, PyDict>, n: usize, steps: usize) -> PyResult<RolloutOut<'py>> {
+        let obs = out
+            .get_item("obs")?
+            .ok_or_else(|| PyKeyError::new_err("rollout buffers need 'obs'"))?
+            .cast_into::<PyDict>()?;
+        let mut columns = Vec::with_capacity(LAYOUT.keys().len());
+        for key in LAYOUT.keys() {
+            let mut shape = vec![n, steps + 1];
+            shape.extend(&key.shape);
+            let name = &key.name;
+            columns.push(match key.dtype {
+                Dtype::I64 => ObsArray::I64(required(rollout_array(&obs, name, &shape)?, name)?),
+                Dtype::F32 => ObsArray::F32(required(rollout_array(&obs, name, &shape)?, name)?),
+                Dtype::Bool => ObsArray::Bool(required(rollout_array(&obs, name, &shape)?, name)?),
+            });
         }
-        for (name, dtype) in SCALAR_COLUMNS {
-            b.push(out, name, dtype)?;
-        }
-        Ok(b)
-    }
-
-    /// The batch over the borrowed arrays.
-    fn batch(&mut self) -> PyResult<Batch<'_>> {
-        let contiguous = |e: numpy::AsSliceError| {
-            PyValueError::new_err(format!("buffers must be C-contiguous: {e}"))
-        };
-        let mut i64s = self
-            .i64s
-            .iter_mut()
-            .map(|a| a.as_slice_mut().map(Some))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(contiguous)?;
-        let mut f32s = self
-            .f32s
-            .iter_mut()
-            .map(|a| a.as_slice_mut().map(Some))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(contiguous)?;
-        let mut bools = self
-            .bools
-            .iter_mut()
-            .map(|a| a.as_slice_mut().map(Some))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(contiguous)?;
-        let mut columns: Vec<ColumnMut<'_>> = self
-            .order
-            .iter()
-            .map(|&(dtype, slot)| match dtype {
-                Dtype::I64 => ColumnMut::I64(i64s[slot].take().expect("column used once")),
-                Dtype::F32 => ColumnMut::F32(f32s[slot].take().expect("column used once")),
-                Dtype::Bool => ColumnMut::Bool(bools[slot].take().expect("column used once")),
-            })
-            .collect();
-        let keys = LAYOUT.keys().len();
-        let mut scalars = columns.split_off(2 * keys).into_iter();
-        let final_obs = columns.split_off(keys);
-        let obs = columns;
-        let mut next_i64 = || match scalars.next() {
-            Some(ColumnMut::I64(c)) => c,
-            _ => unreachable!("SCALAR_COLUMNS order"),
-        };
-        let env_ids = next_i64();
-        let reward = match scalars.next() {
-            Some(ColumnMut::F32(c)) => c,
-            _ => unreachable!("SCALAR_COLUMNS order"),
-        };
-        let mut i64_col = || match scalars.next() {
-            Some(ColumnMut::I64(c)) => c,
-            _ => unreachable!("SCALAR_COLUMNS order"),
-        };
-        let frames = i64_col();
-        let interrupt = i64_col();
-        let mut bool_col = || match scalars.next() {
-            Some(ColumnMut::Bool(c)) => c,
-            _ => unreachable!("SCALAR_COLUMNS order"),
-        };
-        let terminated = bool_col();
-        let truncated = bool_col();
-        let bootstrap = bool_col();
-        let final_valid = bool_col();
-        let policy = match scalars.next() {
-            Some(ColumnMut::I64(c)) => c,
-            _ => unreachable!("SCALAR_COLUMNS order"),
-        };
-        let finished = match scalars.next() {
-            Some(ColumnMut::Bool(c)) => c,
-            _ => unreachable!("SCALAR_COLUMNS order"),
-        };
-        let mut i64_col = || match scalars.next() {
-            Some(ColumnMut::I64(c)) => c,
-            _ => unreachable!("SCALAR_COLUMNS order"),
-        };
-        let job = i64_col();
-        let step = i64_col();
-        Ok(Batch {
-            env_ids,
-            obs,
-            final_obs,
-            reward,
-            frames,
-            interrupt,
-            terminated,
-            truncated,
-            bootstrap,
-            final_valid,
-            policy,
-            finished,
-            job,
-            step,
+        Ok(RolloutOut {
+            steps,
+            obs: columns,
+            starts: required(rollout_array(out, "starts", &[n, steps + 1])?, "starts")?,
+            actions: required(rollout_array(out, "actions", &[n, steps, 3])?, "actions")?,
+            lev: required(rollout_array(out, "logp_ent_val", &[n, steps, 3])?, "logp_ent_val")?,
+            rewards: required(rollout_array(out, "rewards", &[n, steps])?, "rewards")?,
+            frames: required(rollout_array(out, "frames", &[n, steps])?, "frames")?,
+            boot: required(rollout_array(out, "bootstrap_value", &[n, steps])?, "bootstrap_value")?,
+            interrupts: rollout_array(out, "interrupts", &[n, steps])?,
+            jobs: rollout_array(out, "job", &[n, steps])?,
+            decision_steps: rollout_array(out, "step", &[n, steps])?,
+            terminated: rollout_array(out, "terminated", &[n, steps])?,
+            truncated: rollout_array(out, "truncated", &[n, steps])?,
         })
+    }
+
+    /// Copies each env's rollout into its env id row.
+    fn write(&mut self, rollouts: &[(usize, EnvRollout<ZeldaAction>)]) -> PyResult<()> {
+        fn rows<T: Copy>(dst: &mut [T], env: usize, width: usize, src: &[T]) {
+            dst[env * width..env * width + src.len()].copy_from_slice(src);
+        }
+        let steps = self.steps;
+        for (k, key) in LAYOUT.keys().iter().enumerate() {
+            let width = (steps + 1) * key.len();
+            for (env, r) in rollouts {
+                match (&mut self.obs[k], &r.obs.columns[k]) {
+                    (ObsArray::I64(a), Column::I64(c)) => rows(a.as_slice_mut()?, *env, width, c),
+                    (ObsArray::F32(a), Column::F32(c)) => rows(a.as_slice_mut()?, *env, width, c),
+                    (ObsArray::Bool(a), Column::Bool(c)) => rows(a.as_slice_mut()?, *env, width, c),
+                    _ => unreachable!("the pool's layout is LAYOUT"),
+                }
+            }
+        }
+        for (env, r) in rollouts {
+            let starts: Vec<f32> = r.starts.iter().map(|&s| s as u8 as f32).collect();
+            rows(self.starts.as_slice_mut()?, *env, steps + 1, &starts);
+            let flat: Vec<i64> = r.actions.iter().flatten().copied().collect();
+            rows(self.actions.as_slice_mut()?, *env, steps * 3, &flat);
+            let d: Vec<f32> = r.decisions.iter().flat_map(|d| [d.log_prob, d.entropy, d.value]).collect();
+            rows(self.lev.as_slice_mut()?, *env, steps * 3, &d);
+            rows(self.rewards.as_slice_mut()?, *env, steps, &r.reward);
+            let f: Vec<f32> = r.frames.iter().map(|&f| f as f32).collect();
+            rows(self.frames.as_slice_mut()?, *env, steps, &f);
+            rows(self.boot.as_slice_mut()?, *env, steps, &r.bootstrap_value);
+            if let Some(a) = self.interrupts.as_mut() {
+                rows(a.as_slice_mut()?, *env, steps, &r.interrupt);
+            }
+            if let Some(a) = self.jobs.as_mut() {
+                rows(a.as_slice_mut()?, *env, steps, &r.job);
+            }
+            if let Some(a) = self.decision_steps.as_mut() {
+                rows(a.as_slice_mut()?, *env, steps, &r.step);
+            }
+            if let Some(a) = self.terminated.as_mut() {
+                rows(a.as_slice_mut()?, *env, steps, &r.terminated);
+            }
+            if let Some(a) = self.truncated.as_mut() {
+                rows(a.as_slice_mut()?, *env, steps, &r.truncated);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -758,110 +616,18 @@ impl PyEnvPool {
         }
     }
 
-    /// Zeroed buffers of `rows` rows (default `num_envs`): `obs` and `final_obs` dicts of `[rows, *shape]`
-    /// arrays per observation key, the `[rows]` scalar columns, and `mask` (the same array as
-    /// `obs['action_mask']`).
-    #[pyo3(signature = (rows=None))]
-    fn make_buffers<'py>(
-        &self,
-        py: Python<'py>,
-        rows: Option<usize>,
-    ) -> PyResult<Bound<'py, PyDict>> {
-        let rows = rows.unwrap_or(self.pool.num_envs());
+    /// The observation layout: key → `{'shape': [...], 'dtype': 'int64' | 'float32' | 'bool'}` (what
+    /// `rollout` buffers and `poll_plays` observations hold, per row).
+    #[getter]
+    fn obs_spec<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let out = PyDict::new(py);
-        for group in ["obs", "final_obs"] {
-            let d = PyDict::new(py);
-            for key in LAYOUT.keys() {
-                let mut shape = vec![rows];
-                shape.extend(&key.shape);
-                let array = match key.dtype {
-                    Dtype::I64 => PyArray::<i64, _>::zeros(py, shape, false).into_any(),
-                    Dtype::F32 => PyArray::<f32, _>::zeros(py, shape, false).into_any(),
-                    Dtype::Bool => PyArray::<bool, _>::zeros(py, shape, false).into_any(),
-                };
-                d.set_item(&key.name, array)?;
-            }
-            out.set_item(group, d)?;
+        for key in LAYOUT.keys() {
+            let spec = PyDict::new(py);
+            spec.set_item("shape", key.shape.clone())?;
+            spec.set_item("dtype", key.dtype.numpy())?;
+            out.set_item(&key.name, spec)?;
         }
-        for (name, dtype) in SCALAR_COLUMNS {
-            let array = match dtype {
-                Dtype::I64 => PyArray::<i64, _>::zeros(py, [rows], false).into_any(),
-                Dtype::F32 => PyArray::<f32, _>::zeros(py, [rows], false).into_any(),
-                Dtype::Bool => PyArray::<bool, _>::zeros(py, [rows], false).into_any(),
-            };
-            out.set_item(name, array)?;
-        }
-        let obs = out.get_item("obs")?.expect("obs");
-        out.set_item("mask", obs.get_item("action_mask")?)?;
         Ok(out)
-    }
-
-    /// Waits (GIL released) until `min_ready` envs (default: all rows) are ready or `timeout` seconds pass,
-    /// writes every ready env's row (ascending env id) into `out` and returns how many it wrote.
-    #[pyo3(signature = (out, min_ready=None, timeout=None))]
-    fn recv(
-        &self,
-        py: Python<'_>,
-        out: &Bound<'_, PyDict>,
-        min_ready: Option<usize>,
-        timeout: Option<f64>,
-    ) -> PyResult<usize> {
-        let mut borrowed = Borrowed::new(out)?;
-        let rows = borrowed.i64s[borrowed.order[2 * LAYOUT.keys().len()].1].len();
-        let target = min_ready.unwrap_or(rows).min(rows);
-        let deadline = timeout.map(|t| Instant::now() + Duration::from_secs_f64(t.max(0.0)));
-        let tick = Duration::from_millis(50);
-        loop {
-            let wait = match deadline {
-                Some(d) => d.saturating_duration_since(Instant::now()).min(tick),
-                None => tick,
-            };
-            if py
-                .detach(|| self.pool.wait(target, Some(wait)))
-                .map_err(pool_err)?
-            {
-                break;
-            }
-            if deadline.is_some_and(|d| Instant::now() >= d) {
-                break;
-            }
-            py.check_signals()?;
-        }
-        let mut batch = borrowed.batch()?;
-        py.detach(|| self.pool.recv(&mut batch, target, Some(Duration::ZERO)))
-            .map_err(pool_err)
-    }
-
-    /// Queues one action per env: `env_ids` [n] and `actions` [n, 3] (`[kind, direction, duration]`).
-    fn send(
-        &self,
-        py: Python<'_>,
-        env_ids: &Bound<'_, PyAny>,
-        actions: &Bound<'_, PyAny>,
-    ) -> PyResult<()> {
-        let ids = as_int64(py, env_ids)?;
-        let acts = as_int64(py, actions)?;
-        let ids = ids
-            .as_slice()
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let shape = acts.shape();
-        if shape.len() != 2 || shape[1] != 3 || shape[0] != ids.len() {
-            return Err(PyValueError::new_err(format!(
-                "actions must be [{}, 3], got {shape:?}",
-                ids.len()
-            )));
-        }
-        let flat = acts
-            .as_slice()
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let ids: Vec<usize> = ids
-            .iter()
-            .map(|&i| {
-                usize::try_from(i).map_err(|_| PyValueError::new_err(format!("bad env id {i}")))
-            })
-            .collect::<PyResult<_>>()?;
-        let actions: Vec<ZeldaAction> = flat.as_chunks::<3>().0.to_vec();
-        self.pool.send(&ids, &actions).map_err(pool_err)
     }
 
     /// Rolls every active env out `steps` decisions on the worker threads, the Rust `policies` (one
@@ -884,11 +650,11 @@ impl PyEnvPool {
     ) -> PyResult<usize> {
         let nets = policies.iter().map(|p| p.inner.clone()).collect();
         let actor = PolicyActor::new(&LAYOUT, nets, deterministic).map_err(PyValueError::new_err)?;
-        let n = self.pool.num_envs();
+        let mut buffers = RolloutOut::borrow(out, self.pool.num_envs(), steps)?;
         let rollouts = py
             .detach(|| self.pool.rollout(steps, Arc::new(actor)))
             .map_err(pool_err)?;
-        write_rollouts(out, n, steps, &rollouts)?;
+        buffers.write(&rollouts)?;
         Ok(rollouts.len())
     }
 
@@ -899,7 +665,7 @@ impl PyEnvPool {
     /// until `set_hold(env, False)`. `record`: None, 'actions' or 'observations' (see `poll_plays`).
     /// `replay` {job: [n, 3] actions}: replay those recorded episodes instead (the policies score the recorded
     /// actions; a job outside `replay` or a replay running past its actions fails the env). After `play` the
-    /// pool only plays (`recv`, `send`, `rollout` raise).
+    /// pool only plays (`rollout` and another `play` raise).
     #[pyo3(signature = (policies, deterministic=false, record=None, replay=None))]
     fn play(
         &self,
@@ -1046,8 +812,9 @@ impl PyEnvPool {
     }
 
     /// Events since the last call, as dicts with `env` and `type`: `episode` (`info`: the terminal step's info),
-    /// `eval` (`record`), `run` (`result`: the RunResult dict), `room` (`specialist`, `level`, `room`, `health`,
-    /// `max_health`) and `movie` (`origin`, `buttons`, `pokes`).
+    /// `eval` (`record`), `run` (`result`: the RunResult dict), `room` (`specialist`, `level`, `room`, `in_cave`,
+    /// `rooms`: rooms entered so far in the episode or run, `health`, `max_health`, `stalled`, `cheated`) and
+    /// `movie` (`origin`, `buttons`, `pokes`).
     fn poll_events<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let list = PyList::empty(py);
         for (env, event) in self.pool.poll_events() {

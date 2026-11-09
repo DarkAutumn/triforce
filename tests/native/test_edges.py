@@ -4,6 +4,9 @@ errors bad inputs raise (with messages that name the problem)."""
 import pytest
 
 from triforce import _native as native
+from triforce.rollout_buffer import RolloutBuffer
+
+from ..networks import random_network
 
 RIGHT, LEFT, A = 0x80, 0x40, 0x01          # controller byte bits
 
@@ -90,31 +93,40 @@ def _pool(states_dir, tmp_path, envs=2):
 
 
 def test_pool_misuse_errors(states_dir, tmp_path):
-    wait = [1, 0, 0]
+    policy = random_network().to_native()
     with pytest.raises(ValueError, match='at least one env'):
         _pool(states_dir, tmp_path, envs=0)
     with _pool(states_dir, tmp_path) as pool:
-        buffers = pool.make_buffers()
-        pool.recv(buffers)
-        with pytest.raises(ValueError, match=r'env 5 is out of range \(num_envs=2\)'):
-            pool.send([5], [wait])
-        with pytest.raises(ValueError, match='env 0 appears twice'):
-            pool.send([0, 0], [wait, wait])
-        with pytest.raises(ValueError, match=r'actions must be \[1, 3\], got \[2, 3\]'):
-            pool.send([0], [wait, wait])
         with pytest.raises(ValueError, match='out of range'):
             pool.set_render(7, True)
         with pytest.raises(ValueError, match='out of range'):
             pool.frame(7)
         assert pool.frame(0) is None                               # rendering is off
-        # A masked action fails its env at the next recv, naming the env and the legal actions.
-        pool.send([0, 1], [[2, 0, 0], wait])
-        with pytest.raises(native.InvalidActionError, match='env 0: SWORD N is masked; legal: MOVE'):
-            pool.recv(buffers, min_ready=2, timeout=10)
-        with pytest.raises(ValueError, match='not awaiting an action'):
-            pool.send([0], [wait])
+        with pytest.raises(KeyError, match="rollout buffers need 'obs'"):
+            pool.rollout([policy], 2, {})
+        views = RolloutBuffer(2, 2, pool.obs_spec, 0.99, 0.95).rollout_buffers()
+        with pytest.raises(ValueError, match=r'rollout buffer "starts" is \[2, 3\], expected \[2, 4\]'):
+            pool.rollout([policy], 3, {**views, 'obs': RolloutBuffer(3, 2, pool.obs_spec, 0.99, 0.95)
+                                       .rollout_buffers()['obs']})
+        with pytest.raises(ValueError, match="record must be None, 'actions' or 'observations'"):
+            pool.play([policy], record='frames')
+        with pytest.raises(ValueError, match=r'replay actions of job 3 must be \[n, 3\]'):
+            pool.play([policy], replay={3: [[1, 0]]})
+        pool.play([policy])
+        with pytest.raises(ValueError, match='the pool is playing; rollout is off'):
+            pool.rollout([policy], 2, views)
+        with pytest.raises(ValueError, match='the pool is playing; play is off'):
+            pool.play([policy])
     with pytest.raises(RuntimeError, match='closed'):
-        pool.recv(buffers)
+        pool.wait_idle()
+
+
+def test_a_replayed_masked_action_fails_its_env_naming_the_legal_ones(states_dir):
+    task = native.EvalTask(native.SpecialistConfig.load('ow-start'), [('start', 1)], states_dir=str(states_dir))
+    with native.EnvPool(task, num_envs=1, seed=0) as pool:
+        pool.play([random_network().to_native()], replay={1: [[2, 0, 0]]})
+        with pytest.raises(native.InvalidActionError, match='env 0: SWORD N is masked; legal: MOVE'):
+            pool.wait_idle(timeout=10)
 
 
 def test_eval_job_with_a_missing_state_names_the_env_and_file(states_dir):
@@ -122,4 +134,4 @@ def test_eval_job_with_a_missing_state_names_the_env_and_file(states_dir):
                            states_dir=str(states_dir))
     with native.EnvPool(task, num_envs=1, seed=0) as pool:
         with pytest.raises((OSError, ValueError), match='env 0: .*no_such_state.state'):
-            pool.recv(pool.make_buffers(), timeout=10)
+            pool.wait_idle(timeout=10)

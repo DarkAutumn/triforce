@@ -122,9 +122,8 @@ class BanditEnv:
         """No resources."""
 
 
-
 class ListPool:
-    """The native ``EnvPool`` rollout protocol (``make_buffers``, ``rollout``, ``poll_events``) over Python gym-like
+    """The native ``EnvPool`` rollout protocol (``obs_spec``, ``rollout``, ``poll_events``) over Python gym-like
     envs (``reset`` / ``step``), acting with the given ``_native.Policy``.
 
     A terminal step resets the env at once; ``bootstrap_truncation`` truncations get the policy's value of the
@@ -144,11 +143,11 @@ class ListPool:
         self._episodes = [None] * num_envs
         self._space = getattr(self.envs[0], 'observation_space', None) or observation_space()
 
-    def make_buffers(self, rows=None):
-        """Zeroed row buffers shaped like the native ones (only ``obs`` is used by the collector)."""
-        n = rows or self.num_envs
-        return {'obs': {key: np.zeros((n, *space.shape), dtype=space.dtype)
-                        for key, space in self._space.spaces.items()}}
+    @property
+    def obs_spec(self):
+        """Key → ``{'shape', 'dtype'}``, like the native pool's."""
+        return {key: {'shape': list(space.shape), 'dtype': np.dtype(space.dtype).name}
+                for key, space in self._space.spaces.items()}
 
     def _begin(self, i):
         obs, _ = self.envs[i].reset()

@@ -38,7 +38,7 @@ pub trait Actor<A>: Send + Sync {
 /// `steps` is the one the next rollout resumes from. `starts[t]`: row `t` is the first observation of an episode.
 /// Per decision: the action and the actor's [`Decision`], and what the step did (reward, frames, interrupt,
 /// whether it ended the episode, and for a bootstrapped truncation the actor's value of the final observation).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct EnvRollout<A> {
     pub obs: ObsColumns,
     pub starts: Vec<bool>,
@@ -93,7 +93,7 @@ pub enum Record {
 /// One episode as played: decision `t` acted on `obs` row `t` with policy `policy[t]`, chose `actions[t]` and
 /// the actor reported `decisions[t]`. `job` is the episode's key ([`crate::Start::job`]): with the task's job
 /// list it identifies the episode, and replaying `actions` reproduces it.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Play<A> {
     pub job: i64,
     pub policy: Vec<i64>,

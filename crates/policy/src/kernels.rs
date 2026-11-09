@@ -11,10 +11,9 @@ const LANES: usize = 8;
 pub fn dot(a: &[f32], b: &[f32]) -> f32 {
     debug_assert_eq!(a.len(), b.len());
     let mut acc = [0f32; LANES];
-    let chunks = a.len() / LANES;
-    let (a_main, a_rest) = a.split_at(chunks * LANES);
-    let (b_main, b_rest) = b.split_at(chunks * LANES);
-    for (x, y) in a_main.chunks_exact(LANES).zip(b_main.chunks_exact(LANES)) {
+    let (a_main, a_rest) = a.as_chunks::<LANES>();
+    let (b_main, b_rest) = b.as_chunks::<LANES>();
+    for (x, y) in a_main.iter().zip(b_main) {
         for l in 0..LANES {
             acc[l] += x[l] * y[l];
         }
@@ -30,9 +29,8 @@ pub fn dot(a: &[f32], b: &[f32]) -> f32 {
 #[inline]
 pub fn sum(a: &[f32]) -> f32 {
     let mut acc = [0f32; LANES];
-    let chunks = a.len() / LANES;
-    let (main, rest) = a.split_at(chunks * LANES);
-    for x in main.chunks_exact(LANES) {
+    let (main, rest) = a.as_chunks::<LANES>();
+    for x in main {
         for l in 0..LANES {
             acc[l] += x[l];
         }
@@ -66,9 +64,8 @@ pub fn layer_norm(x: &mut [f32], gamma: &[f32], beta: &[f32]) {
     let n = x.len() as f32;
     let mean = sum(x) / n;
     let mut var_acc = [0f32; LANES];
-    let chunks = x.len() / LANES;
-    let (main, rest) = x.split_at(chunks * LANES);
-    for c in main.chunks_exact(LANES) {
+    let (main, rest) = x.as_chunks::<LANES>();
+    for c in main {
         for l in 0..LANES {
             let d = c[l] - mean;
             var_acc[l] += d * d;

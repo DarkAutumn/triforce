@@ -7,13 +7,16 @@ use env::explore::random_action;
 use env::observation::Observation;
 use env::specialist_env::{EnvOptions, SpecialistEnv};
 use env::{EnvError, StateStore};
+use pool::rollout::{Actor, Decision, EnvRollout, Record};
 use pool::zelda::{
-    ACTION_MASK, ChainRunEnv, EvalEnv, EvalJob, InputLog, TrainEnv, ZeldaEvent, interrupt_code,
+    ACTION_MASK, ChainRunEnv, EvalEnv, EvalJob, InputLog, TrainEnv, ZeldaAction, ZeldaEvent, interrupt_code,
     obs_layout, write_observation,
 };
-use pool::{Buffers, Column, EnvControl, EnvInit, Jobs, ObsData, Pool, PoolEnv, PoolOptions};
+use parking_lot::Mutex;
+use pool::{Column, EnvControl, EnvInit, Jobs, ObsData, Pool, PoolEnv, PoolOptions};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 use zcore::{MachineState, Rom, ZCore};
@@ -135,28 +138,45 @@ fn obs_data(obs: &Observation) -> ObsData {
     data
 }
 
-/// Whether batch row `row` of `columns` holds `expected`.
-fn row_is(columns: &[Column], b: &Buffers, row: usize, expected: &ObsData) -> bool {
-    columns.iter().enumerate().all(|(k, c)| {
-        let r = b.row_range(k, row);
+/// Whether row `t` of a rollout's observations holds `expected`.
+fn row_is(r: &EnvRollout<ZeldaAction>, t: usize, expected: &ObsData) -> bool {
+    r.obs.columns.iter().enumerate().all(|(k, c)| {
+        let n = expected.layout().keys()[k].len();
+        let range = t * n..(t + 1) * n;
         match c {
-            Column::I64(v) => v[r] == *expected.i64(k),
-            Column::F32(v) => v[r] == *expected.f32(k),
-            Column::Bool(v) => v[r] == *expected.bool(k),
+            Column::I64(v) => v[range] == *expected.i64(k),
+            Column::F32(v) => v[range] == *expected.f32(k),
+            Column::Bool(v) => v[range] == *expected.bool(k),
         }
     })
 }
 
-fn row_mask(b: &Buffers, row: usize) -> ActionMask {
-    let flat: [bool; MASK_SIZE] = b.obs[ACTION_MASK].bool()[b.row_range(ACTION_MASK, row)]
-        .try_into()
-        .unwrap();
-    ActionMask::from_flat(&flat)
+/// A test actor: `pick(mask, job)` chooses every action (behind a lock; one env keeps the order fixed). Every
+/// value is 1, so a bootstrapped truncation would show.
+struct Picks<F>(Mutex<F>);
+
+fn picks<F: FnMut(&ActionMask, i64) -> zelda::Action + Send>(pick: F) -> Arc<Picks<F>> {
+    Arc::new(Picks(Mutex::new(pick)))
+}
+
+impl<F: FnMut(&ActionMask, i64) -> zelda::Action + Send> Actor<ZeldaAction> for Picks<F> {
+    type Scratch = ();
+
+    fn scratch(&self) {}
+
+    fn act(&self, obs: &ObsData, _: i64, job: i64, _: i64, _: &mut ()) -> Result<(ZeldaAction, Decision), String> {
+        let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
+        let action = (self.0.lock())(&ActionMask::from_flat(&flat), job);
+        Ok((action.to_indices().map(|i| i as i64), Decision::default()))
+    }
+
+    fn value(&self, _: &ObsData, _: i64, _: &mut ()) -> Result<f32, String> {
+        Ok(1.0)
+    }
 }
 
 struct Expected {
     obs: ObsData,
-    final_obs: Option<ObsData>,
     reward: f32,
     frames: i64,
     interrupt: i64,
@@ -177,22 +197,20 @@ fn train_env_rows_match_the_env_played_directly() {
     direct.rng = pool::env_rng(seed, 0);
     let mut action_rng = ChaCha8Rng::seed_from_u64(1);
     let first = obs_data(&direct.reset(None, None).unwrap().0);
-    let mut actions = Vec::new();
+    let mut actions = VecDeque::new();
     let mut expected = Vec::new();
     for _ in 0..40 {
         let action = random_action(direct.session().mask(), &mut action_rng, None);
-        actions.push(action.to_indices().map(|i| i as i64));
+        actions.push_back(action);
         let r = direct.step(action).unwrap();
         let done = r.terminated || r.truncated;
-        let (obs, final_obs) = if done {
-            let reset = obs_data(&direct.reset(None, None).unwrap().0);
-            (reset, Some(obs_data(&r.obs)))
+        let obs = if done {
+            obs_data(&direct.reset(None, None).unwrap().0)
         } else {
-            (obs_data(&r.obs), None)
+            obs_data(&r.obs)
         };
         expected.push(Expected {
             obs,
-            final_obs,
             reward: r.reward as f32,
             frames: r.info.frames as i64,
             interrupt: interrupt_code(r.info.interrupt),
@@ -200,7 +218,7 @@ fn train_env_rows_match_the_env_played_directly() {
             truncated: r.truncated,
         });
     }
-    let episodes = expected.iter().filter(|e| e.final_obs.is_some()).count();
+    let episodes = expected.iter().filter(|e| e.terminated || e.truncated).count();
     assert!(episodes >= 2, "max_steps 12 ends episodes");
 
     // In a pool.
@@ -218,30 +236,17 @@ fn train_env_rows_match_the_env_played_directly() {
         )
     })
     .unwrap();
-    let mut b = pool.buffers();
-    assert_eq!(pool.recv(&mut b.batch(), 1, None).unwrap(), 1);
-    assert!(row_is(&b.obs, &b, 0, &first));
-    for (i, (action, e)) in actions.iter().zip(&expected).enumerate() {
-        pool.send(&[0], &[*action]).unwrap();
-        assert_eq!(pool.recv(&mut b.batch(), 1, None).unwrap(), 1);
-        assert!(row_is(&b.obs, &b, 0, &e.obs), "step {i} observation");
-        assert_eq!(b.final_valid[0], e.final_obs.is_some(), "step {i}");
-        if let Some(f) = &e.final_obs {
-            assert!(row_is(&b.final_obs, &b, 0, f), "step {i} final observation");
-        }
+    let mut rollouts = pool.rollout(40, picks(move |_, _| actions.pop_front().unwrap())).unwrap();
+    let (_, r) = rollouts.pop().unwrap();
+    assert!(row_is(&r, 0, &first));
+    for (i, e) in expected.iter().enumerate() {
+        assert!(row_is(&r, i + 1, &e.obs), "step {i} observation");
         assert_eq!(
-            (
-                b.reward[0],
-                b.frames[0],
-                b.interrupt[0],
-                b.terminated[0],
-                b.truncated[0]
-            ),
+            (r.reward[i], r.frames[i], r.interrupt[i], r.terminated[i], r.truncated[i]),
             (e.reward, e.frames, e.interrupt, e.terminated, e.truncated),
             "step {i}"
         );
-        assert!(!b.bootstrap[0], "max-steps truncations don't bootstrap");
-        assert_eq!(b.policy[0], 0);
+        assert_eq!(r.bootstrap_value[i], 0.0, "max-steps truncations don't bootstrap");
     }
     let ended: Vec<_> = pool
         .poll_events()
@@ -307,29 +312,15 @@ fn chain_runs_in_a_pool_match_direct_runs() {
         Ok::<_, EnvError>(env)
     })
     .unwrap();
-    let mut b = pool.buffers();
-    let mut run = 0;
-    let mut action_rng = ChaCha8Rng::seed_from_u64(100 + seeds[0]);
-    let mut events = Vec::new();
-    loop {
-        assert_eq!(pool.recv(&mut b.batch(), 1, None).unwrap(), 1);
-        events.extend(pool.poll_events().into_iter().map(|(_, e)| e));
-        if b.terminated[0] {
-            assert_eq!(b.reward[0], 0.0);
-            run += 1;
-            if run < seeds.len() {
-                action_rng = ChaCha8Rng::seed_from_u64(100 + seeds[run]);
-            }
-        }
-        if b.finished[0] {
-            break;
-        }
-        let specialist = &policies[b.policy[0] as usize];
-        assert!(data.families.contains_key(&**specialist));
-        let action = random_action(&row_mask(&b, 0), &mut action_rng, None);
-        pool.send(&[0], &[action.to_indices().map(|i| i as i64)])
-            .unwrap();
-    }
+    let mut rngs: HashMap<i64, ChaCha8Rng> = HashMap::new();
+    let actor = picks(move |mask, job| {
+        let rng = rngs.entry(job).or_insert_with(|| ChaCha8Rng::seed_from_u64(100 + job as u64));
+        random_action(mask, rng, None)
+    });
+    pool.play(actor, Record::Off).unwrap();
+    assert!(pool.wait_idle(None).unwrap());
+    let events: Vec<ZeldaEvent> = pool.poll_events().into_iter().map(|(_, e)| e).collect();
+    let run = events.iter().filter(|e| matches!(e, ZeldaEvent::Run(_))).count();
     assert_eq!(run, seeds.len());
     assert_eq!(pool.active(), 0);
     let pooled: Vec<RunResult> = events
@@ -437,34 +428,37 @@ fn frames_publish_only_while_rendering() {
         )
     })
     .unwrap();
-    let mut b = pool.buffers();
     let mut frame = vec![0u8; pool.frame_bytes()];
     let mut rng = ChaCha8Rng::seed_from_u64(5);
-    let mut kinds = Vec::new();
-    let mut step = |b: &mut Buffers, scripted: Option<&str>| {
-        let action = match scripted {
-            Some(text) => zelda::Action::parse(text).unwrap(),
-            None => {
-                let mut mask = prefer_attacks(row_mask(b, 0));
-                mask.disallow_kind(ActionKind::Move);
-                random_action(&mask, &mut rng, None)
-            }
-        };
-        kinds.push(action.kind);
-        pool.send(&[0], &[action.to_indices().map(|i| i as i64)])
-            .unwrap();
-        pool.recv(&mut b.batch(), 1, None).unwrap();
-        assert!(!b.final_valid[0]);
-        b.frames[0] as u64
+    let kinds = Arc::new(Mutex::new(Vec::new()));
+    let script = Arc::new(Mutex::new(VecDeque::from(["MOVE E 16", "MOVE E 16"])));
+    let actor = {
+        let (kinds, script) = (kinds.clone(), script.clone());
+        picks(move |mask, _| {
+            let action = match script.lock().pop_front() {
+                Some(text) => zelda::Action::parse(text).unwrap(),
+                None => {
+                    let mut mask = prefer_attacks(*mask);
+                    mask.disallow_kind(ActionKind::Move);
+                    random_action(&mask, &mut rng, None)
+                }
+            };
+            kinds.lock().push(action.kind);
+            action
+        })
     };
-    pool.recv(&mut b.batch(), 1, None).unwrap();
+    let step = || {
+        let (_, r) = pool.rollout(1, actor.clone()).unwrap().pop().unwrap();
+        assert!(!(r.terminated[0] || r.truncated[0]));
+        r.frames[0] as u64
+    };
     // Off the door tile (attacks are masked there).
-    step(&mut b, Some("MOVE E 16"));
+    step();
     assert_eq!(pool.frame_counter(0).unwrap(), 0);
     pool.set_render(0, true).unwrap();
-    let mut shown = step(&mut b, Some("MOVE E 16"));
+    let mut shown = step();
     for _ in 0..12 {
-        shown += step(&mut b, None);
+        shown += step();
         // Every real frame of the step, no look-ahead frames.
         assert_eq!(pool.frame_counter(0).unwrap(), shown);
     }
@@ -481,9 +475,10 @@ fn frames_publish_only_while_rendering() {
         "a dungeon room isn't one color"
     );
     pool.set_render(0, false).unwrap();
-    step(&mut b, None);
+    step();
     assert_eq!(pool.frame_counter(0).unwrap(), shown);
     assert_eq!(pool.frame(0, shown, &mut frame).unwrap(), None);
+    let kinds = kinds.lock();
     assert!(kinds.contains(&ActionKind::Beams), "beams fired: {kinds:?}");
 }
 
@@ -706,22 +701,9 @@ fn eval_jobs_are_shared_and_each_result_is_independent_of_the_env() {
         Ok::<_, EnvError>(pool::zelda::TaskEnv::Eval(env))
     })
     .unwrap();
-    let mut buffers = pool.buffers();
-    let mut finished = Vec::new();
-    while pool.active() > 0 {
-        let n = pool.recv(&mut buffers.batch(), 1, None).unwrap();
-        let mut send = Vec::new();
-        for row in 0..n {
-            if buffers.finished[row] {
-                finished.push(buffers.env_ids[row]);
-            } else {
-                send.push(buffers.env_ids[row] as usize);
-            }
-        }
-        pool.send(&send, &vec![wait_action(); send.len()]).unwrap();
-    }
-    finished.sort();
-    assert_eq!(finished, [0, 1], "both envs finish once the list is empty");
+    pool.play(picks(|_, _| zelda::Action::parse("WAIT 8").unwrap()), Record::Off).unwrap();
+    assert!(pool.wait_idle(None).unwrap());
+    assert_eq!(pool.active(), 0, "both envs finish once the list is empty");
     assert_eq!(jobs.remaining(), 0);
     let (mut records, mut rooms) = (Vec::new(), Vec::new());
     for (env, e) in pool.poll_events() {

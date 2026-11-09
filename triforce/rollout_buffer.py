@@ -75,8 +75,7 @@ class RolloutBuffer:
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, memory_length: int, n_envs: int, observation_space, gamma: float, lam: float):
-        """``observation_space``: a ``spaces.Dict``, or a dict of per-key ``[rows, *shape]`` arrays (the pool's
-        ``obs`` buffers) whose shapes and dtypes define the layout."""
+        """``observation_space``: a ``spaces.Dict``, or a pool's ``obs_spec`` (key → ``{'shape', 'dtype'}``)."""
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         self.memory_length = memory_length
         self.n_envs = n_envs
@@ -85,8 +84,8 @@ class RolloutBuffer:
         if isinstance(observation_space, spaces.Dict):
             layout = {key: _space_layout(space) for key, space in observation_space.spaces.items()}
         else:
-            layout = {key: (tuple(array.shape[1:]), bool(np.issubdtype(array.dtype, np.integer)))
-                      for key, array in observation_space.items()}
+            layout = {key: (tuple(spec['shape']), bool(np.issubdtype(np.dtype(spec['dtype']), np.integer)))
+                      for key, spec in observation_space.items()}
         self.observation = {key: _storage(shape, integer, n_envs, memory_length + 1)
                             for key, (shape, integer) in layout.items() if key != MASK_KEY}
         self.masks = torch.zeros(n_envs, memory_length + 1, MASK_SIZE, dtype=torch.bool)

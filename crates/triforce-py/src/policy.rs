@@ -68,7 +68,7 @@ impl<'py> Batch<'py> {
 
     fn row<'a>(&'a self, i: usize, vectors: &'a mut Vec<&'a [f32]>) -> PyResult<Input<'a>> {
         let slice = |n: usize, total: usize| -> PyResult<usize> {
-            if total % self.rows.max(1) != 0 {
+            if !total.is_multiple_of(self.rows.max(1)) {
                 return Err(PyValueError::new_err("observation arrays disagree on the batch size"));
             }
             Ok(n * (total / self.rows.max(1)))

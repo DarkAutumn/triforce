@@ -255,10 +255,6 @@ mod _native {
             "DURATIONS",
             pyo3::types::PyTuple::new(py, zelda::actions::DURATIONS)?,
         )?;
-        m.add(
-            "SCALAR_COLUMNS",
-            pyo3::types::PyTuple::new(py, ::pool::SCALAR_COLUMNS.iter().map(|(n, _)| *n))?,
-        )?;
         Ok(())
     }
 }

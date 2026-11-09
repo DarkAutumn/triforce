@@ -15,26 +15,11 @@ import pytest
 import torch
 
 from triforce import _native, registry, replay, run
-from triforce.actions import Action
-from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.runner import Policies, Route, RoomRecord, Runner, RunnerError, RunResult, chain_summary, \
     parse_location, write_jsonl
 from triforce.zelda_enums import ActionKind, MapLocation
 
-
-def scripted(action: str, fallback: str = 'WAIT 8') -> ZeldaPolicy:
-    """A network that plays ``action`` where the mask allows it, else ``fallback`` (zeroed weights, head biases
-    100 for ``action`` and 50 for ``fallback``)."""
-    spec = {k: {'shape': list(v['shape']), 'vocab': v['vocab']} for k, v in _native.OBS_SPEC.items()}
-    network = ZeldaPolicy(config=ModelConfig(obs_spec=spec))
-    with torch.no_grad():
-        for head in (network.kind_head, network.direction_head, network.duration_head):
-            head.weight.zero_()
-            head.bias.zero_()
-        for indices, bias in ((Action.parse(fallback).to_indices(), 50.0), (Action.parse(action).to_indices(), 100.0)):
-            for head, index in zip((network.kind_head, network.direction_head, network.duration_head), indices):
-                head.bias[int(index)] = bias
-    return network
+from .networks import scripted
 
 
 def test_route_definition():

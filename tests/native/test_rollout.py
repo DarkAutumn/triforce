@@ -8,21 +8,11 @@ observation and action, bit for bit); episodes continue across rollouts.
 import numpy as np
 
 from triforce import _native as native
-from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.rollout_buffer import RolloutBuffer
 
+from ..networks import random_network as network
+
 ENVS, STEPS = 4, 24
-
-
-def network():
-    import torch  # pylint: disable=import-outside-toplevel
-    torch.manual_seed(0)
-    spec = {k: {'shape': list(v['shape']), 'vocab': v['vocab']} for k, v in native.OBS_SPEC.items()}
-    net = ZeldaPolicy(config=ModelConfig(obs_spec=spec)).eval()
-    with torch.no_grad():
-        for head in (net.kind_head, net.direction_head, net.duration_head):
-            head.weight.mul_(30.0)
-    return net
 
 
 def pool(states_dir, tmp_path, threads, max_steps=10):
@@ -33,7 +23,7 @@ def pool(states_dir, tmp_path, threads, max_steps=10):
 
 def rollouts(p, policy, count=2):
     out = []
-    buffer = RolloutBuffer(STEPS, ENVS, p.make_buffers(1)['obs'], 0.99, 0.95)
+    buffer = RolloutBuffer(STEPS, ENVS, p.obs_spec, 0.99, 0.95)
     views = buffer.rollout_buffers()
     views['job'] = np.zeros((ENVS, STEPS), np.int64)
     views['step'] = np.zeros((ENVS, STEPS), np.int64)

@@ -67,7 +67,7 @@ class IterationResult:
 class Collector:
     """Rollouts from a native pool into an env-major ``RolloutBuffer``, one ``EnvPool.rollout`` call each.
 
-    ``pool`` is a native ``EnvPool`` over a ``TrainTask`` (or anything with its ``num_envs`` / ``make_buffers`` /
+    ``pool`` is a native ``EnvPool`` over a ``TrainTask`` (or anything with its ``num_envs`` / ``obs_spec`` /
     ``rollout`` / ``poll_events`` interface).  Episodes continue across rollouts; the noise that samples each
     action is keyed by the episode's job and decision step (the pool's seed decides the job keys).
     """
@@ -75,7 +75,7 @@ class Collector:
     def __init__(self, pool, memory_length: int, gamma: float, lam: float):
         self.pool = pool
         self.n_envs = pool.num_envs
-        self.buffer = RolloutBuffer(memory_length, self.n_envs, pool.make_buffers(1)['obs'], gamma, lam)
+        self.buffer = RolloutBuffer(memory_length, self.n_envs, pool.obs_spec, gamma, lam)
         self.views = self.buffer.rollout_buffers()
 
     def collect(self, network: nn.Module, device) -> RolloutMetrics:
